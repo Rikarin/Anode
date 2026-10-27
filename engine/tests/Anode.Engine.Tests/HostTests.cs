@@ -202,6 +202,17 @@ public sealed class HostTests : IAsyncLifetime {
     }
 
     [Fact]
+    public async Task A_pass_with_nothing_armed_still_finishes_with_no_takes() {
+        await LoadAsync(1, [TestAudio.Track(1)], [new(1, [], [])], []);
+        await Send(new TransportMessage(TransportAction.Record, 0));
+        await Eventually(() => Telemetry(out _).State == TelemetryTransportState.Recording);
+        var finished = Assert.IsType<RecordingFinishedMessage>(
+            await Request(new TransportMessage(TransportAction.Stop))
+        );
+        Assert.Empty(finished.Takes);
+    }
+
+    [Fact]
     public async Task Bad_requests_get_errors_and_the_host_carries_on() {
         var error = await Expect<ErrorMessage>(new TransportMessage(TransportAction.Record));
         Assert.Equal("transport", error.Request);

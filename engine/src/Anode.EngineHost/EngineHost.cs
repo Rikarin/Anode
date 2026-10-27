@@ -143,7 +143,7 @@ public sealed class EngineHost : IDisposable {
                 return null;
             default:
                 var takes = Controller.Stop();
-                return takes.Count > 0 ? new RecordingFinishedMessage(takes) : null;
+                return takes is null ? null : new RecordingFinishedMessage(takes);
         }
     }
 

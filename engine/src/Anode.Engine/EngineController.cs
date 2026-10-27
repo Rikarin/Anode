@@ -37,6 +37,7 @@ public sealed class EngineController : IDisposable {
     static readonly TimeSpan PrimeTimeout = TimeSpan.FromSeconds(2);
 
     readonly Lock gate = new();
+    readonly Lock sendGate = new();
     readonly Dictionary<string, MappedSegment> pool = new(StringComparer.Ordinal);
     readonly List<string> poolOrder = [];
     readonly Dictionary<int, StreamFile?> files = [];
@@ -46,6 +47,7 @@ public sealed class EngineController : IDisposable {
     int generations;
     bool countIn;
     RecordTake[] takes = [];
+    bool recordingPass;
 
     public EngineController(EngineOptions options) {
         Options = options;
@@ -324,6 +326,7 @@ public sealed class EngineController : IDisposable {
             var root = Engine.Root;
             var from = stopped ? Engine.Snapshot.Position : snapshot.Position;
             BeginTakes(root);
+            recordingPass = true;
             var (frames, beats) = stopped && countIn
                 ? Metronome.CountInFor(root.Metronome, from, Options.SampleRate)
                 : (0L, 0);
@@ -331,13 +334,18 @@ public sealed class EngineController : IDisposable {
         }
     }
 
-    /// <summary>Stops; returns the takes of the recording pass that ended (empty when none ran).</summary>
-    public IReadOnlyList<RecordedTake> Stop() {
+    /// <summary>
+    ///     Stops; returns the takes of the recording pass that ended (empty when no track was armed), or null when no
+    ///     recording pass ran.
+    /// </summary>
+    public IReadOnlyList<RecordedTake>? Stop() {
         lock (gate) {
             var sent = Send(new(EngineCommandKind.Stop));
             WaitApplied(sent);
+            var pass = recordingPass;
+            recordingPass = false;
             if (takes.Length == 0) {
-                return [];
+                return pass ? [] : null;
             }
 
             Writer.Retire();
@@ -411,18 +419,21 @@ public sealed class EngineController : IDisposable {
         }
     }
 
+    /// <summary>Enqueues a command for the audio thread; returns its sequence number (see <see cref="WaitApplied" />).</summary>
     long Send(in EngineCommand command) {
-        var spin = new SpinWait();
-        var deadline = DateTime.UtcNow + CommandTimeout;
-        while (!Engine.Commands.TryEnqueue(command)) {
-            if (DateTime.UtcNow > deadline) {
-                throw new InvalidOperationException("The audio thread is not taking commands.");
+        lock (sendGate) { // the queue has one producer: whichever control thread holds this
+            var spin = new SpinWait();
+            var deadline = DateTime.UtcNow + CommandTimeout;
+            while (!Engine.Commands.TryEnqueue(command)) {
+                if (DateTime.UtcNow > deadline) {
+                    throw new InvalidOperationException("The audio thread is not taking commands.");
+                }
+
+                spin.SpinOnce();
             }
 
-            spin.SpinOnce();
+            return Engine.Commands.Enqueued;
         }
-
-        return Engine.Commands.Enqueued;
     }
 
     void BeginTakes(ModelRoot root) {
