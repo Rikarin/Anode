@@ -12,6 +12,4 @@ export type ProblemDetails = Schemas['ProblemDetails'];
  * as the Server grows them (docs/01-implementation-plan.md §4.2–4.3).
  */
 export type ServerMessage =
-  | { type: 'connected'; version: string }
-  | { type: 'engine'; engine: EngineStatus }
-  | { type: 'resync' };
+  { type: 'connected'; version: string } | { type: 'engine'; engine: EngineStatus } | { type: 'resync' };
