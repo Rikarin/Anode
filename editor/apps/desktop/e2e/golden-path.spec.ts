@@ -42,9 +42,8 @@ const Lane = 72;
 const laneY = (lane: number) => Ruler + lane * Lane + Lane * 0.75; // the lower half: move, not fade
 
 // The golden path of docs/02-phase-1.md against the real app: Electron, the built editor, anode-server and anode-host on
-// the null device. It needs workstreams A and B (the Server's endpoints are stubs until then), so it is marked fixme
-// until integration; it compiles and runs with `nx e2e desktop` and should pass once they land.
-test.fixme('creates, imports, records, edits, undoes, saves, reopens and plays a project', async ({ app, window }) => {
+// the null device (`nx e2e desktop`).
+test('creates, imports, records, edits, undoes, saves, reopens and plays a project', async ({ app, window }) => {
   const scratch = mkdtempSync(join(tmpdir(), 'anode-golden-'));
   const wav = join(scratch, 'tone.wav');
   writeToneWav(wav);

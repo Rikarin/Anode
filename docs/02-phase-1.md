@@ -112,3 +112,31 @@ Three, in parallel, each in its own branch; they meet only at the contracts abov
 
 Merge A, B, C; run the two-process tests and the Playwright golden path (create project → add tracks → import → record
 on the null device → edit → undo/redo → save → reopen → play); fix what the seams reveal.
+
+## Status (2026-10-28)
+
+**Exit criterion met on macOS.** The Playwright golden path (create → add tracks → import → record on the null device →
+split and move → undo/redo → save → close → reopen → play) passes against the real desktop app, and the two-process
+test drives the real `anode-host`.
+
+| Check | Result |
+|---|---|
+| Engine tests (`dotnet test --solution engine/Anode.slnx`) | 170 pass, 0 skipped |
+| Editor (`nx run-many -t typecheck lint test build`) | 5 projects pass; Storybook + axe 21 stories |
+| e2e (`nx e2e desktop`) | golden path and smoke pass |
+| Skala, Prettier, generated client | clean |
+| Host callback, CoreAudio, 64 frames, 128 tracks | p50 32 µs, p99 63 µs, worst 117 µs of 1,333 µs; 0 allocations |
+
+Contract changes made during the phase: `SetMetronomeMessage.CountIn` (the host needs it); the server and the host both
+load the `an_sys` native library for shared memory (`engine/native/build.sh` must have run).
+
+Decided at integration: a new project takes the device's sample rate unless it asks for another; a project at another
+rate than the device is reported in the engine status (playback off-speed, recording refused).
+
+**Open:**
+- Linux and Windows runs.
+- Real input recording and device-change exit on real hardware.
+- Peak-job progress events.
+- "Dirty" after undoing back to the saved state.
+- Region gain UI, track input selector, an ARIA tree for regions.
+- Waveform textures, and a disk thread that waits on a semaphore instead of polling.
