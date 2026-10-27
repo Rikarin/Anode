@@ -48,6 +48,59 @@ public sealed class TwoProcessTests : IAsyncDisposable {
         );
     }
 
+    [Fact(Skip = "needs workstream A")]
+    public async Task Server_opens_imports_plays_and_records_on_the_null_device() {
+        var media = Directory.CreateTempSubdirectory("anode-two-process-").FullName;
+        try {
+            StartHost();
+            await using var server = new ServerFixture(socketPath);
+            using var client = server.CreateClient();
+            await using var events = await EventStream.ConnectAsync(server);
+            await ServerFixture.Eventually(
+                async () => (await server.SystemAsync(client)).Engine.State == EngineState.Connected,
+                60
+            );
+
+            var project = await client.CreateProjectAsync("Two Process");
+            var file = await client.ImportAsync(TestWav.Write(media, "Loop.wav", frames: 96_000));
+            await client.EditAsync(new AddTrackCommand("Playback"), new AddTrackCommand("Record"));
+            var tracks = (await client.ProjectAsync()).Tracks;
+            await client.EditAsync(
+                new AddRegionCommand(tracks[0].Id, file.Id, 0),
+                new SetTrackCommand(tracks[1].Id, RecordArmed: true, Input: new(1, false))
+            );
+
+            await client.TransportAsync(TransportCommand.Play, 0);
+            await events.WaitAsync<TransportEvent>(
+                static e => e.Transport is { State: TransportState.Playing, PositionSamples: > 24_000 },
+                30
+            );
+            await events.WaitAsync<MetersEvent>(
+                e => e.Tracks.Any(t => t.TrackId == tracks[0].Id && t.PeakLeft > 0),
+                30
+            );
+            await client.TransportAsync(TransportCommand.Stop);
+            await events.WaitAsync<TransportEvent>(static e => e.Transport.State == TransportState.Stopped, 30);
+
+            await client.TransportAsync(TransportCommand.Record, 960 * 4);
+            await events.WaitAsync<TransportEvent>(
+                static e => e.Transport is { State: TransportState.Recording, PositionSamples: > 120_000 },
+                30
+            );
+            await client.TransportAsync(TransportCommand.Stop);
+            var recorded = await events.WaitAsync<ProjectChangedEvent>(
+                e => e.Delta.Ops.OfType<RegionUpserted>().Any(r => r.Region.TrackId == tracks[1].Id),
+                30
+            );
+            var take = recorded.Delta.Ops.OfType<AudioFileUpserted>().Single().File;
+            Assert.Equal(24, take.BitDepth);
+            Assert.True(File.Exists(Path.Combine(project.Path, take.Path)));
+            Assert.Equal(960 * 4, recorded.Delta.Ops.OfType<RegionUpserted>().Single().Region.StartTick);
+        } finally {
+            Directory.Delete(media, true);
+        }
+    }
+
     void StartHost() {
         var dll = Path.Combine(
             AppContext.BaseDirectory.Replace(

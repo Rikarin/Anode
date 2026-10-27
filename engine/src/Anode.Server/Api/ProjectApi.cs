@@ -1,4 +1,6 @@
 using Anode.Contracts;
+using Anode.Model.Audio;
+using Anode.Server.Projects;
 using Microsoft.AspNetCore.Http.HttpResults;
 
 namespace Anode.Server.Api;
@@ -9,18 +11,37 @@ namespace Anode.Server.Api;
 /// </summary>
 static class ProjectApi {
     public static void Map(RouteGroupBuilder api) {
-        var project = api.MapGroup("/project").WithTags("Project");
-        project.MapGet(string.Empty, static Results<Ok<Project>, NotFound>() => throw Pending.Phase1("GetProject"))
+        var project = api.MapGroup("/project").WithTags("Project").AddEndpointFilter<ProblemFilter>();
+        project.MapGet(
+                string.Empty,
+                static Results<Ok<Project>, NotFound>(ProjectSession session, HttpContext http) => {
+                    var current = session.Get();
+                    Revisions.SetETag(http, current.Revision);
+                    return TypedResults.Ok(current);
+                }
+            )
             .WithName("GetProject")
             .WithSummary("The open project, with its revision as the ETag; 404 when none is open.");
-        project.MapPost("/save", static Results<Ok<ProjectSummary>, NotFound>() => throw Pending.Phase1("SaveProject"))
+        project.MapPost(
+                "/save",
+                static Results<Ok<ProjectSummary>, NotFound>(ProjectSession session) => TypedResults.Ok(session.Save())
+            )
             .WithName("SaveProject");
-        project.MapPost("/close", static Results<NoContent, NotFound>() => throw Pending.Phase1("CloseProject"))
+        project.MapPost(
+                "/close",
+                static Results<NoContent, NotFound>(ProjectSession session) => {
+                    session.Close();
+                    return TypedResults.NoContent();
+                }
+            )
             .WithName("CloseProject");
         project.MapPost(
                 "/commands",
-                static Results<Ok<CommandResult>, NotFound, ProblemHttpResult>(CommandBatch batch) =>
-                    throw Pending.Phase1("ApplyCommands")
+                static Results<Ok<CommandResult>, NotFound, ProblemHttpResult>(
+                    CommandBatch batch,
+                    ProjectSession session,
+                    HttpContext http
+                ) => Respond(http, session.Apply(batch, Revisions.Expected(http)))
             )
             .WithName("ApplyCommands")
             .WithSummary(
@@ -29,31 +50,46 @@ static class ProjectApi {
             );
         project.MapPost(
                 "/undo",
-                static Results<Ok<CommandResult>, NotFound, ProblemHttpResult>() =>
-                    throw Pending.Phase1("Undo")
+                static Results<Ok<CommandResult>, NotFound, ProblemHttpResult>(
+                    ProjectSession session,
+                    HttpContext http
+                ) =>
+                    Respond(http, session.Undo(Revisions.Expected(http)))
             )
             .WithName("Undo")
             .WithSummary("Undoes the last edit; 422 when there is nothing to undo.");
         project.MapPost(
                 "/redo",
-                static Results<Ok<CommandResult>, NotFound, ProblemHttpResult>() =>
-                    throw Pending.Phase1("Redo")
+                static Results<Ok<CommandResult>, NotFound, ProblemHttpResult>(
+                    ProjectSession session,
+                    HttpContext http
+                ) =>
+                    Respond(http, session.Redo(Revisions.Expected(http)))
             )
             .WithName("Redo");
-        project.MapGet("/history", static Results<Ok<UndoHistory>, NotFound>() => throw Pending.Phase1("GetHistory"))
+        project.MapGet(
+                "/history",
+                static Results<Ok<UndoHistory>, NotFound>(ProjectSession session) => TypedResults.Ok(session.History())
+            )
             .WithName("GetHistory");
         project.MapPost(
                 "/files",
-                static Results<Ok<AudioFile>, NotFound, ProblemHttpResult>(IFormFile file) =>
-                    throw Pending.Phase1("UploadAudioFile")
+                static async Task<Results<Ok<AudioFile>, NotFound, ProblemHttpResult>>(
+                    IFormFile file,
+                    AudioImport import,
+                    CancellationToken cancellationToken
+                ) => TypedResults.Ok(await import.UploadAsync(file, cancellationToken))
             )
             .WithName("UploadAudioFile")
             .WithSummary("Copies an uploaded WAV into the project's Audio Files folder (a browser on the network).")
             .DisableAntiforgery();
         project.MapPost(
                 "/files/import",
-                static Results<Ok<AudioFile>, NotFound, ProblemHttpResult>(ImportFileRequest request) =>
-                    throw Pending.Phase1("ImportAudioFile")
+                static Results<Ok<AudioFile>, NotFound, ProblemHttpResult>(
+                    ImportFileRequest request,
+                    AudioImport import
+                ) =>
+                    TypedResults.Ok(import.Import(request.Path))
             )
             .WithName("ImportAudioFile")
             .WithSummary(
@@ -61,8 +97,17 @@ static class ProjectApi {
             );
         project.MapGet(
                 "/files/{fileId}/peaks",
-                static IResult(string fileId, int? framesPerPeak, long? start, long? count) =>
-                    throw Pending.Phase1("GetPeaks")
+                static async Task<IResult>(
+                    string fileId,
+                    int? framesPerPeak,
+                    long? start,
+                    long? count,
+                    ProjectSession session,
+                    CancellationToken cancellationToken
+                ) => {
+                    var path = await session.PeaksAsync(fileId, Peaks.NearestLevel(framesPerPeak), cancellationToken);
+                    return TypedResults.Bytes(Peaks.Slice(path, start ?? 0, count), "application/octet-stream");
+                }
             )
             .WithName("GetPeaks")
             .WithSummary(
@@ -71,5 +116,10 @@ static class ProjectApi {
             )
             .Produces(StatusCodes.Status200OK, contentType: "application/octet-stream")
             .Produces(StatusCodes.Status404NotFound);
+    }
+
+    static Ok<CommandResult> Respond(HttpContext http, CommandResult result) {
+        Revisions.SetETag(http, result.Revision);
+        return TypedResults.Ok(result);
     }
 }

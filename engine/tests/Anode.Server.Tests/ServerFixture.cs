@@ -1,6 +1,8 @@
 using Anode.Contracts;
+using Anode.Server.Projects;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using System.Net.Http.Json;
 using Xunit.Sdk;
@@ -56,10 +58,31 @@ public sealed class ServerFixture(string? socketPath = null, string? token = nul
         builder.ConfigureLogging(static logging => logging.SetMinimumLevel(LogLevel.Warning));
     }
 
+    public override async ValueTask DisposeAsync() {
+        StopJobs();
+        await base.DisposeAsync();
+    }
+
     protected override void Dispose(bool disposing) {
+        if (disposing) {
+            StopJobs();
+        }
+
         base.Dispose(disposing);
         if (disposing) {
             Directory.Delete(dataDirectory, true);
+        }
+    }
+
+    /// <summary>
+    ///     Lets background peak jobs finish before the data folder goes (the host disposes its services only after
+    ///     the factory has disposed itself).
+    /// </summary>
+    void StopJobs() {
+        try {
+            Services.GetService<PeakJobs>()?.Dispose();
+        } catch (ObjectDisposedException) {
+            // already shut down
         }
     }
 }
