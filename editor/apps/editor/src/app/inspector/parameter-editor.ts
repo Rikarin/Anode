@@ -3,15 +3,27 @@ import type { ParameterInfo, PluginInfo } from '@anode/api-client';
 import { AnChoice, AnKnob } from '@anode/audio-ui';
 import { InstrumentStore } from '../state/instrument.store';
 
-/** A parameter group: the part of its id before the first dot ("filter" of "filter.cutoff"), or "Main". */
+/**
+ * A parameter group: the part of its id before the first dot ("filter" of "filter.cutoff"); else, for camelCase ids
+ * (the built-in instruments': "osc1Wave", "filterAttack"), its leading word when that names a known group; else "Main".
+ */
 export function parameterGroups(parameters: readonly ParameterInfo[]): { name: string; parameters: ParameterInfo[] }[] {
   const groups = new Map<string, ParameterInfo[]>();
   for (const parameter of parameters) {
-    const dot = parameter.id.indexOf('.');
-    const name = dot > 0 ? parameter.id.slice(0, dot) : 'main';
+    const name = groupOf(parameter.id);
     groups.set(name, [...(groups.get(name) ?? []), parameter]);
   }
   return [...groups].map(([name, list]) => ({ name: GroupNames[name] ?? capitalise(name), parameters: list }));
+}
+
+function groupOf(id: string): string {
+  const dot = id.indexOf('.');
+  if (dot > 0) {
+    return id.slice(0, dot);
+  }
+  const word = /^[a-z]+\d*/.exec(id)?.[0] ?? '';
+  const group = GroupAliases[word] ?? word;
+  return group in GroupNames ? group : 'main';
 }
 
 const GroupNames: Readonly<Record<string, string>> = {
@@ -19,10 +31,18 @@ const GroupNames: Readonly<Record<string, string>> = {
   osc: 'Oscillators',
   osc1: 'Oscillator 1',
   osc2: 'Oscillator 2',
+  filter: 'Filter',
   amp: 'Amp Envelope',
   filterEnv: 'Filter Envelope',
   lfo: 'LFO',
   unison: 'Unison'
+};
+
+/** Leading words of camelCase ids that belong to another word's group ("cutoff" is the filter's). */
+const GroupAliases: Readonly<Record<string, string>> = {
+  cutoff: 'filter',
+  resonance: 'filter',
+  key: 'filter'
 };
 
 function capitalise(text: string): string {
