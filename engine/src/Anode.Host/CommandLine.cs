@@ -1,4 +1,5 @@
 using System.Collections.Frozen;
+using System.Globalization;
 
 namespace Anode.Host;
 
@@ -38,4 +39,15 @@ sealed class CommandLine {
     public bool Flag(string name) => options.ContainsKey(name);
 
     public string? Text(string name) => options.GetValueOrDefault(name);
+
+    /// <summary>An integer option, or <paramref name="fallback" /> when absent; a malformed one is an error.</summary>
+    public int Int(string name, int fallback) {
+        if (Text(name) is not { } text) {
+            return fallback;
+        }
+
+        return int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out var value)
+            ? value
+            : throw new InvalidOperationException($"--{name} needs a whole number, not '{text}'.");
+    }
 }

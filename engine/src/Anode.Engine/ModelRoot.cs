@@ -1,0 +1,124 @@
+using Anode.Engine.Recording;
+using Anode.Engine.Streaming;
+using Anode.Ipc;
+using Anode.Ipc.Segments;
+
+namespace Anode.Engine;
+
+/// <summary>
+///     A track as the engine runs it: its stream from the disk thread, its strip, its input settings and, while a
+///     recording pass runs, its take. One object per engine track id lives across model swaps (its stream keeps
+///     playing); it is replaced only when the track's channel count changes.
+/// </summary>
+public sealed class TrackState : IDisposable {
+    int inputChannel;
+    bool armed;
+    bool monitoring;
+    RecordTake? take;
+
+    public TrackState(int id, bool stereo, int streamFrames) {
+        Id = id;
+        Stream = new(stereo ? 2 : 1, streamFrames);
+    }
+
+    public int Id { get; }
+
+    public bool Stereo => Stream.Channels == 2;
+
+    public TrackFeed Stream { get; }
+
+    public Strip Strip { get; } = new();
+
+    /// <summary>The 0-based first device input (−1: none); a stereo track takes it and the next one.</summary>
+    public int InputChannel => Volatile.Read(ref inputChannel);
+
+    public bool Armed => Volatile.Read(ref armed);
+
+    public bool Monitoring => Volatile.Read(ref monitoring);
+
+    /// <summary>The take this track records into during the current pass, if it is armed.</summary>
+    public RecordTake? Take {
+        get => Volatile.Read(ref take);
+        set => Volatile.Write(ref take, value);
+    }
+
+    /// <summary>Control thread.</summary>
+    public void SetIo(int input, bool recordArmed, bool inputMonitoring) {
+        Volatile.Write(ref inputChannel, input);
+        Volatile.Write(ref armed, recordArmed);
+        Volatile.Write(ref monitoring, inputMonitoring);
+    }
+
+    /// <summary>Control thread.</summary>
+    public void Apply(EngineTrack settings) {
+        SetIo(settings.InputChannel, settings.RecordArmed, settings.Monitoring);
+        Strip.Set(settings.Strip);
+    }
+
+    public void Dispose() => Stream.Dispose();
+}
+
+/// <summary>
+///     The published model (RCU, docs/adr/0006-bulk-ipc.md): immutable once published, swapped whole by the control
+///     thread, read by the audio and disk threads without locks. It holds each track's view into a mapped segment and
+///     the generation of that view, so the disk thread knows when to re-render a track.
+/// </summary>
+public sealed class ModelRoot {
+    public static readonly ModelRoot Empty = new(0, 0, [], [], [], [], default, null, []);
+
+    public ModelRoot(
+        long version,
+        long lengthSamples,
+        TrackState[] tracks,
+        TrackView[] views,
+        int[] generations,
+        MappedSegment?[] owners,
+        TrackView metronome,
+        MappedSegment? metronomeOwner,
+        StreamFile?[] files
+    ) {
+        Version = version;
+        LengthSamples = lengthSamples;
+        Tracks = tracks;
+        Views = views;
+        Generations = generations;
+        Owners = owners;
+        Metronome = metronome;
+        MetronomeOwner = metronomeOwner;
+        Files = files;
+    }
+
+    public long Version { get; }
+
+    public long LengthSamples { get; }
+
+    /// <summary>The tracks, in mix order.</summary>
+    public TrackState[] Tracks { get; }
+
+    /// <summary>Each track's compiled events and playlist (default: none yet).</summary>
+    public TrackView[] Views { get; }
+
+    /// <summary>Each track's compile generation: changes whenever its view does.</summary>
+    public int[] Generations { get; }
+
+    /// <summary>The segment each view points into (reference-counted on the control thread).</summary>
+    public MappedSegment?[] Owners { get; }
+
+    /// <summary>The metronome's clicks (<see cref="TrackEntry.MetronomeTrack" />).</summary>
+    public TrackView Metronome { get; }
+
+    public MappedSegment? MetronomeOwner { get; }
+
+    /// <summary>The files the playlists name, indexed by engine file id.</summary>
+    public StreamFile?[] Files { get; }
+
+    public int IndexOf(int trackId) {
+        for (var i = 0; i < Tracks.Length; i++) {
+            if (Tracks[i].Id == trackId) {
+                return i;
+            }
+        }
+
+        return -1;
+    }
+}

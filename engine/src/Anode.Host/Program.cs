@@ -2,7 +2,6 @@ using Anode.Audio.Native;
 using Anode.EngineHost;
 using Anode.Host;
 using System.Reflection;
-using System.Runtime.InteropServices;
 using System.Text.Json;
 
 // Anode engine host: a NativeAOT executable. --serve runs the engine for anode-server over a Unix domain socket
@@ -17,10 +16,14 @@ try {
     return options.Command switch {
         "version" => PrintVersion(),
         "devices" => ListDevices(),
-        "serve" => await ServeAsync().ConfigureAwait(false),
+        "serve" => await ServeCommand.RunAsync(options, version).ConfigureAwait(false),
         _ => Usage()
     };
-} catch (Exception e) when (e is InvalidOperationException or DllNotFoundException or IOException) {
+} catch (Exception e) when (e is InvalidOperationException
+                                or DllNotFoundException
+                                or IOException
+                                or ArgumentException
+                                or System.Net.Sockets.SocketException) {
     Console.Error.WriteLine($"error: {e.Message}");
     return 1;
 }
@@ -47,42 +50,20 @@ int ListDevices() {
     return 0;
 }
 
-async Task<int> ServeAsync() {
-    var socket = options.Text("socket") ?? throw new InvalidOperationException("--serve needs --socket <path>.");
-    var backend = options.Flag("null-audio") || !NativeAudio.IsLibraryPresent ? "null" : NativeAudio.Backend;
-    using var stop = new CancellationTokenSource();
-    using var sigint = PosixSignalRegistration.Create(PosixSignal.SIGINT, Stop);
-    using var sigterm = PosixSignalRegistration.Create(PosixSignal.SIGTERM, Stop);
-    if (options.Flag("watch-stdin")) {
-        StdinWatch.Start(Console.OpenStandardInput(), () => stop.Cancel());
-    }
-
-    await using var server = new EngineHostServer(socket, version, backend);
-    server.Start();
-    // The desktop app waits for this line (apps/desktop/src/sidecars.ts).
-    Console.WriteLine($"anode-host {version} ({backend}) serving on {socket}");
-    try {
-        await Task.Delay(Timeout.Infinite, stop.Token).ConfigureAwait(false);
-    } catch (OperationCanceledException) {
-        // SIGINT, SIGTERM or the lifeline
-    }
-
-    return 0;
-
-    void Stop(PosixSignalContext context) {
-        context.Cancel = true;
-        stop.Cancel();
-    }
-}
-
 int Usage() {
     Console.WriteLine(
         $"""
          anode-host {version}
 
-           --serve --socket <path> [--null-audio] [--watch-stdin]
+           --serve --socket <path> [--device <uid>] [--rate 48000] [--buffer 64] [--inputs <n>]
+                   [--null-audio [--input-tone] [--lose-device-after <ms>]] [--mute] [--watch-stdin]
                                            run the engine for anode-server until SIGINT or SIGTERM
-                                           (--watch-stdin: also stop when standard input closes)
+                                           (--device: a device uid from --devices, default the system output;
+                                           --inputs: device inputs to open, default all (16 on --null-audio);
+                                           --input-tone: the null device's inputs carry a 440 Hz tone;
+                                           --lose-device-after: the null device reports itself lost (tests);
+                                           --mute: silence the device output; --watch-stdin: also stop when
+                                           standard input closes). Exit code 3: the device was lost or changed.
            --devices [--json]              list audio devices
            --version
          """
