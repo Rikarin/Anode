@@ -1,0 +1,3052 @@
+{
+ "machine": {
+  "platform": "darwin 27.2.0",
+  "cpu": "Apple M1 Max",
+  "cores": 10,
+  "memoryGb": 64
+ },
+ "durationMs": 10000,
+ "canvas": "1600x900 CSS px @ DPR 2",
+ "runs": [
+  {
+   "target": "chromium-headed",
+   "browser": "156.0.8078.4",
+   "scene": "notes",
+   "backend": "webgl2",
+   "thread": "worker",
+   "pacing": "message",
+   "gpu": "ANGLE (Apple, ANGLE Metal Renderer: Apple M1 Max, Unspecified Version)",
+   "refreshMs": 8.325,
+   "frames": 1201,
+   "fps": 120.1,
+   "visibleItems": {
+    "min": 21037,
+    "mean": 24582,
+    "max": 28139
+   },
+   "droppedFrames": 0,
+   "droppedPct": 0,
+   "over60HzBudget": 0,
+   "skippedViews": 0,
+   "frameIntervalMs": {
+    "p50": 8.34,
+    "p95": 9.29,
+    "p99": 9.35,
+    "max": 9.89
+   },
+   "mainThreadIntervalMs": {
+    "p50": 8.33,
+    "p95": 9.055,
+    "p99": 9.28,
+    "max": 9.33
+   },
+   "cpuMs": {
+    "p50": 0.36,
+    "p95": 0.43,
+    "p99": 0.505
+   },
+   "latencyMs": {
+    "p50": 0.425,
+    "p95": 0.525,
+    "p99": 0.6
+   },
+   "syncFrameCostMs": {
+    "p50": 1.285,
+    "p95": 1.49,
+    "p99": 1.599
+   },
+   "indexMs": 27.325
+  },
+  {
+   "target": "chromium-headed",
+   "browser": "156.0.8078.4",
+   "scene": "notes",
+   "backend": "webgl2",
+   "thread": "main",
+   "pacing": null,
+   "gpu": "ANGLE (Apple, ANGLE Metal Renderer: Apple M1 Max, Unspecified Version)",
+   "refreshMs": 8.325,
+   "frames": 1200,
+   "fps": 120,
+   "visibleItems": {
+    "min": 21037,
+    "mean": 24585,
+    "max": 28137
+   },
+   "droppedFrames": 0,
+   "droppedPct": 0,
+   "over60HzBudget": 0,
+   "skippedViews": 0,
+   "frameIntervalMs": {
+    "p50": 8.32,
+    "p95": 9.1,
+    "p99": 9.245,
+    "max": 9.345
+   },
+   "mainThreadIntervalMs": {
+    "p50": 8.33,
+    "p95": 9.103,
+    "p99": 9.21,
+    "max": 9.33
+   },
+   "cpuMs": {
+    "p50": 0.33,
+    "p95": 0.39,
+    "p99": 0.415
+   },
+   "latencyMs": null,
+   "syncFrameCostMs": {
+    "p50": 1.238,
+    "p95": 1.43,
+    "p99": 1.635
+   },
+   "indexMs": 27.28
+  },
+  {
+   "target": "chromium-headed",
+   "browser": "156.0.8078.4",
+   "scene": "notes",
+   "backend": "canvas2d",
+   "thread": "worker",
+   "pacing": "message",
+   "gpu": "Canvas2D",
+   "refreshMs": 8.33,
+   "frames": 1202,
+   "fps": 120.2,
+   "visibleItems": {
+    "min": 21040,
+    "mean": 24583,
+    "max": 28134
+   },
+   "droppedFrames": 0,
+   "droppedPct": 0,
+   "over60HzBudget": 0,
+   "skippedViews": 0,
+   "frameIntervalMs": {
+    "p50": 8.335,
+    "p95": 9.195,
+    "p99": 9.405,
+    "max": 9.51
+   },
+   "mainThreadIntervalMs": {
+    "p50": 8.33,
+    "p95": 9.185,
+    "p99": 9.275,
+    "max": 9.32
+   },
+   "cpuMs": {
+    "p50": 3.078,
+    "p95": 3.55,
+    "p99": 3.675
+   },
+   "latencyMs": {
+    "p50": 3.213,
+    "p95": 3.69,
+    "p99": 3.88
+   },
+   "syncFrameCostMs": {
+    "p50": 8.145,
+    "p95": 9.795,
+    "p99": 10.029
+   },
+   "indexMs": 27.46
+  },
+  {
+   "target": "chromium-headed",
+   "browser": "156.0.8078.4",
+   "scene": "notes",
+   "backend": "canvas2d",
+   "thread": "main",
+   "pacing": null,
+   "gpu": "Canvas2D",
+   "refreshMs": 8.328,
+   "frames": 1201,
+   "fps": 120.1,
+   "visibleItems": {
+    "min": 21036,
+    "mean": 24584,
+    "max": 28132
+   },
+   "droppedFrames": 0,
+   "droppedPct": 0,
+   "over60HzBudget": 0,
+   "skippedViews": 0,
+   "frameIntervalMs": {
+    "p50": 8.32,
+    "p95": 9.155,
+    "p99": 9.285,
+    "max": 9.5
+   },
+   "mainThreadIntervalMs": {
+    "p50": 8.33,
+    "p95": 9.155,
+    "p99": 9.275,
+    "max": 9.335
+   },
+   "cpuMs": {
+    "p50": 3.075,
+    "p95": 3.5,
+    "p99": 3.56
+   },
+   "latencyMs": null,
+   "syncFrameCostMs": {
+    "p50": 38.48,
+    "p95": 45.394,
+    "p99": 47.972
+   },
+   "indexMs": 27.17
+  },
+  {
+   "target": "chromium-headed",
+   "browser": "156.0.8078.4",
+   "scene": "regions",
+   "backend": "webgl2",
+   "thread": "worker",
+   "pacing": "message",
+   "gpu": "ANGLE (Apple, ANGLE Metal Renderer: Apple M1 Max, Unspecified Version)",
+   "refreshMs": 8.33,
+   "frames": 1200,
+   "fps": 120,
+   "visibleItems": {
+    "min": 2276,
+    "mean": 2662,
+    "max": 3059
+   },
+   "droppedFrames": 0,
+   "droppedPct": 0,
+   "over60HzBudget": 0,
+   "skippedViews": 0,
+   "frameIntervalMs": {
+    "p50": 8.34,
+    "p95": 9.27,
+    "p99": 9.32,
+    "max": 9.45
+   },
+   "mainThreadIntervalMs": {
+    "p50": 8.33,
+    "p95": 9.05,
+    "p99": 9.26,
+    "max": 9.335
+   },
+   "cpuMs": {
+    "p50": 0.085,
+    "p95": 0.135,
+    "p99": 0.17
+   },
+   "latencyMs": {
+    "p50": 0.17,
+    "p95": 0.25,
+    "p99": 0.315
+   },
+   "syncFrameCostMs": {
+    "p50": 0.83,
+    "p95": 0.955,
+    "p99": 1.124
+   },
+   "indexMs": 4.49
+  },
+  {
+   "target": "chromium-headed",
+   "browser": "156.0.8078.4",
+   "scene": "regions",
+   "backend": "webgl2",
+   "thread": "main",
+   "pacing": null,
+   "gpu": "ANGLE (Apple, ANGLE Metal Renderer: Apple M1 Max, Unspecified Version)",
+   "refreshMs": 8.333,
+   "frames": 1201,
+   "fps": 120.1,
+   "visibleItems": {
+    "min": 2278,
+    "mean": 2661,
+    "max": 3059
+   },
+   "droppedFrames": 0,
+   "droppedPct": 0,
+   "over60HzBudget": 0,
+   "skippedViews": 0,
+   "frameIntervalMs": {
+    "p50": 8.325,
+    "p95": 9.05,
+    "p99": 9.25,
+    "max": 9.34
+   },
+   "mainThreadIntervalMs": {
+    "p50": 8.33,
+    "p95": 9.045,
+    "p99": 9.24,
+    "max": 9.33
+   },
+   "cpuMs": {
+    "p50": 0.08,
+    "p95": 0.11,
+    "p99": 0.125
+   },
+   "latencyMs": null,
+   "syncFrameCostMs": {
+    "p50": 0.83,
+    "p95": 0.941,
+    "p99": 1.162
+   },
+   "indexMs": 4.595
+  },
+  {
+   "target": "chromium-headed",
+   "browser": "156.0.8078.4",
+   "scene": "regions",
+   "backend": "canvas2d",
+   "thread": "worker",
+   "pacing": "message",
+   "gpu": "Canvas2D",
+   "refreshMs": 8.317,
+   "frames": 1200,
+   "fps": 120,
+   "visibleItems": {
+    "min": 2276,
+    "mean": 2662,
+    "max": 3059
+   },
+   "droppedFrames": 0,
+   "droppedPct": 0,
+   "over60HzBudget": 0,
+   "skippedViews": 0,
+   "frameIntervalMs": {
+    "p50": 8.35,
+    "p95": 9.29,
+    "p99": 9.36,
+    "max": 9.495
+   },
+   "mainThreadIntervalMs": {
+    "p50": 8.33,
+    "p95": 9.191,
+    "p99": 9.295,
+    "max": 9.34
+   },
+   "cpuMs": {
+    "p50": 0.62,
+    "p95": 0.72,
+    "p99": 0.82
+   },
+   "latencyMs": {
+    "p50": 0.715,
+    "p95": 0.865,
+    "p99": 0.945
+   },
+   "syncFrameCostMs": {
+    "p50": 2.325,
+    "p95": 3.206,
+    "p99": 3.476
+   },
+   "indexMs": 4.55
+  },
+  {
+   "target": "chromium-headed",
+   "browser": "156.0.8078.4",
+   "scene": "regions",
+   "backend": "canvas2d",
+   "thread": "main",
+   "pacing": null,
+   "gpu": "Canvas2D",
+   "refreshMs": 8.33,
+   "frames": 1202,
+   "fps": 120.2,
+   "visibleItems": {
+    "min": 2278,
+    "mean": 2662,
+    "max": 3059
+   },
+   "droppedFrames": 0,
+   "droppedPct": 0,
+   "over60HzBudget": 0,
+   "skippedViews": 0,
+   "frameIntervalMs": {
+    "p50": 8.32,
+    "p95": 9.185,
+    "p99": 9.315,
+    "max": 9.38
+   },
+   "mainThreadIntervalMs": {
+    "p50": 8.33,
+    "p95": 9.205,
+    "p99": 9.295,
+    "max": 9.335
+   },
+   "cpuMs": {
+    "p50": 0.575,
+    "p95": 0.665,
+    "p99": 0.695
+   },
+   "latencyMs": null,
+   "syncFrameCostMs": {
+    "p50": 12.647,
+    "p95": 13.702,
+    "p99": 13.976
+   },
+   "indexMs": 4.355
+  },
+  {
+   "target": "chromium-headless",
+   "browser": "156.0.8078.4",
+   "scene": "notes",
+   "backend": "webgl2",
+   "thread": "worker",
+   "pacing": "message",
+   "gpu": "ANGLE (Apple, ANGLE Metal Renderer: Apple M1 Max, Unspecified Version)",
+   "refreshMs": 16.665,
+   "frames": 601,
+   "fps": 60.1,
+   "visibleItems": {
+    "min": 21039,
+    "mean": 24582,
+    "max": 28136
+   },
+   "droppedFrames": 0,
+   "droppedPct": 0,
+   "over60HzBudget": 0,
+   "skippedViews": 0,
+   "frameIntervalMs": {
+    "p50": 16.66,
+    "p95": 17.511,
+    "p99": 17.635,
+    "max": 17.755
+   },
+   "mainThreadIntervalMs": {
+    "p50": 16.665,
+    "p95": 16.67,
+    "p99": 16.67,
+    "max": 16.67
+   },
+   "cpuMs": {
+    "p50": 0.36,
+    "p95": 0.455,
+    "p99": 0.535
+   },
+   "latencyMs": {
+    "p50": 0.465,
+    "p95": 0.58,
+    "p99": 0.69
+   },
+   "syncFrameCostMs": {
+    "p50": 1.365,
+    "p95": 1.515,
+    "p99": 1.655
+   },
+   "indexMs": 27.455
+  },
+  {
+   "target": "chromium-headless",
+   "browser": "156.0.8078.4",
+   "scene": "notes",
+   "backend": "webgl2",
+   "thread": "main",
+   "pacing": null,
+   "gpu": "ANGLE (Apple, ANGLE Metal Renderer: Apple M1 Max, Unspecified Version)",
+   "refreshMs": 16.665,
+   "frames": 601,
+   "fps": 60.1,
+   "visibleItems": {
+    "min": 21037,
+    "mean": 24582,
+    "max": 28136
+   },
+   "droppedFrames": 0,
+   "droppedPct": 0,
+   "over60HzBudget": 0,
+   "skippedViews": 0,
+   "frameIntervalMs": {
+    "p50": 16.665,
+    "p95": 17.375,
+    "p99": 17.625,
+    "max": 17.65
+   },
+   "mainThreadIntervalMs": {
+    "p50": 16.665,
+    "p95": 16.67,
+    "p99": 16.67,
+    "max": 16.67
+   },
+   "cpuMs": {
+    "p50": 0.36,
+    "p95": 0.42,
+    "p99": 0.475
+   },
+   "latencyMs": null,
+   "syncFrameCostMs": {
+    "p50": 1.092,
+    "p95": 1.475,
+    "p99": 1.528
+   },
+   "indexMs": 27
+  },
+  {
+   "target": "chromium-headless",
+   "browser": "156.0.8078.4",
+   "scene": "notes",
+   "backend": "canvas2d",
+   "thread": "worker",
+   "pacing": "message",
+   "gpu": "Canvas2D",
+   "refreshMs": 16.665,
+   "frames": 601,
+   "fps": 60.1,
+   "visibleItems": {
+    "min": 21039,
+    "mean": 24582,
+    "max": 28136
+   },
+   "droppedFrames": 0,
+   "droppedPct": 0,
+   "over60HzBudget": 0,
+   "skippedViews": 0,
+   "frameIntervalMs": {
+    "p50": 16.66,
+    "p95": 17.4,
+    "p99": 17.645,
+    "max": 17.875
+   },
+   "mainThreadIntervalMs": {
+    "p50": 16.665,
+    "p95": 16.67,
+    "p99": 16.67,
+    "max": 16.67
+   },
+   "cpuMs": {
+    "p50": 3.115,
+    "p95": 3.625,
+    "p99": 3.71
+   },
+   "latencyMs": {
+    "p50": 3.31,
+    "p95": 3.855,
+    "p99": 3.935
+   },
+   "syncFrameCostMs": {
+    "p50": 8.275,
+    "p95": 10.072,
+    "p99": 10.432
+   },
+   "indexMs": 27.09
+  },
+  {
+   "target": "chromium-headless",
+   "browser": "156.0.8078.4",
+   "scene": "notes",
+   "backend": "canvas2d",
+   "thread": "main",
+   "pacing": null,
+   "gpu": "Canvas2D",
+   "refreshMs": 16.665,
+   "frames": 601,
+   "fps": 60.1,
+   "visibleItems": {
+    "min": 21039,
+    "mean": 24582,
+    "max": 28136
+   },
+   "droppedFrames": 0,
+   "droppedPct": 0,
+   "over60HzBudget": 0,
+   "skippedViews": 0,
+   "frameIntervalMs": {
+    "p50": 16.675,
+    "p95": 17.515,
+    "p99": 17.66,
+    "max": 17.76
+   },
+   "mainThreadIntervalMs": {
+    "p50": 16.665,
+    "p95": 16.67,
+    "p99": 16.67,
+    "max": 16.67
+   },
+   "cpuMs": {
+    "p50": 3.105,
+    "p95": 3.52,
+    "p99": 3.625
+   },
+   "latencyMs": null,
+   "syncFrameCostMs": {
+    "p50": 38.555,
+    "p95": 44.471,
+    "p99": 51.782
+   },
+   "indexMs": 26.84
+  },
+  {
+   "target": "chromium-headless",
+   "browser": "156.0.8078.4",
+   "scene": "regions",
+   "backend": "webgl2",
+   "thread": "worker",
+   "pacing": "message",
+   "gpu": "ANGLE (Apple, ANGLE Metal Renderer: Apple M1 Max, Unspecified Version)",
+   "refreshMs": 16.665,
+   "frames": 601,
+   "fps": 60.1,
+   "visibleItems": {
+    "min": 2278,
+    "mean": 2661,
+    "max": 3058
+   },
+   "droppedFrames": 0,
+   "droppedPct": 0,
+   "over60HzBudget": 0,
+   "skippedViews": 0,
+   "frameIntervalMs": {
+    "p50": 16.67,
+    "p95": 17.4,
+    "p99": 17.62,
+    "max": 17.695
+   },
+   "mainThreadIntervalMs": {
+    "p50": 16.665,
+    "p95": 16.67,
+    "p99": 16.67,
+    "max": 16.67
+   },
+   "cpuMs": {
+    "p50": 0.095,
+    "p95": 0.15,
+    "p99": 0.195
+   },
+   "latencyMs": {
+    "p50": 0.22,
+    "p95": 0.32,
+    "p99": 0.405
+   },
+   "syncFrameCostMs": {
+    "p50": 0.94,
+    "p95": 1.606,
+    "p99": 2.013
+   },
+   "indexMs": 4.7
+  },
+  {
+   "target": "chromium-headless",
+   "browser": "156.0.8078.4",
+   "scene": "regions",
+   "backend": "webgl2",
+   "thread": "main",
+   "pacing": null,
+   "gpu": "ANGLE (Apple, ANGLE Metal Renderer: Apple M1 Max, Unspecified Version)",
+   "refreshMs": 16.665,
+   "frames": 601,
+   "fps": 60.1,
+   "visibleItems": {
+    "min": 2278,
+    "mean": 2661,
+    "max": 3058
+   },
+   "droppedFrames": 0,
+   "droppedPct": 0,
+   "over60HzBudget": 0,
+   "skippedViews": 0,
+   "frameIntervalMs": {
+    "p50": 16.665,
+    "p95": 17.46,
+    "p99": 17.63,
+    "max": 17.715
+   },
+   "mainThreadIntervalMs": {
+    "p50": 16.665,
+    "p95": 16.67,
+    "p99": 16.67,
+    "max": 16.67
+   },
+   "cpuMs": {
+    "p50": 0.085,
+    "p95": 0.125,
+    "p99": 0.155
+   },
+   "latencyMs": null,
+   "syncFrameCostMs": {
+    "p50": 1.12,
+    "p95": 1.375,
+    "p99": 1.992
+   },
+   "indexMs": 4.84
+  },
+  {
+   "target": "chromium-headless",
+   "browser": "156.0.8078.4",
+   "scene": "regions",
+   "backend": "canvas2d",
+   "thread": "worker",
+   "pacing": "message",
+   "gpu": "Canvas2D",
+   "refreshMs": 16.665,
+   "frames": 601,
+   "fps": 60.1,
+   "visibleItems": {
+    "min": 2278,
+    "mean": 2661,
+    "max": 3058
+   },
+   "droppedFrames": 0,
+   "droppedPct": 0,
+   "over60HzBudget": 0,
+   "skippedViews": 0,
+   "frameIntervalMs": {
+    "p50": 16.675,
+    "p95": 19.596,
+    "p99": 20.745,
+    "max": 24.23
+   },
+   "mainThreadIntervalMs": {
+    "p50": 16.665,
+    "p95": 16.67,
+    "p99": 16.67,
+    "max": 16.67
+   },
+   "cpuMs": {
+    "p50": 1.3,
+    "p95": 3.465,
+    "p99": 4.32
+   },
+   "latencyMs": {
+    "p50": 1.805,
+    "p95": 5.03,
+    "p99": 6.115
+   },
+   "syncFrameCostMs": {
+    "p50": 2.463,
+    "p95": 4.126,
+    "p99": 4.392
+   },
+   "indexMs": 4.915
+  },
+  {
+   "target": "chromium-headless",
+   "browser": "156.0.8078.4",
+   "scene": "regions",
+   "backend": "canvas2d",
+   "thread": "main",
+   "pacing": null,
+   "gpu": "Canvas2D",
+   "refreshMs": 16.665,
+   "frames": 601,
+   "fps": 60.1,
+   "visibleItems": {
+    "min": 2278,
+    "mean": 2661,
+    "max": 3058
+   },
+   "droppedFrames": 0,
+   "droppedPct": 0,
+   "over60HzBudget": 0,
+   "skippedViews": 0,
+   "frameIntervalMs": {
+    "p50": 16.66,
+    "p95": 17.88,
+    "p99": 18.917,
+    "max": 20.685
+   },
+   "mainThreadIntervalMs": {
+    "p50": 16.665,
+    "p95": 16.67,
+    "p99": 16.67,
+    "max": 16.67
+   },
+   "cpuMs": {
+    "p50": 1.11,
+    "p95": 2.4,
+    "p99": 3.065
+   },
+   "latencyMs": null,
+   "syncFrameCostMs": {
+    "p50": 12.64,
+    "p95": 13.505,
+    "p99": 13.903
+   },
+   "indexMs": 6.09
+  },
+  {
+   "target": "electron",
+   "browser": "Electron 45.0.0 (Chromium 156.0.8078.48) Electron",
+   "scene": "notes",
+   "backend": "webgl2",
+   "thread": "worker",
+   "pacing": "message",
+   "gpu": "ANGLE (Apple, ANGLE Metal Renderer: Apple M1 Max, Unspecified Version)",
+   "refreshMs": 8.335,
+   "frames": 1200,
+   "fps": 120,
+   "visibleItems": {
+    "min": 21039,
+    "mean": 24585,
+    "max": 28134
+   },
+   "droppedFrames": 19,
+   "droppedPct": 1.583,
+   "over60HzBudget": 0,
+   "skippedViews": 0,
+   "frameIntervalMs": {
+    "p50": 8.345,
+    "p95": 11.552,
+    "p99": 12.861,
+    "max": 13.605
+   },
+   "mainThreadIntervalMs": {
+    "p50": 8.32,
+    "p95": 9.116,
+    "p99": 9.28,
+    "max": 9.365
+   },
+   "cpuMs": {
+    "p50": 0.43,
+    "p95": 0.925,
+    "p99": 1.725
+   },
+   "latencyMs": {
+    "p50": 0.545,
+    "p95": 2.49,
+    "p99": 3.515
+   },
+   "syncFrameCostMs": {
+    "p50": 1.583,
+    "p95": 2.545,
+    "p99": 2.716
+   },
+   "indexMs": 29.975
+  },
+  {
+   "target": "electron",
+   "browser": "Electron 45.0.0 (Chromium 156.0.8078.48) Electron",
+   "scene": "notes",
+   "backend": "webgl2",
+   "thread": "main",
+   "pacing": null,
+   "gpu": "ANGLE (Apple, ANGLE Metal Renderer: Apple M1 Max, Unspecified Version)",
+   "refreshMs": 8.32,
+   "frames": 1201,
+   "fps": 120.1,
+   "visibleItems": {
+    "min": 21035,
+    "mean": 24582,
+    "max": 28134
+   },
+   "droppedFrames": 0,
+   "droppedPct": 0,
+   "over60HzBudget": 0,
+   "skippedViews": 0,
+   "frameIntervalMs": {
+    "p50": 8.325,
+    "p95": 9.1,
+    "p99": 9.33,
+    "max": 9.415
+   },
+   "mainThreadIntervalMs": {
+    "p50": 8.33,
+    "p95": 9.105,
+    "p99": 9.28,
+    "max": 9.35
+   },
+   "cpuMs": {
+    "p50": 0.4,
+    "p95": 0.465,
+    "p99": 0.495
+   },
+   "latencyMs": null,
+   "syncFrameCostMs": {
+    "p50": 1.925,
+    "p95": 2.79,
+    "p99": 2.975
+   },
+   "indexMs": 27.3
+  },
+  {
+   "target": "electron",
+   "browser": "Electron 45.0.0 (Chromium 156.0.8078.48) Electron",
+   "scene": "notes",
+   "backend": "canvas2d",
+   "thread": "worker",
+   "pacing": "message",
+   "gpu": "Canvas2D",
+   "refreshMs": 8.327,
+   "frames": 1200,
+   "fps": 120,
+   "visibleItems": {
+    "min": 21035,
+    "mean": 24579,
+    "max": 28135
+   },
+   "droppedFrames": 21,
+   "droppedPct": 1.749,
+   "over60HzBudget": 0,
+   "skippedViews": 1,
+   "frameIntervalMs": {
+    "p50": 8.325,
+    "p95": 10.076,
+    "p99": 13.976,
+    "max": 17.505
+   },
+   "mainThreadIntervalMs": {
+    "p50": 8.33,
+    "p95": 9.105,
+    "p99": 9.25,
+    "max": 9.295
+   },
+   "cpuMs": {
+    "p50": 3.323,
+    "p95": 5.316,
+    "p99": 8.991
+   },
+   "latencyMs": {
+    "p50": 3.64,
+    "p95": 6.266,
+    "p99": 10.22
+   },
+   "syncFrameCostMs": {
+    "p50": 9.972,
+    "p95": 12.448,
+    "p99": 15.879
+   },
+   "indexMs": 30.325
+  },
+  {
+   "target": "electron",
+   "browser": "Electron 45.0.0 (Chromium 156.0.8078.48) Electron",
+   "scene": "notes",
+   "backend": "canvas2d",
+   "thread": "main",
+   "pacing": null,
+   "gpu": "Canvas2D",
+   "refreshMs": 8.33,
+   "frames": 1201,
+   "fps": 120.1,
+   "visibleItems": {
+    "min": 21035,
+    "mean": 24582,
+    "max": 28138
+   },
+   "droppedFrames": 0,
+   "droppedPct": 0,
+   "over60HzBudget": 0,
+   "skippedViews": 0,
+   "frameIntervalMs": {
+    "p50": 8.3,
+    "p95": 9.15,
+    "p99": 9.335,
+    "max": 9.495
+   },
+   "mainThreadIntervalMs": {
+    "p50": 8.32,
+    "p95": 9.14,
+    "p99": 9.265,
+    "max": 9.34
+   },
+   "cpuMs": {
+    "p50": 3.06,
+    "p95": 3.51,
+    "p99": 3.595
+   },
+   "latencyMs": null,
+   "syncFrameCostMs": {
+    "p50": 43.298,
+    "p95": 63.247,
+    "p99": 67.774
+   },
+   "indexMs": 30.97
+  },
+  {
+   "target": "electron",
+   "browser": "Electron 45.0.0 (Chromium 156.0.8078.48) Electron",
+   "scene": "regions",
+   "backend": "webgl2",
+   "thread": "worker",
+   "pacing": "message",
+   "gpu": "ANGLE (Apple, ANGLE Metal Renderer: Apple M1 Max, Unspecified Version)",
+   "refreshMs": 8.328,
+   "frames": 1200,
+   "fps": 120,
+   "visibleItems": {
+    "min": 2276,
+    "mean": 2662,
+    "max": 3059
+   },
+   "droppedFrames": 0,
+   "droppedPct": 0,
+   "over60HzBudget": 0,
+   "skippedViews": 0,
+   "frameIntervalMs": {
+    "p50": 8.33,
+    "p95": 9.185,
+    "p99": 10.146,
+    "max": 12.045
+   },
+   "mainThreadIntervalMs": {
+    "p50": 8.33,
+    "p95": 9.025,
+    "p99": 9.265,
+    "max": 9.33
+   },
+   "cpuMs": {
+    "p50": 0.115,
+    "p95": 0.31,
+    "p99": 0.822
+   },
+   "latencyMs": {
+    "p50": 0.29,
+    "p95": 0.595,
+    "p99": 1.726
+   },
+   "syncFrameCostMs": {
+    "p50": 1.315,
+    "p95": 2.447,
+    "p99": 4.776
+   },
+   "indexMs": 5.985
+  },
+  {
+   "target": "electron",
+   "browser": "Electron 45.0.0 (Chromium 156.0.8078.48) Electron",
+   "scene": "regions",
+   "backend": "webgl2",
+   "thread": "main",
+   "pacing": null,
+   "gpu": "ANGLE (Apple, ANGLE Metal Renderer: Apple M1 Max, Unspecified Version)",
+   "refreshMs": 8.33,
+   "frames": 1201,
+   "fps": 120.1,
+   "visibleItems": {
+    "min": 2276,
+    "mean": 2661,
+    "max": 3059
+   },
+   "droppedFrames": 0,
+   "droppedPct": 0,
+   "over60HzBudget": 0,
+   "skippedViews": 0,
+   "frameIntervalMs": {
+    "p50": 8.325,
+    "p95": 9.11,
+    "p99": 9.25,
+    "max": 9.375
+   },
+   "mainThreadIntervalMs": {
+    "p50": 8.33,
+    "p95": 9.095,
+    "p99": 9.25,
+    "max": 9.325
+   },
+   "cpuMs": {
+    "p50": 0.105,
+    "p95": 0.135,
+    "p99": 0.165
+   },
+   "latencyMs": null,
+   "syncFrameCostMs": {
+    "p50": 1.002,
+    "p95": 2.514,
+    "p99": 3.101
+   },
+   "indexMs": 4.485
+  },
+  {
+   "target": "electron",
+   "browser": "Electron 45.0.0 (Chromium 156.0.8078.48) Electron",
+   "scene": "regions",
+   "backend": "canvas2d",
+   "thread": "worker",
+   "pacing": "message",
+   "gpu": "Canvas2D",
+   "refreshMs": 8.32,
+   "frames": 1200,
+   "fps": 120,
+   "visibleItems": {
+    "min": 2276,
+    "mean": 2662,
+    "max": 3059
+   },
+   "droppedFrames": 0,
+   "droppedPct": 0,
+   "over60HzBudget": 0,
+   "skippedViews": 0,
+   "frameIntervalMs": {
+    "p50": 8.33,
+    "p95": 9.125,
+    "p99": 9.255,
+    "max": 10.67
+   },
+   "mainThreadIntervalMs": {
+    "p50": 8.325,
+    "p95": 9.16,
+    "p99": 9.265,
+    "max": 9.335
+   },
+   "cpuMs": {
+    "p50": 0.685,
+    "p95": 0.88,
+    "p99": 1.165
+   },
+   "latencyMs": {
+    "p50": 0.84,
+    "p95": 1.16,
+    "p99": 1.9
+   },
+   "syncFrameCostMs": {
+    "p50": 3.73,
+    "p95": 5.08,
+    "p99": 5.46
+   },
+   "indexMs": 4.445
+  },
+  {
+   "target": "electron",
+   "browser": "Electron 45.0.0 (Chromium 156.0.8078.48) Electron",
+   "scene": "regions",
+   "backend": "canvas2d",
+   "thread": "main",
+   "pacing": null,
+   "gpu": "Canvas2D",
+   "refreshMs": 8.33,
+   "frames": 1202,
+   "fps": 120.2,
+   "visibleItems": {
+    "min": 2277,
+    "mean": 2662,
+    "max": 3059
+   },
+   "droppedFrames": 0,
+   "droppedPct": 0,
+   "over60HzBudget": 0,
+   "skippedViews": 0,
+   "frameIntervalMs": {
+    "p50": 8.32,
+    "p95": 9.16,
+    "p99": 9.29,
+    "max": 10.24
+   },
+   "mainThreadIntervalMs": {
+    "p50": 8.33,
+    "p95": 9.135,
+    "p99": 9.275,
+    "max": 9.32
+   },
+   "cpuMs": {
+    "p50": 0.645,
+    "p95": 0.745,
+    "p99": 0.845
+   },
+   "latencyMs": null,
+   "syncFrameCostMs": {
+    "p50": 14.4,
+    "p95": 15.73,
+    "p99": 16.146
+   },
+   "indexMs": 5.245
+  },
+  {
+   "target": "webkit-headed",
+   "browser": "27.2",
+   "scene": "notes",
+   "backend": "webgl2",
+   "thread": "worker",
+   "pacing": "message",
+   "gpu": "Apple GPU",
+   "refreshMs": 16.67,
+   "frames": 595,
+   "fps": 59.5,
+   "visibleItems": {
+    "min": 21047,
+    "mean": 24583,
+    "max": 28117
+   },
+   "droppedFrames": 16,
+   "droppedPct": 2.667,
+   "over60HzBudget": 15,
+   "skippedViews": 6,
+   "frameIntervalMs": {
+    "p50": 16.7,
+    "p95": 21.132,
+    "p99": 31.567,
+    "max": 51.4
+   },
+   "mainThreadIntervalMs": {
+    "p50": 16.66,
+    "p95": 17.42,
+    "p99": 17.56,
+    "max": 17.92
+   },
+   "cpuMs": {
+    "p50": 0.56,
+    "p95": 1.046,
+    "p99": 2.45
+   },
+   "latencyMs": {
+    "p50": 0.68,
+    "p95": 13.798,
+    "p99": 30.693
+   },
+   "syncFrameCostMs": {
+    "p50": 1.58,
+    "p95": 2.16,
+    "p99": 2.409
+   },
+   "indexMs": 42.24
+  },
+  {
+   "target": "webkit-headed",
+   "browser": "27.2",
+   "scene": "notes",
+   "backend": "webgl2",
+   "thread": "main",
+   "pacing": null,
+   "gpu": "Apple GPU",
+   "refreshMs": 16.64,
+   "frames": 595,
+   "fps": 59.5,
+   "visibleItems": {
+    "min": 21043,
+    "mean": 24612,
+    "max": 28134
+   },
+   "droppedFrames": 6,
+   "droppedPct": 0.998,
+   "over60HzBudget": 1,
+   "skippedViews": 0,
+   "frameIntervalMs": {
+    "p50": 16.66,
+    "p95": 17.467,
+    "p99": 18.163,
+    "max": 114.86
+   },
+   "mainThreadIntervalMs": {
+    "p50": 16.66,
+    "p95": 17.44,
+    "p99": 17.64,
+    "max": 115.28
+   },
+   "cpuMs": {
+    "p50": 0.62,
+    "p95": 2.426,
+    "p99": 2.54
+   },
+   "latencyMs": null,
+   "syncFrameCostMs": {
+    "p50": 1.92,
+    "p95": 3.902,
+    "p99": 5.144
+   },
+   "indexMs": 32.96
+  },
+  {
+   "target": "webkit-headed",
+   "browser": "27.2",
+   "scene": "notes",
+   "backend": "canvas2d",
+   "thread": "worker",
+   "pacing": "message",
+   "gpu": "Canvas2D",
+   "refreshMs": 16.64,
+   "frames": 288,
+   "fps": 28.8,
+   "visibleItems": {
+    "min": 21043,
+    "mean": 24379,
+    "max": 28105
+   },
+   "droppedFrames": 310,
+   "droppedPct": 51.581,
+   "over60HzBudget": 287,
+   "skippedViews": 312,
+   "frameIntervalMs": {
+    "p50": 33.82,
+    "p95": 44.398,
+    "p99": 50.045,
+    "max": 59.38
+   },
+   "mainThreadIntervalMs": {
+    "p50": 16.66,
+    "p95": 17.542,
+    "p99": 18.144,
+    "max": 35.34
+   },
+   "cpuMs": {
+    "p50": 5.85,
+    "p95": 9.1,
+    "p99": 15.575
+   },
+   "latencyMs": {
+    "p50": 41.82,
+    "p95": 55.106,
+    "p99": 60.563
+   },
+   "syncFrameCostMs": {
+    "p50": 39.72,
+    "p95": 45.68,
+    "p99": 47.68
+   },
+   "indexMs": 40.34
+  },
+  {
+   "target": "webkit-headed",
+   "browser": "27.2",
+   "scene": "notes",
+   "backend": "canvas2d",
+   "thread": "main",
+   "pacing": null,
+   "gpu": "Canvas2D",
+   "refreshMs": 16.7,
+   "frames": 349,
+   "fps": 34.9,
+   "visibleItems": {
+    "min": 21043,
+    "mean": 24585,
+    "max": 28134
+   },
+   "droppedFrames": 325,
+   "droppedPct": 54.257,
+   "over60HzBudget": 323,
+   "skippedViews": 0,
+   "frameIntervalMs": {
+    "p50": 28.71,
+    "p95": 33.053,
+    "p99": 36.892,
+    "max": 47.74
+   },
+   "mainThreadIntervalMs": {
+    "p50": 28.64,
+    "p95": 32.46,
+    "p99": 36.287,
+    "max": 47.9
+   },
+   "cpuMs": {
+    "p50": 4.36,
+    "p95": 6.412,
+    "p99": 7.774
+   },
+   "latencyMs": null,
+   "syncFrameCostMs": {
+    "p50": 36.1,
+    "p95": 42.89,
+    "p99": 47.416
+   },
+   "indexMs": 37.5
+  },
+  {
+   "target": "webkit-headed",
+   "browser": "27.2",
+   "scene": "regions",
+   "backend": "webgl2",
+   "thread": "worker",
+   "pacing": "message",
+   "gpu": "Apple GPU",
+   "refreshMs": 16.66,
+   "frames": 596,
+   "fps": 59.6,
+   "visibleItems": {
+    "min": 2278,
+    "mean": 2661,
+    "max": 3058
+   },
+   "droppedFrames": 25,
+   "droppedPct": 4.167,
+   "over60HzBudget": 23,
+   "skippedViews": 5,
+   "frameIntervalMs": {
+    "p50": 16.68,
+    "p95": 23.872,
+    "p99": 31.219,
+    "max": 55.38
+   },
+   "mainThreadIntervalMs": {
+    "p50": 16.66,
+    "p95": 17.361,
+    "p99": 17.981,
+    "max": 19.48
+   },
+   "cpuMs": {
+    "p50": 0.2,
+    "p95": 0.545,
+    "p99": 1.79
+   },
+   "latencyMs": {
+    "p50": 0.47,
+    "p95": 18.54,
+    "p99": 29.687
+   },
+   "syncFrameCostMs": {
+    "p50": 1.3,
+    "p95": 3.62,
+    "p99": 5.408
+   },
+   "indexMs": 5.24
+  },
+  {
+   "target": "webkit-headed",
+   "browser": "27.2",
+   "scene": "regions",
+   "backend": "webgl2",
+   "thread": "main",
+   "pacing": null,
+   "gpu": "Apple GPU",
+   "refreshMs": 16.66,
+   "frames": 601,
+   "fps": 60.1,
+   "visibleItems": {
+    "min": 2277,
+    "mean": 2662,
+    "max": 3058
+   },
+   "droppedFrames": 0,
+   "droppedPct": 0,
+   "over60HzBudget": 0,
+   "skippedViews": 0,
+   "frameIntervalMs": {
+    "p50": 16.66,
+    "p95": 17.501,
+    "p99": 17.802,
+    "max": 23.02
+   },
+   "mainThreadIntervalMs": {
+    "p50": 16.66,
+    "p95": 17.421,
+    "p99": 17.64,
+    "max": 21.14
+   },
+   "cpuMs": {
+    "p50": 0.16,
+    "p95": 0.44,
+    "p99": 0.76
+   },
+   "latencyMs": null,
+   "syncFrameCostMs": {
+    "p50": 0.94,
+    "p95": 1.902,
+    "p99": 2.357
+   },
+   "indexMs": 4.88
+  },
+  {
+   "target": "webkit-headed",
+   "browser": "27.2",
+   "scene": "regions",
+   "backend": "canvas2d",
+   "thread": "worker",
+   "pacing": "message",
+   "gpu": "Canvas2D",
+   "refreshMs": 16.68,
+   "frames": 601,
+   "fps": 60.1,
+   "visibleItems": {
+    "min": 2278,
+    "mean": 2662,
+    "max": 3058
+   },
+   "droppedFrames": 0,
+   "droppedPct": 0,
+   "over60HzBudget": 0,
+   "skippedViews": 0,
+   "frameIntervalMs": {
+    "p50": 16.66,
+    "p95": 17.461,
+    "p99": 17.96,
+    "max": 22.64
+   },
+   "mainThreadIntervalMs": {
+    "p50": 16.66,
+    "p95": 17.381,
+    "p99": 17.62,
+    "max": 18.04
+   },
+   "cpuMs": {
+    "p50": 0.9,
+    "p95": 1.24,
+    "p99": 1.86
+   },
+   "latencyMs": {
+    "p50": 0.98,
+    "p95": 1.38,
+    "p99": 2.34
+   },
+   "syncFrameCostMs": {
+    "p50": 8.47,
+    "p95": 9.381,
+    "p99": 9.825
+   },
+   "indexMs": 4.62
+  },
+  {
+   "target": "webkit-headed",
+   "browser": "27.2",
+   "scene": "regions",
+   "backend": "canvas2d",
+   "thread": "main",
+   "pacing": null,
+   "gpu": "Canvas2D",
+   "refreshMs": 16.65,
+   "frames": 601,
+   "fps": 60.1,
+   "visibleItems": {
+    "min": 2276,
+    "mean": 2662,
+    "max": 3058
+   },
+   "droppedFrames": 1,
+   "droppedPct": 0.166,
+   "over60HzBudget": 1,
+   "skippedViews": 0,
+   "frameIntervalMs": {
+    "p50": 16.66,
+    "p95": 17.54,
+    "p99": 18.266,
+    "max": 25.92
+   },
+   "mainThreadIntervalMs": {
+    "p50": 16.66,
+    "p95": 17.361,
+    "p99": 18.043,
+    "max": 25.6
+   },
+   "cpuMs": {
+    "p50": 0.86,
+    "p95": 1.34,
+    "p99": 1.7
+   },
+   "latencyMs": null,
+   "syncFrameCostMs": {
+    "p50": 8.18,
+    "p95": 10.026,
+    "p99": 12.309
+   },
+   "indexMs": 5.56
+  },
+  {
+   "target": "webkit-headless",
+   "browser": "27.2",
+   "scene": "notes",
+   "backend": "webgl2",
+   "thread": "worker",
+   "pacing": "message",
+   "gpu": "Apple GPU",
+   "refreshMs": 16.66,
+   "frames": 593,
+   "fps": 59.3,
+   "visibleItems": {
+    "min": 21037,
+    "mean": 24591,
+    "max": 28132
+   },
+   "droppedFrames": 24,
+   "droppedPct": 4,
+   "over60HzBudget": 24,
+   "skippedViews": 8,
+   "frameIntervalMs": {
+    "p50": 16.71,
+    "p95": 23.94,
+    "p99": 29.914,
+    "max": 37.3
+   },
+   "mainThreadIntervalMs": {
+    "p50": 16.68,
+    "p95": 17.5,
+    "p99": 19.761,
+    "max": 22.18
+   },
+   "cpuMs": {
+    "p50": 2.26,
+    "p95": 3.856,
+    "p99": 7.206
+   },
+   "latencyMs": {
+    "p50": 2.54,
+    "p95": 23.36,
+    "p99": 34.963
+   },
+   "syncFrameCostMs": {
+    "p50": 3.7,
+    "p95": 4.96,
+    "p99": 7.719
+   },
+   "indexMs": 38.74
+  },
+  {
+   "target": "webkit-headless",
+   "browser": "27.2",
+   "scene": "notes",
+   "backend": "webgl2",
+   "thread": "main",
+   "pacing": null,
+   "gpu": "Apple GPU",
+   "refreshMs": 16.68,
+   "frames": 601,
+   "fps": 60.1,
+   "visibleItems": {
+    "min": 21039,
+    "mean": 24582,
+    "max": 28132
+   },
+   "droppedFrames": 0,
+   "droppedPct": 0,
+   "over60HzBudget": 0,
+   "skippedViews": 0,
+   "frameIntervalMs": {
+    "p50": 16.66,
+    "p95": 18.061,
+    "p99": 19.12,
+    "max": 20.14
+   },
+   "mainThreadIntervalMs": {
+    "p50": 16.68,
+    "p95": 17.34,
+    "p99": 17.701,
+    "max": 18.14
+   },
+   "cpuMs": {
+    "p50": 1.52,
+    "p95": 2.42,
+    "p99": 2.62
+   },
+   "latencyMs": null,
+   "syncFrameCostMs": {
+    "p50": 1.43,
+    "p95": 2.06,
+    "p99": 3.704
+   },
+   "indexMs": 33.18
+  },
+  {
+   "target": "webkit-headless",
+   "browser": "27.2",
+   "scene": "notes",
+   "backend": "canvas2d",
+   "thread": "worker",
+   "pacing": "message",
+   "gpu": "Canvas2D",
+   "refreshMs": 16.64,
+   "frames": 316,
+   "fps": 31.6,
+   "visibleItems": {
+    "min": 21037,
+    "mean": 24442,
+    "max": 28135
+   },
+   "droppedFrames": 322,
+   "droppedPct": 53.577,
+   "over60HzBudget": 311,
+   "skippedViews": 285,
+   "frameIntervalMs": {
+    "p50": 31.36,
+    "p95": 40.142,
+    "p99": 44.952,
+    "max": 50.32
+   },
+   "mainThreadIntervalMs": {
+    "p50": 16.68,
+    "p95": 17.521,
+    "p99": 20.144,
+    "max": 23.02
+   },
+   "cpuMs": {
+    "p50": 5.59,
+    "p95": 8.37,
+    "p99": 10.32
+   },
+   "latencyMs": {
+    "p50": 39.6,
+    "p95": 52.285,
+    "p99": 58.087
+   },
+   "syncFrameCostMs": {
+    "p50": 38.42,
+    "p95": 43.413,
+    "p99": 44.487
+   },
+   "indexMs": 36.18
+  },
+  {
+   "target": "webkit-headless",
+   "browser": "27.2",
+   "scene": "notes",
+   "backend": "canvas2d",
+   "thread": "main",
+   "pacing": null,
+   "gpu": "Canvas2D",
+   "refreshMs": 16.66,
+   "frames": 338,
+   "fps": 33.8,
+   "visibleItems": {
+    "min": 21046,
+    "mean": 24531,
+    "max": 28099
+   },
+   "droppedFrames": 313,
+   "droppedPct": 52.167,
+   "over60HzBudget": 309,
+   "skippedViews": 0,
+   "frameIntervalMs": {
+    "p50": 28.98,
+    "p95": 37.932,
+    "p99": 41.253,
+    "max": 46.74
+   },
+   "mainThreadIntervalMs": {
+    "p50": 29,
+    "p95": 38.14,
+    "p99": 40.385,
+    "max": 45.22
+   },
+   "cpuMs": {
+    "p50": 4.88,
+    "p95": 8.403,
+    "p99": 10.531
+   },
+   "latencyMs": null,
+   "syncFrameCostMs": {
+    "p50": 31.97,
+    "p95": 35.442,
+    "p99": 37.208
+   },
+   "indexMs": 37.12
+  },
+  {
+   "target": "webkit-headless",
+   "browser": "27.2",
+   "scene": "regions",
+   "backend": "webgl2",
+   "thread": "worker",
+   "pacing": "message",
+   "gpu": "Apple GPU",
+   "refreshMs": 16.7,
+   "frames": 598,
+   "fps": 59.8,
+   "visibleItems": {
+    "min": 2278,
+    "mean": 2662,
+    "max": 3058
+   },
+   "droppedFrames": 8,
+   "droppedPct": 1.336,
+   "over60HzBudget": 7,
+   "skippedViews": 2,
+   "frameIntervalMs": {
+    "p50": 16.66,
+    "p95": 18.836,
+    "p99": 25.226,
+    "max": 49.52
+   },
+   "mainThreadIntervalMs": {
+    "p50": 16.66,
+    "p95": 17.38,
+    "p99": 17.581,
+    "max": 19.88
+   },
+   "cpuMs": {
+    "p50": 0.2,
+    "p95": 0.46,
+    "p99": 1.543
+   },
+   "latencyMs": {
+    "p50": 0.36,
+    "p95": 4.762,
+    "p99": 18.62
+   },
+   "syncFrameCostMs": {
+    "p50": 1.32,
+    "p95": 2.22,
+    "p99": 2.537
+   },
+   "indexMs": 5.1
+  },
+  {
+   "target": "webkit-headless",
+   "browser": "27.2",
+   "scene": "regions",
+   "backend": "webgl2",
+   "thread": "main",
+   "pacing": null,
+   "gpu": "Apple GPU",
+   "refreshMs": 16.67,
+   "frames": 601,
+   "fps": 60.1,
+   "visibleItems": {
+    "min": 2278,
+    "mean": 2662,
+    "max": 3058
+   },
+   "droppedFrames": 0,
+   "droppedPct": 0,
+   "over60HzBudget": 0,
+   "skippedViews": 0,
+   "frameIntervalMs": {
+    "p50": 16.66,
+    "p95": 17.4,
+    "p99": 17.6,
+    "max": 19.76
+   },
+   "mainThreadIntervalMs": {
+    "p50": 16.66,
+    "p95": 17.4,
+    "p99": 17.56,
+    "max": 19.76
+   },
+   "cpuMs": {
+    "p50": 0.14,
+    "p95": 0.34,
+    "p99": 0.38
+   },
+   "latencyMs": null,
+   "syncFrameCostMs": {
+    "p50": 1.14,
+    "p95": 1.542,
+    "p99": 1.9
+   },
+   "indexMs": 5.12
+  },
+  {
+   "target": "webkit-headless",
+   "browser": "27.2",
+   "scene": "regions",
+   "backend": "canvas2d",
+   "thread": "worker",
+   "pacing": "message",
+   "gpu": "Canvas2D",
+   "refreshMs": 16.66,
+   "frames": 601,
+   "fps": 60.1,
+   "visibleItems": {
+    "min": 2278,
+    "mean": 2661,
+    "max": 3058
+   },
+   "droppedFrames": 1,
+   "droppedPct": 0.167,
+   "over60HzBudget": 1,
+   "skippedViews": 0,
+   "frameIntervalMs": {
+    "p50": 16.66,
+    "p95": 19.901,
+    "p99": 21.921,
+    "max": 25.56
+   },
+   "mainThreadIntervalMs": {
+    "p50": 16.68,
+    "p95": 17.54,
+    "p99": 19.46,
+    "max": 21.3
+   },
+   "cpuMs": {
+    "p50": 0.94,
+    "p95": 3.26,
+    "p99": 5.58
+   },
+   "latencyMs": {
+    "p50": 1.04,
+    "p95": 3.92,
+    "p99": 6.3
+   },
+   "syncFrameCostMs": {
+    "p50": 8.44,
+    "p95": 12.064,
+    "p99": 15.472
+   },
+   "indexMs": 5.06
+  },
+  {
+   "target": "webkit-headless",
+   "browser": "27.2",
+   "scene": "regions",
+   "backend": "canvas2d",
+   "thread": "main",
+   "pacing": null,
+   "gpu": "Canvas2D",
+   "refreshMs": 16.68,
+   "frames": 601,
+   "fps": 60.1,
+   "visibleItems": {
+    "min": 2278,
+    "mean": 2662,
+    "max": 3059
+   },
+   "droppedFrames": 3,
+   "droppedPct": 0.5,
+   "over60HzBudget": 3,
+   "skippedViews": 0,
+   "frameIntervalMs": {
+    "p50": 16.68,
+    "p95": 17.6,
+    "p99": 21.741,
+    "max": 31.3
+   },
+   "mainThreadIntervalMs": {
+    "p50": 16.68,
+    "p95": 17.52,
+    "p99": 21.921,
+    "max": 31.42
+   },
+   "cpuMs": {
+    "p50": 0.8,
+    "p95": 1.26,
+    "p99": 2.1
+   },
+   "latencyMs": null,
+   "syncFrameCostMs": {
+    "p50": 8.47,
+    "p95": 9.221,
+    "p99": 9.461
+   },
+   "indexMs": 6.08
+  },
+  {
+   "target": "chromium-headless-shell",
+   "browser": "156.0.8078.4",
+   "scene": "notes",
+   "backend": "webgl2",
+   "thread": "worker",
+   "pacing": "message",
+   "gpu": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (LLVM 10.0.0) (0x0000C0DE)), SwiftShader driver)",
+   "refreshMs": 16.665,
+   "frames": 4,
+   "fps": 0.4,
+   "visibleItems": {
+    "min": 23696,
+    "mean": 26561,
+    "max": 28053
+   },
+   "droppedFrames": 901,
+   "droppedPct": 150.167,
+   "over60HzBudget": 3,
+   "skippedViews": 320,
+   "frameIntervalMs": {
+    "p50": 4666.395,
+    "p95": 5755.597,
+    "p99": 5852.415,
+    "max": 5876.62
+   },
+   "mainThreadIntervalMs": {
+    "p50": 16.665,
+    "p95": 16.67,
+    "p99": 16.67,
+    "max": 4633.15
+   },
+   "cpuMs": {
+    "p50": 1.39,
+    "p95": 4.184,
+    "p99": 4.517
+   },
+   "latencyMs": {
+    "p50": 4586.5,
+    "p95": 5695.933,
+    "p99": 5843.038
+   },
+   "syncFrameCostMs": {
+    "p50": 4788.708,
+    "p95": 6190.977,
+    "p99": 6315.623
+   },
+   "indexMs": 30.35
+  },
+  {
+   "target": "chromium-headless-shell",
+   "browser": "156.0.8078.4",
+   "scene": "notes",
+   "backend": "webgl2",
+   "thread": "main",
+   "pacing": null,
+   "gpu": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (LLVM 10.0.0) (0x0000C0DE)), SwiftShader driver)",
+   "refreshMs": 16.665,
+   "frames": 4,
+   "fps": 0.4,
+   "visibleItems": {
+    "min": 21867,
+    "mean": 25160,
+    "max": 28053
+   },
+   "droppedFrames": 430,
+   "droppedPct": 71.667,
+   "over60HzBudget": 3,
+   "skippedViews": 0,
+   "frameIntervalMs": {
+    "p50": 2446.67,
+    "p95": 2479.115,
+    "p99": 2481.999,
+    "max": 2482.72
+   },
+   "mainThreadIntervalMs": {
+    "p50": 2433.235,
+    "p95": 2478.235,
+    "p99": 2482.235,
+    "max": 2483.235
+   },
+   "cpuMs": {
+    "p50": 0.647,
+    "p95": 3.365,
+    "p99": 3.741
+   },
+   "latencyMs": null,
+   "syncFrameCostMs": {
+    "p50": 2532.647,
+    "p95": 2655.012,
+    "p99": 2667.398
+   },
+   "indexMs": 28.935
+  },
+  {
+   "target": "chromium-headless-shell",
+   "browser": "156.0.8078.4",
+   "scene": "notes",
+   "backend": "canvas2d",
+   "thread": "worker",
+   "pacing": "message",
+   "gpu": "Canvas2D",
+   "refreshMs": 16.665,
+   "frames": 142,
+   "fps": 14.2,
+   "visibleItems": {
+    "min": 21051,
+    "mean": 24373,
+    "max": 28094
+   },
+   "droppedFrames": 469,
+   "droppedPct": 78.167,
+   "over60HzBudget": 134,
+   "skippedViews": 409,
+   "frameIntervalMs": {
+    "p50": 68.36,
+    "p95": 85.91,
+    "p99": 223.115,
+    "max": 284.055
+   },
+   "mainThreadIntervalMs": {
+    "p50": 16.665,
+    "p95": 33.33,
+    "p99": 33.335,
+    "max": 33.34
+   },
+   "cpuMs": {
+    "p50": 3.53,
+    "p95": 5.412,
+    "p99": 7.061
+   },
+   "latencyMs": {
+    "p50": 80.255,
+    "p95": 100.097,
+    "p99": 215.039
+   },
+   "syncFrameCostMs": {
+    "p50": 72.44,
+    "p95": 83.71,
+    "p99": 88.499
+   },
+   "indexMs": 30.32
+  },
+  {
+   "target": "chromium-headless-shell",
+   "browser": "156.0.8078.4",
+   "scene": "notes",
+   "backend": "canvas2d",
+   "thread": "main",
+   "pacing": null,
+   "gpu": "Canvas2D",
+   "refreshMs": 16.665,
+   "frames": 154,
+   "fps": 15.4,
+   "visibleItems": {
+    "min": 21051,
+    "mean": 24442,
+    "max": 28122
+   },
+   "droppedFrames": 455,
+   "droppedPct": 75.833,
+   "over60HzBudget": 153,
+   "skippedViews": 0,
+   "frameIntervalMs": {
+    "p50": 65.645,
+    "p95": 72.162,
+    "p99": 73.1,
+    "max": 74.24
+   },
+   "mainThreadIntervalMs": {
+    "p50": 66.665,
+    "p95": 83.325,
+    "p99": 83.33,
+    "max": 83.335
+   },
+   "cpuMs": {
+    "p50": 3.25,
+    "p95": 3.75,
+    "p99": 3.851
+   },
+   "latencyMs": null,
+   "syncFrameCostMs": {
+    "p50": 38.695,
+    "p95": 69.725,
+    "p99": 71.975
+   },
+   "indexMs": 29.005
+  },
+  {
+   "target": "chromium-headless-shell",
+   "browser": "156.0.8078.4",
+   "scene": "regions",
+   "backend": "webgl2",
+   "thread": "worker",
+   "pacing": "message",
+   "gpu": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (LLVM 10.0.0) (0x0000C0DE)), SwiftShader driver)",
+   "refreshMs": 16.665,
+   "frames": 126,
+   "fps": 12.6,
+   "visibleItems": {
+    "min": 2278,
+    "mean": 2652,
+    "max": 3058
+   },
+   "droppedFrames": 483,
+   "droppedPct": 80.5,
+   "over60HzBudget": 123,
+   "skippedViews": 417,
+   "frameIntervalMs": {
+    "p50": 77.61,
+    "p95": 95.757,
+    "p99": 148.65,
+    "max": 198.53
+   },
+   "mainThreadIntervalMs": {
+    "p50": 16.665,
+    "p95": 33.33,
+    "p99": 33.335,
+    "max": 50
+   },
+   "cpuMs": {
+    "p50": 0.105,
+    "p95": 0.179,
+    "p99": 0.474
+   },
+   "latencyMs": {
+    "p50": 87.695,
+    "p95": 112.122,
+    "p99": 146.684
+   },
+   "syncFrameCostMs": {
+    "p50": 57.428,
+    "p95": 64.457,
+    "p99": 105.028
+   },
+   "indexMs": 5.02
+  },
+  {
+   "target": "chromium-headless-shell",
+   "browser": "156.0.8078.4",
+   "scene": "regions",
+   "backend": "webgl2",
+   "thread": "main",
+   "pacing": null,
+   "gpu": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (LLVM 10.0.0) (0x0000C0DE)), SwiftShader driver)",
+   "refreshMs": 16.665,
+   "frames": 147,
+   "fps": 14.7,
+   "visibleItems": {
+    "min": 2279,
+    "mean": 2651,
+    "max": 3056
+   },
+   "droppedFrames": 446,
+   "droppedPct": 74.333,
+   "over60HzBudget": 146,
+   "skippedViews": 0,
+   "frameIntervalMs": {
+    "p50": 67.33,
+    "p95": 73.604,
+    "p99": 93.576,
+    "max": 123.2
+   },
+   "mainThreadIntervalMs": {
+    "p50": 66.665,
+    "p95": 83.33,
+    "p99": 92.501,
+    "max": 116.66
+   },
+   "cpuMs": {
+    "p50": 0.11,
+    "p95": 0.181,
+    "p99": 0.375
+   },
+   "latencyMs": null,
+   "syncFrameCostMs": {
+    "p50": 58.055,
+    "p95": 64.578,
+    "p99": 67.638
+   },
+   "indexMs": 4.69
+  },
+  {
+   "target": "chromium-headless-shell",
+   "browser": "156.0.8078.4",
+   "scene": "regions",
+   "backend": "canvas2d",
+   "thread": "worker",
+   "pacing": "message",
+   "gpu": "Canvas2D",
+   "refreshMs": 16.665,
+   "frames": 585,
+   "fps": 58.5,
+   "visibleItems": {
+    "min": 2278,
+    "mean": 2659,
+    "max": 3058
+   },
+   "droppedFrames": 19,
+   "droppedPct": 3.167,
+   "over60HzBudget": 15,
+   "skippedViews": 7,
+   "frameIntervalMs": {
+    "p50": 16.667,
+    "p95": 18.491,
+    "p99": 35.244,
+    "max": 71.58
+   },
+   "mainThreadIntervalMs": {
+    "p50": 16.665,
+    "p95": 16.67,
+    "p99": 33.33,
+    "max": 33.335
+   },
+   "cpuMs": {
+    "p50": 0.6,
+    "p95": 0.764,
+    "p99": 0.985
+   },
+   "latencyMs": {
+    "p50": 13.18,
+    "p95": 15.655,
+    "p99": 31.781
+   },
+   "syncFrameCostMs": {
+    "p50": 12.34,
+    "p95": 13.375,
+    "p99": 13.713
+   },
+   "indexMs": 5.09
+  },
+  {
+   "target": "chromium-headless-shell",
+   "browser": "156.0.8078.4",
+   "scene": "regions",
+   "backend": "canvas2d",
+   "thread": "main",
+   "pacing": null,
+   "gpu": "Canvas2D",
+   "refreshMs": 16.665,
+   "frames": 601,
+   "fps": 60.1,
+   "visibleItems": {
+    "min": 2278,
+    "mean": 2661,
+    "max": 3058
+   },
+   "droppedFrames": 0,
+   "droppedPct": 0,
+   "over60HzBudget": 0,
+   "skippedViews": 0,
+   "frameIntervalMs": {
+    "p50": 16.665,
+    "p95": 17.046,
+    "p99": 17.405,
+    "max": 17.695
+   },
+   "mainThreadIntervalMs": {
+    "p50": 16.665,
+    "p95": 16.67,
+    "p99": 16.67,
+    "max": 16.67
+   },
+   "cpuMs": {
+    "p50": 0.59,
+    "p95": 0.67,
+    "p99": 0.705
+   },
+   "latencyMs": null,
+   "syncFrameCostMs": {
+    "p50": 12.33,
+    "p95": 13.405,
+    "p99": 13.582
+   },
+   "indexMs": 4.445
+  },
+  {
+   "target": "webkit-headed",
+   "browser": "27.2",
+   "scene": "notes",
+   "backend": "webgl2",
+   "thread": "worker",
+   "pacing": "animation-frame",
+   "gpu": "Apple GPU",
+   "refreshMs": 16.66,
+   "frames": 600,
+   "fps": 60,
+   "visibleItems": {
+    "min": 21037,
+    "mean": 24587,
+    "max": 28135
+   },
+   "droppedFrames": 0,
+   "droppedPct": 0,
+   "over60HzBudget": 0,
+   "skippedViews": 0,
+   "frameIntervalMs": {
+    "p50": 16.66,
+    "p95": 17.322,
+    "p99": 17.661,
+    "max": 20.22
+   },
+   "mainThreadIntervalMs": {
+    "p50": 16.66,
+    "p95": 17.262,
+    "p99": 17.56,
+    "max": 17.62
+   },
+   "cpuMs": {
+    "p50": 2.16,
+    "p95": 2.48,
+    "p99": 2.66
+   },
+   "latencyMs": {
+    "p50": 2.3,
+    "p95": 2.64,
+    "p99": 2.94
+   },
+   "syncFrameCostMs": {
+    "p50": 3.08,
+    "p95": 4.82,
+    "p99": 5.137
+   },
+   "indexMs": 32.98
+  },
+  {
+   "target": "webkit-headed",
+   "browser": "27.2",
+   "scene": "notes",
+   "backend": "canvas2d",
+   "thread": "worker",
+   "pacing": "animation-frame",
+   "gpu": "Canvas2D",
+   "refreshMs": 16.68,
+   "frames": 352,
+   "fps": 35.2,
+   "visibleItems": {
+    "min": 21044,
+    "mean": 24442,
+    "max": 28116
+   },
+   "droppedFrames": 343,
+   "droppedPct": 57.167,
+   "over60HzBudget": 340,
+   "skippedViews": 248,
+   "frameIntervalMs": {
+    "p50": 28.04,
+    "p95": 31.68,
+    "p99": 32.86,
+    "max": 63.76
+   },
+   "mainThreadIntervalMs": {
+    "p50": 16.66,
+    "p95": 17.58,
+    "p99": 17.68,
+    "max": 26.56
+   },
+   "cpuMs": {
+    "p50": 5.08,
+    "p95": 5.929,
+    "p99": 6.32
+   },
+   "latencyMs": {
+    "p50": 36.7,
+    "p95": 45.407,
+    "p99": 48.4
+   },
+   "syncFrameCostMs": {
+    "p50": 33.62,
+    "p95": 38.59,
+    "p99": 39.823
+   },
+   "indexMs": 37.22
+  },
+  {
+   "target": "webkit-headed",
+   "browser": "27.2",
+   "scene": "regions",
+   "backend": "webgl2",
+   "thread": "worker",
+   "pacing": "animation-frame",
+   "gpu": "Apple GPU",
+   "refreshMs": 16.65,
+   "frames": 601,
+   "fps": 60.1,
+   "visibleItems": {
+    "min": 2278,
+    "mean": 2661,
+    "max": 3058
+   },
+   "droppedFrames": 0,
+   "droppedPct": 0,
+   "over60HzBudget": 0,
+   "skippedViews": 0,
+   "frameIntervalMs": {
+    "p50": 16.66,
+    "p95": 17.481,
+    "p99": 17.66,
+    "max": 24.46
+   },
+   "mainThreadIntervalMs": {
+    "p50": 16.66,
+    "p95": 17.401,
+    "p99": 17.64,
+    "max": 17.74
+   },
+   "cpuMs": {
+    "p50": 0.14,
+    "p95": 0.38,
+    "p99": 0.44
+   },
+   "latencyMs": {
+    "p50": 0.28,
+    "p95": 0.58,
+    "p99": 5.24
+   },
+   "syncFrameCostMs": {
+    "p50": 0.94,
+    "p95": 1.18,
+    "p99": 1.312
+   },
+   "indexMs": 5.54
+  },
+  {
+   "target": "webkit-headed",
+   "browser": "27.2",
+   "scene": "regions",
+   "backend": "canvas2d",
+   "thread": "worker",
+   "pacing": "animation-frame",
+   "gpu": "Canvas2D",
+   "refreshMs": 16.66,
+   "frames": 600,
+   "fps": 60,
+   "visibleItems": {
+    "min": 2278,
+    "mean": 2662,
+    "max": 3058
+   },
+   "droppedFrames": 0,
+   "droppedPct": 0,
+   "over60HzBudget": 0,
+   "skippedViews": 0,
+   "frameIntervalMs": {
+    "p50": 16.66,
+    "p95": 17.284,
+    "p99": 17.641,
+    "max": 18.9
+   },
+   "mainThreadIntervalMs": {
+    "p50": 16.66,
+    "p95": 17.28,
+    "p99": 17.6,
+    "max": 17.7
+   },
+   "cpuMs": {
+    "p50": 0.84,
+    "p95": 1.12,
+    "p99": 1.42
+   },
+   "latencyMs": {
+    "p50": 0.94,
+    "p95": 1.26,
+    "p99": 1.64
+   },
+   "syncFrameCostMs": {
+    "p50": 7.82,
+    "p95": 8.5,
+    "p99": 10.158
+   },
+   "indexMs": 4.6
+  },
+  {
+   "target": "webkit-headless",
+   "browser": "27.2",
+   "scene": "notes",
+   "backend": "webgl2",
+   "thread": "worker",
+   "pacing": "animation-frame",
+   "gpu": "Apple GPU",
+   "refreshMs": 16.67,
+   "frames": 600,
+   "fps": 60,
+   "visibleItems": {
+    "min": 21037,
+    "mean": 24587,
+    "max": 28134
+   },
+   "droppedFrames": 3,
+   "droppedPct": 0.5,
+   "over60HzBudget": 3,
+   "skippedViews": 0,
+   "frameIntervalMs": {
+    "p50": 16.7,
+    "p95": 17.38,
+    "p99": 17.64,
+    "max": 32.3
+   },
+   "mainThreadIntervalMs": {
+    "p50": 16.66,
+    "p95": 17.202,
+    "p99": 17.5,
+    "max": 17.58
+   },
+   "cpuMs": {
+    "p50": 2.12,
+    "p95": 2.481,
+    "p99": 2.941
+   },
+   "latencyMs": {
+    "p50": 15.24,
+    "p95": 27.481,
+    "p99": 28.362
+   },
+   "syncFrameCostMs": {
+    "p50": 3,
+    "p95": 3.64,
+    "p99": 4.044
+   },
+   "indexMs": 34.06
+  },
+  {
+   "target": "webkit-headless",
+   "browser": "27.2",
+   "scene": "notes",
+   "backend": "canvas2d",
+   "thread": "worker",
+   "pacing": "animation-frame",
+   "gpu": "Canvas2D",
+   "refreshMs": 16.66,
+   "frames": 325,
+   "fps": 32.5,
+   "visibleItems": {
+    "min": 21041,
+    "mean": 24413,
+    "max": 28095
+   },
+   "droppedFrames": 326,
+   "droppedPct": 54.333,
+   "over60HzBudget": 324,
+   "skippedViews": 275,
+   "frameIntervalMs": {
+    "p50": 30.7,
+    "p95": 36.125,
+    "p99": 39.763,
+    "max": 43.82
+   },
+   "mainThreadIntervalMs": {
+    "p50": 16.66,
+    "p95": 17.5,
+    "p99": 17.64,
+    "max": 26.34
+   },
+   "cpuMs": {
+    "p50": 5.48,
+    "p95": 6.86,
+    "p99": 7.638
+   },
+   "latencyMs": {
+    "p50": 38.68,
+    "p95": 47.864,
+    "p99": 51.59
+   },
+   "syncFrameCostMs": {
+    "p50": 37.74,
+    "p95": 42.108,
+    "p99": 43.483
+   },
+   "indexMs": 35.04
+  },
+  {
+   "target": "webkit-headless",
+   "browser": "27.2",
+   "scene": "regions",
+   "backend": "webgl2",
+   "thread": "worker",
+   "pacing": "animation-frame",
+   "gpu": "Apple GPU",
+   "refreshMs": 16.68,
+   "frames": 600,
+   "fps": 60,
+   "visibleItems": {
+    "min": 2277,
+    "mean": 2662,
+    "max": 3059
+   },
+   "droppedFrames": 0,
+   "droppedPct": 0,
+   "over60HzBudget": 0,
+   "skippedViews": 0,
+   "frameIntervalMs": {
+    "p50": 16.66,
+    "p95": 17.3,
+    "p99": 17.68,
+    "max": 17.96
+   },
+   "mainThreadIntervalMs": {
+    "p50": 16.66,
+    "p95": 17.282,
+    "p99": 17.6,
+    "max": 18.16
+   },
+   "cpuMs": {
+    "p50": 0.14,
+    "p95": 0.36,
+    "p99": 0.42
+   },
+   "latencyMs": {
+    "p50": 0.3,
+    "p95": 0.54,
+    "p99": 0.68
+   },
+   "syncFrameCostMs": {
+    "p50": 0.98,
+    "p95": 2.522,
+    "p99": 3.029
+   },
+   "indexMs": 4.88
+  },
+  {
+   "target": "webkit-headless",
+   "browser": "27.2",
+   "scene": "regions",
+   "backend": "canvas2d",
+   "thread": "worker",
+   "pacing": "animation-frame",
+   "gpu": "Canvas2D",
+   "refreshMs": 16.66,
+   "frames": 601,
+   "fps": 60.1,
+   "visibleItems": {
+    "min": 2278,
+    "mean": 2662,
+    "max": 3058
+   },
+   "droppedFrames": 0,
+   "droppedPct": 0,
+   "over60HzBudget": 0,
+   "skippedViews": 0,
+   "frameIntervalMs": {
+    "p50": 16.66,
+    "p95": 17.52,
+    "p99": 17.66,
+    "max": 17.82
+   },
+   "mainThreadIntervalMs": {
+    "p50": 16.66,
+    "p95": 17.541,
+    "p99": 17.6,
+    "max": 17.74
+   },
+   "cpuMs": {
+    "p50": 0.82,
+    "p95": 1.12,
+    "p99": 1.22
+   },
+   "latencyMs": {
+    "p50": 0.94,
+    "p95": 1.24,
+    "p99": 1.36
+   },
+   "syncFrameCostMs": {
+    "p50": 6.53,
+    "p95": 8.481,
+    "p99": 8.827
+   },
+   "indexMs": 6.38
+  },
+  {
+   "target": "electron",
+   "browser": "Electron 45.0.0 (Chromium 156.0.8078.48) Electron",
+   "scene": "notes",
+   "backend": "webgl2",
+   "thread": "worker",
+   "pacing": "animation-frame",
+   "gpu": "ANGLE (Apple, ANGLE Metal Renderer: Apple M1 Max, Unspecified Version)",
+   "refreshMs": 8.33,
+   "frames": 1201,
+   "fps": 120.1,
+   "visibleItems": {
+    "min": 21035,
+    "mean": 24582,
+    "max": 28138
+   },
+   "droppedFrames": 0,
+   "droppedPct": 0,
+   "over60HzBudget": 0,
+   "skippedViews": 0,
+   "frameIntervalMs": {
+    "p50": 8.335,
+    "p95": 9.876,
+    "p99": 10.826,
+    "max": 11.61
+   },
+   "mainThreadIntervalMs": {
+    "p50": 8.335,
+    "p95": 9.08,
+    "p99": 9.26,
+    "max": 9.335
+   },
+   "cpuMs": {
+    "p50": 0.435,
+    "p95": 1.35,
+    "p99": 1.79
+   },
+   "latencyMs": {
+    "p50": 8.675,
+    "p95": 10.095,
+    "p99": 11.19
+   },
+   "syncFrameCostMs": {
+    "p50": 1.705,
+    "p95": 3.382,
+    "p99": 3.646
+   },
+   "indexMs": 30.03
+  },
+  {
+   "target": "electron",
+   "browser": "Electron 45.0.0 (Chromium 156.0.8078.48) Electron",
+   "scene": "notes",
+   "backend": "canvas2d",
+   "thread": "worker",
+   "pacing": "animation-frame",
+   "gpu": "Canvas2D",
+   "refreshMs": 8.335,
+   "frames": 1200,
+   "fps": 120,
+   "visibleItems": {
+    "min": 21037,
+    "mean": 24585,
+    "max": 28137
+   },
+   "droppedFrames": 0,
+   "droppedPct": 0,
+   "over60HzBudget": 0,
+   "skippedViews": 0,
+   "frameIntervalMs": {
+    "p50": 8.315,
+    "p95": 9.086,
+    "p99": 9.291,
+    "max": 9.595
+   },
+   "mainThreadIntervalMs": {
+    "p50": 8.335,
+    "p95": 9.122,
+    "p99": 9.28,
+    "max": 9.33
+   },
+   "cpuMs": {
+    "p50": 3.1,
+    "p95": 3.555,
+    "p99": 3.665
+   },
+   "latencyMs": {
+    "p50": 11.25,
+    "p95": 11.85,
+    "p99": 11.97
+   },
+   "syncFrameCostMs": {
+    "p50": 8.335,
+    "p95": 10.041,
+    "p99": 11.681
+   },
+   "indexMs": 28.235
+  },
+  {
+   "target": "electron",
+   "browser": "Electron 45.0.0 (Chromium 156.0.8078.48) Electron",
+   "scene": "regions",
+   "backend": "webgl2",
+   "thread": "worker",
+   "pacing": "animation-frame",
+   "gpu": "ANGLE (Apple, ANGLE Metal Renderer: Apple M1 Max, Unspecified Version)",
+   "refreshMs": 8.335,
+   "frames": 1201,
+   "fps": 120.1,
+   "visibleItems": {
+    "min": 2276,
+    "mean": 2662,
+    "max": 3059
+   },
+   "droppedFrames": 0,
+   "droppedPct": 0,
+   "over60HzBudget": 0,
+   "skippedViews": 0,
+   "frameIntervalMs": {
+    "p50": 8.33,
+    "p95": 9.29,
+    "p99": 10.235,
+    "max": 12.24
+   },
+   "mainThreadIntervalMs": {
+    "p50": 8.33,
+    "p95": 9.13,
+    "p99": 9.265,
+    "max": 11.36
+   },
+   "cpuMs": {
+    "p50": 0.105,
+    "p95": 0.375,
+    "p99": 0.54
+   },
+   "latencyMs": {
+    "p50": 8.365,
+    "p95": 9.14,
+    "p99": 10.015
+   },
+   "syncFrameCostMs": {
+    "p50": 0.985,
+    "p95": 2.578,
+    "p99": 2.916
+   },
+   "indexMs": 4.91
+  },
+  {
+   "target": "electron",
+   "browser": "Electron 45.0.0 (Chromium 156.0.8078.48) Electron",
+   "scene": "regions",
+   "backend": "canvas2d",
+   "thread": "worker",
+   "pacing": "animation-frame",
+   "gpu": "Canvas2D",
+   "refreshMs": 8.335,
+   "frames": 1200,
+   "fps": 120,
+   "visibleItems": {
+    "min": 2276,
+    "mean": 2662,
+    "max": 3059
+   },
+   "droppedFrames": 1,
+   "droppedPct": 0.083,
+   "over60HzBudget": 0,
+   "skippedViews": 0,
+   "frameIntervalMs": {
+    "p50": 8.325,
+    "p95": 9.35,
+    "p99": 11.335,
+    "max": 12.68
+   },
+   "mainThreadIntervalMs": {
+    "p50": 8.335,
+    "p95": 9.075,
+    "p99": 9.275,
+    "max": 9.335
+   },
+   "cpuMs": {
+    "p50": 0.7,
+    "p95": 1.405,
+    "p99": 1.98
+   },
+   "latencyMs": {
+    "p50": 8.96,
+    "p95": 9.792,
+    "p99": 11.955
+   },
+   "syncFrameCostMs": {
+    "p50": 4.078,
+    "p95": 5.205,
+    "p99": 5.39
+   },
+   "indexMs": 4.235
+  },
+  {
+   "target": "chromium-headed",
+   "browser": "156.0.8078.4",
+   "scene": "notes",
+   "backend": "webgl2",
+   "thread": "worker",
+   "pacing": "animation-frame",
+   "gpu": "ANGLE (Apple, ANGLE Metal Renderer: Apple M1 Max, Unspecified Version)",
+   "refreshMs": 8.33,
+   "frames": 1200,
+   "fps": 120,
+   "visibleItems": {
+    "min": 21036,
+    "mean": 24585,
+    "max": 28137
+   },
+   "droppedFrames": 1,
+   "droppedPct": 0.083,
+   "over60HzBudget": 0,
+   "skippedViews": 0,
+   "frameIntervalMs": {
+    "p50": 8.335,
+    "p95": 10.035,
+    "p99": 11.34,
+    "max": 12.53
+   },
+   "mainThreadIntervalMs": {
+    "p50": 8.33,
+    "p95": 9.201,
+    "p99": 9.295,
+    "max": 9.365
+   },
+   "cpuMs": {
+    "p50": 0.405,
+    "p95": 1.545,
+    "p99": 1.945
+   },
+   "latencyMs": {
+    "p50": 8.65,
+    "p95": 10.365,
+    "p99": 11.561
+   },
+   "syncFrameCostMs": {
+    "p50": 1.842,
+    "p95": 4.266,
+    "p99": 4.845
+   },
+   "indexMs": 27.985
+  },
+  {
+   "target": "chromium-headed",
+   "browser": "156.0.8078.4",
+   "scene": "notes",
+   "backend": "canvas2d",
+   "thread": "worker",
+   "pacing": "animation-frame",
+   "gpu": "Canvas2D",
+   "refreshMs": 8.332,
+   "frames": 1200,
+   "fps": 120,
+   "visibleItems": {
+    "min": 21037,
+    "mean": 24585,
+    "max": 28137
+   },
+   "droppedFrames": 0,
+   "droppedPct": 0,
+   "over60HzBudget": 0,
+   "skippedViews": 0,
+   "frameIntervalMs": {
+    "p50": 8.33,
+    "p95": 9.225,
+    "p99": 9.345,
+    "max": 9.8
+   },
+   "mainThreadIntervalMs": {
+    "p50": 8.33,
+    "p95": 9.23,
+    "p99": 9.29,
+    "max": 9.335
+   },
+   "cpuMs": {
+    "p50": 3.133,
+    "p95": 3.565,
+    "p99": 3.69
+   },
+   "latencyMs": {
+    "p50": 11.185,
+    "p95": 11.865,
+    "p99": 12.215
+   },
+   "syncFrameCostMs": {
+    "p50": 8.685,
+    "p95": 10.841,
+    "p99": 12.124
+   },
+   "indexMs": 29.205
+  },
+  {
+   "target": "chromium-headed",
+   "browser": "156.0.8078.4",
+   "scene": "regions",
+   "backend": "webgl2",
+   "thread": "worker",
+   "pacing": "animation-frame",
+   "gpu": "ANGLE (Apple, ANGLE Metal Renderer: Apple M1 Max, Unspecified Version)",
+   "refreshMs": 8.33,
+   "frames": 1200,
+   "fps": 120,
+   "visibleItems": {
+    "min": 2277,
+    "mean": 2662,
+    "max": 3059
+   },
+   "droppedFrames": 0,
+   "droppedPct": 0,
+   "over60HzBudget": 0,
+   "skippedViews": 0,
+   "frameIntervalMs": {
+    "p50": 8.33,
+    "p95": 8.916,
+    "p99": 9.235,
+    "max": 9.315
+   },
+   "mainThreadIntervalMs": {
+    "p50": 8.335,
+    "p95": 8.925,
+    "p99": 9.195,
+    "max": 9.31
+   },
+   "cpuMs": {
+    "p50": 0.11,
+    "p95": 0.145,
+    "p99": 0.175
+   },
+   "latencyMs": {
+    "p50": 8.37,
+    "p95": 8.505,
+    "p99": 8.81
+   },
+   "syncFrameCostMs": {
+    "p50": 1.21,
+    "p95": 2.701,
+    "p99": 3.305
+   },
+   "indexMs": 5.13
+  },
+  {
+   "target": "chromium-headed",
+   "browser": "156.0.8078.4",
+   "scene": "regions",
+   "backend": "canvas2d",
+   "thread": "worker",
+   "pacing": "animation-frame",
+   "gpu": "Canvas2D",
+   "refreshMs": 8.335,
+   "frames": 1200,
+   "fps": 120,
+   "visibleItems": {
+    "min": 2276,
+    "mean": 2662,
+    "max": 3059
+   },
+   "droppedFrames": 0,
+   "droppedPct": 0,
+   "over60HzBudget": 0,
+   "skippedViews": 0,
+   "frameIntervalMs": {
+    "p50": 8.33,
+    "p95": 9.277,
+    "p99": 10.471,
+    "max": 12.06
+   },
+   "mainThreadIntervalMs": {
+    "p50": 8.33,
+    "p95": 9.2,
+    "p99": 9.295,
+    "max": 9.355
+   },
+   "cpuMs": {
+    "p50": 0.645,
+    "p95": 0.835,
+    "p99": 1.88
+   },
+   "latencyMs": {
+    "p50": 8.865,
+    "p95": 9.31,
+    "p99": 10.691
+   },
+   "syncFrameCostMs": {
+    "p50": 3.725,
+    "p95": 5.101,
+    "p99": 5.404
+   },
+   "indexMs": 4.495
+  }
+ ]
+}

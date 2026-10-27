@@ -16,4 +16,24 @@ projects (10k+ regions, 100k+ notes). The plan:
 
 Framework-free TypeScript at its core, with thin Angular components on top, so the worker can import it.
 
-Phase 0 spike: 60 fps with 20k visible notes in Electron and iPad Safari.
+## What exists (Phase 0 spike S1)
+
+- `TimeScale`, `gridStep`/`gridLines`: the tick ↔ pixel and grid maths.
+- `LaneIntervalIndex`: items bucketed per lane, sorted by start, with a running max end, so a viewport query is two
+  binary searches and a scan per visible lane.
+- `FrameBuilder`: scene + view → a backend-neutral `RectBatch` (lane backgrounds, grid, culled items, ruler, bar numbers,
+  playhead).
+- Renderers behind one `TimelineRenderer` interface: `WebGL2Renderer` (instanced quads, digit glyph atlas) and
+  `Canvas2DRenderer` (colour-batched paths). `TimelineCanvas` ties a scene, a builder and a renderer together.
+- `TimelineWorkerClient` + `timeline.worker.ts`: the same, in a worker on a transferred `OffscreenCanvas`; scene columns
+  are transferred once, then one small view message per frame, latest wins while the worker is busy.
+
+## Bench
+
+`bench/` is the S1 rendering bench (results and method: `docs/spikes/S1-timeline-rendering.md`).
+
+- `pnpm exec nx run timeline:bench` serves it on http://localhost:4510/
+  (`?scene=notes|regions&backend=webgl2|canvas2d&thread=worker|main&duration=10000`).
+- `pnpm exec nx run timeline:bench-run` builds it and runs the matrix in Chromium, WebKit and Electron via Playwright
+  (`-- --targets=chromium-headed,webkit-headed,electron --duration=10000`), writing JSON to
+  `dist/bench/timeline-results/`. Needs `pnpm exec playwright install chromium webkit` once.
