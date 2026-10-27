@@ -11,6 +11,8 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="../Anode.Contracts/Anode.Contracts.csproj"/>
+    <!-- The built-in instruments' descriptors: the catalogue edits use before a host has sent one, and FakeHost's. -->
+    <ProjectReference Include="../Anode.Dsp/Anode.Dsp.csproj"/>
     <ProjectReference Include="../Anode.Ipc/Anode.Ipc.csproj"/>
     <ProjectReference Include="../Anode.EngineHost/Anode.EngineHost.csproj"/>
     <ProjectReference Include="../Anode.Model/Anode.Model.csproj"/>

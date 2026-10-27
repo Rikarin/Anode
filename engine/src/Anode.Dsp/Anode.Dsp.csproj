@@ -2,4 +2,7 @@
   <PropertyGroup>
     <Description>DSP primitives and Anode's built-in instruments and effects. No engine dependencies.</Description>
   </PropertyGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="Anode.Dsp.Tests"/>
+  </ItemGroup>
 </Project>

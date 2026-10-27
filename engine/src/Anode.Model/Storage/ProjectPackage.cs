@@ -1,4 +1,5 @@
 using Anode.Contracts;
+using Anode.Model.Editing;
 using System.Collections.Immutable;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -21,8 +22,13 @@ public sealed record ProjectFile(
     IReadOnlyList<AudioFile> AudioFiles
 );
 
-/// <summary><c>tracks/&lt;id&gt;.json</c>: one track and its regions.</summary>
-public sealed record TrackFile(int SchemaVersion, Track Track, IReadOnlyList<AudioRegion> Regions);
+/// <summary><c>tracks/&lt;id&gt;.json</c>: one track and its regions, audio and MIDI (schema 2).</summary>
+public sealed record TrackFile(
+    int SchemaVersion,
+    Track Track,
+    IReadOnlyList<AudioRegion> Regions,
+    IReadOnlyList<MidiRegion>? MidiRegions = null
+);
 
 /// <summary>A package that cannot be read: missing, damaged, or from a newer Anode.</summary>
 public sealed class PackageException : Exception {
@@ -35,7 +41,8 @@ public sealed class PackageException : Exception {
 
 /// <summary>
 ///     Reads and writes a project package: a folder with <c>project.json</c>, <c>tracks/&lt;id&gt;.json</c>,
-///     <c>Audio Files/</c> and <c>Peaks/</c> (docs/02-phase-1.md). Every file is written atomically
+///     <c>Audio Files/</c>, <c>Peaks/</c> (docs/02-phase-1.md) and <c>Plugin States/&lt;track id&gt;.bin</c>, each
+///     instrument's opaque state (docs/03-phase-2.md, "State"). Every file is written atomically
 ///     (<see cref="AtomicRename" />): the track files first, then <c>project.json</c>, which names the tracks, so a save
 ///     cut short leaves the previous project readable; track files no longer named are removed last.
 /// </summary>
@@ -45,6 +52,8 @@ public static class ProjectPackage {
     public const string AudioFolder = "Audio Files";
     public const string PeaksFolder = "Peaks";
     public const string BackupsFolder = "Backups";
+    public const string PluginStatesFolder = "Plugin States";
+    public const string StateExtension = ".bin";
 
     /// <summary>The folder extension the server gives new projects.</summary>
     public const string Extension = ".anode";
@@ -62,11 +71,17 @@ public static class ProjectPackage {
         CreateFolders(folder);
         var tracksFolder = Path.Combine(folder, TracksFolder);
         var byTrack = state.Regions.Values.ToLookup(static r => r.TrackId, StringComparer.Ordinal);
+        var midiByTrack = state.MidiRegions.Values.ToLookup(static r => r.TrackId, StringComparer.Ordinal);
         foreach (var track in state.Tracks) {
             var file = new TrackFile(
                 PackageMigrations.CurrentSchemaVersion,
                 track,
-                [..byTrack[track.Id].OrderBy(static r => r.StartTick).ThenBy(static r => r.Id, StringComparer.Ordinal)]
+                [..byTrack[track.Id].OrderBy(static r => r.StartTick).ThenBy(static r => r.Id, StringComparer.Ordinal)],
+                [
+                    ..midiByTrack[track.Id]
+                        .OrderBy(static r => r.StartTick)
+                        .ThenBy(static r => r.Id, StringComparer.Ordinal)
+                ]
             );
             AtomicRename.Write(
                 Path.Combine(tracksFolder, TrackFileName(track.Id)),
@@ -119,16 +134,12 @@ public static class ProjectPackage {
         );
         var tracks = ImmutableList.CreateBuilder<Track>();
         var regions = ImmutableSortedDictionary.CreateBuilder<string, AudioRegion>(StringComparer.Ordinal);
+        var midiRegions = ImmutableSortedDictionary.CreateBuilder<string, MidiRegion>(StringComparer.Ordinal);
         foreach (var id in (root.Tracks ?? []).Distinct(StringComparer.Ordinal)) {
-            if (ReadTrack(folder, id) is not { } file) {
-                continue;
-            }
-
-            tracks.Add(file.Track);
-            foreach (var region in file.Regions ?? []) {
-                if (region.TrackId == id && files.ContainsKey(region.FileId)) {
-                    regions[region.Id] = region;
-                }
+            if (ReadTrack(folder, id) is { } file) {
+                var track = Normalise(file.Track);
+                tracks.Add(track);
+                AddRegions(file, track, files, regions, midiRegions);
             }
         }
 
@@ -140,9 +151,98 @@ public static class ProjectPackage {
             root.Master,
             tracks.ToImmutable(),
             regions.ToImmutable(),
-            files
-        );
+            files,
+            midiRegions.ToImmutable()
+        ) { LastEventId = midiRegions.Values.Select(ProjectState.MaxEventId).DefaultIfEmpty().Max() };
     }
+
+    /// <summary>
+    ///     A track file's regions that belong to it: audio ones of known files on an audio track, MIDI ones on a MIDI
+    ///     track.
+    /// </summary>
+    static void AddRegions(
+        TrackFile file,
+        Track track,
+        ImmutableSortedDictionary<string, AudioFile> files,
+        ImmutableSortedDictionary<string, AudioRegion>.Builder regions,
+        ImmutableSortedDictionary<string, MidiRegion>.Builder midiRegions
+    ) {
+        foreach (var region in file.Regions ?? []) {
+            if (region?.TrackId == track.Id && track.Kind == TrackKind.Audio && files.ContainsKey(region.FileId)) {
+                regions[region.Id] = region;
+            }
+        }
+
+        foreach (var region in file.MidiRegions ?? []) {
+            if (region?.TrackId == track.Id && Edits.IsMidiKind(track.Kind) && region.Id is not null) {
+                midiRegions[region.Id] = Normalise(region);
+            }
+        }
+    }
+
+    /// <summary>
+    ///     Writes the instruments' opaque states, <c>Plugin States/&lt;track id&gt;.bin</c> each, and removes the state
+    ///     files of tracks not in <paramref name="states" />.
+    /// </summary>
+    public static void SaveStates(string folder, IReadOnlyDictionary<string, byte[]> states) {
+        var statesFolder = Path.Combine(folder, PluginStatesFolder);
+        if (states.Count > 0) {
+            Directory.CreateDirectory(statesFolder);
+        }
+
+        foreach (var (trackId, state) in states) {
+            AtomicRename.Write(Path.Combine(statesFolder, StateFileName(trackId)), state);
+        }
+
+        if (Directory.Exists(statesFolder)) {
+            foreach (var stale in Directory.EnumerateFiles(statesFolder, "*" + StateExtension)) {
+                if (!states.ContainsKey(Path.GetFileNameWithoutExtension(stale))) {
+                    File.Delete(stale);
+                }
+            }
+        }
+    }
+
+    /// <summary>The saved states of <paramref name="state" />'s instrument tracks, by track id (unreadable ones left out).</summary>
+    public static Dictionary<string, byte[]> LoadStates(string folder, ProjectState state) {
+        var states = new Dictionary<string, byte[]>(StringComparer.Ordinal);
+        foreach (var track in state.Tracks) {
+            if (track.Instrument is null || !IsSafeId(track.Id)) {
+                continue;
+            }
+
+            var path = Path.Combine(folder, PluginStatesFolder, StateFileName(track.Id));
+            try {
+                if (File.Exists(path)) {
+                    states[track.Id] = File.ReadAllBytes(path);
+                }
+            } catch (Exception e) when (e is IOException or UnauthorizedAccessException) {
+                // An unreadable state: the instrument starts from its parameters.
+            }
+        }
+
+        return states;
+    }
+
+    public static string StateFileName(string trackId) =>
+        IsSafeId(trackId) ? trackId + StateExtension : throw new ArgumentException($"Unsafe track id '{trackId}'.");
+
+    /// <summary>A track as read, in the model's canonical form (parameters in ordinal order).</summary>
+    static Track Normalise(Track track) =>
+        track with {
+            Instrument = track.Instrument is { } slot
+                ? slot with { Parameters = PluginCatalog.Sorted(slot.Parameters) }
+                : null,
+            MidiInput = track.MidiInput ?? ProjectDefaults.MidiInput,
+            MidiOutput = track.Kind == TrackKind.Midi ? track.MidiOutput : null
+        };
+
+    static MidiRegion Normalise(MidiRegion region) =>
+        region with {
+            Playback = region.Playback ?? ProjectDefaults.Playback,
+            Notes = region.Notes ?? [],
+            Controls = region.Controls ?? []
+        };
 
     /// <summary>The track file of <paramref name="id" />, or null when it is missing, unreadable or not that track's.</summary>
     static TrackFile? ReadTrack(string folder, string id) {
@@ -204,11 +304,11 @@ public static class ProjectPackage {
 ///     refused rather than read wrongly.
 /// </remarks>
 public static class PackageMigrations {
-    public const int CurrentSchemaVersion = 1;
+    public const int CurrentSchemaVersion = 2;
     const string VersionField = "schemaVersion";
 
     /// <summary><c>Steps[n]</c> takes schema <c>n + 1</c> to <c>n + 2</c>; it gets the kind of file and its JSON.</summary>
-    static readonly Func<string, JsonObject, JsonObject>[] Steps = [];
+    static readonly Func<string, JsonObject, JsonObject>[] Steps = [ToSchema2];
 
     public static JsonObject Upgrade(JsonObject json, string kind) {
         var version = json[VersionField] is JsonValue v && v.TryGetValue<int>(out var n) ? n : 1;
@@ -223,6 +323,27 @@ public static class PackageMigrations {
         }
 
         json[VersionField] = CurrentSchemaVersion;
+        return json;
+    }
+
+    /// <summary>
+    ///     Schema 1 (Phase 1) to 2 (Phase 2, MIDI and instruments): every track was an audio track taking no MIDI, a
+    ///     track file has no MIDI regions, and MIDI recording made new regions.
+    /// </summary>
+    static JsonObject ToSchema2(string kind, JsonObject json) {
+        if (kind == "project") {
+            if (json["settings"] is JsonObject settings) {
+                settings["mergeMidiRecording"] ??= false;
+            }
+        } else if (kind == "track") {
+            if (json["track"] is JsonObject track) {
+                track["kind"] ??= "audio";
+                track["midiInput"] ??= new JsonObject { ["channel"] = 0 };
+            }
+
+            json["midiRegions"] ??= new JsonArray();
+        }
+
         return json;
     }
 }

@@ -13,8 +13,9 @@ public sealed record CompiledModel(IReadOnlyList<TrackModel> Tracks, long Length
 
 /// <summary>
 ///     Compiles a <see cref="ProjectState" /> into what the host plays (docs/adr/0006-bulk-ipc.md): each track's
-///     regions as a playlist in samples (ticks through the <see cref="TempoMap" />, ADR-0005), and the metronome's
-///     clicks. Incremental: a track is recompiled only when its regions, their files, the tempo or the sample rate
+///     regions as a playlist in samples (ticks through the <see cref="TempoMap" />, ADR-0005), its MIDI regions as
+///     events (<see cref="MidiEvents" />), and the metronome's clicks. Incremental: a track is recompiled only when its
+///     regions (audio or MIDI), their files, the tempo or the sample rate
 ///     changed since the previous call; otherwise the previous <see cref="TrackModel" /> instance is reused, so a
 ///     caller finds the dirty tracks by reference.
 /// </summary>
@@ -25,6 +26,7 @@ public sealed class ModelCompiler {
     public CompiledModel Compile(ProjectState state, EngineIds ids) {
         var map = state.TempoMap;
         var byTrack = state.Regions.Values.ToLookup(static r => r.TrackId, StringComparer.Ordinal);
+        var midiByTrack = state.MidiRegions.Values.ToLookup(static r => r.TrackId, StringComparer.Ordinal);
         var models = new List<TrackModel>(state.Tracks.Count + 1);
         var recompiled = new List<int>();
         var seen = new HashSet<int>();
@@ -36,13 +38,19 @@ public sealed class ModelCompiler {
                 .OrderBy(static r => r.StartTick)
                 .ThenBy(static r => r.Id, StringComparer.Ordinal)
                 .ToArray();
+            var midi = midiByTrack[track.Id]
+                .OrderBy(static r => r.StartTick)
+                .ThenBy(static r => r.Id, StringComparer.Ordinal)
+                .ToArray();
             var key = new TrackKey(
                 state.Settings.Tempo,
                 state.SampleRate,
-                [..regions.Select(r => (r, state.Files[r.FileId]))]
+                [..regions.Select(r => (r, state.Files[r.FileId]))],
+                midi
             );
             if (!cache.TryGetValue(engineId, out var cached) || !cached.Key.Equals(key)) {
-                cached = (key, new(engineId, [], Playlist(state, map, ids, regions)));
+                cached = (key,
+                    new(engineId, MidiEvents(state, map, engineId, midi), Playlist(state, map, ids, regions)));
                 cache[engineId] = cached;
                 recompiled.Add(engineId);
             }
@@ -50,6 +58,10 @@ public sealed class ModelCompiler {
             models.Add(cached.Model);
             if (cached.Model.Playlist is [.., var last]) {
                 end = Math.Max(end, last.Start + last.Length);
+            }
+
+            if (cached.Model.Events is [.., var lastEvent]) {
+                end = Math.Max(end, lastEvent.SamplePos + 1);
             }
         }
 
@@ -173,14 +185,182 @@ public sealed class ModelCompiler {
         return clicks;
     }
 
-    sealed record TrackKey(double Tempo, int SampleRate, (AudioRegion Region, AudioFile File)[] Regions) {
+    /// <summary>
+    ///     A track's MIDI regions as events in samples (docs/03-phase-2.md, "Compilation"): region playback applied
+    ///     (quantise, transpose clamped to 0…127, velocity offset clamped to 1…127), only what starts inside the part of
+    ///     its region that plays, notes cut where that part ends, channels 0…15, sorted with note-offs before
+    ///     controllers before note-ons at equal samples. Where regions overlap, the later-starting one plays.
+    /// </summary>
+    public static PlaybackEvent[] MidiEvents(
+        ProjectState state,
+        TempoMap map,
+        int engineId,
+        IReadOnlyList<MidiRegion> regions
+    ) {
+        if (regions.Count == 0) {
+            return [];
+        }
+
+        var events = new List<(PlaybackEvent Event, int Rank)>();
+        for (var i = 0; i < regions.Count; i++) {
+            if (Windows(regions, i) is { Count: > 0 } windows) {
+                AddNotes(events, state, map, engineId, regions[i], windows);
+                AddControls(events, state, map, engineId, regions[i], windows);
+            }
+        }
+
+        // A stable sort: equal samples keep note-offs, then controllers, then note-ons, each in region order.
+        return [
+            ..events.Select(static (e, i) => (e.Event, e.Rank, i))
+                .OrderBy(static x => x.Event.SamplePos)
+                .ThenBy(static x => x.Rank)
+                .ThenBy(static x => x.i)
+                .Select(static x => x.Event)
+        ];
+    }
+
+    /// <summary>A region's notes that start where it plays, with its playback applied (rank 2 on, 0 off).</summary>
+    static void AddNotes(
+        List<(PlaybackEvent Event, int Rank)> events,
+        ProjectState state,
+        TempoMap map,
+        int engineId,
+        MidiRegion region,
+        List<(long From, long To)> windows
+    ) {
+        var playback = region.Playback;
+        foreach (var note in region.Notes) {
+            var at = Editing.Quantize.Tick(
+                region.StartTick + note.StartTick,
+                playback.QuantizeTicks,
+                playback.QuantizeStrength,
+                playback.Swing
+            );
+            if (WindowAt(windows, at) is not { } window) {
+                continue;
+            }
+
+            var on = map.SampleAt(at, state.SampleRate);
+            var off = Math.Max(map.SampleAt(Math.Min(at + note.LengthTicks, window.To), state.SampleRate), on + 1);
+            var pitch = (byte)Math.Clamp(note.Pitch + playback.Transpose, 0, 127);
+            var velocity = (byte)Math.Clamp(note.Velocity + playback.Velocity, 1, 127);
+            var channel = (byte)(note.Channel - 1);
+            events.Add((Midi(engineId, on, PlaybackEventKind.NoteOn, pitch, velocity, channel), 2));
+            events.Add((Midi(engineId, off, PlaybackEventKind.NoteOff, pitch, 0, channel), 0));
+        }
+    }
+
+    /// <summary>A region's controller events where it plays (rank 1: between a sample's note-offs and note-ons).</summary>
+    static void AddControls(
+        List<(PlaybackEvent Event, int Rank)> events,
+        ProjectState state,
+        TempoMap map,
+        int engineId,
+        MidiRegion region,
+        List<(long From, long To)> windows
+    ) {
+        foreach (var control in region.Controls) {
+            var at = region.StartTick + control.Tick;
+            if (WindowAt(windows, at) is not null) {
+                events.Add((Control(engineId, map.SampleAt(at, state.SampleRate), control), 1));
+            }
+        }
+    }
+
+    static PlaybackEvent Control(int engineId, long sample, ControlEvent control) {
+        var channel = (byte)(control.Channel - 1);
+        return control.Kind switch {
+            ControlKind.ControlChange => Midi(
+                engineId,
+                sample,
+                PlaybackEventKind.ControlChange,
+                (byte)control.Number,
+                (byte)control.Value,
+                channel
+            ),
+            ControlKind.PitchBend => PitchBend(engineId, sample, control.Value, channel),
+            ControlKind.ChannelPressure => Midi(
+                engineId,
+                sample,
+                PlaybackEventKind.ChannelPressure,
+                (byte)control.Value,
+                0,
+                channel
+            ),
+            _ => Midi(engineId, sample, PlaybackEventKind.ProgramChange, (byte)control.Value, 0, channel)
+        };
+    }
+
+    static PlaybackEvent Midi(int track, long sample, PlaybackEventKind kind, byte data1, byte data2, byte channel) =>
+        new() {
+            SamplePos = sample,
+            Track = track,
+            Kind = kind,
+            Data1 = data1,
+            Data2 = data2,
+            Channel = channel
+        };
+
+    static PlaybackEvent PitchBend(int track, long sample, int value, byte channel) {
+        var bend = Math.Clamp(value + 8192, 0, 16383);
+        return Midi(track, sample, PlaybackEventKind.PitchBend, (byte)(bend & 0x7F), (byte)(bend >> 7), channel);
+    }
+
+    /// <summary>
+    ///     The tick ranges where region <paramref name="index" /> plays: its own span, less the spans of the regions
+    ///     after it in start order (later-starting ones; at an equal start, the later id), which win where they overlap.
+    /// </summary>
+    static List<(long From, long To)> Windows(IReadOnlyList<MidiRegion> regions, int index) {
+        var region = regions[index];
+        var windows = new List<(long From, long To)> { (region.StartTick, region.StartTick + region.LengthTicks) };
+        for (var j = index + 1; j < regions.Count && windows.Count > 0; j++) {
+            var (from, to) = (regions[j].StartTick, regions[j].StartTick + regions[j].LengthTicks);
+            var next = new List<(long From, long To)>(windows.Count + 1);
+            foreach (var w in windows) {
+                if (to <= w.From || from >= w.To) {
+                    next.Add(w);
+                    continue;
+                }
+
+                if (from > w.From) {
+                    next.Add((w.From, from));
+                }
+
+                if (to < w.To) {
+                    next.Add((to, w.To));
+                }
+            }
+
+            windows = next;
+        }
+
+        return windows;
+    }
+
+    static (long From, long To)? WindowAt(List<(long From, long To)> windows, long tick) {
+        foreach (var w in windows) {
+            if (tick >= w.From && tick < w.To) {
+                return w;
+            }
+        }
+
+        return null;
+    }
+
+    sealed record TrackKey(
+        double Tempo,
+        int SampleRate,
+        (AudioRegion Region, AudioFile File)[] Regions,
+        MidiRegion[] Midi
+    ) {
         public bool Equals(TrackKey? other) =>
             other is not null
             && Tempo.Equals(other.Tempo)
             && SampleRate == other.SampleRate
-            && Regions.AsSpan().SequenceEqual(other.Regions);
+            && Regions.AsSpan().SequenceEqual(other.Regions)
+            && Midi.AsSpan().SequenceEqual(other.Midi);
 
-        public override int GetHashCode() => HashCode.Combine(Tempo, SampleRate, Regions.Length);
+        public override int GetHashCode() => HashCode.Combine(Tempo, SampleRate, Regions.Length, Midi.Length);
     }
 
     readonly record struct ClickKey(double Tempo, TimeSignature Signature, long EndTick, int SampleRate);

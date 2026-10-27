@@ -1,3 +1,5 @@
+using Anode.Contracts;
+using Anode.Model.Editing;
 using Anode.Model.Storage;
 using System.Text.Json.Nodes;
 
@@ -52,6 +54,97 @@ public sealed class PackageTests : IDisposable {
         File.WriteAllText(path, root.ToJsonString());
         var e = Assert.Throws<PackageException>(() => ProjectPackage.Load(folder));
         Assert.Contains("newer Anode", e.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_Phase_1_package_opens_as_audio_tracks_without_MIDI_and_saves_as_schema_2() {
+        CopyFixture("Phase1.anode");
+        var state = ProjectPackage.Load(folder);
+        Assert.Equal(("prj_phase1fixture", "Phase 1 Song", 96.0), (state.Id, state.Name, state.Settings.Tempo));
+        Assert.False(state.Settings.MergeMidiRecording);
+        Assert.Equal(["Vocal", "Guitar"], state.Tracks.Select(static t => t.Name));
+        Assert.All(
+            state.Tracks,
+            static t => {
+                Assert.Equal(TrackKind.Audio, t.Kind);
+                Assert.Null(t.Instrument);
+                Assert.Null(t.MidiOutput);
+                Assert.Equal(new(null, 0), t.MidiInput);
+            }
+        );
+        Assert.Equal((-2.5, -0.25), (state.Tracks[0].Strip.VolumeDb, state.Tracks[0].Strip.Pan));
+        Assert.Equal(new(3, true), state.Tracks[1].Input);
+        var region = Assert.Single(state.Regions.Values);
+        Assert.Equal((2880L, 96_000L, 480L), (region.StartTick, region.Length, region.FadeOut));
+        Assert.Empty(state.MidiRegions);
+
+        // Saved again, it is schema 2 (with a MIDI region list per track) and reads back the same.
+        ProjectPackage.Save(folder, state);
+        var track = JsonNode.Parse(File.ReadAllText(Path.Combine(folder, "tracks", "trk_vocal0000001.json")))!;
+        Assert.Equal(2, track["schemaVersion"]!.GetValue<int>());
+        Assert.Empty(track["midiRegions"]!.AsArray());
+        Assert.Equal(RandomProjects.Json(state), RandomProjects.Json(ProjectPackage.Load(folder)));
+    }
+
+    [Fact]
+    public void MIDI_regions_live_in_their_track_file_and_note_ids_keep_growing_after_a_reopen() {
+        var ids = new SequentialIds();
+        var state = ProjectDefaults.NewProject("prj_1", "Song", 48_000);
+        state = Edits.Apply(state, new AddTrackCommand(Kind: TrackKind.Instrument), ids, RandomProjects.Plugins).State;
+        var track = state.Tracks[0].Id;
+        state = Edits.Apply(state, new AddMidiRegionCommand(track, 0, 3840), ids).State;
+        var region = state.MidiRegions.Keys.Single();
+        state = Edits.Apply(
+                state,
+                [
+                    new AddNotesCommand(region, [new(60, 100, 1, 0, 480), new(64, 90, 1, 480, 480)]),
+                    new AddControlsCommand(region, [new(ControlKind.PitchBend, 1, 0, -100, 240)])
+                ],
+                ids
+            )
+            .State;
+        ProjectPackage.Save(folder, state);
+        var file = JsonNode.Parse(File.ReadAllText(Path.Combine(folder, "tracks", track + ".json")))!;
+        Assert.Equal(2, file["midiRegions"]![0]!["notes"]!.AsArray().Count);
+        Assert.Equal("anode.synth", file["track"]!["instrument"]!["pluginId"]!.GetValue<string>());
+
+        var loaded = ProjectPackage.Load(folder);
+        Assert.Equal(RandomProjects.Json(state), RandomProjects.Json(loaded));
+        Assert.Equal(3, loaded.LastEventId);
+        var more = Edits.Apply(loaded, new AddNotesCommand(region, [new(67, 80, 1, 960, 480)]), ids).State;
+        Assert.Equal([1L, 2, 4], more.MidiRegions[region].Notes.Select(static n => n.Id));
+    }
+
+    [Fact]
+    public void Instrument_states_are_files_per_track_and_stale_ones_go() {
+        var ids = new SequentialIds();
+        var state = Edits.Apply(
+                ProjectDefaults.NewProject("prj_1", "Song", 48_000),
+                [new AddTrackCommand(Kind: TrackKind.Instrument), new AddTrackCommand(Kind: TrackKind.Instrument)],
+                ids,
+                RandomProjects.Plugins
+            )
+            .State;
+        var (a, b) = (state.Tracks[0].Id, state.Tracks[1].Id);
+        ProjectPackage.Save(folder, state);
+        ProjectPackage.SaveStates(folder, new Dictionary<string, byte[]> { [a] = [1, 2, 3], [b] = [4] });
+        Assert.True(File.Exists(Path.Combine(folder, "Plugin States", a + ".bin")));
+        var states = ProjectPackage.LoadStates(folder, ProjectPackage.Load(folder));
+        Assert.Equal([1, 2, 3], states[a]);
+        Assert.Equal([4], states[b]);
+
+        ProjectPackage.SaveStates(folder, new Dictionary<string, byte[]> { [b] = [5] });
+        Assert.False(File.Exists(Path.Combine(folder, "Plugin States", a + ".bin")));
+        Assert.Equal([b], ProjectPackage.LoadStates(folder, state).Keys);
+    }
+
+    void CopyFixture(string name) {
+        var source = Path.Combine(AppContext.BaseDirectory, "Fixtures", name);
+        foreach (var path in Directory.EnumerateFiles(source, "*", SearchOption.AllDirectories)) {
+            var target = Path.Combine(folder, Path.GetRelativePath(source, path));
+            Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+            File.Copy(path, target, true);
+        }
     }
 
     [Fact]

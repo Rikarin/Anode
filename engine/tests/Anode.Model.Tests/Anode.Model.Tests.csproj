@@ -2,4 +2,8 @@
   <ItemGroup>
     <ProjectReference Include="../../src/Anode.Model/Anode.Model.csproj"/>
   </ItemGroup>
+  <ItemGroup>
+    <!-- Packages written by earlier Anode versions, for the migration tests. -->
+    <None Include="Fixtures/**" CopyToOutputDirectory="PreserveNewest"/>
+  </ItemGroup>
 </Project>

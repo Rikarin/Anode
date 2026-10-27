@@ -1,3 +1,6 @@
+using Anode.Dsp.Instruments.Sampler;
+using Anode.Dsp.Instruments.Synth;
+
 namespace Anode.Dsp.Instruments;
 
 /// <summary>
@@ -6,10 +9,15 @@ namespace Anode.Dsp.Instruments;
 /// </summary>
 public static class BuiltinInstruments {
     /// <summary>The instrument a new instrument track gets.</summary>
-    public const string DefaultId = "anode.synth";
+    public const string DefaultId = AnodeSynth.Id;
 
-    public static IReadOnlyList<InstrumentDescriptor> All { get; } = [];
+    public static IReadOnlyList<InstrumentDescriptor> All { get; } = [AnodeSynth.Info, AnodeSampler.Info];
 
     /// <summary>A new, unprepared instance of instrument <paramref name="id" />, or null when there is none.</summary>
-    public static IInstrument? Create(string id) => null;
+    public static IInstrument? Create(string id) =>
+        id switch {
+            AnodeSynth.Id => new AnodeSynth(),
+            AnodeSampler.Id => new AnodeSampler(),
+            _ => null
+        };
 }

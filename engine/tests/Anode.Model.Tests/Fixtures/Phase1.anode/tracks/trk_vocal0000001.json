@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "track": {
+    "id": "trk_vocal0000001",
+    "name": "Vocal",
+    "kind": "audio",
+    "color": "#4f8ff7",
+    "input": {
+      "channel": 1,
+      "stereo": false
+    },
+    "recordArmed": true,
+    "inputMonitoring": false,
+    "strip": {
+      "volumeDb": -2.5,
+      "pan": -0.25,
+      "mute": false,
+      "solo": false
+    }
+  },
+  "regions": [
+    {
+      "id": "rgn_take00000001",
+      "trackId": "trk_vocal0000001",
+      "fileId": "aud_take00000001",
+      "name": "Vocal",
+      "startTick": 2880,
+      "fileOffset": 0,
+      "length": 96000,
+      "gainDb": 0,
+      "fadeIn": 0,
+      "fadeOut": 480
+    }
+  ]
+}

@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "track": {
+    "id": "trk_guitar000002",
+    "name": "Guitar",
+    "kind": "audio",
+    "color": "#3fbf7f",
+    "input": {
+      "channel": 3,
+      "stereo": true
+    },
+    "recordArmed": false,
+    "inputMonitoring": true,
+    "strip": {
+      "volumeDb": 0,
+      "pan": 0,
+      "mute": true,
+      "solo": false
+    }
+  },
+  "regions": []
+}

@@ -1,4 +1,5 @@
 using Anode.Contracts;
+using Anode.Server.Engine;
 using Microsoft.AspNetCore.Http.HttpResults;
 
 namespace Anode.Server.Api;
@@ -6,14 +7,17 @@ namespace Anode.Server.Api;
 /// <summary>MIDI ports, live MIDI from the editor, and which track hears live MIDI.</summary>
 static class MidiApi {
     public static void Map(RouteGroupBuilder api) {
-        var midi = api.MapGroup("/midi").WithTags("MIDI");
-        midi.MapGet("/devices", static Ok<MidiDevices>() => throw Pending.Phase2("ListMidiDevices"))
+        var midi = api.MapGroup("/midi").WithTags("MIDI").AddEndpointFilter<ProblemFilter>();
+        midi.MapGet("/devices", static Ok<MidiDevices>(EngineCatalog catalog) => TypedResults.Ok(catalog.Devices))
             .WithName("ListMidiDevices")
             .WithSummary("The MIDI ports of the machine the engine runs on.");
         midi.MapPost(
                 "/live",
-                static Results<NoContent, NotFound, ProblemHttpResult>(LiveMidiRequest request) =>
-                    throw Pending.Phase2("SendLiveMidi")
+                static Results<NoContent, NotFound, ProblemHttpResult>(
+                    LiveMidiRequest request,
+                    EngineConnection engine
+                ) =>
+                    engine.SendLiveMidi(request) ? TypedResults.NoContent() : TypedResults.NotFound()
             )
             .WithName("SendLiveMidi")
             .WithSummary(
@@ -22,7 +26,8 @@ static class MidiApi {
             );
         midi.MapPost(
                 "/thru",
-                static Results<NoContent, NotFound>(MidiThruRequest request) => throw Pending.Phase2("SetMidiThru")
+                static Results<NoContent, NotFound>(MidiThruRequest request, EngineConnection engine) =>
+                    engine.SetThru(request) ? TypedResults.NoContent() : TypedResults.NotFound()
             )
             .WithName("SetMidiThru")
             .WithSummary(

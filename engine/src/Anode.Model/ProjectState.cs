@@ -8,6 +8,8 @@ namespace Anode.Model;
 ///     An immutable snapshot of a project's content (docs/adr/0004-state-ownership.md): what an edit changes, what undo
 ///     restores and what the package stores. The revision, the dirty flag and the folder belong to the open session,
 ///     not to the snapshot. Regions and files are keyed (and listed) by id; tracks keep their order.
+///     <see cref="LastEventId" /> is the highest note or controller id the project has used (docs/03-phase-2.md,
+///     "Ids"): it only grows, so an id freed by an undo is never handed out again while the project is open.
 /// </summary>
 public sealed record ProjectState(
     string Id,
@@ -17,8 +19,11 @@ public sealed record ProjectState(
     ChannelStrip Master,
     ImmutableList<Track> Tracks,
     ImmutableSortedDictionary<string, AudioRegion> Regions,
-    ImmutableSortedDictionary<string, AudioFile> Files
+    ImmutableSortedDictionary<string, AudioFile> Files,
+    ImmutableSortedDictionary<string, MidiRegion> MidiRegions
 ) {
+    public long LastEventId { get; init; }
+
     /// <summary>The project's tempo map (one tempo in Phase 1).</summary>
     public TempoMap TempoMap => TempoMap.Constant(Settings.Tempo);
 
@@ -34,6 +39,29 @@ public sealed record ProjectState(
     }
 
     public Track? FindTrack(string id) => IndexOfTrack(id) is >= 0 and var i ? Tracks[i] : null;
+
+    /// <summary>The MIDI regions of a track, by start.</summary>
+    public IEnumerable<MidiRegion> MidiRegionsOf(string trackId) =>
+        MidiRegions.Values.Where(r => r.TrackId == trackId)
+            .OrderBy(static r => r.StartTick)
+            .ThenBy(
+                static r => r.Id,
+                StringComparer.Ordinal
+            );
+
+    /// <summary>The highest note or controller id of <paramref name="region" /> (0 when it has none).</summary>
+    public static long MaxEventId(MidiRegion region) {
+        long max = 0;
+        foreach (var note in region.Notes) {
+            max = Math.Max(max, note.Id);
+        }
+
+        foreach (var control in region.Controls) {
+            max = Math.Max(max, control.Id);
+        }
+
+        return max;
+    }
 
     /// <summary>The regions of a track, by start.</summary>
     public IEnumerable<AudioRegion> RegionsOf(string trackId) =>
@@ -58,7 +86,7 @@ public sealed record ProjectState(
             [..Tracks],
             [..Regions.Values],
             [..Files.Values],
-            [] // MIDI regions: Phase 2, workstream B
+            [..MidiRegions.Values]
         );
 
     /// <summary>Applies one delta operation (an edit's primitive step, also what clients apply).</summary>
@@ -67,7 +95,10 @@ public sealed record ProjectState(
             TrackUpserted(var track, var index) => WithTrack(track, index),
             TrackRemoved(var id) => this with {
                 Tracks = Tracks.RemoveAll(t => t.Id == id),
-                Regions = Regions.RemoveRange(Regions.Values.Where(r => r.TrackId == id).Select(static r => r.Id))
+                Regions = Regions.RemoveRange(Regions.Values.Where(r => r.TrackId == id).Select(static r => r.Id)),
+                MidiRegions = MidiRegions.RemoveRange(
+                    MidiRegions.Values.Where(r => r.TrackId == id).Select(static r => r.Id)
+                )
             },
             RegionUpserted(var region) => this with { Regions = Regions.SetItem(region.Id, region) },
             RegionRemoved(var id) => this with { Regions = Regions.Remove(id) },
@@ -75,6 +106,11 @@ public sealed record ProjectState(
             SettingsChanged(var settings) => this with { Settings = settings },
             MasterChanged(var strip) => this with { Master = strip },
             ProjectRenamed(var name) => this with { Name = name },
+            MidiRegionUpserted(var region) => this with {
+                MidiRegions = MidiRegions.SetItem(region.Id, region),
+                LastEventId = Math.Max(LastEventId, MaxEventId(region))
+            },
+            MidiRegionRemoved(var id) => this with { MidiRegions = MidiRegions.Remove(id) },
             _ => throw new ArgumentException($"Unknown delta operation {op.GetType().Name}.", nameof(op))
         };
 
@@ -105,7 +141,17 @@ public sealed record ProjectState(
             SettingsChanged => new SettingsChanged(Settings),
             MasterChanged => new MasterChanged(Master),
             ProjectRenamed => new ProjectRenamed(Name),
+            MidiRegionUpserted or MidiRegionRemoved => InverseMidi(op),
             _ => throw new ArgumentException($"Unknown delta operation {op.GetType().Name}.", nameof(op))
+        };
+
+    DeltaOp? InverseMidi(DeltaOp op) =>
+        op switch {
+            MidiRegionUpserted(var region) => MidiRegions.TryGetValue(region.Id, out var old)
+                ? new MidiRegionUpserted(old)
+                : new MidiRegionRemoved(region.Id),
+            MidiRegionRemoved(var id) => MidiRegions.TryGetValue(id, out var old) ? new MidiRegionUpserted(old) : null,
+            _ => null
         };
 
     ProjectState WithTrack(Track track, int index) {

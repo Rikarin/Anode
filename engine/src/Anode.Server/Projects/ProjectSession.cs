@@ -9,16 +9,38 @@ using Anode.Model.Storage;
 using Anode.Server.Engine;
 using Anode.Server.Realtime;
 using Microsoft.Extensions.Options;
+using System.Collections.Immutable;
 
 namespace Anode.Server.Projects;
 
 /// <summary>
-///     What the engine link needs of the open project: the snapshot, its folder, the engine ids, and which opening of
-///     a project it belongs to (<see cref="Session" /> changes with every open, create and close).
+///     What the engine link needs of the open project: the snapshot, its folder, the engine ids, which opening of a
+///     project it belongs to (<see cref="Session" /> changes with every open, create and close), and the instrument
+///     states last saved or opened, by track id.
 /// </summary>
-public sealed record OpenProjectView(long Session, string Folder, ProjectState State, EngineIds Ids, long Revision) {
+public sealed record OpenProjectView(
+    long Session,
+    string Folder,
+    ProjectState State,
+    EngineIds Ids,
+    long Revision,
+    ImmutableDictionary<string, SavedState> States
+) {
     public string AudioFolder => Path.Combine(Folder, ProjectPackage.AudioFolder);
+
+    /// <summary>The state saved for <paramref name="track" />'s instrument, when it is still that instrument's.</summary>
+    public byte[]? StateOf(Track track) =>
+        track.Instrument is { } slot && States.TryGetValue(track.Id, out var saved) && saved.PluginId == slot.PluginId
+            ? saved.Bytes
+            : null;
+
+    /// <summary>Where an instrument's file is on disk: <c>instrument.file</c> is relative to the project inside it.</summary>
+    public string? InstrumentFile(InstrumentSlot slot) =>
+        slot.File is { } file ? Path.GetFullPath(Path.Combine(Folder, file)) : null;
 }
+
+/// <summary>An instrument's opaque state (<c>Plugin States/&lt;track id&gt;.bin</c>) and the plugin it belongs to.</summary>
+public sealed record SavedState(string PluginId, byte[] Bytes);
 
 /// <summary>
 ///     The open project (one at a time): the server's truth (docs/adr/0004-state-ownership.md). Every edit, undo,
@@ -32,6 +54,7 @@ public sealed class ProjectSession(
     RecentProjects recent,
     PeakJobs peaks,
     EngineDevice device,
+    EngineCatalog catalog,
     TimeProvider time,
     ILogger<ProjectSession> logger
 ) {
@@ -104,19 +127,34 @@ public sealed class ProjectSession(
         }
 
         ProjectPackage.CreateFolders(folder);
-        return Replace(folder, state);
+        var states = ProjectPackage.LoadStates(folder, state)
+            .ToImmutableDictionary(
+                static s => s.Key,
+                s => new SavedState(state.FindTrack(s.Key)!.Instrument!.PluginId, s.Value),
+                StringComparer.Ordinal
+            );
+        return Replace(folder, state, states);
     }
 
-    public ProjectSummary Save() {
+    /// <summary>
+    ///     Saves the open project. <paramref name="hostStates" /> are the instruments' states the engine reported (by
+    ///     track id; null: none to keep), or null without an engine: the states saved before are kept for the
+    ///     instruments they belong to.
+    /// </summary>
+    public ProjectSummary Save(IReadOnlyDictionary<string, byte[]?>? hostStates = null) {
         ProjectSummary summary;
         lock (gate) {
             var o = Required();
+            var states = States(o, hostStates);
             try {
                 ProjectPackage.Save(o.Folder, o.State);
+                ProjectPackage.SaveStates(o.Folder, states.ToDictionary(static s => s.Key, static s => s.Value.Bytes));
             } catch (Exception e) when (e is IOException or UnauthorizedAccessException) {
                 throw ProjectException.Unprocessable($"Could not save '{o.Folder}': {e.Message}");
             }
 
+            o.States = states;
+            Publish();
             o.Dirty = false;
             summary = o.Summary(time.GetUtcNow());
             recent.Touch(summary);
@@ -148,7 +186,7 @@ public sealed class ProjectSession(
 
             EditResult edit;
             try {
-                edit = Edits.Apply(o.State, batch.Commands, ids);
+                edit = Edits.Apply(o.State, Resolve(o, batch.Commands), ids, catalog.ForEdits);
             } catch (EditException e) {
                 throw ProjectException.Unprocessable(e.Message);
             }
@@ -258,9 +296,15 @@ public sealed class ProjectSession(
 
     /// <summary>
     ///     Applies a finished recording as one undoable batch, "Record": each take's file joins the pool (that part
-    ///     stays on undo) and becomes a region on its track at the position it was recorded at.
+    ///     stays on undo) and becomes a region on its track at the position it was recorded at; each MIDI take becomes
+    ///     a MIDI region spanning the pass, rounded out to bars, or with <c>mergeMidiRecording</c> joins the MIDI region
+    ///     under the start of the pass (docs/03-phase-2.md, "Recording").
     /// </summary>
-    public CommandResult? ApplyRecording(IReadOnlyList<RecordedTake> takes) {
+    public CommandResult? ApplyRecording(
+        IReadOnlyList<RecordedTake> takes,
+        IReadOnlyList<RecordedMidiTake>? midiTakes = null
+    ) {
+        midiTakes ??= [];
         var probed = new List<(RecordedTake Take, WavInfo Info)>();
         foreach (var take in takes) {
             try {
@@ -273,7 +317,7 @@ public sealed class ProjectSession(
         CommandResult? result = null;
         var files = new List<AudioFile>();
         lock (gate) {
-            if (open is not { } o || probed.Count == 0) {
+            if (open is not { } o || probed.Count + midiTakes.Count == 0) {
                 return null;
             }
 
@@ -288,6 +332,12 @@ public sealed class ProjectSession(
                 var (file, region) = taken;
                 files.Add(file);
                 state = Edits.Step(state, [new AudioFileUpserted(file), new RegionUpserted(region)], forward, inverse);
+            }
+
+            foreach (var take in midiTakes) {
+                if (MidiTake(o, state, take) is { } region) {
+                    state = Edits.Step(state, [new MidiRegionUpserted(region)], forward, inverse);
+                }
             }
 
             if (forward.Count > 0) {
@@ -325,6 +375,118 @@ public sealed class ProjectSession(
             new(ids.Next(IdPrefix.Region), track.Id, file.Id, track.Name, Math.Max(0, start), 0, info.Frames, 0, 0, 0));
     }
 
+    /// <summary>
+    ///     The MIDI region a take becomes (a new one, or the one it merges into), or null when there is nothing to
+    ///     keep. Positions come in project samples, already shifted back by the device's input latency.
+    /// </summary>
+    MidiRegion? MidiTake(Open o, ProjectState state, RecordedMidiTake take) {
+        var trackId = o.Ids.TrackOf(take.TrackId);
+        if (trackId is null || state.FindTrack(trackId) is not { } track || !Edits.IsMidiKind(track.Kind)) {
+            ProjectLog.MidiTakeSkipped(logger, take.TrackId, "its track is gone or takes no MIDI");
+            return null;
+        }
+
+        var map = state.TempoMap;
+        var rate = state.SampleRate;
+        var passStart = map.TickAtSample(Math.Max(0, take.StartSample), rate);
+        var passEnd = Math.Max(passStart + 1, map.TickAtSample(Math.Max(0, take.EndSample), rate));
+        var (notes, controls) = MidiRecording.Events(take, map, rate, passEnd);
+        if (notes.Count + controls.Count == 0) {
+            return null;
+        }
+
+        var bar = ProjectDefaults.BarTicks(state.Settings.Signature);
+        var end = Math.Max(passEnd, notes.Count == 0 ? 0 : notes.Max(static n => n.StartTick + n.LengthTicks));
+        var roundedEnd = (end + bar - 1) / bar * bar;
+        var target = state.Settings.MergeMidiRecording
+            ? state.MidiRegionsOf(track.Id)
+                .LastOrDefault(r => r.StartTick <= passStart && passStart < r.StartTick + r.LengthTicks)
+            : null;
+        var next = state.LastEventId;
+        if (target is null) {
+            var start = passStart / bar * bar;
+            target = new(
+                ids.Next(IdPrefix.MidiRegion),
+                track.Id,
+                track.Name,
+                start,
+                Math.Max(bar, roundedEnd - start),
+                ProjectDefaults.Playback,
+                [],
+                []
+            );
+        } else if (roundedEnd > target.StartTick + target.LengthTicks) {
+            target = target with { LengthTicks = roundedEnd - target.StartTick };
+        }
+
+        var origin = target.StartTick;
+        return target with {
+            Notes = Edits.Sorted(
+                target.Notes.Concat(notes.Select(n => n with { Id = ++next, StartTick = n.StartTick - origin }))
+            ),
+            Controls = Edits.Sorted(
+                target.Controls.Concat(controls.Select(e => e with { Id = ++next, Tick = e.Tick - origin }))
+            )
+        };
+    }
+
+    /// <summary>
+    ///     The batch with each <c>loadInstrumentFile</c> path resolved on the server's disk (a relative path is the
+    ///     project's): the file must exist, and inside the project it is kept relative to it.
+    /// </summary>
+    static IReadOnlyList<EditCommand> Resolve(Open o, IReadOnlyList<EditCommand> commands) {
+        if (!commands.Any(static c => c is LoadInstrumentFileCommand)) {
+            return commands;
+        }
+
+        return [
+            ..commands.Select(EditCommand(c) => c is LoadInstrumentFileCommand { Path: { Length: > 0 } path } load
+                    ? load with { Path = InstrumentPath(o.Folder, path) }
+                    : c
+            )
+        ];
+    }
+
+    static string InstrumentPath(string folder, string path) {
+        string full;
+        try {
+            full = Path.GetFullPath(path.Trim(), folder);
+        } catch (Exception e) when (e is ArgumentException or NotSupportedException or PathTooLongException) {
+            throw ProjectException.Unprocessable($"'{path}' is not a file path: {e.Message}");
+        }
+
+        if (!File.Exists(full)) {
+            throw ProjectException.Unprocessable($"No file '{full}'.");
+        }
+
+        return IsInside(folder, full)
+            ? Path.GetRelativePath(folder, full).Replace(Path.DirectorySeparatorChar, '/')
+            : full;
+    }
+
+    /// <summary>
+    ///     The states to save: the engine's answers for the instruments it reported, the earlier ones for the rest when
+    ///     they still belong to the track's instrument.
+    /// </summary>
+    static ImmutableDictionary<string, SavedState> States(Open o, IReadOnlyDictionary<string, byte[]?>? hostStates) {
+        var states = ImmutableDictionary.CreateBuilder<string, SavedState>(StringComparer.Ordinal);
+        foreach (var track in o.State.Tracks) {
+            if (track.Instrument is not { } slot) {
+                continue;
+            }
+
+            if (hostStates is not null && hostStates.TryGetValue(track.Id, out var reported)) {
+                if (reported is { Length: > 0 }) {
+                    states[track.Id] = new(slot.PluginId, reported);
+                }
+            } else if (o.States.TryGetValue(track.Id, out var saved) && saved.PluginId == slot.PluginId) {
+                states[track.Id] = saved;
+            }
+        }
+
+        return states.ToImmutable();
+    }
+
     static bool IsInside(string folder, string path) =>
         Path.GetFullPath(path)
             .StartsWith(Path.GetFullPath(folder) + Path.DirectorySeparatorChar, StringComparison.Ordinal);
@@ -353,7 +515,7 @@ public sealed class ProjectSession(
         }
     }
 
-    Project Replace(string folder, ProjectState state) {
+    Project Replace(string folder, ProjectState state, ImmutableDictionary<string, SavedState>? states = null) {
         Project project;
         lock (gate) {
             if (open is { Dirty: true } old) {
@@ -365,7 +527,9 @@ public sealed class ProjectSession(
                 }
             }
 
-            open = new(++sessions, folder, state, new(time));
+            open = new(++sessions, folder, state, new(time)) {
+                States = states ?? ImmutableDictionary.Create<string, SavedState>(StringComparer.Ordinal)
+            };
             Publish();
             project = open.ToProject();
             var summary = open.Summary(time.GetUtcNow());
@@ -394,7 +558,7 @@ public sealed class ProjectSession(
     void Publish() {
         if (open is { } o) {
             o.Ids = o.Ids.With(o.State);
-            Volatile.Write(ref view, new(o.Session, o.Folder, o.State, o.Ids, o.Revision));
+            Volatile.Write(ref view, new(o.Session, o.Folder, o.State, o.Ids, o.Revision, o.States));
         } else {
             Volatile.Write(ref view, null);
         }
@@ -416,6 +580,9 @@ public sealed class ProjectSession(
         public bool Dirty { get; set; }
         public EditHistory History { get; } = history;
         public EngineIds Ids { get; set; } = EngineIds.Empty;
+
+        public ImmutableDictionary<string, SavedState> States { get; set; } =
+            ImmutableDictionary.Create<string, SavedState>(StringComparer.Ordinal);
 
         public Project ToProject() => State.ToProject(Folder, Revision, Dirty);
 

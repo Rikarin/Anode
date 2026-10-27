@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <ProjectReference Include="../../src/Anode.Dsp/Anode.Dsp.csproj"/>
+  </ItemGroup>
+  <ItemGroup>
+    <!-- Golden renders are read from the source tree (and rewritten there with ANODE_UPDATE_GOLDEN=1). -->
+    <None Remove="Golden/**"/>
+  </ItemGroup>
+</Project>
