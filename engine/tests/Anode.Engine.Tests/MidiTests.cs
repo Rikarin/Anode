@@ -201,6 +201,37 @@ public sealed class MidiTests : IDisposable {
     }
 
     [Fact]
+    public void A_per_track_resend_without_state_keeps_the_instance_and_empty_parameters_take_defaults() {
+        var state = Convert.ToBase64String([4, 2]);
+        Load(
+            1,
+            [MidiFixtures.InstrumentTrack(1, MidiFixtures.Instrument(gain: 0.2, state: state))],
+            [new(1, [], [])]
+        );
+        var instrument = Instrument(1);
+        Assert.Equal([4, 2], instrument.State);
+
+        // The server resends the track (its events changed) without the state: same instance, parameters applied.
+        Load(2, [MidiFixtures.InstrumentTrack(1, MidiFixtures.Instrument(gain: 0.2000000029802322))], [new(1, [], [])], false);
+        Assert.Same(instrument, Instrument(1));
+        Assert.Equal(0, controller.Engine.Root.Tracks[0].Instrument!.Parameters.Count); // 0.2f ≈ 0.2: nothing queued
+        Load(3, [MidiFixtures.InstrumentTrack(1, MidiFixtures.Instrument(gain: 0.9))], [new(1, [], [])], false);
+        driver.Process();
+        Assert.Same(instrument, Instrument(1));
+        Assert.Equal(0.9f, instrument.GetParameter(0));
+
+        // A track created before the server had a catalogue: no parameters, so the plugin's defaults.
+        Load(
+            4,
+            [MidiFixtures.InstrumentTrack(2, new(TestInstrument.Id, new Dictionary<string, double>()))],
+            [new(2, [], [])],
+            false
+        );
+        Assert.Equal(0.5f, Instrument(2).GetParameter(0));
+        Assert.Equal(0.5, controller.Engine.Root.Tracks[1].Instrument!.Values["gain"], 5);
+    }
+
+    [Fact]
     public void Removing_a_track_disposes_its_instrument_and_states_are_reported() {
         Load(
             1,

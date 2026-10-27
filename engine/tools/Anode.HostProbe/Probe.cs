@@ -1,6 +1,7 @@
 using Anode.Audio;
 using Anode.Audio.Native;
 using Anode.Engine;
+using Anode.Engine.Plugins;
 using Anode.Engine.Recording;
 using Anode.Ipc;
 using Anode.Ipc.Segments;
@@ -62,9 +63,26 @@ static class Smoke {
         await socket.ConnectAsync(new UnixDomainSocketEndPoint(socketPath), cancellationToken);
         await using var stream = new NetworkStream(socket);
 
+        var pushed = new List<IpcMessage>();
+        var scanning = false;
+
+        // The next reply; what the host pushes unasked (catalogue, ports, activity) is set aside.
+        async Task<IpcMessage?> Reply() {
+            while (true) {
+                var message = await IpcFraming.ReadAsync(stream, cancellationToken);
+                if (message is MidiPortsMessage or MidiActivityMessage
+                    || (message is PluginCatalogMessage && !scanning)) {
+                    pushed.Add(message);
+                    continue;
+                }
+
+                return message;
+            }
+        }
+
         async Task<IpcMessage?> Request(IpcMessage message) {
             await IpcFraming.WriteAsync(stream, message, cancellationToken);
-            return await IpcFraming.ReadAsync(stream, cancellationToken);
+            return await Reply();
         }
 
         async Task Send(IpcMessage message) {
@@ -203,13 +221,112 @@ static class Smoke {
 
         var error = await Request(new SetStripMessage(99, unity));
         Check(error is ErrorMessage { Request: "setStrip" }, $"unknown track: {error}");
+
+        // ---- Phase 2: catalogue, ports, an instrument track, live MIDI and MIDI recording ----
+        Check(pushed.OfType<MidiPortsMessage>().Any(), "midiPorts after the hello");
+        foreach (var port in pushed.OfType<MidiPortsMessage>().LastOrDefault()?.Ports ?? []) {
+            Console.WriteLine($"  midi port {port.Id} \"{port.Name}\" {(port.Input ? "in" : "out")}");
+        }
+
+        scanning = true;
+        var catalog = await Request(new ScanPluginsMessage()) as PluginCatalogMessage;
+        scanning = false;
+        Check(catalog is not null, "scanPlugins answers the catalogue");
+        foreach (var plugin in catalog?.Plugins ?? []) {
+            Console.WriteLine(
+                $"  plugin {plugin.Id} ({plugin.Format}) {plugin.Name}, {plugin.Parameters.Count} parameters"
+            );
+        }
+
+        var instrument = catalog?.Plugins.FirstOrDefault(static p => p.Id == "org.anode.test-sine")
+            ?? catalog?.Plugins.FirstOrDefault(static p => p.IsInstrument);
+        if (instrument is null) {
+            Console.WriteLine("  (no instrument in the catalogue: build engine/native and set CLAP_PATH to test one)");
+        } else {
+            await Instruments(instrument);
+        }
         var end = Read(region, out _);
         Console.WriteLine(
             $"callbacks {end.Callbacks}, overloads {end.Overloads}, underruns {end.Underruns}, model {end.ModelVersion}"
         );
         Console.WriteLine(failures == 0 ? "PASS" : $"FAIL ({failures})");
         return failures == 0 ? 0 : 1;
+
+        async Task Instruments(EnginePlugin plugin) {
+            Console.WriteLine($"instrument track with {plugin.Id}");
+            var parameters = plugin.Parameters.ToDictionary(static p => p.Id, static p => p.Default);
+            var notes = Enumerable.Range(0, 16)
+                .SelectMany(i => new[] {
+                        Note(i * (long)rate / 4, 60 + i % 3 * 4, true), Note(i * (long)rate / 4 + rate / 5, 60 + i % 3 * 4, false)
+                    }
+                )
+                .ToArray();
+            using (var segment = SegmentWriter.Write(
+                       [new(4, notes, []), new(TrackEntry.MetronomeTrack, Media.Clicks(rate, 20), [])],
+                       2,
+                       20L * rate,
+                       $"an-probe{Environment.ProcessId % 10000}",
+                       2,
+                       true
+                   )) {
+                var loaded = await Request(
+                    new LoadModelMessage(
+                        new(segment.Name, segment.Length, 2),
+                        true,
+                        [new(4, -1, true, true, false, unity, new(plugin.Id, parameters))],
+                        [],
+                        new(0.5f, 0f, false, false),
+                        Path.Combine(dir, "Audio Files")
+                    )
+                );
+                Check(loaded is ModelLoadedMessage { Version: 2 }, $"loadModel with an instrument answered {loaded}");
+            }
+
+            await Send(new SetMetronomeMessage(false, 0.3f, false));
+            await Send(new TransportMessage(TransportAction.Play, 0));
+            Thread.Sleep(1500);
+            var playing = Read(region, out var meters);
+            Report("instrument", playing, meters);
+            Check(meters[0].TrackId == 4 && meters[0].PeakLeft > 0.01f, "the instrument track sounds");
+            await Send(new TransportMessage(TransportAction.Stop));
+            if (plugin.Parameters.Count > 0) {
+                await Send(new SetParameterMessage(4, plugin.Parameters[0].Id, plugin.Parameters[0].Min));
+            }
+
+            await IpcFraming.WriteAsync(stream, new TransportMessage(TransportAction.Record, rate), cancellationToken);
+            Thread.Sleep(300);
+            await Send(new LiveMidiMessage(4, [new(0x90, 72, 100)]));
+            Thread.Sleep(250);
+            await Send(new LiveMidiMessage(4, [new(0x80, 72, 0)]));
+            Thread.Sleep(200);
+            var finished = await Request(new TransportMessage(TransportAction.Stop));
+            if (finished is RecordingFinishedMessage { MidiTakes: [var take] }) {
+                Console.WriteLine(
+                    $"  midi take: track {take.TrackId} {take.StartSample}…{take.EndSample}: "
+                    + string.Join(", ", take.Events.Select(static e => $"{e.Status:X2} {e.Data1} @{e.Sample}"))
+                );
+                Check(take is { TrackId: 4, Events.Count: 2 }, "the live notes were recorded");
+            } else {
+                Check(false, $"recordingFinished with one MIDI take, got {finished}");
+            }
+
+            Check(pushed.OfType<MidiActivityMessage>().Any(), "live MIDI shows as activity");
+            var states = await Request(new RequestInstrumentStatesMessage());
+            Check(
+                states is InstrumentStatesMessage { States: [{ TrackId: 4 }] },
+                $"instrumentStates: {(states as InstrumentStatesMessage)?.States[0].State?.Length ?? 0} base64 chars"
+            );
+        }
     }
+
+    static PlaybackEvent Note(long at, int note, bool on) =>
+        new() {
+            SamplePos = at,
+            Track = 4,
+            Kind = on ? PlaybackEventKind.NoteOn : PlaybackEventKind.NoteOff,
+            Data1 = (byte)note,
+            Data2 = (byte)(on ? 100 : 0)
+        };
 
     static void Report(string label, TelemetryHeader h, MeterEntry[] meters) {
         Console.WriteLine(
@@ -231,12 +348,17 @@ static class Smoke {
 }
 
 static class Bench {
+    // instruments: instrument tracks besides the audio tracks; instrument: what they play, probe.sine (a managed
+    // sine), a built-in id, or a CLAP id found in clapPath (default: CLAP_PATH, else engine/artifacts/native/clap).
     public static async Task<int> RunAsync(
         bool useNull,
         string? device,
         int tracks,
         int seconds,
         int buffer,
+        int instruments = 0,
+        string instrument = ProbeSine.Id,
+        string? clapPath = null,
         CancellationToken cancellationToken = default
     ) {
         IAudioDevice audio = useNull
@@ -268,9 +390,23 @@ static class Bench {
                     ]
                 )
             )
+            .Concat(Enumerable.Range(0, instruments).Select(i => new TrackModel(1000 + i, Chords(rate, i, 60), [])))
             .Append(new(TrackEntry.MetronomeTrack, Media.Clicks(rate, 60), []))
             .ToArray();
-        using var controller = new EngineController(new(rate, audio.BufferFrames));
+        var plugins = new PluginRegistry { Log = static m => Console.WriteLine($"  {m}") };
+        plugins.AddBuiltin(ProbeSine.Info, static () => new ProbeSine());
+        if (instruments > 0 && instrument.Contains('.', StringComparison.Ordinal) && instrument != ProbeSine.Id) {
+            plugins.ScanClap([clapPath ?? Environment.GetEnvironmentVariable("CLAP_PATH") ?? DefaultClapFolder()]);
+        }
+
+        var catalogEntry = plugins.Catalog().FirstOrDefault(p => p.Id == instrument);
+        if (instruments > 0 && catalogEntry is null) {
+            Console.WriteLine($"no instrument '{instrument}' (catalogue: {string.Join(", ", plugins.Catalog().Select(static p => p.Id))})");
+            return 2;
+        }
+
+        var parameters = catalogEntry?.Parameters.ToDictionary(static p => p.Id, static p => p.Default) ?? [];
+        using var controller = new EngineController(new(rate, audio.BufferFrames), plugins);
         using (var segment = SegmentWriter.Write(models, 1, 60L * rate, "an-bench", Environment.ProcessId, true)) {
             controller.LoadModel(
                 new(
@@ -285,6 +421,17 @@ static class Bench {
                                     false,
                                     false,
                                     new(0.8f, t % 3 - 1, false, false)
+                                )
+                            ),
+                        ..Enumerable.Range(0, instruments)
+                            .Select(i => new EngineTrack(
+                                    1000 + i,
+                                    -1,
+                                    true,
+                                    false,
+                                    false,
+                                    new(0.5f, 0f, false, false),
+                                    new(instrument, parameters)
                                 )
                             )
                     ],
@@ -309,7 +456,8 @@ static class Bench {
         var (p50, p99, max, count, allocated) = timed.Summary();
         var period = 1e6 * audio.BufferFrames / rate;
         Console.WriteLine(
-            $"{audio.Backend}, {rate} Hz, {audio.BufferFrames} frames ({period:0} µs), {tracks} mono tracks + click, {seconds} s, "
+            $"{audio.Backend}, {rate} Hz, {audio.BufferFrames} frames ({period:0} µs), {tracks} mono tracks + "
+            + $"{instruments} × {(instruments > 0 ? instrument : "no instrument")} (4-note chords) + click, {seconds} s, "
             + "cycle 10-18 s from 5 s"
         );
         Console.WriteLine(
@@ -331,6 +479,33 @@ static class Bench {
         audio.Stop();
         audio.Dispose();
         return 0;
+    }
+
+    /// <summary>
+    ///     Four-note chords every half second, each held for 0.4 s, on instrument track <paramref name="index" />
+    ///     (a different chord per track): four voices sounding most of the time, eight at each overlap.
+    /// </summary>
+    static PlaybackEvent[] Chords(int rate, int index, int seconds) {
+        var events = new List<PlaybackEvent>();
+        for (var c = 0; c < seconds * 2; c++) {
+            long on = c * (long)rate / 2, off = on + rate * 4 / 10;
+            for (var n = 0; n < 4; n++) {
+                var note = (byte)(48 + index % 12 + n * 4 + c % 3);
+                events.Add(new() { SamplePos = on, Track = 1000 + index, Kind = PlaybackEventKind.NoteOn, Data1 = note, Data2 = 90 });
+                events.Add(new() { SamplePos = off, Track = 1000 + index, Kind = PlaybackEventKind.NoteOff, Data1 = note });
+            }
+        }
+
+        return [..events.OrderBy(static e => e.SamplePos).ThenBy(static e => e.Kind == PlaybackEventKind.NoteOn ? 1 : 0)];
+    }
+
+    static string DefaultClapFolder() {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir is not null && !Directory.Exists(Path.Combine(dir.FullName, "artifacts", "native", "clap"))) {
+            dir = dir.Parent;
+        }
+
+        return dir is null ? "clap" : Path.Combine(dir.FullName, "artifacts", "native", "clap");
     }
 
     /// <summary>Times each callback into a histogram of 0.5 µs bins; allocation-free.</summary>

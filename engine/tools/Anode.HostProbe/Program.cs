@@ -4,7 +4,9 @@ using System.Globalization;
 // anode-host-probe: a tiny driver for anode-host.
 //   smoke --socket <path> [--dir <dir>]      drive a running host over its socket: load, play, cycle, record
 //   bench [--null] [--device <uid>] [--tracks 128] [--seconds 10] [--buffer 64]
-//                                            measure the audio callback in-process on a device (muted) or the null clock
+//         [--instruments 0] [--instrument probe.sine|<builtin id>|<CLAP id>] [--clap-path <dir>]
+//                                            measure the audio callback in-process on a device (muted) or the null clock,
+//                                            with audio tracks and instrument tracks playing chords
 
 var command = args.Length > 0 ? args[0] : "help";
 
@@ -26,14 +28,17 @@ return command switch {
         Option("device"),
         Int("tracks", 128),
         Int("seconds", 10),
-        Int("buffer", 64)
+        Int("buffer", 64),
+        Int("instruments", 0),
+        Option("instrument") ?? ProbeSine.Id,
+        Option("clap-path")
     ),
     _ => Help()
 };
 
 static int Help() {
     Console.WriteLine(
-        "anode-host-probe smoke --socket <path> [--dir <dir>] | bench [--null] [--device <uid>] [--tracks n] [--seconds s] [--buffer n]"
+        "anode-host-probe smoke --socket <path> [--dir <dir>] | bench [--null] [--device <uid>] [--tracks n] [--seconds s] [--buffer n] [--instruments n] [--instrument id] [--clap-path dir]"
     );
     return 2;
 }

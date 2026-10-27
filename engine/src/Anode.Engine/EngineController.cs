@@ -397,10 +397,11 @@ public sealed class EngineController : IDisposable {
     }
 
     /// <summary>
-    ///     Brings <paramref name="track" />'s instrument in line with <paramref name="spec" />: the same plugin, file and
-    ///     state only update parameters; anything else builds a new instance (prepared, state and file loaded,
-    ///     parameters set, activated) and swaps it in. Returns the instrument it replaced, which the caller disposes
-    ///     after a grace period.
+    ///     Brings <paramref name="track" />'s instrument in line with <paramref name="spec" />. The same plugin and
+    ///     file only update the parameters it lists (the server resends a track's settings without the state, and a
+    ///     saved state matters only to a new instance); another plugin or file builds a new instance (prepared, state
+    ///     and file loaded, parameters set, the plugin's defaults for any not listed, activated) and swaps it in.
+    ///     Returns the instrument it replaced, which the caller disposes after a grace period.
     /// </summary>
     InstrumentSlot? ApplyInstrument(TrackState track, EngineInstrument? spec) {
         var current = track.Instrument;
@@ -411,10 +412,9 @@ public sealed class EngineController : IDisposable {
 
         if (current is not null
             && current.PluginId == spec.PluginId
-            && current.File == spec.File
-            && (spec.State is null || spec.State == current.LoadedState)) {
+            && current.File == spec.File) {
             foreach (var (id, value) in spec.Parameters) {
-                if (!current.Values.TryGetValue(id, out var known) || known != value) {
+                if (!current.Values.TryGetValue(id, out var known) || Math.Abs(known - value) > 1e-6) {
                     current.Set(id, value);
                 }
             }
