@@ -1,0 +1,5 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <Description>The real-time engine: transport, render graph, scheduler, disk streaming and recording.</Description>
+  </PropertyGroup>
+</Project>

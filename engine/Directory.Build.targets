@@ -1,0 +1,16 @@
+<Project>
+    <!--
+      Copies the native shim built by native/build.sh (artifacts/native) next to every executable and test
+      project. When it hasn't been built, managed code reports the backend as unavailable instead of failing.
+    -->
+    <PropertyGroup>
+        <AnodeNativeDir>$(MSBuildThisFileDirectory)artifacts/native/</AnodeNativeDir>
+    </PropertyGroup>
+    <ItemGroup Condition="'$(OutputType)' == 'Exe'">
+        <None Include="$(AnodeNativeDir)*cth_*.*"
+              Exclude="$(AnodeNativeDir)*.exp;$(AnodeNativeDir)*.lib;$(AnodeNativeDir)*.pdb"
+              Visible="false"
+              CopyToOutputDirectory="PreserveNewest"
+              CopyToPublishDirectory="PreserveNewest"/>
+    </ItemGroup>
+</Project>

@@ -1,0 +1,32 @@
+{
+  "name": "api-client",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "projectType": "library",
+  "sourceRoot": "libs/api-client/src",
+  "tags": ["type:data"],
+  "targets": {
+    "typecheck": {
+      "executor": "nx:run-commands",
+      "options": {
+        "commands": [
+          "tsc -p libs/api-client/tsconfig.lib.json --noEmit",
+          "tsc -p libs/api-client/tsconfig.spec.json --noEmit"
+        ],
+        "parallel": false
+      }
+    },
+    "generate": {
+      "executor": "nx:run-commands",
+      "inputs": ["{workspaceRoot}/../engine/src/Anode.Server/openapi.json"],
+      "options": {
+        "command": "openapi-typescript ../engine/src/Anode.Server/openapi.json -o libs/api-client/src/generated/schema.ts && prettier --write libs/api-client/src/generated/schema.ts"
+      }
+    },
+    "check-generated": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "openapi-typescript ../engine/src/Anode.Server/openapi.json -o tmp/schema.ts && prettier --ignore-path /dev/null --write tmp/schema.ts > /dev/null && diff -u libs/api-client/src/generated/schema.ts tmp/schema.ts && echo 'api-client is up to date'"
+      }
+    }
+  }
+}

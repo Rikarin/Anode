@@ -1,0 +1,5 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <ProjectReference Include="../../src/Anode.EngineHost/Anode.EngineHost.csproj"/>
+  </ItemGroup>
+</Project>

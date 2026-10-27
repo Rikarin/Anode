@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup>
+    <Description>REST and WebSocket API for Anode: projects, edits, library and media; drives the engine host over IPC.</Description>
+    <AssemblyName>anode-server</AssemblyName>
+    <RootNamespace>Anode.Server</RootNamespace>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <IsAotCompatible>false</IsAotCompatible>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi"/>
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="../Anode.Contracts/Anode.Contracts.csproj"/>
+    <ProjectReference Include="../Anode.Ipc/Anode.Ipc.csproj"/>
+    <ProjectReference Include="../Anode.EngineHost/Anode.EngineHost.csproj"/>
+    <ProjectReference Include="../Anode.Model/Anode.Model.csproj"/>
+  </ItemGroup>
+</Project>

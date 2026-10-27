@@ -1,0 +1,5 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <Description>Audio and MIDI device I/O through the cth_audio native shim.</Description>
+  </PropertyGroup>
+</Project>

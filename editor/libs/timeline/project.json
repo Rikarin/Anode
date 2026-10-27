@@ -1,0 +1,19 @@
+{
+  "name": "timeline",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "projectType": "library",
+  "sourceRoot": "libs/timeline/src",
+  "tags": ["type:ui"],
+  "targets": {
+    "typecheck": {
+      "executor": "nx:run-commands",
+      "options": {
+        "commands": [
+          "tsc -p libs/timeline/tsconfig.lib.json --noEmit",
+          "tsc -p libs/timeline/tsconfig.spec.json --noEmit"
+        ],
+        "parallel": false
+      }
+    }
+  }
+}

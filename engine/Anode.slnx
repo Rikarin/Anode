@@ -1,0 +1,17 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Anode.Audio/Anode.Audio.csproj"/>
+    <Project Path="src/Anode.Contracts/Anode.Contracts.csproj"/>
+    <Project Path="src/Anode.Engine/Anode.Engine.csproj"/>
+    <Project Path="src/Anode.EngineHost/Anode.EngineHost.csproj"/>
+    <Project Path="src/Anode.Host/Anode.Host.csproj"/>
+    <Project Path="src/Anode.Ipc/Anode.Ipc.csproj"/>
+    <Project Path="src/Anode.Model/Anode.Model.csproj"/>
+    <Project Path="src/Anode.Server/Anode.Server.csproj"/>
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Anode.Engine.Tests/Anode.Engine.Tests.csproj"/>
+    <Project Path="tests/Anode.Model.Tests/Anode.Model.Tests.csproj"/>
+    <Project Path="tests/Anode.Server.Tests/Anode.Server.Tests.csproj"/>
+  </Folder>
+</Solution>

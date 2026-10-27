@@ -1,0 +1,5 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <Description>Server-to-host IPC: length-prefixed JSON frames over a Unix domain socket.</Description>
+  </PropertyGroup>
+</Project>

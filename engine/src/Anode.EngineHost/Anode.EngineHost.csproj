@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <Description>Runs the engine for anode-server: the IPC endpoint and the launcher's lifeline.</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../Anode.Audio/Anode.Audio.csproj"/>
+    <ProjectReference Include="../Anode.Engine/Anode.Engine.csproj"/>
+    <ProjectReference Include="../Anode.Ipc/Anode.Ipc.csproj"/>
+  </ItemGroup>
+</Project>

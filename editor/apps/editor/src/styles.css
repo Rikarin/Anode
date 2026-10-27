@@ -1,0 +1,80 @@
+@import 'tailwindcss';
+@import '@xui/core/styles/theme.css';
+@import '@angular/cdk/overlay-prebuilt.css';
+
+/* Tailwind only emits utilities it can see: the xUI packages and our libraries. */
+@source '../../../node_modules/@xui';
+@source '../../../libs';
+
+/* Anode is a dark studio app by default; the tokens carry both themes. */
+html,
+body {
+  height: 100%;
+}
+
+body {
+  @apply bg-background text-foreground antialiased;
+  font-family:
+    Inter,
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    sans-serif;
+  overscroll-behavior: none;
+  /* An app, not a document: labels and readouts are not text to select. Fields still are (below). */
+  @apply select-none;
+}
+
+input,
+textarea,
+[contenteditable]:not([contenteditable='false']) {
+  @apply select-text;
+}
+
+/* The control bar as a macOS title bar (app.ts): dragging it moves the window, while its controls stay clickable. */
+.window-drag {
+  -webkit-app-region: drag;
+}
+
+.window-drag :is(a, button, input, select, textarea, [role='radio'], [tabindex]) {
+  -webkit-app-region: no-drag;
+}
+
+/* The LCD: tabular figures so the position does not jitter as digits change. */
+.an-lcd {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Scrollbars: thin and rounded, a transparent track and a thumb in the theme's border colour. */
+@supports not selector(::-webkit-scrollbar) {
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-border-strong) transparent;
+  }
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track,
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  border: 3px solid transparent;
+  border-radius: 9999px;
+  background: var(--color-border-strong) padding-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-foreground-subtle) padding-box;
+}
+
+/* xUI marks a disabled button only by desaturating it; dim it too. */
+[xuiButton]:disabled {
+  opacity: 0.4;
+}

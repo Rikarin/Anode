@@ -1,0 +1,63 @@
+name: engine
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    paths: ["engine/**", ".github/workflows/engine.yml"]
+  # For release.yml (to come): it runs these jobs on the tagged commit and publishes only when they pass.
+  workflow_call:
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    working-directory: engine
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup-dotnet
+      - name: Install ALSA headers
+        if: runner.os == 'Linux'
+        run: sudo apt-get update -q && sudo apt-get install -y -q libasound2-dev
+      - name: Build native shim
+        shell: bash
+        run: ./native/build.sh
+      - run: dotnet build Anode.slnx -c Release
+      - run: dotnet test --solution Anode.slnx -c Release --no-build
+
+  host-aot:
+    needs: test
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-latest, rid: linux-x64 }
+          - { os: ubuntu-24.04-arm, rid: linux-arm64 }
+          - { os: macos-latest, rid: osx-arm64 }
+          - { os: windows-latest, rid: win-x64 }
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup-dotnet
+      - name: Install ALSA headers
+        if: runner.os == 'Linux'
+        run: sudo apt-get update -q && sudo apt-get install -y -q libasound2-dev
+      - name: Build native shim
+        shell: bash
+        run: ./native/build.sh
+      - run: dotnet publish src/Anode.Host -c Release -r "$RID" -o out
+        shell: bash
+        env:
+          RID: ${{ matrix.rid }}
+      - name: Smoke test (the AOT binary starts and loads the native shim)
+        shell: bash
+        run: ./out/anode-host --version && ./out/anode-host --devices

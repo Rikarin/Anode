@@ -1,0 +1,5 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <Description>API and realtime data contracts. No engine or DSP dependencies.</Description>
+  </PropertyGroup>
+</Project>

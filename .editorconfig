@@ -1,0 +1,39 @@
+# Skala (skala.jsonc, .github/workflows/skala.yml) reads its rule severities and thresholds from here, as Roslyn and the
+# IDE do; skala.jsonc holds only the gates. A rule that fits this codebase is fixed to zero findings, and one that does
+# not is switched off or re-tuned below, with the reason, instead of being parked in .skala/baseline.sarif. Every rule
+# not named here runs at Skala's default. The rules below are inherited from Cathode, for the same reasons.
+root = true
+
+[*.cs]
+# SK6034, a public constant is baked into every caller: the engine's assemblies are one application, built and shipped
+# together from this solution (nothing is published as a library), so every caller is always rebuilt with the constant.
+dotnet_diagnostic.SK6034.severity = none
+
+# SK4002, review a delegate that captures an iteration-local: a prompt to review allocation, not a defect. It cannot
+# tell the audio thread from the control thread; the audio path's allocation discipline is enforced by tests that
+# measure it.
+dotnet_diagnostic.SK4002.severity = none
+
+# SK1084, use a LINQ operator for part of a loop: the opposite of this codebase's deliberate style. An explicit loop
+# allocates nothing, and the engine, the compilers and the host keep LINQ off every path near the audio thread.
+dotnet_diagnostic.SK1084.severity = none
+
+# SK7005, a member takes more than 8 parameters: positional records are this codebase's form for wire contracts.
+dotnet_diagnostic.SK7005.severity = none
+
+# Tests and spikes: table-driven test methods, repeated ids and throwaway measurement harnesses are the readable choice
+# there. The metrics and the repeated-literal rule stay on for the shipped code.
+[engine/{tests,spikes}/**.cs]
+dotnet_diagnostic.SK7001.severity = none
+dotnet_diagnostic.SK7002.severity = none
+dotnet_diagnostic.SK7003.severity = none
+dotnet_diagnostic.SK7082.severity = none
+dotnet_diagnostic.SK7083.severity = none
+
+# The DSP library: a per-sample kernel is one routine per algorithm on purpose (the hot path stays inline and
+# allocation-free, and it reads against the paper it implements).
+[engine/src/Anode.Dsp/**.cs]
+dotnet_diagnostic.SK7001.severity = none
+dotnet_diagnostic.SK7002.severity = none
+dotnet_diagnostic.SK7003.severity = none
+dotnet_diagnostic.SK7030.severity = none

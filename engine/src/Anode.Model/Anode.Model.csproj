@@ -1,0 +1,5 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <Description>The project domain model: time base, tempo map, tracks, regions, edit commands and undo.</Description>
+  </PropertyGroup>
+</Project>

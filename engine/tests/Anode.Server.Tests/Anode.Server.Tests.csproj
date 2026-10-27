@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing"/>
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../src/Anode.Server/Anode.Server.csproj"/>
+    <!-- Built, not referenced: the two-process test runs it as a separate anode-host process. -->
+    <ProjectReference Include="../../src/Anode.Host/Anode.Host.csproj" ReferenceOutputAssembly="false" Private="false"/>
+  </ItemGroup>
+</Project>
