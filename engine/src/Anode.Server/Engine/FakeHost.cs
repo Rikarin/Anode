@@ -1,3 +1,4 @@
+using Anode.Dsp.Instruments;
 using Anode.Ipc;
 using Anode.Ipc.Segments;
 using Anode.Ipc.Telemetry;
@@ -5,6 +6,7 @@ using Anode.Model.Audio;
 using System.Diagnostics;
 using System.Globalization;
 using System.Net.Sockets;
+using System.Text;
 
 namespace Anode.Server.Engine;
 
@@ -13,8 +15,12 @@ namespace Anode.Server.Engine;
 ///     in-process engine mode (<c>--Anode:Engine:Mode=inprocess</c>: tests and UI development) and tests of the
 ///     server's host link. It maps and validates every model segment it is sent, keeps strips and track IO, runs a
 ///     transport whose position advances in real time (wrapping in the cycle), writes a telemetry region about 60
-///     times a second with plausible meters, and fakes recording: on stop, each armed track gets a WAV take of a quiet
-///     sine in the record directory, reported in <see cref="RecordingFinishedMessage" />.
+///     times a second with plausible meters, and fakes recording: on stop, each armed audio track gets a WAV take of a
+///     quiet sine in the record directory, and each armed instrument or external MIDI track a MIDI take of the live
+///     MIDI it received (or, without any, a few notes), reported in <see cref="RecordingFinishedMessage" />. Phase 2: it
+///     serves a plugin catalogue (<see cref="Catalogue" />) and MIDI ports after its hello, keeps instruments,
+///     parameters, MIDI I/O and the MIDI-thru track, answers live MIDI with activity, and reports a state per
+///     instrument (the one it was given, else a made-up one).
 /// </summary>
 public sealed class FakeHost : IAsyncDisposable {
     public const string Backend = "null";
@@ -29,8 +35,11 @@ public sealed class FakeHost : IAsyncDisposable {
     readonly Lock gate = new();
     readonly List<IpcMessage> received = [];
     readonly Dictionary<int, AudioPlaylistEntry[]> playlists = [];
+    readonly Dictionary<int, PlaybackEvent[]> events = [];
     readonly Dictionary<int, EngineTrack> tracks = [];
     readonly Dictionary<int, EngineFile> files = [];
+    readonly Dictionary<int, string> states = [];
+    readonly Dictionary<int, List<RecordedMidiEvent>> live = [];
     readonly CancellationTokenSource stopping;
     EngineStrip master = new(1, 0, false, false);
     string? recordDirectory;
@@ -40,6 +49,7 @@ public sealed class FakeHost : IAsyncDisposable {
     long anchorTimestamp;
     long recordStart;
     long modelVersion;
+    int thru = -1;
     Task? telemetryLoop;
     Socket? listener;
     Task? acceptLoop;
@@ -70,6 +80,84 @@ public sealed class FakeHost : IAsyncDisposable {
         get {
             lock (gate) {
                 return (modelVersion, [..playlists.Keys.Order()]);
+            }
+        }
+    }
+
+    /// <summary>The fake CLAP instrument in <see cref="Catalogue" />.</summary>
+    public const string FakeClapId = "org.anode.fake.sine";
+
+    /// <summary>
+    ///     What this host can load: the built-in instruments (Anode.Dsp's descriptors, or stand-ins with the same ids
+    ///     while those are not filled in), then a fake CLAP instrument with decimal parameter ids.
+    /// </summary>
+    public static IReadOnlyList<EnginePlugin> Catalogue { get; } = [
+        ..BuiltinInstruments.All.Count > 0
+            ? BuiltinInstruments.All.Select(EngineCatalog.From)
+            : [
+                new EnginePlugin(
+                    BuiltinInstruments.DefaultId,
+                    "Synth",
+                    "Anode",
+                    "0",
+                    "builtin",
+                    true,
+                    [],
+                    [
+                        new("cutoff", "Cutoff", 20, 20_000, 8_000, "Hz", 0),
+                        new("resonance", "Resonance", 0, 1, 0.2, string.Empty, 0),
+                        new("wave", "Waveform", 0, 3, 0, string.Empty, 3, ["Saw", "Square", "Triangle", "Sine"])
+                    ]
+                ),
+                new EnginePlugin(
+                    "anode.sampler",
+                    "Sampler",
+                    "Anode",
+                    "0",
+                    "builtin",
+                    true,
+                    [".sfz", ".wav"],
+                    [new("volume", "Volume", -60, 6, 0, "dB", 0), new("tune", "Tune", -100, 100, 0, "ct", 0)]
+                )
+            ],
+        new EnginePlugin(
+            FakeClapId,
+            "Fake Sine",
+            "Anode tests",
+            "0.1",
+            "clap",
+            true,
+            [],
+            [new("0", "Gain", 0, 1, 0.5, string.Empty, 0), new("1", "Detune", -1, 1, 0, string.Empty, 0)]
+        )
+    ];
+
+    /// <summary>The MIDI ports this host reports.</summary>
+    public static IReadOnlyList<EngineMidiPort> Ports { get; } = [
+        new("fake-in", "Fake Keyboard", true, false), new("fake-out", "Fake Module", false, true)
+    ];
+
+    /// <summary>The tracks as this host knows them (settings, instrument, MIDI I/O).</summary>
+    public IReadOnlyDictionary<int, EngineTrack> Tracks {
+        get {
+            lock (gate) {
+                return new Dictionary<int, EngineTrack>(tracks);
+            }
+        }
+    }
+
+    /// <summary>The compiled events of engine track <paramref name="trackId" /> in the loaded model.</summary>
+    public IReadOnlyList<PlaybackEvent> EventsOf(int trackId) {
+        lock (gate) {
+            return events.GetValueOrDefault(trackId) ?? [];
+        }
+    }
+
+    /// <summary>The MIDI-thru track (−1: none).</summary>
+    public int Thru {
+        get {
+            lock (gate) {
+                return thru;
             }
         }
     }
@@ -159,6 +247,52 @@ public sealed class FakeHost : IAsyncDisposable {
         switch (message) {
             case HelloMessage:
                 yield return new HelloMessage(version, Backend, SampleRate, 256, 2, 2, TelemetryName);
+                yield return new PluginCatalogMessage(Catalogue);
+                yield return new MidiPortsMessage(Ports);
+                break;
+            case ScanPluginsMessage:
+                yield return new PluginCatalogMessage(Catalogue);
+                break;
+            case SetInstrumentMessage set:
+                lock (gate) {
+                    if (tracks.TryGetValue(set.TrackId, out var t)) {
+                        tracks[set.TrackId] = t with { Instrument = set.Instrument };
+                    }
+
+                    Remember(set.TrackId, set.Instrument);
+                }
+
+                break;
+            case SetParameterMessage parameter:
+                lock (gate) {
+                    if (tracks.TryGetValue(parameter.TrackId, out var t) && t.Instrument is { } instrument) {
+                        var values = new Dictionary<string, double>(instrument.Parameters) {
+                            [parameter.ParameterId] = parameter.Value
+                        };
+                        tracks[parameter.TrackId] = t with { Instrument = instrument with { Parameters = values } };
+                    }
+                }
+
+                break;
+            case SetMidiIoMessage io:
+                lock (gate) {
+                    if (tracks.TryGetValue(io.TrackId, out var t)) {
+                        tracks[io.TrackId] = t with { Midi = io.Midi };
+                    }
+                }
+
+                break;
+            case SetMidiThruMessage set:
+                lock (gate) {
+                    thru = set.TrackId;
+                }
+
+                break;
+            case LiveMidiMessage midi:
+                yield return Live(midi);
+                break;
+            case RequestInstrumentStatesMessage:
+                yield return States();
                 break;
             case PingMessage ping:
                 yield return new PongMessage(ping.Id);
@@ -212,12 +346,14 @@ public sealed class FakeHost : IAsyncDisposable {
 
     IpcMessage Load(LoadModelMessage load) {
         var loaded = new Dictionary<int, AudioPlaylistEntry[]>();
+        var loadedEvents = new Dictionary<int, PlaybackEvent[]>();
         try {
             using var mapped = MappedSegment.Map(load.Segment.Version, load.Segment.Name, load.Segment.Length);
             mapped.ValidateLayout();
             mapped.Verify();
             for (var i = 0; i < TrackCount(mapped); i++) {
                 loaded[mapped.TrackId(i)] = PlaylistOf(mapped, i);
+                loadedEvents[mapped.TrackId(i)] = EventsOf(mapped, i);
             }
         } catch (Exception e) when (e is IOException or InvalidDataException or UnauthorizedAccessException) {
             return new ErrorMessage(e.Message, "loadModel");
@@ -226,15 +362,20 @@ public sealed class FakeHost : IAsyncDisposable {
         lock (gate) {
             if (load.Replace) {
                 playlists.Clear();
+                events.Clear();
                 tracks.Clear();
             }
 
             foreach (var (id, entries) in loaded) {
                 playlists[id] = entries;
+                events[id] = loadedEvents[id];
             }
 
             foreach (var track in load.Tracks) {
                 tracks[track.Id] = track;
+                if (track.Instrument is { State: not null } || !states.ContainsKey(track.Id)) {
+                    Remember(track.Id, track.Instrument);
+                }
             }
 
             foreach (var file in load.Files) {
@@ -249,15 +390,65 @@ public sealed class FakeHost : IAsyncDisposable {
         return new ModelLoadedMessage(load.Segment.Version);
     }
 
+    /// <summary>A track's instrument changed: the state it was given, or none yet.</summary>
+    void Remember(int trackId, EngineInstrument? instrument) {
+        if (instrument?.State is { } state) {
+            states[trackId] = state;
+        } else {
+            states.Remove(trackId);
+        }
+    }
+
+    /// <summary>Plays live MIDI: kept for the take while the track records, and echoed as activity.</summary>
+    MidiActivityMessage Live(LiveMidiMessage message) {
+        lock (gate) {
+            if (state == TelemetryTransportState.Recording
+                && tracks.TryGetValue(message.TrackId, out var track)
+                && track.RecordArmed) {
+                if (!live.TryGetValue(message.TrackId, out var events)) {
+                    live[message.TrackId] = events = [];
+                }
+
+                var at = Position();
+                events.AddRange(message.Events.Select(e => new RecordedMidiEvent(at, e.Status, e.Data1, e.Data2)));
+            }
+        }
+
+        return new(
+            [..message.Events.Select(e => new MidiActivityEntry(message.TrackId, null, e.Status, e.Data1, e.Data2))]
+        );
+    }
+
+    /// <summary>Every instrument's state: the one it was given, else a made-up one naming its plugin.</summary>
+    InstrumentStatesMessage States() {
+        lock (gate) {
+            return new(
+                [
+                    ..tracks.Values.Where(static t => t.Instrument is not null)
+                        .OrderBy(static t => t.Id)
+                        .Select(t => new InstrumentState(
+                                t.Id,
+                                states.GetValueOrDefault(t.Id)
+                                ?? Convert.ToBase64String(
+                                    Encoding.UTF8.GetBytes($"fake-state:{t.Instrument!.PluginId}")
+                                )
+                            )
+                        )
+                ]
+            );
+        }
+    }
+
     RecordingFinishedMessage? Transport(TransportMessage message) {
         List<(EngineTrack Track, long Start, long Frames)>? takes = null;
+        List<RecordedMidiTake> midiTakes = [];
         string? directory;
         lock (gate) {
             var now = Position();
             switch (message.Action) {
                 case TransportAction.Play:
                 case TransportAction.Record:
-                    takes = Finish();
+                    takes = Finish(midiTakes);
                     anchorPosition = message.PositionSamples >= 0 ? message.PositionSamples : now;
                     anchorTimestamp = Stopwatch.GetTimestamp();
                     state = message.Action == TransportAction.Play
@@ -266,7 +457,7 @@ public sealed class FakeHost : IAsyncDisposable {
                     recordStart = anchorPosition;
                     break;
                 case TransportAction.Stop:
-                    takes = Finish();
+                    takes = Finish(midiTakes);
                     anchorPosition = now;
                     state = TelemetryTransportState.Stopped;
                     break;
@@ -280,7 +471,7 @@ public sealed class FakeHost : IAsyncDisposable {
         }
 
         if (takes is not { Count: > 0 } || directory is null) {
-            return null;
+            return midiTakes.Count > 0 ? new([], midiTakes) : null;
         }
 
         Directory.CreateDirectory(directory);
@@ -293,14 +484,20 @@ public sealed class FakeHost : IAsyncDisposable {
             recorded.Add(new(track.Id, path, start, frames, channels, SampleRate));
         }
 
-        return new(recorded);
+        return new(recorded, midiTakes.Count > 0 ? midiTakes : null);
     }
 
-    /// <summary>The takes of the recording that ends now, if one was running.</summary>
-    List<(EngineTrack, long, long)>? Finish() {
+    /// <summary>
+    ///     The audio takes of the recording that ends now, if one was running; its MIDI takes go to
+    ///     <paramref name="midiTakes" />.
+    /// </summary>
+    List<(EngineTrack, long, long)>? Finish(List<RecordedMidiTake> midiTakes) {
         if (state != TelemetryTransportState.Recording) {
             return null;
         }
+
+        var heard = new Dictionary<int, List<RecordedMidiEvent>>(live);
+        live.Clear();
 
         var elapsed = (long)(Stopwatch.GetElapsedTime(anchorTimestamp).TotalSeconds * SampleRate);
         if (cycle.Enabled && recordStart < cycle.EndSample) {
@@ -308,13 +505,38 @@ public sealed class FakeHost : IAsyncDisposable {
         }
 
         elapsed = Math.Clamp(elapsed, 0, 600L * SampleRate);
-        return elapsed == 0
-            ? null
-            : [
-                ..tracks.Values.Where(static t => t.RecordArmed)
-                    .OrderBy(static t => t.Id)
-                    .Select(t => (t, recordStart, elapsed))
-            ];
+        if (elapsed == 0) {
+            return null;
+        }
+
+        foreach (var track in tracks.Values.Where(static t => t.RecordArmed && IsMidi(t)).OrderBy(static t => t.Id)) {
+            var events = heard.GetValueOrDefault(track.Id) is { Count: > 0 } played
+                ? played
+                : FakeNotes(recordStart, elapsed);
+            midiTakes.Add(new(track.Id, recordStart, recordStart + elapsed, events));
+        }
+
+        return [
+            ..tracks.Values.Where(static t => t.RecordArmed && !IsMidi(t))
+                .OrderBy(static t => t.Id)
+                .Select(t => (t, recordStart, elapsed))
+        ];
+    }
+
+    static bool IsMidi(EngineTrack track) => track.Instrument is not null || track.Midi is not null;
+
+    /// <summary>A few notes for a MIDI take nobody played: an arpeggio, a note every quarter second, in the pass.</summary>
+    List<RecordedMidiEvent> FakeNotes(long start, long frames) {
+        var events = new List<RecordedMidiEvent>();
+        var step = SampleRate / 4;
+        int[] pitches = [60, 64, 67, 72];
+        for (var i = 0; i < pitches.Length && (i + 1L) * step <= frames; i++) {
+            var on = start + i * step;
+            events.Add(new(on, 0x90, pitches[i], 100));
+            events.Add(new(on + step * 4 / 5, 0x80, pitches[i], 0));
+        }
+
+        return events;
     }
 
     void WriteTake(string path, int channels, long frames) {
@@ -434,6 +656,11 @@ public sealed class FakeHost : IAsyncDisposable {
     }
 
     static unsafe int TrackCount(MappedSegment segment) => segment.Header->TrackCount;
+
+    static unsafe PlaybackEvent[] EventsOf(MappedSegment segment, int index) {
+        var view = segment.Track(index);
+        return [..new ReadOnlySpan<PlaybackEvent>(view.Events, (int)view.EventCount)];
+    }
 
     static unsafe AudioPlaylistEntry[] PlaylistOf(MappedSegment segment, int index) {
         var view = segment.Track(index);

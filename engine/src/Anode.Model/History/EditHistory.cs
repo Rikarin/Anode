@@ -14,8 +14,8 @@ public sealed record UndoStep(
 
 /// <summary>
 ///     The project's undo history: one stack (docs/02-phase-1.md). Pushing an edit clears the redo stack. Consecutive
-///     <c>setStrip</c> batches on the same control within <see cref="CoalesceWindow" /> merge into one step, so a fader
-///     drag undoes in one go.
+///     <c>setStrip</c> batches on the same control (and <c>setParameter</c> batches on the same parameter) within
+///     <see cref="CoalesceWindow" /> merge into one step, so a fader or knob drag undoes in one go.
 /// </summary>
 public sealed class EditHistory(TimeProvider time, int capacity = EditHistory.DefaultCapacity) {
     public const int DefaultCapacity = 500;
@@ -36,8 +36,8 @@ public sealed class EditHistory(TimeProvider time, int capacity = EditHistory.De
             && undo.Last?.Value is { } last
             && last.CoalesceKey == coalesceKey
             && now - last.Time <= CoalesceWindow) {
-            // Strip edits upsert the whole strip (its track or the master): the newest edit's operations lead to the
-            // end of the drag and the first one's inverse back to before it, with nothing in between to keep.
+            // Strip and parameter edits upsert the whole strip or track: the newest edit's operations lead to the end
+            // of the drag and the first one's inverse back to before it, with nothing in between to keep.
             undo.RemoveLast();
             undo.AddLast(last with { Revision = revision, Forward = ops.Forward, Time = now });
             return;
@@ -107,22 +107,41 @@ public static class UndoLabels {
                     SetCycleCommand => "Change Cycle",
                     SetMetronomeCommand => "Change Metronome",
                     RenameProjectCommand => "Rename Project",
+                    SetInstrumentCommand => "Change Instrument",
+                    SetParameterCommand => "Change Parameter",
+                    LoadInstrumentFileCommand => "Load Instrument File",
+                    SetMidiIoCommand => "Change MIDI Settings",
+                    AddMidiRegionCommand => "Add MIDI Region",
+                    ResizeMidiRegionCommand => "Resize Region",
+                    SetMidiRegionCommand => "Change Region",
+                    AddNotesCommand => "Add Notes",
+                    EditNotesCommand => "Edit Notes",
+                    DeleteNotesCommand => "Delete Notes",
+                    QuantizeNotesCommand => "Quantize Notes",
+                    AddControlsCommand => "Add Controller Events",
+                    DeleteControlsCommand => "Delete Controller Events",
+                    SetMidiRecordingCommand => "Change MIDI Recording",
                     _ => "Edit"
                 };
 
     /// <summary>
-    ///     The control a batch of only <c>setStrip</c> commands moves (the strip and the fields it sets), or null for
-    ///     any other batch: two batches with the same key within the window are one undo step.
+    ///     The control a batch of only <c>setStrip</c> commands moves (the strip and the fields it sets), or of only
+    ///     <c>setParameter</c> commands on one parameter, or null for any other batch: two batches with the same key
+    ///     within the window are one undo step.
     /// </summary>
     public static string? CoalesceKey(CommandBatch batch) {
         string? key = null;
         foreach (var command in batch.Commands) {
-            if (command is not SetStripCommand strip) {
+            var mine = command switch {
+                SetStripCommand strip => $"strip|{strip.TrackId ?? "master"}|{strip.VolumeDb.HasValue}"
+                    + $"{strip.Pan.HasValue}{strip.Mute.HasValue}{strip.Solo.HasValue}",
+                SetParameterCommand parameter => $"parameter|{parameter.TrackId}|{parameter.ParameterId}",
+                _ => null
+            };
+            if (mine is null) {
                 return null;
             }
 
-            var mine = $"{strip.TrackId ?? "master"}|{strip.VolumeDb.HasValue}{strip.Pan.HasValue}"
-                + $"{strip.Mute.HasValue}{strip.Solo.HasValue}";
             if (key is not null && key != mine) {
                 return null;
             }

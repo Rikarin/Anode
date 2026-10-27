@@ -15,7 +15,7 @@ public sealed record EditResult(ProjectState State, IReadOnlyList<DeltaOp> Forwa
 ///     replaces, so undo restores exactly what was there. A command that does not apply throws
 ///     <see cref="EditException" /> and changes nothing.
 /// </summary>
-public static class Edits {
+public static partial class Edits {
     public const int MaxTracks = 1024;
     public const int MaxNameLength = 128;
     public const int MaxBatch = 10_000;
@@ -29,8 +29,17 @@ public static class Edits {
     /// <summary>The last tick a position may have: about 9 hours at 990 BPM, far from overflowing samples.</summary>
     public const long MaxTick = 1L << 40;
 
-    /// <summary>Applies a batch atomically: all of it, or (on <see cref="EditException" />) none of it.</summary>
-    public static EditResult Apply(ProjectState state, IReadOnlyList<EditCommand> commands, IIdSource ids) {
+    /// <summary>
+    ///     Applies a batch atomically: all of it, or (on <see cref="EditException" />) none of it.
+    ///     <paramref name="plugins" /> is what instrument edits may name (none when left out).
+    /// </summary>
+    public static EditResult Apply(
+        ProjectState state,
+        IReadOnlyList<EditCommand> commands,
+        IIdSource ids,
+        PluginCatalog? plugins = null
+    ) {
+        plugins ??= PluginCatalog.Empty;
         if (commands.Count == 0) {
             throw new EditException("A batch needs at least one command.");
         }
@@ -44,7 +53,7 @@ public static class Edits {
         for (var i = 0; i < commands.Count; i++) {
             IReadOnlyList<DeltaOp> ops;
             try {
-                ops = Ops(state, commands[i] ?? throw new EditException("A command is null."), ids);
+                ops = Ops(state, commands[i] ?? throw new EditException("A command is null."), ids, plugins);
             } catch (EditException e) when (commands.Count > 1) {
                 throw new EditException($"Command {i + 1} ({commands[i]?.GetType().Name}): {e.Message}", e);
             }
@@ -56,8 +65,13 @@ public static class Edits {
         return new(state, forward, inverse);
     }
 
-    public static EditResult Apply(ProjectState state, EditCommand command, IIdSource ids) =>
-        Apply(state, [command], ids);
+    public static EditResult Apply(
+        ProjectState state,
+        EditCommand command,
+        IIdSource ids,
+        PluginCatalog? plugins = null
+    ) =>
+        Apply(state, [command], ids, plugins);
 
     /// <summary>
     ///     Applies delta operations, collecting them and their inverses (in application order; the caller reverses the
@@ -82,9 +96,14 @@ public static class Edits {
     }
 
     /// <summary>The delta operations of one command against <paramref name="state" />.</summary>
-    public static IReadOnlyList<DeltaOp> Ops(ProjectState state, EditCommand command, IIdSource ids) =>
+    public static IReadOnlyList<DeltaOp> Ops(
+        ProjectState state,
+        EditCommand command,
+        IIdSource ids,
+        PluginCatalog plugins
+    ) =>
         command switch {
-            AddTrackCommand c => AddTrack(state, c, ids),
+            AddTrackCommand c => AddTrack(state, c, ids, plugins),
             RemoveTrackCommand c => RemoveTrack(state, c),
             MoveTrackCommand c => MoveTrack(state, c),
             SetTrackCommand c => SetTrack(state, c),
@@ -100,6 +119,22 @@ public static class Edits {
             SetCycleCommand c => SetCycle(state, c),
             SetMetronomeCommand c => SetMetronome(state, c),
             RenameProjectCommand c => [new ProjectRenamed(Name(c.Name, "project name"))],
+            SetInstrumentCommand c => SetInstrument(state, c, plugins),
+            SetParameterCommand c => SetParameter(state, c, plugins),
+            LoadInstrumentFileCommand c => LoadInstrumentFile(state, c, plugins),
+            SetMidiIoCommand c => SetMidiIo(state, c),
+            AddMidiRegionCommand c => AddMidiRegion(state, c, ids),
+            ResizeMidiRegionCommand c => ResizeMidiRegion(state, c),
+            SetMidiRegionCommand c => SetMidiRegion(state, c),
+            AddNotesCommand c => AddNotes(state, c),
+            EditNotesCommand c => EditNotes(state, c),
+            DeleteNotesCommand c => DeleteNotes(state, c),
+            QuantizeNotesCommand c => QuantizeNotes(state, c),
+            AddControlsCommand c => AddControls(state, c),
+            DeleteControlsCommand c => DeleteControls(state, c),
+            SetMidiRecordingCommand c => [
+                new SettingsChanged(state.Settings with { MergeMidiRecording = c.Merge })
+            ],
             _ => throw new EditException($"Unknown command {command.GetType().Name}.")
         };
 
@@ -107,7 +142,7 @@ public static class Edits {
     public static long EndSample(ProjectState state, AudioRegion region) =>
         state.TempoMap.SampleAt(region.StartTick, state.SampleRate) + region.Length;
 
-    static DeltaOp[] AddTrack(ProjectState state, AddTrackCommand c, IIdSource ids) {
+    static DeltaOp[] AddTrack(ProjectState state, AddTrackCommand c, IIdSource ids, PluginCatalog plugins) {
         var count = state.Tracks.Count;
         if (count >= MaxTracks) {
             throw new EditException($"A project holds at most {MaxTracks} tracks.");
@@ -118,26 +153,43 @@ public static class Edits {
             throw new EditException($"Track index {index} is outside 0…{count}.");
         }
 
-        var name = c.Name is null ? NextTrackName(state) : Name(c.Name, "track name");
+        var kind = c.Kind ?? TrackKind.Audio;
+        if (!Enum.IsDefined(kind)) {
+            throw new EditException($"Unknown track kind {kind}.");
+        }
+
+        if (c.PluginId is not null && kind != TrackKind.Instrument) {
+            throw new EditException("Only an instrument track takes a plugin.");
+        }
+
+        var instrument = kind == TrackKind.Instrument
+            ? NewInstrument(plugins, c.PluginId ?? PluginCatalog.DefaultInstrumentId, c.PluginId is not null)
+            : null;
+        var name = c.Name is null ? NextTrackName(state, kind) : Name(c.Name, "track name");
         var track = new Track(
             ids.Next(IdPrefix.Track),
             name,
-            TrackKind.Audio,
+            kind,
             ProjectDefaults.Colors[count % ProjectDefaults.Colors.Count],
-            new(1, c.Stereo),
+            kind == TrackKind.Audio ? new(1, c.Stereo) : new(0, false),
             false,
             false,
             ProjectDefaults.Strip,
-            null,
-            new(null, 0),
+            instrument,
+            ProjectDefaults.MidiInput,
             null
         );
         return [new TrackUpserted(track, index)];
     }
 
-    static string NextTrackName(ProjectState state) {
+    static string NextTrackName(ProjectState state, TrackKind kind) {
+        var prefix = kind switch {
+            TrackKind.Instrument => "Inst",
+            TrackKind.Midi => "MIDI",
+            _ => "Audio"
+        };
         for (var n = state.Tracks.Count + 1;; n++) {
-            var name = $"Audio {n}";
+            var name = $"{prefix} {n}";
             if (!state.Tracks.Exists(t => t.Name == name)) {
                 return name;
             }
@@ -149,6 +201,10 @@ public static class Edits {
         var ops = new List<DeltaOp>();
         foreach (var region in state.RegionsOf(track.Id)) {
             ops.Add(new RegionRemoved(region.Id));
+        }
+
+        foreach (var region in state.MidiRegionsOf(track.Id)) {
+            ops.Add(new MidiRegionRemoved(region.Id));
         }
 
         ops.Add(new TrackRemoved(track.Id));
@@ -205,7 +261,7 @@ public static class Edits {
         new(c.VolumeDb ?? strip.VolumeDb, c.Pan ?? strip.Pan, c.Mute ?? strip.Mute, c.Solo ?? strip.Solo);
 
     static DeltaOp[] AddRegion(ProjectState state, AddRegionCommand c, IIdSource ids) {
-        var track = TrackOf(state, c.TrackId);
+        var track = AudioTrackOf(state, c.TrackId);
         var file = FileOf(state, c.FileId);
         var offset = c.FileOffset ?? 0;
         var length = c.Length ?? file.Frames - offset;
@@ -227,13 +283,22 @@ public static class Edits {
     }
 
     static DeltaOp[] MoveRegion(ProjectState state, MoveRegionCommand c) {
-        var region = RegionOf(state, c.RegionId);
         CheckTick(c.StartTick, "start");
-        var trackId = c.TrackId is null ? region.TrackId : TrackOf(state, c.TrackId).Id;
+        if (state.MidiRegions.TryGetValue(c.RegionId, out var midi)) {
+            var midiTrack = c.TrackId is null ? midi.TrackId : MidiTrackOf(state, c.TrackId).Id;
+            return [new MidiRegionUpserted(midi with { StartTick = c.StartTick, TrackId = midiTrack })];
+        }
+
+        var region = RegionOf(state, c.RegionId);
+        var trackId = c.TrackId is null ? region.TrackId : AudioTrackOf(state, c.TrackId).Id;
         return [new RegionUpserted(region with { StartTick = c.StartTick, TrackId = trackId })];
     }
 
     static DeltaOp[] ResizeRegion(ProjectState state, ResizeRegionCommand c) {
+        if (state.MidiRegions.ContainsKey(c.RegionId)) {
+            throw new EditException($"Region '{c.RegionId}' is a MIDI region: resize it with resizeMidiRegion.");
+        }
+
         var region = RegionOf(state, c.RegionId);
         CheckTick(c.StartTick, "start");
         CheckSpan(FileOf(state, region.FileId), c.FileOffset, c.Length);
@@ -253,6 +318,10 @@ public static class Edits {
     }
 
     static DeltaOp[] SplitRegion(ProjectState state, SplitRegionCommand c, IIdSource ids) {
+        if (state.MidiRegions.TryGetValue(c.RegionId, out var midi)) {
+            return SplitMidiRegion(midi, c.AtTick, ids);
+        }
+
         var region = RegionOf(state, c.RegionId);
         var map = state.TempoMap;
         var start = map.SampleAt(region.StartTick, state.SampleRate);
@@ -275,6 +344,10 @@ public static class Edits {
     }
 
     static DeltaOp[] SetRegion(ProjectState state, SetRegionCommand c) {
+        if (state.MidiRegions.ContainsKey(c.RegionId)) {
+            throw new EditException($"Region '{c.RegionId}' is a MIDI region: change it with setMidiRegion.");
+        }
+
         var region = RegionOf(state, c.RegionId);
         if (c.GainDb is { } gain && !(gain is >= MinRegionGainDb and <= MaxRegionGainDb)) {
             throw new EditException($"Region gain {gain} dB is outside {MinRegionGainDb}…{MaxRegionGainDb} dB.");
@@ -307,7 +380,13 @@ public static class Edits {
             throw new EditException("Name at least one region to delete.");
         }
 
-        return [..c.RegionIds.Distinct(StringComparer.Ordinal).Select(id => new RegionRemoved(RegionOf(state, id).Id))];
+        return [
+            ..c.RegionIds.Distinct(StringComparer.Ordinal)
+                .Select(DeltaOp(id) => id is not null && state.MidiRegions.ContainsKey(id)
+                        ? new MidiRegionRemoved(id)
+                        : new RegionRemoved(RegionOf(state, id ?? string.Empty).Id)
+                )
+        ];
     }
 
     static DeltaOp[] SetTempo(ProjectState state, SetTempoCommand c) {
@@ -380,6 +459,23 @@ public static class Edits {
 
     static Track TrackOf(ProjectState state, string id) =>
         state.FindTrack(id) ?? throw new EditException($"No track '{id}'.");
+
+    static Track AudioTrackOf(ProjectState state, string id) {
+        var track = TrackOf(state, id);
+        return track.Kind == TrackKind.Audio
+            ? track
+            : throw new EditException($"Track '{id}' is not an audio track: it holds MIDI regions.");
+    }
+
+    static Track MidiTrackOf(ProjectState state, string id) {
+        var track = TrackOf(state, id);
+        return IsMidiKind(track.Kind)
+            ? track
+            : throw new EditException($"Track '{id}' is an audio track: it holds no MIDI regions.");
+    }
+
+    /// <summary>Whether a track of <paramref name="kind" /> holds MIDI regions and takes live MIDI.</summary>
+    public static bool IsMidiKind(TrackKind kind) => kind is TrackKind.Instrument or TrackKind.Midi;
 
     static AudioRegion RegionOf(ProjectState state, string id) =>
         state.Regions.TryGetValue(id, out var region) ? region : throw new EditException($"No region '{id}'.");

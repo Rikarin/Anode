@@ -19,17 +19,23 @@ namespace Anode.Server.Engine;
 ///     open project whole (<see cref="HostSync" />), then keeps the host in step with every change; it reads the
 ///     host's telemetry region and publishes <see cref="TransportEvent" />s (about 30 Hz while the transport moves,
 ///     once when it stops) and <see cref="MetersEvent" />s (about 30 Hz while there is something to show), and applies
-///     the host's finished recordings to the project. <see cref="Changed" /> fires on every status change.
+///     the host's finished recordings to the project. It keeps the host's plugin catalogue and MIDI ports
+///     (<see cref="EngineCatalog" />), relays its MIDI activity as <see cref="MidiActivityEvent" />s with track ids, and
+///     carries live MIDI, the MIDI-thru track and instrument-state requests to it. <see cref="Changed" /> fires on
+///     every status change.
 /// </summary>
 public sealed class EngineConnection(
     IOptions<ServerOptions> options,
     ProjectSession session,
     EngineDevice device,
+    EngineCatalog catalog,
     EventHub hub,
     ILogger<EngineConnection> logger
 ) : BackgroundService {
+    public const int MaxLiveEvents = 1024;
     static readonly TimeSpan RetryDelay = TimeSpan.FromMilliseconds(250);
     static readonly TimeSpan TelemetryInterval = TimeSpan.FromMilliseconds(33);
+    static readonly TimeSpan StatesTimeout = TimeSpan.FromSeconds(3);
 
     readonly EngineOptions engine = options.Value.Engine;
     readonly SegmentPool pool = new();
@@ -37,6 +43,7 @@ public sealed class EngineConnection(
     EngineStatus status = new(EngineState.Disconnected, null, null, "Not connected yet.");
     Connection? current;
     TransportStatus? transport;
+    string? thru;
 
     public static string Version =>
         typeof(EngineConnection).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()
@@ -101,6 +108,103 @@ public sealed class EngineConnection(
 
         var at = position >= 0 ? position : Transport().PositionSamples;
         return new(state, at, map.TickAtSample(at, rate), rate);
+    }
+
+    /// <summary>
+    ///     Plays live MIDI on a track now (the on-screen keyboard); false when the open project has no such track.
+    /// </summary>
+    public bool SendLiveMidi(LiveMidiRequest request) {
+        var view = session.View ?? throw ProjectException.NoProject();
+        if (request.TrackId is null || view.State.FindTrack(request.TrackId) is not { } track) {
+            return false;
+        }
+
+        if (!Model.Editing.Edits.IsMidiKind(track.Kind)) {
+            throw ProjectException.Unprocessable($"Track '{track.Id}' is an audio track: it plays no MIDI.");
+        }
+
+        if (request.Events is not { Count: > 0 and <= MaxLiveEvents }) {
+            throw ProjectException.Unprocessable($"Send 1…{MaxLiveEvents} MIDI events.");
+        }
+
+        var events = new EngineMidiEvent[request.Events.Count];
+        for (var i = 0; i < events.Length; i++) {
+            if (request.Events[i] is not {
+                    Status: >= 0x80 and <= 0xEF, Data1: >= 0 and <= 127, Data2: >= 0 and <= 127
+                } e) {
+                throw ProjectException.Unprocessable(
+                    "A MIDI event is a channel message: status 0x80…0xEF, data bytes 0…127."
+                );
+            }
+
+            events[i] = new(e.Status, e.Data1, e.Data2);
+        }
+
+        Send(new LiveMidiMessage(view.Ids.Track(track.Id), events));
+        return true;
+    }
+
+    /// <summary>
+    ///     Makes <paramref name="request" />'s track the one that hears live MIDI when none is armed; false when the
+    ///     open project has no such track.
+    /// </summary>
+    public bool SetThru(MidiThruRequest request) {
+        if (request.TrackId is { } id && session.View?.State.FindTrack(id) is null) {
+            return false;
+        }
+
+        Volatile.Write(ref thru, request.TrackId);
+        Kick();
+        return true;
+    }
+
+    /// <summary>Asks the host to rescan its plugin folders; the new catalogue follows as <c>pluginsChanged</c>.</summary>
+    public void Rescan() => Send(new ScanPluginsMessage());
+
+    /// <summary>
+    ///     The instruments' opaque states, by domain track id (a null state: the instrument keeps none), as the host
+    ///     reports them, or null without an engine or when it does not answer in time.
+    /// </summary>
+    public async Task<IReadOnlyDictionary<string, byte[]?>?> InstrumentStatesAsync(
+        CancellationToken cancellationToken
+    ) {
+        if (Volatile.Read(ref current) is not { } link || session.View is not { } view) {
+            return null;
+        }
+
+        var pending = link.States();
+        if (!link.Work.Writer.TryWrite(new RequestInstrumentStatesMessage())) {
+            return null;
+        }
+
+        InstrumentStatesMessage answer;
+        try {
+            answer = await pending.WaitAsync(StatesTimeout, cancellationToken).ConfigureAwait(false);
+        } catch (TimeoutException) {
+            EngineLog.StatesTimedOut(logger);
+            return null;
+        }
+
+        var states = new Dictionary<string, byte[]?>(StringComparer.Ordinal);
+        foreach (var state in answer.States ?? []) {
+            if (state is null || view.Ids.TrackOf(state.TrackId) is not { } trackId) {
+                continue;
+            }
+
+            try {
+                states[trackId] = state.State is { Length: > 0 } text ? Convert.FromBase64String(text) : null;
+            } catch (FormatException) {
+                EngineLog.BadState(logger, state.TrackId);
+            }
+        }
+
+        return states;
+    }
+
+    void Send(IpcMessage message) {
+        if (Volatile.Read(ref current) is not { } link || !link.Work.Writer.TryWrite(message)) {
+            throw ProjectException.Unprocessable("The engine is not connected.");
+        }
     }
 
     public override async Task StartAsync(CancellationToken cancellationToken) {
@@ -197,7 +301,7 @@ public sealed class EngineConnection(
         Set(
             new(inProcess ? EngineState.InProcess : EngineState.Connected, hello.Version, hello.Backend, RateMismatch())
         );
-        var reading = ReadAsync(stream, link, stop.Token);
+        var reading = ReadAsync(stream, connection, stop.Token);
         var pumping = PumpAsync(connection, stop.Token);
         var publishing = telemetry is null ? Task.CompletedTask : PublishAsync(telemetry, stop.Token);
         try {
@@ -206,6 +310,8 @@ public sealed class EngineConnection(
             Volatile.Write(ref current, null);
             Volatile.Write(ref transport, null);
             connection.Work.Writer.TryComplete();
+            connection.CancelStates();
+            catalog.Clear();
             await stop.CancelAsync().ConfigureAwait(false);
             foreach (var task in new[] { reading, pumping, publishing }) {
                 try {
@@ -221,11 +327,24 @@ public sealed class EngineConnection(
     }
 
     /// <summary>Reads the host's messages until it closes the connection.</summary>
-    async Task ReadAsync(Stream stream, HostLink link, CancellationToken cancellationToken) {
+    async Task ReadAsync(Stream stream, Connection connection, CancellationToken cancellationToken) {
+        var link = connection.Link;
         while (await IpcFraming.ReadAsync(stream, cancellationToken).ConfigureAwait(false) is { } message) {
             switch (message) {
                 case ModelLoadedMessage loaded:
                     link.ModelLoaded(loaded.Version);
+                    break;
+                case PluginCatalogMessage plugins:
+                    catalog.SetPlugins(plugins.Plugins ?? []);
+                    break;
+                case MidiPortsMessage ports:
+                    catalog.SetPorts(ports.Ports ?? []);
+                    break;
+                case MidiActivityMessage activity:
+                    Relay(activity);
+                    break;
+                case InstrumentStatesMessage states:
+                    connection.StatesArrived(states);
                     break;
                 case RecordingFinishedMessage finished:
                     _ = Task.Run(() => ApplyRecording(finished), CancellationToken.None);
@@ -238,9 +357,33 @@ public sealed class EngineConnection(
         }
     }
 
+    /// <summary>The host's MIDI activity, with domain track ids, for keyboards and activity lights.</summary>
+    void Relay(MidiActivityMessage activity) {
+        if (activity.Events is not { Count: > 0 } entries) {
+            return;
+        }
+
+        var ids = session.View?.Ids;
+        hub.Publish(
+            new MidiActivityEvent(
+                [
+                    ..entries.Where(static e => e is not null)
+                        .Select(e => new MidiActivity(
+                                e.TrackId >= 0 ? ids?.TrackOf(e.TrackId) : null,
+                                e.Device,
+                                e.Status,
+                                e.Data1,
+                                e.Data2
+                            )
+                        )
+                ]
+            )
+        );
+    }
+
     void ApplyRecording(RecordingFinishedMessage finished) {
         try {
-            session.ApplyRecording(finished.Takes);
+            session.ApplyRecording(finished.Takes ?? [], finished.MidiTakes);
         } catch (Exception e) when (e is IOException
                                         or UnauthorizedAccessException
                                         or ProjectException
@@ -253,7 +396,7 @@ public sealed class EngineConnection(
     async Task PumpAsync(Connection connection, CancellationToken cancellationToken) {
         var sync = new HostSync(connection.Link, pool, logger);
         await foreach (var message in connection.Work.Reader.ReadAllAsync(cancellationToken).ConfigureAwait(false)) {
-            await sync.SyncAsync(session.View, cancellationToken).ConfigureAwait(false);
+            await sync.SyncAsync(session.View, Volatile.Read(ref thru), cancellationToken).ConfigureAwait(false);
             if (message is not null) {
                 await connection.Link.SendAsync(message, cancellationToken).ConfigureAwait(false);
             }
@@ -330,8 +473,45 @@ public sealed class EngineConnection(
         Changed?.Invoke(next);
     }
 
-    /// <summary>A live connection: its link, and the queue of work for it (null: sync the project).</summary>
-    sealed record Connection(HostLink Link, Channel<IpcMessage?> Work);
+    /// <summary>
+    ///     A live connection: its link, the queue of work for it (null: sync the project), and the instrument-state
+    ///     request waiting for the host's answer.
+    /// </summary>
+    sealed class Connection(HostLink link, Channel<IpcMessage?> work) {
+        readonly Lock gate = new();
+        TaskCompletionSource<InstrumentStatesMessage>? states;
+
+        public HostLink Link { get; } = link;
+        public Channel<IpcMessage?> Work { get; } = work;
+
+        /// <summary>The answer to the pending (or a new) state request.</summary>
+        public Task<InstrumentStatesMessage> States() {
+            lock (gate) {
+                states ??= new(TaskCreationOptions.RunContinuationsAsynchronously);
+                return states.Task;
+            }
+        }
+
+        public void StatesArrived(InstrumentStatesMessage message) {
+            TaskCompletionSource<InstrumentStatesMessage>? done;
+            lock (gate) {
+                done = states;
+                states = null;
+            }
+
+            done?.TrySetResult(message);
+        }
+
+        public void CancelStates() {
+            TaskCompletionSource<InstrumentStatesMessage>? done;
+            lock (gate) {
+                done = states;
+                states = null;
+            }
+
+            done?.TrySetResult(new([]));
+        }
+    }
 
     /// <summary>Why the open project and the device disagree on the sample rate, or null when they agree.</summary>
     string? RateMismatch() =>

@@ -18,10 +18,6 @@ public sealed class EditPropertyTests {
     [Theory]
     [MemberData(nameof(Commands))]
     public void Applying_then_inverting_a_command_is_the_identity(string command) {
-        Assert.SkipWhen(
-            RandomProjects.PendingPhase2.Contains(command),
-            "Phase 2 command the model does not implement yet (docs/03-phase-2.md, workstream B)."
-        );
         var type = RandomProjects.CommandTypes.Single(t => t.Name == command);
         var applied = 0;
         Gen.Int.Sample(
@@ -33,7 +29,7 @@ public sealed class EditPropertyTests {
 
                 EditResult result;
                 try {
-                    result = Edits.Apply(state, edit, ids);
+                    result = Edits.Apply(state, edit, ids, RandomProjects.Plugins);
                 } catch (EditException) {
                     return;
                 }
@@ -66,7 +62,7 @@ public sealed class EditPropertyTests {
                 }
 
                 try {
-                    var result = Edits.Apply(state, batch, ids);
+                    var result = Edits.Apply(state, batch, ids, RandomProjects.Plugins);
                     Assert.Equal(RandomProjects.Json(state), RandomProjects.Json(result.State.Apply(result.Inverse)));
                 } catch (EditException) {
                     // a batch with an edit that does not apply changes nothing: nothing to check
@@ -134,7 +130,7 @@ public sealed class EditPropertyTests {
                         }
 
                         try {
-                            var result = Edits.Apply(state, command, ids);
+                            var result = Edits.Apply(state, command, ids, RandomProjects.Plugins);
                             history.Push(type.Name, step, new(result.Forward, result.Inverse), null);
                             ops = result.Forward;
                         } catch (EditException) {
@@ -155,6 +151,7 @@ public sealed class EditPropertyTests {
         readonly List<Track> tracks = [..project.Tracks];
         readonly Dictionary<string, AudioRegion> regions = project.Regions.ToDictionary(static r => r.Id);
         readonly Dictionary<string, AudioFile> files = project.AudioFiles.ToDictionary(static f => f.Id);
+        readonly Dictionary<string, MidiRegion> midiRegions = project.MidiRegions.ToDictionary(static r => r.Id);
         string name = project.Name;
         ProjectSettings settings = project.Settings;
         ChannelStrip master = project.Master;
@@ -168,6 +165,10 @@ public sealed class EditPropertyTests {
                         break;
                     case TrackRemoved(var id):
                         tracks.RemoveAll(t => t.Id == id);
+                        foreach (var gone in midiRegions.Values.Where(r => r.TrackId == id).ToArray()) {
+                            midiRegions.Remove(gone.Id);
+                        }
+
                         break;
                     case RegionUpserted(var region):
                         regions[region.Id] = region;
@@ -187,6 +188,12 @@ public sealed class EditPropertyTests {
                     case ProjectRenamed(var n):
                         name = n;
                         break;
+                    case MidiRegionUpserted(var region):
+                        midiRegions[region.Id] = region;
+                        break;
+                    case MidiRegionRemoved(var id):
+                        midiRegions.Remove(id);
+                        break;
                 }
             }
         }
@@ -202,7 +209,8 @@ public sealed class EditPropertyTests {
                     Master = master,
                     Tracks = tracks,
                     Regions = [..regions.Values.OrderBy(static r => r.Id, StringComparer.Ordinal)],
-                    AudioFiles = [..files.Values.OrderBy(static f => f.Id, StringComparer.Ordinal)]
+                    AudioFiles = [..files.Values.OrderBy(static f => f.Id, StringComparer.Ordinal)],
+                    MidiRegions = [..midiRegions.Values.OrderBy(static r => r.Id, StringComparer.Ordinal)]
                 },
                 ContractsJsonContext.Default.Project
             );

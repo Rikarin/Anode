@@ -87,6 +87,9 @@ static partial class ProjectLog {
     [LoggerMessage(Level = LogLevel.Warning, Message = "Skipped the recorded take {Path}: {Reason}")]
     public static partial void TakeSkipped(ILogger logger, string path, string reason);
 
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Skipped the MIDI take of engine track {TrackId}: {Reason}")]
+    public static partial void MidiTakeSkipped(ILogger logger, int trackId, string reason);
+
     [LoggerMessage(
         Level = LogLevel.Warning,
         Message = "Could not keep a backup of the unsaved project {Path}: {Error}"

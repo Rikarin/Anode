@@ -1,5 +1,6 @@
 using Anode.Contracts;
 using Anode.Model.Audio;
+using Anode.Server.Engine;
 using Anode.Server.Projects;
 using Microsoft.AspNetCore.Http.HttpResults;
 
@@ -24,7 +25,16 @@ static class ProjectApi {
             .WithSummary("The open project, with its revision as the ETag; 404 when none is open.");
         project.MapPost(
                 "/save",
-                static Results<Ok<ProjectSummary>, NotFound>(ProjectSession session) => TypedResults.Ok(session.Save())
+                static async Task<Results<Ok<ProjectSummary>, NotFound>>(
+                    ProjectSession session,
+                    EngineConnection engine,
+                    CancellationToken cancellationToken
+                ) => {
+                    session.Get(); // 404 before asking the engine anything
+                    // The instruments' opaque states come from the engine (docs/03-phase-2.md, "State").
+                    var states = await engine.InstrumentStatesAsync(cancellationToken);
+                    return TypedResults.Ok(session.Save(states));
+                }
             )
             .WithName("SaveProject");
         project.MapPost(
