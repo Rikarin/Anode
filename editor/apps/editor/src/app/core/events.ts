@@ -2,6 +2,7 @@ import { DestroyRef, Injectable, inject, signal } from '@angular/core';
 import { eventsUrl, type ServerMessage } from '@anode/api-client';
 import { Subject } from 'rxjs';
 import { ConnectionService } from './connection';
+import { FAKE_SERVER } from './fake/fake-backend';
 
 const MaxBackoffMs = 5_000;
 
@@ -26,6 +27,8 @@ function newClientId(): string {
 @Injectable({ providedIn: 'root' })
 export class EventStream {
   private readonly connection = inject(ConnectionService);
+  private readonly fake = inject(FAKE_SERVER, { optional: true });
+  private unsubscribeFake: (() => void) | null = null;
   private socket: WebSocket | null = null;
   private retry: ReturnType<typeof setTimeout> | null = null;
   private attempts = 0;
@@ -42,6 +45,11 @@ export class EventStream {
 
   start(): void {
     this.stopped = false;
+    if (this.fake) {
+      this.unsubscribeFake ??= this.fake.subscribe(message => this.dispatch(message));
+      return;
+    }
+
     this.open();
   }
 
@@ -53,6 +61,8 @@ export class EventStream {
 
     this.socket?.close();
     this.socket = null;
+    this.unsubscribeFake?.();
+    this.unsubscribeFake = null;
   }
 
   private open(): void {
@@ -93,6 +103,11 @@ export class EventStream {
       return; // not a message this editor can read: skip it rather than stop reading the stream
     }
 
+    this.dispatch(message);
+  }
+
+  /** Handles one parsed message (from the socket, or from the in-memory fake Server). */
+  dispatch(message: ServerMessage | { type?: unknown }): void {
     if (message.type === 'connected') {
       this.attempts = 0;
       this.status.set('open');

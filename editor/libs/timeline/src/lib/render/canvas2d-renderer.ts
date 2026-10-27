@@ -1,6 +1,7 @@
 import { type RectBatch, RectStyle } from '../frame-builder';
 import { colorToCss } from '../items';
 import { RendererUnavailableError, type RenderTarget, type TimelineRenderer } from './renderer';
+import { TEXT_FONT } from './webgl2-renderer';
 
 type Context2D = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D;
 
@@ -66,11 +67,12 @@ export class Canvas2DRenderer implements TimelineRenderer {
       begin = end;
     }
 
-    context.fillStyle = '#b8bbc6';
-    context.font = '10px sans-serif';
+    context.font = TEXT_FONT;
     context.textBaseline = 'top';
-    for (let i = 0; i < batch.labelCount; i++) {
-      context.fillText(String(batch.labelValue[i] ?? 0), batch.labelX[i] ?? 0, (batch.labelY[i] ?? 0) + 1);
+    context.textAlign = 'left';
+    for (let i = 0; i < batch.textCount; i++) {
+      context.fillStyle = this.cssColor(batch.textColor[i] ?? 0xffffffff);
+      context.fillText(batch.texts[i] ?? '', batch.textX[i] ?? 0, (batch.textY[i] ?? 0) + 1);
     }
   }
 

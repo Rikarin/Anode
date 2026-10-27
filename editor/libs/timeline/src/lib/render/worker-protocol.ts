@@ -1,4 +1,5 @@
 import { type TimelineScene, type TimelineView } from '../items';
+import { type Waveform } from '../waveform';
 import { type RendererBackend } from './renderer';
 
 /**
@@ -21,6 +22,8 @@ export type WorkerRequest =
     }
   | { readonly type: 'scene'; readonly id: number; readonly scene: TimelineScene }
   | { readonly type: 'resize'; readonly width: number; readonly height: number; readonly dpr: number }
+  /** One resolution of the waveform regions refer to as `key`; `null` forgets every resolution of it. */
+  | { readonly type: 'waveform'; readonly key: number; readonly waveform: Waveform | null }
   /** Draw `view` now. `sentAt` (epoch milliseconds) lets the worker record input-to-draw latency. */
   | { readonly type: 'frame'; readonly view: TimelineView; readonly sentAt: number }
   /** Return and clear the frame records collected since the last `collect`. */

@@ -1,5 +1,9 @@
 import { TestBed } from '@angular/core/testing';
-import { Ppq, TransportStore, barsBeats, clockTime } from './transport.store';
+import { EventStream } from '../core/events';
+import { setUpFakeServer, settle } from '../core/fake/testing';
+import { Notify } from '../core/notify';
+import { ProjectStore } from './project.store';
+import { Ppq, TransportStore, barsBeats, clockTime, parseSignature } from './transport.store';
 
 describe('barsBeats', () => {
   const fourFour = { numerator: 4, denominator: 4 };
@@ -19,37 +23,99 @@ describe('barsBeats', () => {
   });
 });
 
-describe('clockTime', () => {
+describe('clockTime and parseSignature', () => {
   it('formats hours, minutes, seconds and milliseconds', () => {
     expect(clockTime(3_723.456)).toBe('01:02:03.456');
+  });
+
+  it('reads a time signature', () => {
+    expect(parseSignature(' 6 / 8 ')).toEqual({ numerator: 6, denominator: 8 });
+    expect(parseSignature('7/5')).toBeNull();
+    expect(parseSignature('four')).toBeNull();
   });
 });
 
 describe('TransportStore', () => {
-  it('advances the playhead at the tempo while playing and keeps it when stopped', () => {
-    const transport = TestBed.inject(TransportStore);
-    transport.play(1_000);
-    expect(transport.positionAt(1_500)).toBe(Ppq); // 120 bpm: a quarter note every 500 ms
+  async function setUp() {
+    const server = setUpFakeServer();
+    await server.createProject({ name: 'Transport' });
+    const project = TestBed.inject(ProjectStore);
+    await project.refetch();
+    return { server, project, transport: TestBed.inject(TransportStore) };
+  }
 
-    transport.stop(2_000);
+  it('extrapolates the playhead from the last frame at the tempo, and holds it when stopped', async () => {
+    const { transport } = await setUp();
+    transport.applyStatus({ state: 'playing', positionTick: 960, positionSamples: 24_000, sampleRate: 48_000 }, 1_000);
+    expect(transport.positionAt(1_500)).toBe(960 + Ppq); // 120 bpm: a quarter note every 500 ms
+    expect(transport.secondsAt(1_500)).toBe(1);
+
+    transport.applyStatus(
+      { state: 'stopped', positionTick: 1_920, positionSamples: 48_000, sampleRate: 48_000 },
+      2_000
+    );
     expect(transport.playing()).toBe(false);
-    expect(transport.positionAt(9_000)).toBe(Ppq * 2);
+    expect(transport.positionAt(9_000)).toBe(1_920);
   });
 
-  it('returns to the start when stopped twice', () => {
-    const transport = TestBed.inject(TransportStore);
-    transport.play(0);
-    transport.stop(1_000);
-    transport.stop(1_000);
-    expect(transport.positionAt(1_000)).toBe(0);
+  it('wraps at the cycle end while cycling', async () => {
+    const { project, transport } = await setUp();
+    await project.execute([{ type: 'setCycle', enabled: true, startTick: 0, endTick: 4 * Ppq }], 'Set Cycle');
+    transport.applyStatus({ state: 'playing', positionTick: 3 * Ppq, positionSamples: 0, sampleRate: 48_000 }, 0);
+    expect(transport.positionAt(1_000)).toBe(Ppq); // 3 + 2 beats wraps to beat 1
   });
 
-  it('records by playing, and stops recording on stop', () => {
-    const transport = TestBed.inject(TransportStore);
-    transport.record(0);
-    expect(transport.playing()).toBe(true);
+  it('follows transport frames from the Server', async () => {
+    const { transport } = await setUp();
+    TestBed.inject(EventStream).dispatch({
+      type: 'transport',
+      transport: { state: 'recording', positionTick: 480, positionSamples: 12_000, sampleRate: 48_000 }
+    });
     expect(transport.recording()).toBe(true);
-    transport.stop(10);
+    expect(transport.anchorTicks()).toBe(480);
+  });
+
+  it('plays at once and then follows the answer; stop twice goes back to the start', async () => {
+    const { server, transport } = await setUp();
+    transport.play(0);
+    expect(transport.playing()).toBe(true);
+    await settle();
+    expect(server.requests).toContain('ControlTransport');
+
+    transport.stop();
+    await settle();
+    expect(transport.playing()).toBe(false);
+    transport.stop();
+    await settle();
+    expect(transport.anchorTicks()).toBe(0);
+  });
+
+  it('shows stopped again when the Server refuses to record', async () => {
+    const { transport } = await setUp();
+    transport.record(0);
+    expect(transport.recording()).toBe(true);
+    await settle();
     expect(transport.recording()).toBe(false);
+    expect(TestBed.inject(Notify).last()).toBe('Could not record: Record-enable a track first.');
+  });
+
+  it('edits the tempo, signature, cycle and metronome as labelled commands', async () => {
+    const { server, transport } = await setUp();
+    transport.setTempo(98);
+    transport.setSignature({ numerator: 3, denominator: 4 });
+    transport.toggleCycle();
+    transport.toggleMetronome();
+    transport.toggleCountIn();
+    await settle();
+    expect(transport.tempo()).toBe(98);
+    expect(transport.signature()).toEqual({ numerator: 3, denominator: 4 });
+    expect(transport.cycle()).toBe(true);
+    expect((await server.history()).undo.map(s => s.label)).toEqual([
+      'Count-in On',
+      'Metronome On',
+      'Cycle On',
+      'Time Signature Change',
+      'Tempo Change'
+    ]);
   });
 });

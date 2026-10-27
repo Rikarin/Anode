@@ -1,8 +1,10 @@
 import { Injectable, inject, signal } from '@angular/core';
+import { ProjectStore } from '../state/project.store';
 import { SystemStore } from '../state/system.store';
 import { ConnectionService } from './connection';
 import type { ServerTarget } from './desktop';
 import { EventStream } from './events';
+import { FAKE_SERVER } from './fake/fake-backend';
 
 /** Connects to the Server, loads what the shell shows, and opens the event stream. */
 @Injectable({ providedIn: 'root' })
@@ -10,6 +12,8 @@ export class Startup {
   private readonly connection = inject(ConnectionService);
   private readonly events = inject(EventStream);
   private readonly system = inject(SystemStore);
+  private readonly project = inject(ProjectStore);
+  private readonly fake = inject(FAKE_SERVER, { optional: true });
 
   /** `token`: a browser reached a Server that wants an access token it does not have (or has a wrong one). */
   readonly state = signal<'starting' | 'ready' | 'failed' | 'token'>('starting');
@@ -29,14 +33,18 @@ export class Startup {
   async start(): Promise<void> {
     this.state.set('starting');
     try {
-      this.target.set((await this.connection.desktop?.target()) ?? null);
-      await this.connection.connect();
-      if (!this.connection.desktop && (await this.connection.refused())) {
-        this.state.set('token');
-        return;
+      if (!this.fake) {
+        this.target.set((await this.connection.desktop?.target()) ?? null);
+        await this.connection.connect();
+        if (!this.connection.desktop && (await this.connection.refused())) {
+          this.state.set('token');
+          return;
+        }
       }
 
       await this.system.refresh();
+      // Whether a project is open decides between the project chooser and the main window.
+      await this.project.refetch();
       this.events.start();
       this.state.set('ready');
     } catch (error) {
