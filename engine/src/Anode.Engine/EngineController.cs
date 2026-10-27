@@ -1,3 +1,7 @@
+using Anode.Audio.Midi;
+using Anode.Dsp.Instruments;
+using Anode.Engine.Midi;
+using Anode.Engine.Plugins;
 using Anode.Engine.Recording;
 using Anode.Engine.Streaming;
 using Anode.Ipc;
@@ -10,6 +14,10 @@ namespace Anode.Engine;
 /// <param name="SampleRate">The device's sample rate.</param>
 /// <param name="BufferFrames">The device's buffer size, in frames.</param>
 /// <param name="RoundTripLatency">Input plus output latency in frames, by which recorded takes are shifted back.</param>
+/// <param name="OutputLatency">
+///     Output latency in frames: external MIDI is timestamped this far ahead, and recorded live MIDI is shifted back by
+///     it plus one buffer.
+/// </param>
 /// <param name="StreamSeconds">Audio each track's stream keeps queued ahead of the playhead (spike S2: 2 s).</param>
 /// <param name="VerifyBytes">
 ///     Segments up to this size get the checksum and sort-order check on load (ADR-0006: on for per-track segments,
@@ -19,15 +27,20 @@ public sealed record EngineOptions(
     int SampleRate,
     int BufferFrames,
     int RoundTripLatency = 0,
+    int OutputLatency = 0,
     double StreamSeconds = 2,
     long VerifyBytes = 4 << 20
 );
 
+/// <summary>The takes a recording pass produced: audio files, and the live MIDI armed MIDI tracks received.</summary>
+public sealed record RecordingResult(IReadOnlyList<RecordedTake> Takes, IReadOnlyList<RecordedMidiTake> MidiTakes);
+
 /// <summary>
 ///     The engine's control plane, called from the host's control thread (the IPC connection): loads compiled models
 ///     from shared-memory segments and publishes them to the audio and disk threads (RCU; docs/adr/0006-bulk-ipc.md),
-///     sets strips and track IO, drives the transport through the audio thread's command queue and runs recording
-///     passes. Every method is serialised by one lock; the audio thread never waits for it.
+///     sets strips and track IO, builds instruments and swaps them in, queues parameter changes and live MIDI, drives
+///     the transport through the audio thread's command queue and runs recording passes. Every method is serialised by
+///     one lock; the audio thread never waits for it.
 /// </summary>
 public sealed class EngineController : IDisposable {
     /// <summary>Whole-model segments kept mapped for the server to reuse (its pool of two slots, ADR-0006).</summary>
@@ -49,12 +62,20 @@ public sealed class EngineController : IDisposable {
     RecordTake[] takes = [];
     bool recordingPass;
 
-    public EngineController(EngineOptions options) {
+    /// <param name="options">The device's format and the streaming parameters.</param>
+    /// <param name="plugins">The instruments it can load (default: the built-ins only).</param>
+    /// <param name="midi">The MIDI devices (null: none; live MIDI from the server still plays).</param>
+    public EngineController(EngineOptions options, PluginRegistry? plugins = null, IMidiBackend? midi = null) {
         Options = options;
-        Engine = new(options.SampleRate);
+        Engine = new(options.SampleRate) {
+            OutputLatency = options.OutputLatency,
+            MidiRecordShift = options.BufferFrames + options.OutputLatency
+        };
         streamFrames = (int)(options.StreamSeconds * options.SampleRate);
         Streamer = new(Engine, Math.Max(4 * options.BufferFrames, options.SampleRate * 15 / 100));
         Writer = new();
+        Plugins = plugins ?? new();
+        Midi = new(Engine, midi) { Log = message => Log?.Invoke(message) };
     }
 
     public EngineOptions Options { get; }
@@ -65,6 +86,12 @@ public sealed class EngineController : IDisposable {
     public DiskStreamer Streamer { get; }
 
     public RecordWriter Writer { get; }
+
+    /// <summary>The instruments it can load.</summary>
+    public PluginRegistry Plugins { get; }
+
+    /// <summary>The MIDI thread: device input and output, live MIDI, capture and activity.</summary>
+    public MidiHub Midi { get; }
 
     /// <summary>Where recorded takes go, from the last model load (empty before one).</summary>
     public string RecordDirectory { get; private set; } = string.Empty;
@@ -89,8 +116,14 @@ public sealed class EngineController : IDisposable {
         }
     }
 
-    /// <summary>Starts the disk thread (offline renders call <see cref="DiskStreamer.Pass" /> instead).</summary>
-    public void Start() => Streamer.Start();
+    /// <summary>
+    ///     Starts the disk thread and the MIDI thread (offline renders call <see cref="DiskStreamer.Pass" /> and
+    ///     <see cref="MidiHub.Pump" /> instead).
+    /// </summary>
+    public void Start() {
+        Streamer.Start();
+        Midi.Start();
+    }
 
     /// <summary>Where diagnostics go (missing files and the like).</summary>
     public Action<string>? Log { get; set; }
@@ -121,6 +154,7 @@ public sealed class EngineController : IDisposable {
             }
 
             draft.Apply(settings);
+            var replaced = draft.ApplyInstruments(settings);
             Engine.Master.Set(message.Master);
             RecordDirectory = message.RecordDirectory;
             long length;
@@ -131,6 +165,10 @@ public sealed class EngineController : IDisposable {
             }
 
             Swap(draft.Build(message.Segment.Version, length, FileTable()));
+            foreach (var slot in replaced) {
+                slot.Dispose(); // the swap's grace period covered the instruments set before it
+            }
+
             return message.Segment.Version;
         }
     }
@@ -203,6 +241,33 @@ public sealed class EngineController : IDisposable {
             }
         }
 
+        /// <summary>
+        ///     Builds or updates the listed tracks' instruments; returns the instruments they replaced, to dispose once
+        ///     the model is swapped in. A track whose instrument cannot be built is left without one (and logged).
+        /// </summary>
+        public List<InstrumentSlot> ApplyInstruments(Dictionary<int, EngineTrack> settings) {
+            var replaced = new List<InstrumentSlot>();
+            foreach (var track in tracks) {
+                if (!settings.TryGetValue(track.Id, out var s)) {
+                    continue;
+                }
+
+                try {
+                    if (owner.ApplyInstrument(track, s.Instrument) is { } old) {
+                        replaced.Add(old);
+                    }
+                } catch (Exception e) when (IsInstrumentFailure(e)) {
+                    owner.Log?.Invoke($"track {track.Id}: instrument {s.Instrument?.PluginId}: {e.Message}");
+                    if (track.Instrument is { } old) {
+                        track.Instrument = null;
+                        replaced.Add(old);
+                    }
+                }
+            }
+
+            return replaced;
+        }
+
         public ModelRoot Build(long version, long length, StreamFile?[] files) =>
             new(
                 version,
@@ -266,6 +331,147 @@ public sealed class EngineController : IDisposable {
         }
     }
 
+    // ---- Instruments and MIDI ----------------------------------------------------------------------------------------
+
+    /// <summary>
+    ///     Gives a track an instrument (null removes it), building it here and swapping it in. Throws
+    ///     <see cref="InvalidOperationException" /> for an unknown track or plugin, and the instrument's own failures.
+    /// </summary>
+    public void SetInstrument(int trackId, EngineInstrument? instrument) {
+        lock (gate) {
+            var track = Find(Engine.Root, trackId)
+                ?? throw new InvalidOperationException($"No track {trackId}.");
+            if (ApplyInstrument(track, instrument) is { } old) {
+                WaitGrace();
+                old.Dispose();
+            }
+        }
+    }
+
+    /// <summary>Queues a parameter change for the track's instrument; false for an unknown track or parameter.</summary>
+    public bool SetParameter(int trackId, string parameterId, double value) {
+        lock (gate) {
+            return Find(Engine.Root, trackId)?.Instrument is { } slot && slot.Set(parameterId, value);
+        }
+    }
+
+    /// <summary>A track's MIDI input and output; false for an unknown track.</summary>
+    public bool SetMidiIo(int trackId, EngineMidiIo midi) {
+        lock (gate) {
+            var track = Find(Engine.Root, trackId);
+            if (track is not null) {
+                track.MidiIo = midi;
+            }
+
+            return track is not null;
+        }
+    }
+
+    /// <summary>The track that hears live MIDI when no armed track takes it (−1: none).</summary>
+    public void SetMidiThru(int trackId) => Midi.ThruTrack = trackId;
+
+    /// <summary>Plays live MIDI (the server's on-screen keyboard) on a track; false for an unknown track.</summary>
+    public bool LiveMidi(int trackId, IReadOnlyList<EngineMidiEvent> events) => Midi.Live(trackId, events);
+
+    /// <summary>Every instrument's opaque state (base64, null when it keeps none), by track.</summary>
+    public IReadOnlyList<InstrumentState> InstrumentStates() {
+        lock (gate) {
+            var states = new List<InstrumentState>();
+            foreach (var track in Engine.Root.Tracks) {
+                if (track.Instrument is not { } slot) {
+                    continue;
+                }
+
+                string? state = null;
+                try {
+                    state = slot.Instrument.SaveState() is { } bytes ? Convert.ToBase64String(bytes) : null;
+                } catch (Exception e) when (IsInstrumentFailure(e)) {
+                    Log?.Invoke($"track {track.Id}: saving the instrument's state failed: {e.Message}");
+                }
+
+                states.Add(new(track.Id, state));
+            }
+
+            return states;
+        }
+    }
+
+    /// <summary>
+    ///     Brings <paramref name="track" />'s instrument in line with <paramref name="spec" />: the same plugin, file and
+    ///     state only update parameters; anything else builds a new instance (prepared, state and file loaded,
+    ///     parameters set, activated) and swaps it in. Returns the instrument it replaced, which the caller disposes
+    ///     after a grace period.
+    /// </summary>
+    InstrumentSlot? ApplyInstrument(TrackState track, EngineInstrument? spec) {
+        var current = track.Instrument;
+        if (spec is null) {
+            track.Instrument = null;
+            return current;
+        }
+
+        if (current is not null
+            && current.PluginId == spec.PluginId
+            && current.File == spec.File
+            && (spec.State is null || spec.State == current.LoadedState)) {
+            foreach (var (id, value) in spec.Parameters) {
+                if (!current.Values.TryGetValue(id, out var known) || known != value) {
+                    current.Set(id, value);
+                }
+            }
+
+            return null;
+        }
+
+        // A new file for the same plugin keeps what the instance holds beyond its parameters.
+        var state = spec.State;
+        if (state is null && current is not null && current.PluginId == spec.PluginId) {
+            state = current.Instrument.SaveState() is { } bytes ? Convert.ToBase64String(bytes) : null;
+        }
+
+        track.Instrument = Build(spec, state);
+        return current;
+    }
+
+    InstrumentSlot Build(EngineInstrument spec, string? state) {
+        var instrument = Plugins.Create(spec.PluginId)
+            ?? throw new InvalidOperationException($"No plugin '{spec.PluginId}'.");
+        try {
+            instrument.Prepare(Options.SampleRate, AudioEngine.MaxFrames);
+            if (state is not null && !instrument.LoadState(Convert.FromBase64String(state))) {
+                Log?.Invoke($"{spec.PluginId}: the saved state did not load; it starts from its defaults");
+            }
+
+            if (spec.File is not null && !instrument.LoadFile(spec.File)) {
+                Log?.Invoke($"{spec.PluginId}: cannot load {spec.File}");
+            }
+
+            var slot = new InstrumentSlot(instrument, spec.PluginId, spec.File, spec.State);
+            foreach (var (id, value) in spec.Parameters) {
+                slot.Initialise(id, value);
+            }
+
+            (instrument as IHostedInstrument)?.Activate();
+            return slot;
+        } catch {
+            instrument.Dispose();
+            throw;
+        }
+    }
+
+    static bool IsInstrumentFailure(Exception e) =>
+        e is IOException or InvalidOperationException or FormatException or BadImageFormatException
+            or DllNotFoundException or EntryPointNotFoundException or ArgumentException;
+
+    /// <summary>Waits until no callback that may have read what was just replaced is still running.</summary>
+    void WaitGrace() {
+        var grace = Engine.Grace();
+        var spin = new SpinWait();
+        var deadline = DateTime.UtcNow + CommandTimeout;
+        while (!Engine.IsGraceOver(grace) && DateTime.UtcNow < deadline) {
+            spin.SpinOnce(-1);
+        }
+    }
+
     // ---- Transport ---------------------------------------------------------------------------------------------------
 
     public void SetCycle(bool enabled, long start, long end) =>
@@ -326,6 +532,7 @@ public sealed class EngineController : IDisposable {
             var root = Engine.Root;
             var from = stopped ? Engine.Snapshot.Position : snapshot.Position;
             BeginTakes(root);
+            Midi.BeginCapture();
             recordingPass = true;
             var (frames, beats) = stopped && countIn
                 ? Metronome.CountInFor(root.Metronome, from, Options.SampleRate)
@@ -338,14 +545,19 @@ public sealed class EngineController : IDisposable {
     ///     Stops; returns the takes of the recording pass that ended (empty when no track was armed), or null when no
     ///     recording pass ran.
     /// </summary>
-    public IReadOnlyList<RecordedTake>? Stop() {
+    public RecordingResult? Stop() {
         lock (gate) {
             var sent = Send(new(EngineCommandKind.Stop));
             WaitApplied(sent);
             var pass = recordingPass;
             recordingPass = false;
+            if (!pass) {
+                return null;
+            }
+
+            var midiTakes = MidiTakes();
             if (takes.Length == 0) {
-                return pass ? [] : null;
+                return new([], midiTakes);
             }
 
             Writer.Retire();
@@ -369,8 +581,45 @@ public sealed class EngineController : IDisposable {
             var failure = Writer.TakeFailure();
             return failure is not null
                 ? throw new IOException($"Recording failed: {failure.Message}", failure)
-                : finished;
+                : new(finished, midiTakes);
         }
+    }
+
+    /// <summary>
+    ///     The live MIDI each armed MIDI track received during the pass, in project samples from where it started rolling
+    ///     to where it stopped; notes still held at the stop end there. Tracks that received nothing have no take.
+    /// </summary>
+    List<RecordedMidiTake> MidiTakes() {
+        var captured = Midi.EndCapture();
+        var start = Engine.RecordStart;
+        var end = Math.Max(start, Engine.RecordEnd);
+        var result = new List<RecordedMidiTake>();
+        if (start < 0) {
+            return result;
+        }
+
+        Span<(byte Status, byte Note)> open = stackalloc (byte, byte)[128];
+        foreach (var (trackId, events) in captured.OrderBy(static c => c.Key)) {
+            var held = new NoteSet();
+            var list = new List<RecordedMidiEvent>(events.Count);
+            foreach (var e in events.OrderBy(static e => e.Sample)) {
+                held.Track((byte)e.Status, (byte)e.Data1, (byte)e.Data2);
+                list.Add(e with { Sample = Math.Clamp(e.Sample, start, end) });
+            }
+
+            int count;
+            while ((count = held.Release(open)) > 0) {
+                for (var i = 0; i < count; i++) {
+                    list.Add(new(end, open[i].Status, open[i].Note, 0));
+                }
+            }
+
+            if (list.Count > 0) {
+                result.Add(new(trackId, start, end, list));
+            }
+        }
+
+        return result;
     }
 
     /// <summary>Waits until the audio thread has applied the command numbered <paramref name="sequence" />.</summary>
@@ -441,8 +690,8 @@ public sealed class EngineController : IDisposable {
         var started = new List<RecordTake>();
         var stamp = DateTime.UtcNow.ToString("yyyyMMdd'T'HHmmssfff'Z'", CultureInfo.InvariantCulture);
         foreach (var track in root.Tracks) {
-            if (!track.Armed) {
-                continue;
+            if (!track.Armed || track.IsMidi) {
+                continue; // MIDI tracks record MIDI (MidiHub.BeginCapture)
             }
 
             var path = Path.Combine(RecordDirectory, $"{track.Id}-{stamp}.wav");
@@ -497,9 +746,15 @@ public sealed class EngineController : IDisposable {
         }
 
         foreach (var track in previous.Tracks) {
-            if (Array.IndexOf(next.Tracks, track) < 0) {
-                track.Dispose();
+            if (Array.IndexOf(next.Tracks, track) >= 0) {
+                continue;
             }
+
+            if (track.Instrument is { } slot && !next.Tracks.Any(t => t.Instrument == slot)) {
+                slot.Dispose(); // the track went away
+            }
+
+            track.Dispose();
         }
 
         foreach (var file in previous.Files) {
@@ -654,10 +909,12 @@ public sealed class EngineController : IDisposable {
     }
 
     TrackState NewTrack(int id, bool stereo, TrackState? previous) {
-        var state = new TrackState(id, stereo, streamFrames);
+        var state = new TrackState(id, stereo, streamFrames, previous?.Midi);
         if (previous is not null) {
             state.Strip.Set(previous.Strip.Settings);
             state.SetIo(previous.InputChannel, previous.Armed, previous.Monitoring);
+            state.Instrument = previous.Instrument;
+            state.MidiIo = previous.MidiIo;
         }
 
         return state;
@@ -681,11 +938,15 @@ public sealed class EngineController : IDisposable {
             }
         }
 
+        Midi.Dispose();
         Writer.Dispose();
         Streamer.Dispose();
         var root = Engine.Root;
         Engine.Publish(ModelRoot.Empty);
+        WaitGrace();
         foreach (var track in root.Tracks) {
+            track.Instrument?.Dispose();
+            track.Instrument = null;
             track.Dispose();
         }
 

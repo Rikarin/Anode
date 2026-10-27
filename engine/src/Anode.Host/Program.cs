@@ -56,14 +56,16 @@ int Usage() {
          anode-host {version}
 
            --serve --socket <path> [--device <uid>] [--rate 48000] [--buffer 64] [--inputs <n>]
-                   [--null-audio [--input-tone] [--lose-device-after <ms>]] [--mute] [--watch-stdin]
+                   [--null-audio [--input-tone] [--lose-device-after <ms>]] [--mute] [--no-midi] [--watch-stdin]
                                            run the engine for anode-server until SIGINT or SIGTERM
                                            (--device: a device uid from --devices, default the system output;
                                            --inputs: device inputs to open, default all (16 on --null-audio);
                                            --input-tone: the null device's inputs carry a 440 Hz tone;
                                            --lose-device-after: the null device reports itself lost (tests);
-                                           --mute: silence the device output; --watch-stdin: also stop when
-                                           standard input closes). Exit code 3: the device was lost or changed.
+                                           --mute: silence the device output; --no-midi: open no MIDI devices;
+                                           --watch-stdin: also stop when standard input closes). CLAP instruments
+                                           are scanned in CLAP_PATH and the standard folders. Exit code 3: the
+                                           device was lost or changed.
            --devices [--json]              list audio devices
            --version
          """

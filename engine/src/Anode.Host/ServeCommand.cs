@@ -1,4 +1,5 @@
 using Anode.Audio;
+using Anode.Audio.Midi;
 using Anode.Audio.Native;
 using Anode.EngineHost;
 using System.Runtime.InteropServices;
@@ -63,10 +64,14 @@ static class ServeCommand {
             device = session;
         }
 
-        using var host = new EngineHost.EngineHost(device, version);
+        // MIDI devices through the native shim, unless --no-midi (or it is not built).
+        IMidiBackend? midi = !options.Flag("no-midi") && NativeMidiBackend.IsAvailable ? new NativeMidiBackend() : null;
+        using var host = new EngineHost.EngineHost(device, version, midi: midi);
         host.Log = Print;
-        host.Start();
         await using var server = new EngineHostServer(socket, host.HandleAsync, Print);
+        host.Push = server.Push;
+        server.HelloAnswered = host.HelloAnswered;
+        host.Start();
         server.Start();
         var hello = host.Hello;
         // The desktop app waits for this line (apps/desktop/src/sidecars.ts).

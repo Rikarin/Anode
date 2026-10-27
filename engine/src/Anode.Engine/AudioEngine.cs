@@ -1,4 +1,5 @@
 using Anode.Audio;
+using Anode.Engine.Plugins;
 using Anode.Engine.Streaming;
 using System.Diagnostics;
 
@@ -6,11 +7,13 @@ namespace Anode.Engine;
 
 /// <summary>
 ///     The audio callback (docs/01-implementation-plan.md §3.2): applies transport commands, reads every track's next
-///     frames from its stream, adds monitored input, runs each channel strip into the stereo bus, runs the master strip,
-///     adds the click, feeds armed tracks' takes and publishes the transport. It never allocates, locks or blocks; the
-///     model it reads is swapped by the control thread with RCU (<see cref="Publish" />, <see cref="IsGraceOver" />).
+///     frames from its stream, adds monitored input, renders instrument tracks from their MIDI
+///     (<c>AudioEngine.Midi.cs</c>), runs each channel strip into the stereo bus, runs the master strip, adds the click,
+///     feeds armed tracks' takes and publishes the transport. It never allocates, locks or blocks; the model and the
+///     instruments it reads are swapped by the control thread with RCU (<see cref="Publish" />,
+///     <see cref="IsGraceOver" />).
 /// </summary>
-public sealed unsafe class AudioEngine : IAudioProcessor {
+public sealed unsafe partial class AudioEngine : IAudioProcessor {
     /// <summary>Largest callback a device delivers (CTH_MAX_FRAMES).</summary>
     public const int MaxFrames = 4096;
 
@@ -35,6 +38,7 @@ public sealed unsafe class AudioEngine : IAudioProcessor {
     long countInTotal;
     long countInRemaining;
     int countInBeats;
+    int callbackFrames;
     bool metronomeEnabled;
     float metronomeGain = 1f;
 
@@ -74,6 +78,15 @@ public sealed unsafe class AudioEngine : IAudioProcessor {
         return (previous, Volatile.Read(ref started));
     }
 
+    /// <summary>
+    ///     Control thread, after replacing something the callback reads (an instrument): the grace token to wait on
+    ///     before releasing the old one.
+    /// </summary>
+    public long Grace() {
+        Interlocked.MemoryBarrier();
+        return Volatile.Read(ref started);
+    }
+
     /// <summary>True once every callback that had started when <see cref="Publish" /> returned the token has finished.</summary>
     public bool IsGraceOver(long grace) => Volatile.Read(ref completed) >= grace;
 
@@ -82,6 +95,10 @@ public sealed unsafe class AudioEngine : IAudioProcessor {
         try {
             var model = Volatile.Read(ref root);
             var now = (long)(Stopwatch.GetTimestamp() * NanosecondsPerTick);
+            AudioThread.Mark();
+            previousCallbackNs = callbackNs;
+            callbackNs = now;
+            callbackFrames = frames;
             ApplyCommands();
             var clock = transport.Clock;
             var position = transport.Position;
@@ -99,6 +116,7 @@ public sealed unsafe class AudioEngine : IAudioProcessor {
             callbacks++;
             PublishSnapshot(clock, position, now, model);
         } finally {
+            AudioThread.Mark(false); // only while in the callback: offline renders run it on other threads
             Volatile.Write(ref completed, completed + 1);
         }
     }
@@ -114,7 +132,12 @@ public sealed unsafe class AudioEngine : IAudioProcessor {
                     break;
                 case EngineCommandKind.Stop:
                     countInRemaining = 0;
+                    if (transport.State == TransportState.Recording) {
+                        Volatile.Write(ref recordEnd, transport.Position);
+                    }
+
                     transport.Stop();
+                    Panic();
                     break;
                 case EngineCommandKind.Record:
                     Record(command.A, command.B);
@@ -122,6 +145,7 @@ public sealed unsafe class AudioEngine : IAudioProcessor {
                 case EngineCommandKind.Locate:
                     transport.Locate(Math.Max(0, command.A));
                     hardFloor = transport.Anchor.Id;
+                    Panic();
                     break;
                 case EngineCommandKind.SetCycle:
                     transport.SetCycle(new(command.Flag, command.A, command.B));
@@ -139,12 +163,15 @@ public sealed unsafe class AudioEngine : IAudioProcessor {
     void Record(long countIn, long beats) {
         if (transport.State == TransportState.Playing) {
             transport.Record(); // punch in, no count-in
+            BeginRecording();
         } else if (transport.State == TransportState.Stopped && countInRemaining == 0 && countIn > 0) {
             countInTotal = countInRemaining = countIn;
             countInBeats = (int)Math.Clamp(beats, 1, 64);
+            Volatile.Write(ref recordStart, -1);
             transport.PrepareRecord();
         } else if (transport.State == TransportState.Stopped && countInRemaining == 0) {
             transport.Record();
+            BeginRecording();
         }
     }
 
@@ -175,15 +202,15 @@ public sealed unsafe class AudioEngine : IAudioProcessor {
             var left = trackLeft.AsSpan(0, frames);
             var right = trackRight.AsSpan(0, frames);
             ReadTrack(track, model.Generations[i], left, right);
-            InputTrack(track, inputs, inputChannels, offset, left, right, position);
-            track.Strip.MixInto(
-                left,
-                track.Stereo ? right : left,
-                track.Stereo,
-                !anySolo || track.Strip.Solo,
-                bus,
-                busR
-            );
+            var stereo = track.Stereo;
+            if (track.IsMidi) {
+                RenderMidi(track, model.Views[i], model.Generations[i], offset, position, countIn, left, right);
+                stereo = true; // instruments are stereo; an external MIDI track is silent
+            } else {
+                InputTrack(track, inputs, inputChannels, offset, left, right, position);
+            }
+
+            track.Strip.MixInto(left, stereo ? right : left, stereo, !anySolo || track.Strip.Solo, bus, busR);
         }
 
         Master.Process(bus, busR);
@@ -195,6 +222,7 @@ public sealed unsafe class AudioEngine : IAudioProcessor {
             countInRemaining -= frames;
             if (countInRemaining == 0) {
                 transport.Record(); // rolls from the next frame; the count-in's frames do not move the playhead
+                BeginRecording();
             }
         } else {
             transport.Advance(frames);

@@ -24,9 +24,15 @@ static uint64_t to_ns(uint64_t host_time)
     return host_time * timebase.numer / timebase.denom;
 }
 
+static uint64_t to_host_time(uint64_t ns)
+{
+    if (timebase.denom == 0) mach_timebase_info(&timebase);
+    return ns * timebase.denom / timebase.numer;
+}
+
 uint64_t cth_midi_now_ns(void) { return to_ns(mach_absolute_time()); }
 
-static void push(uint64_t time_ns, uint8_t status, uint8_t d1, uint8_t d2, uint8_t length)
+static void push(uint64_t time_ns, uint8_t status, uint8_t d1, uint8_t d2, uint8_t length, int32_t source)
 {
     uint32_t head = atomic_load_explicit(&ring_head, memory_order_relaxed);
     uint32_t tail = atomic_load_explicit(&ring_tail, memory_order_acquire);
@@ -37,6 +43,7 @@ static void push(uint64_t time_ns, uint8_t status, uint8_t d1, uint8_t d2, uint8
     e->data[1] = d1;
     e->data[2] = d2;
     e->length = length;
+    e->source = source;
     atomic_store_explicit(&ring_head, head + 1, memory_order_release);
 }
 
@@ -49,9 +56,9 @@ static uint8_t channel_length(uint8_t status)
     }
 }
 
-static void receive(const MIDIEventList *list, void *source)
+static void receive(const MIDIEventList *list, void *source_ref)
 {
-    (void)source;
+    int32_t source = (int32_t)(intptr_t)source_ref - 1; /* the connection's refCon: its port index + 1 */
     const MIDIEventPacket *packet = &list->packet[0];
     for (UInt32 p = 0; p < list->numPackets; p++) {
         uint64_t time = packet->timeStamp ? to_ns(packet->timeStamp) : cth_midi_now_ns();
@@ -60,9 +67,9 @@ static void receive(const MIDIEventList *list, void *source)
             uint32_t type = word >> 28;
             uint8_t status = (word >> 16) & 0xFF;
             if (type == 0x2) {
-                push(time, status, (word >> 8) & 0x7F, word & 0x7F, channel_length(status));
+                push(time, status, (word >> 8) & 0x7F, word & 0x7F, channel_length(status), source);
             } else if (type == 0x1 && status >= 0xF8) {
-                push(time, status, 0, 0, 1); /* clock, start, continue, stop, … */
+                push(time, status, 0, 0, 1, source); /* clock, start, continue, stop, … */
             } else if (type == 0x3 || type == 0x4 || type == 0x5) {
                 w += (type == 0x3) ? 1 : (type == 0x4 ? 1 : 3); /* skip SysEx and 64/128-bit packets */
             }
@@ -113,7 +120,7 @@ int32_t cth_midi_open(void)
     for (ItemCount i = 0; i < count; i++) {
         MIDIEndpointRef source = MIDIGetSource(i);
         MIDIPortDisconnectSource(input_port, source); /* reconnecting is harmless; refresh picks up new devices */
-        MIDIPortConnectSource(input_port, source, NULL);
+        MIDIPortConnectSource(input_port, source, (void *)(intptr_t)(i + 1)); /* sources come first in the port list */
     }
 
     return 0;
@@ -133,14 +140,14 @@ int32_t cth_midi_read(cth_midi_event *events, int32_t max)
     return n;
 }
 
-int32_t cth_midi_send(const char *destination_uid, const uint8_t *data, int32_t length)
+static int32_t send_list(const char *destination_uid, const uint8_t *data, int32_t length, MIDITimeStamp time)
 {
     if (!output_port || !data || length < 1 || length > 3) return -1;
     uint32_t word = (0x2u << 28) | ((uint32_t)data[0] << 16) | (length > 1 ? (uint32_t)data[1] << 8 : 0)
                     | (length > 2 ? data[2] : 0);
     MIDIEventList list;
     MIDIEventPacket *packet = MIDIEventListInit(&list, kMIDIProtocol_1_0);
-    packet = MIDIEventListAdd(&list, sizeof list, packet, 0, 1, &word);
+    packet = MIDIEventListAdd(&list, sizeof list, packet, time, 1, &word);
     if (!packet) return -2;
 
     int32_t sent = 0;
@@ -159,6 +166,17 @@ int32_t cth_midi_send(const char *destination_uid, const uint8_t *data, int32_t 
     }
 
     return sent > 0 ? 0 : -3;
+}
+
+int32_t cth_midi_send(const char *destination_uid, const uint8_t *data, int32_t length)
+{
+    return send_list(destination_uid, data, length, 0);
+}
+
+int32_t cth_midi_send_at(const char *destination_uid, const uint8_t *data, int32_t length, uint64_t time_ns)
+{
+    int32_t result = send_list(destination_uid, data, length, time_ns ? to_host_time(time_ns) : 0);
+    return result < 0 ? result : 1;
 }
 
 void cth_midi_close(void)

@@ -35,7 +35,7 @@ uint64_t cth_midi_now_ns(void)
     return seconds * 1000000000u + rest * 1000000000u / (uint64_t)frequency.QuadPart;
 }
 
-static void push(uint64_t time_ns, uint8_t status, uint8_t d1, uint8_t d2, uint8_t length)
+static void push(uint64_t time_ns, uint8_t status, uint8_t d1, uint8_t d2, uint8_t length, int32_t source)
 {
     AcquireSRWLockExclusive(&producer_lock);
     uint32_t head = (uint32_t)ring_head;
@@ -47,6 +47,7 @@ static void push(uint64_t time_ns, uint8_t status, uint8_t d1, uint8_t d2, uint8
         e->data[1] = d1;
         e->data[2] = d2;
         e->length = length;
+        e->source = source;
         InterlockedExchange(&ring_head, (LONG)(head + 1)); /* full barrier: the event is visible first */
     }
     ReleaseSRWLockExclusive(&producer_lock);
@@ -63,14 +64,16 @@ static uint8_t channel_length(uint8_t status)
 
 static void CALLBACK receive(HMIDIIN handle, UINT message, DWORD_PTR instance, DWORD_PTR param1, DWORD_PTR param2)
 {
-    (void)handle; (void)instance; (void)param2;
+    (void)handle; (void)param2;
+    int32_t source = (int32_t)instance; /* the WinMM input index, which is its port index (inputs come first) */
     if (message != MIM_DATA) return; /* SysEx (MIM_LONGDATA) is dropped, as on macOS */
     uint8_t status = (uint8_t)(param1 & 0xFF);
     uint64_t time = cth_midi_now_ns();
     if (status >= 0x80 && status < 0xF0) {
-        push(time, status, (uint8_t)((param1 >> 8) & 0x7F), (uint8_t)((param1 >> 16) & 0x7F), channel_length(status));
+        push(time, status, (uint8_t)((param1 >> 8) & 0x7F), (uint8_t)((param1 >> 16) & 0x7F), channel_length(status),
+             source);
     } else if (status >= 0xF8) {
-        push(time, status, 0, 0, 1); /* clock, start, continue, stop, … */
+        push(time, status, 0, 0, 1, source); /* clock, start, continue, stop, … */
     }
 }
 
@@ -145,7 +148,7 @@ int32_t cth_midi_open(void)
     if (count > MAX_PORTS) count = MAX_PORTS;
     for (UINT i = 0; i < count; i++) {
         /* A port another application holds exclusively stays closed; the rest still work. */
-        if (midiInOpen(&inputs[i], i, (DWORD_PTR)receive, 0, CALLBACK_FUNCTION) == MMSYSERR_NOERROR) midiInStart(inputs[i]);
+        if (midiInOpen(&inputs[i], i, (DWORD_PTR)receive, (DWORD_PTR)i, CALLBACK_FUNCTION) == MMSYSERR_NOERROR) midiInStart(inputs[i]);
         else inputs[i] = NULL;
     }
     input_count = (int)count;
@@ -191,6 +194,12 @@ int32_t cth_midi_send(const char *destination_uid, const uint8_t *data, int32_t 
     }
     ReleaseSRWLockExclusive(&ports_lock);
     return sent > 0 ? 0 : -3;
+}
+
+int32_t cth_midi_send_at(const char *destination_uid, const uint8_t *data, int32_t length, uint64_t time_ns)
+{
+    (void)time_ns; /* WinMM has no scheduled output: the caller holds the event until it is due */
+    return cth_midi_send(destination_uid, data, length);
 }
 
 void cth_midi_close(void)
