@@ -1,5 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <ItemGroup>
     <ProjectReference Include="../../src/Anode.EngineHost/Anode.EngineHost.csproj"/>
+    <!-- Built, not referenced: the process tests run it as a separate anode-host process. -->
+    <ProjectReference Include="../../src/Anode.Host/Anode.Host.csproj" ReferenceOutputAssembly="false" Private="false"/>
   </ItemGroup>
 </Project>

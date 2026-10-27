@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>anode-host-probe</AssemblyName>
+    <Description>Drives a running anode-host over its socket (smoke test), or measures the audio callback in-process (bench).</Description>
+    <IsPackable>false</IsPackable>
+    <ServerGarbageCollection>false</ServerGarbageCollection>
+    <ConcurrentGarbageCollection>false</ConcurrentGarbageCollection>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../src/Anode.EngineHost/Anode.EngineHost.csproj"/>
+  </ItemGroup>
+</Project>

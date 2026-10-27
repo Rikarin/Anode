@@ -42,7 +42,12 @@ static class ServeCommand {
 
         IAudioDevice device;
         if (options.Flag("null-audio")) {
-            device = new NullAudioDevice(rate, buffer, inputs, 2, options.Flag("input-tone"));
+            device = new NullAudioDevice(rate, buffer, inputs, 2, options.Flag("input-tone")) {
+                // Testing aid: the null device reports itself lost after this many milliseconds.
+                LoseAfter = options.Text("lose-device-after") is null
+                    ? null
+                    : TimeSpan.FromMilliseconds(options.Int("lose-device-after", 0))
+            };
         } else {
             if (!NativeAudio.IsAvailable) {
                 throw new InvalidOperationException(

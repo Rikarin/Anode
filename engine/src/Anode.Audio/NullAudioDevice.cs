@@ -1,4 +1,5 @@
 using Anode.Audio.Native;
+using System.Diagnostics;
 using System.Runtime.InteropServices;
 
 namespace Anode.Audio;
@@ -26,6 +27,7 @@ public sealed unsafe class NullAudioDevice : IAudioDevice {
     long late;
     long exceptions;
     double tonePhase;
+    long startedAt;
 
     /// <param name="sampleRate">Frames per second.</param>
     /// <param name="bufferFrames">Frames per callback.</param>
@@ -82,7 +84,16 @@ public sealed unsafe class NullAudioDevice : IAudioDevice {
     /// <summary>True once the clock thread runs with a real-time policy.</summary>
     public bool IsRealtime { get; private set; }
 
-    public AudioDeviceStatus Status => AudioDeviceStatus.Ok;
+    /// <summary>
+    ///     For tests of the host's device supervision: the device reports itself lost this long after it starts (as an
+    ///     unplugged interface would). Null: never.
+    /// </summary>
+    public TimeSpan? LoseAfter { get; init; }
+
+    public AudioDeviceStatus Status =>
+        LoseAfter is { } after && startedAt != 0 && Stopwatch.GetElapsedTime(startedAt) >= after
+            ? AudioDeviceStatus.Lost
+            : AudioDeviceStatus.Ok;
 
     public void Start(IAudioProcessor processor) {
         if (running) {
@@ -91,6 +102,7 @@ public sealed unsafe class NullAudioDevice : IAudioDevice {
 
         this.processor = processor;
         running = true;
+        startedAt = Stopwatch.GetTimestamp();
         thread = new(Run) { IsBackground = true, Name = "anode null audio", Priority = ThreadPriority.Highest };
         thread.Start();
     }

@@ -20,4 +20,7 @@
     <Project Path="tests/Anode.Model.Tests/Anode.Model.Tests.csproj"/>
     <Project Path="tests/Anode.Server.Tests/Anode.Server.Tests.csproj"/>
   </Folder>
+  <Folder Name="/tools/">
+    <Project Path="tools/Anode.HostProbe/Anode.HostProbe.csproj"/>
+  </Folder>
 </Solution>
