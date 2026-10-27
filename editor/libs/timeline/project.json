@@ -10,10 +10,20 @@
       "options": {
         "commands": [
           "tsc -p libs/timeline/tsconfig.lib.json --noEmit",
-          "tsc -p libs/timeline/tsconfig.spec.json --noEmit"
+          "tsc -p libs/timeline/tsconfig.spec.json --noEmit",
+          "tsc -p libs/timeline/tsconfig.bench.json --noEmit"
         ],
         "parallel": false
       }
+    },
+    "bench": {
+      "executor": "nx:run-commands",
+      "continuous": true,
+      "options": { "command": "vite --config libs/timeline/vite.bench.config.mts" }
+    },
+    "bench-run": {
+      "executor": "nx:run-commands",
+      "options": { "command": "node libs/timeline/bench/run-bench.mts" }
     }
   }
 }

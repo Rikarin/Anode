@@ -1,0 +1,6 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": { "types": ["node"], "lib": ["es2023", "dom"], "noEmit": true },
+  "include": ["bench/**/*.ts", "bench/**/*.mts", "src/**/*.ts", "vite.bench.config.mts"],
+  "exclude": ["src/**/*.spec.ts"]
+}
