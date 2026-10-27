@@ -21,10 +21,525 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/api/v1/projects/recent': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Recently opened projects, most recent first. */
+    get: operations['ListRecentProjects'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/projects': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Creates a project folder and opens it, closing the open one (unsaved edits are kept in its backup). */
+    post: operations['CreateProject'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/projects/open': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Opens a project folder, closing the open one. */
+    post: operations['OpenProject'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/project': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** The open project, with its revision as the ETag; 404 when none is open. */
+    get: operations['GetProject'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/project/save': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations['SaveProject'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/project/close': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations['CloseProject'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/project/commands': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Applies a batch of edits atomically as one undo step. With If-Match, a stale revision answers 409; an edit that does not apply (an unknown id, a split outside the region) answers 422 and changes nothing. */
+    post: operations['ApplyCommands'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/project/undo': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Undoes the last edit; 422 when there is nothing to undo. */
+    post: operations['Undo'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/project/redo': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations['Redo'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/project/history': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: operations['GetHistory'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/project/files': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Copies an uploaded WAV into the project's Audio Files folder (a browser on the network). */
+    post: operations['UploadAudioFile'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/project/files/import': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Copies a WAV from the server's disk into the project's Audio Files folder (the desktop app). */
+    post: operations['ImportAudioFile'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/project/files/{fileId}/peaks': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Waveform peaks of a file in the binary format of PeakFormat (Anode.Contracts), at the nearest kept resolution to framesPerPeak, optionally only peaks start … start + count. */
+    get: operations['GetPeaks'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/transport': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: operations['GetTransport'];
+    put?: never;
+    /** Play, stop, record or locate. Recording needs an open project and a record-armed track. */
+    post: operations['ControlTransport'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
 }
 export type webhooks = Record<string, never>;
 export interface components {
   schemas: {
+    /** @description An audio file of the project; `path` is relative to the project folder. */
+    AudioFile: {
+      id: string;
+      name: string;
+      path: string;
+      /** Format: int32 */
+      sampleRate: number;
+      /** Format: int32 */
+      channels: number;
+      /** Format: int64 */
+      frames: number;
+      /** Format: int32 */
+      bitDepth: number;
+    };
+    /**
+     * @description A region of an audio file on a track: it starts at `startTick` and plays `length` frames of the file
+     *     from `fileOffset`, at `gainDb`, with linear fades of `fadeIn` and `fadeOut` frames.
+     */
+    AudioRegion: {
+      id: string;
+      trackId: string;
+      fileId: string;
+      name: string;
+      /** Format: int64 */
+      startTick: number;
+      /** Format: int64 */
+      fileOffset: number;
+      /** Format: int64 */
+      length: number;
+      /** Format: double */
+      gainDb: number;
+      /** Format: int64 */
+      fadeIn: number;
+      /** Format: int64 */
+      fadeOut: number;
+    };
+    /** @description Volume in dB (−∞ as −144), pan −1 (left) … 1 (right), mute and solo. */
+    ChannelStrip: {
+      /** Format: double */
+      volumeDb: number;
+      /** Format: double */
+      pan: number;
+      mute: boolean;
+      solo: boolean;
+    };
+    /** @description Edits applied as one undo step; `label` names it in the undo history ("Move Region"). */
+    CommandBatch: {
+      commands: components['schemas']['EditCommand'][];
+      label?: null | string;
+    };
+    /** @description What an edit, undo or redo did: the new revision and the delta every client receives too. */
+    CommandResult: {
+      /** Format: int64 */
+      revision: number;
+      delta: components['schemas']['ProjectDelta'];
+    };
+    CreateProjectRequest: {
+      name: string;
+      directory?: null | string;
+      /** Format: int32 */
+      sampleRate?: null | number;
+    };
+    CycleRange: {
+      enabled: boolean;
+      /** Format: int64 */
+      startTick: number;
+      /** Format: int64 */
+      endTick: number;
+    };
+    DeltaOp:
+      | components['schemas']['DeltaOpTrackUpserted']
+      | components['schemas']['DeltaOpTrackRemoved']
+      | components['schemas']['DeltaOpRegionUpserted']
+      | components['schemas']['DeltaOpRegionRemoved']
+      | components['schemas']['DeltaOpAudioFileUpserted']
+      | components['schemas']['DeltaOpSettingsChanged']
+      | components['schemas']['DeltaOpMasterChanged']
+      | components['schemas']['DeltaOpProjectRenamed'];
+    DeltaOpAudioFileUpserted: {
+      /** @enum {string} */
+      op: 'audioFileUpserted';
+      file: components['schemas']['AudioFile'];
+    };
+    DeltaOpMasterChanged: {
+      /** @enum {string} */
+      op: 'masterChanged';
+      strip: components['schemas']['ChannelStrip'];
+    };
+    DeltaOpProjectRenamed: {
+      /** @enum {string} */
+      op: 'projectRenamed';
+      name: string;
+    };
+    DeltaOpRegionRemoved: {
+      /** @enum {string} */
+      op: 'regionRemoved';
+      id: string;
+    };
+    DeltaOpRegionUpserted: {
+      /** @enum {string} */
+      op: 'regionUpserted';
+      region: components['schemas']['AudioRegion'];
+    };
+    DeltaOpSettingsChanged: {
+      /** @enum {string} */
+      op: 'settingsChanged';
+      settings: components['schemas']['ProjectSettings'];
+    };
+    DeltaOpTrackRemoved: {
+      /** @enum {string} */
+      op: 'trackRemoved';
+      id: string;
+    };
+    /** @description A track was added or changed; `index` is its position in the track list. */
+    DeltaOpTrackUpserted: {
+      /** @enum {string} */
+      op: 'trackUpserted';
+      track: components['schemas']['Track'];
+      /** Format: int32 */
+      index: number;
+    };
+    /**
+     * @description An edit of the open project (docs/adr/0004-state-ownership.md). A batch of them is applied atomically as one
+     *     undo step. Optional properties left out are left unchanged.
+     */
+    EditCommand:
+      | components['schemas']['EditCommandAddTrackCommand']
+      | components['schemas']['EditCommandRemoveTrackCommand']
+      | components['schemas']['EditCommandMoveTrackCommand']
+      | components['schemas']['EditCommandSetTrackCommand']
+      | components['schemas']['EditCommandSetStripCommand']
+      | components['schemas']['EditCommandAddRegionCommand']
+      | components['schemas']['EditCommandMoveRegionCommand']
+      | components['schemas']['EditCommandResizeRegionCommand']
+      | components['schemas']['EditCommandSplitRegionCommand']
+      | components['schemas']['EditCommandSetRegionCommand']
+      | components['schemas']['EditCommandDeleteRegionsCommand']
+      | components['schemas']['EditCommandSetTempoCommand']
+      | components['schemas']['EditCommandSetSignatureCommand']
+      | components['schemas']['EditCommandSetCycleCommand']
+      | components['schemas']['EditCommandSetMetronomeCommand']
+      | components['schemas']['EditCommandRenameProjectCommand'];
+    /** @description Places a file on a track; the whole file unless `fileOffset` and `length` say otherwise. */
+    EditCommandAddRegionCommand: {
+      /** @enum {string} */
+      type: 'addRegion';
+      trackId: string;
+      fileId: string;
+      /** Format: int64 */
+      startTick: number;
+      /** Format: int64 */
+      fileOffset?: null | number;
+      /** Format: int64 */
+      length?: null | number;
+    };
+    /** @description Adds an audio track at `index` (the end when left out). */
+    EditCommandAddTrackCommand: {
+      /** @enum {string} */
+      type: 'addTrack';
+      name?: null | string;
+      /** Format: int32 */
+      index?: null | number;
+      /** @default false */
+      stereo: boolean;
+    };
+    EditCommandDeleteRegionsCommand: {
+      /** @enum {string} */
+      type: 'deleteRegions';
+      regionIds: string[];
+    };
+    /** @description Moves a region in time, and to another track when `trackId` is given. */
+    EditCommandMoveRegionCommand: {
+      /** @enum {string} */
+      type: 'moveRegion';
+      regionId: string;
+      /** Format: int64 */
+      startTick: number;
+      trackId?: null | string;
+    };
+    EditCommandMoveTrackCommand: {
+      /** @enum {string} */
+      type: 'moveTrack';
+      trackId: string;
+      /** Format: int32 */
+      index: number;
+    };
+    EditCommandRemoveTrackCommand: {
+      /** @enum {string} */
+      type: 'removeTrack';
+      trackId: string;
+    };
+    EditCommandRenameProjectCommand: {
+      /** @enum {string} */
+      type: 'renameProject';
+      name: string;
+    };
+    /** @description Trims a region: its new start, and the part of the file it plays. */
+    EditCommandResizeRegionCommand: {
+      /** @enum {string} */
+      type: 'resizeRegion';
+      regionId: string;
+      /** Format: int64 */
+      startTick: number;
+      /** Format: int64 */
+      fileOffset: number;
+      /** Format: int64 */
+      length: number;
+    };
+    EditCommandSetCycleCommand: {
+      /** @enum {string} */
+      type: 'setCycle';
+      enabled?: null | boolean;
+      /** Format: int64 */
+      startTick?: null | number;
+      /** Format: int64 */
+      endTick?: null | number;
+    };
+    EditCommandSetMetronomeCommand: {
+      /** @enum {string} */
+      type: 'setMetronome';
+      enabled?: null | boolean;
+      countIn?: null | boolean;
+      /** Format: double */
+      levelDb?: null | number;
+    };
+    EditCommandSetRegionCommand: {
+      /** @enum {string} */
+      type: 'setRegion';
+      regionId: string;
+      name?: null | string;
+      /** Format: double */
+      gainDb?: null | number;
+      /** Format: int64 */
+      fadeIn?: null | number;
+      /** Format: int64 */
+      fadeOut?: null | number;
+    };
+    EditCommandSetSignatureCommand: {
+      /** @enum {string} */
+      type: 'setSignature';
+      /** Format: int32 */
+      numerator: number;
+      /** Format: int32 */
+      denominator: number;
+    };
+    /** @description Changes a track's channel strip, or the master's when `trackId` is left out. */
+    EditCommandSetStripCommand: {
+      /** @enum {string} */
+      type: 'setStrip';
+      trackId?: null | string;
+      /** Format: double */
+      volumeDb?: null | number;
+      /** Format: double */
+      pan?: null | number;
+      mute?: null | boolean;
+      solo?: null | boolean;
+    };
+    EditCommandSetTempoCommand: {
+      /** @enum {string} */
+      type: 'setTempo';
+      /** Format: double */
+      bpm: number;
+    };
+    EditCommandSetTrackCommand: {
+      /** @enum {string} */
+      type: 'setTrack';
+      trackId: string;
+      name?: null | string;
+      color?: null | string;
+      input: null | components['schemas']['TrackInput'];
+      recordArmed?: null | boolean;
+      inputMonitoring?: null | boolean;
+    };
+    /** @description Splits a region in two at `atTick`, which must fall inside it. */
+    EditCommandSplitRegionCommand: {
+      /** @enum {string} */
+      type: 'splitRegion';
+      regionId: string;
+      /** Format: int64 */
+      atTick: number;
+    };
     /** @enum {unknown} */
     EngineState: 'disconnected' | 'connected' | 'inprocess';
     /**
@@ -38,6 +553,27 @@ export interface components {
       backend?: null | string;
       message?: null | string;
     };
+    HistoryEntry: {
+      label: string;
+      /** Format: int64 */
+      revision: number;
+    };
+    /** Format: binary */
+    IFormFile: string;
+    /** @description Import an audio file the server can read from its own disk (the desktop app, a headless box's library). */
+    ImportFileRequest: {
+      path: string;
+    };
+    /** @description The click: on or off, a one-bar count-in before recording, and its level in dB. */
+    MetronomeSettings: {
+      enabled: boolean;
+      countIn: boolean;
+      /** Format: double */
+      levelDb: number;
+    };
+    OpenProjectRequest: {
+      path: string;
+    };
     ProblemDetails: {
       type?: null | string;
       title?: null | string;
@@ -46,10 +582,110 @@ export interface components {
       detail?: null | string;
       instance?: null | string;
     };
+    /**
+     * @description The open project (docs/01-implementation-plan.md §5). Musical positions are ticks at 960 PPQ; audio offsets,
+     *     lengths and fades are frames at the project's `sampleRate`. `revision` grows with every edit and is
+     *     the ETag; `dirty` says whether it has unsaved edits.
+     */
+    Project: {
+      id: string;
+      name: string;
+      path: string;
+      /** Format: int64 */
+      revision: number;
+      dirty: boolean;
+      /** Format: int32 */
+      sampleRate: number;
+      settings: components['schemas']['ProjectSettings'];
+      master: components['schemas']['ChannelStrip'];
+      tracks: components['schemas']['Track'][];
+      regions: components['schemas']['AudioRegion'][];
+      audioFiles: components['schemas']['AudioFile'][];
+    };
+    /**
+     * @description What changed between two revisions of the open project (docs/adr/0004-state-ownership.md). Clients apply the
+     *     operations in order; a client that misses a revision refetches the project.
+     */
+    ProjectDelta: {
+      /** Format: int64 */
+      revision: number;
+      ops: components['schemas']['DeltaOp'][];
+    };
+    /** @description Global settings. `endTick` is the project end marker. */
+    ProjectSettings: {
+      /** Format: double */
+      tempo: number;
+      signature: components['schemas']['TimeSignature'];
+      cycle: components['schemas']['CycleRange'];
+      metronome: components['schemas']['MetronomeSettings'];
+      /** Format: int64 */
+      endTick: number;
+    };
+    /** @description A project in the recent list. */
+    ProjectSummary: {
+      id: string;
+      name: string;
+      path: string;
+      /** Format: date-time */
+      modified: string;
+    };
     /** @description What `GET /api/v1/system` answers: the server's version and its link to the engine host. */
     SystemInfo: {
       version: string;
       engine: components['schemas']['EngineStatus'];
+    };
+    TimeSignature: {
+      /** Format: int32 */
+      numerator: number;
+      /** Format: int32 */
+      denominator: number;
+    };
+    /**
+     * @description A track and its channel strip. `color` is a CSS colour; `input` is where recording takes its audio
+     *     from.
+     */
+    Track: {
+      id: string;
+      name: string;
+      kind: components['schemas']['TrackKind'];
+      color: string;
+      input: components['schemas']['TrackInput'];
+      recordArmed: boolean;
+      inputMonitoring: boolean;
+      strip: components['schemas']['ChannelStrip'];
+    };
+    /** @description The device input: 1-based first channel (0: none); a stereo input takes that channel and the next. */
+    TrackInput: {
+      /** Format: int32 */
+      channel: number;
+      stereo: boolean;
+    };
+    /** @enum {unknown} */
+    TrackKind: 'audio';
+    /** @enum {unknown} */
+    TransportCommand: 'play' | 'stop' | 'record' | 'locate';
+    /** @description Play, stop or record (from `tick` when given), or locate the playhead to `tick`. */
+    TransportRequest: {
+      command: components['schemas']['TransportCommand'];
+      /** Format: int64 */
+      tick?: null | number;
+    };
+    /** @enum {unknown} */
+    TransportState: 'stopped' | 'playing' | 'recording';
+    /** @description The playhead: state and position, in samples and ticks. */
+    TransportStatus: {
+      state: components['schemas']['TransportState'];
+      /** Format: int64 */
+      positionSamples: number;
+      /** Format: int64 */
+      positionTick: number;
+      /** Format: int32 */
+      sampleRate: number;
+    };
+    /** @description The undo stack (most recent first) and the redo stack (next first). */
+    UndoHistory: {
+      undo: components['schemas']['HistoryEntry'][];
+      redo: components['schemas']['HistoryEntry'][];
     };
   };
   responses: never;
@@ -76,6 +712,539 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['SystemInfo'];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  ListRecentProjects: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ProjectSummary'][];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  CreateProject: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['CreateProjectRequest'];
+      };
+    };
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Project'];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  OpenProject: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['OpenProjectRequest'];
+      };
+    };
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Project'];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  GetProject: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Project'];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  SaveProject: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ProjectSummary'];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  CloseProject: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description No Content */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  ApplyCommands: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['CommandBatch'];
+      };
+    };
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['CommandResult'];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  Undo: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['CommandResult'];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  Redo: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['CommandResult'];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  GetHistory: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['UndoHistory'];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  UploadAudioFile: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'multipart/form-data': {
+          file: components['schemas']['IFormFile'];
+        };
+      };
+    };
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['AudioFile'];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  ImportAudioFile: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['ImportFileRequest'];
+      };
+    };
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['AudioFile'];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  GetPeaks: {
+    parameters: {
+      query?: {
+        framesPerPeak?: number;
+        start?: number;
+        count?: number;
+      };
+      header?: never;
+      path: {
+        fileId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  GetTransport: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['TransportStatus'];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  ControlTransport: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['TransportRequest'];
+      };
+    };
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['TransportStatus'];
         };
       };
       /** @description Internal Server Error */

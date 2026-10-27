@@ -9,6 +9,9 @@ public static class AnodeApi {
         // Any endpoint can fail with an RFC 9457 problem (UseExceptionHandler and AddProblemDetails in Program.cs).
         var api = app.MapGroup("/api/v1").ProducesProblem(StatusCodes.Status500InternalServerError);
         SystemApi.Map(api);
+        ProjectsApi.Map(api);
+        ProjectApi.Map(api);
+        TransportApi.Map(api);
         RealtimeApi.Map(app);
     }
 }

@@ -40,10 +40,1539 @@
           }
         }
       }
+    },
+    "/api/v1/projects/recent": {
+      "get": {
+        "tags": [
+          "Projects"
+        ],
+        "summary": "Recently opened projects, most recent first.",
+        "operationId": "ListRecentProjects",
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ProjectSummary"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects": {
+      "post": {
+        "tags": [
+          "Projects"
+        ],
+        "summary": "Creates a project folder and opens it, closing the open one (unsaved edits are kept in its backup).",
+        "operationId": "CreateProject",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateProjectRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Project"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/open": {
+      "post": {
+        "tags": [
+          "Projects"
+        ],
+        "summary": "Opens a project folder, closing the open one.",
+        "operationId": "OpenProject",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OpenProjectRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Project"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/project": {
+      "get": {
+        "tags": [
+          "Project"
+        ],
+        "summary": "The open project, with its revision as the ETag; 404 when none is open.",
+        "operationId": "GetProject",
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Project"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/api/v1/project/save": {
+      "post": {
+        "tags": [
+          "Project"
+        ],
+        "operationId": "SaveProject",
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectSummary"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/api/v1/project/close": {
+      "post": {
+        "tags": [
+          "Project"
+        ],
+        "operationId": "CloseProject",
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "No Content"
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/api/v1/project/commands": {
+      "post": {
+        "tags": [
+          "Project"
+        ],
+        "summary": "Applies a batch of edits atomically as one undo step. With If-Match, a stale revision answers 409; an edit that does not apply (an unknown id, a split outside the region) answers 422 and changes nothing.",
+        "operationId": "ApplyCommands",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CommandBatch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommandResult"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/api/v1/project/undo": {
+      "post": {
+        "tags": [
+          "Project"
+        ],
+        "summary": "Undoes the last edit; 422 when there is nothing to undo.",
+        "operationId": "Undo",
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommandResult"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/api/v1/project/redo": {
+      "post": {
+        "tags": [
+          "Project"
+        ],
+        "operationId": "Redo",
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommandResult"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/api/v1/project/history": {
+      "get": {
+        "tags": [
+          "Project"
+        ],
+        "operationId": "GetHistory",
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UndoHistory"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/api/v1/project/files": {
+      "post": {
+        "tags": [
+          "Project"
+        ],
+        "summary": "Copies an uploaded WAV into the project\u0027s Audio Files folder (a browser on the network).",
+        "operationId": "UploadAudioFile",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "required": [
+                  "file"
+                ],
+                "type": "object",
+                "properties": {
+                  "file": {
+                    "$ref": "#/components/schemas/IFormFile"
+                  }
+                }
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AudioFile"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/api/v1/project/files/import": {
+      "post": {
+        "tags": [
+          "Project"
+        ],
+        "summary": "Copies a WAV from the server\u0027s disk into the project\u0027s Audio Files folder (the desktop app).",
+        "operationId": "ImportAudioFile",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImportFileRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AudioFile"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/api/v1/project/files/{fileId}/peaks": {
+      "get": {
+        "tags": [
+          "Project"
+        ],
+        "summary": "Waveform peaks of a file in the binary format of PeakFormat (Anode.Contracts), at the nearest kept resolution to framesPerPeak, optionally only peaks start \u2026 start \u002B count.",
+        "operationId": "GetPeaks",
+        "parameters": [
+          {
+            "name": "fileId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "framesPerPeak",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "start",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "count",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK"
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/api/v1/transport": {
+      "get": {
+        "tags": [
+          "Transport"
+        ],
+        "operationId": "GetTransport",
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TransportStatus"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Transport"
+        ],
+        "summary": "Play, stop, record or locate. Recording needs an open project and a record-armed track.",
+        "operationId": "ControlTransport",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TransportRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TransportStatus"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
     "schemas": {
+      "AudioFile": {
+        "required": [
+          "id",
+          "name",
+          "path",
+          "sampleRate",
+          "channels",
+          "frames",
+          "bitDepth"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          },
+          "sampleRate": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "channels": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "frames": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "bitDepth": {
+            "type": "integer",
+            "format": "int32"
+          }
+        },
+        "description": "An audio file of the project; \u0060path\u0060 is relative to the project folder."
+      },
+      "AudioRegion": {
+        "required": [
+          "id",
+          "trackId",
+          "fileId",
+          "name",
+          "startTick",
+          "fileOffset",
+          "length",
+          "gainDb",
+          "fadeIn",
+          "fadeOut"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "trackId": {
+            "type": "string"
+          },
+          "fileId": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "startTick": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "fileOffset": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "length": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "gainDb": {
+            "type": "number",
+            "format": "double"
+          },
+          "fadeIn": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "fadeOut": {
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "description": "A region of an audio file on a track: it starts at \u0060startTick\u0060 and plays \u0060length\u0060 frames of the file\nfrom \u0060fileOffset\u0060, at \u0060gainDb\u0060, with linear fades of \u0060fadeIn\u0060 and \u0060fadeOut\u0060 frames."
+      },
+      "ChannelStrip": {
+        "required": [
+          "volumeDb",
+          "pan",
+          "mute",
+          "solo"
+        ],
+        "type": "object",
+        "properties": {
+          "volumeDb": {
+            "type": "number",
+            "format": "double"
+          },
+          "pan": {
+            "type": "number",
+            "format": "double"
+          },
+          "mute": {
+            "type": "boolean"
+          },
+          "solo": {
+            "type": "boolean"
+          }
+        },
+        "description": "Volume in dB (\u2212\u221E as \u2212144), pan \u22121 (left) \u2026 1 (right), mute and solo."
+      },
+      "CommandBatch": {
+        "required": [
+          "commands"
+        ],
+        "type": "object",
+        "properties": {
+          "commands": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EditCommand"
+            }
+          },
+          "label": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        },
+        "description": "Edits applied as one undo step; \u0060label\u0060 names it in the undo history (\u0022Move Region\u0022)."
+      },
+      "CommandResult": {
+        "required": [
+          "revision",
+          "delta"
+        ],
+        "type": "object",
+        "properties": {
+          "revision": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "delta": {
+            "$ref": "#/components/schemas/ProjectDelta"
+          }
+        },
+        "description": "What an edit, undo or redo did: the new revision and the delta every client receives too."
+      },
+      "CreateProjectRequest": {
+        "required": [
+          "name"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "directory": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "sampleRate": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int32"
+          }
+        }
+      },
+      "CycleRange": {
+        "required": [
+          "enabled",
+          "startTick",
+          "endTick"
+        ],
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "startTick": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "endTick": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "DeltaOp": {
+        "required": [
+          "op"
+        ],
+        "type": "object",
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/DeltaOpTrackUpserted"
+          },
+          {
+            "$ref": "#/components/schemas/DeltaOpTrackRemoved"
+          },
+          {
+            "$ref": "#/components/schemas/DeltaOpRegionUpserted"
+          },
+          {
+            "$ref": "#/components/schemas/DeltaOpRegionRemoved"
+          },
+          {
+            "$ref": "#/components/schemas/DeltaOpAudioFileUpserted"
+          },
+          {
+            "$ref": "#/components/schemas/DeltaOpSettingsChanged"
+          },
+          {
+            "$ref": "#/components/schemas/DeltaOpMasterChanged"
+          },
+          {
+            "$ref": "#/components/schemas/DeltaOpProjectRenamed"
+          }
+        ],
+        "discriminator": {
+          "propertyName": "op",
+          "mapping": {
+            "trackUpserted": "#/components/schemas/DeltaOpTrackUpserted",
+            "trackRemoved": "#/components/schemas/DeltaOpTrackRemoved",
+            "regionUpserted": "#/components/schemas/DeltaOpRegionUpserted",
+            "regionRemoved": "#/components/schemas/DeltaOpRegionRemoved",
+            "audioFileUpserted": "#/components/schemas/DeltaOpAudioFileUpserted",
+            "settingsChanged": "#/components/schemas/DeltaOpSettingsChanged",
+            "masterChanged": "#/components/schemas/DeltaOpMasterChanged",
+            "projectRenamed": "#/components/schemas/DeltaOpProjectRenamed"
+          }
+        }
+      },
+      "DeltaOpAudioFileUpserted": {
+        "required": [
+          "file",
+          "op"
+        ],
+        "properties": {
+          "op": {
+            "enum": [
+              "audioFileUpserted"
+            ],
+            "type": "string"
+          },
+          "file": {
+            "$ref": "#/components/schemas/AudioFile"
+          }
+        }
+      },
+      "DeltaOpMasterChanged": {
+        "required": [
+          "strip",
+          "op"
+        ],
+        "properties": {
+          "op": {
+            "enum": [
+              "masterChanged"
+            ],
+            "type": "string"
+          },
+          "strip": {
+            "$ref": "#/components/schemas/ChannelStrip"
+          }
+        }
+      },
+      "DeltaOpProjectRenamed": {
+        "required": [
+          "name",
+          "op"
+        ],
+        "properties": {
+          "op": {
+            "enum": [
+              "projectRenamed"
+            ],
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        }
+      },
+      "DeltaOpRegionRemoved": {
+        "required": [
+          "id",
+          "op"
+        ],
+        "properties": {
+          "op": {
+            "enum": [
+              "regionRemoved"
+            ],
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          }
+        }
+      },
+      "DeltaOpRegionUpserted": {
+        "required": [
+          "region",
+          "op"
+        ],
+        "properties": {
+          "op": {
+            "enum": [
+              "regionUpserted"
+            ],
+            "type": "string"
+          },
+          "region": {
+            "$ref": "#/components/schemas/AudioRegion"
+          }
+        }
+      },
+      "DeltaOpSettingsChanged": {
+        "required": [
+          "settings",
+          "op"
+        ],
+        "properties": {
+          "op": {
+            "enum": [
+              "settingsChanged"
+            ],
+            "type": "string"
+          },
+          "settings": {
+            "$ref": "#/components/schemas/ProjectSettings"
+          }
+        }
+      },
+      "DeltaOpTrackRemoved": {
+        "required": [
+          "id",
+          "op"
+        ],
+        "properties": {
+          "op": {
+            "enum": [
+              "trackRemoved"
+            ],
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          }
+        }
+      },
+      "DeltaOpTrackUpserted": {
+        "required": [
+          "track",
+          "index",
+          "op"
+        ],
+        "properties": {
+          "op": {
+            "enum": [
+              "trackUpserted"
+            ],
+            "type": "string"
+          },
+          "track": {
+            "$ref": "#/components/schemas/Track"
+          },
+          "index": {
+            "type": "integer",
+            "format": "int32"
+          }
+        },
+        "description": "A track was added or changed; \u0060index\u0060 is its position in the track list."
+      },
+      "EditCommand": {
+        "required": [
+          "type"
+        ],
+        "type": "object",
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/EditCommandAddTrackCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandRemoveTrackCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandMoveTrackCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandSetTrackCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandSetStripCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandAddRegionCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandMoveRegionCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandResizeRegionCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandSplitRegionCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandSetRegionCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandDeleteRegionsCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandSetTempoCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandSetSignatureCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandSetCycleCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandSetMetronomeCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandRenameProjectCommand"
+          }
+        ],
+        "description": "An edit of the open project (docs/adr/0004-state-ownership.md). A batch of them is applied atomically as one\nundo step. Optional properties left out are left unchanged.",
+        "discriminator": {
+          "propertyName": "type",
+          "mapping": {
+            "addTrack": "#/components/schemas/EditCommandAddTrackCommand",
+            "removeTrack": "#/components/schemas/EditCommandRemoveTrackCommand",
+            "moveTrack": "#/components/schemas/EditCommandMoveTrackCommand",
+            "setTrack": "#/components/schemas/EditCommandSetTrackCommand",
+            "setStrip": "#/components/schemas/EditCommandSetStripCommand",
+            "addRegion": "#/components/schemas/EditCommandAddRegionCommand",
+            "moveRegion": "#/components/schemas/EditCommandMoveRegionCommand",
+            "resizeRegion": "#/components/schemas/EditCommandResizeRegionCommand",
+            "splitRegion": "#/components/schemas/EditCommandSplitRegionCommand",
+            "setRegion": "#/components/schemas/EditCommandSetRegionCommand",
+            "deleteRegions": "#/components/schemas/EditCommandDeleteRegionsCommand",
+            "setTempo": "#/components/schemas/EditCommandSetTempoCommand",
+            "setSignature": "#/components/schemas/EditCommandSetSignatureCommand",
+            "setCycle": "#/components/schemas/EditCommandSetCycleCommand",
+            "setMetronome": "#/components/schemas/EditCommandSetMetronomeCommand",
+            "renameProject": "#/components/schemas/EditCommandRenameProjectCommand"
+          }
+        }
+      },
+      "EditCommandAddRegionCommand": {
+        "required": [
+          "trackId",
+          "fileId",
+          "startTick",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "addRegion"
+            ],
+            "type": "string"
+          },
+          "trackId": {
+            "type": "string"
+          },
+          "fileId": {
+            "type": "string"
+          },
+          "startTick": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "fileOffset": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int64"
+          },
+          "length": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int64"
+          }
+        },
+        "description": "Places a file on a track; the whole file unless \u0060fileOffset\u0060 and \u0060length\u0060 say otherwise."
+      },
+      "EditCommandAddTrackCommand": {
+        "required": [
+          "type",
+          "stereo"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "addTrack"
+            ],
+            "type": "string"
+          },
+          "name": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "index": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int32"
+          },
+          "stereo": {
+            "type": "boolean",
+            "default": false
+          }
+        },
+        "description": "Adds an audio track at \u0060index\u0060 (the end when left out)."
+      },
+      "EditCommandDeleteRegionsCommand": {
+        "required": [
+          "regionIds",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "deleteRegions"
+            ],
+            "type": "string"
+          },
+          "regionIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "EditCommandMoveRegionCommand": {
+        "required": [
+          "regionId",
+          "startTick",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "moveRegion"
+            ],
+            "type": "string"
+          },
+          "regionId": {
+            "type": "string"
+          },
+          "startTick": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "trackId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        },
+        "description": "Moves a region in time, and to another track when \u0060trackId\u0060 is given."
+      },
+      "EditCommandMoveTrackCommand": {
+        "required": [
+          "trackId",
+          "index",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "moveTrack"
+            ],
+            "type": "string"
+          },
+          "trackId": {
+            "type": "string"
+          },
+          "index": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "EditCommandRemoveTrackCommand": {
+        "required": [
+          "trackId",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "removeTrack"
+            ],
+            "type": "string"
+          },
+          "trackId": {
+            "type": "string"
+          }
+        }
+      },
+      "EditCommandRenameProjectCommand": {
+        "required": [
+          "name",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "renameProject"
+            ],
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        }
+      },
+      "EditCommandResizeRegionCommand": {
+        "required": [
+          "regionId",
+          "startTick",
+          "fileOffset",
+          "length",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "resizeRegion"
+            ],
+            "type": "string"
+          },
+          "regionId": {
+            "type": "string"
+          },
+          "startTick": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "fileOffset": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "length": {
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "description": "Trims a region: its new start, and the part of the file it plays."
+      },
+      "EditCommandSetCycleCommand": {
+        "required": [
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "setCycle"
+            ],
+            "type": "string"
+          },
+          "enabled": {
+            "type": [
+              "null",
+              "boolean"
+            ]
+          },
+          "startTick": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int64"
+          },
+          "endTick": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int64"
+          }
+        }
+      },
+      "EditCommandSetMetronomeCommand": {
+        "required": [
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "setMetronome"
+            ],
+            "type": "string"
+          },
+          "enabled": {
+            "type": [
+              "null",
+              "boolean"
+            ]
+          },
+          "countIn": {
+            "type": [
+              "null",
+              "boolean"
+            ]
+          },
+          "levelDb": {
+            "type": [
+              "null",
+              "number"
+            ],
+            "format": "double"
+          }
+        }
+      },
+      "EditCommandSetRegionCommand": {
+        "required": [
+          "regionId",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "setRegion"
+            ],
+            "type": "string"
+          },
+          "regionId": {
+            "type": "string"
+          },
+          "name": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "gainDb": {
+            "type": [
+              "null",
+              "number"
+            ],
+            "format": "double"
+          },
+          "fadeIn": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int64"
+          },
+          "fadeOut": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int64"
+          }
+        }
+      },
+      "EditCommandSetSignatureCommand": {
+        "required": [
+          "numerator",
+          "denominator",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "setSignature"
+            ],
+            "type": "string"
+          },
+          "numerator": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "denominator": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "EditCommandSetStripCommand": {
+        "required": [
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "setStrip"
+            ],
+            "type": "string"
+          },
+          "trackId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "volumeDb": {
+            "type": [
+              "null",
+              "number"
+            ],
+            "format": "double"
+          },
+          "pan": {
+            "type": [
+              "null",
+              "number"
+            ],
+            "format": "double"
+          },
+          "mute": {
+            "type": [
+              "null",
+              "boolean"
+            ]
+          },
+          "solo": {
+            "type": [
+              "null",
+              "boolean"
+            ]
+          }
+        },
+        "description": "Changes a track\u0027s channel strip, or the master\u0027s when \u0060trackId\u0060 is left out."
+      },
+      "EditCommandSetTempoCommand": {
+        "required": [
+          "bpm",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "setTempo"
+            ],
+            "type": "string"
+          },
+          "bpm": {
+            "type": "number",
+            "format": "double"
+          }
+        }
+      },
+      "EditCommandSetTrackCommand": {
+        "required": [
+          "trackId",
+          "type",
+          "input"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "setTrack"
+            ],
+            "type": "string"
+          },
+          "trackId": {
+            "type": "string"
+          },
+          "name": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "color": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "input": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/TrackInput"
+              }
+            ]
+          },
+          "recordArmed": {
+            "type": [
+              "null",
+              "boolean"
+            ]
+          },
+          "inputMonitoring": {
+            "type": [
+              "null",
+              "boolean"
+            ]
+          }
+        }
+      },
+      "EditCommandSplitRegionCommand": {
+        "required": [
+          "regionId",
+          "atTick",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "splitRegion"
+            ],
+            "type": "string"
+          },
+          "regionId": {
+            "type": "string"
+          },
+          "atTick": {
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "description": "Splits a region in two at \u0060atTick\u0060, which must fall inside it."
+      },
       "EngineState": {
         "enum": [
           "disconnected",
@@ -81,6 +1610,70 @@
         },
         "description": "The server\u0027s link to the engine host: whether it is reachable (\u0060state\u0060), the host\u0027s version and audio\nbackend (\u0060coreaudio\u0060, \u0060wasapi\u0060, \u0060alsa\u0060, \u0060null\u0060) from its hello while connected, and why the\nlink is down when it is (\u0060message\u0060)."
       },
+      "HistoryEntry": {
+        "required": [
+          "label",
+          "revision"
+        ],
+        "type": "object",
+        "properties": {
+          "label": {
+            "type": "string"
+          },
+          "revision": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "IFormFile": {
+        "type": "string",
+        "format": "binary"
+      },
+      "ImportFileRequest": {
+        "required": [
+          "path"
+        ],
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string"
+          }
+        },
+        "description": "Import an audio file the server can read from its own disk (the desktop app, a headless box\u0027s library)."
+      },
+      "MetronomeSettings": {
+        "required": [
+          "enabled",
+          "countIn",
+          "levelDb"
+        ],
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "countIn": {
+            "type": "boolean"
+          },
+          "levelDb": {
+            "type": "number",
+            "format": "double"
+          }
+        },
+        "description": "The click: on or off, a one-bar count-in before recording, and its level in dB."
+      },
+      "OpenProjectRequest": {
+        "required": [
+          "path"
+        ],
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string"
+          }
+        }
+      },
       "ProblemDetails": {
         "type": "object",
         "properties": {
@@ -117,6 +1710,144 @@
           }
         }
       },
+      "Project": {
+        "required": [
+          "id",
+          "name",
+          "path",
+          "revision",
+          "dirty",
+          "sampleRate",
+          "settings",
+          "master",
+          "tracks",
+          "regions",
+          "audioFiles"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          },
+          "revision": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "dirty": {
+            "type": "boolean"
+          },
+          "sampleRate": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "settings": {
+            "$ref": "#/components/schemas/ProjectSettings"
+          },
+          "master": {
+            "$ref": "#/components/schemas/ChannelStrip"
+          },
+          "tracks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Track"
+            }
+          },
+          "regions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AudioRegion"
+            }
+          },
+          "audioFiles": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AudioFile"
+            }
+          }
+        },
+        "description": "The open project (docs/01-implementation-plan.md \u00A75). Musical positions are ticks at 960 PPQ; audio offsets,\nlengths and fades are frames at the project\u0027s \u0060sampleRate\u0060. \u0060revision\u0060 grows with every edit and is\nthe ETag; \u0060dirty\u0060 says whether it has unsaved edits."
+      },
+      "ProjectDelta": {
+        "required": [
+          "revision",
+          "ops"
+        ],
+        "type": "object",
+        "properties": {
+          "revision": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "ops": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DeltaOp"
+            }
+          }
+        },
+        "description": "What changed between two revisions of the open project (docs/adr/0004-state-ownership.md). Clients apply the\noperations in order; a client that misses a revision refetches the project."
+      },
+      "ProjectSettings": {
+        "required": [
+          "tempo",
+          "signature",
+          "cycle",
+          "metronome",
+          "endTick"
+        ],
+        "type": "object",
+        "properties": {
+          "tempo": {
+            "type": "number",
+            "format": "double"
+          },
+          "signature": {
+            "$ref": "#/components/schemas/TimeSignature"
+          },
+          "cycle": {
+            "$ref": "#/components/schemas/CycleRange"
+          },
+          "metronome": {
+            "$ref": "#/components/schemas/MetronomeSettings"
+          },
+          "endTick": {
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "description": "Global settings. \u0060endTick\u0060 is the project end marker."
+      },
+      "ProjectSummary": {
+        "required": [
+          "id",
+          "name",
+          "path",
+          "modified"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          },
+          "modified": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "description": "A project in the recent list."
+      },
       "SystemInfo": {
         "required": [
           "version",
@@ -132,12 +1863,183 @@
           }
         },
         "description": "What \u0060GET /api/v1/system\u0060 answers: the server\u0027s version and its link to the engine host."
+      },
+      "TimeSignature": {
+        "required": [
+          "numerator",
+          "denominator"
+        ],
+        "type": "object",
+        "properties": {
+          "numerator": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "denominator": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "Track": {
+        "required": [
+          "id",
+          "name",
+          "kind",
+          "color",
+          "input",
+          "recordArmed",
+          "inputMonitoring",
+          "strip"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/TrackKind"
+          },
+          "color": {
+            "type": "string"
+          },
+          "input": {
+            "$ref": "#/components/schemas/TrackInput"
+          },
+          "recordArmed": {
+            "type": "boolean"
+          },
+          "inputMonitoring": {
+            "type": "boolean"
+          },
+          "strip": {
+            "$ref": "#/components/schemas/ChannelStrip"
+          }
+        },
+        "description": "A track and its channel strip. \u0060color\u0060 is a CSS colour; \u0060input\u0060 is where recording takes its audio\nfrom."
+      },
+      "TrackInput": {
+        "required": [
+          "channel",
+          "stereo"
+        ],
+        "type": "object",
+        "properties": {
+          "channel": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "stereo": {
+            "type": "boolean"
+          }
+        },
+        "description": "The device input: 1-based first channel (0: none); a stereo input takes that channel and the next."
+      },
+      "TrackKind": {
+        "enum": [
+          "audio"
+        ]
+      },
+      "TransportCommand": {
+        "enum": [
+          "play",
+          "stop",
+          "record",
+          "locate"
+        ]
+      },
+      "TransportRequest": {
+        "required": [
+          "command"
+        ],
+        "type": "object",
+        "properties": {
+          "command": {
+            "$ref": "#/components/schemas/TransportCommand"
+          },
+          "tick": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int64"
+          }
+        },
+        "description": "Play, stop or record (from \u0060tick\u0060 when given), or locate the playhead to \u0060tick\u0060."
+      },
+      "TransportState": {
+        "enum": [
+          "stopped",
+          "playing",
+          "recording"
+        ]
+      },
+      "TransportStatus": {
+        "required": [
+          "state",
+          "positionSamples",
+          "positionTick",
+          "sampleRate"
+        ],
+        "type": "object",
+        "properties": {
+          "state": {
+            "$ref": "#/components/schemas/TransportState"
+          },
+          "positionSamples": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "positionTick": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "sampleRate": {
+            "type": "integer",
+            "format": "int32"
+          }
+        },
+        "description": "The playhead: state and position, in samples and ticks."
+      },
+      "UndoHistory": {
+        "required": [
+          "undo",
+          "redo"
+        ],
+        "type": "object",
+        "properties": {
+          "undo": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/HistoryEntry"
+            }
+          },
+          "redo": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/HistoryEntry"
+            }
+          }
+        },
+        "description": "The undo stack (most recent first) and the redo stack (next first)."
       }
     }
   },
   "tags": [
     {
       "name": "System"
+    },
+    {
+      "name": "Projects"
+    },
+    {
+      "name": "Project"
+    },
+    {
+      "name": "Transport"
     }
   ]
 }
