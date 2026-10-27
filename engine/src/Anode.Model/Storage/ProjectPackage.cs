@@ -105,7 +105,10 @@ public static class ProjectPackage {
     public static ProjectState Load(string folder) {
         var root = Read(Path.Combine(folder, ProjectFileName), PackageJsonContext.Default.ProjectFile, "project");
         // Deserialisation leaves a property the JSON lacks null, whatever its declared type.
-        if (root?.Id is null || root.Name is null || root.Settings is null || root.Master is null
+        if (root?.Id is null
+            || root.Name is null
+            || root.Settings is null
+            || root.Master is null
             || !ProjectDefaults.SampleRates.Contains(root.SampleRate)) {
             throw new PackageException($"'{folder}' has no readable {ProjectFileName}.");
         }
@@ -117,23 +120,11 @@ public static class ProjectPackage {
         var tracks = ImmutableList.CreateBuilder<Track>();
         var regions = ImmutableSortedDictionary.CreateBuilder<string, AudioRegion>(StringComparer.Ordinal);
         foreach (var id in (root.Tracks ?? []).Distinct(StringComparer.Ordinal)) {
-            if (!IsSafeId(id)) {
+            if (ReadTrack(folder, id) is not { } file) {
                 continue;
             }
 
-            TrackFile? file;
-            try {
-                file = Read(Path.Combine(folder, TracksFolder, TrackFileName(id)), PackageJsonContext.Default.TrackFile,
-                    "track");
-            } catch (PackageException) {
-                continue;
-            }
-
-            if (file?.Track is not { } track || track.Id != id) {
-                continue;
-            }
-
-            tracks.Add(track);
+            tracks.Add(file.Track);
             foreach (var region in file.Regions ?? []) {
                 if (region.TrackId == id && files.ContainsKey(region.FileId)) {
                     regions[region.Id] = region;
@@ -153,6 +144,24 @@ public static class ProjectPackage {
         );
     }
 
+    /// <summary>The track file of <paramref name="id" />, or null when it is missing, unreadable or not that track's.</summary>
+    static TrackFile? ReadTrack(string folder, string id) {
+        if (!IsSafeId(id)) {
+            return null;
+        }
+
+        try {
+            var file = Read(
+                Path.Combine(folder, TracksFolder, TrackFileName(id)),
+                PackageJsonContext.Default.TrackFile,
+                "track"
+            );
+            return file?.Track?.Id == id ? file : null;
+        } catch (PackageException) {
+            return null;
+        }
+    }
+
     public static string TrackFileName(string trackId) =>
         IsSafeId(trackId) ? trackId + ".json" : throw new ArgumentException($"Unsafe track id '{trackId}'.");
 
@@ -164,13 +173,21 @@ public static class ProjectPackage {
         where T : class {
         try {
             JsonNode? node;
-            using (var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete)) {
+            using (var stream = new FileStream(
+                       path,
+                       FileMode.Open,
+                       FileAccess.Read,
+                       FileShare.ReadWrite | FileShare.Delete
+                   )) {
                 node = JsonNode.Parse(stream);
             }
 
             return node is JsonObject obj ? PackageMigrations.Upgrade(obj, kind).Deserialize(type) : null;
-        } catch (Exception e) when (e is JsonException or IOException or UnauthorizedAccessException
-                                        or InvalidOperationException or FormatException) {
+        } catch (Exception e) when (e is JsonException
+                                        or IOException
+                                        or UnauthorizedAccessException
+                                        or InvalidOperationException
+                                        or FormatException) {
             throw new PackageException($"Could not read '{path}': {e.Message}", e);
         }
     }

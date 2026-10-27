@@ -152,8 +152,12 @@ public sealed class ProjectSession(
             }
 
             result = Commit(o, edit.State, edit.Forward);
-            o.History.Push(UndoLabels.For(batch), o.Revision, new(edit.Forward, edit.Inverse),
-                UndoLabels.CoalesceKey(batch));
+            o.History.Push(
+                UndoLabels.For(batch),
+                o.Revision,
+                new(edit.Forward, edit.Inverse),
+                UndoLabels.CoalesceKey(batch)
+            );
         }
 
         Changed?.Invoke();
@@ -240,12 +244,14 @@ public sealed class ProjectSession(
         try {
             await peaks.EnsureAsync(peaksFolder, file.Id, Path.Combine(folder, file.Path), cancellationToken)
                 .ConfigureAwait(false);
-        } catch (Exception e) when (e is IOException or UnauthorizedAccessException or WavFormatException
+        } catch (Exception e) when (e is IOException
+                                        or UnauthorizedAccessException
+                                        or WavFormatException
                                         or InvalidDataException) {
             throw ProjectException.Unprocessable($"No peaks for '{fileId}': {e.Message}");
         }
 
-        return Model.Audio.Peaks.PathOf(peaksFolder, file.Id, framesPerPeak);
+        return Peaks.PathOf(peaksFolder, file.Id, framesPerPeak);
     }
 
     /// <summary>
@@ -273,29 +279,12 @@ public sealed class ProjectSession(
             var inverse = new List<DeltaOp>();
             var state = o.State;
             foreach (var (take, info) in probed) {
-                var trackId = o.Ids.TrackOf(take.TrackId);
-                var track = trackId is null ? null : state.FindTrack(trackId);
-                if (track is null || info.SampleRate != state.SampleRate || info.Frames == 0
-                    || !IsInside(o.Folder, take.Path)) {
-                    ProjectLog.TakeSkipped(logger, take.Path,
-                        track is null ? "its track is gone" : "not a usable take of this project");
+                if (Take(o, state, take, info) is not { } taken) {
                     continue;
                 }
 
-                var file = Describe(o, take.Path, info);
+                var (file, region) = taken;
                 files.Add(file);
-                var region = new AudioRegion(
-                    ids.Next(IdPrefix.Region),
-                    track.Id,
-                    file.Id,
-                    track.Name,
-                    Math.Max(0, state.TempoMap.TickAtSample(Math.Max(0, take.StartSample), state.SampleRate)),
-                    0,
-                    info.Frames,
-                    0,
-                    0,
-                    0
-                );
                 state = Edits.Step(state, [new AudioFileUpserted(file), new RegionUpserted(region)], forward, inverse);
             }
 
@@ -314,8 +303,29 @@ public sealed class ProjectSession(
         return result;
     }
 
+    /// <summary>The file and region a recorded take becomes, or null (logged) when it cannot be used.</summary>
+    (AudioFile File, AudioRegion Region)? Take(Open o, ProjectState state, RecordedTake take, WavInfo info) {
+        var trackId = o.Ids.TrackOf(take.TrackId);
+        var track = trackId is null ? null : state.FindTrack(trackId);
+        if (track is null) {
+            ProjectLog.TakeSkipped(logger, take.Path, "its track is gone");
+            return null;
+        }
+
+        if (info.SampleRate != state.SampleRate || info.Frames == 0 || !IsInside(o.Folder, take.Path)) {
+            ProjectLog.TakeSkipped(logger, take.Path, "not a usable take of this project");
+            return null;
+        }
+
+        var file = Describe(o, take.Path, info);
+        var start = state.TempoMap.TickAtSample(Math.Max(0, take.StartSample), state.SampleRate);
+        return (file,
+            new(ids.Next(IdPrefix.Region), track.Id, file.Id, track.Name, Math.Max(0, start), 0, info.Frames, 0, 0, 0));
+    }
+
     static bool IsInside(string folder, string path) =>
-        Path.GetFullPath(path).StartsWith(Path.GetFullPath(folder) + Path.DirectorySeparatorChar, StringComparison.Ordinal);
+        Path.GetFullPath(path)
+            .StartsWith(Path.GetFullPath(folder) + Path.DirectorySeparatorChar, StringComparison.Ordinal);
 
     AudioFile Describe(Open o, string absolutePath, WavInfo info) {
         var relative = Path.GetRelativePath(o.Folder, absolutePath).Replace(Path.DirectorySeparatorChar, '/');
@@ -332,7 +342,11 @@ public sealed class ProjectSession(
 
     void StartPeaks(AudioFile file) {
         if (View is { } v) {
-            _ = peaks.Start(Path.Combine(v.Folder, ProjectPackage.PeaksFolder), file.Id, Path.Combine(v.Folder, file.Path))
+            _ = peaks.Start(
+                    Path.Combine(v.Folder, ProjectPackage.PeaksFolder),
+                    file.Id,
+                    Path.Combine(v.Folder, file.Path)
+                )
                 .ContinueWith(static _ => { }, TaskScheduler.Default);
         }
     }

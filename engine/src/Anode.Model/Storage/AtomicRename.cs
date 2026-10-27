@@ -10,7 +10,8 @@ namespace Anode.Model.Storage;
 ///     (<see cref="File.Move(string, string, bool)" />)
 ///     is refused while anyone has the destination open, even a reader who shares delete; a rename with POSIX semantics
 ///     (Windows 10 1809 and later, NTFS) replaces it anyway, and the reader keeps the old content. Elsewhere, and where
-///     POSIX semantics are not supported, it is <see cref="File.Move(string, string, bool)" />. <see cref="Write(string, byte[])" /> is
+///     POSIX semantics are not supported, it is <see cref="File.Move(string, string, bool)" />.
+///     <see cref="Write(string, byte[])" /> is
 ///     the whole durable save the stores make with it.
 /// </summary>
 public static partial class AtomicRename {

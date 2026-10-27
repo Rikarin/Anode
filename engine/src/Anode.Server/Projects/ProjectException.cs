@@ -12,10 +12,13 @@ public sealed class ProjectException : Exception {
 
     public ProjectException(string message) : this(StatusCodes.Status422UnprocessableEntity, message) { }
 
-    public ProjectException(string message, Exception innerException) : base(message, innerException) =>
+    public ProjectException(string message, Exception innerException) : base(message, innerException) {
         Status = StatusCodes.Status422UnprocessableEntity;
+    }
 
-    public ProjectException(int status, string message) : base(message) => Status = status;
+    public ProjectException(int status, string message) : base(message) {
+        Status = status;
+    }
 
     public static ProjectException NoProject() => new(StatusCodes.Status404NotFound, "No project is open.");
 

@@ -32,8 +32,13 @@ public sealed class SegmentPool : IDisposable {
             if (slots[slot] is not { } segment || segment.Length < bytes) {
                 slots[slot]?.Dispose();
                 var capacity = Math.Max(MinSlotBytes, (long)BitOperations.RoundUpToPowerOf2((ulong)bytes));
-                segment = SharedSegment.Create(SegmentWriter.DefaultBackend, SharedSegment.DefaultDirectory(), Prefix,
-                    Interlocked.Increment(ref nextId), capacity);
+                segment = SharedSegment.Create(
+                    SegmentWriter.DefaultBackend,
+                    SharedSegment.DefaultDirectory(),
+                    Prefix,
+                    Interlocked.Increment(ref nextId),
+                    capacity
+                );
                 slots[slot] = segment;
             }
 

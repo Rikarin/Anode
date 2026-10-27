@@ -12,6 +12,7 @@ namespace Anode.Server.Projects;
 public sealed class AudioImport(ProjectSession session) {
     /// <summary>Imports a file from the server's own disk.</summary>
     public AudioFile Import(string path) {
+        var (sessionId, folder, rate) = session.Target();
         if (string.IsNullOrWhiteSpace(path)) {
             throw ProjectException.Unprocessable("Name the file to import.");
         }
@@ -21,7 +22,6 @@ public sealed class AudioImport(ProjectSession session) {
             throw ProjectException.Unprocessable($"'{source}' does not exist.");
         }
 
-        var (sessionId, folder, rate) = session.Target();
         var info = Check(source, rate);
         var audio = Path.Combine(folder, ProjectPackage.AudioFolder);
         Directory.CreateDirectory(audio);

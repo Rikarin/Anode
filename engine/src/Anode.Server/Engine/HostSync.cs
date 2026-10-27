@@ -86,9 +86,18 @@ public sealed class HostSync(HostLink link, SegmentPool pool, ILogger logger) {
 
         if (target is null) {
             if (hasModel) {
-                await link.SendAsync(new TransportMessage(TransportAction.Stop), cancellationToken).ConfigureAwait(false);
-                await LoadWholeAsync([new(TrackEntry.MetronomeTrack, [], [])], 0, [], [], new(1, 0, false, false),
-                    Path.GetTempPath(), cancellationToken).ConfigureAwait(false);
+                await link.SendAsync(new TransportMessage(TransportAction.Stop), cancellationToken)
+                    .ConfigureAwait(false);
+                await LoadWholeAsync(
+                        [new(TrackEntry.MetronomeTrack, [], [])],
+                        0,
+                        [],
+                        [],
+                        new(1, 0, false, false),
+                        Path.GetTempPath(),
+                        cancellationToken
+                    )
+                    .ConfigureAwait(false);
             }
 
             sent = null;
@@ -107,14 +116,15 @@ public sealed class HostSync(HostLink link, SegmentPool pool, ILogger logger) {
         var carried = new HashSet<string>(StringComparer.Ordinal);
         if (full || NeedsWhole(previous!, target, model)) {
             await LoadWholeAsync(
-                model.Tracks,
-                model.LengthSamples,
-                [..target.State.Tracks.Select(t => Engine(t, target.Ids))],
-                NewFiles(target),
-                Engine(target.State.Master),
-                target.AudioFolder,
-                cancellationToken
-            ).ConfigureAwait(false);
+                    model.Tracks,
+                    model.LengthSamples,
+                    [..target.State.Tracks.Select(t => Engine(t, target.Ids))],
+                    NewFiles(target),
+                    Engine(target.State.Master),
+                    target.AudioFolder,
+                    cancellationToken
+                )
+                .ConfigureAwait(false);
             carried.UnionWith(target.State.Tracks.Select(static t => t.Id));
         } else {
             await PatchAsync(target, model, carried, cancellationToken).ConfigureAwait(false);
@@ -131,7 +141,7 @@ public sealed class HostSync(HostLink link, SegmentPool pool, ILogger logger) {
     bool NeedsWhole(OpenProjectView previous, OpenProjectView target, CompiledModel model) {
         // A global change (the tempo map) recompiles every track: one whole swap (docs/adr/0006-bulk-ipc.md).
         if (previous.State.Settings.Tempo != target.State.Settings.Tempo
-            || previous.State.Tracks.Any(t => target.State.FindTrack(t.Id) is null)) {
+            || previous.State.Tracks.Exists(t => target.State.FindTrack(t.Id) is null)) {
             return true;
         }
 
@@ -179,11 +189,18 @@ public sealed class HostSync(HostLink link, SegmentPool pool, ILogger logger) {
             var clicks = model.Tracks[^1];
             using var segment = pool.WriteTracks([clicks], version, model.LengthSamples);
             await link.LoadAsync(
-                new(new(segment.Name, segment.Length, version), false, [], files, Engine(target.State.Master),
-                    target.AudioFolder),
-                LoadTimeout,
-                cancellationToken
-            ).ConfigureAwait(false);
+                    new(
+                        new(segment.Name, segment.Length, version),
+                        false,
+                        [],
+                        files,
+                        Engine(target.State.Master),
+                        target.AudioFolder
+                    ),
+                    LoadTimeout,
+                    cancellationToken
+                )
+                .ConfigureAwait(false);
         }
     }
 
@@ -200,8 +217,14 @@ public sealed class HostSync(HostLink link, SegmentPool pool, ILogger logger) {
         var size = SegmentWriter.Size(tracks);
         var (slot, segment) = pool.RentSlot(size);
         SegmentWriter.Write(tracks, version, lengthSamples, pool.Prefix, 0, size < 4 << 20, segment);
-        var message = new LoadModelMessage(new(segment.Name, segment.Length, version), true, engineTracks, files, master,
-            recordDirectory);
+        var message = new LoadModelMessage(
+            new(segment.Name, segment.Length, version),
+            true,
+            engineTracks,
+            files,
+            master,
+            recordDirectory
+        );
         if (await link.LoadAsync(message, LoadTimeout, cancellationToken).ConfigureAwait(false)) {
             pool.Loaded(slot);
         } else {
@@ -225,7 +248,11 @@ public sealed class HostSync(HostLink link, SegmentPool pool, ILogger logger) {
     }
 
     /// <summary>Strips, track IO, cycle and metronome that changed (all of them after a whole load).</summary>
-    static IEnumerable<IpcMessage> Messages(OpenProjectView? previous, OpenProjectView target, HashSet<string> carried) {
+    static IEnumerable<IpcMessage> Messages(
+        OpenProjectView? previous,
+        OpenProjectView target,
+        HashSet<string> carried
+    ) {
         var state = target.State;
         var before = previous?.State;
         if (before is null || before.Master != state.Master) {
@@ -242,7 +269,8 @@ public sealed class HostSync(HostLink link, SegmentPool pool, ILogger logger) {
                 yield return new SetStripMessage(id, Engine(track.Strip));
             }
 
-            if (old.Input != track.Input || old.RecordArmed != track.RecordArmed
+            if (old.Input != track.Input
+                || old.RecordArmed != track.RecordArmed
                 || old.InputMonitoring != track.InputMonitoring) {
                 var e = Engine(track, target.Ids);
                 yield return new SetTrackIoMessage(id, e.InputChannel, e.Stereo, e.RecordArmed, e.Monitoring);
@@ -250,7 +278,9 @@ public sealed class HostSync(HostLink link, SegmentPool pool, ILogger logger) {
         }
 
         var settings = state.Settings;
-        if (before is null || before.Settings.Cycle != settings.Cycle || before.Settings.Tempo != settings.Tempo
+        if (before is null
+            || before.Settings.Cycle != settings.Cycle
+            || before.Settings.Tempo != settings.Tempo
             || before.SampleRate != state.SampleRate) {
             var map = state.TempoMap;
             yield return new SetCycleMessage(
@@ -260,10 +290,13 @@ public sealed class HostSync(HostLink link, SegmentPool pool, ILogger logger) {
             );
         }
 
-        if (before is null || before.Settings.Metronome.Enabled != settings.Metronome.Enabled
+        if (before is null
+            || before.Settings.Metronome.Enabled != settings.Metronome.Enabled
             || before.Settings.Metronome.LevelDb != settings.Metronome.LevelDb) {
-            yield return new SetMetronomeMessage(settings.Metronome.Enabled,
-                Units.DbToGain(settings.Metronome.LevelDb));
+            yield return new SetMetronomeMessage(
+                settings.Metronome.Enabled,
+                Units.DbToGain(settings.Metronome.LevelDb)
+            );
         }
     }
 
@@ -271,8 +304,14 @@ public sealed class HostSync(HostLink link, SegmentPool pool, ILogger logger) {
         new(Units.DbToGain(strip.VolumeDb), (float)strip.Pan, strip.Mute, strip.Solo);
 
     public static EngineTrack Engine(Track track, EngineIds ids) =>
-        new(ids.Track(track.Id), track.Input.Channel - 1, track.Input.Stereo, track.RecordArmed,
-            track.InputMonitoring, Engine(track.Strip));
+        new(
+            ids.Track(track.Id),
+            track.Input.Channel - 1,
+            track.Input.Stereo,
+            track.RecordArmed,
+            track.InputMonitoring,
+            Engine(track.Strip)
+        );
 }
 
 static partial class EngineLog {

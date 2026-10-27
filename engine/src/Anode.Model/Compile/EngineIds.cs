@@ -61,10 +61,14 @@ public sealed class EngineIds {
     }
 
     public int Track(string id) =>
-        tracks.TryGetValue(id, out var engineId) ? engineId : throw new KeyNotFoundException($"No engine id for '{id}'.");
+        tracks.TryGetValue(id, out var engineId)
+            ? engineId
+            : throw new KeyNotFoundException($"No engine id for '{id}'.");
 
     public int File(string id) =>
-        files.TryGetValue(id, out var engineId) ? engineId : throw new KeyNotFoundException($"No engine id for '{id}'.");
+        files.TryGetValue(id, out var engineId)
+            ? engineId
+            : throw new KeyNotFoundException($"No engine id for '{id}'.");
 
     /// <summary>The domain id of engine track <paramref name="engineId" />, or null.</summary>
     public string? TrackOf(int engineId) => trackIds.GetValueOrDefault(engineId);

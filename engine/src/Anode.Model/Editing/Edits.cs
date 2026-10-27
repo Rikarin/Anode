@@ -135,7 +135,7 @@ public static class Edits {
     static string NextTrackName(ProjectState state) {
         for (var n = state.Tracks.Count + 1;; n++) {
             var name = $"Audio {n}";
-            if (!state.Tracks.Any(t => t.Name == name)) {
+            if (!state.Tracks.Exists(t => t.Name == name)) {
                 return name;
             }
         }
@@ -237,8 +237,12 @@ public static class Edits {
         var fadeIn = Math.Min(region.FadeIn, c.Length);
         var fadeOut = Math.Min(region.FadeOut, c.Length - fadeIn);
         return [
-            new RegionUpserted(region with {
-                    StartTick = c.StartTick, FileOffset = c.FileOffset, Length = c.Length, FadeIn = fadeIn,
+            new RegionUpserted(
+                region with {
+                    StartTick = c.StartTick,
+                    FileOffset = c.FileOffset,
+                    Length = c.Length,
+                    FadeIn = fadeIn,
                     FadeOut = fadeOut
                 }
             )
@@ -254,9 +258,7 @@ public static class Edits {
             throw new EditException($"Tick {c.AtTick} is not inside region '{region.Id}'.");
         }
 
-        var left = region with {
-            Length = at, FadeIn = Math.Min(region.FadeIn, at), FadeOut = 0
-        };
+        var left = region with { Length = at, FadeIn = Math.Min(region.FadeIn, at), FadeOut = 0 };
         var rightLength = region.Length - at;
         var right = region with {
             Id = ids.Next(IdPrefix.Region),
@@ -277,13 +279,17 @@ public static class Edits {
 
         var fadeIn = c.FadeIn ?? region.FadeIn;
         var fadeOut = c.FadeOut ?? region.FadeOut;
-        if (fadeIn < 0 || fadeOut < 0 || fadeIn + fadeOut > region.Length || fadeIn > int.MaxValue
+        if (fadeIn < 0
+            || fadeOut < 0
+            || fadeIn + fadeOut > region.Length
+            || fadeIn > int.MaxValue
             || fadeOut > int.MaxValue) {
             throw new EditException("Fades are at least 0 frames and together no longer than the region.");
         }
 
         return [
-            new RegionUpserted(region with {
+            new RegionUpserted(
+                region with {
                     Name = c.Name is null ? region.Name : Name(c.Name, "region name"),
                     GainDb = c.GainDb ?? region.GainDb,
                     FadeIn = fadeIn,
@@ -340,7 +346,8 @@ public static class Edits {
 
         var old = state.Settings.Metronome;
         return [
-            new SettingsChanged(state.Settings with {
+            new SettingsChanged(
+                state.Settings with {
                     Metronome = new(c.Enabled ?? old.Enabled, c.CountIn ?? old.CountIn, c.LevelDb ?? old.LevelDb)
                 }
             )

@@ -36,8 +36,11 @@ public sealed class ModelCompiler {
                 .OrderBy(static r => r.StartTick)
                 .ThenBy(static r => r.Id, StringComparer.Ordinal)
                 .ToArray();
-            var key = new TrackKey(state.Settings.Tempo, state.SampleRate,
-                [..regions.Select(r => (r, state.Files[r.FileId]))]);
+            var key = new TrackKey(
+                state.Settings.Tempo,
+                state.SampleRate,
+                [..regions.Select(r => (r, state.Files[r.FileId]))]
+            );
             if (!cache.TryGetValue(engineId, out var cached) || !cached.Key.Equals(key)) {
                 cached = (key, new(engineId, [], Playlist(state, map, ids, regions)));
                 cache[engineId] = cached;
@@ -92,8 +95,11 @@ public sealed class ModelCompiler {
         }
 
         // Ties on start keep the regions' order (by id), so the later one in that order wins.
-        var sorted = entries.Select(static (e, i) => (e, i)).OrderBy(static x => x.e.Start).ThenBy(static x => x.i)
-            .Select(static x => x.e).ToArray();
+        var sorted = entries.Select(static (e, i) => (e, i))
+            .OrderBy(static x => x.e.Start)
+            .ThenBy(static x => x.i)
+            .Select(static x => x.e)
+            .ToArray();
         return Overlaps(sorted) ? Flatten(sorted) : sorted;
     }
 

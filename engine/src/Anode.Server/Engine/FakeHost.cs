@@ -31,7 +31,7 @@ public sealed class FakeHost : IAsyncDisposable {
     readonly Dictionary<int, AudioPlaylistEntry[]> playlists = [];
     readonly Dictionary<int, EngineTrack> tracks = [];
     readonly Dictionary<int, EngineFile> files = [];
-    readonly CancellationTokenSource stopping = new();
+    readonly CancellationTokenSource stopping;
     EngineStrip master = new(1, 0, false, false);
     string? recordDirectory;
     SetCycleMessage cycle = new(false, 0, 0);
@@ -48,6 +48,7 @@ public sealed class FakeHost : IAsyncDisposable {
     public FakeHost(string version, int sampleRate = 48_000) {
         this.version = version;
         SampleRate = sampleRate;
+        stopping = new();
         telemetry = TelemetryWriter.Create("an" + Convert.ToHexStringLower(Guid.NewGuid().ToByteArray()[..3]) + "t", 0);
     }
 
@@ -105,7 +106,9 @@ public sealed class FakeHost : IAsyncDisposable {
                     await IpcFraming.WriteAsync(stream, reply, token).ConfigureAwait(false);
                 }
             }
-        } catch (Exception e) when (e is OperationCanceledException or IOException or InvalidDataException
+        } catch (Exception e) when (e is OperationCanceledException
+                                        or IOException
+                                        or InvalidDataException
                                         or ObjectDisposedException) {
             // The server went away (or this host is stopping).
         }
@@ -177,7 +180,9 @@ public sealed class FakeHost : IAsyncDisposable {
                 lock (gate) {
                     if (tracks.TryGetValue(io.TrackId, out var t)) {
                         tracks[io.TrackId] = t with {
-                            InputChannel = io.InputChannel, Stereo = io.Stereo, RecordArmed = io.RecordArmed,
+                            InputChannel = io.InputChannel,
+                            Stereo = io.Stereo,
+                            RecordArmed = io.RecordArmed,
                             Monitoring = io.Monitoring
                         };
                     }
@@ -305,7 +310,11 @@ public sealed class FakeHost : IAsyncDisposable {
         elapsed = Math.Clamp(elapsed, 0, 600L * SampleRate);
         return elapsed == 0
             ? null
-            : [..tracks.Values.Where(static t => t.RecordArmed).OrderBy(static t => t.Id).Select(t => (t, recordStart, elapsed))];
+            : [
+                ..tracks.Values.Where(static t => t.RecordArmed)
+                    .OrderBy(static t => t.Id)
+                    .Select(t => (t, recordStart, elapsed))
+            ];
     }
 
     void WriteTake(string path, int channels, long frames) {
@@ -332,7 +341,9 @@ public sealed class FakeHost : IAsyncDisposable {
         }
 
         var position = anchorPosition + (long)(Stopwatch.GetElapsedTime(anchorTimestamp).TotalSeconds * SampleRate);
-        if (cycle.Enabled && cycle.EndSample > cycle.StartSample && anchorPosition < cycle.EndSample
+        if (cycle.Enabled
+            && cycle.EndSample > cycle.StartSample
+            && anchorPosition < cycle.EndSample
             && position >= cycle.EndSample) {
             position = cycle.StartSample + (position - cycle.StartSample) % (cycle.EndSample - cycle.StartSample);
         }
@@ -374,12 +385,16 @@ public sealed class FakeHost : IAsyncDisposable {
             };
             var soloed = tracks.Values.Any(static t => t.Strip.Solo);
             meters = [
-                ..tracks.Values.OrderBy(static t => t.Id).Select(t => new MeterEntry {
-                        TrackId = t.Id, PeakLeft = Level(t, position, soloed), PeakRight = Level(t, position, soloed)
-                    }
-                )
+                ..tracks.Values.OrderBy(static t => t.Id)
+                    .Select(t => new MeterEntry {
+                            TrackId = t.Id,
+                            PeakLeft = Level(t, position, soloed),
+                            PeakRight = Level(t, position, soloed)
+                        }
+                    )
             ];
-            var peak = meters.Length == 0 ? 0 : meters.Max(static m => m.PeakLeft) * (master.Mute ? 0 : master.Gain);
+            var gain = master.Mute ? 0 : master.Gain;
+            var peak = meters.Length == 0 ? 0 : meters.Max(static m => m.PeakLeft) * gain;
             masterMeter = new() { TrackId = -1, PeakLeft = peak, PeakRight = peak };
         }
 
@@ -422,7 +437,7 @@ public sealed class FakeHost : IAsyncDisposable {
 
     static unsafe AudioPlaylistEntry[] PlaylistOf(MappedSegment segment, int index) {
         var view = segment.Track(index);
-        return new ReadOnlySpan<AudioPlaylistEntry>(view.Playlist, (int)view.PlaylistCount).ToArray();
+        return [..new ReadOnlySpan<AudioPlaylistEntry>(view.Playlist, (int)view.PlaylistCount)];
     }
 
     static string Name(IpcMessage message) {

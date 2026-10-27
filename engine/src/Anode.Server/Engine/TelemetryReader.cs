@@ -15,7 +15,9 @@ public sealed unsafe class TelemetryReader : IDisposable {
 
     readonly SharedSegment segment;
 
-    TelemetryReader(SharedSegment segment) => this.segment = segment;
+    TelemetryReader(SharedSegment segment) {
+        this.segment = segment;
+    }
 
     /// <summary>Maps the region <paramref name="name" />; null when there is none or it cannot be mapped.</summary>
     public static TelemetryReader? TryOpen(string? name) {
@@ -25,7 +27,9 @@ public sealed unsafe class TelemetryReader : IDisposable {
 
         try {
             return new(SharedSegment.Open(name, TelemetryLayout.Size));
-        } catch (Exception e) when (e is IOException or UnauthorizedAccessException or InvalidDataException
+        } catch (Exception e) when (e is IOException
+                                        or UnauthorizedAccessException
+                                        or InvalidDataException
                                         or PlatformNotSupportedException) {
             return null;
         }
@@ -72,11 +76,20 @@ public sealed unsafe class TelemetryWriter : IDisposable {
 
     public string Name => segment.Name;
 
-    TelemetryWriter(SharedSegment segment) => this.segment = segment;
+    TelemetryWriter(SharedSegment segment) {
+        this.segment = segment;
+    }
 
     public static TelemetryWriter Create(string prefix, long id) =>
-        new(SharedSegment.Create(SegmentWriter.DefaultBackend, SharedSegment.DefaultDirectory(), prefix, id,
-            TelemetryLayout.Size));
+        new(
+            SharedSegment.Create(
+                SegmentWriter.DefaultBackend,
+                SharedSegment.DefaultDirectory(),
+                prefix,
+                id,
+                TelemetryLayout.Size
+            )
+        );
 
     /// <summary>Publishes <paramref name="header" /> (its sequence is managed here) and the meters.</summary>
     public void Write(TelemetryHeader header, ReadOnlySpan<MeterEntry> tracks, MeterEntry master) {

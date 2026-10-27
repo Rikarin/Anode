@@ -8,11 +8,17 @@ namespace Anode.Server.Api;
 static class TransportApi {
     public static void Map(RouteGroupBuilder api) {
         var transport = api.MapGroup("/transport").WithTags("Transport").AddEndpointFilter<ProblemFilter>();
-        transport.MapGet(string.Empty, static Ok<TransportStatus>(EngineConnection engine) => TypedResults.Ok(engine.Transport()))
+        transport.MapGet(
+                string.Empty,
+                static Ok<TransportStatus>(EngineConnection engine) => TypedResults.Ok(engine.Transport())
+            )
             .WithName("GetTransport");
         transport.MapPost(
                 string.Empty,
-                static Results<Ok<TransportStatus>, ProblemHttpResult>(TransportRequest request, EngineConnection engine) =>
+                static Results<Ok<TransportStatus>, ProblemHttpResult>(
+                    TransportRequest request,
+                    EngineConnection engine
+                ) =>
                     TypedResults.Ok(engine.Control(request))
             )
             .WithName("ControlTransport")

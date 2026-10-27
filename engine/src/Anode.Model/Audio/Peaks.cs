@@ -43,14 +43,37 @@ public static class Peaks {
     }
 
     /// <summary>Reads <paramref name="wavPath" /> once and writes every level's file (atomically).</summary>
-    public static void Build(string wavPath, string peaksFolder, string fileId, CancellationToken cancellationToken = default) {
+    public static void Build(
+        string wavPath,
+        string peaksFolder,
+        string fileId,
+        CancellationToken cancellationToken = default
+    ) {
         Directory.CreateDirectory(peaksFolder);
-        using var reader = WavReader.Open(wavPath);
-        var channels = reader.Info.Channels;
+        int channels;
+        short[] level;
+        using (var reader = WavReader.Open(wavPath)) {
+            channels = reader.Info.Channels;
+            level = Finest(reader, cancellationToken);
+        }
+
         var levels = PeakFormat.Levels;
-        var finest = levels[0];
-        var finestPeaks = (reader.Info.Frames + finest - 1) / finest;
-        var data = new short[finestPeaks * channels * 2];
+        var framesPerPeak = levels[0];
+        for (var l = 0; l < levels.Length; l++) {
+            if (l > 0) {
+                level = Merge(level, channels, levels[l] / framesPerPeak);
+                framesPerPeak = levels[l];
+            }
+
+            AtomicRename.Write(PathOf(peaksFolder, fileId, framesPerPeak), Encode(level, channels, framesPerPeak));
+        }
+    }
+
+    /// <summary>The finest level: min and max of every <c>Levels[0]</c> frames, per channel.</summary>
+    static short[] Finest(WavReader reader, CancellationToken cancellationToken) {
+        var channels = reader.Info.Channels;
+        var finest = PeakFormat.Levels[0];
+        var data = new short[(reader.Info.Frames + finest - 1) / finest * channels * 2];
         var buffer = new float[finest * channels * 64];
         var min = new float[channels];
         var max = new float[channels];
@@ -64,12 +87,7 @@ public static class Peaks {
                     Array.Fill(max, float.MinValue);
                 }
 
-                for (var c = 0; c < channels; c++) {
-                    var x = buffer[i * channels + c];
-                    min[c] = Math.Min(min[c], x);
-                    max[c] = Math.Max(max[c], x);
-                }
-
+                Accumulate(buffer.AsSpan(i * channels, channels), min, max);
                 if (++inPeak == finest) {
                     Store(data, peak++, min, max);
                     inPeak = 0;
@@ -77,20 +95,17 @@ public static class Peaks {
             }
         }
 
-        if (inPeak > 0 && peak < finestPeaks) {
+        if (inPeak > 0) {
             Store(data, peak++, min, max);
         }
 
-        var level = data.AsSpan(0, (int)(peak * channels * 2)).ToArray();
-        var framesPerPeak = finest;
-        for (var l = 0; l < levels.Length; l++) {
-            if (l > 0) {
-                var factor = levels[l] / framesPerPeak;
-                level = Merge(level, channels, factor);
-                framesPerPeak = levels[l];
-            }
+        return [..data.AsSpan(0, (int)(peak * channels * 2))];
+    }
 
-            AtomicRename.Write(PathOf(peaksFolder, fileId, framesPerPeak), Encode(level, channels, framesPerPeak));
+    static void Accumulate(ReadOnlySpan<float> frame, float[] min, float[] max) {
+        for (var c = 0; c < frame.Length; c++) {
+            min[c] = Math.Min(min[c], frame[c]);
+            max[c] = Math.Max(max[c], frame[c]);
         }
     }
 

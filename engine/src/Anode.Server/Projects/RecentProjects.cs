@@ -45,7 +45,7 @@ public sealed class RecentProjects(IOptions<ServerOptions> options, ILogger<Rece
             var json = File.ReadAllText(path);
             return [
                 ..(JsonSerializer.Deserialize(json, PackageJsonContext.Default.ListProjectSummary) ?? [])
-                .Where(static p => p is { Path: not null, Id: not null, Name: not null })
+                    .Where(static p => p is { Path: not null, Id: not null, Name: not null })
             ];
         } catch (Exception e) when (e is JsonException or IOException or UnauthorizedAccessException) {
             ProjectLog.Unreadable(logger, path, e.Message);

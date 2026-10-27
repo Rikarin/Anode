@@ -50,14 +50,20 @@ static class ProjectApi {
             );
         project.MapPost(
                 "/undo",
-                static Results<Ok<CommandResult>, NotFound, ProblemHttpResult>(ProjectSession session, HttpContext http) =>
+                static Results<Ok<CommandResult>, NotFound, ProblemHttpResult>(
+                    ProjectSession session,
+                    HttpContext http
+                ) =>
                     Respond(http, session.Undo(Revisions.Expected(http)))
             )
             .WithName("Undo")
             .WithSummary("Undoes the last edit; 422 when there is nothing to undo.");
         project.MapPost(
                 "/redo",
-                static Results<Ok<CommandResult>, NotFound, ProblemHttpResult>(ProjectSession session, HttpContext http) =>
+                static Results<Ok<CommandResult>, NotFound, ProblemHttpResult>(
+                    ProjectSession session,
+                    HttpContext http
+                ) =>
                     Respond(http, session.Redo(Revisions.Expected(http)))
             )
             .WithName("Redo");
@@ -79,7 +85,10 @@ static class ProjectApi {
             .DisableAntiforgery();
         project.MapPost(
                 "/files/import",
-                static Results<Ok<AudioFile>, NotFound, ProblemHttpResult>(ImportFileRequest request, AudioImport import) =>
+                static Results<Ok<AudioFile>, NotFound, ProblemHttpResult>(
+                    ImportFileRequest request,
+                    AudioImport import
+                ) =>
                     TypedResults.Ok(import.Import(request.Path))
             )
             .WithName("ImportAudioFile")

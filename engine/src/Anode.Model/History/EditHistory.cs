@@ -36,13 +36,10 @@ public sealed class EditHistory(TimeProvider time, int capacity = EditHistory.De
             && undo.Last?.Value is { } last
             && last.CoalesceKey == coalesceKey
             && now - last.Time <= CoalesceWindow) {
+            // Strip edits upsert the whole strip (its track or the master): the newest edit's operations lead to the
+            // end of the drag and the first one's inverse back to before it, with nothing in between to keep.
             undo.RemoveLast();
-            undo.AddLast(
-                last with {
-                    Revision = revision, Forward = [..last.Forward, ..ops.Forward],
-                    Inverse = [..ops.Inverse, ..last.Inverse], Time = now
-                }
-            );
+            undo.AddLast(last with { Revision = revision, Forward = ops.Forward, Time = now });
             return;
         }
 

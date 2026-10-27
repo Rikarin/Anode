@@ -89,11 +89,12 @@ public sealed class EngineConnection(
             throw ProjectException.Unprocessable("Locate needs a tick.");
         }
 
-        if (request.Command == TransportCommand.Record && !view!.State.Tracks.Any(static t => t.RecordArmed)) {
+        if (request.Command == TransportCommand.Record && !view!.State.Tracks.Exists(static t => t.RecordArmed)) {
             throw ProjectException.Unprocessable("Arm a track to record.");
         }
 
-        if (Volatile.Read(ref current) is not { } link || !link.Work.Writer.TryWrite(new TransportMessage(action, position))) {
+        if (Volatile.Read(ref current) is not { } link
+            || !link.Work.Writer.TryWrite(new TransportMessage(action, position))) {
             throw ProjectException.Unprocessable("The engine is not connected.");
         }
 
@@ -141,7 +142,9 @@ public sealed class EngineConnection(
                 lastFailure = "The host closed the connection.";
             } catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) {
                 return;
-            } catch (Exception e) when (e is SocketException or IOException or InvalidDataException
+            } catch (Exception e) when (e is SocketException
+                                            or IOException
+                                            or InvalidDataException
                                             or System.Text.Json.JsonException) {
                 lastFailure = e.Message;
             }
@@ -203,7 +206,9 @@ public sealed class EngineConnection(
             foreach (var task in new[] { reading, pumping, publishing }) {
                 try {
                     await task.ConfigureAwait(false);
-                } catch (Exception e) when (e is OperationCanceledException or IOException or InvalidDataException
+                } catch (Exception e) when (e is OperationCanceledException
+                                                or IOException
+                                                or InvalidDataException
                                                 or ObjectDisposedException) {
                     // ending with the connection
                 }
@@ -232,7 +237,9 @@ public sealed class EngineConnection(
     void ApplyRecording(RecordingFinishedMessage finished) {
         try {
             session.ApplyRecording(finished.Takes);
-        } catch (Exception e) when (e is IOException or UnauthorizedAccessException or ProjectException
+        } catch (Exception e) when (e is IOException
+                                        or UnauthorizedAccessException
+                                        or ProjectException
                                         or InvalidOperationException) {
             EngineLog.RecordingFailed(logger, e);
         }
@@ -252,8 +259,7 @@ public sealed class EngineConnection(
     /// <summary>Reads the telemetry region about 30 times a second and publishes the playhead and meters.</summary>
     async Task PublishAsync(TelemetryReader telemetry, CancellationToken cancellationToken) {
         using var timer = new PeriodicTimer(TelemetryInterval);
-        var lastState = TelemetryTransportState.Stopped;
-        long lastPosition = -1;
+        TransportStatus? last = null;
         var metersLive = false;
         while (await timer.WaitForNextTickAsync(cancellationToken).ConfigureAwait(false)) {
             if (telemetry.Read() is not { } frame) {
@@ -261,43 +267,46 @@ public sealed class EngineConnection(
             }
 
             var view = session.View;
-            var position = frame.Header.PositionSamples;
-            var rate = view?.State.SampleRate ?? (frame.Header.SampleRate > 0 ? frame.Header.SampleRate : 48_000);
-            var map = view?.State.TempoMap ?? TempoMap.Constant(ProjectDefaults.Tempo);
-            var state = frame.Header.State switch {
-                TelemetryTransportState.Playing => TransportState.Playing,
-                TelemetryTransportState.Recording => TransportState.Recording,
-                _ => TransportState.Stopped
-            };
-            var now = new TransportStatus(state, position, map.TickAtSample(position, rate), rate);
+            var now = Status(frame.Header, view);
             Volatile.Write(ref transport, now);
-            var moving = state != TransportState.Stopped;
-            if (moving || lastState != TelemetryTransportState.Stopped || position != lastPosition) {
+            // While it moves, and once more when it stops or is located.
+            var moving = now.State != TransportState.Stopped;
+            if (moving || last is null || last.State != now.State || last.PositionSamples != now.PositionSamples) {
                 hub.Publish(new TransportEvent(now));
             }
 
-            lastState = frame.Header.State;
-            lastPosition = position;
-
-            if (view is null) {
-                continue;
+            last = now;
+            if (view is not null && Meters(frame, view) is var (meters, live) && (moving || live || metersLive)) {
+                hub.Publish(meters);
+                metersLive = live;
             }
-
-            var meters = new List<TrackMeter>(frame.Tracks.Length);
-            var live = frame.Master.PeakLeft > 0 || frame.Master.PeakRight > 0;
-            foreach (var entry in frame.Tracks) {
-                if (view.Ids.TrackOf(entry.TrackId) is { } id) {
-                    meters.Add(new(id, entry.PeakLeft, entry.PeakRight));
-                    live |= entry.PeakLeft > 0 || entry.PeakRight > 0;
-                }
-            }
-
-            if (moving || live || metersLive) {
-                hub.Publish(new MetersEvent(meters, new("master", frame.Master.PeakLeft, frame.Master.PeakRight)));
-            }
-
-            metersLive = live;
         }
+    }
+
+    static TransportStatus Status(TelemetryHeader header, OpenProjectView? view) {
+        var position = header.PositionSamples;
+        var rate = view?.State.SampleRate ?? (header.SampleRate > 0 ? header.SampleRate : ProjectDefaults.SampleRate);
+        var map = view?.State.TempoMap ?? TempoMap.Constant(ProjectDefaults.Tempo);
+        var state = header.State switch {
+            TelemetryTransportState.Playing => TransportState.Playing,
+            TelemetryTransportState.Recording => TransportState.Recording,
+            _ => TransportState.Stopped
+        };
+        return new(state, position, map.TickAtSample(position, rate), rate);
+    }
+
+    /// <summary>The frame's meters by domain track id, and whether any shows a level.</summary>
+    static (MetersEvent Meters, bool Live) Meters(TelemetryFrame frame, OpenProjectView view) {
+        var meters = new List<TrackMeter>(frame.Tracks.Length);
+        var live = frame.Master.PeakLeft > 0 || frame.Master.PeakRight > 0;
+        foreach (var entry in frame.Tracks) {
+            if (view.Ids.TrackOf(entry.TrackId) is { } id) {
+                meters.Add(new(id, entry.PeakLeft, entry.PeakRight));
+                live |= entry.PeakLeft > 0 || entry.PeakRight > 0;
+            }
+        }
+
+        return (new(meters, new("master", frame.Master.PeakLeft, frame.Master.PeakRight)), live);
     }
 
     void Kick() {

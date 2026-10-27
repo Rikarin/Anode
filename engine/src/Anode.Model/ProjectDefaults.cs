@@ -26,8 +26,13 @@ public static class ProjectDefaults {
             id,
             name,
             sampleRate,
-            new(Tempo, signature, new(false, 0, 4L * BarTicks(signature)), new(false, false, -6),
-                EndBars * BarTicks(signature)),
+            new(
+                Tempo,
+                signature,
+                new(false, 0, 4L * BarTicks(signature)),
+                new(false, false, -6),
+                EndBars * BarTicks(signature)
+            ),
             Strip,
             [],
             ImmutableSortedDictionary.Create<string, AudioRegion>(StringComparer.Ordinal),

@@ -12,11 +12,12 @@ public enum WavEncoding {
 
 /// <summary>A WAV file's format and where its samples are.</summary>
 public sealed record WavInfo(int Channels, int SampleRate, WavEncoding Encoding, long DataOffset, long Frames) {
-    public int BitDepth => Encoding switch {
-        WavEncoding.Pcm16 => 16,
-        WavEncoding.Pcm24 => 24,
-        _ => 32
-    };
+    public int BitDepth =>
+        Encoding switch {
+            WavEncoding.Pcm16 => 16,
+            WavEncoding.Pcm24 => 24,
+            _ => 32
+        };
 
     public int BytesPerFrame => Channels * (BitDepth / 8);
 }
@@ -55,7 +56,14 @@ public sealed class WavReader : IDisposable {
     }
 
     public static WavReader Open(string path) {
-        var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, 1, FileOptions.SequentialScan);
+        var stream = new FileStream(
+            path,
+            FileMode.Open,
+            FileAccess.Read,
+            FileShare.Read,
+            1,
+            FileOptions.SequentialScan
+        );
         try {
             return new(stream, true);
         } catch {
@@ -78,8 +86,10 @@ public sealed class WavReader : IDisposable {
     /// </summary>
     public int Read(Span<float> interleaved) {
         var bytesPerSample = Info.BitDepth / 8;
-        var frames = (int)Math.Min(Math.Min(interleaved.Length / Info.Channels, raw.Length / Info.BytesPerFrame),
-            framesLeft);
+        var frames = (int)Math.Min(
+            Math.Min(interleaved.Length / Info.Channels, raw.Length / Info.BytesPerFrame),
+            framesLeft
+        );
         if (frames <= 0) {
             return 0;
         }
@@ -135,15 +145,7 @@ public sealed class WavReader : IDisposable {
             if (chunk[..4].SequenceEqual("fmt "u8)) {
                 format = ReadFormat(stream, size);
             } else if (chunk[..4].SequenceEqual("data"u8)) {
-                if (format is not { } f) {
-                    throw new WavFormatException("The WAV file's data comes before its format.");
-                }
-
-                // A writer that never finished (or streams) leaves the size 0 or 0xFFFFFFFF: take what is there.
-                var available = stream.Length - body;
-                var length = size is 0 or uint.MaxValue || size > available ? available : size;
-                var info = new WavInfo(f.Channels, f.Rate, f.Encoding, body, 0);
-                return info with { Frames = length / info.BytesPerFrame };
+                return DataInfo(stream, format, body, size);
             }
 
             position = body + size + (size & 1);
@@ -154,11 +156,30 @@ public sealed class WavReader : IDisposable {
             stream.Position = position;
         }
 
-        throw new WavFormatException(format is null ? "The WAV file has no format chunk." : "The WAV file has no data.");
+        throw new WavFormatException(
+            format is null ? "The WAV file has no format chunk." : "The WAV file has no data."
+        );
+    }
+
+    static WavInfo DataInfo(
+        Stream stream,
+        (int Channels, int Rate, WavEncoding Encoding)? format,
+        long body,
+        uint size
+    ) {
+        if (format is not { } f) {
+            throw new WavFormatException("The WAV file's data comes before its format.");
+        }
+
+        // A writer that never finished (or streams) leaves the size 0 or 0xFFFFFFFF: take what is there.
+        var available = stream.Length - body;
+        var length = size is 0 or uint.MaxValue || size > available ? available : size;
+        var info = new WavInfo(f.Channels, f.Rate, f.Encoding, body, 0);
+        return info with { Frames = length / info.BytesPerFrame };
     }
 
     static (int, int, WavEncoding) ReadFormat(Stream stream, uint size) {
-        if (size < 16 || size > 1024) {
+        if (size is < 16 or > 1024) {
             throw new WavFormatException("The WAV file's format chunk is malformed.");
         }
 
@@ -183,7 +204,7 @@ public sealed class WavReader : IDisposable {
             throw new WavFormatException($"The WAV file has {channels} channels at {rate} Hz.");
         }
 
-        WavEncoding encoding = (tag, bits) switch {
+        var encoding = (tag, bits) switch {
             (FormatPcm, 16) => WavEncoding.Pcm16,
             (FormatPcm, 24) => WavEncoding.Pcm24,
             (FormatPcm, 32) => WavEncoding.Pcm32,
@@ -218,8 +239,12 @@ public sealed class WavWriter : IDisposable {
     long dataBytes;
 
     public WavWriter(string path, int channels, int sampleRate, WavEncoding encoding)
-        : this(new FileStream(path, FileMode.Create, FileAccess.ReadWrite, FileShare.None), channels, sampleRate,
-            encoding) { }
+        : this(
+            new FileStream(path, FileMode.Create, FileAccess.ReadWrite, FileShare.None),
+            channels,
+            sampleRate,
+            encoding
+        ) { }
 
     public WavWriter(Stream stream, int channels, int sampleRate, WavEncoding encoding) {
         this.stream = stream;
@@ -284,7 +309,7 @@ public sealed class WavWriter : IDisposable {
     }
 
     public void Dispose() {
-        if (dataBytes % 2 == 1) {
+        if ((dataBytes & 1) != 0) {
             stream.WriteByte(0);
         }
 

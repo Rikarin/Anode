@@ -37,13 +37,28 @@ public sealed record ProjectState(
 
     /// <summary>The regions of a track, by start.</summary>
     public IEnumerable<AudioRegion> RegionsOf(string trackId) =>
-        Regions.Values.Where(r => r.TrackId == trackId).OrderBy(static r => r.StartTick).ThenBy(static r => r.Id,
-            StringComparer.Ordinal);
+        Regions.Values.Where(r => r.TrackId == trackId)
+            .OrderBy(static r => r.StartTick)
+            .ThenBy(
+                static r => r.Id,
+                StringComparer.Ordinal
+            );
 
     /// <summary>The contract form, as <c>GET /api/v1/project</c> answers it.</summary>
     public Project ToProject(string path, long revision, bool dirty) =>
-        new(Id, Name, path, revision, dirty, SampleRate, Settings, Master, [..Tracks], [..Regions.Values],
-            [..Files.Values]);
+        new(
+            Id,
+            Name,
+            path,
+            revision,
+            dirty,
+            SampleRate,
+            Settings,
+            Master,
+            [..Tracks],
+            [..Regions.Values],
+            [..Files.Values]
+        );
 
     /// <summary>Applies one delta operation (an edit's primitive step, also what clients apply).</summary>
     public ProjectState Apply(DeltaOp op) =>
