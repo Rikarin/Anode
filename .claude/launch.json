@@ -1,0 +1,26 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "server-inprocess",
+      "runtimeExecutable": "dotnet",
+      "runtimeArgs": [
+        "run",
+        "--project",
+        "engine/src/Anode.Server",
+        "-c",
+        "Release",
+        "--",
+        "--Anode:Engine:Mode=inprocess",
+        "--Anode:DataDirectory=engine/artifacts/dev-data"
+      ],
+      "port": 5190
+    },
+    {
+      "name": "editor",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--dir", "editor", "exec", "nx", "serve", "editor"],
+      "port": 4200
+    }
+  ]
+}
