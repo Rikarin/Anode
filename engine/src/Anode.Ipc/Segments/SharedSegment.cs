@@ -159,7 +159,7 @@ public sealed unsafe partial class SharedSegment : IDisposable {
 
     static SharedSegment CreateShm(string name, long length) {
         RequireMac();
-        var fd = ShmOpen(name, OCreat | OExcl | ORdWr, 0x180); // 0600
+        var fd = ShmOpen(name, true);
         if (fd < 0) {
             throw new IOException($"shm_open({name}) failed: errno {Marshal.GetLastPInvokeError()}.");
         }
@@ -187,7 +187,7 @@ public sealed unsafe partial class SharedSegment : IDisposable {
     static SharedSegment OpenShm(string qualified, long length) {
         RequireMac();
         var name = qualified[ShmPrefix.Length..];
-        var fd = ShmOpen(name, ORdOnly, 0);
+        var fd = ShmOpen(name, false);
         if (fd < 0) {
             throw new IOException($"shm_open({name}) failed: errno {Marshal.GetLastPInvokeError()}.");
         }
@@ -212,38 +212,32 @@ public sealed unsafe partial class SharedSegment : IDisposable {
     }
 
     // macOS values.
-    const int ORdOnly = 0;
-    const int ORdWr = 2;
-    const int OCreat = 0x200;
-    const int OExcl = 0x800;
     const int ProtRead = 1;
     const int ProtWrite = 2;
     const int MapShared = 1;
+    const string AnSys = "an_sys";
 
     /// <summary>
-    ///     <c>shm_open</c> is variadic (the mode). On Apple arm64 variadic arguments go on the stack, not in registers,
-    ///     so the mode is passed as a ninth argument after six unused register arguments; on x64 it is the third.
+    ///     <c>shm_open</c> is variadic (the mode), and on Apple arm64 variadic arguments go on the stack rather than in
+    ///     registers, so it is called through the native shim's fixed-signature wrapper (engine/native/an_sys) instead
+    ///     of being bound directly. <paramref name="create" /> creates the object exclusively (read-write, mode 0600);
+    ///     otherwise an existing one opens read-only.
     /// </summary>
-    static int ShmOpen(string name, int flags, int mode) =>
-        RuntimeInformation.ProcessArchitecture == Architecture.Arm64
-            ? ShmOpenArm64(name, flags, 0, 0, 0, 0, 0, 0, mode)
-            : ShmOpenX64(name, flags, mode);
+    static int ShmOpen(string name, bool create) {
+        try {
+            return AnSysShmOpen(name, create ? 1 : 0, 0);
+        } catch (DllNotFoundException e) {
+            throw new IOException("Shared memory needs the native shim an_sys: run engine/native/build.sh.", e);
+        }
+    }
 
-    [LibraryImport(LibSystem, EntryPoint = "shm_open", SetLastError = true, StringMarshalling = StringMarshalling.Utf8)]
-    private static partial int ShmOpenArm64(
-        string name,
-        int flags,
-        nint x2,
-        nint x3,
-        nint x4,
-        nint x5,
-        nint x6,
-        nint x7,
-        nint mode
-    );
-
-    [LibraryImport(LibSystem, EntryPoint = "shm_open", SetLastError = true, StringMarshalling = StringMarshalling.Utf8)]
-    private static partial int ShmOpenX64(string name, int flags, int mode);
+    [LibraryImport(
+        AnSys,
+        EntryPoint = "an_sys_shm_open",
+        SetLastError = true,
+        StringMarshalling = StringMarshalling.Utf8
+    )]
+    private static partial int AnSysShmOpen(string name, int create, int writable);
 
     [LibraryImport(
         LibSystem,
