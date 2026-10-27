@@ -292,10 +292,12 @@ public sealed class HostSync(HostLink link, SegmentPool pool, ILogger logger) {
 
         if (before is null
             || before.Settings.Metronome.Enabled != settings.Metronome.Enabled
-            || before.Settings.Metronome.LevelDb != settings.Metronome.LevelDb) {
+            || before.Settings.Metronome.LevelDb != settings.Metronome.LevelDb
+            || before.Settings.Metronome.CountIn != settings.Metronome.CountIn) {
             yield return new SetMetronomeMessage(
                 settings.Metronome.Enabled,
-                Units.DbToGain(settings.Metronome.LevelDb)
+                Units.DbToGain(settings.Metronome.LevelDb),
+                settings.Metronome.CountIn
             );
         }
     }

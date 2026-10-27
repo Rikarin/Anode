@@ -48,7 +48,7 @@ public sealed class TwoProcessTests : IAsyncDisposable {
         );
     }
 
-    [Fact(Skip = "needs workstream A")]
+    [Fact]
     public async Task Server_opens_imports_plays_and_records_on_the_null_device() {
         var media = Directory.CreateTempSubdirectory("anode-two-process-").FullName;
         try {

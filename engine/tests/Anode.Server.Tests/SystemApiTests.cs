@@ -20,6 +20,24 @@ public sealed class SystemApiTests {
     }
 
     [Fact]
+    public async Task A_project_at_another_rate_than_the_device_is_reported() {
+        await using var server = new ServerFixture();
+        using var client = server.CreateClient();
+        await ServerFixture.Eventually(async () =>
+            (await server.SystemAsync(client)).Engine.State == EngineState.InProcess
+        );
+
+        // No rate asked: the device's (the in-process engine runs at 48 kHz).
+        Assert.Equal(48_000, (await client.CreateProjectAsync("Default")).SampleRate);
+        Assert.Null((await server.SystemAsync(client)).Engine.Message);
+
+        await client.CreateProjectAsync("Other", 44_100);
+        await ServerFixture.Eventually(async () =>
+            (await server.SystemAsync(client)).Engine.Message?.Contains("44100 Hz", StringComparison.Ordinal) == true
+        );
+    }
+
+    [Fact]
     public async Task With_a_token_every_request_needs_it() {
         await using var server = new ServerFixture(token: "secret");
         using var client = server.CreateClient();

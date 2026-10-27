@@ -24,6 +24,7 @@ namespace Anode.Server.Engine;
 public sealed class EngineConnection(
     IOptions<ServerOptions> options,
     ProjectSession session,
+    EngineDevice device,
     EventHub hub,
     ILogger<EngineConnection> logger
 ) : BackgroundService {
@@ -192,7 +193,10 @@ public sealed class EngineConnection(
         pool.Reset();
         connection.Work.Writer.TryWrite(null); // the first sync sends the open project whole
         Volatile.Write(ref current, connection);
-        Set(new(inProcess ? EngineState.InProcess : EngineState.Connected, hello.Version, hello.Backend, null));
+        device.Set(hello.SampleRate);
+        Set(
+            new(inProcess ? EngineState.InProcess : EngineState.Connected, hello.Version, hello.Backend, RateMismatch())
+        );
         var reading = ReadAsync(stream, link, stop.Token);
         var pumping = PumpAsync(connection, stop.Token);
         var publishing = telemetry is null ? Task.CompletedTask : PublishAsync(telemetry, stop.Token);
@@ -312,6 +316,11 @@ public sealed class EngineConnection(
     void Kick() {
         if (Volatile.Read(ref current) is { } connection) {
             connection.Work.Writer.TryWrite(null);
+            // A project opened at another rate than the device (or a matching one replaced it).
+            var now = Status();
+            if (now.State != EngineState.Disconnected && RateMismatch() is var mismatch && now.Message != mismatch) {
+                Set(now with { Message = mismatch });
+            }
         }
     }
 
@@ -323,4 +332,11 @@ public sealed class EngineConnection(
 
     /// <summary>A live connection: its link, and the queue of work for it (null: sync the project).</summary>
     sealed record Connection(HostLink Link, Channel<IpcMessage?> Work);
+
+    /// <summary>Why the open project and the device disagree on the sample rate, or null when they agree.</summary>
+    string? RateMismatch() =>
+        device.SampleRate is { } rate && session.View?.State.SampleRate is { } project && project != rate
+            ? $"The audio device runs at {rate} Hz and the project at {project} Hz: playback is off-speed and recording "
+            + "is refused. Set the device to the project's rate."
+            : null;
 }

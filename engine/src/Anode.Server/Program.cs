@@ -40,6 +40,7 @@ builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddSingleton<EventHub>();
 builder.Services.AddSingleton<RecentProjects>();
 builder.Services.AddSingleton<PeakJobs>();
+builder.Services.AddSingleton<EngineDevice>();
 builder.Services.AddSingleton<ProjectSession>();
 builder.Services.AddSingleton<AudioImport>();
 builder.Services.AddSingleton<EngineConnection>();

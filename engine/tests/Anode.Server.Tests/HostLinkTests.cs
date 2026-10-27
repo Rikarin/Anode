@@ -67,6 +67,8 @@ public sealed class HostLinkTests : IAsyncDisposable {
         Assert.Equal((96_000L, 192_000L), (cycle.StartSample, cycle.EndSample));
         await client.EditAsync(new SetMetronomeCommand(true, LevelDb: 0));
         Assert.Equal(1f, (await WaitForAsync<SetMetronomeMessage>(static m => m.Enabled)).Gain);
+        await client.EditAsync(new SetMetronomeCommand(CountIn: true));
+        Assert.True((await WaitForAsync<SetMetronomeMessage>(static m => m.CountIn)).Enabled);
 
         var before = Received<LoadModelMessage>().Count(static m => m.Replace);
         await client.EditAsync(new SetTempoCommand(60));

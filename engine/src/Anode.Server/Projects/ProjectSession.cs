@@ -6,6 +6,7 @@ using Anode.Model.Compile;
 using Anode.Model.Editing;
 using Anode.Model.History;
 using Anode.Model.Storage;
+using Anode.Server.Engine;
 using Anode.Server.Realtime;
 using Microsoft.Extensions.Options;
 
@@ -30,6 +31,7 @@ public sealed class ProjectSession(
     EventHub hub,
     RecentProjects recent,
     PeakJobs peaks,
+    EngineDevice device,
     TimeProvider time,
     ILogger<ProjectSession> logger
 ) {
@@ -61,7 +63,7 @@ public sealed class ProjectSession(
             throw ProjectException.Unprocessable("A project name has 1…128 characters and no path separators.");
         }
 
-        var rate = request.SampleRate ?? ProjectDefaults.SampleRate;
+        var rate = request.SampleRate ?? device.SampleRate ?? ProjectDefaults.SampleRate;
         if (!ProjectDefaults.SampleRates.Contains(rate)) {
             throw ProjectException.Unprocessable(
                 $"Sample rate {rate} Hz is not one of {string.Join(", ", ProjectDefaults.SampleRates)}."
