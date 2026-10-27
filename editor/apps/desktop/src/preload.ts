@@ -1,8 +1,24 @@
-import { contextBridge, ipcRenderer } from 'electron';
+import { contextBridge, ipcRenderer, webUtils } from 'electron';
 
 // The only surface the sandboxed renderer gets (typed in apps/editor/src/app/core/desktop.ts).
 contextBridge.exposeInMainWorld('anode', {
   platform: process.platform,
+  // A dropped File's path (Electron no longer puts it on File.path); '' for one that has none.
+  pathForFile: (file: File) => {
+    try {
+      return webUtils.getPathForFile(file);
+    } catch {
+      return '';
+    }
+  },
+  dialogs: {
+    openProject: () => ipcRenderer.invoke('anode:dialog:openProject'),
+    chooseFolder: () => ipcRenderer.invoke('anode:dialog:chooseFolder'),
+    importAudio: () => ipcRenderer.invoke('anode:dialog:importAudio')
+  },
+  onCommand: (listener: (command: unknown) => void) => {
+    ipcRenderer.on('anode:command', (_event, command: unknown) => listener(command));
+  },
   onFullScreen: (listener: (fullScreen: boolean) => void) => {
     ipcRenderer.on('anode:fullScreen', (_event, fullScreen: boolean) => listener(fullScreen));
   },

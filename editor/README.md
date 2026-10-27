@@ -4,11 +4,11 @@ The desktop editor (../docs/01-implementation-plan.md §6): an Angular 22 render
 
 | Project           | Role                                                                                                           |
 | ----------------- | -------------------------------------------------------------------------------------------------------------- |
-| `apps/editor`     | The renderer: control bar (transport, LCD, engine status) and the main window's docked areas                   |
+| `apps/editor`     | The renderer: project chooser, control bar, Tracks area, Mixer; stores fed by REST and `/ws` deltas            |
 | `apps/desktop`    | Electron main (sidecar supervision, `app://` scheme with CSP) and the preload bridge; Playwright E2E in `e2e/` |
 | `libs/api-client` | Types generated from `engine/src/Anode.Server/openapi.json`, plus a typed `fetch` client                       |
-| `libs/audio-ui`   | Audio controls xUI does not have (`an-level-meter` so far), with Storybook stories that must pass axe          |
-| `libs/timeline`   | The canvas/WebGL2 timeline engine behind the Tracks area and the editors (`TimeScale` so far; see its README)  |
+| `libs/audio-ui`   | Audio controls xUI does not have (fader, pan knob, peak meter, channel strip), stories that must pass axe      |
+| `libs/timeline`   | The canvas/WebGL2 timeline engine behind the Tracks area: regions, waveforms, ruler, hit-testing (its README)  |
 
 ## Develop
 
@@ -29,6 +29,11 @@ dotnet run -c Release --project ../engine/src/Anode.Server -- --Anode:Engine:Soc
 ```bash
 pnpm exec nx serve editor
 ```
+
+Or run the editor against an in-memory fake Server (no engine needed): `pnpm exec nx serve editor`, then open
+`http://localhost:4200/?fake` (a demo project) or `?fake&empty` (the project chooser). The fake
+(`apps/editor/src/app/core/fake`) follows the Phase 1 contracts: commands, undo, deltas, transport, recording on armed
+tracks, meters and synthetic peaks. Unit tests use it too.
 
 Or run the whole desktop app. Build the engine first with `dotnet build -c Release` in `engine/`:
 

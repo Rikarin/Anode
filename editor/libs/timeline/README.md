@@ -28,6 +28,17 @@ Framework-free TypeScript at its core, with thin Angular components on top, so t
 - `TimelineWorkerClient` + `timeline.worker.ts`: the same, in a worker on a transferred `OffscreenCanvas`; scene columns
   are transferred once, then one small view message per frame, latest wins while the worker is busy.
 
+## Phase 1 additions
+
+- `RegionDetails` on a scene (file offset, fades, gain, flags, names, waveform keys) and per-frame view overlays
+  (cycle area, project end, marquee, `ItemOverride`s for drag previews).
+- Waveforms: `parsePeaks` reads the Server's `PeakFormat`; a `WaveformSet` per renderer keeps several resolutions per
+  file and the frame builder draws min/max columns from the finest useful one.
+- Text: both renderers draw printable ASCII from one glyph atlas (bar numbers, region names).
+- `hitTest`, `itemsInRect`, `snapStep`/`snapTick` for the pointer tools, on the main thread's copy of the scene.
+
+Still open: waveform textures (columns are rectangles today), context-loss recovery, the ARIA tree.
+
 ## Bench
 
 `bench/` is the S1 rendering bench (results and method: `docs/spikes/S1-timeline-rendering.md`).

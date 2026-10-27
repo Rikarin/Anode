@@ -107,7 +107,7 @@ export class EventStream {
   }
 
   /** Handles one parsed message (from the socket, or from the in-memory fake Server). */
-  dispatch(message: { type?: unknown }): void {
+  dispatch(message: ServerMessage | { type?: unknown }): void {
     if (message.type === 'connected') {
       this.attempts = 0;
       this.status.set('open');

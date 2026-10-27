@@ -234,7 +234,7 @@ export class FakeAnodeServer implements AnodeApi {
   }
 
   async uploadAudioFile(file: File): Promise<AudioFile> {
-    const header = readWavHeader(await file.slice(0, 64 * 1024).arrayBuffer());
+    const header = readWavHeader(await readBytes(file.slice(0, 64 * 1024)));
     return this.answer('UploadAudioFile', () => this.addFile(file.name, header));
   }
 
@@ -834,6 +834,20 @@ export class FakeAnodeServer implements AnodeApi {
     this.recent = [{ id: project.id, name: project.name, path: disk, modified: new Date(this.now()).toISOString() }];
     this.project = project;
   }
+}
+
+/** A blob's bytes (FileReader where `Blob.arrayBuffer` is missing, as in jsdom). */
+function readBytes(blob: Blob): Promise<ArrayBuffer> {
+  if (typeof blob.arrayBuffer === 'function') {
+    return blob.arrayBuffer();
+  }
+
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as ArrayBuffer);
+    reader.onerror = () => reject(reader.error ?? new Error('Could not read the file.'));
+    reader.readAsArrayBuffer(blob);
+  });
 }
 
 function strip(): ChannelStrip {

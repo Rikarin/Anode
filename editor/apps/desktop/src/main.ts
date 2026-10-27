@@ -3,6 +3,7 @@ import {
   Menu,
   type MenuItemConstructorOptions,
   app,
+  dialog,
   ipcMain,
   net,
   protocol,
@@ -10,7 +11,7 @@ import {
   shell
 } from 'electron';
 import { existsSync, statSync } from 'node:fs';
-import { extname, join, normalize, resolve, sep } from 'node:path';
+import { extname, isAbsolute, join, normalize, resolve, sep } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { networkStatus, newToken, portFree } from './network';
 import { type AudioSettings, type NetworkSettings, type ServerTarget, loadSettings, saveSettings } from './settings';
@@ -231,6 +232,28 @@ function handleIpc(): void {
     }
   });
   ipcMain.handle('anode:connection', () => connection());
+  // Native file dialogs for the project chooser and Import. They take nothing from the renderer (titles, filters and
+  // starting folders are main's), answer only the editor's own window, and return what the person picked.
+  ipcMain.handle('anode:dialog:openProject', async event =>
+    first(await pick(event.sender, { title: 'Open Project', properties: ['openDirectory'] }))
+  );
+  ipcMain.handle('anode:dialog:chooseFolder', async event =>
+    first(
+      await pick(event.sender, {
+        title: 'Choose Where to Save the Project',
+        buttonLabel: 'Choose',
+        properties: ['openDirectory', 'createDirectory']
+      })
+    )
+  );
+  ipcMain.handle('anode:dialog:importAudio', async event =>
+    pick(event.sender, {
+      title: 'Import Audio',
+      buttonLabel: 'Import',
+      properties: ['openFile', 'multiSelections'],
+      filters: [{ name: 'WAV audio', extensions: ['wav', 'wave'] }]
+    })
+  );
   ipcMain.handle('anode:target', () => settings.target);
   ipcMain.handle('anode:setTarget', async (_event, target: unknown) => {
     settings = { ...settings, target: validTarget(target) };
@@ -264,6 +287,24 @@ function handleIpc(): void {
 
     return networkStatus(settings.network, sidecars?.networkError ?? null);
   });
+}
+
+/**
+ * Shows an open dialog over the editor's window and returns the absolute paths picked (none when cancelled). Refuses a
+ * request from anything but that window's own page.
+ */
+async function pick(sender: Electron.WebContents, options: Electron.OpenDialogOptions): Promise<string[]> {
+  const owner = sender === window?.webContents ? window : null;
+  if (!owner) {
+    throw new Error('File dialogs are for the Anode window only.');
+  }
+
+  const result = await dialog.showOpenDialog(owner, options);
+  return result.canceled ? [] : result.filePaths.filter(path => isAbsolute(path));
+}
+
+function first(paths: string[]): string | null {
+  return paths[0] ?? null;
 }
 
 /** What the renderer sent for a `T`: an object whose fields are all still to be checked. */
@@ -337,6 +378,22 @@ function buildMenu(): void {
     accelerator: 'CmdOrCtrl+,',
     click: () => window?.webContents.send('anode:openSettings')
   };
+  // File menu items ask the editor (apps/editor/src/app/app.ts, AppCommand), which owns the project's state. ⌘S, ⌘Z and
+  // ⇧⌘Z are the editor's own keys too, so the window handles them first and these accelerators only label the items.
+  const command = (label: string, name: string, accelerator?: string): MenuItemConstructorOptions => ({
+    label,
+    ...(accelerator ? { accelerator } : {}),
+    click: () => window?.webContents.send('anode:command', name)
+  });
+  const fileItems: MenuItemConstructorOptions[] = [
+    command('New Project…', 'newProject', 'CmdOrCtrl+N'),
+    command('Open Project…', 'openProject', 'CmdOrCtrl+O'),
+    { type: 'separator' },
+    command('Save', 'saveProject', 'CmdOrCtrl+S'),
+    command('Close Project', 'closeProject', 'CmdOrCtrl+Shift+W'),
+    { type: 'separator' },
+    command('Import Audio…', 'importAudio', 'CmdOrCtrl+Shift+I')
+  ];
   const template: MenuItemConstructorOptions[] =
     process.platform === 'darwin'
       ? [
@@ -356,13 +413,16 @@ function buildMenu(): void {
               { role: 'quit' }
             ]
           },
-          { role: 'fileMenu' },
+          { label: 'File', submenu: [...fileItems, { type: 'separator' }, { role: 'close' }] },
           { role: 'editMenu' },
           { role: 'viewMenu' },
           { role: 'windowMenu' }
         ]
       : [
-          { label: 'File', submenu: [settings, { type: 'separator' }, { role: 'quit' }] },
+          {
+            label: 'File',
+            submenu: [...fileItems, { type: 'separator' }, settings, { type: 'separator' }, { role: 'quit' }]
+          },
           { role: 'editMenu' },
           { role: 'viewMenu' },
           { role: 'windowMenu' }
