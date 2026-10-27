@@ -26,6 +26,120 @@ export interface TimelineScene {
   /** Lanes the items are spread over: 128 pitches, or the track count. */
   readonly laneCount: number;
   readonly items: TimelineItems;
+  /** Audio regions' file mapping, fades, names and flags (the Tracks area), one entry per item. */
+  readonly regions?: RegionDetails;
+}
+
+/** Item flags ({@link RegionDetails.flags}). */
+export const ItemFlag = { Selected: 1, Muted: 2 } as const;
+
+/**
+ * What the Tracks area knows about each region beyond its span: where in its audio file it starts, its fades and gain,
+ * its waveform (a key into the {@link WaveformSet} the renderer holds) and its name. Columns, like the items.
+ */
+export interface RegionDetails {
+  /** Waveform key per item, or -1 for none (yet). */
+  readonly waveform: Int32Array;
+  /** The file frame the region starts at. */
+  readonly fileOffset: Float64Array;
+  /** Fade lengths, in frames. */
+  readonly fadeIn: Float64Array;
+  readonly fadeOut: Float64Array;
+  /** Linear gain the waveform is drawn at. */
+  readonly gain: Float32Array;
+  /** {@link ItemFlag} bits. */
+  readonly flags: Uint8Array;
+  /** Names drawn in the name bar. */
+  readonly names: readonly string[];
+  /** Audio frames per tick (one tempo and one sample rate per project in Phase 1). */
+  readonly framesPerTick: number;
+}
+
+/** Region details with room for `count` regions. */
+export function createRegionDetails(
+  count: number,
+  framesPerTick: number,
+  names: readonly string[] = []
+): RegionDetails {
+  return {
+    waveform: new Int32Array(count).fill(-1),
+    fileOffset: new Float64Array(count),
+    fadeIn: new Float64Array(count),
+    fadeOut: new Float64Array(count),
+    gain: new Float32Array(count).fill(1),
+    flags: new Uint8Array(count),
+    names,
+    framesPerTick
+  };
+}
+
+/** Every buffer of a scene, to list as transferables when posting it to a worker. */
+export function sceneBuffers(scene: TimelineScene): ArrayBuffer[] {
+  const buffers = itemBuffers(scene.items);
+  const r = scene.regions;
+  if (r) {
+    buffers.push(
+      ...[r.waveform, r.fileOffset, r.fadeIn, r.fadeOut, r.gain, r.flags].map(column => column.buffer as ArrayBuffer)
+    );
+  }
+  return buffers;
+}
+
+/** A copy of a scene whose buffers are its own, so the original can be transferred and the copy kept (hit-testing). */
+export function cloneScene(scene: TimelineScene): TimelineScene {
+  const { items, regions } = scene;
+  return {
+    ...scene,
+    items: {
+      count: items.count,
+      start: items.start.slice(),
+      length: items.length.slice(),
+      lane: items.lane.slice(),
+      color: items.color.slice()
+    },
+    ...(regions
+      ? {
+          regions: {
+            ...regions,
+            waveform: regions.waveform.slice(),
+            fileOffset: regions.fileOffset.slice(),
+            fadeIn: regions.fadeIn.slice(),
+            fadeOut: regions.fadeOut.slice(),
+            gain: regions.gain.slice(),
+            flags: regions.flags.slice()
+          }
+        }
+      : {})
+  };
+}
+
+/**
+ * An item drawn somewhere else than the scene says, for one frame: the local preview while a region is dragged,
+ * trimmed or faded, before the edit is sent (docs/01-implementation-plan.md §4.4). Fields left out keep the scene's.
+ */
+export interface ItemOverride {
+  readonly index: number;
+  readonly start?: number;
+  readonly length?: number;
+  readonly lane?: number;
+  readonly fileOffset?: number;
+  readonly fadeIn?: number;
+  readonly fadeOut?: number;
+}
+
+/** The cycle area in the ruler, in ticks. */
+export interface CycleArea {
+  readonly enabled: boolean;
+  readonly start: number;
+  readonly end: number;
+}
+
+/** A rectangle in CSS pixels (the marquee). */
+export interface PixelRect {
+  readonly x: number;
+  readonly y: number;
+  readonly width: number;
+  readonly height: number;
 }
 
 /** Where a view is looking, in the units the stores use. Small and cloneable: it crosses to the worker every frame. */
@@ -40,6 +154,14 @@ export interface TimelineView {
   readonly laneHeight: number;
   /** The playhead, in ticks. */
   readonly playheadTick: number;
+  /** The cycle area, shown in the ruler and as a tint over the lanes when on. */
+  readonly cycle?: CycleArea | null;
+  /** The project end marker: lanes after it are shaded. */
+  readonly endTick?: number | null;
+  /** A selection rectangle being dragged out. */
+  readonly marquee?: PixelRect | null;
+  /** Items drawn as previewed rather than as the scene has them. */
+  readonly overrides?: readonly ItemOverride[] | null;
 }
 
 /** Item columns with room for `count` items. */

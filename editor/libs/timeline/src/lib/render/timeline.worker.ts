@@ -124,6 +124,13 @@ scope.onmessage = ({ data: request }) => {
       case 'resize':
         surface?.resize(request.width, request.height, request.dpr);
         break;
+      case 'waveform':
+        if (request.waveform) {
+          surface?.setWaveform(request.key, request.waveform);
+        } else {
+          surface?.deleteWaveform(request.key);
+        }
+        break;
       case 'frame':
         requestFrame(request.view, request.sentAt);
         break;

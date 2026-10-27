@@ -1,6 +1,7 @@
 import { barMultiple, GridLevel, gridLines, gridStep } from './grid';
-import { parseHexColor, type TimelineScene, type TimelineView } from './items';
+import { ItemFlag, type ItemOverride, parseHexColor, type TimelineScene, type TimelineView } from './items';
 import { LaneIntervalIndex } from './lane-interval-index';
+import { peakRange, WaveformSet } from './waveform';
 
 /** How a rectangle is shaded: flat, a note (1 px darker border) or a region (border plus a name bar). */
 export const RectStyle = { Flat: 0, Note: 1, Region: 2 } as const;
@@ -17,6 +18,20 @@ export interface TimelineTheme {
   readonly rulerTick: number;
   readonly rulerText: number;
   readonly playhead: number;
+  /** The cycle area in the ruler, on and off. */
+  readonly cycle: number;
+  readonly cycleOff: number;
+  /** Lanes after the project end. */
+  readonly afterEnd: number;
+  readonly endMarker: number;
+  /** Selected regions' outline and the marquee. */
+  readonly selection: number;
+  /** Fade lines and handles. */
+  readonly fade: number;
+  /** Region names, on the region's name bar. */
+  readonly regionText: number;
+  /** A muted region's fill. */
+  readonly muted: number;
 }
 
 export const darkTheme: TimelineTheme = {
@@ -28,16 +43,33 @@ export const darkTheme: TimelineTheme = {
   ruler: parseHexColor('#26272c'),
   rulerTick: parseHexColor('#6b6e7a'),
   rulerText: parseHexColor('#b8bbc6'),
-  playhead: parseHexColor('#f04b4b')
+  playhead: parseHexColor('#f04b4b'),
+  cycle: parseHexColor('#c9a227'),
+  cycleOff: parseHexColor('#4a4c55'),
+  afterEnd: parseHexColor('#141518'),
+  endMarker: parseHexColor('#8a8d99'),
+  selection: parseHexColor('#f2f3f7'),
+  fade: parseHexColor('#16171a'),
+  regionText: parseHexColor('#111214'),
+  muted: parseHexColor('#55575f')
 };
 
 /** Height of the bar ruler across the top, in CSS pixels. */
 export const RULER_HEIGHT = 24;
+/** The cycle band's top within the ruler; bar numbers sit above it. */
+export const CYCLE_BAND_TOP = 15;
+/** Height of a region's name bar (the fragment shader and the Canvas2D renderer tint it). */
+export const NAME_BAR_HEIGHT = 12;
+/** Horizontal advance of one glyph of text, in CSS pixels (both renderers draw 10 px monospace). */
+export const GLYPH_ADVANCE = 6;
+
+/** Layers of a frame, in painter's order ({@link RectBatch.layerEnds}). */
+export const Layer = { Background: 0, Grid: 1, Items: 2, Details: 3, Ruler: 4, Overlay: 5 } as const;
 
 /**
- * One frame as backend-neutral draw lists: rectangles (CSS pixels, painter's order, in layers) and bar-number labels.
- * WebGL2 uploads the columns as instance attributes as they are; Canvas2D walks them. Grows, never shrinks, so a steady
- * view allocates nothing per frame.
+ * One frame as backend-neutral draw lists: rectangles (CSS pixels, painter's order, in layers) and short texts (bar
+ * numbers, region names). WebGL2 uploads the columns as instance attributes as they are; Canvas2D walks them. Grows,
+ * never shrinks, so a steady view allocates nothing per frame but its texts.
  */
 export class RectBatch {
   count = 0;
@@ -45,20 +77,22 @@ export class RectBatch {
   rects = new Float32Array(4 * 1024);
   colors = new Uint32Array(1024);
   styles = new Uint8Array(1024);
-  /** End (exclusive rectangle index) of each layer: background, grid, items, overlay. */
+  /** End (exclusive rectangle index) of each {@link Layer}. */
   readonly layerEnds: number[] = [];
 
-  labelCount = 0;
-  labelX = new Float32Array(64);
-  labelY = new Float32Array(64);
-  labelValue = new Int32Array(64);
+  textCount = 0;
+  textX = new Float32Array(64);
+  textY = new Float32Array(64);
+  textColor = new Uint32Array(64);
+  readonly texts: string[] = [];
 
   /** Items drawn this frame (the visible set after culling). */
   visibleItems = 0;
 
   reset(): void {
     this.count = 0;
-    this.labelCount = 0;
+    this.textCount = 0;
+    this.texts.length = 0;
     this.layerEnds.length = 0;
     this.visibleItems = 0;
   }
@@ -89,20 +123,34 @@ export class RectBatch {
     this.styles[i] = style;
   }
 
+  /** A 1 px outline of a rectangle, as four rectangles. */
+  outline(x: number, y: number, w: number, h: number, color: number): void {
+    this.push(x, y, w, 1, color);
+    this.push(x, y + h - 1, w, 1, color);
+    this.push(x, y + 1, 1, h - 2, color);
+    this.push(x + w - 1, y + 1, 1, h - 2, color);
+  }
+
   endLayer(): void {
     this.layerEnds.push(this.count);
   }
 
-  pushLabel(x: number, y: number, value: number): void {
-    if (this.labelCount === this.labelValue.length) {
-      this.labelX = grow(this.labelX, 2 * this.labelCount);
-      this.labelY = grow(this.labelY, 2 * this.labelCount);
-      this.labelValue = grow(this.labelValue, 2 * this.labelCount);
+  /** Text whose top-left is (x, y), cut to the glyphs that fit in `maxWidth` (nothing when none fits). */
+  pushText(x: number, y: number, text: string, color: number, maxWidth = Infinity): void {
+    const fits = Math.floor(maxWidth / GLYPH_ADVANCE);
+    if (fits < 1 || !text) {
+      return;
     }
-    const i = this.labelCount++;
-    this.labelX[i] = x;
-    this.labelY[i] = y;
-    this.labelValue[i] = value;
+    if (this.textCount === this.textX.length) {
+      this.textX = grow(this.textX, 2 * this.textCount);
+      this.textY = grow(this.textY, 2 * this.textCount);
+      this.textColor = grow(this.textColor, 2 * this.textCount);
+    }
+    const i = this.textCount++;
+    this.textX[i] = x;
+    this.textY[i] = y;
+    this.textColor[i] = color;
+    this.texts[i] = text.length > fits ? text.slice(0, fits) : text;
   }
 }
 
@@ -112,21 +160,46 @@ function grow<T extends Float32Array | Uint32Array | Uint8Array | Int32Array>(ar
   return next;
 }
 
+/** A packed colour with its RGB scaled by `factor` (above 1 lightens towards white). */
+export function shadeColor(color: number, factor: number): number {
+  const f = (c: number) => Math.round(factor <= 1 ? c * factor : c + (255 - c) * (factor - 1));
+  const r = f(color & 0xff);
+  const g = f((color >>> 8) & 0xff);
+  const b = f((color >>> 16) & 0xff);
+  return ((color & 0xff000000) + (b << 16) + (g << 8) + r) >>> 0;
+}
+
 const BLACK_KEYS = new Set([1, 3, 6, 8, 10]);
+
+/** Where one region is drawn this frame: the scene's values, or an {@link ItemOverride}'s. */
+interface DrawnRegion {
+  id: number;
+  start: number;
+  length: number;
+  lane: number;
+  fileOffset: number;
+  fadeIn: number;
+  fadeOut: number;
+}
 
 /**
  * Turns a scene and a view into a {@link RectBatch}: lane backgrounds, the grid, the visible items (culled through a
- * {@link LaneIntervalIndex}, so the cost follows what is on screen, not the project size), then the ruler, bar numbers
- * and playhead on top. Pure CPU work shared by every backend, and the part a worker saves the main thread.
+ * {@link LaneIntervalIndex}, so the cost follows what is on screen, not the project size), the regions' waveforms,
+ * fades, names and selection, then the ruler (bar numbers, cycle area, project end) and the playhead on top. Pure CPU
+ * work shared by every backend, and the part a worker saves the main thread.
  */
 export class FrameBuilder {
   readonly batch = new RectBatch();
   readonly index: LaneIntervalIndex;
   private readonly visible: Uint32Array;
+  private readonly drawn: DrawnRegion[] = [];
+  private readonly range = new Float32Array(2);
 
   constructor(
     readonly scene: TimelineScene,
-    readonly theme: TimelineTheme = darkTheme
+    readonly theme: TimelineTheme = darkTheme,
+    /** Waveforms for {@link TimelineScene.regions}' keys; shared with whoever loads them. */
+    readonly waveforms: WaveformSet = new WaveformSet()
   ) {
     this.index = new LaneIntervalIndex(scene.items, scene.laneCount);
     this.visible = new Uint32Array(this.index.size);
@@ -135,22 +208,28 @@ export class FrameBuilder {
   /** Builds the frame for `view` on a `width` × `height` CSS-pixel canvas. */
   build(view: TimelineView, width: number, height: number): RectBatch {
     const { scene, theme, batch } = this;
-    const { ppq, beatsPerBar, laneCount, items, kind } = scene;
+    const { ppq, beatsPerBar, laneCount, kind } = scene;
     const { originTick, pixelsPerTick: ppt, firstLane, laneHeight } = view;
     const endTick = originTick + width / ppt;
     const laneTop = RULER_HEIGHT;
     const laneFrom = Math.max(0, Math.floor(firstLane));
     const laneTo = Math.min(laneCount, Math.ceil(firstLane + (height - laneTop) / laneHeight));
     const laneY = (lane: number) => laneTop + (lane - firstLane) * laneHeight;
+    const xOf = (tick: number) => (tick - originTick) * ppt;
     batch.reset();
 
-    // Background: one rectangle, then the alternate (or black-key) lanes.
+    // Background: one rectangle, the alternate (or black-key) lanes, and the shade after the project end.
     batch.push(0, 0, width, height, theme.background);
     for (let lane = laneFrom; lane < laneTo; lane++) {
       const shaded = kind === 'notes' ? BLACK_KEYS.has((laneCount - 1 - lane) % 12) : lane % 2 === 1;
       if (shaded) {
         batch.push(0, laneY(lane), width, laneHeight, theme.laneAlternate);
       }
+    }
+    const projectEnd = view.endTick ?? null;
+    const endX = projectEnd === null ? width : Math.max(0, Math.round(xOf(projectEnd)));
+    if (endX < width) {
+      batch.push(endX, laneTop, width - endX, height - laneTop, theme.afterEnd);
     }
     batch.endLayer();
 
@@ -160,47 +239,199 @@ export class FrameBuilder {
     for (const { tick, level } of lines) {
       const color =
         level === GridLevel.Bar ? theme.gridBar : level === GridLevel.Beat ? theme.gridBeat : theme.gridDivision;
-      batch.push(Math.round((tick - originTick) * ppt), laneTop, 1, height - laneTop, color);
+      batch.push(Math.round(xOf(tick)), laneTop, 1, height - laneTop, color);
     }
     batch.endLayer();
 
     // Items: query, then project. Clamp x to just outside the canvas so float32 keeps sub-pixel precision.
     const found = this.index.query(originTick, endTick, laneFrom, laneTo, this.visible);
+    const drawn = this.collect(found, view, originTick, endTick, laneFrom, laneTo);
     const inset = kind === 'notes' ? 0.5 : 1;
     const style = kind === 'notes' ? RectStyle.Note : RectStyle.Region;
-    batch.reserve(found);
-    for (let k = 0; k < found; k++) {
-      const id = this.visible[k] ?? 0;
-      const start = items.start[id] ?? 0;
-      const x0 = Math.max(-2, (start - originTick) * ppt);
-      const x1 = Math.min(width + 2, Math.max((start + (items.length[id] ?? 0) - originTick) * ppt, x0 + 1));
-      const y = laneY(items.lane[id] ?? 0) + inset;
-      batch.push(x0, y, x1 - x0, laneHeight - 2 * inset, items.color[id] ?? 0, style);
+    const flags = scene.regions?.flags;
+    batch.reserve(drawn.length);
+    for (const region of drawn) {
+      const x0 = Math.max(-2, xOf(region.start));
+      const x1 = Math.min(width + 2, Math.max(xOf(region.start + region.length), x0 + 1));
+      const y = laneY(region.lane) + inset;
+      const flag = flags?.[region.id] ?? 0;
+      const base = flag & ItemFlag.Muted ? theme.muted : (scene.items.color[region.id] ?? 0);
+      const color = flag & ItemFlag.Selected ? shadeColor(base, 1.25) : base;
+      batch.push(x0, y, x1 - x0, laneHeight - 2 * inset, color, style);
     }
-    batch.visibleItems = found;
+    batch.visibleItems = drawn.length;
     batch.endLayer();
 
-    // Ruler, bar numbers, playhead.
+    // Region details: waveforms, fades, selection outlines, names.
+    if (scene.regions) {
+      for (const region of drawn) {
+        this.regionDetails(region, view, width, laneY(region.lane) + inset, laneHeight - 2 * inset);
+      }
+    }
+    batch.endLayer();
+
+    // Ruler: background, cycle area, beat and bar ticks, bar numbers, project end.
     const bar = ppq * beatsPerBar;
     batch.push(0, 0, width, laneTop, theme.ruler);
     batch.push(0, laneTop - 1, width, 1, theme.gridBar);
+    const cycle = view.cycle;
+    if (cycle && cycle.end > cycle.start) {
+      const c0 = Math.max(-2, xOf(cycle.start));
+      const c1 = Math.min(width + 2, xOf(cycle.end));
+      if (c1 > c0) {
+        batch.push(
+          c0,
+          CYCLE_BAND_TOP,
+          c1 - c0,
+          laneTop - CYCLE_BAND_TOP - 1,
+          cycle.enabled ? theme.cycle : theme.cycleOff
+        );
+      }
+    }
     const labelEvery = barMultiple(bar * ppt, 40) * bar;
     for (const { tick, level } of lines) {
       if (level !== GridLevel.Division) {
-        const x = Math.round((tick - originTick) * ppt);
+        const x = Math.round(xOf(tick));
         const tall = level === GridLevel.Bar;
-        batch.push(x, tall ? 4 : laneTop - 7, 1, tall ? laneTop - 4 : 6, theme.rulerTick);
+        batch.push(x, tall ? 2 : laneTop - 5, 1, tall ? CYCLE_BAND_TOP - 2 : 4, theme.rulerTick);
         if (tall && tick % labelEvery === 0) {
-          batch.pushLabel(x + 3, 4, tick / bar + 1);
+          batch.pushText(x + 3, 2, String(tick / bar + 1), theme.rulerText);
         }
       }
     }
-    const playheadX = Math.round((view.playheadTick - originTick) * ppt);
+    if (projectEnd !== null && endX < width) {
+      batch.push(endX - 1, 0, 2, laneTop, theme.endMarker);
+    }
+    batch.endLayer();
+
+    // Overlay: the marquee and the playhead.
+    const marquee = view.marquee;
+    if (marquee && marquee.width >= 1 && marquee.height >= 1) {
+      batch.outline(marquee.x, marquee.y, marquee.width, marquee.height, theme.selection);
+    }
+    const playheadX = Math.round(xOf(view.playheadTick));
     if (playheadX >= -5 && playheadX <= width + 5) {
       batch.push(playheadX - 4, 0, 9, 6, theme.playhead);
       batch.push(playheadX, 0, 1, height, theme.playhead);
     }
     batch.endLayer();
     return batch;
+  }
+
+  /** The regions to draw: the visible ones the view does not override, then the overridden ones where they now are. */
+  private collect(
+    found: number,
+    view: TimelineView,
+    from: number,
+    to: number,
+    laneFrom: number,
+    laneTo: number
+  ): DrawnRegion[] {
+    const { items, regions } = this.scene;
+    const drawn = this.drawn;
+    drawn.length = 0;
+    const overrides = view.overrides ?? null;
+    const overridden = overrides?.length ? new Set(overrides.map(o => o.index)) : null;
+    const region = (id: number, o?: ItemOverride): DrawnRegion => ({
+      id,
+      start: o?.start ?? items.start[id] ?? 0,
+      length: o?.length ?? items.length[id] ?? 0,
+      lane: o?.lane ?? items.lane[id] ?? 0,
+      fileOffset: o?.fileOffset ?? regions?.fileOffset[id] ?? 0,
+      fadeIn: o?.fadeIn ?? regions?.fadeIn[id] ?? 0,
+      fadeOut: o?.fadeOut ?? regions?.fadeOut[id] ?? 0
+    });
+    for (let k = 0; k < found; k++) {
+      const id = this.visible[k] ?? 0;
+      if (!overridden?.has(id)) {
+        drawn.push(region(id));
+      }
+    }
+    for (const o of overrides ?? []) {
+      if (o.index >= 0 && o.index < items.count) {
+        const r = region(o.index, o);
+        if (r.lane >= laneFrom && r.lane < laneTo && r.start < to && r.start + r.length > from) {
+          drawn.push(r);
+        }
+      }
+    }
+    return drawn;
+  }
+
+  /** A region's waveform (min/max columns), fade lines and handles, selection outline and name. */
+  private regionDetails(region: DrawnRegion, view: TimelineView, width: number, y: number, h: number): void {
+    const { batch, theme, scene, range } = this;
+    const details = scene.regions;
+    if (!details || h < 4) {
+      return;
+    }
+    const { originTick, pixelsPerTick: ppt } = view;
+    const { id, start, length, fileOffset } = region;
+    const xStart = (start - originTick) * ppt;
+    const xEnd = (start + length - originTick) * ppt;
+    const x0 = Math.max(0, Math.floor(xStart));
+    const x1 = Math.min(width, Math.ceil(xEnd));
+    const flag = details.flags[id] ?? 0;
+    const base = flag & ItemFlag.Muted ? theme.muted : (scene.items.color[id] ?? 0);
+    const withName = h >= 22;
+    const top = withName ? y + NAME_BAR_HEIGHT : y + 1;
+    const bottom = y + h - 1;
+    const framesPerTick = details.framesPerTick;
+
+    // Waveform: one column per CSS pixel, from the coarsest peak level that still resolves a pixel.
+    const waveform = this.waveforms.best(details.waveform[id] ?? -1, framesPerTick / ppt);
+    if (waveform && bottom - top >= 4 && x1 > x0) {
+      const mid = (top + bottom) / 2;
+      const half = (bottom - top) / 2;
+      const gain = details.gain[id] ?? 1;
+      const color = shadeColor(base, 0.42);
+      const framesPerPixel = framesPerTick / ppt;
+      batch.reserve(x1 - x0);
+      for (let x = x0; x < x1; x++) {
+        const frame = fileOffset + (originTick + x / ppt - start) * framesPerTick;
+        if (peakRange(waveform, frame, frame + framesPerPixel, range)) {
+          const hi = Math.min(1, Math.max(-1, (range[1] ?? 0) * gain));
+          const lo = Math.min(1, Math.max(-1, (range[0] ?? 0) * gain));
+          const yHi = mid - hi * half;
+          batch.push(x, yHi, 1, Math.max(1, mid - lo * half - yHi), color);
+        }
+      }
+    }
+
+    // Fades: a line from silence to full level, and a handle where it ends.
+    const fadeInPx = (region.fadeIn / framesPerTick) * ppt;
+    const fadeOutPx = (region.fadeOut / framesPerTick) * ppt;
+    if (fadeInPx >= 1) {
+      this.fadeLine(xStart, bottom, xStart + fadeInPx, top, width);
+    }
+    if (fadeOutPx >= 1) {
+      this.fadeLine(xEnd - fadeOutPx, top, xEnd, bottom, width);
+    }
+
+    if (flag & ItemFlag.Selected && x1 > x0) {
+      batch.outline(Math.max(-1, xStart), y, Math.min(width + 1, xEnd) - Math.max(-1, xStart), h, theme.selection);
+    }
+
+    if (withName) {
+      const textX = Math.max(xStart, 0) + 3;
+      batch.pushText(textX, y + 1, details.names[id] ?? '', theme.regionText, xEnd - textX - 2);
+    }
+  }
+
+  /** A straight fade line as 2 px dots, from (xa, ya) to (xb, yb), clipped to the canvas. */
+  private fadeLine(xa: number, ya: number, xb: number, yb: number, width: number): void {
+    const { batch, theme } = this;
+    const steps = Math.max(1, Math.ceil(Math.hypot(xb - xa, yb - ya) / 2));
+    for (let s = 0; s <= steps; s++) {
+      const x = xa + ((xb - xa) * s) / steps;
+      if (x >= -2 && x <= width + 2) {
+        batch.push(x - 0.75, ya + ((yb - ya) * s) / steps - 0.75, 1.5, 1.5, theme.fade);
+      }
+    }
+    const handleX = ya > yb ? xb : xa;
+    const handleY = Math.min(ya, yb);
+    if (handleX >= -4 && handleX <= width + 4) {
+      batch.push(handleX - 2.5, handleY, 5, 5, theme.fade);
+    }
   }
 }

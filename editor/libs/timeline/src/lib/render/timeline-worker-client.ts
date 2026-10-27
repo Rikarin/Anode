@@ -1,4 +1,5 @@
-import { itemBuffers, type TimelineScene, type TimelineView } from '../items';
+import { sceneBuffers, type TimelineScene, type TimelineView } from '../items';
+import { type Waveform } from '../waveform';
 import { type RendererBackend } from './renderer';
 import { type FramePacing, type FrameRecords, type WorkerRequest, type WorkerResponse } from './worker-protocol';
 
@@ -67,7 +68,7 @@ export class TimelineWorkerClient {
 
   /** Sends the scene, transferring its columns: they are unusable on this thread afterwards. */
   async setScene(scene: TimelineScene): Promise<number> {
-    const response = await this.request({ type: 'scene', scene }, itemBuffers(scene.items));
+    const response = await this.request({ type: 'scene', scene }, sceneBuffers(scene));
     if (response.type !== 'scene-ready') {
       throw new Error(describe(response));
     }
@@ -76,6 +77,11 @@ export class TimelineWorkerClient {
 
   resize(width: number, height: number, dpr: number): void {
     this.post({ type: 'resize', width, height, dpr });
+  }
+
+  /** Sends one resolution of a waveform (copied: the caller keeps its own), or forgets the key's with `null`. */
+  setWaveform(key: number, waveform: Waveform | null): void {
+    this.post({ type: 'waveform', key, waveform });
   }
 
   /**

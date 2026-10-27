@@ -199,6 +199,9 @@ importers:
       '@xui/core':
         specifier: ^3.0.1
         version: 3.0.1(4dca3108be1855d029197dfdd97889b4)
+      '@xui/dialog':
+        specifier: ^3.0.1
+        version: 3.0.1(2330fda0824b62fee150e71e22767c07)
       '@xui/dock-manager':
         specifier: ^3.0.1
         version: 3.0.1(@angular/common@22.2.3(@angular/core@22.2.3(@angular/compiler@22.2.3)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@22.2.3(@angular/compiler@22.2.3)(rxjs@7.8.2))(@ng-icons/core@35.1.0(@angular-devkit/schematics@22.2.4(chokidar@5.0.0))(@angular/common@22.2.3(@angular/core@22.2.3(@angular/compiler@22.2.3)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@22.2.3(@angular/compiler@22.2.3)(rxjs@7.8.2))(@schematics/angular@22.2.4(chokidar@5.0.0))(rxjs@7.8.2))(@ng-icons/material-icons@35.1.0)(@xui/core@3.0.1(4dca3108be1855d029197dfdd97889b4))(@xui/icon@3.0.1(@angular/core@22.2.3(@angular/compiler@22.2.3)(rxjs@7.8.2))(@ng-icons/core@35.1.0(@angular-devkit/schematics@22.2.4(chokidar@5.0.0))(@angular/common@22.2.3(@angular/core@22.2.3(@angular/compiler@22.2.3)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@22.2.3(@angular/compiler@22.2.3)(rxjs@7.8.2))(@schematics/angular@22.2.4(chokidar@5.0.0))(rxjs@7.8.2))(@xui/core@3.0.1(4dca3108be1855d029197dfdd97889b4))(clsx@2.1.1))(clsx@2.1.1)
@@ -208,6 +211,9 @@ importers:
       '@xui/input':
         specifier: ^3.0.1
         version: 3.0.1(25330ce472011a23a50079bcdd208da0)
+      '@xui/menu':
+        specifier: ^3.0.1
+        version: 3.0.1(0e73d85a7c0303dc9552c5b4b21e0f4e)
       '@xui/menubar':
         specifier: ^3.0.1
         version: 3.0.1(dc823c97b380928b64988d5e8ecd4a19)
@@ -217,9 +223,15 @@ importers:
       '@xui/numeric-input':
         specifier: ^3.0.1
         version: 3.0.1(9d8f86003409cdd65800b5b312efac63)
+      '@xui/popover':
+        specifier: ^3.0.1
+        version: 3.0.1(1a060dafd8e5d944d28c4d6e365e27da)
       '@xui/segmented-control':
         specifier: ^3.0.1
         version: 3.0.1(cbc6b7663f8b5aa294ace4bf813e0ed1)
+      '@xui/select':
+        specifier: ^3.0.1
+        version: 3.0.1(97a318ce9ee920414d95d221387b9aa6)
       '@xui/slider':
         specifier: ^3.0.1
         version: 3.0.1(cbc6b7663f8b5aa294ace4bf813e0ed1)
@@ -229,6 +241,9 @@ importers:
       '@xui/splitter':
         specifier: ^3.0.1
         version: 3.0.1(1a060dafd8e5d944d28c4d6e365e27da)
+      '@xui/toast':
+        specifier: ^3.0.1
+        version: 3.0.1(@angular/core@22.2.3(@angular/compiler@22.2.3)(rxjs@7.8.2))(@ng-icons/core@35.1.0(@angular-devkit/schematics@22.2.4(chokidar@5.0.0))(@angular/common@22.2.3(@angular/core@22.2.3(@angular/compiler@22.2.3)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@22.2.3(@angular/compiler@22.2.3)(rxjs@7.8.2))(@schematics/angular@22.2.4(chokidar@5.0.0))(rxjs@7.8.2))(@ng-icons/material-icons@35.1.0)(@xui/core@3.0.1(4dca3108be1855d029197dfdd97889b4))(@xui/icon@3.0.1(@angular/core@22.2.3(@angular/compiler@22.2.3)(rxjs@7.8.2))(@ng-icons/core@35.1.0(@angular-devkit/schematics@22.2.4(chokidar@5.0.0))(@angular/common@22.2.3(@angular/core@22.2.3(@angular/compiler@22.2.3)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@22.2.3(@angular/compiler@22.2.3)(rxjs@7.8.2))(@schematics/angular@22.2.4(chokidar@5.0.0))(rxjs@7.8.2))(@xui/core@3.0.1(4dca3108be1855d029197dfdd97889b4))(clsx@2.1.1))
       '@xui/tooltip':
         specifier: ^3.0.1
         version: 3.0.1(4e0517824e8ba6e676f936d24390ac19)
@@ -3700,6 +3715,17 @@ packages:
       luxon:
         optional: true
 
+  '@xui/dialog@3.0.1':
+    resolution: {integrity: sha512-4w+cYhyIOlN1RLRsWNYm/WPiPO7rFovZKcGCFsaq2FmLn09DXPG8yWPIlgpmSFs7/SNMLWGrZSKhBiOQxxOdTQ==}
+    peerDependencies:
+      '@angular/cdk': '22'
+      '@angular/core': '22'
+      '@ng-icons/core': '35'
+      '@ng-icons/material-icons': '35'
+      '@xui/core': 3.0.1
+      '@xui/icon': 3.0.1
+      clsx: ^2.1.1
+
   '@xui/dock-manager@3.0.1':
     resolution: {integrity: sha512-WyRY6w1od+I2FXhwlwlK3fzNJg5XGp6clqOCeMreIQ5gZZQQU1IXg5axcNgzfrqq5wTfjmFniHvO/bK7hxJcSg==}
     peerDependencies:
@@ -3725,6 +3751,18 @@ packages:
       '@angular/cdk': '22'
       '@angular/core': '22'
       '@angular/forms': '22'
+      '@ng-icons/core': '35'
+      '@ng-icons/material-icons': '35'
+      '@xui/core': 3.0.1
+      '@xui/icon': 3.0.1
+      class-variance-authority: ^0.7.1
+      clsx: ^2.1.1
+
+  '@xui/menu@3.0.1':
+    resolution: {integrity: sha512-0qfGw9fovg5SkqjZMAoWLR7xIpz1aayjf8FPszXzmTTX2K1k11zq6ZhQfT4rxDhUScgwwr+Y9fPuemVvQM0Ykg==}
+    peerDependencies:
+      '@angular/cdk': '22'
+      '@angular/core': '22'
       '@ng-icons/core': '35'
       '@ng-icons/material-icons': '35'
       '@xui/core': 3.0.1
@@ -3761,6 +3799,15 @@ packages:
       '@xui/icon': 3.0.1
       clsx: ^2.1.1
 
+  '@xui/popover@3.0.1':
+    resolution: {integrity: sha512-Jj0/mEpVZvTDZvAo6BIMgcWvFYa67edHip4maY556qSdMdl8ZgtmnFvlPMZ8LQ8RpRFmrzgGd4uDoUHMmcMQ8A==}
+    peerDependencies:
+      '@angular/cdk': '22'
+      '@angular/common': '22'
+      '@angular/core': '22'
+      '@xui/core': 3.0.1
+      clsx: ^2.1.1
+
   '@xui/segmented-control@3.0.1':
     resolution: {integrity: sha512-NUmopWSI9in87fyHTN0NE5a0aiGN9dS5uL5QXp2fIQB7K2cXEWwdcySeGz2V8XJqQSvPWut53WzvF4foNlAF4Q==}
     peerDependencies:
@@ -3769,6 +3816,20 @@ packages:
       '@angular/forms': '22'
       '@xui/core': 3.0.1
       class-variance-authority: ^0.7.1
+      clsx: ^2.1.1
+
+  '@xui/select@3.0.1':
+    resolution: {integrity: sha512-vQdnLvope56o/c71Db/H+855EItZcrZ4y2k1Kl4XdvR477Np3tuNIVtmhFbrHAhUf5oMH8RzqbBXf9S2rSPw2A==}
+    peerDependencies:
+      '@angular/cdk': '22'
+      '@angular/common': '22'
+      '@angular/core': '22'
+      '@angular/forms': '22'
+      '@ng-icons/core': '35'
+      '@ng-icons/material-icons': '35'
+      '@xui/core': 3.0.1
+      '@xui/icon': 3.0.1
+      '@xui/popover': 3.0.1
       clsx: ^2.1.1
 
   '@xui/slider@3.0.1':
@@ -3797,6 +3858,15 @@ packages:
       '@angular/core': '22'
       '@xui/core': 3.0.1
       clsx: ^2.1.1
+
+  '@xui/toast@3.0.1':
+    resolution: {integrity: sha512-IdOY/TixSZLLYwO1g9f69mIWxwCXAdBL6Z2ejy6BWJmHumijzUv3PdNZvk4NlO+1WSI4s5KuNfAJTDcCZrV0pg==}
+    peerDependencies:
+      '@angular/core': '22'
+      '@ng-icons/core': '35'
+      '@ng-icons/material-icons': '35'
+      '@xui/core': 3.0.1
+      '@xui/icon': 3.0.1
 
   '@xui/tooltip@3.0.1':
     resolution: {integrity: sha512-kIcy1VgcUGjyV1Y9/dTFIi3413kUenF72L0U3/dZKnTLMZ7MMWZUzk0pagnFPU5DfZ9DFHJTp0rPEUJm8tj3Vw==}
@@ -9976,6 +10046,17 @@ snapshots:
       tailwind-merge: 3.7.0
       tslib: 2.8.1
 
+  '@xui/dialog@3.0.1(2330fda0824b62fee150e71e22767c07)':
+    dependencies:
+      '@angular/cdk': 22.2.4(@angular/common@22.2.3(@angular/core@22.2.3(@angular/compiler@22.2.3)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@22.2.3(@angular/compiler@22.2.3)(rxjs@7.8.2))(@angular/forms@22.2.3(@angular/common@22.2.3(@angular/core@22.2.3(@angular/compiler@22.2.3)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@22.2.3(@angular/compiler@22.2.3)(rxjs@7.8.2))(@angular/platform-browser@22.2.3(@angular/animations@22.2.3(@angular/core@22.2.3(@angular/compiler@22.2.3)(rxjs@7.8.2)))(@angular/common@22.2.3(@angular/core@22.2.3(@angular/compiler@22.2.3)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@22.2.3(@angular/compiler@22.2.3)(rxjs@7.8.2)))(rxjs@7.8.2))(@angular/platform-browser@22.2.3(@angular/animations@22.2.3(@angular/core@22.2.3(@angular/compiler@22.2.3)(rxjs@7.8.2)))(@angular/common@22.2.3(@angular/core@22.2.3(@angular/compiler@22.2.3)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@22.2.3(@angular/compiler@22.2.3)(rxjs@7.8.2)))(rxjs@7.8.2)
+      '@angular/core': 22.2.3(@angular/compiler@22.2.3)(rxjs@7.8.2)
+      '@ng-icons/core': 35.1.0(@angular-devkit/schematics@22.2.4(chokidar@5.0.0))(@angular/common@22.2.3(@angular/core@22.2.3(@angular/compiler@22.2.3)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@22.2.3(@angular/compiler@22.2.3)(rxjs@7.8.2))(@schematics/angular@22.2.4(chokidar@5.0.0))(rxjs@7.8.2)
+      '@ng-icons/material-icons': 35.1.0
+      '@xui/core': 3.0.1(4dca3108be1855d029197dfdd97889b4)
+      '@xui/icon': 3.0.1(@angular/core@22.2.3(@angular/compiler@22.2.3)(rxjs@7.8.2))(@ng-icons/core@35.1.0(@angular-devkit/schematics@22.2.4(chokidar@5.0.0))(@angular/common@22.2.3(@angular/core@22.2.3(@angular/compiler@22.2.3)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@22.2.3(@angular/compiler@22.2.3)(rxjs@7.8.2))(@schematics/angular@22.2.4(chokidar@5.0.0))(rxjs@7.8.2))(@xui/core@3.0.1(4dca3108be1855d029197dfdd97889b4))(clsx@2.1.1)
+      clsx: 2.1.1
+      tslib: 2.8.1
+
   '@xui/dock-manager@3.0.1(@angular/common@22.2.3(@angular/core@22.2.3(@angular/compiler@22.2.3)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@22.2.3(@angular/compiler@22.2.3)(rxjs@7.8.2))(@ng-icons/core@35.1.0(@angular-devkit/schematics@22.2.4(chokidar@5.0.0))(@angular/common@22.2.3(@angular/core@22.2.3(@angular/compiler@22.2.3)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@22.2.3(@angular/compiler@22.2.3)(rxjs@7.8.2))(@schematics/angular@22.2.4(chokidar@5.0.0))(rxjs@7.8.2))(@ng-icons/material-icons@35.1.0)(@xui/core@3.0.1(4dca3108be1855d029197dfdd97889b4))(@xui/icon@3.0.1(@angular/core@22.2.3(@angular/compiler@22.2.3)(rxjs@7.8.2))(@ng-icons/core@35.1.0(@angular-devkit/schematics@22.2.4(chokidar@5.0.0))(@angular/common@22.2.3(@angular/core@22.2.3(@angular/compiler@22.2.3)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@22.2.3(@angular/compiler@22.2.3)(rxjs@7.8.2))(@schematics/angular@22.2.4(chokidar@5.0.0))(rxjs@7.8.2))(@xui/core@3.0.1(4dca3108be1855d029197dfdd97889b4))(clsx@2.1.1))(clsx@2.1.1)':
     dependencies:
       '@angular/common': 22.2.3(@angular/core@22.2.3(@angular/compiler@22.2.3)(rxjs@7.8.2))(rxjs@7.8.2)
@@ -10000,6 +10081,18 @@ snapshots:
       '@angular/cdk': 22.2.4(@angular/common@22.2.3(@angular/core@22.2.3(@angular/compiler@22.2.3)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@22.2.3(@angular/compiler@22.2.3)(rxjs@7.8.2))(@angular/forms@22.2.3(@angular/common@22.2.3(@angular/core@22.2.3(@angular/compiler@22.2.3)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@22.2.3(@angular/compiler@22.2.3)(rxjs@7.8.2))(@angular/platform-browser@22.2.3(@angular/animations@22.2.3(@angular/core@22.2.3(@angular/compiler@22.2.3)(rxjs@7.8.2)))(@angular/common@22.2.3(@angular/core@22.2.3(@angular/compiler@22.2.3)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@22.2.3(@angular/compiler@22.2.3)(rxjs@7.8.2)))(rxjs@7.8.2))(@angular/platform-browser@22.2.3(@angular/animations@22.2.3(@angular/core@22.2.3(@angular/compiler@22.2.3)(rxjs@7.8.2)))(@angular/common@22.2.3(@angular/core@22.2.3(@angular/compiler@22.2.3)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@22.2.3(@angular/compiler@22.2.3)(rxjs@7.8.2)))(rxjs@7.8.2)
       '@angular/core': 22.2.3(@angular/compiler@22.2.3)(rxjs@7.8.2)
       '@angular/forms': 22.2.3(@angular/common@22.2.3(@angular/core@22.2.3(@angular/compiler@22.2.3)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@22.2.3(@angular/compiler@22.2.3)(rxjs@7.8.2))(@angular/platform-browser@22.2.3(@angular/animations@22.2.3(@angular/core@22.2.3(@angular/compiler@22.2.3)(rxjs@7.8.2)))(@angular/common@22.2.3(@angular/core@22.2.3(@angular/compiler@22.2.3)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@22.2.3(@angular/compiler@22.2.3)(rxjs@7.8.2)))(rxjs@7.8.2)
+      '@ng-icons/core': 35.1.0(@angular-devkit/schematics@22.2.4(chokidar@5.0.0))(@angular/common@22.2.3(@angular/core@22.2.3(@angular/compiler@22.2.3)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@22.2.3(@angular/compiler@22.2.3)(rxjs@7.8.2))(@schematics/angular@22.2.4(chokidar@5.0.0))(rxjs@7.8.2)
+      '@ng-icons/material-icons': 35.1.0
+      '@xui/core': 3.0.1(4dca3108be1855d029197dfdd97889b4)
+      '@xui/icon': 3.0.1(@angular/core@22.2.3(@angular/compiler@22.2.3)(rxjs@7.8.2))(@ng-icons/core@35.1.0(@angular-devkit/schematics@22.2.4(chokidar@5.0.0))(@angular/common@22.2.3(@angular/core@22.2.3(@angular/compiler@22.2.3)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@22.2.3(@angular/compiler@22.2.3)(rxjs@7.8.2))(@schematics/angular@22.2.4(chokidar@5.0.0))(rxjs@7.8.2))(@xui/core@3.0.1(4dca3108be1855d029197dfdd97889b4))(clsx@2.1.1)
+      class-variance-authority: 0.7.1
+      clsx: 2.1.1
+      tslib: 2.8.1
+
+  '@xui/menu@3.0.1(0e73d85a7c0303dc9552c5b4b21e0f4e)':
+    dependencies:
+      '@angular/cdk': 22.2.4(@angular/common@22.2.3(@angular/core@22.2.3(@angular/compiler@22.2.3)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@22.2.3(@angular/compiler@22.2.3)(rxjs@7.8.2))(@angular/forms@22.2.3(@angular/common@22.2.3(@angular/core@22.2.3(@angular/compiler@22.2.3)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@22.2.3(@angular/compiler@22.2.3)(rxjs@7.8.2))(@angular/platform-browser@22.2.3(@angular/animations@22.2.3(@angular/core@22.2.3(@angular/compiler@22.2.3)(rxjs@7.8.2)))(@angular/common@22.2.3(@angular/core@22.2.3(@angular/compiler@22.2.3)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@22.2.3(@angular/compiler@22.2.3)(rxjs@7.8.2)))(rxjs@7.8.2))(@angular/platform-browser@22.2.3(@angular/animations@22.2.3(@angular/core@22.2.3(@angular/compiler@22.2.3)(rxjs@7.8.2)))(@angular/common@22.2.3(@angular/core@22.2.3(@angular/compiler@22.2.3)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@22.2.3(@angular/compiler@22.2.3)(rxjs@7.8.2)))(rxjs@7.8.2)
+      '@angular/core': 22.2.3(@angular/compiler@22.2.3)(rxjs@7.8.2)
       '@ng-icons/core': 35.1.0(@angular-devkit/schematics@22.2.4(chokidar@5.0.0))(@angular/common@22.2.3(@angular/core@22.2.3(@angular/compiler@22.2.3)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@22.2.3(@angular/compiler@22.2.3)(rxjs@7.8.2))(@schematics/angular@22.2.4(chokidar@5.0.0))(rxjs@7.8.2)
       '@ng-icons/material-icons': 35.1.0
       '@xui/core': 3.0.1(4dca3108be1855d029197dfdd97889b4)
@@ -10037,6 +10130,15 @@ snapshots:
       clsx: 2.1.1
       tslib: 2.8.1
 
+  '@xui/popover@3.0.1(1a060dafd8e5d944d28c4d6e365e27da)':
+    dependencies:
+      '@angular/cdk': 22.2.4(@angular/common@22.2.3(@angular/core@22.2.3(@angular/compiler@22.2.3)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@22.2.3(@angular/compiler@22.2.3)(rxjs@7.8.2))(@angular/forms@22.2.3(@angular/common@22.2.3(@angular/core@22.2.3(@angular/compiler@22.2.3)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@22.2.3(@angular/compiler@22.2.3)(rxjs@7.8.2))(@angular/platform-browser@22.2.3(@angular/animations@22.2.3(@angular/core@22.2.3(@angular/compiler@22.2.3)(rxjs@7.8.2)))(@angular/common@22.2.3(@angular/core@22.2.3(@angular/compiler@22.2.3)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@22.2.3(@angular/compiler@22.2.3)(rxjs@7.8.2)))(rxjs@7.8.2))(@angular/platform-browser@22.2.3(@angular/animations@22.2.3(@angular/core@22.2.3(@angular/compiler@22.2.3)(rxjs@7.8.2)))(@angular/common@22.2.3(@angular/core@22.2.3(@angular/compiler@22.2.3)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@22.2.3(@angular/compiler@22.2.3)(rxjs@7.8.2)))(rxjs@7.8.2)
+      '@angular/common': 22.2.3(@angular/core@22.2.3(@angular/compiler@22.2.3)(rxjs@7.8.2))(rxjs@7.8.2)
+      '@angular/core': 22.2.3(@angular/compiler@22.2.3)(rxjs@7.8.2)
+      '@xui/core': 3.0.1(4dca3108be1855d029197dfdd97889b4)
+      clsx: 2.1.1
+      tslib: 2.8.1
+
   '@xui/segmented-control@3.0.1(cbc6b7663f8b5aa294ace4bf813e0ed1)':
     dependencies:
       '@angular/cdk': 22.2.4(@angular/common@22.2.3(@angular/core@22.2.3(@angular/compiler@22.2.3)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@22.2.3(@angular/compiler@22.2.3)(rxjs@7.8.2))(@angular/forms@22.2.3(@angular/common@22.2.3(@angular/core@22.2.3(@angular/compiler@22.2.3)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@22.2.3(@angular/compiler@22.2.3)(rxjs@7.8.2))(@angular/platform-browser@22.2.3(@angular/animations@22.2.3(@angular/core@22.2.3(@angular/compiler@22.2.3)(rxjs@7.8.2)))(@angular/common@22.2.3(@angular/core@22.2.3(@angular/compiler@22.2.3)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@22.2.3(@angular/compiler@22.2.3)(rxjs@7.8.2)))(rxjs@7.8.2))(@angular/platform-browser@22.2.3(@angular/animations@22.2.3(@angular/core@22.2.3(@angular/compiler@22.2.3)(rxjs@7.8.2)))(@angular/common@22.2.3(@angular/core@22.2.3(@angular/compiler@22.2.3)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@22.2.3(@angular/compiler@22.2.3)(rxjs@7.8.2)))(rxjs@7.8.2)
@@ -10044,6 +10146,20 @@ snapshots:
       '@angular/forms': 22.2.3(@angular/common@22.2.3(@angular/core@22.2.3(@angular/compiler@22.2.3)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@22.2.3(@angular/compiler@22.2.3)(rxjs@7.8.2))(@angular/platform-browser@22.2.3(@angular/animations@22.2.3(@angular/core@22.2.3(@angular/compiler@22.2.3)(rxjs@7.8.2)))(@angular/common@22.2.3(@angular/core@22.2.3(@angular/compiler@22.2.3)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@22.2.3(@angular/compiler@22.2.3)(rxjs@7.8.2)))(rxjs@7.8.2)
       '@xui/core': 3.0.1(4dca3108be1855d029197dfdd97889b4)
       class-variance-authority: 0.7.1
+      clsx: 2.1.1
+      tslib: 2.8.1
+
+  '@xui/select@3.0.1(97a318ce9ee920414d95d221387b9aa6)':
+    dependencies:
+      '@angular/cdk': 22.2.4(@angular/common@22.2.3(@angular/core@22.2.3(@angular/compiler@22.2.3)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@22.2.3(@angular/compiler@22.2.3)(rxjs@7.8.2))(@angular/forms@22.2.3(@angular/common@22.2.3(@angular/core@22.2.3(@angular/compiler@22.2.3)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@22.2.3(@angular/compiler@22.2.3)(rxjs@7.8.2))(@angular/platform-browser@22.2.3(@angular/animations@22.2.3(@angular/core@22.2.3(@angular/compiler@22.2.3)(rxjs@7.8.2)))(@angular/common@22.2.3(@angular/core@22.2.3(@angular/compiler@22.2.3)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@22.2.3(@angular/compiler@22.2.3)(rxjs@7.8.2)))(rxjs@7.8.2))(@angular/platform-browser@22.2.3(@angular/animations@22.2.3(@angular/core@22.2.3(@angular/compiler@22.2.3)(rxjs@7.8.2)))(@angular/common@22.2.3(@angular/core@22.2.3(@angular/compiler@22.2.3)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@22.2.3(@angular/compiler@22.2.3)(rxjs@7.8.2)))(rxjs@7.8.2)
+      '@angular/common': 22.2.3(@angular/core@22.2.3(@angular/compiler@22.2.3)(rxjs@7.8.2))(rxjs@7.8.2)
+      '@angular/core': 22.2.3(@angular/compiler@22.2.3)(rxjs@7.8.2)
+      '@angular/forms': 22.2.3(@angular/common@22.2.3(@angular/core@22.2.3(@angular/compiler@22.2.3)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@22.2.3(@angular/compiler@22.2.3)(rxjs@7.8.2))(@angular/platform-browser@22.2.3(@angular/animations@22.2.3(@angular/core@22.2.3(@angular/compiler@22.2.3)(rxjs@7.8.2)))(@angular/common@22.2.3(@angular/core@22.2.3(@angular/compiler@22.2.3)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@22.2.3(@angular/compiler@22.2.3)(rxjs@7.8.2)))(rxjs@7.8.2)
+      '@ng-icons/core': 35.1.0(@angular-devkit/schematics@22.2.4(chokidar@5.0.0))(@angular/common@22.2.3(@angular/core@22.2.3(@angular/compiler@22.2.3)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@22.2.3(@angular/compiler@22.2.3)(rxjs@7.8.2))(@schematics/angular@22.2.4(chokidar@5.0.0))(rxjs@7.8.2)
+      '@ng-icons/material-icons': 35.1.0
+      '@xui/core': 3.0.1(4dca3108be1855d029197dfdd97889b4)
+      '@xui/icon': 3.0.1(@angular/core@22.2.3(@angular/compiler@22.2.3)(rxjs@7.8.2))(@ng-icons/core@35.1.0(@angular-devkit/schematics@22.2.4(chokidar@5.0.0))(@angular/common@22.2.3(@angular/core@22.2.3(@angular/compiler@22.2.3)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@22.2.3(@angular/compiler@22.2.3)(rxjs@7.8.2))(@schematics/angular@22.2.4(chokidar@5.0.0))(rxjs@7.8.2))(@xui/core@3.0.1(4dca3108be1855d029197dfdd97889b4))(clsx@2.1.1)
+      '@xui/popover': 3.0.1(1a060dafd8e5d944d28c4d6e365e27da)
       clsx: 2.1.1
       tslib: 2.8.1
 
@@ -10072,6 +10188,15 @@ snapshots:
       '@angular/core': 22.2.3(@angular/compiler@22.2.3)(rxjs@7.8.2)
       '@xui/core': 3.0.1(4dca3108be1855d029197dfdd97889b4)
       clsx: 2.1.1
+      tslib: 2.8.1
+
+  '@xui/toast@3.0.1(@angular/core@22.2.3(@angular/compiler@22.2.3)(rxjs@7.8.2))(@ng-icons/core@35.1.0(@angular-devkit/schematics@22.2.4(chokidar@5.0.0))(@angular/common@22.2.3(@angular/core@22.2.3(@angular/compiler@22.2.3)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@22.2.3(@angular/compiler@22.2.3)(rxjs@7.8.2))(@schematics/angular@22.2.4(chokidar@5.0.0))(rxjs@7.8.2))(@ng-icons/material-icons@35.1.0)(@xui/core@3.0.1(4dca3108be1855d029197dfdd97889b4))(@xui/icon@3.0.1(@angular/core@22.2.3(@angular/compiler@22.2.3)(rxjs@7.8.2))(@ng-icons/core@35.1.0(@angular-devkit/schematics@22.2.4(chokidar@5.0.0))(@angular/common@22.2.3(@angular/core@22.2.3(@angular/compiler@22.2.3)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@22.2.3(@angular/compiler@22.2.3)(rxjs@7.8.2))(@schematics/angular@22.2.4(chokidar@5.0.0))(rxjs@7.8.2))(@xui/core@3.0.1(4dca3108be1855d029197dfdd97889b4))(clsx@2.1.1))':
+    dependencies:
+      '@angular/core': 22.2.3(@angular/compiler@22.2.3)(rxjs@7.8.2)
+      '@ng-icons/core': 35.1.0(@angular-devkit/schematics@22.2.4(chokidar@5.0.0))(@angular/common@22.2.3(@angular/core@22.2.3(@angular/compiler@22.2.3)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@22.2.3(@angular/compiler@22.2.3)(rxjs@7.8.2))(@schematics/angular@22.2.4(chokidar@5.0.0))(rxjs@7.8.2)
+      '@ng-icons/material-icons': 35.1.0
+      '@xui/core': 3.0.1(4dca3108be1855d029197dfdd97889b4)
+      '@xui/icon': 3.0.1(@angular/core@22.2.3(@angular/compiler@22.2.3)(rxjs@7.8.2))(@ng-icons/core@35.1.0(@angular-devkit/schematics@22.2.4(chokidar@5.0.0))(@angular/common@22.2.3(@angular/core@22.2.3(@angular/compiler@22.2.3)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@22.2.3(@angular/compiler@22.2.3)(rxjs@7.8.2))(@schematics/angular@22.2.4(chokidar@5.0.0))(rxjs@7.8.2))(@xui/core@3.0.1(4dca3108be1855d029197dfdd97889b4))(clsx@2.1.1)
       tslib: 2.8.1
 
   '@xui/tooltip@3.0.1(4e0517824e8ba6e676f936d24390ac19)':

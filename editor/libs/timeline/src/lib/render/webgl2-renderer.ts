@@ -1,5 +1,11 @@
-import { type RectBatch } from '../frame-builder';
+import { GLYPH_ADVANCE, type RectBatch } from '../frame-builder';
 import { RendererUnavailableError, type RenderTarget, type TimelineRenderer } from './renderer';
+
+/** The font both renderers draw text in; its advance is {@link GLYPH_ADVANCE}. */
+export const TEXT_FONT = '10px ui-monospace, Menlo, Consolas, monospace';
+
+/** Glyphs in the atlas (ASCII 32–126). */
+const GLYPH_COUNT = 95;
 
 const RECT_VERTEX = `#version 300 es
 layout(location = 0) in vec2 a_corner;
@@ -45,28 +51,34 @@ void main() {
 const GLYPH_VERTEX = `#version 300 es
 layout(location = 0) in vec2 a_corner;
 layout(location = 1) in vec3 a_glyph;
+layout(location = 2) in vec4 a_color;
 uniform vec2 u_size;
 uniform vec2 u_cell;
 out vec2 v_uv;
+out vec4 v_color;
 void main() {
   vec2 p = a_glyph.xy + a_corner * u_cell;
   gl_Position = vec4(p.x / u_size.x * 2.0 - 1.0, 1.0 - p.y / u_size.y * 2.0, 0.0, 1.0);
-  v_uv = vec2((a_glyph.z + a_corner.x) / 10.0, a_corner.y);
+  v_uv = vec2((a_glyph.z + a_corner.x) / ${GLYPH_COUNT}.0, a_corner.y);
+  v_color = a_color;
 }`;
 
 const GLYPH_FRAGMENT = `#version 300 es
 precision mediump float;
 uniform sampler2D u_atlas;
-uniform vec4 u_color;
 in vec2 v_uv;
+in vec4 v_color;
 out vec4 o_color;
 void main() {
-  o_color = vec4(u_color.rgb, u_color.a * texture(u_atlas, v_uv).a);
+  o_color = vec4(v_color.rgb, v_color.a * texture(u_atlas, v_uv).a);
 }`;
 
-/** Digit cell in the glyph atlas, CSS pixels. Bar numbers are the only text the spike draws. */
-const CELL_WIDTH = 7;
+/** Glyph cell in the atlas, CSS pixels: printable ASCII in 10 px monospace. */
+const CELL_WIDTH = GLYPH_ADVANCE;
 const CELL_HEIGHT = 12;
+/** The atlas holds ASCII 32 (space) to 126 (~); anything else draws as `?`. */
+const FIRST_GLYPH = 32;
+const LAST_GLYPH = 126;
 
 /**
  * Instanced-quad renderer: one unit quad, one instance per rectangle (position and size as `vec4`, colour as normalised
@@ -90,9 +102,10 @@ export class WebGL2Renderer implements TimelineRenderer {
     rectSize: WebGLUniformLocation | null;
     glyphSize: WebGLUniformLocation | null;
     glyphCell: WebGLUniformLocation | null;
-    glyphColor: WebGLUniformLocation | null;
   };
   private glyphs = new Float32Array(3 * 256);
+  private glyphColors = new Uint32Array(256);
+  private readonly glyphColorBuffer: WebGLBuffer;
   private readonly pixel = new Uint8Array(4);
   private width = 1;
   private height = 1;
@@ -119,8 +132,7 @@ export class WebGL2Renderer implements TimelineRenderer {
     this.uniforms = {
       rectSize: gl.getUniformLocation(this.rectProgram, 'u_size'),
       glyphSize: gl.getUniformLocation(this.glyphProgram, 'u_size'),
-      glyphCell: gl.getUniformLocation(this.glyphProgram, 'u_cell'),
-      glyphColor: gl.getUniformLocation(this.glyphProgram, 'u_color')
+      glyphCell: gl.getUniformLocation(this.glyphProgram, 'u_cell')
     };
 
     const corners = buffer(gl);
@@ -139,6 +151,8 @@ export class WebGL2Renderer implements TimelineRenderer {
     bindCorners(gl, corners);
     this.glyphBuffer = buffer(gl);
     instanced(gl, 1, 3, gl.FLOAT, false);
+    this.glyphColorBuffer = buffer(gl);
+    instanced(gl, 2, 4, gl.UNSIGNED_BYTE, true);
     gl.bindVertexArray(null);
 
     const atlas = gl.createTexture();
@@ -180,10 +194,11 @@ export class WebGL2Renderer implements TimelineRenderer {
       gl.useProgram(this.glyphProgram);
       gl.uniform2f(uniforms.glyphSize, this.width, this.height);
       gl.uniform2f(uniforms.glyphCell, CELL_WIDTH, CELL_HEIGHT);
-      gl.uniform4f(uniforms.glyphColor, 0.72, 0.73, 0.78, 1);
       gl.bindVertexArray(this.glyphVao);
       gl.bindBuffer(gl.ARRAY_BUFFER, this.glyphBuffer);
       gl.bufferData(gl.ARRAY_BUFFER, this.glyphs, gl.STREAM_DRAW, 0, 3 * glyphCount);
+      gl.bindBuffer(gl.ARRAY_BUFFER, this.glyphColorBuffer);
+      gl.bufferData(gl.ARRAY_BUFFER, new Uint8Array(this.glyphColors.buffer, 0, 4 * glyphCount), gl.STREAM_DRAW);
       gl.bindTexture(gl.TEXTURE_2D, this.atlas);
       gl.enable(gl.BLEND);
       gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, glyphCount);
@@ -201,21 +216,21 @@ export class WebGL2Renderer implements TimelineRenderer {
 
   private atlasReady = false;
 
-  /** Rasterises the digits 0–9 with Canvas2D (available in workers through OffscreenCanvas) into a texture. */
+  /** Rasterises printable ASCII with Canvas2D (available in workers through OffscreenCanvas) into a texture. */
   private buildAtlas(): void {
     const { gl, dpr } = this;
-    const canvas = new OffscreenCanvas(Math.ceil(10 * CELL_WIDTH * dpr), Math.ceil(CELL_HEIGHT * dpr));
+    const canvas = new OffscreenCanvas(Math.ceil(GLYPH_COUNT * CELL_WIDTH * dpr), Math.ceil(CELL_HEIGHT * dpr));
     const context = canvas.getContext('2d');
     if (!context) {
       return;
     }
     context.scale(dpr, dpr);
     context.fillStyle = '#fff';
-    context.font = '10px sans-serif';
+    context.font = TEXT_FONT;
     context.textBaseline = 'top';
     context.textAlign = 'center';
-    for (let digit = 0; digit < 10; digit++) {
-      context.fillText(String(digit), (digit + 0.5) * CELL_WIDTH, 1);
+    for (let glyph = 0; glyph < GLYPH_COUNT; glyph++) {
+      context.fillText(String.fromCharCode(FIRST_GLYPH + glyph), (glyph + 0.5) * CELL_WIDTH, 1);
     }
     gl.bindTexture(gl.TEXTURE_2D, this.atlas);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, canvas);
@@ -226,22 +241,32 @@ export class WebGL2Renderer implements TimelineRenderer {
     this.atlasReady = true;
   }
 
-  /** One glyph instance (x, y, digit) per digit of every label. */
+  /** One glyph instance (x, y, glyph) and its colour per character of every text. */
   private layoutGlyphs(batch: RectBatch): number {
     let n = 0;
-    for (let i = 0; i < batch.labelCount; i++) {
-      const digits = String(batch.labelValue[i] ?? 0);
-      if (this.glyphs.length < 3 * (n + digits.length)) {
-        const next = new Float32Array(2 * this.glyphs.length + 3 * digits.length);
-        next.set(this.glyphs);
-        this.glyphs = next;
+    for (let i = 0; i < batch.textCount; i++) {
+      const text = batch.texts[i] ?? '';
+      if (this.glyphColors.length < n + text.length) {
+        const capacity = 2 * (n + text.length);
+        const glyphs = new Float32Array(3 * capacity);
+        glyphs.set(this.glyphs);
+        this.glyphs = glyphs;
+        const colors = new Uint32Array(capacity);
+        colors.set(this.glyphColors);
+        this.glyphColors = colors;
       }
-      const x = batch.labelX[i] ?? 0;
-      const y = batch.labelY[i] ?? 0;
-      for (let d = 0; d < digits.length; d++) {
-        this.glyphs[3 * n] = x + d * CELL_WIDTH;
+      const x = batch.textX[i] ?? 0;
+      const y = batch.textY[i] ?? 0;
+      const color = batch.textColor[i] ?? 0xffffffff;
+      for (let c = 0; c < text.length; c++) {
+        const code = text.charCodeAt(c);
+        if (code === 32) {
+          continue;
+        }
+        this.glyphs[3 * n] = x + c * CELL_WIDTH;
         this.glyphs[3 * n + 1] = y;
-        this.glyphs[3 * n + 2] = digits.charCodeAt(d) - 48;
+        this.glyphs[3 * n + 2] = (code >= FIRST_GLYPH && code <= LAST_GLYPH ? code : 63) - FIRST_GLYPH;
+        this.glyphColors[n] = color;
         n++;
       }
     }

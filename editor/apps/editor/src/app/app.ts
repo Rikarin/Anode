@@ -4,9 +4,15 @@ import { XuiButtonImports } from '@xui/button';
 import { XuiInputImports } from '@xui/input';
 import { XuiNonIdealStateImports } from '@xui/non-ideal-state';
 import { XuiSpinnerImports } from '@xui/spinner';
+import type { AppCommand } from './core/desktop';
 import { Startup } from './core/startup';
 import { ControlBar } from './shell/control-bar';
+import { HistoryStore } from './state/history.store';
+import { ProjectSession } from './state/project-session';
+import { ProjectStore } from './state/project.store';
+import { SelectionStore } from './state/selection.store';
 import { TransportStore } from './state/transport.store';
+import { plural } from './tracks/region-edit';
 
 @Component({
   selector: 'an-root',
@@ -66,6 +72,10 @@ import { TransportStore } from './state/transport.store';
 export class App {
   protected readonly startup = inject(Startup);
   private readonly transport = inject(TransportStore);
+  private readonly project = inject(ProjectStore);
+  private readonly history = inject(HistoryStore);
+  private readonly session = inject(ProjectSession);
+  private readonly selection = inject(SelectionStore);
 
   /**
    * In the macOS desktop app the control bar is the title bar: it drags the window and leaves room for the traffic
@@ -83,7 +93,37 @@ export class App {
 
   constructor() {
     window.anode?.onFullScreen(fullScreen => this.fullScreen.set(fullScreen));
+    // The desktop app asks before it quits: the open project lives in its own Server and goes with it.
+    window.anode?.onQuit?.(() => this.session.mayDiscard('quit'));
+    window.anode?.onCommand?.(command => void this.command(command));
     void this.startup.start();
+  }
+
+  /** What the app menu asks for (File ▸ New, Open…, Save, Close, Import Audio…). */
+  async command(command: AppCommand): Promise<void> {
+    const dialogs = window.anode?.dialogs;
+    switch (command) {
+      case 'newProject':
+        await this.session.close();
+        break;
+      case 'openProject': {
+        const path = await dialogs?.openProject();
+        if (path) {
+          await this.session.open(path);
+        }
+        break;
+      }
+      case 'saveProject':
+        await this.session.save();
+        break;
+      case 'closeProject':
+        await this.session.close();
+        break;
+      case 'importAudio':
+        // The Tracks area's Import button has the context (track, playhead); the menu item uses the same.
+        document.querySelector<HTMLButtonElement>('[aria-label="Import audio"]')?.click();
+        break;
+    }
   }
 
   /** Back to this computer's own engine (the window reloads on it). */
@@ -92,31 +132,44 @@ export class App {
   }
 
   /**
-   * The transport keys (Space, R, C) until the key-command registry lands (docs/01-implementation-plan.md §6.1). It
-   * returns nothing on purpose: an Angular listener that returns false cancels the event everywhere.
+   * The key commands until the key-command registry lands (docs/01-implementation-plan.md §6.1): Space, R, C and
+   * Return for the transport, Delete for the selected regions, ⌘Z / ⇧⌘Z for undo and redo, ⌘S to save. Text fields
+   * keep their own keys. It returns nothing on purpose: an Angular listener that returns false cancels the event
+   * everywhere.
    */
   protected onKeydown(event: KeyboardEvent): void {
     const target = event.target as HTMLElement | null;
-    if (event.metaKey || event.ctrlKey || event.altKey || target?.closest('input, textarea, [contenteditable]')) {
+    if (!this.project.isOpen() || event.altKey || target?.closest('input, textarea, [contenteditable]')) {
       return;
     }
 
-    const action = {
-      ' ': () => this.togglePlay(),
-      r: () => this.transport.record(),
-      c: () => this.transport.toggleCycle()
-    }[event.key.toLowerCase()];
-    if (action) {
+    const key = event.key.toLowerCase();
+    const command = event.metaKey || event.ctrlKey;
+    const action = command
+      ? {
+          z: () => void (event.shiftKey ? this.history.redo() : this.history.undo()),
+          y: () => void this.history.redo(),
+          s: () => void this.session.save()
+        }[key]
+      : {
+          ' ': () => this.transport.togglePlay(),
+          r: () => this.transport.record(),
+          c: () => this.transport.toggleCycle(),
+          enter: () => this.transport.goToStart(),
+          delete: () => this.deleteSelection(),
+          backspace: () => this.deleteSelection()
+        }[key];
+    // Space and Return on a focused button press it; the shortcuts are for the rest of the window.
+    if (action && !(target?.closest('button, [role="slider"]') && (key === ' ' || key === 'enter'))) {
       event.preventDefault();
       action();
     }
   }
 
-  private togglePlay(): void {
-    if (this.transport.playing()) {
-      this.transport.stop();
-    } else {
-      this.transport.play();
+  private deleteSelection(): void {
+    const ids = [...this.selection.regions()];
+    if (ids.length > 0) {
+      void this.project.execute([{ type: 'deleteRegions', regionIds: ids }], plural('Delete', ids.length));
     }
   }
 }

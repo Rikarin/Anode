@@ -40,11 +40,29 @@ export interface SidecarStatus {
   pid?: number | null;
 }
 
+/** What the app menu asks the editor to do (apps/desktop/src/main.ts sends it on `anode:command`). */
+export type AppCommand = 'newProject' | 'openProject' | 'saveProject' | 'closeProject' | 'importAudio';
+
+/** Native file dialogs (apps/desktop/src/main.ts, `anode:dialog:*`); each resolves empty when cancelled. */
+export interface DesktopDialogs {
+  /** An Anode project folder to open. */
+  openProject(): Promise<string | null>;
+  /** A folder to create a new project in. */
+  chooseFolder(): Promise<string | null>;
+  /** WAV files to import. */
+  importAudio(): Promise<string[]>;
+}
+
 /**
  * What the Electron preload exposes as `window.anode` (apps/desktop/src/preload.ts). Absent when the editor runs in a
  * plain browser, where audio setup is not available.
  */
 export interface AnodeDesktop {
+  /** The path on disk of a file dropped on the window ('' for one with none, such as a dragged browser image). */
+  pathForFile?(file: File): string;
+  dialogs?: DesktopDialogs;
+  /** Called when an app menu item (File ▸ Save…) asks the editor to act. */
+  onCommand?(listener: (command: AppCommand) => void): void;
   /** Node's `process.platform` of the desktop app ('darwin' on macOS). */
   platform: string;
   /** Called when the window enters or leaves full screen. */
