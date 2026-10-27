@@ -69,11 +69,11 @@ public sealed class PackageTests : IDisposable {
                 Assert.Equal(TrackKind.Audio, t.Kind);
                 Assert.Null(t.Instrument);
                 Assert.Null(t.MidiOutput);
-                Assert.Equal(new MidiInputSettings(null, 0), t.MidiInput);
+                Assert.Equal(new(null, 0), t.MidiInput);
             }
         );
         Assert.Equal((-2.5, -0.25), (state.Tracks[0].Strip.VolumeDb, state.Tracks[0].Strip.Pan));
-        Assert.Equal(new TrackInput(3, true), state.Tracks[1].Input);
+        Assert.Equal(new(3, true), state.Tracks[1].Input);
         var region = Assert.Single(state.Regions.Values);
         Assert.Equal((2880L, 96_000L, 480L), (region.StartTick, region.Length, region.FadeOut));
         Assert.Empty(state.MidiRegions);

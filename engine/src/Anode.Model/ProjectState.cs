@@ -141,11 +141,17 @@ public sealed record ProjectState(
             SettingsChanged => new SettingsChanged(Settings),
             MasterChanged => new MasterChanged(Master),
             ProjectRenamed => new ProjectRenamed(Name),
+            MidiRegionUpserted or MidiRegionRemoved => InverseMidi(op),
+            _ => throw new ArgumentException($"Unknown delta operation {op.GetType().Name}.", nameof(op))
+        };
+
+    DeltaOp? InverseMidi(DeltaOp op) =>
+        op switch {
             MidiRegionUpserted(var region) => MidiRegions.TryGetValue(region.Id, out var old)
                 ? new MidiRegionUpserted(old)
                 : new MidiRegionRemoved(region.Id),
             MidiRegionRemoved(var id) => MidiRegions.TryGetValue(id, out var old) ? new MidiRegionUpserted(old) : null,
-            _ => throw new ArgumentException($"Unknown delta operation {op.GetType().Name}.", nameof(op))
+            _ => null
         };
 
     ProjectState WithTrack(Track track, int index) {

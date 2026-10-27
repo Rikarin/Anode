@@ -23,44 +23,49 @@ static class RandomProjects {
     ///     A catalogue of plugins built here (not Anode.Dsp's, which another workstream fills): two built-in
     ///     instruments, a CLAP instrument with decimal parameter ids, and an effect that is not an instrument.
     /// </summary>
-    public static PluginCatalog Plugins { get; } = new([
-        new(
-            "anode.synth",
-            "Synth",
-            "Anode",
-            "1.0",
-            PluginFormat.Builtin,
-            true,
-            [],
-            [
-                new("cutoff", "Cutoff", 20, 20_000, 8_000, "Hz", 0, null),
-                new("resonance", "Resonance", 0, 1, 0.2, "", 0, null),
-                new("wave", "Waveform", 0, 3, 0, "", 3, ["Saw", "Square", "Triangle", "Sine"]),
-                new("volume", "Volume", -60, 6, -6, "dB", 0, null)
-            ]
-        ),
-        new(
-            "anode.sampler",
-            "Sampler",
-            "Anode",
-            "1.0",
-            PluginFormat.Builtin,
-            true,
-            [".sfz", ".wav"],
-            [new("volume", "Volume", -60, 6, 0, "dB", 0, null), new("tune", "Tune", -100, 100, 0, "ct", 0, null)]
-        ),
-        new(
-            "com.example.sine",
-            "Test Sine",
-            "Example",
-            "0.1",
-            PluginFormat.Clap,
-            true,
-            [],
-            [new("1", "Gain", 0, 1, 0.5, "", 0, null), new("2", "Detune", -1, 1, 0, "", 0, null)]
-        ),
-        new("com.example.fx", "Test Delay", "Example", "0.1", PluginFormat.Clap, false, [], [])
-    ]);
+    public static PluginCatalog Plugins { get; } = new(
+        [
+            new(
+                "anode.synth",
+                "Synth",
+                "Anode",
+                "1.0",
+                PluginFormat.Builtin,
+                true,
+                [],
+                [
+                    new("cutoff", "Cutoff", 20, 20_000, 8_000, "Hz", 0, null),
+                    new("resonance", "Resonance", 0, 1, 0.2, string.Empty, 0, null),
+                    new("wave", "Waveform", 0, 3, 0, string.Empty, 3, ["Saw", "Square", "Triangle", "Sine"]),
+                    new("volume", "Volume", -60, 6, -6, "dB", 0, null)
+                ]
+            ),
+            new(
+                "anode.sampler",
+                "Sampler",
+                "Anode",
+                "1.0",
+                PluginFormat.Builtin,
+                true,
+                [".sfz", ".wav"],
+                [new("volume", "Volume", -60, 6, 0, "dB", 0, null), new("tune", "Tune", -100, 100, 0, "ct", 0, null)]
+            ),
+            new(
+                "com.example.sine",
+                "Test Sine",
+                "Example",
+                "0.1",
+                PluginFormat.Clap,
+                true,
+                [],
+                [
+                    new("1", "Gain", 0, 1, 0.5, string.Empty, 0, null),
+                    new("2", "Detune", -1, 1, 0, string.Empty, 0, null)
+                ]
+            ),
+            new("com.example.fx", "Test Delay", "Example", "0.1", PluginFormat.Clap, false, [], [])
+        ]
+    );
 
     public static (ProjectState State, SequentialIds Ids, Random Random) Build(int seed, int edits = 24) {
         var random = new Random(seed);
@@ -216,9 +221,11 @@ static class RandomProjects {
         };
         string? Track() => tracks.Count == 0 ? null : Pick(r, tracks).Id;
         Track? Instrument() => instruments.Length == 0 ? null : Pick(r, instruments);
+
         Track? Loader() =>
-            instruments.Where(static t => Plugins.Find(t.Instrument!.PluginId)?.FileTypes.Count > 0).ToArray() is
-                { Length: > 0 } some
+            instruments.Where(static t => Plugins.Find(t.Instrument!.PluginId)?.FileTypes.Count > 0).ToArray() is {
+                Length: > 0
+            } some
                 ? Pick(r, some)
                 : null;
 
@@ -239,6 +246,7 @@ static class RandomProjects {
                 : r.Next(regions.Length + midiRegions.Length) is var i && i < regions.Length
                     ? regions[i].Id
                     : midiRegions[i - regions.Length].Id;
+
         T? Maybe<T>(T value) where T : struct => r.Next(2) == 0 ? null : value;
         string? MaybeText(string value) => r.Next(2) == 0 ? null : value;
     }

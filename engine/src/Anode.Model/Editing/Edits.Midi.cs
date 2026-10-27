@@ -51,9 +51,7 @@ public static partial class Edits {
         var info = plugins.Find(slot.PluginId)?.Parameters.FirstOrDefault(p => p.Id == c.ParameterId);
         if (info is not null) {
             if (value < info.Min || value > info.Max) {
-                throw new EditException(
-                    $"Parameter '{info.Id}' takes {info.Min}…{info.Max}, not {value}."
-                );
+                throw new EditException($"Parameter '{info.Id}' takes {info.Min}…{info.Max}, not {value}.");
             }
 
             if (info.Steps > 0 && info.Max > info.Min) {
@@ -199,9 +197,7 @@ public static partial class Edits {
         CheckUnit(playback.Swing, "swing");
         return [
             new MidiRegionUpserted(
-                region with {
-                    Name = c.Name is null ? region.Name : Name(c.Name, "region name"), Playback = playback
-                }
+                region with { Name = c.Name is null ? region.Name : Name(c.Name, "region name"), Playback = playback }
             )
         ];
     }
@@ -243,14 +239,13 @@ public static partial class Edits {
             }
 
             var old = notes[i];
-            var note = new Note(
-                old.Id,
-                change.Pitch ?? old.Pitch,
-                change.Velocity ?? old.Velocity,
-                change.Channel ?? old.Channel,
-                change.StartTick ?? old.StartTick,
-                change.LengthTicks ?? old.LengthTicks
-            );
+            var note = old with {
+                Pitch = change.Pitch ?? old.Pitch,
+                Velocity = change.Velocity ?? old.Velocity,
+                Channel = change.Channel ?? old.Channel,
+                StartTick = change.StartTick ?? old.StartTick,
+                LengthTicks = change.LengthTicks ?? old.LengthTicks
+            };
             CheckNote(region, note, change.StartTick.HasValue);
             notes[i] = note;
         }
@@ -335,7 +330,9 @@ public static partial class Edits {
             Id = ids.Next(IdPrefix.MidiRegion),
             StartTick = at,
             LengthTicks = region.LengthTicks - cut,
-            Notes = [..region.Notes.Where(n => n.StartTick >= cut).Select(n => n with { StartTick = n.StartTick - cut })],
+            Notes = [
+                ..region.Notes.Where(n => n.StartTick >= cut).Select(n => n with { StartTick = n.StartTick - cut })
+            ],
             Controls = [..region.Controls.Where(e => e.Tick >= cut).Select(e => e with { Tick = e.Tick - cut })]
         };
         return [new MidiRegionUpserted(left), new MidiRegionUpserted(right)];
@@ -479,7 +476,7 @@ public static class Quantize {
         var best = long.MaxValue;
         var bestDistance = long.MaxValue;
         for (var j = Math.Max(0, k - 1); j <= k + 1; j++) {
-            var point = j * grid + (j % 2 == 1 ? delay : 0);
+            var point = j * grid + ((j & 1) == 1 ? delay : 0);
             var distance = Math.Abs(point - tick);
             if (distance < bestDistance) {
                 best = point;

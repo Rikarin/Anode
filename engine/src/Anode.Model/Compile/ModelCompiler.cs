@@ -49,7 +49,8 @@ public sealed class ModelCompiler {
                 midi
             );
             if (!cache.TryGetValue(engineId, out var cached) || !cached.Key.Equals(key)) {
-                cached = (key, new(engineId, MidiEvents(state, map, engineId, midi), Playlist(state, map, ids, regions)));
+                cached = (key,
+                    new(engineId, MidiEvents(state, map, engineId, midi), Playlist(state, map, ids, regions)));
                 cache[engineId] = cached;
                 recompiled.Add(engineId);
             }
@@ -200,64 +201,11 @@ public sealed class ModelCompiler {
             return [];
         }
 
-        var rate = state.SampleRate;
         var events = new List<(PlaybackEvent Event, int Rank)>();
         for (var i = 0; i < regions.Count; i++) {
-            var region = regions[i];
-            var windows = Windows(regions, i);
-            if (windows.Count == 0) {
-                continue;
-            }
-
-            var playback = region.Playback;
-            foreach (var note in region.Notes) {
-                var at = region.StartTick + note.StartTick;
-                if (playback.QuantizeTicks > 0) {
-                    at = Editing.Quantize.Tick(at, playback.QuantizeTicks, playback.QuantizeStrength, playback.Swing);
-                }
-
-                if (WindowAt(windows, at) is not { } window) {
-                    continue;
-                }
-
-                var on = map.SampleAt(at, rate);
-                var off = Math.Max(map.SampleAt(Math.Min(at + note.LengthTicks, window.To), rate), on + 1);
-                var pitch = (byte)Math.Clamp(note.Pitch + playback.Transpose, 0, 127);
-                var velocity = (byte)Math.Clamp(note.Velocity + playback.Velocity, 1, 127);
-                var channel = (byte)(note.Channel - 1);
-                events.Add((Midi(engineId, on, PlaybackEventKind.NoteOn, pitch, velocity, channel), 2));
-                events.Add((Midi(engineId, off, PlaybackEventKind.NoteOff, pitch, 0, channel), 0));
-            }
-
-            foreach (var control in region.Controls) {
-                var at = region.StartTick + control.Tick;
-                if (WindowAt(windows, at) is null) {
-                    continue;
-                }
-
-                var sample = map.SampleAt(at, rate);
-                var channel = (byte)(control.Channel - 1);
-                var e = control.Kind switch {
-                    ControlKind.ControlChange => Midi(
-                        engineId,
-                        sample,
-                        PlaybackEventKind.ControlChange,
-                        (byte)control.Number,
-                        (byte)control.Value,
-                        channel
-                    ),
-                    ControlKind.PitchBend => PitchBend(engineId, sample, control.Value, channel),
-                    ControlKind.ChannelPressure => Midi(
-                        engineId,
-                        sample,
-                        PlaybackEventKind.ChannelPressure,
-                        (byte)control.Value,
-                        0,
-                        channel
-                    ),
-                    _ => Midi(engineId, sample, PlaybackEventKind.ProgramChange, (byte)control.Value, 0, channel)
-                };
-                events.Add((e, 1));
+            if (Windows(regions, i) is { Count: > 0 } windows) {
+                AddNotes(events, state, map, engineId, regions[i], windows);
+                AddControls(events, state, map, engineId, regions[i], windows);
             }
         }
 
@@ -271,8 +219,87 @@ public sealed class ModelCompiler {
         ];
     }
 
+    /// <summary>A region's notes that start where it plays, with its playback applied (rank 2 on, 0 off).</summary>
+    static void AddNotes(
+        List<(PlaybackEvent Event, int Rank)> events,
+        ProjectState state,
+        TempoMap map,
+        int engineId,
+        MidiRegion region,
+        List<(long From, long To)> windows
+    ) {
+        var playback = region.Playback;
+        foreach (var note in region.Notes) {
+            var at = Editing.Quantize.Tick(
+                region.StartTick + note.StartTick,
+                playback.QuantizeTicks,
+                playback.QuantizeStrength,
+                playback.Swing
+            );
+            if (WindowAt(windows, at) is not { } window) {
+                continue;
+            }
+
+            var on = map.SampleAt(at, state.SampleRate);
+            var off = Math.Max(map.SampleAt(Math.Min(at + note.LengthTicks, window.To), state.SampleRate), on + 1);
+            var pitch = (byte)Math.Clamp(note.Pitch + playback.Transpose, 0, 127);
+            var velocity = (byte)Math.Clamp(note.Velocity + playback.Velocity, 1, 127);
+            var channel = (byte)(note.Channel - 1);
+            events.Add((Midi(engineId, on, PlaybackEventKind.NoteOn, pitch, velocity, channel), 2));
+            events.Add((Midi(engineId, off, PlaybackEventKind.NoteOff, pitch, 0, channel), 0));
+        }
+    }
+
+    /// <summary>A region's controller events where it plays (rank 1: between a sample's note-offs and note-ons).</summary>
+    static void AddControls(
+        List<(PlaybackEvent Event, int Rank)> events,
+        ProjectState state,
+        TempoMap map,
+        int engineId,
+        MidiRegion region,
+        List<(long From, long To)> windows
+    ) {
+        foreach (var control in region.Controls) {
+            var at = region.StartTick + control.Tick;
+            if (WindowAt(windows, at) is not null) {
+                events.Add((Control(engineId, map.SampleAt(at, state.SampleRate), control), 1));
+            }
+        }
+    }
+
+    static PlaybackEvent Control(int engineId, long sample, ControlEvent control) {
+        var channel = (byte)(control.Channel - 1);
+        return control.Kind switch {
+            ControlKind.ControlChange => Midi(
+                engineId,
+                sample,
+                PlaybackEventKind.ControlChange,
+                (byte)control.Number,
+                (byte)control.Value,
+                channel
+            ),
+            ControlKind.PitchBend => PitchBend(engineId, sample, control.Value, channel),
+            ControlKind.ChannelPressure => Midi(
+                engineId,
+                sample,
+                PlaybackEventKind.ChannelPressure,
+                (byte)control.Value,
+                0,
+                channel
+            ),
+            _ => Midi(engineId, sample, PlaybackEventKind.ProgramChange, (byte)control.Value, 0, channel)
+        };
+    }
+
     static PlaybackEvent Midi(int track, long sample, PlaybackEventKind kind, byte data1, byte data2, byte channel) =>
-        new() { SamplePos = sample, Track = track, Kind = kind, Data1 = data1, Data2 = data2, Channel = channel };
+        new() {
+            SamplePos = sample,
+            Track = track,
+            Kind = kind,
+            Data1 = data1,
+            Data2 = data2,
+            Channel = channel
+        };
 
     static PlaybackEvent PitchBend(int track, long sample, int value, byte channel) {
         var bend = Math.Clamp(value + 8192, 0, 16383);

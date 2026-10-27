@@ -3,6 +3,7 @@ using Anode.Ipc;
 using Anode.Ipc.Segments;
 using Anode.Model;
 using Anode.Server.Engine;
+using System.Net.Http.Json;
 
 namespace Anode.Server.Tests;
 
@@ -129,6 +130,113 @@ public sealed class HostLinkTests : IAsyncDisposable {
         // Transport through the new link, in order after the sync.
         await client.TransportAsync(TransportCommand.Play, 0);
         await WaitForAsync<TransportMessage>(static m => m.Action == TransportAction.Play);
+    }
+
+    [Fact]
+    public async Task Instruments_parameters_MIDI_IO_thru_and_live_MIDI_reach_the_host() {
+        StartHost();
+        await using var server = new ServerFixture(socketPath);
+        using var client = server.CreateClient();
+        await using var events = await EventStream.ConnectAsync(server);
+        await WaitConnectedAsync(server, client);
+        // The catalogue and the ports come after the hello (whether this socket saw their events or not).
+        await ServerFixture.Eventually(async () =>
+            (await client.GetFromJsonAsync(
+                "/api/v1/plugins",
+                ContractsJsonContext.Default.IReadOnlyListPluginInfo,
+                TestContext.Current.CancellationToken
+            ))!.Count
+            == FakeHost.Catalogue.Count
+        );
+        await client.CreateProjectAsync();
+        await WaitForAsync<LoadModelMessage>(static m => m.Replace);
+
+        // A new instrument track rides on its patch with its instrument and MIDI settings.
+        await client.EditAsync(
+            new AddTrackCommand(Kind: TrackKind.Instrument),
+            new AddTrackCommand(Kind: TrackKind.Midi)
+        );
+        var tracks = (await client.ProjectAsync()).Tracks;
+        var patch = await WaitForAsync<LoadModelMessage>(static m => m.Tracks.Any(static t => t.Instrument is not null)
+        );
+        var engineTrack = patch.Tracks.Single(static t => t.Instrument is not null);
+        Assert.Equal(FakeHost.Catalogue[0].Id, engineTrack.Instrument!.PluginId);
+        Assert.Equal(FakeHost.Catalogue[0].Parameters.Count, engineTrack.Instrument.Parameters.Count);
+        Assert.Equal(new(null, 0, null, 0), engineTrack.Midi);
+        var inst = engineTrack.Id;
+        var ext = (await WaitForAsync<LoadModelMessage>(static m => m.Tracks.Any(static t => t is {
+                    Instrument: null, Midi: not null
+                }
+            )
+        )).Tracks[0].Id;
+
+        var parameter = FakeHost.Catalogue[0].Parameters[0];
+        await client.EditAsync(new SetParameterCommand(tracks[0].Id, parameter.Id, parameter.Max));
+        Assert.Equal(
+            parameter.Max,
+            (await WaitForAsync<SetParameterMessage>(m => m.ParameterId == parameter.Id)).Value
+        );
+        await client.EditAsync(new SetInstrumentCommand(tracks[0].Id, FakeHost.FakeClapId));
+        Assert.Equal(
+            inst,
+            (await WaitForAsync<SetInstrumentMessage>(static m => m.Instrument?.PluginId == FakeHost.FakeClapId))
+            .TrackId
+        );
+        await client.EditAsync(new SetMidiIoCommand(tracks[1].Id, Output: new("fake-out", 4)));
+        var io = await WaitForAsync<SetMidiIoMessage>();
+        Assert.Equal((ext, "fake-out", 4), (io.TrackId, io.Midi.OutputDevice, io.Midi.OutputChannel));
+
+        // Notes reach the host compiled: a region with one note is a note-on and a note-off.
+        await client.EditAsync(new AddMidiRegionCommand(tracks[0].Id, 960, 3840));
+        var region = (await client.ProjectAsync()).MidiRegions[0].Id;
+        await client.EditAsync(new AddNotesCommand(region, [new(60, 100, 1, 0, 960)]));
+        await ServerFixture.Eventually(() =>
+            Task.FromResult(
+                host!.EventsOf(inst)
+                    .Select(static e => (e.SamplePos, e.Kind))
+                    .SequenceEqual(
+                        [
+                            (24_000L, PlaybackEventKind.NoteOn), (48_000L, PlaybackEventKind.NoteOff)
+                        ]
+                    )
+            )
+        );
+
+        await client.PostAsJsonAsync(
+            "/api/v1/midi/thru",
+            new(tracks[0].Id),
+            ContractsJsonContext.Default.MidiThruRequest,
+            TestContext.Current.CancellationToken
+        );
+        await ServerFixture.Eventually(() => Task.FromResult(host!.Thru == inst));
+        await client.PostAsJsonAsync(
+            "/api/v1/midi/live",
+            new(tracks[0].Id, [new(0x90, 64, 80)]),
+            ContractsJsonContext.Default.LiveMidiRequest,
+            TestContext.Current.CancellationToken
+        );
+        Assert.Equal(inst, (await WaitForAsync<LiveMidiMessage>()).TrackId);
+        var activity = await events.WaitAsync<MidiActivityEvent>();
+        Assert.Equal(tracks[0].Id, Assert.Single(activity.Events).TrackId);
+
+        // Save asks for the states; a restarted host gets them back with the instrument, and the thru track again.
+        await client.PostAsync("/api/v1/project/save", null, TestContext.Current.CancellationToken);
+        await WaitForAsync<RequestInstrumentStatesMessage>();
+        await host!.DisposeAsync();
+        host = null;
+        await ServerFixture.Eventually(async () =>
+            (await server.SystemAsync(client)).Engine.State == EngineState.Disconnected
+        );
+        StartHost();
+        await WaitConnectedAsync(server, client);
+        var load = await WaitForAsync<LoadModelMessage>(static m => m.Replace);
+        var restored = load.Tracks.Single(t => t.Id == inst).Instrument!;
+        Assert.Equal(FakeHost.FakeClapId, restored.PluginId);
+        Assert.Equal(
+            $"fake-state:{FakeHost.FakeClapId}",
+            System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(restored.State!))
+        );
+        await ServerFixture.Eventually(() => Task.FromResult(host!.Thru == inst));
     }
 
     void StartHost() {

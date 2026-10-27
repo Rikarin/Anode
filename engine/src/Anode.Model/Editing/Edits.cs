@@ -382,9 +382,9 @@ public static partial class Edits {
 
         return [
             ..c.RegionIds.Distinct(StringComparer.Ordinal)
-                .Select(DeltaOp (id) => id is not null && state.MidiRegions.ContainsKey(id)
-                    ? new MidiRegionRemoved(id)
-                    : new RegionRemoved(RegionOf(state, id ?? string.Empty).Id)
+                .Select(DeltaOp(id) => id is not null && state.MidiRegions.ContainsKey(id)
+                        ? new MidiRegionRemoved(id)
+                        : new RegionRemoved(RegionOf(state, id ?? string.Empty).Id)
                 )
         ];
     }

@@ -141,6 +141,7 @@ public static class UndoLabels {
             if (mine is null) {
                 return null;
             }
+
             if (key is not null && key != mine) {
                 return null;
             }

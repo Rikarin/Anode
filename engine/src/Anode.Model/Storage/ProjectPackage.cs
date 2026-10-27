@@ -135,26 +135,11 @@ public static class ProjectPackage {
         var tracks = ImmutableList.CreateBuilder<Track>();
         var regions = ImmutableSortedDictionary.CreateBuilder<string, AudioRegion>(StringComparer.Ordinal);
         var midiRegions = ImmutableSortedDictionary.CreateBuilder<string, MidiRegion>(StringComparer.Ordinal);
-        long lastEventId = 0;
         foreach (var id in (root.Tracks ?? []).Distinct(StringComparer.Ordinal)) {
-            if (ReadTrack(folder, id) is not { } file) {
-                continue;
-            }
-
-            var track = Normalise(file.Track);
-            tracks.Add(track);
-            foreach (var region in file.Regions ?? []) {
-                if (region?.TrackId == id && track.Kind == TrackKind.Audio && files.ContainsKey(region.FileId)) {
-                    regions[region.Id] = region;
-                }
-            }
-
-            foreach (var region in file.MidiRegions ?? []) {
-                if (region?.TrackId == id && Edits.IsMidiKind(track.Kind) && region.Id is not null) {
-                    var normalised = Normalise(region);
-                    midiRegions[region.Id] = normalised;
-                    lastEventId = Math.Max(lastEventId, ProjectState.MaxEventId(normalised));
-                }
+            if (ReadTrack(folder, id) is { } file) {
+                var track = Normalise(file.Track);
+                tracks.Add(track);
+                AddRegions(file, track, files, regions, midiRegions);
             }
         }
 
@@ -168,7 +153,31 @@ public static class ProjectPackage {
             regions.ToImmutable(),
             files,
             midiRegions.ToImmutable()
-        ) { LastEventId = lastEventId };
+        ) { LastEventId = midiRegions.Values.Select(ProjectState.MaxEventId).DefaultIfEmpty().Max() };
+    }
+
+    /// <summary>
+    ///     A track file's regions that belong to it: audio ones of known files on an audio track, MIDI ones on a MIDI
+    ///     track.
+    /// </summary>
+    static void AddRegions(
+        TrackFile file,
+        Track track,
+        ImmutableSortedDictionary<string, AudioFile> files,
+        ImmutableSortedDictionary<string, AudioRegion>.Builder regions,
+        ImmutableSortedDictionary<string, MidiRegion>.Builder midiRegions
+    ) {
+        foreach (var region in file.Regions ?? []) {
+            if (region?.TrackId == track.Id && track.Kind == TrackKind.Audio && files.ContainsKey(region.FileId)) {
+                regions[region.Id] = region;
+            }
+        }
+
+        foreach (var region in file.MidiRegions ?? []) {
+            if (region?.TrackId == track.Id && Edits.IsMidiKind(track.Kind) && region.Id is not null) {
+                midiRegions[region.Id] = Normalise(region);
+            }
+        }
     }
 
     /// <summary>

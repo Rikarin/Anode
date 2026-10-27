@@ -23,13 +23,16 @@ public sealed class MidiEditTests {
         var synth = state.Tracks[0].Instrument!;
         Assert.Equal(("anode.synth", "Synth", null), (synth.PluginId, synth.Name, synth.File));
         Assert.Equal(
-            RandomProjects.Plugins.Find("anode.synth")!.Parameters.ToDictionary(static p => p.Id, static p => p.Default),
+            RandomProjects.Plugins.Find("anode.synth")!.Parameters.ToDictionary(
+                static p => p.Id,
+                static p => p.Default
+            ),
             synth.Parameters
         );
         Assert.Equal(["1", "2"], state.Tracks[1].Instrument!.Parameters.Keys);
         Assert.Null(state.Tracks[2].Instrument);
         Assert.Null(state.Tracks[2].MidiOutput);
-        Assert.Equal(new MidiInputSettings(null, 0), state.Tracks[2].MidiInput);
+        Assert.Equal(new(null, 0), state.Tracks[2].MidiInput);
         Assert.Null(state.Tracks[3].Instrument);
     }
 
@@ -92,8 +95,8 @@ public sealed class MidiEditTests {
         Apply(new AddTrackCommand(Kind: TrackKind.Instrument), new AddTrackCommand(Kind: TrackKind.Midi));
         var (inst, ext) = (state.Tracks[0].Id, state.Tracks[1].Id);
         Apply(new SetMidiIoCommand(inst, new("port-a", 3)), new SetMidiIoCommand(ext, Output: new("port-b", 10)));
-        Assert.Equal(new MidiInputSettings("port-a", 3), state.Tracks[0].MidiInput);
-        Assert.Equal(new MidiOutputSettings("port-b", 10), state.Tracks[1].MidiOutput);
+        Assert.Equal(new("port-a", 3), state.Tracks[0].MidiInput);
+        Assert.Equal(new("port-b", 10), state.Tracks[1].MidiOutput);
         Assert.Throws<EditException>(() => Apply(new SetMidiIoCommand(inst, Output: new("port-b", 1))));
         Assert.Throws<EditException>(() => Apply(new SetMidiIoCommand(ext, Output: new("port-b", 0))));
     }
@@ -122,8 +125,11 @@ public sealed class MidiEditTests {
         var result = Edits.Apply(state, new SplitRegionCommand(region, 2880), ids);
         state = result.State;
         var parts = state.MidiRegions.Values.OrderBy(static r => r.StartTick).ToArray();
-        Assert.Equal((960L, 1920L, 2880L, 1920L), (parts[0].StartTick, parts[0].LengthTicks, parts[1].StartTick,
-            parts[1].LengthTicks));
+        Assert.Equal(
+            (960L, 1920L, 2880L, 1920L),
+            (parts[0].StartTick, parts[0].LengthTicks, parts[1].StartTick,
+                parts[1].LengthTicks)
+        );
         Assert.Equal([0L], parts[0].Notes.Select(static n => n.StartTick));
         Assert.Equal([0L], parts[1].Notes.Select(static n => n.StartTick));
         Assert.Equal([80L], parts[1].Controls.Select(static e => e.Tick));
