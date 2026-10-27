@@ -26,3 +26,5 @@ endfunction()
 
 # Vendored from Cathode until it is extracted into a shared package (docs/adr/0002-native-audio-backend.md).
 add_subdirectory(cth_audio)
+# Time stretch / pitch shift over Signalsmith Stretch (spike S5, docs/spikes/S5-time-stretch.md).
+add_subdirectory(an_stretch)
