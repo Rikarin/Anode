@@ -2,7 +2,7 @@ using System.Security.Cryptography;
 
 namespace Anode.Model;
 
-/// <summary>Makes domain ids: a kind prefix (<c>trk</c>, <c>rgn</c>, <c>aud</c>, <c>prj</c>), an underscore, a suffix.</summary>
+/// <summary>Makes domain ids: a kind prefix (<c>trk</c>, <c>rgn</c>, <c>mid</c>, <c>aud</c>, <c>prj</c>), an underscore, a suffix.</summary>
 public interface IIdSource {
     string Next(string prefix);
 }
@@ -28,4 +28,5 @@ public static class IdPrefix {
     public const string Track = "trk";
     public const string Region = "rgn";
     public const string File = "aud";
+    public const string MidiRegion = "mid";
 }

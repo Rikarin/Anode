@@ -20,6 +20,12 @@ public static class ProjectDefaults {
 
     public static ChannelStrip Strip { get; } = new(0, 0, false, false);
 
+    /// <summary>A new region's playback: as recorded, no quantise.</summary>
+    public static RegionPlayback Playback { get; } = new(0, 0, 0, 1, 0);
+
+    /// <summary>Live MIDI from every device, on every channel.</summary>
+    public static MidiInputSettings MidiInput { get; } = new(null, 0);
+
     public static ProjectState NewProject(string id, string name, int sampleRate) {
         var signature = new TimeSignature(4, 4);
         return new(
@@ -37,7 +43,8 @@ public static class ProjectDefaults {
             Strip,
             [],
             ImmutableSortedDictionary.Create<string, AudioRegion>(StringComparer.Ordinal),
-            ImmutableSortedDictionary.Create<string, AudioFile>(StringComparer.Ordinal)
+            ImmutableSortedDictionary.Create<string, AudioFile>(StringComparer.Ordinal),
+            ImmutableSortedDictionary.Create<string, MidiRegion>(StringComparer.Ordinal)
         );
     }
 

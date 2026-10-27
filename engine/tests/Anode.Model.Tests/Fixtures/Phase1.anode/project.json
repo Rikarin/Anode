@@ -1,0 +1,45 @@
+{
+  "schemaVersion": 1,
+  "id": "prj_phase1fixture",
+  "name": "Phase 1 Song",
+  "sampleRate": 48000,
+  "settings": {
+    "tempo": 96,
+    "signature": {
+      "numerator": 3,
+      "denominator": 4
+    },
+    "cycle": {
+      "enabled": true,
+      "startTick": 0,
+      "endTick": 11520
+    },
+    "metronome": {
+      "enabled": true,
+      "countIn": true,
+      "levelDb": -6
+    },
+    "endTick": 368640
+  },
+  "master": {
+    "volumeDb": -3,
+    "pan": 0,
+    "mute": false,
+    "solo": false
+  },
+  "tracks": [
+    "trk_vocal0000001",
+    "trk_guitar000002"
+  ],
+  "audioFiles": [
+    {
+      "id": "aud_take00000001",
+      "name": "0-20261020T101010000Z",
+      "path": "Audio Files/0-20261020T101010000Z.wav",
+      "sampleRate": 48000,
+      "channels": 1,
+      "frames": 96000,
+      "bitDepth": 24
+    }
+  ]
+}
