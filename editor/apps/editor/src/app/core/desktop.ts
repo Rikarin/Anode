@@ -51,6 +51,8 @@ export interface DesktopDialogs {
   chooseFolder(): Promise<string | null>;
   /** WAV files to import. */
   importAudio(): Promise<string[]>;
+  /** A file for an instrument to load, of one of its `fileTypes` (`.sfz`, `.wav`). */
+  instrumentFile?(fileTypes: readonly string[]): Promise<string | null>;
 }
 
 /**

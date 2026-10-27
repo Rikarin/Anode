@@ -1,6 +1,6 @@
 import { RULER_HEIGHT } from './frame-builder';
 import { gridStep } from './grid';
-import { type PixelRect, type TimelineScene, type TimelineView } from './items';
+import { ItemFlag, type PixelRect, type TimelineScene, type TimelineView } from './items';
 import { type LaneIntervalIndex } from './lane-interval-index';
 
 /** What part of a region the pointer is over, which says what a drag there does (Logic's pointer tool). */
@@ -73,8 +73,9 @@ export function hitTest(
     }
 
     const edge = Math.min(EDGE_PX, (xEnd - xStart) / 4);
+    const fades = regions !== undefined && !((regions.flags[id] ?? 0) & ItemFlag.Midi);
     let zone: RegionZone | null = null;
-    if (regions && upper) {
+    if (fades && upper) {
       const fadeIn = ((regions.fadeIn[id] ?? 0) / regions.framesPerTick) * ppt;
       const fadeOut = ((regions.fadeOut[id] ?? 0) / regions.framesPerTick) * ppt;
       if (fadeIn > 0 && Math.abs(x - (xStart + fadeIn)) <= FADE_HANDLE_PX) {
@@ -85,9 +86,9 @@ export function hitTest(
     }
     if (zone === null) {
       if (Math.abs(x - xStart) <= edge) {
-        zone = upper && regions ? 'fade-in' : 'trim-start';
+        zone = upper && fades ? 'fade-in' : 'trim-start';
       } else if (Math.abs(xEnd - x) <= edge) {
-        zone = upper && regions ? 'fade-out' : 'trim-end';
+        zone = upper && fades ? 'fade-out' : 'trim-end';
       } else if (x > xStart && x < xEnd) {
         zone = 'body';
       }

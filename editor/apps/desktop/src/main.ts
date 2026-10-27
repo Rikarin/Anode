@@ -254,6 +254,18 @@ function handleIpc(): void {
       filters: [{ name: 'WAV audio', extensions: ['wav', 'wave'] }]
     })
   );
+  // A file for an instrument to load (a sampler's SFZ or WAV): the renderer names the plugin's file types, which are
+  // checked to be plain extensions before they become the dialog's filter.
+  ipcMain.handle('anode:dialog:instrumentFile', async (event, fileTypes: unknown) =>
+    first(
+      await pick(event.sender, {
+        title: 'Load Instrument File',
+        buttonLabel: 'Load',
+        properties: ['openFile'],
+        filters: [{ name: 'Instrument files', extensions: validFileTypes(fileTypes) }]
+      })
+    )
+  );
   ipcMain.handle('anode:target', () => settings.target);
   ipcMain.handle('anode:setTarget', async (_event, target: unknown) => {
     settings = { ...settings, target: validTarget(target) };
@@ -305,6 +317,21 @@ async function pick(sender: Electron.WebContents, options: Electron.OpenDialogOp
 
 function first(paths: string[]): string | null {
   return paths[0] ?? null;
+}
+
+/** File types as a plugin lists them (`.sfz`, `.wav`): 1–16 extensions of letters and digits, without the dot. */
+function validFileTypes(value: unknown): string[] {
+  if (!Array.isArray(value) || value.length === 0 || value.length > 16) {
+    throw new Error('File types must be a list of 1 to 16 extensions.');
+  }
+
+  return value.map(type => {
+    const match = typeof type === 'string' ? /^\.?([a-z0-9]{1,10})$/i.exec(type) : null;
+    if (!match?.[1]) {
+      throw new Error(`Not a file extension: ${String(type)}`);
+    }
+    return match[1].toLowerCase();
+  });
 }
 
 /** What the renderer sent for a `T`: an object whose fields are all still to be checked. */

@@ -11,7 +11,7 @@ import {
   untracked,
   viewChild
 } from '@angular/core';
-import type { AudioRegion, EditCommand } from '@anode/api-client';
+import type { EditCommand } from '@anode/api-client';
 import {
   cloneScene,
   CYCLE_BAND_TOP,
@@ -34,7 +34,7 @@ import { PeaksCache } from '../state/peaks';
 import { ProjectStore } from '../state/project.store';
 import { SelectionStore } from '../state/selection.store';
 import { TracksViewStore } from '../state/tracks-view.store';
-import { TransportStore } from '../state/transport.store';
+import { barTicks, TransportStore } from '../state/transport.store';
 import { AudioImport } from './audio-import';
 import {
   type EditContext,
@@ -42,9 +42,12 @@ import {
   fadeOutFrom,
   moveCommands,
   moveRegions,
+  newMidiRegion,
   plural,
-  splitPoint,
+  splitSpan,
   trimEnd,
+  trimMidiEnd,
+  trimMidiStart,
   trimStart
 } from './region-edit';
 import { buildScene, type TracksScene } from './scene';
@@ -67,6 +70,15 @@ interface Gesture {
   base: ReadonlySet<string>;
 }
 
+/** A region of either kind as the pointer edits it: where it is and on which track. */
+interface RegionSpan {
+  id: string;
+  trackId: string;
+  startTick: number;
+  endTick: number;
+  midi: boolean;
+}
+
 const Cursors: Record<RegionZone, string> = {
   body: 'default',
   'trim-start': 'ew-resize',
@@ -76,12 +88,14 @@ const Cursors: Record<RegionZone, string> = {
 };
 
 /**
- * The Tracks area's canvas (ADR-0007): regions with their waveforms, names, fades and selection, the ruler with bars,
- * the cycle area and the project end, and the playhead, drawn by `@anode/timeline` in its render worker. The pointer
- * edits here: the pointer tool selects (click, ⇧-click, marquee), moves (across tracks too), trims edges (lower half)
- * and drags fades (upper half), the scissors split, all snapped to the grid. A drag is a local preview; dropping
- * sends one command batch (docs/01-implementation-plan.md §4.4). The ruler locates the playhead and, in its lower band,
- * draws or toggles the cycle. WAV files dropped here are imported onto the track under the pointer.
+ * The Tracks area's canvas (ADR-0007): audio regions with their waveforms, names, fades and selection, MIDI regions
+ * with their note miniatures, the ruler with bars, the cycle area and the project end, and the playhead, drawn by
+ * `@anode/timeline` in its render worker. The pointer edits here: the pointer tool selects (click, ⇧-click, marquee),
+ * moves (across tracks of the same kind too), trims edges (an audio region's lower half, a MIDI region's whole height)
+ * and drags fades (upper half), the scissors split, the pencil (or a double-click on an empty MIDI lane) makes an empty
+ * MIDI region, all snapped to the grid. A drag is a local preview; dropping sends one command batch
+ * (docs/01-implementation-plan.md §4.4). The ruler locates the playhead and, in its lower band, draws or toggles the
+ * cycle. WAV files dropped here are imported onto the track under the pointer.
  */
 @Component({
   selector: 'an-timeline',
@@ -141,7 +155,7 @@ export class Timeline {
   protected readonly cursor = signal('default');
   protected readonly dropTarget = signal<{ y: number; height: number } | null>(null);
   protected readonly summary = computed(() => {
-    const regions = this.project.regions().size;
+    const regions = this.project.regions().size + this.project.midiRegions().size;
     const tracks = this.project.trackIds().length;
     return `Tracks area: ${regions} ${regions === 1 ? 'region' : 'regions'} on ${tracks} ${tracks === 1 ? 'track' : 'tracks'}`;
   });
@@ -151,6 +165,7 @@ export class Timeline {
     return buildScene({
       tracks: this.project.trackList(),
       regions: this.project.regionList(),
+      midiRegions: this.project.midiRegionList(),
       framesPerTick: this.project.framesPerTick(),
       beatsPerBar: (signature.numerator * 4) / signature.denominator,
       selected: this.selection.regions(),
@@ -341,14 +356,19 @@ export class Timeline {
 
     const hit = hitTest(this.drawn.scene, this.drawn.index, view, x, y);
     const regionId = hit ? (this.drawn.regionIds[hit.index] ?? null) : null;
-    const region = regionId ? this.project.regions().get(regionId) : undefined;
+    const region = regionId ? this.span(regionId) : undefined;
     if (this.view.tool() === 'scissors') {
       if (region) {
-        const at = splitPoint(region, tick, this.context());
+        const at = splitSpan(region.startTick, region.endTick, tick, this.context().snap);
         if (at !== null) {
           void this.project.execute([{ type: 'splitRegion', regionId: region.id, atTick: at }], 'Split Region');
         }
       }
+      return;
+    }
+
+    if (this.view.tool() === 'pencil' && !region) {
+      this.createMidiRegion(lane, tick);
       return;
     }
 
@@ -474,20 +494,37 @@ export class Timeline {
   /** Where a drag puts the regions it moves or the region it trims or fades. */
   private preview(gesture: Gesture, tick: number, lane: number, context: EditContext): ItemOverride[] {
     const drawn = this.drawn;
-    const regions = this.project.regions();
-    const region = gesture.regionId ? regions.get(gesture.regionId) : undefined;
     const index = gesture.regionId ? drawn?.indexOf.get(gesture.regionId) : undefined;
-    if (!drawn || !region || index === undefined) {
+    if (!drawn || !gesture.regionId || index === undefined) {
+      return [];
+    }
+
+    if (gesture.kind === 'body') {
+      return this.moved(gesture, tick, lane, context).map(m => ({
+        index: drawn.indexOf.get(m.id) ?? -1,
+        start: m.startTick,
+        lane: m.lane
+      }));
+    }
+
+    const midi = this.project.midiRegions().get(gesture.regionId);
+    if (midi) {
+      // A trimmed start keeps the notes in time: the miniatures' origin stays (fileOffset is in ticks for MIDI).
+      const t =
+        gesture.kind === 'trim-start'
+          ? trimMidiStart(midi, tick, context.snap)
+          : gesture.kind === 'trim-end'
+            ? trimMidiEnd(midi, tick, context.snap)
+            : null;
+      return t ? [{ index, start: t.startTick, length: t.lengthTicks, fileOffset: t.startTick - midi.startTick }] : [];
+    }
+
+    const region = this.project.regions().get(gesture.regionId);
+    if (!region) {
       return [];
     }
 
     switch (gesture.kind) {
-      case 'body':
-        return this.moved(gesture, tick, lane, context).map(m => ({
-          index: drawn.indexOf.get(m.id) ?? -1,
-          start: m.startTick,
-          lane: m.lane
-        }));
       case 'trim-start': {
         const t = trimStart(region, tick, context);
         return [{ index, start: t.startTick, length: t.length / context.framesPerTick, fileOffset: t.fileOffset }];
@@ -512,6 +549,36 @@ export class Timeline {
     lane: number,
     context: EditContext
   ): { commands: EditCommand[]; label: string } {
+    if (gesture.kind === 'body') {
+      const moved = this.moved(gesture, tick, lane, context);
+      const all = new Map<string, { startTick: number; trackId: string }>([
+        ...this.project.regions(),
+        ...this.project.midiRegions()
+      ]);
+      const tracks = this.project.tracks();
+      const commands = moveCommands(
+        moved,
+        all,
+        l => this.project.trackIds()[l],
+        (id, trackId) => (tracks.get(trackId)?.kind === 'audio') === !id.startsWith('mid_')
+      );
+      return { commands, label: plural('Move', commands.length) };
+    }
+
+    const midi = gesture.regionId ? this.project.midiRegions().get(gesture.regionId) : undefined;
+    if (midi) {
+      if (gesture.kind !== 'trim-start' && gesture.kind !== 'trim-end') {
+        return { commands: [], label: '' };
+      }
+      const t =
+        gesture.kind === 'trim-start' ? trimMidiStart(midi, tick, context.snap) : trimMidiEnd(midi, tick, context.snap);
+      const same = t.startTick === midi.startTick && t.lengthTicks === midi.lengthTicks;
+      return {
+        commands: same ? [] : [{ type: 'resizeMidiRegion', regionId: midi.id, ...t }],
+        label: 'Resize Region'
+      };
+    }
+
     const regions = this.project.regions();
     const region = gesture.regionId ? regions.get(gesture.regionId) : undefined;
     if (!region) {
@@ -519,11 +586,6 @@ export class Timeline {
     }
 
     switch (gesture.kind) {
-      case 'body': {
-        const moved = this.moved(gesture, tick, lane, context);
-        const commands = moveCommands(moved, regions, l => this.project.trackIds()[l]);
-        return { commands, label: plural('Move', commands.length) };
-      }
       case 'trim-start':
       case 'trim-end': {
         const t =
@@ -557,12 +619,11 @@ export class Timeline {
 
   /** The selected regions where a move by the pointer's travel puts them. */
   private moved(gesture: Gesture, tick: number, lane: number, context: EditContext) {
-    const regions = this.project.regions();
     const lanes = new Map(this.project.trackIds().map((id, l) => [id, l]));
-    const grabbed = gesture.regionId ? regions.get(gesture.regionId) : undefined;
+    const grabbed = gesture.regionId ? this.span(gesture.regionId) : undefined;
     const selected = [...this.selection.regions()]
-      .map(id => regions.get(id))
-      .filter((r): r is AudioRegion => r !== undefined)
+      .map(id => this.span(id))
+      .filter((r): r is RegionSpan => r !== undefined)
       .map(r => ({ id: r.id, startTick: r.startTick, lane: lanes.get(r.trackId) ?? 0 }));
     return moveRegions(
       selected,
@@ -574,8 +635,52 @@ export class Timeline {
     );
   }
 
-  private fileFrames(region: AudioRegion): number {
+  private fileFrames(region: { fileId: string; fileOffset: number; length: number }): number {
     return this.project.files().get(region.fileId)?.frames ?? region.fileOffset + region.length;
+  }
+
+  /** A region of either kind by id. */
+  private span(id: string): RegionSpan | undefined {
+    const midi = this.project.midiRegions().get(id);
+    if (midi) {
+      return {
+        id,
+        trackId: midi.trackId,
+        startTick: midi.startTick,
+        endTick: midi.startTick + midi.lengthTicks,
+        midi: true
+      };
+    }
+    const audio = this.project.regions().get(id);
+    return audio
+      ? {
+          id,
+          trackId: audio.trackId,
+          startTick: audio.startTick,
+          endTick: this.project.regionEnd(audio),
+          midi: false
+        }
+      : undefined;
+  }
+
+  /** An empty one-bar MIDI region at `tick` on lane `lane`, when that lane's track takes MIDI. */
+  private createMidiRegion(lane: number, tick: number): void {
+    const trackId = this.project.trackIds()[lane];
+    const track = trackId ? this.project.track(trackId) : undefined;
+    if (!track || track.kind === 'audio') {
+      return;
+    }
+
+    const region = newMidiRegion(tick, barTicks(this.project.settings().signature));
+    this.selection.track.set(track.id);
+    void this.project
+      .execute([{ type: 'addMidiRegion', trackId: track.id, ...region }], 'Create MIDI Region')
+      .then(result => {
+        const added = result?.delta.ops.find(op => op.op === 'midiRegionUpserted');
+        if (added?.op === 'midiRegionUpserted') {
+          this.selection.select([added.region.id]);
+        }
+      });
   }
 
   private hover(x: number, y: number): void {
@@ -586,6 +691,11 @@ export class Timeline {
 
     if (this.view.tool() === 'scissors') {
       this.cursor.set('crosshair');
+      return;
+    }
+
+    if (this.view.tool() === 'pencil') {
+      this.cursor.set('copy');
       return;
     }
 
@@ -609,11 +719,22 @@ export class Timeline {
     }
   }
 
-  /** Below the last track, a double-click adds one (as in Logic). */
+  /**
+   * Below the last track, a double-click adds one (as in Logic); on an empty spot of an instrument or MIDI track it
+   * creates an empty MIDI region there.
+   */
   protected doubleClick(event: MouseEvent): void {
-    const { y } = this.local(event);
-    if (y > RULER_HEIGHT && laneAtY(this.currentView(), y) >= this.project.trackIds().length) {
+    const { x, y } = this.local(event);
+    if (y <= RULER_HEIGHT || !this.drawn) {
+      return;
+    }
+
+    const view = this.currentView();
+    const lane = laneAtY(view, y);
+    if (lane >= this.project.trackIds().length) {
       void this.project.execute([{ type: 'addTrack', stereo: false }], 'New Track');
+    } else if (!hitTest(this.drawn.scene, this.drawn.index, view, x, y)) {
+      this.createMidiRegion(Math.floor(lane), tickAtX(view, x));
     }
   }
 

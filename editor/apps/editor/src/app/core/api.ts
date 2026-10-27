@@ -4,6 +4,9 @@ import {
   type AudioFile,
   type CommandBatch,
   type CommandResult,
+  type LiveMidiEvent,
+  type MidiDevices,
+  type PluginInfo,
   type Project,
   type ProjectSummary,
   type SystemInfo,
@@ -48,6 +51,16 @@ export interface AnodeApi {
   peaks(fileId: string, framesPerPeak: number): Promise<ArrayBuffer>;
   transport(): Promise<TransportStatus>;
   controlTransport(request: TransportRequest): Promise<TransportStatus>;
+  /** The plugins the engine can load, built-in first (empty without an engine). */
+  plugins(): Promise<PluginInfo[]>;
+  /** Rescans the CLAP folders; `pluginsChanged` follows on `/ws`. */
+  rescanPlugins(): Promise<void>;
+  /** The MIDI ports of the machine the engine runs on. */
+  midiDevices(): Promise<MidiDevices>;
+  /** Plays MIDI on a track now, as a keyboard would (the on-screen keyboard, musical typing). */
+  sendLiveMidi(trackId: string, events: LiveMidiEvent[]): Promise<void>;
+  /** Which track hears live MIDI when no track is record-armed (the selected one); null for none. */
+  setMidiThru(trackId: string | null): Promise<void>;
 }
 
 export const ANODE_API = new InjectionToken<AnodeApi>('AnodeApi', {
@@ -162,5 +175,25 @@ export class HttpAnodeApi implements AnodeApi {
 
   async controlTransport(request: TransportRequest): Promise<TransportStatus> {
     return unwrap(await this.client.POST('/api/v1/transport', { body: request }));
+  }
+
+  async plugins(): Promise<PluginInfo[]> {
+    return unwrap(await this.client.GET('/api/v1/plugins'));
+  }
+
+  async rescanPlugins(): Promise<void> {
+    await this.client.POST('/api/v1/plugins/rescan');
+  }
+
+  async midiDevices(): Promise<MidiDevices> {
+    return unwrap(await this.client.GET('/api/v1/midi/devices'));
+  }
+
+  async sendLiveMidi(trackId: string, events: LiveMidiEvent[]): Promise<void> {
+    await this.client.POST('/api/v1/midi/live', { body: { trackId, events } });
+  }
+
+  async setMidiThru(trackId: string | null): Promise<void> {
+    await this.client.POST('/api/v1/midi/thru', { body: { trackId } });
   }
 }
