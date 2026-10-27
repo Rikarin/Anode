@@ -17,6 +17,7 @@
     <Project Path="src/Anode.Server/Anode.Server.csproj"/>
   </Folder>
   <Folder Name="/tests/">
+    <Project Path="tests/Anode.Dsp.Tests/Anode.Dsp.Tests.csproj"/>
     <Project Path="tests/Anode.Engine.Tests/Anode.Engine.Tests.csproj"/>
     <Project Path="tests/Anode.Model.Tests/Anode.Model.Tests.csproj"/>
     <Project Path="tests/Anode.Server.Tests/Anode.Server.Tests.csproj"/>
