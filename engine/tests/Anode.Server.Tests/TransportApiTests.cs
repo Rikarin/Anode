@@ -34,7 +34,11 @@ public sealed class TransportApiTests {
         Assert.InRange(moving.Transport.PositionTick, 3840, 3840 + 960 * 4);
 
         await client.TransportAsync(TransportCommand.Stop);
-        var stopped = await events.WaitAsync<TransportEvent>(static e => e.Transport.State == TransportState.Stopped);
+        // The stop after playing, not the stopped frame from before it.
+        var stopped = await events.WaitAsync<TransportEvent>(static e => e.Transport is {
+                State: TransportState.Stopped, PositionSamples: > 96_000
+            }
+        );
         await Task.Delay(300, Token);
         Assert.Single(events.OfType<TransportEvent>().SkipWhile(e => e != stopped));
         var status = await client.GetFromJsonAsync(
