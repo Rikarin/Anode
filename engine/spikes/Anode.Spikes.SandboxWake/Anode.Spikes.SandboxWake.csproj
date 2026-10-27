@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    Spike S4 (docs/spikes/S4-sandbox-wake.md, docs/adr/0003-plugin-hosting.md): can the engine hand a buffer to a
+    plugin in another process and get it back inside one 64-frame callback, for ~50 instances over a few sandboxes?
+    Published NativeAOT with anode-host's GC settings; the same executable plays the host and the sandbox roles.
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>anode-s4</AssemblyName>
+    <PublishAot>true</PublishAot>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <ServerGarbageCollection>false</ServerGarbageCollection>
+    <ConcurrentGarbageCollection>false</ConcurrentGarbageCollection>
+    <!-- Throwaway measurement code: keep it readable rather than analyzer-clean. -->
+    <NoWarn>$(NoWarn);CA1031;CA1305;CA1307;CA1515;CA1812;CA1852;CA2000;CA5394</NoWarn>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../src/Anode.Audio/Anode.Audio.csproj"/>
+  </ItemGroup>
+  <ItemGroup>
+    <!-- engine/Directory.Build.targets copies only cth_*; this spike also needs the wake shim. -->
+    <None Include="$(AnodeNativeDir)*an_ipcwake.*"
+          Visible="false"
+          CopyToOutputDirectory="PreserveNewest"
+          CopyToPublishDirectory="PreserveNewest"/>
+  </ItemGroup>
+</Project>

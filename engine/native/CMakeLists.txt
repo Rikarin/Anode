@@ -26,3 +26,6 @@ endfunction()
 
 # Vendored from Cathode until it is extracted into a shared package (docs/adr/0002-native-audio-backend.md).
 add_subdirectory(cth_audio)
+
+# Cross-process wake primitives for the plugin sandbox (spike S4, docs/spikes/S4-sandbox-wake.md).
+add_subdirectory(an_ipcwake)
