@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    Spike S3 (docs/spikes/S3-bulk-ipc.md, docs/adr/0006-bulk-ipc.md): can anode-server hand anode-host a compiled
+    playback model of a million events through shared memory, and the host swap it in atomically, in under 10 ms with
+    no allocation on the audio thread? One executable, two roles: `server` spawns `host` as its child.
+    Publishable NativeAOT (run.sh does), so the host role runs as anode-host will.
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <PublishAot>true</PublishAot>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <ServerGarbageCollection>false</ServerGarbageCollection>
+    <ConcurrentGarbageCollection>false</ConcurrentGarbageCollection>
+    <IsPackable>false</IsPackable>
+    <!-- Throwaway measurement code: keep it readable rather than analyzer-clean. -->
+    <NoWarn>$(NoWarn);CA1303;CA2007;CA1031;CA5394;CA1812;CA1852;CA1515;CA1307;CA1305;CA2000;CA1849;CA1848;CA1861</NoWarn>
+  </PropertyGroup>
+</Project>
