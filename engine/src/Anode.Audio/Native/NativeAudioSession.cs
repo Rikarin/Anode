@@ -47,21 +47,21 @@ public sealed unsafe class NativeAudioSession : IAudioDevice {
 
     public (int Input, int Output) Latency {
         get {
-            NativeMethods.Stats(stream, out var s);
+            Stats(stream, out var s);
             return (s.InputLatencyFrames, s.OutputLatencyFrames);
         }
     }
 
     public long Callbacks {
         get {
-            NativeMethods.Stats(stream, out var s);
+            Stats(stream, out var s);
             return (long)s.Callbacks;
         }
     }
 
     public long Overloads {
         get {
-            NativeMethods.Stats(stream, out var s);
+            Stats(stream, out var s);
             return (long)s.Overloads;
         }
     }
@@ -82,7 +82,7 @@ public sealed unsafe class NativeAudioSession : IAudioDevice {
                     return status;
                 }
 
-                NativeMethods.Stats(stream, out var s);
+                Stats(stream, out var s);
                 var now = Stopwatch.GetTimestamp();
                 if (s.Callbacks != lastCallbacks) {
                     lastCallbacks = s.Callbacks;
@@ -132,7 +132,7 @@ public sealed unsafe class NativeAudioSession : IAudioDevice {
         }
 
         lock (watchdog) {
-            NativeMethods.Stats(stream, out var s);
+            Stats(stream, out var s);
             lastCallbacks = s.Callbacks;
             lastCallbackAt = Stopwatch.GetTimestamp();
             running = true;
@@ -188,7 +188,14 @@ public sealed unsafe class NativeAudioSession : IAudioDevice {
     }
 
     [UnmanagedCallersOnly]
-    static void Callback(void* user, float** inputs, int inputChannels, float** outputs, int outputChannels, int frames) {
+    static void Callback(
+        void* user,
+        float** inputs,
+        int inputChannels,
+        float** outputs,
+        int outputChannels,
+        int frames
+    ) {
         var session = Unsafe.As<NativeAudioSession>(GCHandle.FromIntPtr((nint)user).Target!);
         try {
             var processor = Volatile.Read(ref session.processor);

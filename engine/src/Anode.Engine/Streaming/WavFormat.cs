@@ -16,11 +16,12 @@ public enum SampleEncoding {
 ///     <c>WAVE_FORMAT_EXTENSIBLE</c>; other chunks (JUNK, bext, LIST) are skipped.
 /// </summary>
 public sealed record WavFormat(SampleEncoding Encoding, int Channels, int SampleRate, long DataOffset, long Frames) {
-    public int BytesPerSample => Encoding switch {
-        SampleEncoding.Pcm16 => 2,
-        SampleEncoding.Pcm24 => 3,
-        _ => 4
-    };
+    public int BytesPerSample =>
+        Encoding switch {
+            SampleEncoding.Pcm16 => 2,
+            SampleEncoding.Pcm24 => 3,
+            _ => 4
+        };
 
     public int BytesPerFrame => BytesPerSample * Channels;
 
@@ -36,43 +37,27 @@ public sealed record WavFormat(SampleEncoding Encoding, int Channels, int Sample
         }
 
         long at = 12;
-        SampleEncoding? encoding = null;
-        int channels = 0, rate = 0, blockAlign = 0;
+        WavFormat? format = null;
+        var blockAlign = 0;
         while (at + 8 <= length) {
             RandomAccess.Read(handle, chunk[..8], at);
             var size = BinaryPrimitives.ReadUInt32LittleEndian(chunk[4..8]);
             if (chunk[..4].SequenceEqual("fmt "u8)) {
                 fmt.Clear();
                 RandomAccess.Read(handle, fmt[..(int)Math.Min(size, 40)], at + 8);
-                var tag = BinaryPrimitives.ReadUInt16LittleEndian(fmt);
-                channels = BinaryPrimitives.ReadUInt16LittleEndian(fmt[2..]);
-                rate = (int)BinaryPrimitives.ReadUInt32LittleEndian(fmt[4..]);
-                blockAlign = BinaryPrimitives.ReadUInt16LittleEndian(fmt[12..]);
-                var bits = BinaryPrimitives.ReadUInt16LittleEndian(fmt[14..]);
-                if (tag == 0xFFFE && size >= 40) {
-                    tag = BinaryPrimitives.ReadUInt16LittleEndian(fmt[24..]); // the sub-format GUID's first two bytes
-                }
-
-                encoding = (tag, bits) switch {
-                    (1, 16) => SampleEncoding.Pcm16,
-                    (1, 24) => SampleEncoding.Pcm24,
-                    (1, 32) => SampleEncoding.Pcm32,
-                    (3, 32) => SampleEncoding.Float32,
-                    _ => throw new InvalidDataException($"Unsupported WAV encoding (format {tag}, {bits} bits).")
-                };
+                (format, blockAlign) = ParseFormat(fmt, size);
             } else if (chunk[..4].SequenceEqual("data"u8)) {
-                if (encoding is not { } e || channels < 1) {
+                if (format is null) {
                     throw new InvalidDataException("WAV data before its format.");
                 }
 
-                var format = new WavFormat(e, channels, rate, at + 8, 0);
                 if (blockAlign != format.BytesPerFrame) {
                     throw new InvalidDataException("WAV block alignment does not match its format.");
                 }
 
                 // A writer that died leaves the size at 0 or too large: the file's length is the truth.
                 var bytes = Math.Min(size == 0 ? long.MaxValue : size, length - (at + 8));
-                return format with { Frames = bytes / format.BytesPerFrame };
+                return format with { DataOffset = at + 8, Frames = bytes / format.BytesPerFrame };
             }
 
             at += 8 + size + (size & 1);
@@ -80,6 +65,30 @@ public sealed record WavFormat(SampleEncoding Encoding, int Channels, int Sample
 
         throw new InvalidDataException("WAV file without a data chunk.");
     }
+
+    /// <summary>A <c>fmt </c> chunk's encoding, channels and rate, and its block alignment.</summary>
+    static (WavFormat Format, int BlockAlign) ParseFormat(ReadOnlySpan<byte> fmt, uint size) {
+        var tag = BinaryPrimitives.ReadUInt16LittleEndian(fmt);
+        var channels = BinaryPrimitives.ReadUInt16LittleEndian(fmt[2..]);
+        var rate = (int)BinaryPrimitives.ReadUInt32LittleEndian(fmt[4..]);
+        var blockAlign = BinaryPrimitives.ReadUInt16LittleEndian(fmt[12..]);
+        var bits = BinaryPrimitives.ReadUInt16LittleEndian(fmt[14..]);
+        if (tag == 0xFFFE && size >= 40) {
+            tag = BinaryPrimitives.ReadUInt16LittleEndian(fmt[24..]); // the sub-format GUID's first two bytes
+        }
+
+        var encoding = (tag, bits) switch {
+            (1, 16) => SampleEncoding.Pcm16,
+            (1, 24) => SampleEncoding.Pcm24,
+            (1, 32) => SampleEncoding.Pcm32,
+            (3, 32) => SampleEncoding.Float32,
+            _ => throw new InvalidDataException($"Unsupported WAV encoding (format {tag}, {bits} bits).")
+        };
+        return channels < 1
+            ? throw new InvalidDataException("WAV format without channels.")
+            : (new(encoding, channels, rate, 0, 0), blockAlign);
+    }
+
 
     /// <summary>Decodes whole frames of <paramref name="source" /> into interleaved floats in [−1, 1).</summary>
     public void Decode(ReadOnlySpan<byte> source, Span<float> destination) {
@@ -99,7 +108,8 @@ public sealed record WavFormat(SampleEncoding Encoding, int Channels, int Sample
                 break;
             case SampleEncoding.Pcm32:
                 for (var i = 0; i < samples; i++) {
-                    destination[i] = (float)(BinaryPrimitives.ReadInt32LittleEndian(source[(4 * i)..]) * (1.0 / 2_147_483_648.0));
+                    destination[i] =
+                        (float)(BinaryPrimitives.ReadInt32LittleEndian(source[(4 * i)..]) * (1.0 / 2_147_483_648.0));
                 }
 
                 break;
@@ -113,5 +123,6 @@ public sealed record WavFormat(SampleEncoding Encoding, int Channels, int Sample
     }
 
     /// <summary>A little-endian signed 24-bit sample.</summary>
-    public static int Int24(ReadOnlySpan<byte> s, int at) => ((s[at] << 8) | (s[at + 1] << 16) | (s[at + 2] << 24)) >> 8;
+    public static int Int24(ReadOnlySpan<byte> s, int at) =>
+        ((s[at] << 8) | (s[at + 1] << 16) | (s[at + 2] << 24)) >> 8;
 }

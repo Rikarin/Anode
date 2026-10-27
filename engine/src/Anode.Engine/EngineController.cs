@@ -111,61 +111,14 @@ public sealed class EngineController : IDisposable {
             }
 
             var current = Engine.Root;
-            var tracks = new List<TrackState>();
-            var views = new List<TrackView>();
-            var gens = new List<int>();
-            var owners = new List<MappedSegment?>();
-            var metronome = default(TrackView);
-            MappedSegment? metronomeOwner = null;
-            if (!message.Replace) {
-                tracks.AddRange(current.Tracks);
-                views.AddRange(current.Views);
-                gens.AddRange(current.Generations);
-                owners.AddRange(current.Owners);
-                metronome = current.Metronome;
-                metronomeOwner = current.MetronomeOwner;
-            }
-
+            var draft = new ModelDraft(this, message.Replace ? null : current);
             unsafe {
                 for (var k = 0; k < segment.Header->TrackCount; k++) {
-                    var id = segment.TrackId(k);
-                    if (id == TrackEntry.MetronomeTrack) {
-                        metronome = segment.Track(k);
-                        metronomeOwner = segment;
-                        continue;
-                    }
-
-                    var index = tracks.FindIndex(t => t.Id == id);
-                    var existing = index >= 0 ? tracks[index] : Find(current, id);
-                    var stereo = settings.TryGetValue(id, out var s) ? s.Stereo : existing?.Stereo ?? false;
-                    var state = existing is not null && existing.Stereo == stereo ? existing : NewTrack(id, stereo, existing);
-                    if (index < 0) {
-                        tracks.Add(state);
-                        views.Add(segment.Track(k));
-                        gens.Add(++generations);
-                        owners.Add(segment);
-                    } else {
-                        tracks[index] = state;
-                        views[index] = segment.Track(k);
-                        gens[index] = ++generations;
-                        owners[index] = segment;
-                    }
+                    draft.Patch(segment, k, settings, current);
                 }
             }
 
-            for (var i = 0; i < tracks.Count; i++) {
-                if (!settings.TryGetValue(tracks[i].Id, out var s)) {
-                    continue;
-                }
-
-                if (s.Stereo != tracks[i].Stereo) {
-                    tracks[i] = NewTrack(s.Id, s.Stereo, tracks[i]);
-                    gens[i] = ++generations;
-                }
-
-                tracks[i].Apply(s);
-            }
-
+            draft.Apply(settings);
             Engine.Master.Set(message.Master);
             RecordDirectory = message.RecordDirectory;
             long length;
@@ -175,21 +128,91 @@ public sealed class EngineController : IDisposable {
                     : Math.Max(current.LengthSamples, segment.Header->LengthSamples);
             }
 
-            Swap(
-                new(
-                    message.Segment.Version,
-                    length,
-                    [.. tracks],
-                    [.. views],
-                    [.. gens],
-                    [.. owners],
-                    metronome,
-                    metronomeOwner,
-                    FileTable()
-                )
-            );
+            Swap(draft.Build(message.Segment.Version, length, FileTable()));
             return message.Segment.Version;
         }
+    }
+
+    /// <summary>The next model's tracks while a load assembles them: the current ones (a patch) or none (a replace).</summary>
+    sealed class ModelDraft {
+        readonly EngineController owner;
+        readonly List<TrackState> tracks = [];
+        readonly List<TrackView> views = [];
+        readonly List<int> generations = [];
+        readonly List<MappedSegment?> owners = [];
+        TrackView metronome;
+        MappedSegment? metronomeOwner;
+
+        public ModelDraft(EngineController owner, ModelRoot? from) {
+            this.owner = owner;
+            if (from is null) {
+                return;
+            }
+
+            tracks.AddRange(from.Tracks);
+            views.AddRange(from.Views);
+            generations.AddRange(from.Generations);
+            owners.AddRange(from.Owners);
+            metronome = from.Metronome;
+            metronomeOwner = from.MetronomeOwner;
+        }
+
+        /// <summary>Takes track <paramref name="k" /> of <paramref name="segment" />: a new compile of it.</summary>
+        public void Patch(MappedSegment segment, int k, Dictionary<int, EngineTrack> settings, ModelRoot current) {
+            var id = segment.TrackId(k);
+            if (id == TrackEntry.MetronomeTrack) {
+                metronome = segment.Track(k);
+                metronomeOwner = segment;
+                return;
+            }
+
+            var index = tracks.FindIndex(t => t.Id == id);
+            var existing = index >= 0 ? tracks[index] : Find(current, id);
+            var stereo = settings.TryGetValue(id, out var s) ? s.Stereo : existing?.Stereo ?? false;
+            var state = existing is not null && existing.Stereo == stereo
+                ? existing
+                : owner.NewTrack(id, stereo, existing);
+            if (index < 0) {
+                tracks.Add(state);
+                views.Add(segment.Track(k));
+                generations.Add(++owner.generations);
+                owners.Add(segment);
+            } else {
+                tracks[index] = state;
+                views[index] = segment.Track(k);
+                generations[index] = ++owner.generations;
+                owners[index] = segment;
+            }
+        }
+
+        /// <summary>Applies the listed tracks' settings; a changed channel count gets a new stream.</summary>
+        public void Apply(Dictionary<int, EngineTrack> settings) {
+            for (var i = 0; i < tracks.Count; i++) {
+                if (!settings.TryGetValue(tracks[i].Id, out var s)) {
+                    continue;
+                }
+
+                if (s.Stereo != tracks[i].Stereo) {
+                    tracks[i] = owner.NewTrack(s.Id, s.Stereo, tracks[i]);
+                    generations[i] = ++owner.generations;
+                }
+
+                tracks[i].Apply(s);
+            }
+        }
+
+        public ModelRoot Build(long version, long length, StreamFile?[] files) =>
+            new(
+                version,
+                length,
+                [..tracks],
+                [..views],
+                [..generations],
+                [..owners],
+                metronome,
+                metronomeOwner,
+                files
+            );
     }
 
     /// <summary>Control thread: a strip changed; <paramref name="trackId" /> −1 is the master. False for an unknown track.</summary>
@@ -336,7 +359,9 @@ public sealed class EngineController : IDisposable {
 
             takes = [];
             var failure = Writer.TakeFailure();
-            return failure is not null ? throw new IOException($"Recording failed: {failure.Message}", failure) : finished;
+            return failure is not null
+                ? throw new IOException($"Recording failed: {failure.Message}", failure)
+                : finished;
         }
     }
 
@@ -425,7 +450,7 @@ public sealed class EngineController : IDisposable {
             track.Take = take;
         }
 
-        takes = [.. started];
+        takes = [..started];
         Writer.Activate(takes);
     }
 
@@ -488,41 +513,11 @@ public sealed class EngineController : IDisposable {
     }
 
     MappedSegment MapSegment(SegmentRef reference, bool replace) {
-        MappedSegment? segment = null;
-        if (replace && pool.TryGetValue(reference.Name, out var pooled)) {
-            unsafe {
-                if (pooled.Length == reference.Length && pooled.Header->ModelVersion == reference.Version) {
-                    segment = pooled;
-                }
-            }
-
-            if (segment is null) {
-                // Not the server's slot any more (resized, or a new object under the old name): map it afresh.
-                pool.Remove(reference.Name);
-                poolOrder.Remove(reference.Name);
-                pooled.Pooled = false;
-                if (pooled.RootRefs == 0) {
-                    pooled.Dispose();
-                }
-            }
-        }
-
+        var segment = replace ? Pooled(reference) : null;
         var fresh = segment is null;
         segment ??= MappedSegment.Map(++segmentIds, reference.Name, reference.Length);
         try {
-            segment.ValidateLayout();
-            segment.Prefault();
-            if (segment.Length <= Options.VerifyBytes) {
-                segment.Verify();
-            }
-
-            unsafe {
-                if (segment.Header->ModelVersion != reference.Version) {
-                    throw new InvalidDataException(
-                        $"Segment holds model version {segment.Header->ModelVersion}, expected {reference.Version}."
-                    );
-                }
-            }
+            Check(segment, reference.Version);
         } catch {
             if (fresh) {
                 segment.Dispose();
@@ -531,16 +526,55 @@ public sealed class EngineController : IDisposable {
             throw;
         }
 
-        if (replace && fresh) {
+        if (replace) {
             segment.Pooled = true;
             pool[reference.Name] = segment;
-            poolOrder.Add(reference.Name);
-        } else if (replace) {
             poolOrder.Remove(reference.Name);
             poolOrder.Add(reference.Name);
         }
 
         return segment;
+    }
+
+    /// <summary>
+    ///     The whole-model segment of this name the host still has mapped, when it is the server's pooled slot holding
+    ///     this version; otherwise forgets it (resized, or a new object under the old name) and returns null.
+    /// </summary>
+    unsafe MappedSegment? Pooled(SegmentRef reference) {
+        if (!pool.TryGetValue(reference.Name, out var pooled)) {
+            return null;
+        }
+
+        if (pooled.Length == reference.Length && pooled.Header->ModelVersion == reference.Version) {
+            return pooled;
+        }
+
+        pool.Remove(reference.Name);
+        poolOrder.Remove(reference.Name);
+        pooled.Pooled = false;
+        if (pooled.RootRefs == 0) {
+            pooled.Dispose();
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    ///     Validates the layout, prefaults every page (ADR-0006), verifies the checksum and sort order of segments up to
+    ///     <see cref="EngineOptions.VerifyBytes" />, and checks the model version.
+    /// </summary>
+    unsafe void Check(MappedSegment segment, long version) {
+        segment.ValidateLayout();
+        segment.Prefault();
+        if (segment.Length <= Options.VerifyBytes) {
+            segment.Verify();
+        }
+
+        if (segment.Header->ModelVersion != version) {
+            throw new InvalidDataException(
+                $"Segment holds model version {segment.Header->ModelVersion}, expected {version}."
+            );
+        }
     }
 
     /// <summary>Unmaps pooled segments beyond the newest few that no model uses.</summary>
@@ -570,22 +604,27 @@ public sealed class EngineController : IDisposable {
                 continue;
             }
 
-            try {
-                var file = new StreamFile(f.Id, f.Path);
-                if (file.Channels > PlaylistRenderer.MaxFileChannels) {
-                    file.Dispose();
-                    throw new InvalidDataException($"{file.Channels} channels");
-                }
+            files[f.Id] = Open(f);
+        }
+    }
 
-                if (file.Format.SampleRate != Options.SampleRate) {
-                    Log?.Invoke($"file {f.Path}: {file.Format.SampleRate} Hz on a {Options.SampleRate} Hz engine");
-                }
-
-                files[f.Id] = file;
-            } catch (Exception e) when (e is IOException or InvalidDataException or UnauthorizedAccessException) {
-                files[f.Id] = null;
-                Log?.Invoke($"file {f.Path}: {e.Message}; its regions play silence");
+    /// <summary>Opens a file for streaming; null (its regions play silence) when it cannot be read.</summary>
+    StreamFile? Open(EngineFile f) {
+        try {
+            var file = new StreamFile(f.Id, f.Path);
+            if (file.Channels > PlaylistRenderer.MaxFileChannels) {
+                file.Dispose();
+                throw new InvalidDataException($"{file.Channels} channels");
             }
+
+            if (file.Format.SampleRate != Options.SampleRate) {
+                Log?.Invoke($"file {f.Path}: {file.Format.SampleRate} Hz on a {Options.SampleRate} Hz engine");
+            }
+
+            return file;
+        } catch (Exception e) when (e is IOException or InvalidDataException or UnauthorizedAccessException) {
+            Log?.Invoke($"file {f.Path}: {e.Message}; its regions play silence");
+            return null;
         }
     }
 

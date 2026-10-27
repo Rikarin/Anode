@@ -67,9 +67,9 @@ public sealed class PlaybackChangeTests : IDisposable {
         var cycle = new Cycle(true, 38_400, 43_200); // 0.8 s to 0.9 s: after the new fill's lead
         driver.Send(new(EngineCommandKind.SetCycle, cycle.Start, cycle.End, true));
         var rest = driver.Render(Rate).Left;
-        var position = (long)first.Length;
-        for (var n = 0; n < rest.Length; n++) {
-            Assert.Equal(TestAudio.Sample(position, 5), rest[n]);
+        long position = first.Length;
+        foreach (var sample in rest) {
+            Assert.Equal(TestAudio.Sample(position, 5), sample);
             position = cycle.Advance(position, 1);
         }
 
@@ -84,7 +84,7 @@ public sealed class PlaybackChangeTests : IDisposable {
         Assert.Equal(TestAudio.Sample(first.Length - 1, 5), first[^1]);
         driver.Send(new(EngineCommandKind.Locate, 2 * Rate));
         var rest = driver.Render(Rate / 4).Left;
-        Assert.All(rest[..Block], v => Assert.Equal(0f, v)); // the disk had nothing for the new position yet
+        Assert.All(rest[..Block], static v => Assert.Equal(0f, v)); // the disk had nothing for the new position yet
         for (var n = Block; n < rest.Length; n++) {
             Assert.Equal(TestAudio.Sample(2 * Rate + n, 5), rest[n]);
         }
@@ -97,7 +97,7 @@ public sealed class PlaybackChangeTests : IDisposable {
         var first = driver.Render(Rate / 8).Left;
         driver.Send(new(EngineCommandKind.Stop));
         var stopped = driver.Render(Block * 10).Left;
-        Assert.All(stopped, v => Assert.Equal(0f, v));
+        Assert.All(stopped, static v => Assert.Equal(0f, v));
         driver.Send(new(EngineCommandKind.Play));
         var resumed = driver.Render(Block * 10).Left;
         for (var n = 0; n < resumed.Length; n++) {
@@ -112,7 +112,7 @@ public sealed class PlaybackChangeTests : IDisposable {
         driver.Render(Block * 4);
         Assert.True(controller.SetStrip(1, new(1f, 0f, true, false)));
         driver.Render(Block); // the mute ramps over one block
-        Assert.All(driver.Render(Block * 4).Left, v => Assert.Equal(0f, v));
+        Assert.All(driver.Render(Block * 4).Left, static v => Assert.Equal(0f, v));
 
         using var empty = TestAudio.Segment([new(TrackEntry.MetronomeTrack, [], [])], 2);
         controller.LoadModel(TestAudio.Load(empty, 2, true, [], [], dir));

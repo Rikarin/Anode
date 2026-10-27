@@ -8,14 +8,24 @@ namespace Anode.Engine.Tests;
 
 /// <summary>Test fixtures: WAV files with known samples, segments, and an offline driver for the audio callback.</summary>
 static class TestAudio {
-    /// <summary>The 24-bit sample at <paramref name="frame" /> of a test file seeded <paramref name="seed" /> (spike S2's pattern).</summary>
+    /// <summary>
+    ///     The 24-bit sample at <paramref name="frame" /> of a test file seeded <paramref name="seed" /> (spike S2's
+    ///     pattern).
+    /// </summary>
     public static int Pattern(long frame, int seed) => (int)((frame * 3 + seed * 7919L) & 0x7F_FFFF) - 0x40_0000;
 
     /// <summary>The decoded float of <see cref="Pattern" />, as the engine decodes 24-bit PCM.</summary>
     public static float Sample(long frame, int seed) => Pattern(frame, seed) * (1f / 8_388_608f);
 
     /// <summary>Writes a 24-bit WAV whose channel c of frame f is <see cref="Pattern" />(f, seed + c).</summary>
-    public static string Write24(string directory, string name, int channels, long frames, int seed, int rate = 48_000) {
+    public static string Write24(
+        string directory,
+        string name,
+        int channels,
+        long frames,
+        int seed,
+        int rate = 48_000
+    ) {
         var path = Path.Combine(directory, name);
         using var writer = new WavWriter(path, channels, rate);
         var block = new float[4096 * channels];
@@ -34,7 +44,15 @@ static class TestAudio {
     }
 
     /// <summary>Writes a WAV of raw little-endian samples with a JUNK chunk before the data (as BWF writers do).</summary>
-    public static string WriteRaw(string directory, string name, short format, int bits, int channels, byte[] data, int rate = 48_000) {
+    public static string WriteRaw(
+        string directory,
+        string name,
+        short format,
+        int bits,
+        int channels,
+        byte[] data,
+        int rate = 48_000
+    ) {
         var path = Path.Combine(directory, name);
         using var stream = File.Create(path);
         Span<byte> h = stackalloc byte[12 + 24 + 8 + 100 + 8];
@@ -112,10 +130,25 @@ static class TestAudio {
 
     public static EngineStrip Unity => new(1f, 0f, false, false);
 
-    public static EngineTrack Track(int id, bool stereo = false, EngineStrip? strip = null, int input = -1, bool armed = false, bool monitoring = false) =>
+    public static EngineTrack Track(
+        int id,
+        bool stereo = false,
+        EngineStrip? strip = null,
+        int input = -1,
+        bool armed = false,
+        bool monitoring = false
+    ) =>
         new(id, input, stereo, armed, monitoring, strip ?? Unity);
 
-    public static AudioPlaylistEntry Region(long start, long length, int file, long offset = 0, float gain = 1f, int fadeIn = 0, int fadeOut = 0) =>
+    public static AudioPlaylistEntry Region(
+        long start,
+        long length,
+        int file,
+        long offset = 0,
+        float gain = 1f,
+        int fadeIn = 0,
+        int fadeOut = 0
+    ) =>
         new() {
             Start = start,
             FileOffset = offset,
@@ -127,7 +160,13 @@ static class TestAudio {
         };
 
     public static PlaybackEvent Click(long position, bool downbeat) =>
-        new() { SamplePos = position, Track = TrackEntry.MetronomeTrack, Kind = PlaybackEventKind.Click, Data1 = downbeat ? (byte)1 : (byte)0, Value = 1f };
+        new() {
+            SamplePos = position,
+            Track = TrackEntry.MetronomeTrack,
+            Kind = PlaybackEventKind.Click,
+            Data1 = downbeat ? (byte)1 : (byte)0,
+            Value = 1f
+        };
 }
 
 /// <summary>

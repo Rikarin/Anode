@@ -9,12 +9,15 @@ public sealed unsafe class MetronomeTests : IDisposable {
 
     public void Dispose() => Directory.Delete(dir, true);
 
-    /// <summary>Clicks every beat from 0 for <paramref name="bars" /> bars of <paramref name="beats" /> beats of <paramref name="beatFrames" />.</summary>
+    /// <summary>
+    ///     Clicks every beat from 0 for <paramref name="bars" /> bars of <paramref name="beats" /> beats of
+    ///     <paramref name="beatFrames" />.
+    /// </summary>
     static PlaybackEvent[] Clicks(int bars, int beats, long beatFrames, long from = 0) =>
-        Enumerable.Range(0, bars * beats).Select(i => TestAudio.Click(from + i * beatFrames, i % beats == 0)).ToArray();
+        [..Enumerable.Range(0, bars * beats).Select(i => TestAudio.Click(from + i * beatFrames, i % beats == 0))];
 
     static (long, int) CountIn(PlaybackEvent[] events, long position) {
-        fixed (PlaybackEvent* p = events) {
+        fixed (PlaybackEvent* p = events.AsSpan()) {
             return Metronome.CountInFor(new(p, events.Length, null, 0), position, Rate);
         }
     }
@@ -41,7 +44,9 @@ public sealed unsafe class MetronomeTests : IDisposable {
 
     [Fact]
     public void Clicks_start_on_their_sample_and_cut_the_previous_one() {
-        using var controller = Controller([TestAudio.Click(1_000, true), TestAudio.Click(1_500, false), TestAudio.Click(25_000, false)]);
+        using var controller = Controller(
+            [TestAudio.Click(1_000, true), TestAudio.Click(1_500, false), TestAudio.Click(25_000, false)]
+        );
         controller.Engine.SetMetronome(true, 0.5f);
         using var driver = new OfflineDriver(controller, 64);
         driver.PlayFrom(0);
@@ -71,7 +76,7 @@ public sealed unsafe class MetronomeTests : IDisposable {
         using var driver = new OfflineDriver(controller, 64);
         driver.Send(new(EngineCommandKind.SetCycle, 0, 24_000, true));
         driver.PlayFrom(0);
-        Assert.All(driver.Render(Rate).Left, v => Assert.Equal(0f, v));
+        Assert.All(driver.Render(Rate).Left, static v => Assert.Equal(0f, v));
 
         controller.Engine.SetMetronome(true, 1f);
         var left = driver.Render(Rate).Left; // positions 0..24000 twice: the clicks at 0 and 12000 in each lap

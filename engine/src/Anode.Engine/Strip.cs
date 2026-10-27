@@ -27,7 +27,9 @@ public sealed class Strip {
 
     public Strip() { }
 
-    public Strip(EngineStrip strip) => Set(strip);
+    public Strip(EngineStrip strip) {
+        Set(strip);
+    }
 
     public float Gain => Volatile.Read(ref gain);
 

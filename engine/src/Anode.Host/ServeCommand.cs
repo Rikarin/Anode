@@ -58,7 +58,8 @@ static class ServeCommand {
             device = session;
         }
 
-        using var host = new EngineHost.EngineHost(device, version) { Log = Print };
+        using var host = new EngineHost.EngineHost(device, version);
+        host.Log = Print;
         host.Start();
         await using var server = new EngineHostServer(socket, host.HandleAsync, Print);
         server.Start();

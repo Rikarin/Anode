@@ -22,12 +22,12 @@ public sealed class TrackFeedTests {
         var left = new float[400];
         var right = new float[400];
         Assert.Equal(400, feed.Read(0, 400, edited, 0, left, right));
-        Assert.All(left, v => Assert.Equal(1f, v)); // the old fill plays on until the new one starts
+        Assert.All(left, static v => Assert.Equal(1f, v)); // the old fill plays on until the new one starts
 
         left = new float[200];
         Assert.Equal(200, feed.Read(400, 200, edited, 0, left, right));
-        Assert.All(left[..100], v => Assert.Equal(1f, v));
-        Assert.All(left[100..], v => Assert.Equal(2f, v)); // spliced at clock 500
+        Assert.All(left[..100], static v => Assert.Equal(1f, v));
+        Assert.All(left[100..], static v => Assert.Equal(2f, v)); // spliced at clock 500
     }
 
     [Fact]
@@ -40,13 +40,13 @@ public sealed class TrackFeedTests {
         var left = new float[100];
         var right = new float[100];
         Assert.Equal(0, feed.Read(0, 100, located, 2, left, right)); // nothing for the new anchor yet: silence
-        Assert.All(left, v => Assert.Equal(0f, v));
+        Assert.All(left, static v => Assert.Equal(0f, v));
 
         feed.BeginFill(located, 100);
         Append(feed, 500, 3f);
         Assert.Equal(100, feed.Read(100, 100, located, 2, left, right));
-        Assert.All(left, v => Assert.Equal(3f, v));
-        Assert.All(right, v => Assert.Equal(3f, v));
+        Assert.All(left, static v => Assert.Equal(3f, v));
+        Assert.All(right, static v => Assert.Equal(3f, v));
     }
 
     [Fact]
@@ -54,7 +54,7 @@ public sealed class TrackFeedTests {
         using var feed = new TrackFeed(1, 4_096);
         var id = TrackFeed.Identity(1, 1);
         feed.BeginFill(id, 1_000);
-        var data = Enumerable.Range(0, 500).Select(i => (float)i).ToArray();
+        var data = Enumerable.Range(0, 500).Select(static i => (float)i).ToArray();
         feed.Append(data);
         var left = new float[100];
         var right = new float[100];

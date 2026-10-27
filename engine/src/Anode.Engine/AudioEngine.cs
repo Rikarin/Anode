@@ -117,18 +117,7 @@ public sealed unsafe class AudioEngine : IAudioProcessor {
                     transport.Stop();
                     break;
                 case EngineCommandKind.Record:
-                    if (transport.State == TransportState.Stopped && countInRemaining == 0) {
-                        if (command.A > 0) {
-                            countInTotal = countInRemaining = command.A;
-                            countInBeats = (int)Math.Clamp(command.B, 1, 64);
-                            transport.PrepareRecord();
-                        } else {
-                            transport.Record();
-                        }
-                    } else if (transport.State == TransportState.Playing) {
-                        transport.Record(); // punch in, no count-in
-                    }
-
+                    Record(command.A, command.B);
                     break;
                 case EngineCommandKind.Locate:
                     transport.Locate(Math.Max(0, command.A));
@@ -143,6 +132,22 @@ public sealed unsafe class AudioEngine : IAudioProcessor {
         }
     }
 
+    /// <summary>
+    ///     From a stop: a count-in of <paramref name="countIn" /> frames (if any) then recording; while playing: a
+    ///     punch-in.
+    /// </summary>
+    void Record(long countIn, long beats) {
+        if (transport.State == TransportState.Playing) {
+            transport.Record(); // punch in, no count-in
+        } else if (transport.State == TransportState.Stopped && countInRemaining == 0 && countIn > 0) {
+            countInTotal = countInRemaining = countIn;
+            countInBeats = (int)Math.Clamp(beats, 1, 64);
+            transport.PrepareRecord();
+        } else if (transport.State == TransportState.Stopped && countInRemaining == 0) {
+            transport.Record();
+        }
+    }
+
     void RenderBlock(
         ModelRoot model,
         float** inputs,
@@ -153,11 +158,7 @@ public sealed unsafe class AudioEngine : IAudioProcessor {
         int frames
     ) {
         var countIn = countInRemaining > 0;
-        var rolling = transport.Rolling;
-        var recording = transport.State == TransportState.Recording;
-        var clock = transport.Clock;
         var position = transport.Position;
-        var anchor = transport.Anchor.Id;
         var bus = busLeft.AsSpan(0, frames);
         var busR = busRight.AsSpan(0, frames);
         bus.Clear();
@@ -173,50 +174,21 @@ public sealed unsafe class AudioEngine : IAudioProcessor {
             var track = tracks[i];
             var left = trackLeft.AsSpan(0, frames);
             var right = trackRight.AsSpan(0, frames);
-            left.Clear();
-            right.Clear();
-            var identity = TrackFeed.Identity(anchor, model.Generations[i]);
-            if (rolling) {
-                if (track.Stream.Read(clock, frames, identity, hardFloor, left, right) < frames) {
-                    underruns++;
-                }
-            } else {
-                track.Stream.Align(clock, identity, hardFloor);
-            }
-
-            float* in0 = null, in1 = null;
-            var input = track.InputChannel;
-            if ((uint)input < (uint)inputChannels) {
-                in0 = inputs[input] + offset;
-                in1 = track.Stereo && input + 1 < inputChannels ? inputs[input + 1] + offset : in0;
-            }
-
-            if (in0 is not null && track.Monitoring) {
-                Add(left, in0);
-                if (track.Stereo) {
-                    Add(right, in1);
-                }
-            }
-
-            if (recording && track.Take is { } take) {
-                take.Push(in0, track.Stereo ? in1 : null, frames, position);
-            }
-
-            track.Strip.MixInto(left, track.Stereo ? right : left, track.Stereo, !anySolo || track.Strip.Solo, bus, busR);
+            ReadTrack(track, model.Generations[i], left, right);
+            InputTrack(track, inputs, inputChannels, offset, left, right, position);
+            track.Strip.MixInto(
+                left,
+                track.Stereo ? right : left,
+                track.Stereo,
+                !anySolo || track.Strip.Solo,
+                bus,
+                busR
+            );
         }
 
         Master.Process(bus, busR);
-
         var click = clicks.AsSpan(0, frames);
-        click.Clear();
-        metronome.Begin();
-        if (countIn) {
-            metronome.AddCountIn(countInTotal, countInBeats, countInTotal - countInRemaining, frames);
-        } else if (rolling && Volatile.Read(ref metronomeEnabled)) {
-            AddModelClicks(model, position, frames);
-        }
-
-        metronome.Render(click, Volatile.Read(ref metronomeGain));
+        RenderClicks(model, countIn, position, click);
         WriteOutputs(outputs, outputChannels, offset, bus, busR, click);
 
         if (countIn) {
@@ -228,6 +200,65 @@ public sealed unsafe class AudioEngine : IAudioProcessor {
             transport.Advance(frames);
         }
     }
+
+    /// <summary>The track's next frames from its stream while rolling (counting an underrun when short).</summary>
+    void ReadTrack(TrackState track, int generation, Span<float> left, Span<float> right) {
+        left.Clear();
+        right.Clear();
+        var identity = TrackFeed.Identity(transport.Anchor.Id, generation);
+        if (!transport.Rolling) {
+            track.Stream.Align(transport.Clock, identity, hardFloor);
+        } else if (track.Stream.Read(transport.Clock, left.Length, identity, hardFloor, left, right) < left.Length) {
+            underruns++;
+        }
+    }
+
+    /// <summary>Adds the track's input when it monitors, and feeds its take while recording.</summary>
+    void InputTrack(
+        TrackState track,
+        float** inputs,
+        int inputChannels,
+        int offset,
+        Span<float> left,
+        Span<float> right,
+        long position
+    ) {
+        var input = track.InputChannel;
+        if ((uint)input >= (uint)inputChannels) {
+            if (transport.State == TransportState.Recording && track.Take is { } silent) {
+                silent.Push(null, null, left.Length, position);
+            }
+
+            return;
+        }
+
+        var in0 = inputs[input] + offset;
+        var in1 = track.Stereo && input + 1 < inputChannels ? inputs[input + 1] + offset : in0;
+        if (track.Monitoring) {
+            Add(left, in0);
+            if (track.Stereo) {
+                Add(right, in1);
+            }
+        }
+
+        if (transport.State == TransportState.Recording && track.Take is { } take) {
+            take.Push(in0, track.Stereo ? in1 : null, left.Length, position);
+        }
+    }
+
+    /// <summary>The count-in's clicks, or the model's while rolling with the metronome on.</summary>
+    void RenderClicks(ModelRoot model, bool countIn, long position, Span<float> click) {
+        click.Clear();
+        metronome.Begin();
+        if (countIn) {
+            metronome.AddCountIn(countInTotal, countInBeats, countInTotal - countInRemaining, click.Length);
+        } else if (transport.Rolling && Volatile.Read(ref metronomeEnabled)) {
+            AddModelClicks(model, position, click.Length);
+        }
+
+        metronome.Render(click, Volatile.Read(ref metronomeGain));
+    }
+
 
     void AddModelClicks(ModelRoot model, long position, int frames) {
         var order = transport.PlayOrder;

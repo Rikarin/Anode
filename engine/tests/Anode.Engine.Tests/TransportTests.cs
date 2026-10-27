@@ -68,36 +68,38 @@ public sealed class TransportTests {
     [Fact]
     public void Advancing_in_steps_equals_advancing_at_once() =>
         Gen.Select(Gen.Long[0, 10_000], Gen.Long[1, 5_000], Gen.Long[0, 20_000], Gen.Int[1, 4096].Array[1, 20])
-            .Sample((start, length, position, steps) => {
-                var cycle = new Cycle(true, start, start + length);
-                var stepped = position;
-                long total = 0;
-                foreach (var step in steps) {
-                    stepped = cycle.Advance(stepped, step);
-                    total += step;
-                }
+            .Sample(static (start, length, position, steps) => {
+                    var cycle = new Cycle(true, start, start + length);
+                    var stepped = position;
+                    long total = 0;
+                    foreach (var step in steps) {
+                        stepped = cycle.Advance(stepped, step);
+                        total += step;
+                    }
 
-                return stepped == cycle.Advance(position, total);
-            });
+                    return stepped == cycle.Advance(position, total);
+                }
+            );
 
     [Fact]
     public void The_anchor_maps_every_clock_to_the_transport_position() =>
         Gen.Select(Gen.Long[0, 10_000], Gen.Long[1, 5_000], Gen.Long[0, 20_000], Gen.Int[1, 512].Array[1, 40])
-            .Sample((start, length, position, blocks) => {
-                var transport = new Transport();
-                transport.SetCycle(new(true, start, start + length));
-                transport.Locate(position);
-                transport.Play();
-                var anchor = transport.Anchor;
-                foreach (var block in blocks) {
-                    transport.Advance(block);
-                    if (anchor.PositionAt(transport.Clock) != transport.Position) {
-                        return false;
+            .Sample(static (start, length, position, blocks) => {
+                    var transport = new Transport();
+                    transport.SetCycle(new(true, start, start + length));
+                    transport.Locate(position);
+                    transport.Play();
+                    var anchor = transport.Anchor;
+                    foreach (var block in blocks) {
+                        transport.Advance(block);
+                        if (anchor.PositionAt(transport.Clock) != transport.Position) {
+                            return false;
+                        }
                     }
-                }
 
-                return true;
-            });
+                    return true;
+                }
+            );
 
     [Fact]
     public void Recording_ignores_the_cycle_and_changes_the_anchor() {
@@ -115,7 +117,7 @@ public sealed class TransportTests {
         transport.Advance(200);
         Assert.Equal(1_100, transport.Position); // linear through the cycle end
         transport.Stop();
-        Assert.Equal(new Cycle(true, 0, 1_000), transport.PlayOrder);
+        Assert.Equal(new(true, 0, 1_000), transport.PlayOrder);
         Assert.True(transport.Anchor.Id > pending.Id);
     }
 

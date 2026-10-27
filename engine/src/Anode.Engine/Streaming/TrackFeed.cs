@@ -46,7 +46,10 @@ public sealed unsafe class TrackFeed : IDisposable {
 
     public SpscRing Ring { get; }
 
-    /// <summary>The identity of a fill for anchor <paramref name="anchorId" /> and compiled generation <paramref name="generation" />.</summary>
+    /// <summary>
+    ///     The identity of a fill for anchor <paramref name="anchorId" /> and compiled generation
+    ///     <paramref name="generation" />.
+    /// </summary>
     public static long Identity(long anchorId, int generation) =>
         (anchorId << IdentityGenerationBits) | (uint)(generation & ((1 << IdentityGenerationBits) - 1));
 
@@ -71,8 +74,7 @@ public sealed unsafe class TrackFeed : IDisposable {
     }
 
     /// <summary>Frames the producer can queue now (ring space and a queue slot).</summary>
-    public int FreeFrames =>
-        tail - Volatile.Read(ref head) >= QueueCapacity ? 0 : Ring.Free / Channels;
+    public int FreeFrames => tail - Volatile.Read(ref head) >= QueueCapacity ? 0 : Ring.Free / Channels;
 
     /// <summary>
     ///     Queues <paramref name="interleaved" /> (whole frames) as the current fill's next frames and advances its
@@ -107,12 +109,9 @@ public sealed unsafe class TrackFeed : IDisposable {
             var remaining = chunk.Frames - headConsumed;
             var want = clock + i;
             var current = chunk.Identity == identity;
-            long next = -1;
-            if (!current) {
-                if (AnchorOf(chunk.Identity) < hardFloor || (FindCurrent(identity, out next) && next <= want)) {
-                    Drop(remaining);
-                    continue;
-                }
+            if (Superseded(chunk, identity, hardFloor, want, out var next)) {
+                Drop(remaining);
+                continue;
             }
 
             if (at < want) {
@@ -146,8 +145,7 @@ public sealed unsafe class TrackFeed : IDisposable {
         while (Peek(out var chunk)) {
             var at = chunk.StartClock + headConsumed;
             var remaining = chunk.Frames - headConsumed;
-            if (chunk.Identity != identity
-                && (AnchorOf(chunk.Identity) < hardFloor || (FindCurrent(identity, out var next) && next <= clock))) {
+            if (Superseded(chunk, identity, hardFloor, clock, out _)) {
                 Drop(remaining);
                 continue;
             }
@@ -159,6 +157,20 @@ public sealed unsafe class TrackFeed : IDisposable {
 
             return;
         }
+    }
+
+    /// <summary>
+    ///     Whether <paramref name="chunk" /> must not play at <paramref name="clock" />: it is of another fill, and
+    ///     either from before the last hard anchor or the current fill has begun. <paramref name="next" /> is where the
+    ///     current fill begins (−1: not queued yet).
+    /// </summary>
+    bool Superseded(in Chunk chunk, long identity, long hardFloor, long clock, out long next) {
+        next = -1;
+        if (chunk.Identity == identity) {
+            return false;
+        }
+
+        return AnchorOf(chunk.Identity) < hardFloor || (FindCurrent(identity, out next) && next <= clock);
     }
 
     bool Peek(out Chunk chunk) {

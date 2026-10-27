@@ -18,7 +18,14 @@ public sealed unsafe class RecordTake : IDisposable {
     long dropped;
     long skip = -1; // writer: leading frames still to drop (−1: not known yet)
 
-    public RecordTake(int trackId, string path, int channels, int sampleRate, int latencyFrames, double ringSeconds = 4) {
+    public RecordTake(
+        int trackId,
+        string path,
+        int channels,
+        int sampleRate,
+        int latencyFrames,
+        double ringSeconds = 4
+    ) {
         TrackId = trackId;
         Channels = channels;
         SampleRate = sampleRate;

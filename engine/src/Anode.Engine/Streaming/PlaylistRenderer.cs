@@ -122,21 +122,26 @@ public sealed unsafe class PlaylistRenderer : IDisposable {
             var level = plain ? entry.Gain : Level(entry, regionFrame + f);
             var frame = source.Slice(f * fileChannels, fileChannels);
             if (channels == 1) {
-                if (fileChannels == 1) {
-                    destination[f] = frame[0] * level;
-                } else {
-                    var sum = 0f;
-                    foreach (var s in frame) {
-                        sum += s;
-                    }
-
-                    destination[f] = sum / fileChannels * level;
-                }
+                destination[f] = Downmix(frame) * level;
             } else {
                 destination[2 * f] = frame[0] * level;
                 destination[2 * f + 1] = (fileChannels == 1 ? frame[0] : frame[1]) * level;
             }
         }
+    }
+
+    /// <summary>A file frame for a mono track: the sample itself, or the average of the file's channels.</summary>
+    static float Downmix(ReadOnlySpan<float> frame) {
+        if (frame.Length == 1) {
+            return frame[0];
+        }
+
+        var sum = 0f;
+        foreach (var s in frame) {
+            sum += s;
+        }
+
+        return sum / frame.Length;
     }
 
     /// <summary>The first entry that ends after <paramref name="position" />.</summary>

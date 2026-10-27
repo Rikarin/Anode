@@ -12,7 +12,7 @@ public sealed unsafe class PlaylistRendererTests : IDisposable {
     static float[] Render(AudioPlaylistEntry[] playlist, StreamFile?[] files, long position, int frames, int channels) {
         using var renderer = new PlaylistRenderer(DiskStreamer.ReadFrames);
         var output = new float[frames * channels];
-        fixed (AudioPlaylistEntry* p = playlist) {
+        fixed (AudioPlaylistEntry* p = playlist.AsSpan()) {
             renderer.Render(new(null, 0, p, playlist.Length), files, position, frames, channels, output);
         }
 
@@ -66,7 +66,7 @@ public sealed unsafe class PlaylistRendererTests : IDisposable {
             Assert.Equal(TestAudio.Sample(f, 4), output[f]);
         }
 
-        Assert.All(output[500..], v => Assert.Equal(0f, v));
+        Assert.All(output[500..], static v => Assert.Equal(0f, v));
     }
 
     [Fact]

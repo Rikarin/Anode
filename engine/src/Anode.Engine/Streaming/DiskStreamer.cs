@@ -71,39 +71,12 @@ public sealed class DiskStreamer : IDisposable {
             var bestAhead = long.MaxValue;
             var bestFrames = 0;
             for (var i = 0; i < tracks.Length; i++) {
-                var stream = tracks[i].Stream;
-                var identity = TrackFeed.Identity(anchor.Id, model.Generations[i]);
-                if (stream.FillIdentity != identity) {
-                    // A locate restarts at once (the old audio is dropped); anything else starts a little ahead, so
-                    // the old audio plays on until the new fill begins.
-                    var hard = anchor.Hard && TrackFeed.AnchorOf(stream.FillIdentity) != anchor.Id;
-                    var lead = rolling && !hard ? LeadFrames : 0;
-                    stream.BeginFill(identity, Math.Max(anchor.Clock, snapshot.Clock + lead));
+                var (ahead, frames) = Plan(tracks[i].Stream, model.Generations[i], snapshot, rolling);
+                if (frames > 0 && ahead < bestAhead) {
+                    best = i;
+                    bestAhead = ahead;
+                    bestFrames = frames;
                 }
-
-                var ahead = stream.FillCursor - snapshot.Clock;
-                if (ahead < 0) {
-                    // The playhead overtook the fill (the disk stalled): skip ahead rather than read audio that is
-                    // already late; the gap plays as silence.
-                    stream.BeginFill(identity, snapshot.Clock + (rolling ? LeadFrames : 0));
-                    ahead = stream.FillCursor - snapshot.Clock;
-                }
-
-                if (ahead >= stream.TargetFrames * 2L / 3) {
-                    continue;
-                }
-
-                var frames = (int)Math.Min(
-                    Math.Min(ChunkFrames(stream.Channels), stream.FreeFrames),
-                    stream.TargetFrames - Math.Max(0, ahead)
-                );
-                if (frames < Math.Min(1_024, ChunkFrames(stream.Channels)) || ahead >= bestAhead) {
-                    continue;
-                }
-
-                best = i;
-                bestAhead = ahead;
-                bestFrames = frames;
             }
 
             if (best < 0) {
@@ -115,6 +88,39 @@ public sealed class DiskStreamer : IDisposable {
         } finally {
             Interlocked.Increment(ref completed);
         }
+    }
+
+    /// <summary>
+    ///     Starts a new fill when the play order or the track's compile changed; then how much audio the stream holds
+    ///     ahead of the playhead, and how many frames it should read now (0: none, it is above two thirds of its target
+    ///     or has no room for a useful read).
+    /// </summary>
+    (long Ahead, int Frames) Plan(TrackFeed stream, int generation, in EngineSnapshot snapshot, bool rolling) {
+        var anchor = snapshot.Anchor;
+        var identity = TrackFeed.Identity(anchor.Id, generation);
+        if (stream.FillIdentity != identity) {
+            // A locate restarts at once (the old audio is dropped); anything else starts a little ahead, so the old
+            // audio plays on until the new fill begins.
+            var hard = anchor.Hard && TrackFeed.AnchorOf(stream.FillIdentity) != anchor.Id;
+            var lead = rolling && !hard ? LeadFrames : 0;
+            stream.BeginFill(identity, Math.Max(anchor.Clock, snapshot.Clock + lead));
+        }
+
+        var ahead = stream.FillCursor - snapshot.Clock;
+        if (ahead < 0) {
+            // The playhead overtook the fill (the disk stalled): skip ahead rather than read audio that is already
+            // late; the gap plays as silence.
+            stream.BeginFill(identity, snapshot.Clock + (rolling ? LeadFrames : 0));
+            ahead = stream.FillCursor - snapshot.Clock;
+        }
+
+        if (ahead >= stream.TargetFrames * 2L / 3) {
+            return (ahead, 0);
+        }
+
+        var chunk = ChunkFrames(stream.Channels);
+        var frames = (int)Math.Min(Math.Min(chunk, stream.FreeFrames), stream.TargetFrames - ahead);
+        return (ahead, frames < Math.Min(1_024, chunk) ? 0 : frames);
     }
 
     /// <summary>Renders the next <paramref name="frames" /> of the stream's fill, in play order, and queues them.</summary>

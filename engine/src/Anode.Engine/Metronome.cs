@@ -132,44 +132,48 @@ public sealed unsafe class Metronome {
     public static (long Frames, int Beats) CountInFor(in TrackView clicks, long position, int sampleRate) {
         var events = clicks.Events;
         var count = clicks.EventCount;
-        long downbeat = -1;
-        for (var i = Math.Min(LowerBound(events, count, position + 1), count) - 1; i >= 0; i--) {
-            if (events[i].Kind == PlaybackEventKind.Click && events[i].Data1 == 1) {
-                downbeat = i;
-                break;
-            }
-        }
-
+        var downbeat = LastDownbeat(events, Math.Min(LowerBound(events, count, position + 1), count));
         if (downbeat < 0) {
-            for (long i = 0; i < count; i++) {
-                if (events[i].Kind == PlaybackEventKind.Click && events[i].Data1 == 1) {
-                    downbeat = i;
-                    break;
-                }
-            }
+            downbeat = NextDownbeat(events, count, 0);
         }
 
-        if (downbeat >= 0) {
-            var beats = 1;
-            for (var i = downbeat + 1; i < count; i++) {
-                if (events[i].Kind != PlaybackEventKind.Click) {
-                    continue;
-                }
+        if (downbeat >= 0 && NextDownbeat(events, count, downbeat + 1) is var next and >= 0) {
+            var frames = events[next].SamplePos - events[downbeat].SamplePos;
+            var beats = 0;
+            for (var i = downbeat; i < next; i++) {
+                beats += events[i].Kind == PlaybackEventKind.Click ? 1 : 0;
+            }
 
-                if (events[i].Data1 == 1) {
-                    var frames = events[i].SamplePos - events[downbeat].SamplePos;
-                    if (frames > 0 && beats <= 32) {
-                        return (frames, beats);
-                    }
-
-                    break;
-                }
-
-                beats++;
+            if (frames > 0 && beats <= 32) {
+                return (frames, beats);
             }
         }
 
         return (2L * sampleRate, 4); // 4/4 at 120 bpm
+    }
+
+    static bool IsDownbeat(in PlaybackEvent e) => e is { Kind: PlaybackEventKind.Click, Data1: 1 };
+
+    /// <summary>The index of the last downbeat before index <paramref name="end" />, or −1.</summary>
+    static long LastDownbeat(PlaybackEvent* events, long end) {
+        for (var i = end - 1; i >= 0; i--) {
+            if (IsDownbeat(events[i])) {
+                return i;
+            }
+        }
+
+        return -1;
+    }
+
+    /// <summary>The index of the first downbeat at or after index <paramref name="from" />, or −1.</summary>
+    static long NextDownbeat(PlaybackEvent* events, long count, long from) {
+        for (var i = from; i < count; i++) {
+            if (IsDownbeat(events[i])) {
+                return i;
+            }
+        }
+
+        return -1;
     }
 
     static long LowerBound(PlaybackEvent* events, long count, long position) {

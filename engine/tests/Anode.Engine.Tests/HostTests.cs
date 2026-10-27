@@ -15,16 +15,19 @@ public sealed class HostTests : IAsyncLifetime {
     const int Rate = 48_000;
     readonly string dir = TestAudio.TempDirectory();
     readonly string socketPath = Path.Combine(Path.GetTempPath(), $"an-{Guid.NewGuid().ToString("n")[..8]}.sock");
-    readonly EngineHost.EngineHost host = new(new NullAudioDevice(Rate, 64, 2, 2, true), "test");
+    EngineHost.EngineHost? host;
     EngineHostServer? server;
     Socket? socket;
     NetworkStream? stream;
 
+    EngineHost.EngineHost Host => host!;
+
     static CancellationToken Token => TestContext.Current.CancellationToken;
 
     public async ValueTask InitializeAsync() {
+        host = new(new NullAudioDevice(Rate, 64, 2, 2, true), "test");
         host.Start();
-        server = new(socketPath, host.HandleAsync);
+        server = new(socketPath, Host.HandleAsync);
         server.Start();
         socket = new(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
         await socket.ConnectAsync(new UnixDomainSocketEndPoint(socketPath), Token);
@@ -41,7 +44,7 @@ public sealed class HostTests : IAsyncLifetime {
             await server.DisposeAsync();
         }
 
-        host.Dispose();
+        host?.Dispose();
         Directory.Delete(dir, true);
     }
 
@@ -59,7 +62,7 @@ public sealed class HostTests : IAsyncLifetime {
 
     unsafe TelemetryHeader Telemetry(out MeterEntry[] meters) {
         meters = new MeterEntry[TelemetryHeader.MaxTracks + 1];
-        Assert.True(TelemetryWriter.TryRead(host.TelemetryRegion, out var header, meters));
+        Assert.True(TelemetryWriter.TryRead(Host.TelemetryRegion, out var header, meters));
         return header;
     }
 
@@ -84,7 +87,10 @@ public sealed class HostTests : IAsyncLifetime {
         var hello = await Expect<HelloMessage>(new HelloMessage("server"));
         Assert.Equal("test", hello.Version);
         Assert.Equal("null", hello.Backend);
-        Assert.Equal((Rate, 64, 2, 2), (hello.SampleRate, hello.BufferFrames, hello.InputChannels, hello.OutputChannels));
+        Assert.Equal(
+            (Rate, 64, 2, 2),
+            (hello.SampleRate, hello.BufferFrames, hello.InputChannels, hello.OutputChannels)
+        );
         Assert.StartsWith("shm:/an-tl-", hello.TelemetryName);
 
         // The server's side: map the region read-only by its name.
@@ -143,7 +149,10 @@ public sealed class HostTests : IAsyncLifetime {
     public async Task Records_armed_tracks_and_answers_recording_finished() {
         await LoadAsync(
             1,
-            [TestAudio.Track(4, input: 0, armed: true, monitoring: true), TestAudio.Track(5, true, input: 0, armed: true), TestAudio.Track(6)],
+            [
+                TestAudio.Track(4, input: 0, armed: true, monitoring: true),
+                TestAudio.Track(5, true, input: 0, armed: true), TestAudio.Track(6)
+            ],
             [new(4, [], []), new(5, [], []), new(6, [], [])],
             []
         );
@@ -151,8 +160,10 @@ public sealed class HostTests : IAsyncLifetime {
         await Send(new TransportMessage(TransportAction.Record, 24_000));
         await Eventually(() => Telemetry(out _).State == TelemetryTransportState.Recording);
         await Eventually(() => Telemetry(out var m).PositionSamples > 24_000 + Rate / 2 && m[0].PeakLeft > 0.05f);
-        var finished = Assert.IsType<RecordingFinishedMessage>(await Request(new TransportMessage(TransportAction.Stop)));
-        Assert.Equal([4, 5], finished.Takes.Select(t => t.TrackId).Order());
+        var finished = Assert.IsType<RecordingFinishedMessage>(
+            await Request(new TransportMessage(TransportAction.Stop))
+        );
+        Assert.Equal([4, 5], finished.Takes.Select(static t => t.TrackId).Order());
         foreach (var take in finished.Takes) {
             Assert.Equal(24_000, take.StartSample);
             Assert.Equal(Rate, take.SampleRate);
@@ -171,14 +182,22 @@ public sealed class HostTests : IAsyncLifetime {
 
     [Fact]
     public async Task Count_in_holds_the_playhead_before_recording() {
-        PlaybackEvent[] clicks = [.. Enumerable.Range(0, 64).Select(i => TestAudio.Click(i * 6_000L, i % 4 == 0))];
-        await LoadAsync(1, [TestAudio.Track(1, input: 0, armed: true)], [new(1, [], []), new(TrackEntry.MetronomeTrack, clicks, [])], []);
+        PlaybackEvent[] clicks =
+            [..Enumerable.Range(0, 64).Select(static i => TestAudio.Click(i * 6_000L, i % 4 == 0))];
+        await LoadAsync(
+            1,
+            [TestAudio.Track(1, input: 0, armed: true)],
+            [new(1, [], []), new(TrackEntry.MetronomeTrack, clicks, [])],
+            []
+        );
         await Send(new SetMetronomeMessage(true, 0.5f, true));
         await Send(new TransportMessage(TransportAction.Record, 48_000));
         await Eventually(() => Telemetry(out _).State == TelemetryTransportState.Recording);
         Assert.Equal(48_000, Telemetry(out _).PositionSamples); // the bar of 24,000 frames is still counting in
         await Eventually(() => Telemetry(out _).PositionSamples > 48_000);
-        var finished = Assert.IsType<RecordingFinishedMessage>(await Request(new TransportMessage(TransportAction.Stop)));
+        var finished = Assert.IsType<RecordingFinishedMessage>(
+            await Request(new TransportMessage(TransportAction.Stop))
+        );
         Assert.Equal(48_000, Assert.Single(finished.Takes).StartSample);
     }
 
@@ -187,7 +206,10 @@ public sealed class HostTests : IAsyncLifetime {
         var error = await Expect<ErrorMessage>(new TransportMessage(TransportAction.Record));
         Assert.Equal("transport", error.Request);
         Assert.Equal("setStrip", (await Expect<ErrorMessage>(new SetStripMessage(42, TestAudio.Unity))).Request);
-        Assert.Equal("setTrackIo", (await Expect<ErrorMessage>(new SetTrackIoMessage(42, 0, false, true, false))).Request);
+        Assert.Equal(
+            "setTrackIo",
+            (await Expect<ErrorMessage>(new SetTrackIoMessage(42, 0, false, true, false))).Request
+        );
         Assert.Equal("transport", (await Expect<ErrorMessage>(new TransportMessage(TransportAction.Locate))).Request);
         var load = await Expect<ErrorMessage>(
             new LoadModelMessage(new("shm:/an-missing-segment", 4096, 1), true, [], [], TestAudio.Unity, dir)
@@ -211,9 +233,9 @@ public sealed class HostTests : IAsyncLifetime {
         await Send(new SetTrackIoMessage(2, 1, true, true, true));
         await Send(new SetCycleMessage(true, 0, Rate / 2));
         Assert.Equal(new PongMessage(2), await Request(new PingMessage(2)));
-        var root = host.Controller.Engine.Root;
-        Assert.Equal(new EngineStrip(0.5f, -1f, false, false), root.Tracks[0].Strip.Settings);
-        Assert.Equal(0.25f, host.Controller.Engine.Master.Gain);
+        var root = Host.Controller.Engine.Root;
+        Assert.Equal(new(0.5f, -1f, false, false), root.Tracks[0].Strip.Settings);
+        Assert.Equal(0.25f, Host.Controller.Engine.Master.Gain);
         Assert.True(root.Tracks[1].Stereo);
         Assert.Equal((1, true, true), (root.Tracks[1].InputChannel, root.Tracks[1].Armed, root.Tracks[1].Monitoring));
 
@@ -226,8 +248,8 @@ public sealed class HostTests : IAsyncLifetime {
         using var patch = TestAudio.Segment([new(2, [], [TestAudio.Region(0, Rate, 0)])], 2);
         var loaded = await Expect<ModelLoadedMessage>(TestAudio.Load(patch, 2, false, [], [], dir));
         Assert.Equal(2, loaded.Version);
-        Assert.Equal(2, host.Controller.Engine.Root.Tracks.Length);
-        Assert.Equal(1, host.Controller.Engine.Root.Views[1].PlaylistCount);
+        Assert.Equal(2, Host.Controller.Engine.Root.Tracks.Length);
+        Assert.Equal(1, Host.Controller.Engine.Root.Views[1].PlaylistCount);
         await Eventually(() => Telemetry(out _).ModelVersion == 2);
         Assert.Equal(0, Telemetry(out _).Underruns);
     }

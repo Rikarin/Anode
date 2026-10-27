@@ -5,13 +5,19 @@ public enum EngineCommandKind : byte {
     Play,
     Stop,
 
-    /// <summary>Record from the current position; <see cref="EngineCommand.A" /> count-in frames (0: none), <see cref="EngineCommand.B" /> beats.</summary>
+    /// <summary>
+    ///     Record from the current position; <see cref="EngineCommand.A" /> count-in frames (0: none),
+    ///     <see cref="EngineCommand.B" /> beats.
+    /// </summary>
     Record,
 
     /// <summary>Move the playhead to <see cref="EngineCommand.A" />.</summary>
     Locate,
 
-    /// <summary>The cycle: <see cref="EngineCommand.Flag" /> enabled, <see cref="EngineCommand.A" /> start, <see cref="EngineCommand.B" /> end.</summary>
+    /// <summary>
+    ///     The cycle: <see cref="EngineCommand.Flag" /> enabled, <see cref="EngineCommand.A" /> start,
+    ///     <see cref="EngineCommand.B" /> end.
+    /// </summary>
     SetCycle
 }
 

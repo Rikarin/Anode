@@ -40,13 +40,21 @@ public sealed unsafe class AllocationTests : IDisposable {
         var tracks = new List<EngineTrack>();
         for (var t = 0; t < 8; t++) {
             var regions = Enumerable.Range(0, 40)
-                .Select(r => TestAudio.Region(r * 12_000L, 11_000, t % 2, r * 3_000L, 0.7f, 200, 300))
+                .Select(r => TestAudio.Region(r * 12_000L, 11_000, t & 1, r * 3_000L, 0.7f, 200, 300))
                 .ToArray();
             models.Add(new(t, [], regions));
-            tracks.Add(TestAudio.Track(t, t % 2 == 1, new(0.8f, t / 8f - 0.5f, t == 5, t == 3), t % 2, t == 2, t < 4));
+            tracks.Add(
+                TestAudio.Track(t, (t & 1) == 1, new(0.8f, t / 8f - 0.5f, t == 5, t == 3), t & 1, t == 2, t < 4)
+            );
         }
 
-        models.Add(new(TrackEntry.MetronomeTrack, Enumerable.Range(0, 400).Select(i => TestAudio.Click(i * 6_000L, i % 4 == 0)).ToArray(), []));
+        models.Add(
+            new(
+                TrackEntry.MetronomeTrack,
+                [..Enumerable.Range(0, 400).Select(static i => TestAudio.Click(i * 6_000L, i % 4 == 0))],
+                []
+            )
+        );
         using var segment = TestAudio.Segment(models, 1);
         using var controller = new EngineController(new(Rate, 64));
         controller.LoadModel(TestAudio.Load(segment, 1, true, tracks, files, dir));
@@ -55,7 +63,7 @@ public sealed unsafe class AllocationTests : IDisposable {
         using var take = new RecordTake(2, Path.Combine(dir, "2-take.wav"), 1, Rate, 0);
         controller.Engine.Root.Tracks[2].Take = take;
         var region = NativeMemory.AlignedAlloc((nuint)TelemetryLayout.Size, 64);
-        using var telemetry = new TelemetryWriter(controller.Engine, (byte*)region, () => 0);
+        using var telemetry = new TelemetryWriter(controller.Engine, (byte*)region, static () => 0);
         var scratch = new float[8192];
         try {
             driver.Send(new(EngineCommandKind.SetCycle, 30_000, 150_000, true));

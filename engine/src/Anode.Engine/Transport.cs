@@ -74,7 +74,9 @@ public sealed class Transport {
     /// <summary>The current anchor (see <see cref="Engine.Anchor" />).</summary>
     public Anchor Anchor { get; private set; }
 
-    public Transport() => Anchor = new(++anchorIds, 0, 0, Cycle.Off, true);
+    public Transport() {
+        Anchor = new(++anchorIds, 0, 0, Cycle.Off, true);
+    }
 
     public void Play() => Set(TransportState.Playing, false);
 

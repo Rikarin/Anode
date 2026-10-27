@@ -41,10 +41,13 @@ sealed class CommandLine {
     public string? Text(string name) => options.GetValueOrDefault(name);
 
     /// <summary>An integer option, or <paramref name="fallback" /> when absent; a malformed one is an error.</summary>
-    public int Int(string name, int fallback) =>
-        Text(name) is { } text
-            ? int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out var value)
-                ? value
-                : throw new InvalidOperationException($"--{name} needs a whole number, not '{text}'.")
-            : fallback;
+    public int Int(string name, int fallback) {
+        if (Text(name) is not { } text) {
+            return fallback;
+        }
+
+        return int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out var value)
+            ? value
+            : throw new InvalidOperationException($"--{name} needs a whole number, not '{text}'.");
+    }
 }

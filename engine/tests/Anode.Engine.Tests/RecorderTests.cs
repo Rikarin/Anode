@@ -31,7 +31,7 @@ public sealed unsafe class RecorderTests : IDisposable {
         }
 
         var result = take.Complete(scratch);
-        Assert.Equal(new Ipc.RecordedTake(1, path, 4_800, 6_400, 2, Rate), result);
+        Assert.Equal(new(1, path, 4_800, 6_400, 2, Rate), result);
         var samples = TestAudio.Read24(path, out var channels);
         Assert.Equal(2, channels);
         Assert.Equal(12_800, samples.Length);
@@ -53,7 +53,7 @@ public sealed unsafe class RecorderTests : IDisposable {
     public void A_take_is_shifted_back_by_the_round_trip_latency(long position, int latency, long start, int skipped) {
         var path = Path.Combine(dir, $"2-{position}.wav");
         using var take = new RecordTake(2, path, 1, Rate, latency);
-        var input = Enumerable.Range(0, 2_000).Select(i => TestAudio.Sample(i, 9)).ToArray();
+        var input = Enumerable.Range(0, 2_000).Select(static i => TestAudio.Sample(i, 9)).ToArray();
         fixed (float* p = input) {
             take.Push(p, null, input.Length, position);
         }

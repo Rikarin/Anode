@@ -33,15 +33,15 @@ public sealed class OfflineRenderTests : IDisposable {
                 new(1f, 0f, false, false),
                 [
                     TestAudio.Region(4_800, 43_200, 0, 24_000, 0.5f, 480, 960),
-                    TestAudio.Region(72_000, 48_000, 0, 0, 1f)
+                    TestAudio.Region(72_000, 48_000, 0)
                 ]
             ),
             new(2, true, new(0.8f, -0.5f, false, false), [TestAudio.Region(0, 2 * Rate, 1)]),
-            new(3, false, new(1f, 0.3f, false, false), [TestAudio.Region(12_000, 36_000, 0, 1_000, 0.75f, 100, 0)]),
+            new(3, false, new(1f, 0.3f, false, false), [TestAudio.Region(12_000, 36_000, 0, 1_000, 0.75f, 100)]),
             new(4, false, new(1f, 0f, true, false), [TestAudio.Region(0, Rate, 0)])
         ];
         var master = new EngineStrip(0.9f, 0f, false, false);
-        var models = tracks.Select(t => new TrackModel(t.Id, [], t.Regions)).ToArray();
+        var models = tracks.Select(static t => new TrackModel(t.Id, [], t.Regions)).ToArray();
         using var segment = TestAudio.Segment(models, 1);
         using var controller = new EngineController(new(Rate, block));
         controller.LoadModel(
@@ -49,7 +49,7 @@ public sealed class OfflineRenderTests : IDisposable {
                 segment,
                 1,
                 true,
-                tracks.Select(t => TestAudio.Track(t.Id, t.Stereo, t.Strip)).ToArray(),
+                tracks.Select(static t => TestAudio.Track(t.Id, t.Stereo, t.Strip)).ToArray(),
                 [new(0, fileA, 1, Rate, 3 * Rate), new(1, fileB, 2, Rate, 2 * Rate)],
                 dir,
                 master
@@ -80,14 +80,16 @@ public sealed class OfflineRenderTests : IDisposable {
             var expectedLeft = accL * mL;
             var expectedRight = accR * mR;
             if (expectedLeft != left[n] || expectedRight != right[n]) {
-                Assert.Fail($"frame {n} (position {position}): expected {expectedLeft}/{expectedRight}, got {left[n]}/{right[n]}");
+                Assert.Fail(
+                    $"frame {n} (position {position}): expected {expectedLeft}/{expectedRight}, got {left[n]}/{right[n]}"
+                );
             }
 
             position = c.Advance(position, 1);
         }
 
         Assert.Equal(0, controller.Engine.Snapshot.Underruns);
-        Assert.Contains(left, v => v != 0);
+        Assert.Contains(left, static v => v != 0);
     }
 
     /// <summary>The track's pre-strip sample at a position: what the disk thread renders.</summary>
