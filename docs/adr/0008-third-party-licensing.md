@@ -9,7 +9,7 @@ Anode is **GPL-3.0-or-later**, as Cathode. Third-party code must be GPL-3-compat
 
 | Need | Choice | Licence |
 |---|---|---|
-| Time stretch / pitch shift | Signalsmith Stretch | MIT |
+| Time stretch / pitch shift | Signalsmith Stretch, pinned `88061fd` (1.4.0 + 1), with Signalsmith Linear 0.6.6 ([S5](../spikes/S5-time-stretch.md)) | MIT |
 | VST3 | Steinberg VST3 SDK | MIT (3.8+) |
 | CLAP | CLAP headers | MIT |
 | Ableton Link | Link SDK | GPL-2.0-or-later |

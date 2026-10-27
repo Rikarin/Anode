@@ -678,5 +678,6 @@ shared package exists.
 1. ~~Confirm the codename and repo location; create the repo from the Cathode skeleton.~~ Done (bootstrap).
 2. Extract `cth_audio`, IPC and audio-ui into shared packages (§10.1). Coordinate with the Cathode roadmap, since its knob and meter upstreaming to xUI is already planned.
 3. ~~Write ADR-0001 through ADR-0008.~~ Done (proposed ones await the Phase 0 spikes).
-4. Run the six Phase 0 spikes in parallel and record the results in `docs/`.
+4. Run the six Phase 0 spikes in parallel and record the results in `docs/`. S1–S5 done (macOS), see
+   [docs/spikes](spikes/README.md); S6 and the Linux/Windows runs remain.
 5. Write `docs/04-implementation-plan.md` for Anode from §12, in Cathode's phase and spike format, and start Phase 1.

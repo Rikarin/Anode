@@ -1,19 +1,41 @@
 # ADR-0003: Third-party plugin hosting and sandboxing
 
-- **Status:** proposed (Phase 0 spikes 4 and 6 decide)
+- **Status:** accepted for audio processing (spike S4, macOS measured); plugin editor windows still open (spike S6)
 - **Date:** 2026-10-27
+- **Spike:** [S4](../spikes/S4-sandbox-wake.md). Harness: `engine/spikes/Anode.Spikes.SandboxWake`, shim `engine/native/an_ipcwake`.
 
-## Proposal
+## Decision
 
 - **Formats:** CLAP (C ABI, hosted directly from C#), VST3 (C++ SDK behind the `an_plug` C shim; MIT since 3.8),
   AU v2/v3 on macOS (AudioToolbox behind the same shim).
-- **Sandbox modes:** in-host (opt-in), grouped sandbox (default, one `anode-plugin` per group), per-instance sandbox.
-  Sandboxed plugins process **in the same cycle** through shared-memory buffers and a futex/semaphore wake, so they add
-  no buffer of latency.
+- **Sandbox modes:** in-host (opt-in), **grouped sandbox (default)**, per-instance sandbox (opt-in; each sandbox costs
+  about 10–20 µs per cycle). Default grouping: one `anode-plugin` process per vendor, capped at about the number of
+  performance cores minus 2.
+- **In-cycle processing:** sandboxed plugins process **in the same callback** through planar buffers in shared memory.
+  The host signals every sandbox in parallel and waits with a deadline at **80 % of the period**; a sandbox that misses
+  is bypassed with the host's copy of the dry input and is not signalled again until it has finished the late cycle.
+- **Wake primitive** (S4: anything else failed):
+  - macOS: shared `os_sync_wait_on_address` with an absolute deadline (requires **macOS 14.4**).
+  - Linux: shared (non-private) futex.
+  - Windows: named auto-reset events over a file mapping (`WaitOnAddress` is process-local).
+  - Not POSIX semaphores (no `sem_timedwait` on macOS: 30–397 overloads per 15 s), not pure spinning (33–66 % misses).
+- **Real-time sandbox threads are required** (without them: 32 % misses). macOS: join the device's IO `os_workgroup`
+  (published by the host over a Mach bootstrap service), time-constraint policy as the fallback; Linux `SCHED_FIFO`;
+  Windows MMCSS "Pro Audio".
+- **One-buffer-latency mode** stays as a per-sandbox fallback: buffers under 32 frames, Windows until measured, and
+  sandboxes that keep missing.
 - **Editors:** the sandbox owns native top-level editor windows, positioned by Electron's main process; browsers on the
-  LAN get a generic parameter editor.
+  LAN get a generic parameter editor. **Not yet validated** — spike S6.
 - **Failure:** a crashed sandbox bypasses its slots and the UI offers to reload it.
 
-## Open questions
+## Evidence (M1 Max, built-in output, 48 kHz)
 
-Latency of the cross-process wake at 32–64 frames on each OS; parenting native windows to Electron windows on Linux.
+57 configurations with the address wait and real-time sandbox threads (1/8/50 instances, 1/2/4 sandboxes, 64 and 32
+frames, device and null clock, idle and loaded): **0 deadline misses in 1.85 M handshakes, 0 CoreAudio overloads**. Wake
+latency p50 6–13 µs, p99 11–23 µs. 50 instances at 64 frames finish in 87–208 µs p50 (worst callback 251 µs of
+1,333 µs); with 500 µs of extra DSP, 165–545 µs.
+
+## Open
+
+Linux futex and `SCHED_FIFO` code never compiled locally (CI builds it with `-Werror`); Windows not built; only the
+built-in device tested; data integrity was checked only in smoke runs. S6 (editor windows) not run.
