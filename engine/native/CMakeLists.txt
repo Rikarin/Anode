@@ -29,3 +29,6 @@ add_subdirectory(cth_audio)
 
 # Cross-process wake primitives for the plugin sandbox (spike S4, docs/spikes/S4-sandbox-wake.md).
 add_subdirectory(an_ipcwake)
+
+# Time stretch / pitch shift over Signalsmith Stretch (spike S5, docs/spikes/S5-time-stretch.md).
+add_subdirectory(an_stretch)

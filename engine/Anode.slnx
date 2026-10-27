@@ -1,4 +1,10 @@
 <Solution>
+  <Folder Name="/spikes/">
+    <Project Path="spikes/Anode.Spikes.BulkIpc/Anode.Spikes.BulkIpc.csproj"/>
+    <Project Path="spikes/Anode.Spikes.DiskStream/Anode.Spikes.DiskStream.csproj"/>
+    <Project Path="spikes/Anode.Spikes.SandboxWake/Anode.Spikes.SandboxWake.csproj"/>
+    <Project Path="spikes/Anode.Spikes.Stretch/Anode.Spikes.Stretch.csproj"/>
+  </Folder>
   <Folder Name="/src/">
     <Project Path="src/Anode.Audio/Anode.Audio.csproj"/>
     <Project Path="src/Anode.Contracts/Anode.Contracts.csproj"/>

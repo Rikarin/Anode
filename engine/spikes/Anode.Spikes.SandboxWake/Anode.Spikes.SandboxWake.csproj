@@ -17,11 +17,4 @@
   <ItemGroup>
     <ProjectReference Include="../../src/Anode.Audio/Anode.Audio.csproj"/>
   </ItemGroup>
-  <ItemGroup>
-    <!-- engine/Directory.Build.targets copies only cth_*; this spike also needs the wake shim. -->
-    <None Include="$(AnodeNativeDir)*an_ipcwake.*"
-          Visible="false"
-          CopyToOutputDirectory="PreserveNewest"
-          CopyToPublishDirectory="PreserveNewest"/>
-  </ItemGroup>
 </Project>
