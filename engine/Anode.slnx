@@ -8,6 +8,7 @@
   <Folder Name="/src/">
     <Project Path="src/Anode.Audio/Anode.Audio.csproj"/>
     <Project Path="src/Anode.Contracts/Anode.Contracts.csproj"/>
+    <Project Path="src/Anode.Dsp/Anode.Dsp.csproj"/>
     <Project Path="src/Anode.Engine/Anode.Engine.csproj"/>
     <Project Path="src/Anode.EngineHost/Anode.EngineHost.csproj"/>
     <Project Path="src/Anode.Host/Anode.Host.csproj"/>

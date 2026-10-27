@@ -1,0 +1,5 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <Description>DSP primitives and Anode's built-in instruments and effects. No engine dependencies.</Description>
+  </PropertyGroup>
+</Project>

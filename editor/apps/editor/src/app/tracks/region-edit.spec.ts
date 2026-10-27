@@ -120,7 +120,10 @@ describe('buildScene', () => {
     input: { channel: 1, stereo: false },
     recordArmed: false,
     inputMonitoring: false,
-    strip: { volumeDb: 0, pan: 0, mute, solo: false }
+    strip: { volumeDb: 0, pan: 0, mute, solo: false },
+    instrument: null,
+    midiInput: { device: null, channel: 0 },
+    midiOutput: null
   });
 
   it('lays regions on their tracks’ lanes in their colours, with selection, mute and file mapping', () => {

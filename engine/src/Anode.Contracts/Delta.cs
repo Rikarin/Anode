@@ -17,6 +17,8 @@ public sealed record ProjectDelta(long Revision, IReadOnlyList<DeltaOp> Ops);
 [JsonDerivedType(typeof(SettingsChanged), "settingsChanged")]
 [JsonDerivedType(typeof(MasterChanged), "masterChanged")]
 [JsonDerivedType(typeof(ProjectRenamed), "projectRenamed")]
+[JsonDerivedType(typeof(MidiRegionUpserted), "midiRegionUpserted")]
+[JsonDerivedType(typeof(MidiRegionRemoved), "midiRegionRemoved")]
 public abstract record DeltaOp;
 
 /// <summary>A track was added or changed; <c>index</c> is its position in the track list.</summary>
@@ -35,3 +37,8 @@ public sealed record SettingsChanged(ProjectSettings Settings) : DeltaOp;
 public sealed record MasterChanged(ChannelStrip Strip) : DeltaOp;
 
 public sealed record ProjectRenamed(string Name) : DeltaOp;
+
+/// <summary>A MIDI region was added or changed (its notes included).</summary>
+public sealed record MidiRegionUpserted(MidiRegion Region) : DeltaOp;
+
+public sealed record MidiRegionRemoved(string Id) : DeltaOp;

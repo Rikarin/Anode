@@ -35,7 +35,8 @@ export const DefaultSettings: ProjectSettings = {
   signature: { numerator: 4, denominator: 4 },
   cycle: { enabled: false, startTick: 0, endTick: 4 * 4 * Ppq },
   metronome: { enabled: false, countIn: false, levelDb: -6 },
-  endTick: 32 * 4 * Ppq
+  endTick: 32 * 4 * Ppq,
+  mergeMidiRecording: false
 };
 
 const SilentStrip: ChannelStrip = { volumeDb: 0, pan: 0, mute: false, solo: false };
@@ -344,6 +345,10 @@ export class ProjectStore {
         break;
       case 'projectRenamed':
         this.info.update(info => (info ? { ...info, name: op.name } : info));
+        break;
+      case 'midiRegionUpserted':
+      case 'midiRegionRemoved':
+        // MIDI regions: Phase 2, workstream C (docs/03-phase-2.md).
         break;
     }
   }

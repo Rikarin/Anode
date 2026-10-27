@@ -127,7 +127,10 @@ public static class Edits {
             new(1, c.Stereo),
             false,
             false,
-            ProjectDefaults.Strip
+            ProjectDefaults.Strip,
+            null,
+            new(null, 0),
+            null
         );
         return [new TrackUpserted(track, index)];
     }

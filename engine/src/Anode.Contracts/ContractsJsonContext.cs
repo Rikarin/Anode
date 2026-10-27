@@ -22,4 +22,8 @@ namespace Anode.Contracts;
 [JsonSerializable(typeof(UndoHistory))]
 [JsonSerializable(typeof(TransportRequest))]
 [JsonSerializable(typeof(TransportStatus))]
+[JsonSerializable(typeof(IReadOnlyList<PluginInfo>))]
+[JsonSerializable(typeof(MidiDevices))]
+[JsonSerializable(typeof(LiveMidiRequest))]
+[JsonSerializable(typeof(MidiThruRequest))]
 public sealed partial class ContractsJsonContext : JsonSerializerContext;

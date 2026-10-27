@@ -255,6 +255,91 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/api/v1/plugins': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Every plugin the engine can load, built-in first; empty while no engine is connected. */
+    get: operations['ListPlugins'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/plugins/rescan': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Rescans the CLAP folders; pluginsChanged follows on /ws when the catalogue is in. */
+    post: operations['RescanPlugins'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/midi/devices': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** The MIDI ports of the machine the engine runs on. */
+    get: operations['ListMidiDevices'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/midi/live': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Plays MIDI on an instrument or external MIDI track now, as a keyboard would (and records it when the track is armed and recording). */
+    post: operations['SendLiveMidi'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/midi/thru': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Sends live MIDI to this track when no instrument track is record-armed (the selected track). */
+    post: operations['SetMidiThru'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -315,6 +400,22 @@ export interface components {
       revision: number;
       delta: components['schemas']['ProjectDelta'];
     };
+    /** @description A controller event of a MIDI region; `tick` is relative to the region's start. */
+    ControlEvent: {
+      /** Format: int64 */
+      id: number;
+      kind: components['schemas']['ControlKind'];
+      /** Format: int32 */
+      channel: number;
+      /** Format: int32 */
+      number: number;
+      /** Format: int32 */
+      value: number;
+      /** Format: int64 */
+      tick: number;
+    };
+    /** @enum {unknown} */
+    ControlKind: 'controlChange' | 'pitchBend' | 'channelPressure' | 'programChange';
     CreateProjectRequest: {
       name: string;
       directory?: null | string;
@@ -336,7 +437,9 @@ export interface components {
       | components['schemas']['DeltaOpAudioFileUpserted']
       | components['schemas']['DeltaOpSettingsChanged']
       | components['schemas']['DeltaOpMasterChanged']
-      | components['schemas']['DeltaOpProjectRenamed'];
+      | components['schemas']['DeltaOpProjectRenamed']
+      | components['schemas']['DeltaOpMidiRegionUpserted']
+      | components['schemas']['DeltaOpMidiRegionRemoved'];
     DeltaOpAudioFileUpserted: {
       /** @enum {string} */
       op: 'audioFileUpserted';
@@ -346,6 +449,17 @@ export interface components {
       /** @enum {string} */
       op: 'masterChanged';
       strip: components['schemas']['ChannelStrip'];
+    };
+    DeltaOpMidiRegionRemoved: {
+      /** @enum {string} */
+      op: 'midiRegionRemoved';
+      id: string;
+    };
+    /** @description A MIDI region was added or changed (its notes included). */
+    DeltaOpMidiRegionUpserted: {
+      /** @enum {string} */
+      op: 'midiRegionUpserted';
+      region: components['schemas']['MidiRegion'];
     };
     DeltaOpProjectRenamed: {
       /** @enum {string} */
@@ -400,7 +514,44 @@ export interface components {
       | components['schemas']['EditCommandSetSignatureCommand']
       | components['schemas']['EditCommandSetCycleCommand']
       | components['schemas']['EditCommandSetMetronomeCommand']
-      | components['schemas']['EditCommandRenameProjectCommand'];
+      | components['schemas']['EditCommandRenameProjectCommand']
+      | components['schemas']['EditCommandSetInstrumentCommand']
+      | components['schemas']['EditCommandSetParameterCommand']
+      | components['schemas']['EditCommandLoadInstrumentFileCommand']
+      | components['schemas']['EditCommandSetMidiIoCommand']
+      | components['schemas']['EditCommandAddMidiRegionCommand']
+      | components['schemas']['EditCommandResizeMidiRegionCommand']
+      | components['schemas']['EditCommandSetMidiRegionCommand']
+      | components['schemas']['EditCommandAddNotesCommand']
+      | components['schemas']['EditCommandEditNotesCommand']
+      | components['schemas']['EditCommandDeleteNotesCommand']
+      | components['schemas']['EditCommandQuantizeNotesCommand']
+      | components['schemas']['EditCommandAddControlsCommand']
+      | components['schemas']['EditCommandDeleteControlsCommand']
+      | components['schemas']['EditCommandSetMidiRecordingCommand'];
+    EditCommandAddControlsCommand: {
+      /** @enum {string} */
+      type: 'addControls';
+      regionId: string;
+      events: components['schemas']['NewControlEvent'][];
+    };
+    /** @description Adds an empty MIDI region to an instrument or external MIDI track. */
+    EditCommandAddMidiRegionCommand: {
+      /** @enum {string} */
+      type: 'addMidiRegion';
+      trackId: string;
+      /** Format: int64 */
+      startTick: number;
+      /** Format: int64 */
+      lengthTicks: number;
+      name?: null | string;
+    };
+    EditCommandAddNotesCommand: {
+      /** @enum {string} */
+      type: 'addNotes';
+      regionId: string;
+      notes: components['schemas']['NewNote'][];
+    };
     /** @description Places a file on a track; the whole file unless `fileOffset` and `length` say otherwise. */
     EditCommandAddRegionCommand: {
       /** @enum {string} */
@@ -414,7 +565,10 @@ export interface components {
       /** Format: int64 */
       length?: null | number;
     };
-    /** @description Adds an audio track at `index` (the end when left out). */
+    /**
+     * @description Adds a track at `index` (the end when left out): audio by default; an instrument track gets
+     *     `pluginId` (the default synth when left out).
+     */
     EditCommandAddTrackCommand: {
       /** @enum {string} */
       type: 'addTrack';
@@ -423,13 +577,43 @@ export interface components {
       index?: null | number;
       /** @default false */
       stereo: boolean;
+      kind?: null | components['schemas']['TrackKind'];
+      pluginId?: null | string;
+    };
+    EditCommandDeleteControlsCommand: {
+      /** @enum {string} */
+      type: 'deleteControls';
+      regionId: string;
+      eventIds: number[];
+    };
+    EditCommandDeleteNotesCommand: {
+      /** @enum {string} */
+      type: 'deleteNotes';
+      regionId: string;
+      noteIds: number[];
     };
     EditCommandDeleteRegionsCommand: {
       /** @enum {string} */
       type: 'deleteRegions';
       regionIds: string[];
     };
-    /** @description Moves a region in time, and to another track when `trackId` is given. */
+    EditCommandEditNotesCommand: {
+      /** @enum {string} */
+      type: 'editNotes';
+      regionId: string;
+      changes: components['schemas']['NoteChange'][];
+    };
+    /** @description Loads a file (a sampler instrument, a sample) into a track's instrument; a path on the server's disk. */
+    EditCommandLoadInstrumentFileCommand: {
+      /** @enum {string} */
+      type: 'loadInstrumentFile';
+      trackId: string;
+      path: string;
+    };
+    /**
+     * @description Moves a region (audio or MIDI) in time, and to another track of a kind that can hold it when `trackId` is
+     *     given. `splitRegion` and `deleteRegions` also take either kind.
+     */
     EditCommandMoveRegionCommand: {
       /** @enum {string} */
       type: 'moveRegion';
@@ -445,6 +629,28 @@ export interface components {
       /** Format: int32 */
       index: number;
     };
+    /**
+     * @description Moves note starts towards the grid (destructive; `noteIds` left out: every note of the region), with the
+     *     same strength and swing meaning as RegionPlayback.
+     */
+    EditCommandQuantizeNotesCommand: {
+      /** @enum {string} */
+      type: 'quantizeNotes';
+      regionId: string;
+      /** Format: int32 */
+      gridTicks: number;
+      /**
+       * Format: double
+       * @default 1
+       */
+      strength: number;
+      /**
+       * Format: double
+       * @default 0
+       */
+      swing: number;
+      noteIds?: null | number[];
+    };
     EditCommandRemoveTrackCommand: {
       /** @enum {string} */
       type: 'removeTrack';
@@ -454,6 +660,19 @@ export interface components {
       /** @enum {string} */
       type: 'renameProject';
       name: string;
+    };
+    /**
+     * @description Moves a MIDI region's start and end. Its notes stay where they are in time: moving the start shifts their
+     *     relative positions, and notes that fall outside are kept but do not play.
+     */
+    EditCommandResizeMidiRegionCommand: {
+      /** @enum {string} */
+      type: 'resizeMidiRegion';
+      regionId: string;
+      /** Format: int64 */
+      startTick: number;
+      /** Format: int64 */
+      lengthTicks: number;
     };
     /** @description Trims a region: its new start, and the part of the file it plays. */
     EditCommandResizeRegionCommand: {
@@ -476,6 +695,13 @@ export interface components {
       /** Format: int64 */
       endTick?: null | number;
     };
+    /** @description Replaces an instrument track's instrument; its parameters start at their defaults. */
+    EditCommandSetInstrumentCommand: {
+      /** @enum {string} */
+      type: 'setInstrument';
+      trackId: string;
+      pluginId: string;
+    };
     EditCommandSetMetronomeCommand: {
       /** @enum {string} */
       type: 'setMetronome';
@@ -483,6 +709,46 @@ export interface components {
       countIn?: null | boolean;
       /** Format: double */
       levelDb?: null | number;
+    };
+    EditCommandSetMidiIoCommand: {
+      /** @enum {string} */
+      type: 'setMidiIo';
+      trackId: string;
+      input: null | components['schemas']['MidiInputSettings'];
+      output: null | components['schemas']['MidiOutputSettings'];
+    };
+    EditCommandSetMidiRecordingCommand: {
+      /** @enum {string} */
+      type: 'setMidiRecording';
+      merge: boolean;
+    };
+    EditCommandSetMidiRegionCommand: {
+      /** @enum {string} */
+      type: 'setMidiRegion';
+      regionId: string;
+      name?: null | string;
+      /** Format: int32 */
+      transpose?: null | number;
+      /** Format: int32 */
+      velocity?: null | number;
+      /** Format: int32 */
+      quantizeTicks?: null | number;
+      /** Format: double */
+      quantizeStrength?: null | number;
+      /** Format: double */
+      swing?: null | number;
+    };
+    /**
+     * @description Sets one parameter of a track's instrument. Consecutive batches on the same parameter within 1 s coalesce into
+     *     one undo step, as `setStrip` does.
+     */
+    EditCommandSetParameterCommand: {
+      /** @enum {string} */
+      type: 'setParameter';
+      trackId: string;
+      parameterId: string;
+      /** Format: double */
+      value: number;
     };
     EditCommandSetRegionCommand: {
       /** @enum {string} */
@@ -564,6 +830,33 @@ export interface components {
     ImportFileRequest: {
       path: string;
     };
+    /**
+     * @description A track's instrument: the plugin, its parameter values by parameter id (all of them), and the file it loaded
+     *     (a sampler's instrument), relative to the project folder when inside it. A plugin's opaque state lives in the
+     *     project's `Plugin States` folder.
+     */
+    InstrumentSlot: {
+      pluginId: string;
+      name: string;
+      parameters: {
+        [key: string]: number;
+      };
+      file?: null | string;
+    };
+    /** @description One raw MIDI message (status 0x80…0xEF, data bytes 0…127). */
+    LiveMidiEvent: {
+      /** Format: int32 */
+      status: number;
+      /** Format: int32 */
+      data1: number;
+      /** Format: int32 */
+      data2: number;
+    };
+    /** @description Plays MIDI on a track now, as if it came from a keyboard (the on-screen keyboard, musical typing). */
+    LiveMidiRequest: {
+      trackId: string;
+      events: components['schemas']['LiveMidiEvent'][];
+    };
     /** @description The click: on or off, a one-bar count-in before recording, and its level in dB. */
     MetronomeSettings: {
       enabled: boolean;
@@ -571,8 +864,142 @@ export interface components {
       /** Format: double */
       levelDb: number;
     };
+    MidiDevices: {
+      inputs: components['schemas']['MidiPort'][];
+      outputs: components['schemas']['MidiPort'][];
+    };
+    /** @description Where a track takes live MIDI from: a device id (null: every device) and channel (0: all, else 1…16). */
+    MidiInputSettings: {
+      device?: null | string;
+      /** Format: int32 */
+      channel: number;
+    };
+    /** @description Where an external MIDI track sends its regions: a device id and channel 1…16. */
+    MidiOutputSettings: {
+      device: string;
+      /** Format: int32 */
+      channel: number;
+    };
+    /** @description A MIDI port of the machine the engine runs on. */
+    MidiPort: {
+      id: string;
+      name: string;
+    };
+    /**
+     * @description A MIDI region: it starts at `startTick` and lasts `lengthTicks`; its notes and controller events are
+     *     positioned relative to its start (ticks at 960 PPQ). Events past the end do not play; a note that crosses the end
+     *     is cut there. `playback` holds the non-destructive region parameters.
+     */
+    MidiRegion: {
+      id: string;
+      trackId: string;
+      name: string;
+      /** Format: int64 */
+      startTick: number;
+      /** Format: int64 */
+      lengthTicks: number;
+      playback: components['schemas']['RegionPlayback'];
+      notes: components['schemas']['Note'][];
+      controls: components['schemas']['ControlEvent'][];
+    };
+    /**
+     * @description Which track hears live MIDI when no instrument track is record-armed (Logic sends input to the selected
+     *     track); null: none.
+     */
+    MidiThruRequest: {
+      trackId?: null | string;
+    };
+    /** @description A controller event to add; `tick` relative to the region's start. */
+    NewControlEvent: {
+      kind: components['schemas']['ControlKind'];
+      /** Format: int32 */
+      channel: number;
+      /** Format: int32 */
+      number: number;
+      /** Format: int32 */
+      value: number;
+      /** Format: int64 */
+      tick: number;
+    };
+    /** @description A note to add; positions relative to the region's start. */
+    NewNote: {
+      /** Format: int32 */
+      pitch: number;
+      /** Format: int32 */
+      velocity: number;
+      /** Format: int32 */
+      channel: number;
+      /** Format: int64 */
+      startTick: number;
+      /** Format: int64 */
+      lengthTicks: number;
+    };
+    /** @description A note. `id` is unique in the project; `channel` is 1…16. */
+    Note: {
+      /** Format: int64 */
+      id: number;
+      /** Format: int32 */
+      pitch: number;
+      /** Format: int32 */
+      velocity: number;
+      /** Format: int32 */
+      channel: number;
+      /** Format: int64 */
+      startTick: number;
+      /** Format: int64 */
+      lengthTicks: number;
+    };
+    /** @description Changes to one note; left-out properties stay. */
+    NoteChange: {
+      /** Format: int64 */
+      id: number;
+      /** Format: int32 */
+      pitch?: null | number;
+      /** Format: int32 */
+      velocity?: null | number;
+      /** Format: int32 */
+      channel?: null | number;
+      /** Format: int64 */
+      startTick?: null | number;
+      /** Format: int64 */
+      lengthTicks?: null | number;
+    };
     OpenProjectRequest: {
       path: string;
+    };
+    /**
+     * @description A plugin parameter. `steps` &gt; 0 makes it discrete (`steps` + 1 values from `min` to
+     *     `max`), with `valueNames` naming them when it is a choice.
+     */
+    ParameterInfo: {
+      id: string;
+      name: string;
+      /** Format: double */
+      min: number;
+      /** Format: double */
+      max: number;
+      /** Format: double */
+      default: number;
+      unit: string;
+      /** Format: int32 */
+      steps: number;
+      valueNames?: null | string[];
+    };
+    /** @enum {unknown} */
+    PluginFormat: 'builtin' | 'clap';
+    /**
+     * @description A plugin the engine can load. `fileTypes` (extensions such as `.sfz`, `.wav`) lists what an
+     *     instrument loads with `loadInstrumentFile`, empty when it loads none.
+     */
+    PluginInfo: {
+      id: string;
+      name: string;
+      vendor: string;
+      version: string;
+      format: components['schemas']['PluginFormat'];
+      isInstrument: boolean;
+      fileTypes: string[];
+      parameters: components['schemas']['ParameterInfo'][];
     };
     ProblemDetails: {
       type?: null | string;
@@ -601,6 +1028,7 @@ export interface components {
       tracks: components['schemas']['Track'][];
       regions: components['schemas']['AudioRegion'][];
       audioFiles: components['schemas']['AudioFile'][];
+      midiRegions: components['schemas']['MidiRegion'][];
     };
     /**
      * @description What changed between two revisions of the open project (docs/adr/0004-state-ownership.md). Clients apply the
@@ -611,7 +1039,10 @@ export interface components {
       revision: number;
       ops: components['schemas']['DeltaOp'][];
     };
-    /** @description Global settings. `endTick` is the project end marker. */
+    /**
+     * @description Global settings. `endTick` is the project end marker. `mergeMidiRecording`: a MIDI recording over an
+     *     existing MIDI region adds its notes to that region instead of making a new one.
+     */
     ProjectSettings: {
       /** Format: double */
       tempo: number;
@@ -620,6 +1051,7 @@ export interface components {
       metronome: components['schemas']['MetronomeSettings'];
       /** Format: int64 */
       endTick: number;
+      mergeMidiRecording: boolean;
     };
     /** @description A project in the recent list. */
     ProjectSummary: {
@@ -628,6 +1060,23 @@ export interface components {
       path: string;
       /** Format: date-time */
       modified: string;
+    };
+    /**
+     * @description How a MIDI region plays, without changing its notes (Logic's Region inspector): transpose in semitones,
+     *     velocity offset (−127…127), quantise grid in ticks (0: off) with strength (0…1, 1 = all the way) and swing
+     *     (0…1, 0 = straight; delays every second grid step by up to half a step).
+     */
+    RegionPlayback: {
+      /** Format: int32 */
+      transpose: number;
+      /** Format: int32 */
+      velocity: number;
+      /** Format: int32 */
+      quantizeTicks: number;
+      /** Format: double */
+      quantizeStrength: number;
+      /** Format: double */
+      swing: number;
     };
     /** @description What `GET /api/v1/system` answers: the server's version and its link to the engine host. */
     SystemInfo: {
@@ -641,8 +1090,9 @@ export interface components {
       denominator: number;
     };
     /**
-     * @description A track and its channel strip. `color` is a CSS colour; `input` is where recording takes its audio
-     *     from.
+     * @description A track and its channel strip. `color` is a CSS colour; `input` is where an audio track records from.
+     *     An instrument track has an `instrument`; instrument and external MIDI tracks take MIDI from
+     *     `midiInput`, and an external MIDI track sends its regions to `midiOutput`.
      */
     Track: {
       id: string;
@@ -653,6 +1103,9 @@ export interface components {
       recordArmed: boolean;
       inputMonitoring: boolean;
       strip: components['schemas']['ChannelStrip'];
+      instrument: null | components['schemas']['InstrumentSlot'];
+      midiInput: components['schemas']['MidiInputSettings'];
+      midiOutput: null | components['schemas']['MidiOutputSettings'];
     };
     /** @description The device input: 1-based first channel (0: none); a stereo input takes that channel and the next. */
     TrackInput: {
@@ -661,7 +1114,7 @@ export interface components {
       stereo: boolean;
     };
     /** @enum {unknown} */
-    TrackKind: 'audio';
+    TrackKind: 'audio' | 'instrument' | 'midi';
     /** @enum {unknown} */
     TransportCommand: 'play' | 'stop' | 'record' | 'locate';
     /** @description Play, stop or record (from `tick` when given), or locate the playhead to `tick`. */
@@ -1246,6 +1699,167 @@ export interface operations {
         content: {
           'application/json': components['schemas']['TransportStatus'];
         };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  ListPlugins: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PluginInfo'][];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  RescanPlugins: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Accepted */
+      202: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  ListMidiDevices: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['MidiDevices'];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  SendLiveMidi: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['LiveMidiRequest'];
+      };
+    };
+    responses: {
+      /** @description No Content */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  SetMidiThru: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['MidiThruRequest'];
+      };
+    };
+    responses: {
+      /** @description No Content */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
       };
       /** @description Internal Server Error */
       500: {

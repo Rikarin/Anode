@@ -23,10 +23,33 @@ namespace Anode.Contracts;
 [JsonDerivedType(typeof(SetCycleCommand), "setCycle")]
 [JsonDerivedType(typeof(SetMetronomeCommand), "setMetronome")]
 [JsonDerivedType(typeof(RenameProjectCommand), "renameProject")]
+[JsonDerivedType(typeof(SetInstrumentCommand), "setInstrument")]
+[JsonDerivedType(typeof(SetParameterCommand), "setParameter")]
+[JsonDerivedType(typeof(LoadInstrumentFileCommand), "loadInstrumentFile")]
+[JsonDerivedType(typeof(SetMidiIoCommand), "setMidiIo")]
+[JsonDerivedType(typeof(AddMidiRegionCommand), "addMidiRegion")]
+[JsonDerivedType(typeof(ResizeMidiRegionCommand), "resizeMidiRegion")]
+[JsonDerivedType(typeof(SetMidiRegionCommand), "setMidiRegion")]
+[JsonDerivedType(typeof(AddNotesCommand), "addNotes")]
+[JsonDerivedType(typeof(EditNotesCommand), "editNotes")]
+[JsonDerivedType(typeof(DeleteNotesCommand), "deleteNotes")]
+[JsonDerivedType(typeof(QuantizeNotesCommand), "quantizeNotes")]
+[JsonDerivedType(typeof(AddControlsCommand), "addControls")]
+[JsonDerivedType(typeof(DeleteControlsCommand), "deleteControls")]
+[JsonDerivedType(typeof(SetMidiRecordingCommand), "setMidiRecording")]
 public abstract record EditCommand;
 
-/// <summary>Adds an audio track at <c>index</c> (the end when left out).</summary>
-public sealed record AddTrackCommand(string? Name = null, int? Index = null, bool Stereo = false) : EditCommand;
+/// <summary>
+///     Adds a track at <c>index</c> (the end when left out): audio by default; an instrument track gets
+///     <c>pluginId</c> (the default synth when left out).
+/// </summary>
+public sealed record AddTrackCommand(
+    string? Name = null,
+    int? Index = null,
+    bool Stereo = false,
+    TrackKind? Kind = null,
+    string? PluginId = null
+) : EditCommand;
 
 public sealed record RemoveTrackCommand(string TrackId) : EditCommand;
 
@@ -59,7 +82,10 @@ public sealed record AddRegionCommand(
     long? Length = null
 ) : EditCommand;
 
-/// <summary>Moves a region in time, and to another track when <c>trackId</c> is given.</summary>
+/// <summary>
+///     Moves a region (audio or MIDI) in time, and to another track of a kind that can hold it when <c>trackId</c> is
+///     given. <c>splitRegion</c> and <c>deleteRegions</c> also take either kind.
+/// </summary>
 public sealed record MoveRegionCommand(string RegionId, long StartTick, string? TrackId = null) : EditCommand;
 
 /// <summary>Trims a region: its new start, and the part of the file it plays.</summary>
@@ -90,6 +116,68 @@ public sealed record SetMetronomeCommand(bool? Enabled = null, bool? CountIn = n
     : EditCommand;
 
 public sealed record RenameProjectCommand(string Name) : EditCommand;
+
+/// <summary>Replaces an instrument track's instrument; its parameters start at their defaults.</summary>
+public sealed record SetInstrumentCommand(string TrackId, string PluginId) : EditCommand;
+
+/// <summary>
+///     Sets one parameter of a track's instrument. Consecutive batches on the same parameter within 1 s coalesce into
+///     one undo step, as <c>setStrip</c> does.
+/// </summary>
+public sealed record SetParameterCommand(string TrackId, string ParameterId, double Value) : EditCommand;
+
+/// <summary>Loads a file (a sampler instrument, a sample) into a track's instrument; a path on the server's disk.</summary>
+public sealed record LoadInstrumentFileCommand(string TrackId, string Path) : EditCommand;
+
+public sealed record SetMidiIoCommand(
+    string TrackId,
+    MidiInputSettings? Input = null,
+    MidiOutputSettings? Output = null
+) : EditCommand;
+
+/// <summary>Adds an empty MIDI region to an instrument or external MIDI track.</summary>
+public sealed record AddMidiRegionCommand(string TrackId, long StartTick, long LengthTicks, string? Name = null)
+    : EditCommand;
+
+/// <summary>
+///     Moves a MIDI region's start and end. Its notes stay where they are in time: moving the start shifts their
+///     relative positions, and notes that fall outside are kept but do not play.
+/// </summary>
+public sealed record ResizeMidiRegionCommand(string RegionId, long StartTick, long LengthTicks) : EditCommand;
+
+public sealed record SetMidiRegionCommand(
+    string RegionId,
+    string? Name = null,
+    int? Transpose = null,
+    int? Velocity = null,
+    int? QuantizeTicks = null,
+    double? QuantizeStrength = null,
+    double? Swing = null
+) : EditCommand;
+
+public sealed record AddNotesCommand(string RegionId, IReadOnlyList<NewNote> Notes) : EditCommand;
+
+public sealed record EditNotesCommand(string RegionId, IReadOnlyList<NoteChange> Changes) : EditCommand;
+
+public sealed record DeleteNotesCommand(string RegionId, IReadOnlyList<long> NoteIds) : EditCommand;
+
+/// <summary>
+///     Moves note starts towards the grid (destructive; <c>noteIds</c> left out: every note of the region), with the
+///     same strength and swing meaning as <see cref="RegionPlayback" />.
+/// </summary>
+public sealed record QuantizeNotesCommand(
+    string RegionId,
+    int GridTicks,
+    double Strength = 1,
+    double Swing = 0,
+    IReadOnlyList<long>? NoteIds = null
+) : EditCommand;
+
+public sealed record AddControlsCommand(string RegionId, IReadOnlyList<NewControlEvent> Events) : EditCommand;
+
+public sealed record DeleteControlsCommand(string RegionId, IReadOnlyList<long> EventIds) : EditCommand;
+
+public sealed record SetMidiRecordingCommand(bool Merge) : EditCommand;
 
 /// <summary>Edits applied as one undo step; <c>label</c> names it in the undo history ("Move Region").</summary>
 public sealed record CommandBatch(IReadOnlyList<EditCommand> Commands, string? Label = null);

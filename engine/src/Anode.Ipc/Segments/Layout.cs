@@ -3,9 +3,32 @@ using System.Runtime.InteropServices;
 namespace Anode.Ipc.Segments;
 
 /// <summary>What a <see cref="PlaybackEvent" /> means.</summary>
+/// <remarks>
+///     MIDI kinds carry the message's data bytes in <see cref="PlaybackEvent.Data1" /> and
+///     <see cref="PlaybackEvent.Data2" /> and its channel (0…15) in <see cref="PlaybackEvent.Channel" />; at the same
+///     sample, note-offs sort before note-ons so a repeated note retriggers.
+/// </remarks>
 public enum PlaybackEventKind : byte {
     /// <summary>A metronome click; <see cref="PlaybackEvent.Data1" /> is 1 on a bar's downbeat, else 0.</summary>
-    Click = 1
+    Click = 1,
+
+    /// <summary>Data1 = note, Data2 = velocity 1…127.</summary>
+    NoteOn = 2,
+
+    /// <summary>Data1 = note, Data2 = release velocity.</summary>
+    NoteOff = 3,
+
+    /// <summary>Data1 = controller, Data2 = value.</summary>
+    ControlChange = 4,
+
+    /// <summary>Data1 = LSB, Data2 = MSB (14 bits, 8192 = centre).</summary>
+    PitchBend = 5,
+
+    /// <summary>Data1 = pressure.</summary>
+    ChannelPressure = 6,
+
+    /// <summary>Data1 = program.</summary>
+    ProgramChange = 7
 }
 
 /// <summary>One compiled event of a track, at an absolute sample position. 24 bytes, no implicit padding.</summary>
@@ -16,7 +39,10 @@ public struct PlaybackEvent {
     public PlaybackEventKind Kind;
     public byte Data1;
     public byte Data2;
-    public byte Reserved;
+
+    /// <summary>MIDI channel 0…15 of a MIDI kind; 0 otherwise.</summary>
+    public byte Channel;
+
     public float Value;
     public int Reserved2;
 }

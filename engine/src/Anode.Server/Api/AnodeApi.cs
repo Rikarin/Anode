@@ -12,6 +12,8 @@ public static class AnodeApi {
         ProjectsApi.Map(api);
         ProjectApi.Map(api);
         TransportApi.Map(api);
+        PluginsApi.Map(api);
+        MidiApi.Map(api);
         RealtimeApi.Map(app);
     }
 }

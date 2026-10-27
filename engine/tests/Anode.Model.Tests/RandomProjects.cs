@@ -53,6 +53,24 @@ static class RandomProjects {
         return (state, ids, random);
     }
 
+    /// <summary>Phase 2 commands the model rejects until workstream B implements them; the identity property skips them.</summary>
+    public static readonly IReadOnlySet<string> PendingPhase2 = new HashSet<string>(StringComparer.Ordinal) {
+        nameof(SetInstrumentCommand),
+        nameof(SetParameterCommand),
+        nameof(LoadInstrumentFileCommand),
+        nameof(SetMidiIoCommand),
+        nameof(AddMidiRegionCommand),
+        nameof(ResizeMidiRegionCommand),
+        nameof(SetMidiRegionCommand),
+        nameof(AddNotesCommand),
+        nameof(EditNotesCommand),
+        nameof(DeleteNotesCommand),
+        nameof(QuantizeNotesCommand),
+        nameof(AddControlsCommand),
+        nameof(DeleteControlsCommand),
+        nameof(SetMidiRecordingCommand)
+    };
+
     /// <summary>A random command of <paramref name="type" /> for <paramref name="s" />, or null when none can be made.</summary>
     public static EditCommand? Command(Type type, ProjectState s, Random r) {
         var tracks = s.Tracks;
@@ -102,6 +120,31 @@ static class RandomProjects {
                 Maybe((double)r.Next(-40, 1))
             ),
             nameof(RenameProjectCommand) => new RenameProjectCommand($"Song {r.Next(1000)}"),
+            // Phase 2 commands (docs/03-phase-2.md): placeholders until the model implements them (workstream B
+            // replaces these with generators that make commands that apply).
+            nameof(SetInstrumentCommand) => Track() is { } t ? new SetInstrumentCommand(t, "anode.synth") : null,
+            nameof(SetParameterCommand) => Track() is { } t
+                ? new SetParameterCommand(t, "cutoff", r.NextDouble())
+                : null,
+            nameof(LoadInstrumentFileCommand) => Track() is { } t
+                ? new LoadInstrumentFileCommand(t, "/tmp/a.sfz")
+                : null,
+            nameof(SetMidiIoCommand) => Track() is { } t ? new SetMidiIoCommand(t, new(null, r.Next(17))) : null,
+            nameof(AddMidiRegionCommand) => Track() is { } t
+                ? new AddMidiRegionCommand(t, r.Next(8) * 960L, 3840)
+                : null,
+            nameof(ResizeMidiRegionCommand) => new ResizeMidiRegionCommand("mid_none", 0, 960),
+            nameof(SetMidiRegionCommand) => new SetMidiRegionCommand("mid_none", Transpose: r.Next(-12, 13)),
+            nameof(AddNotesCommand) => new AddNotesCommand("mid_none", [new(60, 100, 1, 0, 480)]),
+            nameof(EditNotesCommand) => new EditNotesCommand("mid_none", [new(1, 61)]),
+            nameof(DeleteNotesCommand) => new DeleteNotesCommand("mid_none", [1]),
+            nameof(QuantizeNotesCommand) => new QuantizeNotesCommand("mid_none", 240),
+            nameof(AddControlsCommand) => new AddControlsCommand(
+                "mid_none",
+                [new(ControlKind.ControlChange, 1, 1, 64, 0)]
+            ),
+            nameof(DeleteControlsCommand) => new DeleteControlsCommand("mid_none", [1]),
+            nameof(SetMidiRecordingCommand) => new SetMidiRecordingCommand(r.Next(2) == 0),
             _ => throw new InvalidOperationException($"No generator for {type.Name}.")
         };
         string? Track() => tracks.Count == 0 ? null : Pick(r, tracks).Id;

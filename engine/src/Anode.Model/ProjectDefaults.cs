@@ -31,7 +31,8 @@ public static class ProjectDefaults {
                 signature,
                 new(false, 0, 4L * BarTicks(signature)),
                 new(false, false, -6),
-                EndBars * BarTicks(signature)
+                EndBars * BarTicks(signature),
+                false
             ),
             Strip,
             [],

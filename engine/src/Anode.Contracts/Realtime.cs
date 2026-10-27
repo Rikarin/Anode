@@ -13,6 +13,9 @@ namespace Anode.Contracts;
 [JsonDerivedType(typeof(ProjectChangedEvent), "projectChanged")]
 [JsonDerivedType(typeof(TransportEvent), "transport")]
 [JsonDerivedType(typeof(MetersEvent), "meters")]
+[JsonDerivedType(typeof(MidiActivityEvent), "midiActivity")]
+[JsonDerivedType(typeof(PluginsChangedEvent), "pluginsChanged")]
+[JsonDerivedType(typeof(MidiDevicesChangedEvent), "midiDevicesChanged")]
 public abstract record RealtimeEvent;
 
 /// <summary>The socket is open; the client fetches the state it needs now.</summary>
@@ -44,3 +47,17 @@ public sealed record TransportEvent(TransportStatus Transport) : RealtimeEvent;
 public sealed record MetersEvent(IReadOnlyList<TrackMeter> Tracks, TrackMeter Master) : RealtimeEvent;
 
 public sealed record TrackMeter(string TrackId, float PeakLeft, float PeakRight);
+
+/// <summary>
+///     Live MIDI the engine received (from a device or <c>/midi/live</c>), batched up to 30 times a second, for
+///     keyboards and activity lights; <c>trackId</c> is the track that played it, if any.
+/// </summary>
+public sealed record MidiActivityEvent(IReadOnlyList<MidiActivity> Events) : RealtimeEvent;
+
+public sealed record MidiActivity(string? TrackId, string? Device, int Status, int Data1, int Data2);
+
+/// <summary>The plugin catalogue changed (a rescan finished); clients refetch <c>/plugins</c>.</summary>
+public sealed record PluginsChangedEvent : RealtimeEvent;
+
+/// <summary>A MIDI device was connected or removed; clients refetch <c>/midi/devices</c>.</summary>
+public sealed record MidiDevicesChangedEvent : RealtimeEvent;

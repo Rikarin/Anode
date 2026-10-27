@@ -619,6 +619,169 @@
           }
         }
       }
+    },
+    "/api/v1/plugins": {
+      "get": {
+        "tags": [
+          "Plugins"
+        ],
+        "summary": "Every plugin the engine can load, built-in first; empty while no engine is connected.",
+        "operationId": "ListPlugins",
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PluginInfo"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/plugins/rescan": {
+      "post": {
+        "tags": [
+          "Plugins"
+        ],
+        "summary": "Rescans the CLAP folders; pluginsChanged follows on /ws when the catalogue is in.",
+        "operationId": "RescanPlugins",
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Accepted"
+          }
+        }
+      }
+    },
+    "/api/v1/midi/devices": {
+      "get": {
+        "tags": [
+          "MIDI"
+        ],
+        "summary": "The MIDI ports of the machine the engine runs on.",
+        "operationId": "ListMidiDevices",
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MidiDevices"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/midi/live": {
+      "post": {
+        "tags": [
+          "MIDI"
+        ],
+        "summary": "Plays MIDI on an instrument or external MIDI track now, as a keyboard would (and records it when the track is armed and recording).",
+        "operationId": "SendLiveMidi",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LiveMidiRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "No Content"
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/api/v1/midi/thru": {
+      "post": {
+        "tags": [
+          "MIDI"
+        ],
+        "summary": "Sends live MIDI to this track when no instrument track is record-armed (the selected track).",
+        "operationId": "SetMidiThru",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MidiThruRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "No Content"
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -781,6 +944,51 @@
         },
         "description": "What an edit, undo or redo did: the new revision and the delta every client receives too."
       },
+      "ControlEvent": {
+        "required": [
+          "id",
+          "kind",
+          "channel",
+          "number",
+          "value",
+          "tick"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/ControlKind"
+          },
+          "channel": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "number": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "value": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "tick": {
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "description": "A controller event of a MIDI region; \u0060tick\u0060 is relative to the region\u0027s start."
+      },
+      "ControlKind": {
+        "enum": [
+          "controlChange",
+          "pitchBend",
+          "channelPressure",
+          "programChange"
+        ]
+      },
       "CreateProjectRequest": {
         "required": [
           "name"
@@ -855,6 +1063,12 @@
           },
           {
             "$ref": "#/components/schemas/DeltaOpProjectRenamed"
+          },
+          {
+            "$ref": "#/components/schemas/DeltaOpMidiRegionUpserted"
+          },
+          {
+            "$ref": "#/components/schemas/DeltaOpMidiRegionRemoved"
           }
         ],
         "discriminator": {
@@ -867,7 +1081,9 @@
             "audioFileUpserted": "#/components/schemas/DeltaOpAudioFileUpserted",
             "settingsChanged": "#/components/schemas/DeltaOpSettingsChanged",
             "masterChanged": "#/components/schemas/DeltaOpMasterChanged",
-            "projectRenamed": "#/components/schemas/DeltaOpProjectRenamed"
+            "projectRenamed": "#/components/schemas/DeltaOpProjectRenamed",
+            "midiRegionUpserted": "#/components/schemas/DeltaOpMidiRegionUpserted",
+            "midiRegionRemoved": "#/components/schemas/DeltaOpMidiRegionRemoved"
           }
         }
       },
@@ -904,6 +1120,41 @@
             "$ref": "#/components/schemas/ChannelStrip"
           }
         }
+      },
+      "DeltaOpMidiRegionRemoved": {
+        "required": [
+          "id",
+          "op"
+        ],
+        "properties": {
+          "op": {
+            "enum": [
+              "midiRegionRemoved"
+            ],
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          }
+        }
+      },
+      "DeltaOpMidiRegionUpserted": {
+        "required": [
+          "region",
+          "op"
+        ],
+        "properties": {
+          "op": {
+            "enum": [
+              "midiRegionUpserted"
+            ],
+            "type": "string"
+          },
+          "region": {
+            "$ref": "#/components/schemas/MidiRegion"
+          }
+        },
+        "description": "A MIDI region was added or changed (its notes included)."
       },
       "DeltaOpProjectRenamed": {
         "required": [
@@ -1066,6 +1317,48 @@
           },
           {
             "$ref": "#/components/schemas/EditCommandRenameProjectCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandSetInstrumentCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandSetParameterCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandLoadInstrumentFileCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandSetMidiIoCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandAddMidiRegionCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandResizeMidiRegionCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandSetMidiRegionCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandAddNotesCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandEditNotesCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandDeleteNotesCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandQuantizeNotesCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandAddControlsCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandDeleteControlsCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandSetMidiRecordingCommand"
           }
         ],
         "description": "An edit of the open project (docs/adr/0004-state-ownership.md). A batch of them is applied atomically as one\nundo step. Optional properties left out are left unchanged.",
@@ -1087,7 +1380,103 @@
             "setSignature": "#/components/schemas/EditCommandSetSignatureCommand",
             "setCycle": "#/components/schemas/EditCommandSetCycleCommand",
             "setMetronome": "#/components/schemas/EditCommandSetMetronomeCommand",
-            "renameProject": "#/components/schemas/EditCommandRenameProjectCommand"
+            "renameProject": "#/components/schemas/EditCommandRenameProjectCommand",
+            "setInstrument": "#/components/schemas/EditCommandSetInstrumentCommand",
+            "setParameter": "#/components/schemas/EditCommandSetParameterCommand",
+            "loadInstrumentFile": "#/components/schemas/EditCommandLoadInstrumentFileCommand",
+            "setMidiIo": "#/components/schemas/EditCommandSetMidiIoCommand",
+            "addMidiRegion": "#/components/schemas/EditCommandAddMidiRegionCommand",
+            "resizeMidiRegion": "#/components/schemas/EditCommandResizeMidiRegionCommand",
+            "setMidiRegion": "#/components/schemas/EditCommandSetMidiRegionCommand",
+            "addNotes": "#/components/schemas/EditCommandAddNotesCommand",
+            "editNotes": "#/components/schemas/EditCommandEditNotesCommand",
+            "deleteNotes": "#/components/schemas/EditCommandDeleteNotesCommand",
+            "quantizeNotes": "#/components/schemas/EditCommandQuantizeNotesCommand",
+            "addControls": "#/components/schemas/EditCommandAddControlsCommand",
+            "deleteControls": "#/components/schemas/EditCommandDeleteControlsCommand",
+            "setMidiRecording": "#/components/schemas/EditCommandSetMidiRecordingCommand"
+          }
+        }
+      },
+      "EditCommandAddControlsCommand": {
+        "required": [
+          "regionId",
+          "events",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "addControls"
+            ],
+            "type": "string"
+          },
+          "regionId": {
+            "type": "string"
+          },
+          "events": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/NewControlEvent"
+            }
+          }
+        }
+      },
+      "EditCommandAddMidiRegionCommand": {
+        "required": [
+          "trackId",
+          "startTick",
+          "lengthTicks",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "addMidiRegion"
+            ],
+            "type": "string"
+          },
+          "trackId": {
+            "type": "string"
+          },
+          "startTick": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "lengthTicks": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "name": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        },
+        "description": "Adds an empty MIDI region to an instrument or external MIDI track."
+      },
+      "EditCommandAddNotesCommand": {
+        "required": [
+          "regionId",
+          "notes",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "addNotes"
+            ],
+            "type": "string"
+          },
+          "regionId": {
+            "type": "string"
+          },
+          "notes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/NewNote"
+            }
           }
         }
       },
@@ -1160,9 +1549,75 @@
           "stereo": {
             "type": "boolean",
             "default": false
+          },
+          "kind": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/TrackKind"
+              }
+            ]
+          },
+          "pluginId": {
+            "type": [
+              "null",
+              "string"
+            ]
           }
         },
-        "description": "Adds an audio track at \u0060index\u0060 (the end when left out)."
+        "description": "Adds a track at \u0060index\u0060 (the end when left out): audio by default; an instrument track gets\n\u0060pluginId\u0060 (the default synth when left out)."
+      },
+      "EditCommandDeleteControlsCommand": {
+        "required": [
+          "regionId",
+          "eventIds",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "deleteControls"
+            ],
+            "type": "string"
+          },
+          "regionId": {
+            "type": "string"
+          },
+          "eventIds": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        }
+      },
+      "EditCommandDeleteNotesCommand": {
+        "required": [
+          "regionId",
+          "noteIds",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "deleteNotes"
+            ],
+            "type": "string"
+          },
+          "regionId": {
+            "type": "string"
+          },
+          "noteIds": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        }
       },
       "EditCommandDeleteRegionsCommand": {
         "required": [
@@ -1183,6 +1638,52 @@
             }
           }
         }
+      },
+      "EditCommandEditNotesCommand": {
+        "required": [
+          "regionId",
+          "changes",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "editNotes"
+            ],
+            "type": "string"
+          },
+          "regionId": {
+            "type": "string"
+          },
+          "changes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/NoteChange"
+            }
+          }
+        }
+      },
+      "EditCommandLoadInstrumentFileCommand": {
+        "required": [
+          "trackId",
+          "path",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "loadInstrumentFile"
+            ],
+            "type": "string"
+          },
+          "trackId": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          }
+        },
+        "description": "Loads a file (a sampler instrument, a sample) into a track\u0027s instrument; a path on the server\u0027s disk."
       },
       "EditCommandMoveRegionCommand": {
         "required": [
@@ -1211,7 +1712,7 @@
             ]
           }
         },
-        "description": "Moves a region in time, and to another track when \u0060trackId\u0060 is given."
+        "description": "Moves a region (audio or MIDI) in time, and to another track of a kind that can hold it when \u0060trackId\u0060 is\ngiven. \u0060splitRegion\u0060 and \u0060deleteRegions\u0060 also take either kind."
       },
       "EditCommandMoveTrackCommand": {
         "required": [
@@ -1234,6 +1735,51 @@
             "format": "int32"
           }
         }
+      },
+      "EditCommandQuantizeNotesCommand": {
+        "required": [
+          "regionId",
+          "gridTicks",
+          "type",
+          "strength",
+          "swing"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "quantizeNotes"
+            ],
+            "type": "string"
+          },
+          "regionId": {
+            "type": "string"
+          },
+          "gridTicks": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "strength": {
+            "type": "number",
+            "format": "double",
+            "default": 1
+          },
+          "swing": {
+            "type": "number",
+            "format": "double",
+            "default": 0
+          },
+          "noteIds": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        },
+        "description": "Moves note starts towards the grid (destructive; \u0060noteIds\u0060 left out: every note of the region), with the\nsame strength and swing meaning as RegionPlayback."
       },
       "EditCommandRemoveTrackCommand": {
         "required": [
@@ -1268,6 +1814,34 @@
             "type": "string"
           }
         }
+      },
+      "EditCommandResizeMidiRegionCommand": {
+        "required": [
+          "regionId",
+          "startTick",
+          "lengthTicks",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "resizeMidiRegion"
+            ],
+            "type": "string"
+          },
+          "regionId": {
+            "type": "string"
+          },
+          "startTick": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "lengthTicks": {
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "description": "Moves a MIDI region\u0027s start and end. Its notes stay where they are in time: moving the start shifts their\nrelative positions, and notes that fall outside are kept but do not play."
       },
       "EditCommandResizeRegionCommand": {
         "required": [
@@ -1335,6 +1909,28 @@
           }
         }
       },
+      "EditCommandSetInstrumentCommand": {
+        "required": [
+          "trackId",
+          "pluginId",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "setInstrument"
+            ],
+            "type": "string"
+          },
+          "trackId": {
+            "type": "string"
+          },
+          "pluginId": {
+            "type": "string"
+          }
+        },
+        "description": "Replaces an instrument track\u0027s instrument; its parameters start at their defaults."
+      },
       "EditCommandSetMetronomeCommand": {
         "required": [
           "type"
@@ -1366,6 +1962,147 @@
             "format": "double"
           }
         }
+      },
+      "EditCommandSetMidiIoCommand": {
+        "required": [
+          "trackId",
+          "type",
+          "input",
+          "output"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "setMidiIo"
+            ],
+            "type": "string"
+          },
+          "trackId": {
+            "type": "string"
+          },
+          "input": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/MidiInputSettings"
+              }
+            ]
+          },
+          "output": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/MidiOutputSettings"
+              }
+            ]
+          }
+        }
+      },
+      "EditCommandSetMidiRecordingCommand": {
+        "required": [
+          "merge",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "setMidiRecording"
+            ],
+            "type": "string"
+          },
+          "merge": {
+            "type": "boolean"
+          }
+        }
+      },
+      "EditCommandSetMidiRegionCommand": {
+        "required": [
+          "regionId",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "setMidiRegion"
+            ],
+            "type": "string"
+          },
+          "regionId": {
+            "type": "string"
+          },
+          "name": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "transpose": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int32"
+          },
+          "velocity": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int32"
+          },
+          "quantizeTicks": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int32"
+          },
+          "quantizeStrength": {
+            "type": [
+              "null",
+              "number"
+            ],
+            "format": "double"
+          },
+          "swing": {
+            "type": [
+              "null",
+              "number"
+            ],
+            "format": "double"
+          }
+        }
+      },
+      "EditCommandSetParameterCommand": {
+        "required": [
+          "trackId",
+          "parameterId",
+          "value",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "setParameter"
+            ],
+            "type": "string"
+          },
+          "trackId": {
+            "type": "string"
+          },
+          "parameterId": {
+            "type": "string"
+          },
+          "value": {
+            "type": "number",
+            "format": "double"
+          }
+        },
+        "description": "Sets one parameter of a track\u0027s instrument. Consecutive batches on the same parameter within 1 s coalesce into\none undo step, as \u0060setStrip\u0060 does."
       },
       "EditCommandSetRegionCommand": {
         "required": [
@@ -1642,6 +2379,78 @@
         },
         "description": "Import an audio file the server can read from its own disk (the desktop app, a headless box\u0027s library)."
       },
+      "InstrumentSlot": {
+        "required": [
+          "pluginId",
+          "name",
+          "parameters"
+        ],
+        "type": "object",
+        "properties": {
+          "pluginId": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "parameters": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "number",
+              "format": "double"
+            }
+          },
+          "file": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        },
+        "description": "A track\u0027s instrument: the plugin, its parameter values by parameter id (all of them), and the file it loaded\n(a sampler\u0027s instrument), relative to the project folder when inside it. A plugin\u0027s opaque state lives in the\nproject\u0027s \u0060Plugin States\u0060 folder."
+      },
+      "LiveMidiEvent": {
+        "required": [
+          "status",
+          "data1",
+          "data2"
+        ],
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "data1": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "data2": {
+            "type": "integer",
+            "format": "int32"
+          }
+        },
+        "description": "One raw MIDI message (status 0x80\u20260xEF, data bytes 0\u2026127)."
+      },
+      "LiveMidiRequest": {
+        "required": [
+          "trackId",
+          "events"
+        ],
+        "type": "object",
+        "properties": {
+          "trackId": {
+            "type": "string"
+          },
+          "events": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LiveMidiEvent"
+            }
+          }
+        },
+        "description": "Plays MIDI on a track now, as if it came from a keyboard (the on-screen keyboard, musical typing)."
+      },
       "MetronomeSettings": {
         "required": [
           "enabled",
@@ -1663,6 +2472,290 @@
         },
         "description": "The click: on or off, a one-bar count-in before recording, and its level in dB."
       },
+      "MidiDevices": {
+        "required": [
+          "inputs",
+          "outputs"
+        ],
+        "type": "object",
+        "properties": {
+          "inputs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MidiPort"
+            }
+          },
+          "outputs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MidiPort"
+            }
+          }
+        }
+      },
+      "MidiInputSettings": {
+        "required": [
+          "channel"
+        ],
+        "type": "object",
+        "properties": {
+          "device": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "channel": {
+            "type": "integer",
+            "format": "int32"
+          }
+        },
+        "description": "Where a track takes live MIDI from: a device id (null: every device) and channel (0: all, else 1\u202616)."
+      },
+      "MidiOutputSettings": {
+        "required": [
+          "device",
+          "channel"
+        ],
+        "type": "object",
+        "properties": {
+          "device": {
+            "type": "string"
+          },
+          "channel": {
+            "type": "integer",
+            "format": "int32"
+          }
+        },
+        "description": "Where an external MIDI track sends its regions: a device id and channel 1\u202616."
+      },
+      "MidiPort": {
+        "required": [
+          "id",
+          "name"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "description": "A MIDI port of the machine the engine runs on."
+      },
+      "MidiRegion": {
+        "required": [
+          "id",
+          "trackId",
+          "name",
+          "startTick",
+          "lengthTicks",
+          "playback",
+          "notes",
+          "controls"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "trackId": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "startTick": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "lengthTicks": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "playback": {
+            "$ref": "#/components/schemas/RegionPlayback"
+          },
+          "notes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Note"
+            }
+          },
+          "controls": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ControlEvent"
+            }
+          }
+        },
+        "description": "A MIDI region: it starts at \u0060startTick\u0060 and lasts \u0060lengthTicks\u0060; its notes and controller events are\npositioned relative to its start (ticks at 960 PPQ). Events past the end do not play; a note that crosses the end\nis cut there. \u0060playback\u0060 holds the non-destructive region parameters."
+      },
+      "MidiThruRequest": {
+        "type": "object",
+        "properties": {
+          "trackId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        },
+        "description": "Which track hears live MIDI when no instrument track is record-armed (Logic sends input to the selected\ntrack); null: none."
+      },
+      "NewControlEvent": {
+        "required": [
+          "kind",
+          "channel",
+          "number",
+          "value",
+          "tick"
+        ],
+        "type": "object",
+        "properties": {
+          "kind": {
+            "$ref": "#/components/schemas/ControlKind"
+          },
+          "channel": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "number": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "value": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "tick": {
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "description": "A controller event to add; \u0060tick\u0060 relative to the region\u0027s start."
+      },
+      "NewNote": {
+        "required": [
+          "pitch",
+          "velocity",
+          "channel",
+          "startTick",
+          "lengthTicks"
+        ],
+        "type": "object",
+        "properties": {
+          "pitch": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "velocity": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "channel": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "startTick": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "lengthTicks": {
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "description": "A note to add; positions relative to the region\u0027s start."
+      },
+      "Note": {
+        "required": [
+          "id",
+          "pitch",
+          "velocity",
+          "channel",
+          "startTick",
+          "lengthTicks"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "pitch": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "velocity": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "channel": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "startTick": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "lengthTicks": {
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "description": "A note. \u0060id\u0060 is unique in the project; \u0060channel\u0060 is 1\u202616."
+      },
+      "NoteChange": {
+        "required": [
+          "id"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "pitch": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int32"
+          },
+          "velocity": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int32"
+          },
+          "channel": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int32"
+          },
+          "startTick": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int64"
+          },
+          "lengthTicks": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int64"
+          }
+        },
+        "description": "Changes to one note; left-out properties stay."
+      },
       "OpenProjectRequest": {
         "required": [
           "path"
@@ -1673,6 +2766,107 @@
             "type": "string"
           }
         }
+      },
+      "ParameterInfo": {
+        "required": [
+          "id",
+          "name",
+          "min",
+          "max",
+          "default",
+          "unit",
+          "steps"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "min": {
+            "type": "number",
+            "format": "double"
+          },
+          "max": {
+            "type": "number",
+            "format": "double"
+          },
+          "default": {
+            "type": "number",
+            "format": "double"
+          },
+          "unit": {
+            "type": "string"
+          },
+          "steps": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "valueNames": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "description": "A plugin parameter. \u0060steps\u0060 \u0026gt; 0 makes it discrete (\u0060steps\u0060 \u002B 1 values from \u0060min\u0060 to\n\u0060max\u0060), with \u0060valueNames\u0060 naming them when it is a choice."
+      },
+      "PluginFormat": {
+        "enum": [
+          "builtin",
+          "clap"
+        ]
+      },
+      "PluginInfo": {
+        "required": [
+          "id",
+          "name",
+          "vendor",
+          "version",
+          "format",
+          "isInstrument",
+          "fileTypes",
+          "parameters"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "vendor": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          },
+          "format": {
+            "$ref": "#/components/schemas/PluginFormat"
+          },
+          "isInstrument": {
+            "type": "boolean"
+          },
+          "fileTypes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "parameters": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ParameterInfo"
+            }
+          }
+        },
+        "description": "A plugin the engine can load. \u0060fileTypes\u0060 (extensions such as \u0060.sfz\u0060, \u0060.wav\u0060) lists what an\ninstrument loads with \u0060loadInstrumentFile\u0060, empty when it loads none."
       },
       "ProblemDetails": {
         "type": "object",
@@ -1722,7 +2916,8 @@
           "master",
           "tracks",
           "regions",
-          "audioFiles"
+          "audioFiles",
+          "midiRegions"
         ],
         "type": "object",
         "properties": {
@@ -1769,6 +2964,12 @@
             "items": {
               "$ref": "#/components/schemas/AudioFile"
             }
+          },
+          "midiRegions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MidiRegion"
+            }
           }
         },
         "description": "The open project (docs/01-implementation-plan.md \u00A75). Musical positions are ticks at 960 PPQ; audio offsets,\nlengths and fades are frames at the project\u0027s \u0060sampleRate\u0060. \u0060revision\u0060 grows with every edit and is\nthe ETag; \u0060dirty\u0060 says whether it has unsaved edits."
@@ -1799,7 +3000,8 @@
           "signature",
           "cycle",
           "metronome",
-          "endTick"
+          "endTick",
+          "mergeMidiRecording"
         ],
         "type": "object",
         "properties": {
@@ -1819,9 +3021,12 @@
           "endTick": {
             "type": "integer",
             "format": "int64"
+          },
+          "mergeMidiRecording": {
+            "type": "boolean"
           }
         },
-        "description": "Global settings. \u0060endTick\u0060 is the project end marker."
+        "description": "Global settings. \u0060endTick\u0060 is the project end marker. \u0060mergeMidiRecording\u0060: a MIDI recording over an\nexisting MIDI region adds its notes to that region instead of making a new one."
       },
       "ProjectSummary": {
         "required": [
@@ -1847,6 +3052,39 @@
           }
         },
         "description": "A project in the recent list."
+      },
+      "RegionPlayback": {
+        "required": [
+          "transpose",
+          "velocity",
+          "quantizeTicks",
+          "quantizeStrength",
+          "swing"
+        ],
+        "type": "object",
+        "properties": {
+          "transpose": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "velocity": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "quantizeTicks": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "quantizeStrength": {
+            "type": "number",
+            "format": "double"
+          },
+          "swing": {
+            "type": "number",
+            "format": "double"
+          }
+        },
+        "description": "How a MIDI region plays, without changing its notes (Logic\u0027s Region inspector): transpose in semitones,\nvelocity offset (\u2212127\u2026127), quantise grid in ticks (0: off) with strength (0\u20261, 1 = all the way) and swing\n(0\u20261, 0 = straight; delays every second grid step by up to half a step)."
       },
       "SystemInfo": {
         "required": [
@@ -1890,7 +3128,10 @@
           "input",
           "recordArmed",
           "inputMonitoring",
-          "strip"
+          "strip",
+          "instrument",
+          "midiInput",
+          "midiOutput"
         ],
         "type": "object",
         "properties": {
@@ -1917,9 +3158,32 @@
           },
           "strip": {
             "$ref": "#/components/schemas/ChannelStrip"
+          },
+          "instrument": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/InstrumentSlot"
+              }
+            ]
+          },
+          "midiInput": {
+            "$ref": "#/components/schemas/MidiInputSettings"
+          },
+          "midiOutput": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/MidiOutputSettings"
+              }
+            ]
           }
         },
-        "description": "A track and its channel strip. \u0060color\u0060 is a CSS colour; \u0060input\u0060 is where recording takes its audio\nfrom."
+        "description": "A track and its channel strip. \u0060color\u0060 is a CSS colour; \u0060input\u0060 is where an audio track records from.\nAn instrument track has an \u0060instrument\u0060; instrument and external MIDI tracks take MIDI from\n\u0060midiInput\u0060, and an external MIDI track sends its regions to \u0060midiOutput\u0060."
       },
       "TrackInput": {
         "required": [
@@ -1940,7 +3204,9 @@
       },
       "TrackKind": {
         "enum": [
-          "audio"
+          "audio",
+          "instrument",
+          "midi"
         ]
       },
       "TransportCommand": {
@@ -2040,6 +3306,12 @@
     },
     {
       "name": "Transport"
+    },
+    {
+      "name": "Plugins"
+    },
+    {
+      "name": "MIDI"
     }
   ]
 }

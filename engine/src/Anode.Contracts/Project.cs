@@ -21,16 +21,21 @@ public sealed record Project(
     ChannelStrip Master,
     IReadOnlyList<Track> Tracks,
     IReadOnlyList<AudioRegion> Regions,
-    IReadOnlyList<AudioFile> AudioFiles
+    IReadOnlyList<AudioFile> AudioFiles,
+    IReadOnlyList<MidiRegion> MidiRegions
 );
 
-/// <summary>Global settings. <c>endTick</c> is the project end marker.</summary>
+/// <summary>
+///     Global settings. <c>endTick</c> is the project end marker. <c>mergeMidiRecording</c>: a MIDI recording over an
+///     existing MIDI region adds its notes to that region instead of making a new one.
+/// </summary>
 public sealed record ProjectSettings(
     double Tempo,
     TimeSignature Signature,
     CycleRange Cycle,
     MetronomeSettings Metronome,
-    long EndTick
+    long EndTick,
+    bool MergeMidiRecording
 );
 
 public sealed record TimeSignature(int Numerator, int Denominator);
@@ -43,12 +48,21 @@ public sealed record MetronomeSettings(bool Enabled, bool CountIn, double LevelD
 [JsonConverter(typeof(JsonStringEnumConverter<TrackKind>))]
 public enum TrackKind {
     [JsonStringEnumMemberName("audio")]
-    Audio
+    Audio,
+
+    /// <summary>A software instrument: MIDI regions played by <c>instrument</c>.</summary>
+    [JsonStringEnumMemberName("instrument")]
+    Instrument,
+
+    /// <summary>External MIDI: MIDI regions sent to <c>midiOutput</c>.</summary>
+    [JsonStringEnumMemberName("midi")]
+    Midi
 }
 
 /// <summary>
-///     A track and its channel strip. <c>color</c> is a CSS colour; <c>input</c> is where recording takes its audio
-///     from.
+///     A track and its channel strip. <c>color</c> is a CSS colour; <c>input</c> is where an audio track records from.
+///     An instrument track has an <c>instrument</c>; instrument and external MIDI tracks take MIDI from
+///     <c>midiInput</c>, and an external MIDI track sends its regions to <c>midiOutput</c>.
 /// </summary>
 public sealed record Track(
     string Id,
@@ -58,7 +72,10 @@ public sealed record Track(
     TrackInput Input,
     bool RecordArmed,
     bool InputMonitoring,
-    ChannelStrip Strip
+    ChannelStrip Strip,
+    InstrumentSlot? Instrument,
+    MidiInputSettings MidiInput,
+    MidiOutputSettings? MidiOutput
 );
 
 /// <summary>The device input: 1-based first channel (0: none); a stereo input takes that channel and the next.</summary>

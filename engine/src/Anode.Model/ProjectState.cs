@@ -57,7 +57,8 @@ public sealed record ProjectState(
             Master,
             [..Tracks],
             [..Regions.Values],
-            [..Files.Values]
+            [..Files.Values],
+            [] // MIDI regions: Phase 2, workstream B
         );
 
     /// <summary>Applies one delta operation (an edit's primitive step, also what clients apply).</summary>

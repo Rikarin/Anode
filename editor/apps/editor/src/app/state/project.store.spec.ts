@@ -14,7 +14,10 @@ function track(id: string, name = id): Track {
     input: { channel: 1, stereo: false },
     recordArmed: false,
     inputMonitoring: false,
-    strip: { volumeDb: 0, pan: 0, mute: false, solo: false }
+    strip: { volumeDb: 0, pan: 0, mute: false, solo: false },
+    instrument: null,
+    midiInput: { device: null, channel: 0 },
+    midiOutput: null
   };
 }
 
@@ -46,7 +49,8 @@ function snapshot(revision = 3): Project {
       signature: { numerator: 4, denominator: 4 },
       cycle: { enabled: false, startTick: 0, endTick: 15_360 },
       metronome: { enabled: false, countIn: false, levelDb: -6 },
-      endTick: 122_880
+      endTick: 122_880,
+      mergeMidiRecording: false
     },
     master: { volumeDb: 0, pan: 0, mute: false, solo: false },
     tracks: [track('trk_1'), track('trk_2')],
@@ -61,7 +65,8 @@ function snapshot(revision = 3): Project {
         bitDepth: 24,
         frames: 96_000
       }
-    ]
+    ],
+    midiRegions: []
   };
 }
 

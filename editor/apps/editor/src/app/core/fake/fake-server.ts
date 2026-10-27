@@ -129,12 +129,14 @@ export class FakeAnodeServer implements AnodeApi {
           signature: { numerator: 4, denominator: 4 },
           cycle: { enabled: false, startTick: 0, endTick: 4 * 4 * Ppq },
           metronome: { enabled: false, countIn: false, levelDb: -6 },
-          endTick: DefaultEndTick
+          endTick: DefaultEndTick,
+          mergeMidiRecording: false
         },
         master: strip(),
         tracks: [],
         regions: [],
-        audioFiles: []
+        audioFiles: [],
+        midiRegions: []
       };
       this.disk.set(path, structuredClone(project));
       this.open(project);
@@ -493,7 +495,10 @@ export class FakeAnodeServer implements AnodeApi {
           input: { channel: command.stereo ? 2 * count + 1 : count + 1, stereo: command.stereo },
           recordArmed: false,
           inputMonitoring: false,
-          strip: strip()
+          strip: strip(),
+          instrument: null,
+          midiInput: { device: null, channel: 0 },
+          midiOutput: null
         };
         const index = Math.min(count, Math.max(0, command.index ?? count));
         const tracks = [...project.tracks];
@@ -661,6 +666,22 @@ export class FakeAnodeServer implements AnodeApi {
           throw new ApiError(422, 'A project needs a name.');
         }
         return { ...project, name: command.name.trim() };
+      case 'setInstrument':
+      case 'setParameter':
+      case 'loadInstrumentFile':
+      case 'setMidiIo':
+      case 'addMidiRegion':
+      case 'resizeMidiRegion':
+      case 'setMidiRegion':
+      case 'addNotes':
+      case 'editNotes':
+      case 'deleteNotes':
+      case 'quantizeNotes':
+      case 'addControls':
+      case 'deleteControls':
+      case 'setMidiRecording':
+        // MIDI and instruments: Phase 2, workstream C (docs/03-phase-2.md).
+        throw new ApiError(422, `${command.type}: not in the fake Server yet.`);
     }
   }
 
@@ -792,12 +813,14 @@ export class FakeAnodeServer implements AnodeApi {
         signature: { numerator: 4, denominator: 4 },
         cycle: { enabled: false, startTick: 4 * 4 * Ppq, endTick: 8 * 4 * Ppq },
         metronome: { enabled: false, countIn: true, levelDb: -6 },
-        endTick: DefaultEndTick
+        endTick: DefaultEndTick,
+        mergeMidiRecording: false
       },
       master: strip(),
       tracks: [],
       regions: [],
-      audioFiles: []
+      audioFiles: [],
+      midiRegions: []
     };
     let project = base;
     for (const name of ['Drums', 'Bass', 'Guitar', 'Vocals']) {
