@@ -2,13 +2,13 @@
 
 The desktop editor (../docs/01-implementation-plan.md §6): an Angular 22 renderer styled with [xUI](https://xuijs.org) and Tailwind 4, in an Electron shell that runs the engine (anode-host and anode-server) as sidecars. The same build is served by anode-server to browsers and tablets on the local network.
 
-| Project           | Role                                                                                                           |
-| ----------------- | -------------------------------------------------------------------------------------------------------------- |
-| `apps/editor`     | The renderer: project chooser, control bar, Tracks area, Mixer; stores fed by REST and `/ws` deltas            |
-| `apps/desktop`    | Electron main (sidecar supervision, `app://` scheme with CSP) and the preload bridge; Playwright E2E in `e2e/` |
-| `libs/api-client` | Types generated from `engine/src/Anode.Server/openapi.json`, plus a typed `fetch` client                       |
-| `libs/audio-ui`   | Audio controls xUI does not have (fader, pan knob, peak meter, channel strip), stories that must pass axe      |
-| `libs/timeline`   | The canvas/WebGL2 timeline engine behind the Tracks area: regions, waveforms, ruler, hit-testing (its README)  |
+| Project           | Role                                                                                                                                        |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `apps/editor`     | The renderer: project chooser, control bar, Tracks area, Piano Roll, Inspector, Keyboard, Mixer; stores fed by REST and `/ws` deltas        |
+| `apps/desktop`    | Electron main (sidecar supervision, `app://` scheme with CSP) and the preload bridge; Playwright E2E in `e2e/`                              |
+| `libs/api-client` | Types generated from `engine/src/Anode.Server/openapi.json`, plus a typed `fetch` client                                                    |
+| `libs/audio-ui`   | Audio controls xUI does not have (fader, pan knob, knob, choice, on-screen keyboard, peak meter, channel strip), stories that must pass axe |
+| `libs/timeline`   | The canvas/WebGL2 timeline engine behind the Tracks area: regions, waveforms, ruler, hit-testing (its README)                               |
 
 ## Develop
 
@@ -32,8 +32,10 @@ pnpm exec nx serve editor
 
 Or run the editor against an in-memory fake Server (no engine needed): `pnpm exec nx serve editor`, then open
 `http://localhost:4200/?fake` (a demo project) or `?fake&empty` (the project chooser). The fake
-(`apps/editor/src/app/core/fake`) follows the Phase 1 contracts: commands, undo, deltas, transport, recording on armed
-tracks, meters and synthetic peaks. Unit tests use it too.
+(`apps/editor/src/app/core/fake`) follows the Phase 1 and Phase 2 contracts: every command, undo, deltas, transport,
+recording on armed tracks (audio takes, and MIDI takes from live MIDI or a few faked notes), meters, synthetic peaks, a
+plugin catalogue (`anode.synth`, `anode.sampler`, a CLAP test instrument), MIDI devices, live MIDI with activity, and
+the MIDI-thru track. The demo has two instrument tracks with MIDI regions. Unit tests use it too.
 
 Or run the whole desktop app. Build the engine first with `dotnet build -c Release` in `engine/`:
 

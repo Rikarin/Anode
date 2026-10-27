@@ -12,7 +12,12 @@ import {
 import type { Track } from '@anode/api-client';
 import { faderDb, faderPosition, formatDb } from '@anode/audio-ui';
 import { provideIcons } from '@ng-icons/core';
-import { matMoreHorizRound } from '@ng-icons/material-icons/round';
+import {
+  matGraphicEqRound,
+  matMoreHorizRound,
+  matPianoRound,
+  matSettingsInputComponentRound
+} from '@ng-icons/material-icons/round';
 import { XuiButtonImports } from '@xui/button';
 import { XuiIconImports } from '@xui/icon';
 import { XuiInputImports } from '@xui/input';
@@ -20,6 +25,7 @@ import { XuiMenuImports } from '@xui/menu';
 import { XuiPopoverImports } from '@xui/popover';
 import { XuiSliderImports } from '@xui/slider';
 import { XuiTooltipImports } from '@xui/tooltip';
+import { LiveMidiStore } from '../state/live-midi.store';
 import { MixerStore } from '../state/mixer.store';
 import { ProjectStore } from '../state/project.store';
 import { SelectionStore } from '../state/selection.store';
@@ -27,9 +33,10 @@ import { TrackColors } from '../state/track-colors';
 import { setTrack, setTrackLabel, type TrackChange } from '../state/track-commands';
 
 /**
- * A track's header in the Tracks area (Logic's track header): its colour, number and name (double-click to rename),
- * mute, solo, record enable and input monitoring, and a volume slider on the fader's dB taper. Its menu moves and
- * deletes the track. Every change is one command batch with a label for the undo history.
+ * A track's header in the Tracks area (Logic's track header): its colour, number, kind and name (double-click to
+ * rename), mute, solo, record enable and (audio) input monitoring, and a volume slider on the fader's dB taper. An
+ * instrument or MIDI track has an activity dot that lights while the engine plays or receives MIDI on it. Its menu
+ * moves and deletes the track. Every change is one command batch with a label for the undo history.
  */
 @Component({
   selector: 'an-track-header',
@@ -43,7 +50,7 @@ import { setTrack, setTrackLabel, type TrackChange } from '../state/track-comman
     XuiSliderImports,
     XuiTooltipImports
   ],
-  providers: [provideIcons({ matMoreHorizRound })],
+  providers: [provideIcons({ matGraphicEqRound, matMoreHorizRound, matPianoRound, matSettingsInputComponentRound })],
   host: {
     class: 'border-border flex items-stretch gap-2 border-b pe-2',
     role: 'group',
@@ -79,6 +86,14 @@ import { setTrack, setTrackLabel, type TrackChange } from '../state/track-comman
     <div class="flex min-w-0 flex-1 flex-col justify-center gap-1 py-1">
       <div class="flex min-w-0 items-center gap-1.5">
         <span class="text-foreground-muted w-4 shrink-0 text-end text-[11px] tabular-nums">{{ number() }}</span>
+        <ng-icon
+          xui
+          size="sm"
+          class="text-foreground-muted shrink-0"
+          [name]="kindIcon()"
+          [attr.title]="kindTitle()"
+          aria-hidden="true"
+        />
         @if (renaming()) {
           <input
             #name
@@ -98,6 +113,17 @@ import { setTrack, setTrackLabel, type TrackChange } from '../state/track-comman
           >
             {{ track().name }}
           </span>
+        }
+        @if (track().kind !== 'audio') {
+          <span
+            class="size-1.5 shrink-0 rounded-full transition-colors"
+            [class.bg-success]="active()"
+            [class.bg-border]="!active()"
+            role="img"
+            data-testid="midi-activity"
+            [attr.data-active]="active() || null"
+            [attr.aria-label]="active() ? 'MIDI activity' : 'No MIDI activity'"
+          ></span>
         }
         <button
           xuiButton
@@ -170,6 +196,8 @@ import { setTrack, setTrackLabel, type TrackChange } from '../state/track-comman
           type="button"
           size="sm"
           [class]="toggleClass"
+          [class.invisible]="track().kind !== 'audio'"
+          [disabled]="track().kind !== 'audio'"
           [variant]="track().inputMonitoring ? 'default' : 'outline'"
           [color]="track().inputMonitoring ? 'warning' : 'secondary'"
           [active]="track().inputMonitoring"
@@ -214,6 +242,22 @@ export class TrackHeader {
   protected readonly volume = computed(() => this.mixer.value(this.track().id, 'volumeDb'));
   protected readonly volumePosition = computed(() => faderPosition(this.volume()));
   protected readonly volumeText = computed(() => formatDb(this.volume()));
+  private readonly live = inject(LiveMidiStore);
+  protected readonly active = computed(() => this.live.active().has(this.track().id));
+  protected readonly kindIcon = computed(
+    () =>
+      ({ audio: 'matGraphicEqRound', instrument: 'matPianoRound', midi: 'matSettingsInputComponentRound' })[
+        this.track().kind
+      ]
+  );
+  protected readonly kindTitle = computed(() => {
+    const track = this.track();
+    return track.kind === 'audio'
+      ? 'Audio track'
+      : track.kind === 'midi'
+        ? 'External MIDI track'
+        : `Software instrument: ${track.instrument?.name ?? 'none'}`;
+  });
 
   constructor() {
     effect(() => {

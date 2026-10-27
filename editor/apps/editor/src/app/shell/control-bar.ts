@@ -23,7 +23,7 @@ import { Lcd } from './lcd';
 
 /**
  * The control bar (Logic's): the project's name and save state, undo and redo, the transport (go to start, stop, play,
- * record, cycle) with the LCD, the metronome and count-in, and the engine status. Its keys (Space, R, C, Return, ⌘Z,
+ * record, cycle) with the LCD, the metronome and count-in, MIDI recording's merge switch, and the engine status. Its keys (Space, R, C, Return, ⌘Z,
  * ⇧⌘Z, ⌘S) are handled by the app shell.
  */
 @Component({
@@ -205,6 +205,20 @@ import { Lcd } from './lcd';
         >
           Count-in
         </button>
+        <button
+          xuiButton
+          type="button"
+          size="sm"
+          class="px-2 text-xs"
+          data-testid="merge-recording"
+          [variant]="mergeMidi() ? 'default' : 'ghost'"
+          [active]="mergeMidi()"
+          [attr.aria-pressed]="mergeMidi()"
+          xuiTooltip="Merge new MIDI recordings into the region under the playhead"
+          (click)="toggleMerge()"
+        >
+          Merge
+        </button>
       </div>
     }
     <an-engine-status class="ms-auto" />
@@ -215,6 +229,16 @@ export class ControlBar {
   protected readonly project = inject(ProjectStore);
   protected readonly history = inject(HistoryStore);
   protected readonly session = inject(ProjectSession);
+
+  protected readonly mergeMidi = computed(() => this.project.settings().mergeMidiRecording);
+
+  protected toggleMerge(): void {
+    const merge = !this.mergeMidi();
+    void this.project.execute(
+      [{ type: 'setMidiRecording', merge }],
+      merge ? 'Merge MIDI Recordings' : 'Separate MIDI Recordings'
+    );
+  }
 
   protected readonly undoTip = computed(() => {
     const label = this.history.undoLabel();

@@ -218,12 +218,24 @@ export class FrameBuilder {
     const xOf = (tick: number) => (tick - originTick) * ppt;
     batch.reset();
 
-    // Background: one rectangle, the alternate (or black-key) lanes, and the shade after the project end.
-    batch.push(0, 0, width, height, theme.background);
+    // Background: one rectangle, the alternate (or black-key) lanes, and the shade after the project end. With spans
+    // (the Piano Roll's regions), lanes are drawn only inside them and the rest is shaded.
+    const spans = view.spans ?? null;
+    batch.push(0, 0, width, height, spans ? theme.afterEnd : theme.background);
+    const stretches: [number, number][] = spans
+      ? spans
+          .map(span => [Math.max(0, xOf(span.start)), Math.min(width, xOf(span.end))] as [number, number])
+          .filter(([a, b]) => b > a)
+      : [[0, width]];
+    for (const [a, b] of spans ? stretches : []) {
+      batch.push(a, laneTop, b - a, height - laneTop, theme.background);
+    }
     for (let lane = laneFrom; lane < laneTo; lane++) {
       const shaded = kind === 'notes' ? BLACK_KEYS.has((laneCount - 1 - lane) % 12) : lane % 2 === 1;
       if (shaded) {
-        batch.push(0, laneY(lane), width, laneHeight, theme.laneAlternate);
+        for (const [a, b] of stretches) {
+          batch.push(a, laneY(lane), b - a, laneHeight, theme.laneAlternate);
+        }
       }
     }
     const projectEnd = view.endTick ?? null;
@@ -248,7 +260,7 @@ export class FrameBuilder {
     const drawn = this.collect(found, view, originTick, endTick, laneFrom, laneTo);
     const inset = kind === 'notes' ? 0.5 : 1;
     const style = kind === 'notes' ? RectStyle.Note : RectStyle.Region;
-    const flags = scene.regions?.flags;
+    const flags = scene.regions?.flags ?? scene.noteFlags;
     batch.reserve(drawn.length);
     for (const region of drawn) {
       const x0 = Math.max(-2, xOf(region.start));
@@ -262,10 +274,18 @@ export class FrameBuilder {
     batch.visibleItems = drawn.length;
     batch.endLayer();
 
-    // Region details: waveforms, fades, selection outlines, names.
+    // Region details: waveforms, note miniatures, fades, selection outlines, names. Selected notes get an outline.
     if (scene.regions) {
       for (const region of drawn) {
         this.regionDetails(region, view, width, laneY(region.lane) + inset, laneHeight - 2 * inset);
+      }
+    } else if (scene.noteFlags) {
+      for (const note of drawn) {
+        if ((scene.noteFlags[note.id] ?? 0) & ItemFlag.Selected) {
+          const x0 = Math.max(-2, xOf(note.start));
+          const x1 = Math.min(width + 2, Math.max(xOf(note.start + note.length), x0 + 2));
+          batch.outline(x0, laneY(note.lane), x1 - x0, laneHeight, theme.selection);
+        }
       }
     }
     batch.endLayer();
@@ -394,6 +414,35 @@ export class FrameBuilder {
           const lo = Math.min(1, Math.max(-1, (range[0] ?? 0) * gain));
           const yHi = mid - hi * half;
           batch.push(x, yHi, 1, Math.max(1, mid - lo * half - yHi), color);
+        }
+      }
+    }
+
+    // A MIDI region's notes, between its lowest and highest pitch.
+    const notes = details.notes;
+    if (notes && flag & ItemFlag.Midi && bottom - top >= 4) {
+      const from = notes.offset[id] ?? 0;
+      const to = notes.offset[id + 1] ?? from;
+      const low = notes.low[id] ?? 0;
+      const rows = (notes.high[id] ?? 127) - low + 1;
+      const rowHeight = (bottom - top) / rows;
+      const noteHeight = Math.max(1, Math.min(4, rowHeight));
+      const origin = start - fileOffset;
+      const color = shadeColor(base, 0.35);
+      const end = start + length;
+      batch.reserve(to - from);
+      for (let k = from; k < to; k++) {
+        const a = Math.max(start, origin + (notes.start[k] ?? 0));
+        const b = Math.min(end, origin + (notes.start[k] ?? 0) + (notes.length[k] ?? 0));
+        if (b <= a) {
+          continue;
+        }
+        const nx0 = Math.max(x0, (a - originTick) * ppt);
+        const nx1 = Math.min(x1, (b - originTick) * ppt);
+        if (nx1 > nx0 - 1) {
+          const row = rows - 1 - ((notes.pitch[k] ?? 0) - low);
+          const ny = top + row * rowHeight + (rowHeight - noteHeight) / 2;
+          batch.push(nx0, ny, Math.max(1, nx1 - nx0), noteHeight, color);
         }
       }
     }

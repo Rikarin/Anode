@@ -1,17 +1,23 @@
 import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
+import type { TrackKind } from '@anode/api-client';
 import { RULER_HEIGHT } from '@anode/timeline';
 import { provideIcons } from '@ng-icons/core';
 import {
   matAddRound,
   matContentCutRound,
+  matExpandMoreRound,
   matFileDownloadRound,
+  matGraphicEqRound,
   matGridOnRound,
   matNearMeRound,
+  matPianoRound,
+  matSettingsInputComponentRound,
   matZoomInRound,
   matZoomOutRound
 } from '@ng-icons/material-icons/round';
 import { XuiButtonImports } from '@xui/button';
 import { XuiIconImports } from '@xui/icon';
+import { XuiMenuImports } from '@xui/menu';
 import { XuiSegmentedControlImports, type XuiSegmentedOption } from '@xui/segmented-control';
 import { XuiSpinnerImports } from '@xui/spinner';
 import { XuiTooltipImports } from '@xui/tooltip';
@@ -37,6 +43,7 @@ import { TrackHeader } from './track-header';
     TrackHeader,
     XuiButtonImports,
     XuiIconImports,
+    XuiMenuImports,
     XuiSegmentedControlImports,
     XuiSpinnerImports,
     XuiTooltipImports
@@ -45,9 +52,13 @@ import { TrackHeader } from './track-header';
     provideIcons({
       matAddRound,
       matContentCutRound,
+      matExpandMoreRound,
       matFileDownloadRound,
+      matGraphicEqRound,
       matGridOnRound,
       matNearMeRound,
+      matPianoRound,
+      matSettingsInputComponentRound,
       matZoomInRound,
       matZoomOutRound
     })
@@ -67,10 +78,46 @@ import { TrackHeader } from './track-header';
         aria-label="New track"
         xuiTooltip="New audio track"
         data-testid="add-track"
-        (click)="addTrack()"
+        (click)="addTrack('audio')"
       >
         <ng-icon xui name="matAddRound" size="sm" />
       </button>
+      <button
+        xuiButton
+        type="button"
+        size="sm"
+        variant="ghost"
+        class="-ms-2 w-5 px-0"
+        aria-label="New track of a kind"
+        xuiTooltip="New audio, software instrument or external MIDI track"
+        data-testid="add-track-menu"
+        [xuiMenuTriggerFor]="kinds"
+      >
+        <ng-icon xui name="matExpandMoreRound" size="sm" />
+      </button>
+      <ng-template #kinds>
+        <xui-menu>
+          <button xuiMenuItem type="button" icon="matGraphicEqRound" (click)="addTrack('audio')">Audio Track</button>
+          <button
+            xuiMenuItem
+            type="button"
+            icon="matPianoRound"
+            data-testid="add-instrument-track"
+            (click)="addTrack('instrument')"
+          >
+            Software Instrument Track
+          </button>
+          <button
+            xuiMenuItem
+            type="button"
+            icon="matSettingsInputComponentRound"
+            data-testid="add-midi-track"
+            (click)="addTrack('midi')"
+          >
+            External MIDI Track
+          </button>
+        </xui-menu>
+      </ng-template>
       @if (desktop?.dialogs) {
         <button
           xuiButton
@@ -124,7 +171,9 @@ import { TrackHeader } from './track-header';
             <an-track-header [track]="track" [index]="i" [style.height.px]="view.laneHeight()" />
           }
           @if (project.trackList().length === 0) {
-            <p class="text-foreground-muted p-3 text-xs">No tracks yet. Add one with + or drop a WAV file here.</p>
+            <p class="text-foreground-muted p-3 text-xs">
+              No tracks yet. Add one with + (its arrow for an instrument or MIDI track) or drop a WAV file here.
+            </p>
           }
         </div>
       </div>
@@ -143,6 +192,7 @@ export class TracksArea {
   protected readonly ruler = RULER_HEIGHT;
   protected readonly tools: XuiSegmentedOption<TracksTool>[] = [
     { value: 'pointer', label: 'Pointer' },
+    { value: 'pencil', label: 'Pencil' },
     { value: 'scissors', label: 'Scissors' }
   ];
   protected readonly offset = computed(() => -this.view.firstLane() * this.view.laneHeight());
@@ -153,10 +203,23 @@ export class TracksArea {
     }
   }
 
-  protected addTrack(): void {
+  /** A new track after the selected one: audio (mono), or a software instrument (stereo) or external MIDI track. */
+  protected addTrack(kind: TrackKind): void {
     const selected = this.selection.track();
     const index = selected ? this.project.trackIds().indexOf(selected) + 1 : null;
-    void this.project.execute([{ type: 'addTrack', stereo: false, ...(index ? { index } : {}) }], 'New Track');
+    const before = new Set(this.project.trackIds());
+    void this.project
+      .execute(
+        [{ type: 'addTrack', stereo: kind === 'instrument', kind, ...(index ? { index } : {}) }],
+        kind === 'audio' ? 'New Track' : kind === 'instrument' ? 'New Software Instrument Track' : 'New MIDI Track'
+      )
+      .then(result => {
+        // Select the new track, so the keyboard plays it and the inspector shows it.
+        const added = result?.delta.ops.find(op => op.op === 'trackUpserted' && !before.has(op.track.id));
+        if (kind !== 'audio' && added?.op === 'trackUpserted') {
+          this.selection.track.set(added.track.id);
+        }
+      });
   }
 
   /** The desktop app's Import: files from a native dialog, onto the selected track at the playhead. */

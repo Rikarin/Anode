@@ -37,6 +37,13 @@ Framework-free TypeScript at its core, with thin Angular components on top, so t
 - Text: both renderers draw printable ASCII from one glyph atlas (bar numbers, region names).
 - `hitTest`, `itemsInRect`, `snapStep`/`snapTick` for the pointer tools, on the main thread's copy of the scene.
 
+## Phase 2 additions
+
+- MIDI regions in the Tracks area: `ItemFlag.Midi` (no fades: edges trim in both halves) and `NoteMiniatures` drawn
+  inside them (a trimmed start keeps the notes in time: a MIDI region's `fileOffset` is in ticks).
+- The Piano Roll's notes scene: `noteFlags` (selected notes outlined, notes that do not play greyed) and
+  `TimelineView.spans` (the regions in play lit, the rest shaded).
+
 Still open: waveform textures (columns are rectangles today), context-loss recovery, the ARIA tree.
 
 ## Bench

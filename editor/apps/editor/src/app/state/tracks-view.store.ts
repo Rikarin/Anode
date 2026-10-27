@@ -2,7 +2,7 @@ import { Injectable, computed, signal } from '@angular/core';
 import { Ppq } from './project.store';
 
 /** The Tracks area's tools (Logic's Left-click tool menu; more in later phases). */
-export type TracksTool = 'pointer' | 'scissors';
+export type TracksTool = 'pointer' | 'pencil' | 'scissors';
 
 export const MinPixelsPerQuarter = 2;
 export const MaxPixelsPerQuarter = 960;

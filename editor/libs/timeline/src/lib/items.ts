@@ -28,10 +28,67 @@ export interface TimelineScene {
   readonly items: TimelineItems;
   /** Audio regions' file mapping, fades, names and flags (the Tracks area), one entry per item. */
   readonly regions?: RegionDetails;
+  /** {@link ItemFlag} bits per item of a notes scene (the Piano Roll): selected notes, notes that do not play. */
+  readonly noteFlags?: Uint8Array;
 }
 
-/** Item flags ({@link RegionDetails.flags}). */
-export const ItemFlag = { Selected: 1, Muted: 2 } as const;
+/**
+ * Item flags ({@link RegionDetails.flags}, {@link TimelineScene.noteFlags}). `Midi` marks a MIDI region: it has no
+ * waveform and no fades, so its edges trim in both halves and it draws its note miniatures.
+ */
+export const ItemFlag = { Selected: 1, Muted: 2, Midi: 4 } as const;
+
+/**
+ * The notes MIDI regions draw as miniatures in the Tracks area, as columns: region `i`'s notes are
+ * `offset[i]..offset[i + 1]`, positioned in ticks from the region's note origin (its start, less its
+ * {@link RegionDetails.fileOffset}, which a MIDI region uses in ticks), and drawn between the region's
+ * `low[i]`…`high[i]` pitches.
+ */
+export interface NoteMiniatures {
+  readonly offset: Uint32Array;
+  readonly start: Float64Array;
+  readonly length: Float64Array;
+  readonly pitch: Uint8Array;
+  readonly low: Uint8Array;
+  readonly high: Uint8Array;
+}
+
+/** Miniatures for regions with these notes (one list per region, in item order). */
+export function createNoteMiniatures(
+  regions: readonly (readonly { start: number; length: number; pitch: number }[])[]
+): NoteMiniatures {
+  const total = regions.reduce((sum, notes) => sum + notes.length, 0);
+  const offset = new Uint32Array(regions.length + 1);
+  const start = new Float64Array(total);
+  const length = new Float64Array(total);
+  const pitch = new Uint8Array(total);
+  const low = new Uint8Array(regions.length);
+  const high = new Uint8Array(regions.length);
+  let k = 0;
+  regions.forEach((notes, i) => {
+    offset[i] = k;
+    let lo = 127;
+    let hi = 0;
+    for (const note of notes) {
+      start[k] = note.start;
+      length[k] = note.length;
+      pitch[k] = note.pitch;
+      lo = Math.min(lo, note.pitch);
+      hi = Math.max(hi, note.pitch);
+      k++;
+    }
+    // At least an octave, centred on what is there, so a few notes do not fill the whole height.
+    if (notes.length === 0) {
+      lo = 60;
+      hi = 72;
+    }
+    const pad = Math.max(0, 12 - (hi - lo));
+    low[i] = Math.max(0, lo - Math.ceil(pad / 2));
+    high[i] = Math.min(127, hi + Math.floor(pad / 2));
+  });
+  offset[regions.length] = k;
+  return { offset, start, length, pitch, low, high };
+}
 
 /**
  * What the Tracks area knows about each region beyond its span: where in its audio file it starts, its fades and gain,
@@ -53,6 +110,8 @@ export interface RegionDetails {
   readonly names: readonly string[];
   /** Audio frames per tick (one tempo and one sample rate per project in Phase 1). */
   readonly framesPerTick: number;
+  /** MIDI regions' note miniatures (regions flagged {@link ItemFlag.Midi}). */
+  readonly notes?: NoteMiniatures;
 }
 
 /** Region details with room for `count` regions. */
@@ -81,15 +140,26 @@ export function sceneBuffers(scene: TimelineScene): ArrayBuffer[] {
     buffers.push(
       ...[r.waveform, r.fileOffset, r.fadeIn, r.fadeOut, r.gain, r.flags].map(column => column.buffer as ArrayBuffer)
     );
+    const n = r.notes;
+    if (n) {
+      buffers.push(
+        ...[n.offset, n.start, n.length, n.pitch, n.low, n.high].map(column => column.buffer as ArrayBuffer)
+      );
+    }
+  }
+  if (scene.noteFlags) {
+    buffers.push(scene.noteFlags.buffer as ArrayBuffer);
   }
   return buffers;
 }
 
 /** A copy of a scene whose buffers are its own, so the original can be transferred and the copy kept (hit-testing). */
 export function cloneScene(scene: TimelineScene): TimelineScene {
-  const { items, regions } = scene;
+  const { items, regions, noteFlags } = scene;
+  const notes = regions?.notes;
   return {
     ...scene,
+    ...(noteFlags ? { noteFlags: noteFlags.slice() } : {}),
     items: {
       count: items.count,
       start: items.start.slice(),
@@ -106,7 +176,19 @@ export function cloneScene(scene: TimelineScene): TimelineScene {
             fadeIn: regions.fadeIn.slice(),
             fadeOut: regions.fadeOut.slice(),
             gain: regions.gain.slice(),
-            flags: regions.flags.slice()
+            flags: regions.flags.slice(),
+            ...(notes
+              ? {
+                  notes: {
+                    offset: notes.offset.slice(),
+                    start: notes.start.slice(),
+                    length: notes.length.slice(),
+                    pitch: notes.pitch.slice(),
+                    low: notes.low.slice(),
+                    high: notes.high.slice()
+                  }
+                }
+              : {})
           }
         }
       : {})
@@ -162,6 +244,17 @@ export interface TimelineView {
   readonly marquee?: PixelRect | null;
   /** Items drawn as previewed rather than as the scene has them. */
   readonly overrides?: readonly ItemOverride[] | null;
+  /**
+   * Stretches of time that are in play (the regions a Piano Roll edits): when given, the lanes are drawn only there
+   * and the rest is shaded as after the project end.
+   */
+  readonly spans?: readonly TickSpan[] | null;
+}
+
+/** A stretch of ticks, `[start, end)`. */
+export interface TickSpan {
+  readonly start: number;
+  readonly end: number;
 }
 
 /** Item columns with room for `count` items. */
