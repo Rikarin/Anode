@@ -3,6 +3,7 @@ using Anode.EngineHost;
 using Anode.Server;
 using Anode.Server.Api;
 using Anode.Server.Engine;
+using Anode.Server.Projects;
 using Anode.Server.Realtime;
 using System.Text.Json.Serialization;
 
@@ -35,7 +36,12 @@ builder.Services.ConfigureHttpJsonOptions(static o => {
 builder.Services.AddProblemDetails();
 builder.Services.AddAnodeCors();
 builder.Services.AddOpenApi(static o => o.MarkNonNullablePropertiesRequired());
+builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddSingleton<EventHub>();
+builder.Services.AddSingleton<RecentProjects>();
+builder.Services.AddSingleton<PeakJobs>();
+builder.Services.AddSingleton<ProjectSession>();
+builder.Services.AddSingleton<AudioImport>();
 builder.Services.AddSingleton<EngineConnection>();
 builder.Services.AddHostedService(static s => s.GetRequiredService<EngineConnection>());
 

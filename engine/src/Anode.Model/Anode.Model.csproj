@@ -1,5 +1,9 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <Description>The project domain model: time base, tempo map, tracks, regions, edit commands and undo.</Description>
+    <Description>The project domain model: time base, tempo map, tracks, regions, edit commands and undo, the project package, WAV and peaks, and the playback-model compiler.</Description>
   </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../Anode.Contracts/Anode.Contracts.csproj"/>
+    <ProjectReference Include="../Anode.Ipc/Anode.Ipc.csproj"/>
+  </ItemGroup>
 </Project>
