@@ -265,14 +265,30 @@ public static partial class Edits {
                     "Audio regions join only when they play one contiguous stretch of one file (others need a bounce)."
                 );
             }
+
+            if ((r.Follow, r.Transpose, r.FineTune) != (first.Follow, first.Transpose, first.FineTune)) {
+                throw new EditException("Audio regions join only when they follow the tempo and are tuned alike.");
+            }
         }
 
         var last = regions[^1];
         var length = last.FileOffset + last.Length - first.FileOffset;
-        return [
-            ..regions.Skip(1).Select(static r => new RegionRemoved(r.Id)),
-            new RegionUpserted(first with { Length = length, FadeOut = Math.Min(last.FadeOut, length - first.FadeIn) })
-        ];
+        var joined = first with { Length = length, FadeOut = Math.Min(last.FadeOut, length - first.FadeIn) };
+        if (regions.Any(static r => r.FlexMarkers.Count > 0 || r.PitchNotes.Count > 0)) {
+            // Markers keep their ticks (relative to the joined region's start), notes their frames.
+            joined = joined with {
+                FlexMarkers = [
+                    ..regions.SelectMany(r => r.FlexMarkers.Select(m => m with {
+                                Tick = m.Tick + r.StartTick - first.StartTick
+                            }
+                        )
+                    )
+                ],
+                PitchNotes = [..regions.SelectMany(static r => r.PitchNotes)]
+            };
+        }
+
+        return [..regions.Skip(1).Select(static r => new RegionRemoved(r.Id)), new RegionUpserted(joined)];
     }
 
     static List<DeltaOp> CopyRegions(ProjectState state, CopyRegionsCommand c, IIdSource ids) {

@@ -29,14 +29,23 @@ public sealed class ModelCompiler {
     readonly Dictionary<int, TrackModel> previous = [];
     readonly TrackModel masterBase = new(AutomationEvents.MasterTrack, [], []);
     bool masterAutomated;
-    (ClickKey Key, TrackModel Model)? metronome;
+    (ClickKey Key, TrackModel Model, Varispeed Varispeed)? metronome;
 
-    public CompiledModel Compile(ProjectState state, EngineIds ids) {
+    /// <summary>
+    ///     Compiles <paramref name="state" />; <paramref name="analyses" /> are the files' cached analyses by file id
+    ///     (Flex Pitch shapes pitch notes' drift and vibrato from their pitch curves).
+    /// </summary>
+    public CompiledModel Compile(
+        ProjectState state,
+        EngineIds ids,
+        IReadOnlyDictionary<string, FileAnalysis>? analyses = null
+    ) {
         var map = state.TempoMap;
         var source = new Source(
             state,
             ids,
             map,
+            analyses ?? new Dictionary<string, FileAnalysis>(StringComparer.Ordinal),
             state.Regions.Values.ToLookup(static r => r.TrackId, StringComparer.Ordinal),
             state.MidiRegions.Values.ToLookup(static r => r.TrackId, StringComparer.Ordinal),
             state.TakeFolders.Values.ToLookup(static f => f.TrackId, StringComparer.Ordinal)
@@ -44,8 +53,9 @@ public sealed class ModelCompiler {
         var models = new List<TrackModel>(state.Tracks.Count + 2);
         var seen = new HashSet<int>();
         long end = 0;
+        var varispeed = Varispeed.Of(state);
         foreach (var track in state.Tracks.Where(Stacks.IsPlayable)) {
-            var model = Track(source, track);
+            var model = varispeed.Scaled(Track(source, track));
             seen.Add(model.TrackId);
             models.Add(model);
             if (model.Playlist is [.., var last]) {
@@ -62,7 +72,7 @@ public sealed class ModelCompiler {
         masterAutomated |= master.Length > 0;
         if (masterAutomated) {
             seen.Add(AutomationEvents.MasterTrack);
-            models.Add(WithAutomation(masterBase, master));
+            models.Add(varispeed.Scaled(WithAutomation(masterBase, master)));
         }
 
         var recompiled = models
@@ -79,13 +89,14 @@ public sealed class ModelCompiler {
         var endTick = Math.Max(settings.EndTick, settings.Cycle.EndTick);
         var tempo = settings.TempoEvents ?? [];
         var clickKey = new ClickKey(tempo, settings.Signatures ?? [], settings.Signature, endTick, state.SampleRate);
-        if (metronome is not { } m || !m.Key.Equals(clickKey)) {
-            metronome = m = (clickKey, new(TrackEntry.MetronomeTrack, Clicks(state, map, endTick), []));
+        if (metronome is not { } m || !m.Key.Equals(clickKey) || m.Varispeed != varispeed) {
+            metronome = m = (clickKey,
+                varispeed.Scaled(new(TrackEntry.MetronomeTrack, Clicks(state, map, endTick), [])), varispeed);
             recompiled.Add(TrackEntry.MetronomeTrack);
         }
 
         models.Add(m.Model);
-        end = Math.Max(end, map.SampleAt(endTick, state.SampleRate));
+        end = Math.Max(end, varispeed.Sample(map.SampleAt(endTick, state.SampleRate)));
         return new(models, end, recompiled);
     }
 
@@ -94,6 +105,7 @@ public sealed class ModelCompiler {
         ProjectState State,
         EngineIds Ids,
         TempoMap Map,
+        IReadOnlyDictionary<string, FileAnalysis> Analyses,
         ILookup<string, AudioRegion> Regions,
         ILookup<string, MidiRegion> Midi,
         ILookup<string, TakeFolder> Folders
@@ -122,10 +134,19 @@ public sealed class ModelCompiler {
             [..regions.Select(r => (r, state.Files[r.FileId]))],
             midi,
             [..folders.Select(f => (f, FilesOf(state, f)))]
-        );
+        ) {
+            Flex = (track.FlexOn, track.FlexMode),
+            Signatures = regions.Any(static r => r.Follow is FlexFollow.Bars or FlexFollow.BarsAndBeats)
+                ? state.Settings.Signatures ?? []
+                : [],
+            Analyses = [
+                ..regions.Where(static r => r.PitchNotes.Count > 0)
+                    .Select(r => source.Analyses.GetValueOrDefault(r.FileId))
+            ]
+        };
         if (!cache.TryGetValue(engineId, out var cached) || !cached.Key.Equals(key)) {
-            cached = (key,
-                new(engineId, MidiEvents(state, map, engineId, midi), Playlist(state, map, ids, regions, folders)));
+            var (playlist, warp, pitch) = Playlist(state, map, ids, regions, folders, track, source.Analyses);
+            cached = (key, new(engineId, MidiEvents(state, map, engineId, midi), playlist, warp, pitch));
             cache[engineId] = cached;
         }
 
@@ -168,7 +189,9 @@ public sealed class ModelCompiler {
                         .ThenBy(static x => x.i)
                         .Select(static x => x.e)
                 ],
-                model.Playlist
+                model.Playlist,
+                model.Warp,
+                model.Pitch
             );
         automated[model.TrackId] = (model, automation, merged);
         return merged;
@@ -179,14 +202,17 @@ public sealed class ModelCompiler {
     ///     folders in samples, sorted by start. Entries overlap only as crossfades — where the earlier fades out and the
     ///     later fades in over all of the overlap, never three at once. Where entries overlap any other way, the one
     ///     that starts later plays (at an equal start, the later in region order), and the earlier one resumes after
-    ///     it, without the fade it would have had at that point.
+    ///     it, without the fade it would have had at that point. Warped regions (docs/06-phase-5.md) carry their warp
+    ///     and pitch points, which their entries index in the returned arrays (null when the track has none).
     /// </summary>
-    public static AudioPlaylistEntry[] Playlist(
+    public static (AudioPlaylistEntry[] Playlist, WarpPoint[]? Warp, PitchPoint[]? Pitch) Playlist(
         ProjectState state,
         TempoMap map,
         EngineIds ids,
         IReadOnlyList<AudioRegion> regions,
-        IReadOnlyList<TakeFolder>? folders = null
+        IReadOnlyList<TakeFolder>? folders = null,
+        Track? track = null,
+        IReadOnlyDictionary<string, FileAnalysis>? analyses = null
     ) {
         // Regions and folders in one order (start tick, then id): later in it wins an overlap.
         var placed = new List<(long Tick, string Id, AudioRegion? Region, TakeFolder? Folder)>(regions.Count);
@@ -200,15 +226,23 @@ public sealed class ModelCompiler {
         );
 
         placed.Sort(static (a, b) => a.Tick != b.Tick ? a.Tick.CompareTo(b.Tick) : string.CompareOrdinal(a.Id, b.Id));
-        var entries = new List<(AudioPlaylistEntry Entry, int Order)>();
+        var entries = new List<(PlacedEntry Entry, int Order)>();
         foreach (var (_, _, region, folder) in placed) {
             if (region is not null) {
-                entries.Add((Entry(region, map, state.SampleRate, ids), entries.Count));
+                var entry = Warps.Entry(
+                    RegionTiming.Of(state, region),
+                    track ?? state.FindTrack(region.TrackId)!,
+                    map,
+                    state.SampleRate,
+                    ids.File(region.FileId),
+                    analyses?.GetValueOrDefault(region.FileId)
+                );
+                entries.Add((entry, entries.Count));
                 continue;
             }
 
             foreach (var piece in Comps.Pieces(state, folder!)) {
-                entries.Add((Entry(piece, ids), entries.Count));
+                entries.Add((new(Entry(piece, ids)), entries.Count));
             }
         }
 
@@ -216,18 +250,45 @@ public sealed class ModelCompiler {
             .ThenBy(static x => x.Order)
             .Select(static x => x.Entry)
             .ToArray();
-        return Overlaps(sorted) ? Resolve(sorted) : sorted;
+        return Indexed(Overlaps(sorted) ? Resolve(sorted) : sorted);
+    }
+
+    /// <summary>The entries with their warp and pitch points gathered into the track's arrays, indexed.</summary>
+    static (AudioPlaylistEntry[] Playlist, WarpPoint[]? Warp, PitchPoint[]? Pitch) Indexed(PlacedEntry[] placed) {
+        if (placed.All(static p => p.Warp is null)) {
+            return ([..placed.Select(static p => p.Entry)], null, null);
+        }
+
+        var warp = new List<WarpPoint>();
+        var pitch = new List<PitchPoint>();
+        var playlist = new AudioPlaylistEntry[placed.Length];
+        for (var i = 0; i < placed.Length; i++) {
+            var p = placed[i];
+            var entry = p.Entry;
+            if (p.Warp is { } w) {
+                entry = entry with { WarpStart = warp.Count, WarpCount = w.Length };
+                warp.AddRange(w);
+                if (p.Pitch is { Length: > 0 } pp) {
+                    entry = entry with { PitchStart = pitch.Count, PitchCount = pp.Length };
+                    pitch.AddRange(pp);
+                }
+            }
+
+            playlist[i] = entry;
+        }
+
+        return (playlist, [..warp], [..pitch]);
     }
 
     /// <summary>Sorted, overlapping entries as the host plays them: crossfades kept, other overlaps flattened.</summary>
-    static AudioPlaylistEntry[] Resolve(AudioPlaylistEntry[] sorted) {
+    static PlacedEntry[] Resolve(PlacedEntry[] sorted) {
         // Each run of overlapping entries stays as it is when it is a chain of crossfades, else is flattened.
-        var result = new List<AudioPlaylistEntry>(sorted.Length);
+        var result = new List<PlacedEntry>(sorted.Length);
         for (var i = 0; i < sorted.Length;) {
-            var end = sorted[i].Start + sorted[i].Length;
+            var end = sorted[i].End;
             var j = i + 1;
             while (j < sorted.Length && sorted[j].Start < end) {
-                end = Math.Max(end, sorted[j].Start + sorted[j].Length);
+                end = Math.Max(end, sorted[j].End);
                 j++;
             }
 
@@ -238,19 +299,6 @@ public sealed class ModelCompiler {
 
         return [..result];
     }
-
-    static AudioPlaylistEntry Entry(AudioRegion r, TempoMap map, int sampleRate, EngineIds ids) =>
-        new() {
-            Start = map.SampleAt(r.StartTick, sampleRate),
-            FileOffset = r.FileOffset,
-            Length = r.Length,
-            FileId = ids.File(r.FileId),
-            Gain = Units.DbToGain(r.GainDb),
-            FadeIn = (int)Math.Min(r.FadeIn, int.MaxValue),
-            FadeOut = (int)Math.Min(r.FadeOut, int.MaxValue),
-            FadeInCurve = (float)r.FadeInCurve,
-            FadeOutCurve = (float)r.FadeOutCurve
-        };
 
     /// <summary>A comp piece: unity gain, linear (curve 0) crossfades.</summary>
     static AudioPlaylistEntry Entry(CompPiece piece, EngineIds ids) =>
@@ -268,14 +316,14 @@ public sealed class ModelCompiler {
     ///     Whether sorted, overlapping entries are a chain of crossfades: each overlap lies inside both the earlier's
     ///     fade-out and the later's fade-in, and no entry overlaps any but its neighbours.
     /// </summary>
-    static bool IsCrossfadeChain(AudioPlaylistEntry[] cluster) {
+    static bool IsCrossfadeChain(PlacedEntry[] cluster) {
         for (var k = 1; k < cluster.Length; k++) {
-            var (previous, current) = (cluster[k - 1], cluster[k]);
+            var (previous, current) = (cluster[k - 1].Entry, cluster[k].Entry);
             var overlap = previous.Start + previous.Length - current.Start;
             if (overlap > previous.FadeOut
                 || overlap > current.FadeIn
                 || current.Start + current.Length < previous.Start + previous.Length
-                || (k >= 2 && cluster[k - 2].Start + cluster[k - 2].Length > current.Start)) {
+                || (k >= 2 && cluster[k - 2].End > current.Start)) {
                 return false;
             }
         }
@@ -283,9 +331,9 @@ public sealed class ModelCompiler {
         return true;
     }
 
-    static bool Overlaps(AudioPlaylistEntry[] sorted) {
+    static bool Overlaps(PlacedEntry[] sorted) {
         for (var i = 1; i < sorted.Length; i++) {
-            if (sorted[i].Start < sorted[i - 1].Start + sorted[i - 1].Length) {
+            if (sorted[i].Start < sorted[i - 1].End) {
                 return true;
             }
         }
@@ -293,9 +341,9 @@ public sealed class ModelCompiler {
         return false;
     }
 
-    static AudioPlaylistEntry[] Flatten(AudioPlaylistEntry[] sorted) {
-        var bounds = sorted.SelectMany(static e => new[] { e.Start, e.Start + e.Length }).Distinct().Order().ToArray();
-        var pieces = new List<AudioPlaylistEntry>();
+    static PlacedEntry[] Flatten(PlacedEntry[] sorted) {
+        var bounds = sorted.SelectMany(static e => new[] { e.Start, e.End }).Distinct().Order().ToArray();
+        var pieces = new List<PlacedEntry>();
         int? current = null;
         long pieceStart = 0;
         for (var b = 0; b < bounds.Length; b++) {
@@ -303,7 +351,7 @@ public sealed class ModelCompiler {
             int? top = null;
             if (b < bounds.Length - 1) {
                 for (var i = 0; i < sorted.Length; i++) {
-                    if (sorted[i].Start <= bounds[b] && bounds[b] < sorted[i].Start + sorted[i].Length) {
+                    if (sorted[i].Start <= bounds[b] && bounds[b] < sorted[i].End) {
                         top = i;
                     }
                 }
@@ -324,15 +372,20 @@ public sealed class ModelCompiler {
         return [..pieces];
     }
 
-    static AudioPlaylistEntry Piece(AudioPlaylistEntry e, long start, long end) {
+    /// <summary>The part of an entry from <paramref name="start" /> to <paramref name="end" /> (a warped one's map sliced).</summary>
+    static PlacedEntry Piece(PlacedEntry placed, long start, long end) {
+        var e = placed.Entry;
         var length = end - start;
-        return e with {
+        var entry = e with {
             Start = start,
-            FileOffset = e.FileOffset + (start - e.Start),
+            FileOffset = placed.Warp is null ? e.FileOffset + (start - e.Start) : e.FileOffset,
             Length = length,
             FadeIn = start == e.Start ? (int)Math.Min(e.FadeIn, length) : 0,
             FadeOut = end == e.Start + e.Length ? (int)Math.Min(e.FadeOut, length) : 0
         };
+        return placed.Warp is { } warp
+            ? placed with { Entry = entry, Warp = Warps.Slice(warp, start - e.Start, length) }
+            : placed with { Entry = entry };
     }
 
     /// <summary>
@@ -531,8 +584,20 @@ public sealed class ModelCompiler {
         MidiRegion[] Midi,
         (TakeFolder Folder, AudioFile?[] Files)[] Folders
     ) {
+        /// <summary>The track's flex (whether its regions warp, and how).</summary>
+        public (bool On, FlexMode Mode) Flex { get; init; }
+
+        /// <summary>The signature track (regions following bars and beats land on it).</summary>
+        public IReadOnlyList<SignatureEvent> Signatures { get; init; } = [];
+
+        /// <summary>The analyses of the files of regions with pitch notes (their pitch curves shape the notes).</summary>
+        public FileAnalysis?[] Analyses { get; init; } = [];
+
         public bool Equals(TrackKey? other) =>
             other is not null
+            && Flex == other.Flex
+            && Signatures.SequenceEqual(other.Signatures)
+            && Analyses.AsSpan().SequenceEqual(other.Analyses)
             && Tempo.Equals(other.Tempo)
             && SampleRate == other.SampleRate
             && TempoEvents.SequenceEqual(other.TempoEvents)

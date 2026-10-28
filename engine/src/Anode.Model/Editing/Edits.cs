@@ -1,4 +1,5 @@
 using Anode.Contracts;
+using Anode.Model.Time;
 
 namespace Anode.Model.Editing;
 
@@ -38,10 +39,12 @@ public static partial class Edits {
         IReadOnlyList<EditCommand> commands,
         IIdSource ids,
         PluginCatalog? plugins = null,
-        IPatchSource? patches = null
+        IPatchSource? patches = null,
+        IAnalysisSource? analysis = null
     ) {
         plugins ??= PluginCatalog.Empty;
         patches ??= NoPatches.Instance;
+        analysis ??= NoAnalysis.Instance;
         if (commands.Count == 0) {
             throw new EditException("A batch needs at least one command.");
         }
@@ -55,7 +58,14 @@ public static partial class Edits {
         for (var i = 0; i < commands.Count; i++) {
             IReadOnlyList<DeltaOp> ops;
             try {
-                ops = Ops(state, commands[i] ?? throw new EditException("A command is null."), ids, plugins, patches);
+                ops = Ops(
+                    state,
+                    commands[i] ?? throw new EditException("A command is null."),
+                    ids,
+                    plugins,
+                    patches,
+                    analysis
+                );
             } catch (EditException e) when (commands.Count > 1) {
                 throw new EditException($"Command {i + 1} ({commands[i]?.GetType().Name}): {e.Message}", e);
             }
@@ -72,9 +82,10 @@ public static partial class Edits {
         EditCommand command,
         IIdSource ids,
         PluginCatalog? plugins = null,
-        IPatchSource? patches = null
+        IPatchSource? patches = null,
+        IAnalysisSource? analysis = null
     ) =>
-        Apply(state, [command], ids, plugins, patches);
+        Apply(state, [command], ids, plugins, patches, analysis);
 
     /// <summary>
     ///     Applies delta operations, collecting them and their inverses (in application order; the caller reverses the
@@ -104,7 +115,8 @@ public static partial class Edits {
         EditCommand command,
         IIdSource ids,
         PluginCatalog plugins,
-        IPatchSource? patches = null
+        IPatchSource? patches = null,
+        IAnalysisSource? analysis = null
     ) =>
         command switch {
             AddTrackCommand c => AddTrack(state, c, ids, plugins),
@@ -182,12 +194,16 @@ public static partial class Edits {
             SetMixerSettingsCommand c => SetMixerSettings(state, c),
             ApplyPatchCommand c => ApplyPatch(state, c, ids, patches ?? NoPatches.Instance),
             UnfreezeTrackCommand c => UnfreezeTrack(state, c),
-            _ => throw new EditException($"Unknown command {command.GetType().Name}.")
+            _ => FlexOps(state, command, ids, plugins, analysis ?? NoAnalysis.Instance)
+                ?? throw new EditException($"Unknown command {command.GetType().Name}.")
         };
 
-    /// <summary>The project sample at which a region ends (exclusive).</summary>
-    public static long EndSample(ProjectState state, AudioRegion region) =>
-        state.TempoMap.SampleAt(region.StartTick, state.SampleRate) + region.Length;
+    /// <summary>The project sample at which a region ends (exclusive; <see cref="RegionTiming" />).</summary>
+    public static long EndSample(ProjectState state, AudioRegion region) => RegionTiming.Of(state, region).EndSample;
+
+    /// <summary>The tick at which a region ends (where its last frame lands, rounded; <see cref="RegionTiming" />).</summary>
+    public static long EndTick(ProjectState state, AudioRegion region) =>
+        (long)Math.Round(RegionTiming.Of(state, region).EndTick);
 
     static DeltaOp[] AddTrack(ProjectState state, AddTrackCommand c, IIdSource ids, PluginCatalog plugins) {
         var count = state.Tracks.Count;
@@ -456,6 +472,7 @@ public static partial class Edits {
         var length = c.Length ?? file.Frames - offset;
         CheckTick(c.StartTick, "start");
         CheckSpan(file, offset, length);
+        var adapt = AdaptsTempo(state, file);
         var region = new AudioRegion(
             ids.Next(IdPrefix.Region),
             track.Id,
@@ -470,13 +487,34 @@ public static partial class Edits {
             0,
             0,
             false,
-            FlexFollow.Off,
+            file.Tempo is null || adapt ? FlexFollow.Off : state.Settings.SmartTempo.DefaultFollow,
             [],
             0,
             0,
             []
         );
-        return [new RegionUpserted(region)];
+        if (!adapt) {
+            return [new RegionUpserted(region)];
+        }
+
+        // Smart Tempo's adapt mode (or auto in a project without MIDI and with one tempo): the project's first audio
+        // takes its tempo from the file, and plays unwarped (docs/06-phase-5.md, "Server").
+        DeltaOp added = new RegionUpserted(region);
+        return [added, ..Adapted(state.Apply(added), region, file.Tempo!)];
+    }
+
+    /// <summary>
+    ///     Whether adding audio of <paramref name="file" /> adapts the project tempo: the mode is adapt (or auto, without
+    ///     MIDI regions and with one tempo event), the file has a tempo, and the project has no audio yet.
+    /// </summary>
+    public static bool AdaptsTempo(ProjectState state, AudioFile file) {
+        var settings = state.Settings;
+        var mode = settings.SmartTempo?.Mode ?? ProjectTempoMode.Keep;
+        var adapting = mode == ProjectTempoMode.Adapt
+            || (mode == ProjectTempoMode.Auto
+                && state.MidiRegions.IsEmpty
+                && (settings.TempoEvents?.Count ?? 1) <= 1);
+        return adapting && file.Tempo is { Bpm: > 0 } && state.Regions.IsEmpty && state.TakeFolders.IsEmpty;
     }
 
     static DeltaOp[] MoveRegion(ProjectState state, MoveRegionCommand c) {
@@ -533,24 +571,54 @@ public static partial class Edits {
         }
 
         var region = RegionOf(state, c.RegionId!);
-        var map = state.TempoMap;
-        var start = map.SampleAt(region.StartTick, state.SampleRate);
-        var at = c.AtTick > region.StartTick ? map.SampleAt(c.AtTick, state.SampleRate) - start : 0;
+        var timing = RegionTiming.Of(state, region);
+        long at;
+        if (timing.Warped) {
+            at = c.AtTick > region.StartTick ? (long)Math.Round(timing.FrameAt(c.AtTick)) - region.FileOffset : 0;
+        } else {
+            var map = state.TempoMap;
+            var start = map.SampleAt(region.StartTick, state.SampleRate);
+            at = c.AtTick > region.StartTick ? map.SampleAt(c.AtTick, state.SampleRate) - start : 0;
+        }
+
         if (at <= 0 || at >= region.Length) {
             throw new EditException($"Tick {c.AtTick} is not inside region '{region.Id}'.");
         }
 
-        var left = region with { Length = at, FadeIn = Math.Min(region.FadeIn, at), FadeOut = 0 };
+        var left = Piece(region, region.FileOffset, region.FileOffset + at, region.StartTick) with {
+            FadeIn = Math.Min(region.FadeIn, at), FadeOut = 0
+        };
         var rightLength = region.Length - at;
-        var right = region with {
-            Id = ids.Next(IdPrefix.Region),
-            StartTick = c.AtTick,
-            FileOffset = region.FileOffset + at,
-            Length = rightLength,
-            FadeIn = 0,
-            FadeOut = Math.Min(region.FadeOut, rightLength)
+        var right = Piece(region, region.FileOffset + at, region.FileOffset + region.Length, c.AtTick) with {
+            Id = ids.Next(IdPrefix.Region), FadeIn = 0, FadeOut = Math.Min(region.FadeOut, rightLength)
         };
         return [new RegionUpserted(left), new RegionUpserted(right)];
+    }
+
+    /// <summary>
+    ///     The part of <paramref name="region" /> over file frames <paramref name="from" />…<paramref name="to" />,
+    ///     starting at <paramref name="startTick" />: its flex markers inside that part (their ticks relative to the new
+    ///     start) and its pitch notes cut to it.
+    /// </summary>
+    public static AudioRegion Piece(AudioRegion region, long from, long to, long startTick) {
+        var shift = startTick - region.StartTick;
+        return region with {
+            StartTick = startTick,
+            FileOffset = from,
+            Length = to - from,
+            FlexMarkers = region.FlexMarkers.Count == 0
+                ? region.FlexMarkers
+                : [
+                    ..region.FlexMarkers.Where(m => m.FileFrame > from && m.FileFrame < to && m.Tick - shift > 0)
+                        .Select(m => m with { Tick = m.Tick - shift })
+                ],
+            PitchNotes = region.PitchNotes.Count == 0
+                ? region.PitchNotes
+                : [
+                    ..region.PitchNotes.Where(n => n.EndFrame > from && n.StartFrame < to)
+                        .Select(n => n with { StartFrame = Math.Max(n.StartFrame, from), EndFrame = Math.Min(n.EndFrame, to) })
+                ]
+        };
     }
 
     static DeltaOp[] SetRegion(ProjectState state, SetRegionCommand c) {
@@ -567,7 +635,7 @@ public static partial class Edits {
         var fadeOut = c.FadeOut ?? region.FadeOut;
         if (fadeIn < 0
             || fadeOut < 0
-            || fadeIn + fadeOut > region.Length
+            || fadeIn + fadeOut > SpanSamples(state, region)
             || fadeIn > int.MaxValue
             || fadeOut > int.MaxValue) {
             throw new EditException("Fades are at least 0 frames and together no longer than the region.");
@@ -588,6 +656,12 @@ public static partial class Edits {
                 }
             )
         ];
+    }
+
+    /// <summary>How many project samples a region spans (its frames, unless it is warped).</summary>
+    public static long SpanSamples(ProjectState state, AudioRegion region) {
+        var timing = RegionTiming.Of(state, region);
+        return timing.Warped ? Math.Max(1, timing.EndSample - timing.StartSample) : region.Length;
     }
 
     static DeltaOp[] DeleteRegions(ProjectState state, DeleteRegionsCommand c) {

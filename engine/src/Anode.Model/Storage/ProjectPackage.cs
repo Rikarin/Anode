@@ -12,7 +12,8 @@ namespace Anode.Model.Storage;
 ///     <c>project.json</c>: the project's root (docs/01-implementation-plan.md §5.6). <c>tracks</c> lists the track ids
 ///     in order; each track and its regions are in <c>tracks/&lt;id&gt;.json</c>. Schema 3 adds the global tracks (in
 ///     <c>settings</c>), markers, arrangement sections, the project's notes and the editor's screensets; schema 4 the
-///     mixer (the master's inserts, mixer settings), the mixer groups and the master's automation lanes.
+///     mixer (the master's inserts, mixer settings), the mixer groups and the master's automation lanes; schema 5
+///     Smart Tempo and Varispeed (in <c>settings</c>), tempo ramps' shapes and files' tempos.
 /// </summary>
 public sealed record ProjectFile(
     int SchemaVersion,
@@ -33,7 +34,7 @@ public sealed record ProjectFile(
 
 /// <summary>
 ///     <c>tracks/&lt;id&gt;.json</c>: one track and its regions, audio and MIDI (schema 2), its take folders (schema 3),
-///     and its automation lanes (schema 4).
+///     its automation lanes (schema 4), and its flex and alternatives, and its regions' flex (schema 5).
 /// </summary>
 public sealed record TrackFile(
     int SchemaVersion,
@@ -295,6 +296,12 @@ public static class ProjectPackage {
                 FrozenFileId = t.FrozenFileId is { } frozen && files.ContainsKey(frozen) ? frozen : null,
                 InputBus = t.Kind == TrackKind.Aux ? Math.Clamp(t.InputBus, 1, Edits.MaxBus) : 0
             };
+            (var alternatives, var active) = Alternatives(tracks[i], files);
+            tracks[i] = tracks[i] with {
+                Alternatives = alternatives,
+                AlternativeId = active,
+                FlexMode = Enum.IsDefined(tracks[i].FlexMode) ? tracks[i].FlexMode : FlexMode.Polyphonic
+            };
         }
     }
 
@@ -363,7 +370,16 @@ public static class ProjectPackage {
             Recording = settings.Recording ?? ProjectDefaults.Recording(signature),
             Mixer = settings.Mixer is { } mixer && Enum.IsDefined(mixer.Pdc) && double.IsFinite(mixer.LowLatencyLimitMs)
                 ? mixer
-                : ProjectDefaults.Mixer
+                : ProjectDefaults.Mixer,
+            SmartTempo = settings.SmartTempo is { } smart
+                && Enum.IsDefined(smart.Mode)
+                && Enum.IsDefined(smart.DefaultFollow)
+                    ? smart
+                    : ProjectDefaults.SmartTempo,
+            Varispeed = settings.Varispeed is { Speed: >= Edits.MinSpeed and <= Edits.MaxSpeed } varispeed
+                && Enum.IsDefined(varispeed.Mode)
+                    ? varispeed
+                    : ProjectDefaults.Varispeed
         };
     }
 
@@ -381,7 +397,7 @@ public static class ProjectPackage {
     ) {
         foreach (var region in file.Regions ?? []) {
             if (region?.TrackId == track.Id && track.Kind == TrackKind.Audio && files.ContainsKey(region.FileId)) {
-                regions[region.Id] = region;
+                regions[region.Id] = Normalise(region);
             }
         }
 
@@ -517,6 +533,58 @@ public static class ProjectPackage {
         };
     }
 
+    /// <summary>An audio region as read: its Phase 5 lists present, a follow mode there is.</summary>
+    static AudioRegion Normalise(AudioRegion region) =>
+        region with {
+            Follow = Enum.IsDefined(region.Follow) ? region.Follow : FlexFollow.Off,
+            FlexMarkers = [..(region.FlexMarkers ?? []).Where(static m => m is not null)],
+            PitchNotes = [..(region.PitchNotes ?? []).Where(static n => n is not null)]
+        };
+
+    /// <summary>
+    ///     A track's alternatives as read: well formed, their regions those of known files, the active one listed (a
+    ///     track without any has no active one).
+    /// </summary>
+    static (IReadOnlyList<TrackAlternative> Alternatives, string? Active) Alternatives(
+        Track track,
+        ImmutableSortedDictionary<string, AudioFile> files
+    ) {
+        var entries = (track.Alternatives ?? [])
+            .Where(static a => a?.Id is not null)
+            .DistinctBy(static a => a.Id)
+            .Select(a => a with {
+                    Name = a.Name ?? a.Id,
+                    Regions = [
+                        ..(a.Regions ?? []).Where(r => r?.Id is not null && files.ContainsKey(r.FileId ?? string.Empty))
+                            .Select(r => Normalise(r) with { TrackId = track.Id })
+                    ],
+                    MidiRegions = [
+                        ..(a.MidiRegions ?? []).Where(static r => r?.Id is not null)
+                            .Select(r => Normalise(r) with { TrackId = track.Id })
+                    ],
+                    TakeFolders = [
+                        ..(a.TakeFolders ?? []).Where(f => f?.Id is not null
+                                && f.Takes is { Count: > 0 }
+                                && f.Takes.All(t => t is not null && files.ContainsKey(t.FileId ?? string.Empty))
+                            )
+                            .Select(f => f with { TrackId = track.Id, Comp = f.Comp ?? [] })
+                    ]
+                }
+            )
+            .ToList();
+        if (entries.Count == 0) {
+            return ([], null);
+        }
+
+        if (track.AlternativeId is { } active && entries.Exists(a => a.Id == active)) {
+            return (entries, active);
+        }
+
+        // The live content has lost its entry: it gets one back.
+        var restored = new TrackAlternative(track.AlternativeId ?? "alt_restored", "Current", [], [], []);
+        return ([restored, ..entries.Where(a => a.Id != restored.Id)], restored.Id);
+    }
+
     static MidiRegion Normalise(MidiRegion region) =>
         region with {
             Playback = region.Playback ?? ProjectDefaults.Playback,
@@ -584,11 +652,11 @@ public static class ProjectPackage {
 ///     refused rather than read wrongly.
 /// </remarks>
 public static class PackageMigrations {
-    public const int CurrentSchemaVersion = 4;
+    public const int CurrentSchemaVersion = 5;
     const string VersionField = "schemaVersion";
 
     /// <summary><c>Steps[n]</c> takes schema <c>n + 1</c> to <c>n + 2</c>; it gets the kind of file and its JSON.</summary>
-    static readonly Func<string, JsonObject, JsonObject>[] Steps = [ToSchema2, ToSchema3, ToSchema4];
+    static readonly Func<string, JsonObject, JsonObject>[] Steps = [ToSchema2, ToSchema3, ToSchema4, ToSchema5];
 
     public static JsonObject Upgrade(JsonObject json, string kind) {
         var version = json[VersionField] is JsonValue v && v.TryGetValue<int>(out var n) ? n : 1;
@@ -603,7 +671,6 @@ public static class PackageMigrations {
         }
 
         json[VersionField] = CurrentSchemaVersion;
-        Phase5Fields.Fill(kind, json);
         return json;
     }
 
@@ -718,6 +785,42 @@ public static class PackageMigrations {
 
         return json;
     }
+
+    /// <summary>
+    ///     Schema 4 (Phase 4) to 5 (Phase 5, advanced audio; docs/06-phase-5.md): Smart Tempo keeps the project tempo,
+    ///     new regions do not follow it and imports are analysed; Varispeed is off at 100 %, speed only; tempo ramps
+    ///     are linear; files have no tempo; tracks' flex is off (Polyphonic), without alternatives; regions do not
+    ///     follow the tempo and have no markers, transpose, fine tune or pitch notes.
+    /// </summary>
+    static JsonObject ToSchema5(string kind, JsonObject json) {
+        if (kind == "project") {
+            if (json["settings"] is JsonObject settings) {
+                settings["smartTempo"] ??= new JsonObject {
+                    ["mode"] = "keep", ["defaultFollow"] = "off", ["analyzeImports"] = true
+                };
+                settings["varispeed"] ??= new JsonObject { ["enabled"] = false, ["mode"] = "speedOnly", ["speed"] = 1 };
+                foreach (var tempo in (settings["tempoEvents"] as JsonArray ?? []).OfType<JsonObject>()) {
+                    tempo["shape"] ??= 0;
+                }
+            }
+        } else if (kind == "track") {
+            if (json["track"] is JsonObject track) {
+                track["flexOn"] ??= false;
+                track["flexMode"] ??= "polyphonic";
+                track["alternatives"] ??= new JsonArray();
+            }
+
+            foreach (var region in (json["regions"] as JsonArray ?? []).OfType<JsonObject>()) {
+                region["follow"] ??= "off";
+                region["flexMarkers"] ??= new JsonArray();
+                region["transpose"] ??= 0;
+                region["fineTune"] ??= 0;
+                region["pitchNotes"] ??= new JsonArray();
+            }
+        }
+
+        return json;
+    }
 }
 
 /// <summary>The Phase 4 additions to a schema-3 file (docs/05-phase-4.md).</summary>
@@ -732,43 +835,6 @@ static class Schema4 {
         strip["sends"] ??= new JsonArray();
         strip["output"] ??= "master";
         strip["groups"] ??= new JsonArray();
-    }
-}
-
-/// <summary>
-///     The Phase 5 fields (docs/06-phase-5.md) at their defaults where a file lacks them, so schema-4 packages read with
-///     the Phase 5 contracts: interim, until workstream B adds schema 5 and its migration from 4 (which replaces this,
-///     with the same defaults). Leaves fields that are present alone.
-/// </summary>
-static class Phase5Fields {
-    public static void Fill(string kind, JsonObject json) {
-        if (kind == "project") {
-            if (json["settings"] is JsonObject settings) {
-                settings["smartTempo"] ??= new JsonObject {
-                    ["mode"] = "keep", ["defaultFollow"] = "off", ["analyzeImports"] = true
-                };
-                settings["varispeed"] ??= new JsonObject { ["enabled"] = false, ["mode"] = "speedOnly", ["speed"] = 1 };
-            }
-        } else if (kind == "track") {
-            if (json["track"] is JsonObject track) {
-                track["flexOn"] ??= false;
-                track["flexMode"] ??= "polyphonic";
-                track["alternatives"] ??= new JsonArray();
-            }
-
-            foreach (var region in (json["regions"] as JsonArray ?? []).OfType<JsonObject>()) {
-                Region(region);
-            }
-        }
-    }
-
-    /// <summary>An audio region that does not follow the tempo, without markers, transpose or pitch notes.</summary>
-    public static void Region(JsonObject region) {
-        region["follow"] ??= "off";
-        region["flexMarkers"] ??= new JsonArray();
-        region["transpose"] ??= 0;
-        region["fineTune"] ??= 0;
-        region["pitchNotes"] ??= new JsonArray();
     }
 }
 

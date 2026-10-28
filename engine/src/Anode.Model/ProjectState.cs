@@ -63,6 +63,15 @@ public sealed record ProjectState(
             ? TempoMaps.GetValue(events, static e => TempoMap.Of(e))
             : TempoMap.Constant(Settings.Tempo);
 
+    /// <summary>
+    ///     The tempo map playback runs on: <see cref="TempoMap" /> at Varispeed's speed while it is on (what the
+    ///     compiler, the transport and the host's positions use; docs/06-phase-5.md).
+    /// </summary>
+    public TempoMap PlaybackMap => TempoMap.WithSpeed(PlaybackSpeed);
+
+    /// <summary>Varispeed's speed while it is on, else 1.</summary>
+    public double PlaybackSpeed => Settings.Varispeed is { Enabled: true, Speed: > 0 } v ? v.Speed : 1;
+
     /// <summary>The project's signature track as bars and beats.</summary>
     public SignatureMap SignatureMap =>
         Settings.Signatures is { Count: > 0 } events

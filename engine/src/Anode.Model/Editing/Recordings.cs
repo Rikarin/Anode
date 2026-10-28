@@ -141,8 +141,9 @@ public static class Recordings {
     static void Carve(ProjectState state, AudioRegion r, long from, long to, IIdSource ids, List<DeltaOp> ops) {
         var map = state.TempoMap;
         var rate = state.SampleRate;
-        var start = map.SampleAt(r.StartTick, rate);
-        var end = start + r.Length;
+        var timing = RegionTiming.Of(state, r);
+        var start = timing.StartSample;
+        var end = timing.EndSample;
         if (end <= from || start >= to) {
             return;
         }
@@ -153,13 +154,22 @@ public static class Recordings {
         }
 
         if (start < from) {
-            ops.Add(new RegionUpserted(Trimmed(r, r.FileOffset, from - start)));
+            var kept = timing.Warped ? (long)Math.Round(timing.FrameAtSample(from)) - r.FileOffset : from - start;
+            if (kept > 0) {
+                ops.Add(new RegionUpserted(Trimmed(Edits.Piece(r, r.FileOffset, r.FileOffset + kept, r.StartTick), r.FileOffset, kept)));
+            }
         }
 
         var tick = CeilingTick(map, to, rate);
-        var shift = map.SampleAt(tick, rate) - start;
-        if (end > to && shift < r.Length) {
-            var right = Trimmed(r, r.FileOffset + shift, r.Length - shift) with { StartTick = tick };
+        var shift = timing.Warped
+            ? (long)Math.Round(timing.FrameAt(tick)) - r.FileOffset
+            : map.SampleAt(tick, rate) - start;
+        if (end > to && shift > 0 && shift < r.Length) {
+            var right = Trimmed(
+                Edits.Piece(r, r.FileOffset + shift, r.FileOffset + r.Length, tick),
+                r.FileOffset + shift,
+                r.Length - shift
+            );
             ops.Add(new RegionUpserted(start < from ? right with { Id = ids.Next(IdPrefix.Region) } : right));
         }
     }
