@@ -57,6 +57,7 @@ int Usage() {
 
            --serve --socket <path> [--device <uid>] [--rate 48000] [--buffer 64] [--inputs <n>]
                    [--null-audio [--input-tone] [--lose-device-after <ms>]] [--mute] [--no-midi | --virtual-midi] [--watch-stdin]
+                   [--data-dir <dir>] [--plugin-sandbox <path>] [--sandbox-mode grouped|instance|in-host]
                                            run the engine for anode-server until SIGINT or SIGTERM
                                            (--device: a device uid from --devices, default the system output;
                                            --inputs: device inputs to open, default all (16 on --null-audio);
@@ -64,8 +65,10 @@ int Usage() {
                                            --lose-device-after: the null device reports itself lost (tests);
                                            --mute: silence the device output; --no-midi: open no MIDI devices;
                                            --virtual-midi: one virtual MIDI input and output instead of devices;
-                                           --watch-stdin: also stop when standard input closes). CLAP instruments
-                                           are scanned in CLAP_PATH and the standard folders. Exit code 3: the
+                                           --watch-stdin: also stop when standard input closes). CLAP, VST3 and AU
+                                           plugins run in anode-plugin sandboxes (--data-dir: the
+                                           catalogue cache; --plugin-sandbox: the sandbox executable, default next
+                                           to anode-host or ANODE_PLUGIN_SANDBOX). Exit code 3: the
                                            device was lost or changed.
            --devices [--json]              list audio devices
            --version

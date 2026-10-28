@@ -118,15 +118,20 @@ public sealed class HostMidiTests : IAsyncLifetime {
     public async Task The_catalogue_and_ports_follow_the_hello_and_a_rescan_answers_the_catalogue() {
         Assert.IsType<HelloMessage>(await Request(new HelloMessage("server")));
         var catalog = await Pushed<PluginCatalogMessage>();
-        // Built-ins first (Anode's, then the test's), then CLAP.
+        // Instruments: built-ins first (Anode's, then the test's), then CLAP.
         Assert.Equal(
             [
                 ("anode.synth", "builtin"), ("anode.sampler", "builtin"), (TestInstrument.Id, "builtin"),
                 (MidiFixtures.ClapId, "clap")
             ],
-            catalog.Plugins.Select(static p => (p.Id, p.Format))
+            catalog.Plugins.Where(static p => p.IsInstrument).Select(static p => (p.Id, p.Format))
         );
-        var test = catalog.Plugins[2];
+        // The built-in effects follow the built-in instruments (Phase 4).
+        Assert.Contains(
+            catalog.Plugins,
+            static p => p is { Id: "anode.channel-eq", IsInstrument: false, Category: "EQ" }
+        );
+        var test = catalog.Plugins.Single(static p => p.Id == TestInstrument.Id);
         Assert.Equal([".txt"], test.FileTypes);
         Assert.Equal(["sine", "square", "saw"], test.Parameters[1].ValueNames);
         Assert.Equal(2, test.Parameters[1].Steps);

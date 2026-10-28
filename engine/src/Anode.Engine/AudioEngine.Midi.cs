@@ -50,6 +50,7 @@ public sealed unsafe partial class AudioEngine {
 
     void RenderMidi(
         TrackState track,
+        Mixing.MixNode node,
         in TrackView view,
         int generation,
         int blockOffset,
@@ -90,7 +91,7 @@ public sealed unsafe partial class AudioEngine {
         var events = new ReadOnlySpan<MidiEvent>(midi.Events, 0, midi.Count);
         if (slot is not null) {
             slot.ApplyParameters();
-            slot.Instrument.Process(events, left, right);
+            RenderInstrument(node, slot, events, left, right);
         } else {
             left.Clear();
             right.Clear();

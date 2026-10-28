@@ -3,6 +3,10 @@
  * docs/spikes/S4-sandbox-wake.md).
  * SPDX-License-Identifier: GPL-3.0-or-later
  *
+ * Product code since Phase 4: Anode.Plugins (Native/IpcWake.cs) uses the shared memory, AN_WAKE_ADDRESS, the clock,
+ * an_rt_promote and the workgroup sharing for the anode-plugin sandboxes. AN_WAKE_SPIN and AN_WAKE_SEMAPHORE stay only
+ * so the S4 harness can reproduce its comparison; the product never uses them.
+ *
  * The host and an anode-plugin sandbox share one memory segment. Each direction of a handshake is a 32-bit counter in
  * that segment (a "wake word"): the signaller increments it and wakes the other side, the waiter blocks until it
  * differs from the value it last saw. How the waiter blocks is the wake kind:

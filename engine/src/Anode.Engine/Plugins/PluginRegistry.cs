@@ -1,3 +1,4 @@
+using Anode.Dsp.Effects;
 using Anode.Dsp.Instruments;
 using Anode.Engine.Plugins.Clap;
 using Anode.Ipc;
@@ -5,13 +6,18 @@ using Anode.Ipc;
 namespace Anode.Engine.Plugins;
 
 /// <summary>
-///     The instruments the engine can load: Anode's built-ins (<see cref="BuiltinInstruments" />, plus any registered
-///     with <see cref="AddBuiltin" />, as tests do) and the CLAP plugins found by <see cref="ScanClap" />. It answers
-///     the catalogue the host sends the server (built-ins first, then CLAP) and creates instances by plugin id.
+///     The plugins the engine can load: Anode's built-in instruments (<see cref="BuiltinInstruments" />) and effects
+///     (<see cref="BuiltinEffects" />), plus any registered with <see cref="AddBuiltin" /> and
+///     <see cref="AddBuiltinEffect" /> (tests, tools); the CLAP instruments found by <see cref="ScanClap" />; and
+///     whatever the third-party <see cref="Factory" /> hosts (VST3, AU; docs/05-phase-4.md, workstream E). It answers
+///     the catalogue the host sends the server (built-ins first, then CLAP, then the factory's) and creates instances by
+///     plugin id.
 /// </summary>
 public sealed class PluginRegistry {
     readonly Lock gate = new();
     readonly List<(InstrumentDescriptor Descriptor, Func<IInstrument> Create)> extras = [];
+    readonly List<(EffectDescriptor Descriptor, Func<IAudioEffect> Create)> effects = [];
+    IPluginFactory factory = NullPluginFactory.Instance;
     TaskCompletionSource idle = Done();
     IReadOnlyList<ClapEntry> clap = [];
     int scans;
@@ -41,6 +47,19 @@ public sealed class PluginRegistry {
         }
     }
 
+    /// <summary>Adds an effect the engine treats as built in (tests, tools).</summary>
+    public void AddBuiltinEffect(EffectDescriptor descriptor, Func<IAudioEffect> create) {
+        lock (gate) {
+            effects.Add((descriptor, create));
+        }
+    }
+
+    /// <summary>Third-party plugin hosting (default: none).</summary>
+    public IPluginFactory Factory {
+        get => Volatile.Read(ref factory);
+        set => Volatile.Write(ref factory, value ?? NullPluginFactory.Instance);
+    }
+
     /// <summary>Every plugin, as the host reports it in <see cref="PluginCatalogMessage" />.</summary>
     public IReadOnlyList<EnginePlugin> Catalog() {
         var list = new List<EnginePlugin>();
@@ -48,8 +67,16 @@ public sealed class PluginRegistry {
             list.Add(Builtin(d));
         }
 
+        foreach (var d in BuiltinEffects.All) {
+            list.Add(Builtin(d));
+        }
+
         lock (gate) {
             foreach (var (d, _) in extras) {
+                list.Add(Builtin(d));
+            }
+
+            foreach (var (d, _) in effects) {
                 list.Add(Builtin(d));
             }
 
@@ -61,14 +88,53 @@ public sealed class PluginRegistry {
             }
         }
 
+        var known = new HashSet<string>(list.Select(static p => p.Id), StringComparer.Ordinal);
+        foreach (var p in Factory.Catalog) {
+            if (known.Add(p.Id)) {
+                list.Add(p);
+            }
+        }
+
         return list;
+    }
+
+    /// <summary>
+    ///     A new, unprepared effect <paramref name="pluginId" /> for the insert <paramref name="context" /> names, or
+    ///     null when there is none: a built-in, else the factory's. Control thread.
+    /// </summary>
+    public IAudioEffect? CreateEffect(string pluginId, PluginContext context) {
+        if (BuiltinEffects.Create(pluginId) is { } builtin) {
+            return builtin;
+        }
+
+        Func<IAudioEffect>? create = null;
+        lock (gate) {
+            foreach (var (d, f) in effects) {
+                if (d.Id == pluginId) {
+                    create = f;
+                }
+            }
+        }
+
+        if (create is not null) {
+            return create();
+        }
+
+        var hosted = Factory;
+        return hosted.Handles(pluginId) ? hosted.CreateEffect(pluginId, context) : null;
     }
 
     /// <summary>
     ///     A new, unprepared instance of plugin <paramref name="pluginId" />, or null when there is none. Control
     ///     thread; a CLAP instance is created on the plugin thread.
     /// </summary>
-    public IInstrument? Create(string pluginId) {
+    public IInstrument? Create(string pluginId) => Create(pluginId, null);
+
+    /// <summary>
+    ///     As <see cref="Create(string)" />, for the track <paramref name="context" /> names; ids that are neither built
+    ///     in nor found by the CLAP scan go to the <see cref="Factory" />.
+    /// </summary>
+    public IInstrument? Create(string pluginId, PluginContext? context) {
         if (BuiltinInstruments.Create(pluginId) is { } builtin) {
             return builtin;
         }
@@ -98,7 +164,33 @@ public sealed class PluginRegistry {
             return create();
         }
 
-        return found is null ? null : ClapInstrument.Create(found.Path, pluginId, Log);
+        if (found is not null) {
+            return ClapInstrument.Create(found.Path, pluginId, Log);
+        }
+
+        var hosted = Factory;
+        return context is not null && hosted.Handles(pluginId) ? hosted.CreateInstrument(pluginId, context) : null;
+    }
+
+    /// <summary>
+    ///     Scans the CLAP folders in process (<see cref="ScanClap" />; unless <paramref name="clap" /> is false, when
+    ///     the factory hosts CLAP), then has the factory rescan its formats.
+    /// </summary>
+    public void ScanAll(IEnumerable<string>? clapFolders = null, bool clap = true) {
+        BeginScan();
+        try {
+            if (clap) {
+                Scan(clapFolders);
+            }
+
+            try {
+                Factory.Scan();
+            } catch (Exception e) when (e is IOException or InvalidOperationException or UnauthorizedAccessException) {
+                Log?.Invoke($"plugin scan: {e.Message}");
+            }
+        } finally {
+            EndScan();
+        }
     }
 
     /// <summary>
@@ -145,6 +237,10 @@ public sealed class PluginRegistry {
     public static TimeSpan ScanWait { get; set; } = TimeSpan.FromSeconds(60);
 
     bool Knows(string pluginId) {
+        if (Factory.Handles(pluginId)) {
+            return true;
+        }
+
         lock (gate) {
             return extras.Exists(e => e.Descriptor.Id == pluginId) || clap.Any(e => e.Descriptor.Id == pluginId);
         }
@@ -244,6 +340,20 @@ public sealed class PluginRegistry {
 
     static EnginePlugin Builtin(InstrumentDescriptor d) =>
         new(d.Id, d.Name, d.Vendor, d.Version, "builtin", true, d.FileTypes, [..d.Parameters.Select(Map)]);
+
+    static EnginePlugin Builtin(EffectDescriptor d) =>
+        new(
+            d.Id,
+            d.Name,
+            d.Vendor,
+            d.Version,
+            "builtin",
+            false,
+            [],
+            [..d.Parameters.Select(Map)],
+            d.Category,
+            d.HasSidechain
+        );
 
     static EngineParameter Map(InstrumentParameter p) =>
         new(p.Id, p.Name, p.Min, p.Max, p.Default, p.Unit, p.Steps, p.ValueNames);
