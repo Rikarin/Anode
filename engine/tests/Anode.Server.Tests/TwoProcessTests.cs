@@ -201,14 +201,17 @@ public sealed class TwoProcessTests : IAsyncDisposable {
             var region = (await client.ProjectAsync()).Regions.Single(r => r.TrackId == tracks[2].Id);
             foreach (var cents in new[] { 6_100.0, 6_200, 6_300, 6_400 }) {
                 await client.EditAsync(
-                    new SetPitchNotesCommand(region.Id, [..region.PitchNotes.Select((n, i) => i == 1 ? n with { TargetCents = cents } : n)])
+                    new SetPitchNotesCommand(
+                        region.Id,
+                        [..region.PitchNotes.Select((n, i) => i == 1 ? n with { TargetCents = cents } : n)]
+                    )
                 );
             }
 
             for (var k = 0; k < 2; k++) {
                 var response = await client.PostAsJsonAsync(
                     "/api/v1/project/bounce",
-                    new BounceRequest($"Pitched {k}", media, 0, 2 * Bar),
+                    new($"Pitched {k}", media, 0, 2 * Bar),
                     ContractsJsonContext.Default.BounceRequest,
                     TestContext.Current.CancellationToken
                 );
@@ -318,7 +321,11 @@ public sealed class TwoProcessTests : IAsyncDisposable {
         var loop = await client.ImportAsync(DrumLoopWav(media, "Loop.wav", false));
         var humanised = await client.ImportAsync(DrumLoopWav(media, "Humanised.wav", true));
         var melody = await client.ImportAsync(MelodyWav(media));
-        await client.EditAsync(new AddTrackCommand("Loop"), new AddTrackCommand("Humanised"), new AddTrackCommand("Melody"));
+        await client.EditAsync(
+            new AddTrackCommand("Loop"),
+            new AddTrackCommand("Humanised"),
+            new AddTrackCommand("Melody")
+        );
         var tracks = (await client.ProjectAsync()).Tracks;
         await client.EditAsync(
             new AddRegionCommand(tracks[0].Id, loop.Id, 0),

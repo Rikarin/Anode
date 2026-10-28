@@ -306,7 +306,8 @@ public sealed partial class EngineController {
                     continue;
                 }
 
-                if (stream.FillIdentity != identity || stream.FillCursor - clock < Math.Min(frames, stream.TargetFrames)) {
+                if (stream.FillIdentity != identity
+                    || stream.FillCursor - clock < Math.Min(frames, stream.TargetFrames)) {
                     return $"track {i}'s {name} (fill {stream.FillIdentity:x}, wanted {identity:x}; "
                         + $"{stream.FillCursor - clock} of {Math.Min(frames, stream.TargetFrames)} frames ahead, "
                         + $"{stream.FreeFrames} free; {stream.Describe()}; render clock {clock})";
