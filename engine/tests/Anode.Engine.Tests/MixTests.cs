@@ -281,7 +281,12 @@ public sealed class MixTests : IDisposable {
     [Fact]
     public void Delay_compensation_delays_a_parallel_path_by_exactly_the_latency_and_low_latency_mode_bypasses_it() {
         EngineTrack[] tracks = [
-            Track(1, false, Strip(inserts: [TestEffects.Insert("d", TestEffects.Delay, Frames(100))]), monitoring: true),
+            Track(
+                1,
+                false,
+                Strip(inserts: [TestEffects.Insert("d", TestEffects.Delay, Frames(100))]),
+                monitoring: true
+            ),
             Track(2, false, Strip())
         ];
         using var rig = new Rig(dir, 64, [Model(1, 0), Model(2, 0)], tracks, Files);

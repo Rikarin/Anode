@@ -255,7 +255,9 @@ public sealed partial class EngineController {
     }
 
     void Problem(int trackId, string? insertId, string pluginId, string message) {
-        Log?.Invoke($"track {trackId}: {pluginId}{(insertId is null ? "" : $" (insert {insertId})")}: {message}");
+        Log?.Invoke(
+            $"track {trackId}: {pluginId}{(insertId is null ? string.Empty : $" (insert {insertId})")}: {message}"
+        );
         PluginProblem?.Invoke(new(trackId, insertId, pluginId, message));
     }
 
@@ -342,7 +344,8 @@ public sealed partial class EngineController {
         }
 
         public void LatencyChanged() =>
-            ThreadPool.QueueUserWorkItem(static o => {
+            ThreadPool.QueueUserWorkItem(
+                static o => {
                     lock (o.gate) {
                         o.GrowDelays(o.Engine.Root.Mix);
                     }

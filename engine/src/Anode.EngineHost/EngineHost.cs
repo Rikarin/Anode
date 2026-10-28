@@ -298,7 +298,9 @@ public sealed class EngineHost : IDisposable {
         lock (renderGate) {
             if (!renders.TryAdd(message.JobId, cancel)) {
                 cancel.Dispose();
-                Push?.Invoke(new RenderFinishedMessage(message.JobId, [], $"Job {message.JobId} is already rendering."));
+                Push?.Invoke(
+                    new RenderFinishedMessage(message.JobId, [], $"Job {message.JobId} is already rendering.")
+                );
                 return;
             }
         }

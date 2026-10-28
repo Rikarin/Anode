@@ -259,8 +259,19 @@ sealed class TestFactory : IPluginFactory, IAudioCycleObserver {
     public long Cycles;
 
     public IReadOnlyList<EnginePlugin> Catalog { get; } = [
-        new(Hosted, "Hosted Gain", "Test Vendor", "1.0", "vst3", false, [], [new("gain", "Gain", -4, 4, 1, "", 0)],
-            "Utility", false, true)
+        new(
+            Hosted,
+            "Hosted Gain",
+            "Test Vendor",
+            "1.0",
+            "vst3",
+            false,
+            [],
+            [new("gain", "Gain", -4, 4, 1, string.Empty, 0)],
+            "Utility",
+            false,
+            true
+        )
     ];
 
     public void Scan() => Scans++;
@@ -280,15 +291,18 @@ sealed class TestFactory : IPluginFactory, IAudioCycleObserver {
     public void EndCycle() { }
 
     /// <summary>The hosted gain: a plugin editor that can be opened and closed.</summary>
-    public sealed class HostedEffect() : TestEffect(new(
-        Hosted,
-        "Hosted Gain",
-        "Test Vendor",
-        "1.0",
-        "Utility",
-        [Parameter(0, "gain", -4, 4, 1)],
-        false
-    )), IPluginEditor {
+    public sealed class HostedEffect() : TestEffect(
+            new(
+                Hosted,
+                "Hosted Gain",
+                "Test Vendor",
+                "1.0",
+                "Utility",
+                [Parameter(0, "gain", -4, 4, 1)],
+                false
+            )
+        ),
+        IPluginEditor {
         public bool EditorOpen { get; private set; }
 
         public bool SetEditorOpen(bool open) {

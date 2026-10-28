@@ -79,7 +79,8 @@ public sealed class MixPlan {
 
     public const int Destinations = 1 + Buses + OutputPairs;
 
-    public static readonly MixPlan Empty = new([], new() { Channel = new(new()), Config = ChannelConfig.Empty }, [0], []);
+    public static readonly MixPlan Empty =
+        new([], new() { Channel = new(new()), Config = ChannelConfig.Empty }, [0], []);
 
     MixPlan(MixNode[] order, MixNode master, int[] used, int[] snapshotBuses) {
         Order = order;

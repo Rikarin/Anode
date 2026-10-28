@@ -213,7 +213,10 @@ public sealed class ModelRoot {
     ///     Each track's view as compiled (a frozen track's <see cref="Views" /> entry plays its freeze file instead), so
     ///     a patch or an unfreeze starts from the compiled playlist.
     /// </summary>
-    public TrackView[] SourceViews { get => sourceViews ?? Views; init => sourceViews = value; }
+    public TrackView[] SourceViews {
+        get => sourceViews ?? Views;
+        init => sourceViews = value;
+    }
 
     readonly TrackView[]? sourceViews;
 
@@ -332,7 +335,13 @@ public sealed unsafe class FreezeSource : IDisposable {
             entry = (AudioPlaylistEntry*)System.Runtime.InteropServices.NativeMemory.AllocZeroed(
                 (nuint)sizeof(AudioPlaylistEntry)
             );
-            *entry = new() { Start = 0, FileOffset = 0, Length = File.Frames, FileId = 0, Gain = 1f };
+            *entry = new() {
+                Start = 0,
+                FileOffset = 0,
+                Length = File.Frames,
+                FileId = 0,
+                Gain = 1f
+            };
         } catch {
             File.Dispose();
             throw;

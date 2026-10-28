@@ -112,7 +112,12 @@ public sealed partial class EngineController {
                         throw new InvalidOperationException($"No track {id}.");
                     }
 
-                    var target = new RenderTarget(id, Path.Combine(Path.GetFullPath(message.Path), $"{id}.wav"), frames, ring);
+                    var target = new RenderTarget(
+                        id,
+                        Path.Combine(Path.GetFullPath(message.Path), $"{id}.wav"),
+                        frames,
+                        ring
+                    );
                     tracks[id] = target;
                     Open(target);
                 }
@@ -279,7 +284,8 @@ public sealed partial class EngineController {
         for (var i = 0; i < root.Tracks.Length; i++) {
             var identity = TrackFeed.Identity(anchor, root.Generations[i]);
             var track = root.Tracks[i];
-            if (!Holds(track.Stream) || (root.Lanes[i] is not null && track.Crossfade is { } second && !Holds(second))) {
+            if (!Holds(track.Stream)
+                || (root.Lanes[i] is not null && track.Crossfade is { } second && !Holds(second))) {
                 return false;
             }
 

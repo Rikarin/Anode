@@ -1,6 +1,5 @@
 using Anode.Audio;
 using Anode.Ipc;
-using Anode.Ipc.Segments;
 
 namespace Anode.Engine.Tests;
 
@@ -68,10 +67,16 @@ public sealed class ChannelTests : IDisposable {
         Assert.True(
             controller.SetChannel(
                 1,
-                new(1f, 0f, false, false, [
-                    TestEffects.Insert("a", TestEffects.Gain, Gain(0.5), true),
-                    TestEffects.Insert("b", TestEffects.Gain, Gain(0))
-                ])
+                new(
+                    1f,
+                    0f,
+                    false,
+                    false,
+                    [
+                        TestEffects.Insert("a", TestEffects.Gain, Gain(0.5), true),
+                        TestEffects.Insert("b", TestEffects.Gain, Gain(0))
+                    ]
+                )
             )
         );
         Assert.Same(a, Slot(controller, 1, "a"));
@@ -95,21 +100,31 @@ public sealed class ChannelTests : IDisposable {
     [Fact]
     public void The_masters_inserts_run_and_insert_states_are_saved_by_track_and_insert() {
         using var controller = Load(null, TestEffects.Insert("a", TestEffects.Gain, Gain(0.25)));
-        Assert.True(controller.SetChannel(-1, new(1f, 0f, false, false, [TestEffects.Insert("m", TestEffects.Gain, Gain(2))])));
+        Assert.True(
+            controller.SetChannel(-1, new(1f, 0f, false, false, [TestEffects.Insert("m", TestEffects.Gain, Gain(2))]))
+        );
         var left = Play(controller, 640);
         for (var n = 0; n < 640; n++) {
             Assert.Equal(TestAudio.Sample(64 + n, 1) * 0.25f * 2f, left[n]);
         }
 
         var states = controller.InstrumentStates();
-        Assert.Contains(states, static s => s is { TrackId: 1, InsertId: "a" } && s.State == Convert.ToBase64String(BitConverter.GetBytes(0.25f)));
+        Assert.Contains(
+            states,
+            static s => s is { TrackId: 1, InsertId: "a" }
+                && s.State == Convert.ToBase64String(BitConverter.GetBytes(0.25f))
+        );
         Assert.Contains(states, static s => s is { TrackId: -1, InsertId: "m" });
     }
 
     [Fact]
     public void The_factory_creates_hosted_plugins_and_relays_their_parameters_problems_and_editors() {
         var factory = new TestFactory();
-        using var controller = Load(factory, TestEffects.Insert("h", TestFactory.Hosted, Gain(0.5)), TestEffects.Insert("x", "nobody.has.this"));
+        using var controller = Load(
+            factory,
+            TestEffects.Insert("h", TestFactory.Hosted, Gain(0.5)),
+            TestEffects.Insert("x", "nobody.has.this")
+        );
         var problems = new List<PluginProblemMessage>();
         var changes = new List<ParameterChangedMessage>();
         controller.PluginProblem = problems.Add;
@@ -125,12 +140,12 @@ public sealed class ChannelTests : IDisposable {
         Assert.False(controller.OpenPluginEditor(1, null, true)); // no instrument
 
         context.Callbacks.ParameterChanged("gain", 0.75);
-        Assert.Equal(new ParameterChangedMessage(1, "h", "gain", 0.75), Assert.Single(changes));
+        Assert.Equal(new(1, "h", "gain", 0.75), Assert.Single(changes));
 
         var left = Play(controller, 640);
         Assert.Equal(TestAudio.Sample(64, 1) * 0.5f, left[0]);
         context.Callbacks.Problem("crashed");
-        Assert.Equal(new PluginProblemMessage(1, "h", TestFactory.Hosted, "crashed"), problems[^1]);
+        Assert.Equal(new(1, "h", TestFactory.Hosted, "crashed"), problems[^1]);
         left = Play(controller, 640);
         Assert.Equal(TestAudio.Sample(64, 1), left[0]); // bypassed: dry
 
@@ -142,7 +157,12 @@ public sealed class ChannelTests : IDisposable {
 
     [Fact]
     public async Task The_host_takes_the_mixer_messages_and_renders_in_the_background() {
-        using var host = new EngineHost.EngineHost(new NullAudioDevice(Rate, 64, 2, 2), "test", false, TestEffects.Registry());
+        using var host = new EngineHost.EngineHost(
+            new NullAudioDevice(Rate, 64, 2, 2),
+            "test",
+            false,
+            TestEffects.Registry()
+        );
         var pushed = new List<IpcMessage>();
         host.Push = m => {
             lock (pushed) {
@@ -159,7 +179,14 @@ public sealed class ChannelTests : IDisposable {
             );
         }
 
-        EngineStrip strip = new(1f, 0f, false, false, [TestEffects.Insert("g", TestEffects.Gain)], [new("s", 1, 0.5f, 0f, false)]);
+        EngineStrip strip = new(
+            1f,
+            0f,
+            false,
+            false,
+            [TestEffects.Insert("g", TestEffects.Gain)],
+            [new("s", 1, 0.5f, 0f, false)]
+        );
         Assert.Null(await host.HandleAsync(new SetChannelMessage(1, strip), Token));
         Assert.Null(await host.HandleAsync(new SetInsertParameterMessage(1, "g", "gain", 0.5), Token));
         Assert.Null(await host.HandleAsync(new SetSendLevelMessage(1, "s", 0.25f, 0f), Token));
@@ -183,7 +210,9 @@ public sealed class ChannelTests : IDisposable {
         Assert.Null(finished.Error);
         Assert.Equal([path], finished.Files);
         Assert.True(new FileInfo(path).Length > Rate * 8);
-        var states = Assert.IsType<InstrumentStatesMessage>(await host.HandleAsync(new RequestInstrumentStatesMessage(), Token));
+        var states = Assert.IsType<InstrumentStatesMessage>(
+            await host.HandleAsync(new RequestInstrumentStatesMessage(), Token)
+        );
         Assert.Contains(states.States, static s => s is { TrackId: 1, InsertId: "g" });
     }
 }

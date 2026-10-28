@@ -170,7 +170,16 @@ public sealed class DiskStreamer : IDisposable {
         while (done < frames) {
             var position = anchor.PositionAt(clock + done);
             var count = (int)Math.Min(frames - done, anchor.Cycle.UntilJump(position));
-            renderer.Render(view, lanes, lane, model.FilesFor(index), position, count, channels, buffer[(done * channels)..]);
+            renderer.Render(
+                view,
+                lanes,
+                lane,
+                model.FilesFor(index),
+                position,
+                count,
+                channels,
+                buffer[(done * channels)..]
+            );
             done += count;
         }
 

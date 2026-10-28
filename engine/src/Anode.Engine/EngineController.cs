@@ -559,8 +559,14 @@ public sealed partial class EngineController : IDisposable {
     InstrumentSlot Build(int trackId, EngineInstrument spec, string? state) {
         var instrument = Plugins.Create(
                 spec.PluginId,
-                new(trackId, null, spec.PluginId, Options.SampleRate, AudioEngine.MaxFrames,
-                    new PluginCallbacks(this, trackId, null, spec.PluginId))
+                new(
+                    trackId,
+                    null,
+                    spec.PluginId,
+                    Options.SampleRate,
+                    AudioEngine.MaxFrames,
+                    new PluginCallbacks(this, trackId, null, spec.PluginId)
+                )
             )
             ?? throw new InvalidOperationException($"No plugin '{spec.PluginId}'.");
         try {

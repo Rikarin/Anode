@@ -41,10 +41,29 @@ public sealed class RenderTests : IDisposable {
                 false,
                 false,
                 false,
-                new(0.3f, 0f, false, false, [TestEffects.Insert("d", TestEffects.Delay, new Dictionary<string, double> { ["frames"] = 100 })]),
+                new(
+                    0.3f,
+                    0f,
+                    false,
+                    false,
+                    [TestEffects.Insert("d", TestEffects.Delay, new Dictionary<string, double> { ["frames"] = 100 })]
+                ),
                 FreezeFile: freezeFile
             ),
-            new(2, -1, false, false, false, new(1f, 0f, false, false, [TestEffects.Insert("g", TestEffects.Gain, new Dictionary<string, double> { ["gain"] = 0.5 })]))
+            new(
+                2,
+                -1,
+                false,
+                false,
+                false,
+                new(
+                    1f,
+                    0f,
+                    false,
+                    false,
+                    [TestEffects.Insert("g", TestEffects.Gain, new Dictionary<string, double> { ["gain"] = 0.5 })]
+                )
+            )
         ];
         using var segment = TestAudio.Segment(models, 1);
         controller.LoadModel(TestAudio.Load(segment, 1, true, tracks, [new(0, mono, 1, Rate, Seconds * Rate)], dir));

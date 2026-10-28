@@ -117,7 +117,8 @@ public sealed class AutomationLane {
                 continue;
             }
 
-            var sorted = list.Select((e, order) => (e, order)).OrderBy(static x => x.e.Position)
+            var sorted = list.Select(static (e, order) => (e, order))
+                .OrderBy(static x => x.e.Position)
                 .ThenBy(static x => x.order)
                 .Select(static x => x.e)
                 .ToArray();
