@@ -676,9 +676,18 @@ export class GlobalTracks {
     }
   }
 
-  /** A ramp's curve shape (a double-click on its handle: linear again). */
+  /**
+   * A ramp's curve shape (a double-click on its handle: linear again). It shows at once, so a quick run of key presses
+   * builds on each other rather than each on the shape from before the Server answered.
+   */
   protected shape(index: number, shape: number): void {
-    void this.smartTempo.setShape(index, shape);
+    const draft = withShape(this.tempoEvents(), index, shape);
+    this.tempoDraft.set(draft);
+    void this.smartTempo.setShape(index, shape).finally(() => {
+      if (this.tempoDraft() === draft) {
+        this.tempoDraft.set(null);
+      }
+    });
   }
 
   /** Arrows change a curve's shape by 0.05 (Page keys by 0.25); Home/End reach the ends. */
