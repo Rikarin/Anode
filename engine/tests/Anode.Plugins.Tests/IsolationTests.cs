@@ -78,7 +78,7 @@ public sealed class IsolationTests : IDisposable {
         var (l, r) = Signal(Frames);
         crasher.Process(l, r, [], []);
         SpinWait.SpinUntil(() => problems.Count == 2, TimeSpan.FromSeconds(5));
-        Assert.Equal([1, 2], problems.Select(p => p.Owner.TrackId).Order());
+        Assert.Equal([1, 2], problems.Select(static p => p.Owner.TrackId).Order());
         Assert.True(((IHostedPlugin)neighbour).IsFailed);
         var (x, y) = Signal(Frames);
         var dry = (float[])x.Clone();

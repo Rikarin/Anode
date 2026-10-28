@@ -15,7 +15,7 @@ public sealed class ScanTests : IDisposable {
         var catalog = host.CatalogEntries();
         Assert.Equal(4, catalog.Count);
 
-        var gain = Assert.Single(catalog, p => p.Id == GainId);
+        var gain = Assert.Single(catalog, static p => p.Id == GainId);
         Assert.Equal("Anode Test Gain", gain.Name);
         Assert.Equal("Anode", gain.Vendor);
         Assert.Equal("vst3", gain.Format);
@@ -23,19 +23,19 @@ public sealed class ScanTests : IDisposable {
         Assert.Equal("Utility", gain.Category);
         Assert.True(gain.HasEditor);
         Assert.False(gain.HasSidechain);
-        Assert.Equal(["Gain", "Tone"], gain.Parameters.Select(p => p.Name));
+        Assert.Equal(["Gain", "Tone"], gain.Parameters.Select(static p => p.Name));
         Assert.Equal(24.0 / 36.0, gain.Parameters[0].Default, 9);
 
-        var delay = Assert.Single(catalog, p => p.Id == DelayId);
+        var delay = Assert.Single(catalog, static p => p.Id == DelayId);
         Assert.Equal("Delay", delay.Category);
         Assert.True(delay.HasSidechain);
         Assert.False(delay.HasEditor);
         Assert.Equal(64, host.Catalog.Find(DelayId)!.Description.Latency);
 
-        var misbehave = Assert.Single(catalog, p => p.Id == MisbehaveId);
+        var misbehave = Assert.Single(catalog, static p => p.Id == MisbehaveId);
         Assert.Equal(1, misbehave.Parameters[0].Steps);
 
-        var synth = Assert.Single(catalog, p => p.Id == SynthId);
+        var synth = Assert.Single(catalog, static p => p.Id == SynthId);
         Assert.True(synth.IsInstrument);
         Assert.Equal(string.Empty, synth.Category);
     }
@@ -73,7 +73,10 @@ public sealed class ScanTests : IDisposable {
 
         // The good copy (scanned after the crash, in a new scanner) is found; the crashing one is blocklisted.
         Assert.Equal(4, host.Catalog.Entries.Count);
-        Assert.All(host.Catalog.Entries, e => Assert.EndsWith("ZAnodeTest.vst3", e.Path, StringComparison.Ordinal));
+        Assert.All(
+            host.Catalog.Entries,
+            static e => Assert.EndsWith("ZAnodeTest.vst3", e.Path, StringComparison.Ordinal)
+        );
         var (item, reason) = Assert.Single(host.Catalog.Blocklist);
         Assert.EndsWith("AnodeTestCrashOnScan.vst3", item, StringComparison.Ordinal);
         Assert.Contains("crashed", reason, StringComparison.Ordinal);
@@ -123,8 +126,8 @@ public sealed class ScanTests : IDisposable {
         }
 
         if (OperatingSystem.IsMacOS()) {
-            Assert.Contains(host.Catalog.Entries, e => e.PluginId == AuDelayId);
-            Assert.Contains(host.Catalog.Entries, e => e.PluginId == "au:aufx.hshf.appl");
+            Assert.Contains(host.Catalog.Entries, static e => e.PluginId == AuDelayId);
+            Assert.Contains(host.Catalog.Entries, static e => e.PluginId == "au:aufx.hshf.appl");
         }
     }
 
@@ -155,7 +158,7 @@ public sealed class ScanTests : IDisposable {
                 peak = l.Max(MathF.Abs);
             } else if (hosted is Anode.Dsp.Instruments.IInstrument inst) {
                 inst.Prepare(48000, 512);
-                var (l, _) = Render(inst, 50, 64, b => b == 1 ? [new(0, 0x90, 60, 100)] : []);
+                var (l, _) = Render(inst, 50, 64, static b => b == 1 ? [new(0, 0x90, 60, 100)] : []);
                 peak = l.Max(MathF.Abs);
             }
 

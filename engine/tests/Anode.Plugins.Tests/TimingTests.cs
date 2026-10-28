@@ -45,7 +45,7 @@ public sealed class TimingTests : IDisposable {
             var cycles = 1500;
             Run(host, effects, cycles, true, split, out var times);
             Array.Sort(times);
-            var misses = effects.Sum(e => ((IHostedPlugin)e).Stats.Misses);
+            var misses = effects.Sum(static e => ((IHostedPlugin)e).Stats.Misses);
 
             string P(double q) =>
                 (times[(int)(q * (times.Length - 1))] / 1000.0).ToString(
