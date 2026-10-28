@@ -164,7 +164,11 @@ function readWav(path: string): { sampleRate: number; samples: Float32Array } {
   return { sampleRate, samples };
 }
 
-/** Onsets in seconds: where the 1 ms energy jumps well above the 20 ms before it (at most one per 60 ms). */
+/**
+ * Onsets in seconds: where the 1 ms energy jumps well above the 20 ms before it (at most one per 60 ms), each placed at
+ * the first millisecond within 10 dB of the hit's peak (its next 20 ms), so a stretcher's pre-echo, a quiet smear tens
+ * of dB below the hit, does not count as the hit.
+ */
 function onsets(path: string): number[] {
   const { sampleRate, samples } = readWav(path);
   const window = Math.round(sampleRate / 1000);
@@ -185,7 +189,12 @@ function onsets(path: string): number[] {
     before /= 20;
     const now = energy[i] ?? 0;
     if (now > 1e-4 && now > 8 * before && (found.length === 0 || i / 1000 - (found.at(-1) ?? 0) > 0.06)) {
-      found.push(i / 1000);
+      const peak = Math.max(...energy.slice(i, i + 20));
+      let at = i;
+      while ((energy[at] ?? 0) < peak / 10) {
+        at++;
+      }
+      found.push(at / 1000);
     }
   }
   return found;
@@ -245,6 +254,12 @@ async function expectRegions(window: Page, regions: number, tracks: number): Pro
   );
 }
 
+/** The regions the Tracks area shows (from its label). */
+async function regionCount(window: Page): Promise<number> {
+  const label = await window.getByRole('img', { name: /^Tracks area:/ }).getAttribute('aria-label');
+  return Number(/(\d+) regions?/.exec(label ?? '')?.[1] ?? 0);
+}
+
 /** Imports a WAV onto a new audio track (the desktop app's open dialog answers with `path`). */
 async function importOnNewTrack(
   window: Page,
@@ -259,7 +274,10 @@ async function importOnNewTrack(
   await app.evaluate(({ dialog }, file) => {
     dialog.showOpenDialog = () => Promise.resolve({ canceled: false, filePaths: [file] });
   }, path);
+  const regions = await regionCount(window);
   await window.getByRole('button', { name: 'Import audio' }).click();
+  // The import analyses the file first; the region lands when it is done.
+  await expect.poll(() => regionCount(window), { timeout: 30_000 }).toBe(regions + 1);
   return header;
 }
 
@@ -293,19 +311,31 @@ async function bounce(window: Page, folder: string, name: string, endBar: number
   return path;
 }
 
-/** Whether every onset lies within `tolerance` seconds of a grid of `step` seconds. */
-function onGrid(times: readonly number[], step: number, tolerance: number): boolean {
-  return times.every(t => Math.abs(t / step - Math.round(t / step)) * step <= tolerance);
+/** The middle of an element, in its own coordinates. */
+async function middleOf(locator: Locator): Promise<{ x: number; y: number }> {
+  const box = await locator.boundingBox();
+  if (!box) {
+    throw new Error('The element is not on screen.');
+  }
+  return { x: box.width / 2, y: box.height / 2 };
+}
+
+/** The farthest any onset lies from a grid of `step` seconds, in milliseconds (there must be onsets to measure). */
+function gridErrorMs(times: readonly number[], step: number): number {
+  expect(times.length).toBeGreaterThan(8);
+  return 1000 * Math.max(...times.map(t => Math.abs(t / step - Math.round(t / step)) * step));
+}
+
+/** Records what the exit criterion measured as a test annotation (the JSON reporter lists them), and returns it. */
+function measured(what: string, value: number, unit: string): number {
+  test.info().annotations.push({ type: 'measured', description: `${what}: ${value.toFixed(3)} ${unit}` });
+  return value;
 }
 
 // The Phase 5 exit criterion (docs/06-phase-5.md): audio as editable in time and pitch as MIDI, on the real app with
 // the null device: Smart Tempo, Follow, Flex Time, quantised audio, Flex Pitch and Flex Pitch to MIDI, Strip Silence,
 // tempo curves and beat mapping, Varispeed, track alternatives, bounce in place and selection-based processing.
-//
-// FIXME: it can pass only once every Phase 5 workstream has merged (the engine's flex rendering, the Server's commands,
-// the analysis DSP and the flex algorithms): until then the Server answers the new commands 501. It compiles and drives
-// workstream C's UI by role and test id.
-test.fixme('edits audio in time and pitch: Smart Tempo, Follow, Flex Time and Pitch, quantise, Strip Silence, tempo curves, beat mapping, Varispeed, alternatives, bounce in place, processing, reopening', async ({
+test('edits audio in time and pitch: Smart Tempo, Follow, Flex Time and Pitch, quantise, Strip Silence, tempo curves, beat mapping, Varispeed, alternatives, bounce in place, processing, reopening', async ({
   app,
   window
 }) => {
@@ -333,7 +363,7 @@ test.fixme('edits audio in time and pitch: Smart Tempo, Follow, Flex Time and Pi
     await window.getByRole('menuitemradio', { name: 'Adapt Project Tempo' }).click();
     await importOnNewTrack(window, app, files.loop, 1, 'Audio 1');
     await expectRegions(window, 1, 1);
-    const bpm = Number(await window.getByTestId('lcd-tempo').innerText());
+    const bpm = measured('Adapted tempo', Number(await window.getByTestId('lcd-tempo').innerText()), 'bpm');
     expect(Math.abs(bpm - 100)).toBeLessThanOrEqual(0.5);
     // Open the Smart Tempo Editor on the region and move its second downbeat a little (then keep the file tempo).
     await selectRegion(window, 0);
@@ -352,7 +382,9 @@ test.fixme('edits audio in time and pitch: Smart Tempo, Follow, Flex Time and Pi
     await window.keyboard.press('Enter');
     await expect(window.getByTestId('lcd-tempo')).toHaveText('120');
     const followed = await bounce(window, bounces, 'Follow', 5);
-    expect(onGrid(onsets(followed), 0.25, 0.005)).toBe(true);
+    expect(
+      measured('Follow: farthest onset off the 120 bpm grid', gridErrorMs(onsets(followed), 0.25), 'ms')
+    ).toBeLessThanOrEqual(5);
 
     // 3. Flex Time: flex on (Polyphonic), drag the marker of the transient at beat 3 right by a sixteenth, then Slicing;
     //    in a bounce the onset moved by the drag (within 2 ms).
@@ -377,15 +409,19 @@ test.fixme('edits audio in time and pitch: Smart Tempo, Follow, Flex Time and Pi
     await window.getByRole('menuitemradio', { name: 'Slicing' }).click();
     const sliced = await bounce(window, bounces, 'Sliced', 5);
     // The onset at 1.0 s (beat 3 at 120 bpm) now starts 125 ms later.
-    expect(onsets(sliced).some(t => Math.abs(t - 1.125) <= 0.002)).toBe(true);
+    const moved = Math.min(...onsets(sliced).map(t => 1000 * Math.abs(t - 1.125)));
+    expect(measured('Flex marker: the marked onset off where the drag put it', moved, 'ms')).toBeLessThanOrEqual(2);
 
     // 4. Quantise audio: the humanised loop to 1/16; its onsets land on the grid within 5 ms.
     await importOnNewTrack(window, app, files.humanised, 2, 'Audio 2');
     await selectRegion(window, 1);
+    await expect(window.getByRole('heading', { name: 'Region: Drums humanised' })).toBeVisible();
     await window.getByTestId('quantize-audio-grid').selectOption({ label: '1/16 note' });
     await soloOnly(window, tracks.slice(0, 2), 'Audio 2');
     const quantised = await bounce(window, bounces, 'Quantised', 5);
-    expect(onGrid(onsets(quantised), 0.125, 0.005)).toBe(true);
+    expect(
+      measured('Quantise: farthest onset off the 1/16 grid', gridErrorMs(onsets(quantised), 0.125), 'ms')
+    ).toBeLessThanOrEqual(5);
 
     // 5. Flex Pitch on the melody: every note to 100 %, one note +2 semitones, another's vibrato halved; a bounce,
     //    re-analysed, is within 10 cents of the targets. Then Flex Pitch to MIDI.
@@ -400,21 +436,35 @@ test.fixme('edits audio in time and pitch: Smart Tempo, Follow, Flex Time and Pi
     await notes.nth(1).focus();
     await window.keyboard.press('ArrowUp');
     await window.keyboard.press('ArrowUp');
-    await notes.nth(3).click();
-    const vibrato = window.getByTestId('pitch-hotspot-vibrato').first();
+    // Select the fourth note away from its hotspots (top left, bottom left, centre and right), then halve its vibrato.
+    await notes
+      .nth(3)
+      .click({ position: { x: (await middleOf(notes.nth(3))).x / 2, y: (await middleOf(notes.nth(3))).y } });
+    const vibrato = window.locator('an-pitch-note').nth(3).getByTestId('pitch-hotspot-vibrato');
     await vibrato.focus();
     for (let i = 0; i < 5; i++) {
       await window.keyboard.press('ArrowDown');
     }
+    await expect(vibrato).toHaveAttribute('aria-valuenow', '50');
     await soloOnly(window, tracks.slice(0, 3), 'Audio 3');
     const pitched = await bounce(window, bounces, 'Pitched', 3);
     const targets = Melody.map((note, i) => hz(note.midi + (i === 1 ? 2 : 0)));
     targets.forEach((target, i) => {
       const from = 0.1 + i * NoteStep + 0.15;
-      expect(Math.abs(cents(pitchAt(pitched, from, from + 0.3), target))).toBeLessThanOrEqual(10);
+      const off = Math.abs(cents(pitchAt(pitched, from, from + 0.3), target));
+      expect(measured(`Flex Pitch: note ${i + 1} off its target`, off, 'cents')).toBeLessThanOrEqual(10);
     });
+    // Flex Pitch to MIDI: a new instrument track (named as any new one) under the melody's, with a region of its notes.
     await window.getByTestId('flex-pitch-to-midi').click();
-    await expect(window.getByRole('group', { name: /^Track \d+: Melody MIDI$/ })).toBeVisible();
+    await expectRegions(window, 4, 4);
+    const midiTrack = (
+      (await window.getByRole('group', { name: /^Track 4: / }).getAttribute('aria-label')) ?? ''
+    ).replace(/^Track 4: /, '');
+    await selectRegion(window, 3);
+    await expect(window.getByRole('img', { name: /^Piano Roll:/ })).toHaveAttribute(
+      'aria-label',
+      new RegExp(`^Piano Roll: ${Melody.length} notes in`)
+    );
 
     // 6. Strip Silence on the phrase: one region per note.
     await importOnNewTrack(window, app, files.phrase, 5, 'Audio 4');
@@ -442,15 +492,23 @@ test.fixme('edits audio in time and pitch: Smart Tempo, Follow, Flex Time and Pi
     await drums.click();
     const lane = window.getByTestId('beat-mapping-lane');
     const laneBox = await lane.boundingBox();
-    const transient = window.getByTestId('beat-mapping-transient').nth(9);
-    const transientBox = await transient.boundingBox();
-    if (!laneBox || !transientBox) {
+    if (!laneBox) {
       throw new Error('The Beat Mapping track is not on screen.');
     }
+    // Map the beat at bar 3 beat 3 onto the loop's transient nearest it (where the flex marker left that kick).
+    const beatX = laneBox.x + 2 * Bar + 2 * Quarter;
+    const transientXs = await window.getByTestId('beat-mapping-transient').evaluateAll(lines =>
+      lines.map(line => {
+        const r = line.getBoundingClientRect();
+        return r.x + r.width / 2;
+      })
+    );
+    const transientX = transientXs.reduce((a, b) => (Math.abs(b - beatX) < Math.abs(a - beatX) ? b : a));
+    expect(Math.abs(transientX - beatX)).toBeGreaterThan(2);
     const points = await window.locator('[data-testid^="tempo-point-"]').count();
-    await window.mouse.move(laneBox.x + 2 * Bar + 2 * Quarter, laneBox.y + 6);
+    await window.mouse.move(beatX, laneBox.y + 6);
     await window.mouse.down();
-    await window.mouse.move(transientBox.x + transientBox.width / 2, laneBox.y + laneBox.height - 6, { steps: 8 });
+    await window.mouse.move(transientX, laneBox.y + laneBox.height - 6, { steps: 8 });
     await window.mouse.up();
     await expect(window.locator('[data-testid^="tempo-point-"]')).not.toHaveCount(points);
     await window.getByTestId('global-tracks').click();
@@ -467,13 +525,20 @@ test.fixme('edits audio in time and pitch: Smart Tempo, Follow, Flex Time and Pi
     await window.keyboard.press('Enter');
     await expect(window.getByTestId('varispeed-display')).toHaveAttribute('aria-valuenow', '-10');
     const slower = await bounce(window, bounces, 'Speed Only', 3);
-    expect(Math.abs(frames(slower) / frames(plain) - 1 / 0.9)).toBeLessThan(0.01);
+    const longer = measured('Varispeed speed only: length ratio', frames(slower) / frames(plain), '×');
+    expect(Math.abs(longer - 1 / 0.9)).toBeLessThan(0.01);
     const note = (path: string, stretch: number) => pitchAt(path, (0.1 + 0.15) * stretch, (0.1 + 0.45) * stretch);
-    expect(Math.abs(cents(note(slower, 1 / 0.9), note(plain, 1)))).toBeLessThanOrEqual(5);
+    const kept = measured('Varispeed speed only: pitch change', cents(note(slower, 1 / 0.9), note(plain, 1)), 'cents');
+    expect(Math.abs(kept)).toBeLessThanOrEqual(5);
     await window.getByTestId('varispeed-mode').click();
     await window.getByRole('menuitemradio', { name: 'Varispeed (Speed and Pitch)' }).click();
     const tape = await bounce(window, bounces, 'Tape', 3);
-    expect(Math.abs(cents(note(tape, 1 / 0.9), note(plain, 1)) - 12 * Math.log2(0.9) * 100)).toBeLessThanOrEqual(5);
+    const fell = measured(
+      'Varispeed speed and pitch: pitch change',
+      cents(note(tape, 1 / 0.9), note(plain, 1)),
+      'cents'
+    );
+    expect(Math.abs(fell - 12 * Math.log2(0.9) * 100)).toBeLessThanOrEqual(5);
     await window.getByTestId('varispeed-toggle').click();
     await soloOnly(window, tracks.slice(0, 3), '');
 
@@ -530,20 +595,22 @@ test.fixme('edits audio in time and pitch: Smart Tempo, Follow, Flex Time and Pi
     await expectRegions(window, afterProcessing, 6);
 
     // 11. Save, close and reopen: everything is intact.
+    const tempo = (await window.getByTestId('lcd-tempo').innerText()).trim();
     await window.keyboard.press('ControlOrMeta+s');
     await expect(window.getByTestId('unsaved')).toHaveCount(0);
     await window.getByRole('button', { name: 'Close project' }).click();
     await window.getByTestId('recent-Advanced').click();
     await expect(window.getByTestId('project-name')).toHaveText('Advanced');
     await expectRegions(window, afterProcessing, 6);
-    await expect(window.getByTestId('lcd-tempo')).toHaveText('120');
+    await expect(window.getByTestId('lcd-tempo')).toHaveText(tempo);
     await window.getByTestId('flex-toggle').click();
     const reopened = window.getByRole('group', { name: 'Track 1: Audio 1' });
     await expect(reopened.getByTestId('track-flex')).toHaveAttribute('aria-pressed', 'true');
     await expect(reopened.getByTestId('track-flex-mode')).toContainText('Slicing');
     await expect(reopened.getByTestId('track-alternatives')).toContainText('A');
     await expect(window.getByTestId('flex-marker').first()).toBeVisible();
-    await expect(window.getByRole('group', { name: /^Track \d+: Melody MIDI$/ })).toBeVisible();
+    // Bounce in place put its track under the melody's, so the MIDI track is a track further down now.
+    await expect(window.getByRole('group', { name: `Track 5: ${midiTrack}` })).toBeVisible();
   } finally {
     rmSync(scratch, { recursive: true, force: true });
   }
