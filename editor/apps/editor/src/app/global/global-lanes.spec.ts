@@ -24,11 +24,12 @@ describe('Global lanes', () => {
     fixture.autoDetectChanges();
     await fixture.whenStable();
     const handle = () => (fixture.nativeElement as HTMLElement).querySelector('[data-testid="tempo-curve-handle"]');
-    // Six steps in a row, none waiting for the last edit to come back.
+    // Six steps in a row, faster than it renders, none waiting for the last edit to come back.
+    const pressed = handle();
     for (let i = 0; i < 6; i++) {
-      handle()?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true }));
-      fixture.detectChanges();
+      pressed?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true }));
     }
+    fixture.detectChanges();
     expect(handle()?.getAttribute('aria-valuenow')).toBe('0.3');
     await settle();
     await settle();

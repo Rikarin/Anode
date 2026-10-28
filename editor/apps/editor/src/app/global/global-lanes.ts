@@ -177,7 +177,7 @@ interface Field {
                 [style.top.px]="tempoY(handle.bpm)"
                 (pointerdown)="press('curve', '', handle.index, handle.tick, $event)"
                 (dblclick)="$event.stopPropagation(); shape(handle.index, 0)"
-                (keydown)="curveKey(handle.index, handle.shape, $event)"
+                (keydown)="curveKey(handle.index, $event)"
               ></button>
             }
           }
@@ -691,7 +691,9 @@ export class GlobalTracks {
   }
 
   /** Arrows change a curve's shape by 0.05 (Page keys by 0.25); Home/End reach the ends. */
-  protected curveKey(index: number, shape: number, event: KeyboardEvent): void {
+  protected curveKey(index: number, event: KeyboardEvent): void {
+    // The shape as it is now (a press before the last one has rendered builds on it too).
+    const shape = this.tempoEvents()[index]?.shape ?? 0;
     const step = { ArrowUp: 0.05, ArrowRight: 0.05, ArrowDown: -0.05, ArrowLeft: -0.05, PageUp: 0.25, PageDown: -0.25 }[
       event.key
     ];
