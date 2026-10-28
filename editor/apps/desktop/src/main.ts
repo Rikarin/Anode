@@ -254,6 +254,16 @@ function handleIpc(): void {
       filters: [{ name: 'WAV audio', extensions: ['wav', 'wave'] }]
     })
   );
+  ipcMain.handle('anode:dialog:importMidi', async event =>
+    first(
+      await pick(event.sender, {
+        title: 'Import MIDI File',
+        buttonLabel: 'Import',
+        properties: ['openFile'],
+        filters: [{ name: 'Standard MIDI files', extensions: ['mid', 'midi', 'smf'] }]
+      })
+    )
+  );
   // A file for an instrument to load (a sampler's SFZ or WAV): the renderer names the plugin's file types, which are
   // checked to be plain extensions before they become the dialog's filter.
   ipcMain.handle('anode:dialog:instrumentFile', async (event, fileTypes: unknown) =>
@@ -419,7 +429,11 @@ function buildMenu(): void {
     command('Save', 'saveProject', 'CmdOrCtrl+S'),
     command('Close Project', 'closeProject', 'CmdOrCtrl+Shift+W'),
     { type: 'separator' },
-    command('Import Audio…', 'importAudio', 'CmdOrCtrl+Shift+I')
+    command('Import Audio…', 'importAudio', 'CmdOrCtrl+Shift+I'),
+    command('Import MIDI File…', 'importMidi'),
+    { type: 'separator' },
+    command('Save as Alternative…', 'saveAlternative'),
+    command('Key Commands…', 'keyCommands')
   ];
   const template: MenuItemConstructorOptions[] =
     process.platform === 'darwin'

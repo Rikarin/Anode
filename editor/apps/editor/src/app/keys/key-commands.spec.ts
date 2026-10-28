@@ -30,9 +30,7 @@ describe('key commands', () => {
   });
 
   it('reads bindings from the physical key, in modifier order', () => {
-    expect(bindingOf(key('KeyZ', 'Ω', { metaKey: true, shiftKey: true, altKey: true }), true)).toBe(
-      'Meta+Alt+Shift+Z'
-    );
+    expect(bindingOf(key('KeyZ', 'Ω', { metaKey: true, shiftKey: true, altKey: true }), true)).toBe('Meta+Alt+Shift+Z');
     expect(bindingOf(key('Space', ' '), true)).toBe('Space');
     expect(bindingOf(key('Digit3', '£', { shiftKey: true }), true)).toBe('Shift+3');
     expect(bindingOf(key('ShiftLeft', 'Shift', { shiftKey: true }), true)).toBeNull();

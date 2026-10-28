@@ -214,12 +214,16 @@ describe('FakeAnodeServer, Phase 3 commands', () => {
     let now = 0;
     const server = new FakeAnodeServer({ now: () => now });
     const { trackId } = await audioProject(server);
-    await run(server, { type: 'setCycle', enabled: true, startTick: 0, endTick: Bar }, {
-      type: 'setTrack',
-      trackId,
-      input: null,
-      recordArmed: true
-    });
+    await run(
+      server,
+      { type: 'setCycle', enabled: true, startTick: 0, endTick: Bar },
+      {
+        type: 'setTrack',
+        trackId,
+        input: null,
+        recordArmed: true
+      }
+    );
     await server.controlTransport({ command: 'record', tick: 0 });
     now += 2_000 * 2.5; // two and a half bars at 120 bpm
     await server.controlTransport({ command: 'stop' });

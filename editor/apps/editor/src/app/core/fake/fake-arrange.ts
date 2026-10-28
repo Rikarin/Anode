@@ -35,7 +35,12 @@ export function framesBetween(project: Project, from: number, to: number): numbe
 }
 
 /** Moves everything that starts at or after `from` (regions, take folders, markers, sections) by `by` ticks. */
-export function shiftFrom(project: Project, from: number, by: number, except: ReadonlySet<string> = new Set()): Project {
+export function shiftFrom(
+  project: Project,
+  from: number,
+  by: number,
+  except: ReadonlySet<string> = new Set()
+): Project {
   if (by === 0) {
     return project;
   }
@@ -110,15 +115,15 @@ export function moveSection(project: Project, sectionId: string, toTick: number,
   const shiftedContent = contentIn(next, movedStart, movedStart + length);
   next = {
     ...next,
-    regions: [...next.regions, ...shiftedContent.regions.map(r => ({ ...r, id: id('rgn'), startTick: r.startTick + offset }))],
+    regions: [
+      ...next.regions,
+      ...shiftedContent.regions.map(r => ({ ...r, id: id('rgn'), startTick: r.startTick + offset }))
+    ],
     midiRegions: [
       ...next.midiRegions,
       ...shiftedContent.midiRegions.map(r => ({ ...r, id: id('mid'), startTick: r.startTick + offset }))
     ],
-    takeFolders: [
-      ...next.takeFolders,
-      ...shiftedContent.takeFolders.map(f => copyFolder(shiftFolder(f, offset), id))
-    ],
+    takeFolders: [...next.takeFolders, ...shiftedContent.takeFolders.map(f => copyFolder(shiftFolder(f, offset), id))],
     markers: [...next.markers, ...shiftedContent.markers.map(m => ({ ...m, id: id('mrk'), tick: m.tick + offset }))],
     arrangement: [...next.arrangement, { ...section, id: copy ? id('sec') : section.id, startTick: toTick }]
   };
@@ -223,14 +228,23 @@ export function copyRegions(
       throw new ApiError(422, `${track.name} cannot hold that region.`);
     }
     if (audio) {
-      next = { ...next, regions: [...next.regions, { ...audio, id: id('rgn'), startTick: start + offset, trackId: target }] };
+      next = {
+        ...next,
+        regions: [...next.regions, { ...audio, id: id('rgn'), startTick: start + offset, trackId: target }]
+      };
     } else if (midi) {
       next = {
         ...next,
-        midiRegions: [...next.midiRegions, { ...structuredClone(midi), id: id('mid'), startTick: start + offset, trackId: target }]
+        midiRegions: [
+          ...next.midiRegions,
+          { ...structuredClone(midi), id: id('mid'), startTick: start + offset, trackId: target }
+        ]
       };
     } else if (folder) {
-      next = { ...next, takeFolders: [...next.takeFolders, { ...copyFolder(shiftFolder(folder, offset), id), trackId: target }] };
+      next = {
+        ...next,
+        takeFolders: [...next.takeFolders, { ...copyFolder(shiftFolder(folder, offset), id), trackId: target }]
+      };
     }
   }
   return next;
@@ -246,7 +260,7 @@ export function joinRegions(project: Project, ids: readonly string[]): Project {
   }
   const midi = ids.map(i => project.midiRegions.find(r => r.id === i));
   if (midi.every(r => r !== undefined)) {
-    const regions = (midi as MidiRegion[]).sort((a, b) => a.startTick - b.startTick);
+    const regions = midi.sort((a, b) => a.startTick - b.startTick);
     const first = regions[0] as MidiRegion;
     if (new Set(regions.map(r => r.trackId)).size !== 1) {
       throw new ApiError(422, 'Joined regions must be on one track.');
@@ -260,7 +274,11 @@ export function joinRegions(project: Project, ids: readonly string[]): Project {
         .flatMap(r =>
           r.notes
             .filter(n => n.startTick >= 0 && n.startTick < r.lengthTicks)
-            .map(n => ({ ...n, startTick: n.startTick + r.startTick - first.startTick, id: r === first ? n.id : ++noteId }))
+            .map(n => ({
+              ...n,
+              startTick: n.startTick + r.startTick - first.startTick,
+              id: r === first ? n.id : ++noteId
+            }))
         )
         .sort((a, b) => a.startTick - b.startTick || a.pitch - b.pitch),
       controls: regions.flatMap(r => r.controls.map(c => ({ ...c, tick: c.tick + r.startTick - first.startTick })))
@@ -274,7 +292,7 @@ export function joinRegions(project: Project, ids: readonly string[]): Project {
   if (!audio.every(r => r !== undefined)) {
     throw new ApiError(422, 'Join takes regions of one kind.');
   }
-  const regions = (audio as AudioRegion[]).sort((a, b) => a.startTick - b.startTick);
+  const regions = audio.sort((a, b) => a.startTick - b.startTick);
   const first = regions[0] as AudioRegion;
   for (let i = 1; i < regions.length; i++) {
     const a = regions[i - 1] as AudioRegion;
@@ -285,7 +303,10 @@ export function joinRegions(project: Project, ids: readonly string[]): Project {
       b.fileOffset !== a.fileOffset + a.length ||
       Math.abs(b.startTick - audioEnd(project, a)) > 1
     ) {
-      throw new ApiError(422, 'These regions do not play one stretch of one file: joining them needs a bounce (Phase 4).');
+      throw new ApiError(
+        422,
+        'These regions do not play one stretch of one file: joining them needs a bounce (Phase 4).'
+      );
     }
   }
   const last = regions.at(-1) as AudioRegion;
@@ -299,12 +320,17 @@ export function joinRegions(project: Project, ids: readonly string[]): Project {
 }
 
 /** `packTakeFolder`: overlapping or touching audio regions of one track become a take folder, one take each. */
-export function packTakeFolder(project: Project, ids: readonly string[], name: string | null | undefined, id: IdMaker): Project {
+export function packTakeFolder(
+  project: Project,
+  ids: readonly string[],
+  name: string | null | undefined,
+  id: IdMaker
+): Project {
   const regions = ids.map(i => project.regions.find(r => r.id === i));
   if (regions.length < 1 || !regions.every(r => r !== undefined)) {
     throw new ApiError(422, 'Pack takes audio regions.');
   }
-  const sorted = (regions as AudioRegion[]).sort((a, b) => a.startTick - b.startTick);
+  const sorted = regions.sort((a, b) => a.startTick - b.startTick);
   if (new Set(sorted.map(r => r.trackId)).size !== 1) {
     throw new ApiError(422, 'Packed regions must be on one track.');
   }
@@ -362,8 +388,8 @@ export function flattenTakeFolder(project: Project, folderId: string, id: IdMake
     }
     const before = segments[i - 1];
     const after = segments[i + 1];
-    const joinsBefore = before !== undefined && before.endTick === s.startTick;
-    const joinsAfter = after !== undefined && after.startTick === s.endTick;
+    const joinsBefore = before?.endTick === s.startTick;
+    const joinsAfter = after?.startTick === s.endTick;
     let offset = take.fileOffset + framesBetween(project, take.startTick, s.startTick);
     let length = framesBetween(project, s.startTick, s.endTick);
     let startTick = s.startTick;
@@ -447,7 +473,14 @@ export function replaceRange(project: Project, trackId: string, from: number, to
     }
     if (end > to) {
       const cut = framesBetween(project, r.startTick, to);
-      regions.push({ ...r, id: id('rgn'), startTick: Math.round(to), fileOffset: r.fileOffset + cut, length: r.length - cut, fadeIn: 0 });
+      regions.push({
+        ...r,
+        id: id('rgn'),
+        startTick: Math.round(to),
+        fileOffset: r.fileOffset + cut,
+        length: r.length - cut,
+        fadeIn: 0
+      });
     }
   }
   return {

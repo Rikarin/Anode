@@ -73,7 +73,11 @@ export function fakeFileExists(path: string): boolean {
 }
 
 /** `/files` on the fake disk: folders first, then files, by name; audio with a probed format. */
-export function listFakeFolder(path: string | null | undefined, sampleRate: number, modified: string): DirectoryListing {
+export function listFakeFolder(
+  path: string | null | undefined,
+  sampleRate: number,
+  modified: string
+): DirectoryListing {
   const at = (path ?? FakeHome).replace(/\/+$/, '') || FakeHome;
   const folder = folderAt(at);
   if (!folder) {

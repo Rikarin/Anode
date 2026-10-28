@@ -10,11 +10,9 @@ import {
   viewChild
 } from '@angular/core';
 import { XuiInputImports } from '@xui/input';
+import { KeyNames } from '../global/global-math';
 import { ProjectStore } from '../state/project.store';
-import { TransportStore, barsBeats, clockTime, parseSignature } from '../state/transport.store';
-
-/** Pitch-class names for the key, as Logic spells them. */
-const KeyNames = ['C', 'C♯', 'D', 'E♭', 'E', 'F', 'F♯', 'G', 'A♭', 'A', 'B♭', 'B'];
+import { TransportStore, clockTime, parseSignature } from '../state/transport.store';
 
 /**
  * The LCD in the control bar (Logic's, in its glossy glass): the playhead as bars/beats/divisions/ticks and as clock
@@ -96,7 +94,7 @@ const KeyNames = ['C', 'C♯', 'D', 'E♭', 'E', 'F', 'F♯', 'G', 'A♭', 'A', 
 export class Lcd {
   protected readonly transport = inject(TransportStore);
   private readonly project = inject(ProjectStore);
-  /** The project's key at its start (the key track's first event), read-only until the global tracks land. */
+  /** The key at the start (the key track's first event; the key track edits the rest). */
   protected readonly keyText = computed(() => {
     const key = this.project.settings().keys[0];
     return key ? `${KeyNames[key.tonic] ?? '?'} ${key.mode === 'minor' ? 'min' : 'maj'}` : '—';
@@ -111,7 +109,7 @@ export class Lcd {
     const draw = () => {
       const now = performance.now();
       const ticks = this.transport.positionAt(now);
-      const { bar, beat, division, tick } = barsBeats(ticks, this.transport.signature());
+      const { bar, beat, division, tick } = this.project.meter().position(ticks);
       this.bars.set(`${bar} ${beat} ${division} ${String(tick).padStart(3, ' ')}`);
       this.time.set(clockTime(this.transport.secondsAt(now)));
       frame = requestAnimationFrame(draw);

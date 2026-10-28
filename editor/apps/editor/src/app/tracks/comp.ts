@@ -12,7 +12,7 @@ export function normalizeComp(segments: readonly CompSegment[]): CompSegment[] {
   const merged: CompSegment[] = [];
   for (const s of sorted) {
     const last = merged.at(-1);
-    if (last && last.takeId === s.takeId && s.startTick <= last.endTick) {
+    if (last?.takeId === s.takeId && s.startTick <= last.endTick) {
       last.endTick = Math.max(last.endTick, s.endTick);
     } else {
       merged.push(s);

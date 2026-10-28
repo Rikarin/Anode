@@ -47,9 +47,7 @@ describe('drag modes', () => {
   });
 
   it('shuffles several moved regions one after another', () => {
-    expect(
-      applyDragMode('shuffleLeft', [span('b', 1500, 2000), span('d', 1800, 2100)], [span('a', 0, 1000)])
-    ).toEqual([
+    expect(applyDragMode('shuffleLeft', [span('b', 1500, 2000), span('d', 1800, 2100)], [span('a', 0, 1000)])).toEqual([
       { kind: 'move', id: 'b', startTick: 1000 },
       { kind: 'move', id: 'd', startTick: 1500 }
     ]);

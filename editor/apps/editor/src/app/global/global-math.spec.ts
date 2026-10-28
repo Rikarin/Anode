@@ -9,6 +9,7 @@ import {
   nearestBoundary,
   nextSection,
   nextSectionName,
+  parseKey,
   removeTempoPoint,
   sectionBoundaries,
   tempoPath,
@@ -60,6 +61,16 @@ describe('tempo lane maths', () => {
       100
     );
     expect(path).toBe('0.0,120.0 38.4,120.0 38.4,90.0 76.8,140.0 100.0,140.0');
+  });
+});
+
+describe('parseKey', () => {
+  it('reads key names', () => {
+    expect(parseKey('A minor')).toEqual({ tonic: 9, mode: 'minor' });
+    expect(parseKey('Am')).toEqual({ tonic: 9, mode: 'minor' });
+    expect(parseKey('F# major')).toEqual({ tonic: 6, mode: 'major' });
+    expect(parseKey('Bb')).toEqual({ tonic: 10, mode: 'major' });
+    expect(parseKey('H')).toBeNull();
   });
 });
 

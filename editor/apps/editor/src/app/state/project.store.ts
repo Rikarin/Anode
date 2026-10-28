@@ -273,6 +273,14 @@ export class ProjectStore {
     );
   }
 
+  /**
+   * Runs another request that answers with an edit's result (a MIDI file import), in line with the edits, applying
+   * its delta here; null when refused (reported).
+   */
+  send(request: () => Promise<CommandResult>, failure: string): Promise<CommandResult | null> {
+    return this.serial(request, failure);
+  }
+
   undo(): Promise<CommandResult | null> {
     return this.serial(() => this.api.undo(), 'Could not undo');
   }

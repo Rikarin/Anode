@@ -34,9 +34,7 @@ export class MeterMap {
     events: readonly MeterEvent[],
     readonly ppq = 960
   ) {
-    const sorted = [...events]
-      .filter(e => e.numerator > 0 && e.denominator > 0)
-      .sort((a, b) => a.tick - b.tick);
+    const sorted = [...events].filter(e => e.numerator > 0 && e.denominator > 0).sort((a, b) => a.tick - b.tick);
     if (sorted.length === 0 || (sorted[0]?.tick ?? 0) > 0) {
       sorted.unshift({ tick: 0, numerator: sorted[0]?.numerator ?? 4, denominator: sorted[0]?.denominator ?? 4 });
     }
@@ -49,7 +47,7 @@ export class MeterMap {
         ? previous.tick + Math.ceil((e.tick - previous.tick) / previous.barTicks) * previous.barTicks
         : 0;
       const bar = previous ? previous.bar + (tick - previous.tick) / previous.barTicks : 0;
-      if (previous && previous.tick === tick) {
+      if (previous?.tick === tick) {
         this.segments.pop();
       }
       this.segments.push({ tick, bar, barTicks: beatTicks * e.numerator, beatTicks });
@@ -153,7 +151,10 @@ export class MeterMap {
       for (let t = 0; t < s.barTicks; t += step) {
         const tick = start + t;
         if (tick >= from && tick <= to) {
-          lines.push({ tick, level: t === 0 ? GridLevel.Bar : t % s.beatTicks === 0 ? GridLevel.Beat : GridLevel.Division });
+          lines.push({
+            tick,
+            level: t === 0 ? GridLevel.Bar : t % s.beatTicks === 0 ? GridLevel.Beat : GridLevel.Division
+          });
         }
       }
     }

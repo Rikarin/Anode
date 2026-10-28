@@ -34,7 +34,6 @@ import { clampParameter, defaultParameters } from '../../instruments/parameters'
 import { isNoteOff, isNoteOn, NeutralPlayback, quantizeNotes } from '../../midi/midi-math';
 import { TrackColors } from '../../state/track-colors';
 import type { AnodeApi, CreateProject } from '../api';
-import { fakePeaks, hash, readWavHeader } from './fake-audio';
 import {
   audioEnd,
   checkComp,
@@ -45,7 +44,6 @@ import {
   framesBetween,
   groupStacks,
   joinRegions,
-  meterOf,
   moveSection,
   packTakeFolder,
   replaceRange,
@@ -53,6 +51,7 @@ import {
   sortSections,
   tempoOf
 } from './fake-arrange';
+import { fakePeaks, hash, readWavHeader } from './fake-audio';
 import { fakeFileExists, FakeHome, fileKind, listFakeFolder } from './fake-files';
 import { FakeCatalogue, FakeMidiDevices } from './fake-plugins';
 
@@ -450,14 +449,21 @@ export class FakeAnodeServer implements AnodeApi {
     return this.answer('FlashbackCapture', () => {
       const project = this.require();
       this.advance();
-      const played = this.transportState === 'playing' ? { ...(this.played ?? { from: 0, wraps: 0 }), to: this.positionTick } : this.played;
+      const played =
+        this.transportState === 'playing'
+          ? { ...(this.played ?? { from: 0, wraps: 0 }), to: this.positionTick }
+          : this.played;
       if (!played || played.to <= played.from + 1) {
         throw new ApiError(422, 'Nothing was played to capture: play first, then capture.');
       }
       if (!project.tracks.some(t => t.recordArmed)) {
         throw new ApiError(422, 'Record-enable the tracks to capture first.');
       }
-      this.commit(project, this.recordedTakes(project, played.from, played.to, played.wraps, true), 'Flashback Capture');
+      this.commit(
+        project,
+        this.recordedTakes(project, played.from, played.to, played.wraps, true),
+        'Flashback Capture'
+      );
     });
   }
 
@@ -479,7 +485,12 @@ export class FakeAnodeServer implements AnodeApi {
           entry.alternative = { ...entry.alternative, current: false };
         }
       }
-      const alternative: ProjectAlternative = { id: `alt_${this.nextId++}`, name: name.trim(), modified, current: true };
+      const alternative: ProjectAlternative = {
+        id: `alt_${this.nextId++}`,
+        name: name.trim(),
+        modified,
+        current: true
+      };
       set.push({ alternative, project: null });
       return { ...alternative };
     });
@@ -524,7 +535,9 @@ export class FakeAnodeServer implements AnodeApi {
   }
 
   backups(): Promise<ProjectBackup[]> {
-    return this.answer('ListBackups', () => (this.backupSets.get(this.require().path) ?? []).map(b => ({ ...b.backup })));
+    return this.answer('ListBackups', () =>
+      (this.backupSets.get(this.require().path) ?? []).map(b => ({ ...b.backup }))
+    );
   }
 
   revertToBackup(id: string): Promise<Project> {
@@ -551,7 +564,10 @@ export class FakeAnodeServer implements AnodeApi {
         throw new ApiError(422, 'Screensets are numbered 1 to 9.');
       }
       const list = (this.screensetSets.get(project.path) ?? []).filter(s => s.number !== screenset.number);
-      this.screensetSets.set(project.path, [...list, structuredClone(screenset)].sort((a, b) => a.number - b.number));
+      this.screensetSets.set(
+        project.path,
+        [...list, structuredClone(screenset)].sort((a, b) => a.number - b.number)
+      );
       this.project = { ...project, dirty: true };
       return structuredClone(screenset);
     });
@@ -1310,7 +1326,11 @@ export class FakeAnodeServer implements AnodeApi {
       }
       case 'deleteRegions':
         command.regionIds.forEach(regionId =>
-          regionId.startsWith('tkf_') ? folder(regionId) : isMidiRegionId(regionId) ? midiRegion(regionId) : region(regionId)
+          regionId.startsWith('tkf_')
+            ? folder(regionId)
+            : isMidiRegionId(regionId)
+              ? midiRegion(regionId)
+              : region(regionId)
         );
         return {
           ...project,
@@ -1573,7 +1593,7 @@ export class FakeAnodeServer implements AnodeApi {
         });
         return {
           ...project,
-          settings: { ...project.settings, tempoEvents: events, tempo: events[0]?.bpm ?? project.settings.tempo }
+          settings: { ...project.settings, tempoEvents: events, tempo: events[0].bpm }
         };
       }
       case 'setSignatures': {
@@ -1616,7 +1636,7 @@ export class FakeAnodeServer implements AnodeApi {
           id: `mrk_${this.nextId++}`,
           name: command.name || `Marker ${project.markers.length + 1}`,
           tick: Math.round(command.tick),
-          lengthTicks: Math.max(0, Math.round(command.lengthTicks ?? 0)),
+          lengthTicks: Math.max(0, Math.round(command.lengthTicks)),
           color: command.color ?? null,
           text: ''
         };
@@ -1680,9 +1700,9 @@ export class FakeAnodeServer implements AnodeApi {
         return { ...project, arrangement };
       }
       case 'deleteSections':
-        return deleteSections(project, command.sectionIds, command.removeContent ?? false);
+        return deleteSections(project, command.sectionIds, command.removeContent);
       case 'moveSection':
-        return moveSection(project, command.sectionId, Math.round(command.toTick), command.copy ?? false, id);
+        return moveSection(project, command.sectionId, Math.round(command.toTick), command.copy, id);
       case 'setComp': {
         const f = folder(command.folderId);
         return withFolder({ ...f, comp: checkComp(f, command.segments) });
@@ -1710,9 +1730,7 @@ export class FakeAnodeServer implements AnodeApi {
           name: command.name ?? f.name,
           crossfade: Math.max(0, Math.round(command.crossfade ?? f.crossfade)),
           muted: command.muted ?? f.muted,
-          takes: f.takes.map(t =>
-            t.id === command.takeId && command.takeName ? { ...t, name: command.takeName } : t
-          )
+          takes: f.takes.map(t => (t.id === command.takeId && command.takeName ? { ...t, name: command.takeName } : t))
         });
       }
       case 'deleteTake': {
@@ -1783,9 +1801,7 @@ export class FakeAnodeServer implements AnodeApi {
         ];
         // Stacks the members left behind empty are removed with them.
         const emptied = new Set(
-          project.tracks
-            .filter(t => t.kind === 'stack' && !tracks.some(m => m.parentId === t.id))
-            .map(t => t.id)
+          project.tracks.filter(t => t.kind === 'stack' && !tracks.some(m => m.parentId === t.id)).map(t => t.id)
         );
         return { ...project, tracks: groupStacks(tracks.filter(t => !emptied.has(t.id))) };
       }
@@ -2061,10 +2077,21 @@ export class FakeAnodeServer implements AnodeApi {
       ['Verse', 4, 8],
       ['Chorus', 12, 8]
     ] as const) {
-      project = this.applyCommand(project, { type: 'addSection', name, startTick: start * bar, lengthTicks: bars * bar });
+      project = this.applyCommand(project, {
+        type: 'addSection',
+        name,
+        startTick: start * bar,
+        lengthTicks: bars * bar
+      });
     }
     project = this.applyCommand(project, { type: 'addMarker', name: 'Vocals in', tick: 4 * bar, lengthTicks: 0 });
-    project = this.applyCommand(project, { type: 'addMarker', name: 'Drop', tick: 12 * bar, lengthTicks: 0, color: '#d0021b' });
+    project = this.applyCommand(project, {
+      type: 'addMarker',
+      name: 'Drop',
+      tick: 12 * bar,
+      lengthTicks: 0,
+      color: '#d0021b'
+    });
     const vocals = project.regions.find(r => r.name === 'Lead vocal');
     if (vocals) {
       project = this.applyCommand(project, {
@@ -2309,14 +2336,26 @@ export function diff(before: Project, after: Project): DeltaOp[] {
       ops.push({ op: 'midiRegionUpserted', region });
     }
   }
-  diffList(before.takeFolders, after.takeFolders, same, id => ops.push({ op: 'takeFolderRemoved', id }), folder =>
-    ops.push({ op: 'takeFolderUpserted', folder })
+  diffList(
+    before.takeFolders,
+    after.takeFolders,
+    same,
+    id => ops.push({ op: 'takeFolderRemoved', id }),
+    folder => ops.push({ op: 'takeFolderUpserted', folder })
   );
-  diffList(before.markers, after.markers, same, id => ops.push({ op: 'markerRemoved', id }), marker =>
-    ops.push({ op: 'markerUpserted', marker })
+  diffList(
+    before.markers,
+    after.markers,
+    same,
+    id => ops.push({ op: 'markerRemoved', id }),
+    marker => ops.push({ op: 'markerUpserted', marker })
   );
-  diffList(before.arrangement, after.arrangement, same, id => ops.push({ op: 'sectionRemoved', id }), section =>
-    ops.push({ op: 'sectionUpserted', section })
+  diffList(
+    before.arrangement,
+    after.arrangement,
+    same,
+    id => ops.push({ op: 'sectionRemoved', id }),
+    section => ops.push({ op: 'sectionUpserted', section })
   );
   if (before.notes !== after.notes) {
     ops.push({ op: 'notesChanged', text: after.notes });

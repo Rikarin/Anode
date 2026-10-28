@@ -13,6 +13,8 @@ import type { Track } from '@anode/api-client';
 import { faderDb, faderPosition, formatDb } from '@anode/audio-ui';
 import { provideIcons } from '@ng-icons/core';
 import {
+  matChevronRightRound,
+  matExpandMoreRound,
   matFolderRound,
   matGraphicEqRound,
   matMoreHorizRound,
@@ -53,6 +55,8 @@ import { setTrack, setTrackLabel, type TrackChange } from '../state/track-comman
   ],
   providers: [
     provideIcons({
+      matChevronRightRound,
+      matExpandMoreRound,
       matFolderRound,
       matGraphicEqRound,
       matMoreHorizRound,
@@ -67,7 +71,9 @@ import { setTrack, setTrackLabel, type TrackChange } from '../state/track-comman
     '[attr.data-track-id]': 'track().id',
     '[class.bg-muted]': 'selected()',
     '[class.bg-surface]': '!selected()',
-    '(click)': 'select()'
+    '[style.margin-inline-start.px]': 'depth() * 14',
+    '[attr.data-stack]': 'track().kind === "stack" || null',
+    '(click)': 'select($event)'
   },
   template: `
     <button
@@ -94,6 +100,18 @@ import { setTrack, setTrackLabel, type TrackChange } from '../state/track-comman
     </ng-template>
     <div class="flex min-w-0 flex-1 flex-col justify-center gap-1 py-1">
       <div class="flex min-w-0 items-center gap-1.5">
+        @if (track().kind === 'stack') {
+          <button
+            type="button"
+            class="text-foreground-muted hover:text-foreground -ms-1 grid size-4 shrink-0 place-items-center"
+            [attr.aria-label]="(track().collapsed ? 'Expand stack ' : 'Collapse stack ') + track().name"
+            [attr.aria-expanded]="!track().collapsed"
+            data-testid="stack-disclosure"
+            (click)="$event.stopPropagation(); toggleCollapsed()"
+          >
+            <ng-icon xui size="sm" [name]="track().collapsed ? 'matChevronRightRound' : 'matExpandMoreRound'" />
+          </button>
+        }
         <span class="text-foreground-subtle w-4 shrink-0 text-end text-[11px] font-medium tabular-nums">{{
           number()
         }}</span>
@@ -155,6 +173,15 @@ import { setTrack, setTrackLabel, type TrackChange } from '../state/track-comman
               Move Down
             </button>
             <xui-menu-divider />
+            @if (track().kind === 'stack') {
+              <button xuiMenuItem type="button" (click)="unstack()">Flatten Stack</button>
+            } @else {
+              <button xuiMenuItem type="button" (click)="stack()">Create Track Stack</button>
+              @if (track().parentId) {
+                <button xuiMenuItem type="button" (click)="leaveStack()">Remove from Stack</button>
+              }
+            }
+            <xui-menu-divider />
             <button xuiMenuItem type="button" color="error" (click)="remove()">Delete Track</button>
           </xui-menu>
         </ng-template>
@@ -183,6 +210,8 @@ import { setTrack, setTrackLabel, type TrackChange } from '../state/track-comman
         <button
           type="button"
           class="state-toggle toggle-arm"
+          [class.invisible]="track().kind === 'stack'"
+          [disabled]="track().kind === 'stack'"
           [attr.aria-pressed]="track().recordArmed"
           [attr.aria-label]="'Record enable ' + track().name"
           xuiTooltip="Record enable"
@@ -227,13 +256,17 @@ export class TrackHeader {
   readonly track = input.required<Track>();
   /** Position in the track list, from 0. */
   readonly index = input.required<number>();
+  /** 1 for a track in a stack: its header is indented under the stack's. */
+  readonly depth = input(0);
 
   protected readonly colors = TrackColors;
   protected readonly renaming = signal(false);
   private readonly nameInput = viewChild<ElementRef<HTMLInputElement>>('name');
   protected readonly number = computed(() => this.index() + 1);
   protected readonly count = computed(() => this.project.trackIds().length);
-  protected readonly selected = computed(() => this.selection.track() === this.track().id);
+  protected readonly selected = computed(
+    () => this.selection.track() === this.track().id || this.selection.tracks().has(this.track().id)
+  );
   protected readonly volume = computed(() => this.mixer.value(this.track().id, 'volumeDb'));
   protected readonly volumePosition = computed(() => faderPosition(this.volume()));
   protected readonly volumeText = computed(() => formatDb(this.volume()));
@@ -254,7 +287,9 @@ export class TrackHeader {
       ? 'Audio track'
       : track.kind === 'midi'
         ? 'External MIDI track'
-        : `Software instrument: ${track.instrument?.name ?? 'none'}`;
+        : track.kind === 'stack'
+          ? 'Track stack'
+          : `Software instrument: ${track.instrument?.name ?? 'none'}`;
   });
 
   constructor() {
@@ -265,8 +300,35 @@ export class TrackHeader {
     });
   }
 
-  protected select(): void {
-    this.selection.track.set(this.track().id);
+  /** Selects the track; ⇧ or ⌘ adds it to the selected tracks (to stack them). */
+  protected select(event?: MouseEvent): void {
+    this.selection.selectTrack(this.track().id, !!event && (event.shiftKey || event.metaKey));
+  }
+
+  protected toggleCollapsed(): void {
+    const collapsed = !this.track().collapsed;
+    void this.project.execute(
+      [{ type: 'setTrack', trackId: this.track().id, input: null, collapsed }],
+      collapsed ? 'Collapse Stack' : 'Expand Stack'
+    );
+  }
+
+  /** A stack of the selected tracks (this one when it is not among them). */
+  protected stack(): void {
+    const selected = this.selection.trackSelection().filter(id => this.project.track(id)?.kind !== 'stack');
+    const ids = selected.includes(this.track().id) ? selected : [this.track().id];
+    void this.project.execute([{ type: 'createStack', trackIds: ids }], 'Create Track Stack');
+  }
+
+  protected unstack(): void {
+    void this.project.execute([{ type: 'removeStack', stackId: this.track().id }], 'Flatten Stack');
+  }
+
+  protected leaveStack(): void {
+    void this.project.execute(
+      [{ type: 'setTrackParent', trackId: this.track().id, parentId: null }],
+      'Remove from Stack'
+    );
   }
 
   protected startRename(event?: Event): void {

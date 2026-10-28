@@ -29,12 +29,13 @@ export function xAtTick(view: TimelineView, tick: number): number {
 
 /** The lane at y (CSS pixels from the canvas's top edge), fractional; negative over the ruler. */
 export function laneAtY(view: TimelineView, y: number): number {
-  return y < RULER_HEIGHT ? -1 : view.firstLane + (y - RULER_HEIGHT) / view.laneHeight;
+  const top = view.lanesTop ?? RULER_HEIGHT;
+  return y < top ? -1 : view.firstLane + (y - top) / view.laneHeight;
 }
 
 /** The y of a lane's top edge. */
 export function yAtLane(view: TimelineView, lane: number): number {
-  return RULER_HEIGHT + (lane - view.firstLane) * view.laneHeight;
+  return (view.lanesTop ?? RULER_HEIGHT) + (lane - view.firstLane) * view.laneHeight;
 }
 
 /**
@@ -72,12 +73,24 @@ export function hitTest(
       continue;
     }
 
+    const flag = regions?.flags[id] ?? 0;
+    if (flag & ItemFlag.Inner) {
+      continue; // a part of the item under it: the item is what the pointer takes
+    }
+    if (flag & ItemFlag.Folder) {
+      if (x > xStart && x < xEnd) {
+        best = { index: id, zone: 'body' };
+      }
+      continue;
+    }
     const edge = Math.min(EDGE_PX, (xEnd - xStart) / 4);
-    const fades = regions !== undefined && !((regions.flags[id] ?? 0) & ItemFlag.Midi);
+    const fades = regions !== undefined && !(flag & ItemFlag.Midi);
     let zone: RegionZone | null = null;
     if (fades && upper) {
-      const fadeIn = ((regions.fadeIn[id] ?? 0) / regions.framesPerTick) * ppt;
-      const fadeOut = ((regions.fadeOut[id] ?? 0) / regions.framesPerTick) * ppt;
+      const own = regions.rate[id] ?? 0;
+      const rate = own > 0 ? own : regions.framesPerTick;
+      const fadeIn = ((regions.fadeIn[id] ?? 0) / rate) * ppt;
+      const fadeOut = ((regions.fadeOut[id] ?? 0) / rate) * ppt;
       if (fadeIn > 0 && Math.abs(x - (xStart + fadeIn)) <= FADE_HANDLE_PX) {
         zone = 'fade-in';
       } else if (fadeOut > 0 && Math.abs(x - (xEnd - fadeOut)) <= FADE_HANDLE_PX) {
@@ -109,7 +122,7 @@ export function itemsInRect(
 ): number[] {
   const from = tickAtX(view, rect.x);
   const to = tickAtX(view, rect.x + rect.width);
-  const laneFrom = Math.floor(Math.max(0, laneAtY(view, Math.max(rect.y, RULER_HEIGHT))));
+  const laneFrom = Math.floor(Math.max(0, laneAtY(view, Math.max(rect.y, view.lanesTop ?? RULER_HEIGHT))));
   const laneTo = Math.min(scene.laneCount, Math.floor(laneAtY(view, rect.y + rect.height)) + 1);
   if (laneTo <= laneFrom || to <= from) {
     return [];

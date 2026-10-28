@@ -11,6 +11,8 @@ export class SelectionStore {
   private readonly project = inject(ProjectStore);
   readonly regions = signal<ReadonlySet<string>>(new Set());
   readonly track = signal<string | null>(null);
+  /** Tracks selected in the Tracks area (⇧- or ⌘-click adds), for track stacks; the last clicked is {@link track}. */
+  readonly tracks = signal<ReadonlySet<string>>(new Set());
   readonly notes = signal<ReadonlySet<number>>(new Set());
   readonly hasRegions = computed(() => this.regions().size > 0);
 
@@ -18,10 +20,11 @@ export class SelectionStore {
     effect(() => {
       const regions = this.project.regions();
       const midi = this.project.midiRegions();
+      const folders = this.project.takeFolders();
       const tracks = this.project.tracks();
       untracked(() => {
         const selected = this.regions();
-        const kept = [...selected].filter(id => regions.has(id) || midi.has(id));
+        const kept = [...selected].filter(id => regions.has(id) || midi.has(id) || folders.has(id));
         if (kept.length !== selected.size) {
           this.regions.set(new Set(kept));
         }
@@ -29,6 +32,10 @@ export class SelectionStore {
         const track = this.track();
         if (track && !tracks.has(track)) {
           this.track.set(null);
+        }
+        const selectedTracks = this.tracks();
+        if ([...selectedTracks].some(id => !tracks.has(id))) {
+          this.tracks.set(new Set([...selectedTracks].filter(id => tracks.has(id))));
         }
 
         const notes = this.notes();
@@ -46,6 +53,29 @@ export class SelectionStore {
         }
       });
     });
+  }
+
+  /** Selects a track (the clicked header or lane); with `add`, adds it to (or removes it from) the selected tracks. */
+  selectTrack(id: string, add = false): void {
+    this.track.set(id);
+    if (add) {
+      this.tracks.update(set => {
+        const next = new Set(set);
+        if (!next.delete(id)) {
+          next.add(id);
+        }
+        return next;
+      });
+    } else {
+      this.tracks.set(new Set([id]));
+    }
+  }
+
+  /** The tracks a track command applies to: the selected ones, or the last clicked. */
+  trackSelection(): string[] {
+    const set = this.tracks();
+    const last = this.track();
+    return set.size > 0 ? [...set] : last ? [last] : [];
   }
 
   isSelected(regionId: string): boolean {

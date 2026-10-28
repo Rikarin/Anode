@@ -1,6 +1,7 @@
 import { barMultiple, GridLevel, gridLines, gridStep } from './grid';
 import { ItemFlag, type ItemOverride, parseHexColor, type TimelineScene, type TimelineView } from './items';
 import { LaneIntervalIndex } from './lane-interval-index';
+import { MeterMap } from './meter';
 import { peakRange, WaveformSet } from './waveform';
 
 /**
@@ -67,6 +68,9 @@ export interface TimelineTheme {
   readonly regionText: number;
   /** A muted region's fill. */
   readonly muted: number;
+  /** The autopunch range in the ruler, on and off. */
+  readonly punch: number;
+  readonly punchOff: number;
 }
 
 /** The dark theme (Anode's primary): graphite lanes, a lighter ruler, a white playhead, Logic's yellow cycle area. */
@@ -89,7 +93,9 @@ export const darkTheme: TimelineTheme = {
   marqueeFill: parseHexColor('#ffffff1a'),
   fade: parseHexColor('#ededf0'),
   regionText: parseHexColor('#f8f8fa'),
-  muted: parseHexColor('#6c6c72')
+  muted: parseHexColor('#6c6c72'),
+  punch: parseHexColor('#ff453a'),
+  punchOff: parseHexColor('#7a3a37')
 };
 
 /** The light theme: Logic's light grey lanes, a dark playhead, the same yellow cycle area. */
@@ -112,7 +118,9 @@ export const lightTheme: TimelineTheme = {
   marqueeFill: parseHexColor('#0071e31f'),
   fade: parseHexColor('#ffffff'),
   regionText: parseHexColor('#ffffff'),
-  muted: parseHexColor('#a2a2a8')
+  muted: parseHexColor('#a2a2a8'),
+  punch: parseHexColor('#e0352b'),
+  punchOff: parseHexColor('#d9a3a0')
 };
 
 /** The palette for a {@link TimelineScene.theme}. */
@@ -256,6 +264,8 @@ interface DrawnRegion {
   fileOffset: number;
   fadeIn: number;
   fadeOut: number;
+  fadeInCurve: number;
+  fadeOutCurve: number;
 }
 
 /**
@@ -270,6 +280,8 @@ export class FrameBuilder {
   private readonly visible: Uint32Array;
   private readonly drawn: DrawnRegion[] = [];
   private readonly range = new Float32Array(2);
+  /** The signature track, when the scene has one. */
+  private readonly meter: MeterMap | null;
 
   constructor(
     readonly scene: TimelineScene,
@@ -279,6 +291,7 @@ export class FrameBuilder {
   ) {
     this.index = new LaneIntervalIndex(scene.items, scene.laneCount);
     this.visible = new Uint32Array(this.index.size);
+    this.meter = scene.meter?.length ? new MeterMap(scene.meter, scene.ppq) : null;
   }
 
   /** Builds the frame for `view` on a `width` × `height` CSS-pixel canvas. */
@@ -287,7 +300,7 @@ export class FrameBuilder {
     const { ppq, beatsPerBar, laneCount, kind } = scene;
     const { originTick, pixelsPerTick: ppt, firstLane, laneHeight } = view;
     const endTick = originTick + width / ppt;
-    const laneTop = RULER_HEIGHT;
+    const laneTop = view.lanesTop ?? RULER_HEIGHT;
     const laneFrom = Math.max(0, Math.floor(firstLane));
     const laneTo = Math.min(laneCount, Math.ceil(firstLane + (height - laneTop) / laneHeight));
     const laneY = (lane: number) => laneTop + (lane - firstLane) * laneHeight;
@@ -321,8 +334,13 @@ export class FrameBuilder {
     }
     batch.endLayer();
 
-    // Grid.
-    const lines = gridLines(originTick, endTick, gridStep(ppq, beatsPerBar, ppt, 8), ppq, beatsPerBar);
+    // Grid: bars and beats of the signature track when there is one.
+    const meter = this.meter;
+    const firstBar = meter ? meter.barTicksAt(0) : ppq * beatsPerBar;
+    const step = gridStep(ppq, firstBar / ppq, ppt, 8);
+    const lines = meter
+      ? meter.gridLines(originTick, endTick, step, Math.max(1, Math.round(step / firstBar)))
+      : gridLines(originTick, endTick, step, ppq, beatsPerBar);
     batch.reserve(lines.length);
     for (const { tick, level } of lines) {
       const color =
@@ -353,15 +371,28 @@ export class FrameBuilder {
     const style = kind === 'notes' ? RectStyle.Note : RectStyle.Region;
     const flags = scene.regions?.flags ?? scene.noteFlags;
     batch.reserve(drawn.length);
-    for (const region of drawn) {
-      const x0 = Math.max(-2, xOf(region.start));
-      const x1 = Math.min(width + 2, Math.max(xOf(region.start + region.length), x0 + 1));
-      const y = laneY(region.lane) + inset;
-      const flag = flags?.[region.id] ?? 0;
-      const base = flag & ItemFlag.Muted ? theme.muted : (scene.items.color[region.id] ?? 0);
-      const selected = flag & ItemFlag.Selected;
-      const color = selected ? shadeColor(base, 1.25) : base;
-      batch.push(x0, y, x1 - x0, laneHeight - 2 * inset, color, selected ? style | RectStyle.Selected : style);
+    // Two passes: whole items, then the parts drawn inside them (comp segments), so a part is never under its item.
+    for (const inner of [false, true]) {
+      for (const region of drawn) {
+        const flag = flags?.[region.id] ?? 0;
+        if (Boolean(flag & ItemFlag.Inner) !== inner) {
+          continue;
+        }
+        const x0 = Math.max(-2, xOf(region.start));
+        const x1 = Math.min(width + 2, Math.max(xOf(region.start + region.length), x0 + 1));
+        const y = laneY(region.lane) + inset;
+        const h = laneHeight - 2 * inset;
+        const base = flag & ItemFlag.Muted ? theme.muted : (scene.items.color[region.id] ?? 0);
+        if (inner) {
+          // A part: flat, between the name bar and the bottom edge, a little lighter than the item's body.
+          const top = h >= NAME_BAR_MIN_HEIGHT ? NAME_BAR_HEIGHT : 1;
+          batch.push(x0, y + top, x1 - x0, Math.max(1, h - top - 1), shadeColor(base, 0.92));
+          continue;
+        }
+        const selected = flag & ItemFlag.Selected;
+        const color = selected ? shadeColor(base, 1.25) : base;
+        batch.push(x0, y, x1 - x0, h, color, selected ? style | RectStyle.Selected : style);
+      }
     }
     batch.visibleItems = drawn.length;
     batch.endLayer();
@@ -376,8 +407,13 @@ export class FrameBuilder {
 
     // Ruler: background, cycle area, beat and bar ticks, bar numbers, project end.
     const bar = ppq * beatsPerBar;
-    batch.push(0, 0, width, laneTop, theme.ruler, RectStyle.Ruler);
-    batch.push(0, laneTop - 1, width, 1, theme.laneLine);
+    if (laneTop > RULER_HEIGHT) {
+      // The global tracks' band under the ruler (drawn over by the editor).
+      batch.push(0, RULER_HEIGHT, width, laneTop - RULER_HEIGHT, theme.laneAlternate);
+      batch.push(0, laneTop - 1, width, 1, theme.laneLine);
+    }
+    batch.push(0, 0, width, RULER_HEIGHT, theme.ruler, RectStyle.Ruler);
+    batch.push(0, RULER_HEIGHT - 1, width, 1, theme.laneLine);
     const cycle = view.cycle;
     if (cycle && cycle.end > cycle.start) {
       const c0 = Math.max(-2, xOf(cycle.start));
@@ -387,25 +423,38 @@ export class FrameBuilder {
           c0,
           CYCLE_BAND_TOP,
           c1 - c0,
-          laneTop - CYCLE_BAND_TOP - 1,
+          RULER_HEIGHT - CYCLE_BAND_TOP - 1,
           cycle.enabled ? theme.cycle : theme.cycleOff,
           RectStyle.Cycle
         );
       }
     }
-    const labelEvery = barMultiple(bar * ppt, 40) * bar;
+    const labelBars = barMultiple((meter ? firstBar : bar) * ppt, 40);
     for (const { tick, level } of lines) {
       if (level !== GridLevel.Division) {
         const x = Math.round(xOf(tick));
         const tall = level === GridLevel.Bar;
-        batch.push(x, tall ? 2 : laneTop - 5, 1, tall ? CYCLE_BAND_TOP - 2 : 4, theme.rulerTick);
-        if (tall && tick % labelEvery === 0) {
-          batch.pushText(x + 3, 2, String(tick / bar + 1), theme.rulerText);
+        batch.push(x, tall ? 2 : RULER_HEIGHT - 5, 1, tall ? CYCLE_BAND_TOP - 2 : 4, theme.rulerTick);
+        const barIndex = Math.round(meter ? meter.barAt(tick) : tick / bar);
+        if (tall && barIndex % labelBars === 0) {
+          batch.pushText(x + 3, 2, String(barIndex + 1), theme.rulerText);
         }
       }
     }
+    // Autopunch: a red band along the ruler's bottom, with its locators as ticks.
+    const punch = view.punch;
+    if (punch && punch.end > punch.start) {
+      const p0 = Math.max(-2, xOf(punch.start));
+      const p1 = Math.min(width + 2, xOf(punch.end));
+      if (p1 > p0) {
+        const color = punch.enabled ? theme.punch : theme.punchOff;
+        batch.push(p0, RULER_HEIGHT - 4, p1 - p0, 3, color);
+        batch.push(Math.round(p0), CYCLE_BAND_TOP - 2, 1, RULER_HEIGHT - CYCLE_BAND_TOP + 1, color);
+        batch.push(Math.round(p1) - 1, CYCLE_BAND_TOP - 2, 1, RULER_HEIGHT - CYCLE_BAND_TOP + 1, color);
+      }
+    }
     if (projectEnd !== null && endX < width) {
-      batch.push(endX - 1, 0, 2, laneTop, theme.endMarker);
+      batch.push(endX - 1, 0, 2, RULER_HEIGHT, theme.endMarker);
     }
     batch.endLayer();
 
@@ -446,7 +495,9 @@ export class FrameBuilder {
       lane: o?.lane ?? items.lane[id] ?? 0,
       fileOffset: o?.fileOffset ?? regions?.fileOffset[id] ?? 0,
       fadeIn: o?.fadeIn ?? regions?.fadeIn[id] ?? 0,
-      fadeOut: o?.fadeOut ?? regions?.fadeOut[id] ?? 0
+      fadeOut: o?.fadeOut ?? regions?.fadeOut[id] ?? 0,
+      fadeInCurve: o?.fadeInCurve ?? regions?.fadeInCurve[id] ?? 0,
+      fadeOutCurve: o?.fadeOutCurve ?? regions?.fadeOutCurve[id] ?? 0
     });
     for (let k = 0; k < found; k++) {
       const id = this.visible[k] ?? 0;
@@ -483,7 +534,10 @@ export class FrameBuilder {
     const withName = h >= NAME_BAR_MIN_HEIGHT;
     const top = withName ? y + NAME_BAR_HEIGHT : y + 1;
     const bottom = y + h - 1;
-    const framesPerTick = details.framesPerTick;
+    const own = details.rate[id] ?? 0;
+    const framesPerTick = own > 0 ? own : details.framesPerTick;
+    const inner = (flag & ItemFlag.Inner) !== 0;
+    const ownFades = !inner && !(flag & ItemFlag.Folder);
 
     // Waveform: one column per CSS pixel, from the coarsest peak level that still resolves a pixel.
     const waveform = this.waveforms.best(details.waveform[id] ?? -1, framesPerTick / ppt);
@@ -535,35 +589,56 @@ export class FrameBuilder {
     }
 
     // Fades: a line from silence to full level, and a handle where it ends.
-    const fadeInPx = (region.fadeIn / framesPerTick) * ppt;
-    const fadeOutPx = (region.fadeOut / framesPerTick) * ppt;
+    const fadeInPx = ownFades ? (region.fadeIn / framesPerTick) * ppt : 0;
+    const fadeOutPx = ownFades ? (region.fadeOut / framesPerTick) * ppt : 0;
     if (fadeInPx >= 1) {
-      this.fadeLine(xStart, bottom, xStart + fadeInPx, top, width);
+      this.fadeCurve(xStart, xStart + fadeInPx, top, bottom, region.fadeInCurve, false, width);
     }
     if (fadeOutPx >= 1) {
-      this.fadeLine(xEnd - fadeOutPx, top, xEnd, bottom, width);
+      this.fadeCurve(xEnd - fadeOutPx, xEnd, top, bottom, region.fadeOutCurve, true, width);
     }
 
-    if (withName) {
+    if (withName && !inner) {
       const textX = Math.max(xStart, 0) + 4;
       batch.pushText(textX, y + 1, details.names[id] ?? '', theme.regionText, xEnd - textX - 2);
     }
   }
 
-  /** A straight fade line as 2 px dots, from (xa, ya) to (xb, yb), clipped to the canvas. */
-  private fadeLine(xa: number, ya: number, xb: number, yb: number, width: number): void {
+  /**
+   * A fade as 1.5 px dots along its gain curve between `xa` and `xb` (silence at the bottom, full level at the top),
+   * clipped to the canvas, with a handle where it meets full level. A fade-out is the fade-in's mirror.
+   */
+  private fadeCurve(
+    xa: number,
+    xb: number,
+    top: number,
+    bottom: number,
+    curve: number,
+    out: boolean,
+    width: number
+  ): void {
     const { batch, theme } = this;
-    const steps = Math.max(1, Math.ceil(Math.hypot(xb - xa, yb - ya) / 2));
+    const steps = Math.max(2, Math.ceil(Math.hypot(xb - xa, bottom - top) / 2));
     for (let s = 0; s <= steps; s++) {
-      const x = xa + ((xb - xa) * s) / steps;
+      const f = s / steps;
+      const x = xa + (xb - xa) * f;
       if (x >= -2 && x <= width + 2) {
-        batch.push(x - 0.75, ya + ((yb - ya) * s) / steps - 0.75, 1.5, 1.5, theme.fade);
+        const gain = fadeGain(out ? 1 - f : f, curve);
+        batch.push(x - 0.75, bottom - gain * (bottom - top) - 0.75, 1.5, 1.5, theme.fade);
       }
     }
-    const handleX = ya > yb ? xb : xa;
-    const handleY = Math.min(ya, yb);
+    const handleX = out ? xa : xb;
     if (handleX >= -4 && handleX <= width + 4) {
-      batch.push(handleX - 2.5, handleY, 5, 5, theme.fade);
+      batch.push(handleX - 2.5, top, 5, 5, theme.fade);
     }
   }
+}
+
+/**
+ * A fade-in's gain at position `x` (0…1) for curve `c` (-1…1): x^(2^(-2c)) (docs/04-phase-3.md). c = 0 is linear,
+ * c = -1 a slow, exponential-looking start, c = 1 a fast, logarithmic-looking one. A fade-out at x is a fade-in at 1 - x.
+ */
+export function fadeGain(x: number, c: number): number {
+  const position = Math.min(1, Math.max(0, x));
+  return position ** (2 ** (-2 * Math.min(1, Math.max(-1, c))));
 }

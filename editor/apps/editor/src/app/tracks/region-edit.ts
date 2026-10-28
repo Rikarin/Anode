@@ -10,6 +10,13 @@ export interface EditContext {
   framesPerTick: number;
   /** The snap step in ticks; 0 when snapping is off. */
   snap: number;
+  /** Snaps a position (a snap mode other than a fixed step: bars of the signature track, frames…); else `snap`. */
+  snapTo?: (tick: number) => number;
+}
+
+/** A position snapped as the context says. */
+export function snapIn(context: Pick<EditContext, 'snap' | 'snapTo'>, tick: number): number {
+  return context.snapTo ? context.snapTo(tick) : snapTick(tick, context.snap);
 }
 
 /** A region where a move would put it. */
@@ -35,7 +42,7 @@ export function moveRegions(
     return [];
   }
 
-  let delta = snapTick(grabbed.startTick + deltaTick, context.snap) - grabbed.startTick;
+  let delta = snapIn(context, grabbed.startTick + deltaTick) - grabbed.startTick;
   const earliest = Math.min(...regions.map(r => r.startTick));
   delta = Math.max(delta, -earliest);
   const lowest = Math.min(...regions.map(r => r.lane));
@@ -89,7 +96,7 @@ export function trimStart(region: AudioRegion, tick: number, context: EditContex
   const { framesPerTick } = context;
   const end = region.startTick + region.length / framesPerTick;
   const fileStart = region.startTick - region.fileOffset / framesPerTick;
-  const wanted = snapTick(tick, context.snap);
+  const wanted = snapIn(context, tick);
   const start = Math.min(end - MinRegionFrames / framesPerTick, Math.max(0, fileStart, wanted));
   const shift = Math.max(-region.fileOffset, Math.round((start - region.startTick) * framesPerTick));
   return {
@@ -101,7 +108,7 @@ export function trimStart(region: AudioRegion, tick: number, context: EditContex
 
 /** Moves a region's end to `tick` (snapped): not past the end of its file, nor closer to its start than the minimum. */
 export function trimEnd(region: AudioRegion, tick: number, fileFrames: number, context: EditContext): Trimmed {
-  const wanted = snapTick(tick, context.snap);
+  const wanted = snapIn(context, tick);
   const frames = Math.round((wanted - region.startTick) * context.framesPerTick);
   const length = Math.min(fileFrames - region.fileOffset, Math.max(MinRegionFrames, frames));
   return { startTick: region.startTick, fileOffset: region.fileOffset, length };
@@ -122,7 +129,7 @@ export function fadeOutFrom(region: AudioRegion, tick: number, context: EditCont
 
 /** Where the scissors cut a region clicked at `tick` (snapped), or null when that is not strictly inside it. */
 export function splitPoint(region: AudioRegion, tick: number, context: EditContext): number | null {
-  const at = snapTick(tick, context.snap);
+  const at = snapIn(context, tick);
   const end = region.startTick + region.length / context.framesPerTick;
   return at > region.startTick && at < end ? Math.round(at) : null;
 }

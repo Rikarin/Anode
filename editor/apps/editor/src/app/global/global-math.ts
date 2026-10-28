@@ -43,10 +43,7 @@ function tidy(events: TempoEvent[]): TempoEvent[] {
 export function addTempoPoint(events: readonly TempoEvent[], tick: number, bpm: number): TempoEvent[] {
   const t = Math.max(0, Math.round(tick));
   const before = [...events].filter(e => e.tick <= t).pop();
-  return tidy([
-    ...events.filter(e => e.tick !== t),
-    { tick: t, bpm: clampBpm(bpm), curve: before?.curve ?? 'step' }
-  ]);
+  return tidy([...events.filter(e => e.tick !== t), { tick: t, bpm: clampBpm(bpm), curve: before?.curve ?? 'step' }]);
 }
 
 /**
@@ -150,6 +147,22 @@ export function nextSection(
   const start = Math.max(0, ...sections.map(s => s.startTick + s.lengthTicks));
   const startBar = Math.round(meter.barAt(start));
   return { startTick: start, lengthTicks: meter.barStart(startBar + bars) - start };
+}
+
+/** Each global track's height in the Tracks area, in CSS pixels. */
+export const GlobalLaneHeights = { arrangement: 24, marker: 22, tempo: 64, signature: 22, key: 22 } as const;
+
+/** "A minor", "Am", "F# major", "Bb" to a key, or null. */
+export function parseKey(text: string): { tonic: number; mode: 'major' | 'minor' } | null {
+  const match = /^\s*([A-Ga-g])\s*([#♯b♭]?)\s*(m|min|minor|maj|major)?\s*$/.exec(text);
+  if (!match?.[1]) {
+    return null;
+  }
+  const naturals: Record<string, number> = { c: 0, d: 2, e: 4, f: 5, g: 7, a: 9, b: 11 };
+  const base = naturals[match[1].toLowerCase()] ?? 0;
+  const accidental = match[2] === '#' || match[2] === '♯' ? 1 : match[2] === 'b' || match[2] === '♭' ? -1 : 0;
+  const mode = match[3]?.startsWith('m') && !match[3].startsWith('maj') ? 'minor' : 'major';
+  return { tonic: (base + accidental + 12) % 12, mode };
 }
 
 /** Logic's section names, in the order it offers them. */

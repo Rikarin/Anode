@@ -1,8 +1,24 @@
-import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  effect,
+  type ElementRef,
+  inject,
+  signal,
+  viewChild
+} from '@angular/core';
 import { provideIcons } from '@ng-icons/core';
 import {
+  matDarkModeRound,
+  matDashboardRound,
+  matExpandMoreRound,
   matFiberManualRecordRound,
   matFolderOpenRound,
+  matHistoryRound,
+  matKeyboardRound,
+  matLightModeRound,
+  matLockRound,
   matLoopRound,
   matPlayArrowRound,
   matRedoRound,
@@ -13,11 +29,18 @@ import {
 } from '@ng-icons/material-icons/round';
 
 import { XuiIconImports } from '@xui/icon';
+import { XuiInputImports } from '@xui/input';
+import { XuiMenuImports } from '@xui/menu';
 import { XuiTooltipImports } from '@xui/tooltip';
+import { formatBinding } from '../keys/key-commands';
 import { HistoryStore } from '../state/history.store';
+import { KeyCommandsStore } from '../state/key-commands.store';
 import { ProjectSession } from '../state/project-session';
 import { ProjectStore } from '../state/project.store';
+import { ScreensetStore } from '../state/screenset.store';
+import { ThemeStore } from '../state/theme.store';
 import { TransportStore } from '../state/transport.store';
+import { UiStore } from '../state/ui.store';
 import { EngineStatus } from './engine-status';
 import { Lcd } from './lcd';
 
@@ -30,9 +53,16 @@ import { Lcd } from './lcd';
 @Component({
   selector: 'an-control-bar',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [EngineStatus, Lcd, XuiIconImports, XuiTooltipImports],
+  imports: [EngineStatus, Lcd, XuiIconImports, XuiInputImports, XuiMenuImports, XuiTooltipImports],
   providers: [
     provideIcons({
+      matDarkModeRound,
+      matDashboardRound,
+      matExpandMoreRound,
+      matHistoryRound,
+      matKeyboardRound,
+      matLightModeRound,
+      matLockRound,
       matFiberManualRecordRound,
       matFolderOpenRound,
       matLoopRound,
@@ -74,6 +104,81 @@ import { Lcd } from './lcd';
               role="img"
             ></span>
           }
+          <button
+            type="button"
+            class="bezel text-foreground grid h-6.5 w-6 shrink-0 place-items-center"
+            aria-label="Project menu"
+            data-testid="project-menu"
+            xuiTooltip="Alternatives, backups and key commands"
+            [xuiMenuTriggerFor]="projectMenu"
+            (menuOpened)="session.refreshVersions()"
+          >
+            <ng-icon xui name="matExpandMoreRound" size="sm" />
+          </button>
+          <ng-template #projectMenu>
+            <xui-menu class="min-w-56">
+              <button
+                xuiMenuItem
+                type="button"
+                data-testid="new-alternative"
+                (click)="ui.saveAlternativeOpen.set(true)"
+              >
+                Save as Alternative…
+              </button>
+              <button xuiMenuItem type="button" data-testid="alternatives" [xuiMenuTriggerFor]="alternativesMenu">
+                Alternatives
+              </button>
+              <button xuiMenuItem type="button" data-testid="backups" [xuiMenuTriggerFor]="backupsMenu">
+                Revert to Backup
+              </button>
+              <xui-menu-divider />
+              <button xuiMenuItem type="button" icon="matKeyboardRound" (click)="ui.keyCommandsOpen.set(true)">
+                Key Commands… ({{ keyOf('view.keyCommands') }})
+              </button>
+              <button
+                xuiMenuItem
+                type="button"
+                [icon]="theme.appearance() === 'dark' ? 'matLightModeRound' : 'matDarkModeRound'"
+                (click)="theme.toggle()"
+              >
+                {{ theme.appearance() === 'dark' ? 'Light Appearance' : 'Dark Appearance' }}
+              </button>
+            </xui-menu>
+          </ng-template>
+          <ng-template #alternativesMenu>
+            <xui-menu>
+              @for (alternative of session.alternatives(); track alternative.id) {
+                <button
+                  xuiMenuItem
+                  type="button"
+                  role="menuitemradio"
+                  [attr.aria-checked]="alternative.current"
+                  [attr.data-testid]="'alternative-' + alternative.name"
+                  (click)="alternative.current || session.openAlternative(alternative.id)"
+                >
+                  {{ alternative.current ? '✓ ' : '' }}{{ alternative.name }}
+                </button>
+              } @empty {
+                <button xuiMenuItem type="button" disabled>No alternatives yet</button>
+              }
+            </xui-menu>
+          </ng-template>
+          <ng-template #backupsMenu>
+            <xui-menu>
+              @for (backup of session.backups(); track backup.id; let i = $index) {
+                <button
+                  xuiMenuItem
+                  type="button"
+                  [attr.data-testid]="'backup-' + i"
+                  (click)="session.revertToBackup(backup.id)"
+                >
+                  {{ savedAt(backup.saved) }}
+                </button>
+              } @empty {
+                <button xuiMenuItem type="button" disabled>No backups yet: each save keeps one</button>
+              }
+            </xui-menu>
+          </ng-template>
           <div class="bezel-group text-foreground h-6.5 shrink-0">
             <button
               type="button"
@@ -170,6 +275,75 @@ import { Lcd } from './lcd';
         </button>
       </div>
       @if (project.isOpen()) {
+        <div class="bezel-group text-foreground h-6.5 text-[11px] font-semibold" role="toolbar" aria-label="Recording">
+          <button
+            type="button"
+            class="flex items-center gap-0.5 px-2"
+            aria-label="Cycle recording mode"
+            data-testid="cycle-mode"
+            xuiTooltip="What cycle recording makes of its passes"
+            [xuiMenuTriggerFor]="cycleModeMenu"
+          >
+            {{ recording().cycleMode === 'takeFolder' ? 'Takes' : 'Regions' }}
+            <ng-icon xui name="matExpandMoreRound" size="14px" />
+          </button>
+          <button
+            type="button"
+            class="px-2.5"
+            data-testid="autopunch"
+            [class.text-transport-record]="recording().autopunch"
+            [attr.aria-pressed]="recording().autopunch ? 'true' : 'false'"
+            [xuiTooltip]="'Autopunch: record only between the punch locators (' + keyOf('transport.autopunch') + ')'"
+            (click)="transport.toggleAutopunch()"
+          >
+            Punch
+          </button>
+          <button
+            type="button"
+            class="px-2.5"
+            data-testid="replace"
+            [class.text-lit]="recording().replace"
+            [attr.aria-pressed]="recording().replace ? 'true' : 'false'"
+            [xuiTooltip]="'Replace: a recording removes what it covers (' + keyOf('transport.replace') + ')'"
+            (click)="transport.toggleReplace()"
+          >
+            Replace
+          </button>
+          <button
+            type="button"
+            class="text-transport-record grid w-8 place-items-center"
+            aria-label="Capture as recording"
+            data-testid="flashback"
+            [xuiTooltip]="
+              'Flashback Capture: what you just played becomes a recording (' + keyOf('transport.flashback') + ')'
+            "
+            (click)="transport.flashbackCapture()"
+          >
+            <ng-icon xui name="matHistoryRound" size="16px" />
+          </button>
+        </div>
+        <ng-template #cycleModeMenu>
+          <xui-menu>
+            <button
+              xuiMenuItem
+              type="button"
+              role="menuitemradio"
+              [attr.aria-checked]="recording().cycleMode === 'takeFolder'"
+              (click)="transport.setCycleMode('takeFolder')"
+            >
+              Create Take Folders
+            </button>
+            <button
+              xuiMenuItem
+              type="button"
+              role="menuitemradio"
+              [attr.aria-checked]="recording().cycleMode === 'regions'"
+              (click)="transport.setCycleMode('regions')"
+            >
+              Create Regions
+            </button>
+          </xui-menu>
+        </ng-template>
         <an-lcd />
         <div class="bezel-group text-foreground h-6.5 text-[11px] font-semibold" role="toolbar" aria-label="Metronome">
           <button
@@ -206,7 +380,76 @@ import { Lcd } from './lcd';
         </div>
       }
     </div>
-    <div class="flex min-w-0 flex-1 items-center justify-end">
+    <div class="flex min-w-0 flex-1 items-center justify-end gap-2">
+      @if (project.isOpen()) {
+        @if (renamingScreenset()) {
+          <input
+            #screensetName
+            xuiInput
+            class="h-6.5 w-36 px-1.5 text-[11px]"
+            aria-label="Screenset name"
+            [value]="screensets.name()"
+            (keydown.enter)="renameScreenset(screensetName.value)"
+            (keydown.escape)="renamingScreenset.set(false)"
+            (blur)="renameScreenset(screensetName.value)"
+          />
+        } @else {
+          <button
+            type="button"
+            class="bezel text-foreground flex h-6.5 max-w-44 items-center gap-1 px-2 text-[11px] font-semibold"
+            aria-label="Screenset menu"
+            data-testid="screenset-menu"
+            [xuiTooltip]="'Screensets: keys 1–9 recall them'"
+            [xuiMenuTriggerFor]="screensetMenu"
+          >
+            <ng-icon xui name="matDashboardRound" size="14px" class="text-foreground-muted" />
+            <span class="readout" data-testid="screenset-number">{{ screensets.current() }}</span>
+            <span class="truncate">{{ screensets.name() }}</span>
+            @if (screensets.locked()) {
+              <ng-icon xui name="matLockRound" size="12px" aria-label="Locked" />
+            }
+          </button>
+        }
+        <ng-template #screensetMenu>
+          <xui-menu class="min-w-52">
+            @for (n of numbers; track n) {
+              <button
+                xuiMenuItem
+                type="button"
+                role="menuitemradio"
+                [attr.aria-checked]="screensets.current() === n"
+                [attr.data-testid]="'screenset-' + n"
+                (click)="screensets.recall(n)"
+              >
+                <span class="flex-1">{{ n }} {{ screensets.screensets().get(n)?.name ?? 'Screenset ' + n }}</span>
+                @if (screensets.screensets().get(n)?.locked) {
+                  <ng-icon xui name="matLockRound" size="12px" aria-label="Locked" />
+                }
+              </button>
+            }
+            <xui-menu-divider />
+            <button xuiMenuItem type="button" (click)="screensets.saveCurrent()">Save</button>
+            <button xuiMenuItem type="button" data-testid="rename-screenset" (click)="renamingScreenset.set(true)">
+              Rename…
+            </button>
+            <button xuiMenuItem type="button" data-testid="lock-screenset" (click)="screensets.toggleLock()">
+              {{ screensets.locked() ? 'Unlock' : 'Lock' }}
+            </button>
+          </xui-menu>
+        </ng-template>
+        <button
+          type="button"
+          class="bezel text-foreground grid h-6.5 w-8 place-items-center"
+          [attr.aria-label]="theme.appearance() === 'dark' ? 'Light appearance' : 'Dark appearance'"
+          data-testid="appearance"
+          [xuiTooltip]="
+            theme.appearance() === 'dark' ? 'Switch to the light appearance' : 'Switch to the dark appearance'
+          "
+          (click)="theme.toggle()"
+        >
+          <ng-icon xui [name]="theme.appearance() === 'dark' ? 'matLightModeRound' : 'matDarkModeRound'" size="sm" />
+        </button>
+      }
       <an-engine-status />
     </div>
   `
@@ -217,7 +460,41 @@ export class ControlBar {
   protected readonly history = inject(HistoryStore);
   protected readonly session = inject(ProjectSession);
 
+  protected readonly screensets = inject(ScreensetStore);
+  protected readonly theme = inject(ThemeStore);
+  protected readonly ui = inject(UiStore);
+  private readonly keys = inject(KeyCommandsStore);
+
   protected readonly mergeMidi = computed(() => this.project.settings().mergeMidiRecording);
+  protected readonly recording = computed(() => this.project.settings().recording);
+  protected readonly numbers = [1, 2, 3, 4, 5, 6, 7, 8, 9];
+  protected readonly renamingScreenset = signal(false);
+  private readonly screensetInput = viewChild<ElementRef<HTMLInputElement>>('screensetName');
+
+  constructor() {
+    effect(() => {
+      const input = this.screensetInput()?.nativeElement;
+      input?.focus();
+      input?.select();
+    });
+  }
+
+  protected keyOf(id: string): string {
+    const binding = this.keys.bindingOf(id);
+    return binding ? formatBinding(binding) : 'no key';
+  }
+
+  protected savedAt(iso: string): string {
+    const date = new Date(iso);
+    return Number.isNaN(date.getTime()) ? iso : date.toLocaleString();
+  }
+
+  protected renameScreenset(name: string): void {
+    if (this.renamingScreenset()) {
+      this.renamingScreenset.set(false);
+      void this.screensets.rename(name);
+    }
+  }
 
   protected toggleMerge(): void {
     const merge = !this.mergeMidi();

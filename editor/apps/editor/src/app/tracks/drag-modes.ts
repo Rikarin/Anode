@@ -50,10 +50,16 @@ export function applyDragMode(mode: DragMode, moved: readonly Span[], others: re
 }
 
 /** Shuffle L: a moved region starts where the region before it on its track ends (the project start when none). */
-function shuffle(mode: 'shuffleLeft' | 'shuffleRight', moved: readonly Span[], others: readonly Span[]): DragAdjustment[] {
+function shuffle(
+  mode: 'shuffleLeft' | 'shuffleRight',
+  moved: readonly Span[],
+  others: readonly Span[]
+): DragAdjustment[] {
   const result: DragAdjustment[] = [];
   const placed: Span[] = [...others];
-  const order = [...moved].sort((a, b) => (mode === 'shuffleLeft' ? a.startTick - b.startTick : b.startTick - a.startTick));
+  const order = [...moved].sort((a, b) =>
+    mode === 'shuffleLeft' ? a.startTick - b.startTick : b.startTick - a.startTick
+  );
   for (const m of order) {
     const length = m.endTick - m.startTick;
     const lane = placed.filter(o => o.trackId === m.trackId);
