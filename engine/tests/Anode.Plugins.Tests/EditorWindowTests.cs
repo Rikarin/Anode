@@ -79,7 +79,7 @@ public sealed class EditorWindowTests : IDisposable {
         using var b = host.CreateEffect(GainId, new(2, "b"))!;
         a.Prepare(48000, 512);
         b.Prepare(48000, 512);
-        var parent = ((IHostedPlugin)a).OpenEditor(true, new(0, 300, 200, Floating: false));
+        var parent = ((IHostedPlugin)a).OpenEditor(true, new(0, 300, 200, false));
         Settle();
         var child = ((IHostedPlugin)b).OpenEditor(true, new(parent, Floating: false));
         Settle();

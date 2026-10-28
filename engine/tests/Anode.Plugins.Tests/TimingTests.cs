@@ -45,7 +45,7 @@ public sealed class TimingTests : IDisposable {
             var cycles = 1500;
             Run(host, effects, cycles, true, split, out var times);
             Array.Sort(times);
-            var misses = effects.Sum(e => ((IHostedPlugin)e).Stats.Misses);
+            var misses = effects.Sum(static e => ((IHostedPlugin)e).Stats.Misses);
 
             string P(double q) =>
                 (times[(int)(q * (times.Length - 1))] / 1000.0).ToString(
@@ -54,7 +54,7 @@ public sealed class TimingTests : IDisposable {
                 );
 
             Log(
-                $"timing {instances} x gain ({mode}, {host.Sandboxes.Count} sandbox(es){(split ? ", split-phase" : "")}), 64 frames: cycle p50 {P(0.5)} / "
+                $"timing {instances} x gain ({mode}, {host.Sandboxes.Count} sandbox(es){(split ? ", split-phase" : string.Empty)}), 64 frames: cycle p50 {P(0.5)} / "
                 + $"p99 {P(0.99)} / max {P(1)} µs; misses {misses} / {cycles * instances}"
             );
             // Generous: this is a test thread on a busy machine, not CoreAudio's; S4 measured the protocol itself.

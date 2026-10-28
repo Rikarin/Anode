@@ -55,7 +55,7 @@ public sealed class HostingTests : IDisposable {
         gain.Prepare(48000, 512);
         gain.SetParameter(0, 1f); // +12 dB
         var (l, r) = Signal(Frames);
-        var expected = l.Select(v => v * MathF.Pow(10, 12 / 20f)).ToArray();
+        var expected = l.Select(static v => v * MathF.Pow(10, 12 / 20f)).ToArray();
         gain.Process(l, r, [], []);
         for (var i = 0; i < Frames; i++) {
             Assert.Equal(expected[i], l[i], 4);
@@ -134,7 +134,7 @@ public sealed class HostingTests : IDisposable {
         a.Prepare(48000, 512);
         b.Prepare(48000, 512);
 
-        MidiEvent[] Events(int block) =>
+        static MidiEvent[] Events(int block) =>
             block switch {
                 1 => [new(10, 0x90, 60, 100), new(20, 0x90, 67, 90)],
                 30 => [new(0, 0x80, 60, 0)],
@@ -144,8 +144,8 @@ public sealed class HostingTests : IDisposable {
         var x = Render(a, 60, Frames, Events);
         var y = Render(b, 60, Frames, Events);
         Assert.Equal(y.Left, x.Left);
-        Assert.Contains(x.Left, v => MathF.Abs(v) > 0.05f);
-        Assert.All(x.Left.Take(Frames), v => Assert.Equal(0f, v));
+        Assert.Contains(x.Left, static v => MathF.Abs(v) > 0.05f);
+        Assert.All(x.Left.Take(Frames), static v => Assert.Equal(0f, v));
     }
 
     [Fact]
@@ -196,8 +196,8 @@ public sealed class HostingTests : IDisposable {
                 }
             }
         } finally {
-            a.ForEach(e => e.Dispose());
-            b.ForEach(e => e.Dispose());
+            a.ForEach(static e => e.Dispose());
+            b.ForEach(static e => e.Dispose());
         }
     }
 

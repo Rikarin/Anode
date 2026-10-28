@@ -44,7 +44,7 @@ public sealed class IsolationTests : IDisposable {
         Assert.True(watch.Elapsed < TimeSpan.FromSeconds(5), $"processing around the crash took {watch.Elapsed}");
         SpinWait.SpinUntil(() => !problems.IsEmpty, TimeSpan.FromSeconds(5));
         var problem = Assert.Single(problems);
-        Assert.Equal(new PluginOwner(1, "a"), problem.Owner);
+        Assert.Equal(new(1, "a"), problem.Owner);
         Assert.Equal(MisbehaveId, problem.PluginId);
         Assert.Contains("crashed", problem.Message, StringComparison.Ordinal);
         var hosted = (IHostedPlugin)crasher;
@@ -78,7 +78,7 @@ public sealed class IsolationTests : IDisposable {
         var (l, r) = Signal(Frames);
         crasher.Process(l, r, [], []);
         SpinWait.SpinUntil(() => problems.Count == 2, TimeSpan.FromSeconds(5));
-        Assert.Equal([1, 2], problems.Select(p => p.Owner.TrackId).Order());
+        Assert.Equal([1, 2], problems.Select(static p => p.Owner.TrackId).Order());
         Assert.True(((IHostedPlugin)neighbour).IsFailed);
         var (x, y) = Signal(Frames);
         var dry = (float[])x.Clone();

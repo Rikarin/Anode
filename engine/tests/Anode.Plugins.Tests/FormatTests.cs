@@ -32,7 +32,7 @@ public sealed class FormatTests : IDisposable {
         Assert.Equal(ClapSineId, entry.Id); // the CLAP id itself, as Phase 2 projects store it
         Assert.Equal("clap", entry.Format);
         Assert.True(entry.IsInstrument);
-        Assert.Equal(["Gain", "Octave"], entry.Parameters.Select(p => p.Name));
+        Assert.Equal(["Gain", "Octave"], entry.Parameters.Select(static p => p.Name));
         Assert.Equal(["-2", "-1", "0", "+1", "+2"], entry.Parameters[1].ValueNames!);
 
         sandboxed.Processing = ProcessingMode.Offline;
@@ -45,7 +45,7 @@ public sealed class FormatTests : IDisposable {
         a.SetParameter(1, 1f); // an octave up
         b.SetParameter(1, 1f);
 
-        MidiEvent[] Events(int block) =>
+        static MidiEvent[] Events(int block) =>
             block switch {
                 2 => [new(5, 0x90, 57, 110)],
                 20 => [new(30, 0x80, 57, 0)],
@@ -55,7 +55,7 @@ public sealed class FormatTests : IDisposable {
         var x = Render(a, 40, Frames, Events);
         var y = Render(b, 40, Frames, Events);
         Assert.Equal(y.Left, x.Left);
-        Assert.Contains(x.Left, v => MathF.Abs(v) > 0.01f);
+        Assert.Contains(x.Left, static v => MathF.Abs(v) > 0.01f);
 
         var state = a.SaveState()!;
         using var c = sandboxed.CreateInstrument(ClapSineId, new(1, null))!;
@@ -88,7 +88,7 @@ public sealed class FormatTests : IDisposable {
         var y = Render(b, 100, Frames);
         Assert.Equal(y.Left, x.Left);
         Assert.Equal(y.Right, x.Right);
-        Assert.Contains(x.Left, v => MathF.Abs(v) > 0.01f);
+        Assert.Contains(x.Left, static v => MathF.Abs(v) > 0.01f);
         Assert.Equal(value, a.GetParameter(0), 4);
 
         // State: the parameter travels in the AU's ClassInfo.
