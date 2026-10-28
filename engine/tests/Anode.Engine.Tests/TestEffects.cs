@@ -290,6 +290,10 @@ sealed class TestFactory : IPluginFactory, IAudioCycleObserver {
 
     public void EndCycle() { }
 
+    public bool Offline { get; private set; }
+
+    public void SetOffline(bool offline) => Offline = offline;
+
     /// <summary>The hosted gain: a plugin editor that can be opened and closed.</summary>
     public sealed class HostedEffect() : TestEffect(
             new(

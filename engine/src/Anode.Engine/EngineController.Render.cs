@@ -159,6 +159,8 @@ public sealed partial class EngineController {
         outputs[1] = memory + RenderBlock;
         var clock = Stopwatch.StartNew();
         var reported = TimeSpan.Zero;
+        var observer = Plugins.Factory as Plugins.IAudioCycleObserver;
+        observer?.SetOffline(true); // hosted plugins are waited for, not bypassed for being slow
         Engine.BeginOffline();
         try {
             Engine.BeginRender(message.StartSample);
@@ -189,6 +191,7 @@ public sealed partial class EngineController {
         } finally {
             Engine.EndRender();
             Engine.EndOffline();
+            observer?.SetOffline(false);
             Streamer.Wake();
             NativeMemory.Free(memory);
         }

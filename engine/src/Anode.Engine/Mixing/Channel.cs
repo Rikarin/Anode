@@ -137,6 +137,8 @@ public sealed class ChannelState {
     DelayLine? delay;
     float[]? postLeft;
     float[]? postRight;
+    float[]? workLeft;
+    float[]? workRight;
 
     public ChannelState(Strip strip) {
         Strip = strip;
@@ -171,6 +173,26 @@ public sealed class ChannelState {
     internal bool Live;
     internal bool Audible;
     internal bool ImpliedSolo;
+
+    /// <summary>Its own work buffers, for a track whose sandboxed inserts begin before the mix reaches it.</summary>
+    public float[]? WorkLeft => Volatile.Read(ref workLeft);
+
+    public float[]? WorkRight => Volatile.Read(ref workRight);
+
+    // Audio thread, a prefetched block: where its inserts resume, whether a sandboxed block was handed over (the
+    // insert before Resume), and whether the signal is stereo by then.
+    internal bool Prefetched;
+    internal bool Begun;
+    internal int Resume;
+    internal bool PrefetchStereo;
+
+    /// <summary>Control thread: allocates the work buffers (before a plan that prefetches the channel is published).</summary>
+    public void EnsureWork() {
+        if (workLeft is null) {
+            Volatile.Write(ref workRight, GC.AllocateArray<float>(AudioEngine.MaxFrames, true));
+            Volatile.Write(ref workLeft, GC.AllocateArray<float>(AudioEngine.MaxFrames, true));
+        }
+    }
 
     /// <summary>Control thread: allocates the post-fader buffers (before a plan that writes them is published).</summary>
     public void EnsurePost() {

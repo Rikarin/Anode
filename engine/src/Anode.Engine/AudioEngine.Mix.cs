@@ -3,6 +3,7 @@ using Anode.Dsp.Instruments;
 using Anode.Engine.Mixing;
 using Anode.Engine.Plugins;
 using Anode.Engine.Rendering;
+using Anode.Plugins;
 
 namespace Anode.Engine;
 
@@ -173,7 +174,28 @@ public sealed unsafe partial class AudioEngine {
 
         Latencies(plan);
         FollowTempo(model, plan, position);
+        // Tracks with sandboxed inserts first hand their first sandboxed block over (ISplitProcessing), so their
+        // sandboxes run in parallel with each other and with the rest of the mix; each then completes in plan order.
         foreach (var node in plan.Order) {
+            if (node.Prefetch) {
+                Prefetch(node);
+            }
+        }
+
+        foreach (var node in plan.Order) {
+            var ch = node.Channel;
+            if (ch.Prefetched) {
+                ch.Prefetched = false;
+                var l = ch.WorkLeft.AsSpan(0, frames);
+                var r = ch.WorkRight.AsSpan(0, frames);
+                if (ch.Begun && node.Config.Inserts[ch.Resume - 1].Slot.Effect is ISplitProcessing split) {
+                    split.End(l, r); // on a miss the block stays dry
+                }
+
+                Channel(node, l, r, ch.PrefetchStereo, default, default, ch.Resume);
+                continue;
+            }
+
             var left = trackLeft.AsSpan(0, frames);
             var right = trackRight.AsSpan(0, frames);
             var stereo = Source(node, left, right);
@@ -473,10 +495,11 @@ public sealed unsafe partial class AudioEngine {
         Span<float> right,
         bool stereo,
         Span<float> outLeft,
-        Span<float> outRight
+        Span<float> outRight,
+        int firstInsert = 0
     ) {
         var ch = node.Channel;
-        stereo = Inserts(node, left, right, stereo);
+        stereo = Inserts(node, left, right, stereo, firstInsert);
         var source = stereo ? right : left;
         if (blockCapture is { Kind: RenderKind.Freeze } freeze
             && node.Track is { } frozen
@@ -799,10 +822,10 @@ public sealed unsafe partial class AudioEngine {
     // ---- Inserts -----------------------------------------------------------------------------------------------------
 
     /// <summary>The channel's inserts in order; returns whether the signal is stereo after them.</summary>
-    bool Inserts(MixNode node, Span<float> left, Span<float> right, bool stereo) {
+    bool Inserts(MixNode node, Span<float> left, Span<float> right, bool stereo, int first = 0) {
         var inserts = node.Config.Inserts;
         var live = node.Channel.Live;
-        for (var k = 0; k < inserts.Length; k++) {
+        for (var k = first; k < inserts.Length; k++) {
             var insert = inserts[k];
             insert.Slot.ApplyParameters();
             if (Active(insert, live) is not { } effect) {
@@ -823,6 +846,46 @@ public sealed unsafe partial class AudioEngine {
         }
 
         return stereo;
+    }
+
+    /// <summary>
+    ///     A track's source and its inserts up to the first sandboxed one (<see cref="ISplitProcessing" />, not automated,
+    ///     before any sidechained insert), whose block it hands over without waiting; the rest runs in plan order.
+    /// </summary>
+    void Prefetch(MixNode node) {
+        var ch = node.Channel;
+        var left = ch.WorkLeft.AsSpan(0, blockFrames);
+        var right = ch.WorkRight.AsSpan(0, blockFrames);
+        var stereo = Source(node, left, right);
+        var inserts = node.Config.Inserts;
+        var k = 0;
+        ch.Begun = false;
+        for (; k < inserts.Length && !ch.Begun; k++) {
+            var insert = inserts[k];
+            if (!node.Sidechains[k].None || node.InsertBindings[k].Length > 0) {
+                break; // a sidechain or automation: the rest runs in order
+            }
+
+            insert.Slot.ApplyParameters();
+            if (Active(insert, ch.Live) is not { } effect) {
+                continue;
+            }
+
+            if (!stereo) {
+                left.CopyTo(right);
+                stereo = true;
+            }
+
+            if (effect is ISplitProcessing split) {
+                ch.Begun = split.Begin(left, right, [], []);
+            } else {
+                effect.Process(left, right, [], []);
+            }
+        }
+
+        ch.Resume = k;
+        ch.PrefetchStereo = stereo;
+        ch.Prefetched = true;
     }
 
     /// <summary>An insert with automated parameters, <see cref="ParameterBlock" /> frames at a time.</summary>

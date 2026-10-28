@@ -2,6 +2,7 @@ using Anode.Dsp.Effects;
 using Anode.Engine.Mixing;
 using Anode.Engine.Plugins;
 using Anode.Ipc;
+using Anode.Plugins;
 
 namespace Anode.Engine;
 
@@ -105,7 +106,12 @@ public sealed partial class EngineController {
             object? instance = insertId is null
                 ? root.Tracks.FirstOrDefault(t => t.Id == trackId)?.Instrument?.Instrument
                 : FindInsert(root, trackId, insertId)?.Effect;
-            return instance is IPluginEditor editor && editor.SetEditorOpen(open);
+            return instance switch {
+                IPluginEditor editor => editor.SetEditorOpen(open),
+                IHostedPlugin { HasEditor: true } hosted => hosted.OpenEditor(open) is var window
+                    && (open ? window > 0 : window >= 0),
+                _ => false
+            };
         }
     }
 
@@ -294,6 +300,7 @@ public sealed partial class EngineController {
     ///     buffers of sidechain sources, previous-block copies of buses read late, and delay lines.
     /// </summary>
     MixPlan BuildPlan(TrackState[] tracks, AutomationSet automation) {
+        Engine.CycleObserver = Plugins.Factory as IAudioCycleObserver;
         var plan = MixPlan.Build(tracks, Engine.MasterChannel, automation);
         foreach (var bus in plan.SnapshotBuses) {
             Engine.EnsureBusSnapshot(bus);

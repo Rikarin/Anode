@@ -10,5 +10,8 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../Anode.EngineHost/Anode.EngineHost.csproj"/>
+    <!-- Built beside it, not referenced: the plugin sandbox and scanner processes it starts. -->
+    <ProjectReference Include="../Anode.PluginSandbox/Anode.PluginSandbox.csproj" ReferenceOutputAssembly="false"
+                      Private="false"/>
   </ItemGroup>
 </Project>

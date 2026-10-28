@@ -67,6 +67,12 @@ public sealed class MixNode {
     /// <summary>Each send's level target (−1: none).</summary>
     public int[] SendTargets { get; init; } = [];
 
+    /// <summary>
+    ///     A track with a sandboxed insert (<see cref="Anode.Plugins.ISplitProcessing" />): its first sandboxed block is
+    ///     handed over before the mix runs, so sandboxes overlap.
+    /// </summary>
+    public bool Prefetch { get; init; }
+
     /// <summary>Other inserts take this channel's post-fader signal as a sidechain.</summary>
     public bool WritePost { get; init; }
 }
@@ -251,8 +257,20 @@ public sealed class MixPlan {
                 MuteTarget = Lane(trackId, AutomationKind.Mute),
                 SendTargets =
                     [..config.Sends.Take(sends.Length).Select(s => Lane(trackId, AutomationKind.Send, s.Slot.Id))],
-                WritePost = index >= 0 && sidechainSources.Contains(index)
+                WritePost = index >= 0 && sidechainSources.Contains(index),
+                Prefetch = Prefetches(track, inserts)
             };
+        }
+
+        /// <summary>Whether a track (not an aux, not frozen) has a sandboxed insert; gives it work buffers.</summary>
+        static bool Prefetches(TrackState? track, ChannelInsert[] inserts) {
+            if (track is not { InputBus: <= 0, Frozen: false }
+                || !inserts.Any(static i => i.Slot.Effect is Anode.Plugins.ISplitProcessing)) {
+                return false;
+            }
+
+            track.Channel.EnsureWork();
+            return true;
         }
 
         /// <summary>The target of <paramref name="kind" /> on the track, when it has a lane (−1: none).</summary>

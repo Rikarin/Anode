@@ -26,6 +26,7 @@ public sealed class EngineHost : IDisposable {
     readonly Lock scanGate = new();
     readonly Lock pushGate = new();
     readonly Lock renderGate = new();
+    readonly IPluginFactory? factory;
     readonly Dictionary<int, CancellationTokenSource> renders = [];
     Task scanning = Task.CompletedTask;
     bool catalogReady;
@@ -40,15 +41,21 @@ public sealed class EngineHost : IDisposable {
     /// <param name="plugins">The instruments it can load (default: the built-ins, then the CLAP scan).</param>
     /// <param name="midi">The MIDI devices (null: none).</param>
     /// <param name="clapFolders">Where to scan for CLAP plugins (null: CLAP_PATH and the standard folders).</param>
+    /// <param name="factory">
+    ///     Third-party plugin hosting (anode-host: <see cref="SandboxPluginFactory" />). With one, CLAP plugins are
+    ///     hosted (and scanned) by it, in sandboxes; without, the Phase 2 in-process CLAP host serves CLAP instruments.
+    /// </param>
     public unsafe EngineHost(
         IAudioDevice device,
         string version,
         bool sharedTelemetry = true,
         PluginRegistry? plugins = null,
         IMidiBackend? midi = null,
-        IReadOnlyList<string>? clapFolders = null
+        IReadOnlyList<string>? clapFolders = null,
+        IPluginFactory? factory = null
     ) {
         Device = device;
+        this.factory = factory;
         this.clapFolders = clapFolders;
         var latency = device.Latency;
         Controller = new(
@@ -56,6 +63,10 @@ public sealed class EngineHost : IDisposable {
             plugins,
             midi
         ) { Log = message => Log?.Invoke(message) };
+        if (factory is not null) {
+            Controller.Plugins.Factory = factory;
+        }
+
         Controller.Plugins.Log = message => Log?.Invoke(message);
         Controller.Midi.PortsChanged = ports => Push?.Invoke(new MidiPortsMessage(ports));
         Controller.Midi.Activity = batch => Push?.Invoke(batch);
@@ -169,7 +180,7 @@ public sealed class EngineHost : IDisposable {
         async Task<PluginCatalogMessage> Scan(Task before) {
             try {
                 await before.ConfigureAwait(ConfigureAwaitOptions.SuppressThrowing);
-                await Task.Run(() => Controller.Plugins.ScanAll(clapFolders)).ConfigureAwait(false);
+                await Task.Run(() => Controller.Plugins.ScanAll(clapFolders, factory is null)).ConfigureAwait(false);
             } finally {
                 Controller.Plugins.EndScan();
             }
@@ -454,6 +465,7 @@ public sealed class EngineHost : IDisposable {
         }
 
         Controller.Dispose();
+        (factory as IDisposable)?.Dispose();
         Device.Dispose();
         sharedTelemetry?.Dispose();
         if (localTelemetry is not null) {

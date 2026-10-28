@@ -172,11 +172,17 @@ public sealed class PluginRegistry {
         return context is not null && hosted.Handles(pluginId) ? hosted.CreateInstrument(pluginId, context) : null;
     }
 
-    /// <summary>Scans the CLAP folders (<see cref="ScanClap" />), then has the factory rescan its formats.</summary>
-    public void ScanAll(IEnumerable<string>? clapFolders = null) {
+    /// <summary>
+    ///     Scans the CLAP folders in process (<see cref="ScanClap" />; unless <paramref name="clap" /> is false, when
+    ///     the factory hosts CLAP), then has the factory rescan its formats.
+    /// </summary>
+    public void ScanAll(IEnumerable<string>? clapFolders = null, bool clap = true) {
         BeginScan();
         try {
-            Scan(clapFolders);
+            if (clap) {
+                Scan(clapFolders);
+            }
+
             try {
                 Factory.Scan();
             } catch (Exception e) when (e is IOException or InvalidOperationException or UnauthorizedAccessException) {

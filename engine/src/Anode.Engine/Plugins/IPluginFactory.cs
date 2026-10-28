@@ -91,6 +91,12 @@ public interface IAudioCycleObserver {
 
     /// <summary>The callback's processing is done.</summary>
     void EndCycle();
+
+    /// <summary>
+    ///     Control thread: an offline render starts (true: hosted plugins are waited for, never bypassed for being
+    ///     slow) or ends.
+    /// </summary>
+    void SetOffline(bool offline);
 }
 
 /// <summary>No third-party plugins: the engine with built-in effects and instruments (and its in-process CLAP) only.</summary>
