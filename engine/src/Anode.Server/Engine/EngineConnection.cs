@@ -477,10 +477,8 @@ public sealed class EngineConnection(
                     connection.RenderFinished(done);
                     break;
                 case ParameterChangedMessage changed when changed.ParameterId is not null:
-                    _ = Task.Run(
-                        () => session.ApplyHostParameter(changed.TrackId, changed.InsertId, changed.ParameterId, changed.Value),
-                        CancellationToken.None
-                    );
+                    // In order, here: a plugin's editor sends its moves one after another.
+                    session.ApplyHostParameter(changed.TrackId, changed.InsertId, changed.ParameterId, changed.Value);
                     break;
                 case PluginProblemMessage problem:
                     Relay(problem);
