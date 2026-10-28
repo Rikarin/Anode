@@ -36,6 +36,19 @@ internal abstract class PluginBackend : IDisposable {
         long deadlineNs
     );
 
+    /// <summary>Hands a block over without waiting (audio thread); false on a miss.</summary>
+    public abstract bool Submit(
+        ReadOnlySpan<float> inL,
+        ReadOnlySpan<float> inR,
+        ReadOnlySpan<float> scL,
+        ReadOnlySpan<float> scR,
+        ReadOnlySpan<MidiEvent> events,
+        int frames
+    );
+
+    /// <summary>Collects the block <see cref="Submit" /> handed over; false on a miss (outputs untouched).</summary>
+    public abstract bool Complete(Span<float> outL, Span<float> outR, long deadlineNs);
+
     public abstract void SetParameter(int index, double value);
 
     public abstract void Reset();
@@ -123,6 +136,19 @@ internal sealed class SandboxBackend(SandboxProcess box, int slot, PluginEntry e
         long deadlineNs
     ) =>
         loaded && audio.Run(inL, inR, scL, scR, events, outL, outR, deadlineNs);
+
+    public override bool Submit(
+        ReadOnlySpan<float> inL,
+        ReadOnlySpan<float> inR,
+        ReadOnlySpan<float> scL,
+        ReadOnlySpan<float> scR,
+        ReadOnlySpan<MidiEvent> events,
+        int frames
+    ) =>
+        loaded && audio.Submit(inL, inR, scL, scR, events, frames);
+
+    public override bool Complete(Span<float> outL, Span<float> outR, long deadlineNs) =>
+        loaded && audio.Complete(outL, outR, deadlineNs);
 
     public override void SetParameter(int index, double value) => audio.SetParameter(index, value);
 
@@ -318,6 +344,65 @@ internal sealed unsafe class InHostBackend(PluginEntry entry) : PluginBackend {
         }
 
         return ok;
+    }
+
+    // In this process there is nothing to overlap: Submit keeps the block, Complete processes it.
+    float[] heldL = [];
+    float[] heldR = [];
+    float[] heldScL = [];
+    float[] heldScR = [];
+    int heldFrames = -1;
+    bool heldSidechain;
+
+    public override bool Submit(
+        ReadOnlySpan<float> inL,
+        ReadOnlySpan<float> inR,
+        ReadOnlySpan<float> scL,
+        ReadOnlySpan<float> scR,
+        ReadOnlySpan<MidiEvent> events,
+        int frames
+    ) {
+        if (plug == 0 || buffers == null || inL.IsEmpty) {
+            heldFrames = -1;
+            return false;
+        }
+
+        if (heldL.Length < maxFrames) {
+            heldL = new float[maxFrames];
+            heldR = new float[maxFrames];
+            heldScL = new float[maxFrames];
+            heldScR = new float[maxFrames];
+        }
+
+        heldFrames = Math.Min(frames, maxFrames);
+        inL[..heldFrames].CopyTo(heldL);
+        inR[..heldFrames].CopyTo(heldR);
+        heldSidechain = !scL.IsEmpty;
+        if (heldSidechain) {
+            scL[..heldFrames].CopyTo(heldScL);
+            scR[..heldFrames].CopyTo(heldScR);
+        }
+
+        return true;
+    }
+
+    public override bool Complete(Span<float> outL, Span<float> outR, long deadlineNs) {
+        if (heldFrames < 0) {
+            return false;
+        }
+
+        var frames = heldFrames;
+        heldFrames = -1;
+        return Process(
+            heldL.AsSpan(0, frames),
+            heldR.AsSpan(0, frames),
+            heldSidechain ? heldScL.AsSpan(0, frames) : [],
+            heldSidechain ? heldScR.AsSpan(0, frames) : [],
+            [],
+            outL[..frames],
+            outR[..frames],
+            deadlineNs
+        );
     }
 
     public override void SetParameter(int index, double value) {

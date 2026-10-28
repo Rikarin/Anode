@@ -128,6 +128,24 @@ internal sealed class PluginInstance : IDisposable {
         return b.Process(inL, inR, scL, scR, events, outL, outR, host.Deadline(outL.Length, sampleRate));
     }
 
+    public bool Submit(
+        ReadOnlySpan<float> inL,
+        ReadOnlySpan<float> inR,
+        ReadOnlySpan<float> scL,
+        ReadOnlySpan<float> scR
+    ) {
+        var b = backend;
+        return b is not null && Prepared && failure is null && b.Submit(inL, inR, scL, scR, [], inL.Length);
+    }
+
+    public bool Complete(Span<float> outL, Span<float> outR) {
+        var b = backend;
+        return b is not null
+            && Prepared
+            && failure is null
+            && b.Complete(outL, outR, host.Deadline(outL.Length, sampleRate));
+    }
+
     public void Reset() => backend?.Reset();
 
     public byte[]? SaveState() {
@@ -230,7 +248,7 @@ internal sealed class PluginInstance : IDisposable {
 }
 
 /// <summary>A hosted plugin effect, as the engine sees it.</summary>
-internal sealed class HostedEffect(PluginInstance instance) : IAudioEffect, IHostedPlugin {
+internal sealed class HostedEffect(PluginInstance instance) : IAudioEffect, IHostedPlugin, ISplitProcessing {
     readonly EffectDescriptor descriptor = instance.Entry.EffectDescriptor();
 
     public PluginInstance Instance => instance;
@@ -259,6 +277,16 @@ internal sealed class HostedEffect(PluginInstance instance) : IAudioEffect, IHos
         ReadOnlySpan<float> sidechainRight
     ) =>
         instance.Process(left, right, sidechainLeft, sidechainRight, [], left, right);
+
+    public bool Begin(
+        ReadOnlySpan<float> left,
+        ReadOnlySpan<float> right,
+        ReadOnlySpan<float> sidechainLeft,
+        ReadOnlySpan<float> sidechainRight
+    ) =>
+        instance.Submit(left, right, sidechainLeft, sidechainRight);
+
+    public bool End(Span<float> left, Span<float> right) => instance.Complete(left, right);
 
     public void Reset() => instance.Reset();
 

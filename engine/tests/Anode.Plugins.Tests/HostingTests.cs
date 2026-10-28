@@ -167,6 +167,41 @@ public sealed class HostingTests : IDisposable {
     }
 
     [Fact]
+    public void Split_phase_processing_of_independent_chains_matches_one_at_a_time() {
+        using var sandboxed = Host(data, SandboxMode.PerInstance);
+        sandboxed.Processing = ProcessingMode.Offline;
+        using var local = new PluginHost(Options(data.Path, SandboxMode.InHost));
+        var a = Enumerable.Range(0, 3).Select(i => sandboxed.CreateEffect(GainId, new(i, "x"))!).ToList();
+        var b = Enumerable.Range(0, 3).Select(i => local.CreateEffect(GainId, new(i, "x"))!).ToList();
+        try {
+            for (var i = 0; i < 3; i++) {
+                a[i].Prepare(48000, 512);
+                b[i].Prepare(48000, 512);
+                a[i].SetParameter(0, 0.2f + 0.2f * i);
+                b[i].SetParameter(0, 0.2f + 0.2f * i);
+            }
+
+            for (var block = 0; block < 50; block++) {
+                var x = Enumerable.Range(0, 3).Select(_ => Signal(Frames, block * Frames)).ToList();
+                var y = Enumerable.Range(0, 3).Select(_ => Signal(Frames, block * Frames)).ToList();
+                for (var i = 0; i < 3; i++) {
+                    Assert.True(((ISplitProcessing)a[i]).Begin(x[i].Left, x[i].Right, [], []));
+                }
+
+                for (var i = 0; i < 3; i++) {
+                    Assert.True(((ISplitProcessing)a[i]).End(x[i].Left, x[i].Right));
+                    b[i].Process(y[i].Left, y[i].Right, [], []);
+                    Assert.Equal(y[i].Left, x[i].Left);
+                    Assert.Equal(y[i].Right, x[i].Right);
+                }
+            }
+        } finally {
+            a.ForEach(e => e.Dispose());
+            b.ForEach(e => e.Dispose());
+        }
+    }
+
+    [Fact]
     public void An_unknown_plugin_is_null() {
         using var host = Host(data);
         Assert.Null(host.CreateEffect("vst3:00000000000000000000000000000000", Owner));

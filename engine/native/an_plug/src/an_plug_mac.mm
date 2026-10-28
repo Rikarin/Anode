@@ -96,6 +96,9 @@ int32_t editor_open(Plugin *plugin, const char *title, int64_t parent, int32_t x
         panel.hidesOnDeactivate = NO;
         panel.becomesKeyOnlyIfNeeded = YES;
         panel.level = NSFloatingWindowLevel;
+        // Also over the app's full-screen space, as Logic's plug-in windows are.
+        panel.collectionBehavior =
+            NSWindowCollectionBehaviorFullScreenAuxiliary | NSWindowCollectionBehaviorMoveToActiveSpace;
         window = panel;
     } else {
         window = [[NSWindow alloc]

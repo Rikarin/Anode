@@ -54,6 +54,27 @@ public readonly record struct HostedPluginStats(
     int SandboxPid
 );
 
+/// <summary>
+///     Split-phase processing for sandboxed effects: <see cref="Begin" /> hands a block to the sandbox and returns at
+///     once, <see cref="End" /> waits for it (with the cycle's deadline) and writes the output in place. An engine that
+///     begins the sandboxed inserts of several independent chains before it ends any lets their sandboxes (and one
+///     sandbox's slots, back to back) run while it does other work, instead of paying one round trip per insert in
+///     series (S4: about 10–20 µs per round trip). <c>IAudioEffect.Process</c> is <c>Begin</c> plus <c>End</c>.
+///     Audio thread; on a miss or a failure <see cref="End" /> leaves the buffers as they are (dry).
+/// </summary>
+public interface ISplitProcessing {
+    /// <summary>Hands the block over; false when it was not (a miss: the block stays dry).</summary>
+    bool Begin(
+        ReadOnlySpan<float> left,
+        ReadOnlySpan<float> right,
+        ReadOnlySpan<float> sidechainLeft,
+        ReadOnlySpan<float> sidechainRight
+    );
+
+    /// <summary>Writes the processed block into the buffers; false on a miss (untouched).</summary>
+    bool End(Span<float> left, Span<float> right);
+}
+
 /// <summary>What the engine can ask of a hosted plugin besides <c>IAudioEffect</c> / <c>IInstrument</c>.</summary>
 public interface IHostedPlugin {
     PluginOwner Owner { get; }

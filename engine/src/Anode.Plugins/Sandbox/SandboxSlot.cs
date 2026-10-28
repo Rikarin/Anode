@@ -80,7 +80,6 @@ internal sealed unsafe class SandboxSlot {
     ///     Runs one block through the plugin: input (effects) or MIDI (instruments) in, output into
     ///     <paramref name="outL" /> and <paramref name="outR" />. False on a miss, leaving the outputs untouched.
     /// </summary>
-    [MethodImpl(MethodImplOptions.AggressiveOptimization)]
     public bool Run(
         ReadOnlySpan<float> inL,
         ReadOnlySpan<float> inR,
@@ -90,8 +89,28 @@ internal sealed unsafe class SandboxSlot {
         Span<float> outL,
         Span<float> outR,
         long deadlineNs
+    ) =>
+        Submit(inL, inR, scL, scR, events, outL.Length) && Complete(outL, outR, deadlineNs);
+
+    long submitted;
+    long submitStart;
+    int submittedFrames;
+
+    /// <summary>
+    ///     The first half of <see cref="Run" />: hands the block to the sandbox and wakes it, without waiting. False (a
+    ///     miss) when the sandbox is gone or still busy with a late block.
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveOptimization)]
+    public bool Submit(
+        ReadOnlySpan<float> inL,
+        ReadOnlySpan<float> inR,
+        ReadOnlySpan<float> scL,
+        ReadOnlySpan<float> scR,
+        ReadOnlySpan<MidiEvent> events,
+        int length
     ) {
-        var frames = Math.Min(outL.Length, maxFrames);
+        submitted = 0;
+        var frames = Math.Min(length, maxFrames);
         if (box.IsDead) {
             Misses++;
             return false;
@@ -156,14 +175,32 @@ internal sealed unsafe class SandboxSlot {
         Volatile.Write(ref control->Requested, request);
         lastRequested = request;
         IpcWake.Signal(box.Go);
+        submitted = request;
+        submitStart = start;
+        submittedFrames = frames;
+        return true;
+    }
 
+    /// <summary>
+    ///     The second half of <see cref="Run" />: waits for the submitted block until the deadline and copies its output.
+    ///     False (a miss, outputs untouched) when nothing was submitted or it came too late.
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveOptimization)]
+    public bool Complete(Span<float> outL, Span<float> outR, long deadlineNs) {
+        var request = submitted;
+        submitted = 0;
+        if (request == 0) {
+            return false; // Submit already counted the miss
+        }
+
+        var frames = Math.Min(submittedFrames, outL.Length);
         if (!WaitDone(request, deadlineNs)) {
             Misses++;
             return false;
         }
 
         var seen = IpcWake.Now();
-        LastRoundTripNs = seen - start;
+        LastRoundTripNs = seen - submitStart;
         if (seen > deadlineNs || box.IsDead) {
             // Finished, but the host only saw it after the deadline: as good as a miss.
             Misses++;
