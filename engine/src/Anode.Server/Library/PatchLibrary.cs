@@ -80,19 +80,22 @@ public sealed class PatchLibrary(IOptions<ServerOptions> options) : IPatchSource
         }
     }
 
-    /// <summary>Saves a track's strip as a new patch, with the states of its plugins (by state key, as the project keeps them).</summary>
+    /// <summary>
+    ///     Saves a track's strip as a new patch, with the states of its plugins (by state key, as the project keeps
+    ///     them).
+    /// </summary>
     public PatchInfo Save(Track track, string name, string category, IReadOnlyDictionary<string, byte[]> states) {
         var trimmedName = (name ?? string.Empty).Trim();
         var trimmedCategory = (category ?? string.Empty).Trim();
-        if (trimmedName.Length is 0 or > Model.Editing.Edits.MaxNameLength) {
-            throw ProjectException.Unprocessable($"A patch name has 1…{Model.Editing.Edits.MaxNameLength} characters.");
+        if (trimmedName.Length is 0 or > Edits.MaxNameLength) {
+            throw ProjectException.Unprocessable($"A patch name has 1…{Edits.MaxNameLength} characters.");
         }
 
         if (trimmedCategory.Length > MaxCategoryLength) {
             throw ProjectException.Unprocessable($"A patch category has at most {MaxCategoryLength} characters.");
         }
 
-        if (!Model.Editing.Edits.HasAudioStrip(track.Kind)) {
+        if (!Edits.HasAudioStrip(track.Kind)) {
             throw ProjectException.Unprocessable("Only audio, instrument and aux tracks make patches.");
         }
 
@@ -119,7 +122,10 @@ public sealed class PatchLibrary(IOptions<ServerOptions> options) : IPatchSource
         lock (gate) {
             try {
                 Directory.CreateDirectory(Folder);
-                AtomicRename.Write(Path.Combine(Folder, id + ".json"), JsonSerializer.Serialize(file, PatchJsonContext.Default.PatchFile));
+                AtomicRename.Write(
+                    Path.Combine(Folder, id + ".json"),
+                    JsonSerializer.Serialize(file, PatchJsonContext.Default.PatchFile)
+                );
             } catch (Exception e) when (e is IOException or UnauthorizedAccessException) {
                 throw ProjectException.Unprocessable($"Could not save the patch: {e.Message}");
             }

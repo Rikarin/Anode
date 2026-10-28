@@ -21,7 +21,8 @@ public static partial class Edits {
     public const double NewSendLevelDb = Units.SilenceDb;
 
     /// <summary>What a new mixer group links: volume, mute, solo, pan, record arm and selection (not sends or automation).</summary>
-    public static GroupProperties DefaultGroupProperties { get; } = new(true, true, true, true, false, true, false, true);
+    public static GroupProperties DefaultGroupProperties { get; } =
+        new(true, true, true, true, false, true, false, true);
 
     public const string GroupColor = "#8a8f98";
 
@@ -66,7 +67,9 @@ public static partial class Edits {
         var (track, strip) = InsertStripOf(state, c.TrackId);
         var insert = InsertOf(strip, c.InsertId);
         var ops = new List<DeltaOp>();
-        ops.AddRange(LanesFor(state, track?.Id, $"insert:{insert.Id}:").Select(static l => new AutomationLaneRemoved(l.Id)));
+        ops.AddRange(
+            LanesFor(state, track?.Id, $"insert:{insert.Id}:").Select(static l => new AutomationLaneRemoved(l.Id))
+        );
         ops.Add(Upsert(state, track, strip with { Inserts = [..strip.Inserts.Where(i => i.Id != insert.Id)] }));
         return ops;
     }
@@ -94,7 +97,13 @@ public static partial class Edits {
         }
 
         var changed = insert with { Bypassed = c.Bypassed ?? insert.Bypassed, Sidechain = sidechain };
-        return [Upsert(state, track, strip with { Inserts = [..strip.Inserts.Select(i => i.Id == insert.Id ? changed : i)] })];
+        return [
+            Upsert(
+                state,
+                track,
+                strip with { Inserts = [..strip.Inserts.Select(i => i.Id == insert.Id ? changed : i)] }
+            )
+        ];
     }
 
     static List<DeltaOp> SetInsertParameter(ProjectState state, SetInsertParameterCommand c, PluginCatalog plugins) {
@@ -105,8 +114,16 @@ public static partial class Edits {
         }
 
         var value = ParameterValue(plugins, insert.PluginId, insert.Parameters, c.ParameterId, c.Value, "Insert");
-        var changed = insert with { Parameters = PluginCatalog.Sorted(insert.Parameters).SetItem(c.ParameterId, value) };
-        return [Upsert(state, track, strip with { Inserts = [..strip.Inserts.Select(i => i.Id == insert.Id ? changed : i)] })];
+        var changed = insert with {
+            Parameters = PluginCatalog.Sorted(insert.Parameters).SetItem(c.ParameterId, value)
+        };
+        return [
+            Upsert(
+                state,
+                track,
+                strip with { Inserts = [..strip.Inserts.Select(i => i.Id == insert.Id ? changed : i)] }
+            )
+        ];
     }
 
     /// <summary>A parameter value checked against the plugin's catalogue entry (rounded to its steps), or kept.</summary>
@@ -204,7 +221,9 @@ public static partial class Edits {
     }
 
     static Track WithSend(Track track, Send send) =>
-        track with { Strip = track.Strip with { Sends = [..track.Strip.Sends.Select(s => s.Id == send.Id ? send : s)] } };
+        track with {
+            Strip = track.Strip with { Sends = [..track.Strip.Sends.Select(s => s.Id == send.Id ? send : s)] }
+        };
 
     static List<DeltaOp> RemoveSend(ProjectState state, RemoveSendCommand c) {
         var track = MixTrackOf(state, c.TrackId, "sends");
@@ -233,10 +252,11 @@ public static partial class Edits {
 
     static List<DeltaOp> AddAux(ProjectState state, AddAuxCommand c, IIdSource ids) {
         CheckTrackCount(state);
-        var bus = c.Bus ?? Routing.LowestFreeBus(state)
+        var bus = c.Bus
+            ?? Routing.LowestFreeBus(state)
             ?? throw new EditException($"Every bus 1…{MaxBus} is in use.");
         CheckBus(bus);
-        if (state.Tracks.Any(t => t.Kind == TrackKind.Aux && t.InputBus == bus)) {
+        if (state.Tracks.Exists(t => t.Kind == TrackKind.Aux && t.InputBus == bus)) {
             throw new EditException($"Bus {bus} already feeds an aux.");
         }
 
@@ -284,7 +304,9 @@ public static partial class Edits {
             throw new EditException($"Track '{id}' is not a VCA.");
         }
 
-        return [new TrackUpserted(track with { Strip = track.Strip with { VcaId = c.VcaId } }, state.IndexOfTrack(track.Id))];
+        return [
+            new TrackUpserted(track with { Strip = track.Strip with { VcaId = c.VcaId } }, state.IndexOfTrack(track.Id))
+        ];
     }
 
     static List<DeltaOp> SetGroup(ProjectState state, SetGroupCommand c) {
@@ -309,7 +331,9 @@ public static partial class Edits {
         foreach (var track in state.Tracks.Where(t => t.Strip.Groups.Contains(c.Number))) {
             ops.Add(
                 new TrackUpserted(
-                    track with { Strip = track.Strip with { Groups = [..track.Strip.Groups.Where(g => g != c.Number)] } },
+                    track with {
+                        Strip = track.Strip with { Groups = [..track.Strip.Groups.Where(g => g != c.Number)] }
+                    },
                     state.IndexOfTrack(track.Id)
                 )
             );
@@ -373,20 +397,7 @@ public static partial class Edits {
     /// <summary>Points in tick order (two at most on one tick: a jump), inside the target's range, curves −1…1.</summary>
     static void CheckPoints(IReadOnlyList<AutomationPoint> points, LaneRange range) {
         for (var i = 0; i < points.Count; i++) {
-            var p = points[i] ?? throw new EditException("An automation point is null.");
-            CheckTick(p.Tick, "automation point");
-            if (!double.IsFinite(p.Value) || p.Value < range.Min || p.Value > range.Max) {
-                throw new EditException($"An automation value of this lane is {range.Min}…{range.Max}, not {p.Value}.");
-            }
-
-            if (range.Toggle && p.Value is not (0 or 1)) {
-                throw new EditException("A mute lane's values are 0 and 1.");
-            }
-
-            if (!(p.Curve is >= -1 and <= 1)) {
-                throw new EditException($"An automation curve is −1…1, not {p.Curve}.");
-            }
-
+            var p = CheckPoint(points[i], range);
             if (i > 0 && p.Tick < points[i - 1].Tick) {
                 throw new EditException("Automation points are in tick order.");
             }
@@ -395,6 +406,20 @@ public static partial class Edits {
                 throw new EditException($"At most two automation points share tick {p.Tick}.");
             }
         }
+    }
+
+    static AutomationPoint CheckPoint(AutomationPoint? point, LaneRange range) {
+        var p = point ?? throw new EditException("An automation point is null.");
+        CheckTick(p.Tick, "automation point");
+        if (!double.IsFinite(p.Value) || p.Value < range.Min || p.Value > range.Max) {
+            throw new EditException($"An automation value of this lane is {range.Min}…{range.Max}, not {p.Value}.");
+        }
+
+        if (range.Toggle && p.Value is not (0 or 1)) {
+            throw new EditException("A mute lane's values are 0 and 1.");
+        }
+
+        return p.Curve is >= -1 and <= 1 ? p : throw new EditException($"An automation curve is −1…1, not {p.Curve}.");
     }
 
     /// <summary>What values a lane's target takes; whether it toggles (mute).</summary>
@@ -497,7 +522,11 @@ public static partial class Edits {
             throw new EditException($"The low-latency limit is 0…{MaxLowLatencyLimitMs} ms, not {limit}.");
         }
 
-        var mixer = new MixerSettings(c.Pdc ?? old.Pdc, c.LowLatency ?? old.LowLatency, c.LowLatencyLimitMs ?? old.LowLatencyLimitMs);
+        var mixer = new MixerSettings(
+            c.Pdc ?? old.Pdc,
+            c.LowLatency ?? old.LowLatency,
+            c.LowLatencyLimitMs ?? old.LowLatencyLimitMs
+        );
         return [new SettingsChanged(state.Settings with { Mixer = mixer })];
     }
 
@@ -505,7 +534,9 @@ public static partial class Edits {
         var track = MixTrackOf(state, c.TrackId, "patches");
         var patch = patches.Find(c.PatchId ?? string.Empty) ?? throw new EditException($"No patch '{c.PatchId}'.");
         if (patch.Kind == TrackKind.Instrument && track.Kind != TrackKind.Instrument) {
-            throw new EditException($"Patch '{patch.Name}' is an instrument patch; '{track.Name}' is not an instrument track.");
+            throw new EditException(
+                $"Patch '{patch.Name}' is an instrument patch; '{track.Name}' is not an instrument track."
+            );
         }
 
         if (track.FrozenFileId is not null) {
@@ -516,7 +547,9 @@ public static partial class Edits {
         var instrument = track.Instrument;
         if (track.Kind == TrackKind.Instrument && patch.Instrument is { } slot) {
             if (instrument?.PluginId != slot.PluginId) {
-                ops.AddRange(LanesFor(state, track.Id, "instrument:").Select(static l => new AutomationLaneRemoved(l.Id)));
+                ops.AddRange(
+                    LanesFor(state, track.Id, "instrument:").Select(static l => new AutomationLaneRemoved(l.Id))
+                );
             }
 
             instrument = slot with { Parameters = PluginCatalog.Sorted(slot.Parameters) };
@@ -524,7 +557,8 @@ public static partial class Edits {
 
         foreach (var lane in state.LanesOf(track.Id)
                      .Where(static l => l.Target.StartsWith("insert:", StringComparison.Ordinal)
-                         || l.Target.StartsWith("send:", StringComparison.Ordinal))) {
+                         || l.Target.StartsWith("send:", StringComparison.Ordinal)
+                     )) {
             ops.Add(new AutomationLaneRemoved(lane.Id));
         }
 
@@ -539,12 +573,14 @@ public static partial class Edits {
         var sends = new List<Send>();
         foreach (var send in patch.Sends.Take(MaxSends)) {
             CheckBus(send.Bus);
-            if (sends.All(s => s.Bus != send.Bus)) {
+            if (sends.TrueForAll(s => s.Bus != send.Bus)) {
                 sends.Add(send with { Id = ids.Next(IdPrefix.Send) });
             }
         }
 
-        var changed = track with { Instrument = instrument, Strip = track.Strip with { Inserts = inserts, Sends = sends } };
+        var changed = track with {
+            Instrument = instrument, Strip = track.Strip with { Inserts = inserts, Sends = sends }
+        };
         CheckRouting(state, changed);
         ops.Add(new TrackUpserted(changed, state.IndexOfTrack(track.Id)));
         return ops;
@@ -570,7 +606,12 @@ public static partial class Edits {
         _ = FileOf(state, fileId);
         var forward = new List<DeltaOp>();
         var inverse = new List<DeltaOp>();
-        state = Step(state, [new TrackUpserted(track with { FrozenFileId = fileId }, state.IndexOfTrack(track.Id))], forward, inverse);
+        state = Step(
+            state,
+            [new TrackUpserted(track with { FrozenFileId = fileId }, state.IndexOfTrack(track.Id))],
+            forward,
+            inverse
+        );
         inverse.Reverse();
         return new(state, forward, inverse);
     }
@@ -596,7 +637,8 @@ public static partial class Edits {
     }
 
     /// <summary>Whether a track of <paramref name="kind" /> has a full channel strip (inserts, sends, an output).</summary>
-    public static bool HasAudioStrip(TrackKind kind) => kind is TrackKind.Audio or TrackKind.Instrument or TrackKind.Aux;
+    public static bool HasAudioStrip(TrackKind kind) =>
+        kind is TrackKind.Audio or TrackKind.Instrument or TrackKind.Aux;
 
     static string Kind(TrackKind kind) =>
         kind switch {
@@ -614,18 +656,28 @@ public static partial class Edits {
         strip.Inserts.FirstOrDefault(i => i.Id == id) ?? throw new EditException($"No insert '{id}' on that strip.");
 
     static Send SendOf(Track track, string? id) =>
-        track.Strip.Sends.FirstOrDefault(s => s.Id == id) ?? throw new EditException($"Track '{track.Id}' has no send '{id}'.");
+        track.Strip.Sends.FirstOrDefault(s => s.Id == id)
+        ?? throw new EditException($"Track '{track.Id}' has no send '{id}'.");
 
     /// <summary>The lanes of a strip whose target is <paramref name="target" /> or starts with it (a prefix ending ':').</summary>
-    static AutomationLane[] LanesFor(ProjectState state, string? trackId, string target) =>
-        state.LanesOf(trackId)
-            .Where(l => target.EndsWith(':') ? l.Target.StartsWith(target, StringComparison.Ordinal) : l.Target == target)
-            .ToArray();
+    static AutomationLane[] LanesFor(ProjectState state, string? trackId, string target) => [
+        ..state.LanesOf(trackId)
+            .Where(l => target.EndsWith(':')
+                    ? l.Target.StartsWith(target, StringComparison.Ordinal)
+                    : l.Target == target
+            )
+    ];
 
-    static string CheckSidechain(ProjectState state, Track? track, string source) =>
-        IsSidechain(state, track, source)
-            ? Routing.Normalise(source) is { } bus && bus.StartsWith("bus:", StringComparison.Ordinal) ? bus : source
-            : throw new EditException($"A sidechain is another track with audio or 'bus:1'…'bus:{MaxBus}', not '{source}'.");
+    /// <summary>A sidechain source as kept: a track id, or a bus in canonical form.</summary>
+    static string CheckSidechain(ProjectState state, Track? track, string source) {
+        if (!IsSidechain(state, track, source)) {
+            throw new EditException(
+                $"A sidechain is another track with audio or 'bus:1'…'bus:{MaxBus}', not '{source}'."
+            );
+        }
+
+        return Routing.BusOf(source) is { } bus ? $"bus:{bus}" : source;
+    }
 
     static bool IsSidechain(ProjectState state, Track? track, string source) =>
         Routing.BusOf(source) is >= 1 and <= MaxBus
@@ -663,7 +715,9 @@ public static partial class Edits {
 
     /// <summary>Refuses <paramref name="changed" /> when, in place of its old self, it would close a routing loop.</summary>
     static void CheckRouting(ProjectState state, Track changed) {
-        var after = state with { Tracks = state.Tracks.Select(t => t.Id == changed.Id ? changed : t).ToImmutableList() };
+        var after = state with {
+            Tracks = state.Tracks.Select(t => t.Id == changed.Id ? changed : t).ToImmutableList()
+        };
         if (Routing.Loop(after) is { } loop) {
             throw new EditException($"That would make a routing loop: {loop}.");
         }
@@ -674,7 +728,8 @@ public static partial class Edits {
     ///     own other groups do not follow).
     /// </summary>
     static Track[] Linked(ProjectState state, Track track, Func<GroupProperties, bool> links) {
-        var groups = track.Strip.Groups.Where(g => state.Groups.TryGetValue(g, out var group) && group.Enabled && links(group.Properties))
+        var groups = track.Strip.Groups
+            .Where(g => state.Groups.TryGetValue(g, out var group) && group.Enabled && links(group.Properties))
             .ToHashSet();
         return groups.Count == 0
             ? []
@@ -732,19 +787,28 @@ public static class Routing {
 
     /// <summary>A loop in <paramref name="state" />'s routing ("bus 1 → Aux 1 → bus 1"), or null.</summary>
     public static string? Loop(ProjectState state) {
-        var auxes = state.Tracks.Where(static t => t.Kind == TrackKind.Aux && t.InputBus > 0).ToLookup(static t => t.InputBus);
-        var visiting = new HashSet<int>();
-        var done = new HashSet<int>();
-        var path = new List<string>();
-        foreach (var start in auxes.Select(static g => g.Key).Order()) {
-            if (Visit(start) is { } loop) {
+        var search = new LoopSearch(state);
+        foreach (var start in search.Buses) {
+            if (search.Visit(start) is { } loop) {
                 return loop;
             }
         }
 
         return null;
+    }
 
-        string? Visit(int bus) {
+    /// <summary>A depth-first search of the bus graph: bus → the auxes it feeds → the buses they feed.</summary>
+    sealed class LoopSearch(ProjectState state) {
+        readonly ILookup<int, Track> auxes =
+            state.Tracks.Where(static t => t.Kind == TrackKind.Aux && t.InputBus > 0).ToLookup(static t => t.InputBus);
+
+        readonly HashSet<int> visiting = [];
+        readonly HashSet<int> done = [];
+        readonly List<string> path = [];
+
+        public IEnumerable<int> Buses => auxes.Select(static g => g.Key).Order();
+
+        public string? Visit(int bus) {
             if (done.Contains(bus)) {
                 return null;
             }
@@ -755,18 +819,25 @@ public static class Routing {
             }
 
             foreach (var aux in auxes[bus]) {
-                path.Add(aux.Name);
-                foreach (var next in Feeds(aux).Distinct()) {
-                    if (Visit(next) is { } loop) {
-                        return loop;
-                    }
+                if (Through(aux) is { } loop) {
+                    return loop;
                 }
-
-                path.RemoveAt(path.Count - 1);
             }
 
             visiting.Remove(bus);
             done.Add(bus);
+            path.RemoveAt(path.Count - 1);
+            return null;
+        }
+
+        string? Through(Track aux) {
+            path.Add(aux.Name);
+            foreach (var next in Feeds(aux).Distinct()) {
+                if (Visit(next) is { } loop) {
+                    return loop;
+                }
+            }
+
             path.RemoveAt(path.Count - 1);
             return null;
         }

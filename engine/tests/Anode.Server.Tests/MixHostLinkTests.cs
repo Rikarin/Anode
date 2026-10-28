@@ -27,7 +27,9 @@ public sealed class MixHostLinkTests : IAsyncDisposable {
         host.Listen(socketPath);
         await using var server = new ServerFixture(socketPath);
         using var client = server.CreateClient();
-        await ServerFixture.Eventually(async () => (await server.SystemAsync(client)).Engine.State == EngineState.Connected);
+        await ServerFixture.Eventually(async () =>
+            (await server.SystemAsync(client)).Engine.State == EngineState.Connected
+        );
         await client.CreateProjectAsync();
         await client.EditAsync(new AddTrackCommand("Gtr"), new AddAuxCommand(4, "Verb"), new AddVcaCommand("V"));
         var tracks = (await client.ProjectAsync()).Tracks;
@@ -50,7 +52,10 @@ public sealed class MixHostLinkTests : IAsyncDisposable {
 
         await client.EditAsync(new SetInsertParameterCommand(insert.Id, "threshold", -30, gtr));
         var parameter = await WaitForAsync<SetInsertParameterMessage>();
-        Assert.Equal((0, insert.Id, "threshold", -30.0), (parameter.TrackId, parameter.InsertId, parameter.ParameterId, parameter.Value));
+        Assert.Equal(
+            (0, insert.Id, "threshold", -30.0),
+            (parameter.TrackId, parameter.InsertId, parameter.ParameterId, parameter.Value)
+        );
 
         await client.EditAsync(new SetOutputCommand(verb, "output:2"));
         Assert.Equal(-2, (await WaitForAsync<SetChannelMessage>(static m => m.TrackId == 1)).Strip.Output);
@@ -59,7 +64,9 @@ public sealed class MixHostLinkTests : IAsyncDisposable {
 
         // A VCA's fader folds into its member's gain.
         await client.EditAsync(new AssignVcaCommand(gtr, vca), new SetStripCommand(vca, -10));
-        await WaitForAsync<SetStripMessage>(static m => m.TrackId == 0 && Math.Abs(m.Strip.Gain - Units.DbToGain(-10)) < 1e-6);
+        await WaitForAsync<SetStripMessage>(static m =>
+            m.TrackId == 0 && Math.Abs(m.Strip.Gain - Units.DbToGain(-10)) < 1e-6
+        );
 
         await client.EditAsync(new SetMixerSettingsCommand(PdcMode.Off, true, 3));
         var mixer = await WaitForAsync<SetMixerMessage>(static m => m.Pdc == "off");
@@ -86,13 +93,23 @@ public sealed class MixHostLinkTests : IAsyncDisposable {
         await using var server = new ServerFixture(socketPath);
         using var client = server.CreateClient();
         await using var events = await EventStream.ConnectAsync(server);
-        await ServerFixture.Eventually(async () => (await server.SystemAsync(client)).Engine.State == EngineState.Connected);
+        await ServerFixture.Eventually(async () =>
+            (await server.SystemAsync(client)).Engine.State == EngineState.Connected
+        );
         await client.CreateProjectAsync();
         await client.EditAsync(new AddTrackCommand("Keys", Kind: TrackKind.Instrument));
         var keys = (await client.ProjectAsync()).Tracks[0].Id;
         await client.EditAsync(new AddMidiRegionCommand(keys, 0, 960));
-        var response = await client.PostAsync($"/api/v1/project/tracks/{keys}/freeze", null, TestContext.Current.CancellationToken);
-        var job = (await System.Net.Http.Json.HttpContentJsonExtensions.ReadFromJsonAsync(response.Content, ContractsJsonContext.Default.Job, TestContext.Current.CancellationToken))!;
+        var response = await client.PostAsync(
+            $"/api/v1/project/tracks/{keys}/freeze",
+            null,
+            TestContext.Current.CancellationToken
+        );
+        var job = (await System.Net.Http.Json.HttpContentJsonExtensions.ReadFromJsonAsync(
+            response.Content,
+            ContractsJsonContext.Default.Job,
+            TestContext.Current.CancellationToken
+        ))!;
         var render = await WaitForAsync<RenderMessage>();
         Assert.Equal((true, 0L, 24_000L + 96_000), (render.Freeze, render.StartSample, render.EndSample));
         Assert.Equal([0], render.Tracks!);

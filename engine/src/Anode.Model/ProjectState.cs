@@ -232,16 +232,7 @@ public sealed record ProjectState(
             MidiRegionUpserted or MidiRegionRemoved or TakeFolderUpserted or TakeFolderRemoved => InverseMidi(op),
             MarkerUpserted or MarkerRemoved or SectionUpserted or SectionRemoved => InverseArrangement(op),
             NotesChanged => new NotesChanged(Notes),
-            AutomationLaneUpserted(var lane) => Automation.TryGetValue(lane.Id, out var old)
-                ? new AutomationLaneUpserted(old)
-                : new AutomationLaneRemoved(lane.Id),
-            AutomationLaneRemoved(var id) => Automation.TryGetValue(id, out var old)
-                ? new AutomationLaneUpserted(old)
-                : null,
-            GroupUpserted(var group) => Groups.TryGetValue(group.Number, out var old)
-                ? new GroupUpserted(old)
-                : new GroupRemoved(group.Number),
-            GroupRemoved(var number) => Groups.TryGetValue(number, out var old) ? new GroupUpserted(old) : null,
+            AutomationLaneUpserted or AutomationLaneRemoved or GroupUpserted or GroupRemoved => InverseMixer(op),
             _ => throw new ArgumentException($"Unknown delta operation {op.GetType().Name}.", nameof(op))
         };
 
@@ -255,6 +246,21 @@ public sealed record ProjectState(
                 ? new TakeFolderUpserted(old)
                 : new TakeFolderRemoved(folder.Id),
             TakeFolderRemoved(var id) => TakeFolders.TryGetValue(id, out var old) ? new TakeFolderUpserted(old) : null,
+            _ => null
+        };
+
+    DeltaOp? InverseMixer(DeltaOp op) =>
+        op switch {
+            AutomationLaneUpserted(var lane) => Automation.TryGetValue(lane.Id, out var old)
+                ? new AutomationLaneUpserted(old)
+                : new AutomationLaneRemoved(lane.Id),
+            AutomationLaneRemoved(var id) => Automation.TryGetValue(id, out var old)
+                ? new AutomationLaneUpserted(old)
+                : null,
+            GroupUpserted(var group) => Groups.TryGetValue(group.Number, out var old)
+                ? new GroupUpserted(old)
+                : new GroupRemoved(group.Number),
+            GroupRemoved(var number) => Groups.TryGetValue(number, out var old) ? new GroupUpserted(old) : null,
             _ => null
         };
 

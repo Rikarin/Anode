@@ -35,14 +35,21 @@ public sealed class MixApiTests {
         );
         project = await client.ProjectAsync();
         var strip = project.Tracks[0].Strip;
-        Assert.Equal(("anode.compressor", 1, -6.0, vca), (strip.Inserts[0].PluginId, strip.Sends[0].Bus, strip.Sends[0].LevelDb, strip.VcaId));
+        Assert.Equal(
+            ("anode.compressor", 1, -6.0, vca),
+            (strip.Inserts[0].PluginId, strip.Sends[0].Bus, strip.Sends[0].LevelDb, strip.VcaId)
+        );
         Assert.Equal([1], strip.Groups);
         Assert.Equal("Guitars", Assert.Single(project.Groups).Name);
         Assert.Equal("volume", Assert.Single(project.Automation).Target);
         Assert.Equal(PdcMode.Tracks, project.Settings.Mixer.Pdc);
 
         var loop = await client.SendCommandsAsync(null, new SetOutputCommand(verb, "bus:1"));
-        Assert.Contains("loop", await ApiCalls.AssertProblemAsync(loop, HttpStatusCode.UnprocessableEntity), StringComparison.Ordinal);
+        Assert.Contains(
+            "loop",
+            await ApiCalls.AssertProblemAsync(loop, HttpStatusCode.UnprocessableEntity),
+            StringComparison.Ordinal
+        );
         var range = await client.SendCommandsAsync(null, new AddSendCommand(gtr, 65));
         await ApiCalls.AssertProblemAsync(range, HttpStatusCode.UnprocessableEntity);
         var group = await client.SendCommandsAsync(null, new SetGroupCommand(33));
@@ -61,8 +68,11 @@ public sealed class MixApiTests {
         var undoBefore = (await History(client)).Undo.Count;
 
         await client.TransportAsync(TransportCommand.Play, 0);
-        await events.WaitAsync<TransportEvent>(static e => e.Transport is { State: TransportState.Playing, PositionTick: > 100 });
-        foreach (var db in (double[]) [-10, -8, -6]) {
+        await events.WaitAsync<TransportEvent>(static e => e.Transport is {
+                State: TransportState.Playing, PositionTick: > 100
+            }
+        );
+        foreach (var db in (double[])[-10, -8, -6]) {
             await client.EditAsync(new SetStripCommand(gtr, db));
             await Task.Delay(150, Token);
         }
@@ -70,7 +80,8 @@ public sealed class MixApiTests {
         await Task.Delay(200, Token);
         await client.TransportAsync(TransportCommand.Stop);
         await ServerFixture.Eventually(async () =>
-            (await client.ProjectAsync()).Automation.SingleOrDefault()?.Points.Count >= 4 // three moves and the latch end
+            (await client.ProjectAsync()).Automation.SingleOrDefault()?.Points.Count
+            >= 4 // three moves and the latch end
         );
         var lane = (await client.ProjectAsync()).Automation.Single();
         Assert.Equal(("volume", gtr), (lane.Target, lane.TrackId));
@@ -86,7 +97,10 @@ public sealed class MixApiTests {
         // Read mode records nothing.
         await client.EditAsync(new SetAutomationModeCommand(AutomationMode.Read, gtr));
         await client.TransportAsync(TransportCommand.Play, 0);
-        await events.WaitAsync<TransportEvent>(static e => e.Transport is { State: TransportState.Playing, PositionTick: > 100 });
+        await events.WaitAsync<TransportEvent>(static e => e.Transport is {
+                State: TransportState.Playing, PositionTick: > 100
+            }
+        );
         await client.EditAsync(new SetStripCommand(gtr, -3));
         await client.TransportAsync(TransportCommand.Stop);
         Assert.Empty((await client.ProjectAsync()).Automation);
@@ -141,7 +155,7 @@ public sealed class MixApiTests {
         var job = await StartAsync(
             client,
             "/api/v1/project/bounce",
-            new BounceRequest(
+            new(
                 "Mix",
                 StartTick: 0,
                 EndTick: 4 * Bar,
@@ -153,11 +167,17 @@ public sealed class MixApiTests {
                 AddToProject: true
             )
         );
-        var done = await events.WaitAsync<JobEvent>(e => e.Job.Id == job.Id && e.Job.State is JobState.Done or JobState.Failed, 60);
+        var done = await events.WaitAsync<JobEvent>(
+            e => e.Job.Id == job.Id && e.Job.State is JobState.Done or JobState.Failed,
+            60
+        );
         Assert.Equal(JobState.Done, done.Job.State);
         Assert.Contains(events.OfType<JobEvent>(), e => e.Job.Id == job.Id && e.Job.State == JobState.Running);
         var file = Assert.Single(done.Job.Files);
-        Assert.Equal(Path.Combine(Path.GetDirectoryName(created.Path)!, Path.GetFileName(created.Path), "Bounces", "Mix.wav"), file);
+        Assert.Equal(
+            Path.Combine(Path.GetDirectoryName(created.Path)!, Path.GetFileName(created.Path), "Bounces", "Mix.wav"),
+            file
+        );
         var info = WavReader.Probe(file);
         Assert.Equal((44_100, 24, 2), (info.SampleRate, info.BitDepth, info.Channels));
         Assert.InRange(info.Frames, 8 * 44_100 - 1, 8 * 44_100 + 1);
@@ -201,7 +221,10 @@ public sealed class MixApiTests {
                     PeakCeilingDb: -3
                 )
             );
-            var done = await events.WaitAsync<JobEvent>(e => e.Job.Id == job.Id && e.Job.State is JobState.Done or JobState.Failed, 60);
+            var done = await events.WaitAsync<JobEvent>(
+                e => e.Job.Id == job.Id && e.Job.State is JobState.Done or JobState.Failed,
+                60
+            );
             Assert.Equal(JobState.Done, done.Job.State);
             Assert.Equal(["Song - Bass.aif", "Song - Kick.aif"], done.Job.Files.Select(Path.GetFileName).Order());
             foreach (var path in done.Job.Files) {
@@ -212,22 +235,28 @@ public sealed class MixApiTests {
 
             var bad = await client.PostAsJsonAsync(
                 "/api/v1/project/bounce",
-                new BounceRequest("Song", BitDepth: 20),
+                new("Song", BitDepth: 20),
                 ContractsJsonContext.Default.BounceRequest,
                 Token
             );
             await ApiCalls.AssertProblemAsync(bad, HttpStatusCode.UnprocessableEntity);
 
             // A long render cancelled while it runs, and one cancelled while it waits behind it.
-            var long1 = await StartAsync(client, "/api/v1/project/bounce", new BounceRequest("Long", directory, 0, 2000 * Bar));
-            var long2 = await StartAsync(client, "/api/v1/project/bounce", new BounceRequest("Later", directory, 0, Bar));
+            var long1 = await StartAsync(client, "/api/v1/project/bounce", new("Long", directory, 0, 2000 * Bar));
+            var long2 = await StartAsync(client, "/api/v1/project/bounce", new("Later", directory, 0, Bar));
             var cancelled = await client.PostAsync($"/api/v1/jobs/{long2.Id}/cancel", null, Token);
-            Assert.Equal(JobState.Cancelled, (await cancelled.Content.ReadFromJsonAsync(ContractsJsonContext.Default.Job, Token))!.State);
+            Assert.Equal(
+                JobState.Cancelled,
+                (await cancelled.Content.ReadFromJsonAsync(ContractsJsonContext.Default.Job, Token))!.State
+            );
             await events.WaitAsync<JobEvent>(e => e.Job.Id == long1.Id && e.Job.State == JobState.Running, 30);
             await client.PostAsync($"/api/v1/jobs/{long1.Id}/cancel", null, Token);
             await events.WaitAsync<JobEvent>(e => e.Job.Id == long1.Id && e.Job.State == JobState.Cancelled, 30);
             Assert.False(File.Exists(Path.Combine(directory, "Long.wav")));
-            Assert.Equal(HttpStatusCode.NotFound, (await client.PostAsync("/api/v1/jobs/job_none/cancel", null, Token)).StatusCode);
+            Assert.Equal(
+                HttpStatusCode.NotFound,
+                (await client.PostAsync("/api/v1/jobs/job_none/cancel", null, Token)).StatusCode
+            );
         } finally {
             Directory.Delete(directory, true);
         }
@@ -246,16 +275,31 @@ public sealed class MixApiTests {
             new AddInsertCommand(FakeHost.FakeVst3Id, vox),
             new AddSendCommand(vox, 2, -9)
         );
-        Assert.Empty((await client.GetFromJsonAsync("/api/v1/library/patches", ContractsJsonContext.Default.IReadOnlyListPatchInfo, Token))!);
+        Assert.Empty(
+            (await client.GetFromJsonAsync(
+                "/api/v1/library/patches",
+                ContractsJsonContext.Default.IReadOnlyListPatchInfo,
+                Token
+            ))!
+        );
         var response = await client.PostAsJsonAsync(
             "/api/v1/library/patches",
-            new SavePatchRequest(vox, "Lead Vocal", "Vocals"),
+            new(vox, "Lead Vocal", "Vocals"),
             ContractsJsonContext.Default.SavePatchRequest,
             Token
         );
         var patch = (await response.Content.ReadFromJsonAsync(ContractsJsonContext.Default.PatchInfo, Token))!;
         Assert.Equal(("Lead Vocal", "Vocals", TrackKind.Audio), (patch.Name, patch.Category, patch.Kind));
-        Assert.Equal(patch, Assert.Single((await client.GetFromJsonAsync("/api/v1/library/patches", ContractsJsonContext.Default.IReadOnlyListPatchInfo, Token))!));
+        Assert.Equal(
+            patch,
+            Assert.Single(
+                (await client.GetFromJsonAsync(
+                    "/api/v1/library/patches",
+                    ContractsJsonContext.Default.IReadOnlyListPatchInfo,
+                    Token
+                ))!
+            )
+        );
 
         await client.EditAsync(new ApplyPatchCommand(backing, patch.Id));
         var strip = (await client.ProjectAsync()).Tracks[1].Strip;
@@ -269,13 +313,19 @@ public sealed class MixApiTests {
             )
         );
 
-        Assert.Equal(HttpStatusCode.NoContent, (await client.DeleteAsync($"/api/v1/library/patches/{patch.Id}", Token)).StatusCode);
-        Assert.Equal(HttpStatusCode.NotFound, (await client.DeleteAsync($"/api/v1/library/patches/{patch.Id}", Token)).StatusCode);
+        Assert.Equal(
+            HttpStatusCode.NoContent,
+            (await client.DeleteAsync($"/api/v1/library/patches/{patch.Id}", Token)).StatusCode
+        );
+        Assert.Equal(
+            HttpStatusCode.NotFound,
+            (await client.DeleteAsync($"/api/v1/library/patches/{patch.Id}", Token)).StatusCode
+        );
         var missing = await client.SendCommandsAsync(null, new ApplyPatchCommand(backing, patch.Id));
         await ApiCalls.AssertProblemAsync(missing, HttpStatusCode.UnprocessableEntity);
         var noTrack = await client.PostAsJsonAsync(
             "/api/v1/library/patches",
-            new SavePatchRequest("trk_none", "X", "Y"),
+            new("trk_none", "X", "Y"),
             ContractsJsonContext.Default.SavePatchRequest,
             Token
         );
@@ -286,12 +336,29 @@ public sealed class MixApiTests {
     public async Task IO_labels_are_kept_per_user() {
         await using var server = new ServerFixture();
         using var client = server.CreateClient();
-        var empty = await client.GetFromJsonAsync("/api/v1/settings/io-labels", ContractsJsonContext.Default.IoLabels, Token);
+        var empty = await client.GetFromJsonAsync(
+            "/api/v1/settings/io-labels",
+            ContractsJsonContext.Default.IoLabels,
+            Token
+        );
         Assert.Equal((0, 0, 0), (empty!.Inputs.Count, empty.Outputs.Count, empty.Buses.Count));
-        var labels = new IoLabels([new(1, "Vocal Mic"), new(2, " ")], [new(1, "Monitors")], [new(1, "Reverb"), new(64, "Print")]);
-        var put = await client.PutAsJsonAsync("/api/v1/settings/io-labels", labels, ContractsJsonContext.Default.IoLabels, Token);
+        var labels = new IoLabels(
+            [new(1, "Vocal Mic"), new(2, " ")],
+            [new(1, "Monitors")],
+            [new(1, "Reverb"), new(64, "Print")]
+        );
+        var put = await client.PutAsJsonAsync(
+            "/api/v1/settings/io-labels",
+            labels,
+            ContractsJsonContext.Default.IoLabels,
+            Token
+        );
         put.EnsureSuccessStatusCode();
-        var saved = await client.GetFromJsonAsync("/api/v1/settings/io-labels", ContractsJsonContext.Default.IoLabels, Token);
+        var saved = await client.GetFromJsonAsync(
+            "/api/v1/settings/io-labels",
+            ContractsJsonContext.Default.IoLabels,
+            Token
+        );
         Assert.Equal(["Vocal Mic"], saved!.Inputs.Select(static l => l.Name));
         Assert.Equal([(1, "Reverb"), (64, "Print")], saved.Buses.Select(static l => (l.Number, l.Name)));
         var bad = await client.PutAsJsonAsync(
@@ -328,16 +395,21 @@ public sealed class MixApiTests {
         var undo = (await History(client)).Undo.Count;
         await host.ChangeParameterAsync(0, inserts[0].Id, "0", 3);
         await host.ChangeParameterAsync(0, inserts[0].Id, "0", 6);
-        await ServerFixture.Eventually(async () => (await client.ProjectAsync()).Tracks[0].Strip.Inserts[0].Parameters["0"] == 6);
+        await ServerFixture.Eventually(async () =>
+            (await client.ProjectAsync()).Tracks[0].Strip.Inserts[0].Parameters["0"] == 6
+        );
         Assert.Equal(undo + 1, (await History(client)).Undo.Count);
 
         await host.ReportReadingsAsync([new(0, inserts[1].Id, -4.5f), new(7, "ins_gone", 1)]);
         var meters = await events.WaitAsync<MetersEvent>(static e => e.Readings is { Count: > 0 });
-        Assert.Equal(new InsertReading(gtr, inserts[1].Id, -4.5), Assert.Single(meters.Readings!));
+        Assert.Equal(new(gtr, inserts[1].Id, -4.5), Assert.Single(meters.Readings!));
 
         await host.ReportProblemAsync(0, inserts[0].Id, FakeHost.FakeVst3Id, "The plugin crashed.");
         var problem = await events.WaitAsync<PluginProblemEvent>();
-        Assert.Equal((gtr, inserts[0].Id, FakeHost.FakeVst3Id, "The plugin crashed."), (problem.TrackId, problem.InsertId, problem.PluginId, problem.Message));
+        Assert.Equal(
+            (gtr, inserts[0].Id, FakeHost.FakeVst3Id, "The plugin crashed."),
+            (problem.TrackId, problem.InsertId, problem.PluginId, problem.Message)
+        );
     }
 
     [Fact]
@@ -357,20 +429,31 @@ public sealed class MixApiTests {
         Assert.True(File.Exists(Path.Combine(states, $"master.{master}.bin")));
 
         await client.PostAsync("/api/v1/project/close", null, Token);
-        var open = await client.PostAsJsonAsync("/api/v1/projects/open", new OpenProjectRequest(created.Path), ContractsJsonContext.Default.OpenProjectRequest, Token);
+        var open = await client.PostAsJsonAsync(
+            "/api/v1/projects/open",
+            new(created.Path),
+            ContractsJsonContext.Default.OpenProjectRequest,
+            Token
+        );
         open.EnsureSuccessStatusCode();
         var host = server.Services.GetRequiredService<EngineConnection>().InProcessHost!;
         await ServerFixture.Eventually(() => Task.FromResult(
                 host.Received.OfType<Ipc.LoadModelMessage>()
                     .Any(m => m.Replace
                         && m.Tracks.Any(t => t.Strip.Inserts!.Any(i => i.Id == insert && i.State is not null))
-                        && m.Master.Inserts!.Any(i => i.Id == master && i.State is not null))
+                        && m.Master.Inserts!.Any(i => i.Id == master && i.State is not null)
+                    )
             )
         );
     }
 
     static Task<HttpResponseMessage> Editor(HttpClient client, PluginEditorRequest request) =>
-        client.PostAsJsonAsync("/api/v1/plugins/editor", request, ContractsJsonContext.Default.PluginEditorRequest, Token);
+        client.PostAsJsonAsync(
+            "/api/v1/plugins/editor",
+            request,
+            ContractsJsonContext.Default.PluginEditorRequest,
+            Token
+        );
 
     static async Task<UndoHistory> History(HttpClient client) =>
         (await client.GetFromJsonAsync("/api/v1/project/history", ContractsJsonContext.Default.UndoHistory, Token))!;

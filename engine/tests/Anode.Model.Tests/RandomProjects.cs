@@ -136,9 +136,14 @@ static class RandomProjects {
                 TrackKind.Audio,
                 null,
                 [
-                    new("ins_p1", "anode.test-compressor", "Test Compressor", false, new Dictionary<string, double> {
-                        ["threshold"] = -18, ["ratio"] = 3, ["character"] = 1
-                    }, null),
+                    new(
+                        "ins_p1",
+                        "anode.test-compressor",
+                        "Test Compressor",
+                        false,
+                        new Dictionary<string, double> { ["threshold"] = -18, ["ratio"] = 3, ["character"] = 1 },
+                        null
+                    ),
                     new("ins_p2", "com.example.fx", "Test Delay", true, new Dictionary<string, double>(), "bus:3")
                 ],
                 [new("snd_p1", 2, -12, 0, false), new("snd_p2", 5, -20, 0.5, true)]
@@ -148,10 +153,24 @@ static class RandomProjects {
                 "Warm Pad",
                 "Synths",
                 TrackKind.Instrument,
-                new("anode.synth", "Synth", new Dictionary<string, double> {
-                    ["cutoff"] = 1200, ["resonance"] = 0.4, ["wave"] = 2, ["volume"] = -3
-                }, null),
-                [new("ins_p3", "com.example.vst3.gain", "Test Gain", false, new Dictionary<string, double> { ["0"] = 3, ["1"] = 0 }, null)],
+                new(
+                    "anode.synth",
+                    "Synth",
+                    new Dictionary<string, double> {
+                        ["cutoff"] = 1200, ["resonance"] = 0.4, ["wave"] = 2, ["volume"] = -3
+                    },
+                    null
+                ),
+                [
+                    new(
+                        "ins_p3",
+                        "com.example.vst3.gain",
+                        "Test Gain",
+                        false,
+                        new Dictionary<string, double> { ["0"] = 3, ["1"] = 0 },
+                        null
+                    )
+                ],
                 []
             )
         ]
@@ -219,7 +238,7 @@ static class RandomProjects {
         // Half the time, a track is frozen (to a file of the pool, as a finished freeze job leaves it).
         if (edits > 20
             && random.Next(2) == 0
-            && state.Tracks.FirstOrDefault(static t => t.Kind is TrackKind.Audio or TrackKind.Instrument) is { } frozen) {
+            && state.Tracks.Find(static t => t.Kind is TrackKind.Audio or TrackKind.Instrument) is { } frozen) {
             state = Edits.Freeze(state, frozen.Id, state.Files.Keys.First()).State;
         }
 
@@ -462,7 +481,11 @@ static class RandomProjects {
                 ? new RemoveInsertCommand(Pick(r, strip.Inserts).Id, t)
                 : null,
             nameof(MoveInsertCommand) => WithInserts() is var (t, strip) && strip is not null
-                ? new MoveInsertCommand(Pick(r, strip.Inserts).Id, r.Next(0, strip.Inserts.Count + (r.Next(8) == 0 ? 1 : 0)), t)
+                ? new MoveInsertCommand(
+                    Pick(r, strip.Inserts).Id,
+                    r.Next(0, strip.Inserts.Count + (r.Next(8) == 0 ? 1 : 0)),
+                    t
+                )
                 : null,
             nameof(SetInsertCommand) => WithInserts() is var (t, strip) && strip is not null
                 ? new SetInsertCommand(
@@ -471,7 +494,7 @@ static class RandomProjects {
                     Maybe(r.Next(2) == 0),
                     r.Next(3) switch {
                         0 => null,
-                        1 => Pick(r, ["", $"bus:{r.Next(1, 9)}", "bus:99"]),
+                        1 => Pick(r, [string.Empty, $"bus:{r.Next(1, 9)}", "bus:99"]),
                         _ => mixed.Length > 0 ? Pick(r, mixed).Id : null
                     }
                 )
@@ -497,14 +520,19 @@ static class RandomProjects {
                     r.Next(4) == 0 ? r.Next(1, 9) : null
                 )
                 : null,
-            nameof(RemoveSendCommand) => WithSends() is { } t ? new RemoveSendCommand(t.Id, Pick(r, t.Strip.Sends).Id) : null,
+            nameof(RemoveSendCommand) => WithSends() is { } t
+                ? new RemoveSendCommand(t.Id, Pick(r, t.Strip.Sends).Id)
+                : null,
             nameof(SetOutputCommand) => mixed.Length > 0
                 ? new SetOutputCommand(
                     Pick(r, mixed).Id,
                     Pick(r, ["master", $"bus:{r.Next(1, 9)}", $"output:{r.Next(1, 5)}", "bus:0", "speakers"])
                 )
                 : null,
-            nameof(AddAuxCommand) => new AddAuxCommand(r.Next(2) == 0 ? null : r.Next(1, 9), MaybeText($"FX {r.Next(10)}")),
+            nameof(AddAuxCommand) => new AddAuxCommand(
+                r.Next(2) == 0 ? null : r.Next(1, 9),
+                MaybeText($"FX {r.Next(10)}")
+            ),
             nameof(SetGroupCommand) => new SetGroupCommand(
                 r.Next(16) == 0 ? 33 : r.Next(1, 5),
                 MaybeText($"Group {r.Next(10)}"),
@@ -512,8 +540,16 @@ static class RandomProjects {
                 Maybe(r.Next(4) > 0),
                 r.Next(2) == 0
                     ? null
-                    : new(r.Next(4) > 0, r.Next(2) == 0, r.Next(2) == 0, r.Next(2) == 0, r.Next(2) == 0, r.Next(2) == 0,
-                        r.Next(2) == 0, r.Next(2) == 0)
+                    : new(
+                        r.Next(4) > 0,
+                        r.Next(2) == 0,
+                        r.Next(2) == 0,
+                        r.Next(2) == 0,
+                        r.Next(2) == 0,
+                        r.Next(2) == 0,
+                        r.Next(2) == 0,
+                        r.Next(2) == 0
+                    )
             ),
             nameof(DeleteGroupCommand) => groups.Length > 0 ? new DeleteGroupCommand(Pick(r, groups)) : null,
             nameof(SetTrackGroupsCommand) => plain.Length > 0
@@ -536,7 +572,9 @@ static class RandomProjects {
             nameof(ApplyPatchCommand) => mixed.Length > 0
                 ? new ApplyPatchCommand(Pick(r, mixed).Id, Pick(r, ["pat_strip", "pat_synth", "pat_strip"]))
                 : null,
-            nameof(UnfreezeTrackCommand) => tracks.Where(static t => t.FrozenFileId is not null).ToArray() is { Length: > 0 } frozen
+            nameof(UnfreezeTrackCommand) => tracks.Where(static t => t.FrozenFileId is not null).ToArray() is {
+                Length: > 0
+            } frozen
                 ? new UnfreezeTrackCommand(Pick(r, frozen).Id)
                 : plain.Length > 0 && r.Next(4) == 0
                     ? new UnfreezeTrackCommand(Pick(r, plain).Id)
@@ -557,6 +595,7 @@ static class RandomProjects {
 
         Track? WithSends() =>
             mixed.Where(static t => t.Strip.Sends.Count > 0).ToArray() is { Length: > 0 } some ? Pick(r, some) : null;
+
         Track? Instrument() => instruments.Length == 0 ? null : Pick(r, instruments);
 
         Track? Loader() =>
@@ -633,14 +672,16 @@ static class RandomProjects {
 
     /// <summary>A lane of a random strip and target: points in order within the target's range, or none (removal).</summary>
     static SetAutomationCommand? Automation(ProjectState s, Random r) {
-        var strips = s.Tracks.Where(static t => t.Kind is not (TrackKind.Stack or TrackKind.Midi)).Select(static t => (Track?)t).ToList();
+        var strips = s.Tracks.Where(static t => t.Kind is not (TrackKind.Stack or TrackKind.Midi))
+            .Select(static t => (Track?)t)
+            .ToList();
         strips.Add(null);
         var track = Pick(r, strips);
         var strip = track?.Strip ?? s.Master;
         var targets = new List<string> { "volume", "mute" };
         if (track?.Kind != TrackKind.Vca) {
             targets.Add("pan");
-            targets.AddRange(strip.Inserts.SelectMany(i => i.Parameters.Keys.Select(p => $"insert:{i.Id}:{p}")));
+            targets.AddRange(strip.Inserts.SelectMany(static i => i.Parameters.Keys.Select(p => $"insert:{i.Id}:{p}")));
         }
 
         if (track is not null && track.Kind != TrackKind.Vca) {
@@ -663,11 +704,16 @@ static class RandomProjects {
         var tick = 0L;
         var points = new List<AutomationPoint>();
         for (var n = r.Next(0, 7); n > 0; n--) {
-            tick += r.Next(3) == 0 && points.Count > 0 && points[^1].Tick == tick && (points.Count < 2 || points[^2].Tick != tick)
-                ? 0
-                : r.Next(1, 16) * 240L;
+            tick += r.Next(3) == 0
+                && points.Count > 0
+                && points[^1].Tick == tick
+                && (points.Count < 2 || points[^2].Tick != tick)
+                    ? 0
+                    : r.Next(1, 16) * 240L;
             var value = range.Toggle ? r.Next(2) : Math.Round(min + r.NextDouble() * (max - min), 3);
-            points.Add(new(tick, r.Next(12) == 0 ? max + 1 : value, range.Toggle ? 0 : Math.Round(r.NextDouble() * 2 - 1, 2)));
+            points.Add(
+                new(tick, r.Next(12) == 0 ? max + 1 : value, range.Toggle ? 0 : Math.Round(r.NextDouble() * 2 - 1, 2))
+            );
         }
 
         return new(target, points, track?.Id);

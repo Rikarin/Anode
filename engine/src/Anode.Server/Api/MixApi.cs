@@ -42,7 +42,10 @@ static class MixApi {
             .WithName("CancelJob");
 
         var library = api.MapGroup("/library").WithTags("Library").AddEndpointFilter<ProblemFilter>();
-        library.MapGet("/patches", static Ok<IReadOnlyList<PatchInfo>>(PatchLibrary patches) => TypedResults.Ok(patches.List()))
+        library.MapGet(
+                "/patches",
+                static Ok<IReadOnlyList<PatchInfo>>(PatchLibrary patches) => TypedResults.Ok(patches.List())
+            )
             .WithName("ListPatches")
             .WithSummary("The user's saved channel-strip patches, by category.");
         library.MapPost(
@@ -81,7 +84,10 @@ static class MixApi {
 
         api.MapPost(
                 "/plugins/editor",
-                static Results<NoContent, NotFound, ProblemHttpResult>(PluginEditorRequest request, EngineConnection engine) => {
+                static Results<NoContent, NotFound, ProblemHttpResult>(
+                    PluginEditorRequest request,
+                    EngineConnection engine
+                ) => {
                     engine.OpenEditor(request);
                     return TypedResults.NoContent();
                 }

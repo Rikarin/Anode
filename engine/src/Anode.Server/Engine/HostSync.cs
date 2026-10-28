@@ -207,7 +207,9 @@ public sealed class HostSync(HostLink link, SegmentPool pool, ILogger logger) {
         }
 
         var (old, now) = (sent.State.FindTrack(id), target.State.FindTrack(id));
-        return old is not null && now is not null && (old.InputBus != now.InputBus || old.FrozenFileId != now.FrozenFileId);
+        return old is not null
+            && now is not null
+            && (old.InputBus != now.InputBus || old.FrozenFileId != now.FrozenFileId);
     }
 
     async Task PatchAsync(
@@ -357,34 +359,42 @@ public sealed class HostSync(HostLink link, SegmentPool pool, ILogger logger) {
         string? trackId
     ) {
         if (Strips.StructureDiffers(old, now)) {
-            var known = (old.Inserts ?? []).Select(static i => (i.Id, i.PluginId)).ToHashSet();
-            var strip = trackId is null && id == -1 ? Master(target, true) : Engine(target.State.FindTrack(trackId!)!, target, true).Strip;
-            yield return new SetChannelMessage(
-                id,
-                strip with {
-                    Inserts = [..(strip.Inserts ?? []).Select(i => known.Contains((i.Id, i.PluginId)) ? i with { State = null } : i)]
-                }
+            return [Channel(id, old, target, trackId)];
+        }
+
+        IEnumerable<IpcMessage> levels =
+            old.Gain != now.Gain || old.Pan != now.Pan || old.Mute != now.Mute || old.Solo != now.Solo
+                ? [new SetStripMessage(id, now)]
+                : [];
+        return levels.Concat(
+                (old.Sends ?? []).Zip(now.Sends ?? [])
+                .Where(static p => p.First.Gain != p.Second.Gain || p.First.Pan != p.Second.Pan)
+                .Select(p => new SetSendLevelMessage(id, p.Second.Id, p.Second.Gain, p.Second.Pan))
+            )
+            .Concat(
+                (old.Inserts ?? []).Zip(now.Inserts ?? [])
+                .SelectMany(p => p.Second.Parameters
+                    .Where(q => !p.First.Parameters.TryGetValue(q.Key, out var was) || !was.Equals(q.Value))
+                    .Select(q => new SetInsertParameterMessage(id, p.Second.Id, q.Key, q.Value))
+                )
             );
-            yield break;
-        }
+    }
 
-        if (old.Gain != now.Gain || old.Pan != now.Pan || old.Mute != now.Mute || old.Solo != now.Solo) {
-            yield return new SetStripMessage(id, now);
-        }
-
-        foreach (var (a, b) in (old.Sends ?? []).Zip(now.Sends ?? [])) {
-            if (a.Gain != b.Gain || a.Pan != b.Pan) {
-                yield return new SetSendLevelMessage(id, b.Id, b.Gain, b.Pan);
+    /// <summary>A strip whole, with the saved states of the inserts the host does not have yet (by id and plugin).</summary>
+    static SetChannelMessage Channel(int id, EngineStrip old, OpenProjectView target, string? trackId) {
+        var known = (old.Inserts ?? []).Select(static i => (i.Id, i.PluginId)).ToHashSet();
+        var strip = trackId is null
+            ? Master(target, true)
+            : Engine(target.State.FindTrack(trackId)!, target, true).Strip;
+        return new(
+            id,
+            strip with {
+                Inserts = [
+                    ..(strip.Inserts ?? []).Select(i => known.Contains((i.Id, i.PluginId)) ? i with { State = null } : i
+                    )
+                ]
             }
-        }
-
-        foreach (var (a, b) in (old.Inserts ?? []).Zip(now.Inserts ?? [])) {
-            foreach (var (parameter, value) in b.Parameters) {
-                if (!a.Parameters.TryGetValue(parameter, out var was) || !was.Equals(value)) {
-                    yield return new SetInsertParameterMessage(id, b.Id, parameter, value);
-                }
-            }
-        }
+        );
     }
 
     /// <summary>Cycle, punch and metronome that changed (all of them without <paramref name="before" />).</summary>
@@ -436,10 +446,21 @@ public sealed class HostSync(HostLink link, SegmentPool pool, ILogger logger) {
     }
 
     /// <summary>What changed in a track the host has and is not sent whole (its effective strip: a stack's change too).</summary>
-    static IEnumerable<IpcMessage> TrackMessages(OpenProjectView previous, Track old, Track track, OpenProjectView target) {
+    static IEnumerable<IpcMessage> TrackMessages(
+        OpenProjectView previous,
+        Track old,
+        Track track,
+        OpenProjectView target
+    ) {
         var id = target.Ids.Track(track.Id);
         var strip = Engine(track, target, false).Strip;
-        foreach (var message in StripMessages(id, Engine(old, previous with { Ids = target.Ids }, false).Strip, strip, target, track.Id)) {
+        foreach (var message in StripMessages(
+                     id,
+                     Engine(old, previous with { Ids = target.Ids }, false).Strip,
+                     strip,
+                     target,
+                     track.Id
+                 )) {
             yield return message;
         }
 
@@ -475,8 +496,9 @@ public sealed class HostSync(HostLink link, SegmentPool pool, ILogger logger) {
 
         if (old is null || now is null || old.PluginId != now.PluginId || old.File != now.File) {
             // A patch's instrument comes with its state; any other new instrument starts from its parameters.
-            var track = target.State.Tracks.FirstOrDefault(t => target.Ids.TrackOf(id) == t.Id);
-            yield return new SetInstrumentMessage(id, now is null ? null : Engine(now, target, track is null ? null : target.StateOf(track)));
+            var track = target.State.Tracks.Find(t => target.Ids.TrackOf(id) == t.Id);
+            var state = track is null ? null : target.StateOf(track);
+            yield return new SetInstrumentMessage(id, now is null ? null : Engine(now, target, state));
             yield break;
         }
 

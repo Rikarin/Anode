@@ -14,7 +14,15 @@ public sealed class MixerEditTests {
         state = Edits.Apply(state, commands, ids, RandomProjects.Plugins, RandomProjects.Patches).State;
 
     string Fails(params EditCommand[] commands) =>
-        Assert.Throws<EditException>(() => Edits.Apply(state, commands, ids, RandomProjects.Plugins, RandomProjects.Patches)).Message;
+        Assert.Throws<EditException>(() => Edits.Apply(
+                    state,
+                    commands,
+                    ids,
+                    RandomProjects.Plugins,
+                    RandomProjects.Patches
+                )
+            )
+            .Message;
 
     Track T(string name) => state.Tracks.Single(t => t.Name == name);
 
@@ -24,7 +32,11 @@ public sealed class MixerEditTests {
         Assert.Contains("loop", Fails(new SetOutputCommand(T("A").Id, "bus:1")), StringComparison.Ordinal);
         Assert.Contains("loop", Fails(new AddSendCommand(T("A").Id, 1, 0)), StringComparison.Ordinal);
         Apply(new SetOutputCommand(T("A").Id, "bus:2"));
-        Assert.Contains("bus 1 → A → bus 2 → B → bus 1", Fails(new AddSendCommand(T("B").Id, 1, 0)), StringComparison.Ordinal);
+        Assert.Contains(
+            "bus 1 → A → bus 2 → B → bus 1",
+            Fails(new AddSendCommand(T("B").Id, 1, 0)),
+            StringComparison.Ordinal
+        );
         // A track that is not an aux cannot close a loop.
         Apply(new SetOutputCommand(T("Gtr").Id, "bus:1"), new AddSendCommand(T("Gtr").Id, 2));
         Assert.Equal("bus:1", T("Gtr").Strip.Output);
@@ -66,18 +78,41 @@ public sealed class MixerEditTests {
         var comp = T("Gtr").Strip.Inserts[1];
         Assert.Equal(-20, comp.Parameters["threshold"]);
         Apply(new MoveInsertCommand(comp.Id, 0, gtr), new SetInsertCommand(comp.Id, gtr, true, T("Kick").Id));
-        Assert.Equal((comp.Id, true, T("Kick").Id), (T("Gtr").Strip.Inserts[0].Id, T("Gtr").Strip.Inserts[0].Bypassed, T("Gtr").Strip.Inserts[0].Sidechain));
+        Assert.Equal(
+            (comp.Id, true, T("Kick").Id),
+            (T("Gtr").Strip.Inserts[0].Id, T("Gtr").Strip.Inserts[0].Bypassed, T("Gtr").Strip.Inserts[0].Sidechain)
+        );
         Apply(new SetInsertParameterCommand(comp.Id, "character", 1.4, gtr));
         Assert.Equal(1, T("Gtr").Strip.Inserts[0].Parameters["character"]); // stepped
-        Assert.Contains("-60…0", Fails(new SetInsertParameterCommand(comp.Id, "threshold", 3, gtr)), StringComparison.Ordinal);
+        Assert.Contains(
+            "-60…0",
+            Fails(new SetInsertParameterCommand(comp.Id, "threshold", 3, gtr)),
+            StringComparison.Ordinal
+        );
         var delay = T("Gtr").Strip.Inserts.Single(static i => i.PluginId == "com.example.fx").Id;
-        Assert.Contains("no sidechain", Fails(new SetInsertCommand(delay, gtr, Sidechain: "bus:2")), StringComparison.Ordinal);
-        Assert.Contains("sidechain", Fails(new SetInsertCommand(comp.Id, gtr, Sidechain: gtr)), StringComparison.Ordinal);
+        Assert.Contains(
+            "no sidechain",
+            Fails(new SetInsertCommand(delay, gtr, Sidechain: "bus:2")),
+            StringComparison.Ordinal
+        );
+        Assert.Contains(
+            "sidechain",
+            Fails(new SetInsertCommand(comp.Id, gtr, Sidechain: gtr)),
+            StringComparison.Ordinal
+        );
         // The engine sets tempo-synced plugins' tempo: inserts do not keep it, edits and lanes refuse it.
         var gain = T("Gtr").Strip.Inserts.Single(static i => i.PluginId == "com.example.vst3.gain");
         Assert.False(gain.Parameters.ContainsKey(Edits.HostTempoParameter));
-        Assert.Contains("tempo", Fails(new SetInsertParameterCommand(gain.Id, "tempo", 100, gtr)), StringComparison.Ordinal);
-        Assert.Contains("tempo", Fails(new SetAutomationCommand($"insert:{gain.Id}:tempo", [new(0, 100, 0)], gtr)), StringComparison.Ordinal);
+        Assert.Contains(
+            "tempo",
+            Fails(new SetInsertParameterCommand(gain.Id, "tempo", 100, gtr)),
+            StringComparison.Ordinal
+        );
+        Assert.Contains(
+            "tempo",
+            Fails(new SetAutomationCommand($"insert:{gain.Id}:tempo", [new(0, 100, 0)], gtr)),
+            StringComparison.Ordinal
+        );
 
         // Removing the track a sidechain comes from clears the sidechain.
         Apply(new RemoveTrackCommand(T("Kick").Id));
@@ -98,9 +133,21 @@ public sealed class MixerEditTests {
         Assert.Equal(3, state.Automation.Count);
         Apply(new RemoveInsertCommand(insert, gtr), new RemoveSendCommand(gtr, send));
         Assert.Equal("volume", Assert.Single(state.Automation.Values).Target);
-        Assert.Contains("mute lane", Fails(new SetAutomationCommand("mute", [new(0, 0.5, 0)], gtr)), StringComparison.Ordinal);
-        Assert.Contains("order", Fails(new SetAutomationCommand("pan", [new(960, 0, 0), new(0, 0, 0)], gtr)), StringComparison.Ordinal);
-        Assert.Contains("two", Fails(new SetAutomationCommand("pan", [new(0, 0, 0), new(0, 0.5, 0), new(0, 1, 0)], gtr)), StringComparison.Ordinal);
+        Assert.Contains(
+            "mute lane",
+            Fails(new SetAutomationCommand("mute", [new(0, 0.5, 0)], gtr)),
+            StringComparison.Ordinal
+        );
+        Assert.Contains(
+            "order",
+            Fails(new SetAutomationCommand("pan", [new(960, 0, 0), new(0, 0, 0)], gtr)),
+            StringComparison.Ordinal
+        );
+        Assert.Contains(
+            "two",
+            Fails(new SetAutomationCommand("pan", [new(0, 0, 0), new(0, 0.5, 0), new(0, 1, 0)], gtr)),
+            StringComparison.Ordinal
+        );
         Apply(new SetAutomationCommand("volume", [], gtr));
         Assert.Empty(state.Automation);
     }
@@ -115,9 +162,15 @@ public sealed class MixerEditTests {
             new SetTrackGroupsCommand(T("B").Id, [1])
         );
         Apply(new SetStripCommand(T("A").Id, -3, 0.5, true, true));
-        Assert.Equal((-3.0, 0.5, true, true), (T("A").Strip.VolumeDb, T("A").Strip.Pan, T("A").Strip.Mute, T("A").Strip.Solo));
+        Assert.Equal(
+            (-3.0, 0.5, true, true),
+            (T("A").Strip.VolumeDb, T("A").Strip.Pan, T("A").Strip.Mute, T("A").Strip.Solo)
+        );
         // Volume keeps B's offset, mute follows; pan and solo are not linked; C is in no group.
-        Assert.Equal((-9.0, 0.0, true, false), (T("B").Strip.VolumeDb, T("B").Strip.Pan, T("B").Strip.Mute, T("B").Strip.Solo));
+        Assert.Equal(
+            (-9.0, 0.0, true, false),
+            (T("B").Strip.VolumeDb, T("B").Strip.Pan, T("B").Strip.Mute, T("B").Strip.Solo)
+        );
         Assert.Equal(0, T("C").Strip.VolumeDb);
 
         Apply(new SetTrackCommand(T("A").Id, RecordArmed: true));
@@ -141,7 +194,11 @@ public sealed class MixerEditTests {
     public void A_VCA_folds_into_its_members_and_removing_it_releases_them() {
         Apply(new AddTrackCommand("A"), new AddVcaCommand("Drums VCA"));
         var vca = T("Drums VCA").Id;
-        Apply(new AssignVcaCommand(T("A").Id, vca), new SetStripCommand(vca, -6, Mute: false, Solo: true), new SetStripCommand(T("A").Id, -3));
+        Apply(
+            new AssignVcaCommand(T("A").Id, vca),
+            new SetStripCommand(vca, -6, Mute: false, Solo: true),
+            new SetStripCommand(T("A").Id, -3)
+        );
         var effective = Stacks.EffectiveStrip(state, T("A"));
         Assert.Equal((-9.0, true), (effective.VolumeDb, effective.Solo));
         var engine = Strips.Engine(state, T("A"), EngineIds.Empty.With(state));
@@ -159,9 +216,16 @@ public sealed class MixerEditTests {
     public void An_aux_takes_the_lowest_free_bus_and_cannot_record() {
         Apply(new AddTrackCommand("Gtr"));
         Apply(new AddSendCommand(T("Gtr").Id, 1), new AddAuxCommand());
-        Assert.Equal((TrackKind.Aux, 2, "Aux 2"), (state.Tracks[^1].Kind, state.Tracks[^1].InputBus, state.Tracks[^1].Name));
+        Assert.Equal(
+            (TrackKind.Aux, 2, "Aux 2"),
+            (state.Tracks[^1].Kind, state.Tracks[^1].InputBus, state.Tracks[^1].Name)
+        );
         Assert.Contains("already feeds", Fails(new AddAuxCommand(2)), StringComparison.Ordinal);
-        Assert.Contains("records", Fails(new SetTrackCommand(state.Tracks[^1].Id, RecordArmed: true)), StringComparison.Ordinal);
+        Assert.Contains(
+            "records",
+            Fails(new SetTrackCommand(state.Tracks[^1].Id, RecordArmed: true)),
+            StringComparison.Ordinal
+        );
     }
 
     [Fact]
@@ -173,7 +237,11 @@ public sealed class MixerEditTests {
         Assert.DoesNotContain(strip.Inserts, static i => i.Id.StartsWith("ins_p", StringComparison.Ordinal));
         Assert.Equal([2, 5], strip.Sends.Select(static s => s.Bus));
         Assert.Equal("bus:3", strip.Inserts[1].Sidechain);
-        Assert.Contains("instrument patch", Fails(new ApplyPatchCommand(T("Vox").Id, "pat_synth")), StringComparison.Ordinal);
+        Assert.Contains(
+            "instrument patch",
+            Fails(new ApplyPatchCommand(T("Vox").Id, "pat_synth")),
+            StringComparison.Ordinal
+        );
         Apply(new ApplyPatchCommand(T("Keys").Id, "pat_synth"));
         Assert.Equal(1200, T("Keys").Instrument!.Parameters["cutoff"]);
         Assert.False(T("Keys").Strip.Inserts[0].Parameters.ContainsKey("tempo"));
@@ -182,7 +250,9 @@ public sealed class MixerEditTests {
 
     [Fact]
     public void Freezing_is_one_step_and_a_frozen_track_keeps_its_plugins_until_unfrozen() {
-        state = state.Apply(new AudioFileUpserted(new("aud_f", "Freeze", "Audio Files/Freeze.wav", 48_000, 2, 48_000, 32)));
+        state = state.Apply(
+            new AudioFileUpserted(new("aud_f", "Freeze", "Audio Files/Freeze.wav", 48_000, 2, 48_000, 32))
+        );
         Apply(new AddTrackCommand("Keys", Kind: TrackKind.Instrument));
         var keys = T("Keys").Id;
         Apply(new AddInsertCommand("com.example.fx", keys));
@@ -210,6 +280,7 @@ public sealed class MixerEditTests {
         var time = new ManualTime();
         var history = new EditHistory(time);
         var pass = new AutomationPass(1, 0);
+
         void Move(long tick, EditCommand command) {
             var batch = new CommandBatch([command]);
             Assert.True(AutomationPass.Records(batch.Commands));
@@ -228,7 +299,10 @@ public sealed class MixerEditTests {
         Move(3840, new SetStripCommand(gtr, Pan: 0.5));
         Move(4000, new SetStripCommand(T("Bass").Id, -1)); // Bass reads: no lane
         var volume = state.LaneOf(gtr, "volume")!;
-        Assert.Equal([(0L, -10.0), (1920, -6), (2880, -3), (9600, -10)], volume.Points.Select(static p => (p.Tick, p.Value)));
+        Assert.Equal(
+            [(0L, -10.0), (1920, -6), (2880, -3), (9600, -10)],
+            volume.Points.Select(static p => (p.Tick, p.Value))
+        );
         Assert.Equal([(3840L, 0.5)], state.LaneOf(gtr, "pan")!.Points.Select(static p => (p.Tick, p.Value)));
         Assert.Null(state.LaneOf(T("Bass").Id, "volume"));
         Assert.Empty(pass.Finish(state, 6000, ids)); // touch: the lane takes over again

@@ -169,7 +169,10 @@ public sealed class EngineCatalog(EventHub hub) {
     static double Widen(float value) =>
         double.Parse(value.ToString(CultureInfo.InvariantCulture), CultureInfo.InvariantCulture);
 
-    /// <summary>Anode's built-in instruments and effects (<see cref="BuiltinInstruments.All" />, <see cref="BuiltinEffects.All" />).</summary>
+    /// <summary>
+    ///     Anode's built-in instruments and effects (<see cref="BuiltinInstruments.All" />,
+    ///     <see cref="BuiltinEffects.All" />).
+    /// </summary>
     public static PluginInfo[] Builtins() => [
         ..BuiltinInstruments.All.Select(static d => From(From(d))),
         ..BuiltinEffects.All.Select(static d => From(From(d)))

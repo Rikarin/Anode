@@ -1,10 +1,7 @@
 using Anode.Contracts;
-using Anode.Ipc;
 using Anode.Model;
 using Anode.Model.Audio;
-using Anode.Model.Compile;
 using Anode.Model.Editing;
-using Anode.Model.Storage;
 using Anode.Server.Engine;
 using Anode.Server.Realtime;
 using System.Collections.Concurrent;
@@ -19,7 +16,8 @@ namespace Anode.Server.Projects;
 ///     a scratch folder in the project, post-processes each file (<see cref="BounceProcessor" />) into
 ///     <c>directory</c> (default <c>&lt;project&gt;/Bounces</c>) and, with <c>addToProject</c>, adds a copy at the
 ///     project's rate to its audio files. A freeze renders a track's source and inserts into the project's
-///     <c>Freeze Files</c> folder, from the start to its last region's end plus <see cref="FreezeTailSeconds" /> s, and makes it
+///     <c>Freeze Files</c> folder, from the start to its last region's end plus <see cref="FreezeTailSeconds" /> s, and
+///     makes it
 ///     play that as one undoable step. Every change of state, and progress at most a few times a second, goes out as a
 ///     <see cref="JobEvent" />. Cancelling a queued job drops it; a running one asks the engine to stop.
 /// </summary>
@@ -28,6 +26,7 @@ public sealed class Jobs : IDisposable {
 
     /// <summary>Where freeze files go in the project folder.</summary>
     public const string FreezeFolder = "Freeze Files";
+
     static readonly TimeSpan ProgressInterval = TimeSpan.FromMilliseconds(250);
 
     readonly ProjectSession session;
@@ -81,48 +80,10 @@ public sealed class Jobs : IDisposable {
     public Job Bounce(BounceRequest request) {
         var view = session.View ?? throw ProjectException.NoProject();
         var state = view.State;
-        var name = (request?.FileName ?? string.Empty).Trim();
-        if (name.Length is 0 or > Edits.MaxNameLength || name.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0 || name.StartsWith('.')) {
-            throw ProjectException.Unprocessable("A file name has 1…128 characters and no path separators.");
-        }
-
-        if (request!.BitDepth is not (16 or 24 or 32)) {
-            throw ProjectException.Unprocessable($"A bounce is 16, 24 or 32-bit (float), not {request.BitDepth}.");
-        }
-
-        var rate = request.SampleRate ?? state.SampleRate;
-        if (!ProjectDefaults.SampleRates.Contains(rate)) {
-            throw ProjectException.Unprocessable($"Sample rate {rate} Hz is not one of {string.Join(", ", ProjectDefaults.SampleRates)}.");
-        }
-
-        if (!Enum.IsDefined(request.Format) || !Enum.IsDefined(request.Dither) || !Enum.IsDefined(request.Normalize) || !Enum.IsDefined(request.Source)) {
-            throw ProjectException.Unprocessable("Unknown format, dither, normalisation or source.");
-        }
-
-        if (!(request.LoudnessLufs is >= -70 and <= 0) || !(request.PeakCeilingDb is >= -20 and <= 0)) {
-            throw ProjectException.Unprocessable("Loudness is −70…0 LUFS and the ceiling −20…0 dBTP.");
-        }
-
+        var (name, rate) = Check(request, state);
         var (start, end) = Range(state, request.StartTick, request.EndTick);
-        string? directory = null;
-        if (request.Directory is { Length: > 0 } d) {
-            try {
-                directory = Path.GetFullPath(d);
-            } catch (Exception e) when (e is ArgumentException or NotSupportedException or PathTooLongException) {
-                throw ProjectException.Unprocessable($"'{d}' is not a folder path: {e.Message}");
-            }
-        }
-
-        Track[] stems = [];
-        if (request.Source == BounceSource.Stems) {
-            stems = request.TrackIds is { Count: > 0 } chosen
-                ? [..chosen.Distinct(StringComparer.Ordinal).Select(id => state.FindTrack(id ?? string.Empty) ?? throw ProjectException.NotFound($"No track '{id}'."))]
-                : [..state.Tracks.Where(static t => Edits.HasAudioStrip(t.Kind))];
-            if (stems.Any(static t => !Edits.HasAudioStrip(t.Kind)) || stems.Length == 0) {
-                throw ProjectException.Unprocessable("Stems are of audio, instrument and aux tracks.");
-            }
-        }
-
+        var directory = Folder(request.Directory);
+        var stems = request.Source == BounceSource.Stems ? Stems(request, state) : [];
         var format = new BounceFormat(
             request.Format,
             request.BitDepth,
@@ -132,8 +93,78 @@ public sealed class Jobs : IDisposable {
             request.LoudnessLufs,
             request.PeakCeilingDb
         );
-        var plan = new BouncePlan(view.Session, view.Folder, name, directory ?? Path.Combine(view.Folder, "Bounces"), start, end, stems, format, request);
+        var plan = new BouncePlan(
+            view.Session,
+            view.Folder,
+            name,
+            directory ?? Path.Combine(view.Folder, "Bounces"),
+            start,
+            end,
+            stems,
+            format,
+            request
+        );
         return Enqueue(JobKind.Bounce, (entry, token) => BounceAsync(entry, plan, token));
+    }
+
+    /// <summary>A bounce request's file name and rate, checked: 422 when it cannot be carried out.</summary>
+    static (string Name, int Rate) Check(BounceRequest? request, ProjectState state) {
+        var name = (request?.FileName ?? string.Empty).Trim();
+        if (name.Length is 0 or > Edits.MaxNameLength
+            || name.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0
+            || name.StartsWith('.')) {
+            throw ProjectException.Unprocessable("A file name has 1…128 characters and no path separators.");
+        }
+
+        if (request!.BitDepth is not (16 or 24 or 32)) {
+            throw ProjectException.Unprocessable($"A bounce is 16, 24 or 32-bit (float), not {request.BitDepth}.");
+        }
+
+        var rate = request.SampleRate ?? state.SampleRate;
+        if (!ProjectDefaults.SampleRates.Contains(rate)) {
+            throw ProjectException.Unprocessable(
+                $"Sample rate {rate} Hz is not one of {string.Join(", ", ProjectDefaults.SampleRates)}."
+            );
+        }
+
+        if (!Enum.IsDefined(request.Format)
+            || !Enum.IsDefined(request.Dither)
+            || !Enum.IsDefined(request.Normalize)
+            || !Enum.IsDefined(request.Source)) {
+            throw ProjectException.Unprocessable("Unknown format, dither, normalisation or source.");
+        }
+
+        return request.LoudnessLufs is >= -70 and <= 0 && request.PeakCeilingDb is >= -20 and <= 0
+            ? (name, rate)
+            : throw ProjectException.Unprocessable("Loudness is −70…0 LUFS and the ceiling −20…0 dBTP.");
+    }
+
+    /// <summary>The folder a bounce goes to, when the request names one.</summary>
+    static string? Folder(string? directory) {
+        if (directory is not { Length: > 0 } d) {
+            return null;
+        }
+
+        try {
+            return Path.GetFullPath(d);
+        } catch (Exception e) when (e is ArgumentException or NotSupportedException or PathTooLongException) {
+            throw ProjectException.Unprocessable($"'{d}' is not a folder path: {e.Message}");
+        }
+    }
+
+    /// <summary>The tracks to bounce as stems: those named, else every audio, instrument and aux track.</summary>
+    static Track[] Stems(BounceRequest request, ProjectState state) {
+        Track[] stems = request.TrackIds is { Count: > 0 } chosen
+            ? [
+                ..chosen.Distinct(StringComparer.Ordinal)
+                    .Select(id => state.FindTrack(id ?? string.Empty)
+                        ?? throw ProjectException.NotFound($"No track '{id}'.")
+                    )
+            ]
+            : [..state.Tracks.Where(static t => Edits.HasAudioStrip(t.Kind))];
+        return stems.Length > 0 && stems.All(static t => Edits.HasAudioStrip(t.Kind))
+            ? stems
+            : throw ProjectException.Unprocessable("Stems are of audio, instrument and aux tracks.");
     }
 
     /// <summary>Queues freezing a track: 404 for an unknown track, 422 for one that cannot freeze.</summary>
@@ -149,9 +180,13 @@ public sealed class Jobs : IDisposable {
             throw ProjectException.Unprocessable($"Track '{track.Name}' is frozen already.");
         }
 
-        var end = LastSample(state, track.Id) ?? throw ProjectException.Unprocessable($"Track '{track.Name}' has nothing to freeze.");
+        var end = LastSample(state, track.Id)
+            ?? throw ProjectException.Unprocessable($"Track '{track.Name}' has nothing to freeze.");
         end += (long)(FreezeTailSeconds * state.SampleRate);
-        return Enqueue(JobKind.Freeze, (entry, token) => FreezeAsync(entry, view.Session, view.Folder, track, end, token));
+        return Enqueue(
+            JobKind.Freeze,
+            (entry, token) => FreezeAsync(entry, view.Session, view.Folder, track, end, token)
+        );
     }
 
     /// <summary>Where a track's last region (audio, MIDI or take folder) ends, in samples, or null when it has none.</summary>
@@ -159,13 +194,20 @@ public sealed class Jobs : IDisposable {
         var map = state.TempoMap;
         var ends = state.RegionsOf(trackId)
             .Select(r => Edits.EndSample(state, r))
-            .Concat(state.MidiRegionsOf(trackId).Select(r => map.SampleAt(r.StartTick + r.LengthTicks, state.SampleRate)))
-            .Concat(state.TakeFoldersOf(trackId).Select(f => map.SampleAt(f.StartTick + f.LengthTicks, state.SampleRate)))
+            .Concat(
+                state.MidiRegionsOf(trackId).Select(r => map.SampleAt(r.StartTick + r.LengthTicks, state.SampleRate))
+            )
+            .Concat(
+                state.TakeFoldersOf(trackId).Select(f => map.SampleAt(f.StartTick + f.LengthTicks, state.SampleRate))
+            )
             .ToArray();
         return ends.Length == 0 ? null : ends.Max();
     }
 
-    /// <summary>The range to bounce in samples: the one given, else the cycle when it is on, else the project start to its end.</summary>
+    /// <summary>
+    ///     The range to bounce in samples: the one given, else the cycle when it is on, else the project start to its
+    ///     end.
+    /// </summary>
     static (long Start, long End) Range(ProjectState state, long? startTick, long? endTick) {
         var settings = state.Settings;
         var (from, to) = startTick is null && endTick is null && settings.Cycle.Enabled
@@ -231,7 +273,9 @@ public sealed class Jobs : IDisposable {
             var view = session.View is { } v && v.Session == plan.Session
                 ? v
                 : throw ProjectException.Conflict("The project was closed.");
-            IReadOnlyList<int>? tracks = plan.Request.Source == BounceSource.Stems ? [..plan.Stems.Select(t => view.Ids.Track(t.Id))] : null;
+            IReadOnlyList<int>? tracks = plan.Request.Source == BounceSource.Stems
+                ? [..plan.Stems.Select(t => view.Ids.Track(t.Id))]
+                : null;
             var target = tracks is null ? Path.Combine(scratch, "mix.wav") : scratch;
             var finished = await engine.RenderAsync(
                     new(entry.EngineId, plan.Start, plan.End, target, tracks, false, plan.Request.Realtime),
@@ -249,7 +293,10 @@ public sealed class Jobs : IDisposable {
             var added = new List<(string, WavInfo)>();
             var sources = tracks is null
                 ? [(Path.Combine(scratch, "mix.wav"), plan.Name)]
-                : plan.Stems.Select(t => (Path.Combine(scratch, $"{view.Ids.Track(t.Id)}.wav"), $"{plan.Name} - {Safe(t.Name)}")).ToList();
+                : plan.Stems.Select(t => (Path.Combine(scratch, $"{view.Ids.Track(t.Id)}.wav"),
+                            $"{plan.Name} - {Safe(t.Name)}")
+                    )
+                    .ToList();
             for (var i = 0; i < sources.Count; i++) {
                 token.ThrowIfCancellationRequested();
                 var (source, name) = sources[i];
@@ -283,7 +330,15 @@ public sealed class Jobs : IDisposable {
     ///     Copies a bounced file into the project's audio files: as it is when it is a WAV at the project's rate, else a
     ///     32-bit float WAV of the same mix at the project's rate.
     /// </summary>
-    (string Path, WavInfo Info) AddToProject(BouncePlan plan, string output, float[][] render, int renderRate, float[][] processed, string scratch, string name) {
+    (string Path, WavInfo Info) AddToProject(
+        BouncePlan plan,
+        string output,
+        float[][] render,
+        int renderRate,
+        float[][] processed,
+        string scratch,
+        string name
+    ) {
         if (plan.Format.Format == AudioFormat.Wav && plan.Format.SampleRate == renderRate) {
             var (_, brought, info) = import.Bring(output);
             return (brought, info);
@@ -293,7 +348,11 @@ public sealed class Jobs : IDisposable {
             ? processed
             : BounceProcessor.Process(render, renderRate, plan.Format with { SampleRate = renderRate });
         var path = Path.Combine(scratch, name + ".wav");
-        BounceProcessor.Write(path, copy, plan.Format with { Format = AudioFormat.Wav, BitDepth = 32, SampleRate = renderRate });
+        BounceProcessor.Write(
+            path,
+            copy,
+            plan.Format with { Format = AudioFormat.Wav, BitDepth = 32, SampleRate = renderRate }
+        );
         var (_, copied, copiedInfo) = import.Bring(path);
         return (copied, copiedInfo);
     }
@@ -306,7 +365,9 @@ public sealed class Jobs : IDisposable {
         long end,
         CancellationToken token
     ) {
-        var view = session.View is { } v && v.Session == sessionId ? v : throw ProjectException.Conflict("The project was closed.");
+        var view = session.View is { } v && v.Session == sessionId
+            ? v
+            : throw ProjectException.Conflict("The project was closed.");
         var audio = Path.Combine(folder, FreezeFolder);
         Directory.CreateDirectory(audio);
         var stamp = time.GetUtcNow().ToString("yyyyMMdd'T'HHmmss", CultureInfo.InvariantCulture);

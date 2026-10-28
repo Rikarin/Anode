@@ -57,7 +57,8 @@ public sealed class PackageException : Exception {
 ///     Reads and writes a project package: a folder with <c>project.json</c>, <c>tracks/&lt;id&gt;.json</c>,
 ///     <c>Audio Files/</c>, <c>Peaks/</c> (docs/02-phase-1.md) and <c>Plugin States/</c>: each instrument's opaque state
 ///     as <c>&lt;track id&gt;.bin</c> (docs/03-phase-2.md, "State") and each insert's as
-///     <c>&lt;track id&gt;.&lt;insert id&gt;.bin</c> (<c>master.&lt;insert id&gt;.bin</c> on the master; docs/05-phase-4.md). Every file is written atomically
+///     <c>&lt;track id&gt;.&lt;insert id&gt;.bin</c> (<c>master.&lt;insert id&gt;.bin</c> on the master;
+///     docs/05-phase-4.md). Every file is written atomically
 ///     (<see cref="AtomicRename" />): the track files first, then <c>project.json</c>, which names the tracks, so a save
 ///     cut short leaves the previous project readable; track files no longer named are removed last.
 /// </summary>
@@ -184,7 +185,10 @@ public static class ProjectPackage {
 
         var groups = ImmutableSortedDictionary.CreateRange(
             (root.Groups ?? [])
-            .Where(static g => g is { Number: >= 1 and <= Edits.MaxGroup, Name: not null, Color: not null, Properties: not null })
+            .Where(static g => g is {
+                    Number: >= 1 and <= Edits.MaxGroup, Name: not null, Color: not null, Properties: not null
+                }
+            )
             .Select(static g => KeyValuePair.Create(g.Number, g))
             .DistinctBy(static p => p.Key)
         );
@@ -224,7 +228,16 @@ public static class ProjectPackage {
                 .Select(static s => KeyValuePair.Create(s.Number, s))
                 .DistinctBy(static p => p.Key)
             ),
-            Automation = Lanes(loaded, [..trackFiles.SelectMany(static f => (f.Automation ?? []).Select(l => l with { TrackId = f.Track.Id })), ..(root.Automation ?? []).Where(static l => l is not null).Select(static l => l with { TrackId = null })])
+            Automation = Lanes(
+                loaded,
+                [
+                    ..trackFiles.SelectMany(static f => (f.Automation ?? []).Select(l => l with { TrackId = f.Track.Id }
+                        )
+                    ),
+                    ..(root.Automation ?? []).Where(static l => l is not null)
+                        .Select(static l => l with { TrackId = null })
+                ]
+            )
         };
     }
 
@@ -232,7 +245,10 @@ public static class ProjectPackage {
     ///     The lanes that belong: of a known strip and target, with sorted, well-formed points; one per strip and
     ///     target (the first).
     /// </summary>
-    static ImmutableSortedDictionary<string, AutomationLane> Lanes(ProjectState state, IEnumerable<AutomationLane> lanes) {
+    static ImmutableSortedDictionary<string, AutomationLane> Lanes(
+        ProjectState state,
+        IEnumerable<AutomationLane> lanes
+    ) {
         var builder = ImmutableSortedDictionary.CreateBuilder<string, AutomationLane>(StringComparer.Ordinal);
         var seen = new HashSet<(string?, string)>();
         foreach (var lane in lanes) {
@@ -482,13 +498,17 @@ public static class ProjectPackage {
     static ChannelStrip Normalise(ChannelStrip? strip, Track? track) {
         strip ??= ProjectDefaults.Strip;
         var full = track is null || Edits.HasAudioStrip(track.Kind);
-        var sends = (strip.Sends ?? []).Where(static s => s?.Id is not null && s.Bus is >= 1 and <= Edits.MaxBus).DistinctBy(static s => s.Bus);
+        var sends = (strip.Sends ?? []).Where(static s => s?.Id is not null && s.Bus is >= 1 and <= Edits.MaxBus)
+            .DistinctBy(static s => s.Bus);
         return strip with {
             Inserts = full
                 ? [
                     ..(strip.Inserts ?? []).Where(static i => i?.Id is not null && i.PluginId is not null)
-                    .Select(static i => i with { Name = i.Name ?? i.PluginId, Parameters = PluginCatalog.Sorted(i.Parameters) })
-                    .DistinctBy(static i => i.Id)
+                        .Select(static i => i with {
+                                Name = i.Name ?? i.PluginId, Parameters = PluginCatalog.Sorted(i.Parameters)
+                            }
+                        )
+                        .DistinctBy(static i => i.Id)
                 ]
                 : [],
             Sends = full && track is not null ? [..sends] : [],
@@ -677,7 +697,9 @@ public static class PackageMigrations {
     static JsonObject ToSchema4(string kind, JsonObject json) {
         if (kind == "project") {
             if (json["settings"] is JsonObject settings) {
-                settings["mixer"] ??= new JsonObject { ["pdc"] = "all", ["lowLatency"] = false, ["lowLatencyLimitMs"] = 10 };
+                settings["mixer"] ??= new JsonObject {
+                    ["pdc"] = "all", ["lowLatency"] = false, ["lowLatencyLimitMs"] = 10
+                };
             }
 
             Schema4.Strip(json["master"] as JsonObject);

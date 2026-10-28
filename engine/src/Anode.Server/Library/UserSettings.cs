@@ -92,7 +92,9 @@ public sealed class UserSettings(IOptions<ServerOptions> options) {
 
     /// <summary>The user's names for inputs, output pairs and buses (Logic's I/O Labels; none: the defaults).</summary>
     public IoLabels IoLabels() =>
-        Read("io-labels.json", ContractsJsonContext.Default.IoLabels) is { Inputs: not null, Outputs: not null, Buses: not null } labels
+        Read("io-labels.json", ContractsJsonContext.Default.IoLabels) is {
+            Inputs: not null, Outputs: not null, Buses: not null
+        } labels
             ? labels
             : new([], [], []);
 
@@ -126,10 +128,12 @@ public sealed class UserSettings(IOptions<ServerOptions> options) {
 
                 var name = (label.Name ?? string.Empty).Trim();
                 if (name.Length > Model.Editing.Edits.MaxNameLength) {
-                    throw ProjectException.Unprocessable($"A label has at most {Model.Editing.Edits.MaxNameLength} characters.");
+                    throw ProjectException.Unprocessable(
+                        $"A label has at most {Model.Editing.Edits.MaxNameLength} characters."
+                    );
                 }
 
-                if (!clean.TryAdd(label.Number, new(label.Number, name))) {
+                if (!clean.TryAdd(label.Number, label with { Name = name })) {
                     throw ProjectException.Unprocessable($"Two labels for {what} {label.Number}.");
                 }
             }

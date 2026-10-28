@@ -94,17 +94,16 @@ public sealed class EngineIds {
     }
 
     /// <summary>What every automated target of <paramref name="state" /> drives, by index.</summary>
-    public IReadOnlyList<EngineAutomationTarget> AutomationTargets(ProjectState state) =>
-        [
-            ..Automated(state)
-                .Select(x => AutomationEvents.Describe(
-                        Target(x.TrackId, x.Target),
-                        x.TrackId is null ? AutomationEvents.MasterTrack : Track(x.TrackId),
-                        x.Target
-                    )
+    public IReadOnlyList<EngineAutomationTarget> AutomationTargets(ProjectState state) => [
+        ..Automated(state)
+            .Select(x => AutomationEvents.Describe(
+                    Target(x.TrackId, x.Target),
+                    x.TrackId is null ? AutomationEvents.MasterTrack : Track(x.TrackId),
+                    x.Target
                 )
-                .OrderBy(static x => x.Index)
-        ];
+            )
+            .OrderBy(static x => x.Index)
+    ];
 
     public int Track(string id) =>
         tracks.TryGetValue(id, out var engineId)

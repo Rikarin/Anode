@@ -28,8 +28,11 @@ public sealed class AutomationPass(long number, long startTick) {
     /// <summary>Whether a batch is made of control moves only: the edits that record.</summary>
     public static bool Records(IReadOnlyList<EditCommand> commands) =>
         commands.Count > 0
-        && commands.All(static c => c is SetStripCommand or SetSendCommand { Bus: null }
-            or SetInsertParameterCommand or SetParameterCommand);
+        && commands.All(static c => c is SetStripCommand
+            or SetSendCommand { Bus: null }
+            or SetInsertParameterCommand
+            or SetParameterCommand
+        );
 
     /// <summary>Whether a track in <paramref name="mode" /> records control moves.</summary>
     public static bool Recording(AutomationMode mode) =>
@@ -87,7 +90,15 @@ public sealed class AutomationPass(long number, long startTick) {
                     continue;
                 }
 
-                var op = Write(state, track.Id, lane.Target, StartTick - 1, stopTick, [new(StartTick, value, 0), new(stopTick, value, 0)], ids);
+                var op = Write(
+                    state,
+                    track.Id,
+                    lane.Target,
+                    StartTick - 1,
+                    stopTick,
+                    [new(StartTick, value, 0), new(stopTick, value, 0)],
+                    ids
+                );
                 ops.Add(op);
                 state = state.Apply(op);
             }

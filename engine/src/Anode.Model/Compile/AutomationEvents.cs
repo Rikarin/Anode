@@ -58,15 +58,20 @@ public static class AutomationEvents {
     }
 
     static bool IsPluginTarget(string target) =>
-        target.StartsWith("insert:", StringComparison.Ordinal) || target.StartsWith("instrument:", StringComparison.Ordinal);
+        target.StartsWith("insert:", StringComparison.Ordinal)
+        || target.StartsWith("instrument:", StringComparison.Ordinal);
 
     /// <summary>A track's stack and VCA, when their lanes play (not off).</summary>
     static IEnumerable<Track> Outers(ProjectState state, Track track) {
-        if (track.ParentId is not null && state.FindTrack(track.ParentId) is { Kind: TrackKind.Stack } stack && stack.AutomationMode != AutomationMode.Off) {
+        if (track.ParentId is not null
+            && state.FindTrack(track.ParentId) is { Kind: TrackKind.Stack } stack
+            && stack.AutomationMode != AutomationMode.Off) {
             yield return stack;
         }
 
-        if (track.Strip.VcaId is not null && state.FindTrack(track.Strip.VcaId) is { Kind: TrackKind.Vca } vca && vca.AutomationMode != AutomationMode.Off) {
+        if (track.Strip.VcaId is not null
+            && state.FindTrack(track.Strip.VcaId) is { Kind: TrackKind.Vca } vca
+            && vca.AutomationMode != AutomationMode.Off) {
             yield return vca;
         }
     }
@@ -83,7 +88,13 @@ public static class AutomationEvents {
     }
 
     /// <summary>The automation events of a strip (null: the master) under engine track <paramref name="engineTrack" />.</summary>
-    public static PlaybackEvent[] Compile(ProjectState state, TempoMap map, EngineIds ids, Track? track, int engineTrack) {
+    public static PlaybackEvent[] Compile(
+        ProjectState state,
+        TempoMap map,
+        EngineIds ids,
+        Track? track,
+        int engineTrack
+    ) {
         var targets = Targets(state, track);
         if (targets.Count == 0) {
             return [];
@@ -100,7 +111,12 @@ public static class AutomationEvents {
             }
         }
 
-        return [..events.Select(static (e, i) => (e, i)).OrderBy(static x => x.e.SamplePos).ThenBy(static x => x.i).Select(static x => x.e)];
+        return [
+            ..events.Select(static (e, i) => (e, i))
+                .OrderBy(static x => x.e.SamplePos)
+                .ThenBy(static x => x.i)
+                .Select(static x => x.e)
+        ];
     }
 
     /// <summary>The curves whose sum (or, for mute, whose maximum) is a target's value: the track's, its stack's, its VCA's.</summary>
@@ -138,7 +154,14 @@ public static class AutomationEvents {
         };
 
     /// <summary>Mute: a step wherever the combined value changes (and at the start).</summary>
-    static void Steps(List<PlaybackEvent> events, ProjectState state, TempoMap map, List<Curve> curves, int track, int index) {
+    static void Steps(
+        List<PlaybackEvent> events,
+        ProjectState state,
+        TempoMap map,
+        List<Curve> curves,
+        int track,
+        int index
+    ) {
         var ticks = curves.SelectMany(static c => c.Points.Select(static p => p.Tick)).Append(0).Distinct().Order();
         double? last = null;
         foreach (var tick in ticks) {
@@ -160,38 +183,66 @@ public static class AutomationEvents {
         int index,
         string target
     ) {
-        var rate = state.SampleRate;
-        var gainLike = target == "volume" || target.StartsWith("send:", StringComparison.Ordinal);
-        var tolerance = gainLike ? 0.01 : 1e-4 * Math.Max(1, curves.Max(static c => c.Magnitude));
         var ticks = curves.SelectMany(static c => c.Points.Select(static p => p.Tick)).Distinct().Order().ToArray();
         if (ticks.Length == 0) {
             return;
         }
 
-        double Combined(long tick, bool right) => Sum(curves, c => right ? c.Right(tick, false) : c.Left(tick));
-        float Engine(double v) => gainLike ? Units.DbToGain(v) : (float)v;
-
+        var sampler = new RampSampler(events, map, state.SampleRate, curves, track, index, target);
         // The value before the first point, from the start.
-        events.Add(Event(0, track, index, Engine(Combined(ticks[0], false)), true));
+        events.Add(Event(0, track, index, sampler.Engine(sampler.Combined(ticks[0], false)), true));
         for (var i = 0; i < ticks.Length; i++) {
-            var tick = ticks[i];
+            sampler.Point(ticks[i], i > 0 || ticks[i] > 0);
+            if (i + 1 < ticks.Length) {
+                sampler.Between(ticks[i], ticks[i + 1]);
+            }
+        }
+    }
+
+    /// <summary>
+    ///     Samples one continuous target into events: its value in engine units at each point, and inside a segment
+    ///     that is no straight line in engine units, at most every <see cref="MaxStepMs" /> ms and finer where the line
+    ///     between two samples strays from the curve by more than the tolerance (0.01 dB for gains).
+    /// </summary>
+    sealed class RampSampler(
+        List<PlaybackEvent> events,
+        TempoMap map,
+        int rate,
+        List<Curve> curves,
+        int track,
+        int index,
+        string target
+    ) {
+        readonly bool gainLike = target == "volume" || target.StartsWith("send:", StringComparison.Ordinal);
+
+        readonly double tolerance = target == "volume" || target.StartsWith("send:", StringComparison.Ordinal)
+            ? 0.01
+            : 1e-4 * Math.Max(1, curves.Max(static c => c.Magnitude));
+
+        long from;
+        long to;
+
+        public double Combined(long tick, bool right) => Sum(curves, c => right ? c.Right(tick, false) : c.Left(tick));
+
+        public float Engine(double v) => gainLike ? Units.DbToGain(v) : (float)v;
+
+        /// <summary>The events at a point: the value arriving (unless it is the start), then a step when it jumps.</summary>
+        public void Point(long tick, bool arriving) {
             var sample = map.SampleAt(tick, rate);
             var left = Combined(tick, false);
             var right = Combined(tick, true);
-            if (i > 0 || tick > 0) {
+            if (arriving) {
                 events.Add(Event(sample, track, index, Engine(left), false));
             }
 
             if (!right.Equals(left)) {
                 events.Add(Event(sample, track, index, Engine(right), true));
             }
-
-            if (i + 1 < ticks.Length) {
-                Interior(tick, ticks[i + 1]);
-            }
         }
 
-        void Interior(long from, long to) {
+        /// <summary>The events inside a segment, when it bends.</summary>
+        public void Between(long start, long end) {
+            (from, to) = (start, end);
             var s0 = map.SampleAt(from, rate);
             var s1 = map.SampleAt(to, rate);
             var v0 = Engine(Combined(from, true));
@@ -200,8 +251,7 @@ public static class AutomationEvents {
                 return;
             }
 
-            var step = rate * MaxStepMs / 1000;
-            var pieces = (int)Math.Ceiling((s1 - s0) / step);
+            var pieces = (int)Math.Ceiling((s1 - s0) / (rate * MaxStepMs / 1000));
             var previous = (Sample: s0, Value: v0);
             for (var k = 1; k <= pieces; k++) {
                 var s = k == pieces ? s1 : s0 + (long)Math.Round(k * (double)(s1 - s0) / pieces);
@@ -213,40 +263,38 @@ public static class AutomationEvents {
 
                 previous = (s, v);
             }
-
-            return;
-
-            float At(long sample) => Engine(Combined(Math.Clamp(map.TickAtSample(sample, rate), from, to), true));
-
-            bool IsLine(long a, long b, float va, float vb) {
-                foreach (var f in (ReadOnlySpan<double>)[0.25, 0.5, 0.75]) {
-                    var s = a + (long)((b - a) * f);
-                    if (Math.Abs(Error(At(s), va + (vb - va) * (float)((double)(s - a) / (b - a)))) > 1e-6) {
-                        return false;
-                    }
-                }
-
-                return true;
-            }
-
-            void Refine(long a, float va, long b, float vb, int depth) {
-                if (depth > 8 || b - a < rate * MinStepMs / 1000) {
-                    return;
-                }
-
-                var m = (a + b) / 2;
-                var vm = At(m);
-                if (Math.Abs(Error(vm, (va + vb) / 2)) <= tolerance) {
-                    return;
-                }
-
-                Refine(a, va, m, vm, depth + 1);
-                events.Add(Event(m, track, index, vm, false));
-                Refine(m, vm, b, vb, depth + 1);
-            }
         }
 
-        // Volume and sends compare in dB, the rest in their own units.
+        float At(long sample) => Engine(Combined(Math.Clamp(map.TickAtSample(sample, rate), from, to), true));
+
+        bool IsLine(long a, long b, float va, float vb) {
+            foreach (var f in (ReadOnlySpan<double>)[0.25, 0.5, 0.75]) {
+                var s = a + (long)((b - a) * f);
+                if (Math.Abs(Error(At(s), va + (vb - va) * (float)((double)(s - a) / (b - a)))) > 1e-6) {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        void Refine(long a, float va, long b, float vb, int depth) {
+            if (depth > 8 || b - a < rate * MinStepMs / 1000) {
+                return;
+            }
+
+            var m = (a + b) / 2;
+            var vm = At(m);
+            if (Math.Abs(Error(vm, (va + vb) / 2)) <= tolerance) {
+                return;
+            }
+
+            Refine(a, va, m, vm, depth + 1);
+            events.Add(Event(m, track, index, vm, false));
+            Refine(m, vm, b, vb, depth + 1);
+        }
+
+        /// <summary>How far a value strays from the line: in dB for gains, in their own units for the rest.</summary>
         double Error(float actual, float line) =>
             gainLike ? 20 * Math.Log10(Math.Max(actual, 1e-7f) / Math.Max(line, 1e-7f)) : actual - line;
     }
@@ -352,6 +400,9 @@ public static class AutomationEvents {
         }
     }
 
-    /// <summary>A segment's shape at position <paramref name="x" /> (0…1) for curve <paramref name="curve" /> (−1…1, 0 linear).</summary>
+    /// <summary>
+    ///     A segment's shape at position <paramref name="x" /> (0…1) for curve <paramref name="curve" /> (−1…1, 0
+    ///     linear).
+    /// </summary>
     public static double Shaped(double x, double curve) => curve == 0 ? x : Math.Pow(x, Math.Pow(2, -2 * curve));
 }

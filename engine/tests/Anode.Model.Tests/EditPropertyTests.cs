@@ -130,7 +130,8 @@ public sealed class EditPropertyTests {
                         }
 
                         try {
-                            var result = Edits.Apply(state, command, ids, RandomProjects.Plugins, RandomProjects.Patches);
+                            var result =
+                                Edits.Apply(state, command, ids, RandomProjects.Plugins, RandomProjects.Patches);
                             history.Push(type.Name, step, new(result.Forward, result.Inverse), null);
                             ops = result.Forward;
                         } catch (EditException) {

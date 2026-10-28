@@ -30,7 +30,16 @@ public static class Strips {
             strip.Solo,
             full ? [..strip.Inserts.Select(i => Insert(state, ids, i, stateOf?.Invoke(i)))] : [],
             full && track is not null
-                ? [..strip.Sends.Select(static s => new EngineSend(s.Id, s.Bus, Units.DbToGain(s.LevelDb), (float)s.Pan, s.PreFader))]
+                ? [
+                    ..strip.Sends.Select(static s => new EngineSend(
+                            s.Id,
+                            s.Bus,
+                            Units.DbToGain(s.LevelDb),
+                            (float)s.Pan,
+                            s.PreFader
+                        )
+                    )
+                ]
                 : [],
             track is null ? 0 : Output(strip.Output)
         );
@@ -53,8 +62,15 @@ public static class Strips {
     /// <summary>Whether two engine strips differ in structure (inserts, sends, output), not just levels.</summary>
     public static bool StructureDiffers(EngineStrip a, EngineStrip b) =>
         a.Output != b.Output
-        || !Same(a.Inserts, b.Inserts, static (x, y) => x.Id == y.Id && x.PluginId == y.PluginId && x.Bypassed == y.Bypassed
-            && x.SidechainTrack == y.SidechainTrack && x.SidechainBus == y.SidechainBus)
+        || !Same(
+            a.Inserts,
+            b.Inserts,
+            static (x, y) => x.Id == y.Id
+                && x.PluginId == y.PluginId
+                && x.Bypassed == y.Bypassed
+                && x.SidechainTrack == y.SidechainTrack
+                && x.SidechainBus == y.SidechainBus
+        )
         || !Same(a.Sends, b.Sends, static (x, y) => x.Id == y.Id && x.Bus == y.Bus && x.PreFader == y.PreFader);
 
     static bool Same<T>(IReadOnlyList<T>? a, IReadOnlyList<T>? b, Func<T, T, bool> equal) {

@@ -54,7 +54,7 @@ public sealed class FakeHost : IAsyncDisposable {
     readonly Dictionary<(int Track, string Insert), string> insertStates = [];
     readonly Dictionary<int, CancellationTokenSource> renders = [];
     readonly HashSet<(int Track, string? Insert)> editors = [];
-    readonly SemaphoreSlim writing = new(1, 1);
+    readonly SemaphoreSlim writing;
     Stream? connection;
     SetMixerMessage mixer = new("all", false, 10);
     readonly Dictionary<int, List<RecordedMidiEvent>> live = [];
@@ -83,6 +83,7 @@ public sealed class FakeHost : IAsyncDisposable {
         this.version = version;
         SampleRate = sampleRate;
         stopping = new();
+        writing = new(1, 1);
         telemetry = TelemetryWriter.Create("an" + Convert.ToHexStringLower(Guid.NewGuid().ToByteArray()[..3]) + "t", 0);
     }
 
@@ -211,17 +212,18 @@ public sealed class FakeHost : IAsyncDisposable {
         SendAsync(new ParameterChangedMessage(trackId, insertId, parameterId, value));
 
     /// <summary>Plays inserts reporting readings (a compressor's gain reduction).</summary>
-    public Task ReportReadingsAsync(IReadOnlyList<InsertReadingEntry> readings) => SendAsync(new InsertReadingsMessage(readings));
+    public Task ReportReadingsAsync(IReadOnlyList<InsertReadingEntry> readings) =>
+        SendAsync(new InsertReadingsMessage(readings));
 
     /// <summary>Plays a plugin crashing: the host bypasses it and tells the server.</summary>
     public Task ReportProblemAsync(int trackId, string? insertId, string pluginId, string message) =>
         SendAsync(new PluginProblemMessage(trackId, insertId, pluginId, message));
 
-    async Task SendAsync(IpcMessage message) {
+    async Task SendAsync(IpcMessage message, CancellationToken cancellationToken = default) {
         var stream = Volatile.Read(ref connection) ?? throw new InvalidOperationException("No server is connected.");
-        await writing.WaitAsync().ConfigureAwait(false);
+        await writing.WaitAsync(cancellationToken).ConfigureAwait(false);
         try {
-            await IpcFraming.WriteAsync(stream, message, CancellationToken.None).ConfigureAwait(false);
+            await IpcFraming.WriteAsync(stream, message, cancellationToken).ConfigureAwait(false);
         } finally {
             writing.Release();
         }
@@ -481,6 +483,24 @@ public sealed class FakeHost : IAsyncDisposable {
             case FlashbackCaptureMessage:
                 yield return Capture();
                 break;
+            case TransportMessage transport:
+                if (Transport(transport) is { } finished) {
+                    yield return finished;
+                }
+
+                break;
+            default:
+                if (!HandleMixer(message)) {
+                    yield return new ErrorMessage($"Unsupported message {message.GetType().Name}.", Name(message));
+                }
+
+                break;
+        }
+    }
+
+    /// <summary>The mixer's messages (Phase 4), none of which answers; false for any other message.</summary>
+    bool HandleMixer(IpcMessage message) {
+        switch (message) {
             case SetChannelMessage channel:
                 lock (gate) {
                     if (channel.TrackId == -1) {
@@ -495,23 +515,37 @@ public sealed class FakeHost : IAsyncDisposable {
                 break;
             case SetInsertParameterMessage parameter:
                 lock (gate) {
-                    SetStripOf(parameter.TrackId, strip => strip with {
-                        Inserts = [
-                            ..(strip.Inserts ?? []).Select(i => i.Id != parameter.InsertId
-                                ? i
-                                : i with {
-                                    Parameters = new Dictionary<string, double>(i.Parameters) { [parameter.ParameterId] = parameter.Value }
-                                })
-                        ]
-                    });
+                    SetStripOf(
+                        parameter.TrackId,
+                        strip => strip with {
+                            Inserts = [
+                                ..(strip.Inserts ?? []).Select(i => i.Id != parameter.InsertId
+                                        ? i
+                                        : i with {
+                                            Parameters = new Dictionary<string, double>(i.Parameters) {
+                                                [parameter.ParameterId] = parameter.Value
+                                            }
+                                        }
+                                )
+                            ]
+                        }
+                    );
                 }
 
                 break;
             case SetSendLevelMessage send:
                 lock (gate) {
-                    SetStripOf(send.TrackId, strip => strip with {
-                        Sends = [..(strip.Sends ?? []).Select(x => x.Id == send.SendId ? x with { Gain = send.Gain, Pan = send.Pan } : x)]
-                    });
+                    SetStripOf(
+                        send.TrackId,
+                        strip => strip with {
+                            Sends = [
+                                ..(strip.Sends ?? []).Select(x => x.Id == send.SendId
+                                        ? x with { Gain = send.Gain, Pan = send.Pan }
+                                        : x
+                                )
+                            ]
+                        }
+                    );
                 }
 
                 break;
@@ -542,16 +576,11 @@ public sealed class FakeHost : IAsyncDisposable {
                 }
 
                 break;
-            case TransportMessage transport:
-                if (Transport(transport) is { } finished) {
-                    yield return finished;
-                }
-
-                break;
             default:
-                yield return new ErrorMessage($"Unsupported message {message.GetType().Name}.", Name(message));
-                break;
+                return false;
         }
+
+        return true;
     }
 
     IpcMessage Load(LoadModelMessage load) {
@@ -636,7 +665,8 @@ public sealed class FakeHost : IAsyncDisposable {
             renders[render.JobId] = cancel;
         }
 
-        _ = Task.Run(async () => {
+        _ = Task.Run(
+            async () => {
                 RenderFinishedMessage finished;
                 try {
                     finished = new(render.JobId, await RenderAsync(render, cancel.Token).ConfigureAwait(false));
@@ -664,58 +694,82 @@ public sealed class FakeHost : IAsyncDisposable {
 
     /// <summary>Writes the render's files: a sine per track (see the class summary), in tenths, reporting each.</summary>
     async Task<IReadOnlyList<string>> RenderAsync(RenderMessage render, CancellationToken token) {
-        List<(string Path, (EngineTrack Track, float Gain)[] Sources)> outputs;
-        float masterGain;
-        lock (gate) {
-            masterGain = master.Mute ? 0 : master.Gain;
-            var soloed = tracks.Values.Any(static t => t.Strip.Solo);
-            float Gain(EngineTrack t) => render.Freeze ? 1 : t.Strip.Mute || (soloed && !t.Strip.Solo) ? 0 : t.Strip.Gain;
-            if (render.Tracks is null) {
-                outputs = [(render.Path, [..tracks.Values.OrderBy(static t => t.Id).Select(t => (t, Gain(t)))])];
-            } else {
-                outputs = [
-                    ..render.Tracks.Where(tracks.ContainsKey)
-                        .Select(id => (render.Freeze ? render.Path : Path.Combine(render.Path, $"{id}.wav"), new[] { (tracks[id], Gain(tracks[id])) }))
-                ];
-                masterGain = 1;
-            }
-        }
-
-        var frames = Math.Max(0, render.EndSample - render.StartSample);
+        var (outputs, masterGain) = Outputs(render);
         var written = new List<string>();
         foreach (var (path, sources) in outputs) {
-            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-            using var writer = new WavWriter(path, 2, SampleRate, WavEncoding.Float32);
-            var block = new float[4096 * 2];
-            var tenth = Math.Max(1, frames / 10);
-            long reported = 0;
-            for (long done = 0; done < frames;) {
-                token.ThrowIfCancellationRequested();
-                var n = (int)Math.Min(4096, frames - done);
-                for (var i = 0; i < n; i++) {
-                    var at = render.StartSample + done + i;
-                    double x = 0;
-                    foreach (var (track, gain) in sources) {
-                        x += RenderAmplitude * gain * Math.Sin(2 * Math.PI * RenderFrequency(track.Id) * at / SampleRate);
-                    }
-
-                    block[2 * i] = block[(2 * i) + 1] = (float)(x * masterGain);
-                }
-
-                writer.Write(block.AsSpan(0, n * 2));
-                done += n;
-                if (done / tenth > reported) {
-                    reported = done / tenth;
-                    var fraction = (written.Count + (double)done / frames) / outputs.Count;
-                    await SendAsync(new RenderProgressMessage(render.JobId, fraction)).ConfigureAwait(false);
-                    await Task.Delay(1, token).ConfigureAwait(false);
-                }
-            }
-
+            await WriteRenderAsync(render, path, sources, masterGain, (written.Count, outputs.Count), token)
+                .ConfigureAwait(false);
             written.Add(path);
         }
 
         return written;
+    }
+
+    /// <summary>The files a render writes and the tracks each sums (with their gains), and the gain over them.</summary>
+    (List<(string Path, (EngineTrack Track, float Gain)[] Sources)> Outputs, float MasterGain) Outputs(
+        RenderMessage render
+    ) {
+        lock (gate) {
+            var soloed = tracks.Values.Any(static t => t.Strip.Solo);
+            if (render.Tracks is null) {
+                return ([(render.Path, [..tracks.Values.OrderBy(static t => t.Id).Select(t => (t, Gain(t)))])],
+                    master.Mute ? 0 : master.Gain);
+            }
+
+            return ([
+                ..render.Tracks.Where(tracks.ContainsKey)
+                    .Select(id => (render.Freeze ? render.Path : Path.Combine(render.Path, $"{id}.wav"),
+                            new[] { (tracks[id], Gain(tracks[id])) })
+                    )
+            ], 1);
+
+            float Gain(EngineTrack t) =>
+                render.Freeze ? 1 : t.Strip.Mute || (soloed && !t.Strip.Solo) ? 0 : t.Strip.Gain;
+        }
+    }
+
+    /// <summary>Writes one render file, reporting progress every tenth (as part <paramref name="part" /> of all).</summary>
+    async Task WriteRenderAsync(
+        RenderMessage render,
+        string path,
+        (EngineTrack Track, float Gain)[] sources,
+        float masterGain,
+        (int Index, int Count) part,
+        CancellationToken token
+    ) {
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        using var writer = new WavWriter(path, 2, SampleRate, WavEncoding.Float32);
+        var frames = Math.Max(0, render.EndSample - render.StartSample);
+        var block = new float[4096 * 2];
+        var tenth = Math.Max(1, frames / 10);
+        long reported = 0;
+        for (long done = 0; done < frames;) {
+            token.ThrowIfCancellationRequested();
+            var n = (int)Math.Min(4096, frames - done);
+            for (var i = 0; i < n; i++) {
+                var x = Sum(sources, render.StartSample + done + i) * masterGain;
+                block[2 * i] = block[2 * i + 1] = (float)x;
+            }
+
+            writer.Write(block.AsSpan(0, n * 2));
+            done += n;
+            if (done / tenth > reported) {
+                reported = done / tenth;
+                var fraction = (part.Index + (double)done / frames) / part.Count;
+                await SendAsync(new RenderProgressMessage(render.JobId, fraction), token).ConfigureAwait(false);
+                await Task.Delay(1, token).ConfigureAwait(false);
+            }
+        }
+    }
+
+    /// <summary>The tracks' sines at project sample <paramref name="at" />.</summary>
+    double Sum((EngineTrack Track, float Gain)[] sources, long at) {
+        double x = 0;
+        foreach (var (track, gain) in sources) {
+            x += RenderAmplitude * gain * Math.Sin(2 * Math.PI * RenderFrequency(track.Id) * at / SampleRate);
+        }
+
+        return x;
     }
 
     /// <summary>Plays live MIDI: kept for the take while the track records, and echoed as activity.</summary>

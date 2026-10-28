@@ -333,6 +333,32 @@ public static partial class Edits {
 
     static List<DeltaOp> SetTrack(ProjectState state, SetTrackCommand c) {
         var track = TrackOf(state, c.TrackId);
+        CheckTrackChange(track, c);
+        var changed = track with {
+            Name = c.Name is null ? track.Name : Name(c.Name, "track name"),
+            Color = c.Color ?? track.Color,
+            Input = c.Input ?? track.Input,
+            RecordArmed = c.RecordArmed ?? track.RecordArmed,
+            InputMonitoring = c.InputMonitoring ?? track.InputMonitoring,
+            Collapsed = c.Collapsed ?? track.Collapsed,
+            Notes = c.Notes is null ? track.Notes : Text(c.Notes, "track notes")
+        };
+        List<DeltaOp> ops = [new TrackUpserted(changed, state.IndexOfTrack(track.Id))];
+        if (c.RecordArmed is { } armed) {
+            // Group members that link record arm follow (those that can record).
+            ops.AddRange(
+                Linked(state, track, static p => p.RecordArm)
+                    .Where(m => m.RecordArmed != armed
+                        && m.Kind is TrackKind.Audio or TrackKind.Instrument or TrackKind.Midi
+                    )
+                    .Select(m => new TrackUpserted(m with { RecordArmed = armed }, state.IndexOfTrack(m.Id)))
+            );
+        }
+
+        return ops;
+    }
+
+    static void CheckTrackChange(Track track, SetTrackCommand c) {
         if (c.Color is { } color && (string.IsNullOrWhiteSpace(color) || color.Length > 64)) {
             throw new EditException("A colour is a CSS colour of at most 64 characters.");
         }
@@ -348,38 +374,10 @@ public static partial class Edits {
         if (track.Kind is TrackKind.Aux or TrackKind.Vca && (c.RecordArmed == true || c.InputMonitoring == true)) {
             throw new EditException($"A {Kind(track.Kind)} track records and monitors nothing.");
         }
-
-        var changed = track with {
-            Name = c.Name is null ? track.Name : Name(c.Name, "track name"),
-            Color = c.Color ?? track.Color,
-            Input = c.Input ?? track.Input,
-            RecordArmed = c.RecordArmed ?? track.RecordArmed,
-            InputMonitoring = c.InputMonitoring ?? track.InputMonitoring,
-            Collapsed = c.Collapsed ?? track.Collapsed,
-            Notes = c.Notes is null ? track.Notes : Text(c.Notes, "track notes")
-        };
-        var ops = new List<DeltaOp> { new TrackUpserted(changed, state.IndexOfTrack(track.Id)) };
-        if (c.RecordArmed is { } armed) {
-            // Group members that link record arm follow (those that can record).
-            foreach (var member in Linked(state, track, static p => p.RecordArm)) {
-                if (member.RecordArmed != armed && member.Kind is TrackKind.Audio or TrackKind.Instrument or TrackKind.Midi) {
-                    ops.Add(new TrackUpserted(member with { RecordArmed = armed }, state.IndexOfTrack(member.Id)));
-                }
-            }
-        }
-
-        return ops;
     }
 
     static List<DeltaOp> SetStrip(ProjectState state, SetStripCommand c) {
-        if (c.VolumeDb is { } volume && !(volume >= Units.SilenceDb && volume <= MaxVolumeDb)) {
-            throw new EditException($"Volume {volume} dB is outside {Units.SilenceDb}…{MaxVolumeDb} dB.");
-        }
-
-        if (c.Pan is { } pan && !(pan is >= -1 and <= 1)) {
-            throw new EditException($"Pan {pan} is outside −1…1.");
-        }
-
+        CheckStrip(c);
         if (c.TrackId is null) {
             return [new MasterChanged(Changed(state.Master, c))];
         }
@@ -389,13 +387,33 @@ public static partial class Edits {
         }
 
         var track = TrackOf(state, c.TrackId);
-        var ops = new List<DeltaOp> {
-            new TrackUpserted(track with { Strip = Changed(track.Strip, c) }, state.IndexOfTrack(track.Id))
-        };
+        List<DeltaOp> ops =
+            [new TrackUpserted(track with { Strip = Changed(track.Strip, c) }, state.IndexOfTrack(track.Id))];
+        ops.AddRange(GroupFollows(state, track, c));
+        return ops;
+    }
+
+    static void CheckStrip(SetStripCommand c) {
+        if (c.VolumeDb is { } volume && !(volume >= Units.SilenceDb && volume <= MaxVolumeDb)) {
+            throw new EditException($"Volume {volume} dB is outside {Units.SilenceDb}…{MaxVolumeDb} dB.");
+        }
+
+        if (c.Pan is { } pan && !(pan is >= -1 and <= 1)) {
+            throw new EditException($"Pan {pan} is outside −1…1.");
+        }
+    }
+
+    /// <summary>The upserts of the group members that follow a strip change of <paramref name="track" />.</summary>
+    static List<DeltaOp> GroupFollows(ProjectState state, Track track, SetStripCommand c) {
+        var ops = new List<DeltaOp>();
         // Members of the track's enabled groups follow the properties their groups link: volume and pan keep their
         // offsets (docs/05-phase-4.md, "VCA and groups").
         var members = new Dictionary<string, ChannelStrip>(StringComparer.Ordinal);
-        Link(static p => p.Volume, c.VolumeDb, (s, v) => s with { VolumeDb = Follow(s.VolumeDb, v - track.Strip.VolumeDb) });
+        Link(
+            static p => p.Volume,
+            c.VolumeDb,
+            (s, v) => s with { VolumeDb = Follow(s.VolumeDb, v - track.Strip.VolumeDb) }
+        );
         Link(static p => p.Pan, c.Pan, (s, v) => s with { Pan = Math.Clamp(s.Pan + (v - track.Strip.Pan), -1, 1) });
         Link(static p => p.Mute, c.Mute, static (s, v) => s with { Mute = v });
         Link(static p => p.Solo, c.Solo, static (s, v) => s with { Solo = v });

@@ -221,14 +221,16 @@ public sealed class EngineConnection(
         string pluginId;
         var engineTrack = -1;
         if (request.TrackId is not null) {
-            var track = view.State.FindTrack(request.TrackId) ?? throw ProjectException.NotFound($"No track '{request.TrackId}'.");
+            var track = view.State.FindTrack(request.TrackId)
+                ?? throw ProjectException.NotFound($"No track '{request.TrackId}'.");
             if (!Stacks.IsPlayable(track)) {
                 throw ProjectException.Unprocessable($"Track '{track.Name}' has no plugins.");
             }
 
             engineTrack = view.Ids.Track(track.Id);
             pluginId = request.InsertId is null
-                ? track.Instrument?.PluginId ?? throw ProjectException.NotFound($"Track '{track.Name}' has no instrument.")
+                ? track.Instrument?.PluginId
+                ?? throw ProjectException.NotFound($"Track '{track.Name}' has no instrument.")
                 : track.Strip.Inserts.FirstOrDefault(i => i.Id == request.InsertId)?.PluginId
                 ?? throw ProjectException.NotFound($"No insert '{request.InsertId}' on track '{track.Name}'.");
         } else {
@@ -301,9 +303,16 @@ public sealed class EngineConnection(
             return null;
         }
 
+        return Keyed(answer, view);
+    }
+
+    /// <summary>The host's answer by state key, its unknown tracks and undecodable states left out.</summary>
+    Dictionary<string, byte[]?> Keyed(InstrumentStatesMessage answer, OpenProjectView view) {
         var states = new Dictionary<string, byte[]?>(StringComparer.Ordinal);
         foreach (var state in answer.States ?? []) {
-            var trackId = state?.TrackId == -1 && state.InsertId is not null ? null : view.Ids.TrackOf(state?.TrackId ?? -1);
+            var trackId = state?.TrackId == -1 && state.InsertId is not null
+                ? null
+                : view.Ids.TrackOf(state?.TrackId ?? -1);
             if (state is null || (trackId is null && state.InsertId is null)) {
                 continue;
             }
@@ -517,7 +526,14 @@ public sealed class EngineConnection(
     void Relay(PluginProblemMessage problem) {
         var trackId = problem.TrackId >= 0 ? session.View?.Ids.TrackOf(problem.TrackId) : null;
         EngineLog.PluginProblem(logger, problem.PluginId ?? string.Empty, problem.Message ?? string.Empty);
-        hub.Publish(new PluginProblemEvent(trackId, problem.InsertId, problem.PluginId ?? string.Empty, problem.Message ?? string.Empty));
+        hub.Publish(
+            new PluginProblemEvent(
+                trackId,
+                problem.InsertId,
+                problem.PluginId ?? string.Empty,
+                problem.Message ?? string.Empty
+            )
+        );
     }
 
     /// <summary>The host's MIDI activity, with domain track ids, for keyboards and activity lights.</summary>
@@ -669,10 +685,13 @@ public sealed class EngineConnection(
             done?.TrySetResult(message);
         }
 
-        readonly Dictionary<int, (TaskCompletionSource<RenderFinishedMessage> Done, Action<double> Progress)> renders = [];
+        readonly Dictionary<int, (TaskCompletionSource<RenderFinishedMessage> Done, Action<double> Progress)> renders =
+            [];
 
         public Task<RenderFinishedMessage> StartRender(int jobId, Action<double> progress) {
-            var done = new TaskCompletionSource<RenderFinishedMessage>(TaskCreationOptions.RunContinuationsAsynchronously);
+            var done = new TaskCompletionSource<RenderFinishedMessage>(
+                TaskCreationOptions.RunContinuationsAsynchronously
+            );
             lock (gate) {
                 renders[jobId] = (done, progress);
             }

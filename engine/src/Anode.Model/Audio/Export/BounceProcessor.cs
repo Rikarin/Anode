@@ -60,6 +60,8 @@ public static class BounceProcessor {
     /// <summary>Normalises in place: peak to the ceiling (true peak), or loudness to the target then limited to the ceiling.</summary>
     public static void Normalise(float[][] audio, int sampleRate, NormalizeMode mode, double lufs, double ceilingDb) {
         switch (mode) {
+            case NormalizeMode.Off:
+                break;
             case NormalizeMode.Peak:
                 var peak = TruePeak.Measure(audio);
                 if (peak > 0) {

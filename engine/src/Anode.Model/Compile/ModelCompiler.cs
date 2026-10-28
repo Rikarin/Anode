@@ -33,58 +33,26 @@ public sealed class ModelCompiler {
 
     public CompiledModel Compile(ProjectState state, EngineIds ids) {
         var map = state.TempoMap;
-        var byTrack = state.Regions.Values.ToLookup(static r => r.TrackId, StringComparer.Ordinal);
-        var midiByTrack = state.MidiRegions.Values.ToLookup(static r => r.TrackId, StringComparer.Ordinal);
-        var foldersByTrack = state.TakeFolders.Values.ToLookup(static f => f.TrackId, StringComparer.Ordinal);
-        var tempo = state.Settings.TempoEvents ?? [];
-        var models = new List<TrackModel>(state.Tracks.Count + 1);
-        var recompiled = new List<int>();
+        var source = new Source(
+            state,
+            ids,
+            map,
+            state.Regions.Values.ToLookup(static r => r.TrackId, StringComparer.Ordinal),
+            state.MidiRegions.Values.ToLookup(static r => r.TrackId, StringComparer.Ordinal),
+            state.TakeFolders.Values.ToLookup(static f => f.TrackId, StringComparer.Ordinal)
+        );
+        var models = new List<TrackModel>(state.Tracks.Count + 2);
         var seen = new HashSet<int>();
         long end = 0;
-        foreach (var track in state.Tracks) {
-            if (!Stacks.IsPlayable(track)) {
-                continue;
-            }
-
-            var engineId = ids.Track(track.Id);
-            seen.Add(engineId);
-            var regions = byTrack[track.Id]
-                .OrderBy(static r => r.StartTick)
-                .ThenBy(static r => r.Id, StringComparer.Ordinal)
-                .ToArray();
-            var midi = midiByTrack[track.Id]
-                .OrderBy(static r => r.StartTick)
-                .ThenBy(static r => r.Id, StringComparer.Ordinal)
-                .ToArray();
-            var folders = foldersByTrack[track.Id]
-                .OrderBy(static f => f.StartTick)
-                .ThenBy(static f => f.Id, StringComparer.Ordinal)
-                .ToArray();
-            var key = new TrackKey(
-                tempo,
-                state.Settings.Tempo,
-                state.SampleRate,
-                [..regions.Select(r => (r, state.Files[r.FileId]))],
-                midi,
-                [..folders.Select(f => (f, FilesOf(state, f)))]
-            );
-            if (!cache.TryGetValue(engineId, out var cached) || !cached.Key.Equals(key)) {
-                cached = (key,
-                    new(engineId, MidiEvents(state, map, engineId, midi), Playlist(state, map, ids, regions, folders)));
-                cache[engineId] = cached;
-            }
-
-            var model = WithAutomation(cached.Model, AutomationEvents.Compile(state, map, ids, track, engineId));
-            if (!previous.TryGetValue(engineId, out var before) || !ReferenceEquals(before, model)) {
-                recompiled.Add(engineId);
-            }
-
+        foreach (var track in state.Tracks.Where(Stacks.IsPlayable)) {
+            var model = Track(source, track);
+            seen.Add(model.TrackId);
             models.Add(model);
             if (model.Playlist is [.., var last]) {
                 end = Math.Max(end, last.Start + last.Length);
             }
 
-            if (cached.Model.Events is [.., var lastEvent]) {
+            if (cache[model.TrackId].Model.Events is [.., var lastEvent]) {
                 end = Math.Max(end, lastEvent.SamplePos + 1);
             }
         }
@@ -94,29 +62,22 @@ public sealed class ModelCompiler {
         masterAutomated |= master.Length > 0;
         if (masterAutomated) {
             seen.Add(AutomationEvents.MasterTrack);
-            var model = WithAutomation(masterBase, master);
-            if (!previous.TryGetValue(AutomationEvents.MasterTrack, out var before) || !ReferenceEquals(before, model)) {
-                recompiled.Add(AutomationEvents.MasterTrack);
-            }
-
-            models.Add(model);
+            models.Add(WithAutomation(masterBase, master));
         }
 
+        var recompiled = models
+            .Where(m => !previous.TryGetValue(m.TrackId, out var before) || !ReferenceEquals(before, m))
+            .Select(static m => m.TrackId)
+            .ToList();
         previous.Clear();
         foreach (var model in models) {
             previous[model.TrackId] = model;
         }
 
-        foreach (var stale in cache.Keys.Where(k => !seen.Contains(k)).ToArray()) {
-            cache.Remove(stale);
-        }
-
-        foreach (var stale in automated.Keys.Where(k => !seen.Contains(k)).ToArray()) {
-            automated.Remove(stale);
-        }
-
+        Forget(seen);
         var settings = state.Settings;
         var endTick = Math.Max(settings.EndTick, settings.Cycle.EndTick);
+        var tempo = settings.TempoEvents ?? [];
         var clickKey = new ClickKey(tempo, settings.Signatures ?? [], settings.Signature, endTick, state.SampleRate);
         if (metronome is not { } m || !m.Key.Equals(clickKey)) {
             metronome = m = (clickKey, new(TrackEntry.MetronomeTrack, Clicks(state, map, endTick), []));
@@ -128,6 +89,60 @@ public sealed class ModelCompiler {
         return new(models, end, recompiled);
     }
 
+    /// <summary>What a compilation reads: the project, its ids and tempo map, and its regions by track.</summary>
+    sealed record Source(
+        ProjectState State,
+        EngineIds Ids,
+        TempoMap Map,
+        ILookup<string, AudioRegion> Regions,
+        ILookup<string, MidiRegion> Midi,
+        ILookup<string, TakeFolder> Folders
+    );
+
+    /// <summary>A track's model: its cached regions and events when they did not change, with its automation.</summary>
+    TrackModel Track(Source source, Track track) {
+        var (state, ids, map) = (source.State, source.Ids, source.Map);
+        var engineId = ids.Track(track.Id);
+        var regions = source.Regions[track.Id]
+            .OrderBy(static r => r.StartTick)
+            .ThenBy(static r => r.Id, StringComparer.Ordinal)
+            .ToArray();
+        var midi = source.Midi[track.Id]
+            .OrderBy(static r => r.StartTick)
+            .ThenBy(static r => r.Id, StringComparer.Ordinal)
+            .ToArray();
+        var folders = source.Folders[track.Id]
+            .OrderBy(static f => f.StartTick)
+            .ThenBy(static f => f.Id, StringComparer.Ordinal)
+            .ToArray();
+        var key = new TrackKey(
+            state.Settings.TempoEvents ?? [],
+            state.Settings.Tempo,
+            state.SampleRate,
+            [..regions.Select(r => (r, state.Files[r.FileId]))],
+            midi,
+            [..folders.Select(f => (f, FilesOf(state, f)))]
+        );
+        if (!cache.TryGetValue(engineId, out var cached) || !cached.Key.Equals(key)) {
+            cached = (key,
+                new(engineId, MidiEvents(state, map, engineId, midi), Playlist(state, map, ids, regions, folders)));
+            cache[engineId] = cached;
+        }
+
+        return WithAutomation(cached.Model, AutomationEvents.Compile(state, map, ids, track, engineId));
+    }
+
+    /// <summary>Drops the cached models of engine tracks that are gone.</summary>
+    void Forget(HashSet<int> seen) {
+        foreach (var stale in cache.Keys.Where(k => !seen.Contains(k)).ToArray()) {
+            cache.Remove(stale);
+        }
+
+        foreach (var stale in automated.Keys.Where(k => !seen.Contains(k)).ToArray()) {
+            automated.Remove(stale);
+        }
+    }
+
     /// <summary>
     ///     A track's model with its automation events merged in (before other events at an equal sample): the very
     ///     instance of the previous compilation when neither changed.
@@ -135,7 +150,8 @@ public sealed class ModelCompiler {
     TrackModel WithAutomation(TrackModel model, PlaybackEvent[] automation) {
         if (automated.TryGetValue(model.TrackId, out var cached)
             && ReferenceEquals(cached.Base, model)
-            && MemoryMarshal.AsBytes(cached.Automation.AsSpan()).SequenceEqual(MemoryMarshal.AsBytes(automation.AsSpan()))) {
+            && MemoryMarshal.AsBytes(cached.Automation.AsSpan())
+                .SequenceEqual(MemoryMarshal.AsBytes(automation.AsSpan()))) {
             return cached.Model;
         }
 

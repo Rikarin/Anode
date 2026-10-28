@@ -39,7 +39,8 @@ public sealed record OpenProjectView(
 
     /// <summary>The state saved for an insert of a track (null: the master), when it is still that plugin's.</summary>
     public byte[]? StateOf(string? trackId, Insert insert) =>
-        States.TryGetValue(ProjectPackage.StateKey(trackId, insert.Id), out var saved) && saved.PluginId == insert.PluginId
+        States.TryGetValue(ProjectPackage.StateKey(trackId, insert.Id), out var saved)
+        && saved.PluginId == insert.PluginId
             ? saved.Bytes
             : null;
 
@@ -144,7 +145,11 @@ public sealed class ProjectSession(
         var plugins = PluginsByKey(state);
         var states = ProjectPackage.LoadStates(folder, state)
             .Where(s => plugins.ContainsKey(s.Key))
-            .ToImmutableDictionary(static s => s.Key, s => new SavedState(plugins[s.Key], s.Value), StringComparer.Ordinal);
+            .ToImmutableDictionary(
+                static s => s.Key,
+                s => new SavedState(plugins[s.Key], s.Value),
+                StringComparer.Ordinal
+            );
         return Replace(folder, state, states);
     }
 
@@ -535,20 +540,12 @@ public sealed class ProjectSession(
     /// </summary>
     void KeepStates(Open o, ProjectState before, ProjectState after, IReadOnlyList<EditCommand> commands) {
         var states = o.States.ToBuilder();
+        var patched = false;
         foreach (var apply in commands.OfType<ApplyPatchCommand>()) {
-            if (patches.Read(apply.PatchId ?? string.Empty) is not { } patch || after.FindTrack(apply.TrackId) is not { } track) {
-                continue;
-            }
-
-            var inserts = track.Strip.Inserts;
-            for (var i = 0; i < Math.Min(inserts.Count, patch.Inserts.Count); i++) {
-                if (patch.InsertStates?.GetValueOrDefault(patch.Inserts[i].Id) is { } text && Bytes(text) is { } bytes) {
-                    states[ProjectPackage.StateKey(track.Id, inserts[i].Id)] = new(inserts[i].PluginId, bytes);
-                }
-            }
-
-            if (track.Instrument is { } slot && patch.Instrument is not null && patch.InstrumentState is { } state && Bytes(state) is { } b) {
-                states[track.Id] = new(slot.PluginId, b);
+            patched = true;
+            if (patches.Read(apply.PatchId ?? string.Empty) is { } patch
+                && after.FindTrack(apply.TrackId) is { } track) {
+                PatchStates(states, patch, track);
             }
         }
 
@@ -557,17 +554,30 @@ public sealed class ProjectSession(
         foreach (var key in states.Keys.ToArray()) {
             // A state stays with its plugin: gone, or another plugin in its place (an instrument replaced).
             if (!plugins.TryGetValue(key, out var plugin)
-                || (previous.TryGetValue(key, out var was) && was != plugin && !commands.OfType<ApplyPatchCommand>().Any())) {
+                || (!patched && previous.TryGetValue(key, out var was) && was != plugin)) {
                 states.Remove(key);
             }
         }
 
         o.States = states.ToImmutable();
-        return;
+    }
 
-        static byte[]? Bytes(string base64) {
+    /// <summary>A patch's plugin states, for the inserts it gave the track (in order) and its instrument.</summary>
+    static void PatchStates(ImmutableDictionary<string, SavedState>.Builder states, PatchFile patch, Track track) {
+        var inserts = track.Strip.Inserts;
+        for (var i = 0; i < Math.Min(inserts.Count, patch.Inserts.Count); i++) {
+            if (Bytes(patch.InsertStates?.GetValueOrDefault(patch.Inserts[i].Id)) is { } bytes) {
+                states[ProjectPackage.StateKey(track.Id, inserts[i].Id)] = new(inserts[i].PluginId, bytes);
+            }
+        }
+
+        if (track.Instrument is { } slot && patch.Instrument is not null && Bytes(patch.InstrumentState) is { } b) {
+            states[track.Id] = new(slot.PluginId, b);
+        }
+
+        static byte[]? Bytes(string? base64) {
             try {
-                return Convert.FromBase64String(base64);
+                return base64 is null ? null : Convert.FromBase64String(base64);
             } catch (FormatException) {
                 return null;
             }
@@ -602,7 +612,8 @@ public sealed class ProjectSession(
         lock (gate) {
             var o = Required();
             var track = o.State.FindTrack(trackId) ?? throw ProjectException.NotFound($"No track '{trackId}'.");
-            var states = States(o, hostStates).ToDictionary(static s => s.Key, static s => s.Value.Bytes, StringComparer.Ordinal);
+            var states = States(o, hostStates)
+                .ToDictionary(static s => s.Key, static s => s.Value.Bytes, StringComparer.Ordinal);
             return (track, states);
         }
     }

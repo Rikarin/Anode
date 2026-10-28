@@ -130,10 +130,13 @@ public sealed class PackageTests : IDisposable {
     public void A_Phase_3_package_opens_with_plain_channel_strips_and_saves_as_schema_4() {
         CopyFixture("Phase3.anode");
         var state = ProjectPackage.Load(folder);
-        Assert.Equal(new MixerSettings(PdcMode.All, false, 10), state.Settings.Mixer);
+        Assert.Equal(new(PdcMode.All, false, 10), state.Settings.Mixer);
         Assert.Empty(state.Groups);
         Assert.Empty(state.Automation);
-        Assert.Equal((-1.5, 0, 0, "master"), (state.Master.VolumeDb, state.Master.Inserts.Count, state.Master.Groups.Count, state.Master.Output));
+        Assert.Equal(
+            (-1.5, 0, 0, "master"),
+            (state.Master.VolumeDb, state.Master.Inserts.Count, state.Master.Groups.Count, state.Master.Output)
+        );
         Assert.Equal(3, state.Tracks.Count);
         Assert.All(
             state.Tracks,
@@ -192,7 +195,8 @@ public sealed class PackageTests : IDisposable {
                     new AddSendCommand(gtr, 2, -6), new SetOutputCommand(aux, "output:2"),
                     new AssignVcaCommand(gtr, vca), new SetTrackGroupsCommand(gtr, [3]),
                     new SetAutomationCommand("volume", [new(0, -6, 0), new(3840, 0, 0.5)], gtr),
-                    new SetAutomationCommand("pan", [new(0, -1, 0)]), new SetAutomationModeCommand(AutomationMode.Latch, gtr),
+                    new SetAutomationCommand("pan", [new(0, -1, 0)]),
+                    new SetAutomationModeCommand(AutomationMode.Latch, gtr),
                     new SetMixerSettingsCommand(PdcMode.Tracks, true, 5)
                 ],
                 ids,
@@ -200,7 +204,8 @@ public sealed class PackageTests : IDisposable {
             )
             .State;
         var insert = state.FindTrack(gtr)!.Strip.Inserts[0].Id;
-        state = Edits.Apply(state, new SetInsertCommand(insert, gtr, Sidechain: aux), ids, RandomProjects.Plugins).State;
+        state = Edits.Apply(state, new SetInsertCommand(insert, gtr, Sidechain: aux), ids, RandomProjects.Plugins)
+            .State;
         ProjectPackage.Save(folder, state);
         var loaded = ProjectPackage.Load(folder);
         Assert.Equal(RandomProjects.Json(state), RandomProjects.Json(loaded));
@@ -239,7 +244,7 @@ public sealed class PackageTests : IDisposable {
         var loaded = ProjectPackage.LoadStates(folder, state);
         Assert.Equal([1], loaded[$"{track}.{own}"]);
         Assert.Equal([2], loaded[$"master.{master}"]);
-        Assert.Throws<ArgumentException>(() => ProjectPackage.StateFileName("../x"));
+        Assert.Throws<ArgumentException>(static () => ProjectPackage.StateFileName("../x"));
     }
 
     [Fact]
