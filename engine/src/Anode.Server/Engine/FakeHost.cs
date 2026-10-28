@@ -34,7 +34,7 @@ namespace Anode.Server.Engine;
 ///     cancelled. <see cref="ChangeParameterAsync" /> and <see cref="ReportProblemAsync" /> play a plugin's own editor
 ///     and a crash for tests.
 /// </summary>
-public sealed class FakeHost : IAsyncDisposable {
+public sealed partial class FakeHost : IAsyncDisposable {
     public const string Backend = "null";
     const int MaxLog = 4096;
     const double TakeFrequency = 440;
@@ -577,6 +577,7 @@ public sealed class FakeHost : IAsyncDisposable {
     IpcMessage Load(LoadModelMessage load) {
         var loaded = new Dictionary<int, AudioPlaylistEntry[]>();
         var loadedEvents = new Dictionary<int, PlaybackEvent[]>();
+        var loadedWarps = new Dictionary<int, (WarpPoint[][] Warps, PitchPoint[][] Pitches)>();
         try {
             using var mapped = MappedSegment.Map(load.Segment.Version, load.Segment.Name, load.Segment.Length);
             mapped.ValidateLayout();
@@ -584,6 +585,7 @@ public sealed class FakeHost : IAsyncDisposable {
             for (var i = 0; i < TrackCount(mapped); i++) {
                 loaded[mapped.TrackId(i)] = PlaylistOf(mapped, i);
                 loadedEvents[mapped.TrackId(i)] = EventsOf(mapped, i);
+                loadedWarps[mapped.TrackId(i)] = WarpsOf(mapped, i);
             }
         } catch (Exception e) when (e is IOException or InvalidDataException or UnauthorizedAccessException) {
             return new ErrorMessage(e.Message, "loadModel");
@@ -592,12 +594,15 @@ public sealed class FakeHost : IAsyncDisposable {
         lock (gate) {
             if (load.Replace) {
                 playlists.Clear();
+                warps.Clear();
+                pitches.Clear();
                 events.Clear();
                 tracks.Clear();
             }
 
             foreach (var (id, entries) in loaded) {
                 playlists[id] = entries;
+                (warps[id], pitches[id]) = loadedWarps[id];
                 events[id] = loadedEvents[id];
             }
 
@@ -707,15 +712,24 @@ public sealed class FakeHost : IAsyncDisposable {
                     master.Mute ? 0 : master.Gain);
             }
 
+            // A freeze of one track to a .wav writes that file; stems, and a bounce in place (a freeze of several
+            // tracks, or to a folder), write <path>/<track>.wav each.
+            var single = render.Freeze
+                && render.Tracks.Count == 1
+                && string.Equals(Path.GetExtension(render.Path), ".wav", StringComparison.OrdinalIgnoreCase);
             return ([
                 ..render.Tracks.Where(tracks.ContainsKey)
-                    .Select(id => (render.Freeze ? render.Path : Path.Combine(render.Path, $"{id}.wav"),
+                    .Select(id => (single ? render.Path : Path.Combine(render.Path, $"{id}.wav"),
                             new[] { (tracks[id], Gain(tracks[id])) })
                     )
             ], 1);
 
             float Gain(EngineTrack t) =>
-                render.Freeze ? 1 : t.Strip.Mute || (soloed && !t.Strip.Solo) ? 0 : t.Strip.Gain;
+                render.Freeze
+                    ? render.IncludeVolumePan ? t.Strip.Gain : 1
+                    : t.Strip.Mute || (soloed && !t.Strip.Solo)
+                        ? 0
+                        : t.Strip.Gain;
         }
     }
 
@@ -731,37 +745,60 @@ public sealed class FakeHost : IAsyncDisposable {
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         using var writer = new WavWriter(path, 2, SampleRate, WavEncoding.Float32);
         var frames = Math.Max(0, render.EndSample - render.StartSample);
-        var block = new float[4096 * 2];
+        var block = new float[RenderBlock * 2];
+        var (left, right) = (new float[RenderBlock], new float[RenderBlock]);
+        var audio = sources.Select(s => AudioOf(s.Track.Id)).ToArray();
         var tenth = Math.Max(1, frames / 10);
         long reported = 0;
-        for (long done = 0; done < frames;) {
-            token.ThrowIfCancellationRequested();
-            var n = (int)Math.Min(4096, frames - done);
-            for (var i = 0; i < n; i++) {
-                var x = Sum(sources, render.StartSample + done + i) * masterGain;
-                block[2 * i] = block[2 * i + 1] = (float)x;
-            }
+        try {
+            for (long done = 0; done < frames;) {
+                token.ThrowIfCancellationRequested();
+                var n = (int)Math.Min(RenderBlock, frames - done);
+                var at = render.StartSample + done;
+                Array.Clear(left);
+                Array.Clear(right);
+                for (var s = 0; s < sources.Length; s++) {
+                    var (track, gain) = sources[s];
+                    if (audio[s] is { } playlist) {
+                        var (l, r) = (new float[n], new float[n]);
+                        playlist.Render(at, l, r);
+                        for (var i = 0; i < n; i++) {
+                            left[i] += l[i] * gain;
+                            right[i] += r[i] * gain;
+                        }
+                    } else {
+                        for (var i = 0; i < n; i++) {
+                            var x = (float)Sine(track, gain, at + i);
+                            left[i] += x;
+                            right[i] += x;
+                        }
+                    }
+                }
 
-            writer.Write(block.AsSpan(0, n * 2));
+                for (var i = 0; i < n; i++) {
+                    block[2 * i] = left[i] * masterGain;
+                    block[2 * i + 1] = right[i] * masterGain;
+                }
+
+                writer.Write(block.AsSpan(0, n * 2));
             done += n;
             if (done / tenth > reported) {
                 reported = done / tenth;
                 var fraction = (part.Index + (double)done / frames) / part.Count;
-                await SendAsync(new RenderProgressMessage(render.JobId, fraction), token).ConfigureAwait(false);
-                await Task.Delay(1, token).ConfigureAwait(false);
+                    await SendAsync(new RenderProgressMessage(render.JobId, fraction), token).ConfigureAwait(false);
+                    await Task.Delay(1, token).ConfigureAwait(false);
+                }
+            }
+        } finally {
+            foreach (var playlist in audio) {
+                playlist?.Dispose();
             }
         }
     }
 
-    /// <summary>The tracks' sines at project sample <paramref name="at" />.</summary>
-    double Sum((EngineTrack Track, float Gain)[] sources, long at) {
-        double x = 0;
-        foreach (var (track, gain) in sources) {
-            x += RenderAmplitude * gain * Math.Sin(2 * Math.PI * RenderFrequency(track.Id) * at / SampleRate);
-        }
-
-        return x;
-    }
+    /// <summary>A track's sine at project sample <paramref name="at" />.</summary>
+    double Sine(EngineTrack track, float gain, long at) =>
+        RenderAmplitude * gain * Math.Sin(2 * Math.PI * RenderFrequency(track.Id) * at / SampleRate);
 
     /// <summary>Plays live MIDI: kept for the take while the track records, and echoed as activity.</summary>
     MidiActivityMessage Live(LiveMidiMessage message) {

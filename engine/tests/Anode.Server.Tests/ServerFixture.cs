@@ -12,10 +12,14 @@ namespace Anode.Server.Tests;
 /// <summary>
 ///     A Server with a throwaway data folder and, by default, an in-process engine. Pass a socket path to talk to a
 ///     separate anode-host over IPC instead, a token to require one on every request, and an editor folder to serve
-///     the editor's web build at the root.
+///     the editor's web build at the root, and an analyzer to analyse audio in place of <c>Anode.Dsp</c>'s.
 /// </summary>
-public sealed class ServerFixture(string? socketPath = null, string? token = null, string? editorDirectory = null)
-    : WebApplicationFactory<Program> {
+public sealed class ServerFixture(
+    string? socketPath = null,
+    string? token = null,
+    string? editorDirectory = null,
+    IAudioAnalyzer? analyzer = null
+) : WebApplicationFactory<Program> {
     readonly string dataDirectory = Directory.CreateTempSubdirectory("anode-server-").FullName;
 
     public async Task<SystemInfo> SystemAsync(HttpClient client) =>
@@ -53,6 +57,10 @@ public sealed class ServerFixture(string? socketPath = null, string? token = nul
 
         if (editorDirectory is not null) {
             builder.UseSetting("Anode:EditorDirectory", editorDirectory);
+        }
+
+        if (analyzer is not null) {
+            builder.ConfigureServices(services => services.AddSingleton(analyzer));
         }
 
         builder.ConfigureLogging(static logging => logging.SetMinimumLevel(LogLevel.Warning));

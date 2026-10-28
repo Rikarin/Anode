@@ -93,7 +93,7 @@ public sealed class EngineConnection(
             throw ProjectException.Unprocessable($"Tick {request.Tick} is out of range.");
         }
 
-        var map = view?.State.TempoMap ?? TempoMap.Constant(ProjectDefaults.Tempo);
+        var map = view?.State.PlaybackMap ?? TempoMap.Constant(ProjectDefaults.Tempo);
         var rate = view?.State.SampleRate ?? ProjectDefaults.SampleRate;
         var position = request.Tick is { } tick ? map.SampleAt(tick, rate) : -1;
         var (action, state) = request.Command switch {
@@ -616,7 +616,7 @@ public sealed class EngineConnection(
     static TransportStatus Status(TelemetryHeader header, OpenProjectView? view) {
         var position = header.PositionSamples;
         var rate = view?.State.SampleRate ?? (header.SampleRate > 0 ? header.SampleRate : ProjectDefaults.SampleRate);
-        var map = view?.State.TempoMap ?? TempoMap.Constant(ProjectDefaults.Tempo);
+        var map = view?.State.PlaybackMap ?? TempoMap.Constant(ProjectDefaults.Tempo);
         var state = header.State switch {
             TelemetryTransportState.Playing => TransportState.Playing,
             TelemetryTransportState.Recording => TransportState.Recording,

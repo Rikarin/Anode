@@ -136,7 +136,7 @@ public sealed class HostSync(HostLink link, SegmentPool pool, ILogger logger) {
             compilerSession = target.Session;
         }
 
-        var model = compiler.Compile(target.State, target.Ids);
+        var model = compiler.Compile(target.State, target.Ids, target.Analyses);
         var full = sent is null || sent.Session != target.Session;
         var previous = sent;
         var carried = new HashSet<string>(StringComparer.Ordinal);
@@ -316,6 +316,8 @@ public sealed class HostSync(HostLink link, SegmentPool pool, ILogger logger) {
     static bool TempoChanged(ProjectState before, ProjectState now) =>
         before.SampleRate != now.SampleRate
         || before.Settings.Tempo != now.Settings.Tempo
+        || before.PlaybackSpeed != now.PlaybackSpeed
+        || before.Settings.Varispeed?.Mode != now.Settings.Varispeed?.Mode
         || !(before.Settings.TempoEvents ?? []).SequenceEqual(now.Settings.TempoEvents ?? []);
 
     /// <summary>Strips, track IO, cycle, punch and metronome that changed (all of them after a whole load).</summary>
@@ -401,7 +403,7 @@ public sealed class HostSync(HostLink link, SegmentPool pool, ILogger logger) {
     static IEnumerable<IpcMessage> SettingsMessages(ProjectState? before, ProjectState state) {
         var settings = state.Settings;
         var tempoChanged = before is null || TempoChanged(before, state);
-        var map = state.TempoMap;
+        var map = state.PlaybackMap;
         if (tempoChanged || before!.Settings.Cycle != settings.Cycle) {
             yield return new SetCycleMessage(
                 settings.Cycle.Enabled,

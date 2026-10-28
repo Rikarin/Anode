@@ -27,7 +27,8 @@ public sealed record OpenProjectView(
     ProjectState State,
     EngineIds Ids,
     long Revision,
-    ImmutableDictionary<string, SavedState> States
+    ImmutableDictionary<string, SavedState> States,
+    ImmutableDictionary<string, FileAnalysis> Analyses
 ) {
     public string AudioFolder => Path.Combine(Folder, ProjectPackage.AudioFolder);
 
@@ -67,6 +68,7 @@ public sealed class ProjectSession(
     EngineCatalog catalog,
     PatchLibrary patches,
     TransportClock clock,
+    FileAnalyses analyses,
     TimeProvider time,
     ILogger<ProjectSession> logger
 ) {
@@ -424,6 +426,19 @@ public sealed class ProjectSession(
     /// </summary>
     public CommandResult Apply(CommandBatch batch, long? expected) {
         CommandResult result;
+        IReadOnlyList<FileAnalysis> built = [];
+        try {
+            result = ApplyLocked(batch, expected, ref built);
+        } finally {
+            Announce(built);
+        }
+
+        Changed?.Invoke();
+        return result;
+    }
+
+    CommandResult ApplyLocked(CommandBatch batch, long? expected, ref IReadOnlyList<FileAnalysis> built) {
+        CommandResult result;
         lock (gate) {
             var o = Required();
             CheckRevision(o, expected);
@@ -432,11 +447,15 @@ public sealed class ProjectSession(
             }
 
             EditResult edit;
+            var analysis = new SessionAnalysis(analyses, o.Folder);
             try {
-                edit = Edits.Apply(o.State, Resolve(o, batch.Commands), ids, catalog.ForEdits, patches);
+                edit = Edits.Apply(o.State, Resolve(o, batch.Commands), ids, catalog.ForEdits, patches, analysis);
             } catch (EditException e) {
+                built = Keep(o, analysis.Built);
                 throw ProjectException.Unprocessable(e.Message);
             }
+
+            built = Keep(o, analysis.Built);
 
             var forward = edit.Forward;
             var inverse = edit.Inverse;
@@ -458,8 +477,74 @@ public sealed class ProjectSession(
             o.History.Push(UndoLabels.For(batch), o.Revision, new(forward, inverse), key);
         }
 
-        Changed?.Invoke();
         return result;
+    }
+
+    /// <summary>Keeps analyses just built for the open project (the compiler shapes pitch notes with them).</summary>
+    static IReadOnlyList<FileAnalysis> Keep(Open o, IReadOnlyList<FileAnalysis> built) {
+        foreach (var analysis in built) {
+            o.Analyses = o.Analyses.SetItem(analysis.FileId, analysis);
+        }
+
+        return [..built];
+    }
+
+    /// <summary>Tells clients that analyses changed (they refetch them).</summary>
+    void Announce(IEnumerable<FileAnalysis> built) {
+        foreach (var analysis in built) {
+            hub.Publish(new AnalysisEvent(analysis.FileId));
+        }
+    }
+
+    /// <summary>
+    ///     A file's analysis: the cached one, its transients and beats analysed now when they are missing (an
+    ///     <c>analysis</c> event follows a build).
+    /// </summary>
+    public FileAnalysis Analysis(string fileId) {
+        var (session, folder, file) = FileOf(fileId);
+        FileAnalysis analysis;
+        bool built;
+        try {
+            (analysis, built) = analyses.Rhythm(folder, file);
+        } catch (AnalysisException e) {
+            throw ProjectException.Unprocessable(e.Message);
+        }
+
+        if (built) {
+            KeepAnalysis(session, analysis);
+        }
+
+        return analysis;
+    }
+
+    /// <summary>Which opening, folder and file a file id of the open project is: 404 when there is none.</summary>
+    public (long Session, string Folder, AudioFile File) FileOf(string fileId) {
+        lock (gate) {
+            var o = Required();
+            return o.State.Files.TryGetValue(fileId, out var file)
+                ? (o.Session, o.Folder, file)
+                : throw ProjectException.NotFound($"No audio file '{fileId}'.");
+        }
+    }
+
+    /// <summary>
+    ///     An analysis built outside an edit (a request, the analyze job) joins the open project's (when it is still that
+    ///     opening) and is announced.
+    /// </summary>
+    public void KeepAnalysis(long session, FileAnalysis analysis) {
+        var changed = false;
+        lock (gate) {
+            if (open is { } o && o.Session == session) {
+                Keep(o, [analysis]);
+                Publish();
+                changed = true;
+            }
+        }
+
+        Announce([analysis]);
+        if (changed) {
+            Changed?.Invoke();
+        }
     }
 
     /// <summary>The pass recording now (started when playback did), with the playhead's tick; null while stopped.</summary>
@@ -701,6 +786,7 @@ public sealed class ProjectSession(
     /// </summary>
     public AudioFile AddFile(long session, string absolutePath, WavInfo info) {
         AudioFile file;
+        var built = new List<FileAnalysis>();
         lock (gate) {
             var o = Required();
             if (o.Session != session) {
@@ -708,13 +794,81 @@ public sealed class ProjectSession(
             }
 
             file = Describe(o, absolutePath, info);
+            if (o.State.Settings.SmartTempo?.AnalyzeImports == true) {
+                file = Analysed(o, file, built);
+            }
+
             var op = new AudioFileUpserted(file);
             Commit(o, o.State.Apply(op), [op]);
         }
 
+        Announce(built);
         StartPeaks(file);
         Changed?.Invoke();
         return file;
+    }
+
+    /// <summary>
+    ///     <paramref name="file" /> with its tempo from an analysis of its transients and beats (Smart Tempo), cached and
+    ///     kept; as it is when it cannot be analysed (logged).
+    /// </summary>
+    AudioFile Analysed(Open o, AudioFile file, List<FileAnalysis> built) {
+        try {
+            var (analysis, fresh) = analyses.Rhythm(o.Folder, file);
+            if (fresh) {
+                built.AddRange(Keep(o, [analysis]));
+            }
+
+            return file with { Tempo = analysis.Tempo };
+        } catch (AnalysisException e) {
+            ProjectLog.AnalysisFailed(logger, file.Path, e.Message);
+            return file;
+        }
+    }
+
+    /// <summary>
+    ///     A finished job's result as one undo step named <paramref name="label" />: its files (already in the project's
+    ///     <c>Audio Files</c>) join the pool, then <paramref name="edit" /> makes its edits on top (bounce in place,
+    ///     selection-based processing). An edit that does not apply fails it all (422).
+    /// </summary>
+    public CommandResult ApplyJob(
+        long session,
+        string label,
+        IReadOnlyList<(string Path, WavInfo Info)> files,
+        Action<JobEdit, IReadOnlyList<AudioFile>> edit
+    ) {
+        CommandResult result;
+        var added = new List<AudioFile>();
+        lock (gate) {
+            var o = Required();
+            if (o.Session != session) {
+                throw ProjectException.Conflict("The project was closed while the job ran.");
+            }
+
+            var job = new JobEdit(o.State, ids, catalog.ForEdits);
+            foreach (var (path, info) in files) {
+                var file = Describe(o, path, info);
+                added.Add(file);
+                job.Step([new AudioFileUpserted(file)]);
+            }
+
+            try {
+                edit(job, added);
+            } catch (EditException e) {
+                throw ProjectException.Unprocessable(e.Message);
+            }
+
+            job.Inverse.Reverse();
+            result = Commit(o, job.State, job.Forward);
+            o.History.Push(label, o.Revision, new(job.Forward, job.Inverse), null);
+        }
+
+        foreach (var file in added) {
+            StartPeaks(file);
+        }
+
+        Changed?.Invoke();
+        return result;
     }
 
     /// <summary>
@@ -797,6 +951,7 @@ public sealed class ProjectSession(
 
         CommandResult? result = null;
         var files = new List<AudioFile>();
+        var built = new List<FileAnalysis>();
         lock (gate) {
             if (open is not { } o || probed.Count + midiTakes.Count == 0) {
                 return null;
@@ -812,7 +967,9 @@ public sealed class ProjectSession(
 
                 var (file, ops) = taken;
                 files.Add(file);
+                var before = state;
                 state = Edits.Step(state, ops, forward, inverse);
+                state = Adapted(o, before, state, file, ops, forward, inverse, built);
             }
 
             foreach (var take in midiTakes) {
@@ -828,12 +985,53 @@ public sealed class ProjectSession(
             }
         }
 
+        Announce(built);
         foreach (var file in files) {
             StartPeaks(file);
         }
 
         Changed?.Invoke();
         return result;
+    }
+
+    /// <summary>
+    ///     Smart Tempo's adapt mode for a recording (docs/06-phase-5.md): when it is the project's first audio, its file
+    ///     is analysed and the project tempo adapts to the region it became (one region; a take folder keeps the tempo).
+    /// </summary>
+    ProjectState Adapted(
+        Open o,
+        ProjectState before,
+        ProjectState after,
+        AudioFile file,
+        IReadOnlyList<DeltaOp> ops,
+        List<DeltaOp> forward,
+        List<DeltaOp> inverse,
+        List<FileAnalysis> built
+    ) {
+        if (before.Settings.SmartTempo?.Mode is null or ProjectTempoMode.Keep
+            || !before.Regions.IsEmpty
+            || !before.TakeFolders.IsEmpty
+            || ops.OfType<RegionUpserted>().FirstOrDefault() is not { } placed) {
+            return after;
+        }
+
+        var analysed = Analysed(o, file, built);
+        if (!Edits.AdaptsTempo(before, analysed)) {
+            return after;
+        }
+
+        try {
+            after = Edits.Step(after, [new AudioFileUpserted(analysed)], forward, inverse);
+            return Edits.Step(
+                after,
+                Edits.Ops(after, new AdaptTempoCommand(placed.Region.Id), ids, catalog.ForEdits),
+                forward,
+                inverse
+            );
+        } catch (EditException e) {
+            ProjectLog.AnalysisFailed(logger, file.Path, e.Message);
+            return after;
+        }
     }
 
     /// <summary>The takes whose files can be read, with their formats (the others logged).</summary>
@@ -1062,7 +1260,8 @@ public sealed class ProjectSession(
             }
 
             open = new(++sessions, folder, state, new(time)) {
-                States = states ?? ImmutableDictionary.Create<string, SavedState>(StringComparer.Ordinal)
+                States = states ?? ImmutableDictionary.Create<string, SavedState>(StringComparer.Ordinal),
+                Analyses = FileAnalyses.CachedAll(folder, state.Files.Values).ToImmutableDictionary(StringComparer.Ordinal)
             };
             Publish();
             project = open.ToProject();
@@ -1092,7 +1291,7 @@ public sealed class ProjectSession(
     void Publish() {
         if (open is { } o) {
             o.Ids = o.Ids.With(o.State);
-            Volatile.Write(ref view, new(o.Session, o.Folder, o.State, o.Ids, o.Revision, o.States));
+            Volatile.Write(ref view, new(o.Session, o.Folder, o.State, o.Ids, o.Revision, o.States, o.Analyses));
         } else {
             Volatile.Write(ref view, null);
         }
@@ -1117,6 +1316,10 @@ public sealed class ProjectSession(
 
         /// <summary>The automation recording pass of the current playback, once a move recorded.</summary>
         public AutomationPass? Pass { get; set; }
+
+        /// <summary>The files' analyses known so far, by file id (cached in the package).</summary>
+        public ImmutableDictionary<string, FileAnalysis> Analyses { get; set; } =
+            ImmutableDictionary.Create<string, FileAnalysis>(StringComparer.Ordinal);
 
         public ImmutableDictionary<string, SavedState> States { get; set; } =
             ImmutableDictionary.Create<string, SavedState>(StringComparer.Ordinal);
