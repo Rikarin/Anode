@@ -27,7 +27,7 @@ also `libasound2-dev`.
 ```bash
 ./engine/native/build.sh
 dotnet build engine/Anode.slnx -c Release
-dotnet test --solution engine/Anode.slnx -c Release
+dotnet test --solution engine/Anode.slnx -c Release --max-parallel-test-modules 2
 cd editor && pnpm install && pnpm exec nx run-many -t typecheck lint test build
 ```
 

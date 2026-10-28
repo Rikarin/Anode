@@ -32,7 +32,8 @@ jobs:
         shell: bash
         run: ./native/build.sh
       - run: dotnet build Anode.slnx -c Release
-      - run: dotnet test --solution Anode.slnx -c Release --no-build
+      # Two test modules at a time: the real-time host, plugin sandbox and DSP CPU tests share the machine.
+      - run: dotnet test --solution Anode.slnx -c Release --no-build --max-parallel-test-modules 2
 
   host-aot:
     needs: test
