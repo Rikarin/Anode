@@ -564,8 +564,8 @@ public static class ProjectPackage {
                     ],
                     TakeFolders = [
                         ..(a.TakeFolders ?? []).Where(f => f?.Id is not null
-                                && f.Takes is { Count: > 0 }
-                                && f.Takes.All(t => t is not null && files.ContainsKey(t.FileId ?? string.Empty))
+                            && f.Takes is { Count: > 0 }
+                            && f.Takes.All(t => t is not null && files.ContainsKey(t.FileId ?? string.Empty))
                             )
                             .Select(f => f with { TrackId = track.Id, Comp = f.Comp ?? [] })
                     ]

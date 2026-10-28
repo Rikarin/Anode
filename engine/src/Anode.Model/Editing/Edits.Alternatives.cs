@@ -40,7 +40,12 @@ public static partial class Edits {
         entries[entries.FindIndex(e => e.Id == active)] = snapshot;
         entries.Add(created);
         ops.AddRange(LiveItems(state, track.Id).Select(Timeline.Remove));
-        ops.Add(new TrackUpserted(track with { Alternatives = entries, AlternativeId = created.Id }, state.IndexOfTrack(track.Id)));
+        ops.Add(
+            new TrackUpserted(
+                track with { Alternatives = entries, AlternativeId = created.Id },
+                state.IndexOfTrack(track.Id)
+            )
+        );
         ops.AddRange(copies);
         return ops;
     }
@@ -59,10 +64,16 @@ public static partial class Edits {
             entries[active] = Snapshot(state, track.Id, entries[active]);
         }
 
-        entries[entries.FindIndex(e => e.Id == target.Id)] = target with { Regions = [], MidiRegions = [], TakeFolders = [] };
+        entries[entries.FindIndex(e => e.Id == target.Id)] =
+            target with { Regions = [], MidiRegions = [], TakeFolders = [] };
         var ops = new List<DeltaOp>();
         ops.AddRange(LiveItems(state, track.Id).Select(Timeline.Remove));
-        ops.Add(new TrackUpserted(track with { Alternatives = entries, AlternativeId = target.Id }, state.IndexOfTrack(track.Id)));
+        ops.Add(
+            new TrackUpserted(
+                track with { Alternatives = entries, AlternativeId = target.Id },
+                state.IndexOfTrack(track.Id)
+            )
+        );
         ops.AddRange(target.Regions.Select(static r => new RegionUpserted(r)));
         ops.AddRange(target.MidiRegions.Select(static r => new MidiRegionUpserted(r)));
         ops.AddRange(target.TakeFolders.Select(static f => new TakeFolderUpserted(f)));
@@ -76,7 +87,8 @@ public static partial class Edits {
         return [
             new TrackUpserted(
                 track with {
-                    Alternatives = [..track.Alternatives.Select(e => e.Id == alternative.Id ? e with { Name = name } : e)]
+                    Alternatives =
+                        [..track.Alternatives.Select(e => e.Id == alternative.Id ? e with { Name = name } : e)]
                 },
                 state.IndexOfTrack(track.Id)
             )
@@ -118,15 +130,16 @@ public static partial class Edits {
         };
 
     /// <summary>The track's live regions (audio and MIDI) and take folders.</summary>
-    static TimelineItem[] LiveItems(ProjectState state, string trackId) =>
-        Timeline.Items(state)
+    static TimelineItem[] LiveItems(ProjectState state, string trackId) => [
+        ..Timeline.Items(state)
             .Where(i => i.Kind is TimelineKind.AudioRegion or TimelineKind.MidiRegion or TimelineKind.TakeFolder
                 && Timeline.TrackOf(state, i) == trackId
             )
-            .ToArray();
+    ];
 
     /// <summary>"A", "B", … then "Alternative 27", …: the default name of the alternative at <paramref name="index" />.</summary>
-    static string AlternativeName(int index) => index < 26 ? ((char)('A' + index)).ToString() : $"Alternative {index + 1}";
+    static string AlternativeName(int index) =>
+        index < 26 ? ((char)('A' + index)).ToString() : $"Alternative {index + 1}";
 
     static Track AlternatingTrackOf(ProjectState state, string? id) {
         var track = TrackOf(state, id ?? string.Empty);

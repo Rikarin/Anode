@@ -314,7 +314,7 @@ public sealed class RegionTiming {
             return nextBar;
         }
 
-        return signatures.TickOf(new(position.Bar, position.Beat + 1, 0));
+        return signatures.TickOf(position with { Beat = position.Beat + 1, Tick = 0 });
     }
 
     static long BeatAtOrBefore(SignatureMap signatures, long tick) {

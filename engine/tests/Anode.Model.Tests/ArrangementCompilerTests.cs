@@ -194,7 +194,11 @@ public sealed class ArrangementCompilerTests {
                 // And at a Varispeed speed, where every entry is warped.
                 var speed = state with {
                     Settings = state.Settings with {
-                        Varispeed = new(true, RandomProjects.Pick(random, Enum.GetValues<VarispeedMode>()), 0.5 + random.NextDouble())
+                        Varispeed = new(
+                            true,
+                            RandomProjects.Pick(random, Enum.GetValues<VarispeedMode>()),
+                            0.5 + random.NextDouble()
+                        )
                     }
                 };
                 foreach (var track in new ModelCompiler().Compile(speed, EngineIds.Empty.With(speed)).Tracks) {

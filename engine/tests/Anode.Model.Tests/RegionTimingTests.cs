@@ -27,7 +27,26 @@ public sealed class RegionTimingTests {
         FlexFollow follow = FlexFollow.Off,
         IReadOnlyList<FlexMarker>? markers = null
     ) =>
-        new("rgn_1", "trk_1", "aud_1", "R", startTick, offset, length, 0, 0, 0, 0, 0, false, follow, markers ?? [], 0, 0, []);
+        new(
+            "rgn_1",
+            "trk_1",
+            "aud_1",
+            "R",
+            startTick,
+            offset,
+            length,
+            0,
+            0,
+            0,
+            0,
+            0,
+            false,
+            follow,
+            markers ?? [],
+            0,
+            0,
+            []
+        );
 
     static RegionTiming Timing(
         AudioRegion region,
@@ -45,9 +64,14 @@ public sealed class RegionTimingTests {
             Rate
         );
 
-    static readonly FileTempo Steady100 = new(100, false, [..Enumerable.Range(0, 20).Select(i => i * Beat100)], [
-        ..Enumerable.Range(0, 5).Select(i => i * 4 * Beat100)
-    ]);
+    static readonly FileTempo Steady100 = new(
+        100,
+        false,
+        [..Enumerable.Range(0, 20).Select(static i => i * Beat100)],
+        [
+            ..Enumerable.Range(0, 5).Select(static i => i * 4 * Beat100)
+        ]
+    );
 
     [Fact]
     public void An_unwarped_region_plays_its_frames_one_to_one_from_its_start() {
@@ -174,16 +198,20 @@ public sealed class RegionTimingTests {
     /// <summary>The cases of the shared vectors: inputs, and the frames whose ticks and samples they record.</summary>
     static IEnumerable<(string Name, IReadOnlyList<TempoEvent> Tempo, IReadOnlyList<SignatureEvent> Signatures, bool
         FlexOn, AudioRegion Region, FileTempo? File, long[] Frames)> Cases() {
-        long[] Frames(long offset, long length, int n) => [..Enumerable.Range(0, n + 1).Select(i => offset + length * i / n)];
+        static long[] Frames(long offset, long length, int n) =>
+            [..Enumerable.Range(0, n + 1).Select(i => offset + length * i / n)];
+
         yield return ("unwarped", At120, FourFour, false, Region(960, 1_000, 96_000), null, Frames(1_000, 96_000, 4));
-        yield return ("flex, time", At120, FourFour, true, Region(960, 1_000, 96_000), Steady100, Frames(1_000, 96_000, 4));
+        yield return ("flex, time", At120, FourFour, true, Region(960, 1_000, 96_000), Steady100,
+            Frames(1_000, 96_000, 4));
         yield return ("follow on", At120, FourFour, false, Region(3_840, 14_400, 288_000, FlexFollow.On), Steady100,
             Frames(14_400, 288_000, 8));
         yield return ("follow on, no file tempo", At120, FourFour, false, Region(0, 0, 48_000, FlexFollow.On), null,
             Frames(0, 48_000, 2));
         yield return ("follow bars", At120, FourFour, false, Region(0, 0, 300_000, FlexFollow.Bars),
             new(100, true, [], [0, 120_000, 230_400]), [0, 60_000, 120_000, 175_200, 230_400, 300_000]);
-        yield return ("follow bars and beats", At120, FourFour, false, Region(480, 10_000, 100_000, FlexFollow.BarsAndBeats),
+        yield return ("follow bars and beats", At120, FourFour, false,
+            Region(480, 10_000, 100_000, FlexFollow.BarsAndBeats),
             new(100, false, [0, 30_000, 60_000, 90_000], [0]), [10_000, 20_000, 30_000, 60_000, 90_000, 110_000]);
         yield return ("follow bars in 7/8 after a signature change", At120, [new(0, 4, 4), new(3_840, 7, 8)], false,
             Region(0, 0, 400_000, FlexFollow.Bars), new(100, false, [], [0, 115_200, 230_400, 345_600]),
@@ -193,18 +221,23 @@ public sealed class RegionTimingTests {
         yield return ("markers ignored", At120, FourFour, true,
             Region(0, 0, 288_000, FlexFollow.On, [new(144_000, 4_000), new(150_000, 3_000), new(400_000, 100)]),
             Steady100, [0, 144_000, 150_000, 288_000]);
-        yield return ("markers on time", At120, FourFour, true, Region(1_920, 0, 96_000, FlexFollow.Off, [new(48_000, 1_000)]),
+        yield return ("markers on time", At120, FourFour, true,
+            Region(1_920, 0, 96_000, FlexFollow.Off, [new(48_000, 1_000)]),
             null, [0, 24_000, 48_000, 72_000, 96_000]);
         var linear = new TempoEvent[] { new(0, 60, TempoCurve.Ramp), new(3_840, 120, TempoCurve.Step) };
         var convex = new TempoEvent[] { new(0, 60, TempoCurve.Ramp, -0.5), new(3_840, 120, TempoCurve.Step) };
         var concave = new TempoEvent[] { new(0, 60, TempoCurve.Ramp, 0.5), new(3_840, 120, TempoCurve.Step) };
         var file60 = new FileTempo(60, false, [0, 48_000, 96_000, 144_000, 192_000], [0, 192_000]);
-        yield return ("unwarped over a linear ramp", linear, FourFour, false, Region(0, 0, 240_000), null, Frames(0, 240_000, 5));
-        yield return ("follow on over a linear ramp", linear, FourFour, false, Region(0, 0, 240_000, FlexFollow.On), file60,
+        yield return ("unwarped over a linear ramp", linear, FourFour, false, Region(0, 0, 240_000), null,
             Frames(0, 240_000, 5));
-        yield return ("follow on over a convex ramp", convex, FourFour, false, Region(0, 0, 240_000, FlexFollow.On), file60,
+        yield return ("follow on over a linear ramp", linear, FourFour, false, Region(0, 0, 240_000, FlexFollow.On),
+            file60,
             Frames(0, 240_000, 5));
-        yield return ("follow on over a concave ramp", concave, FourFour, false, Region(0, 0, 240_000, FlexFollow.On), file60,
+        yield return ("follow on over a convex ramp", convex, FourFour, false, Region(0, 0, 240_000, FlexFollow.On),
+            file60,
+            Frames(0, 240_000, 5));
+        yield return ("follow on over a concave ramp", concave, FourFour, false, Region(0, 0, 240_000, FlexFollow.On),
+            file60,
             Frames(0, 240_000, 5));
         yield return ("markers over a concave ramp", concave, FourFour, true,
             Region(480, 0, 192_000, FlexFollow.On, [new(96_000, 2_000)]), file60, Frames(0, 192_000, 4));
@@ -230,12 +263,14 @@ public sealed class RegionTimingTests {
                         ["startSample"] = t.StartSample,
                         ["endSample"] = t.EndSample,
                         ["endTick"] = Round(t.EndTick),
-                        ["points"] = new JsonArray([
-                            ..frames.Select(f => (JsonNode)new JsonObject {
-                                    ["frame"] = f, ["tick"] = Round(t.TickAt(f)), ["sample"] = Round(t.SampleAt(f))
-                                }
-                            )
-                        ])
+                        ["points"] = new JsonArray(
+                            [
+                                ..frames.Select(f => (JsonNode)new JsonObject {
+                                        ["frame"] = f, ["tick"] = Round(t.TickAt(f)), ["sample"] = Round(t.SampleAt(f))
+                                    }
+                                )
+                            ]
+                        )
                     }
                 }
             );
@@ -259,7 +294,12 @@ public sealed class RegionTimingTests {
     static double Round(double value) => Math.Round(value, 6);
 
     static JsonNode Node<T>(T value) =>
-        JsonSerializer.SerializeToNode(value, (System.Text.Json.Serialization.Metadata.JsonTypeInfo<T>)ContractsJsonContext.Default.GetTypeInfo(typeof(T))!)!;
+        JsonSerializer.SerializeToNode(
+            value,
+            (System.Text.Json.Serialization.Metadata.JsonTypeInfo<T>)ContractsJsonContext.Default.GetTypeInfo(
+                typeof(T)
+            )!
+        )!;
 
     static string VectorsPath([CallerFilePath] string source = "") =>
         Path.Combine(Path.GetDirectoryName(source)!, "RegionTimingVectors.json");

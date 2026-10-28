@@ -43,52 +43,71 @@ public sealed record Varispeed(double Speed, VarispeedMode Mode) {
     }
 
     TrackModel Scale(TrackModel model) {
-        var semitones = Semitones;
-        var events = new PlaybackEvent[model.Events.Length];
-        for (var i = 0; i < events.Length; i++) {
-            var e = model.Events[i] with { SamplePos = Sample(model.Events[i].SamplePos) };
-            if (semitones != 0 && e.Kind is PlaybackEventKind.NoteOn or PlaybackEventKind.NoteOff) {
-                e = e with { Data1 = (byte)Math.Clamp(e.Data1 + semitones, 0, 127) };
-            }
-
-            events[i] = e;
-        }
-
         var warp = new List<WarpPoint>();
         var playlist = new AudioPlaylistEntry[model.Playlist.Length];
         for (var i = 0; i < playlist.Length; i++) {
-            var e = model.Playlist[i];
-            var start = Sample(e.Start);
-            var length = Math.Max(1, Sample(e.Start + e.Length) - start);
-            var points = new List<WarpPoint> { new() { Offset = 0, FileFrame = Frame(model, e, 0) } };
-            if (e.WarpCount > 0) {
-                for (var k = 1; k < e.WarpCount - 1; k++) {
-                    var p = model.Warp![e.WarpStart + k];
-                    var offset = Sample(e.Start + p.Offset) - start;
-                    if (offset > points[^1].Offset && offset < length) {
-                        points.Add(new() { Offset = offset, FileFrame = p.FileFrame });
-                    }
-                }
-            }
-
-            points.Add(new() { Offset = length, FileFrame = Frame(model, e, e.Length) });
-            var fadeIn = (int)Math.Min(Sample(e.FadeIn), length);
-            playlist[i] = e with {
-                Start = start,
-                Length = length,
-                FadeIn = fadeIn,
-                FadeOut = (int)Math.Min(Sample(e.FadeOut), length - fadeIn),
-                WarpStart = warp.Count,
-                WarpCount = points.Count,
-                Algorithm = Mode == VarispeedMode.SpeedOnly
-                    ? e.Algorithm == FlexAlgorithm.None ? FlexAlgorithm.Polyphonic : e.Algorithm
-                    : FlexAlgorithm.Speed
-            };
+            var (entry, points) = Entry(model, model.Playlist[i]);
+            playlist[i] = entry with { WarpStart = warp.Count };
             warp.AddRange(points);
         }
 
         Crossfaded(playlist);
-        return new(model.TrackId, events, playlist, [..warp], model.Pitch ?? []);
+        return model with {
+            Events = Events(model.Events), Playlist = playlist, Warp = [..warp], Pitch = model.Pitch ?? []
+        };
+    }
+
+    /// <summary>Events at the speed: MIDI notes transposed in the MIDI mode.</summary>
+    PlaybackEvent[] Events(PlaybackEvent[] events) {
+        var semitones = Semitones;
+        var scaled = new PlaybackEvent[events.Length];
+        for (var i = 0; i < scaled.Length; i++) {
+            var e = events[i] with { SamplePos = Sample(events[i].SamplePos) };
+            if (semitones != 0 && e.Kind is PlaybackEventKind.NoteOn or PlaybackEventKind.NoteOff) {
+                e = e with { Data1 = (byte)Math.Clamp(e.Data1 + semitones, 0, 127) };
+            }
+
+            scaled[i] = e;
+        }
+
+        return scaled;
+    }
+
+    /// <summary>An entry at the speed, warped, with its warp points (its warp start left for the caller).</summary>
+    (AudioPlaylistEntry Entry, List<WarpPoint> Points) Entry(TrackModel model, AudioPlaylistEntry e) {
+        var start = Sample(e.Start);
+        var length = Math.Max(1, Sample(e.Start + e.Length) - start);
+        var points = new List<WarpPoint> { new() { Offset = 0, FileFrame = Frame(model, e, 0) } };
+        for (var k = 1; k < e.WarpCount - 1; k++) {
+            var p = model.Warp![e.WarpStart + k];
+            var offset = Sample(e.Start + p.Offset) - start;
+            if (offset > points[^1].Offset && offset < length) {
+                points.Add(new() { Offset = offset, FileFrame = p.FileFrame });
+            }
+        }
+
+        points.Add(new() { Offset = length, FileFrame = Frame(model, e, e.Length) });
+        var fadeIn = (int)Math.Min(Sample(e.FadeIn), length);
+        return (e with {
+            Start = start,
+            Length = length,
+            FadeIn = fadeIn,
+            FadeOut = (int)Math.Min(Sample(e.FadeOut), length - fadeIn),
+            WarpCount = points.Count,
+            Algorithm = Algorithm(e.Algorithm)
+        }, points);
+    }
+
+    /// <summary>
+    ///     How an entry plays at the speed: speed only keeps a warped entry's algorithm and stretches an unwarped one;
+    ///     speed and pitch resamples.
+    /// </summary>
+    FlexAlgorithm Algorithm(FlexAlgorithm algorithm) {
+        if (Mode != VarispeedMode.SpeedOnly) {
+            return FlexAlgorithm.Speed;
+        }
+
+        return algorithm == FlexAlgorithm.None ? FlexAlgorithm.Polyphonic : algorithm;
     }
 
     /// <summary>Where scaling made neighbours overlap past their fades, the fades grow to the overlap.</summary>
@@ -112,5 +131,7 @@ public sealed record Varispeed(double Speed, VarispeedMode Mode) {
 
     /// <summary>The file frame an entry plays at offset <paramref name="offset" /> (at speed 1).</summary>
     static double Frame(TrackModel model, AudioPlaylistEntry e, long offset) =>
-        e.WarpCount == 0 ? e.FileOffset + offset : Warps.FrameAt(model.Warp![e.WarpStart..(e.WarpStart + e.WarpCount)], offset);
+        e.WarpCount == 0
+            ? e.FileOffset + offset
+            : Warps.FrameAt(model.Warp![e.WarpStart..(e.WarpStart + e.WarpCount)], offset);
 }

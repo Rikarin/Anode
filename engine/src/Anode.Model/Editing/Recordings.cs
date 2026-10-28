@@ -156,7 +156,11 @@ public static class Recordings {
         if (start < from) {
             var kept = timing.Warped ? (long)Math.Round(timing.FrameAtSample(from)) - r.FileOffset : from - start;
             if (kept > 0) {
-                ops.Add(new RegionUpserted(Trimmed(Edits.Piece(r, r.FileOffset, r.FileOffset + kept, r.StartTick), r.FileOffset, kept)));
+                ops.Add(
+                    new RegionUpserted(
+                        Trimmed(Edits.Piece(r, r.FileOffset, r.FileOffset + kept, r.StartTick), r.FileOffset, kept)
+                    )
+                );
             }
         }
 

@@ -514,7 +514,7 @@ public static partial class Edits {
             || (mode == ProjectTempoMode.Auto
                 && state.MidiRegions.IsEmpty
                 && (settings.TempoEvents?.Count ?? 1) <= 1);
-        return adapting && file.Tempo is { Bpm: > 0 } && state.Regions.IsEmpty && state.TakeFolders.IsEmpty;
+        return adapting && HasBeats(file.Tempo) && state.Regions.IsEmpty && state.TakeFolders.IsEmpty;
     }
 
     static DeltaOp[] MoveRegion(ProjectState state, MoveRegionCommand c) {
@@ -616,7 +616,10 @@ public static partial class Edits {
                 ? region.PitchNotes
                 : [
                     ..region.PitchNotes.Where(n => n.EndFrame > from && n.StartFrame < to)
-                        .Select(n => n with { StartFrame = Math.Max(n.StartFrame, from), EndFrame = Math.Min(n.EndFrame, to) })
+                        .Select(n => n with {
+                                StartFrame = Math.Max(n.StartFrame, from), EndFrame = Math.Min(n.EndFrame, to)
+                            }
+                        )
                 ]
         };
     }

@@ -72,7 +72,9 @@ public static partial class Edits {
 
         var transpose = c.Transpose ?? region.Transpose;
         if (transpose is < -MaxRegionTranspose or > MaxRegionTranspose) {
-            throw new EditException($"A region transposes −{MaxRegionTranspose}…{MaxRegionTranspose} semitones, not {transpose}.");
+            throw new EditException(
+                $"A region transposes −{MaxRegionTranspose}…{MaxRegionTranspose} semitones, not {transpose}."
+            );
         }
 
         var fineTune = c.FineTune ?? region.FineTune;
@@ -81,7 +83,9 @@ public static partial class Edits {
         }
 
         var changed = region with { Follow = follow, Transpose = transpose, FineTune = fineTune };
-        if (!track.FlexOn && follow == FlexFollow.Off && (transpose != 0 || fineTune != 0 || changed.PitchNotes.Count > 0)) {
+        if (!track.FlexOn
+            && follow == FlexFollow.Off
+            && (transpose != 0 || fineTune != 0 || changed.PitchNotes.Count > 0)) {
             throw new EditException("A transpose, fine tune or pitch notes need Flex or Follow: turn one on first.");
         }
 
@@ -90,8 +94,9 @@ public static partial class Edits {
             // Following needs the file's beats: analysed now when it has none.
             var file = FileOf(state, region.FileId);
             if (file.Tempo is null) {
-                var tempo = analysis.Rhythm(file)?.Tempo
-                    ?? throw new EditException($"Following the tempo needs the beats of '{file.Name}': it has none.");
+                var tempo = analysis.Rhythm(file)?.Tempo is { } found && HasBeats(found)
+                    ? found
+                    : throw new EditException($"Following the tempo needs the beats of '{file.Name}': it has none.");
                 ops.Add(new AudioFileUpserted(file with { Tempo = tempo }));
             }
         }
@@ -162,29 +167,7 @@ public static partial class Edits {
             var file = FileOf(state, region.FileId);
             var transients = analysis.Rhythm(file)?.Transients
                 ?? throw new EditException($"Quantising audio needs the transients of '{file.Name}': it has none.");
-            var timing = RegionTiming.Of(
-                region with { FlexMarkers = [] },
-                file.Tempo,
-                true,
-                state.TempoMap,
-                state.SignatureMap,
-                state.SampleRate
-            );
-            var end = region.FileOffset + region.Length;
-            var endTick = timing.Base(end);
-            var markers = new List<FlexMarker>();
-            foreach (var frame in transients) {
-                if (frame <= region.FileOffset || frame >= end) {
-                    continue;
-                }
-
-                var at = (long)Math.Round(region.StartTick + timing.Base(frame));
-                var tick = Quantize.Tick(at, c.GridTicks, c.Strength, c.Swing) - region.StartTick;
-                if (tick > 0 && tick < endTick && (markers.Count == 0 || tick > markers[^1].Tick)) {
-                    markers.Add(new(frame, tick));
-                }
-            }
-
+            var markers = QuantizedMarkers(state, region, file, transients, c);
             if (!track.FlexOn && flexed.Add(track.Id)) {
                 ops.Add(new TrackUpserted(track with { FlexOn = true }, state.IndexOfTrack(track.Id)));
             }
@@ -193,6 +176,36 @@ public static partial class Edits {
         }
 
         return ops;
+    }
+
+    /// <summary>Markers on a region's transients, quantised (each strictly inside it and after the one before).</summary>
+    static List<FlexMarker> QuantizedMarkers(
+        ProjectState state,
+        AudioRegion region,
+        AudioFile file,
+        IReadOnlyList<long> transients,
+        QuantizeAudioCommand c
+    ) {
+        var timing = RegionTiming.Of(
+            region with { FlexMarkers = [] },
+            file.Tempo,
+            true,
+            state.TempoMap,
+            state.SignatureMap,
+            state.SampleRate
+        );
+        var end = region.FileOffset + region.Length;
+        var endTick = timing.Base(end);
+        var markers = new List<FlexMarker>();
+        foreach (var frame in transients.Where(f => f > region.FileOffset && f < end)) {
+            var at = (long)Math.Round(region.StartTick + timing.Base(frame));
+            var tick = Quantize.Tick(at, c.GridTicks, c.Strength, c.Swing) - region.StartTick;
+            if (tick > 0 && tick < endTick && (markers.Count == 0 || tick > markers[^1].Tick)) {
+                markers.Add(new(frame, tick));
+            }
+        }
+
+        return markers;
     }
 
     static DeltaOp[] SetPitchNotes(ProjectState state, SetPitchNotesCommand c) {
@@ -213,7 +226,9 @@ public static partial class Edits {
             }
 
             if (n.StartFrame < start || n.EndFrame > end || n.EndFrame <= n.StartFrame) {
-                throw new EditException($"A pitch note lies inside its region (frames {start}…{end}) and ends after it starts.");
+                throw new EditException(
+                    $"A pitch note lies inside its region (frames {start}…{end}) and ends after it starts."
+                );
             }
 
             if (previous is not null && n.StartFrame < previous.EndFrame) {
@@ -302,6 +317,12 @@ public static partial class Edits {
         return ops;
     }
 
+    /// <summary>
+    ///     Whether a file tempo has beats: an analysis of silence, noise or under two seconds has none (and a guessed
+    ///     120 bpm), and keeps the project tempo.
+    /// </summary>
+    public static bool HasBeats(FileTempo? tempo) => tempo is { Bpm: > 0, Beats.Count: > 0 };
+
     static DeltaOp[] SetFileTempo(ProjectState state, SetFileTempoCommand c) {
         var file = FileOf(state, c.FileId);
         if (c.Tempo is not { } tempo) {
@@ -313,7 +334,8 @@ public static partial class Edits {
             new AudioFileUpserted(
                 file with {
                     Tempo = tempo with {
-                        Beats = Frames(tempo.Beats, file, "beats"), Downbeats = Frames(tempo.Downbeats, file, "downbeats")
+                        Beats = Frames(tempo.Beats, file, "beats"),
+                        Downbeats = Frames(tempo.Downbeats, file, "downbeats")
                     }
                 }
             )
@@ -341,13 +363,18 @@ public static partial class Edits {
         var ops = new List<DeltaOp>();
         var tempo = file.Tempo;
         if (tempo is null) {
-            tempo = analysis.Rhythm(file)?.Tempo
-                ?? throw new EditException($"Adapting the tempo needs the beats of '{file.Name}': it has none.");
+            tempo = analysis.Rhythm(file)?.Tempo is { } found && HasBeats(found)
+                ? found
+                : throw new EditException($"Adapting the tempo needs the beats of '{file.Name}': it has none.");
             ops.Add(new AudioFileUpserted(file with { Tempo = tempo }));
             state = state.Apply(ops[0]);
         }
 
         CheckBpm(tempo.Bpm);
+        if (!HasBeats(tempo)) {
+            throw new EditException($"'{file.Name}' has no beats to adapt the tempo to.");
+        }
+
         ops.AddRange(Adapted(state, region, tempo));
         return ops;
     }
@@ -358,7 +385,7 @@ public static partial class Edits {
     ///     after it; and the region made to play unwarped.
     /// </summary>
     static DeltaOp[] Adapted(ProjectState state, AudioRegion region, FileTempo tempo) {
-        var rate = (double)state.SampleRate;
+        double rate = state.SampleRate;
         var old = state.TempoMap;
         var start = region.StartTick;
         var (from, to) = (region.FileOffset, region.FileOffset + region.Length);
@@ -373,7 +400,9 @@ public static partial class Edits {
             var first = Bpm(beats[1] - beats[0]);
             var tick0 = start + (long)Math.Round((beats[0] - from) * first * TempoMap.Ppq / (60 * rate));
             if (tick0 > start) {
-                adapted.Add(new(start, Bpm((beats[0] - from) * TempoMap.Ppq / (double)(tick0 - start)), TempoCurve.Step));
+                adapted.Add(
+                    new(start, Bpm((beats[0] - from) * TempoMap.Ppq / (double)(tick0 - start)), TempoCurve.Step)
+                );
             }
 
             for (var k = 0; k + 1 < beats.Length; k++) {
@@ -381,7 +410,9 @@ public static partial class Edits {
             }
 
             var last = adapted[^1].Bpm;
-            endTick = tick0 + (beats.Length - 1) * (double)TempoMap.Ppq + (to - beats[^1]) * last * TempoMap.Ppq / (60 * rate);
+            endTick = tick0
+                + (beats.Length - 1) * (double)TempoMap.Ppq
+                + (to - beats[^1]) * last * TempoMap.Ppq / (60 * rate);
         }
 
         var restore = (long)Math.Ceiling(endTick);
@@ -413,7 +444,7 @@ public static partial class Edits {
         }
 
         var events = (state.Settings.TempoEvents ?? [new(0, state.Settings.Tempo, TempoCurve.Step)]).ToList();
-        var rate = (double)state.SampleRate;
+        double rate = state.SampleRate;
         foreach (var m in mappings) {
             if (m is null) {
                 throw new EditException("A beat mapping is null.");
@@ -513,7 +544,11 @@ public static partial class Edits {
     }
 
     /// <summary>The parts of a region over non-silent ranges of its file, each starting on a tick.</summary>
-    static List<AudioRegion> Pieces(ProjectState state, AudioRegion region, IReadOnlyList<(long Start, long End)> ranges) {
+    static List<AudioRegion> Pieces(
+        ProjectState state,
+        AudioRegion region,
+        IReadOnlyList<(long Start, long End)> ranges
+    ) {
         var timing = RegionTiming.Of(state, region);
         var map = state.TempoMap;
         var rate = state.SampleRate;
@@ -564,7 +599,8 @@ public static partial class Edits {
 
     static DeltaOp[] SetSmartTempo(ProjectState state, SetSmartTempoCommand c) {
         var old = state.Settings.SmartTempo ?? ProjectDefaults.SmartTempo;
-        if ((c.Mode is { } mode && !Enum.IsDefined(mode)) || (c.DefaultFollow is { } follow && !Enum.IsDefined(follow))) {
+        if ((c.Mode is { } mode && !Enum.IsDefined(mode))
+            || (c.DefaultFollow is { } follow && !Enum.IsDefined(follow))) {
             throw new EditException("Unknown tempo mode or follow mode.");
         }
 

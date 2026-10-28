@@ -57,7 +57,7 @@ public sealed partial class Jobs {
         var name = request.Name is null ? null : CheckedName(request.Name);
         var sources = InPlaceSources(request, state);
         if (request.Destination == BounceInPlaceDestination.Replace
-            && sources.Any(static s => s.Track.Kind != TrackKind.Audio)) {
+            && sources.Exists(static s => s.Track.Kind != TrackKind.Audio)) {
             throw ProjectException.Unprocessable("Only audio tracks' regions can be replaced in place.");
         }
 
@@ -83,49 +83,67 @@ public sealed partial class Jobs {
             throw ProjectException.Unprocessable("Bounce either tracks or regions in place.");
         }
 
+        return byTracks ? TrackSources(request, state) : RegionSources(request, state);
+    }
+
+    /// <summary>Whole tracks to bounce in place: each from its first region's start to its last one's end.</summary>
+    static List<InPlace> TrackSources(BounceInPlaceRequest request, ProjectState state) {
         var map = state.TempoMap;
         var rate = state.SampleRate;
         var sources = new List<InPlace>();
-        if (byTracks) {
-            foreach (var id in request.TrackIds!.Distinct(StringComparer.Ordinal)) {
-                var track = state.FindTrack(id ?? string.Empty) ?? throw ProjectException.NotFound($"No track '{id}'.");
-                if (track.Kind is not (TrackKind.Audio or TrackKind.Instrument)) {
-                    throw ProjectException.Unprocessable("Only audio and instrument tracks bounce in place.");
-                }
-
-                var regions = state.RegionsOf(track.Id).ToArray();
-                var midi = state.MidiRegionsOf(track.Id).ToArray();
-                var folders = state.TakeFoldersOf(track.Id).ToArray();
-                var spans = regions.Select(r => (RegionTiming.Of(state, r).StartSample, Edits.EndSample(state, r)))
-                    .Concat(midi.Select(r => (map.SampleAt(r.StartTick, rate), map.SampleAt(r.StartTick + r.LengthTicks, rate))))
-                    .Concat(folders.Select(f => (map.SampleAt(f.StartTick, rate), map.SampleAt(f.StartTick + f.LengthTicks, rate))))
-                    .ToArray();
-                if (spans.Length == 0) {
-                    throw ProjectException.Unprocessable($"Track '{track.Name}' has nothing to bounce.");
-                }
-
-                sources.Add(
-                    new(
-                        track,
-                        spans.Min(static s => s.Item1),
-                        spans.Max(static s => s.Item2),
-                        [..regions.Select(static r => r.Id)],
-                        [..midi.Select(static r => r.Id)],
-                        [..folders.Select(static f => f.Id)]
-                    )
-                );
+        foreach (var id in request.TrackIds!.Distinct(StringComparer.Ordinal)) {
+            var track = state.FindTrack(id ?? string.Empty) ?? throw ProjectException.NotFound($"No track '{id}'.");
+            if (track.Kind is not (TrackKind.Audio or TrackKind.Instrument)) {
+                throw ProjectException.Unprocessable("Only audio and instrument tracks bounce in place.");
             }
 
-            return sources;
+            var regions = state.RegionsOf(track.Id).ToArray();
+            var midi = state.MidiRegionsOf(track.Id).ToArray();
+            var folders = state.TakeFoldersOf(track.Id).ToArray();
+            var spans = regions.Select(r => (RegionTiming.Of(state, r).StartSample, Edits.EndSample(state, r)))
+                .Concat(
+                    midi.Select(r => (map.SampleAt(r.StartTick, rate),
+                            map.SampleAt(r.StartTick + r.LengthTicks, rate))
+                    )
+                )
+                .Concat(
+                    folders.Select(f => (map.SampleAt(f.StartTick, rate),
+                            map.SampleAt(f.StartTick + f.LengthTicks, rate))
+                    )
+                )
+                .ToArray();
+            if (spans.Length == 0) {
+                throw ProjectException.Unprocessable($"Track '{track.Name}' has nothing to bounce.");
+            }
+
+            sources.Add(
+                new(
+                    track,
+                    spans.Min(static s => s.Item1),
+                    spans.Max(static s => s.Item2),
+                    [..regions.Select(static r => r.Id)],
+                    [..midi.Select(static r => r.Id)],
+                    [..folders.Select(static f => f.Id)]
+                )
+            );
         }
 
+        return sources;
+    }
+
+    /// <summary>Regions to bounce in place, by track: each track over its regions' range.</summary>
+    static List<InPlace> RegionSources(BounceInPlaceRequest request, ProjectState state) {
+        var map = state.TempoMap;
+        var rate = state.SampleRate;
+        var sources = new List<InPlace>();
         var items = request.RegionIds!.Distinct(StringComparer.Ordinal)
             .Select(id => id is not null && state.Regions.TryGetValue(id, out var audio)
-                ? (audio.TrackId, id, RegionTiming.Of(state, audio).StartSample, Edits.EndSample(state, audio), false)
-                : id is not null && state.MidiRegions.TryGetValue(id, out var midi)
-                    ? (midi.TrackId, id, map.SampleAt(midi.StartTick, rate),
-                        map.SampleAt(midi.StartTick + midi.LengthTicks, rate), true)
-                    : throw ProjectException.NotFound($"No region '{id}'.")
+                    ? (audio.TrackId, id, RegionTiming.Of(state, audio).StartSample, Edits.EndSample(state, audio),
+                        false)
+                    : id is not null && state.MidiRegions.TryGetValue(id, out var midi)
+                        ? (midi.TrackId, id, map.SampleAt(midi.StartTick, rate),
+                            map.SampleAt(midi.StartTick + midi.LengthTicks, rate), true)
+                        : throw ProjectException.NotFound($"No region '{id}'.")
             )
             .ToArray();
         foreach (var group in items.GroupBy(static i => i.TrackId, StringComparer.Ordinal)) {
@@ -198,7 +216,11 @@ public sealed partial class Jobs {
                 }
 
                 var path = Path.Combine(scratch, $"{Safe(name ?? source.Track.Name + " Bounce")}.wav");
-                BounceProcessor.Write(path, part, new(AudioFormat.Wav, 32, rate, DitherMode.None, NormalizeMode.Off, -16, -1));
+                BounceProcessor.Write(
+                    path,
+                    part,
+                    new(AudioFormat.Wav, 32, rate, DitherMode.None, NormalizeMode.Off, -16, -1)
+                );
                 var (_, brought, info) = import.Bring(path);
                 files.Add((brought, info));
                 Progress(entry, 0.8 + 0.15 * (i + 1) / sources.Count);
@@ -237,7 +259,9 @@ public sealed partial class Jobs {
 
         var trackId = source.Track.Id;
         if (request.Destination == BounceInPlaceDestination.Replace) {
-            var replaced = source.Regions.Concat(source.Folders).Where(id => job.State.Regions.ContainsKey(id) || job.State.TakeFolders.ContainsKey(id)).ToArray();
+            var replaced = source.Regions.Concat(source.Folders)
+                .Where(id => job.State.Regions.ContainsKey(id) || job.State.TakeFolders.ContainsKey(id))
+                .ToArray();
             if (replaced.Length > 0) {
                 job.Apply(new DeleteRegionsCommand(replaced));
             }
@@ -279,6 +303,9 @@ public sealed partial class Jobs {
             case BounceSourceAction.Delete:
                 job.Apply(new DeleteRegionsCommand([..source.Regions, ..source.MidiRegions]));
                 break;
+            case BounceSourceAction.Leave:
+            default:
+                break;
         }
     }
 
@@ -292,6 +319,21 @@ public sealed partial class Jobs {
             throw ProjectException.Unprocessable($"Process one or more regions with a chain of 1…{MaxChain} effects.");
         }
 
+        CheckChain(chain);
+
+        if (request.StartTick is < 0 || (request.StartTick ?? 0) >= (request.EndTick ?? long.MaxValue)) {
+            throw ProjectException.Unprocessable("The range ends after it starts.");
+        }
+
+        var parts = ProcessParts(state, request, ids);
+        return Enqueue(
+            JobKind.Process,
+            (entry, token) => Task.Run(() => ProcessRegions(entry, view, request, parts, token), token)
+        );
+    }
+
+    /// <summary>A chain of built-in effects with parameters they have: 422 otherwise.</summary>
+    static void CheckChain(IReadOnlyList<ProcessEffect> chain) {
         foreach (var effect in chain) {
             using var instance = BuiltinEffects.Create(effect?.PluginId ?? string.Empty)
                 ?? throw ProjectException.Unprocessable($"'{effect?.PluginId}' is not a built-in effect.");
@@ -301,11 +343,14 @@ public sealed partial class Jobs {
                 }
             }
         }
+    }
 
-        if (request.StartTick is < 0 || (request.StartTick ?? 0) >= (request.EndTick ?? long.MaxValue)) {
-            throw ProjectException.Unprocessable("The range ends after it starts.");
-        }
-
+    /// <summary>The frames of each region the processing replaces: 404 for unknown ones, 422 for MIDI or outside.</summary>
+    static List<(AudioRegion Region, long From, long To)> ProcessParts(
+        ProjectState state,
+        ProcessRequest request,
+        IReadOnlyList<string> ids
+    ) {
         var parts = new List<(AudioRegion Region, long From, long To)>();
         foreach (var id in ids.Distinct(StringComparer.Ordinal)) {
             if (id is not null && state.MidiRegions.ContainsKey(id)) {
@@ -328,10 +373,7 @@ public sealed partial class Jobs {
             parts.Add((region, from, to));
         }
 
-        return Enqueue(
-            JobKind.Process,
-            (entry, token) => Task.Run(() => ProcessRegions(entry, view, request, parts, token), token)
-        );
+        return parts;
     }
 
     IReadOnlyList<string> ProcessRegions(
@@ -353,7 +395,11 @@ public sealed partial class Jobs {
                 var tail = request.IncludeTail ? (int)(ProcessTailSeconds * rate) : 0;
                 var processed = Chain(audio, (int)from, (int)(to - from), tail, rate, request.Chain);
                 var path = Path.Combine(scratch, $"{Safe(region.Name)} Processed.wav");
-                BounceProcessor.Write(path, processed, new(AudioFormat.Wav, 32, rate, DitherMode.None, NormalizeMode.Off, -16, -1));
+                BounceProcessor.Write(
+                    path,
+                    processed,
+                    new(AudioFormat.Wav, 32, rate, DitherMode.None, NormalizeMode.Off, -16, -1)
+                );
                 var (_, brought, info) = import.Bring(path);
                 files.Add((brought, info));
                 Progress(entry, 0.9 * (i + 1) / parts.Count);
@@ -383,7 +429,14 @@ public sealed partial class Jobs {
     ///     Frames <paramref name="from" />… of <paramref name="audio" /> (and <paramref name="tail" /> frames of
     ///     silence) through a chain of built-in effects, in stereo.
     /// </summary>
-    static float[][] Chain(float[][] audio, int from, int length, int tail, int rate, IReadOnlyList<ProcessEffect> chain) {
+    static float[][] Chain(
+        float[][] audio,
+        int from,
+        int length,
+        int tail,
+        int rate,
+        IReadOnlyList<ProcessEffect> chain
+    ) {
         var total = length + tail;
         var left = new float[total];
         var right = new float[total];
@@ -433,7 +486,9 @@ public sealed partial class Jobs {
         var fromTick = from == region.FileOffset ? region.StartTick : Tick(timing, state, from);
         var ops = new List<DeltaOp>();
         if (from > region.FileOffset) {
-            ops.Add(new RegionUpserted(Edits.Piece(region, region.FileOffset, from, region.StartTick) with { FadeOut = 0 }));
+            ops.Add(
+                new RegionUpserted(Edits.Piece(region, region.FileOffset, from, region.StartTick) with { FadeOut = 0 })
+            );
         } else {
             ops.Add(new RegionRemoved(region.Id));
         }
@@ -462,7 +517,9 @@ public sealed partial class Jobs {
             var toTick = Tick(timing, state, to);
             var shift = timing.Warped
                 ? Math.Max(to, (long)Math.Round(timing.FrameAt(toTick)))
-                : to + state.TempoMap.SampleAt(toTick, state.SampleRate) - (timing.StartSample + to - region.FileOffset);
+                : to
+                + state.TempoMap.SampleAt(toTick, state.SampleRate)
+                - (timing.StartSample + to - region.FileOffset);
             if (shift < end) {
                 ops.Add(
                     new RegionUpserted(
@@ -479,5 +536,9 @@ public sealed partial class Jobs {
     static long Tick(RegionTiming timing, ProjectState state, long frame) =>
         timing.Warped
             ? (long)Math.Ceiling(timing.TickAt(frame) - 1e-6)
-            : Recordings.CeilingTick(state.TempoMap, timing.StartSample + frame - timing.Region.FileOffset, state.SampleRate);
+            : Recordings.CeilingTick(
+                state.TempoMap,
+                timing.StartSample + frame - timing.Region.FileOffset,
+                state.SampleRate
+            );
 }

@@ -91,7 +91,10 @@ public sealed class FlexApiTests {
         var track = (await client.ProjectAsync()).Tracks[0].Id;
         await client.EditAsync(new AddRegionCommand(track, file.Id, 0));
         var region = (await client.ProjectAsync()).Regions[0].Id;
-        await client.EditAsync(new SetRegionFlexCommand(region, FlexFollow.On), new QuantizeAudioCommand([region], 240));
+        await client.EditAsync(
+            new SetRegionFlexCommand(region, FlexFollow.On),
+            new QuantizeAudioCommand([region], 240)
+        );
         var project = await client.ProjectAsync();
         Assert.True(project.Tracks[0].FlexOn);
         Assert.NotEmpty(project.Regions[0].FlexMarkers);
@@ -146,7 +149,10 @@ public sealed class FlexApiTests {
         Assert.Equal(HttpStatusCode.UnprocessableEntity, bad.StatusCode);
         var job = await StartAsync(client, "/api/v1/project/bounce-in-place", new BounceInPlaceRequest([track]));
         Assert.Equal(JobKind.BounceInPlace, job.Kind);
-        var done = await events.WaitAsync<JobEvent>(e => e.Job.Id == job.Id && e.Job.State is JobState.Done or JobState.Failed, 30);
+        var done = await events.WaitAsync<JobEvent>(
+            e => e.Job.Id == job.Id && e.Job.State is JobState.Done or JobState.Failed,
+            30
+        );
         Assert.Equal(JobState.Done, done.Job.State);
 
         var project = await client.ProjectAsync();
@@ -197,7 +203,10 @@ public sealed class FlexApiTests {
                 960
             )
         );
-        var done = await events.WaitAsync<JobEvent>(e => e.Job.Id == job.Id && e.Job.State is JobState.Done or JobState.Failed, 30);
+        var done = await events.WaitAsync<JobEvent>(
+            e => e.Job.Id == job.Id && e.Job.State is JobState.Done or JobState.Failed,
+            30
+        );
         Assert.Equal(JobState.Done, done.Job.State);
         var project = await client.ProjectAsync();
         var parts = project.Regions.OrderBy(static r => r.StartTick).ToArray();
@@ -225,15 +234,21 @@ public sealed class FlexApiTests {
         await WaitEngineAsync(server, client);
         var host = server.Services.GetRequiredService<EngineConnection>().InProcessHost!;
         var region = (await client.ProjectAsync()).Regions[0].Id;
-        await client.EditAsync(new SetTrackFlexCommand(track, true, FlexMode.Rhythmic), new SetRegionFlexCommand(region, FlexFollow.On));
-        await ServerFixture.Eventually(() => Task.FromResult(host.PlaylistOf(0) is [{ Algorithm: FlexAlgorithm.Rhythmic }]));
+        await client.EditAsync(
+            new SetTrackFlexCommand(track, true, FlexMode.Rhythmic),
+            new SetRegionFlexCommand(region, FlexFollow.On)
+        );
+        await ServerFixture.Eventually(() =>
+            Task.FromResult(host.PlaylistOf(0) is [{ Algorithm: FlexAlgorithm.Rhythmic }])
+        );
         // 8 beats of 100 bpm at 120: 8 quarter notes, 4 s.
         Assert.Equal(4 * Rate, host.PlaylistOf(0)[0].Length);
         var warp = Assert.Single(host.WarpOf(0));
         Assert.Equal((4L * Rate, 8.0 * Beat), (warp[^1].Offset, warp[^1].FileFrame));
 
         await client.EditAsync(new SetVarispeedCommand(true, VarispeedMode.SpeedAndPitch, 0.8));
-        await ServerFixture.Eventually(() => Task.FromResult(host.PlaylistOf(0) is [{ Algorithm: FlexAlgorithm.Speed }]));
+        await ServerFixture.Eventually(() => Task.FromResult(host.PlaylistOf(0) is [{ Algorithm: FlexAlgorithm.Speed }])
+        );
         Assert.Equal(5 * Rate, host.PlaylistOf(0)[0].Length);
         // The transport reports positions in compiled samples: tick 960 is 0.625 s in.
         var status = await client.TransportAsync(TransportCommand.Locate, 960);
@@ -244,7 +259,14 @@ public sealed class FlexApiTests {
         ServerFixture.Eventually(async () => (await server.SystemAsync(client)).Engine.State == EngineState.InProcess);
 
     static Task<HttpResponseMessage> PostAsync<T>(HttpClient client, string path, T body) =>
-        client.PostAsJsonAsync(path, body, (System.Text.Json.Serialization.Metadata.JsonTypeInfo<T>)ContractsJsonContext.Default.GetTypeInfo(typeof(T))!, Token);
+        client.PostAsJsonAsync(
+            path,
+            body,
+            (System.Text.Json.Serialization.Metadata.JsonTypeInfo<T>)ContractsJsonContext.Default.GetTypeInfo(
+                typeof(T)
+            )!,
+            Token
+        );
 
     static async Task<Job> StartAsync<T>(HttpClient client, string path, T? body) where T : class {
         var response = body is null ? await client.PostAsync(path, null, Token) : await PostAsync(client, path, body);
@@ -262,7 +284,7 @@ public sealed class FlexApiTests {
     public sealed class FakeAnalyzer : IAudioAnalyzer {
         int rhythmRuns;
 
-        public long[] Transients { get; } = [..Enumerable.Range(0, 32).Select(static i => i * 7_200L + (i % 2) * 300)];
+        public long[] Transients { get; } = [..Enumerable.Range(0, 32).Select(static i => i * 7_200L + i % 2 * 300)];
 
         public int RhythmRuns => Volatile.Read(ref rhythmRuns);
 
@@ -270,7 +292,9 @@ public sealed class FlexApiTests {
 
         long[] IAudioAnalyzer.Transients(float[] mono, int sampleRate) {
             Interlocked.Increment(ref rhythmRuns);
-            return Fail ? throw new NotImplementedException("Phase 5 workstream D") : [..Transients.Where(t => t < mono.Length)];
+            return Fail
+                ? throw new InvalidOperationException("No analysis today")
+                : [..Transients.Where(t => t < mono.Length)];
         }
 
         public BeatTrack Beats(float[] mono, int sampleRate) {
@@ -287,6 +311,8 @@ public sealed class FlexApiTests {
             var end = (long)track.Cents.Length * track.Hop;
             return [new(0, end / 2, 6_900, 1), new(end / 2, end, 6_900, 1)];
         }
+
+        public bool Polyphonic(float[] mono, int sampleRate, PitchTrack track) => false;
 
         public (long Start, long End)[] Silence(
             float[] mono,

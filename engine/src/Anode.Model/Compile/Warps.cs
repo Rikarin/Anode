@@ -67,9 +67,7 @@ public static class Warps {
 
         var fadeIn = (int)Math.Min(entry.FadeIn, entry.Length);
         entry = entry with {
-            Algorithm = Algorithm(track),
-            FadeIn = fadeIn,
-            FadeOut = (int)Math.Min(entry.FadeOut, entry.Length - fadeIn)
+            Algorithm = Algorithm(track), FadeIn = fadeIn, FadeOut = (int)Math.Min(entry.FadeOut, entry.Length - fadeIn)
         };
         return new(entry, Points(timing, map, sampleRate, entry.Length), Pitch(r, analysis));
     }
@@ -146,44 +144,55 @@ public static class Warps {
         var curve = analysis?.Pitch ?? [];
         var points = new List<PitchPoint> { Point(region.FileOffset, transpose, 0, 0) };
         foreach (var note in region.PitchNotes.OrderBy(static n => n.StartFrame)) {
-            var (slope, intercept) = Trend(note, curve, hop);
-            if (note.StartFrame - 1 > points[^1].FileFrame) {
-                points.Add(Point(note.StartFrame - 1, transpose, 0, 0));
-            }
-
-            Add(note.StartFrame);
-            for (var k = note.StartFrame / hop + 1; k * hop < note.EndFrame - 1; k++) {
-                Add(k * hop);
-            }
-
-            Add(note.EndFrame - 1);
-            if (note.EndFrame > points[^1].FileFrame) {
-                points.Add(Point(note.EndFrame, transpose, 0, 0));
-            }
-
-            continue;
-
-            void Add(long frame) {
-                if (frame < points[^1].FileFrame) {
-                    return;
-                }
-
-                if (frame == points[^1].FileFrame) {
-                    points.RemoveAt(points.Count - 1);
-                }
-
-                var trend = intercept + slope * frame;
-                var k = (int)Math.Round(frame / (double)hop);
-                var vibrato = k >= 0 && k < curve.Count && curve[k] is { } c ? c - trend : 0;
-                var cents = note.TargetCents
-                    - note.DetectedCents
-                    + (note.Drift - 1) * (trend - note.DetectedCents)
-                    + (note.Vibrato - 1) * vibrato;
-                points.Add(Point(frame, transpose + cents, note.FormantCents, note.GainDb));
-            }
+            AddNote(points, note, transpose, curve, hop);
         }
 
         return [..points];
+    }
+
+    /// <summary>A note's pitch points at the hop, the region's transpose before and after it.</summary>
+    static void AddNote(
+        List<PitchPoint> points,
+        PitchNote note,
+        double transpose,
+        IReadOnlyList<float?> curve,
+        int hop
+    ) {
+        var (slope, intercept) = Trend(note, curve, hop);
+        if (note.StartFrame - 1 > points[^1].FileFrame) {
+            points.Add(Point(note.StartFrame - 1, transpose, 0, 0));
+        }
+
+        Add(note.StartFrame);
+        for (var k = note.StartFrame / hop + 1; k * hop < note.EndFrame - 1; k++) {
+            Add(k * hop);
+        }
+
+        Add(note.EndFrame - 1);
+        if (note.EndFrame > points[^1].FileFrame) {
+            points.Add(Point(note.EndFrame, transpose, 0, 0));
+        }
+
+        return;
+
+        void Add(long frame) {
+            if (frame < points[^1].FileFrame) {
+                return;
+            }
+
+            if (frame == points[^1].FileFrame) {
+                points.RemoveAt(points.Count - 1);
+            }
+
+            var trend = intercept + slope * frame;
+            var k = (int)Math.Round(frame / (double)hop);
+            var vibrato = k >= 0 && k < curve.Count && curve[k] is { } c ? c - trend : 0;
+            var cents = note.TargetCents
+                - note.DetectedCents
+                + (note.Drift - 1) * (trend - note.DetectedCents)
+                + (note.Vibrato - 1) * vibrato;
+            points.Add(Point(frame, transpose + cents, note.FormantCents, note.GainDb));
+        }
     }
 
     /// <summary>The line fitted to a note's voiced analysed pitch (cents against frame); flat at its pitch without.</summary>

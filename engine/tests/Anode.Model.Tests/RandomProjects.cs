@@ -776,8 +776,9 @@ static class RandomProjects {
         var bpm = Math.Round(70 + r.NextDouble() * 100, 2);
         var step = (long)(60 * file.SampleRate / bpm);
         var first = r.NextInt64(0, step);
-        long[] beats = [..Enumerable.Range(0, (int)Math.Max(0, (file.Frames - first) / step)).Select(i => first + i * step)];
-        return new(file.Id, new(bpm, r.Next(2) == 0, beats, [..beats.Where((_, i) => i % 4 == 0)]));
+        long[] beats =
+            [..Enumerable.Range(0, (int)Math.Max(0, (file.Frames - first) / step)).Select(i => first + i * step)];
+        return new(file.Id, new(bpm, r.Next(2) == 0, beats, [..beats.Where(static (_, i) => i % 4 == 0)]));
     }
 
     /// <summary>One to three beats mapped near where they play now (sometimes impossibly).</summary>
@@ -804,7 +805,8 @@ static class RandomProjects {
             var beat = (long)(60 * file.SampleRate / Bpm);
             var nudge = file.Frames % 97;
             long[] transients = [
-                ..Enumerable.Range(0, (int)(file.Frames / (beat / 4))).Select(i => i * (beat / 4) + nudge * (i % 3))
+                ..Enumerable.Range(0, (int)(file.Frames / (beat / 4)))
+                    .Select(i => i * (beat / 4) + nudge * (i % 3))
                     .Where(f => f < file.Frames)
             ];
             long[] beats = [..Enumerable.Range(0, (int)(file.Frames / beat)).Select(i => i * beat)];
@@ -812,7 +814,7 @@ static class RandomProjects {
                 file.Id,
                 240,
                 transients,
-                new(Bpm, file.Frames % 2 == 0, beats, [..beats.Where((_, i) => i % 4 == 0)]),
+                new(Bpm, file.Frames % 2 == 0, beats, [..beats.Where(static (_, i) => i % 4 == 0)]),
                 [],
                 [],
                 false
@@ -829,7 +831,7 @@ static class RandomProjects {
             [
                 ..Enumerable.Range(0, (int)(file.Frames / 30_000) + 1)
                     .Select(i => (i * 30_000L, Math.Min(file.Frames, i * 30_000L + 20_000)))
-                    .Where(x => x.Item1 < x.Item2)
+                    .Where(static x => x.Item1 < x.Item2)
             ];
     }
 

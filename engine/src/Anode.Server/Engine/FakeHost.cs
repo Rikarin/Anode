@@ -712,11 +712,7 @@ public sealed partial class FakeHost : IAsyncDisposable {
                     master.Mute ? 0 : master.Gain);
             }
 
-            // A freeze of one track to a .wav writes that file; stems, and a bounce in place (a freeze of several
-            // tracks, or to a folder), write <path>/<track>.wav each.
-            var single = render.Freeze
-                && render.Tracks.Count == 1
-                && string.Equals(Path.GetExtension(render.Path), ".wav", StringComparison.OrdinalIgnoreCase);
+            var single = IsSingleFile(render);
             return ([
                 ..render.Tracks.Where(tracks.ContainsKey)
                     .Select(id => (single ? render.Path : Path.Combine(render.Path, $"{id}.wav"),
@@ -724,14 +720,22 @@ public sealed partial class FakeHost : IAsyncDisposable {
                     )
             ], 1);
 
-            float Gain(EngineTrack t) =>
-                render.Freeze
-                    ? render.IncludeVolumePan ? t.Strip.Gain : 1
-                    : t.Strip.Mute || (soloed && !t.Strip.Solo)
-                        ? 0
-                        : t.Strip.Gain;
+            float Gain(EngineTrack t) {
+                if (render.Freeze) {
+                    return render.IncludeVolumePan ? t.Strip.Gain : 1;
+                }
+
+                return t.Strip.Mute || (soloed && !t.Strip.Solo) ? 0 : t.Strip.Gain;
+            }
         }
     }
+
+    /// <summary>
+    ///     Whether a render writes its path itself: a freeze of one track to a .wav does; stems, and a bounce in place
+    ///     (a freeze of several tracks, or to a folder), write <c>&lt;path&gt;/&lt;track&gt;.wav</c> each.
+    /// </summary>
+    static bool IsSingleFile(RenderMessage render) =>
+        render is { Freeze: true, Tracks.Count: 1 } && Path.GetExtension(render.Path) is ".wav" or ".WAV";
 
     /// <summary>Writes one render file, reporting progress every tenth (as part <paramref name="part" /> of all).</summary>
     async Task WriteRenderAsync(
@@ -755,36 +759,17 @@ public sealed partial class FakeHost : IAsyncDisposable {
                 token.ThrowIfCancellationRequested();
                 var n = (int)Math.Min(RenderBlock, frames - done);
                 var at = render.StartSample + done;
-                Array.Clear(left);
-                Array.Clear(right);
-                for (var s = 0; s < sources.Length; s++) {
-                    var (track, gain) = sources[s];
-                    if (audio[s] is { } playlist) {
-                        var (l, r) = (new float[n], new float[n]);
-                        playlist.Render(at, l, r);
-                        for (var i = 0; i < n; i++) {
-                            left[i] += l[i] * gain;
-                            right[i] += r[i] * gain;
-                        }
-                    } else {
-                        for (var i = 0; i < n; i++) {
-                            var x = (float)Sine(track, gain, at + i);
-                            left[i] += x;
-                            right[i] += x;
-                        }
-                    }
-                }
-
+                Mix(sources, audio, at, left.AsSpan(0, n), right.AsSpan(0, n));
                 for (var i = 0; i < n; i++) {
                     block[2 * i] = left[i] * masterGain;
                     block[2 * i + 1] = right[i] * masterGain;
                 }
 
                 writer.Write(block.AsSpan(0, n * 2));
-            done += n;
-            if (done / tenth > reported) {
-                reported = done / tenth;
-                var fraction = (part.Index + (double)done / frames) / part.Count;
+                done += n;
+                if (done / tenth > reported) {
+                    reported = done / tenth;
+                    var fraction = (part.Index + (double)done / frames) / part.Count;
                     await SendAsync(new RenderProgressMessage(render.JobId, fraction), token).ConfigureAwait(false);
                     await Task.Delay(1, token).ConfigureAwait(false);
                 }
@@ -792,6 +777,39 @@ public sealed partial class FakeHost : IAsyncDisposable {
         } finally {
             foreach (var playlist in audio) {
                 playlist?.Dispose();
+            }
+        }
+    }
+
+    /// <summary>The sources over samples <paramref name="at" />…: each its playlist, or its sine without one.</summary>
+    void Mix(
+        (EngineTrack Track, float Gain)[] sources,
+        TrackAudio?[] audio,
+        long at,
+        Span<float> left,
+        Span<float> right
+    ) {
+        left.Clear();
+        right.Clear();
+        var (l, r) = (new float[left.Length], new float[left.Length]);
+        for (var s = 0; s < sources.Length; s++) {
+            var (track, gain) = sources[s];
+            if (audio[s] is not { } playlist) {
+                for (var i = 0; i < left.Length; i++) {
+                    var x = (float)Sine(track, gain, at + i);
+                    left[i] += x;
+                    right[i] += x;
+                }
+
+                continue;
+            }
+
+            Array.Clear(l);
+            Array.Clear(r);
+            playlist.Render(at, l, r);
+            for (var i = 0; i < left.Length; i++) {
+                left[i] += l[i] * gain;
+                right[i] += r[i] * gain;
             }
         }
     }

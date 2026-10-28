@@ -8,7 +8,8 @@ namespace Anode.Model.Time;
 ///     ramp, changes along the ramp's shape (docs/06-phase-5.md): at fraction x of the way the tempo is
 ///     <c>b₀ + (b₁ − b₀)·x^(2^(−2·shape))</c>, and seconds are its integral. A linear ramp (shape 0) is integrated
 ///     exactly: across <c>Δ</c> ticks, with slope <c>k = (b₁ − b₀) / Δ</c>, the time to tick offset <c>t</c> is
-///     <c>60 / (PPQ·k) · ln(1 + k·t / b₀)</c>; a curved one numerically (Gauss–Legendre, after the substitution t = span·uᵐ that smooths a concave start, over
+///     <c>60 / (PPQ·k) · ln(1 + k·t / b₀)</c>; a curved one numerically (Gauss–Legendre, after the substitution t =
+///     span·uᵐ that smooths a concave start, over
 ///     <see cref="ShapeSteps" /> equal steps, about 1e-9 s), and inverted by Newton's method. A ramp on the last change
 ///     holds its tempo. Immutable; lookups are a binary search over the changes.
 ///     <para>
@@ -83,17 +84,23 @@ public sealed class TempoMap {
         }
 
         for (var i = 0; i < list.Length; i++) {
-            if (ramps[i] && i + 1 < list.Length) {
-                slopes[i] = (bpms[i + 1] - bpms[i]) / (ticks[i + 1] - ticks[i]);
-                if (Math.Abs(shapes[i]) >= FlatShape && Math.Abs(slopes[i]) >= FlatSlope) {
-                    powers[i] = Math.Pow(2, -2 * shapes[i]);
-                    curves[i] = Curve(i);
-                }
-            }
-
+            Shape(i);
             if (i > 0) {
                 starts[i] = starts[i - 1] + Seconds(i - 1, ticks[i] - ticks[i - 1]);
             }
+        }
+    }
+
+    /// <summary>Segment i's slope, and a curved ramp's exponent and integral table.</summary>
+    void Shape(int i) {
+        if (!ramps[i] || i + 1 >= ticks.Length) {
+            return;
+        }
+
+        slopes[i] = (bpms[i + 1] - bpms[i]) / (ticks[i + 1] - ticks[i]);
+        if (Math.Abs(shapes[i]) >= FlatShape && Math.Abs(slopes[i]) >= FlatSlope) {
+            powers[i] = Math.Pow(2, -2 * shapes[i]);
+            curves[i] = Curve(i);
         }
     }
 

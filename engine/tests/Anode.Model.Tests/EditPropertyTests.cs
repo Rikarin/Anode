@@ -29,7 +29,14 @@ public sealed class EditPropertyTests {
 
                 EditResult result;
                 try {
-                    result = Edits.Apply(state, edit, ids, RandomProjects.Plugins, RandomProjects.Patches, RandomProjects.Analysis);
+                    result = Edits.Apply(
+                        state,
+                        edit,
+                        ids,
+                        RandomProjects.Plugins,
+                        RandomProjects.Patches,
+                        RandomProjects.Analysis
+                    );
                 } catch (EditException) {
                     return;
                 }
@@ -62,7 +69,14 @@ public sealed class EditPropertyTests {
                 }
 
                 try {
-                    var result = Edits.Apply(state, batch, ids, RandomProjects.Plugins, RandomProjects.Patches, RandomProjects.Analysis);
+                    var result = Edits.Apply(
+                        state,
+                        batch,
+                        ids,
+                        RandomProjects.Plugins,
+                        RandomProjects.Patches,
+                        RandomProjects.Analysis
+                    );
                     Assert.Equal(RandomProjects.Json(state), RandomProjects.Json(result.State.Apply(result.Inverse)));
                 } catch (EditException) {
                     // a batch with an edit that does not apply changes nothing: nothing to check
@@ -131,7 +145,14 @@ public sealed class EditPropertyTests {
 
                         try {
                             var result =
-                                Edits.Apply(state, command, ids, RandomProjects.Plugins, RandomProjects.Patches, RandomProjects.Analysis);
+                                Edits.Apply(
+                                    state,
+                                    command,
+                                    ids,
+                                    RandomProjects.Plugins,
+                                    RandomProjects.Patches,
+                                    RandomProjects.Analysis
+                                );
                             history.Push(type.Name, step, new(result.Forward, result.Inverse), null);
                             ops = result.Forward;
                         } catch (EditException) {

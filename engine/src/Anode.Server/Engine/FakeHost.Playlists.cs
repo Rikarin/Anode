@@ -53,7 +53,7 @@ public sealed partial class FakeHost {
                 entries,
                 warps.GetValueOrDefault(trackId) ?? [..entries.Select(static _ => Array.Empty<WarpPoint>())],
                 pitches.GetValueOrDefault(trackId) ?? [..entries.Select(static _ => Array.Empty<PitchPoint>())],
-                entries.Select(e => files.GetValueOrDefault(e.FileId)).ToArray(),
+                [..entries.Select(e => files.GetValueOrDefault(e.FileId))],
                 SampleRate
             );
         }

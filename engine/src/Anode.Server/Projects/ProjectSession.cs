@@ -819,7 +819,7 @@ public sealed class ProjectSession(
                 built.AddRange(Keep(o, [analysis]));
             }
 
-            return file with { Tempo = analysis.Tempo };
+            return Edits.HasBeats(analysis.Tempo) ? file with { Tempo = analysis.Tempo } : file;
         } catch (AnalysisException e) {
             ProjectLog.AnalysisFailed(logger, file.Path, e.Message);
             return file;
@@ -1261,7 +1261,8 @@ public sealed class ProjectSession(
 
             open = new(++sessions, folder, state, new(time)) {
                 States = states ?? ImmutableDictionary.Create<string, SavedState>(StringComparer.Ordinal),
-                Analyses = FileAnalyses.CachedAll(folder, state.Files.Values).ToImmutableDictionary(StringComparer.Ordinal)
+                Analyses = FileAnalyses.CachedAll(folder, state.Files.Values)
+                    .ToImmutableDictionary(StringComparer.Ordinal)
             };
             Publish();
             project = open.ToProject();

@@ -81,7 +81,7 @@ public sealed class FlexEditTests {
         Apply(new QuantizeAudioCommand([Region.Id], 240));
         Assert.True(state.Tracks[0].FlexOn);
         var timing = RegionTiming.Of(state, Region);
-        foreach (var transient in analysis.Transients.Where(f => f > 0 && f < 16 * Beat)) {
+        foreach (var transient in analysis.Transients.Where(static f => f is > 0 and < 16 * Beat)) {
             var tick = timing.TickAt(transient);
             Assert.Equal(0, Math.Round(tick) % 240);
             Assert.InRange(tick, transient / 30.0 - 120, transient / 30.0 + 120);
@@ -159,7 +159,9 @@ public sealed class FlexEditTests {
     [Fact]
     public void The_first_audio_in_adapt_mode_sets_the_project_tempo() {
         Apply(new SetSmartTempoCommand(ProjectTempoMode.Adapt));
-        state = state.Apply(new AudioFileUpserted(state.Files["aud_1"] with { Tempo = analysis.Rhythm(state.Files["aud_1"])!.Tempo }));
+        state = state.Apply(
+            new AudioFileUpserted(state.Files["aud_1"] with { Tempo = analysis.Rhythm(state.Files["aud_1"])!.Tempo })
+        );
         LoopOnTrack();
         Assert.Equal(100, state.Settings.Tempo);
         Assert.Equal(FlexFollow.Off, Region.Follow);
@@ -171,7 +173,9 @@ public sealed class FlexEditTests {
     [Fact]
     public void Auto_adapts_only_without_MIDI_and_with_one_tempo() {
         Apply(new SetSmartTempoCommand(ProjectTempoMode.Auto, FlexFollow.On));
-        state = state.Apply(new AudioFileUpserted(state.Files["aud_1"] with { Tempo = analysis.Rhythm(state.Files["aud_1"])!.Tempo }));
+        state = state.Apply(
+            new AudioFileUpserted(state.Files["aud_1"] with { Tempo = analysis.Rhythm(state.Files["aud_1"])!.Tempo })
+        );
         Apply(new AddTrackCommand(Kind: TrackKind.Instrument), new AddMidiRegionCommand("trk_000001", 0, 960));
         Apply(new AddTrackCommand());
         Apply(new AddRegionCommand(state.Tracks[1].Id, "aud_1", 0));
@@ -245,7 +249,7 @@ public sealed class FlexEditTests {
     public void A_warped_region_compiles_to_warp_points_and_its_track_algorithm() {
         LoopOnTrack();
         Apply(new SetTrackFlexCommand(Track, true, FlexMode.Slicing));
-        Apply(new SetRegionFlexCommand(Region.Id, FlexFollow.On, Transpose: 2));
+        Apply(new SetRegionFlexCommand(Region.Id, FlexFollow.On, 2));
         Apply(new SetFlexMarkersCommand(Region.Id, [new(Beat, 900)]));
         var model = new ModelCompiler().Compile(state, EngineIds.Empty.With(state)).Tracks[0];
         var entry = Assert.Single(model.Playlist);
@@ -335,7 +339,7 @@ public sealed class FlexEditTests {
     ///     every second one 300 frames late; sound for 20 000 frames of every 30 000.
     /// </summary>
     sealed class Analysis : IAnalysisSource {
-        public long[] Transients { get; } = [..Enumerable.Range(0, 64).Select(static i => i * 7_200L + (i % 2) * 300)];
+        public long[] Transients { get; } = [..Enumerable.Range(0, 64).Select(static i => i * 7_200L + i % 2 * 300)];
 
         public FileAnalysis Rhythm(AudioFile file) {
             long[] beats = [..Enumerable.Range(0, (int)(file.Frames / Beat)).Select(static i => i * Beat)];

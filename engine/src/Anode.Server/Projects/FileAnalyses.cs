@@ -21,6 +21,9 @@ public interface IAudioAnalyzer {
 
     NoteSegment[] Notes(PitchTrack track, int sampleRate);
 
+    /// <summary>Whether a file sounds polyphonic (Flex Pitch then works less well).</summary>
+    bool Polyphonic(float[] mono, int sampleRate, PitchTrack track);
+
     (long Start, long End)[] Silence(
         float[] mono,
         int sampleRate,
@@ -40,6 +43,12 @@ public sealed class DspAudioAnalyzer : IAudioAnalyzer {
     public PitchTrack Pitch(float[] mono, int sampleRate, int hop) => PitchTracker.Track(mono, sampleRate, hop);
 
     public NoteSegment[] Notes(PitchTrack track, int sampleRate) => NoteSegmenter.Segment(track, sampleRate);
+
+    /// <summary>
+    ///     Fewer than half of the loud frames voiced (pYIN finds no single pitch in a chord). Workstream D's
+    ///     <c>Polyphony.IsPolyphonic</c> replaces this when it merges.
+    /// </summary>
+    public bool Polyphonic(float[] mono, int sampleRate, PitchTrack track) => FileAnalyses.Polyphonic(mono, track);
 
     public (long Start, long End)[] Silence(
         float[] mono,
@@ -69,23 +78,30 @@ public sealed class FileAnalyses(IAudioAnalyzer analyzer) {
     readonly ConcurrentDictionary<string, Lock> locks = new(StringComparer.Ordinal);
 
     /// <summary>The pitch hop at <paramref name="sampleRate" />: about 5 ms.</summary>
-    public static int Hop(int sampleRate) => Math.Max(1, sampleRate / 200);
+    public static int Hop(int sampleRate) => Math.Max(1, (int)Math.Round(sampleRate * 0.005));
 
     public static string PathOf(string projectFolder, string fileId) =>
-        Path.Combine(projectFolder, Folder, Model.Storage.ProjectPackage.IsSafeId(fileId)
-            ? fileId + ".json"
-            : throw new ArgumentException($"Unsafe file id '{fileId}'."));
+        Path.Combine(
+            projectFolder,
+            Folder,
+            Model.Storage.ProjectPackage.IsSafeId(fileId)
+                ? fileId + ".json"
+                : throw new ArgumentException($"Unsafe file id '{fileId}'.")
+        );
 
     /// <summary>The cached analysis of a file, or null.</summary>
     public static FileAnalysis? Cached(string projectFolder, string fileId) {
         var path = PathOf(projectFolder, fileId);
         try {
-            return File.Exists(path)
-                ? JsonSerializer.Deserialize(File.ReadAllText(path), ContractsJsonContext.Default.FileAnalysis) is
-                    { FileId: not null, Transients: not null, Pitch: not null, Notes: not null } a && a.FileId == fileId
+            if (!File.Exists(path)) {
+                return null;
+            }
+
+            var a = JsonSerializer.Deserialize(File.ReadAllText(path), ContractsJsonContext.Default.FileAnalysis);
+            return a is { FileId: not null, Transients: not null, Pitch: not null, Notes: not null }
+                && a.FileId == fileId
                     ? a
-                    : null
-                : null;
+                    : null;
         } catch (Exception e) when (e is IOException or UnauthorizedAccessException or JsonException) {
             return null;
         }
@@ -151,8 +167,10 @@ public sealed class FileAnalyses(IAudioAnalyzer analyzer) {
                 analysis = rhythm with {
                     Hop = track.Hop,
                     Pitch = [..track.Cents.Select(static c => float.IsFinite(c) ? c : (float?)null)],
-                    Notes = [..notes.Select(static n => new PitchSegment(n.StartFrame, n.EndFrame, n.Cents, n.Confidence))],
-                    Polyphonic = Polyphonic(mono, track)
+                    Notes = [
+                        ..notes.Select(static n => new PitchSegment(n.StartFrame, n.EndFrame, n.Cents, n.Confidence))
+                    ],
+                    Polyphonic = analyzer.Polyphonic(mono, rate, track)
                 };
             } catch (Exception e) when (e is not OperationCanceledException) {
                 throw new AnalysisException($"Could not analyse the pitch of '{file.Name}': {e.Message}", e);
@@ -184,7 +202,7 @@ public sealed class FileAnalyses(IAudioAnalyzer analyzer) {
     ///     Whether a file sounds polyphonic: fewer than half of its frames loud enough to matter are voiced (pYIN finds
     ///     no single pitch in a chord).
     /// </summary>
-    static bool Polyphonic(float[] mono, PitchTrack track) {
+    public static bool Polyphonic(float[] mono, PitchTrack track) {
         int loud = 0, voiced = 0;
         var threshold = Math.Pow(10, QuietDb / 20);
         for (var k = 0; k < track.Cents.Length; k++) {
@@ -234,7 +252,8 @@ public sealed class FileAnalyses(IAudioAnalyzer analyzer) {
         }
     }
 
-    Lock LockOf(string projectFolder, string fileId) => locks.GetOrAdd(PathOf(projectFolder, fileId), static _ => new());
+    Lock LockOf(string projectFolder, string fileId) =>
+        locks.GetOrAdd(PathOf(projectFolder, fileId), static _ => new());
 }
 
 /// <summary>
