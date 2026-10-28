@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <Description>
+      Third-party plugin hosting (docs/adr/0003-plugin-hosting.md, docs/05-phase-4.md workstream E): the scanner and
+      catalogue, the anode-plugin sandbox client, and the IAudioEffect / IInstrument adapters the engine creates
+      through PluginHost.
+    </Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../Anode.Dsp/Anode.Dsp.csproj"/>
+    <ProjectReference Include="../Anode.Ipc/Anode.Ipc.csproj"/>
+  </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="Anode.Plugins.Tests"/>
+    <InternalsVisibleTo Include="anode-plugin"/>
+  </ItemGroup>
+</Project>
