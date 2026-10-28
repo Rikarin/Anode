@@ -58,7 +58,7 @@ std::string Plugin::describe(int32_t latencySamples) const {
     j.key("name").value(name);
     j.key("vendor").value(vendor);
     j.key("version").value(version);
-    j.key("format").value(format == AN_PLUG_VST3 ? "vst3" : "au");
+    j.key("format").value(format == AN_PLUG_VST3 ? "vst3" : format == AN_PLUG_CLAP ? "clap" : "au");
     j.key("category").value(instrument ? std::string() : category);
     j.key("isInstrument").value(instrument);
     j.key("hasSidechain").value(sidechainCapable);
@@ -258,9 +258,9 @@ void an_plug_free(void *p) { std::free(p); }
 
 int32_t an_plug_format_supported(int32_t format) {
 #if defined(__APPLE__)
-    return format == AN_PLUG_VST3 || format == AN_PLUG_AU;
+    return format == AN_PLUG_VST3 || format == AN_PLUG_AU || format == AN_PLUG_CLAP;
 #else
-    return format == AN_PLUG_VST3;
+    return format == AN_PLUG_VST3 || format == AN_PLUG_CLAP;
 #endif
 }
 
@@ -274,6 +274,12 @@ int32_t an_plug_scan(int32_t format, const char *path, int32_t instantiate, char
                 return fail("VST3: a path is required");
             }
             r = vst3_scan(path, instantiate != 0, out);
+            break;
+        case AN_PLUG_CLAP:
+            if (!path) {
+                return fail("CLAP: a path is required");
+            }
+            r = clap_scan(path, instantiate != 0, out);
             break;
 #if defined(__APPLE__)
         case AN_PLUG_AU: r = au_scan(path, instantiate != 0, out); break;
@@ -296,6 +302,12 @@ int32_t an_plug_open(int32_t format, const char *path, const char *id, an_plug *
                 return fail("VST3: a path and a class id are required");
             }
             r = vst3_open(path, id, &impl);
+            break;
+        case AN_PLUG_CLAP:
+            if (!path || !id) {
+                return fail("CLAP: a path and a plugin id are required");
+            }
+            r = clap_open(path, id, &impl);
             break;
 #if defined(__APPLE__)
         case AN_PLUG_AU:

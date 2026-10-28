@@ -119,6 +119,8 @@ struct Plugin {
 /* Format entry points. */
 int32_t vst3_scan(const char *path, bool instantiate, std::string &json);
 int32_t vst3_open(const char *path, const char *id, Plugin **plugin);
+int32_t clap_scan(const char *path, bool instantiate, std::string &json);
+int32_t clap_open(const char *path, const char *id, Plugin **plugin);
 int32_t au_scan(const char *path, bool instantiate, std::string &json);
 int32_t au_open(const char *id, Plugin **plugin);
 

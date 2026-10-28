@@ -59,7 +59,7 @@ public sealed record PluginDescription(
 
 /// <summary>
 ///     A plugin in the catalogue: Anode's plugin id (<c>vst3:&lt;class id&gt;</c>, <c>au:&lt;type.subtype.manu&gt;</c>,
-///     <c>clap:&lt;id&gt;</c>), where it lives (a bundle; empty for AU) and what it is.
+///     and for CLAP its own id, as Phase 2 stored it in projects), where it lives (a bundle; empty for AU) and what it is.
 /// </summary>
 public sealed record PluginEntry(string PluginId, HostedFormat Format, string Path, PluginDescription Description) {
     /// <summary>Anode's id for a format-local id.</summary>
@@ -67,7 +67,7 @@ public sealed record PluginEntry(string PluginId, HostedFormat Format, string Pa
         format switch {
             HostedFormat.Vst3 => "vst3:" + nativeId,
             HostedFormat.Au => "au:" + nativeId,
-            _ => "clap:" + nativeId
+            _ => nativeId
         };
 
     public static string FormatName(HostedFormat format) =>

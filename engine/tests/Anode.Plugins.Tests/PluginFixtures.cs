@@ -10,6 +10,7 @@ public static class PluginFixtures {
     public const string MisbehaveId = "vst3:414E4F44455447310000000300000001";
     public const string SynthId = "vst3:414E4F44455447310000000400000001";
     public const string AuDelayId = "au:aufx.dely.appl";
+    public const string ClapSineId = "org.anode.test-sine";
 
     /// <summary>engine/artifacts/native/vst3, where native/build.sh puts AnodeTest.vst3.</summary>
     public static string Vst3Folder {
@@ -26,6 +27,9 @@ public static class PluginFixtures {
     }
 
     public static string TestBundle => Path.Combine(Vst3Folder, "AnodeTest.vst3");
+
+    /// <summary>engine/artifacts/native/clap, where native/build.sh puts the Phase 2 test CLAP instrument.</summary>
+    public static string ClapFolder => Path.Combine(Path.GetDirectoryName(Vst3Folder)!, "clap");
 
     /// <summary>
     ///     The anode-plugin build next to this test project's (run with dotnet exec), or <c>ANODE_PLUGIN_SANDBOX</c>

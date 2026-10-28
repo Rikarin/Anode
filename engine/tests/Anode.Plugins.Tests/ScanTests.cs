@@ -128,6 +128,44 @@ public sealed class ScanTests : IDisposable {
         }
     }
 
+    [Fact]
+    public void Installed_plugins_load_and_process_in_sandboxes() {
+        Assert.SkipUnless(
+            Environment.GetEnvironmentVariable("ANODE_TEST_INSTALLED") == "1",
+            "loads every installed plugin: set ANODE_TEST_INSTALLED=1"
+        );
+        var options = Options(data.Path);
+        options.Vst3Folders = null;
+        options.ClapFolders = null;
+        options.ScanAudioUnits = OperatingSystem.IsMacOS();
+        using var host = new PluginHost(options);
+        host.Catalog.Scan(false, TestContext.Current.CancellationToken);
+        host.Processing = ProcessingMode.Offline;
+        foreach (var e in host.Catalog.Entries) {
+            var watch = Stopwatch.StartNew();
+            var hosted = e.Description.IsInstrument
+                ? (IDisposable?)host.CreateInstrument(e.PluginId, new(1, null))
+                : host.CreateEffect(e.PluginId, new(1, "x"));
+            using var _ = hosted;
+            var plugin = (IHostedPlugin)hosted!;
+            var peak = 0f;
+            if (hosted is Anode.Dsp.Effects.IAudioEffect fx) {
+                fx.Prepare(48000, 512);
+                var (l, _) = Render(fx, 50, 64);
+                peak = l.Max(MathF.Abs);
+            } else if (hosted is Anode.Dsp.Instruments.IInstrument inst) {
+                inst.Prepare(48000, 512);
+                var (l, _) = Render(inst, 50, 64, b => b == 1 ? [new(0, 0x90, 60, 100)] : []);
+                peak = l.Max(MathF.Abs);
+            }
+
+            Log(
+                $"loaded {e.PluginId,-48} {(plugin.IsFailed ? "FAILED " + plugin.Failure : "ok")} in {watch.ElapsedMilliseconds} ms; " +
+                $"blocks {plugin.Stats.Completed}, peak {peak:0.000}"
+            );
+        }
+    }
+
     static void CopyBundle(string from, string to) {
         foreach (var file in Directory.GetFiles(from, "*", SearchOption.AllDirectories)) {
             var target = Path.Combine(to, Path.GetRelativePath(from, file));

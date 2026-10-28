@@ -54,7 +54,7 @@ public readonly record struct HostedPluginStats(
 public interface IHostedPlugin {
     PluginOwner Owner { get; }
 
-    /// <summary>Anode's plugin id (<c>vst3:…</c>, <c>au:…</c>, <c>clap:…</c>).</summary>
+    /// <summary>Anode's plugin id (<c>vst3:…</c>, <c>au:…</c>, or a CLAP id).</summary>
     string PluginId { get; }
 
     /// <summary>It has its own editor window (otherwise the generic editor).</summary>

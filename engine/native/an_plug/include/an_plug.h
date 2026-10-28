@@ -3,8 +3,8 @@
  * (docs/adr/0003-plugin-hosting.md, docs/05-phase-4.md workstream E).
  * SPDX-License-Identifier: GPL-3.0-or-later
  *
- * Formats: VST3 (the Steinberg VST3 SDK, MIT, pinned in CMakeLists.txt) and, on macOS, Audio Units v2 and v3
- * (AudioToolbox). CLAP stays in C#: see docs/05-phase-4.md and Anode.Plugins.
+ * Formats: VST3 (the Steinberg VST3 SDK, MIT, pinned in CMakeLists.txt), CLAP (its C headers, MIT, pinned in
+ * an_testclap/CMakeLists.txt) and, on macOS, Audio Units v2 and v3 (AudioToolbox).
  *
  * Model. A plugin instance is opened from a file (a .vst3 bundle) or a component (AU) and a class id, activated for a
  * sample rate, a maximum block and an optional sidechain, and processed on one audio thread. Every instance is stereo:
@@ -37,6 +37,7 @@ extern "C" {
 
 #define AN_PLUG_VST3 1
 #define AN_PLUG_AU 2
+#define AN_PLUG_CLAP 3
 
 typedef struct an_plug an_plug;
 
@@ -54,6 +55,7 @@ AN_PLUG_API int32_t an_plug_format_supported(int32_t format);
 /*
  * Describes plugins as a JSON array (malloc'd, UTF-8; free with an_plug_free):
  *   VST3: every audio-module class in the bundle at `path`.
+ *   CLAP: every plugin in the .clap at `path` (a bundle on macOS).
  *   AU:   path NULL lists every installed effect, music effect and instrument component without instantiating them
  *         (only `id`, `name`, `vendor`, `version`, `isInstrument`); otherwise `path` is one component id
  *         ("aufx.dely.appl") and that component is described.

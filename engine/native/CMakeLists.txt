@@ -36,11 +36,12 @@ add_subdirectory(an_sys)
 # Time stretch / pitch shift over Signalsmith Stretch (spike S5, docs/spikes/S5-time-stretch.md).
 add_subdirectory(an_stretch)
 
-# Third-party plugin hosting for the anode-plugin sandbox and scanner: VST3 and AU (docs/adr/0003-plugin-hosting.md).
+# A CLAP instrument the tests host (docs/03-phase-2.md, workstream A). Before an_plug, which uses its CLAP headers.
+add_subdirectory(an_testclap)
+
+# Third-party plugin hosting for the anode-plugin sandbox and scanner: VST3, CLAP and AU
+# (docs/adr/0003-plugin-hosting.md).
 add_subdirectory(an_plug)
 
 # Anode's test VST3 plug-ins (docs/05-phase-4.md, workstream E).
 add_subdirectory(an_testvst3)
-
-# A CLAP instrument the tests host (docs/03-phase-2.md, workstream A).
-add_subdirectory(an_testclap)

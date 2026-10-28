@@ -1,4 +1,4 @@
-# an_plug: a C ABI over the VST3 SDK, AudioUnits (macOS) and CLAP, for the anode-plugin sandbox and the scanner
+# an_plug: a C ABI over the VST3 SDK, CLAP and Audio Units (macOS), for the anode-plugin sandbox and the scanner
 # (docs/adr/0003-plugin-hosting.md, docs/05-phase-4.md workstream E). See include/an_plug.h.
 
 include(FetchContent)
@@ -79,14 +79,17 @@ target_link_libraries(an_vst3_plugin PUBLIC an_vst3_common)
 target_compile_options(an_vst3_plugin PRIVATE -w)
 
 # The shim.
-set(AN_PLUG_SOURCES src/an_plug.cpp src/an_plug_vst3.cpp)
+set(AN_PLUG_SOURCES src/an_plug.cpp src/an_plug_vst3.cpp src/an_plug_clap.cpp)
 if(APPLE)
   list(APPEND AN_PLUG_SOURCES src/an_plug_mac.mm src/an_plug_au.mm)
 else()
   list(APPEND AN_PLUG_SOURCES src/an_plug_stub.cpp)
 endif()
 add_library(an_plug SHARED ${AN_PLUG_SOURCES})
+# The CLAP headers come from an_testclap's pinned FetchContent (added before this folder).
+FetchContent_GetProperties(clap)
 target_include_directories(an_plug PUBLIC include PRIVATE src)
+target_include_directories(an_plug SYSTEM PRIVATE ${clap_SOURCE_DIR}/include)
 target_link_libraries(an_plug PRIVATE an_vst3_hosting)
 target_compile_options(an_plug PRIVATE -Wall -Wextra -Werror -O2)
 if(APPLE)

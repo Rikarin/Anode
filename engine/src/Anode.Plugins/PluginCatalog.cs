@@ -148,10 +148,8 @@ public sealed class PluginCatalog {
             items.Add(("vst3:" + bundle, Stamp(bundle)));
         }
 
-        if (Native.PlugNative.Available && Native.PlugNative.FormatSupported(Native.PlugNative.Clap) == 1) {
-            foreach (var bundle in Bundles(options.ClapFolders ?? ClapFolders(), ".clap")) {
-                items.Add(("clap:" + bundle, Stamp(bundle)));
-            }
+        foreach (var bundle in Bundles(options.ClapFolders ?? ClapFolders(), ".clap")) {
+            items.Add(("clap:" + bundle, Stamp(bundle)));
         }
 
         if (options.ScanAudioUnits && OperatingSystem.IsMacOS()) {

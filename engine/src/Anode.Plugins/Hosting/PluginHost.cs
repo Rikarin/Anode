@@ -342,8 +342,10 @@ public sealed class PluginHost : IDisposable {
             if (backend is SandboxBackend sb && instances.TryGetValue(sb.Box, out var slots)) {
                 slots.Remove(sb.Slot);
                 sb.Box.FreeSlot(sb.Slot);
-                if (slots.Count == 0) {
-                    // Nobody left in it: let it go (a crashed one is unmapped only now, when no adapter reads it).
+                // An empty grouped sandbox stays for the vendor's next plugin (replacing an insert, reopening a
+                // project); an empty per-instance or crashed one goes (a crashed one is unmapped only now, when no
+                // adapter reads it any more).
+                if (slots.Count == 0 && (sb.Box.IsDead || options.Mode == SandboxMode.PerInstance)) {
                     idle = sb.Box;
                     instances.Remove(sb.Box);
                     sandboxes.Remove(sb.Box);
