@@ -7,6 +7,7 @@ import {
   type CommandResult,
   type DeltaOp,
   type EditCommand,
+  type MidiRegion,
   type Project,
   type ProjectDelta,
   type ProjectSettings,
@@ -78,6 +79,8 @@ export class ProjectStore {
   readonly trackIds = signal<readonly string[]>([]);
   readonly tracks = signal<ReadonlyMap<string, Track>>(new Map());
   readonly regions = signal<ReadonlyMap<string, AudioRegion>>(new Map());
+  /** MIDI regions (`mid_…`), with their notes and controller events. */
+  readonly midiRegions = signal<ReadonlyMap<string, MidiRegion>>(new Map());
   readonly files = signal<ReadonlyMap<string, AudioFile>>(new Map());
   /** A project is being opened, created or refetched. */
   readonly loading = signal(false);
@@ -90,6 +93,7 @@ export class ProjectStore {
       .filter((track): track is Track => track !== undefined);
   });
   readonly regionList = computed(() => [...this.regions().values()]);
+  readonly midiRegionList = computed(() => [...this.midiRegions().values()]);
   readonly framesPerTick = computed(() => framesPerTick(this.info()?.sampleRate ?? 48_000, this.settings().tempo));
 
   /** Deltas that arrived ahead of a missing revision, by revision. */
@@ -139,6 +143,7 @@ export class ProjectStore {
     this.trackIds.set(project.tracks.map(t => t.id));
     this.tracks.set(new Map(project.tracks.map(t => [t.id, t])));
     this.regions.set(new Map(project.regions.map(r => [r.id, r])));
+    this.midiRegions.set(new Map(project.midiRegions.map(r => [r.id, r])));
     this.files.set(new Map(project.audioFiles.map(f => [f.id, f])));
   }
 
@@ -154,6 +159,7 @@ export class ProjectStore {
     this.trackIds.set([]);
     this.tracks.set(new Map());
     this.regions.set(new Map());
+    this.midiRegions.set(new Map());
     this.files.set(new Map());
   }
 
@@ -256,6 +262,10 @@ export class ProjectStore {
     return region.startTick + regionTicks(region, this.framesPerTick());
   }
 
+  midiRegion(id: string): MidiRegion | undefined {
+    return this.midiRegions().get(id);
+  }
+
   private serial(send: () => Promise<CommandResult>, failure: string): Promise<CommandResult | null> {
     const run = this.queue.then(async () => {
       try {
@@ -279,11 +289,12 @@ export class ProjectStore {
   private applyOps(delta: ProjectDelta): void {
     const tracks = new Map(this.tracks());
     const regions = new Map(this.regions());
+    const midiRegions = new Map(this.midiRegions());
     const files = new Map(this.files());
     let trackIds = [...this.trackIds()];
     let missingFile = false;
     for (const op of delta.ops) {
-      this.applyOp(op, { tracks, regions, files }, ids => (trackIds = ids(trackIds)));
+      this.applyOp(op, { tracks, regions, midiRegions, files }, ids => (trackIds = ids(trackIds)));
       if (op.op === 'regionUpserted' && !files.has(op.region.fileId)) {
         missingFile = true;
       }
@@ -291,6 +302,11 @@ export class ProjectStore {
 
     this.tracks.set(tracks);
     this.regions.set(regions);
+    if (
+      delta.ops.some(op => op.op === 'midiRegionUpserted' || op.op === 'midiRegionRemoved' || op.op === 'trackRemoved')
+    ) {
+      this.midiRegions.set(midiRegions);
+    }
     this.files.set(files);
     this.trackIds.set(trackIds);
     this.revision.set(delta.revision);
@@ -306,6 +322,7 @@ export class ProjectStore {
     maps: {
       tracks: Map<string, Track>;
       regions: Map<string, AudioRegion>;
+      midiRegions: Map<string, MidiRegion>;
       files: Map<string, AudioFile>;
     },
     order: (update: (ids: string[]) => string[]) => void
@@ -325,6 +342,11 @@ export class ProjectStore {
         for (const [id, region] of maps.regions) {
           if (region.trackId === op.id) {
             maps.regions.delete(id);
+          }
+        }
+        for (const [id, region] of maps.midiRegions) {
+          if (region.trackId === op.id) {
+            maps.midiRegions.delete(id);
           }
         }
         break;
@@ -347,8 +369,10 @@ export class ProjectStore {
         this.info.update(info => (info ? { ...info, name: op.name } : info));
         break;
       case 'midiRegionUpserted':
+        maps.midiRegions.set(op.region.id, op.region);
+        break;
       case 'midiRegionRemoved':
-        // MIDI regions: Phase 2, workstream C (docs/03-phase-2.md).
+        maps.midiRegions.delete(op.id);
         break;
     }
   }

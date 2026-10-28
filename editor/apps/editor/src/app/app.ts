@@ -8,6 +8,7 @@ import type { AppCommand } from './core/desktop';
 import { Startup } from './core/startup';
 import { ControlBar } from './shell/control-bar';
 import { HistoryStore } from './state/history.store';
+import { LiveMidiStore } from './state/live-midi.store';
 import { ProjectSession } from './state/project-session';
 import { ProjectStore } from './state/project.store';
 import { SelectionStore } from './state/selection.store';
@@ -18,7 +19,12 @@ import { plural } from './tracks/region-edit';
   selector: 'an-root',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [ControlBar, RouterOutlet, XuiButtonImports, XuiInputImports, XuiNonIdealStateImports, XuiSpinnerImports],
-  host: { class: 'flex h-full flex-col', '(document:keydown)': 'onKeydown($event)' },
+  host: {
+    class: 'flex h-full flex-col',
+    '(document:keydown)': 'onKeydown($event)',
+    '(document:keyup)': 'onKeyup($event)',
+    '(window:blur)': 'live.releaseTyped()'
+  },
   template: `
     @switch (startup.state()) {
       @case ('starting') {
@@ -76,6 +82,7 @@ export class App {
   private readonly history = inject(HistoryStore);
   private readonly session = inject(ProjectSession);
   private readonly selection = inject(SelectionStore);
+  protected readonly live = inject(LiveMidiStore);
 
   /**
    * In the macOS desktop app the control bar is the title bar: it drags the window and leaves room for the traffic
@@ -132,7 +139,8 @@ export class App {
   }
 
   /**
-   * The key commands until the key-command registry lands (docs/01-implementation-plan.md §6.1): Space, R, C and
+   * The key commands until the key-command registry lands (docs/01-implementation-plan.md §6.1): musical typing first
+   * (A W S E D F T G Y H U J K play the selected instrument track, Z and X move the octave), then Space, R, C and
    * Return for the transport, Delete for the selected regions, ⌘Z / ⇧⌘Z for undo and redo, ⌘S to save. Text fields
    * keep their own keys. It returns nothing on purpose: an Angular listener that returns false cancels the event
    * everywhere.
@@ -145,6 +153,11 @@ export class App {
 
     const key = event.key.toLowerCase();
     const command = event.metaKey || event.ctrlKey;
+    if (!command && !event.shiftKey && this.live.typeDown(event.code, event.repeat)) {
+      event.preventDefault();
+      return;
+    }
+
     const action = command
       ? {
           z: () => void (event.shiftKey ? this.history.redo() : this.history.undo()),
@@ -163,6 +176,12 @@ export class App {
     if (action && !(target?.closest('button, [role="slider"]') && (key === ' ' || key === 'enter'))) {
       event.preventDefault();
       action();
+    }
+  }
+
+  protected onKeyup(event: KeyboardEvent): void {
+    if (this.live.typeUp(event.code)) {
+      event.preventDefault();
     }
   }
 
