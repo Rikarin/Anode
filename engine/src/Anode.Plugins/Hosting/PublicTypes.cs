@@ -28,12 +28,18 @@ public readonly record struct PluginOwner(int TrackId, string? InsertId);
 public sealed record PluginProblem(PluginOwner Owner, string PluginId, string Message);
 
 /// <summary>
-///     Where a plugin's editor window goes (spike S6, docs/spikes/S6-plugin-windows.md): directly above
-///     <paramref name="ParentWindow" /> (a window number, e.g. the Electron window's CGWindowID; 0 for none), its
-///     top-left corner at (<paramref name="X" />, <paramref name="Y" />) in screen points (negative: centred), as a
-///     floating utility panel when <paramref name="Floating" />.
+///     Where a plugin's editor window goes (spike S6, docs/spikes/S6-plugin-windows.md).
+///     <paramref name="ParentWindow" />: a window number (CGWindowID) to order the editor directly above; 0 for none;
+///     <see cref="AppWindow" /> (the default) for the desktop app's main window, which the sandbox finds by the app's
+///     process (<see cref="PluginHostOptions.AppProcessId" />), so no handle has to travel through the host and the
+///     server. (<paramref name="X" />, <paramref name="Y" />): the top-left corner in screen points from the main
+///     screen's top-left; negative places it over the parent's top-left corner, or centres it without one.
+///     <paramref name="Floating" />: a floating utility panel (above every normal window) rather than a normal window.
 /// </summary>
-public sealed record EditorPlacement(long ParentWindow = 0, int X = -1, int Y = -1, bool Floating = true);
+public sealed record EditorPlacement(long ParentWindow = EditorPlacement.AppWindow, int X = -1, int Y = -1, bool Floating = true) {
+    /// <summary>The desktop app's main window.</summary>
+    public const long AppWindow = -1;
+}
 
 /// <summary>Counters of one hosted instance, for diagnostics and tests.</summary>
 public readonly record struct HostedPluginStats(

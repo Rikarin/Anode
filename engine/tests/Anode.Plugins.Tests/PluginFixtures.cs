@@ -27,9 +27,16 @@ public static class PluginFixtures {
 
     public static string TestBundle => Path.Combine(Vst3Folder, "AnodeTest.vst3");
 
-    /// <summary>The anode-plugin build next to this test project's (dotnet exec).</summary>
+    /// <summary>
+    ///     The anode-plugin build next to this test project's (run with dotnet exec), or <c>ANODE_PLUGIN_SANDBOX</c>
+    ///     (a published NativeAOT one).
+    /// </summary>
     public static string Sandbox {
         get {
+            if (Environment.GetEnvironmentVariable("ANODE_PLUGIN_SANDBOX") is { Length: > 0 } published) {
+                return published;
+            }
+
             var dll = Path.Combine(
                 AppContext.BaseDirectory.Replace(
                     Path.Combine("tests", "Anode.Plugins.Tests"),
@@ -56,6 +63,13 @@ public static class PluginFixtures {
         };
 
     public static void Log(string line) {
+        // ANODE_PLUGIN_TEST_LOG=<file> keeps what passing tests report (scan results, timings).
+        if (Environment.GetEnvironmentVariable("ANODE_PLUGIN_TEST_LOG") is { Length: > 0 } file) {
+            lock (typeof(PluginFixtures)) {
+                File.AppendAllText(file, line + Environment.NewLine);
+            }
+        }
+
         try {
             TestContext.Current.TestOutputHelper?.WriteLine(line);
         } catch (InvalidOperationException) {

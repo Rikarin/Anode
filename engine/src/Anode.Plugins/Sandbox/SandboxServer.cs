@@ -206,10 +206,12 @@ internal sealed unsafe class SandboxServer {
                     return new() { Ok = true };
                 }
 
+                // The app's window: found by its process, the handle never travels (docs/spikes/S6-plugin-windows.md).
+                var parent = r.Parent < 0 ? (r.AppPid > 0 ? PlugNative.AppWindow(r.AppPid) : 0) : r.Parent;
                 var window = PlugNative.EditorOpen(
                     plug,
                     r.Title ?? "Plugin",
-                    r.Parent,
+                    parent,
                     r.X,
                     r.Y,
                     r.Floating ? PlugNative.EditorFloating : 0

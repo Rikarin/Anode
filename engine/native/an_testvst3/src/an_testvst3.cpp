@@ -7,7 +7,8 @@
  *                         use.
  *   Anode Test Delay      a 64-sample delay that reports its latency, plus a stereo sidechain added at "Sidechain".
  *   Anode Test Misbehave  passes audio through until "Crash" is on (it then crashes the process) or "Stall" is
- *                         above 0 (it then sleeps Stall x 100 ms per block): for crash isolation and deadline tests.
+ *                         above 0 (it then sleeps Stall x 100 ms per block, and never returns at 1): for crash
+ *                         isolation, hang and deadline tests.
  *   Anode Test Synth      a sine per note (an instrument), at "Level".
  *
  * A copy of the bundle whose name contains "CrashOnScan" or "HangOnScan" crashes or hangs as soon as it is loaded.
@@ -217,6 +218,11 @@ public:
                 if (values[0] >= 0.5) {
                     volatile int *crash = nullptr;
                     *crash = 1; // deliberately: crash isolation tests
+                }
+                if (values[1] >= 1.0) {
+                    for (;;) {
+                        sleep(1); // deliberately: hang detection tests
+                    }
                 }
                 if (values[1] > 0) {
                     usleep(static_cast<useconds_t>(values[1] * 100000));

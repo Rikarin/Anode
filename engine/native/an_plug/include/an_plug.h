@@ -135,8 +135,9 @@ AN_PLUG_API int32_t an_plug_has_editor(an_plug *plug);
 /*
  * Opens the plugin's editor in a top-level window owned by this process, titled `title`, its top-left corner at
  * (x, y) in screen points from the top-left of the main screen (x < 0: centred). parent_window: a window number
- * (CGWindowID, possibly another process's) to order the editor directly above, or 0. An AU without its own view gets
- * the generic AU view. Main thread. Returns the editor's window number (> 0), or negative.
+ * (CGWindowID, possibly another process's) to order the editor directly above, or 0; with x < 0 and a parent the
+ * editor goes over the parent's top-left corner. Opening an open editor moves and re-orders it. An AU without its own
+ * view gets the generic AU view. Main thread. Returns the editor's window number (> 0), or negative.
  */
 AN_PLUG_API int32_t an_plug_editor_open(an_plug *plug, const char *title, int64_t parent_window, int32_t x, int32_t y,
                                         int32_t flags);
@@ -148,6 +149,12 @@ AN_PLUG_API int32_t an_plug_editor_window(an_plug *plug);
  * owner's pid, its bounds in points (top-left origin), its layer and whether it is on screen. 0, or -1 if unknown. */
 AN_PLUG_API int32_t an_plug_window_info(int64_t window, int32_t *pid, int32_t *x, int32_t *y, int32_t *width,
                                         int32_t *height, int32_t *layer, int32_t *onscreen);
+
+/* The main window of process `pid` (its largest on-screen window at the normal level), or 0: how a sandbox finds
+ * the desktop app's window without a handle being passed through the host and the server. */
+AN_PLUG_API int32_t an_plug_app_window(int32_t pid);
+/* Window `window`'s place in the on-screen order, front to back (0 is frontmost), or -1 when it is not on screen. */
+AN_PLUG_API int32_t an_plug_window_z(int64_t window);
 
 /* ---- The sandbox's main thread ------------------------------------------------------------------------------- */
 

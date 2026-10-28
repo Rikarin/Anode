@@ -70,6 +70,10 @@ void an_plug_main_call(void (*fn)(void *), void *ctx) {
     doneWake.wait(l, [&] { return done; });
 }
 
+int32_t an_plug_app_window(int32_t) { return 0; }
+
+int32_t an_plug_window_z(int64_t) { return -1; }
+
 int32_t an_plug_window_info(int64_t, int32_t *, int32_t *, int32_t *, int32_t *, int32_t *, int32_t *, int32_t *) {
     return -1;
 }

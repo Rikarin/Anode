@@ -26,6 +26,7 @@ internal sealed class SandboxRequest {
     public int X { get; set; } = -1;
     public int Y { get; set; } = -1;
     public bool Floating { get; set; }
+    public int AppPid { get; set; }
 }
 
 /// <summary>

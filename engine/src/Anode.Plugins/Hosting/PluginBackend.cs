@@ -41,7 +41,7 @@ internal abstract class PluginBackend : IDisposable {
     public abstract bool LoadState(ReadOnlySpan<byte> state, out double[]? values, out int latency, out string? error);
 
     /// <summary>Opens the editor window; its window number, or negative.</summary>
-    public abstract int OpenEditor(string title, EditorPlacement placement, out string? error);
+    public abstract int OpenEditor(string title, EditorPlacement placement, int appPid, out string? error);
 
     public abstract void CloseEditor();
 
@@ -141,7 +141,7 @@ internal sealed class SandboxBackend(SandboxProcess box, int slot, PluginEntry e
         return reply.Ok;
     }
 
-    public override int OpenEditor(string title, EditorPlacement placement, out string? error) {
+    public override int OpenEditor(string title, EditorPlacement placement, int appPid, out string? error) {
         var reply = box.Request(
             new() {
                 Op = "editor",
@@ -151,7 +151,8 @@ internal sealed class SandboxBackend(SandboxProcess box, int slot, PluginEntry e
                 Parent = placement.ParentWindow,
                 X = placement.X,
                 Y = placement.Y,
-                Floating = placement.Floating
+                Floating = placement.Floating,
+                AppPid = appPid
             },
             RequestTimeout
         );
@@ -319,7 +320,7 @@ internal sealed unsafe class InHostBackend(PluginEntry entry) : PluginBackend {
         return true;
     }
 
-    public override int OpenEditor(string title, EditorPlacement placement, out string? error) {
+    public override int OpenEditor(string title, EditorPlacement placement, int appPid, out string? error) {
         error = "plugins hosted in the engine's own process have no editor window; use the generic editor";
         return -1;
     }

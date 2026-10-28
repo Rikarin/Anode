@@ -5,4 +5,9 @@
     <ProjectReference Include="../../src/Anode.PluginSandbox/Anode.PluginSandbox.csproj" ReferenceOutputAssembly="false"
                       Private="false"/>
   </ItemGroup>
+  <ItemGroup>
+    <!-- The tests start sandbox processes and drive real-time threads: one class at a time, so they neither starve
+         nor measure each other. -->
+    <Content Include="xunit.runner.json" CopyToOutputDirectory="PreserveNewest"/>
+  </ItemGroup>
 </Project>

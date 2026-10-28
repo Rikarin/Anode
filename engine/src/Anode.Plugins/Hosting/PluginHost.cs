@@ -50,6 +50,14 @@ public sealed class PluginHostOptions {
     /// <summary>How long scanning one item may take before it is blocklisted as hung.</summary>
     public TimeSpan ScanTimeout { get; set; } = TimeSpan.FromSeconds(30);
 
+    /// <summary>
+    ///     The desktop app's process, whose main window editor windows go over (<see cref="EditorPlacement.AppWindow" />).
+    ///     Default: this process's parent (the desktop app starts the host as a sidecar).
+    /// </summary>
+    public int AppProcessId { get; set; } = ParentProcessId();
+
+    static int ParentProcessId() => OperatingSystem.IsWindows() ? 0 : Native.Libc.GetParentPid();
+
     /// <summary>Diagnostics (sandbox output, plugins that failed to scan).</summary>
     public Action<string>? Log { get; set; }
 }
@@ -381,23 +389,5 @@ public sealed class PluginHost : IDisposable {
         return File.Exists(native) ? native : Path.Combine(dir, "anode-plugin.dll");
     }
 
-    static int PerformanceCores() {
-        if (OperatingSystem.IsMacOS()) {
-            try {
-                var psi = new System.Diagnostics.ProcessStartInfo("sysctl", "-n hw.perflevel0.physicalcpu") {
-                    RedirectStandardOutput = true,
-                    UseShellExecute = false
-                };
-                using var p = System.Diagnostics.Process.Start(psi);
-                if (p is not null && int.TryParse(p.StandardOutput.ReadToEnd().Trim(), out var cores)) {
-                    p.WaitForExit();
-                    return cores;
-                }
-            } catch (System.ComponentModel.Win32Exception) {
-                // fall through
-            }
-        }
-
-        return Environment.ProcessorCount;
-    }
+    static int PerformanceCores() => OperatingSystem.IsWindows() ? Environment.ProcessorCount : Libc.PerformanceCores();
 }

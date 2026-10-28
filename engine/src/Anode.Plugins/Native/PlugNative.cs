@@ -120,6 +120,12 @@ internal static unsafe partial class PlugNative {
         out int onscreen
     );
 
+    [LibraryImport(Library, EntryPoint = "an_plug_app_window")]
+    public static partial int AppWindow(int pid);
+
+    [LibraryImport(Library, EntryPoint = "an_plug_window_z")]
+    public static partial int WindowZ(long window);
+
     [LibraryImport(Library, EntryPoint = "an_plug_main_run")]
     public static partial void MainRun();
 

@@ -182,7 +182,7 @@ internal sealed class PluginInstance {
             return 0;
         }
 
-        var window = backend.OpenEditor(Entry.Description.Name, placement ?? new(), out var error);
+        var window = backend.OpenEditor(Entry.Description.Name, placement ?? new(), host.Options.AppProcessId, out var error);
         if (window < 0) {
             host.Log?.Invoke($"{Entry.Description.Name}: no editor window ({error})");
             return -1;

@@ -34,12 +34,53 @@ static void editor_dispose(Plugin *plugin, bool closeWindow) {
     delete e;
 }
 
+/* A window's bounds (top-left origin, points), any process's. */
+static bool window_bounds(int64_t window, CGRect &bounds) {
+    auto list = CGWindowListCopyWindowInfo(kCGWindowListOptionIncludingWindow, static_cast<CGWindowID>(window));
+    if (!list) {
+        return false;
+    }
+    auto ok = false;
+    if (CFArrayGetCount(list) > 0) {
+        auto info = static_cast<CFDictionaryRef>(CFArrayGetValueAtIndex(list, 0));
+        if (auto b = static_cast<CFDictionaryRef>(CFDictionaryGetValue(info, kCGWindowBounds))) {
+            ok = CGRectMakeWithDictionaryRepresentation(b, &bounds);
+        }
+    }
+    CFRelease(list);
+    return ok;
+}
+
+/* Positions and orders an editor window: at (x, y) (top-left, from the main screen's top-left); x < 0 places it
+ * over the parent's top-left corner (cascaded), or centres it without a parent. */
+static void place(NSWindow *window, int64_t parent, int32_t x, int32_t y) {
+    auto *screen = NSScreen.screens.firstObject;
+    auto top = screen ? screen.frame.size.height : 900;
+    CGRect bounds;
+    if (x < 0 && parent > 0 && window_bounds(parent, bounds)) {
+        x = static_cast<int32_t>(bounds.origin.x) + 48;
+        y = static_cast<int32_t>(bounds.origin.y) + 72;
+    }
+    if (x < 0) {
+        [window center];
+    } else {
+        [window setFrameTopLeftPoint:NSMakePoint(x, top - y)];
+    }
+    if (parent > 0) {
+        // Directly above the parent (another process's window: ordering works across processes, ownership does not).
+        [window orderWindow:NSWindowAbove relativeTo:static_cast<NSInteger>(parent)];
+    } else {
+        [window orderFrontRegardless];
+    }
+}
+
 int32_t editor_open(Plugin *plugin, const char *title, int64_t parent, int32_t x, int32_t y, int32_t flags) {
     if (![NSThread isMainThread]) {
         return fail("editor windows open on the main thread");
     }
     if (plugin->editor) {
-        [plugin->editor->window orderFrontRegardless];
+        // Already open: move and re-order it (the app's window moved, or the user asked for it again).
+        place(plugin->editor->window, parent, x, y);
         return static_cast<int32_t>(plugin->editor->window.windowNumber);
     }
     [NSApplication sharedApplication];
@@ -84,19 +125,7 @@ int32_t editor_open(Plugin *plugin, const char *title, int64_t parent, int32_t x
     if (width > 0 && height > 0) {
         editor_resize(plugin, width, height);
     }
-    if (x < 0) {
-        [window center];
-    } else {
-        auto *screen = NSScreen.screens.firstObject;
-        auto top = screen ? screen.frame.size.height : 900;
-        [window setFrameTopLeftPoint:NSMakePoint(x, top - y)];
-    }
-    if (parent > 0) {
-        // Directly above the parent (another process's window: ordering works across processes, ownership does not).
-        [window orderWindow:NSWindowAbove relativeTo:static_cast<NSInteger>(parent)];
-    } else {
-        [window orderFrontRegardless];
-    }
+    place(window, parent, x, y);
     return static_cast<int32_t>(window.windowNumber);
 }
 
@@ -179,6 +208,62 @@ void an_plug_main_call(void (*fn)(void *), void *ctx) {
     } else {
         dispatch_sync_f(dispatch_get_main_queue(), ctx, fn);
     }
+}
+
+int32_t an_plug_app_window(int32_t pid) {
+    // The largest normal-layer window on screen that the process owns: an app's main window.
+    auto list = CGWindowListCopyWindowInfo(kCGWindowListOptionOnScreenOnly | kCGWindowListExcludeDesktopElements,
+                                           kCGNullWindowID);
+    if (!list) {
+        return 0;
+    }
+    int32_t best = 0;
+    double bestArea = 0;
+    for (CFIndex i = 0; i < CFArrayGetCount(list); i++) {
+        auto info = static_cast<CFDictionaryRef>(CFArrayGetValueAtIndex(list, i));
+        int32_t owner = 0, layer = -1, number = 0;
+        if (auto n = static_cast<CFNumberRef>(CFDictionaryGetValue(info, kCGWindowOwnerPID))) {
+            CFNumberGetValue(n, kCFNumberSInt32Type, &owner);
+        }
+        if (auto n = static_cast<CFNumberRef>(CFDictionaryGetValue(info, kCGWindowLayer))) {
+            CFNumberGetValue(n, kCFNumberSInt32Type, &layer);
+        }
+        if (auto n = static_cast<CFNumberRef>(CFDictionaryGetValue(info, kCGWindowNumber))) {
+            CFNumberGetValue(n, kCFNumberSInt32Type, &number);
+        }
+        CGRect bounds = CGRectZero;
+        if (auto b = static_cast<CFDictionaryRef>(CFDictionaryGetValue(info, kCGWindowBounds))) {
+            CGRectMakeWithDictionaryRepresentation(b, &bounds);
+        }
+        auto area = bounds.size.width * bounds.size.height;
+        if (owner == pid && layer == 0 && area > bestArea) {
+            best = number;
+            bestArea = area;
+        }
+    }
+    CFRelease(list);
+    return best;
+}
+
+int32_t an_plug_window_z(int64_t window) {
+    auto list = CGWindowListCopyWindowInfo(kCGWindowListOptionOnScreenOnly, kCGNullWindowID);
+    if (!list) {
+        return -1;
+    }
+    int32_t z = -1;
+    for (CFIndex i = 0; i < CFArrayGetCount(list); i++) {
+        auto info = static_cast<CFDictionaryRef>(CFArrayGetValueAtIndex(list, i));
+        int32_t number = 0;
+        if (auto n = static_cast<CFNumberRef>(CFDictionaryGetValue(info, kCGWindowNumber))) {
+            CFNumberGetValue(n, kCFNumberSInt32Type, &number);
+        }
+        if (number == window) {
+            z = static_cast<int32_t>(i);
+            break;
+        }
+    }
+    CFRelease(list);
+    return z;
 }
 
 int32_t an_plug_window_info(int64_t window, int32_t *pid, int32_t *x, int32_t *y, int32_t *width, int32_t *height,

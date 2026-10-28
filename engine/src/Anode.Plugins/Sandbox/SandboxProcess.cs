@@ -86,7 +86,7 @@ internal sealed unsafe class SandboxProcess : IDisposable {
 
         var until = Stopwatch.StartNew();
         while (Volatile.Read(ref h->AudioReady) == 0) {
-            if (dead || until.Elapsed > TimeSpan.FromSeconds(20)) {
+            if (dead || until.Elapsed > TimeSpan.FromSeconds(30)) {
                 var why = DeathReason ?? "did not start";
                 Kill("did not start");
                 throw new InvalidOperationException($"anode-plugin {why}");

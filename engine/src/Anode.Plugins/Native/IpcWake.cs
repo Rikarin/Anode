@@ -52,6 +52,9 @@ internal static unsafe partial class IpcWake {
     [SuppressGCTransition]
     public static partial long Now();
 
+    [LibraryImport(Library, EntryPoint = "an_sleep_until_ns")]
+    public static partial void SleepUntil(long t);
+
     [LibraryImport(Library, EntryPoint = "an_rt_promote")]
     public static partial int RtPromote(ulong periodNs, ulong computationNs, ulong constraintNs);
 
