@@ -85,11 +85,81 @@ static class RandomProjects {
                 "Delay",
                 false,
                 false
+            ),
+            new(
+                "anode.test-compressor",
+                "Test Compressor",
+                "Anode",
+                "1.0",
+                PluginFormat.Builtin,
+                false,
+                [],
+                [
+                    new("threshold", "Threshold", -60, 0, -20, "dB", 0, null),
+                    new("ratio", "Ratio", 1, 20, 4, string.Empty, 0, null),
+                    new("character", "Character", 0, 2, 0, string.Empty, 2, ["VCA", "FET", "Opto"])
+                ],
+                "Dynamics",
+                true,
+                false
+            ),
+            new(
+                "com.example.vst3.gain",
+                "Test Gain",
+                "Example",
+                "1.0",
+                PluginFormat.Vst3,
+                false,
+                [],
+                [new("0", "Gain", -24, 24, 0, "dB", 0, null), new("1", "Tilt", -1, 1, 0, string.Empty, 0, null)],
+                "Utility",
+                false,
+                true
             )
         ]
     );
 
-    public static (ProjectState State, SequentialIds Ids, Random Random) Build(int seed, int edits = 24) {
+    /// <summary>The effects of <see cref="Plugins" />.</summary>
+    public static IReadOnlyList<PluginInfo> Effects { get; } = [..Plugins.Plugins.Where(static p => !p.IsInstrument)];
+
+    /// <summary>Two saved patches: an audio channel strip and an instrument one.</summary>
+    public static TestPatches Patches { get; } = new(
+        [
+            new(
+                "pat_strip",
+                "Vocal Strip",
+                "Vocals",
+                TrackKind.Audio,
+                null,
+                [
+                    new("ins_p1", "anode.test-compressor", "Test Compressor", false, new Dictionary<string, double> {
+                        ["threshold"] = -18, ["ratio"] = 3, ["character"] = 1
+                    }, null),
+                    new("ins_p2", "com.example.fx", "Test Delay", true, new Dictionary<string, double>(), "bus:3")
+                ],
+                [new("snd_p1", 2, -12, 0, false), new("snd_p2", 5, -20, 0.5, true)]
+            ),
+            new(
+                "pat_synth",
+                "Warm Pad",
+                "Synths",
+                TrackKind.Instrument,
+                new("anode.synth", "Synth", new Dictionary<string, double> {
+                    ["cutoff"] = 1200, ["resonance"] = 0.4, ["wave"] = 2, ["volume"] = -3
+                }, null),
+                [new("ins_p3", "com.example.vst3.gain", "Test Gain", false, new Dictionary<string, double> { ["0"] = 3, ["1"] = 0 }, null)],
+                []
+            )
+        ]
+    );
+
+    public sealed class TestPatches(IReadOnlyList<ChannelPatch> patches) : IPatchSource {
+        public IReadOnlyList<ChannelPatch> All { get; } = patches;
+
+        public ChannelPatch? Find(string id) => All.FirstOrDefault(p => p.Id == id);
+    }
+
+    public static (ProjectState State, SequentialIds Ids, Random Random) Build(int seed, int edits = 34) {
         var random = new Random(seed);
         var ids = new SequentialIds();
         var state = ProjectDefaults.NewProject("prj_test", "Test", 48_000);
@@ -120,6 +190,14 @@ static class RandomProjects {
                 17 => typeof(AddMarkerCommand),
                 < 20 => typeof(AddSectionCommand),
                 20 => typeof(CreateStackCommand),
+                21 => typeof(AddAuxCommand),
+                < 24 => typeof(AddInsertCommand),
+                < 26 => typeof(AddSendCommand),
+                26 => typeof(SetGroupCommand),
+                27 => typeof(SetTrackGroupsCommand),
+                28 => typeof(AddVcaCommand),
+                29 => typeof(AssignVcaCommand),
+                < 32 => typeof(SetAutomationCommand),
                 _ => Pick(random, CommandTypes)
             };
             var command = i is >= 4 and < 7 && FirstAudioTrack(state) is { } audio && state.Files.Count > 0
@@ -127,41 +205,24 @@ static class RandomProjects {
                 : Command(type, state, random);
             if (command is not null) {
                 try {
-                    state = Edits.Apply(state, command, ids, Plugins).State;
+                    state = Edits.Apply(state, command, ids, Plugins, Patches).State;
                 } catch (EditException) {
                     // not every random edit applies
                 }
             }
         }
 
+        // Half the time, a track is frozen (to a file of the pool, as a finished freeze job leaves it).
+        if (edits > 20
+            && random.Next(2) == 0
+            && state.Tracks.FirstOrDefault(static t => t.Kind is TrackKind.Audio or TrackKind.Instrument) is { } frozen) {
+            state = Edits.Freeze(state, frozen.Id, state.Files.Keys.First()).State;
+        }
+
         return (state, ids, random);
     }
 
     static string? FirstAudioTrack(ProjectState state) => state.Tracks.Find(static t => t.Kind == TrackKind.Audio)?.Id;
-
-    /// <summary>Phase 4 commands the model rejects until workstream B implements them; the identity property skips them.</summary>
-    public static readonly IReadOnlySet<string> PendingPhase4 = new HashSet<string>(StringComparer.Ordinal) {
-        nameof(AddInsertCommand),
-        nameof(RemoveInsertCommand),
-        nameof(MoveInsertCommand),
-        nameof(SetInsertCommand),
-        nameof(SetInsertParameterCommand),
-        nameof(AddSendCommand),
-        nameof(SetSendCommand),
-        nameof(RemoveSendCommand),
-        nameof(SetOutputCommand),
-        nameof(AddAuxCommand),
-        nameof(SetGroupCommand),
-        nameof(DeleteGroupCommand),
-        nameof(SetTrackGroupsCommand),
-        nameof(AddVcaCommand),
-        nameof(AssignVcaCommand),
-        nameof(SetAutomationCommand),
-        nameof(SetAutomationModeCommand),
-        nameof(SetMixerSettingsCommand),
-        nameof(ApplyPatchCommand),
-        nameof(UnfreezeTrackCommand)
-    };
 
     /// <summary>A random command of <paramref name="type" /> for <paramref name="s" />, or null when none can be made.</summary>
     public static EditCommand? Command(Type type, ProjectState s, Random r) {
@@ -176,6 +237,9 @@ static class RandomProjects {
         var sections = s.Sections.Values.ToArray();
         var stacks = tracks.Where(static t => t.Kind == TrackKind.Stack).ToArray();
         var plain = tracks.Where(static t => t.Kind != TrackKind.Stack).ToArray();
+        var mixed = tracks.Where(static t => Edits.HasAudioStrip(t.Kind)).ToArray();
+        var vcas = tracks.Where(static t => t.Kind == TrackKind.Vca).ToArray();
+        var groups = s.Groups.Keys.ToArray();
         return type.Name switch {
             nameof(AddTrackCommand) => AddTrack(r, tracks.Count),
             nameof(RemoveTrackCommand) => Track() is { } t ? new RemoveTrackCommand(t) : null,
@@ -385,36 +449,110 @@ static class RandomProjects {
                     r.Next(3) == 0 ? Track() : null
                 )
                 : null,
-            // Phase 4 commands (docs/05-phase-4.md): placeholders until the model implements them (workstream B
-            // replaces these with generators that make commands that apply).
             nameof(AddInsertCommand) => new AddInsertCommand(
-                "com.example.fx",
-                plain.Length > 0 ? Pick(r, plain).Id : null
+                r.Next(12) == 0 ? Pick(r, Plugins.Plugins).Id : Pick(r, Effects).Id,
+                r.Next(5) == 0 || mixed.Length == 0 ? null : Pick(r, mixed).Id,
+                r.Next(2) == 0 ? null : r.Next(0, 3)
             ),
-            nameof(RemoveInsertCommand) => new RemoveInsertCommand("ins_none"),
-            nameof(MoveInsertCommand) => new MoveInsertCommand("ins_none", 0),
-            nameof(SetInsertCommand) => new SetInsertCommand("ins_none", Bypassed: true),
-            nameof(SetInsertParameterCommand) => new SetInsertParameterCommand("ins_none", "1", r.NextDouble()),
-            nameof(AddSendCommand) => plain.Length > 0 ? new AddSendCommand(Pick(r, plain).Id, 1 + r.Next(4)) : null,
-            nameof(SetSendCommand) => plain.Length > 0 ? new SetSendCommand(Pick(r, plain).Id, "snd_none", -6) : null,
-            nameof(RemoveSendCommand) => plain.Length > 0 ? new RemoveSendCommand(Pick(r, plain).Id, "snd_none") : null,
-            nameof(SetOutputCommand) => plain.Length > 0 ? new SetOutputCommand(Pick(r, plain).Id, "bus:1") : null,
-            nameof(AddAuxCommand) => new AddAuxCommand(),
-            nameof(SetGroupCommand) => new SetGroupCommand(1 + r.Next(4), "Drums"),
-            nameof(DeleteGroupCommand) => new DeleteGroupCommand(1 + r.Next(4)),
-            nameof(SetTrackGroupsCommand) => plain.Length > 0
-                ? new SetTrackGroupsCommand(Pick(r, plain).Id, [1])
+            nameof(RemoveInsertCommand) => WithInserts() is var (t, strip) && strip is not null
+                ? new RemoveInsertCommand(Pick(r, strip.Inserts).Id, t)
                 : null,
-            nameof(AddVcaCommand) => new AddVcaCommand(),
-            nameof(AssignVcaCommand) => plain.Length > 0 ? new AssignVcaCommand(Pick(r, plain).Id, null) : null,
-            nameof(SetAutomationCommand) => new SetAutomationCommand("volume", [new(0, -6, 0), new(3840, 0, 0)]),
-            nameof(SetAutomationModeCommand) => new SetAutomationModeCommand(AutomationMode.Touch),
-            nameof(SetMixerSettingsCommand) => new SetMixerSettingsCommand(LowLatency: r.Next(2) == 0),
-            nameof(ApplyPatchCommand) => plain.Length > 0 ? new ApplyPatchCommand(Pick(r, plain).Id, "pat_none") : null,
-            nameof(UnfreezeTrackCommand) => plain.Length > 0 ? new UnfreezeTrackCommand(Pick(r, plain).Id) : null,
+            nameof(MoveInsertCommand) => WithInserts() is var (t, strip) && strip is not null
+                ? new MoveInsertCommand(Pick(r, strip.Inserts).Id, r.Next(0, strip.Inserts.Count + (r.Next(8) == 0 ? 1 : 0)), t)
+                : null,
+            nameof(SetInsertCommand) => WithInserts() is var (t, strip) && strip is not null
+                ? new SetInsertCommand(
+                    Pick(r, strip.Inserts).Id,
+                    t,
+                    Maybe(r.Next(2) == 0),
+                    r.Next(3) switch {
+                        0 => null,
+                        1 => Pick(r, ["", $"bus:{r.Next(1, 9)}", "bus:99"]),
+                        _ => mixed.Length > 0 ? Pick(r, mixed).Id : null
+                    }
+                )
+                : null,
+            nameof(SetInsertParameterCommand) => WithInserts() is var (t, strip) && strip is not null
+                ? InsertParameter(Pick(r, strip.Inserts), t, r)
+                : null,
+            nameof(AddSendCommand) => plain.Length > 0
+                ? new AddSendCommand(
+                    (mixed.Length > 0 && r.Next(6) > 0 ? Pick(r, mixed) : Pick(r, plain)).Id,
+                    r.Next(16) == 0 ? 65 : r.Next(1, 9),
+                    r.Next(2) == 0 ? null : Math.Round(r.NextDouble() * 50 - 44, 1),
+                    Maybe(r.Next(2) == 0)
+                )
+                : null,
+            nameof(SetSendCommand) => WithSends() is { } t
+                ? new SetSendCommand(
+                    t.Id,
+                    Pick(r, t.Strip.Sends).Id,
+                    Maybe(Math.Round(r.NextDouble() * 150 - 144, 1)),
+                    Maybe(Math.Round(r.NextDouble() * 2 - 1, 2)),
+                    Maybe(r.Next(2) == 0),
+                    r.Next(4) == 0 ? r.Next(1, 9) : null
+                )
+                : null,
+            nameof(RemoveSendCommand) => WithSends() is { } t ? new RemoveSendCommand(t.Id, Pick(r, t.Strip.Sends).Id) : null,
+            nameof(SetOutputCommand) => mixed.Length > 0
+                ? new SetOutputCommand(
+                    Pick(r, mixed).Id,
+                    Pick(r, ["master", $"bus:{r.Next(1, 9)}", $"output:{r.Next(1, 5)}", "bus:0", "speakers"])
+                )
+                : null,
+            nameof(AddAuxCommand) => new AddAuxCommand(r.Next(2) == 0 ? null : r.Next(1, 9), MaybeText($"FX {r.Next(10)}")),
+            nameof(SetGroupCommand) => new SetGroupCommand(
+                r.Next(16) == 0 ? 33 : r.Next(1, 5),
+                MaybeText($"Group {r.Next(10)}"),
+                MaybeText("#4f8ff7"),
+                Maybe(r.Next(4) > 0),
+                r.Next(2) == 0
+                    ? null
+                    : new(r.Next(4) > 0, r.Next(2) == 0, r.Next(2) == 0, r.Next(2) == 0, r.Next(2) == 0, r.Next(2) == 0,
+                        r.Next(2) == 0, r.Next(2) == 0)
+            ),
+            nameof(DeleteGroupCommand) => groups.Length > 0 ? new DeleteGroupCommand(Pick(r, groups)) : null,
+            nameof(SetTrackGroupsCommand) => plain.Length > 0
+                ? new SetTrackGroupsCommand(Pick(r, plain).Id, groups.Length > 0 ? [..Some(groups, r)] : [])
+                : null,
+            nameof(AddVcaCommand) => new AddVcaCommand(MaybeText($"VCA {r.Next(10)}")),
+            nameof(AssignVcaCommand) => plain.Length > 0
+                ? new AssignVcaCommand(Pick(r, plain).Id, vcas.Length > 0 && r.Next(4) > 0 ? Pick(r, vcas).Id : null)
+                : null,
+            nameof(SetAutomationCommand) => Automation(s, r),
+            nameof(SetAutomationModeCommand) => new SetAutomationModeCommand(
+                Pick(r, Enum.GetValues<AutomationMode>()),
+                r.Next(4) == 0 ? null : Track()
+            ),
+            nameof(SetMixerSettingsCommand) => new SetMixerSettingsCommand(
+                r.Next(2) == 0 ? null : Pick(r, Enum.GetValues<PdcMode>()),
+                Maybe(r.Next(2) == 0),
+                Maybe(Math.Round(r.NextDouble() * 50, 1))
+            ),
+            nameof(ApplyPatchCommand) => mixed.Length > 0
+                ? new ApplyPatchCommand(Pick(r, mixed).Id, Pick(r, ["pat_strip", "pat_synth", "pat_strip"]))
+                : null,
+            nameof(UnfreezeTrackCommand) => tracks.Where(static t => t.FrozenFileId is not null).ToArray() is { Length: > 0 } frozen
+                ? new UnfreezeTrackCommand(Pick(r, frozen).Id)
+                : plain.Length > 0 && r.Next(4) == 0
+                    ? new UnfreezeTrackCommand(Pick(r, plain).Id)
+                    : null,
             _ => throw new InvalidOperationException($"No generator for {type.Name}.")
         };
         string? Track() => tracks.Count == 0 ? null : Pick(r, tracks).Id;
+
+        // A strip with inserts: a track's (its id) or the master's (null).
+        (string? TrackId, ChannelStrip? Strip) WithInserts() {
+            var with = mixed.Where(static t => t.Strip.Inserts.Count > 0).ToArray();
+            if (s.Master.Inserts.Count > 0 && (with.Length == 0 || r.Next(4) == 0)) {
+                return (null, s.Master);
+            }
+
+            return with.Length == 0 ? (null, null) : Pick(r, with) is var t ? (t.Id, t.Strip) : default;
+        }
+
+        Track? WithSends() =>
+            mixed.Where(static t => t.Strip.Sends.Count > 0).ToArray() is { Length: > 0 } some ? Pick(r, some) : null;
         Track? Instrument() => instruments.Length == 0 ? null : Pick(r, instruments);
 
         Track? Loader() =>
@@ -476,6 +614,59 @@ static class RandomProjects {
             kind,
             plugin
         );
+    }
+
+    static SetInsertParameterCommand InsertParameter(Insert insert, string? trackId, Random r) {
+        var known = Plugins.Find(insert.PluginId)?.Parameters ?? [];
+        if (known.Count == 0 || r.Next(10) == 0) {
+            return new(insert.Id, insert.Parameters.Keys.FirstOrDefault() ?? "none", r.NextDouble(), trackId);
+        }
+
+        var p = Pick(r, known);
+        var value = r.Next(8) == 0 ? p.Max + 1 : p.Min + Math.Round(r.NextDouble() * (p.Max - p.Min), 3);
+        return new(insert.Id, p.Id, value, trackId);
+    }
+
+    /// <summary>A lane of a random strip and target: points in order within the target's range, or none (removal).</summary>
+    static SetAutomationCommand? Automation(ProjectState s, Random r) {
+        var strips = s.Tracks.Where(static t => t.Kind is not (TrackKind.Stack or TrackKind.Midi)).Select(static t => (Track?)t).ToList();
+        strips.Add(null);
+        var track = Pick(r, strips);
+        var strip = track?.Strip ?? s.Master;
+        var targets = new List<string> { "volume", "mute" };
+        if (track?.Kind != TrackKind.Vca) {
+            targets.Add("pan");
+            targets.AddRange(strip.Inserts.SelectMany(i => i.Parameters.Keys.Select(p => $"insert:{i.Id}:{p}")));
+        }
+
+        if (track is not null && track.Kind != TrackKind.Vca) {
+            targets.AddRange(strip.Sends.Select(static x => $"send:{x.Id}"));
+        }
+
+        if (track?.Instrument is { } slot) {
+            targets.AddRange(slot.Parameters.Keys.Select(static p => $"instrument:{p}"));
+        }
+
+        var target = r.Next(20) == 0 ? "send:none" : Pick(r, targets);
+        Edits.LaneRange range;
+        try {
+            range = Edits.TargetRangeOf(s, track?.Id, target, Plugins);
+        } catch (EditException) {
+            range = new(0, 1, false);
+        }
+
+        var (min, max) = (Math.Max(range.Min, -1000), Math.Min(range.Max, 1000));
+        var tick = 0L;
+        var points = new List<AutomationPoint>();
+        for (var n = r.Next(0, 7); n > 0; n--) {
+            tick += r.Next(3) == 0 && points.Count > 0 && points[^1].Tick == tick && (points.Count < 2 || points[^2].Tick != tick)
+                ? 0
+                : r.Next(1, 16) * 240L;
+            var value = range.Toggle ? r.Next(2) : Math.Round(min + r.NextDouble() * (max - min), 3);
+            points.Add(new(tick, r.Next(12) == 0 ? max + 1 : value, range.Toggle ? 0 : Math.Round(r.NextDouble() * 2 - 1, 2)));
+        }
+
+        return new(target, points, track?.Id);
     }
 
     static SetParameterCommand SetParameter(Track track, Random r) {

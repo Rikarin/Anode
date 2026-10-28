@@ -20,6 +20,9 @@ public static class ProjectDefaults {
 
     public static ChannelStrip Strip { get; } = new(0, 0, false, false, [], [], "master", [], null);
 
+    /// <summary>Delay compensation everywhere; low-latency mode off, at 10 ms.</summary>
+    public static MixerSettings Mixer { get; } = new(PdcMode.All, false, 10);
+
     /// <summary>Arrangement sections' colour when none is given.</summary>
     public const string SectionColor = "#8a8f98";
 
@@ -56,7 +59,7 @@ public static class ProjectDefaults {
                 [new(0, signature.Numerator, signature.Denominator)],
                 [new(0, 0, KeyMode.Major)],
                 Recording(signature),
-                new(PdcMode.All, false, 10)
+                Mixer
             ),
             Strip,
             [],

@@ -15,12 +15,17 @@ public sealed record UndoStep(
 /// <summary>
 ///     The project's undo history: one stack (docs/02-phase-1.md). Pushing an edit clears the redo stack. Consecutive
 ///     <c>setStrip</c> batches on the same control (and <c>setParameter</c> batches on the same parameter) within
-///     <see cref="CoalesceWindow" /> merge into one step, so a fader or knob drag undoes in one go.
+///     <see cref="CoalesceWindow" /> merge into one step, so a fader or knob drag undoes in one go. A key starting
+///     <see cref="PassPrefix" /> is an automation recording pass (docs/05-phase-4.md, "Automation"): its batches merge
+///     whatever they touch and however far apart they come, so a pass undoes in one go.
 /// </summary>
 public sealed class EditHistory(TimeProvider time, int capacity = EditHistory.DefaultCapacity) {
     public const int DefaultCapacity = 500;
 
     public static readonly TimeSpan CoalesceWindow = TimeSpan.FromSeconds(1);
+
+    /// <summary>The coalescing key prefix of an automation recording pass.</summary>
+    public const string PassPrefix = "pass|";
 
     readonly LinkedList<UndoStep> undo = new();
     readonly Stack<UndoStep> redo = new();
@@ -32,6 +37,24 @@ public sealed class EditHistory(TimeProvider time, int capacity = EditHistory.De
     public void Push(string label, long revision, EditBatchOps ops, string? coalesceKey) {
         var now = time.GetUtcNow();
         redo.Clear();
+        if (coalesceKey is not null
+            && coalesceKey.StartsWith(PassPrefix, StringComparison.Ordinal)
+            && undo.Last?.Value is { } pass
+            && pass.CoalesceKey == coalesceKey) {
+            // A recording pass: each batch may touch other objects, so the operations add up, kept to the last one
+            // of each object either way (every operation sets its object whole).
+            undo.RemoveLast();
+            undo.AddLast(
+                pass with {
+                    Revision = revision,
+                    Forward = Compact([..pass.Forward, ..ops.Forward]),
+                    Inverse = Compact([..ops.Inverse, ..pass.Inverse]),
+                    Time = now
+                }
+            );
+            return;
+        }
+
         if (coalesceKey is not null
             && undo.Last?.Value is { } last
             && last.CoalesceKey == coalesceKey
@@ -48,6 +71,38 @@ public sealed class EditHistory(TimeProvider time, int capacity = EditHistory.De
             undo.RemoveFirst();
         }
     }
+
+    /// <summary>
+    ///     Operations applied in order, without those a later one on the same object overrides (an upsert or removal
+    ///     of one track, region, lane… sets it whole; a track's index comes with its last upsert).
+    /// </summary>
+    public static IReadOnlyList<DeltaOp> Compact(IReadOnlyList<DeltaOp> ops) {
+        var last = new Dictionary<string, int>(StringComparer.Ordinal);
+        for (var i = 0; i < ops.Count; i++) {
+            if (Key(ops[i]) is { } key) {
+                last[key] = i;
+            }
+        }
+
+        var kept = new List<DeltaOp>(last.Count);
+        for (var i = 0; i < ops.Count; i++) {
+            if (Key(ops[i]) is not { } key || last[key] == i) {
+                kept.Add(ops[i]);
+            }
+        }
+
+        return kept;
+    }
+
+    /// <summary>The object an operation sets whole, or null when it must be kept (anything else).</summary>
+    static string? Key(DeltaOp op) =>
+        op switch {
+            TrackUpserted(var track, _) => "track|" + track.Id,
+            AutomationLaneUpserted(var lane) => "lane|" + lane.Id,
+            AutomationLaneRemoved(var id) => "lane|" + id,
+            MasterChanged => "master",
+            _ => null
+        };
 
     /// <summary>The step undo would undo; the caller applies its inverse, then calls <see cref="Undone" />.</summary>
     public UndoStep? PeekUndo() => undo.Last?.Value;
@@ -145,13 +200,33 @@ public static class UndoLabels {
                     SetProjectNotesCommand => "Change Project Notes",
                     JoinRegionsCommand => "Join Regions",
                     CopyRegionsCommand => "Copy Regions",
+                    AddInsertCommand => "Add Plug-in",
+                    RemoveInsertCommand => "Remove Plug-in",
+                    MoveInsertCommand => "Move Plug-in",
+                    SetInsertCommand => "Change Plug-in",
+                    SetInsertParameterCommand => "Change Plug-in Parameter",
+                    AddSendCommand => "Add Send",
+                    SetSendCommand => "Change Send",
+                    RemoveSendCommand => "Remove Send",
+                    SetOutputCommand => "Change Output",
+                    AddAuxCommand => "Create Aux",
+                    SetGroupCommand => "Change Group",
+                    DeleteGroupCommand => "Delete Group",
+                    SetTrackGroupsCommand => "Change Group Assignment",
+                    AddVcaCommand => "Create VCA",
+                    AssignVcaCommand => "Change VCA Assignment",
+                    SetAutomationCommand => "Change Automation",
+                    SetAutomationModeCommand => "Change Automation Mode",
+                    SetMixerSettingsCommand => "Change Mixer Settings",
+                    ApplyPatchCommand => "Load Patch",
+                    UnfreezeTrackCommand => "Unfreeze Track",
                     _ => "Edit"
                 };
 
     /// <summary>
     ///     The control a batch of only <c>setStrip</c> commands moves (the strip and the fields it sets), or of only
-    ///     <c>setParameter</c> commands on one parameter, or null for any other batch: two batches with the same key
-    ///     within the window are one undo step.
+    ///     <c>setParameter</c>, <c>setInsertParameter</c>, send level or pan, or <c>setAutomation</c> commands on one
+    ///     target, or null for any other batch: two batches with the same key within the window are one undo step.
     /// </summary>
     public static string? CoalesceKey(CommandBatch batch) {
         string? key = null;
@@ -160,6 +235,11 @@ public static class UndoLabels {
                 SetStripCommand strip => $"strip|{strip.TrackId ?? "master"}|{strip.VolumeDb.HasValue}"
                     + $"{strip.Pan.HasValue}{strip.Mute.HasValue}{strip.Solo.HasValue}",
                 SetParameterCommand parameter => $"parameter|{parameter.TrackId}|{parameter.ParameterId}",
+                SetInsertParameterCommand insert =>
+                    $"insert|{insert.TrackId ?? "master"}|{insert.InsertId}|{insert.ParameterId}",
+                SetSendCommand { Bus: null, PreFader: null } send =>
+                    $"send|{send.TrackId}|{send.SendId}|{send.LevelDb.HasValue}{send.Pan.HasValue}",
+                SetAutomationCommand lane => $"automation|{lane.TrackId ?? "master"}|{lane.Target}",
                 _ => null
             };
             if (mine is null) {

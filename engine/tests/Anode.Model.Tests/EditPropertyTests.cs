@@ -18,10 +18,6 @@ public sealed class EditPropertyTests {
     [Theory]
     [MemberData(nameof(Commands))]
     public void Applying_then_inverting_a_command_is_the_identity(string command) {
-        Assert.SkipWhen(
-            RandomProjects.PendingPhase4.Contains(command),
-            "Phase 4 command the model does not implement yet (docs/05-phase-4.md, workstream B)."
-        );
         var type = RandomProjects.CommandTypes.Single(t => t.Name == command);
         var applied = 0;
         Gen.Int.Sample(
@@ -33,7 +29,7 @@ public sealed class EditPropertyTests {
 
                 EditResult result;
                 try {
-                    result = Edits.Apply(state, edit, ids, RandomProjects.Plugins);
+                    result = Edits.Apply(state, edit, ids, RandomProjects.Plugins, RandomProjects.Patches);
                 } catch (EditException) {
                     return;
                 }
@@ -66,7 +62,7 @@ public sealed class EditPropertyTests {
                 }
 
                 try {
-                    var result = Edits.Apply(state, batch, ids, RandomProjects.Plugins);
+                    var result = Edits.Apply(state, batch, ids, RandomProjects.Plugins, RandomProjects.Patches);
                     Assert.Equal(RandomProjects.Json(state), RandomProjects.Json(result.State.Apply(result.Inverse)));
                 } catch (EditException) {
                     // a batch with an edit that does not apply changes nothing: nothing to check
@@ -134,7 +130,7 @@ public sealed class EditPropertyTests {
                         }
 
                         try {
-                            var result = Edits.Apply(state, command, ids, RandomProjects.Plugins);
+                            var result = Edits.Apply(state, command, ids, RandomProjects.Plugins, RandomProjects.Patches);
                             history.Push(type.Name, step, new(result.Forward, result.Inverse), null);
                             ops = result.Forward;
                         } catch (EditException) {
@@ -159,6 +155,8 @@ public sealed class EditPropertyTests {
         readonly Dictionary<string, TakeFolder> folders = project.TakeFolders.ToDictionary(static f => f.Id);
         readonly Dictionary<string, Marker> markers = project.Markers.ToDictionary(static m => m.Id);
         readonly Dictionary<string, ArrangementMarker> sections = project.Arrangement.ToDictionary(static s => s.Id);
+        readonly Dictionary<string, AutomationLane> lanes = project.Automation.ToDictionary(static l => l.Id);
+        readonly Dictionary<int, MixerGroup> groups = project.Groups.ToDictionary(static g => g.Number);
         string notes = project.Notes;
         string name = project.Name;
         ProjectSettings settings = project.Settings;
@@ -183,6 +181,10 @@ public sealed class EditPropertyTests {
 
                         foreach (var gone in folders.Values.Where(f => f.TrackId == id).ToArray()) {
                             folders.Remove(gone.Id);
+                        }
+
+                        foreach (var gone in lanes.Values.Where(l => l.TrackId == id).ToArray()) {
+                            lanes.Remove(gone.Id);
                         }
 
                         break;
@@ -231,6 +233,18 @@ public sealed class EditPropertyTests {
                     case NotesChanged(var text):
                         notes = text;
                         break;
+                    case AutomationLaneUpserted(var lane):
+                        lanes[lane.Id] = lane;
+                        break;
+                    case AutomationLaneRemoved(var id):
+                        lanes.Remove(id);
+                        break;
+                    case GroupUpserted(var group):
+                        groups[group.Number] = group;
+                        break;
+                    case GroupRemoved(var number):
+                        groups.Remove(number);
+                        break;
                 }
             }
         }
@@ -251,7 +265,9 @@ public sealed class EditPropertyTests {
                     TakeFolders = [..folders.Values.OrderBy(static f => f.Id, StringComparer.Ordinal)],
                     Markers = [..markers.Values.OrderBy(static m => m.Id, StringComparer.Ordinal)],
                     Arrangement = [..sections.Values.OrderBy(static s => s.Id, StringComparer.Ordinal)],
-                    Notes = notes
+                    Notes = notes,
+                    Groups = [..groups.Values.OrderBy(static g => g.Number)],
+                    Automation = [..lanes.Values.OrderBy(static l => l.Id, StringComparer.Ordinal)]
                 },
                 ContractsJsonContext.Default.Project
             );

@@ -1,6 +1,7 @@
 using Anode.Contracts;
 using Anode.Ipc.Segments;
 using Anode.Model.Time;
+using System.Runtime.InteropServices;
 
 namespace Anode.Model.Compile;
 
@@ -15,13 +16,19 @@ public sealed record CompiledModel(IReadOnlyList<TrackModel> Tracks, long Length
 ///     Compiles a <see cref="ProjectState" /> into what the host plays (docs/adr/0006-bulk-ipc.md): each track's
 ///     regions and take folder comps as a playlist in samples (ticks through the <see cref="TempoMap" /> and its ramps,
 ///     ADR-0005), its MIDI regions as events (<see cref="MidiEvents" />), and the metronome's clicks on the beats of the
-///     signature track. Muted regions and folders play nothing, and a folder stack has no engine track of its own.
+///     signature track; its automation lanes as automation events (<see cref="AutomationEvents" />), and the master's
+///     under engine track −1 when it has any. Muted regions and folders play nothing, and a folder stack and a VCA have
+///     no engine track of their own.
 ///     Incremental: a track is recompiled only when its regions (audio or MIDI), take folders, their files, the tempo
 ///     track or the sample rate changed since the previous call; otherwise the previous <see cref="TrackModel" />
 ///     instance is reused, so a caller finds the dirty tracks by reference.
 /// </summary>
 public sealed class ModelCompiler {
     readonly Dictionary<int, (TrackKey Key, TrackModel Model)> cache = [];
+    readonly Dictionary<int, (TrackModel Base, PlaybackEvent[] Automation, TrackModel Model)> automated = [];
+    readonly Dictionary<int, TrackModel> previous = [];
+    readonly TrackModel masterBase = new(AutomationEvents.MasterTrack, [], []);
+    bool masterAutomated;
     (ClickKey Key, TrackModel Model)? metronome;
 
     public CompiledModel Compile(ProjectState state, EngineIds ids) {
@@ -35,7 +42,7 @@ public sealed class ModelCompiler {
         var seen = new HashSet<int>();
         long end = 0;
         foreach (var track in state.Tracks) {
-            if (track.Kind == TrackKind.Stack) {
+            if (!Stacks.IsPlayable(track)) {
                 continue;
             }
 
@@ -65,11 +72,15 @@ public sealed class ModelCompiler {
                 cached = (key,
                     new(engineId, MidiEvents(state, map, engineId, midi), Playlist(state, map, ids, regions, folders)));
                 cache[engineId] = cached;
+            }
+
+            var model = WithAutomation(cached.Model, AutomationEvents.Compile(state, map, ids, track, engineId));
+            if (!previous.TryGetValue(engineId, out var before) || !ReferenceEquals(before, model)) {
                 recompiled.Add(engineId);
             }
 
-            models.Add(cached.Model);
-            if (cached.Model.Playlist is [.., var last]) {
+            models.Add(model);
+            if (model.Playlist is [.., var last]) {
                 end = Math.Max(end, last.Start + last.Length);
             }
 
@@ -78,8 +89,30 @@ public sealed class ModelCompiler {
             }
         }
 
+        // Once the master has had lanes, its entry stays (empty when they are gone), so a patch clears it.
+        var master = AutomationEvents.Compile(state, map, ids, null, AutomationEvents.MasterTrack);
+        masterAutomated |= master.Length > 0;
+        if (masterAutomated) {
+            seen.Add(AutomationEvents.MasterTrack);
+            var model = WithAutomation(masterBase, master);
+            if (!previous.TryGetValue(AutomationEvents.MasterTrack, out var before) || !ReferenceEquals(before, model)) {
+                recompiled.Add(AutomationEvents.MasterTrack);
+            }
+
+            models.Add(model);
+        }
+
+        previous.Clear();
+        foreach (var model in models) {
+            previous[model.TrackId] = model;
+        }
+
         foreach (var stale in cache.Keys.Where(k => !seen.Contains(k)).ToArray()) {
             cache.Remove(stale);
+        }
+
+        foreach (var stale in automated.Keys.Where(k => !seen.Contains(k)).ToArray()) {
+            automated.Remove(stale);
         }
 
         var settings = state.Settings;
@@ -93,6 +126,36 @@ public sealed class ModelCompiler {
         models.Add(m.Model);
         end = Math.Max(end, map.SampleAt(endTick, state.SampleRate));
         return new(models, end, recompiled);
+    }
+
+    /// <summary>
+    ///     A track's model with its automation events merged in (before other events at an equal sample): the very
+    ///     instance of the previous compilation when neither changed.
+    /// </summary>
+    TrackModel WithAutomation(TrackModel model, PlaybackEvent[] automation) {
+        if (automated.TryGetValue(model.TrackId, out var cached)
+            && ReferenceEquals(cached.Base, model)
+            && MemoryMarshal.AsBytes(cached.Automation.AsSpan()).SequenceEqual(MemoryMarshal.AsBytes(automation.AsSpan()))) {
+            return cached.Model;
+        }
+
+        var merged = automation.Length == 0
+            ? model
+            : new TrackModel(
+                model.TrackId,
+                [
+                    ..automation.Select(static e => (e, 0))
+                        .Concat(model.Events.Select(static e => (e, 1)))
+                        .Select(static (x, i) => (x.e, x.Item2, i))
+                        .OrderBy(static x => x.e.SamplePos)
+                        .ThenBy(static x => x.Item2)
+                        .ThenBy(static x => x.i)
+                        .Select(static x => x.e)
+                ],
+                model.Playlist
+            );
+        automated[model.TrackId] = (model, automation, merged);
+        return merged;
     }
 
     /// <summary>

@@ -30,15 +30,18 @@ public static partial class Edits {
 
     /// <summary>
     ///     Applies a batch atomically: all of it, or (on <see cref="EditException" />) none of it.
-    ///     <paramref name="plugins" /> is what instrument edits may name (none when left out).
+    ///     <paramref name="plugins" /> is what instrument and insert edits may name (none when left out), and
+    ///     <paramref name="patches" /> what <c>applyPatch</c> may.
     /// </summary>
     public static EditResult Apply(
         ProjectState state,
         IReadOnlyList<EditCommand> commands,
         IIdSource ids,
-        PluginCatalog? plugins = null
+        PluginCatalog? plugins = null,
+        IPatchSource? patches = null
     ) {
         plugins ??= PluginCatalog.Empty;
+        patches ??= NoPatches.Instance;
         if (commands.Count == 0) {
             throw new EditException("A batch needs at least one command.");
         }
@@ -52,7 +55,7 @@ public static partial class Edits {
         for (var i = 0; i < commands.Count; i++) {
             IReadOnlyList<DeltaOp> ops;
             try {
-                ops = Ops(state, commands[i] ?? throw new EditException("A command is null."), ids, plugins);
+                ops = Ops(state, commands[i] ?? throw new EditException("A command is null."), ids, plugins, patches);
             } catch (EditException e) when (commands.Count > 1) {
                 throw new EditException($"Command {i + 1} ({commands[i]?.GetType().Name}): {e.Message}", e);
             }
@@ -68,9 +71,10 @@ public static partial class Edits {
         ProjectState state,
         EditCommand command,
         IIdSource ids,
-        PluginCatalog? plugins = null
+        PluginCatalog? plugins = null,
+        IPatchSource? patches = null
     ) =>
-        Apply(state, [command], ids, plugins);
+        Apply(state, [command], ids, plugins, patches);
 
     /// <summary>
     ///     Applies delta operations, collecting them and their inverses (in application order; the caller reverses the
@@ -99,7 +103,8 @@ public static partial class Edits {
         ProjectState state,
         EditCommand command,
         IIdSource ids,
-        PluginCatalog plugins
+        PluginCatalog plugins,
+        IPatchSource? patches = null
     ) =>
         command switch {
             AddTrackCommand c => AddTrack(state, c, ids, plugins),
@@ -157,6 +162,26 @@ public static partial class Edits {
             SetProjectNotesCommand c => SetProjectNotes(c),
             JoinRegionsCommand c => JoinRegions(state, c),
             CopyRegionsCommand c => CopyRegions(state, c, ids),
+            AddInsertCommand c => AddInsert(state, c, ids, plugins),
+            RemoveInsertCommand c => RemoveInsert(state, c),
+            MoveInsertCommand c => MoveInsert(state, c),
+            SetInsertCommand c => SetInsert(state, c, plugins),
+            SetInsertParameterCommand c => SetInsertParameter(state, c, plugins),
+            AddSendCommand c => AddSend(state, c, ids),
+            SetSendCommand c => SetSend(state, c),
+            RemoveSendCommand c => RemoveSend(state, c),
+            SetOutputCommand c => SetOutput(state, c),
+            AddAuxCommand c => AddAux(state, c, ids),
+            SetGroupCommand c => SetGroup(state, c),
+            DeleteGroupCommand c => DeleteGroup(state, c),
+            SetTrackGroupsCommand c => SetTrackGroups(state, c),
+            AddVcaCommand c => AddVca(state, c, ids),
+            AssignVcaCommand c => AssignVca(state, c),
+            SetAutomationCommand c => SetAutomation(state, c, ids, plugins),
+            SetAutomationModeCommand c => SetAutomationMode(state, c),
+            SetMixerSettingsCommand c => SetMixerSettings(state, c),
+            ApplyPatchCommand c => ApplyPatch(state, c, ids, patches ?? NoPatches.Instance),
+            UnfreezeTrackCommand c => UnfreezeTrack(state, c),
             _ => throw new EditException($"Unknown command {command.GetType().Name}.")
         };
 
@@ -178,6 +203,10 @@ public static partial class Edits {
         var kind = c.Kind ?? TrackKind.Audio;
         if (!Enum.IsDefined(kind)) {
             throw new EditException($"Unknown track kind {kind}.");
+        }
+
+        if (kind is TrackKind.Aux or TrackKind.Vca) {
+            throw new EditException($"Add {(kind == TrackKind.Aux ? "an aux with addAux" : "a VCA with addVca")}.");
         }
 
         if (c.PluginId is not null && kind != TrackKind.Instrument) {
@@ -215,6 +244,8 @@ public static partial class Edits {
             TrackKind.Instrument => "Inst",
             TrackKind.Midi => "MIDI",
             TrackKind.Stack => "Stack",
+            TrackKind.Aux => "Aux",
+            TrackKind.Vca => "VCA",
             _ => "Audio"
         };
         // Numbered by kind, as Logic does: the first instrument track is "Inst 1" whatever else the project holds.
@@ -233,28 +264,62 @@ public static partial class Edits {
         }
     }
 
+    /// <summary>
+    ///     Removes a track with its regions, folders and lanes (a stack with its members, as Logic does; removeStack
+    ///     keeps them); a VCA's members leave it, and sidechains taken from the track are cleared.
+    /// </summary>
     static List<DeltaOp> RemoveTrack(ProjectState state, RemoveTrackCommand c) {
         var track = TrackOf(state, c.TrackId);
         var ops = new List<DeltaOp>();
-        foreach (var region in state.RegionsOf(track.Id)) {
-            ops.Add(new RegionRemoved(region.Id));
-        }
-
-        foreach (var region in state.MidiRegionsOf(track.Id)) {
-            ops.Add(new MidiRegionRemoved(region.Id));
-        }
-
-        foreach (var folder in state.TakeFoldersOf(track.Id)) {
-            ops.Add(new TakeFolderRemoved(folder.Id));
-        }
-
-        // A stack goes with its members, as in Logic (removeStack keeps them).
         foreach (var member in state.MembersOf(track.Id).ToArray()) {
-            ops.AddRange(RemoveTrack(state, new(member.Id)));
+            state = RemoveOne(state, member.Id, ops);
         }
 
-        ops.Add(new TrackRemoved(track.Id));
+        RemoveOne(state, track.Id, ops);
         return ops;
+    }
+
+    /// <summary>Removes one track, appending the operations and returning the state after them.</summary>
+    static ProjectState RemoveOne(ProjectState state, string trackId, List<DeltaOp> ops) {
+        var step = new List<DeltaOp>();
+        step.AddRange(state.RegionsOf(trackId).Select(static r => new RegionRemoved(r.Id)));
+        step.AddRange(state.MidiRegionsOf(trackId).Select(static r => new MidiRegionRemoved(r.Id)));
+        step.AddRange(state.TakeFoldersOf(trackId).Select(static f => new TakeFolderRemoved(f.Id)));
+        step.AddRange(state.LanesOf(trackId).ToArray().Select(static l => new AutomationLaneRemoved(l.Id)));
+        foreach (var other in state.Tracks) {
+            if (other.Id == trackId) {
+                continue;
+            }
+
+            var strip = Unlinked(other.Strip, trackId);
+            if (!ReferenceEquals(strip, other.Strip)) {
+                step.Add(new TrackUpserted(other with { Strip = strip }, state.IndexOfTrack(other.Id)));
+            }
+        }
+
+        if (Unlinked(state.Master, trackId) is var master && !ReferenceEquals(master, state.Master)) {
+            step.Add(new MasterChanged(master));
+        }
+
+        step.Add(new TrackRemoved(trackId));
+        ops.AddRange(step);
+        return state.Apply(step);
+    }
+
+    /// <summary>A strip without references to track <paramref name="trackId" /> (its VCA, sidechains); itself when none.</summary>
+    static ChannelStrip Unlinked(ChannelStrip strip, string trackId) {
+        var vca = strip.VcaId == trackId;
+        var sidechained = strip.Inserts.Any(i => i.Sidechain == trackId);
+        if (!vca && !sidechained) {
+            return strip;
+        }
+
+        return strip with {
+            VcaId = vca ? null : strip.VcaId,
+            Inserts = sidechained
+                ? [..strip.Inserts.Select(i => i.Sidechain == trackId ? i with { Sidechain = null } : i)]
+                : strip.Inserts
+        };
     }
 
     static DeltaOp[] MoveTrack(ProjectState state, MoveTrackCommand c) {
@@ -266,7 +331,7 @@ public static partial class Edits {
         return [new TrackUpserted(track, c.Index)];
     }
 
-    static DeltaOp[] SetTrack(ProjectState state, SetTrackCommand c) {
+    static List<DeltaOp> SetTrack(ProjectState state, SetTrackCommand c) {
         var track = TrackOf(state, c.TrackId);
         if (c.Color is { } color && (string.IsNullOrWhiteSpace(color) || color.Length > 64)) {
             throw new EditException("A colour is a CSS colour of at most 64 characters.");
@@ -280,6 +345,10 @@ public static partial class Edits {
             throw new EditException("A stack records and monitors nothing itself: arm its members.");
         }
 
+        if (track.Kind is TrackKind.Aux or TrackKind.Vca && (c.RecordArmed == true || c.InputMonitoring == true)) {
+            throw new EditException($"A {Kind(track.Kind)} track records and monitors nothing.");
+        }
+
         var changed = track with {
             Name = c.Name is null ? track.Name : Name(c.Name, "track name"),
             Color = c.Color ?? track.Color,
@@ -289,10 +358,20 @@ public static partial class Edits {
             Collapsed = c.Collapsed ?? track.Collapsed,
             Notes = c.Notes is null ? track.Notes : Text(c.Notes, "track notes")
         };
-        return [new TrackUpserted(changed, state.IndexOfTrack(track.Id))];
+        var ops = new List<DeltaOp> { new TrackUpserted(changed, state.IndexOfTrack(track.Id)) };
+        if (c.RecordArmed is { } armed) {
+            // Group members that link record arm follow (those that can record).
+            foreach (var member in Linked(state, track, static p => p.RecordArm)) {
+                if (member.RecordArmed != armed && member.Kind is TrackKind.Audio or TrackKind.Instrument or TrackKind.Midi) {
+                    ops.Add(new TrackUpserted(member with { RecordArmed = armed }, state.IndexOfTrack(member.Id)));
+                }
+            }
+        }
+
+        return ops;
     }
 
-    static DeltaOp[] SetStrip(ProjectState state, SetStripCommand c) {
+    static List<DeltaOp> SetStrip(ProjectState state, SetStripCommand c) {
         if (c.VolumeDb is { } volume && !(volume >= Units.SilenceDb && volume <= MaxVolumeDb)) {
             throw new EditException($"Volume {volume} dB is outside {Units.SilenceDb}…{MaxVolumeDb} dB.");
         }
@@ -305,8 +384,39 @@ public static partial class Edits {
             return [new MasterChanged(Changed(state.Master, c))];
         }
 
+        if (state.FindTrack(c.TrackId) is { Kind: TrackKind.Vca } && c.Pan is not null) {
+            throw new EditException("A VCA has no pan.");
+        }
+
         var track = TrackOf(state, c.TrackId);
-        return [new TrackUpserted(track with { Strip = Changed(track.Strip, c) }, state.IndexOfTrack(track.Id))];
+        var ops = new List<DeltaOp> {
+            new TrackUpserted(track with { Strip = Changed(track.Strip, c) }, state.IndexOfTrack(track.Id))
+        };
+        // Members of the track's enabled groups follow the properties their groups link: volume and pan keep their
+        // offsets (docs/05-phase-4.md, "VCA and groups").
+        var members = new Dictionary<string, ChannelStrip>(StringComparer.Ordinal);
+        Link(static p => p.Volume, c.VolumeDb, (s, v) => s with { VolumeDb = Follow(s.VolumeDb, v - track.Strip.VolumeDb) });
+        Link(static p => p.Pan, c.Pan, (s, v) => s with { Pan = Math.Clamp(s.Pan + (v - track.Strip.Pan), -1, 1) });
+        Link(static p => p.Mute, c.Mute, static (s, v) => s with { Mute = v });
+        Link(static p => p.Solo, c.Solo, static (s, v) => s with { Solo = v });
+        foreach (var other in state.Tracks) {
+            if (members.TryGetValue(other.Id, out var strip) && strip != other.Strip) {
+                ops.Add(new TrackUpserted(other with { Strip = strip }, state.IndexOfTrack(other.Id)));
+            }
+        }
+
+        return ops;
+
+        void Link<T>(Func<GroupProperties, bool> links, T? value, Func<ChannelStrip, T, ChannelStrip> set)
+            where T : struct {
+            if (value is not { } v) {
+                return;
+            }
+
+            foreach (var member in Linked(state, track, links)) {
+                members[member.Id] = set(members.GetValueOrDefault(member.Id) ?? member.Strip, v);
+            }
+        }
     }
 
     static ChannelStrip Changed(ChannelStrip strip, SetStripCommand c) =>
