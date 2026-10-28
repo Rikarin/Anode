@@ -42,6 +42,7 @@ import { barTicks, TransportStore } from '../state/transport.store';
 import { AudioImport } from './audio-import';
 import { swipeComp } from './comp';
 import { applyDragMode, type Span } from './drag-modes';
+import { FlexOverlay } from './flex-overlay';
 import {
   type EditContext,
   fadeInTo,
@@ -155,7 +156,7 @@ const ToolCursors: Record<TracksTool, string> = {
 @Component({
   selector: 'an-timeline',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [XuiInputImports],
+  imports: [FlexOverlay, XuiInputImports],
   host: {
     class: 'relative block min-h-0 min-w-0 touch-none overflow-hidden',
     '[style.cursor]': 'cursor()',
@@ -172,6 +173,7 @@ const ToolCursors: Record<TracksTool, string> = {
   },
   template: `
     <canvas #canvas class="absolute inset-0 size-full" role="img" [attr.aria-label]="summary()"></canvas>
+    <an-flex-overlay [lanesTop]="lanesTop()" />
     @if (dropTarget(); as target) {
       <div
         class="border-primary bg-primary/10 pointer-events-none absolute border-2 border-dashed"
@@ -259,6 +261,7 @@ export class Timeline {
       takeFolders: this.project.takeFolderList(),
       framesPerTick: this.project.framesPerTick(),
       rate: span => this.project.regionRate(span),
+      timing: region => this.project.timing(region),
       beatsPerBar: (signature.numerator * 4) / signature.denominator,
       meter: settings.signatures,
       selected: this.selection.regions(),
@@ -381,7 +384,7 @@ export class Timeline {
     });
   }
 
-  private lanesTop(): number {
+  protected lanesTop(): number {
     return RULER_HEIGHT + this.globalHeight();
   }
 

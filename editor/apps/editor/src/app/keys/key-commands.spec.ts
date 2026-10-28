@@ -46,7 +46,8 @@ describe('key commands', () => {
     expect(resolveKey(index, key('KeyR', 'R', { shiftKey: true }), true)).toBe('transport.flashback');
     expect(resolveKey(index, key('Digit2', '2'), true)).toBe('screenset.recall2');
     expect(resolveKey(index, key('Backspace', 'Backspace'), true)).toBe('edit.delete');
-    expect(resolveKey(index, key('KeyQ', 'q'), true)).toBeNull();
+    expect(resolveKey(index, key('KeyQ', 'q'), true)).toBe('region.quantizeAudio');
+    expect(resolveKey(index, key('KeyO', 'o'), true)).toBeNull();
   });
 
   it('lets the user rebind, taking the binding from whoever had it', () => {

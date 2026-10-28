@@ -1,5 +1,12 @@
 import { barMultiple, GridLevel, gridLines, gridStep } from './grid';
-import { ItemFlag, type ItemOverride, parseHexColor, type TimelineScene, type TimelineView } from './items';
+import {
+  ItemFlag,
+  type ItemOverride,
+  parseHexColor,
+  type RegionDetails,
+  type TimelineScene,
+  type TimelineView
+} from './items';
 import { LaneIntervalIndex } from './lane-interval-index';
 import { MeterMap } from './meter';
 import { peakRange, WaveformSet } from './waveform';
@@ -547,10 +554,33 @@ export class FrameBuilder {
       const gain = details.gain[id] ?? 1;
       const color = waveformColor(base);
       const framesPerPixel = framesPerTick / ppt;
+      const warp = details.warp;
+      const from = warp?.offset[id] ?? 0;
+      const to = warp?.offset[id + 1] ?? from;
+      // A warped region: its map's points, relative to where it is drawn now (a drag moves it whole).
+      const warped = warp && to - from >= 2 && !inner ? warp : null;
+      const shift = fileOffset - sceneFileOffset(details, id);
+      let k = from;
+      const frameAt = (x: number): number => {
+        const tick = originTick + x / ppt - start;
+        if (!warped) {
+          return fileOffset + tick * framesPerTick;
+        }
+        while (k + 2 < to && (warped.tick[k + 1] ?? 0) <= tick) {
+          k++;
+        }
+        const t0 = warped.tick[k] ?? 0;
+        const t1 = warped.tick[k + 1] ?? t0;
+        const f0 = warped.frame[k] ?? 0;
+        const f1 = warped.frame[k + 1] ?? f0;
+        return shift + (t1 === t0 ? f0 : f0 + ((tick - t0) * (f1 - f0)) / (t1 - t0));
+      };
       batch.reserve(x1 - x0);
+      let next = frameAt(x0);
       for (let x = x0; x < x1; x++) {
-        const frame = fileOffset + (originTick + x / ppt - start) * framesPerTick;
-        if (peakRange(waveform, frame, frame + framesPerPixel, range)) {
+        const frame = next;
+        next = frameAt(x + 1);
+        if (peakRange(waveform, frame, warped ? Math.max(frame + 1, next) : frame + framesPerPixel, range)) {
           const hi = Math.min(1, Math.max(-1, (range[1] ?? 0) * gain));
           const lo = Math.min(1, Math.max(-1, (range[0] ?? 0) * gain));
           const yHi = mid - hi * half;
@@ -632,6 +662,11 @@ export class FrameBuilder {
       batch.push(handleX - 2.5, top, 5, 5, theme.fade);
     }
   }
+}
+
+/** An item's scene file offset (a drag that trims it shifts its drawn file offset from this). */
+function sceneFileOffset(details: RegionDetails, id: number): number {
+  return details.fileOffset[id] ?? 0;
 }
 
 /**

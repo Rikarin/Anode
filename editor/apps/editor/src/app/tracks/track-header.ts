@@ -9,7 +9,7 @@ import {
   viewChild,
   type ElementRef
 } from '@angular/core';
-import type { AutomationMode, Track } from '@anode/api-client';
+import type { AutomationMode, FlexMode, Track, TrackAlternative } from '@anode/api-client';
 import {
   AnAutomationMode,
   automationModeLabel,
@@ -27,6 +27,8 @@ import {
   matExpandMoreRound,
   matFolderRound,
   matGraphicEqRound,
+  matHourglassEmptyRound,
+  matLayersRound,
   matMoreHorizRound,
   matPianoRound,
   matSettingsInputComponentRound,
@@ -40,13 +42,16 @@ import { XuiPopoverImports } from '@xui/popover';
 import { XuiSliderImports } from '@xui/slider';
 import { XuiTooltipImports } from '@xui/tooltip';
 import { AutomationStore } from '../automation/automation.store';
+import { flexModeLabel, FlexModes, FlexStore } from '../state/flex.store';
 import { isActive, JobsStore } from '../state/jobs.store';
 import { LiveMidiStore } from '../state/live-midi.store';
 import { MixerStore } from '../state/mixer.store';
 import { ProjectStore } from '../state/project.store';
 import { SelectionStore } from '../state/selection.store';
+import { TrackAlternativesStore } from '../state/track-alternatives.store';
 import { TrackColors } from '../state/track-colors';
 import { setTrack, setTrackLabel, type TrackChange } from '../state/track-commands';
+import { UiStore } from '../state/ui.store';
 
 /**
  * A track's header in the Tracks area (Logic's track header): its colour, number, kind and name (double-click to
@@ -78,6 +83,8 @@ import { setTrack, setTrackLabel, type TrackChange } from '../state/track-comman
       matExpandMoreRound,
       matFolderRound,
       matGraphicEqRound,
+      matHourglassEmptyRound,
+      matLayersRound,
       matMoreHorizRound,
       matPianoRound,
       matSettingsInputComponentRound,
@@ -164,6 +171,81 @@ import { setTrack, setTrackLabel, type TrackChange } from '../state/track-comman
             {{ track().name }}
           </span>
         }
+        @if (hasRegions()) {
+          @if (renamingAlternative(); as alt) {
+            <input
+              #altName
+              xuiInput
+              class="h-5 w-16 shrink-0 px-1 text-[11px]"
+              data-testid="track-alternative-name"
+              [value]="alt.name"
+              [attr.aria-label]="'Name of alternative ' + alt.name"
+              (click)="$event.stopPropagation()"
+              (keydown.enter)="renameAlternative(altName.value)"
+              (keydown.escape)="renamingAlternative.set(null)"
+              (blur)="renameAlternative(altName.value)"
+            />
+          } @else {
+            <button
+              type="button"
+              class="bezel text-foreground flex h-4.5 max-w-16 shrink-0 items-center gap-0.5 px-1 text-[10px] font-semibold"
+              data-testid="track-alternatives"
+              aria-label="Track alternatives"
+              [attr.aria-description]="activeAlternative()?.name ?? null"
+              [xuiTooltip]="
+                activeAlternative() ? 'Track alternative: ' + activeAlternative()?.name : 'Track alternatives'
+              "
+              [xuiMenuTriggerFor]="alternativesMenu"
+              (click)="$event.stopPropagation()"
+            >
+              @if (activeAlternative(); as active) {
+                <span class="truncate">{{ active.name }}</span>
+              } @else {
+                <ng-icon xui name="matLayersRound" size="12px" class="text-foreground-muted" />
+              }
+            </button>
+          }
+          <ng-template #alternativesMenu>
+            <xui-menu aria-label="Track alternatives">
+              @for (alt of track().alternatives; track alt.id) {
+                <button
+                  xuiMenuItem
+                  type="button"
+                  role="menuitemradio"
+                  [attr.aria-checked]="alt.id === track().alternativeId"
+                  [selected]="alt.id === track().alternativeId"
+                  (click)="alternatives.select(track().id, alt.id)"
+                >
+                  {{ alt.name }}
+                </button>
+              }
+              @if (track().alternatives.length > 0) {
+                <xui-menu-divider />
+              }
+              <button xuiMenuItem type="button" (click)="alternatives.create(track().id)">New Alternative</button>
+              <button xuiMenuItem type="button" (click)="alternatives.create(track().id, true)">
+                Duplicate Alternative
+              </button>
+              <button
+                xuiMenuItem
+                type="button"
+                [disabled]="!activeAlternative()"
+                (click)="renamingAlternative.set(activeAlternative())"
+              >
+                Rename Alternative…
+              </button>
+              <button
+                xuiMenuItem
+                type="button"
+                color="error"
+                [disabled]="track().alternatives.length < 2"
+                (click)="deleteAlternative()"
+              >
+                Delete Alternative
+              </button>
+            </xui-menu>
+          </ng-template>
+        }
         @if (track().kind !== 'audio') {
           <span
             class="size-1.5 shrink-0 rounded-full transition-colors duration-100"
@@ -230,6 +312,10 @@ import { setTrack, setTrackLabel, type TrackChange } from '../state/track-comman
                 <button xuiMenuItem type="button" (click)="leaveStack()">Remove from Stack</button>
               }
             }
+            @if (hasRegions()) {
+              <xui-menu-divider />
+              <button xuiMenuItem type="button" (click)="bounceInPlace()">Bounce Track in Place…</button>
+            }
             <xui-menu-divider />
             <button xuiMenuItem type="button" color="error" (click)="remove()">Delete Track</button>
           </xui-menu>
@@ -280,6 +366,46 @@ import { setTrack, setTrackLabel, type TrackChange } from '../state/track-comman
         >
           I
         </button>
+        @if (showFlex()) {
+          <button
+            type="button"
+            class="state-toggle [--toggle-on-foreground:var(--color-primary-foreground)] [--toggle-on:var(--color-primary)]"
+            data-testid="track-flex"
+            aria-label="Flex"
+            [attr.aria-pressed]="track().flexOn"
+            [xuiTooltip]="track().flexOn ? 'Flex on: ' + flexLabel() : 'Flex off'"
+            (click)="$event.stopPropagation(); flex.setTrackFlex(track().id, !track().flexOn)"
+          >
+            <ng-icon xui name="matHourglassEmptyRound" size="12px" class="rotate-90" />
+          </button>
+          <button
+            type="button"
+            class="bezel text-foreground flex h-4.5 min-w-0 shrink items-center px-1.5 text-[10px] font-semibold"
+            data-testid="track-flex-mode"
+            aria-label="Flex mode"
+            [attr.aria-description]="flexLabel()"
+            [xuiMenuTriggerFor]="flexModes"
+            (click)="$event.stopPropagation()"
+          >
+            <span class="truncate">{{ flexLabel() }}</span>
+          </button>
+          <ng-template #flexModes>
+            <xui-menu aria-label="Flex mode">
+              @for (mode of flexModeList; track mode.value) {
+                <button
+                  xuiMenuItem
+                  type="button"
+                  role="menuitemradio"
+                  [attr.aria-checked]="track().flexMode === mode.value"
+                  [selected]="track().flexMode === mode.value"
+                  (click)="setFlexMode(mode.value)"
+                >
+                  {{ mode.label }}
+                </button>
+              }
+            </xui-menu>
+          </ng-template>
+        }
         @if (automation.shown()) {
           <div class="flex min-w-0 flex-1 items-center gap-1 ps-1">
             <button
@@ -377,6 +503,21 @@ export class TrackHeader {
     return isActive(job) ? (job ?? null) : null;
   });
   protected readonly active = computed(() => this.live.active().has(this.track().id));
+  protected readonly flex = inject(FlexStore);
+  protected readonly alternatives = inject(TrackAlternativesStore);
+  private readonly ui = inject(UiStore);
+  protected readonly flexModeList = FlexModes;
+  /** The flex button and mode show on audio tracks while Show Flex (⌘F) is on. */
+  protected readonly showFlex = computed(() => this.flex.showFlex() && this.track().kind === 'audio');
+  protected readonly flexLabel = computed(() => flexModeLabel(this.track().flexMode));
+  /** Tracks that hold regions: they have track alternatives and bounce in place. */
+  protected readonly hasRegions = computed(() => ['audio', 'instrument', 'midi'].includes(this.track().kind));
+  protected readonly activeAlternative = computed(
+    () => this.track().alternatives.find(a => a.id === this.track().alternativeId) ?? null
+  );
+  /** The alternative being renamed in the header. */
+  protected readonly renamingAlternative = signal<TrackAlternative | null>(null);
+  private readonly alternativeInput = viewChild<ElementRef<HTMLInputElement>>('altName');
   protected readonly kindIcon = computed(
     () =>
       ({
@@ -402,6 +543,11 @@ export class TrackHeader {
   constructor() {
     effect(() => {
       const input = this.nameInput()?.nativeElement;
+      input?.focus();
+      input?.select();
+    });
+    effect(() => {
+      const input = this.alternativeInput()?.nativeElement;
       input?.focus();
       input?.select();
     });
@@ -485,6 +631,36 @@ export class TrackHeader {
 
   protected setMode(mode: AutomationMode): void {
     void this.automation.setMode(this.track().id, mode);
+  }
+
+  protected setFlexMode(mode: FlexMode): void {
+    void this.flex.setFlexMode(this.track().id, mode);
+  }
+
+  protected renameAlternative(name: string): void {
+    const alt = this.renamingAlternative();
+    if (!alt) {
+      return;
+    }
+    this.renamingAlternative.set(null);
+    const trimmed = name.trim();
+    if (trimmed && trimmed !== alt.name) {
+      void this.alternatives.rename(this.track().id, alt.id, trimmed);
+    }
+  }
+
+  protected deleteAlternative(): void {
+    const id = this.track().alternativeId;
+    if (id) {
+      void this.alternatives.delete(this.track().id, id);
+    }
+  }
+
+  /** Bounce in Place of this whole track: it alone is selected, without regions, and the window opens. */
+  protected bounceInPlace(): void {
+    this.selection.clear();
+    this.selection.selectTrack(this.track().id);
+    this.ui.bounceInPlaceOpen.set(true);
   }
 
   protected remove(): void {

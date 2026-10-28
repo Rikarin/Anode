@@ -28,8 +28,8 @@ export const MinLaneHeight = 36;
 export const MaxLaneHeight = 160;
 
 /** The global tracks Logic shows above the tracks, in its order. */
-export type GlobalLane = 'marker' | 'arrangement' | 'tempo' | 'signature' | 'key';
-export const GlobalLanes: readonly GlobalLane[] = ['arrangement', 'marker', 'tempo', 'signature', 'key'];
+export type GlobalLane = 'marker' | 'arrangement' | 'tempo' | 'beatMapping' | 'signature' | 'key';
+export const GlobalLanes: readonly GlobalLane[] = ['arrangement', 'marker', 'tempo', 'beatMapping', 'signature', 'key'];
 
 /** A time range picked with the marquee tool, across lanes `laneFrom…laneTo` (inclusive). */
 export interface MarqueeRange {

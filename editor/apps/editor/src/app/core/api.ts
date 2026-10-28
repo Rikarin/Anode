@@ -3,10 +3,12 @@ import {
   ApiError,
   type AudioFile,
   type Bookmarks,
+  type BounceInPlaceRequest,
   type BounceRequest,
   type CommandBatch,
   type CommandResult,
   type DirectoryListing,
+  type FileAnalysis,
   type IoLabels,
   type Job,
   type KeyCommandSet,
@@ -15,6 +17,7 @@ import {
   type PatchInfo,
   type PluginEditorRequest,
   type PluginInfo,
+  type ProcessRequest,
   type Project,
   type ProjectAlternative,
   type ProjectBackup,
@@ -121,6 +124,17 @@ export interface AnodeApi {
    * when the plugin has none or the engine runs headless.
    */
   openPluginEditor(request: PluginEditorRequest): Promise<void>;
+  /**
+   * A file's cached analysis (Phase 5): transients and beats (analysed now when missing), and its pitch curve and notes
+   * once an `analyze` job has run.
+   */
+  fileAnalysis(fileId: string): Promise<FileAnalysis>;
+  /** Starts pitch analysis of a file (Flex Pitch); an `analysis` event follows when it is cached. */
+  analyzeFile(fileId: string): Promise<Job>;
+  /** Bounce in place: renders tracks or regions to new files; the edit follows when the job is done (one undo step). */
+  bounceInPlace(request: BounceInPlaceRequest): Promise<Job>;
+  /** Selection-based processing: a chain of built-in effects over part of regions, as a job (one undo step). */
+  processRegions(request: ProcessRequest): Promise<Job>;
 }
 
 export const ANODE_API = new InjectionToken<AnodeApi>('AnodeApi', {
@@ -364,5 +378,21 @@ export class HttpAnodeApi implements AnodeApi {
 
   async openPluginEditor(request: PluginEditorRequest): Promise<void> {
     unwrap(await this.client.POST('/api/v1/plugins/editor', { body: request }));
+  }
+
+  async fileAnalysis(fileId: string): Promise<FileAnalysis> {
+    return unwrap(await this.client.GET('/api/v1/project/files/{fileId}/analysis', { params: { path: { fileId } } }));
+  }
+
+  async analyzeFile(fileId: string): Promise<Job> {
+    return unwrap(await this.client.POST('/api/v1/project/files/{fileId}/analyze', { params: { path: { fileId } } }));
+  }
+
+  async bounceInPlace(request: BounceInPlaceRequest): Promise<Job> {
+    return unwrap(await this.client.POST('/api/v1/project/bounce-in-place', { body: request }));
+  }
+
+  async processRegions(request: ProcessRequest): Promise<Job> {
+    return unwrap(await this.client.POST('/api/v1/project/process', { body: request }));
   }
 }

@@ -13,15 +13,18 @@ import { XuiContextMenuImports } from '@xui/context-menu';
 import { XuiInputImports } from '@xui/input';
 import { XuiMenuImports } from '@xui/menu';
 import { ProjectStore } from '../state/project.store';
+import { SmartTempoStore } from '../state/smart-tempo.store';
 import { type GlobalLane, GlobalLanes, TracksViewStore } from '../state/tracks-view.store';
 import { parseSignature, TransportStore } from '../state/transport.store';
 import { snapBy } from '../tracks/snap';
+import { BeatMappingLane } from './beat-mapping-lane';
 import {
   addKey,
   addSignature,
   addTempoPoint,
   bpmAtY,
   bpmRange,
+  curveHandle,
   GlobalLaneHeights,
   keyName,
   moveTempoPoint,
@@ -29,14 +32,16 @@ import {
   parseKey,
   removeEvent,
   removeTempoPoint,
+  shapeAfterDrag,
   tempoPath,
   toggleRamp,
+  withShape,
   yAtBpm
 } from './global-math';
 
 /** A drag in a global track: what it holds and where it started. */
 interface Drag {
-  kind: 'section' | 'marker' | 'tempo';
+  kind: 'section' | 'marker' | 'tempo' | 'curve';
   id: string;
   index: number;
   x: number;
@@ -64,7 +69,7 @@ interface Field {
 @Component({
   selector: 'an-global-lanes',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [XuiContextMenuImports, XuiInputImports, XuiMenuImports],
+  imports: [BeatMappingLane, XuiContextMenuImports, XuiInputImports, XuiMenuImports],
   host: {
     class: 'border-hairline bg-surface/85 block overflow-hidden border-b select-none',
     role: 'group',
@@ -157,6 +162,27 @@ interface Field {
                 >{{ event.bpm }}</span
               >
             }
+            @for (handle of curveHandles(); track handle.index) {
+              <button
+                type="button"
+                class="bg-surface border-primary focus-visible:outline-focus absolute size-2 -translate-x-1/2 -translate-y-1/2 rotate-45 cursor-ns-resize touch-none border-[1.5px] focus-visible:outline-2"
+                role="slider"
+                aria-label="Tempo curve"
+                aria-valuemin="-1"
+                aria-valuemax="1"
+                data-testid="tempo-curve-handle"
+                [attr.aria-valuenow]="handle.shape"
+                [attr.aria-valuetext]="handle.shape === 0 ? 'Linear' : handle.shape.toFixed(2)"
+                [style.left.px]="x(handle.tick)"
+                [style.top.px]="tempoY(handle.bpm)"
+                (pointerdown)="press('curve', '', handle.index, handle.tick, $event)"
+                (dblclick)="$event.stopPropagation(); shape(handle.index, 0)"
+                (keydown)="curveKey(handle.index, handle.shape, $event)"
+              ></button>
+            }
+          }
+          @case ('beatMapping') {
+            <an-beat-mapping-lane />
           }
           @case ('signature') {
             @for (event of settings().signatures; track event.tick; let i = $index) {
@@ -250,6 +276,7 @@ interface Field {
 })
 export class GlobalTracks {
   private readonly project = inject(ProjectStore);
+  private readonly smartTempo = inject(SmartTempoStore);
   private readonly view = inject(TracksViewStore);
   private readonly transport = inject(TransportStore);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
@@ -263,6 +290,7 @@ export class GlobalTracks {
     arrangement: 'Arrangement',
     marker: 'Marker',
     tempo: 'Tempo',
+    beatMapping: 'Beat Mapping',
     signature: 'Signature',
     key: 'Key'
   };
@@ -280,6 +308,14 @@ export class GlobalTracks {
   protected readonly field = signal<Field | null>(null);
 
   protected readonly tempoEvents = computed(() => this.tempoDraft() ?? this.settings().tempoEvents);
+  /** Each shapeable ramp's curve handle (halfway along it, on its curve). */
+  protected readonly curveHandles = computed(() => {
+    const events = this.tempoEvents();
+    return events.flatMap((e, index) => {
+      const handle = curveHandle(events, index);
+      return handle ? [{ index, shape: e.shape, ...handle }] : [];
+    });
+  });
   private readonly range = computed(() => bpmRange(this.settings().tempoEvents));
   protected readonly tempoLine = computed(() => {
     const width = this.host.nativeElement.getBoundingClientRect().width || 4000;
@@ -361,6 +397,17 @@ export class GlobalTracks {
     if (!drag.moved) {
       this.drag.set({ ...drag, moved: true });
     }
+    if (drag.kind === 'curve') {
+      const events = this.settings().tempoEvents;
+      const e = events[drag.index];
+      const next = events[drag.index + 1];
+      if (e && next) {
+        this.tempoDraft.set(
+          withShape(events, drag.index, shapeAfterDrag(e.shape, drag.y - event.clientY, e.bpm, next.bpm))
+        );
+      }
+      return;
+    }
     const travel = (event.clientX - drag.x) / this.ppt();
     if (drag.kind === 'section') {
       this.dragTick.set(drag.startTick + travel);
@@ -409,6 +456,13 @@ export class GlobalTracks {
           'Move Marker'
         );
         return;
+      case 'curve': {
+        const shape = this.tempoDraft()?.[drag.index]?.shape;
+        if (shape !== undefined) {
+          void this.smartTempo.setShape(drag.index, shape).finally(() => this.tempoDraft.set(null));
+        }
+        return;
+      }
       case 'tempo': {
         const events = this.tempoDraft();
         if (events) {
@@ -426,6 +480,8 @@ export class GlobalTracks {
     const tick = this.snap(this.tickAt(event.clientX));
     const meter = this.project.meter();
     switch (lane) {
+      case 'beatMapping':
+        return; // beats are mapped by dragging
       case 'arrangement':
         this.addSection(tick);
         return;
@@ -495,6 +551,7 @@ export class GlobalTracks {
       arrangement: 'Section name',
       marker: 'Marker name',
       tempo: 'Tempo',
+      beatMapping: 'Beat',
       signature: 'Time signature',
       key: 'Key'
     }[field.lane];
@@ -617,6 +674,25 @@ export class GlobalTracks {
       event.stopPropagation();
       void this.project.execute([{ type: 'setTempoEvents', events: next }], 'Tempo Change');
     }
+  }
+
+  /** A ramp's curve shape (a double-click on its handle: linear again). */
+  protected shape(index: number, shape: number): void {
+    void this.smartTempo.setShape(index, shape);
+  }
+
+  /** Arrows change a curve's shape by 0.05 (Page keys by 0.25); Home/End reach the ends. */
+  protected curveKey(index: number, shape: number, event: KeyboardEvent): void {
+    const step = { ArrowUp: 0.05, ArrowRight: 0.05, ArrowDown: -0.05, ArrowLeft: -0.05, PageUp: 0.25, PageDown: -0.25 }[
+      event.key
+    ];
+    const next = step !== undefined ? shape + step : event.key === 'Home' ? -1 : event.key === 'End' ? 1 : null;
+    if (next === null) {
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    this.shape(index, Math.round(Math.min(1, Math.max(-1, next)) * 100) / 100);
   }
 
   /** A lane's top within the global tracks. */

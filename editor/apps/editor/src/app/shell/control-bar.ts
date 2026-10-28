@@ -3,10 +3,10 @@ import {
   Component,
   computed,
   effect,
-  type ElementRef,
   inject,
   signal,
-  viewChild
+  viewChild,
+  type ElementRef
 } from '@angular/core';
 import { provideIcons } from '@ng-icons/core';
 import {
@@ -29,21 +29,25 @@ import {
   matRedoRound,
   matSaveRound,
   matSkipPreviousRound,
+  matSpeedRound,
   matStopRound,
   matSwapHorizRound,
   matUndoRound
 } from '@ng-icons/material-icons/round';
 
+import { AnVarispeedDisplay } from '@anode/audio-ui';
 import { XuiIconImports } from '@xui/icon';
 import { XuiInputImports } from '@xui/input';
 import { XuiMenuImports } from '@xui/menu';
 import { XuiTooltipImports } from '@xui/tooltip';
 import { formatBinding } from '../keys/key-commands';
+import { formatSpeed, parseSpeed, VarispeedModes, VarispeedUnits, type VarispeedUnit } from '../music/varispeed';
 import { HistoryStore } from '../state/history.store';
 import { KeyCommandsStore } from '../state/key-commands.store';
 import { ProjectSession } from '../state/project-session';
 import { ProjectStore } from '../state/project.store';
 import { ScreensetStore } from '../state/screenset.store';
+import { SmartTempoStore } from '../state/smart-tempo.store';
 import { ThemeStore } from '../state/theme.store';
 import { TransportStore } from '../state/transport.store';
 import { UiStore } from '../state/ui.store';
@@ -59,7 +63,7 @@ import { Lcd } from './lcd';
 @Component({
   selector: 'an-control-bar',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [EngineStatus, Lcd, XuiIconImports, XuiInputImports, XuiMenuImports, XuiTooltipImports],
+  imports: [AnVarispeedDisplay, EngineStatus, Lcd, XuiIconImports, XuiInputImports, XuiMenuImports, XuiTooltipImports],
   providers: [
     provideIcons({
       matAvTimerRound,
@@ -81,6 +85,7 @@ import { Lcd } from './lcd';
       matRedoRound,
       matSaveRound,
       matSkipPreviousRound,
+      matSpeedRound,
       matStopRound,
       matSwapHorizRound,
       matUndoRound
@@ -408,6 +413,104 @@ import { Lcd } from './lcd';
             <span class="max-xl:sr-only">Merge</span>
           </button>
         </div>
+        <div class="flex items-center gap-1.5" role="group" aria-label="Varispeed">
+          <div
+            class="bezel-group text-foreground h-6.5 text-[11px] font-semibold"
+            role="toolbar"
+            aria-label="Varispeed settings"
+          >
+            <button
+              type="button"
+              class="flex items-center px-2.5"
+              aria-label="Varispeed"
+              data-testid="varispeed-toggle"
+              [class.text-lit]="varispeed().enabled"
+              [attr.aria-pressed]="varispeed().enabled ? 'true' : 'false'"
+              xuiTooltip="Varispeed: the whole project plays faster or slower"
+              (click)="smartTempo.setVarispeedEnabled(!varispeed().enabled)"
+            >
+              <span class="flex xl:hidden"><ng-icon xui name="matSpeedRound" size="14px" /></span>
+              <span class="max-xl:sr-only">Varispeed</span>
+            </button>
+            @if (varispeed().enabled) {
+              <button
+                type="button"
+                class="flex items-center gap-0.5 px-2"
+                aria-label="Varispeed mode"
+                data-testid="varispeed-mode"
+                [xuiTooltip]="modeLabel()"
+                [xuiMenuTriggerFor]="varispeedModeMenu"
+              >
+                {{ modeShort() }}
+                <ng-icon xui name="matExpandMoreRound" size="14px" />
+              </button>
+              <button
+                type="button"
+                class="flex items-center gap-0.5 px-2"
+                aria-label="Varispeed display unit"
+                data-testid="varispeed-unit"
+                xuiTooltip="Show the speed as percent, resulting tempo or detune"
+                [xuiMenuTriggerFor]="varispeedUnitMenu"
+              >
+                {{ unitShort() }}
+                <ng-icon xui name="matExpandMoreRound" size="14px" />
+              </button>
+            }
+          </div>
+          @if (varispeed().enabled) {
+            @if (editingSpeed()) {
+              <input
+                #speedInput
+                xuiInput
+                class="readout h-8 w-24 px-1.5 text-center text-[13px] font-semibold"
+                aria-label="Varispeed speed"
+                data-testid="varispeed-speed"
+                [value]="speedText()"
+                (keydown.enter)="commitSpeed(speedInput.value)"
+                (keydown.escape)="editingSpeed.set(false)"
+                (blur)="commitSpeed(speedInput.value)"
+              />
+            } @else {
+              <an-varispeed-display
+                [speed]="varispeed().speed"
+                [unit]="smartTempo.varispeedUnit()"
+                [bpm]="transport.tempo()"
+                (committed)="smartTempo.setSpeed($event)"
+                (edit)="editingSpeed.set(true)"
+              />
+            }
+          }
+        </div>
+        <ng-template #varispeedModeMenu>
+          <xui-menu class="min-w-60">
+            @for (mode of varispeedModes; track mode.value) {
+              <button
+                xuiMenuItem
+                type="button"
+                role="menuitemradio"
+                [attr.aria-checked]="varispeed().mode === mode.value"
+                (click)="smartTempo.setVarispeedMode(mode.value)"
+              >
+                {{ varispeed().mode === mode.value ? '✓ ' : '' }}{{ mode.label }}
+              </button>
+            }
+          </xui-menu>
+        </ng-template>
+        <ng-template #varispeedUnitMenu>
+          <xui-menu class="min-w-52">
+            @for (unit of varispeedUnits; track unit.value) {
+              <button
+                xuiMenuItem
+                type="button"
+                role="menuitemradio"
+                [attr.aria-checked]="smartTempo.varispeedUnit() === unit.value"
+                (click)="smartTempo.varispeedUnit.set(unit.value)"
+              >
+                {{ smartTempo.varispeedUnit() === unit.value ? '✓ ' : '' }}{{ unit.label }}
+              </button>
+            }
+          </xui-menu>
+        </ng-template>
       }
     </div>
     <div class="flex min-w-max flex-1 items-center justify-end gap-2">
@@ -496,6 +599,30 @@ export class ControlBar {
   protected readonly ui = inject(UiStore);
   private readonly keys = inject(KeyCommandsStore);
 
+  protected readonly smartTempo = inject(SmartTempoStore);
+  protected readonly varispeed = this.smartTempo.varispeed;
+  protected readonly varispeedModes = VarispeedModes;
+  protected readonly varispeedUnits = VarispeedUnits;
+  protected readonly editingSpeed = signal(false);
+  private readonly speedInput = viewChild<ElementRef<HTMLInputElement>>('speedInput');
+  protected readonly modeLabel = computed(
+    () => VarispeedModes.find(m => m.value === this.varispeed().mode)?.label ?? ''
+  );
+  protected readonly modeShort = computed(
+    () => ({ speedOnly: 'Speed', speedAndPitch: 'Tape', speedAndPitchMidi: 'Tape+MIDI' })[this.varispeed().mode]
+  );
+  protected readonly unitShort = computed(
+    () =>
+      (({ percent: '%', tempo: 'bpm', detune: 'st' }) satisfies Record<VarispeedUnit, string>)[
+        this.smartTempo.varispeedUnit()
+      ]
+  );
+  /** The speed as typed: the shown value without its unit. */
+  protected readonly speedText = computed(() =>
+    formatSpeed(this.varispeed().speed, this.smartTempo.varispeedUnit(), this.transport.tempo())
+      .replace(/\s*(%|bpm|st)$/, '')
+      .replace('−', '-')
+  );
   protected readonly mergeMidi = computed(() => this.project.settings().mergeMidiRecording);
   protected readonly recording = computed(() => this.project.settings().recording);
   protected readonly numbers = [1, 2, 3, 4, 5, 6, 7, 8, 9];
@@ -508,6 +635,23 @@ export class ControlBar {
       input?.focus();
       input?.select();
     });
+    effect(() => {
+      const input = this.speedInput()?.nativeElement;
+      input?.focus();
+      input?.select();
+    });
+  }
+
+  /** A typed speed in the shown unit (Return); a value it cannot read leaves the speed. */
+  protected commitSpeed(text: string): void {
+    if (!this.editingSpeed()) {
+      return;
+    }
+    this.editingSpeed.set(false);
+    const speed = parseSpeed(text, this.smartTempo.varispeedUnit(), this.transport.tempo());
+    if (speed !== null && speed !== this.varispeed().speed) {
+      void this.smartTempo.setSpeed(speed);
+    }
   }
 
   protected keyOf(id: string): string {

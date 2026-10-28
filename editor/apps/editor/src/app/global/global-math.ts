@@ -1,5 +1,6 @@
 import type { ArrangementMarker, KeyEvent, SignatureEvent, TempoEvent } from '@anode/api-client';
 import type { MeterMap } from '@anode/timeline';
+import { rampBpm } from '../music/tempo-map';
 
 export const MinBpm = 20;
 export const MaxBpm = 999;
@@ -76,7 +77,13 @@ export function toggleRamp(events: readonly TempoEvent[], index: number): TempoE
   return events.map((e, i) => (i === index ? { ...e, curve: e.curve === 'ramp' ? 'step' : 'ramp' } : e));
 }
 
-/** The tempo track's points as an SVG polyline: steps hold, ramps slope to the next point, the last holds to `endX`. */
+/** Points a curved ramp is drawn with. */
+const CurveSamples = 24;
+
+/**
+ * The tempo track's points as an SVG polyline: steps hold, ramps slope to the next point (along their curve shape,
+ * sampled, when it is not 0), the last holds to `endX`.
+ */
 export function tempoPath(
   events: readonly TempoEvent[],
   x: (tick: number) => number,
@@ -91,9 +98,59 @@ export function tempoPath(
       points.push(`${Math.max(endX, x(e.tick)).toFixed(1)},${y(e.bpm).toFixed(1)}`);
     } else if (e.curve === 'step') {
       points.push(`${x(next.tick).toFixed(1)},${y(e.bpm).toFixed(1)}`);
+    } else if (e.shape !== 0 && next.bpm !== e.bpm) {
+      for (let k = 1; k < CurveSamples; k++) {
+        const f = k / CurveSamples;
+        const tick = e.tick + f * (next.tick - e.tick);
+        points.push(`${x(tick).toFixed(1)},${y(rampBpm(e.bpm, next.bpm, f, e.shape)).toFixed(1)}`);
+      }
     }
   });
   return points.join(' ');
+}
+
+/**
+ * Where a ramp's curve handle sits: halfway along it in ticks, on its curve. Null for a step, the last point, or a ramp
+ * between equal tempos (it has no curve to shape).
+ */
+export function curveHandle(events: readonly TempoEvent[], index: number): { tick: number; bpm: number } | null {
+  const e = events[index];
+  const next = events[index + 1];
+  if (e?.curve !== 'ramp' || !next || next.bpm === e.bpm) {
+    return null;
+  }
+  return { tick: (e.tick + next.tick) / 2, bpm: rampBpm(e.bpm, next.bpm, 0.5, e.shape) };
+}
+
+/** Pixels of vertical drag a whole unit of curve shape takes. */
+export const ShapePixels = 40;
+
+/**
+ * A ramp's shape after its handle is dragged `up` pixels (negative: down): the handle follows the pointer, so up bends
+ * a rising ramp to a faster start (a higher shape) and a falling one to a slower start; −1…1, to 0.01.
+ */
+export function shapeAfterDrag(shape: number, up: number, bpm0: number, bpm1: number): number {
+  const direction = bpm1 >= bpm0 ? 1 : -1;
+  const next = shape + (direction * up) / ShapePixels;
+  return Math.round(Math.min(1, Math.max(-1, next)) * 100) / 100;
+}
+
+/** The events with point `index`'s ramp shaped `shape` (−1…1). */
+export function withShape(events: readonly TempoEvent[], index: number, shape: number): TempoEvent[] {
+  return events.map((e, i) => (i === index ? { ...e, shape: Math.min(1, Math.max(-1, shape)) } : e));
+}
+
+/**
+ * The project ticks of a region's transients (file frames, from its analysis), through its timing: only those inside
+ * the region, ascending.
+ */
+export function transientTicks(
+  region: { fileOffset: number; length: number },
+  transients: readonly number[],
+  tickAt: (frame: number) => number
+): number[] {
+  const end = region.fileOffset + region.length;
+  return transients.filter(f => f >= region.fileOffset && f < end).map(tickAt);
 }
 
 /** Adds a signature change at the bar line nearest `tick` (replacing one there); the first stays at 0. */
@@ -153,7 +210,14 @@ export function nextSection(
 }
 
 /** Each global track's height in the Tracks area, in CSS pixels. */
-export const GlobalLaneHeights = { arrangement: 24, marker: 22, tempo: 64, signature: 22, key: 22 } as const;
+export const GlobalLaneHeights = {
+  arrangement: 24,
+  marker: 22,
+  tempo: 64,
+  beatMapping: 40,
+  signature: 22,
+  key: 22
+} as const;
 
 /** "A minor", "Am", "F# major", "Bb" to a key, or null. */
 export function parseKey(text: string): { tonic: number; mode: 'major' | 'minor' } | null {

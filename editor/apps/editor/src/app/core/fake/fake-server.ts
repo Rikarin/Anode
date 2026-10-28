@@ -3,6 +3,7 @@ import {
   type AudioFile,
   type AudioRegion,
   type Bookmarks,
+  type BounceInPlaceRequest,
   type BounceRequest,
   type ChannelStrip,
   type CommandBatch,
@@ -10,6 +11,7 @@ import {
   type DeltaOp,
   type DirectoryListing,
   type EditCommand,
+  type FileAnalysis,
   type Insert,
   type InsertReading,
   type IoLabel,
@@ -23,6 +25,7 @@ import {
   type PatchInfo,
   type PluginEditorRequest,
   type PluginInfo,
+  type ProcessRequest,
   type Project,
   type ProjectAlternative,
   type ProjectBackup,
@@ -62,6 +65,7 @@ import {
 } from './fake-arrange';
 import { fakePeaks, hash, readWavHeader } from './fake-audio';
 import { fakeFileExists, FakeHome, fileKind, listFakeFolder } from './fake-files';
+import { adaptTempo, applyFlexCommand, fakeAnalysis, type FlexContext, timingOf } from './fake-flex';
 import {
   applyMixCommand,
   applyStrip,
@@ -94,6 +98,8 @@ interface FakeJob {
   done: number;
   bounce?: BounceRequest;
   trackId?: string;
+  /** What finishing does (Phase 5's jobs): the files it wrote. */
+  finish?: () => string[];
 }
 
 interface UndoStep {
@@ -153,6 +159,8 @@ export class FakeAnodeServer implements AnodeApi {
     [...FakeCatalogue, ...FakeEffects].sort((a, b) => Number(a.format !== 'builtin') - Number(b.format !== 'builtin'))
   );
   private readonly jobList = new Map<string, FakeJob>();
+  /** File analyses (the package's `Analysis/<fileId>.json`), by file id. */
+  private readonly analyses = new Map<string, FileAnalysis>();
   private jobTimer: ReturnType<typeof setInterval> | null = null;
   private readonly patchStore = new Map<string, StoredPatch>();
   private labels: IoLabels = { inputs: [], outputs: [], buses: [] };
@@ -854,6 +862,238 @@ export class FakeAnodeServer implements AnodeApi {
     });
   }
 
+  // ---- Phase 5: analysis, bounce in place, selection-based processing
+
+  fileAnalysis(fileId: string): Promise<FileAnalysis> {
+    return this.answer('GetFileAnalysis', () => {
+      const file = this.require().audioFiles.find(f => f.id === fileId);
+      if (!file) {
+        throw new ApiError(404, `No file ${fileId}.`);
+      }
+      return structuredClone(this.analysisOf(file));
+    });
+  }
+
+  analyzeFile(fileId: string): Promise<Job> {
+    return this.answer('AnalyzeFile', () => {
+      const file = this.require().audioFiles.find(f => f.id === fileId);
+      if (!file) {
+        throw new ApiError(404, `No file ${fileId}.`);
+      }
+      const finish = (): string[] => {
+        this.analysisOf(file, true);
+        return [];
+      };
+      return this.startJob('analyze', { finish }, 1);
+    });
+  }
+
+  bounceInPlace(request: BounceInPlaceRequest): Promise<Job> {
+    return this.answer('BounceInPlace', () => {
+      const project = this.require();
+      const trackIds = request.trackIds ?? [];
+      const regionIds = request.regionIds ?? [];
+      if (trackIds.length === 0 && regionIds.length === 0) {
+        throw new ApiError(422, 'Choose the tracks or regions to bounce in place.');
+      }
+      if (project.settings.varispeed.enabled) {
+        throw new ApiError(422, 'Turn Varispeed off to bounce in place.');
+      }
+      for (const id of trackIds) {
+        const track = project.tracks.find(t => t.id === id);
+        if (!track) {
+          throw new ApiError(404, `No track ${id}.`);
+        }
+        if (track.kind === 'stack' || track.kind === 'vca') {
+          throw new ApiError(422, `${track.name} has no audio of its own to bounce.`);
+        }
+        if (request.destination === 'replace' && track.kind !== 'audio') {
+          throw new ApiError(422, 'Only audio tracks bounce in place replacing their regions.');
+        }
+      }
+      for (const id of regionIds) {
+        if (!project.regions.some(r => r.id === id) && !project.midiRegions.some(r => r.id === id)) {
+          throw new ApiError(404, `No region ${id}.`);
+        }
+      }
+      const copy = structuredClone(request);
+      return this.startJob('bounceInPlace', { finish: () => this.finishBounceInPlace(copy) }, 1);
+    });
+  }
+
+  processRegions(request: ProcessRequest): Promise<Job> {
+    return this.answer('ProcessRegions', () => {
+      const project = this.require();
+      if (request.regionIds.length === 0) {
+        throw new ApiError(422, 'Choose the regions to process.');
+      }
+      if (request.chain.length === 0) {
+        throw new ApiError(422, 'The processing chain is empty.');
+      }
+      for (const effect of request.chain) {
+        const plugin = this.catalogue.find(p => p.id === effect.pluginId);
+        if (plugin?.format !== 'builtin' || plugin.isInstrument) {
+          throw new ApiError(422, `${effect.pluginId} is not a built-in effect.`);
+        }
+      }
+      for (const id of request.regionIds) {
+        if (!project.regions.some(r => r.id === id)) {
+          throw new ApiError(404, `No audio region ${id}.`);
+        }
+      }
+      const { startTick, endTick } = request;
+      if (startTick !== null && startTick !== undefined && endTick !== null && endTick !== undefined) {
+        if (endTick <= startTick) {
+          throw new ApiError(422, 'The range must end after it starts.');
+        }
+      }
+      const copy = structuredClone(request);
+      return this.startJob('process', { finish: () => this.finishProcess(copy) }, 1);
+    });
+  }
+
+  /** The ranges a bounce in place renders, by source track: whole tracks, or the regions grouped by track. */
+  private bounceSources(
+    project: Project,
+    request: BounceInPlaceRequest
+  ): Map<string, { startTick: number; endTick: number; regionIds: string[] }> {
+    const sources = new Map<string, { startTick: number; endTick: number; regionIds: string[] }>();
+    const extend = (trackId: string, start: number, end: number, id: string) => {
+      const source = sources.get(trackId) ?? { startTick: start, endTick: end, regionIds: [] };
+      source.startTick = Math.min(source.startTick, start);
+      source.endTick = Math.max(source.endTick, end);
+      source.regionIds.push(id);
+      sources.set(trackId, source);
+    };
+    const audio = (r: AudioRegion) => extend(r.trackId, r.startTick, timingOf(project, r).endTick, r.id);
+    const midi = (r: MidiRegion) => extend(r.trackId, r.startTick, r.startTick + r.lengthTicks, r.id);
+    for (const id of request.regionIds ?? []) {
+      project.regions.filter(r => r.id === id).forEach(audio);
+      project.midiRegions.filter(r => r.id === id).forEach(midi);
+    }
+    for (const id of request.trackIds ?? []) {
+      project.regions.filter(r => r.trackId === id).forEach(audio);
+      project.midiRegions.filter(r => r.trackId === id).forEach(midi);
+      project.takeFolders
+        .filter(f => f.trackId === id)
+        .forEach(f => extend(id, f.startTick, f.startTick + f.lengthTicks, f.id));
+      if (!sources.has(id)) {
+        throw new Error(`${project.tracks.find(t => t.id === id)?.name ?? id} has nothing to bounce.`);
+      }
+    }
+    return sources;
+  }
+
+  /** A finished bounce in place: its files, and the new track (or replaced regions) with the source handled. */
+  private finishBounceInPlace(request: BounceInPlaceRequest): string[] {
+    const before = this.require();
+    let after = before;
+    const paths: string[] = [];
+    for (const [trackId, source] of this.bounceSources(before, request)) {
+      const track = after.tracks.find(t => t.id === trackId);
+      if (!track) {
+        throw new Error('A source track was deleted during the bounce.');
+      }
+      const name = request.name?.trim() || `${track.name} Bounce`;
+      const effects = !request.bypassEffects && track.strip.inserts.length > 0;
+      const tail = request.includeTail && effects ? after.sampleRate : 0;
+      const file: AudioFile = {
+        id: `aud_${this.nextId++}`,
+        name: `${name}.wav`,
+        path: `Bounces/${name}.wav`,
+        sampleRate: after.sampleRate,
+        channels: 2,
+        bitDepth: 24,
+        frames: Math.max(1, framesBetween(after, source.startTick, source.endTick) + tail),
+        tempo: null
+      };
+      paths.push(`${projectFolder(after)}/${file.path}`);
+      after = { ...after, audioFiles: [...after.audioFiles, file] };
+      const replace = request.destination === 'replace' && track.kind === 'audio';
+      let target = trackId;
+      if (replace) {
+        after = this.applyCommand(after, { type: 'deleteRegions', regionIds: source.regionIds });
+      } else {
+        const index = after.tracks.findIndex(t => t.id === trackId) + 1;
+        after = this.applyCommand(after, { type: 'addTrack', kind: 'audio', stereo: true, index, name });
+        target = after.tracks[index]?.id ?? trackId;
+      }
+      after = this.applyCommand(after, {
+        type: 'addRegion',
+        trackId: target,
+        fileId: file.id,
+        startTick: source.startTick
+      });
+      after = renameLast(after, name);
+      if (!replace && request.source === 'mute') {
+        after = this.applyCommand(after, { type: 'setStrip', trackId, mute: true });
+      } else if (!replace && request.source === 'delete') {
+        after = this.applyCommand(after, { type: 'deleteRegions', regionIds: source.regionIds });
+      }
+    }
+    this.commit(before, after, 'Bounce in Place');
+    return paths;
+  }
+
+  /** A finished selection-based processing: a new file and region for the processed part of each region. */
+  private finishProcess(request: ProcessRequest): string[] {
+    const before = this.require();
+    let after = before;
+    const paths: string[] = [];
+    for (const id of request.regionIds) {
+      const region = after.regions.find(r => r.id === id);
+      if (!region) {
+        throw new Error('A region was deleted during processing.');
+      }
+      const timing = timingOf(after, region);
+      const from = Math.round(Math.max(timing.startTick, request.startTick ?? timing.startTick));
+      const to = Math.round(Math.min(timing.endTick, request.endTick ?? timing.endTick));
+      if (to <= from) {
+        continue;
+      }
+      const a = Math.round(timing.frameAt(from));
+      const b = Math.round(timing.frameAt(to));
+      const file: AudioFile = {
+        id: `aud_${this.nextId++}`,
+        name: `${region.name} Processed.wav`,
+        path: `Audio Files/${region.name} Processed ${this.nextId}.wav`,
+        sampleRate: after.sampleRate,
+        channels: 2,
+        bitDepth: 32,
+        frames: b - a + (request.includeTail ? after.sampleRate : 0),
+        tempo: null
+      };
+      paths.push(`${projectFolder(after)}/${file.path}`);
+      after = { ...after, audioFiles: [...after.audioFiles, file] };
+      // Split off the part, then replace it with a region of the processed file.
+      const startsAt = (tick: number) =>
+        after.regions.find(
+          r => r.trackId === region.trackId && r.fileId === region.fileId && Math.abs(r.startTick - tick) <= 1
+        );
+      if (from > timing.startTick + 1) {
+        after = this.applyCommand(after, { type: 'splitRegion', regionId: region.id, atTick: from });
+      }
+      const middle = startsAt(from);
+      if (middle && to < timing.endTick - 1) {
+        after = this.applyCommand(after, { type: 'splitRegion', regionId: middle.id, atTick: to });
+      }
+      const part = startsAt(from);
+      if (part) {
+        after = this.applyCommand(after, { type: 'deleteRegions', regionIds: [part.id] });
+      }
+      after = this.applyCommand(after, {
+        type: 'addRegion',
+        trackId: region.trackId,
+        fileId: file.id,
+        startTick: from,
+        length: b - a
+      });
+      after = renameLast(after, `${region.name} Processed`);
+    }
+    this.commit(before, after, 'Selection-Based Processing');
+    return paths;
+  }
+
   /**
    * Moves every unfinished job on by up to `steps` steps (tests; the dev mode's timer calls it too), reporting each
    * change as a `job` event; a job finishes on its last step.
@@ -879,7 +1119,11 @@ export class FakeAnodeServer implements AnodeApi {
     return entry;
   }
 
-  private startJob(kind: Job['kind'], extra: { bounce?: BounceRequest; trackId?: string }, slowness: number): Job {
+  private startJob(
+    kind: Job['kind'],
+    extra: { bounce?: BounceRequest; trackId?: string; finish?: () => string[] },
+    slowness: number
+  ): Job {
     const job: Job = { id: `job_${this.nextId++}`, kind, state: 'queued', progress: 0, message: null, files: [] };
     const entry: FakeJob = { job, steps: JobSteps * slowness, done: 0, ...extra };
     this.jobList.set(job.id, entry);
@@ -910,7 +1154,11 @@ export class FakeAnodeServer implements AnodeApi {
       return;
     }
     try {
-      const files = entry.bounce ? this.finishBounce(entry.bounce) : this.finishFreeze(entry.trackId ?? '');
+      const files = entry.finish
+        ? entry.finish()
+        : entry.bounce
+          ? this.finishBounce(entry.bounce)
+          : this.finishFreeze(entry.trackId ?? '');
       this.setJob(entry, { ...entry.job, state: 'done', progress: 1, files });
     } catch (error) {
       this.setJob(entry, {
@@ -1021,7 +1269,9 @@ export class FakeAnodeServer implements AnodeApi {
 
     const { cycle } = this.project.settings;
     const map = tempoOf(this.project);
-    let tick = map.tickAt(map.secondsAt(this.positionTick) + (now - this.lastAdvance) / 1000);
+    // Varispeed: the project plays at its speed (the transport reports compiled samples).
+    const speed = this.project.settings.varispeed.enabled ? this.project.settings.varispeed.speed : 1;
+    let tick = map.tickAt(map.secondsAt(this.positionTick) + ((now - this.lastAdvance) / 1000) * speed);
     // The engine cycles while playing and while recording (cycle recording: one pass per wrap).
     if (cycle.enabled && cycle.endTick > cycle.startTick) {
       if (this.positionTick < cycle.endTick && tick >= cycle.endTick) {
@@ -1377,7 +1627,10 @@ export class FakeAnodeServer implements AnodeApi {
   private status(): TransportStatus {
     const project = this.project;
     const sampleRate = project?.sampleRate ?? 48_000;
-    const seconds = project ? tempoOf(project).secondsAt(this.positionTick) : (this.positionTick / Ppq) * 0.5;
+    const varispeed = project?.settings.varispeed;
+    const speed = varispeed?.enabled ? varispeed.speed : 1;
+    // Compiled samples: Varispeed scales every position by 1/speed.
+    const seconds = (project ? tempoOf(project).secondsAt(this.positionTick) : (this.positionTick / Ppq) * 0.5) / speed;
     return {
       state: this.transportState,
       positionTick: Math.round(this.positionTick),
@@ -1694,12 +1947,29 @@ export class FakeAnodeServer implements AnodeApi {
           fadeInCurve: 0,
           fadeOutCurve: 0,
           muted: false,
-          follow: 'off',
+          // The default follow only for a file with a tempo (the Model's rule).
+          follow: f.tempo ? project.settings.smartTempo.defaultFollow : 'off',
           flexMarkers: [],
           transpose: 0,
           fineTune: 0,
           pitchNotes: []
         };
+        const smart = project.settings.smartTempo;
+        const adapts =
+          project.regions.length === 0 &&
+          (smart.mode === 'adapt' ||
+            (smart.mode === 'auto' && project.midiRegions.length === 0 && project.settings.tempoEvents.length === 1));
+        if (adapts) {
+          // The first audio region sets the tempo from its file's beats (Smart Tempo's adapt) and plays unwarped.
+          const tempo = f.tempo ?? this.analysisOf(f).tempo;
+          if (tempo) {
+            const withTempo = f.tempo
+              ? project
+              : { ...project, audioFiles: project.audioFiles.map(x => (x.id === f.id ? { ...x, tempo } : x)) };
+            const adapted = adaptTempo(withTempo, { ...added, follow: 'off' }, tempo);
+            return { ...adapted, regions: [...adapted.regions, { ...added, follow: 'off' }] };
+          }
+        }
         return { ...project, regions: [...project.regions, added] };
       }
       case 'moveRegion': {
@@ -1752,21 +2022,35 @@ export class FakeAnodeServer implements AnodeApi {
           throw new ApiError(422, 'A take folder does not split: flatten it first.');
         }
         const r = region(command.regionId);
-        const endTick = audioEnd(project, r);
-        if (command.atTick <= r.startTick || command.atTick >= endTick) {
+        const timing = timingOf(project, r);
+        if (command.atTick <= r.startTick || command.atTick >= timing.endTick) {
           throw new ApiError(422, 'A split must fall inside the region.');
         }
-        const left = framesBetween(project, r.startTick, command.atTick);
+        const left = Math.round(timing.frameAt(command.atTick)) - r.fileOffset;
+        const cut = r.fileOffset + left;
+        const at = Math.round(command.atTick);
         const right: AudioRegion = {
           ...r,
           id: `rgn_${this.nextId++}`,
-          startTick: Math.round(command.atTick),
-          fileOffset: r.fileOffset + left,
+          startTick: at,
+          fileOffset: cut,
           length: r.length - left,
           fadeIn: 0,
-          fadeOut: Math.min(r.fadeOut, r.length - left)
+          fadeOut: Math.min(r.fadeOut, r.length - left),
+          flexMarkers: r.flexMarkers
+            .filter(m => m.fileFrame > cut)
+            .map(m => ({ ...m, tick: m.tick - (at - r.startTick) }))
+            .filter(m => m.tick > 0),
+          pitchNotes: r.pitchNotes.filter(n => n.startFrame >= cut)
         };
-        const first = { ...r, length: left, fadeIn: Math.min(r.fadeIn, left), fadeOut: 0 };
+        const first = {
+          ...r,
+          length: left,
+          fadeIn: Math.min(r.fadeIn, left),
+          fadeOut: 0,
+          flexMarkers: r.flexMarkers.filter(m => m.fileFrame < cut && m.tick < at - r.startTick),
+          pitchNotes: r.pitchNotes.filter(n => n.endFrame <= cut)
+        };
         return { ...withRegion(first), regions: [...withRegion(first).regions, right] };
       }
       case 'setRegion': {
@@ -2341,25 +2625,34 @@ export class FakeAnodeServer implements AnodeApi {
       case 'applyPatch':
       case 'unfreezeTrack':
         return applyMixCommand(project, command, this.mixContext()) ?? project;
-      case 'setTrackFlex':
-      case 'setRegionFlex':
-      case 'setFlexMarkers':
-      case 'quantizeAudio':
-      case 'setPitchNotes':
-      case 'flexPitchToMidi':
-      case 'setFileTempo':
-      case 'adaptTempo':
-      case 'mapBeats':
-      case 'stripSilence':
-      case 'newTrackAlternative':
-      case 'selectTrackAlternative':
-      case 'setTrackAlternative':
-      case 'deleteTrackAlternative':
-      case 'setVarispeed':
-      case 'setSmartTempo':
-        // Flex, Smart Tempo, Varispeed and track alternatives: Phase 5, the editor workstream (docs/06-phase-5.md).
-        throw new ApiError(422, `${command.type}: not in the fake Server yet.`);
+      default:
+        // Flex, Smart Tempo, Varispeed and track alternatives (Phase 5).
+        return applyFlexCommand(project, command, this.flexContext()) ?? project;
     }
+  }
+
+  /** What the Phase 5 commands need: ids, composition, and file analysis. */
+  private flexContext(): FlexContext {
+    return {
+      id: prefix => `${prefix}_${this.nextId++}`,
+      apply: (project, command) => this.applyCommand(project, command),
+      analysis: file => this.analysisOf(file)
+    };
+  }
+
+  /**
+   * A file's cached analysis: transients and beats built now when missing (as the Server does synchronously), the
+   * pitch curve and notes once an analyze job ran. Building or rebuilding announces it (`analysis`).
+   */
+  private analysisOf(file: AudioFile, withPitch = false): FileAnalysis {
+    const cached = this.analyses.get(file.id);
+    if (cached && (!withPitch || cached.pitch.length > 0)) {
+      return cached;
+    }
+    const built = fakeAnalysis(file, withPitch);
+    this.analyses.set(file.id, built);
+    setTimeout(() => this.emit({ type: 'analysis', fileId: file.id }), 0);
+    return built;
   }
 
   /** What the mixing commands need: ids, the catalogue, the patches, and the playhead while the transport runs. */
@@ -2498,6 +2791,9 @@ export class FakeAnodeServer implements AnodeApi {
       frames: header.frames,
       tempo: null
     };
+    if (project.settings.smartTempo.analyzeImports) {
+      file.tempo = this.analysisOf(file).tempo;
+    }
     // An import is not an edit: no revision, no undo step. The file reaches other clients with the region that uses it.
     this.project = { ...project, audioFiles: [...project.audioFiles, file] };
     return { ...file };
@@ -2848,6 +3144,11 @@ export class FakeAnodeServer implements AnodeApi {
 }
 
 /** A blob's bytes (FileReader where `Blob.arrayBuffer` is missing, as in jsdom). */
+/** The last region of a project renamed (the one a command just added). */
+function renameLast(project: Project, name: string): Project {
+  return { ...project, regions: project.regions.map((r, i, all) => (i === all.length - 1 ? { ...r, name } : r)) };
+}
+
 function readBytes(blob: Blob): Promise<ArrayBuffer> {
   if (typeof blob.arrayBuffer === 'function') {
     return blob.arrayBuffer();
