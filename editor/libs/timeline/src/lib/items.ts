@@ -30,6 +30,22 @@ export interface TimelineScene {
   readonly regions?: RegionDetails;
   /** {@link ItemFlag} bits per item of a notes scene (the Piano Roll): selected notes, notes that do not play. */
   readonly noteFlags?: Uint8Array;
+  /** The palette to draw in ({@link documentTheme}); dark when unset. */
+  readonly theme?: TimelineThemeName;
+}
+
+/** The timeline palettes: the app's dark (primary) and light themes. */
+export type TimelineThemeName = 'dark' | 'light';
+
+/**
+ * The theme the page renders in, from the root element's `color-scheme` (xUI sets it per theme), for
+ * {@link TimelineScene.theme}. Dark outside a document (workers, tests).
+ */
+export function documentTheme(): TimelineThemeName {
+  if (typeof document === 'undefined' || typeof getComputedStyle !== 'function') {
+    return 'dark';
+  }
+  return getComputedStyle(document.documentElement).colorScheme.includes('light') ? 'light' : 'dark';
 }
 
 /**

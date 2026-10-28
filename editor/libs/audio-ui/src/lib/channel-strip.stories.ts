@@ -9,11 +9,22 @@ const playing: MeterSource = () => {
   return { left: level, right: level * 0.9 };
 };
 
-/** A mixer channel strip: pan, fader with meter, mute and solo, and the channel's name on its colour. */
+/**
+ * A mixer channel strip as in Logic's Mixer: a graded column with the pan knob and its readout, the dB readout over a
+ * metal-capped fader and its scale, the LED meter, mute and solo keys, and the channel's name under a bar of its colour.
+ */
 const meta: Meta<AnChannelStrip> = {
   title: 'Audio UI/Channel strip',
   component: AnChannelStrip,
-  args: { name: 'Guitar', color: '#46a758', volumeDb: -3.5, pan: -0.25, mute: false, solo: false, meter: playing }
+  args: {
+    name: 'Guitar',
+    color: 'var(--track-2)',
+    volumeDb: -3.5,
+    pan: -0.25,
+    mute: false,
+    solo: false,
+    meter: playing
+  }
 };
 
 export default meta;
@@ -23,22 +34,25 @@ export const Default: Story = {};
 
 export const MutedAndSoloed: Story = { args: { mute: true, solo: true } };
 
+/** The selected track's strip is lighter, as in Logic's Mixer. */
+export const Selected: Story = { args: { selected: true } };
+
 export const Master: Story = { args: { name: 'Stereo Out', master: true, color: 'var(--color-foreground-muted)' } };
 
 /** A small mixer: the strips are wired to local state, as the editor wires them to the Server. */
 export const Mixer: Story = {
   render: () => {
     const strips = signal([
-      { name: 'Drums', color: '#e5484d', volumeDb: 0, pan: 0, mute: false, solo: false },
-      { name: 'Bass', color: '#f76b15', volumeDb: -4, pan: -0.1, mute: false, solo: false },
-      { name: 'Vocals', color: '#0090ff', volumeDb: -2, pan: 0.15, mute: false, solo: true }
+      { name: 'Drums', color: 'var(--track-1)', volumeDb: 0, pan: 0, mute: false, solo: false },
+      { name: 'Bass', color: 'var(--track-4)', volumeDb: -4, pan: -0.1, mute: false, solo: false },
+      { name: 'Vocals', color: 'var(--track-6)', volumeDb: -2, pan: 0.15, mute: false, solo: true }
     ]);
     const update = (i: number, change: object) =>
       strips.update(list => list.map((s, j) => (i === j ? { ...s, ...change } : s)));
     return {
       props: { strips, update, playing },
       template: `
-        <div class="flex gap-2">
+        <div class="bg-surface-sunken flex h-96">
           @for (s of strips(); track s.name; let i = $index) {
             <an-channel-strip
               [name]="s.name"

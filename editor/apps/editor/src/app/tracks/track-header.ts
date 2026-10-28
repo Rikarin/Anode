@@ -61,29 +61,29 @@ import { setTrack, setTrackLabel, type TrackChange } from '../state/track-comman
     })
   ],
   host: {
-    class: 'border-border flex items-stretch gap-2 border-b pe-2',
+    class: 'an-track-header border-hairline flex items-stretch gap-2 border-b pe-2',
     role: 'group',
     '[attr.aria-label]': '"Track " + number() + ": " + track().name',
     '[attr.data-track-id]': 'track().id',
-    '[class.bg-surface-raised]': 'selected()',
+    '[class.bg-muted]': 'selected()',
     '[class.bg-surface]': '!selected()',
     '(click)': 'select()'
   },
   template: `
     <button
       type="button"
-      class="focus-visible:outline-focus w-1.5 shrink-0 cursor-pointer focus-visible:outline-2"
+      class="focus-visible:outline-focus w-1.5 shrink-0 cursor-pointer shadow-[inset_-1px_0_0_var(--hairline)] focus-visible:outline-2"
       [style.background-color]="track().color"
       [attr.aria-label]="'Colour of ' + track().name"
       [xuiPopover]="palette"
       placement="right-start"
     ></button>
     <ng-template #palette>
-      <div class="grid grid-cols-4 gap-1 p-1" role="group" aria-label="Track colours">
+      <div class="grid grid-cols-6 gap-1.5 p-1.5" role="group" aria-label="Track colours">
         @for (color of colors; track color) {
           <button
             type="button"
-            class="focus-visible:outline-focus size-5 rounded-sm focus-visible:outline-2"
+            class="focus-visible:outline-focus aria-pressed:ring-foreground size-5 rounded-[5px] shadow-[inset_0_0_0_1px_var(--hairline)] focus-visible:outline-2 aria-pressed:ring-2 aria-pressed:ring-offset-1"
             [style.background-color]="color"
             [attr.aria-label]="'Colour ' + color"
             [attr.aria-pressed]="color === track().color"
@@ -94,7 +94,9 @@ import { setTrack, setTrackLabel, type TrackChange } from '../state/track-comman
     </ng-template>
     <div class="flex min-w-0 flex-1 flex-col justify-center gap-1 py-1">
       <div class="flex min-w-0 items-center gap-1.5">
-        <span class="text-foreground-muted w-4 shrink-0 text-end text-[11px] tabular-nums">{{ number() }}</span>
+        <span class="text-foreground-subtle w-4 shrink-0 text-end text-[11px] font-medium tabular-nums">{{
+          number()
+        }}</span>
         <ng-icon
           xui
           size="sm"
@@ -116,7 +118,7 @@ import { setTrack, setTrackLabel, type TrackChange } from '../state/track-comman
           />
         } @else {
           <span
-            class="text-foreground min-w-0 flex-1 truncate text-xs font-medium"
+            class="text-foreground min-w-0 flex-1 truncate text-[12px] font-semibold"
             [attr.title]="track().name + ' (double-click to rename)'"
             (dblclick)="startRename($event)"
           >
@@ -125,9 +127,9 @@ import { setTrack, setTrackLabel, type TrackChange } from '../state/track-comman
         }
         @if (track().kind !== 'audio') {
           <span
-            class="size-1.5 shrink-0 rounded-full transition-colors"
-            [class.bg-success]="active()"
-            [class.bg-border]="!active()"
+            class="size-1.5 shrink-0 rounded-full transition-colors duration-100"
+            [class.bg-meter-low]="active()"
+            [class.bg-border-strong]="!active()"
             role="img"
             data-testid="midi-activity"
             [attr.data-active]="active() || null"
@@ -159,13 +161,9 @@ import { setTrack, setTrackLabel, type TrackChange } from '../state/track-comman
       </div>
       <div class="flex items-center gap-1">
         <button
-          xuiButton
           type="button"
-          size="sm"
-          [class]="toggleClass"
-          [variant]="track().strip.mute ? 'default' : 'outline'"
-          [color]="track().strip.mute ? 'info' : 'secondary'"
-          [active]="track().strip.mute"
+          class="state-toggle toggle-mute"
+          [attr.aria-pressed]="track().strip.mute"
           [attr.aria-label]="'Mute ' + track().name"
           xuiTooltip="Mute"
           (click)="mixer.toggleMute(track().id)"
@@ -173,13 +171,9 @@ import { setTrack, setTrackLabel, type TrackChange } from '../state/track-comman
           M
         </button>
         <button
-          xuiButton
           type="button"
-          size="sm"
-          [class]="toggleClass"
-          [variant]="track().strip.solo ? 'default' : 'outline'"
-          [color]="track().strip.solo ? 'warning' : 'secondary'"
-          [active]="track().strip.solo"
+          class="state-toggle toggle-solo"
+          [attr.aria-pressed]="track().strip.solo"
           [attr.aria-label]="'Solo ' + track().name"
           xuiTooltip="Solo"
           (click)="mixer.toggleSolo(track().id)"
@@ -187,13 +181,9 @@ import { setTrack, setTrackLabel, type TrackChange } from '../state/track-comman
           S
         </button>
         <button
-          xuiButton
           type="button"
-          size="sm"
-          [class]="toggleClass"
-          [variant]="track().recordArmed ? 'default' : 'outline'"
-          [color]="track().recordArmed ? 'error' : 'secondary'"
-          [active]="track().recordArmed"
+          class="state-toggle toggle-arm"
+          [attr.aria-pressed]="track().recordArmed"
           [attr.aria-label]="'Record enable ' + track().name"
           xuiTooltip="Record enable"
           (click)="change({ recordArmed: !track().recordArmed })"
@@ -201,25 +191,22 @@ import { setTrack, setTrackLabel, type TrackChange } from '../state/track-comman
           R
         </button>
         <button
-          xuiButton
           type="button"
-          size="sm"
-          [class]="toggleClass"
+          class="state-toggle toggle-monitor"
           [class.invisible]="track().kind !== 'audio'"
           [disabled]="track().kind !== 'audio'"
-          [variant]="track().inputMonitoring ? 'default' : 'outline'"
-          [color]="track().inputMonitoring ? 'warning' : 'secondary'"
-          [active]="track().inputMonitoring"
+          [attr.aria-pressed]="track().inputMonitoring"
           [attr.aria-label]="'Input monitoring ' + track().name"
           xuiTooltip="Input monitoring"
           (click)="change({ inputMonitoring: !track().inputMonitoring })"
         >
           I
         </button>
-        <label class="flex min-w-0 flex-1 items-center" [attr.title]="'Volume ' + volumeText()">
+        <label class="an-track-volume flex min-w-0 flex-1 items-center ps-1" [attr.title]="'Volume ' + volumeText()">
           <span class="sr-only">Volume of {{ track().name }}</span>
           <xui-slider
             class="min-w-0 flex-1"
+            color="none"
             [min]="0"
             [max]="1"
             [stepSize]="0.001"
@@ -242,7 +229,6 @@ export class TrackHeader {
   readonly index = input.required<number>();
 
   protected readonly colors = TrackColors;
-  protected readonly toggleClass = 'h-5 w-5 px-0 text-[10px] font-semibold';
   protected readonly renaming = signal(false);
   private readonly nameInput = viewChild<ElementRef<HTMLInputElement>>('name');
   protected readonly number = computed(() => this.index() + 1);

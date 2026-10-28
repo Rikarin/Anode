@@ -3,7 +3,8 @@ import { expect, userEvent, within } from 'storybook/test';
 import { AnKnob } from './knob';
 
 /**
- * A plugin parameter's knob: any range and unit, logarithmic for frequencies and times, stepped when discrete. Drag
+ * A plugin parameter's knob: a turned-metal body with a highlight, its value as an accent arc on a sunken track. Any
+ * range and unit, logarithmic for frequencies and times, stepped when discrete. Drag
  * (⇧ for fine), arrows and Page keys, Home/End; double-click or ⌥-click for the default.
  */
 const meta: Meta<AnKnob> = {

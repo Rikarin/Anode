@@ -2,7 +2,10 @@ import type { Meta, StoryObj } from '@storybook/angular-vite';
 import { expect, userEvent, within } from 'storybook/test';
 import { AnPanKnob } from './pan-knob';
 
-/** A channel's pan, shown as Logic does (L64 … C … R63). Drag, arrows, Home/End; double-click to centre. */
+/**
+ * A channel's pan: a small metal knob whose arc grows from the centre, with its value in a readout as Logic shows it
+ * (L64 … C … R63). Drag, arrows, Home/End; double-click to centre.
+ */
 const meta: Meta<AnPanKnob> = {
   title: 'Audio UI/Pan knob',
   component: AnPanKnob,

@@ -1,5 +1,4 @@
 import { ChangeDetectionStrategy, Component, booleanAttribute, input, output } from '@angular/core';
-import { XuiButtonImports } from '@xui/button';
 import { AnFader } from './fader';
 import { AnPanKnob } from './pan-knob';
 import { AnPeakMeter, type MeterSource } from './peak-meter';
@@ -12,13 +11,12 @@ import { AnPeakMeter, type MeterSource } from './peak-meter';
 @Component({
   selector: 'an-channel-strip',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [AnFader, AnPanKnob, AnPeakMeter, XuiButtonImports],
+  imports: [AnFader, AnPanKnob, AnPeakMeter],
   host: {
-    class: 'bg-surface border-border flex w-20 shrink-0 flex-col items-center gap-2 rounded-md border px-1 pt-2 pb-1',
+    class: 'strip-body flex h-full max-h-96 min-h-72 w-21 shrink-0 flex-col items-center gap-2 pt-2.5',
     role: 'group',
     '[attr.aria-label]': 'name() + " channel strip"',
-    '[class.ring-1]': 'selected()',
-    '[class.ring-primary]': 'selected()'
+    '[class.strip-selected]': 'selected()'
   },
   template: `
     <an-pan-knob
@@ -27,24 +25,21 @@ import { AnPeakMeter, type MeterSource } from './peak-meter';
       (valueChange)="panChange.emit($event)"
       (committed)="panCommit.emit($event)"
     />
-    <div class="flex items-stretch gap-1">
+    <div class="flex min-h-0 flex-1 items-stretch gap-1">
       <an-fader
+        class="h-auto!"
         [label]="name() + ' volume'"
         [value]="volumeDb()"
         (valueChange)="volumeChange.emit($event)"
         (committed)="volumeCommit.emit($event)"
       />
-      <an-peak-meter class="mb-4" [label]="name() + ' level'" [source]="meter()" [mono]="mono()" />
+      <an-peak-meter class="h-auto! pt-6 pb-2" [label]="name() + ' level'" [source]="meter()" [mono]="mono()" />
     </div>
     <div class="flex gap-1">
       <button
-        xuiButton
         type="button"
-        size="sm"
-        class="h-5 w-6 px-0 text-[10px] font-semibold"
-        [variant]="mute() ? 'default' : 'outline'"
-        [color]="mute() ? 'info' : 'secondary'"
-        [active]="mute()"
+        class="state-toggle toggle-mute h-5 w-7"
+        [attr.aria-pressed]="mute()"
         [attr.aria-label]="'Mute ' + name()"
         (click)="muteToggle.emit()"
       >
@@ -52,13 +47,9 @@ import { AnPeakMeter, type MeterSource } from './peak-meter';
       </button>
       @if (!master()) {
         <button
-          xuiButton
           type="button"
-          size="sm"
-          class="h-5 w-6 px-0 text-[10px] font-semibold"
-          [variant]="solo() ? 'default' : 'outline'"
-          [color]="solo() ? 'warning' : 'secondary'"
-          [active]="solo()"
+          class="state-toggle toggle-solo h-5 w-7"
+          [attr.aria-pressed]="solo()"
           [attr.aria-label]="'Solo ' + name()"
           (click)="soloToggle.emit()"
         >
@@ -66,12 +57,14 @@ import { AnPeakMeter, type MeterSource } from './peak-meter';
         </button>
       }
     </div>
-    <div
-      class="text-foreground w-full truncate rounded-sm border-t-4 px-1 pt-0.5 text-center text-[11px]"
-      [style.border-top-color]="color()"
-      [attr.title]="name()"
-    >
-      {{ name() }}
+    <div class="w-full px-1 pb-1">
+      <div
+        class="text-foreground bg-surface-inset w-full truncate rounded-[4px] px-1 py-1 text-center text-[11px] font-semibold shadow-[inset_0_3px_0_var(--strip-color),inset_0_0_0_1px_var(--hairline)]"
+        [style.--strip-color]="color()"
+        [attr.title]="name()"
+      >
+        {{ name() }}
+      </div>
     </div>
   `
 })

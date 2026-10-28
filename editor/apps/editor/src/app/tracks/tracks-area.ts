@@ -65,11 +65,7 @@ import { TrackHeader } from './track-header';
   ],
   host: { class: 'flex h-full min-h-0 flex-col', role: 'region', 'aria-label': 'Tracks' },
   template: `
-    <div
-      class="border-border flex h-9 shrink-0 items-center gap-2 border-b px-2"
-      role="toolbar"
-      aria-label="Tracks area"
-    >
+    <div class="glass-bar flex h-9 shrink-0 items-center gap-2 px-2" role="toolbar" aria-label="Tracks area">
       <button
         xuiButton
         type="button"
@@ -164,8 +160,8 @@ import { TrackHeader } from './track-header';
       </div>
     </div>
     <div class="flex min-h-0 flex-1">
-      <div class="border-border relative w-64 shrink-0 overflow-hidden border-e" (wheel)="wheel($event)">
-        <div class="bg-surface border-border border-b" [style.height.px]="ruler"></div>
+      <div class="border-hairline bg-surface relative w-64 shrink-0 overflow-hidden border-e" (wheel)="wheel($event)">
+        <div class="glass-bar" [style.height.px]="ruler"></div>
         <div class="absolute inset-x-0" [style.top.px]="ruler" [style.transform]="'translateY(' + offset() + 'px)'">
           @for (track of project.trackList(); track track.id; let i = $index) {
             <an-track-header [track]="track" [index]="i" [style.height.px]="view.laneHeight()" />

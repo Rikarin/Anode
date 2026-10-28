@@ -3,17 +3,50 @@ import { ItemFlag, type ItemOverride, parseHexColor, type TimelineScene, type Ti
 import { LaneIntervalIndex } from './lane-interval-index';
 import { peakRange, WaveformSet } from './waveform';
 
-/** How a rectangle is shaded: flat, a note (1 px darker border) or a region (border plus a name bar). */
-export const RectStyle = { Flat: 0, Note: 1, Region: 2 } as const;
-export type RectStyle = (typeof RectStyle)[keyof typeof RectStyle];
+/**
+ * How a rectangle is shaded. The low four bits pick a shape the renderers draw as one instance (the WebGL2 fragment
+ * shader, or a Canvas2D path): flat; a Piano Roll note (rounded, a soft vertical gradient, a darker edge); a region
+ * (rounded, a gradient body under a darker name bar when it is {@link NAME_BAR_MIN_HEIGHT} tall, a darker hairline
+ * edge and a highlight along its top); the cycle area (a rounded band); the playhead's head (a triangle pointing down);
+ * the ruler (a vertical gradient). {@link RectStyle.Selected} is a flag on notes and regions: a white ring at the edge.
+ */
+export const RectStyle = { Flat: 0, Note: 1, Region: 2, Cycle: 3, PlayheadHead: 4, Ruler: 5, Selected: 16 } as const;
+export type RectStyle = number;
+
+/** The shape bits of a {@link RectStyle}, without its flags. */
+export const RECT_SHAPE_MASK = 15;
+
+/** A region shows its name bar from this height (CSS pixels) up; a lower one shows its body only. */
+export const NAME_BAR_MIN_HEIGHT = 22;
+
+/** Corner radii in CSS pixels; both renderers round by these (less on a smaller rectangle). */
+export const CornerRadius = { Region: 4, Note: 2, Cycle: 3 } as const;
+
+/**
+ * How a region is shaded from its colour (multipliers of its RGB), top to bottom, by both renderers. The body is a
+ * darker version of the track colour, so the lighter waveform reads on it; the name bar is darker still, so the name in
+ * {@link TimelineTheme.regionText} keeps its contrast on every palette colour; the edge is a dark hairline.
+ */
+export const RegionShade = {
+  bodyTop: 0.86,
+  bodyBottom: 0.64,
+  nameTop: 0.56,
+  nameBottom: 0.46,
+  edge: 0.34,
+  /** The highlight along the top, towards white. */
+  gloss: 0.22
+} as const;
 
 /** A view's colours, packed ({@link parseHexColor}). */
 export interface TimelineTheme {
   readonly background: number;
   readonly laneAlternate: number;
+  /** The hairline between two tracks' lanes (and the Piano Roll's octaves), and under the ruler. */
+  readonly laneLine: number;
   readonly gridBar: number;
   readonly gridBeat: number;
   readonly gridDivision: number;
+  /** The ruler's colour; it is drawn as a vertical gradient around it. */
   readonly ruler: number;
   readonly rulerTick: number;
   readonly rulerText: number;
@@ -24,8 +57,10 @@ export interface TimelineTheme {
   /** Lanes after the project end. */
   readonly afterEnd: number;
   readonly endMarker: number;
-  /** Selected regions' outline and the marquee. */
+  /** The marquee's outline. */
   readonly selection: number;
+  /** The marquee's translucent fill. */
+  readonly marqueeFill: number;
   /** Fade lines and handles. */
   readonly fade: number;
   /** Region names, on the region's name bar. */
@@ -34,25 +69,66 @@ export interface TimelineTheme {
   readonly muted: number;
 }
 
+/** The dark theme (Anode's primary): graphite lanes, a lighter ruler, a white playhead, Logic's yellow cycle area. */
 export const darkTheme: TimelineTheme = {
-  background: parseHexColor('#1c1d21'),
-  laneAlternate: parseHexColor('#18191c'),
-  gridBar: parseHexColor('#3a3c44'),
-  gridBeat: parseHexColor('#2b2d33'),
-  gridDivision: parseHexColor('#232429'),
-  ruler: parseHexColor('#26272c'),
-  rulerTick: parseHexColor('#6b6e7a'),
-  rulerText: parseHexColor('#b8bbc6'),
-  playhead: parseHexColor('#f04b4b'),
-  cycle: parseHexColor('#c9a227'),
-  cycleOff: parseHexColor('#4a4c55'),
-  afterEnd: parseHexColor('#141518'),
-  endMarker: parseHexColor('#8a8d99'),
-  selection: parseHexColor('#f2f3f7'),
-  fade: parseHexColor('#16171a'),
-  regionText: parseHexColor('#111214'),
-  muted: parseHexColor('#55575f')
+  background: parseHexColor('#232325'),
+  laneAlternate: parseHexColor('#202022'),
+  laneLine: parseHexColor('#151516'),
+  gridBar: parseHexColor('#3d3d42'),
+  gridBeat: parseHexColor('#2e2e32'),
+  gridDivision: parseHexColor('#28282b'),
+  ruler: parseHexColor('#38383d'),
+  rulerTick: parseHexColor('#8e8e95'),
+  rulerText: parseHexColor('#dedee2'),
+  playhead: parseHexColor('#f4f4f6'),
+  cycle: parseHexColor('#f5c400'),
+  cycleOff: parseHexColor('#5e5e64'),
+  afterEnd: parseHexColor('#1a1a1b'),
+  endMarker: parseHexColor('#aaaab0'),
+  selection: parseHexColor('#ffffff'),
+  marqueeFill: parseHexColor('#ffffff1a'),
+  fade: parseHexColor('#ededf0'),
+  regionText: parseHexColor('#f8f8fa'),
+  muted: parseHexColor('#6c6c72')
 };
+
+/** The light theme: Logic's light grey lanes, a dark playhead, the same yellow cycle area. */
+export const lightTheme: TimelineTheme = {
+  background: parseHexColor('#ededf0'),
+  laneAlternate: parseHexColor('#e8e8eb'),
+  laneLine: parseHexColor('#cdcdd2'),
+  gridBar: parseHexColor('#c1c1c7'),
+  gridBeat: parseHexColor('#d7d7dc'),
+  gridDivision: parseHexColor('#e1e1e5'),
+  ruler: parseHexColor('#dadade'),
+  rulerTick: parseHexColor('#86868c'),
+  rulerText: parseHexColor('#36363a'),
+  playhead: parseHexColor('#1d1d1f'),
+  cycle: parseHexColor('#f5c400'),
+  cycleOff: parseHexColor('#b2b2b8'),
+  afterEnd: parseHexColor('#e0e0e4'),
+  endMarker: parseHexColor('#6e6e73'),
+  selection: parseHexColor('#1d1d1f'),
+  marqueeFill: parseHexColor('#0071e31f'),
+  fade: parseHexColor('#ffffff'),
+  regionText: parseHexColor('#ffffff'),
+  muted: parseHexColor('#a2a2a8')
+};
+
+/** The palette for a {@link TimelineScene.theme}. */
+export function timelineTheme(name: TimelineScene['theme']): TimelineTheme {
+  return name === 'light' ? lightTheme : darkTheme;
+}
+
+/** A region's waveform colour: a lighter tint of its colour, drawn over its darker body. */
+export function waveformColor(base: number): number {
+  return shadeColor(base, 1.48);
+}
+
+/** A MIDI region's note miniatures: small bars in a lighter tint of its colour. */
+export function miniatureColor(base: number): number {
+  return shadeColor(base, 1.7);
+}
 
 /** Height of the bar ruler across the top, in CSS pixels. */
 export const RULER_HEIGHT = 24;
@@ -197,7 +273,7 @@ export class FrameBuilder {
 
   constructor(
     readonly scene: TimelineScene,
-    readonly theme: TimelineTheme = darkTheme,
+    readonly theme: TimelineTheme = timelineTheme(scene.theme),
     /** Waveforms for {@link TimelineScene.regions}' keys; shared with whoever loads them. */
     readonly waveforms: WaveformSet = new WaveformSet()
   ) {
@@ -253,6 +329,21 @@ export class FrameBuilder {
         level === GridLevel.Bar ? theme.gridBar : level === GridLevel.Beat ? theme.gridBeat : theme.gridDivision;
       batch.push(Math.round(xOf(tick)), laneTop, 1, height - laneTop, color);
     }
+    // Hairlines across: between tracks; in the Piano Roll between keys (when they are tall enough), darker at each B|C.
+    batch.reserve(laneTo - laneFrom);
+    for (let lane = laneFrom; lane < laneTo; lane++) {
+      const y = Math.round(laneY(lane) + laneHeight) - 1;
+      if (kind === 'regions') {
+        batch.push(0, y, width, 1, theme.laneLine);
+      } else {
+        const octave = (laneCount - 1 - lane) % 12 === 0;
+        if (octave || laneHeight >= 8) {
+          for (const [a, b] of stretches) {
+            batch.push(a, y, b - a, 1, octave ? theme.laneLine : theme.gridDivision);
+          }
+        }
+      }
+    }
     batch.endLayer();
 
     // Items: query, then project. Clamp x to just outside the canvas so float32 keeps sub-pixel precision.
@@ -268,32 +359,25 @@ export class FrameBuilder {
       const y = laneY(region.lane) + inset;
       const flag = flags?.[region.id] ?? 0;
       const base = flag & ItemFlag.Muted ? theme.muted : (scene.items.color[region.id] ?? 0);
-      const color = flag & ItemFlag.Selected ? shadeColor(base, 1.25) : base;
-      batch.push(x0, y, x1 - x0, laneHeight - 2 * inset, color, style);
+      const selected = flag & ItemFlag.Selected;
+      const color = selected ? shadeColor(base, 1.25) : base;
+      batch.push(x0, y, x1 - x0, laneHeight - 2 * inset, color, selected ? style | RectStyle.Selected : style);
     }
     batch.visibleItems = drawn.length;
     batch.endLayer();
 
-    // Region details: waveforms, note miniatures, fades, selection outlines, names. Selected notes get an outline.
+    // Region details: waveforms, note miniatures, fades, names. (Selection is the items' ring, drawn by the renderer.)
     if (scene.regions) {
       for (const region of drawn) {
         this.regionDetails(region, view, width, laneY(region.lane) + inset, laneHeight - 2 * inset);
-      }
-    } else if (scene.noteFlags) {
-      for (const note of drawn) {
-        if ((scene.noteFlags[note.id] ?? 0) & ItemFlag.Selected) {
-          const x0 = Math.max(-2, xOf(note.start));
-          const x1 = Math.min(width + 2, Math.max(xOf(note.start + note.length), x0 + 2));
-          batch.outline(x0, laneY(note.lane), x1 - x0, laneHeight, theme.selection);
-        }
       }
     }
     batch.endLayer();
 
     // Ruler: background, cycle area, beat and bar ticks, bar numbers, project end.
     const bar = ppq * beatsPerBar;
-    batch.push(0, 0, width, laneTop, theme.ruler);
-    batch.push(0, laneTop - 1, width, 1, theme.gridBar);
+    batch.push(0, 0, width, laneTop, theme.ruler, RectStyle.Ruler);
+    batch.push(0, laneTop - 1, width, 1, theme.laneLine);
     const cycle = view.cycle;
     if (cycle && cycle.end > cycle.start) {
       const c0 = Math.max(-2, xOf(cycle.start));
@@ -304,7 +388,8 @@ export class FrameBuilder {
           CYCLE_BAND_TOP,
           c1 - c0,
           laneTop - CYCLE_BAND_TOP - 1,
-          cycle.enabled ? theme.cycle : theme.cycleOff
+          cycle.enabled ? theme.cycle : theme.cycleOff,
+          RectStyle.Cycle
         );
       }
     }
@@ -327,11 +412,13 @@ export class FrameBuilder {
     // Overlay: the marquee and the playhead.
     const marquee = view.marquee;
     if (marquee && marquee.width >= 1 && marquee.height >= 1) {
+      batch.push(marquee.x, marquee.y, marquee.width, marquee.height, theme.marqueeFill);
       batch.outline(marquee.x, marquee.y, marquee.width, marquee.height, theme.selection);
     }
     const playheadX = Math.round(xOf(view.playheadTick));
-    if (playheadX >= -5 && playheadX <= width + 5) {
-      batch.push(playheadX - 4, 0, 9, 6, theme.playhead);
+    if (playheadX >= -6 && playheadX <= width + 6) {
+      // Logic's playhead: a hairline with a small downward triangle in the ruler.
+      batch.push(playheadX - 5, 0, 11, 9, theme.playhead, RectStyle.PlayheadHead);
       batch.push(playheadX, 0, 1, height, theme.playhead);
     }
     batch.endLayer();
@@ -378,7 +465,7 @@ export class FrameBuilder {
     return drawn;
   }
 
-  /** A region's waveform (min/max columns), fade lines and handles, selection outline and name. */
+  /** A region's waveform (min/max columns) or note miniatures, fade lines and handles, and name. */
   private regionDetails(region: DrawnRegion, view: TimelineView, width: number, y: number, h: number): void {
     const { batch, theme, scene, range } = this;
     const details = scene.regions;
@@ -393,7 +480,7 @@ export class FrameBuilder {
     const x1 = Math.min(width, Math.ceil(xEnd));
     const flag = details.flags[id] ?? 0;
     const base = flag & ItemFlag.Muted ? theme.muted : (scene.items.color[id] ?? 0);
-    const withName = h >= 22;
+    const withName = h >= NAME_BAR_MIN_HEIGHT;
     const top = withName ? y + NAME_BAR_HEIGHT : y + 1;
     const bottom = y + h - 1;
     const framesPerTick = details.framesPerTick;
@@ -404,7 +491,7 @@ export class FrameBuilder {
       const mid = (top + bottom) / 2;
       const half = (bottom - top) / 2;
       const gain = details.gain[id] ?? 1;
-      const color = shadeColor(base, 0.42);
+      const color = waveformColor(base);
       const framesPerPixel = framesPerTick / ppt;
       batch.reserve(x1 - x0);
       for (let x = x0; x < x1; x++) {
@@ -426,9 +513,9 @@ export class FrameBuilder {
       const low = notes.low[id] ?? 0;
       const rows = (notes.high[id] ?? 127) - low + 1;
       const rowHeight = (bottom - top) / rows;
-      const noteHeight = Math.max(1, Math.min(4, rowHeight));
+      const noteHeight = Math.max(1.5, Math.min(3, rowHeight * 0.8));
       const origin = start - fileOffset;
-      const color = shadeColor(base, 0.35);
+      const color = miniatureColor(base);
       const end = start + length;
       batch.reserve(to - from);
       for (let k = from; k < to; k++) {
@@ -457,12 +544,8 @@ export class FrameBuilder {
       this.fadeLine(xEnd - fadeOutPx, top, xEnd, bottom, width);
     }
 
-    if (flag & ItemFlag.Selected && x1 > x0) {
-      batch.outline(Math.max(-1, xStart), y, Math.min(width + 1, xEnd) - Math.max(-1, xStart), h, theme.selection);
-    }
-
     if (withName) {
-      const textX = Math.max(xStart, 0) + 3;
+      const textX = Math.max(xStart, 0) + 4;
       batch.pushText(textX, y + 1, details.names[id] ?? '', theme.regionText, xEnd - textX - 2);
     }
   }

@@ -20,14 +20,19 @@ export function meterFraction(db: number, floorDb = MeterFloorDb): number {
   selector: 'an-level-meter',
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: {
-    class: 'bg-surface-inset border-border relative block w-2 overflow-hidden rounded-sm border',
+    class: 'well relative block w-2 overflow-hidden rounded-[2px]',
     role: 'meter',
     '[attr.aria-label]': 'label()',
     '[attr.aria-valuemin]': 'floorDb()',
     'aria-valuemax': '0',
     '[attr.aria-valuenow]': 'clampedDb()'
   },
-  template: `<div class="absolute inset-x-0 bottom-0" [class]="fill()" [style.height.%]="fraction() * 100"></div>`
+  template: `
+    <div class="meter-segments absolute inset-px">
+      <div class="bg-meter-unlit absolute inset-0"></div>
+      <div class="absolute inset-x-0 bottom-0" [class]="fill()" [style.height.%]="fraction() * 100"></div>
+    </div>
+  `
 })
 export class AnLevelMeter {
   /** The level in dBFS. */
@@ -40,6 +45,6 @@ export class AnLevelMeter {
   protected readonly fraction = computed(() => meterFraction(this.db(), this.floorDb()));
   protected readonly clampedDb = computed(() => Math.round(Math.min(0, Math.max(this.floorDb(), this.db()))));
   protected readonly fill = computed(() =>
-    this.db() >= 0 ? 'bg-error' : this.db() > -6 ? 'bg-warning' : 'bg-success'
+    this.db() >= 0 ? 'bg-meter-high' : this.db() > -6 ? 'bg-meter-mid' : 'bg-meter-low'
   );
 }

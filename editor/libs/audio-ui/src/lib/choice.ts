@@ -15,7 +15,7 @@ let nextId = 0;
   host: { class: 'inline-flex w-28 flex-col items-stretch gap-0.5' },
   template: `
     <xui-select
-      class="w-full"
+      class="an-compact-select w-full"
       [items]="names()"
       [itemText]="text"
       [filterable]="false"

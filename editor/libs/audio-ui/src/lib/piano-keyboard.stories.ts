@@ -3,7 +3,8 @@ import { expect, fireEvent, fn, userEvent, waitFor, within } from 'storybook/tes
 import { AnPianoKeyboard } from './piano-keyboard';
 
 /**
- * The on-screen keyboard: press keys to play (lower on a key is louder), drag for a glissando. Keys the engine reports
+ * The on-screen keyboard, ivory and ebony keys in either theme: press keys to play (lower on a key is louder), drag for
+ * a glissando. Keys the engine reports
  * sounding light up. Every key is a button named by its note (C3 is middle C); arrows move between them.
  */
 const meta: Meta<AnPianoKeyboard> = {

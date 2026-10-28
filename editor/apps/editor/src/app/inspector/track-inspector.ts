@@ -42,7 +42,10 @@ const Channels = Array.from({ length: 17 }, (_, i) => i);
   providers: [provideIcons({ matFolderOpenRound, matRefreshRound })],
   host: { class: 'flex flex-col gap-3', role: 'group', '[attr.aria-label]': '"Track: " + track().name' },
   template: `
-    <h3 class="text-foreground truncate text-xs font-semibold" [attr.title]="track().name">
+    <h3
+      class="text-foreground border-hairline bg-surface-raised -mx-3 truncate border-y px-3 py-1 text-[11px] font-bold shadow-[inset_0_1px_0_var(--highlight)]"
+      [attr.title]="track().name"
+    >
       Track: {{ track().name }}
     </h3>
     @if (track().kind === 'instrument') {
@@ -125,7 +128,7 @@ const Channels = Array.from({ length: 17 }, (_, i) => i);
           (valueChange)="setInput($event, null)"
         />
         <xui-select
-          class="w-20"
+          class="an-compact-select w-20"
           aria-label="MIDI input channel"
           [items]="channels"
           [itemText]="inputChannelText"
@@ -151,7 +154,7 @@ const Channels = Array.from({ length: 17 }, (_, i) => i);
             (valueChange)="setOutput($event, null)"
           />
           <xui-select
-            class="w-20"
+            class="an-compact-select w-20"
             aria-label="MIDI output channel"
             [items]="outputChannels"
             [itemText]="channelText"
