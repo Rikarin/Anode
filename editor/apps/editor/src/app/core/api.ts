@@ -2,13 +2,19 @@ import { Injectable, InjectionToken, inject } from '@angular/core';
 import {
   ApiError,
   type AudioFile,
+  type Bookmarks,
   type CommandBatch,
   type CommandResult,
+  type DirectoryListing,
+  type KeyCommandSet,
   type LiveMidiEvent,
   type MidiDevices,
   type PluginInfo,
   type Project,
+  type ProjectAlternative,
+  type ProjectBackup,
   type ProjectSummary,
+  type Screenset,
   type SystemInfo,
   type TransportRequest,
   type TransportStatus,
@@ -61,6 +67,35 @@ export interface AnodeApi {
   sendLiveMidi(trackId: string, events: LiveMidiEvent[]): Promise<void>;
   /** Which track hears live MIDI when no track is record-armed (the selected one); null for none. */
   setMidiThru(trackId: string | null): Promise<void>;
+  /** Flashback Capture: what the armed tracks heard since playback last started becomes a recording (a delta follows). */
+  flashbackCapture(): Promise<void>;
+  /** The open project's alternatives; one is current. */
+  alternatives(): Promise<ProjectAlternative[]>;
+  /** Saves the open project as a new alternative and makes it current. */
+  createAlternative(name: string): Promise<ProjectAlternative>;
+  /** Switches to another alternative; resolves with it as the open project. */
+  openAlternative(id: string): Promise<Project>;
+  deleteAlternative(id: string): Promise<void>;
+  /** The current alternative's backups, newest first. */
+  backups(): Promise<ProjectBackup[]>;
+  /** Replaces the open project with a backup (like reopening it: no undo step). */
+  revertToBackup(id: string): Promise<Project>;
+  /** The screensets saved in the open project. */
+  screensets(): Promise<Screenset[]>;
+  /** Saves screenset 1…9 in the project (not an undo step; it marks the project unsaved). */
+  saveScreenset(screenset: Screenset): Promise<Screenset>;
+  /** Imports a Standard MIDI File from the Server's disk as instrument tracks, with its tempo and signatures. */
+  importMidiFile(path: string): Promise<CommandResult>;
+  /** The user's key bindings (empty: the editor's defaults). */
+  keyCommands(): Promise<KeyCommandSet>;
+  saveKeyCommands(set: KeyCommandSet): Promise<KeyCommandSet>;
+  /** Folders pinned in the All Files browser. */
+  bookmarks(): Promise<Bookmarks>;
+  saveBookmarks(bookmarks: Bookmarks): Promise<Bookmarks>;
+  /** A folder on the Server's disk (the user's home when `path` is left out). */
+  listFiles(path?: string | null): Promise<DirectoryListing>;
+  /** Plays an audio file through the engine's preview channel; null stops it. */
+  previewFile(path: string | null): Promise<void>;
 }
 
 export const ANODE_API = new InjectionToken<AnodeApi>('AnodeApi', {
@@ -195,5 +230,74 @@ export class HttpAnodeApi implements AnodeApi {
 
   async setMidiThru(trackId: string | null): Promise<void> {
     await this.client.POST('/api/v1/midi/thru', { body: { trackId } });
+  }
+
+  async flashbackCapture(): Promise<void> {
+    await this.client.POST('/api/v1/transport/capture');
+  }
+
+  async alternatives(): Promise<ProjectAlternative[]> {
+    return unwrap(await this.client.GET('/api/v1/project/alternatives'));
+  }
+
+  async createAlternative(name: string): Promise<ProjectAlternative> {
+    return unwrap(await this.client.POST('/api/v1/project/alternatives', { body: { name } }));
+  }
+
+  async openAlternative(id: string): Promise<Project> {
+    return unwrap(await this.client.POST('/api/v1/project/alternatives/{id}/open', { params: { path: { id } } }));
+  }
+
+  async deleteAlternative(id: string): Promise<void> {
+    await this.client.DELETE('/api/v1/project/alternatives/{id}', { params: { path: { id } } });
+  }
+
+  async backups(): Promise<ProjectBackup[]> {
+    return unwrap(await this.client.GET('/api/v1/project/backups'));
+  }
+
+  async revertToBackup(id: string): Promise<Project> {
+    return unwrap(await this.client.POST('/api/v1/project/backups/{id}/revert', { params: { path: { id } } }));
+  }
+
+  async screensets(): Promise<Screenset[]> {
+    return unwrap(await this.client.GET('/api/v1/project/screensets'));
+  }
+
+  async saveScreenset(screenset: Screenset): Promise<Screenset> {
+    return unwrap(
+      await this.client.PUT('/api/v1/project/screensets/{number}', {
+        params: { path: { number: screenset.number } },
+        body: screenset
+      })
+    );
+  }
+
+  async importMidiFile(path: string): Promise<CommandResult> {
+    return unwrap(await this.client.POST('/api/v1/project/files/import-midi', { body: { path } }));
+  }
+
+  async keyCommands(): Promise<KeyCommandSet> {
+    return unwrap(await this.client.GET('/api/v1/settings/key-commands'));
+  }
+
+  async saveKeyCommands(set: KeyCommandSet): Promise<KeyCommandSet> {
+    return unwrap(await this.client.PUT('/api/v1/settings/key-commands', { body: set }));
+  }
+
+  async bookmarks(): Promise<Bookmarks> {
+    return unwrap(await this.client.GET('/api/v1/settings/bookmarks'));
+  }
+
+  async saveBookmarks(bookmarks: Bookmarks): Promise<Bookmarks> {
+    return unwrap(await this.client.PUT('/api/v1/settings/bookmarks', { body: bookmarks }));
+  }
+
+  async listFiles(path?: string | null): Promise<DirectoryListing> {
+    return unwrap(await this.client.GET('/api/v1/files', { params: { query: path ? { path } : {} } }));
+  }
+
+  async previewFile(path: string | null): Promise<void> {
+    await this.client.POST('/api/v1/files/preview', { body: { path } });
   }
 }
