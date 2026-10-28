@@ -5,6 +5,7 @@ import { join, resolve } from 'node:path';
 
 const main = resolve(__dirname, '../../../dist/apps/desktop/main.js');
 const TestClapFolder = resolve(__dirname, '../../../../engine/artifacts/native/clap');
+const TestVst3Folder = resolve(__dirname, '../../../../engine/artifacts/native/vst3');
 
 /**
  * Each test gets a fresh app: throwaway settings and data, its own sidecars (null audio). `desktopSettings` starts it
@@ -31,6 +32,8 @@ export const test = base.extend<{
         ANODE_DATA_DIR: join(scratch, 'server-data'),
         // The engine's test CLAP instrument (engine/native/an_testclap), so the golden paths can load a CLAP plugin.
         CLAP_PATH: TestClapFolder,
+        // The engine's test VST3 effects (engine/native/an_testvst3), hosted in the plugin sandbox.
+        VST3_PATH: TestVst3Folder,
         // A virtual MIDI output, so external MIDI tracks have a port on any machine.
         ANODE_VIRTUAL_MIDI: '1'
       }

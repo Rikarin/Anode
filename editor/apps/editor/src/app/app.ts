@@ -174,7 +174,8 @@ export class App {
       'mixer.ioLabels': () => this.ui.ioLabelsOpen.set(true),
       'mixer.groupSettings': () => this.openGroupSettings(),
       'track.newAux': () => void this.mixer.addAux(),
-      'track.newVca': () => void this.mixer.addVca()
+      'track.newVca': () => void this.mixer.addVca(),
+      'view.musicalTyping': () => this.live.typing.update(on => !on)
     };
     for (let n = 1; n <= 9; n++) {
       actions[`screenset.recall${n}`] = () => void this.screensets.recall(n);

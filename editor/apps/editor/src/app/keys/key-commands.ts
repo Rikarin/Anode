@@ -68,6 +68,7 @@ export const KeyCommands: readonly KeyCommand[] = [
   { id: 'view.lists', label: 'Show List Editors', group: 'View', defaults: ['D'] },
   { id: 'view.notes', label: 'Show Note Pad', group: 'View', defaults: ['Meta+Alt+P'] },
   { id: 'view.keyCommands', label: 'Key Commands…', group: 'View', defaults: ['Alt+K'] },
+  { id: 'view.musicalTyping', label: 'Show/Hide Musical Typing', group: 'View', defaults: ['Meta+K'] },
   { id: 'view.theme', label: 'Toggle Light/Dark Appearance', group: 'View', defaults: ['Meta+Ctrl+T'] },
   ...screensets,
   { id: 'project.save', label: 'Save', group: 'Project', defaults: ['Meta+S'] },

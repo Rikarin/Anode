@@ -36,7 +36,11 @@ export class LiveMidiStore {
   readonly octave = signal(5);
   /** The velocity musical typing and the keyboard play with. */
   readonly velocity = signal(100);
-  readonly typing = signal(true);
+  /**
+   * Musical typing: off until turned on (⌘K, or the Keyboard pane's button), as in Logic, so its letter keys do not take
+   * the key commands (A, E, G, S, T…) whenever an instrument track is selected.
+   */
+  readonly typing = signal(false);
   /** Notes held here (keyboard, typing), by pitch, and the track they play on. */
   private readonly held = signal<ReadonlySet<number>>(new Set());
   private heldOn: string | null = null;

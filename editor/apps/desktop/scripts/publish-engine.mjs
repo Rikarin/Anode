@@ -31,6 +31,8 @@ console.log(`Building the native shims and publishing the engine for ${rid}`);
 const gitBash = 'C:\\Program Files\\Git\\bin\\bash.exe';
 run(process.platform === 'win32' && existsSync(gitBash) ? gitBash : 'bash', ['native/build.sh']);
 run('dotnet', ['publish', 'src/Anode.Host', '-c', 'Release', '-r', rid, '-o', out]);
+// The plugin sandbox (anode-plugin) sits next to anode-host, which starts it (docs/adr/0003-plugin-hosting.md).
+run('dotnet', ['publish', 'src/Anode.PluginSandbox', '-c', 'Release', '-r', rid, '-o', out]);
 run('dotnet', [
   'publish',
   'src/Anode.Server',

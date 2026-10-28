@@ -287,6 +287,8 @@ export class Sidecars {
         '--watch-stdin',
         ...audio,
         ...midi,
+        // The plugin scan's cache and blocklist go to the same data folder as the Server's.
+        ...(this.dataDirectory ? ['--data-dir', this.dataDirectory] : []),
         '--rate',
         String(this.audio.sampleRate),
         '--buffer',

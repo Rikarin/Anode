@@ -85,7 +85,7 @@ const Bar = 192;
 // device. It needs workstreams A (the mixer graph, automation, rendering), B (the Server's Phase 4 commands, jobs and
 // bounce post-processing), D (the built-in effects) and E (the sandboxed test VST3), so it is fixme until the
 // integration; it compiles and its steps drive the editor's Phase 4 UI by role and test id.
-test.fixme('mixes, automates, freezes and bounces a session: inserts, sends, routing, a group, a VCA, touch automation, freeze, patches, bounces and reopening', async ({
+test('mixes, automates, freezes and bounces a session: inserts, sends, routing, a group, a VCA, touch automation, freeze, patches, bounces and reopening', async ({
   app,
   window
 }) => {

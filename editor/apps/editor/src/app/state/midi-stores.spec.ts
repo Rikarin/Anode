@@ -112,6 +112,9 @@ describe('MIDI stores', () => {
     TestBed.tick();
     await Promise.resolve();
     expect(server.thruTrack).toBe(inst);
+    // Musical typing is off until turned on (⌘K): letters stay key commands.
+    expect(live.typeDown('KeyE')).toBe(false);
+    live.typing.set(true);
     expect(live.typeDown('KeyE')).toBe(true); // E♭ of octave 5: 63
     await Promise.resolve();
     expect(server.liveMidi.at(-1)).toEqual({ trackId: inst, events: [{ status: 0x90, data1: 63, data2: 100 }] });
