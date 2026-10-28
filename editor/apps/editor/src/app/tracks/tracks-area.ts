@@ -48,6 +48,7 @@ import { ProjectStore } from '../state/project.store';
 import { SelectionStore } from '../state/selection.store';
 import { type GlobalLane, GlobalLanes as GlobalLaneOrder, Tools, TracksViewStore } from '../state/tracks-view.store';
 import { TransportStore } from '../state/transport.store';
+import { UiStore } from '../state/ui.store';
 import { AudioImport } from './audio-import';
 import { canPack } from './comp';
 import { DragModes } from './drag-modes';
@@ -433,6 +434,16 @@ import { TrackHeader } from './track-header';
             </button>
             <button xuiMenuItem type="button" (click)="repeat()">Repeat Once ({{ keyOf('region.repeat') }})</button>
             <xui-menu-divider />
+            <button xuiMenuItem type="button" (click)="ui.stripSilenceOpen.set(true)">
+              Strip Silence… ({{ keyOf('region.stripSilence') }})
+            </button>
+            <button xuiMenuItem type="button" (click)="ui.bounceInPlaceOpen.set(true)">
+              Bounce in Place… ({{ keyOf('region.bounceInPlace') }})
+            </button>
+            <button xuiMenuItem type="button" (click)="ui.processingOpen.set(true)">
+              Selection-Based Processing… ({{ keyOf('region.process') }})
+            </button>
+            <xui-menu-divider />
             <button xuiMenuItem type="button" color="error" (click)="deleteSelected()">Delete</button>
           </xui-menu>
         }
@@ -468,6 +479,7 @@ export class TracksArea {
   protected readonly desktop = inject(ConnectionService).desktop;
   protected readonly automation = inject(AutomationStore);
   private readonly jobs = inject(JobsStore);
+  protected readonly ui = inject(UiStore);
   protected readonly timeline = viewChild.required(Timeline);
   private readonly menuTrigger = viewChild(CdkContextMenuTrigger);
   private readonly globalLanes = viewChild<GlobalTracks>('global');
