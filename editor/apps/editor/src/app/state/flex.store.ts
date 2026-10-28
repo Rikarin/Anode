@@ -76,14 +76,26 @@ export class FlexStore {
     });
     effect(() => {
       // A new project starts with its own files.
-      this.project.info();
+      const id = this.project.info()?.id ?? null;
       untracked(() => {
-        this.analyses.set(new Map());
-        this.loading.clear();
-        this.pitchWaiting.clear();
-        this.analysing.set(new Set());
+        if (id !== this.projectId) {
+          this.projectId = id;
+          this.forget();
+        }
       });
     });
+  }
+
+  /** The project whose analyses these are. */
+  private projectId: string | null = null;
+
+  private forget(): void {
+    if (this.analyses().size > 0) {
+      this.analyses.set(new Map());
+    }
+    this.loading.clear();
+    this.pitchWaiting.clear();
+    this.analysing.set(new Set());
   }
 
   toggleShowFlex(): void {
@@ -101,6 +113,7 @@ export class FlexStore {
 
   /** Fetches a file's analysis (again, with `refresh`). */
   async load(fileId: string, refresh = false): Promise<FileAnalysis | null> {
+    this.projectId ??= this.project.info()?.id ?? null;
     if (this.loading.has(fileId) || (!refresh && this.analyses().has(fileId))) {
       return this.analyses().get(fileId) ?? null;
     }

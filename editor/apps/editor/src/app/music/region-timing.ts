@@ -60,8 +60,9 @@ export function followRate(tempo: FileTempo | null | undefined, sampleRate: numb
  * - Unwarped, or `follow: off`: time. Frame `fileOffset + n` plays n frames after `startTick` under the tempo track.
  * - `follow: on`: the file's beat (`tempo.bpm`) is a quarter note, linear in ticks from `startTick`.
  * - `follow: bars` / `barsAndBeats`: the file's downbeats (or beats) inside the region land on successive bar (or
- *   beat) lines: the first on the line nearest where `follow: on` puts it (but after `startTick`), each next one on the
- *   next line; linear in ticks between them, from `startTick` to the first, and at the `on` rate after the last.
+ *   beat) lines: the first on the line nearest where `follow: on` puts it (among lines strictly after `startTick`),
+ *   each next one on the next line; linear in ticks between them, from `startTick` to the first, and at the `on` rate
+ *   after the last. Anchors count up to the first one past the region's end.
  *   Without a file tempo these fall back to `on`, and `on` to time.
  * - Flex markers move a file frame to `startTick + tick`; between neighbouring knots (the region's start, the markers,
  *   its end) the base map is scaled linearly, so the start and the end stay where the base map puts them.
@@ -215,9 +216,11 @@ function baseMap(region: TimedRegion, fileTempo: FileTempo | null | undefined, c
   if (region.follow === 'on' || !fileTempo) {
     return linearMap(region, rate);
   }
-  const anchors = (region.follow === 'bars' ? fileTempo.downbeats : fileTempo.beats).filter(
-    f => f > region.fileOffset && f < region.fileOffset + region.length
-  );
+  // The anchors after the region's start, up to the first one past its end (the Model's rule).
+  const end = region.fileOffset + region.length;
+  const after = (region.follow === 'bars' ? fileTempo.downbeats : fileTempo.beats).filter(f => f > region.fileOffset);
+  const past = after.findIndex(f => f > end);
+  const anchors = past < 0 ? after : after.slice(0, past + 1);
   if (anchors.length === 0) {
     return linearMap(region, rate);
   }

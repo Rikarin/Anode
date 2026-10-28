@@ -896,6 +896,9 @@ export class FakeAnodeServer implements AnodeApi {
       if (trackIds.length === 0 && regionIds.length === 0) {
         throw new ApiError(422, 'Choose the tracks or regions to bounce in place.');
       }
+      if (project.settings.varispeed.enabled) {
+        throw new ApiError(422, 'Turn Varispeed off to bounce in place.');
+      }
       for (const id of trackIds) {
         const track = project.tracks.find(t => t.id === id);
         if (!track) {
@@ -1944,7 +1947,8 @@ export class FakeAnodeServer implements AnodeApi {
           fadeInCurve: 0,
           fadeOutCurve: 0,
           muted: false,
-          follow: project.settings.smartTempo.defaultFollow,
+          // The default follow only for a file with a tempo (the Model's rule).
+          follow: f.tempo ? project.settings.smartTempo.defaultFollow : 'off',
           flexMarkers: [],
           transpose: 0,
           fineTune: 0,
@@ -1965,14 +1969,6 @@ export class FakeAnodeServer implements AnodeApi {
             const adapted = adaptTempo(withTempo, { ...added, follow: 'off' }, tempo);
             return { ...adapted, regions: [...adapted.regions, { ...added, follow: 'off' }] };
           }
-        }
-        if (added.follow !== 'off' && !f.tempo) {
-          const tempo = this.analysisOf(f).tempo;
-          return {
-            ...project,
-            audioFiles: project.audioFiles.map(x => (x.id === f.id ? { ...x, tempo } : x)),
-            regions: [...project.regions, added]
-          };
         }
         return { ...project, regions: [...project.regions, added] };
       }

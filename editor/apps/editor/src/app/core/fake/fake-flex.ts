@@ -243,17 +243,8 @@ export function applyFlexCommand(project: Project, command: EditCommand, ctx: Fl
       if (!track(r.trackId).flexOn) {
         throw new ApiError(422, 'Flex markers need the track’s flex on.');
       }
-      const length = timingOf(project, r).lengthTicks;
+      // Markers outside the region or out of order are kept but ignored by its timing (the Model's rule), not refused.
       const markers = [...command.markers].sort((a, b) => a.fileFrame - b.fileFrame);
-      markers.forEach((m, i) => {
-        const previous = markers[i - 1];
-        if (m.fileFrame <= r.fileOffset || m.fileFrame >= r.fileOffset + r.length) {
-          throw new ApiError(422, 'A flex marker lies inside its region’s audio.');
-        }
-        if (m.tick <= 0 || m.tick >= length || (previous && m.tick <= previous.tick)) {
-          throw new ApiError(422, 'Flex markers stay in order, inside the region.');
-        }
-      });
       return withRegion(project, { ...r, flexMarkers: markers });
     }
     case 'quantizeAudio': {
@@ -364,7 +355,7 @@ export function applyFlexCommand(project: Project, command: EditCommand, ctx: Fl
       const file = fileOf(r);
       const next = withFileTempo(project, file);
       const tempo = next.audioFiles.find(f => f.id === file.id)?.tempo as FileTempo;
-      return withRegion(adaptTempo(next, r, tempo), { ...r, follow: 'off' });
+      return withRegion(adaptTempo(next, r, tempo), { ...r, follow: 'off', flexMarkers: [] });
     }
     case 'mapBeats':
       try {
@@ -463,7 +454,9 @@ export function applyFlexCommand(project: Project, command: EditCommand, ctx: Fl
       }
       let next = project;
       if (command.alternativeId === t.alternativeId) {
-        const other = t.alternatives.find(a => a.id !== t.alternativeId);
+        // The next alternative, or the previous one when it was the last.
+        const index = t.alternatives.findIndex(a => a.id === t.alternativeId);
+        const other = t.alternatives[index + 1] ?? t.alternatives[index - 1];
         if (!other) {
           throw new ApiError(422, 'A track keeps at least one alternative.');
         }

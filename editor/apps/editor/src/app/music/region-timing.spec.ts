@@ -183,10 +183,10 @@ describe('Tempo curve shapes', () => {
 });
 
 /**
- * Parity with the Model's RegionTiming (workstream B): shared vectors in
- * engine/tests/Anode.Model.Tests/RegionTimingVectors.json, when the file is there. Each case:
- * `{ name, sampleRate, tempoEvents, signatures, flexOn, fileTempo, region, frames, ticks, endTick }`, where `ticks[i]`
- * is the tick of `frames[i]`.
+ * Parity with the Model's RegionTiming (workstream B): the shared vectors in
+ * engine/tests/Anode.Model.Tests/RegionTimingVectors.json, when the file is there. Each case has its inputs and the
+ * expected start and end sample, end tick, and the tick and sample of some frames; ticks and samples match within 1e-6
+ * (relative 1e-9 on ramps).
  */
 interface Vector {
   name: string;
@@ -196,13 +196,17 @@ interface Vector {
   flexOn: boolean;
   fileTempo: FileTempo | null;
   region: TimedRegion;
-  frames: number[];
-  ticks: number[];
-  endTick: number;
+  expected: {
+    warped: boolean;
+    startSample: number;
+    endSample: number;
+    endTick: number;
+    points: { frame: number; tick: number; sample: number }[];
+  };
 }
 
 async function loadVectors(): Promise<Vector[] | null> {
-  const proc = (globalThis as { process?: { cwd(): string } }).process;
+  const proc = (globalThis as { process?: { cwd(): string; env: Record<string, string | undefined> } }).process;
   if (!proc) {
     return null;
   }
@@ -212,8 +216,9 @@ async function loadVectors(): Promise<Vector[] | null> {
       existsSync(path: string): boolean;
       readFileSync(path: string, encoding: string): string;
     };
-    const cwd = proc.cwd().replace(/\/editor(\/.*)?$/, '');
-    const path = `${cwd}/engine/tests/Anode.Model.Tests/RegionTimingVectors.json`;
+    const root = proc.cwd().replace(/\/editor(\/.*)?$/, '');
+    const path =
+      proc.env['ANODE_REGION_TIMING_VECTORS'] ?? `${root}/engine/tests/Anode.Model.Tests/RegionTimingVectors.json`;
     if (!fs.existsSync(path)) {
       return null;
     }
@@ -224,19 +229,32 @@ async function loadVectors(): Promise<Vector[] | null> {
   }
 }
 
+function near(actual: number, expected: number, what: string): void {
+  const tolerance = Math.max(1e-6, 1e-9 * Math.abs(expected));
+  expect(Math.abs(actual - expected), `${what}: ${actual} vs ${expected}`).toBeLessThanOrEqual(tolerance);
+}
+
 describe('RegionTiming parity with the Model', async () => {
   const vectors = await loadVectors();
-  it.skipIf(vectors === null)('matches every shared vector within a tick', () => {
+  it.skipIf(vectors === null)('matches every shared vector', () => {
     for (const v of vectors ?? []) {
+      const tempo = new TempoMap(v.tempoEvents);
       const timing = new RegionTiming(v.region, v.flexOn, v.fileTempo, {
-        tempo: new TempoMap(v.tempoEvents),
+        tempo,
         meter: new MeterMap(v.signatures),
         sampleRate: v.sampleRate
       });
-      expect(timing.endTick, v.name).toBeCloseTo(v.endTick, 0);
-      v.frames.forEach((frame, i) =>
-        expect(timing.tickAt(frame), `${v.name} @${frame}`).toBeCloseTo(v.ticks[i] ?? 0, 0)
-      );
+      const sample = (tick: number) => tempo.secondsAt(tick) * v.sampleRate;
+      expect(timing.warped, v.name).toBe(v.expected.warped);
+      near(timing.endTick, v.expected.endTick, `${v.name} end tick`);
+      // The start and end are whole project samples, as the compiler places them.
+      near(Math.round(sample(timing.startTick)), v.expected.startSample, `${v.name} start sample`);
+      near(Math.round(sample(timing.endTick)), v.expected.endSample, `${v.name} end sample`);
+      for (const point of v.expected.points) {
+        const tick = timing.tickAt(point.frame);
+        near(tick, point.tick, `${v.name} tick @${point.frame}`);
+        near(sample(tick), point.sample, `${v.name} sample @${point.frame}`);
+      }
     }
   });
 });
