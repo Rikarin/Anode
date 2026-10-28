@@ -189,6 +189,91 @@ public sealed partial class HostProcessTests : IDisposable {
         Assert.Throws<IOException>(() => SharedSegment.Open(hello.TelemetryName!, TelemetryLayout.Size).Dispose());
     }
 
+    /// <summary>
+    ///     Phase 5 through the real host: a format-3 segment with a warped region (its warp points in the segment) loads,
+    ///     plays, and bounces in place over the socket, with the region's onsets where its warp map puts them.
+    /// </summary>
+    [Fact]
+    public async Task Loads_plays_and_bounces_a_warped_region() {
+        await StartAsync();
+        using var socket = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
+        await socket.ConnectAsync(new UnixDomainSocketEndPoint(socketPath), Token);
+        await using var stream = new NetworkStream(socket);
+
+        // The next message that is not one the host pushes unasked.
+        async Task<IpcMessage?> Next() {
+            while (true) {
+                var message = await IpcFraming.ReadAsync(stream, Token);
+                if (message is not (PluginCatalogMessage
+                    or MidiPortsMessage
+                    or MidiActivityMessage
+                    or RenderProgressMessage)) {
+                    return message;
+                }
+            }
+        }
+
+        await IpcFraming.WriteAsync(stream, new HelloMessage("test"), Token);
+        var hello = Assert.IsType<HelloMessage>(await Next());
+        using var region = SharedSegment.Open(hello.TelemetryName!, TelemetryLayout.Size);
+        var file = FlexPlaybackTests.WriteBursts(dir, "bursts.wav", 2);
+        const long start = 10_000;
+        using (var segment = TestAudio.Segment(
+                   [
+                       new(
+                           1,
+                           [],
+                           [FlexPlaybackTests.Warped(start, 0, FlexAlgorithm.Polyphonic)],
+                           FlexPlaybackTests.Map()
+                       )
+                   ],
+                   3
+               )) {
+            await IpcFraming.WriteAsync(
+                stream,
+                TestAudio.Load(segment, 3, true, [TestAudio.Track(1, true)], [new(0, file, 2, Rate, 80_000)], dir),
+                Token
+            );
+            Assert.Equal(new ModelLoadedMessage(3), await Next());
+        }
+
+        await IpcFraming.WriteAsync(stream, new TransportMessage(TransportAction.Play, start), Token);
+        for (var polls = 0; Header(region).PositionSamples < start + Rate / 2; polls++) {
+            Assert.True(polls < 500, "the playhead did not move");
+            await Task.Delay(20, Token);
+        }
+
+        await IpcFraming.WriteAsync(stream, new TransportMessage(TransportAction.Stop), Token);
+        var end = start + FlexPlaybackTests.MapLength + Rate / 4;
+        var bounce = Path.Combine(dir, "bounce");
+        await IpcFraming.WriteAsync(
+            stream,
+            new RenderMessage(9, 0, end, bounce, [1], true, IncludeVolumePan: true),
+            Token
+        );
+        RenderFinishedMessage finished;
+        while (true) {
+            if (await Next() is RenderFinishedMessage f) {
+                finished = f;
+                break;
+            }
+        }
+
+        Assert.Null(finished.Error);
+        var data = RenderTests.ReadFloat(Assert.Single(finished.Files), out _);
+        Assert.Equal(2 * end, data.Length);
+        var onsets = FlexPlaybackTests.Onsets(Enumerable.Range(0, (int)end).Select(f => data[2 * f]).ToArray());
+        var expected = FlexPlaybackTests.MapTargets.Select(static t => start + t).ToArray();
+        Assert.Equal(expected.Length, onsets.Count);
+        for (var k = 0; k < expected.Length; k++) {
+            Assert.InRange(onsets[k], expected[k] - Rate * 3 / 1000, expected[k] + Rate * 3 / 1000);
+        }
+
+        lock (output) {
+            Assert.DoesNotContain("misbehaving", output.ToString(), StringComparison.Ordinal);
+        }
+    }
+
     [Fact]
     public async Task Exits_with_code_3_when_the_device_is_lost() {
         await StartAsync("--lose-device-after", "300");

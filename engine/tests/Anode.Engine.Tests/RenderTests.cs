@@ -71,7 +71,7 @@ public sealed class RenderTests : IDisposable {
     }
 
     /// <summary>A 32-bit float WAV's interleaved samples.</summary>
-    static float[] ReadFloat(string path, out int channels) {
+    internal static float[] ReadFloat(string path, out int channels) {
         var bytes = File.ReadAllBytes(path);
         Assert.Equal("RIFF"u8.ToArray(), bytes[..4]);
         var at = 12;

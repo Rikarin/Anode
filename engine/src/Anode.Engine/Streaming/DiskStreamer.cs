@@ -6,7 +6,9 @@ namespace Anode.Engine.Streaming;
 ///     per playlist lane, and the preview channel one), once it is below two thirds of its 2 s
 ///     target, with one page-aligned read of about 96 KiB (32,768 mono frames) through <c>F_NOCACHE</c>. It renders in
 ///     play order, following the cycle, so a cycle jump needs nothing of the audio thread; and it starts a new fill
-///     whenever the play order (the anchor) or a track's compiled playlist changes.
+///     whenever the play order (the anchor) or a track's compiled playlist changes. Warped entries render here too,
+///     through each stream's flex renderers (<see cref="FlexLane" />, docs/06-phase-5.md): a fill that starts inside
+///     one, or a cycle jump into one, primes its renderer, which costs this thread time, not the audio a gap.
 /// </summary>
 public sealed class DiskStreamer : IDisposable {
     /// <summary>Frames of one read for a mono track (96 KiB of 24-bit audio); a stereo track reads half as many.</summary>
@@ -166,6 +168,7 @@ public sealed class DiskStreamer : IDisposable {
         var clock = stream.FillCursor;
         var view = model.Views[index];
         var lanes = model.Lanes[index];
+        stream.Flex.Begin(stream.FillIdentity);
         var done = 0;
         while (done < frames) {
             var position = anchor.PositionAt(clock + done);
@@ -178,7 +181,8 @@ public sealed class DiskStreamer : IDisposable {
                 position,
                 count,
                 channels,
-                buffer[(done * channels)..]
+                buffer[(done * channels)..],
+                stream.Flex
             );
             done += count;
         }

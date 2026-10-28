@@ -346,12 +346,17 @@ public sealed partial class EngineController : IDisposable {
             return replaced;
         }
 
-        /// <summary>Gives every track whose playlist has crossfades its second stream, before the model is published.</summary>
+        /// <summary>
+        ///     Gives every track whose playlist has crossfades its second stream, and every stream the flex renderers of
+        ///     its warped entries, before the model is published (so the disk thread allocates neither).
+        /// </summary>
         public void PrepareStreams() {
             for (var i = 0; i < tracks.Count; i++) {
                 if (lanes[i] is not null) {
                     tracks[i].EnsureCrossfade();
                 }
+
+                tracks[i].EnsureFlex(views[i], lanes[i], owner.Options.SampleRate);
             }
         }
 
@@ -1131,6 +1136,8 @@ public sealed partial class EngineController : IDisposable {
             if (previous.Crossfade is not null) {
                 state.EnsureCrossfade();
             }
+
+            state.EnsureFlexLike(previous, Options.SampleRate);
         }
 
         return state;

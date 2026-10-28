@@ -107,6 +107,82 @@ public sealed unsafe class AllocationTests : IDisposable {
     }
 
     /// <summary>
+    ///     Phase 5's warped playback (docs/06-phase-5.md): tracks whose warped regions (several algorithms, mono and
+    ///     stereo) crossfade with unwarped ones, played across a cycle wrap, then located into the middle of a warped
+    ///     region (renderers priming) and edited (a new fill). The disk thread's passes allocate nothing: the renderers
+    ///     were made when the model loaded.
+    /// </summary>
+    [Fact]
+    public void Warped_playback_cycles_locates_and_edits_allocate_nothing_on_the_disk_thread() {
+        var bursts = FlexPlaybackTests.WriteBursts(dir, "bursts.wav", 2);
+        var mono = TestAudio.Write24(dir, "mono.wav", 1, 20 * Rate, 1);
+        EngineFile[] files = [new(0, bursts, 2, Rate, 80_000), new(1, mono, 1, Rate, 20 * Rate)];
+        FlexAlgorithm[] algorithms = [
+            FlexAlgorithm.Polyphonic, FlexAlgorithm.Slicing, FlexAlgorithm.Speed, FlexAlgorithm.Monophonic,
+            FlexAlgorithm.Rhythmic, FlexAlgorithm.Tempophone
+        ];
+
+        TrackModel[] Models(long shift) => [
+            ..algorithms.Select((algorithm, t) => {
+                    var length = FlexPlaybackTests.MapLength;
+                    AudioPlaylistEntry[] playlist = [
+                        TestAudio.Region(0, 12_000, 1, t * 1_000L, 0.8f, 0, 2_000),
+                        FlexPlaybackTests.Warped(10_000 + shift, t & 1, algorithm, 0, 0.9f, 2_000, 3_000),
+                        TestAudio.Region(10_000 + shift + length - 3_000, 40_000, 1, 5_000, 0.7f, 3_000)
+                    ];
+                    return new TrackModel(t, [], playlist, FlexPlaybackTests.Map());
+                }
+            )
+        ];
+
+        var tracks = algorithms.Select(static (_, t) => TestAudio.Track(t, (t & 1) == 0)).ToArray();
+        using var segment = TestAudio.Segment(Models(0), 1);
+        using var controller = new EngineController(new(Rate, 64));
+        controller.LoadModel(TestAudio.Load(segment, 1, true, tracks, files, dir));
+        using var driver = new OfflineDriver(controller, 64);
+
+        void Callbacks() {
+            for (var i = 0; i < 100; i++) {
+                driver.Process(false);
+            }
+        }
+
+        driver.Send(new(EngineCommandKind.SetCycle, 30_000, 75_000, true));
+        driver.PlayFrom(20_000);
+        var callbackBytes = Least(Callbacks);
+        var pumps = 0L;
+        for (var round = 0; round < 30; round++) {
+            if (round == 12) {
+                // Each locate into the warped regions starts new fills: every renderer primes.
+                driver.Send(new(EngineCommandKind.Stop));
+                pumps = Math.Max(
+                    pumps,
+                    Least(() => {
+                            driver.Send(new(EngineCommandKind.Locate, 51_234));
+                            driver.Process(false);
+                            driver.Pump();
+                        }
+                    )
+                );
+                driver.Send(new(EngineCommandKind.Play));
+            }
+
+            if (round == 20) {
+                using var edit = TestAudio.Segment(Models(500), 2);
+                controller.LoadModel(TestAudio.Load(edit, 2, false, [], [], dir));
+            }
+
+            pumps = Math.Max(pumps, Least(driver.Pump));
+            callbackBytes = Math.Max(callbackBytes, Least(Callbacks));
+        }
+
+        Assert.Equal(0, callbackBytes);
+        Assert.Equal(0, pumps);
+        Assert.Equal(0, controller.Engine.Snapshot.Underruns);
+        Assert.All(controller.Engine.Root.Tracks, static t => Assert.NotNull(t.Crossfade));
+    }
+
+    /// <summary>
     ///     Phase 3's paths: tracks crossfading continuously through curved fades (two streams each), the preview channel,
     ///     Flashback Capture's buffers and MIDI history while playing, then cycle recording with autopunch (passes
     ///     wrapping), a stop and a locate. Neither the callback nor the disk thread's passes allocate.

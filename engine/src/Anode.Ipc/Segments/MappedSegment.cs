@@ -47,7 +47,10 @@ public sealed unsafe class MappedSegment : IDisposable {
 
     public static MappedSegment Map(long id, string name, long length) => new(id, SharedSegment.Open(name, length));
 
-    /// <summary>Checks the header and the track table, so every pointer the audio thread derives is in bounds.</summary>
+    /// <summary>
+    ///     Checks the header, the track table and the warped entries (their ranges and warp maps), so every pointer the
+    ///     audio and disk threads derive is in bounds.
+    /// </summary>
     public void ValidateLayout() {
         if (segment.Length < sizeof(SegmentHeader)) {
             throw new InvalidDataException("Segment smaller than its header.");
@@ -95,6 +98,10 @@ public sealed unsafe class MappedSegment : IDisposable {
                 throw new InvalidDataException($"Track entry {i} out of bounds.");
             }
         }
+
+        for (var i = 0; i < h->TrackCount; i++) {
+            CheckFlex(i, Track(i));
+        }
     }
 
     /// <summary>
@@ -133,7 +140,6 @@ public sealed unsafe class MappedSegment : IDisposable {
             }
 
             CheckPlaylist(i, t);
-            CheckRanges(i, t);
         }
     }
 
@@ -158,8 +164,14 @@ public sealed unsafe class MappedSegment : IDisposable {
 
     public void Dispose() => segment.Dispose();
 
-    /// <summary>Every warped entry's warp and pitch ranges lie inside the segment's arrays.</summary>
-    static void CheckRanges(int track, TrackView t) {
+    /// <summary>
+    ///     Every warped entry's warp and pitch ranges lie inside the segment's arrays, and its warp map is one a flex
+    ///     renderer can play (<see cref="AudioPlaylistEntry" />): an algorithm, at least two points, the first at offset
+    ///     0 and the last at the entry's length, offsets strictly increasing, file frames finite; its pitch points are
+    ///     finite and sorted by file frame. Part of the layout check (not <see cref="Verify" />, which large segments
+    ///     skip), since the disk thread indexes the arrays by these ranges.
+    /// </summary>
+    static void CheckFlex(int track, TrackView t) {
         for (long e = 0; e < t.PlaylistCount; e++) {
             var entry = t.Playlist[e];
             if (entry.WarpCount < 0
@@ -172,7 +184,50 @@ public sealed unsafe class MappedSegment : IDisposable {
                     $"Track {track} playlist entry {e} has warp or pitch points out of bounds."
                 );
             }
+
+            if (entry.WarpCount == 0) {
+                continue;
+            }
+
+            if (!WarpMapValid(entry, t.Warp + entry.WarpStart)
+                || !PitchValid(t.Pitch + entry.PitchStart, entry.PitchCount)) {
+                throw new InvalidDataException(
+                    $"Track {track} playlist entry {e} has an invalid warp map or pitch curve."
+                );
+            }
         }
+    }
+
+    static bool WarpMapValid(in AudioPlaylistEntry entry, WarpPoint* warp) {
+        if (entry.Algorithm is FlexAlgorithm.None or > FlexAlgorithm.Pitch
+            || entry.WarpCount < 2
+            || warp[0].Offset != 0
+            || warp[entry.WarpCount - 1].Offset != entry.Length) {
+            return false;
+        }
+
+        for (var k = 0; k < entry.WarpCount; k++) {
+            if (!double.IsFinite(warp[k].FileFrame) || (k > 0 && warp[k].Offset <= warp[k - 1].Offset)) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    static bool PitchValid(PitchPoint* pitch, int count) {
+        for (var k = 0; k < count; k++) {
+            var p = pitch[k];
+            if (!double.IsFinite(p.FileFrame)
+                || !float.IsFinite(p.Cents)
+                || !float.IsFinite(p.FormantCents)
+                || !float.IsFinite(p.GainDb)
+                || (k > 0 && p.FileFrame < pitch[k - 1].FileFrame)) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /// <summary>A track's playlist is sorted by start and overlaps only as crossfades, never three entries at once.</summary>

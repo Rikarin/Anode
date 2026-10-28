@@ -1,3 +1,4 @@
+using Anode.Dsp.Flex;
 using Anode.Dsp.Instruments;
 using Anode.Engine.Midi;
 using Anode.Engine.Mixing;
@@ -95,6 +96,39 @@ public sealed class TrackState : IDisposable {
     public void EnsureCrossfade() {
         if (Crossfade is null) {
             Volatile.Write(ref crossfade, new(Stream.Channels, Stream.TargetFrames));
+        }
+    }
+
+    /// <summary>
+    ///     Control thread, before publishing a model with <paramref name="view" />: gives each stream the flex renderers
+    ///     its warped entries need (by <paramref name="lanes" />; the second stream must exist when they use lane 1).
+    /// </summary>
+    public unsafe void EnsureFlex(in TrackView view, byte[]? lanes, int sampleRate) {
+        for (long e = 0; e < view.PlaylistCount; e++) {
+            ref readonly var entry = ref view.Playlist[e];
+            if (entry.WarpCount <= 0) {
+                continue;
+            }
+
+            var lane = lanes is not null && e < lanes.Length ? lanes[e] : 0;
+            (lane == 0 ? Stream : Crossfade)?.Flex.Ensure(
+                (FlexKind)entry.Algorithm,
+                sampleRate,
+                DiskStreamer.ReadFrames
+            );
+        }
+    }
+
+    /// <summary>Control thread: gives this track's streams renderers for the algorithms <paramref name="previous" />'s have.</summary>
+    public void EnsureFlexLike(TrackState previous, int sampleRate) {
+        foreach (var algorithm in previous.Stream.Flex.Algorithms) {
+            Stream.Flex.Ensure(algorithm, sampleRate, DiskStreamer.ReadFrames);
+        }
+
+        if (previous.Crossfade is { } second && Crossfade is { } mine) {
+            foreach (var algorithm in second.Flex.Algorithms) {
+                mine.Flex.Ensure(algorithm, sampleRate, DiskStreamer.ReadFrames);
+            }
         }
     }
 
