@@ -16,7 +16,13 @@ sealed class ProbeLink(Stream stream, CancellationToken cancellationToken) {
         await IpcFraming.WriteAsync(stream, message, cancellationToken);
         while (true) {
             var reply = await IpcFraming.ReadAsync(stream, cancellationToken);
-            if (reply is MidiPortsMessage or MidiActivityMessage
+            if (reply is MidiPortsMessage
+                    or MidiActivityMessage
+                    or RenderProgressMessage
+                    or RenderFinishedMessage
+                    or PluginProblemMessage
+                    or ParameterChangedMessage
+                    or InsertReadingsMessage
                 || (reply is PluginCatalogMessage && !catalogIsReply)) {
                 Pushed.Add(reply);
                 continue;

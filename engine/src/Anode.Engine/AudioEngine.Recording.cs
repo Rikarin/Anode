@@ -52,6 +52,12 @@ public sealed unsafe partial class AudioEngine {
 
     /// <summary>The block's bookkeeping before the tracks: the position history, Flashback's run, the recorded range.</summary>
     void BeginBlock(long clock, long position, int frames, bool countIn) {
+        if (Volatile.Read(ref offline) != 0) {
+            flashbackActive = false; // a render is neither played nor kept for Flashback Capture
+            flashbackRestart = true;
+            return;
+        }
+
         var rolling = transport.Rolling && !countIn;
         if (rolling) {
             History.Played(clock, position, frames, transport.PlayOrder);

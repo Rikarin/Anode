@@ -1,5 +1,6 @@
 using Anode.Dsp.Instruments;
 using Anode.Engine.Midi;
+using Anode.Engine.Mixing;
 using Anode.Engine.Recording;
 using Anode.Engine.Streaming;
 using Anode.Ipc;
@@ -24,10 +25,18 @@ public sealed class TrackState : IDisposable {
     InstrumentSlot? instrument;
     EngineMidiIo? midiIo;
 
-    public TrackState(int id, bool stereo, int streamFrames, MidiTrackState? midi = null) {
+    public TrackState(
+        int id,
+        bool stereo,
+        int streamFrames,
+        MidiTrackState? midi = null,
+        ChannelState? channel = null
+    ) {
         Id = id;
         Stream = new(stereo ? 2 : 1, streamFrames);
         Midi = midi ?? new();
+        Channel = channel ?? new(new());
+        SourceStereo = stereo;
     }
 
     public int Id { get; }
@@ -43,7 +52,25 @@ public sealed class TrackState : IDisposable {
     /// </summary>
     public TrackFeed? Crossfade => Volatile.Read(ref crossfade);
 
-    public Strip Strip { get; } = new();
+    /// <summary>The track's fader (<see cref="ChannelState.Strip" />).</summary>
+    public Strip Strip => Channel.Strip;
+
+    /// <summary>The track's channel strip: fader, inserts, sends and output, kept when the track's stream is replaced.</summary>
+    public ChannelState Channel { get; }
+
+    /// <summary>An aux track's input bus (1…64), else 0. Control thread; the audio thread reads the plan's copy.</summary>
+    public int InputBus { get; set; }
+
+    /// <summary>The freeze file the track plays instead of its source and inserts (null: not frozen). Control thread.</summary>
+    public string? FreezeFile { get; set; }
+
+    public bool Frozen => FreezeFile is not null;
+
+    /// <summary>
+    ///     Whether the track's source is stereo (<see cref="EngineTrack.Stereo" />); a frozen mono track streams its
+    ///     stereo freeze file but keeps its mono pan law when it had no inserts (the file's channels are then equal).
+    /// </summary>
+    public bool SourceStereo { get; set; }
 
     /// <summary>The 0-based first device input (−1: none); a stereo track takes it and the next one.</summary>
     public int InputChannel => Volatile.Read(ref inputChannel);
@@ -101,6 +128,9 @@ public sealed class TrackState : IDisposable {
         SetIo(settings.InputChannel, settings.RecordArmed, settings.Monitoring);
         Strip.Set(settings.Strip);
         MidiIo = settings.Midi;
+        InputBus = settings.InputBus;
+        FreezeFile = settings.FreezeFile;
+        SourceStereo = settings.Stereo;
     }
 
     public void Dispose() {
@@ -168,6 +198,61 @@ public sealed class MidiTrackState {
 public sealed class ModelRoot {
     public static readonly ModelRoot Empty = new(0, 0, [], [], [], [], default, null, []);
 
+    /// <summary>The mixer graph (published with the model, RCU).</summary>
+    public MixPlan Mix { get; init; } = MixPlan.Empty;
+
+    /// <summary>The master's events (its automation), from the segment's track −1.</summary>
+    public TrackView MasterView { get; init; }
+
+    public MappedSegment? MasterOwner { get; init; }
+
+    /// <summary>Each frozen track's freeze file (null for the others); its view plays it instead of the playlist.</summary>
+    public FreezeSource?[] Freeze { get; init; } = [];
+
+    /// <summary>
+    ///     Each track's view as compiled (a frozen track's <see cref="Views" /> entry plays its freeze file instead), so
+    ///     a patch or an unfreeze starts from the compiled playlist.
+    /// </summary>
+    public TrackView[] SourceViews {
+        get => sourceViews ?? Views;
+        init => sourceViews = value;
+    }
+
+    readonly TrackView[]? sourceViews;
+
+    /// <summary>The automation targets and their lanes.</summary>
+    public AutomationSet Automation { get; init; } = AutomationSet.Empty;
+
+    /// <summary>The files track <paramref name="index" />'s playlist refers to (a frozen track: its freeze file).</summary>
+    public StreamFile?[] FilesFor(int index) =>
+        (uint)index < (uint)Freeze.Length && Freeze[index] is { } freeze ? freeze.Table : Files;
+
+    /// <summary>A copy with other tracks (and their views, generations and lanes) or another plan.</summary>
+    public ModelRoot With(
+        TrackState[]? tracks = null,
+        int[]? generations = null,
+        MixPlan? mix = null
+    ) =>
+        new(
+            Version,
+            LengthSamples,
+            tracks ?? Tracks,
+            Views,
+            generations ?? Generations,
+            Owners,
+            Metronome,
+            MetronomeOwner,
+            Files,
+            Lanes
+        ) {
+            Mix = mix ?? Mix,
+            MasterView = MasterView,
+            MasterOwner = MasterOwner,
+            Freeze = Freeze,
+            SourceViews = SourceViews,
+            Automation = Automation
+        };
+
     public ModelRoot(
         long version,
         long lengthSamples,
@@ -230,5 +315,53 @@ public sealed class ModelRoot {
         }
 
         return -1;
+    }
+}
+
+/// <summary>
+///     A frozen track's source: its freeze file (stereo, from the project start) as a one-region playlist the disk
+///     thread streams like any other. Owned by the control thread; released once no published model uses it.
+/// </summary>
+public sealed unsafe class FreezeSource : IDisposable {
+    readonly AudioPlaylistEntry* entry;
+
+    public FreezeSource(string path) {
+        File = new(0, path);
+        try {
+            if (File.Channels > PlaylistRenderer.MaxFileChannels) {
+                throw new InvalidDataException($"{File.Channels} channels");
+            }
+
+            entry = (AudioPlaylistEntry*)System.Runtime.InteropServices.NativeMemory.AllocZeroed(
+                (nuint)sizeof(AudioPlaylistEntry)
+            );
+            *entry = new() {
+                Start = 0,
+                FileOffset = 0,
+                Length = File.Frames,
+                FileId = 0,
+                Gain = 1f
+            };
+        } catch {
+            File.Dispose();
+            throw;
+        }
+
+        Table = [File];
+    }
+
+    public string Path => File.Path;
+
+    public StreamFile File { get; }
+
+    /// <summary>The file table its playlist indexes (the freeze file is id 0).</summary>
+    public StreamFile?[] Table { get; }
+
+    /// <summary>The track's view with its events kept and its playlist replaced by the freeze file.</summary>
+    public TrackView View(in TrackView track) => new(track.Events, track.EventCount, entry, 1);
+
+    public void Dispose() {
+        System.Runtime.InteropServices.NativeMemory.Free(entry);
+        File.Dispose();
     }
 }

@@ -45,6 +45,7 @@ namespace Anode.Ipc;
 [JsonDerivedType(typeof(OpenPluginEditorMessage), "openPluginEditor")]
 [JsonDerivedType(typeof(ParameterChangedMessage), "parameterChanged")]
 [JsonDerivedType(typeof(PluginProblemMessage), "pluginProblem")]
+[JsonDerivedType(typeof(InsertReadingsMessage), "insertReadings")]
 public abstract record IpcMessage;
 
 /// <summary>
@@ -323,8 +324,11 @@ public sealed record MidiActivityMessage(IReadOnlyList<MidiActivityEntry> Events
 /// <summary>Server → host: send every instrument's opaque state (before a save).</summary>
 public sealed record RequestInstrumentStatesMessage : IpcMessage;
 
-/// <summary>A track's instrument state, base64; null when its instrument keeps none beyond its parameters.</summary>
-public sealed record InstrumentState(int TrackId, string? State);
+/// <summary>
+///     A track's instrument state, base64; null when its instrument keeps none beyond its parameters. With
+///     <paramref name="InsertId" />, the state of that insert of the track (−1: the master) instead (Phase 4).
+/// </summary>
+public sealed record InstrumentState(int TrackId, string? State, string? InsertId = null);
 
 public sealed record InstrumentStatesMessage(IReadOnlyList<InstrumentState> States) : IpcMessage;
 
@@ -402,3 +406,12 @@ public sealed record ParameterChangedMessage(int TrackId, string? InsertId, stri
 
 /// <summary>Host → server: a plugin crashed or failed to load and is bypassed.</summary>
 public sealed record PluginProblemMessage(int TrackId, string? InsertId, string PluginId, string Message) : IpcMessage;
+
+/// <summary>An insert's reading (<c>IAudioEffect.Reading</c>: a compressor's gain reduction in dB, a meter's level).</summary>
+public sealed record InsertReadingEntry(int TrackId, string InsertId, float Value);
+
+/// <summary>
+///     Host → server: the inserts' readings (track −1: the master; inserts without one are left out), at most 15 times a
+///     second while any insert has one.
+/// </summary>
+public sealed record InsertReadingsMessage(IReadOnlyList<InsertReadingEntry> Readings) : IpcMessage;

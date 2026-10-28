@@ -1,7 +1,9 @@
 using Anode.Audio;
 using Anode.Audio.Midi;
 using Anode.Audio.Native;
+using Anode.Engine.Plugins;
 using Anode.EngineHost;
+using Anode.Plugins;
 using System.Runtime.InteropServices;
 
 namespace Anode.Host;
@@ -64,7 +66,14 @@ static class ServeCommand {
             device = session;
         }
 
-        using var host = new EngineHost.EngineHost(device, version, midi: Midi(options));
+        var plugins = Plugins(options, Print);
+        // The sandboxes' deadline follows the device's period; on macOS they join its IO workgroup (null: none).
+        plugins.Host.ConfigureDevice(
+            device.SampleRate,
+            device.BufferFrames,
+            options.Flag("null-audio") ? null : options.Text("device") ?? string.Empty
+        );
+        using var host = new EngineHost.EngineHost(device, version, midi: Midi(options), factory: plugins);
         host.Log = Print;
         await using var server = new EngineHostServer(socket, host.HandleAsync, Print);
         host.Push = server.Push;
@@ -124,6 +133,30 @@ static class ServeCommand {
         options.Flag("virtual-midi") ? new VirtualMidiBackend()
         : !options.Flag("no-midi") && NativeMidiBackend.IsAvailable ? new NativeMidiBackend()
         : null;
+
+    /// <summary>
+    ///     Third-party plugins (VST3, AU, CLAP) in <c>anode-plugin</c> sandboxes (docs/adr/0003-plugin-hosting.md):
+    ///     <c>--data-dir</c> holds the catalogue's cache and blocklist, <c>--plugin-sandbox</c> names the sandbox
+    ///     executable (default: next to anode-host), <c>--sandbox-mode</c> is <c>grouped</c> (default), <c>instance</c>
+    ///     or <c>in-host</c>.
+    /// </summary>
+    static SandboxPluginFactory Plugins(CommandLine options, Action<string> log) {
+        var settings = new PluginHostOptions {
+            SandboxExecutable = options.Text("plugin-sandbox")
+                ?? Environment.GetEnvironmentVariable("ANODE_PLUGIN_SANDBOX"),
+            Mode = options.Text("sandbox-mode") switch {
+                "instance" => SandboxMode.PerInstance,
+                "in-host" => SandboxMode.InHost,
+                _ => SandboxMode.Grouped
+            },
+            Log = log
+        };
+        if (options.Text("data-dir") is { } data) {
+            settings.DataDirectory = data;
+        }
+
+        return new(new(settings));
+    }
 
     static void Print(string message) => Console.Error.WriteLine($"{DateTime.Now:HH:mm:ss.fff} {message}");
 }

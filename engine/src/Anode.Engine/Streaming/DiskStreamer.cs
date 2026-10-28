@@ -33,6 +33,9 @@ public sealed class DiskStreamer : IDisposable {
 
     public int LeadFrames { get; }
 
+    /// <summary>Whether the disk thread runs (otherwise whoever drives the engine calls <see cref="Pass" />).</summary>
+    public bool IsRunning => running;
+
     /// <summary>Bytes read from audio files so far.</summary>
     public long BytesRead => renderer.BytesRead;
 
@@ -167,7 +170,16 @@ public sealed class DiskStreamer : IDisposable {
         while (done < frames) {
             var position = anchor.PositionAt(clock + done);
             var count = (int)Math.Min(frames - done, anchor.Cycle.UntilJump(position));
-            renderer.Render(view, lanes, lane, model.Files, position, count, channels, buffer[(done * channels)..]);
+            renderer.Render(
+                view,
+                lanes,
+                lane,
+                model.FilesFor(index),
+                position,
+                count,
+                channels,
+                buffer[(done * channels)..]
+            );
             done += count;
         }
 

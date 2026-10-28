@@ -201,6 +201,7 @@ static class Smoke {
 
         await Phase2.RunAsync(link, region, rate, dir, unity);
         await Phase3.RunAsync(link, region, rate, dir, unity, tone, high);
+        await Phase4.RunAsync(link, region, rate, dir, tone);
         var end = Read(region, out _);
         Console.WriteLine(
             $"callbacks {end.Callbacks}, overloads {end.Overloads}, underruns {end.Underruns}, model {end.ModelVersion}"
@@ -428,7 +429,7 @@ static class Bench {
     }
 
     /// <summary>Times each callback into a histogram of 0.5 µs bins; allocation-free.</summary>
-    sealed unsafe class TimedProcessor(IAudioProcessor inner, int frames, int rate) : IAudioProcessor {
+    internal sealed unsafe class TimedProcessor(IAudioProcessor inner, int frames, int rate) : IAudioProcessor {
         readonly long[] bins = new long[200_000];
         long baseline = -1;
         long allocated;

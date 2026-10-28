@@ -52,7 +52,13 @@ public sealed partial class HostProcessTests : IDisposable {
         );
         Assert.True(File.Exists(dll), $"anode-host not built at {dll}");
         host = new() {
-            StartInfo = new("dotnet", ["exec", dll, "--serve", "--null-audio", "--socket", socketPath, ..extra]) {
+            StartInfo = new(
+                "dotnet",
+                [
+                    "exec", dll, "--serve", "--null-audio", "--socket", socketPath, "--data-dir",
+                    Path.Combine(dir, "data"), ..extra
+                ]
+            ) {
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
                 Environment = { ["CLAP_PATH"] = MidiFixtures.ClapFolder }

@@ -31,6 +31,8 @@ public sealed unsafe partial class AudioEngine : IAudioProcessor {
     readonly float[] laneRight = GC.AllocateArray<float>(MaxFrames, true);
 
     ModelRoot root = ModelRoot.Empty;
+    int offline;
+    int inDevice;
     long started;
     long completed;
     long callbacks;
@@ -46,6 +48,7 @@ public sealed unsafe partial class AudioEngine : IAudioProcessor {
 
     public AudioEngine(int sampleRate) {
         SampleRate = sampleRate;
+        MasterChannel = new(Master);
         metronome = new(sampleRate);
         hardFloor = transport.Anchor.Id;
         PublishSnapshot(0, 0, 0, root);
@@ -92,12 +95,52 @@ public sealed unsafe partial class AudioEngine : IAudioProcessor {
     /// <summary>True once every callback that had started when <see cref="Publish" /> returned the token has finished.</summary>
     public bool IsGraceOver(long grace) => Volatile.Read(ref completed) >= grace;
 
+    /// <summary>
+    ///     The device's callback. While an offline render drives the engine (<see cref="BeginOffline" />) it leaves the
+    ///     device's (cleared) buffers silent and touches nothing else.
+    /// </summary>
     public void Process(float** inputs, int inputChannels, float** outputs, int outputChannels, int frames) {
+        Interlocked.Exchange(ref inDevice, 1); // full fence before `offline` is read (pairs with BeginOffline)
+        try {
+            if (Volatile.Read(ref offline) == 0) {
+                Run(inputs, inputChannels, outputs, outputChannels, frames);
+            }
+        } finally {
+            Volatile.Write(ref inDevice, 0);
+        }
+    }
+
+    /// <summary>
+    ///     Control thread: from now on the device's callbacks are silent and touch nothing, and the caller's thread is
+    ///     the engine's audio thread (<see cref="ProcessOffline" />) until <see cref="EndOffline" />. Returns once no
+    ///     device callback is running the engine.
+    /// </summary>
+    public void BeginOffline() {
+        Interlocked.Exchange(ref offline, 1); // full fence before `inDevice` is read
+        var spin = new SpinWait();
+        while (Volatile.Read(ref inDevice) != 0) {
+            spin.SpinOnce(-1);
+        }
+    }
+
+    /// <summary>The render's thread hands the engine back to the device.</summary>
+    public void EndOffline() => Volatile.Write(ref offline, 0);
+
+    /// <summary>Whether an offline render drives the engine.</summary>
+    public bool IsOffline => Volatile.Read(ref offline) != 0;
+
+    /// <summary>The callback, run by the thread that called <see cref="BeginOffline" /> (an offline render).</summary>
+    public void ProcessOffline(float** inputs, int inputChannels, float** outputs, int outputChannels, int frames) =>
+        Run(inputs, inputChannels, outputs, outputChannels, frames);
+
+    void Run(float** inputs, int inputChannels, float** outputs, int outputChannels, int frames) {
         Interlocked.Increment(ref started); // full fence before the root is read
         try {
             var model = Volatile.Read(ref root);
             var now = (long)(Stopwatch.GetTimestamp() * NanosecondsPerTick);
             AudioThread.Mark();
+            var observer = Volatile.Read(ref cycleObserver);
+            observer?.BeginCycle(now, frames);
             previousCallbackNs = callbackNs;
             callbackNs = now;
             callbackFrames = frames;
@@ -116,6 +159,7 @@ public sealed unsafe partial class AudioEngine : IAudioProcessor {
             }
 
             callbacks++;
+            observer?.EndCycle();
             PublishSnapshot(clock, position, now, model);
         } finally {
             AudioThread.Mark(false); // only while in the callback: offline renders run it on other threads
@@ -130,6 +174,7 @@ public sealed unsafe partial class AudioEngine : IAudioProcessor {
                     if (transport.State == TransportState.Stopped && countInRemaining == 0) {
                         transport.Play();
                         flashbackRestart = true;
+                        ReleaseOverrides();
                     }
 
                     break;
@@ -149,6 +194,7 @@ public sealed unsafe partial class AudioEngine : IAudioProcessor {
                     transport.Locate(Math.Max(0, command.A));
                     hardFloor = transport.Anchor.Id;
                     Panic();
+                    ReleaseOverrides();
                     break;
                 case EngineCommandKind.SetCycle:
                     transport.SetCycle(new(command.Flag, command.A, command.B));
@@ -193,39 +239,26 @@ public sealed unsafe partial class AudioEngine : IAudioProcessor {
         var countIn = countInRemaining > 0;
         var position = transport.Position;
         var clock = transport.Clock;
-        var bus = busLeft.AsSpan(0, frames);
-        var busR = busRight.AsSpan(0, frames);
-        bus.Clear();
-        busR.Clear();
         BeginBlock(clock, position, frames, countIn);
-
-        var tracks = model.Tracks;
-        var anySolo = false;
-        foreach (var track in tracks) {
-            anySolo |= track.Strip.Solo;
-        }
-
-        for (var i = 0; i < tracks.Length; i++) {
-            var track = tracks[i];
-            var left = trackLeft.AsSpan(0, frames);
-            var right = trackRight.AsSpan(0, frames);
-            ReadTrack(track, model.Generations[i], model.Lanes[i], left, right);
-            var stereo = track.Stereo;
-            if (track.IsMidi) {
-                RenderMidi(track, model.Views[i], model.Generations[i], offset, position, clock, countIn, left, right);
-                stereo = true; // instruments are stereo; an external MIDI track is silent
-            } else {
-                InputTrack(track, inputs, inputChannels, offset, left, right, position, clock, countIn);
-            }
-
-            track.Strip.MixInto(left, stereo ? right : left, stereo, !anySolo || track.Strip.Solo, bus, busR);
-        }
-
-        Volatile.Read(ref preview)?.MixInto(bus, busR);
-        Master.Process(bus, busR);
+        var outLeft = busLeft.AsSpan(0, frames);
+        var outRight = busRight.AsSpan(0, frames);
+        Mix(
+            model,
+            inputs,
+            inputChannels,
+            outputs,
+            outputChannels,
+            offset,
+            frames,
+            position,
+            clock,
+            countIn,
+            outLeft,
+            outRight
+        );
         var click = clicks.AsSpan(0, frames);
         RenderClicks(model, countIn, position, click);
-        WriteOutputs(outputs, outputChannels, offset, bus, busR, click);
+        WriteOutputs(outputs, outputChannels, offset, outLeft, outRight, click);
 
         if (countIn) {
             countInRemaining -= frames;
