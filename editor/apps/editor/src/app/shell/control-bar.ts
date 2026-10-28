@@ -125,10 +125,22 @@ import { Lcd } from './lcd';
               >
                 Save as Alternative…
               </button>
-              <button xuiMenuItem type="button" data-testid="alternatives" [xuiMenuTriggerFor]="alternativesMenu">
+              <button
+                xuiMenuItem
+                type="button"
+                data-testid="alternatives"
+                [xuiMenuTriggerFor]="alternativesMenu"
+                (menuOpened)="session.refreshVersions()"
+              >
                 Alternatives
               </button>
-              <button xuiMenuItem type="button" data-testid="backups" [xuiMenuTriggerFor]="backupsMenu">
+              <button
+                xuiMenuItem
+                type="button"
+                data-testid="backups"
+                [xuiMenuTriggerFor]="backupsMenu"
+                (menuOpened)="session.refreshVersions()"
+              >
                 Revert to Backup
               </button>
               <xui-menu-divider />
@@ -242,7 +254,7 @@ import { Lcd } from './lcd';
           aria-label="Play"
           [disabled]="!project.isOpen()"
           data-testid="play"
-          [attr.aria-pressed]="transport.state() === 'playing' ? 'true' : null"
+          [attr.aria-pressed]="transport.state() === 'playing' ? 'true' : 'false'"
           [class.text-transport-play]="transport.playing()"
           [xuiTooltip]="'Play (Space)'"
           (click)="transport.play()"
@@ -255,7 +267,7 @@ import { Lcd } from './lcd';
           aria-label="Record"
           [disabled]="!project.isOpen()"
           data-testid="record"
-          [attr.aria-pressed]="transport.recording() ? 'true' : null"
+          [attr.aria-pressed]="transport.recording() ? 'true' : 'false'"
           [xuiTooltip]="'Record (R)'"
           (click)="transport.record()"
         >
@@ -266,7 +278,7 @@ import { Lcd } from './lcd';
           class="grid w-10 place-items-center disabled:opacity-35"
           aria-label="Cycle"
           [disabled]="!project.isOpen()"
-          [attr.aria-pressed]="transport.cycle() ? 'true' : null"
+          [attr.aria-pressed]="transport.cycle() ? 'true' : 'false'"
           [class.text-transport-cycle]="transport.cycle()"
           [xuiTooltip]="'Cycle (C)'"
           (click)="transport.toggleCycle()"
@@ -350,7 +362,7 @@ import { Lcd } from './lcd';
             type="button"
             class="px-2.5"
             [class.text-lit]="transport.metronome()"
-            [attr.aria-pressed]="transport.metronome() ? 'true' : null"
+            [attr.aria-pressed]="transport.metronome() ? 'true' : 'false'"
             xuiTooltip="Metronome click"
             (click)="transport.toggleMetronome()"
           >
@@ -360,7 +372,7 @@ import { Lcd } from './lcd';
             type="button"
             class="px-2.5"
             [class.text-lit]="transport.countIn()"
-            [attr.aria-pressed]="transport.countIn() ? 'true' : null"
+            [attr.aria-pressed]="transport.countIn() ? 'true' : 'false'"
             xuiTooltip="One bar of count-in before recording"
             (click)="transport.toggleCountIn()"
           >

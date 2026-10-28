@@ -23,7 +23,7 @@ import { LiveMidiStore } from '../state/live-midi.store';
         type="button"
         class="bezel text-foreground ms-auto h-6.5 px-2.5 text-[11px] font-semibold"
         [class.text-lit]="live.typing()"
-        [attr.aria-pressed]="live.typing() ? 'true' : null"
+        [attr.aria-pressed]="live.typing() ? 'true' : 'false'"
         xuiTooltip="Play with the computer keyboard: A W S E D F T G Y H U J K; Z and X change the octave"
         data-testid="musical-typing"
         (click)="live.typing.set(!live.typing())"

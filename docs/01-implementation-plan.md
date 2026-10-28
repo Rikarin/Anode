@@ -681,4 +681,5 @@ shared package exists.
 4. Run the six Phase 0 spikes in parallel and record the results in `docs/`. S1–S5 done (macOS), see
    [docs/spikes](spikes/README.md); S6 and the Linux/Windows runs remain.
 5. ~~Start Phase 1.~~ Phase 1 done on macOS: see [docs/02-phase-1.md](02-phase-1.md#status-2026-10-28). Phase 2 done
-   on macOS: see [docs/03-phase-2.md](03-phase-2.md#status-2026-10-28).
+   on macOS: see [docs/03-phase-2.md](03-phase-2.md#status-2026-10-28). Phase 3 (alpha) done on macOS: see
+   [docs/04-phase-3.md](04-phase-3.md#status-2026-10-28).

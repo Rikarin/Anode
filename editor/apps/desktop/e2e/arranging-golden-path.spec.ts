@@ -60,7 +60,7 @@ const Bar = 192;
 // The Phase 3 exit criterion (docs/04-phase-3.md) against the real app on the null device. It needs workstreams A
 // (cycle recording, punch, flashback on the host) and B (the Server's Phase 3 commands and endpoints), so it is
 // fixme until the integration; it compiles and its steps drive the editor's Phase 3 UI by role and test id.
-test.fixme('tracks and edits a session: takes, comping, punch, flashback, tempo, arrangement, crossfades, stacks, screensets, key commands, import, alternatives and backups', async ({
+test('tracks and edits a session: takes, comping, punch, flashback, tempo, arrangement, crossfades, stacks, screensets, key commands, import, alternatives and backups', async ({
   app,
   window
 }) => {
@@ -182,24 +182,24 @@ test.fixme('tracks and edits a session: takes, comping, punch, flashback, tempo,
     await expect(window.getByTestId('screenset-number')).toHaveText('1');
 
     // Rebind a key command: Cycle Mode to L, then L toggles the cycle.
+    await expect(window.getByRole('button', { name: 'Cycle', exact: true })).toHaveAttribute('aria-pressed', 'false');
     await window.keyboard.press('Alt+k');
     await window.getByTestId('key-search').fill('cycle mode');
     await window.getByRole('button', { name: 'Learn a key for Cycle Mode' }).click();
     await window.keyboard.press('l');
     await expect(window.getByTestId('key-transport.cycle')).toContainText('L');
     await window.getByRole('button', { name: 'Done' }).click();
+    // Keys pressed while the editor's dialog is still closing belong to the dialog, not the window.
+    await expect(window.getByRole('dialog')).toHaveCount(0);
     await window.keyboard.press('l');
     await expect(window.getByRole('button', { name: 'Cycle', exact: true })).toHaveAttribute('aria-pressed', 'true');
 
     // Import from the All Files browser: the MIDI file (double-click imports it).
     await window.keyboard.press('f');
     await expect(window.getByTestId('all-files')).toBeVisible();
-    for (const part of scratch.split('/').filter(Boolean)) {
-      const open = window.getByRole('button', { name: `Open ${part}` });
-      if (await open.isVisible().catch(() => false)) {
-        await open.click();
-      }
-    }
+    await window.getByRole('button', { name: 'Go to folder…' }).click();
+    await window.getByTestId('go-to-folder').fill(scratch);
+    await window.getByTestId('go-to-folder').press('Enter');
     await window.getByTestId('file-song.mid').dblclick();
     await expect(window.getByRole('group', { name: /^Track \d+: song/ }).first()).toBeVisible();
 
@@ -211,8 +211,11 @@ test.fixme('tracks and edits a session: takes, comping, punch, flashback, tempo,
     await window.getByTestId('save-alternative').click();
     await window.getByTestId('add-track').click();
     await window.keyboard.press('ControlOrMeta+s');
+    // Saved (each save keeps a backup of the one before) before the menu lists the backups.
+    await expect(window.getByTestId('unsaved')).toHaveCount(0);
     await window.getByTestId('project-menu').click();
-    await window.getByTestId('backups').click();
+    // A submenu opens on hover (as in macOS menus); clicking its item again would close it.
+    await window.getByTestId('backups').hover();
     await window.getByTestId('backup-0').click();
     await expect(window.getByTestId('project-name')).toBeVisible();
   } finally {

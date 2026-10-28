@@ -266,3 +266,51 @@ Make Anode look and feel like Logic Pro on a current macOS. Load the `impeccable
 3. Run the Playwright golden path for the exit criterion.
 4. Take screenshots of the new UI.
 5. Fix the seams.
+
+## Status (2026-10-28)
+
+**Exit criterion met on macOS: alpha.** The Playwright arranging golden path passes against the real desktop app on the
+null device (with the null device's input tone). In one run it:
+- cycle-records takes into a take folder;
+- comps them with Quick Swipe;
+- punches in with autopunch;
+- captures a performance with Flashback Capture;
+- adds a tempo ramp and a signature change;
+- lays out arrangement sections and moves one;
+- crossfades two regions;
+- stacks tracks;
+- switches screensets;
+- rebinds a key command;
+- imports a MIDI file from the All Files browser;
+- saves an alternative and reverts to a backup.
+
+All four e2e specs pass. Screenshots are in [design/](design/).
+
+| Check | Result |
+|---|---|
+| Engine tests (`dotnet test --solution engine/Anode.slnx`) | 519 pass, 2 skipped (opt-in demo renders) |
+| Two-process, real host | cycle takes, autopunch exact to a tick, Flashback Capture |
+| Editor (`nx run-many -t typecheck lint test build`) | 5 projects pass; Storybook + axe 46 tests |
+| e2e (`nx e2e desktop`) | arranging, MIDI and Phase 1 golden paths, smoke; twice in a row |
+| Skala, Prettier, generated client | clean |
+| Callback, CoreAudio, 64 frames, 128 tracks with 32 crossfading | p50 40 µs, p99 81 µs, worst 106 µs of 1,333 µs; 0 allocations |
+
+**Contract changes and decisions at integration:**
+- `RecordedPass(StartSample, FileOffset, Frames)` and `RecordedTake.Passes` landed with workstream A (the contracts
+  commit had missed them).
+- The fade-curve description was corrected to the formula: c = −1 is a slow start, c = 1 a fast one.
+- Toggle buttons always expose `aria-pressed` (`false` when off), not only when on.
+- The All Files browser gained "Go to Folder": click the folder title and type a path, as with Finder's ⇧⌘G.
+- The alternatives and backups submenus refresh when they open.
+
+**Open:**
+- Section moves do not carry tempo, signature and key events.
+- MIDI cycle recording keeps the first pass on the server (the engine merges passes).
+- Audio glue that needs a bounce answers 422 (Phase 4).
+- Preview is WAV only, with no resampling.
+- No transient region solo.
+- No MIDI upload from a remote browser.
+- In the desktop app ⌘S is both a menu accelerator and an editor shortcut; saves are serialised on the server, but it
+  may save twice.
+- Timeline text is drawn in a monospace atlas.
+- Linux and Windows.

@@ -85,9 +85,31 @@ const KindIcons: Record<FileEntry['kind'], string> = {
             >
               <ng-icon xui name="matArrowUpwardRound" size="sm" />
             </button>
-            <span class="text-foreground min-w-0 flex-1 truncate text-[11px] font-semibold" [attr.title]="path()">
-              {{ folderName() }}
-            </span>
+            @if (goingTo()) {
+              <input
+                #goTo
+                xuiInput
+                type="text"
+                class="h-6 min-w-0 flex-1 font-mono text-[11px]"
+                aria-label="Go to folder"
+                data-testid="go-to-folder"
+                spellcheck="false"
+                [value]="path()"
+                (keydown.enter)="goToFolder(goTo.value)"
+                (keydown.escape)="goingTo.set(false)"
+                (blur)="goingTo.set(false)"
+              />
+            } @else {
+              <button
+                type="button"
+                class="text-foreground min-w-0 flex-1 truncate text-left text-[11px] font-semibold"
+                [attr.title]="path() + ' — click to type a folder path'"
+                aria-label="Go to folder…"
+                (click)="goingTo.set(true)"
+              >
+                {{ folderName() }}
+              </button>
+            }
             <button
               xuiButton
               type="button"
@@ -239,6 +261,8 @@ export class BrowsersPane {
 
   protected readonly tab = signal<string | null>('files');
   protected readonly path = computed(() => this.browser.listing()?.path ?? '');
+  /** Whether the folder title is a field to type a path into (Finder's Go to Folder). */
+  protected readonly goingTo = signal(false);
   protected readonly folderName = computed(() => this.baseName(this.path()) || 'Home');
   protected readonly projectFiles = computed(() =>
     [...this.project.files().values()].sort((a, b) => a.name.localeCompare(b.name))
@@ -259,6 +283,14 @@ export class BrowsersPane {
 
   constructor() {
     void this.browser.start();
+  }
+
+  protected goToFolder(path: string): void {
+    this.goingTo.set(false);
+    const trimmed = path.trim();
+    if (trimmed) {
+      void this.browser.open(trimmed);
+    }
   }
 
   protected baseName(path: string): string {
