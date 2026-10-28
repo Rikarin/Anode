@@ -4,16 +4,18 @@ namespace Anode.Dsp.Analysis;
 ///     Silence detection (Strip Silence): an RMS gate. Deterministic, and about 50× real time or better on one core.
 /// </summary>
 /// <remarks>
-///     The level is the RMS of a 10 ms window centred on each frame. Runs above the threshold shorter than the minimum
-///     time are dropped; the rest are widened by the pre-attack and post-release times and merged where they meet.
+///     The level is the RMS of a 10 ms window centred on each frame. Runs above the threshold are widened by the
+///     pre-attack and post-release times; as in Logic's Strip Silence, the minimum time is the shortest silence that
+///     separates them, so runs whose gap is shorter are merged.
 /// </remarks>
 public static class Silence {
     const double WindowSeconds = 0.01;
 
     /// <summary>
     ///     The non-silent ranges of <paramref name="mono" /> (start inclusive, end exclusive, in frames, ascending): above
-    ///     <paramref name="thresholdDb" /> for at least <paramref name="minTimeMs" />, widened by
-    ///     <paramref name="preAttackMs" /> before and <paramref name="postReleaseMs" /> after, merged where they meet.
+    ///     <paramref name="thresholdDb" />, widened by <paramref name="preAttackMs" /> before and
+    ///     <paramref name="postReleaseMs" /> after, and merged where they meet or the silence between them is shorter than
+    ///     <paramref name="minTimeMs" />.
     /// </summary>
     public static (long Start, long End)[] Detect(
         ReadOnlySpan<float> mono,
@@ -86,13 +88,9 @@ public static class Silence {
         long post,
         long length
     ) {
-        if (end - start < minFrames) {
-            return;
-        }
-
         start = Math.Max(0, start - pre);
         end = Math.Min(length, end + post);
-        if (ranges.Count > 0 && start <= ranges[^1].End) {
+        if (ranges.Count > 0 && start - ranges[^1].End < Math.Max(minFrames, 1)) {
             ranges[^1] = (ranges[^1].Start, Math.Max(ranges[^1].End, end));
             return;
         }

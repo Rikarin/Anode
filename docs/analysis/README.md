@@ -11,7 +11,7 @@ checks every entry point).
 | `BeatTracker.Track(mono, rate)` | The same flux as an onset envelope → tempo from the autocorrelation (median over 8 s windows, a log-normal prior at 120 bpm, scored with the two-beat and half-beat lags) → local period per 8 s window (±25 %) → Ellis's dynamic programme → beats snapped to transients within 40 ms → tempo = beats over their span; *variable* when the 8-beat median interval moves by more than 4 %; downbeats assume 4/4 and pick the phase with the strongest sub-200 Hz onsets. |
 | `PitchTracker.Track(mono, rate, hop)` | pYIN: YIN difference by FFT (21 ms window, 50–2,000 Hz), 100 Beta(2, 18)-weighted thresholds → candidates and voicing probability; Viterbi over 20-cent bins × voiced/unvoiced (35.92 octaves/s, switch 0.01); the voiced pitch is the candidate nearest the bin, moved to the hop's own time. Hops quieter than −70 dBFS (or 30 dB below their window) are unvoiced. |
 | `NoteSegmenter.Segment(track, rate)` | Voiced runs, split where the mean of the next 50 ms differs from the previous 50 ms by over 70 ¢ (at its peak), each split placed by least absolute deviation; notes under 60 ms dropped, neighbours within 50 ¢ joined; pitch = median without the first and last 20 ms; confidence = mean voicing. |
-| `Silence.Detect(mono, rate, thresholdDb, minTimeMs, preAttackMs, postReleaseMs)` | 10 ms centred RMS gate; runs above the threshold shorter than the minimum time dropped, the rest widened and merged. |
+| `Silence.Detect(mono, rate, thresholdDb, minTimeMs, preAttackMs, postReleaseMs)` | 10 ms centred RMS gate; runs above the threshold widened by the pre-attack and post-release, and merged across silences shorter than the minimum time (Logic's Strip Silence). |
 | `Polyphony.IsPolyphonic(mono, rate, track)` (added) | For `FileAnalysis.Polyphonic`. Loud hops mostly unvoiced or unconfident, or (every 40 ms) voiced hops whose pitch does not explain their spectrum (first three harmonics under 5 % of the energy, or under 70 % within 3 % of the first twenty). Chords, noise and drums read as polyphonic. |
 
 ## Method
@@ -94,6 +94,6 @@ state per hop (640 states), about 7.7 MB per minute at a 5 ms hop.
   about 0.5: few beats on onsets) also means the tempo is a guess.
 - **Sensitivity:** 0.5 (the default) finds every hit of the test loops and nothing in noise; 0 keeps only strong
   onsets, 1 also finds hits 30 dB below their neighbours. The beat tracker always uses 0.5.
-- **Strip Silence** follows the contract's wording: the *minimum time* drops non-silent runs shorter than it (Logic's
-  dialog applies it to the silences). A short click under a long minimum time is therefore dropped.
+- **Strip Silence** follows Logic: the *minimum time* is the shortest silence that splits regions; sounds separated by
+  a shorter gap stay in one region, and a short click is kept.
 - **Downbeats** assume 4/4 and that the loudest low-band (kick) beat starts the bar, preferring the first beat.

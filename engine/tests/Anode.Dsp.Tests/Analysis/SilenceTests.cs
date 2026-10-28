@@ -42,22 +42,26 @@ public sealed class SilenceTests {
     }
 
     [Fact]
-    public void Ranges_are_widened_merged_and_short_ones_dropped() {
+    public void Ranges_are_widened_and_merged_across_silences_shorter_than_the_minimum() {
         // −6 dBFS bursts at 0.5 s (300 ms) and 1.0 s (300 ms); a 20 ms click at 2 s; a −50 dBFS hum at 2.5 s.
         var audio = Bursts((0.5, 0.3, 0.7), (1.0, 0.3, 0.7), (2.0, 0.02, 0.7), (2.5, 0.3, 0.0045));
         var plain = Silence.Detect(audio, Rate, -40, 50, 0, 0);
-        Assert.Equal(2, plain.Length);
+        Assert.Equal(3, plain.Length); // a short sound is kept: the minimum time is about silences
         Assert.InRange(plain[0].Start, Ms(495), Ms(500));
         Assert.InRange(plain[0].End, Ms(800), Ms(805));
 
+        // The 200 ms silence between the bursts is shorter than a 250 ms minimum: one range for both.
+        var bridged = Silence.Detect(audio, Rate, -40, 250, 0, 0);
+        Assert.Equal(2, bridged.Length);
+        Assert.InRange(bridged[0].End, Ms(1_300), Ms(1_305));
+
         // A 250 ms post-release reaches the second burst's pre-attack: one range.
         var merged = Silence.Detect(audio, Rate, -40, 50, 20, 250);
-        Assert.Single(merged);
+        Assert.Equal(2, merged.Length);
         Assert.InRange(merged[0].Start, Ms(475), Ms(480));
         Assert.InRange(merged[0].End, Ms(1_550), Ms(1_555));
 
-        // No minimum time keeps the click; a lower threshold finds the hum.
-        Assert.Equal(3, Silence.Detect(audio, Rate, -40, 0, 0, 0).Length);
+        // A lower threshold finds the hum.
         Assert.Equal(4, Silence.Detect(audio, Rate, -60, 0, 0, 0).Length);
     }
 
