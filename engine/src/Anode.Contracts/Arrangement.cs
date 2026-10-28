@@ -8,13 +8,16 @@ public enum TempoCurve {
     [JsonStringEnumMemberName("step")]
     Step,
 
-    /// <summary>The tempo changes linearly (in BPM over ticks) to the next event's.</summary>
+    /// <summary>The tempo changes (in BPM over ticks, along the event's <c>shape</c>) to the next event's.</summary>
     [JsonStringEnumMemberName("ramp")]
     Ramp
 }
 
-/// <summary>A point of the tempo track. The first is at tick 0.</summary>
-public sealed record TempoEvent(long Tick, double Bpm, TempoCurve Curve);
+/// <summary>
+///     A point of the tempo track. The first is at tick 0. A ramp's tempo at fraction x (0…1) of the way to the next
+///     event is bpm₀ + (bpm₁ − bpm₀)·x^(2^(−2·<c>shape</c>)), the fade formula: <c>shape</c> −1…1, 0 the linear ramp.
+/// </summary>
+public sealed record TempoEvent(long Tick, double Bpm, TempoCurve Curve, double Shape = 0);
 
 /// <summary>A time signature change, on a bar line of the signature before it. The first is at tick 0.</summary>
 public sealed record SignatureEvent(long Tick, int Numerator, int Denominator);

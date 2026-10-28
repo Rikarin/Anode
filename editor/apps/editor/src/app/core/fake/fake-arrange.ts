@@ -417,7 +417,12 @@ export function flattenTakeFolder(project: Project, folderId: string, id: IdMake
         fadeOut,
         fadeInCurve: 0,
         fadeOutCurve: 0,
-        muted: folder.muted
+        muted: folder.muted,
+        follow: 'off',
+        flexMarkers: [],
+        transpose: 0,
+        fineTune: 0,
+        pitchNotes: []
       }
     ];
   });

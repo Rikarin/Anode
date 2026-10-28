@@ -87,6 +87,25 @@ export type DitherMode = Schemas['DitherMode'];
 export type NormalizeMode = Schemas['NormalizeMode'];
 export type PluginFormat = Schemas['PluginFormat'];
 
+export type FlexMode = Schemas['FlexMode'];
+export type FlexFollow = Schemas['FlexFollow'];
+export type FlexMarker = Schemas['FlexMarker'];
+export type PitchNote = Schemas['PitchNote'];
+export type FileTempo = Schemas['FileTempo'];
+export type ProjectTempoMode = Schemas['ProjectTempoMode'];
+export type SmartTempoSettings = Schemas['SmartTempoSettings'];
+export type VarispeedMode = Schemas['VarispeedMode'];
+export type VarispeedSettings = Schemas['VarispeedSettings'];
+export type TrackAlternative = Schemas['TrackAlternative'];
+export type BeatMapping = Schemas['BeatMapping'];
+export type PitchSegment = Schemas['PitchSegment'];
+export type FileAnalysis = Schemas['FileAnalysis'];
+export type BounceInPlaceRequest = Schemas['BounceInPlaceRequest'];
+export type BounceInPlaceDestination = Schemas['BounceInPlaceDestination'];
+export type BounceSourceAction = Schemas['BounceSourceAction'];
+export type ProcessRequest = Schemas['ProcessRequest'];
+export type ProcessEffect = Schemas['ProcessEffect'];
+
 export type TransportState = Schemas['TransportState'];
 export type TransportStatus = Schemas['TransportStatus'];
 export type TransportRequest = Schemas['TransportRequest'];
@@ -124,8 +143,8 @@ export interface MidiActivity {
  * message after connecting is `connected`; `engine` reports a change of the link to the engine host; `resync` replaces
  * events a client fell too far behind to receive, so it refetches what it shows. `projectChanged` carries the delta of
  * every edit, undo, redo or finished recording; `transport` and `meters` stream while the engine runs; `midiActivity`
- * streams live MIDI; `pluginsChanged` and `midiDevicesChanged` ask for a refetch; `job` reports bounce and freeze progress; `pluginProblem` a
- * plugin the engine had to bypass.
+ * streams live MIDI; `pluginsChanged` and `midiDevicesChanged` ask for a refetch; `job` reports job progress (bounce, freeze, analyze, bounce in place, process); `pluginProblem` a
+ * plugin the engine had to bypass; `analysis` says a file's analysis changed, so a client refetches it.
  */
 export type ServerMessage =
   | { type: 'connected'; version: string }
@@ -141,4 +160,5 @@ export type ServerMessage =
   | { type: 'pluginsChanged' }
   | { type: 'midiDevicesChanged' }
   | { type: 'job'; job: Job }
-  | { type: 'pluginProblem'; trackId: string | null; insertId: string | null; pluginId: string; message: string };
+  | { type: 'pluginProblem'; trackId: string | null; insertId: string | null; pluginId: string; message: string }
+  | { type: 'analysis'; fileId: string };

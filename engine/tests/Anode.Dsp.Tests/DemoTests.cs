@@ -28,7 +28,7 @@ public sealed class DemoTests {
     }
 
     static void Save(string folder, string name, (float[] Left, float[] Right) audio) {
-        var peak = Math.Max(Analysis.Peak(audio.Left), Analysis.Peak(audio.Right));
+        var peak = Math.Max(Support.Analysis.Peak(audio.Left), Support.Analysis.Peak(audio.Right));
         var scale = peak > 0.98 ? (float)(0.98 / peak) : 1f;
         TestWav.Write(
             Path.Combine(folder, name + ".wav"),

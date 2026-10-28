@@ -9,7 +9,7 @@ public sealed class MidiEditTests {
     readonly SequentialIds ids = new();
 
     ProjectState state = ProjectDefaults.NewProject("prj_1", "Song", 48_000)
-        .Apply(new AudioFileUpserted(new("aud_1", "Kick", "Audio Files/Kick.wav", 48_000, 1, 96_000, 24)));
+        .Apply(new AudioFileUpserted(new("aud_1", "Kick", "Audio Files/Kick.wav", 48_000, 1, 96_000, 24, null)));
 
     [Fact]
     public void A_new_instrument_track_gets_the_synth_with_every_parameter_at_its_default() {

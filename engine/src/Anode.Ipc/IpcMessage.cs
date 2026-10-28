@@ -380,6 +380,12 @@ public sealed record SetMixerMessage(string Pdc, bool LowLatency, double LowLate
 ///     track, <c>{Path}/{trackId}.wav</c>, post-fader as it reaches its output; with <paramref name="Freeze" />, the one
 ///     track's source and inserts before its fader. The host answers with progress and a finish.
 /// </summary>
+/// <remarks>
+///     Bounce in place (Phase 5, docs/06-phase-5.md) renders as a freeze, for every track of
+///     <paramref name="Tracks" />: each isolated (its source alone, no sends), through its inserts unless
+///     <paramref name="BypassInserts" />, and through its fader and pan too when <paramref name="IncludeVolumePan" />
+///     (both apply only with <paramref name="Freeze" />); the server extends the range by the tail it wants.
+/// </remarks>
 public sealed record RenderMessage(
     int JobId,
     long StartSample,
@@ -387,7 +393,9 @@ public sealed record RenderMessage(
     string Path,
     IReadOnlyList<int>? Tracks = null,
     bool Freeze = false,
-    bool Realtime = false
+    bool Realtime = false,
+    bool IncludeVolumePan = false,
+    bool BypassInserts = false
 ) : IpcMessage;
 
 public sealed record CancelRenderMessage(int JobId) : IpcMessage;

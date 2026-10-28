@@ -40,6 +40,10 @@ function track(id: string, extra: Partial<Track> = {}, output = 'master', sends:
     inputBus: 0,
     automationMode: 'read',
     frozenFileId: null,
+    flexOn: false,
+    flexMode: 'polyphonic',
+    alternatives: [],
+    alternativeId: null,
     ...extra
   };
 }

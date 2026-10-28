@@ -17,7 +17,7 @@ export class TempoMap {
   constructor(events: readonly TempoEvent[], fallbackBpm = 120) {
     const sorted = [...events].filter(e => e.bpm > 0).sort((a, b) => a.tick - b.tick);
     if (sorted.length === 0 || (sorted[0]?.tick ?? 0) > 0) {
-      sorted.unshift({ tick: 0, bpm: sorted[0]?.bpm ?? fallbackBpm, curve: 'step' });
+      sorted.unshift({ tick: 0, bpm: sorted[0]?.bpm ?? fallbackBpm, curve: 'step', shape: 0 });
     }
     this.events = sorted;
     this.seconds = [0];
@@ -28,7 +28,7 @@ export class TempoMap {
 
   /** A map with one tempo throughout. */
   static constant(bpm: number): TempoMap {
-    return new TempoMap([{ tick: 0, bpm, curve: 'step' }]);
+    return new TempoMap([{ tick: 0, bpm, curve: 'step', shape: 0 }]);
   }
 
   /** The tempo at `tick`, in BPM. */

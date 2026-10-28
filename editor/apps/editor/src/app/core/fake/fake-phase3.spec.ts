@@ -26,8 +26,8 @@ describe('FakeAnodeServer, Phase 3 commands', () => {
     let p = await run(server, {
       type: 'setTempoEvents',
       events: [
-        { tick: 0, bpm: 100, curve: 'ramp' },
-        { tick: 2 * Bar, bpm: 140, curve: 'step' }
+        { tick: 0, bpm: 100, curve: 'ramp', shape: 0 },
+        { tick: 2 * Bar, bpm: 140, curve: 'step', shape: 0 }
       ]
     });
     expect(p.settings.tempo).toBe(100);
@@ -55,7 +55,9 @@ describe('FakeAnodeServer, Phase 3 commands', () => {
       })
     ).rejects.toThrow('bar line');
     await expect(
-      server.applyCommands({ commands: [{ type: 'setTempoEvents', events: [{ tick: 5, bpm: 100, curve: 'step' }] }] })
+      server.applyCommands({
+        commands: [{ type: 'setTempoEvents', events: [{ tick: 5, bpm: 100, curve: 'step', shape: 0 }] }]
+      })
     ).rejects.toThrow('tick 0');
   });
 

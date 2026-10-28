@@ -135,7 +135,12 @@ public static partial class Edits {
                         Math.Min(piece.FadeOut, length - fadeIn),
                         0,
                         0,
-                        folder.Muted
+                        folder.Muted,
+                        FlexFollow.Off,
+                        [],
+                        0,
+                        0,
+                        []
                     )
                 )
             );

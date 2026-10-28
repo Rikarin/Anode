@@ -243,7 +243,7 @@ export class FakeAnodeServer implements AnodeApi {
           metronome: { enabled: false, countIn: false, levelDb: -6 },
           endTick: DefaultEndTick,
           mergeMidiRecording: false,
-          tempoEvents: [{ tick: 0, bpm: 120, curve: 'step' }],
+          tempoEvents: [{ tick: 0, bpm: 120, curve: 'step', shape: 0 }],
           signatures: [{ tick: 0, numerator: 4, denominator: 4 }],
           keys: [{ tick: 0, tonic: 0, mode: 'major' }],
           recording: {
@@ -253,7 +253,9 @@ export class FakeAnodeServer implements AnodeApi {
             punchInTick: 0,
             punchOutTick: 4 * 4 * Ppq
           },
-          mixer: { pdc: 'all', lowLatency: false, lowLatencyLimitMs: 10 }
+          mixer: { pdc: 'all', lowLatency: false, lowLatencyLimitMs: 10 },
+          smartTempo: { mode: 'keep', defaultFollow: 'off', analyzeImports: true },
+          varispeed: { enabled: false, mode: 'speedOnly', speed: 1 }
         },
         master: strip(),
         tracks: [],
@@ -953,7 +955,8 @@ export class FakeAnodeServer implements AnodeApi {
         sampleRate,
         channels: 2,
         bitDepth: request.bitDepth,
-        frames
+        frames,
+        tempo: null
       }));
       this.commit(project, { ...project, audioFiles: [...project.audioFiles, ...added] }, 'Add Bounce');
     }
@@ -980,7 +983,8 @@ export class FakeAnodeServer implements AnodeApi {
       sampleRate: project.sampleRate,
       channels: 2,
       bitDepth: 32,
-      frames: Math.round(framesBetween(project, 0, last) + 2 * project.sampleRate)
+      frames: Math.round(framesBetween(project, 0, last) + 2 * project.sampleRate),
+      tempo: null
     };
     this.commit(
       project,
@@ -1132,7 +1136,8 @@ export class FakeAnodeServer implements AnodeApi {
         sampleRate: before.sampleRate,
         channels: track.input.stereo ? 2 : 1,
         bitDepth: 24,
-        frames: total
+        frames: total,
+        tempo: null
       };
       after = { ...after, audioFiles: [...after.audioFiles, file] };
       // Each pass: where it is in the song and in the file, cut to the punch range under autopunch.
@@ -1207,7 +1212,10 @@ export class FakeAnodeServer implements AnodeApi {
     const name = (path.split('/').pop() ?? path).replace(/\.midi?$/i, '');
     const seed = hash(path);
     const bpm = 84 + (seed % 48);
-    let project = this.applyCommand(before, { type: 'setTempoEvents', events: [{ tick: 0, bpm, curve: 'step' }] });
+    let project = this.applyCommand(before, {
+      type: 'setTempoEvents',
+      events: [{ tick: 0, bpm, curve: 'step', shape: 0 }]
+    });
     project = this.applyCommand(project, {
       type: 'setSignatures',
       events: [{ tick: 0, numerator: 4, denominator: 4 }]
@@ -1610,6 +1618,10 @@ export class FakeAnodeServer implements AnodeApi {
           inputBus: 0,
           automationMode: 'read',
           frozenFileId: null,
+          flexOn: false,
+          flexMode: 'polyphonic',
+          alternatives: [],
+          alternativeId: null,
           // An external MIDI track sends nowhere until setMidiIo picks a port (as the Server does).
           midiOutput: null
         };
@@ -1681,7 +1693,12 @@ export class FakeAnodeServer implements AnodeApi {
           fadeOut: 0,
           fadeInCurve: 0,
           fadeOutCurve: 0,
-          muted: false
+          muted: false,
+          follow: 'off',
+          flexMarkers: [],
+          transpose: 0,
+          fineTune: 0,
+          pitchNotes: []
         };
         return { ...project, regions: [...project.regions, added] };
       }
@@ -2241,7 +2258,11 @@ export class FakeAnodeServer implements AnodeApi {
           notes: '',
           inputBus: 0,
           automationMode: 'read',
-          frozenFileId: null
+          frozenFileId: null,
+          flexOn: false,
+          flexMode: 'polyphonic',
+          alternatives: [],
+          alternativeId: null
         };
         const ids = new Set(members.map(m => m.id));
         const rest = project.tracks.filter(t => !ids.has(t.id));
@@ -2320,6 +2341,24 @@ export class FakeAnodeServer implements AnodeApi {
       case 'applyPatch':
       case 'unfreezeTrack':
         return applyMixCommand(project, command, this.mixContext()) ?? project;
+      case 'setTrackFlex':
+      case 'setRegionFlex':
+      case 'setFlexMarkers':
+      case 'quantizeAudio':
+      case 'setPitchNotes':
+      case 'flexPitchToMidi':
+      case 'setFileTempo':
+      case 'adaptTempo':
+      case 'mapBeats':
+      case 'stripSilence':
+      case 'newTrackAlternative':
+      case 'selectTrackAlternative':
+      case 'setTrackAlternative':
+      case 'deleteTrackAlternative':
+      case 'setVarispeed':
+      case 'setSmartTempo':
+        // Flex, Smart Tempo, Varispeed and track alternatives: Phase 5, the editor workstream (docs/06-phase-5.md).
+        throw new ApiError(422, `${command.type}: not in the fake Server yet.`);
     }
   }
 
@@ -2456,7 +2495,8 @@ export class FakeAnodeServer implements AnodeApi {
       sampleRate: header.sampleRate,
       channels: header.channels,
       bitDepth: header.bitDepth,
-      frames: header.frames
+      frames: header.frames,
+      tempo: null
     };
     // An import is not an edit: no revision, no undo step. The file reaches other clients with the region that uses it.
     this.project = { ...project, audioFiles: [...project.audioFiles, file] };
@@ -2524,7 +2564,7 @@ export class FakeAnodeServer implements AnodeApi {
         metronome: { enabled: false, countIn: true, levelDb: -6 },
         endTick: DefaultEndTick,
         mergeMidiRecording: false,
-        tempoEvents: [{ tick: 0, bpm: 112, curve: 'step' }],
+        tempoEvents: [{ tick: 0, bpm: 112, curve: 'step', shape: 0 }],
         signatures: [{ tick: 0, numerator: 4, denominator: 4 }],
         keys: [{ tick: 0, tonic: 0, mode: 'major' }],
         recording: {
@@ -2534,7 +2574,9 @@ export class FakeAnodeServer implements AnodeApi {
           punchInTick: 0,
           punchOutTick: 4 * 4 * Ppq
         },
-        mixer: { pdc: 'all', lowLatency: false, lowLatencyLimitMs: 10 }
+        mixer: { pdc: 'all', lowLatency: false, lowLatencyLimitMs: 10 },
+        smartTempo: { mode: 'keep', defaultFollow: 'off', analyzeImports: true },
+        varispeed: { enabled: false, mode: 'speedOnly', speed: 1 }
       },
       master: strip(),
       tracks: [],
@@ -2566,7 +2608,8 @@ export class FakeAnodeServer implements AnodeApi {
         sampleRate: 48_000,
         channels,
         bitDepth: 24,
-        frames: seconds * 48_000
+        frames: seconds * 48_000,
+        tempo: null
       };
       project = { ...project, audioFiles: [...project.audioFiles, file] };
       const track = project.tracks[i];

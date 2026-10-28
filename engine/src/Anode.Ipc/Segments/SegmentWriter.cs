@@ -8,13 +8,15 @@ namespace Anode.Ipc.Segments;
 public static unsafe class SegmentWriter {
     /// <summary>The bytes a segment of <paramref name="tracks" /> needs.</summary>
     public static long Size(IReadOnlyList<TrackModel> tracks) {
-        long events = 0, playlists = 0;
+        long events = 0, playlists = 0, warps = 0, pitches = 0;
         foreach (var t in tracks) {
             events += t.Events.Length;
             playlists += t.Playlist.Length;
+            warps += t.Warp?.Length ?? 0;
+            pitches += t.Pitch?.Length ?? 0;
         }
 
-        return Layout.Offsets(tracks.Count, events, playlists).Total;
+        return Layout.Offsets(tracks.Count, events, playlists, warps, pitches).Total;
     }
 
     /// <summary>
@@ -30,13 +32,15 @@ public static unsafe class SegmentWriter {
         bool checksum,
         SharedSegment? into = null
     ) {
-        long eventCount = 0, playlistCount = 0;
+        long eventCount = 0, playlistCount = 0, warpCount = 0, pitchCount = 0;
         foreach (var t in tracks) {
             eventCount += t.Events.Length;
             playlistCount += t.Playlist.Length;
+            warpCount += t.Warp?.Length ?? 0;
+            pitchCount += t.Pitch?.Length ?? 0;
         }
 
-        var offsets = Layout.Offsets(tracks.Count, eventCount, playlistCount);
+        var offsets = Layout.Offsets(tracks.Count, eventCount, playlistCount, warpCount, pitchCount);
         var segment = into
             ?? SharedSegment.Create(DefaultBackend, SharedSegment.DefaultDirectory(), prefix, id, offsets.Total);
         if (segment.Length < offsets.Total) {
@@ -48,7 +52,9 @@ public static unsafe class SegmentWriter {
         var table = (TrackEntry*)(basePointer + offsets.Tracks);
         var eventsOut = (PlaybackEvent*)(basePointer + offsets.Events);
         var playlistsOut = (AudioPlaylistEntry*)(basePointer + offsets.Playlists);
-        long e = 0, p = 0;
+        var warpsOut = (WarpPoint*)(basePointer + offsets.Warps);
+        var pitchesOut = (PitchPoint*)(basePointer + offsets.Pitches);
+        long e = 0, p = 0, w = 0, q = 0;
         for (var i = 0; i < tracks.Count; i++) {
             var track = tracks[i];
             table[i] = new() {
@@ -59,9 +65,20 @@ public static unsafe class SegmentWriter {
                 PlaylistCount = track.Playlist.Length
             };
             track.Events.AsSpan().CopyTo(new(eventsOut + e, track.Events.Length));
-            track.Playlist.AsSpan().CopyTo(new(playlistsOut + p, track.Playlist.Length));
+            var playlist = new Span<AudioPlaylistEntry>(playlistsOut + p, track.Playlist.Length);
+            track.Playlist.AsSpan().CopyTo(playlist);
+            foreach (ref var entry in playlist) {
+                // A track's warp and pitch ranges index its own arrays; the segment's hold every track's.
+                entry.WarpStart += entry.WarpCount > 0 ? (int)w : 0;
+                entry.PitchStart += entry.PitchCount > 0 ? (int)q : 0;
+            }
+
+            track.Warp.AsSpan().CopyTo(new(warpsOut + w, track.Warp?.Length ?? 0));
+            track.Pitch.AsSpan().CopyTo(new(pitchesOut + q, track.Pitch?.Length ?? 0));
             e += track.Events.Length;
             p += track.Playlist.Length;
+            w += track.Warp?.Length ?? 0;
+            q += track.Pitch?.Length ?? 0;
         }
 
         *header = new() {
@@ -77,6 +94,10 @@ public static unsafe class SegmentWriter {
             EventCount = eventCount,
             PlaylistOffset = offsets.Playlists,
             PlaylistCount = playlistCount,
+            WarpOffset = offsets.Warps,
+            WarpCount = warpCount,
+            PitchOffset = offsets.Pitches,
+            PitchCount = pitchCount,
             LengthSamples = lengthSamples
         };
         if (checksum) {

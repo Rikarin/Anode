@@ -43,7 +43,10 @@ function tidy(events: TempoEvent[]): TempoEvent[] {
 export function addTempoPoint(events: readonly TempoEvent[], tick: number, bpm: number): TempoEvent[] {
   const t = Math.max(0, Math.round(tick));
   const before = [...events].filter(e => e.tick <= t).pop();
-  return tidy([...events.filter(e => e.tick !== t), { tick: t, bpm: clampBpm(bpm), curve: before?.curve ?? 'step' }]);
+  return tidy([
+    ...events.filter(e => e.tick !== t),
+    { tick: t, bpm: clampBpm(bpm), curve: before?.curve ?? 'step', shape: 0 }
+  ]);
 }
 
 /**

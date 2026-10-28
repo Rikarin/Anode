@@ -1033,7 +1033,8 @@ public sealed class ProjectSession(
             info.SampleRate,
             info.Channels,
             info.Frames,
-            info.BitDepth
+            info.BitDepth,
+            null
         );
     }
 

@@ -22,7 +22,12 @@ const audio = (id: string, startTick: number, length: number, fileOffset = 0): A
   fadeOut: 0,
   fadeInCurve: 0,
   fadeOutCurve: 0,
-  muted: false
+  muted: false,
+  follow: 'off',
+  flexMarkers: [],
+  transpose: 0,
+  fineTune: 0,
+  pitchNotes: []
 });
 const midi: MidiRegion = {
   id: 'mid_1',

@@ -291,6 +291,10 @@ public static partial class Edits {
             string.Empty,
             0,
             AutomationMode.Read,
+            null,
+            false,
+            FlexMode.Polyphonic,
+            [],
             null
         );
 

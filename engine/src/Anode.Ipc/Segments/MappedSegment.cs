@@ -1,16 +1,27 @@
 namespace Anode.Ipc.Segments;
 
-/// <summary>What the audio thread reads of one track: pointers into a mapped segment.</summary>
+/// <summary>
+///     What the audio thread reads of one track: pointers into a mapped segment. <see cref="Warp" /> and
+///     <see cref="Pitch" /> are the whole segment's warp and pitch arrays, which warped entries index (format 3).
+/// </summary>
 public readonly unsafe struct TrackView(
     PlaybackEvent* events,
     long eventCount,
     AudioPlaylistEntry* playlist,
-    long playlistCount
+    long playlistCount,
+    WarpPoint* warp = null,
+    long warpCount = 0,
+    PitchPoint* pitch = null,
+    long pitchCount = 0
 ) {
     public PlaybackEvent* Events { get; } = events;
     public long EventCount { get; } = eventCount;
     public AudioPlaylistEntry* Playlist { get; } = playlist;
     public long PlaylistCount { get; } = playlistCount;
+    public WarpPoint* Warp { get; } = warp;
+    public long WarpCount { get; } = warpCount;
+    public PitchPoint* Pitch { get; } = pitch;
+    public long PitchCount { get; } = pitchCount;
 }
 
 /// <summary>
@@ -54,14 +65,20 @@ public sealed unsafe class MappedSegment : IDisposable {
             || h->EventCount < 0
             || h->PlaylistCount < 0
             || h->EventCount > segment.Length / sizeof(PlaybackEvent)
-            || h->PlaylistCount > segment.Length / sizeof(AudioPlaylistEntry)) {
+            || h->PlaylistCount > segment.Length / sizeof(AudioPlaylistEntry)
+            || h->WarpCount < 0
+            || h->PitchCount < 0
+            || h->WarpCount > segment.Length / sizeof(WarpPoint)
+            || h->PitchCount > segment.Length / sizeof(PitchPoint)) {
             throw new InvalidDataException("Segment counts out of range.");
         }
 
-        var expected = Layout.Offsets(h->TrackCount, h->EventCount, h->PlaylistCount);
+        var expected = Layout.Offsets(h->TrackCount, h->EventCount, h->PlaylistCount, h->WarpCount, h->PitchCount);
         if (expected.Tracks != h->TrackTableOffset
             || expected.Events != h->EventsOffset
             || expected.Playlists != h->PlaylistOffset
+            || expected.Warps != h->WarpOffset
+            || expected.Pitches != h->PitchOffset
             || expected.Total != h->TotalLength) {
             throw new InvalidDataException("Segment offsets do not match its counts.");
         }
@@ -116,6 +133,7 @@ public sealed unsafe class MappedSegment : IDisposable {
             }
 
             CheckPlaylist(i, t);
+            CheckRanges(i, t);
         }
     }
 
@@ -130,11 +148,32 @@ public sealed unsafe class MappedSegment : IDisposable {
             (PlaybackEvent*)((byte*)h + h->EventsOffset) + entry.EventStart,
             entry.EventCount,
             (AudioPlaylistEntry*)((byte*)h + h->PlaylistOffset) + entry.PlaylistStart,
-            entry.PlaylistCount
+            entry.PlaylistCount,
+            (WarpPoint*)((byte*)h + h->WarpOffset),
+            h->WarpCount,
+            (PitchPoint*)((byte*)h + h->PitchOffset),
+            h->PitchCount
         );
     }
 
     public void Dispose() => segment.Dispose();
+
+    /// <summary>Every warped entry's warp and pitch ranges lie inside the segment's arrays.</summary>
+    static void CheckRanges(int track, TrackView t) {
+        for (long e = 0; e < t.PlaylistCount; e++) {
+            var entry = t.Playlist[e];
+            if (entry.WarpCount < 0
+                || entry.PitchCount < 0
+                || (entry.WarpCount > 0
+                    && (entry.WarpStart < 0 || (long)entry.WarpStart + entry.WarpCount > t.WarpCount))
+                || (entry.PitchCount > 0
+                    && (entry.PitchStart < 0 || (long)entry.PitchStart + entry.PitchCount > t.PitchCount))) {
+                throw new InvalidDataException(
+                    $"Track {track} playlist entry {e} has warp or pitch points out of bounds."
+                );
+            }
+        }
+    }
 
     /// <summary>A track's playlist is sorted by start and overlaps only as crossfades, never three entries at once.</summary>
     static void CheckPlaylist(int track, TrackView t) {

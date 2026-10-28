@@ -35,7 +35,8 @@ public sealed record Project(
 ///     Global settings. <c>tempo</c> and <c>signature</c> are the values at the project start (the first of
 ///     <c>tempoEvents</c> and <c>signatures</c>, which are the global tempo and signature tracks).
 ///     <c>endTick</c> is the project end marker. <c>mergeMidiRecording</c>: a MIDI recording over an
-///     existing MIDI region adds its notes to that region instead of making a new one.
+///     existing MIDI region adds its notes to that region instead of making a new one. <c>smartTempo</c> and
+///     <c>varispeed</c> (Phase 5): the project tempo mode and Varispeed.
 /// </summary>
 public sealed record ProjectSettings(
     double Tempo,
@@ -48,7 +49,9 @@ public sealed record ProjectSettings(
     IReadOnlyList<SignatureEvent> Signatures,
     IReadOnlyList<KeyEvent> Keys,
     RecordingSettings Recording,
-    MixerSettings Mixer
+    MixerSettings Mixer,
+    SmartTempoSettings SmartTempo,
+    VarispeedSettings Varispeed
 );
 
 public sealed record TimeSignature(int Numerator, int Denominator);
@@ -90,7 +93,9 @@ public enum TrackKind {
 /// <summary>
 ///     A track and its channel strip. <c>color</c> is a CSS colour; <c>input</c> is where an audio track records from.
 ///     An instrument track has an <c>instrument</c>; instrument and external MIDI tracks take MIDI from
-///     <c>midiInput</c>, and an external MIDI track sends its regions to <c>midiOutput</c>.
+///     <c>midiInput</c>, and an external MIDI track sends its regions to <c>midiOutput</c>. Phase 5: <c>flexOn</c> and
+///     <c>flexMode</c> are its flex algorithm; <c>alternatives</c> are its inactive track alternatives, and
+///     <c>alternativeId</c> names the active one (null until the track has alternatives).
 /// </summary>
 public sealed record Track(
     string Id,
@@ -109,7 +114,11 @@ public sealed record Track(
     string Notes,
     int InputBus,
     AutomationMode AutomationMode,
-    string? FrozenFileId
+    string? FrozenFileId,
+    bool FlexOn,
+    FlexMode FlexMode,
+    IReadOnlyList<TrackAlternative> Alternatives,
+    string? AlternativeId
 );
 
 /// <summary>The device input: 1-based first channel (0: none); a stereo input takes that channel and the next.</summary>
@@ -141,6 +150,14 @@ public sealed record ChannelStrip(
 ///     does not play. Two regions on a track may overlap only as a crossfade: where the earlier fades out and the later
 ///     fades in.
 /// </summary>
+/// <remarks>
+///     Phase 5 (docs/06-phase-5.md, <c>RegionTiming</c>): a region is <em>warped</em> when its track's flex is on, its
+///     <c>follow</c> is not <c>off</c>, or it has a <c>transpose</c> (semitones), a <c>fineTune</c> (cents) or
+///     <c>pitchNotes</c>; these need Flex or Follow, and the server refuses them otherwise. An unwarped region plays
+///     <c>fileOffset + n</c> at <c>startTick</c> plus n frames, as before. A warped region's file frames map through
+///     its base map (by <c>follow</c> and the file's <c>tempo</c>), scaled linearly between its <c>flexMarkers</c>;
+///     its end tick is where its last file frame lands (derived, never stored). Fades stay in project frames.
+/// </remarks>
 public sealed record AudioRegion(
     string Id,
     string TrackId,
@@ -154,10 +171,18 @@ public sealed record AudioRegion(
     long FadeOut,
     double FadeInCurve,
     double FadeOutCurve,
-    bool Muted
+    bool Muted,
+    FlexFollow Follow,
+    IReadOnlyList<FlexMarker> FlexMarkers,
+    int Transpose,
+    int FineTune,
+    IReadOnlyList<PitchNote> PitchNotes
 );
 
-/// <summary>An audio file of the project; <c>path</c> is relative to the project folder.</summary>
+/// <summary>
+///     An audio file of the project; <c>path</c> is relative to the project folder. <c>tempo</c> is its File Tempo
+///     (Smart Tempo), null until analysed.
+/// </summary>
 public sealed record AudioFile(
     string Id,
     string Name,
@@ -165,7 +190,8 @@ public sealed record AudioFile(
     int SampleRate,
     int Channels,
     long Frames,
-    int BitDepth
+    int BitDepth,
+    FileTempo? Tempo
 );
 
 public sealed record CreateProjectRequest(string Name, string? Directory, int? SampleRate);

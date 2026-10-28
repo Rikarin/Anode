@@ -10,7 +10,7 @@ public sealed class ArrangementEditTests {
     readonly SequentialIds ids = new();
 
     ProjectState state = ProjectDefaults.NewProject("prj_1", "Song", 48_000)
-        .Apply(new AudioFileUpserted(new("aud_1", "Kick", "Audio Files/Kick.wav", 48_000, 1, 96_000, 24)));
+        .Apply(new AudioFileUpserted(new("aud_1", "Kick", "Audio Files/Kick.wav", 48_000, 1, 96_000, 24, null)));
 
     [Fact]
     public void The_tempo_and_signature_settings_are_always_the_first_events() {

@@ -33,6 +33,11 @@ function region(change: Partial<AudioRegion> = {}): AudioRegion {
     fadeInCurve: 0,
     fadeOutCurve: 0,
     muted: false,
+    follow: 'off',
+    flexMarkers: [],
+    transpose: 0,
+    fineTune: 0,
+    pitchNotes: [],
     ...change
   };
 }
@@ -142,7 +147,11 @@ describe('buildScene', () => {
     notes: '',
     inputBus: 0,
     automationMode: 'read',
-    frozenFileId: null
+    frozenFileId: null,
+    flexOn: false,
+    flexMode: 'polyphonic',
+    alternatives: [],
+    alternativeId: null
   });
 
   it('lays regions on their tracks’ lanes in their colours, with selection, mute and file mapping', () => {

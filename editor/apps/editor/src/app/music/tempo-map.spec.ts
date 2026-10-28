@@ -11,8 +11,8 @@ describe('TempoMap', () => {
 
   it('holds a step until the next event', () => {
     const map = new TempoMap([
-      { tick: 0, bpm: 120, curve: 'step' },
-      { tick: 3840, bpm: 60, curve: 'step' }
+      { tick: 0, bpm: 120, curve: 'step', shape: 0 },
+      { tick: 3840, bpm: 60, curve: 'step', shape: 0 }
     ]);
     expect(map.secondsAt(3840)).toBeCloseTo(2);
     expect(map.secondsAt(4800)).toBeCloseTo(3);
@@ -23,8 +23,8 @@ describe('TempoMap', () => {
 
   it('ramps linearly in BPM over ticks, its seconds the exact integral', () => {
     const map = new TempoMap([
-      { tick: 0, bpm: 60, curve: 'ramp' },
-      { tick: 9600, bpm: 180, curve: 'step' }
+      { tick: 0, bpm: 60, curve: 'ramp', shape: 0 },
+      { tick: 9600, bpm: 180, curve: 'step', shape: 0 }
     ]);
     expect(map.bpmAt(4800)).toBeCloseTo(120);
     // Numeric integration of 60 / (PPQ × bpm(t)).
@@ -40,11 +40,11 @@ describe('TempoMap', () => {
 
   it('round-trips and is monotonic', () => {
     const map = new TempoMap([
-      { tick: 0, bpm: 90, curve: 'ramp' },
-      { tick: 1920, bpm: 140, curve: 'step' },
-      { tick: 5760, bpm: 70, curve: 'ramp' },
-      { tick: 7680, bpm: 70, curve: 'ramp' },
-      { tick: 9600, bpm: 200, curve: 'step' }
+      { tick: 0, bpm: 90, curve: 'ramp', shape: 0 },
+      { tick: 1920, bpm: 140, curve: 'step', shape: 0 },
+      { tick: 5760, bpm: 70, curve: 'ramp', shape: 0 },
+      { tick: 7680, bpm: 70, curve: 'ramp', shape: 0 },
+      { tick: 9600, bpm: 200, curve: 'step', shape: 0 }
     ]);
     let last = -1;
     for (let tick = 0; tick <= 12_000; tick += 37) {
@@ -56,8 +56,8 @@ describe('TempoMap', () => {
   });
 
   it('adds a first event at 0 when the track has none there', () => {
-    const map = new TempoMap([{ tick: 960, bpm: 100, curve: 'step' }]);
-    expect(map.events[0]).toEqual({ tick: 0, bpm: 100, curve: 'step' });
+    const map = new TempoMap([{ tick: 960, bpm: 100, curve: 'step', shape: 0 }]);
+    expect(map.events[0]).toEqual({ tick: 0, bpm: 100, curve: 'step', shape: 0 });
   });
 
   it('converts audio frames', () => {

@@ -251,7 +251,7 @@ public sealed class MixerEditTests {
     [Fact]
     public void Freezing_is_one_step_and_a_frozen_track_keeps_its_plugins_until_unfrozen() {
         state = state.Apply(
-            new AudioFileUpserted(new("aud_f", "Freeze", "Audio Files/Freeze.wav", 48_000, 2, 48_000, 32))
+            new AudioFileUpserted(new("aud_f", "Freeze", "Audio Files/Freeze.wav", 48_000, 2, 48_000, 32, null))
         );
         Apply(new AddTrackCommand("Keys", Kind: TrackKind.Instrument));
         var keys = T("Keys").Id;

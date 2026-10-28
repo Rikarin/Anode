@@ -1791,6 +1791,182 @@
           }
         }
       }
+    },
+    "/api/v1/project/files/{fileId}/analysis": {
+      "get": {
+        "tags": [
+          "Project"
+        ],
+        "summary": "A file\u0027s cached analysis: transients and beats (analysed now when missing), and its pitch curve and notes once an analyze job has run.",
+        "operationId": "GetFileAnalysis",
+        "parameters": [
+          {
+            "name": "fileId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FileAnalysis"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/api/v1/project/files/{fileId}/analyze": {
+      "post": {
+        "tags": [
+          "Project"
+        ],
+        "summary": "Starts pitch analysis of a file (Flex Pitch) as a job; an analysis event on /ws follows when it is cached.",
+        "operationId": "AnalyzeFile",
+        "parameters": [
+          {
+            "name": "fileId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Job"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/api/v1/project/bounce-in-place": {
+      "post": {
+        "tags": [
+          "Project"
+        ],
+        "summary": "Renders tracks or regions in place to new files; when the job finishes, adds a track or replaces the regions and leaves, mutes or deletes the source, in one undo step.",
+        "operationId": "BounceInPlace",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BounceInPlaceRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Job"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/api/v1/project/process": {
+      "post": {
+        "tags": [
+          "Project"
+        ],
+        "summary": "Selection-based processing: runs a chain of built-in effects over part of regions; when the job finishes, that part becomes a new file and region, in one undo step.",
+        "operationId": "ProcessRegions",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProcessRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Job"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -1833,7 +2009,8 @@
           "sampleRate",
           "channels",
           "frames",
-          "bitDepth"
+          "bitDepth",
+          "tempo"
         ],
         "type": "object",
         "properties": {
@@ -1861,9 +2038,19 @@
           "bitDepth": {
             "type": "integer",
             "format": "int32"
+          },
+          "tempo": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/FileTempo"
+              }
+            ]
           }
         },
-        "description": "An audio file of the project; \u0060path\u0060 is relative to the project folder."
+        "description": "An audio file of the project; \u0060path\u0060 is relative to the project folder. \u0060tempo\u0060 is its File Tempo\n(Smart Tempo), null until analysed."
       },
       "AudioFormat": {
         "enum": [
@@ -1886,7 +2073,12 @@
           "fadeOut",
           "fadeInCurve",
           "fadeOutCurve",
-          "muted"
+          "muted",
+          "follow",
+          "flexMarkers",
+          "transpose",
+          "fineTune",
+          "pitchNotes"
         ],
         "type": "object",
         "properties": {
@@ -1936,6 +2128,29 @@
           },
           "muted": {
             "type": "boolean"
+          },
+          "follow": {
+            "$ref": "#/components/schemas/FlexFollow"
+          },
+          "flexMarkers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FlexMarker"
+            }
+          },
+          "transpose": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "fineTune": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "pitchNotes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PitchNote"
+            }
           }
         },
         "description": "A region of an audio file on a track: it starts at \u0060startTick\u0060 and plays \u0060length\u0060 frames of the file\nfrom \u0060fileOffset\u0060, at \u0060gainDb\u0060, with fades of \u0060fadeIn\u0060 and \u0060fadeOut\u0060 frames whose curves run\nfrom \u22121 (slow start, exponential-looking) through 0 (linear) to 1 (fast start, logarithmic-looking): a fade-in\u0027s\ngain at position x (0\u20261) is x^(2^(\u22122c)), a fade-out the mirror. A muted region\ndoes not play. Two regions on a track may overlap only as a crossfade: where the earlier fades out and the later\nfades in."
@@ -2001,6 +2216,24 @@
         },
         "description": "A point of an automation lane, in the target\u0027s own unit; \u0060curve\u0060 \u22121\u20261 shapes the segment to the next."
       },
+      "BeatMapping": {
+        "required": [
+          "tick",
+          "sample"
+        ],
+        "type": "object",
+        "properties": {
+          "tick": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "sample": {
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "description": "Beat mapping: tick \u0060tick\u0060 lands on project sample \u0060sample\u0060 (the tempo events are set so that it does,\nkeeping earlier mappings and the positions before them)."
+      },
       "Bookmarks": {
         "required": [
           "paths"
@@ -2015,6 +2248,72 @@
           }
         },
         "description": "Folders pinned in the All Files browser."
+      },
+      "BounceInPlaceDestination": {
+        "enum": [
+          "newTrack",
+          "replace"
+        ],
+        "default": "newTrack"
+      },
+      "BounceInPlaceRequest": {
+        "required": [
+          "destination",
+          "source",
+          "bypassEffects",
+          "includeTail",
+          "includeVolumePan",
+          "normalize"
+        ],
+        "type": "object",
+        "properties": {
+          "trackIds": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "type": "string"
+            }
+          },
+          "regionIds": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "type": "string"
+            }
+          },
+          "destination": {
+            "$ref": "#/components/schemas/BounceInPlaceDestination"
+          },
+          "source": {
+            "$ref": "#/components/schemas/BounceSourceAction"
+          },
+          "bypassEffects": {
+            "type": "boolean",
+            "default": false
+          },
+          "includeTail": {
+            "type": "boolean",
+            "default": true
+          },
+          "includeVolumePan": {
+            "type": "boolean",
+            "default": false
+          },
+          "normalize": {
+            "$ref": "#/components/schemas/NormalizeMode"
+          },
+          "name": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        },
+        "description": "Bounce in place: tracks (\u0060trackIds\u0060, their whole range) or regions (\u0060regionIds\u0060, theirs) rendered\nisolated by the host through \u0060render\u0060, through their inserts unless \u0060bypassEffects\u0060, with fader and pan\nonly when \u0060includeVolumePan\u0060, plus the effects\u0027 tail when \u0060includeTail\u0060; normalised as a bounce. When\nthe job finishes, the server adds the files and, in one undo step, adds a new track (or replaces the regions) and\nleaves, mutes or deletes the source. \u0060name\u0060 names the new track or regions (left out: the source\u0027s, plus\n\u0022 Bounce\u0022)."
       },
       "BounceRequest": {
         "required": [
@@ -2114,6 +2413,14 @@
           "stems"
         ],
         "default": "mix"
+      },
+      "BounceSourceAction": {
+        "enum": [
+          "leave",
+          "mute",
+          "delete"
+        ],
+        "default": "mute"
       },
       "ChannelStrip": {
         "required": [
@@ -3060,6 +3367,54 @@
           },
           {
             "$ref": "#/components/schemas/EditCommandUnfreezeTrackCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandSetTrackFlexCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandSetRegionFlexCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandSetFlexMarkersCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandQuantizeAudioCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandSetPitchNotesCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandFlexPitchToMidiCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandSetFileTempoCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandAdaptTempoCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandMapBeatsCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandStripSilenceCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandNewTrackAlternativeCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandSelectTrackAlternativeCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandSetTrackAlternativeCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandDeleteTrackAlternativeCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandSetVarispeedCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandSetSmartTempoCommand"
           }
         ],
         "description": "An edit of the open project (docs/adr/0004-state-ownership.md). A batch of them is applied atomically as one\nundo step. Optional properties left out are left unchanged.",
@@ -3138,9 +3493,43 @@
             "setAutomationMode": "#/components/schemas/EditCommandSetAutomationModeCommand",
             "setMixerSettings": "#/components/schemas/EditCommandSetMixerSettingsCommand",
             "applyPatch": "#/components/schemas/EditCommandApplyPatchCommand",
-            "unfreezeTrack": "#/components/schemas/EditCommandUnfreezeTrackCommand"
+            "unfreezeTrack": "#/components/schemas/EditCommandUnfreezeTrackCommand",
+            "setTrackFlex": "#/components/schemas/EditCommandSetTrackFlexCommand",
+            "setRegionFlex": "#/components/schemas/EditCommandSetRegionFlexCommand",
+            "setFlexMarkers": "#/components/schemas/EditCommandSetFlexMarkersCommand",
+            "quantizeAudio": "#/components/schemas/EditCommandQuantizeAudioCommand",
+            "setPitchNotes": "#/components/schemas/EditCommandSetPitchNotesCommand",
+            "flexPitchToMidi": "#/components/schemas/EditCommandFlexPitchToMidiCommand",
+            "setFileTempo": "#/components/schemas/EditCommandSetFileTempoCommand",
+            "adaptTempo": "#/components/schemas/EditCommandAdaptTempoCommand",
+            "mapBeats": "#/components/schemas/EditCommandMapBeatsCommand",
+            "stripSilence": "#/components/schemas/EditCommandStripSilenceCommand",
+            "newTrackAlternative": "#/components/schemas/EditCommandNewTrackAlternativeCommand",
+            "selectTrackAlternative": "#/components/schemas/EditCommandSelectTrackAlternativeCommand",
+            "setTrackAlternative": "#/components/schemas/EditCommandSetTrackAlternativeCommand",
+            "deleteTrackAlternative": "#/components/schemas/EditCommandDeleteTrackAlternativeCommand",
+            "setVarispeed": "#/components/schemas/EditCommandSetVarispeedCommand",
+            "setSmartTempo": "#/components/schemas/EditCommandSetSmartTempoCommand"
           }
         }
+      },
+      "EditCommandAdaptTempoCommand": {
+        "required": [
+          "regionId",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "adaptTempo"
+            ],
+            "type": "string"
+          },
+          "regionId": {
+            "type": "string"
+          }
+        },
+        "description": "Sets the project\u0027s tempo events from an audio region\u0027s file tempo (analysed now if need be) over the region\u0027s\nrange, and makes the region play unwarped there."
       },
       "EditCommandAddAuxCommand": {
         "required": [
@@ -3756,6 +4145,28 @@
         },
         "description": "Removes a take (and its comp segments) from a folder; the folder\u0027s last take cannot be removed."
       },
+      "EditCommandDeleteTrackAlternativeCommand": {
+        "required": [
+          "trackId",
+          "alternativeId",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "deleteTrackAlternative"
+            ],
+            "type": "string"
+          },
+          "trackId": {
+            "type": "string"
+          },
+          "alternativeId": {
+            "type": "string"
+          }
+        },
+        "description": "Deletes a track alternative with its content; deleting the active one selects another first."
+      },
       "EditCommandEditNotesCommand": {
         "required": [
           "regionId",
@@ -3797,6 +4208,30 @@
           }
         },
         "description": "Replaces a take folder with regions playing its comp, crossfaded at the boundaries."
+      },
+      "EditCommandFlexPitchToMidiCommand": {
+        "required": [
+          "regionId",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "flexPitchToMidi"
+            ],
+            "type": "string"
+          },
+          "regionId": {
+            "type": "string"
+          },
+          "trackId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        },
+        "description": "Makes a MIDI region of an audio region\u0027s pitch notes (their target pitches, at the times they play) on\n\u0060trackId\u0060, or on a new instrument track under the region\u0027s when left out."
       },
       "EditCommandJoinRegionsCommand": {
         "required": [
@@ -3840,6 +4275,27 @@
           }
         },
         "description": "Loads a file (a sampler instrument, a sample) into a track\u0027s instrument; a path on the server\u0027s disk."
+      },
+      "EditCommandMapBeatsCommand": {
+        "required": [
+          "mappings",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "mapBeats"
+            ],
+            "type": "string"
+          },
+          "mappings": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BeatMapping"
+            }
+          }
+        },
+        "description": "Beat mapping: for each mapping in order, sets tempo events so that its tick lands on its sample, keeping earlier\nmappings and the positions before them."
       },
       "EditCommandMoveInsertCommand": {
         "required": [
@@ -3949,6 +4405,35 @@
           }
         }
       },
+      "EditCommandNewTrackAlternativeCommand": {
+        "required": [
+          "trackId",
+          "type",
+          "duplicate"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "newTrackAlternative"
+            ],
+            "type": "string"
+          },
+          "trackId": {
+            "type": "string"
+          },
+          "name": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "duplicate": {
+            "type": "boolean",
+            "default": false
+          }
+        },
+        "description": "Makes a new track alternative and selects it: empty, or a copy of the active one when \u0060duplicate\u0060 (with new\nids). The track\u0027s first alternative also names the current content."
+      },
       "EditCommandPackTakeFolderCommand": {
         "required": [
           "regionIds",
@@ -3975,6 +4460,44 @@
           }
         },
         "description": "Packs overlapping or adjacent audio regions of one track into a new take folder, one take each."
+      },
+      "EditCommandQuantizeAudioCommand": {
+        "required": [
+          "regionIds",
+          "gridTicks",
+          "type",
+          "strength",
+          "swing"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "quantizeAudio"
+            ],
+            "type": "string"
+          },
+          "regionIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "gridTicks": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "strength": {
+            "type": "number",
+            "format": "double",
+            "default": 1
+          },
+          "swing": {
+            "type": "number",
+            "format": "double",
+            "default": 0
+          }
+        },
+        "description": "Quantises audio regions: flex markers on their transients (analysed now if need be) move toward the grid of\n\u0060gridTicks\u0060 by \u0060strength\u0060 (0\u20261), with \u0060swing\u0060 (0\u20261) delaying every second grid step. Turns flex\non for their tracks when it is off."
       },
       "EditCommandQuantizeNotesCommand": {
         "required": [
@@ -4200,6 +4723,28 @@
         },
         "description": "Makes one take the whole comp."
       },
+      "EditCommandSelectTrackAlternativeCommand": {
+        "required": [
+          "trackId",
+          "alternativeId",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "selectTrackAlternative"
+            ],
+            "type": "string"
+          },
+          "trackId": {
+            "type": "string"
+          },
+          "alternativeId": {
+            "type": "string"
+          }
+        },
+        "description": "Swaps a track\u0027s live regions, MIDI regions and take folders for those of alternative \u0060alternativeId\u0060."
+      },
       "EditCommandSetAutomationCommand": {
         "required": [
           "target",
@@ -4311,6 +4856,60 @@
             "format": "int64"
           }
         }
+      },
+      "EditCommandSetFileTempoCommand": {
+        "required": [
+          "fileId",
+          "tempo",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "setFileTempo"
+            ],
+            "type": "string"
+          },
+          "fileId": {
+            "type": "string"
+          },
+          "tempo": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/FileTempo"
+              }
+            ]
+          }
+        },
+        "description": "Sets a file\u0027s tempo, beats and downbeats (the Smart Tempo Editor), or clears them (null)."
+      },
+      "EditCommandSetFlexMarkersCommand": {
+        "required": [
+          "regionId",
+          "markers",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "setFlexMarkers"
+            ],
+            "type": "string"
+          },
+          "regionId": {
+            "type": "string"
+          },
+          "markers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FlexMarker"
+            }
+          }
+        },
+        "description": "Replaces an audio region\u0027s flex markers: file frames inside the region, their ticks increasing with them and\ninside the region. Needs the track\u0027s flex on."
       },
       "EditCommandSetGroupCommand": {
         "required": [
@@ -4758,6 +5357,31 @@
         },
         "description": "Sets one parameter of a track\u0027s instrument. Consecutive batches on the same parameter within 1 s coalesce into\none undo step, as \u0060setStrip\u0060 does."
       },
+      "EditCommandSetPitchNotesCommand": {
+        "required": [
+          "regionId",
+          "notes",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "setPitchNotes"
+            ],
+            "type": "string"
+          },
+          "regionId": {
+            "type": "string"
+          },
+          "notes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PitchNote"
+            }
+          }
+        },
+        "description": "Replaces an audio region\u0027s Flex Pitch notes (edits, splits and joins); notes need Flex or Follow, as a\ntranspose does."
+      },
       "EditCommandSetProjectNotesCommand": {
         "required": [
           "text",
@@ -4887,6 +5511,48 @@
             ]
           }
         }
+      },
+      "EditCommandSetRegionFlexCommand": {
+        "required": [
+          "regionId",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "setRegionFlex"
+            ],
+            "type": "string"
+          },
+          "regionId": {
+            "type": "string"
+          },
+          "follow": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/FlexFollow"
+              }
+            ]
+          },
+          "transpose": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int32"
+          },
+          "fineTune": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int32"
+          }
+        },
+        "description": "Sets an audio region\u0027s Flex \u0026amp; Follow, transpose (semitones) or fine tune (cents). A transpose or fine tune\nneeds Flex or Follow (the track\u0027s flex on, or a \u0060follow\u0060 other than \u0060off\u0060), else 422."
       },
       "EditCommandSetSectionCommand": {
         "required": [
@@ -5018,6 +5684,46 @@
           }
         },
         "description": "Replaces the signature track; the first event at tick 0, each later one on a bar line."
+      },
+      "EditCommandSetSmartTempoCommand": {
+        "required": [
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "setSmartTempo"
+            ],
+            "type": "string"
+          },
+          "mode": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ProjectTempoMode"
+              }
+            ]
+          },
+          "defaultFollow": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/FlexFollow"
+              }
+            ]
+          },
+          "analyzeImports": {
+            "type": [
+              "null",
+              "boolean"
+            ]
+          }
+        },
+        "description": "Sets the project tempo mode, the follow new audio regions get, or whether imports are analysed."
       },
       "EditCommandSetStripCommand": {
         "required": [
@@ -5153,6 +5859,32 @@
         },
         "description": "Replaces the tempo track; the first event must be at tick 0. Audio regions keep their musical positions."
       },
+      "EditCommandSetTrackAlternativeCommand": {
+        "required": [
+          "trackId",
+          "alternativeId",
+          "name",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "setTrackAlternative"
+            ],
+            "type": "string"
+          },
+          "trackId": {
+            "type": "string"
+          },
+          "alternativeId": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "description": "Renames a track alternative."
+      },
       "EditCommandSetTrackCommand": {
         "required": [
           "trackId",
@@ -5217,6 +5949,40 @@
           }
         }
       },
+      "EditCommandSetTrackFlexCommand": {
+        "required": [
+          "trackId",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "setTrackFlex"
+            ],
+            "type": "string"
+          },
+          "trackId": {
+            "type": "string"
+          },
+          "on": {
+            "type": [
+              "null",
+              "boolean"
+            ]
+          },
+          "mode": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/FlexMode"
+              }
+            ]
+          }
+        },
+        "description": "Turns a track\u0027s flex on or off, or changes its algorithm."
+      },
       "EditCommandSetTrackGroupsCommand": {
         "required": [
           "trackId",
@@ -5266,6 +6032,43 @@
         },
         "description": "Moves a track into a stack (\u0060parentId\u0060) or out of one (null). Stacks do not nest."
       },
+      "EditCommandSetVarispeedCommand": {
+        "required": [
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "setVarispeed"
+            ],
+            "type": "string"
+          },
+          "enabled": {
+            "type": [
+              "null",
+              "boolean"
+            ]
+          },
+          "mode": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/VarispeedMode"
+              }
+            ]
+          },
+          "speed": {
+            "type": [
+              "null",
+              "number"
+            ],
+            "format": "double"
+          }
+        },
+        "description": "Turns Varispeed on or off, or sets its mode or speed (0.5\u20261.5)."
+      },
       "EditCommandSplitRegionCommand": {
         "required": [
           "regionId",
@@ -5288,6 +6091,51 @@
           }
         },
         "description": "Splits a region in two at \u0060atTick\u0060, which must fall inside it."
+      },
+      "EditCommandStripSilenceCommand": {
+        "required": [
+          "regionIds",
+          "type",
+          "thresholdDb",
+          "minTimeMs",
+          "preAttackMs",
+          "postReleaseMs"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "stripSilence"
+            ],
+            "type": "string"
+          },
+          "regionIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "thresholdDb": {
+            "type": "number",
+            "format": "double",
+            "default": -40
+          },
+          "minTimeMs": {
+            "type": "number",
+            "format": "double",
+            "default": 100
+          },
+          "preAttackMs": {
+            "type": "number",
+            "format": "double",
+            "default": 20
+          },
+          "postReleaseMs": {
+            "type": "number",
+            "format": "double",
+            "default": 50
+          }
+        },
+        "description": "Strip Silence: splits each audio region into one region per stretch above \u0060thresholdDb\u0060 (RMS) lasting at\nleast \u0060minTimeMs\u0060, each widened by \u0060preAttackMs\u0060 before and \u0060postReleaseMs\u0060 after; the silence\nbetween them is removed."
       },
       "EditCommandUnfreezeTrackCommand": {
         "required": [
@@ -5343,6 +6191,64 @@
           }
         },
         "description": "The server\u0027s link to the engine host: whether it is reachable (\u0060state\u0060), the host\u0027s version and audio\nbackend (\u0060coreaudio\u0060, \u0060wasapi\u0060, \u0060alsa\u0060, \u0060null\u0060) from its hello while connected, and why the\nlink is down when it is (\u0060message\u0060)."
+      },
+      "FileAnalysis": {
+        "required": [
+          "fileId",
+          "hop",
+          "transients",
+          "tempo",
+          "pitch",
+          "notes",
+          "polyphonic"
+        ],
+        "type": "object",
+        "properties": {
+          "fileId": {
+            "type": "string"
+          },
+          "hop": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "transients": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          "tempo": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/FileTempo"
+              }
+            ]
+          },
+          "pitch": {
+            "type": "array",
+            "items": {
+              "type": [
+                "null",
+                "number"
+              ],
+              "format": "float"
+            }
+          },
+          "notes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PitchSegment"
+            }
+          },
+          "polyphonic": {
+            "type": "boolean"
+          }
+        },
+        "description": "A file\u0027s analysis, cached in the package as \u0060Analysis/\u0026lt;fileId\u0026gt;.json\u0060 and rebuilt on demand: its\ntransients (file frames), its tempo (null until beats are tracked), its pitch curve (MIDI cents per\n\u0060hop\u0060 frames from frame 0; null where unvoiced; empty until pitch is analysed), its notes, and whether\nit sounds polyphonic (Flex Pitch then works less well)."
       },
       "FileEntry": {
         "required": [
@@ -5404,6 +6310,78 @@
           "instrument",
           "other"
         ]
+      },
+      "FileTempo": {
+        "required": [
+          "bpm",
+          "variable",
+          "beats",
+          "downbeats"
+        ],
+        "type": "object",
+        "properties": {
+          "bpm": {
+            "type": "number",
+            "format": "double"
+          },
+          "variable": {
+            "type": "boolean"
+          },
+          "beats": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          "downbeats": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        },
+        "description": "A file\u0027s tempo (Smart Tempo): its average tempo, whether it varies, and its beats and downbeats in file frames,\nascending."
+      },
+      "FlexFollow": {
+        "enum": [
+          "off",
+          "on",
+          "bars",
+          "barsAndBeats"
+        ],
+        "description": "How an audio region follows the project tempo (Logic\u0027s Flex \u0026amp; Follow)."
+      },
+      "FlexMarker": {
+        "required": [
+          "fileFrame",
+          "tick"
+        ],
+        "type": "object",
+        "properties": {
+          "fileFrame": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "tick": {
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "description": "A flex marker: file frame \u0060fileFrame\u0060 (absolute in the file) plays at \u0060tick\u0060, relative to the region\u0027s\n\u0060startTick\u0060. Between neighbouring markers, and between the outermost markers and the region\u0027s ends, the\nregion\u0027s base map is scaled linearly; the region\u0027s start and end stay where the base map puts them."
+      },
+      "FlexMode": {
+        "enum": [
+          "monophonic",
+          "slicing",
+          "rhythmic",
+          "polyphonic",
+          "speed",
+          "tempophone",
+          "pitch"
+        ],
+        "description": "A track\u0027s flex algorithm (docs/06-phase-5.md). A region is \u003Cem\u003Ewarped\u003C/em\u003E when its track\u0027s flex is on, its\n\u0060follow\u0060 is not \u0060off\u0060, or it has a transpose or pitch notes; warped regions play through the track\u0027s\nalgorithm (Polyphonic while flex is off)."
       },
       "GroupProperties": {
         "required": [
@@ -5631,7 +6609,10 @@
       "JobKind": {
         "enum": [
           "bounce",
-          "freeze"
+          "freeze",
+          "analyze",
+          "bounceInPlace",
+          "process"
         ]
       },
       "JobState": {
@@ -6225,6 +7206,82 @@
           "off"
         ]
       },
+      "PitchNote": {
+        "required": [
+          "startFrame",
+          "endFrame",
+          "detectedCents",
+          "targetCents",
+          "drift",
+          "vibrato",
+          "formantCents",
+          "gainDb"
+        ],
+        "type": "object",
+        "properties": {
+          "startFrame": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "endFrame": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "detectedCents": {
+            "type": "number",
+            "format": "double"
+          },
+          "targetCents": {
+            "type": "number",
+            "format": "double"
+          },
+          "drift": {
+            "type": "number",
+            "format": "double"
+          },
+          "vibrato": {
+            "type": "number",
+            "format": "double"
+          },
+          "formantCents": {
+            "type": "number",
+            "format": "double"
+          },
+          "gainDb": {
+            "type": "number",
+            "format": "double"
+          }
+        },
+        "description": "A Flex Pitch note of a region, over file frames \u0060startFrame\u0060\u2026\u0060endFrame\u0060. Pitches are MIDI cents (6900\nis A4): the analysed \u0060detectedCents\u0060 plays as \u0060targetCents\u0060. \u0060drift\u0060 and \u0060vibrato\u0060 scale the\nanalysed drift and vibrato around the note\u0027s own trend (1 unchanged, 0 removed, up to 2); \u0060formantCents\u0060\nshifts the formants, \u0060gainDb\u0060 the level."
+      },
+      "PitchSegment": {
+        "required": [
+          "startFrame",
+          "endFrame",
+          "cents",
+          "confidence"
+        ],
+        "type": "object",
+        "properties": {
+          "startFrame": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "endFrame": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "cents": {
+            "type": "number",
+            "format": "double"
+          },
+          "confidence": {
+            "type": "number",
+            "format": "double"
+          }
+        },
+        "description": "A stable voiced run of a file\u0027s pitch curve, in file frames, at \u0060cents\u0060 (MIDI cents)."
+      },
       "PluginEditorRequest": {
         "required": [
           "open"
@@ -6362,6 +7419,69 @@
             ]
           }
         }
+      },
+      "ProcessEffect": {
+        "required": [
+          "pluginId"
+        ],
+        "type": "object",
+        "properties": {
+          "pluginId": {
+            "type": "string"
+          },
+          "parameters": {
+            "type": [
+              "null",
+              "object"
+            ],
+            "additionalProperties": {
+              "type": "number",
+              "format": "double"
+            }
+          }
+        },
+        "description": "A built-in effect of a processing chain, with the parameters it is set to (the rest at their defaults)."
+      },
+      "ProcessRequest": {
+        "required": [
+          "regionIds",
+          "chain",
+          "includeTail"
+        ],
+        "type": "object",
+        "properties": {
+          "regionIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "chain": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ProcessEffect"
+            }
+          },
+          "startTick": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int64"
+          },
+          "endTick": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int64"
+          },
+          "includeTail": {
+            "type": "boolean",
+            "default": false
+          }
+        },
+        "description": "Selection-based processing: runs \u0060chain\u0060 (built-in effects only, in order) in-process over the regions\u0027\naudio between \u0060startTick\u0060 and \u0060endTick\u0060 (left out: the regions\u0027 own ends), with the chain\u0027s tail when\n\u0060includeTail\u0060. When the job finishes, the server writes a new file per region and, in one undo step,\nreplaces that part of each region with a new region of it."
       },
       "Project": {
         "required": [
@@ -6546,7 +7666,9 @@
           "signatures",
           "keys",
           "recording",
-          "mixer"
+          "mixer",
+          "smartTempo",
+          "varispeed"
         ],
         "type": "object",
         "properties": {
@@ -6593,9 +7715,15 @@
           },
           "mixer": {
             "$ref": "#/components/schemas/MixerSettings"
+          },
+          "smartTempo": {
+            "$ref": "#/components/schemas/SmartTempoSettings"
+          },
+          "varispeed": {
+            "$ref": "#/components/schemas/VarispeedSettings"
           }
         },
-        "description": "Global settings. \u0060tempo\u0060 and \u0060signature\u0060 are the values at the project start (the first of\n\u0060tempoEvents\u0060 and \u0060signatures\u0060, which are the global tempo and signature tracks).\n\u0060endTick\u0060 is the project end marker. \u0060mergeMidiRecording\u0060: a MIDI recording over an\nexisting MIDI region adds its notes to that region instead of making a new one."
+        "description": "Global settings. \u0060tempo\u0060 and \u0060signature\u0060 are the values at the project start (the first of\n\u0060tempoEvents\u0060 and \u0060signatures\u0060, which are the global tempo and signature tracks).\n\u0060endTick\u0060 is the project end marker. \u0060mergeMidiRecording\u0060: a MIDI recording over an\nexisting MIDI region adds its notes to that region instead of making a new one. \u0060smartTempo\u0060 and\n\u0060varispeed\u0060 (Phase 5): the project tempo mode and Varispeed."
       },
       "ProjectSummary": {
         "required": [
@@ -6621,6 +7749,14 @@
           }
         },
         "description": "A project in the recent list."
+      },
+      "ProjectTempoMode": {
+        "enum": [
+          "keep",
+          "adapt",
+          "auto"
+        ],
+        "description": "What an audio import or recording does to the project tempo (Logic\u0027s project tempo modes)."
       },
       "RecordingSettings": {
         "required": [
@@ -6783,6 +7919,26 @@
         },
         "description": "A time signature change, on a bar line of the signature before it. The first is at tick 0."
       },
+      "SmartTempoSettings": {
+        "required": [
+          "mode",
+          "defaultFollow",
+          "analyzeImports"
+        ],
+        "type": "object",
+        "properties": {
+          "mode": {
+            "$ref": "#/components/schemas/ProjectTempoMode"
+          },
+          "defaultFollow": {
+            "$ref": "#/components/schemas/FlexFollow"
+          },
+          "analyzeImports": {
+            "type": "boolean"
+          }
+        },
+        "description": "Smart Tempo: the project tempo mode, the \u0060follow\u0060 new audio regions get, and whether imports are analysed\n(transients and beats) as they arrive."
+      },
       "SystemInfo": {
         "required": [
           "version",
@@ -6897,7 +8053,8 @@
         "required": [
           "tick",
           "bpm",
-          "curve"
+          "curve",
+          "shape"
         ],
         "type": "object",
         "properties": {
@@ -6911,9 +8068,14 @@
           },
           "curve": {
             "$ref": "#/components/schemas/TempoCurve"
+          },
+          "shape": {
+            "type": "number",
+            "format": "double",
+            "default": 0
           }
         },
-        "description": "A point of the tempo track. The first is at tick 0."
+        "description": "A point of the tempo track. The first is at tick 0. A ramp\u0027s tempo at fraction x (0\u20261) of the way to the next\nevent is bpm\u2080 \u002B (bpm\u2081 \u2212 bpm\u2080)\u00B7x^(2^(\u22122\u00B7\u0060shape\u0060)), the fade formula: \u0060shape\u0060 \u22121\u20261, 0 the linear ramp."
       },
       "TimeSignature": {
         "required": [
@@ -6948,7 +8110,10 @@
           "collapsed",
           "notes",
           "inputBus",
-          "automationMode"
+          "automationMode",
+          "flexOn",
+          "flexMode",
+          "alternatives"
         ],
         "type": "object",
         "properties": {
@@ -7023,9 +8188,64 @@
               "null",
               "string"
             ]
+          },
+          "flexOn": {
+            "type": "boolean"
+          },
+          "flexMode": {
+            "$ref": "#/components/schemas/FlexMode"
+          },
+          "alternatives": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TrackAlternative"
+            }
+          },
+          "alternativeId": {
+            "type": [
+              "null",
+              "string"
+            ]
           }
         },
-        "description": "A track and its channel strip. \u0060color\u0060 is a CSS colour; \u0060input\u0060 is where an audio track records from.\nAn instrument track has an \u0060instrument\u0060; instrument and external MIDI tracks take MIDI from\n\u0060midiInput\u0060, and an external MIDI track sends its regions to \u0060midiOutput\u0060."
+        "description": "A track and its channel strip. \u0060color\u0060 is a CSS colour; \u0060input\u0060 is where an audio track records from.\nAn instrument track has an \u0060instrument\u0060; instrument and external MIDI tracks take MIDI from\n\u0060midiInput\u0060, and an external MIDI track sends its regions to \u0060midiOutput\u0060. Phase 5: \u0060flexOn\u0060 and\n\u0060flexMode\u0060 are its flex algorithm; \u0060alternatives\u0060 are its inactive track alternatives, and\n\u0060alternativeId\u0060 names the active one (null until the track has alternatives)."
+      },
+      "TrackAlternative": {
+        "required": [
+          "id",
+          "name",
+          "regions",
+          "midiRegions",
+          "takeFolders"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "regions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AudioRegion"
+            }
+          },
+          "midiRegions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MidiRegion"
+            }
+          },
+          "takeFolders": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TakeFolder"
+            }
+          }
+        },
+        "description": "An inactive alternative of a track: a snapshot of its regions, MIDI regions and take folders. The track\u0027s live\nones are its active alternative (\u0060alternativeId\u0060); selecting another swaps them in one undoable step, and\nids stay unique project-wide."
       },
       "TrackInput": {
         "required": [
@@ -7136,6 +8356,34 @@
           }
         },
         "description": "The undo stack (most recent first) and the redo stack (next first)."
+      },
+      "VarispeedMode": {
+        "enum": [
+          "speedOnly",
+          "speedAndPitch",
+          "speedAndPitchMidi"
+        ]
+      },
+      "VarispeedSettings": {
+        "required": [
+          "enabled",
+          "mode",
+          "speed"
+        ],
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "mode": {
+            "$ref": "#/components/schemas/VarispeedMode"
+          },
+          "speed": {
+            "type": "number",
+            "format": "double"
+          }
+        },
+        "description": "Varispeed: while enabled, the whole project plays at \u0060speed\u0060 (0.5\u20261.5) of its tempo; the server compiles it\n(every position scaled by 1/speed), and the transport reports compiled samples."
       }
     }
   },

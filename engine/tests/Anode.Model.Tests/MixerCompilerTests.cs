@@ -179,7 +179,7 @@ public sealed class MixerCompilerTests {
             static e => Assert.Equal((AutomationEvents.MasterTrack, PlaybackEventKind.Automation), (e.Track, e.Kind))
         );
 
-        state = state.Apply(new AudioFileUpserted(new("aud_f", "F", "Audio Files/F.wav", 48_000, 2, 48_000, 32)));
+        state = state.Apply(new AudioFileUpserted(new("aud_f", "F", "Audio Files/F.wav", 48_000, 2, 48_000, 32, null)));
         state = Edits.Freeze(state, gtr, "aud_f").State;
         Assert.DoesNotContain($"insert:{insert}:ratio", AutomationEvents.Targets(state, T("Gtr")));
         Assert.Contains("volume", AutomationEvents.Targets(state, T("Gtr")));

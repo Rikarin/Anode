@@ -196,7 +196,8 @@ static class RandomProjects {
                         48_000,
                         1 + i % 2,
                         random.Next(1_000, 400_000),
-                        24
+                        24,
+                        null
                     )
                 )
             );
@@ -246,6 +247,26 @@ static class RandomProjects {
     }
 
     static string? FirstAudioTrack(ProjectState state) => state.Tracks.Find(static t => t.Kind == TrackKind.Audio)?.Id;
+
+    /// <summary>Phase 5 commands the model rejects until workstream B implements them; the identity property skips them.</summary>
+    public static readonly IReadOnlySet<string> PendingPhase5 = new HashSet<string>(StringComparer.Ordinal) {
+        nameof(SetTrackFlexCommand),
+        nameof(SetRegionFlexCommand),
+        nameof(SetFlexMarkersCommand),
+        nameof(QuantizeAudioCommand),
+        nameof(SetPitchNotesCommand),
+        nameof(FlexPitchToMidiCommand),
+        nameof(SetFileTempoCommand),
+        nameof(AdaptTempoCommand),
+        nameof(MapBeatsCommand),
+        nameof(StripSilenceCommand),
+        nameof(NewTrackAlternativeCommand),
+        nameof(SelectTrackAlternativeCommand),
+        nameof(SetTrackAlternativeCommand),
+        nameof(DeleteTrackAlternativeCommand),
+        nameof(SetVarispeedCommand),
+        nameof(SetSmartTempoCommand)
+    };
 
     /// <summary>A random command of <paramref name="type" /> for <paramref name="s" />, or null when none can be made.</summary>
     public static EditCommand? Command(Type type, ProjectState s, Random r) {
@@ -579,6 +600,60 @@ static class RandomProjects {
                 : plain.Length > 0 && r.Next(4) == 0
                     ? new UnfreezeTrackCommand(Pick(r, plain).Id)
                     : null,
+            // Phase 5 commands (docs/06-phase-5.md): placeholders until the model implements them (workstream B
+            // replaces these with generators that make commands that apply).
+            nameof(SetTrackFlexCommand) => Track() is { } t
+                ? new SetTrackFlexCommand(
+                    t,
+                    Maybe(r.Next(2) == 0),
+                    r.Next(2) == 0 ? null : Pick(r, Enum.GetValues<FlexMode>())
+                )
+                : null,
+            nameof(SetRegionFlexCommand) => regions.Length > 0
+                ? new SetRegionFlexCommand(Pick(r, regions).Id, FlexFollow.On, Maybe(r.Next(-12, 13)))
+                : null,
+            nameof(SetFlexMarkersCommand) => regions.Length > 0
+                ? new SetFlexMarkersCommand(Pick(r, regions).Id, [new(Pick(r, regions).FileOffset, 0)])
+                : null,
+            nameof(QuantizeAudioCommand) => regions.Length > 0
+                ? new QuantizeAudioCommand([Pick(r, regions).Id], 240)
+                : null,
+            nameof(SetPitchNotesCommand) => regions.Length > 0
+                ? new SetPitchNotesCommand(Pick(r, regions).Id, [new(0, 4_800, 6_900, 7_000, 1, 1, 0, 0)])
+                : null,
+            nameof(FlexPitchToMidiCommand) => regions.Length > 0
+                ? new FlexPitchToMidiCommand(Pick(r, regions).Id)
+                : null,
+            nameof(SetFileTempoCommand) => files.Length > 0
+                ? new SetFileTempoCommand(Pick(r, files).Id, new(100, false, [0, 28_800], [0]))
+                : null,
+            nameof(AdaptTempoCommand) => regions.Length > 0 ? new AdaptTempoCommand(Pick(r, regions).Id) : null,
+            nameof(MapBeatsCommand) => new MapBeatsCommand([new(3_840, 96_000 + r.Next(-4_800, 4_800))]),
+            nameof(StripSilenceCommand) => regions.Length > 0
+                ? new StripSilenceCommand([Pick(r, regions).Id])
+                : null,
+            nameof(NewTrackAlternativeCommand) => plain.Length > 0
+                ? new NewTrackAlternativeCommand(Pick(r, plain).Id, MaybeText("Alt"), r.Next(2) == 0)
+                : null,
+            nameof(SelectTrackAlternativeCommand) => plain.Length > 0
+                ? new SelectTrackAlternativeCommand(Pick(r, plain).Id, "alt_none")
+                : null,
+            nameof(SetTrackAlternativeCommand) => plain.Length > 0
+                ? new SetTrackAlternativeCommand(Pick(r, plain).Id, "alt_none", "Take B")
+                : null,
+            nameof(DeleteTrackAlternativeCommand) => plain.Length > 0
+                ? new DeleteTrackAlternativeCommand(Pick(r, plain).Id, "alt_none")
+                : null,
+            nameof(SetVarispeedCommand) => new SetVarispeedCommand(
+                Maybe(r.Next(2) == 0),
+                r.Next(2) == 0 ? null : Pick(r, Enum.GetValues<VarispeedMode>()),
+                Maybe(Math.Round(0.5 + r.NextDouble(), 2))
+            ),
+            nameof(SetSmartTempoCommand) => new SetSmartTempoCommand(
+                r.Next(2) == 0 ? null : Pick(r, Enum.GetValues<ProjectTempoMode>()),
+                r.Next(2) == 0 ? null : Pick(r, Enum.GetValues<FlexFollow>()),
+                Maybe(r.Next(2) == 0)
+            ),
             _ => throw new InvalidOperationException($"No generator for {type.Name}.")
         };
         string? Track() => tracks.Count == 0 ? null : Pick(r, tracks).Id;

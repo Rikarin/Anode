@@ -23,6 +23,12 @@ public static class ProjectDefaults {
     /// <summary>Delay compensation everywhere; low-latency mode off, at 10 ms.</summary>
     public static MixerSettings Mixer { get; } = new(PdcMode.All, false, 10);
 
+    /// <summary>Smart Tempo keeps the project tempo; new regions do not follow it; imports are analysed.</summary>
+    public static SmartTempoSettings SmartTempo { get; } = new(ProjectTempoMode.Keep, FlexFollow.Off, true);
+
+    /// <summary>Varispeed off, speed only, at 100 %.</summary>
+    public static VarispeedSettings Varispeed { get; } = new(false, VarispeedMode.SpeedOnly, 1);
+
     /// <summary>Arrangement sections' colour when none is given.</summary>
     public const string SectionColor = "#8a8f98";
 
@@ -59,7 +65,9 @@ public static class ProjectDefaults {
                 [new(0, signature.Numerator, signature.Denominator)],
                 [new(0, 0, KeyMode.Major)],
                 Recording(signature),
-                Mixer
+                Mixer,
+                SmartTempo,
+                Varispeed
             ),
             Strip,
             [],

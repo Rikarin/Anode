@@ -61,8 +61,8 @@ describe('ProjectStore, Phase 3 deltas', () => {
         {
           type: 'setTempoEvents',
           events: [
-            { tick: 0, bpm: 120, curve: 'step' },
-            { tick: Bar, bpm: 60, curve: 'step' }
+            { tick: 0, bpm: 120, curve: 'step', shape: 0 },
+            { tick: Bar, bpm: 60, curve: 'step', shape: 0 }
           ]
         }
       ],
@@ -103,6 +103,10 @@ describe('lane rows', () => {
     inputBus: 0,
     automationMode: 'read',
     frozenFileId: null,
+    flexOn: false,
+    flexMode: 'polyphonic',
+    alternatives: [],
+    alternativeId: null,
     ...extra
   });
   const folder = {

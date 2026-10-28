@@ -18,6 +18,7 @@ namespace Anode.Contracts;
 [JsonDerivedType(typeof(MidiDevicesChangedEvent), "midiDevicesChanged")]
 [JsonDerivedType(typeof(JobEvent), "job")]
 [JsonDerivedType(typeof(PluginProblemEvent), "pluginProblem")]
+[JsonDerivedType(typeof(AnalysisEvent), "analysis")]
 public abstract record RealtimeEvent;
 
 /// <summary>The socket is open; the client fetches the state it needs now.</summary>
@@ -81,3 +82,6 @@ public sealed record JobEvent(Job Job) : RealtimeEvent;
 /// <summary>A plugin crashed or failed to load; the engine bypasses it. <c>insertId</c> null is the instrument.</summary>
 public sealed record PluginProblemEvent(string? TrackId, string? InsertId, string PluginId, string Message)
     : RealtimeEvent;
+
+/// <summary>A file's analysis changed (it was built or rebuilt); clients refetch <c>/project/files/{fileId}/analysis</c>.</summary>
+public sealed record AnalysisEvent(string FileId) : RealtimeEvent;

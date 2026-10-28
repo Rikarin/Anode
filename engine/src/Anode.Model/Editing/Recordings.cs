@@ -89,7 +89,26 @@ public static class Recordings {
             var (tick, offset, length, _) = placed[i];
             ops.Add(
                 new RegionUpserted(
-                    new(regionIds[i], track.Id, file.Id, track.Name, tick, offset, length, 0, 0, 0, 0, 0, false)
+                    new(
+                        regionIds[i],
+                        track.Id,
+                        file.Id,
+                        track.Name,
+                        tick,
+                        offset,
+                        length,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        false,
+                        FlexFollow.Off,
+                        [],
+                        0,
+                        0,
+                        []
+                    )
                 )
             );
         }

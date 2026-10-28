@@ -38,6 +38,10 @@ public static partial class Edits {
             string.Empty,
             0,
             AutomationMode.Read,
+            null,
+            false,
+            FlexMode.Polyphonic,
+            [],
             null
         );
         // Upserts in final order from the first member's place: the stack, then its members right after it.

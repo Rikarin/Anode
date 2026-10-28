@@ -18,9 +18,9 @@ import {
 } from './global-math';
 
 const track: TempoEvent[] = [
-  { tick: 0, bpm: 120, curve: 'step' },
-  { tick: 3840, bpm: 90, curve: 'ramp' },
-  { tick: 7680, bpm: 140, curve: 'step' }
+  { tick: 0, bpm: 120, curve: 'step', shape: 0 },
+  { tick: 3840, bpm: 90, curve: 'ramp', shape: 0 },
+  { tick: 7680, bpm: 140, curve: 'step', shape: 0 }
 ];
 
 describe('tempo lane maths', () => {
@@ -41,9 +41,9 @@ describe('tempo lane maths', () => {
   });
 
   it('keeps a dragged point between its neighbours and the first at 0', () => {
-    expect(moveTempoPoint(track, 1, 99_999, 2000)[1]).toEqual({ tick: 7679, bpm: 999, curve: 'ramp' });
-    expect(moveTempoPoint(track, 1, -5, 5)[1]).toEqual({ tick: 1, bpm: 20, curve: 'ramp' });
-    expect(moveTempoPoint(track, 0, 500, 130)[0]).toEqual({ tick: 0, bpm: 130, curve: 'step' });
+    expect(moveTempoPoint(track, 1, 99_999, 2000)[1]).toEqual({ tick: 7679, bpm: 999, curve: 'ramp', shape: 0 });
+    expect(moveTempoPoint(track, 1, -5, 5)[1]).toEqual({ tick: 1, bpm: 20, curve: 'ramp', shape: 0 });
+    expect(moveTempoPoint(track, 0, 500, 130)[0]).toEqual({ tick: 0, bpm: 130, curve: 'step', shape: 0 });
   });
 
   it('removes and toggles ramps, never removing the first', () => {

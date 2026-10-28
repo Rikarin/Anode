@@ -45,11 +45,13 @@ export const DefaultSettings: ProjectSettings = {
   metronome: { enabled: false, countIn: false, levelDb: -6 },
   endTick: 32 * 4 * Ppq,
   mergeMidiRecording: false,
-  tempoEvents: [{ tick: 0, bpm: 120, curve: 'step' }],
+  tempoEvents: [{ tick: 0, bpm: 120, curve: 'step', shape: 0 }],
   signatures: [{ tick: 0, numerator: 4, denominator: 4 }],
   keys: [{ tick: 0, tonic: 0, mode: 'major' }],
   recording: { cycleMode: 'takeFolder', replace: false, autopunch: false, punchInTick: 0, punchOutTick: 4 * 4 * Ppq },
-  mixer: { pdc: 'all', lowLatency: false, lowLatencyLimitMs: 10 }
+  mixer: { pdc: 'all', lowLatency: false, lowLatencyLimitMs: 10 },
+  smartTempo: { mode: 'keep', defaultFollow: 'off', analyzeImports: true },
+  varispeed: { enabled: false, mode: 'speedOnly', speed: 1 }
 };
 
 const SilentStrip: ChannelStrip = {

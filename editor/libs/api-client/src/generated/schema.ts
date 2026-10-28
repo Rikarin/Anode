@@ -691,6 +691,74 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/api/v1/project/files/{fileId}/analysis': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** A file's cached analysis: transients and beats (analysed now when missing), and its pitch curve and notes once an analyze job has run. */
+    get: operations['GetFileAnalysis'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/project/files/{fileId}/analyze': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Starts pitch analysis of a file (Flex Pitch) as a job; an analysis event on /ws follows when it is cached. */
+    post: operations['AnalyzeFile'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/project/bounce-in-place': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Renders tracks or regions in place to new files; when the job finishes, adds a track or replaces the regions and leaves, mutes or deletes the source, in one undo step. */
+    post: operations['BounceInPlace'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/project/process': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Selection-based processing: runs a chain of built-in effects over part of regions; when the job finishes, that part becomes a new file and region, in one undo step. */
+    post: operations['ProcessRegions'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -708,7 +776,10 @@ export interface components {
       lengthTicks: number;
       color: string;
     };
-    /** @description An audio file of the project; `path` is relative to the project folder. */
+    /**
+     * @description An audio file of the project; `path` is relative to the project folder. `tempo` is its File Tempo
+     *     (Smart Tempo), null until analysed.
+     */
     AudioFile: {
       id: string;
       name: string;
@@ -721,6 +792,7 @@ export interface components {
       frames: number;
       /** Format: int32 */
       bitDepth: number;
+      tempo: null | components['schemas']['FileTempo'];
     };
     /**
      * @default wav
@@ -757,6 +829,13 @@ export interface components {
       /** Format: double */
       fadeOutCurve: number;
       muted: boolean;
+      follow: components['schemas']['FlexFollow'];
+      flexMarkers: components['schemas']['FlexMarker'][];
+      /** Format: int32 */
+      transpose: number;
+      /** Format: int32 */
+      fineTune: number;
+      pitchNotes: components['schemas']['PitchNote'][];
     };
     /**
      * @description Track automation of one parameter. `trackId` null is the master strip. `target` is `volume` (dB),
@@ -780,9 +859,46 @@ export interface components {
       /** Format: double */
       curve: number;
     };
+    /**
+     * @description Beat mapping: tick `tick` lands on project sample `sample` (the tempo events are set so that it does,
+     *     keeping earlier mappings and the positions before them).
+     */
+    BeatMapping: {
+      /** Format: int64 */
+      tick: number;
+      /** Format: int64 */
+      sample: number;
+    };
     /** @description Folders pinned in the All Files browser. */
     Bookmarks: {
       paths: string[];
+    };
+    /**
+     * @default newTrack
+     * @enum {unknown}
+     */
+    BounceInPlaceDestination: 'newTrack' | 'replace';
+    /**
+     * @description Bounce in place: tracks (`trackIds`, their whole range) or regions (`regionIds`, theirs) rendered
+     *     isolated by the host through `render`, through their inserts unless `bypassEffects`, with fader and pan
+     *     only when `includeVolumePan`, plus the effects' tail when `includeTail`; normalised as a bounce. When
+     *     the job finishes, the server adds the files and, in one undo step, adds a new track (or replaces the regions) and
+     *     leaves, mutes or deletes the source. `name` names the new track or regions (left out: the source's, plus
+     *     " Bounce").
+     */
+    BounceInPlaceRequest: {
+      trackIds?: null | string[];
+      regionIds?: null | string[];
+      destination: components['schemas']['BounceInPlaceDestination'];
+      source: components['schemas']['BounceSourceAction'];
+      /** @default false */
+      bypassEffects: boolean;
+      /** @default true */
+      includeTail: boolean;
+      /** @default false */
+      includeVolumePan: boolean;
+      normalize: components['schemas']['NormalizeMode'];
+      name?: null | string;
     };
     /**
      * @description Bounce (export): the range (ticks; left out: the cycle when it is on, else the project start to its end), the
@@ -829,6 +945,11 @@ export interface components {
      * @enum {unknown}
      */
     BounceSource: 'mix' | 'stems';
+    /**
+     * @default mute
+     * @enum {unknown}
+     */
+    BounceSourceAction: 'leave' | 'mute' | 'delete';
     /**
      * @description A channel strip: volume in dB (−∞ as −144), pan −1 (left) … 1 (right), mute and solo; its insert effects in
      *     order; its sends to buses; where it goes (`output`: `master`, `bus:N` for bus 1…64, or
@@ -1122,7 +1243,32 @@ export interface components {
       | components['schemas']['EditCommandSetAutomationModeCommand']
       | components['schemas']['EditCommandSetMixerSettingsCommand']
       | components['schemas']['EditCommandApplyPatchCommand']
-      | components['schemas']['EditCommandUnfreezeTrackCommand'];
+      | components['schemas']['EditCommandUnfreezeTrackCommand']
+      | components['schemas']['EditCommandSetTrackFlexCommand']
+      | components['schemas']['EditCommandSetRegionFlexCommand']
+      | components['schemas']['EditCommandSetFlexMarkersCommand']
+      | components['schemas']['EditCommandQuantizeAudioCommand']
+      | components['schemas']['EditCommandSetPitchNotesCommand']
+      | components['schemas']['EditCommandFlexPitchToMidiCommand']
+      | components['schemas']['EditCommandSetFileTempoCommand']
+      | components['schemas']['EditCommandAdaptTempoCommand']
+      | components['schemas']['EditCommandMapBeatsCommand']
+      | components['schemas']['EditCommandStripSilenceCommand']
+      | components['schemas']['EditCommandNewTrackAlternativeCommand']
+      | components['schemas']['EditCommandSelectTrackAlternativeCommand']
+      | components['schemas']['EditCommandSetTrackAlternativeCommand']
+      | components['schemas']['EditCommandDeleteTrackAlternativeCommand']
+      | components['schemas']['EditCommandSetVarispeedCommand']
+      | components['schemas']['EditCommandSetSmartTempoCommand'];
+    /**
+     * @description Sets the project's tempo events from an audio region's file tempo (analysed now if need be) over the region's
+     *     range, and makes the region play unwarped there.
+     */
+    EditCommandAdaptTempoCommand: {
+      /** @enum {string} */
+      type: 'adaptTempo';
+      regionId: string;
+    };
     /** @description Adds an aux track listening to bus `bus` (the lowest unused bus when left out). */
     EditCommandAddAuxCommand: {
       /** @enum {string} */
@@ -1311,6 +1457,13 @@ export interface components {
       folderId: string;
       takeId: string;
     };
+    /** @description Deletes a track alternative with its content; deleting the active one selects another first. */
+    EditCommandDeleteTrackAlternativeCommand: {
+      /** @enum {string} */
+      type: 'deleteTrackAlternative';
+      trackId: string;
+      alternativeId: string;
+    };
     EditCommandEditNotesCommand: {
       /** @enum {string} */
       type: 'editNotes';
@@ -1322,6 +1475,16 @@ export interface components {
       /** @enum {string} */
       type: 'flattenTakeFolder';
       folderId: string;
+    };
+    /**
+     * @description Makes a MIDI region of an audio region's pitch notes (their target pitches, at the times they play) on
+     *     `trackId`, or on a new instrument track under the region's when left out.
+     */
+    EditCommandFlexPitchToMidiCommand: {
+      /** @enum {string} */
+      type: 'flexPitchToMidi';
+      regionId: string;
+      trackId?: null | string;
     };
     /**
      * @description Glues regions of one track into one: MIDI regions merge their notes; audio regions only when they play one
@@ -1338,6 +1501,15 @@ export interface components {
       type: 'loadInstrumentFile';
       trackId: string;
       path: string;
+    };
+    /**
+     * @description Beat mapping: for each mapping in order, sets tempo events so that its tick lands on its sample, keeping earlier
+     *     mappings and the positions before them.
+     */
+    EditCommandMapBeatsCommand: {
+      /** @enum {string} */
+      type: 'mapBeats';
+      mappings: components['schemas']['BeatMapping'][];
     };
     /** @description Moves an insert to another slot of the same strip. */
     EditCommandMoveInsertCommand: {
@@ -1381,12 +1553,46 @@ export interface components {
       /** Format: int32 */
       index: number;
     };
+    /**
+     * @description Makes a new track alternative and selects it: empty, or a copy of the active one when `duplicate` (with new
+     *     ids). The track's first alternative also names the current content.
+     */
+    EditCommandNewTrackAlternativeCommand: {
+      /** @enum {string} */
+      type: 'newTrackAlternative';
+      trackId: string;
+      name?: null | string;
+      /** @default false */
+      duplicate: boolean;
+    };
     /** @description Packs overlapping or adjacent audio regions of one track into a new take folder, one take each. */
     EditCommandPackTakeFolderCommand: {
       /** @enum {string} */
       type: 'packTakeFolder';
       regionIds: string[];
       name?: null | string;
+    };
+    /**
+     * @description Quantises audio regions: flex markers on their transients (analysed now if need be) move toward the grid of
+     *     `gridTicks` by `strength` (0…1), with `swing` (0…1) delaying every second grid step. Turns flex
+     *     on for their tracks when it is off.
+     */
+    EditCommandQuantizeAudioCommand: {
+      /** @enum {string} */
+      type: 'quantizeAudio';
+      regionIds: string[];
+      /** Format: int64 */
+      gridTicks: number;
+      /**
+       * Format: double
+       * @default 1
+       */
+      strength: number;
+      /**
+       * Format: double
+       * @default 0
+       */
+      swing: number;
     };
     /**
      * @description Moves note starts towards the grid (destructive; `noteIds` left out: every note of the region), with the
@@ -1470,6 +1676,13 @@ export interface components {
       folderId: string;
       takeId: string;
     };
+    /** @description Swaps a track's live regions, MIDI regions and take folders for those of alternative `alternativeId`. */
+    EditCommandSelectTrackAlternativeCommand: {
+      /** @enum {string} */
+      type: 'selectTrackAlternative';
+      trackId: string;
+      alternativeId: string;
+    };
     /** @description Replaces one automation lane's points (an empty list removes the lane); the master's when no track. */
     EditCommandSetAutomationCommand: {
       /** @enum {string} */
@@ -1499,6 +1712,23 @@ export interface components {
       startTick?: null | number;
       /** Format: int64 */
       endTick?: null | number;
+    };
+    /** @description Sets a file's tempo, beats and downbeats (the Smart Tempo Editor), or clears them (null). */
+    EditCommandSetFileTempoCommand: {
+      /** @enum {string} */
+      type: 'setFileTempo';
+      fileId: string;
+      tempo: null | components['schemas']['FileTempo'];
+    };
+    /**
+     * @description Replaces an audio region's flex markers: file frames inside the region, their ticks increasing with them and
+     *     inside the region. Needs the track's flex on.
+     */
+    EditCommandSetFlexMarkersCommand: {
+      /** @enum {string} */
+      type: 'setFlexMarkers';
+      regionId: string;
+      markers: components['schemas']['FlexMarker'][];
     };
     /** @description Creates or changes mixer group 1…32. */
     EditCommandSetGroupCommand: {
@@ -1619,6 +1849,16 @@ export interface components {
       /** Format: double */
       value: number;
     };
+    /**
+     * @description Replaces an audio region's Flex Pitch notes (edits, splits and joins); notes need Flex or Follow, as a
+     *     transpose does.
+     */
+    EditCommandSetPitchNotesCommand: {
+      /** @enum {string} */
+      type: 'setPitchNotes';
+      regionId: string;
+      notes: components['schemas']['PitchNote'][];
+    };
     EditCommandSetProjectNotesCommand: {
       /** @enum {string} */
       type: 'setProjectNotes';
@@ -1651,6 +1891,20 @@ export interface components {
       /** Format: double */
       fadeOutCurve?: null | number;
       muted?: null | boolean;
+    };
+    /**
+     * @description Sets an audio region's Flex &amp; Follow, transpose (semitones) or fine tune (cents). A transpose or fine tune
+     *     needs Flex or Follow (the track's flex on, or a `follow` other than `off`), else 422.
+     */
+    EditCommandSetRegionFlexCommand: {
+      /** @enum {string} */
+      type: 'setRegionFlex';
+      regionId: string;
+      follow?: null | components['schemas']['FlexFollow'];
+      /** Format: int32 */
+      transpose?: null | number;
+      /** Format: int32 */
+      fineTune?: null | number;
     };
     /** @description Renames, recolours or resizes a section (from its end); it must not come to overlap another. */
     EditCommandSetSectionCommand: {
@@ -1690,6 +1944,14 @@ export interface components {
       /** @enum {string} */
       type: 'setSignatures';
       events: components['schemas']['SignatureEvent'][];
+    };
+    /** @description Sets the project tempo mode, the follow new audio regions get, or whether imports are analysed. */
+    EditCommandSetSmartTempoCommand: {
+      /** @enum {string} */
+      type: 'setSmartTempo';
+      mode?: null | components['schemas']['ProjectTempoMode'];
+      defaultFollow?: null | components['schemas']['FlexFollow'];
+      analyzeImports?: null | boolean;
     };
     /**
      * @description Changes a track's volume, pan, mute or solo, or the master's when `trackId` is left out. Members of the
@@ -1732,6 +1994,14 @@ export interface components {
       type: 'setTempoEvents';
       events: components['schemas']['TempoEvent'][];
     };
+    /** @description Renames a track alternative. */
+    EditCommandSetTrackAlternativeCommand: {
+      /** @enum {string} */
+      type: 'setTrackAlternative';
+      trackId: string;
+      alternativeId: string;
+      name: string;
+    };
     EditCommandSetTrackCommand: {
       /** @enum {string} */
       type: 'setTrack';
@@ -1743,6 +2013,14 @@ export interface components {
       inputMonitoring?: null | boolean;
       collapsed?: null | boolean;
       notes?: null | string;
+    };
+    /** @description Turns a track's flex on or off, or changes its algorithm. */
+    EditCommandSetTrackFlexCommand: {
+      /** @enum {string} */
+      type: 'setTrackFlex';
+      trackId: string;
+      on?: null | boolean;
+      mode?: null | components['schemas']['FlexMode'];
     };
     EditCommandSetTrackGroupsCommand: {
       /** @enum {string} */
@@ -1757,6 +2035,15 @@ export interface components {
       trackId: string;
       parentId?: null | string;
     };
+    /** @description Turns Varispeed on or off, or sets its mode or speed (0.5…1.5). */
+    EditCommandSetVarispeedCommand: {
+      /** @enum {string} */
+      type: 'setVarispeed';
+      enabled?: null | boolean;
+      mode?: null | components['schemas']['VarispeedMode'];
+      /** Format: double */
+      speed?: null | number;
+    };
     /** @description Splits a region in two at `atTick`, which must fall inside it. */
     EditCommandSplitRegionCommand: {
       /** @enum {string} */
@@ -1764,6 +2051,36 @@ export interface components {
       regionId: string;
       /** Format: int64 */
       atTick: number;
+    };
+    /**
+     * @description Strip Silence: splits each audio region into one region per stretch above `thresholdDb` (RMS) lasting at
+     *     least `minTimeMs`, each widened by `preAttackMs` before and `postReleaseMs` after; the silence
+     *     between them is removed.
+     */
+    EditCommandStripSilenceCommand: {
+      /** @enum {string} */
+      type: 'stripSilence';
+      regionIds: string[];
+      /**
+       * Format: double
+       * @default -40
+       */
+      thresholdDb: number;
+      /**
+       * Format: double
+       * @default 100
+       */
+      minTimeMs: number;
+      /**
+       * Format: double
+       * @default 20
+       */
+      preAttackMs: number;
+      /**
+       * Format: double
+       * @default 50
+       */
+      postReleaseMs: number;
     };
     /** @description Plays a frozen track live again (its freeze file stays in the project's audio). */
     EditCommandUnfreezeTrackCommand: {
@@ -1783,6 +2100,22 @@ export interface components {
       hostVersion?: null | string;
       backend?: null | string;
       message?: null | string;
+    };
+    /**
+     * @description A file's analysis, cached in the package as `Analysis/&lt;fileId&gt;.json` and rebuilt on demand: its
+     *     transients (file frames), its tempo (null until beats are tracked), its pitch curve (MIDI cents per
+     *     `hop` frames from frame 0; null where unvoiced; empty until pitch is analysed), its notes, and whether
+     *     it sounds polyphonic (Flex Pitch then works less well).
+     */
+    FileAnalysis: {
+      fileId: string;
+      /** Format: int32 */
+      hop: number;
+      transients: number[];
+      tempo: null | components['schemas']['FileTempo'];
+      pitch: (null | number)[];
+      notes: components['schemas']['PitchSegment'][];
+      polyphonic: boolean;
     };
     /**
      * @description An entry of a folder on the server's disk. Audio files carry their format when it could be read
@@ -1805,6 +2138,40 @@ export interface components {
     };
     /** @enum {unknown} */
     FileKind: 'folder' | 'audio' | 'midi' | 'project' | 'instrument' | 'other';
+    /**
+     * @description A file's tempo (Smart Tempo): its average tempo, whether it varies, and its beats and downbeats in file frames,
+     *     ascending.
+     */
+    FileTempo: {
+      /** Format: double */
+      bpm: number;
+      variable: boolean;
+      beats: number[];
+      downbeats: number[];
+    };
+    /**
+     * @description How an audio region follows the project tempo (Logic's Flex &amp; Follow).
+     * @enum {unknown}
+     */
+    FlexFollow: 'off' | 'on' | 'bars' | 'barsAndBeats';
+    /**
+     * @description A flex marker: file frame `fileFrame` (absolute in the file) plays at `tick`, relative to the region's
+     *     `startTick`. Between neighbouring markers, and between the outermost markers and the region's ends, the
+     *     region's base map is scaled linearly; the region's start and end stay where the base map puts them.
+     */
+    FlexMarker: {
+      /** Format: int64 */
+      fileFrame: number;
+      /** Format: int64 */
+      tick: number;
+    };
+    /**
+     * @description A track's flex algorithm (docs/06-phase-5.md). A region is <em>warped</em> when its track's flex is on, its
+     *     `follow` is not `off`, or it has a transpose or pitch notes; warped regions play through the track's
+     *     algorithm (Polyphonic while flex is off).
+     * @enum {unknown}
+     */
+    FlexMode: 'monophonic' | 'slicing' | 'rhythmic' | 'polyphonic' | 'speed' | 'tempophone' | 'pitch';
     /** @description What a mixer group links among its members (Logic's group settings). */
     GroupProperties: {
       volume: boolean;
@@ -1877,7 +2244,7 @@ export interface components {
       files: string[];
     };
     /** @enum {unknown} */
-    JobKind: 'bounce' | 'freeze';
+    JobKind: 'bounce' | 'freeze' | 'analyze' | 'bounceInPlace' | 'process';
     /** @enum {unknown} */
     JobState: 'queued' | 'running' | 'done' | 'failed' | 'cancelled';
     /** @description Key bindings by command id (`transport.play`); each binding like `Space` or `Meta+Shift+Z`. */
@@ -2083,6 +2450,41 @@ export interface components {
     };
     /** @enum {unknown} */
     PdcMode: 'all' | 'tracks' | 'off';
+    /**
+     * @description A Flex Pitch note of a region, over file frames `startFrame`…`endFrame`. Pitches are MIDI cents (6900
+     *     is A4): the analysed `detectedCents` plays as `targetCents`. `drift` and `vibrato` scale the
+     *     analysed drift and vibrato around the note's own trend (1 unchanged, 0 removed, up to 2); `formantCents`
+     *     shifts the formants, `gainDb` the level.
+     */
+    PitchNote: {
+      /** Format: int64 */
+      startFrame: number;
+      /** Format: int64 */
+      endFrame: number;
+      /** Format: double */
+      detectedCents: number;
+      /** Format: double */
+      targetCents: number;
+      /** Format: double */
+      drift: number;
+      /** Format: double */
+      vibrato: number;
+      /** Format: double */
+      formantCents: number;
+      /** Format: double */
+      gainDb: number;
+    };
+    /** @description A stable voiced run of a file's pitch curve, in file frames, at `cents` (MIDI cents). */
+    PitchSegment: {
+      /** Format: int64 */
+      startFrame: number;
+      /** Format: int64 */
+      endFrame: number;
+      /** Format: double */
+      cents: number;
+      /** Format: double */
+      confidence: number;
+    };
     /** @description Opens (or closes) a plugin's own editor window: an insert, or with no `insertId` the instrument. */
     PluginEditorRequest: {
       trackId?: null | string;
@@ -2122,6 +2524,29 @@ export interface components {
       status?: null | number;
       detail?: null | string;
       instance?: null | string;
+    };
+    /** @description A built-in effect of a processing chain, with the parameters it is set to (the rest at their defaults). */
+    ProcessEffect: {
+      pluginId: string;
+      parameters?: null | {
+        [key: string]: number;
+      };
+    };
+    /**
+     * @description Selection-based processing: runs `chain` (built-in effects only, in order) in-process over the regions'
+     *     audio between `startTick` and `endTick` (left out: the regions' own ends), with the chain's tail when
+     *     `includeTail`. When the job finishes, the server writes a new file per region and, in one undo step,
+     *     replaces that part of each region with a new region of it.
+     */
+    ProcessRequest: {
+      regionIds: string[];
+      chain: components['schemas']['ProcessEffect'][];
+      /** Format: int64 */
+      startTick?: null | number;
+      /** Format: int64 */
+      endTick?: null | number;
+      /** @default false */
+      includeTail: boolean;
     };
     /**
      * @description The open project (docs/01-implementation-plan.md §5). Musical positions are ticks at 960 PPQ; audio offsets,
@@ -2177,7 +2602,8 @@ export interface components {
      * @description Global settings. `tempo` and `signature` are the values at the project start (the first of
      *     `tempoEvents` and `signatures`, which are the global tempo and signature tracks).
      *     `endTick` is the project end marker. `mergeMidiRecording`: a MIDI recording over an
-     *     existing MIDI region adds its notes to that region instead of making a new one.
+     *     existing MIDI region adds its notes to that region instead of making a new one. `smartTempo` and
+     *     `varispeed` (Phase 5): the project tempo mode and Varispeed.
      */
     ProjectSettings: {
       /** Format: double */
@@ -2193,6 +2619,8 @@ export interface components {
       keys: components['schemas']['KeyEvent'][];
       recording: components['schemas']['RecordingSettings'];
       mixer: components['schemas']['MixerSettings'];
+      smartTempo: components['schemas']['SmartTempoSettings'];
+      varispeed: components['schemas']['VarispeedSettings'];
     };
     /** @description A project in the recent list. */
     ProjectSummary: {
@@ -2202,6 +2630,11 @@ export interface components {
       /** Format: date-time */
       modified: string;
     };
+    /**
+     * @description What an audio import or recording does to the project tempo (Logic's project tempo modes).
+     * @enum {unknown}
+     */
+    ProjectTempoMode: 'keep' | 'adapt' | 'auto';
     /**
      * @description How recording works: cycle recording mode; replace mode (a recording removes what it covers on its track); and
      *     autopunch, which records only between `punchInTick` and `punchOutTick` while playback continues around
@@ -2269,6 +2702,15 @@ export interface components {
       /** Format: int32 */
       denominator: number;
     };
+    /**
+     * @description Smart Tempo: the project tempo mode, the `follow` new audio regions get, and whether imports are analysed
+     *     (transients and beats) as they arrive.
+     */
+    SmartTempoSettings: {
+      mode: components['schemas']['ProjectTempoMode'];
+      defaultFollow: components['schemas']['FlexFollow'];
+      analyzeImports: boolean;
+    };
     /** @description What `GET /api/v1/system` answers: the server's version and its link to the engine host. */
     SystemInfo: {
       version: string;
@@ -2307,13 +2749,21 @@ export interface components {
     };
     /** @enum {unknown} */
     TempoCurve: 'step' | 'ramp';
-    /** @description A point of the tempo track. The first is at tick 0. */
+    /**
+     * @description A point of the tempo track. The first is at tick 0. A ramp's tempo at fraction x (0…1) of the way to the next
+     *     event is bpm₀ + (bpm₁ − bpm₀)·x^(2^(−2·`shape`)), the fade formula: `shape` −1…1, 0 the linear ramp.
+     */
     TempoEvent: {
       /** Format: int64 */
       tick: number;
       /** Format: double */
       bpm: number;
       curve: components['schemas']['TempoCurve'];
+      /**
+       * Format: double
+       * @default 0
+       */
+      shape: number;
     };
     TimeSignature: {
       /** Format: int32 */
@@ -2324,7 +2774,9 @@ export interface components {
     /**
      * @description A track and its channel strip. `color` is a CSS colour; `input` is where an audio track records from.
      *     An instrument track has an `instrument`; instrument and external MIDI tracks take MIDI from
-     *     `midiInput`, and an external MIDI track sends its regions to `midiOutput`.
+     *     `midiInput`, and an external MIDI track sends its regions to `midiOutput`. Phase 5: `flexOn` and
+     *     `flexMode` are its flex algorithm; `alternatives` are its inactive track alternatives, and
+     *     `alternativeId` names the active one (null until the track has alternatives).
      */
     Track: {
       id: string;
@@ -2345,6 +2797,22 @@ export interface components {
       inputBus: number;
       automationMode: components['schemas']['AutomationMode'];
       frozenFileId?: null | string;
+      flexOn: boolean;
+      flexMode: components['schemas']['FlexMode'];
+      alternatives: components['schemas']['TrackAlternative'][];
+      alternativeId?: null | string;
+    };
+    /**
+     * @description An inactive alternative of a track: a snapshot of its regions, MIDI regions and take folders. The track's live
+     *     ones are its active alternative (`alternativeId`); selecting another swaps them in one undoable step, and
+     *     ids stay unique project-wide.
+     */
+    TrackAlternative: {
+      id: string;
+      name: string;
+      regions: components['schemas']['AudioRegion'][];
+      midiRegions: components['schemas']['MidiRegion'][];
+      takeFolders: components['schemas']['TakeFolder'][];
     };
     /** @description The device input: 1-based first channel (0: none); a stereo input takes that channel and the next. */
     TrackInput: {
@@ -2378,6 +2846,18 @@ export interface components {
     UndoHistory: {
       undo: components['schemas']['HistoryEntry'][];
       redo: components['schemas']['HistoryEntry'][];
+    };
+    /** @enum {unknown} */
+    VarispeedMode: 'speedOnly' | 'speedAndPitch' | 'speedAndPitchMidi';
+    /**
+     * @description Varispeed: while enabled, the whole project plays at `speed` (0.5…1.5) of its tempo; the server compiles it
+     *     (every position scaled by 1/speed), and the transport reports compiled samples.
+     */
+    VarispeedSettings: {
+      enabled: boolean;
+      mode: components['schemas']['VarispeedMode'];
+      /** Format: double */
+      speed: number;
     };
   };
   responses: never;
@@ -4034,6 +4514,162 @@ export interface operations {
         content: {
           'application/json': components['schemas']['IoLabels'];
         };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  GetFileAnalysis: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        fileId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['FileAnalysis'];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  AnalyzeFile: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        fileId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Accepted */
+      202: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Job'];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  BounceInPlace: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['BounceInPlaceRequest'];
+      };
+    };
+    responses: {
+      /** @description Accepted */
+      202: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Job'];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  ProcessRegions: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['ProcessRequest'];
+      };
+    };
+    responses: {
+      /** @description Accepted */
+      202: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Job'];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
       };
       /** @description Internal Server Error */
       500: {

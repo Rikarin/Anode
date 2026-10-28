@@ -8,7 +8,18 @@ public enum JobKind {
     Bounce,
 
     [JsonStringEnumMemberName("freeze")]
-    Freeze
+    Freeze,
+
+    /// <summary>Pitch analysis of a file (Flex Pitch); an <c>analysis</c> event follows when it is cached.</summary>
+    [JsonStringEnumMemberName("analyze")]
+    Analyze,
+
+    [JsonStringEnumMemberName("bounceInPlace")]
+    BounceInPlace,
+
+    /// <summary>Selection-based processing.</summary>
+    [JsonStringEnumMemberName("process")]
+    Process
 }
 
 [JsonConverter(typeof(JsonStringEnumConverter<JobState>))]
@@ -109,4 +120,64 @@ public sealed record BounceRequest(
     double PeakCeilingDb = -1,
     bool Realtime = false,
     bool AddToProject = false
+);
+
+[JsonConverter(typeof(JsonStringEnumConverter<BounceInPlaceDestination>))]
+public enum BounceInPlaceDestination {
+    /// <summary>A new audio track under each source track, with the bounced regions.</summary>
+    [JsonStringEnumMemberName("newTrack")]
+    NewTrack,
+
+    /// <summary>The bounced regions replace the source regions on their own track (audio tracks only).</summary>
+    [JsonStringEnumMemberName("replace")]
+    Replace
+}
+
+[JsonConverter(typeof(JsonStringEnumConverter<BounceSourceAction>))]
+public enum BounceSourceAction {
+    [JsonStringEnumMemberName("leave")]
+    Leave,
+
+    [JsonStringEnumMemberName("mute")]
+    Mute,
+
+    [JsonStringEnumMemberName("delete")]
+    Delete
+}
+
+/// <summary>
+///     Bounce in place: tracks (<c>trackIds</c>, their whole range) or regions (<c>regionIds</c>, theirs) rendered
+///     isolated by the host through <c>render</c>, through their inserts unless <c>bypassEffects</c>, with fader and pan
+///     only when <c>includeVolumePan</c>, plus the effects' tail when <c>includeTail</c>; normalised as a bounce. When
+///     the job finishes, the server adds the files and, in one undo step, adds a new track (or replaces the regions) and
+///     leaves, mutes or deletes the source. <c>name</c> names the new track or regions (left out: the source's, plus
+///     " Bounce").
+/// </summary>
+public sealed record BounceInPlaceRequest(
+    IReadOnlyList<string>? TrackIds = null,
+    IReadOnlyList<string>? RegionIds = null,
+    BounceInPlaceDestination Destination = BounceInPlaceDestination.NewTrack,
+    BounceSourceAction Source = BounceSourceAction.Mute,
+    bool BypassEffects = false,
+    bool IncludeTail = true,
+    bool IncludeVolumePan = false,
+    NormalizeMode Normalize = NormalizeMode.Off,
+    string? Name = null
+);
+
+/// <summary>A built-in effect of a processing chain, with the parameters it is set to (the rest at their defaults).</summary>
+public sealed record ProcessEffect(string PluginId, IReadOnlyDictionary<string, double>? Parameters = null);
+
+/// <summary>
+///     Selection-based processing: runs <c>chain</c> (built-in effects only, in order) in-process over the regions'
+///     audio between <c>startTick</c> and <c>endTick</c> (left out: the regions' own ends), with the chain's tail when
+///     <c>includeTail</c>. When the job finishes, the server writes a new file per region and, in one undo step,
+///     replaces that part of each region with a new region of it.
+/// </summary>
+public sealed record ProcessRequest(
+    IReadOnlyList<string> RegionIds,
+    IReadOnlyList<ProcessEffect> Chain,
+    long? StartTick = null,
+    long? EndTick = null,
+    bool IncludeTail = false
 );

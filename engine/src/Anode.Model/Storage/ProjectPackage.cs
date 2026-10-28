@@ -603,6 +603,7 @@ public static class PackageMigrations {
         }
 
         json[VersionField] = CurrentSchemaVersion;
+        Phase5Fields.Fill(kind, json);
         return json;
     }
 
@@ -731,6 +732,43 @@ static class Schema4 {
         strip["sends"] ??= new JsonArray();
         strip["output"] ??= "master";
         strip["groups"] ??= new JsonArray();
+    }
+}
+
+/// <summary>
+///     The Phase 5 fields (docs/06-phase-5.md) at their defaults where a file lacks them, so schema-4 packages read with
+///     the Phase 5 contracts: interim, until workstream B adds schema 5 and its migration from 4 (which replaces this,
+///     with the same defaults). Leaves fields that are present alone.
+/// </summary>
+static class Phase5Fields {
+    public static void Fill(string kind, JsonObject json) {
+        if (kind == "project") {
+            if (json["settings"] is JsonObject settings) {
+                settings["smartTempo"] ??= new JsonObject {
+                    ["mode"] = "keep", ["defaultFollow"] = "off", ["analyzeImports"] = true
+                };
+                settings["varispeed"] ??= new JsonObject { ["enabled"] = false, ["mode"] = "speedOnly", ["speed"] = 1 };
+            }
+        } else if (kind == "track") {
+            if (json["track"] is JsonObject track) {
+                track["flexOn"] ??= false;
+                track["flexMode"] ??= "polyphonic";
+                track["alternatives"] ??= new JsonArray();
+            }
+
+            foreach (var region in (json["regions"] as JsonArray ?? []).OfType<JsonObject>()) {
+                Region(region);
+            }
+        }
+    }
+
+    /// <summary>An audio region that does not follow the tempo, without markers, transpose or pitch notes.</summary>
+    public static void Region(JsonObject region) {
+        region["follow"] ??= "off";
+        region["flexMarkers"] ??= new JsonArray();
+        region["transpose"] ??= 0;
+        region["fineTune"] ??= 0;
+        region["pitchNotes"] ??= new JsonArray();
     }
 }
 

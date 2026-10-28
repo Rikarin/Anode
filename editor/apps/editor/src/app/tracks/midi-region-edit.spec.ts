@@ -76,7 +76,11 @@ describe('MIDI region edits in the Tracks area', () => {
       notes: '',
       inputBus: 0,
       automationMode: 'read',
-      frozenFileId: null
+      frozenFileId: null,
+      flexOn: false,
+      flexMode: 'polyphonic',
+      alternatives: [],
+      alternativeId: null
     };
     const midi: MidiRegion = {
       id: 'mid_1',

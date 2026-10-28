@@ -309,7 +309,11 @@ function newTrack(project: Project, kind: 'aux' | 'vca', name: string, inputBus:
     notes: '',
     inputBus,
     automationMode: 'read',
-    frozenFileId: null
+    frozenFileId: null,
+    flexOn: false,
+    flexMode: 'polyphonic',
+    alternatives: [],
+    alternativeId: null
   };
 }
 

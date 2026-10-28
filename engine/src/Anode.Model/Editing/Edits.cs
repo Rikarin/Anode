@@ -234,6 +234,10 @@ public static partial class Edits {
             string.Empty,
             0,
             AutomationMode.Read,
+            null,
+            false,
+            FlexMode.Polyphonic,
+            [],
             null
         );
         return [new TrackUpserted(track, index)];
@@ -465,7 +469,12 @@ public static partial class Edits {
             0,
             0,
             0,
-            false
+            false,
+            FlexFollow.Off,
+            [],
+            0,
+            0,
+            []
         );
         return [new RegionUpserted(region)];
     }

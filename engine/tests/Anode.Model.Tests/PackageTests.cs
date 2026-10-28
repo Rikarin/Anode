@@ -55,6 +55,40 @@ public sealed class PackageTests : IDisposable {
     }
 
     [Fact]
+    public void A_schema_4_package_without_the_Phase_5_fields_reads_them_at_their_defaults() {
+        var (state, _, _) = RandomProjects.Build(11, 30);
+        ProjectPackage.Save(folder, state);
+        var path = Path.Combine(folder, "project.json");
+        var root = JsonNode.Parse(File.ReadAllText(path))!.AsObject();
+        root["settings"]!.AsObject().Remove("smartTempo");
+        root["settings"]!.AsObject().Remove("varispeed");
+        foreach (var tempo in root["settings"]!["tempoEvents"]!.AsArray()) {
+            tempo!.AsObject().Remove("shape");
+        }
+
+        File.WriteAllText(path, root.ToJsonString());
+        foreach (var file in Directory.EnumerateFiles(Path.Combine(folder, "tracks"))) {
+            var json = JsonNode.Parse(File.ReadAllText(file))!.AsObject();
+            foreach (var field in new[] { "flexOn", "flexMode", "alternatives" }) {
+                json["track"]!.AsObject().Remove(field);
+            }
+
+            foreach (var region in json["regions"]!.AsArray()) {
+                foreach (var field in new[] { "follow", "flexMarkers", "transpose", "fineTune", "pitchNotes" }) {
+                    region!.AsObject().Remove(field);
+                }
+            }
+
+            File.WriteAllText(file, json.ToJsonString());
+        }
+
+        var loaded = ProjectPackage.Load(folder);
+        Assert.Equal(RandomProjects.Json(state), RandomProjects.Json(loaded));
+        Assert.Equal(ProjectDefaults.SmartTempo, loaded.Settings.SmartTempo);
+        Assert.All(loaded.Tracks, static t => Assert.Equal((false, FlexMode.Polyphonic), (t.FlexOn, t.FlexMode)));
+    }
+
+    [Fact]
     public void A_Phase_1_package_opens_as_audio_tracks_without_MIDI_and_saves_as_the_current_schema() {
         CopyFixture("Phase1.anode");
         var state = ProjectPackage.Load(folder);

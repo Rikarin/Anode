@@ -11,9 +11,9 @@ public sealed class TakeEditTests {
     readonly SequentialIds ids = new();
 
     ProjectState state = ProjectDefaults.NewProject("prj_1", "Song", 48_000)
-        .Apply(new AudioFileUpserted(new("aud_1", "Take 1", "Audio Files/1.wav", 48_000, 1, 480_000, 24)))
-        .Apply(new AudioFileUpserted(new("aud_2", "Take 2", "Audio Files/2.wav", 48_000, 1, 480_000, 24)))
-        .Apply(new AudioFileUpserted(new("aud_3", "Take 3", "Audio Files/3.wav", 48_000, 1, 480_000, 24)));
+        .Apply(new AudioFileUpserted(new("aud_1", "Take 1", "Audio Files/1.wav", 48_000, 1, 480_000, 24, null)))
+        .Apply(new AudioFileUpserted(new("aud_2", "Take 2", "Audio Files/2.wav", 48_000, 1, 480_000, 24, null)))
+        .Apply(new AudioFileUpserted(new("aud_3", "Take 3", "Audio Files/3.wav", 48_000, 1, 480_000, 24, null)));
 
     [Fact]
     public void Packing_regions_makes_a_folder_with_a_take_each_and_the_comp_on_the_last() {

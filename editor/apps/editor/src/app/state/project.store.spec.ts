@@ -33,7 +33,11 @@ function track(id: string, name = id): Track {
     notes: '',
     inputBus: 0,
     automationMode: 'read',
-    frozenFileId: null
+    frozenFileId: null,
+    flexOn: false,
+    flexMode: 'polyphonic',
+    alternatives: [],
+    alternativeId: null
   };
 }
 
@@ -51,7 +55,12 @@ function region(id: string, trackId: string, startTick = 0): AudioRegion {
     fadeOut: 0,
     fadeInCurve: 0,
     fadeOutCurve: 0,
-    muted: false
+    muted: false,
+    follow: 'off',
+    flexMarkers: [],
+    transpose: 0,
+    fineTune: 0,
+    pitchNotes: []
   };
 }
 
@@ -70,11 +79,13 @@ function snapshot(revision = 3): Project {
       metronome: { enabled: false, countIn: false, levelDb: -6 },
       endTick: 122_880,
       mergeMidiRecording: false,
-      tempoEvents: [{ tick: 0, bpm: 120, curve: 'step' }],
+      tempoEvents: [{ tick: 0, bpm: 120, curve: 'step', shape: 0 }],
       signatures: [{ tick: 0, numerator: 4, denominator: 4 }],
       keys: [{ tick: 0, tonic: 0, mode: 'major' }],
       recording: { cycleMode: 'takeFolder', replace: false, autopunch: false, punchInTick: 0, punchOutTick: 15_360 },
-      mixer: { pdc: 'all', lowLatency: false, lowLatencyLimitMs: 10 }
+      mixer: { pdc: 'all', lowLatency: false, lowLatencyLimitMs: 10 },
+      smartTempo: { mode: 'keep', defaultFollow: 'off', analyzeImports: true },
+      varispeed: { enabled: false, mode: 'speedOnly', speed: 1 }
     },
     master: {
       volumeDb: 0,
@@ -97,7 +108,8 @@ function snapshot(revision = 3): Project {
         sampleRate: 48_000,
         channels: 1,
         bitDepth: 24,
-        frames: 96_000
+        frames: 96_000,
+        tempo: null
       }
     ],
     midiRegions: [],

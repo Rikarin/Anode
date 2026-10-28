@@ -80,6 +80,22 @@ namespace Anode.Contracts;
 [JsonDerivedType(typeof(SetMixerSettingsCommand), "setMixerSettings")]
 [JsonDerivedType(typeof(ApplyPatchCommand), "applyPatch")]
 [JsonDerivedType(typeof(UnfreezeTrackCommand), "unfreezeTrack")]
+[JsonDerivedType(typeof(SetTrackFlexCommand), "setTrackFlex")]
+[JsonDerivedType(typeof(SetRegionFlexCommand), "setRegionFlex")]
+[JsonDerivedType(typeof(SetFlexMarkersCommand), "setFlexMarkers")]
+[JsonDerivedType(typeof(QuantizeAudioCommand), "quantizeAudio")]
+[JsonDerivedType(typeof(SetPitchNotesCommand), "setPitchNotes")]
+[JsonDerivedType(typeof(FlexPitchToMidiCommand), "flexPitchToMidi")]
+[JsonDerivedType(typeof(SetFileTempoCommand), "setFileTempo")]
+[JsonDerivedType(typeof(AdaptTempoCommand), "adaptTempo")]
+[JsonDerivedType(typeof(MapBeatsCommand), "mapBeats")]
+[JsonDerivedType(typeof(StripSilenceCommand), "stripSilence")]
+[JsonDerivedType(typeof(NewTrackAlternativeCommand), "newTrackAlternative")]
+[JsonDerivedType(typeof(SelectTrackAlternativeCommand), "selectTrackAlternative")]
+[JsonDerivedType(typeof(SetTrackAlternativeCommand), "setTrackAlternative")]
+[JsonDerivedType(typeof(DeleteTrackAlternativeCommand), "deleteTrackAlternative")]
+[JsonDerivedType(typeof(SetVarispeedCommand), "setVarispeed")]
+[JsonDerivedType(typeof(SetSmartTempoCommand), "setSmartTempo")]
 public abstract record EditCommand;
 
 /// <summary>
@@ -434,3 +450,104 @@ public sealed record ApplyPatchCommand(string TrackId, string PatchId) : EditCom
 
 /// <summary>Plays a frozen track live again (its freeze file stays in the project's audio).</summary>
 public sealed record UnfreezeTrackCommand(string TrackId) : EditCommand;
+
+/// <summary>Turns a track's flex on or off, or changes its algorithm.</summary>
+public sealed record SetTrackFlexCommand(string TrackId, bool? On = null, FlexMode? Mode = null) : EditCommand;
+
+/// <summary>
+///     Sets an audio region's Flex &amp; Follow, transpose (semitones) or fine tune (cents). A transpose or fine tune
+///     needs Flex or Follow (the track's flex on, or a <c>follow</c> other than <c>off</c>), else 422.
+/// </summary>
+public sealed record SetRegionFlexCommand(
+    string RegionId,
+    FlexFollow? Follow = null,
+    int? Transpose = null,
+    int? FineTune = null
+) : EditCommand;
+
+/// <summary>
+///     Replaces an audio region's flex markers: file frames inside the region, their ticks increasing with them and
+///     inside the region. Needs the track's flex on.
+/// </summary>
+public sealed record SetFlexMarkersCommand(string RegionId, IReadOnlyList<FlexMarker> Markers) : EditCommand;
+
+/// <summary>
+///     Quantises audio regions: flex markers on their transients (analysed now if need be) move toward the grid of
+///     <c>gridTicks</c> by <c>strength</c> (0…1), with <c>swing</c> (0…1) delaying every second grid step. Turns flex
+///     on for their tracks when it is off.
+/// </summary>
+public sealed record QuantizeAudioCommand(
+    IReadOnlyList<string> RegionIds,
+    long GridTicks,
+    double Strength = 1,
+    double Swing = 0
+) : EditCommand;
+
+/// <summary>
+///     Replaces an audio region's Flex Pitch notes (edits, splits and joins); notes need Flex or Follow, as a
+///     transpose does.
+/// </summary>
+public sealed record SetPitchNotesCommand(string RegionId, IReadOnlyList<PitchNote> Notes) : EditCommand;
+
+/// <summary>
+///     Makes a MIDI region of an audio region's pitch notes (their target pitches, at the times they play) on
+///     <c>trackId</c>, or on a new instrument track under the region's when left out.
+/// </summary>
+public sealed record FlexPitchToMidiCommand(string RegionId, string? TrackId = null) : EditCommand;
+
+/// <summary>Sets a file's tempo, beats and downbeats (the Smart Tempo Editor), or clears them (null).</summary>
+public sealed record SetFileTempoCommand(string FileId, FileTempo? Tempo) : EditCommand;
+
+/// <summary>
+///     Sets the project's tempo events from an audio region's file tempo (analysed now if need be) over the region's
+///     range, and makes the region play unwarped there.
+/// </summary>
+public sealed record AdaptTempoCommand(string RegionId) : EditCommand;
+
+/// <summary>
+///     Beat mapping: for each mapping in order, sets tempo events so that its tick lands on its sample, keeping earlier
+///     mappings and the positions before them.
+/// </summary>
+public sealed record MapBeatsCommand(IReadOnlyList<BeatMapping> Mappings) : EditCommand;
+
+/// <summary>
+///     Strip Silence: splits each audio region into one region per stretch above <c>thresholdDb</c> (RMS) lasting at
+///     least <c>minTimeMs</c>, each widened by <c>preAttackMs</c> before and <c>postReleaseMs</c> after; the silence
+///     between them is removed.
+/// </summary>
+public sealed record StripSilenceCommand(
+    IReadOnlyList<string> RegionIds,
+    double ThresholdDb = -40,
+    double MinTimeMs = 100,
+    double PreAttackMs = 20,
+    double PostReleaseMs = 50
+) : EditCommand;
+
+/// <summary>
+///     Makes a new track alternative and selects it: empty, or a copy of the active one when <c>duplicate</c> (with new
+///     ids). The track's first alternative also names the current content.
+/// </summary>
+public sealed record NewTrackAlternativeCommand(string TrackId, string? Name = null, bool Duplicate = false)
+    : EditCommand;
+
+/// <summary>Swaps a track's live regions, MIDI regions and take folders for those of alternative <c>alternativeId</c>.</summary>
+public sealed record SelectTrackAlternativeCommand(string TrackId, string AlternativeId) : EditCommand;
+
+/// <summary>Renames a track alternative.</summary>
+public sealed record SetTrackAlternativeCommand(string TrackId, string AlternativeId, string Name) : EditCommand;
+
+/// <summary>
+///     Deletes a track alternative with its content; deleting the active one selects another first.
+/// </summary>
+public sealed record DeleteTrackAlternativeCommand(string TrackId, string AlternativeId) : EditCommand;
+
+/// <summary>Turns Varispeed on or off, or sets its mode or speed (0.5…1.5).</summary>
+public sealed record SetVarispeedCommand(bool? Enabled = null, VarispeedMode? Mode = null, double? Speed = null)
+    : EditCommand;
+
+/// <summary>Sets the project tempo mode, the follow new audio regions get, or whether imports are analysed.</summary>
+public sealed record SetSmartTempoCommand(
+    ProjectTempoMode? Mode = null,
+    FlexFollow? DefaultFollow = null,
+    bool? AnalyzeImports = null
+) : EditCommand;
