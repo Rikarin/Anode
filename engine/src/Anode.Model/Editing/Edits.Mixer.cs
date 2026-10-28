@@ -25,6 +25,13 @@ public static partial class Edits {
 
     public const string GroupColor = "#8a8f98";
 
+    /// <summary>
+    ///     The parameter tempo-synced effects (Anode.Dsp's Stereo Delay, Tape Delay, Tremolo, AutoFilter…) take the
+    ///     project tempo through: the engine sets it, so inserts do not keep it, edits refuse it and it is no automation
+    ///     target.
+    /// </summary>
+    public const string HostTempoParameter = "tempo";
+
     static List<DeltaOp> AddInsert(ProjectState state, AddInsertCommand c, IIdSource ids, PluginCatalog plugins) {
         var (track, strip) = InsertStripOf(state, c.TrackId);
         if (string.IsNullOrWhiteSpace(c.PluginId) || plugins.Find(c.PluginId) is not { } plugin) {
@@ -44,7 +51,14 @@ public static partial class Edits {
             throw new EditException($"Insert slot {index} is outside 0…{strip.Inserts.Count}.");
         }
 
-        var insert = new Insert(ids.Next(IdPrefix.Insert), plugin.Id, plugin.Name, false, PluginCatalog.Defaults(plugin), null);
+        var insert = new Insert(
+            ids.Next(IdPrefix.Insert),
+            plugin.Id,
+            plugin.Name,
+            false,
+            PluginCatalog.Defaults(plugin).Remove(HostTempoParameter),
+            null
+        );
         return [Upsert(state, track, strip with { Inserts = strip.Inserts.ToImmutableList().Insert(index, insert) })];
     }
 
@@ -86,6 +100,10 @@ public static partial class Edits {
     static List<DeltaOp> SetInsertParameter(ProjectState state, SetInsertParameterCommand c, PluginCatalog plugins) {
         var (track, strip) = InsertStripOf(state, c.TrackId);
         var insert = InsertOf(strip, c.InsertId);
+        if (c.ParameterId == HostTempoParameter) {
+            throw new EditException("The engine sets the tempo parameter from the project tempo.");
+        }
+
         var value = ParameterValue(plugins, insert.PluginId, insert.Parameters, c.ParameterId, c.Value, "Insert");
         var changed = insert with { Parameters = PluginCatalog.Sorted(insert.Parameters).SetItem(c.ParameterId, value) };
         return [Upsert(state, track, strip with { Inserts = [..strip.Inserts.Select(i => i.Id == insert.Id ? changed : i)] })];
@@ -427,6 +445,10 @@ public static partial class Edits {
             case ["insert", var id, var parameter] when !vca:
                 var insert = strip.Inserts.FirstOrDefault(i => i.Id == id)
                     ?? throw new EditException($"No insert '{id}' on that strip.");
+                if (parameter == HostTempoParameter) {
+                    throw new EditException("The engine sets the tempo parameter from the project tempo.");
+                }
+
                 return ParameterRange(plugins, insert.PluginId, insert.Parameters, parameter);
             case ["instrument", var parameter] when track?.Instrument is { } slot:
                 return ParameterRange(plugins, slot.PluginId, slot.Parameters, parameter);
@@ -509,7 +531,7 @@ public static partial class Edits {
         var inserts = patch.Inserts.Take(MaxInserts)
             .Select(i => i with {
                     Id = ids.Next(IdPrefix.Insert),
-                    Parameters = PluginCatalog.Sorted(i.Parameters),
+                    Parameters = PluginCatalog.Sorted(i.Parameters).Remove(HostTempoParameter),
                     Sidechain = i.Sidechain is { } s && IsSidechain(state, track, s) ? s : null
                 }
             )

@@ -129,6 +129,10 @@ public sealed class AutomationPass(long number, long startTick) {
 
         foreach (var insert in strip.Inserts) {
             foreach (var (parameter, value) in insert.Parameters) {
+                if (parameter == Edits.HostTempoParameter) {
+                    continue;
+                }
+
                 controls[$"insert:{insert.Id}:{parameter}"] = value;
             }
         }

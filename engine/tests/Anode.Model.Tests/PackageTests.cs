@@ -85,7 +85,7 @@ public sealed class PackageTests : IDisposable {
     }
 
     [Fact]
-    public void A_Phase_2_package_opens_with_global_tracks_of_its_tempo_and_signature_and_saves_as_schema_3() {
+    public void A_Phase_2_package_opens_with_global_tracks_of_its_tempo_and_signature_and_saves_as_the_current_schema() {
         CopyFixture("Phase2.anode");
         var state = ProjectPackage.Load(folder);
         var settings = state.Settings;
@@ -118,12 +118,128 @@ public sealed class PackageTests : IDisposable {
 
         ProjectPackage.Save(folder, state);
         var root = JsonNode.Parse(File.ReadAllText(Path.Combine(folder, "project.json")))!;
-        Assert.Equal(3, root["schemaVersion"]!.GetValue<int>());
+        Assert.Equal(PackageMigrations.CurrentSchemaVersion, root["schemaVersion"]!.GetValue<int>());
         Assert.Single(root["settings"]!["tempoEvents"]!.AsArray());
         var track = JsonNode.Parse(File.ReadAllText(Path.Combine(folder, "tracks", "trk_drums0000001.json")))!;
-        Assert.Equal(3, track["schemaVersion"]!.GetValue<int>());
+        Assert.Equal(PackageMigrations.CurrentSchemaVersion, track["schemaVersion"]!.GetValue<int>());
         Assert.Empty(track["takeFolders"]!.AsArray());
         Assert.Equal(RandomProjects.Json(state), RandomProjects.Json(ProjectPackage.Load(folder)));
+    }
+
+    [Fact]
+    public void A_Phase_3_package_opens_with_plain_channel_strips_and_saves_as_schema_4() {
+        CopyFixture("Phase3.anode");
+        var state = ProjectPackage.Load(folder);
+        Assert.Equal(new MixerSettings(PdcMode.All, false, 10), state.Settings.Mixer);
+        Assert.Empty(state.Groups);
+        Assert.Empty(state.Automation);
+        Assert.Equal((-1.5, 0, 0, "master"), (state.Master.VolumeDb, state.Master.Inserts.Count, state.Master.Groups.Count, state.Master.Output));
+        Assert.Equal(3, state.Tracks.Count);
+        Assert.All(
+            state.Tracks,
+            static t => {
+                Assert.Empty(t.Strip.Inserts);
+                Assert.Empty(t.Strip.Sends);
+                Assert.Empty(t.Strip.Groups);
+                Assert.Equal(("master", (string?)null), (t.Strip.Output, t.Strip.VcaId));
+                Assert.Equal((0, AutomationMode.Read, (string?)null), (t.InputBus, t.AutomationMode, t.FrozenFileId));
+            }
+        );
+        // What Phase 3 had is all there.
+        var vocal = state.FindTrack("trk_vocal0000002")!;
+        Assert.Equal((-4.5, -0.25, "trk_stack0000001"), (vocal.Strip.VolumeDb, vocal.Strip.Pan, vocal.ParentId));
+        Assert.True(state.FindTrack("trk_keys00000003")!.Strip.Solo);
+        Assert.Equal(2, state.Settings.TempoEvents.Count);
+        Assert.True(state.Settings.Recording.Autopunch);
+        Assert.Single(state.Regions);
+        Assert.Single(state.MidiRegions);
+        Assert.Single(state.Markers);
+        Assert.Single(state.Sections);
+        Assert.Single(state.Screensets);
+        Assert.Equal("Phase 3 fixture", state.Notes);
+
+        ProjectPackage.Save(folder, state);
+        var root = JsonNode.Parse(File.ReadAllText(Path.Combine(folder, "project.json")))!;
+        Assert.Equal(4, root["schemaVersion"]!.GetValue<int>());
+        Assert.Equal("all", root["settings"]!["mixer"]!["pdc"]!.GetValue<string>());
+        Assert.Empty(root["master"]!["inserts"]!.AsArray());
+        Assert.Empty(root["groups"]!.AsArray());
+        var track = JsonNode.Parse(File.ReadAllText(Path.Combine(folder, "tracks", "trk_vocal0000002.json")))!;
+        Assert.Equal(4, track["schemaVersion"]!.GetValue<int>());
+        Assert.Equal("read", track["track"]!["automationMode"]!.GetValue<string>());
+        Assert.Empty(track["automation"]!.AsArray());
+        Assert.Equal(RandomProjects.Json(state), RandomProjects.Json(ProjectPackage.Load(folder)));
+    }
+
+    [Fact]
+    public void The_mixer_survives_the_package_and_broken_references_are_dropped() {
+        var ids = new SequentialIds();
+        var state = Edits.Apply(
+                ProjectDefaults.NewProject("prj_1", "Song", 48_000),
+                [
+                    new AddTrackCommand("Gtr"), new AddAuxCommand(2), new AddVcaCommand(),
+                    new SetGroupCommand(3, "Guitars")
+                ],
+                ids,
+                RandomProjects.Plugins
+            )
+            .State;
+        var (gtr, aux, vca) = (state.Tracks[0].Id, state.Tracks[1].Id, state.Tracks[2].Id);
+        state = Edits.Apply(
+                state,
+                [
+                    new AddInsertCommand("anode.test-compressor", gtr), new AddInsertCommand("com.example.fx"),
+                    new AddSendCommand(gtr, 2, -6), new SetOutputCommand(aux, "output:2"),
+                    new AssignVcaCommand(gtr, vca), new SetTrackGroupsCommand(gtr, [3]),
+                    new SetAutomationCommand("volume", [new(0, -6, 0), new(3840, 0, 0.5)], gtr),
+                    new SetAutomationCommand("pan", [new(0, -1, 0)]), new SetAutomationModeCommand(AutomationMode.Latch, gtr),
+                    new SetMixerSettingsCommand(PdcMode.Tracks, true, 5)
+                ],
+                ids,
+                RandomProjects.Plugins
+            )
+            .State;
+        var insert = state.FindTrack(gtr)!.Strip.Inserts[0].Id;
+        state = Edits.Apply(state, new SetInsertCommand(insert, gtr, Sidechain: aux), ids, RandomProjects.Plugins).State;
+        ProjectPackage.Save(folder, state);
+        var loaded = ProjectPackage.Load(folder);
+        Assert.Equal(RandomProjects.Json(state), RandomProjects.Json(loaded));
+        Assert.Equal(2, loaded.Automation.Count);
+
+        // A track file gone: what pointed at it lets go (VCA, sidechain), its lanes go with it.
+        File.Delete(Path.Combine(folder, "tracks", vca + ".json"));
+        File.Delete(Path.Combine(folder, "tracks", aux + ".json"));
+        var damaged = ProjectPackage.Load(folder);
+        var strip = damaged.FindTrack(gtr)!.Strip;
+        Assert.Null(strip.VcaId);
+        Assert.Null(strip.Inserts[0].Sidechain);
+        Assert.Equal(2, damaged.Automation.Count);
+    }
+
+    [Fact]
+    public void Insert_states_are_files_per_track_and_insert() {
+        var ids = new SequentialIds();
+        var state = Edits.Apply(
+                ProjectDefaults.NewProject("prj_1", "Song", 48_000),
+                [new AddTrackCommand("A"), new AddInsertCommand("com.example.fx")],
+                ids,
+                RandomProjects.Plugins
+            )
+            .State;
+        var track = state.Tracks[0].Id;
+        state = Edits.Apply(state, new AddInsertCommand("com.example.fx", track), ids, RandomProjects.Plugins).State;
+        var (own, master) = (state.Tracks[0].Strip.Inserts[0].Id, state.Master.Inserts[0].Id);
+        var keys = new Dictionary<string, byte[]> {
+            [ProjectPackage.StateKey(track, own)] = [1], [ProjectPackage.StateKey(null, master)] = [2]
+        };
+        ProjectPackage.Save(folder, state);
+        ProjectPackage.SaveStates(folder, keys);
+        Assert.True(File.Exists(Path.Combine(folder, "Plugin States", $"{track}.{own}.bin")));
+        Assert.True(File.Exists(Path.Combine(folder, "Plugin States", $"master.{master}.bin")));
+        var loaded = ProjectPackage.LoadStates(folder, state);
+        Assert.Equal([1], loaded[$"{track}.{own}"]);
+        Assert.Equal([2], loaded[$"master.{master}"]);
+        Assert.Throws<ArgumentException>(() => ProjectPackage.StateFileName("../x"));
     }
 
     [Fact]

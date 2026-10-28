@@ -111,7 +111,11 @@ static class RandomProjects {
                 PluginFormat.Vst3,
                 false,
                 [],
-                [new("0", "Gain", -24, 24, 0, "dB", 0, null), new("1", "Tilt", -1, 1, 0, string.Empty, 0, null)],
+                [
+                    new("0", "Gain", -24, 24, 0, "dB", 0, null),
+                    new("1", "Tilt", -1, 1, 0, string.Empty, 0, null),
+                    new("tempo", "Tempo", 20, 300, 120, "bpm", 0, null)
+                ],
                 "Utility",
                 false,
                 true
