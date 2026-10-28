@@ -1,3 +1,4 @@
+using Anode.Dsp.Effects;
 using Anode.Dsp.Instruments;
 using Anode.Dsp.Instruments.Sampler;
 using Anode.Dsp.Instruments.Synth;
@@ -196,6 +197,76 @@ public sealed class DemoTests {
         sampler.SetParameter(AnodeSampler.Release, 10_000);
         report.AppendLine(Measure("sampler, 32 voices (looped, stereo)", sampler, 32, 100));
         File.WriteAllText(Path.Combine(folder, "cpu.txt"), report.ToString());
+        TestContext.Current.TestOutputHelper?.WriteLine(report.ToString());
+    }
+
+    /// <summary>
+    ///     Each effect at its <see cref="EffectPresets" /> setting on four seconds of <see cref="Fx.Music" /> (looped from
+    ///     its 1.5 s), next to the dry signal: <c>effect-&lt;name&gt;.wav</c>.
+    /// </summary>
+    [Fact]
+    public void Render_effect_demos() {
+        var folder = Output();
+        var (left, right) = Fx.Music();
+        var dryLeft = Enumerable.Range(0, 192_000).Select(i => left[i % left.Length]).ToArray();
+        var dryRight = Enumerable.Range(0, 192_000).Select(i => right[i % right.Length]).ToArray();
+        Save(folder, "effect-dry", (dryLeft, dryRight));
+        foreach (var descriptor in BuiltinEffects.All) {
+            using var effect = Fx.Create(descriptor.Id, EffectPresets.For(descriptor.Id));
+            Save(
+                folder,
+                "effect-" + descriptor.Id["anode.".Length..],
+                Fx.Run(effect, dryLeft, dryRight, sidechainLeft: dryRight)
+            );
+        }
+    }
+
+    /// <summary>
+    ///     The CPU of one instance of each effect at its <see cref="EffectPresets" /> setting, 48 kHz, 64-frame blocks of
+    ///     program material: <c>effects-cpu.txt</c>.
+    /// </summary>
+    [Fact]
+    public void Measure_effect_cpu() {
+        var folder = Output();
+        var report = new StringBuilder();
+        var period = 64 / 48_000.0 * 1e6;
+        report.AppendLine(
+            CultureInfo.InvariantCulture,
+            $"Anode.Dsp effects, one instance, 48 kHz, 64-frame blocks (period {period:0.0} µs)"
+        );
+        report.AppendLine(
+            CultureInfo.InvariantCulture,
+            $"{Environment.OSVersion}, {Environment.ProcessorCount} cores, .NET {Environment.Version}"
+        );
+        report.AppendLine("| Effect | Id | Median µs | Median % | p99 µs | p99 % |");
+        report.AppendLine("|---|---|---:|---:|---:|---:|");
+        var (music, musicRight) = Fx.Music();
+        foreach (var descriptor in BuiltinEffects.All) {
+            using var effect = Fx.Create(descriptor.Id, EffectPresets.For(descriptor.Id));
+            var left = new float[64];
+            var right = new float[64];
+            var times = new double[20_000];
+            for (var i = -2_000; i < times.Length; i++) {
+                var at = (i + 2_000) * 64 % (music.Length - 64);
+                music.AsSpan(at, 64).CopyTo(left);
+                musicRight.AsSpan(at, 64).CopyTo(right);
+                var start = Stopwatch.GetTimestamp();
+                effect.Process(left, right, right, right);
+                if (i >= 0) {
+                    times[i] = Stopwatch.GetElapsedTime(start).TotalMicroseconds;
+                }
+            }
+
+            Array.Sort(times);
+            var median = times[times.Length / 2];
+            var p99 = times[(int)(times.Length * 0.99)];
+            report.AppendLine(
+                CultureInfo.InvariantCulture,
+                $"| {descriptor.Name} | {descriptor.Id} | {median:0.0} | {100 * median / period:0.00} | {p99:0.0} | {100 * p99 / period:0.00} |"
+            );
+        }
+
+        File.WriteAllText(Path.Combine(folder, "effects-cpu.txt"), report.ToString());
         TestContext.Current.TestOutputHelper?.WriteLine(report.ToString());
     }
 
