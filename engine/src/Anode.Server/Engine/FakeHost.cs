@@ -438,11 +438,7 @@ public sealed class FakeHost : IAsyncDisposable {
                 break;
             case SetStripMessage strip:
                 lock (gate) {
-                    if (strip.TrackId == -1) {
-                        master = strip.Strip;
-                    } else if (tracks.TryGetValue(strip.TrackId, out var t)) {
-                        tracks[strip.TrackId] = t with { Strip = strip.Strip };
-                    }
+                    SetStripOf(strip.TrackId, _ => strip.Strip);
                 }
 
                 break;
@@ -503,12 +499,7 @@ public sealed class FakeHost : IAsyncDisposable {
         switch (message) {
             case SetChannelMessage channel:
                 lock (gate) {
-                    if (channel.TrackId == -1) {
-                        master = channel.Strip;
-                    } else if (tracks.TryGetValue(channel.TrackId, out var t)) {
-                        tracks[channel.TrackId] = t with { Strip = channel.Strip };
-                    }
-
+                    SetStripOf(channel.TrackId, _ => channel.Strip);
                     RememberInserts(channel.TrackId, channel.Strip);
                 }
 

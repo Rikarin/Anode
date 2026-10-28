@@ -221,10 +221,7 @@ public sealed record ProjectState(
                 ? new TrackUpserted(Tracks[i], i)
                 : new TrackRemoved(track.Id),
             TrackRemoved(var id) => IndexOfTrack(id) is >= 0 and var i ? new TrackUpserted(Tracks[i], i) : null,
-            RegionUpserted(var region) => Regions.TryGetValue(region.Id, out var old)
-                ? new RegionUpserted(old)
-                : new RegionRemoved(region.Id),
-            RegionRemoved(var id) => Regions.TryGetValue(id, out var old) ? new RegionUpserted(old) : null,
+            RegionUpserted or RegionRemoved => InverseRegion(op),
             AudioFileUpserted(var file) => Files.TryGetValue(file.Id, out var old) ? new AudioFileUpserted(old) : null,
             SettingsChanged => new SettingsChanged(Settings),
             MasterChanged => new MasterChanged(Master),
@@ -246,6 +243,15 @@ public sealed record ProjectState(
                 ? new TakeFolderUpserted(old)
                 : new TakeFolderRemoved(folder.Id),
             TakeFolderRemoved(var id) => TakeFolders.TryGetValue(id, out var old) ? new TakeFolderUpserted(old) : null,
+            _ => null
+        };
+
+    DeltaOp? InverseRegion(DeltaOp op) =>
+        op switch {
+            RegionUpserted(var region) => Regions.TryGetValue(region.Id, out var old)
+                ? new RegionUpserted(old)
+                : new RegionRemoved(region.Id),
+            RegionRemoved(var id) => Regions.TryGetValue(id, out var old) ? new RegionUpserted(old) : null,
             _ => null
         };
 
