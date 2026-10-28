@@ -1,27 +1,36 @@
-import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
-import { XuiDockManagerImports, type XuiDockManagerLayout } from '@xui/dock-manager';
+import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
+import { XuiDockManagerImports } from '@xui/dock-manager';
 import { XuiSpinnerImports } from '@xui/spinner';
+import { BrowsersPane } from '../browsers/browsers-pane';
 import { Inspector } from '../inspector/inspector';
+import { MarkerList } from '../lists/marker-list';
 import { KeyboardPane } from '../live/keyboard-pane';
 import { MixerPane } from '../mixer/mixer-pane';
+import { NotePad } from '../notes/note-pad';
 import { PianoRoll } from '../piano-roll/piano-roll';
 import { ProjectStore } from '../state/project.store';
+import { ScreensetStore } from '../state/screenset.store';
 import { TracksArea } from '../tracks/tracks-area';
 import { ProjectChooser } from './project-chooser';
 
+export { defaultLayout } from './layout';
+
 /**
  * The main window's areas, as in Logic: Library and Inspector on the left, the Tracks area in the middle, the editors
- * (the Piano Roll), the Mixer and the Keyboard below, the list editors on the right. The Library and the list editors
- * are placeholders until their phases land (docs/01-implementation-plan.md §6.1, §12). The layout is a serialisable
- * tree, which is what screensets will store. With no project open, the window shows the project chooser.
+ * (the Piano Roll), the Mixer and the Keyboard below, the Browsers, the List Editors (the Marker List) and the Note Pad
+ * on the right. The layout is the current screenset's (ScreensetStore): a serialisable tree the screensets keep in the
+ * project, recalled with 1–9. With no project open, the window shows the project chooser.
  */
 @Component({
   selector: 'an-main-window',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
+    BrowsersPane,
     Inspector,
     KeyboardPane,
+    MarkerList,
     MixerPane,
+    NotePad,
     PianoRoll,
     ProjectChooser,
     TracksArea,
@@ -37,7 +46,7 @@ import { ProjectChooser } from './project-chooser';
         <an-project-chooser />
       }
     } @else {
-      <xui-dock-manager class="h-full" [(layout)]="layout">
+      <xui-dock-manager class="h-full" [(layout)]="screensets.layout">
         <ng-template xuiDockContent="library">
           <section class="text-foreground-muted p-3 text-sm" aria-label="Library">Patches and presets.</section>
         </ng-template>
@@ -56,10 +65,14 @@ import { ProjectChooser } from './project-chooser';
         <ng-template xuiDockContent="mixer">
           <an-mixer-pane />
         </ng-template>
+        <ng-template xuiDockContent="browsers">
+          <an-browsers-pane />
+        </ng-template>
         <ng-template xuiDockContent="lists">
-          <section class="text-foreground-muted p-3 text-sm" aria-label="List editors">
-            Event, Marker, Tempo and Signature lists.
-          </section>
+          <an-marker-list />
+        </ng-template>
+        <ng-template xuiDockContent="notes">
+          <an-note-pad />
         </ng-template>
       </xui-dock-manager>
     }
@@ -67,44 +80,5 @@ import { ProjectChooser } from './project-chooser';
 })
 export class MainWindow {
   protected readonly project = inject(ProjectStore);
-  protected readonly layout = signal<XuiDockManagerLayout>(defaultLayout());
-}
-
-/** The layout a new project opens with. */
-export function defaultLayout(): XuiDockManagerLayout {
-  return {
-    rootPane: {
-      type: 'splitPane',
-      orientation: 'horizontal',
-      panes: [
-        {
-          type: 'splitPane',
-          orientation: 'vertical',
-          size: 1,
-          panes: [
-            { type: 'contentPane', contentId: 'library', header: 'Library', size: 1, allowClose: false },
-            { type: 'contentPane', contentId: 'inspector', header: 'Inspector', size: 3, allowClose: false }
-          ]
-        },
-        {
-          type: 'splitPane',
-          orientation: 'vertical',
-          size: 4,
-          panes: [
-            { type: 'contentPane', contentId: 'tracks', header: 'Tracks', size: 3, allowClose: false },
-            {
-              type: 'tabGroupPane',
-              size: 2,
-              panes: [
-                { type: 'contentPane', contentId: 'mixer', header: 'Mixer', allowClose: false },
-                { type: 'contentPane', contentId: 'editors', header: 'Editors', allowClose: false },
-                { type: 'contentPane', contentId: 'keyboard', header: 'Keyboard', allowClose: false }
-              ]
-            }
-          ]
-        },
-        { type: 'contentPane', contentId: 'lists', header: 'List Editors', size: 1, isPinned: false }
-      ]
-    }
-  };
+  protected readonly screensets = inject(ScreensetStore);
 }

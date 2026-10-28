@@ -1,5 +1,5 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
-import type { TransportRequest, TransportState, TransportStatus } from '@anode/api-client';
+import type { CycleRecordMode, TransportRequest, TransportState, TransportStatus } from '@anode/api-client';
 import { ANODE_API } from '../core/api';
 import { EventStream } from '../core/events';
 import { Notify } from '../core/notify';
@@ -86,6 +86,7 @@ export class TransportStore {
   readonly tempo = computed(() => this.project.settings().tempo);
   readonly signature = computed<TimeSignature>(() => this.project.settings().signature);
   readonly ticksPerSecond = computed(() => (this.tempo() / 60) * Ppq);
+  readonly recordingSettings = computed(() => this.project.settings().recording);
 
   /** The playhead at the last frame (or where it was located), in ticks. */
   readonly anchorTicks = signal(0);
@@ -113,7 +114,8 @@ export class TransportStore {
       return anchor;
     }
 
-    const tick = anchor + (Math.max(0, now - this.anchorTime) / 1000) * this.ticksPerSecond();
+    const map = this.project.tempoMap();
+    const tick = map.tickAt(map.secondsAt(anchor) + Math.max(0, now - this.anchorTime) / 1000);
     const cycle = this.project.settings().cycle;
     if (this.state() === 'playing' && cycle.enabled && cycle.endTick > cycle.startTick && anchor < cycle.endTick) {
       if (tick >= cycle.endTick) {
@@ -124,9 +126,9 @@ export class TransportStore {
     return tick;
   }
 
-  /** The playhead as seconds from the project start (the LCD's clock). One tempo per project in Phase 1. */
+  /** The playhead as seconds from the project start (the LCD's clock), under the tempo track. */
   secondsAt(now: number): number {
-    return this.positionAt(now) / this.ticksPerSecond();
+    return this.project.tempoMap().secondsAt(this.positionAt(now));
   }
 
   /** A transport frame from the Server (or the answer to a command). */
@@ -206,6 +208,47 @@ export class TransportStore {
   toggleCountIn(): void {
     const on = !this.countIn();
     void this.project.execute([{ type: 'setMetronome', countIn: on }], on ? 'Count-in On' : 'Count-in Off');
+  }
+
+  setCycleMode(cycleMode: CycleRecordMode): void {
+    if (cycleMode !== this.recordingSettings().cycleMode) {
+      void this.project.execute(
+        [{ type: 'setRecording', cycleMode }],
+        cycleMode === 'takeFolder' ? 'Cycle Recording: Take Folders' : 'Cycle Recording: Regions'
+      );
+    }
+  }
+
+  toggleReplace(): void {
+    const on = !this.recordingSettings().replace;
+    void this.project.execute([{ type: 'setRecording', replace: on }], on ? 'Replace On' : 'Replace Off');
+  }
+
+  /** Autopunch on or off; turned on with the punch range unset, it starts as the cycle range. */
+  toggleAutopunch(): void {
+    const recording = this.recordingSettings();
+    const on = !recording.autopunch;
+    const cycle = this.project.settings().cycle;
+    const unset = recording.punchOutTick <= recording.punchInTick;
+    void this.project.execute(
+      [
+        {
+          type: 'setRecording',
+          autopunch: on,
+          ...(on && unset ? { punchInTick: cycle.startTick, punchOutTick: cycle.endTick } : {})
+        }
+      ],
+      on ? 'Autopunch On' : 'Autopunch Off'
+    );
+  }
+
+  /** Flashback Capture: what was played since playback last started becomes a recording (an undoable step). */
+  async flashbackCapture(): Promise<void> {
+    try {
+      await this.api.flashbackCapture();
+    } catch (error) {
+      this.notify.failure(error, 'Could not capture the performance');
+    }
   }
 
   setTempo(bpm: number): void {

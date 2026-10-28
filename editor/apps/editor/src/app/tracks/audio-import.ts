@@ -11,6 +11,11 @@ export function isWav(file: { name: string; type?: string }): boolean {
   return /\.wave?$/i.test(file.name) || file.type === 'audio/wav' || file.type === 'audio/x-wav';
 }
 
+/** Whether a dropped file is a Standard MIDI File. */
+export function isMidiFile(file: { name: string; type?: string }): boolean {
+  return /\.(mid|midi|smf)$/i.test(file.name) || file.type === 'audio/midi' || file.type === 'audio/x-midi';
+}
+
 /** The id of the track a batch added, from its delta. */
 export function addedTrackId(result: CommandResult | null, before: ReadonlySet<string>): string | null {
   for (const op of result?.delta.ops ?? []) {
@@ -38,9 +43,18 @@ export class AudioImport {
 
   /** Imports dropped files onto `trackId` (a new track when null) from `startTick`. */
   async importFiles(files: readonly File[], trackId: string | null, startTick: number): Promise<void> {
+    const midi = files.filter(isMidiFile);
+    for (const file of midi) {
+      const path = this.desktop?.pathForFile?.(file);
+      if (path) {
+        await this.importServerFile(path, 'midi', null, 0);
+      } else {
+        this.notify.error(`${file.name}: a browser cannot send MIDI files yet; import it from the All Files browser.`);
+      }
+    }
     const wavs = files.filter(isWav);
-    if (wavs.length < files.length) {
-      this.notify.error('Anode imports WAV files only for now.');
+    if (wavs.length + midi.length < files.length) {
+      this.notify.error('Anode imports WAV and MIDI files only for now.');
     }
 
     await this.place(
@@ -51,6 +65,36 @@ export class AudioImport {
       trackId,
       startTick
     );
+  }
+
+  /**
+   * Imports a file from the Server's disk (the All Files browser): audio onto `trackId` at `startTick`, a Standard
+   * MIDI File as new instrument tracks with its tempo and signatures.
+   */
+  async importServerFile(
+    path: string,
+    kind: 'audio' | 'midi',
+    trackId: string | null,
+    startTick: number
+  ): Promise<void> {
+    if (kind === 'midi') {
+      this.importing.update(n => n + 1);
+      try {
+        await this.project.send(() => this.api.importMidiFile(path), 'Could not import the MIDI file');
+      } finally {
+        this.importing.update(n => n - 1);
+      }
+      return;
+    }
+    await this.importPaths([path], trackId, startTick);
+  }
+
+  /** Places a file of the project (the Project Audio browser) on a track at `startTick`, or on a new track. */
+  async placeProjectFile(fileId: string, trackId: string | null, startTick: number): Promise<void> {
+    const file = this.project.files().get(fileId);
+    if (file) {
+      await this.place([() => Promise.resolve(file)], trackId, startTick);
+    }
   }
 
   /** Imports files by path (the desktop app's Import dialog). */

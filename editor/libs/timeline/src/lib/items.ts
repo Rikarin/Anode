@@ -1,3 +1,5 @@
+import type { MeterEvent } from './meter';
+
 /**
  * What a timeline view draws, as columns of typed arrays (structure of arrays) so the whole set can be transferred to
  * the render worker without copying or serialising: regions in the Tracks area, notes in the Piano Roll.
@@ -32,6 +34,11 @@ export interface TimelineScene {
   readonly noteFlags?: Uint8Array;
   /** The palette to draw in ({@link documentTheme}); dark when unset. */
   readonly theme?: TimelineThemeName;
+  /**
+   * The signature track: bars and beats of the grid and the ruler follow it. Without it every bar is
+   * {@link beatsPerBar} quarter notes.
+   */
+  readonly meter?: readonly MeterEvent[];
 }
 
 /** The timeline palettes: the app's dark (primary) and light themes. */
@@ -50,9 +57,12 @@ export function documentTheme(): TimelineThemeName {
 
 /**
  * Item flags ({@link RegionDetails.flags}, {@link TimelineScene.noteFlags}). `Midi` marks a MIDI region: it has no
- * waveform and no fades, so its edges trim in both halves and it draws its note miniatures.
+ * waveform and no fades, so its edges trim in both halves and it draws its note miniatures. `Folder` marks a take
+ * folder: a region with a name bar and no fades of its own. `Inner` marks a part drawn inside the item before it on
+ * its lane (a comp segment of a take folder, the comped part of a take): flat, under the name bar, with its waveform,
+ * never hit by the pointer.
  */
-export const ItemFlag = { Selected: 1, Muted: 2, Midi: 4 } as const;
+export const ItemFlag = { Selected: 1, Muted: 2, Midi: 4, Folder: 8, Inner: 16 } as const;
 
 /**
  * The notes MIDI regions draw as miniatures in the Tracks area, as columns: region `i`'s notes are
@@ -118,6 +128,17 @@ export interface RegionDetails {
   /** Fade lengths, in frames. */
   readonly fadeIn: Float64Array;
   readonly fadeOut: Float64Array;
+  /**
+   * Fade curves, -1…1 (docs/04-phase-3.md): a fade-in's gain at position x (0…1) is x^(2^(-2c)), a fade-out's the
+   * mirror. 0 is linear.
+   */
+  readonly fadeInCurve: Float32Array;
+  readonly fadeOutCurve: Float32Array;
+  /**
+   * Audio frames per tick per item, where the tempo changes under a region (its average); 0 uses
+   * {@link framesPerTick}.
+   */
+  readonly rate: Float64Array;
   /** Linear gain the waveform is drawn at. */
   readonly gain: Float32Array;
   /** {@link ItemFlag} bits. */
@@ -141,6 +162,9 @@ export function createRegionDetails(
     fileOffset: new Float64Array(count),
     fadeIn: new Float64Array(count),
     fadeOut: new Float64Array(count),
+    fadeInCurve: new Float32Array(count),
+    fadeOutCurve: new Float32Array(count),
+    rate: new Float64Array(count),
     gain: new Float32Array(count).fill(1),
     flags: new Uint8Array(count),
     names,
@@ -154,7 +178,9 @@ export function sceneBuffers(scene: TimelineScene): ArrayBuffer[] {
   const r = scene.regions;
   if (r) {
     buffers.push(
-      ...[r.waveform, r.fileOffset, r.fadeIn, r.fadeOut, r.gain, r.flags].map(column => column.buffer as ArrayBuffer)
+      ...[r.waveform, r.fileOffset, r.fadeIn, r.fadeOut, r.fadeInCurve, r.fadeOutCurve, r.rate, r.gain, r.flags].map(
+        column => column.buffer as ArrayBuffer
+      )
     );
     const n = r.notes;
     if (n) {
@@ -175,6 +201,7 @@ export function cloneScene(scene: TimelineScene): TimelineScene {
   const notes = regions?.notes;
   return {
     ...scene,
+    ...(scene.meter ? { meter: scene.meter.map(e => ({ ...e })) } : {}),
     ...(noteFlags ? { noteFlags: noteFlags.slice() } : {}),
     items: {
       count: items.count,
@@ -191,6 +218,9 @@ export function cloneScene(scene: TimelineScene): TimelineScene {
             fileOffset: regions.fileOffset.slice(),
             fadeIn: regions.fadeIn.slice(),
             fadeOut: regions.fadeOut.slice(),
+            fadeInCurve: regions.fadeInCurve.slice(),
+            fadeOutCurve: regions.fadeOutCurve.slice(),
+            rate: regions.rate.slice(),
             gain: regions.gain.slice(),
             flags: regions.flags.slice(),
             ...(notes
@@ -223,6 +253,8 @@ export interface ItemOverride {
   readonly fileOffset?: number;
   readonly fadeIn?: number;
   readonly fadeOut?: number;
+  readonly fadeInCurve?: number;
+  readonly fadeOutCurve?: number;
 }
 
 /** The cycle area in the ruler, in ticks. */
@@ -256,6 +288,13 @@ export interface TimelineView {
   readonly cycle?: CycleArea | null;
   /** The project end marker: lanes after it are shaded. */
   readonly endTick?: number | null;
+  /**
+   * Where the lanes start, in CSS pixels from the top: the ruler's height, or more when something is shown between the
+   * ruler and the lanes (the Tracks area's global tracks).
+   */
+  readonly lanesTop?: number;
+  /** The autopunch range, drawn as a red band in the ruler (dimmed when autopunch is off). */
+  readonly punch?: CycleArea | null;
   /** A selection rectangle being dragged out. */
   readonly marquee?: PixelRect | null;
   /** Items drawn as previewed rather than as the scene has them. */

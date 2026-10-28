@@ -1,21 +1,26 @@
 import { DestroyRef, Injectable, computed, inject, signal } from '@angular/core';
 import {
   ApiError,
+  type ArrangementMarker,
   type AudioFile,
   type AudioRegion,
   type ChannelStrip,
   type CommandResult,
   type DeltaOp,
   type EditCommand,
+  type Marker,
   type MidiRegion,
   type Project,
   type ProjectDelta,
   type ProjectSettings,
+  type TakeFolder,
   type Track
 } from '@anode/api-client';
+import { MeterMap } from '@anode/timeline';
 import { ANODE_API } from '../core/api';
 import { EventStream } from '../core/events';
 import { Notify } from '../core/notify';
+import { TempoMap } from '../music/tempo-map';
 
 /** Ticks per quarter note: the project's musical time base (docs/01-implementation-plan.md §5.1). */
 export const Ppq = 960;
@@ -86,6 +91,14 @@ export class ProjectStore {
   /** MIDI regions (`mid_…`), with their notes and controller events. */
   readonly midiRegions = signal<ReadonlyMap<string, MidiRegion>>(new Map());
   readonly files = signal<ReadonlyMap<string, AudioFile>>(new Map());
+  /** Take folders (`tkf_…`) by id: takes of cycle recordings, or packed regions, and their comps. */
+  readonly takeFolders = signal<ReadonlyMap<string, TakeFolder>>(new Map());
+  /** Markers (the marker track and the Marker List), in time order. */
+  readonly markers = signal<readonly Marker[]>([]);
+  /** Arrangement sections, in time order. */
+  readonly sections = signal<readonly ArrangementMarker[]>([]);
+  /** The project Note Pad. */
+  readonly notes = signal('');
   /** A project is being opened, created or refetched. */
   readonly loading = signal(false);
 
@@ -99,6 +112,14 @@ export class ProjectStore {
   readonly regionList = computed(() => [...this.regions().values()]);
   readonly midiRegionList = computed(() => [...this.midiRegions().values()]);
   readonly framesPerTick = computed(() => framesPerTick(this.info()?.sampleRate ?? 48_000, this.settings().tempo));
+  readonly takeFolderList = computed(() => [...this.takeFolders().values()]);
+  /** The tempo track as time (steps and ramps). */
+  readonly tempoMap = computed(() => new TempoMap(this.settings().tempoEvents, this.settings().tempo));
+  /** The signature track as bars and beats. */
+  readonly meter = computed(() => {
+    const signatures = this.settings().signatures;
+    return new MeterMap(signatures.length ? signatures : [{ tick: 0, ...this.settings().signature }]);
+  });
 
   /** Deltas that arrived ahead of a missing revision, by revision. */
   private readonly ahead = new Map<number, ProjectDelta>();
@@ -149,6 +170,10 @@ export class ProjectStore {
     this.regions.set(new Map(project.regions.map(r => [r.id, r])));
     this.midiRegions.set(new Map(project.midiRegions.map(r => [r.id, r])));
     this.files.set(new Map(project.audioFiles.map(f => [f.id, f])));
+    this.takeFolders.set(new Map(project.takeFolders.map(f => [f.id, f])));
+    this.markers.set(byTick(project.markers));
+    this.sections.set(byStart(project.arrangement));
+    this.notes.set(project.notes);
   }
 
   /** No project open. */
@@ -165,6 +190,10 @@ export class ProjectStore {
     this.regions.set(new Map());
     this.midiRegions.set(new Map());
     this.files.set(new Map());
+    this.takeFolders.set(new Map());
+    this.markers.set([]);
+    this.sections.set([]);
+    this.notes.set('');
   }
 
   /** Fetches the open project (or learns that none is), replacing what the store has. Concurrent calls share one. */
@@ -244,6 +273,14 @@ export class ProjectStore {
     );
   }
 
+  /**
+   * Runs another request that answers with an edit's result (a MIDI file import), in line with the edits, applying
+   * its delta here; null when refused (reported).
+   */
+  send(request: () => Promise<CommandResult>, failure: string): Promise<CommandResult | null> {
+    return this.serial(request, failure);
+  }
+
   undo(): Promise<CommandResult | null> {
     return this.serial(() => this.api.undo(), 'Could not undo');
   }
@@ -261,9 +298,29 @@ export class ProjectStore {
     return this.tracks().get(id);
   }
 
-  /** The end of a region in ticks. */
-  regionEnd(region: AudioRegion): number {
-    return region.startTick + regionTicks(region, this.framesPerTick());
+  /** The end of a region in ticks, under the tempo track. */
+  regionEnd(region: Pick<AudioRegion, 'startTick' | 'length'>): number {
+    const map = this.tempoMap();
+    return map.constant
+      ? region.startTick + regionTicks(region, this.framesPerTick())
+      : map.tickAfterFrames(region.startTick, region.length, this.info()?.sampleRate ?? 48_000);
+  }
+
+  /** Audio frames per tick over a region (its average under a changing tempo). */
+  regionRate(region: Pick<AudioRegion, 'startTick' | 'length'>): number {
+    const ticks = this.regionEnd(region) - region.startTick;
+    return ticks > 0 ? region.length / ticks : this.framesPerTick();
+  }
+
+  takeFolder(id: string): TakeFolder | undefined {
+    return this.takeFolders().get(id);
+  }
+
+  /** Marks the project unsaved without an edit (a saved screenset). */
+  markDirty(): void {
+    if (this.info()) {
+      this.dirty.set(true);
+    }
   }
 
   midiRegion(id: string): MidiRegion | undefined {
@@ -295,10 +352,17 @@ export class ProjectStore {
     const regions = new Map(this.regions());
     const midiRegions = new Map(this.midiRegions());
     const files = new Map(this.files());
+    const takeFolders = new Map(this.takeFolders());
+    const markers = new Map(this.markers().map(m => [m.id, m]));
+    const sections = new Map(this.sections().map(s => [s.id, s]));
     let trackIds = [...this.trackIds()];
     let missingFile = false;
     for (const op of delta.ops) {
-      this.applyOp(op, { tracks, regions, midiRegions, files }, ids => (trackIds = ids(trackIds)));
+      this.applyOp(
+        op,
+        { tracks, regions, midiRegions, files, takeFolders, markers, sections },
+        ids => (trackIds = ids(trackIds))
+      );
       if (op.op === 'regionUpserted' && !files.has(op.region.fileId)) {
         missingFile = true;
       }
@@ -312,6 +376,15 @@ export class ProjectStore {
       this.midiRegions.set(midiRegions);
     }
     this.files.set(files);
+    if (delta.ops.some(op => op.op.startsWith('takeFolder') || op.op === 'trackRemoved')) {
+      this.takeFolders.set(takeFolders);
+    }
+    if (delta.ops.some(op => op.op.startsWith('marker'))) {
+      this.markers.set(byTick([...markers.values()]));
+    }
+    if (delta.ops.some(op => op.op.startsWith('section'))) {
+      this.sections.set(byStart([...sections.values()]));
+    }
     this.trackIds.set(trackIds);
     this.revision.set(delta.revision);
     this.dirty.set(true);
@@ -328,6 +401,9 @@ export class ProjectStore {
       regions: Map<string, AudioRegion>;
       midiRegions: Map<string, MidiRegion>;
       files: Map<string, AudioFile>;
+      takeFolders: Map<string, TakeFolder>;
+      markers: Map<string, Marker>;
+      sections: Map<string, ArrangementMarker>;
     },
     order: (update: (ids: string[]) => string[]) => void
   ): void {
@@ -351,6 +427,11 @@ export class ProjectStore {
         for (const [id, region] of maps.midiRegions) {
           if (region.trackId === op.id) {
             maps.midiRegions.delete(id);
+          }
+        }
+        for (const [id, folder] of maps.takeFolders) {
+          if (folder.trackId === op.id) {
+            maps.takeFolders.delete(id);
           }
         }
         break;
@@ -379,13 +460,25 @@ export class ProjectStore {
         maps.midiRegions.delete(op.id);
         break;
       case 'takeFolderUpserted':
+        maps.takeFolders.set(op.folder.id, op.folder);
+        break;
       case 'takeFolderRemoved':
+        maps.takeFolders.delete(op.id);
+        break;
       case 'markerUpserted':
+        maps.markers.set(op.marker.id, op.marker);
+        break;
       case 'markerRemoved':
+        maps.markers.delete(op.id);
+        break;
       case 'sectionUpserted':
+        maps.sections.set(op.section.id, op.section);
+        break;
       case 'sectionRemoved':
+        maps.sections.delete(op.id);
+        break;
       case 'notesChanged':
-        // Take folders, markers, arrangement and notes: Phase 3, the editor features workstream (docs/04-phase-3.md).
+        this.notes.set(op.text);
         break;
     }
   }
@@ -396,4 +489,12 @@ export class ProjectStore {
       this.gapTimer = null;
     }
   }
+}
+
+function byTick(markers: readonly Marker[]): Marker[] {
+  return [...markers].sort((a, b) => a.tick - b.tick);
+}
+
+function byStart(sections: readonly ArrangementMarker[]): ArrangementMarker[] {
+  return [...sections].sort((a, b) => a.startTick - b.startTick);
 }

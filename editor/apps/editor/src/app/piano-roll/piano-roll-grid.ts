@@ -14,7 +14,6 @@ import {
 import type { EditCommand, MidiRegion } from '@anode/api-client';
 import {
   cloneScene,
-  documentTheme,
   hitTest,
   type ItemOverride,
   itemsInRect,
@@ -33,6 +32,7 @@ import { LiveMidiStore } from '../state/live-midi.store';
 import { PianoRollStore } from '../state/piano-roll.store';
 import { ProjectStore } from '../state/project.store';
 import { SelectionStore } from '../state/selection.store';
+import { ThemeStore } from '../state/theme.store';
 import { TransportStore } from '../state/transport.store';
 import { createSurface, type TimelineSurface } from '../tracks/timeline-surface';
 import {
@@ -109,6 +109,7 @@ export class PianoRollGrid {
   private readonly selection = inject(SelectionStore);
   private readonly live = inject(LiveMidiStore);
   protected readonly store = inject(PianoRollStore);
+  private readonly theme = inject(ThemeStore);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   private readonly canvas = viewChild.required<ElementRef<HTMLCanvasElement>>('canvas');
 
@@ -147,7 +148,9 @@ export class PianoRollGrid {
     effect(() => {
       const scene = this.scene();
       const ready = this.ready();
-      untracked(() => this.pushScene(scene, ready));
+      // The appearance too: the canvas redraws in the light or dark palette at once.
+      const theme = this.theme.appearance();
+      untracked(() => this.pushScene(scene, ready, theme));
     });
     effect(() => {
       const regions = this.store.regions();
@@ -202,10 +205,10 @@ export class PianoRollGrid {
     this.dirty = true;
   }
 
-  private pushScene(scene: NotesScene, ready: boolean): void {
+  private pushScene(scene: NotesScene, ready: boolean, theme: 'dark' | 'light'): void {
     this.drawn = { ...scene, index: new LaneIntervalIndex(scene.scene.items, scene.scene.laneCount) };
     if (ready) {
-      this.surface?.setScene({ ...cloneScene(scene.scene), theme: documentTheme() });
+      this.surface?.setScene({ ...cloneScene(scene.scene), theme });
       this.dirty = true;
     }
   }

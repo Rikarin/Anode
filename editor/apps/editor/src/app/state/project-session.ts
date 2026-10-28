@@ -1,5 +1,5 @@
 import { Injectable, inject, signal } from '@angular/core';
-import type { ProjectSummary } from '@anode/api-client';
+import type { ProjectAlternative, ProjectBackup, ProjectSummary } from '@anode/api-client';
 import { ANODE_API, type CreateProject } from '../core/api';
 import { Notify } from '../core/notify';
 import { ProjectStore } from './project.store';
@@ -16,6 +16,9 @@ export class ProjectSession {
   private readonly notify = inject(Notify);
 
   readonly recent = signal<ProjectSummary[]>([]);
+  /** The open project's alternatives and backups (the project menu), as last listed. */
+  readonly alternatives = signal<ProjectAlternative[]>([]);
+  readonly backups = signal<ProjectBackup[]>([]);
   /** What is being done ("Opening Demo…"), or null. */
   readonly busy = signal<string | null>(null);
 
@@ -71,6 +74,48 @@ export class ProjectSession {
     }
 
     return saved !== null;
+  }
+
+  /** Lists the open project's alternatives and backups (when the project menu opens). */
+  async refreshVersions(): Promise<void> {
+    if (!this.project.isOpen()) {
+      return;
+    }
+    const [alternatives, backups] = await Promise.all([
+      this.api.alternatives().catch(() => [] as ProjectAlternative[]),
+      this.api.backups().catch(() => [] as ProjectBackup[])
+    ]);
+    this.alternatives.set(alternatives);
+    this.backups.set(backups);
+  }
+
+  /** Saves the open project as a new alternative, which becomes current (Logic's File ▸ Alternatives ▸ New). */
+  async saveAlternative(name: string): Promise<boolean> {
+    if (!this.project.isOpen() || !name.trim()) {
+      return false;
+    }
+    const created = await this.notify.run(
+      () => this.api.createAlternative(name.trim()),
+      'Could not save the alternative'
+    );
+    if (created) {
+      this.notify.info(`Saved the alternative “${created.name}”.`);
+      await this.refreshVersions();
+    }
+    return created !== null;
+  }
+
+  /** Switches to another alternative (the Server keeps unsaved edits in a backup first). */
+  async openAlternative(id: string): Promise<boolean> {
+    return this.load('Opening the alternative…', () => this.api.openAlternative(id), 'Could not open the alternative');
+  }
+
+  /** Replaces the open project with a backup, after asking when there are unsaved edits. */
+  async revertToBackup(id: string): Promise<boolean> {
+    if (!this.mayDiscard('revert to the backup')) {
+      return false;
+    }
+    return this.load('Reverting…', () => this.api.revertToBackup(id), 'Could not revert to the backup');
   }
 
   async close(): Promise<boolean> {

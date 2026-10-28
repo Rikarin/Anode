@@ -6,19 +6,33 @@ import { XuiNonIdealStateImports } from '@xui/non-ideal-state';
 import { XuiSpinnerImports } from '@xui/spinner';
 import type { AppCommand } from './core/desktop';
 import { Startup } from './core/startup';
+import { KeyCommandsEditor } from './keys/key-commands-editor';
 import { ControlBar } from './shell/control-bar';
+import { SaveAlternativeDialog } from './shell/save-alternative';
 import { HistoryStore } from './state/history.store';
+import { KeyCommandsStore } from './state/key-commands.store';
 import { LiveMidiStore } from './state/live-midi.store';
 import { ProjectSession } from './state/project-session';
 import { ProjectStore } from './state/project.store';
-import { SelectionStore } from './state/selection.store';
+import { ScreensetStore } from './state/screenset.store';
+import { ThemeStore } from './state/theme.store';
 import { TransportStore } from './state/transport.store';
-import { plural } from './tracks/region-edit';
+import { UiStore } from './state/ui.store';
+import { AudioImport } from './tracks/audio-import';
 
 @Component({
   selector: 'an-root',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [ControlBar, RouterOutlet, XuiButtonImports, XuiInputImports, XuiNonIdealStateImports, XuiSpinnerImports],
+  imports: [
+    ControlBar,
+    KeyCommandsEditor,
+    RouterOutlet,
+    SaveAlternativeDialog,
+    XuiButtonImports,
+    XuiInputImports,
+    XuiNonIdealStateImports,
+    XuiSpinnerImports
+  ],
   host: {
     class: 'flex h-full flex-col',
     '(document:keydown)': 'onKeydown($event)',
@@ -71,6 +85,8 @@ import { plural } from './tracks/region-edit';
         <main class="relative min-h-0 flex-1 overflow-hidden">
           <router-outlet />
         </main>
+        <an-key-commands-editor />
+        <an-save-alternative />
       }
     }
   `
@@ -81,8 +97,12 @@ export class App {
   private readonly project = inject(ProjectStore);
   private readonly history = inject(HistoryStore);
   private readonly session = inject(ProjectSession);
-  private readonly selection = inject(SelectionStore);
+  private readonly keys = inject(KeyCommandsStore);
+  private readonly screensets = inject(ScreensetStore);
+  private readonly theme = inject(ThemeStore);
+  private readonly ui = inject(UiStore);
   protected readonly live = inject(LiveMidiStore);
+  private readonly audioImport = inject(AudioImport);
 
   /**
    * In the macOS desktop app the control bar is the title bar: it drags the window and leaves room for the traffic
@@ -103,7 +123,39 @@ export class App {
     // The desktop app asks before it quits: the open project lives in its own Server and goes with it.
     window.anode?.onQuit?.(() => this.session.mayDiscard('quit'));
     window.anode?.onCommand?.(command => void this.command(command));
+    this.registerKeys();
     void this.startup.start();
+  }
+
+  /** What the shell's key commands do (the Tracks area and others register their own). */
+  private registerKeys(): void {
+    const actions: Record<string, () => void> = {
+      'transport.play': () => this.transport.togglePlay(),
+      'transport.record': () => this.transport.record(),
+      'transport.cycle': () => this.transport.toggleCycle(),
+      'transport.goToStart': () => this.transport.goToStart(),
+      'transport.flashback': () => void this.transport.flashbackCapture(),
+      'transport.autopunch': () => this.transport.toggleAutopunch(),
+      'transport.replace': () => this.transport.toggleReplace(),
+      'transport.metronome': () => this.transport.toggleMetronome(),
+      'edit.undo': () => void this.history.undo(),
+      'edit.redo': () => void this.history.redo(),
+      'project.save': () => void this.session.save(),
+      'project.saveAlternative': () => this.ui.saveAlternativeOpen.set(true),
+      'view.keyCommands': () => this.ui.keyCommandsOpen.set(true),
+      'view.theme': () => this.theme.toggle(),
+      'view.mixer': () => this.screensets.showPane('mixer'),
+      'view.editors': () => this.screensets.showPane('editors'),
+      'view.browsers': () => this.screensets.showPane('browsers'),
+      'view.lists': () => this.screensets.showPane('lists'),
+      'view.notes': () => this.screensets.showPane('notes')
+    };
+    for (let n = 1; n <= 9; n++) {
+      actions[`screenset.recall${n}`] = () => void this.screensets.recall(n);
+    }
+    for (const [id, action] of Object.entries(actions)) {
+      this.keys.register(id, action);
+    }
   }
 
   /** What the app menu asks for (File ▸ New, Open…, Save, Close, Import Audio…). */
@@ -130,6 +182,19 @@ export class App {
         // The Tracks area's Import button has the context (track, playhead); the menu item uses the same.
         document.querySelector<HTMLButtonElement>('[aria-label="Import audio"]')?.click();
         break;
+      case 'importMidi': {
+        const path = await dialogs?.importMidi?.();
+        if (path) {
+          await this.audioImport.importServerFile(path, 'midi', null, 0);
+        }
+        break;
+      }
+      case 'keyCommands':
+        this.ui.keyCommandsOpen.set(true);
+        break;
+      case 'saveAlternative':
+        this.ui.saveAlternativeOpen.set(true);
+        break;
     }
   }
 
@@ -139,56 +204,39 @@ export class App {
   }
 
   /**
-   * The key commands until the key-command registry lands (docs/01-implementation-plan.md §6.1): musical typing first
-   * (A W S E D F T G Y H U J K play the selected instrument track, Z and X move the octave), then Space, R, C and
-   * Return for the transport, Delete for the selected regions, ⌘Z / ⇧⌘Z for undo and redo, ⌘S to save. Text fields
-   * keep their own keys. It returns nothing on purpose: an Angular listener that returns false cancels the event
+   * Every key press goes through the key command registry (KeyCommandsStore, Logic-like defaults with the person's
+   * rebindings): musical typing first (A W S E D F T G Y H U J K play the selected instrument track, Z and X move the
+   * octave), then whatever command the key is bound to. Text fields keep their own keys, and Space and Return on a
+   * focused button press it. It returns nothing on purpose: an Angular listener that returns false cancels the event
    * everywhere.
    */
   protected onKeydown(event: KeyboardEvent): void {
     const target = event.target as HTMLElement | null;
-    if (!this.project.isOpen() || event.altKey || target?.closest('input, textarea, [contenteditable]')) {
+    if (
+      !this.project.isOpen() ||
+      target?.closest('input, textarea, select, [contenteditable], [role="dialog"], [role="menu"]')
+    ) {
       return;
     }
 
-    const key = event.key.toLowerCase();
-    const command = event.metaKey || event.ctrlKey;
-    if (!command && !event.shiftKey && this.live.typeDown(event.code, event.repeat)) {
+    const modified = event.metaKey || event.ctrlKey || event.altKey;
+    if (!modified && !event.shiftKey && this.live.typeDown(event.code, event.repeat)) {
       event.preventDefault();
       return;
     }
 
-    const action = command
-      ? {
-          z: () => void (event.shiftKey ? this.history.redo() : this.history.undo()),
-          y: () => void this.history.redo(),
-          s: () => void this.session.save()
-        }[key]
-      : {
-          ' ': () => this.transport.togglePlay(),
-          r: () => this.transport.record(),
-          c: () => this.transport.toggleCycle(),
-          enter: () => this.transport.goToStart(),
-          delete: () => this.deleteSelection(),
-          backspace: () => this.deleteSelection()
-        }[key];
+    const id = this.keys.resolve(event);
+    const pressKey = event.key === ' ' || event.key === 'Enter';
     // Space and Return on a focused button press it; the shortcuts are for the rest of the window.
-    if (action && !(target?.closest('button, [role="slider"]') && (key === ' ' || key === 'enter'))) {
+    if (id && !(pressKey && !modified && target?.closest('button, [role="slider"], [role="radio"]'))) {
       event.preventDefault();
-      action();
+      this.keys.run(id);
     }
   }
 
   protected onKeyup(event: KeyboardEvent): void {
     if (this.live.typeUp(event.code)) {
       event.preventDefault();
-    }
-  }
-
-  private deleteSelection(): void {
-    const ids = [...this.selection.regions()];
-    if (ids.length > 0) {
-      void this.project.execute([{ type: 'deleteRegions', regionIds: ids }], plural('Delete', ids.length));
     }
   }
 }

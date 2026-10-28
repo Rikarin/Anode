@@ -15,6 +15,7 @@ contextBridge.exposeInMainWorld('anode', {
     openProject: () => ipcRenderer.invoke('anode:dialog:openProject'),
     chooseFolder: () => ipcRenderer.invoke('anode:dialog:chooseFolder'),
     importAudio: () => ipcRenderer.invoke('anode:dialog:importAudio'),
+    importMidi: () => ipcRenderer.invoke('anode:dialog:importMidi'),
     instrumentFile: (fileTypes: unknown) => ipcRenderer.invoke('anode:dialog:instrumentFile', fileTypes)
   },
   onCommand: (listener: (command: unknown) => void) => {

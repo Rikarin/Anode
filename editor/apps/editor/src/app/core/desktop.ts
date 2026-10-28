@@ -41,7 +41,15 @@ export interface SidecarStatus {
 }
 
 /** What the app menu asks the editor to do (apps/desktop/src/main.ts sends it on `anode:command`). */
-export type AppCommand = 'newProject' | 'openProject' | 'saveProject' | 'closeProject' | 'importAudio';
+export type AppCommand =
+  | 'newProject'
+  | 'openProject'
+  | 'saveProject'
+  | 'closeProject'
+  | 'importAudio'
+  | 'importMidi'
+  | 'saveAlternative'
+  | 'keyCommands';
 
 /** Native file dialogs (apps/desktop/src/main.ts, `anode:dialog:*`); each resolves empty when cancelled. */
 export interface DesktopDialogs {
@@ -51,6 +59,8 @@ export interface DesktopDialogs {
   chooseFolder(): Promise<string | null>;
   /** WAV files to import. */
   importAudio(): Promise<string[]>;
+  /** A Standard MIDI File to import. */
+  importMidi?(): Promise<string | null>;
   /** A file for an instrument to load, of one of its `fileTypes` (`.sfz`, `.wav`). */
   instrumentFile?(fileTypes: readonly string[]): Promise<string | null>;
 }

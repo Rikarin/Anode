@@ -4,6 +4,7 @@ export * from './lib/grid';
 export * from './lib/hit-test';
 export * from './lib/items';
 export * from './lib/lane-interval-index';
+export * from './lib/meter';
 export * from './lib/render/canvas2d-renderer';
 export * from './lib/render/renderer';
 export * from './lib/render/timeline-canvas';

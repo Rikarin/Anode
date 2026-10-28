@@ -2,21 +2,28 @@ import {
   ApiError,
   type AudioFile,
   type AudioRegion,
+  type Bookmarks,
   type ChannelStrip,
   type CommandBatch,
   type CommandResult,
   type DeltaOp,
+  type DirectoryListing,
   type EditCommand,
+  type KeyCommandSet,
   type LiveMidiEvent,
   type MidiDevices,
   type MidiRegion,
   type Note,
   type PluginInfo,
   type Project,
+  type ProjectAlternative,
+  type ProjectBackup,
   type ProjectDelta,
   type ProjectSummary,
+  type Screenset,
   type ServerMessage,
   type SystemInfo,
+  type TakeFolder,
   type Track,
   type TrackMeter,
   type TransportRequest,
@@ -27,7 +34,25 @@ import { clampParameter, defaultParameters } from '../../instruments/parameters'
 import { isNoteOff, isNoteOn, NeutralPlayback, quantizeNotes } from '../../midi/midi-math';
 import { TrackColors } from '../../state/track-colors';
 import type { AnodeApi, CreateProject } from '../api';
+import {
+  audioEnd,
+  checkComp,
+  checkSections,
+  copyRegions,
+  deleteSections,
+  flattenTakeFolder,
+  framesBetween,
+  groupStacks,
+  joinRegions,
+  moveSection,
+  packTakeFolder,
+  replaceRange,
+  shiftFolder,
+  sortSections,
+  tempoOf
+} from './fake-arrange';
 import { fakePeaks, hash, readWavHeader } from './fake-audio';
+import { fakeFileExists, FakeHome, fileKind, listFakeFolder } from './fake-files';
 import { FakeCatalogue, FakeMidiDevices } from './fake-plugins';
 
 /** Ticks per quarter note (the contract's time base). */
@@ -103,6 +128,19 @@ export class FakeAnodeServer implements AnodeApi {
 
   /** Requests seen, newest last (tests). */
   readonly requests: string[] = [];
+
+  /** Cycle wraps of the transport since it last started. */
+  private wraps = 0;
+  /** The last playback (not recording): where it started and got to, and its cycle wraps; Flashback Capture's source. */
+  private played: { from: number; to: number; wraps: number } | null = null;
+  /** Alternatives per project path; the current one's project is the open project (or what is on disk). */
+  private readonly alternativeSets = new Map<string, { alternative: ProjectAlternative; project: Project | null }[]>();
+  private readonly backupSets = new Map<string, { backup: ProjectBackup; project: Project }[]>();
+  private readonly screensetSets = new Map<string, Screenset[]>();
+  private keyCommandSet: KeyCommandSet = { bindings: {} };
+  private bookmarkSet: Bookmarks = { paths: [`${FakeHome}/Music/Loops`, `${FakeHome}/Music/MIDI`] };
+  /** The file the preview channel plays (tests). */
+  previewing: string | null = null;
 
   constructor(options: FakeServerOptions = {}) {
     this.now = options.now ?? (() => Date.now());
@@ -207,6 +245,16 @@ export class FakeAnodeServer implements AnodeApi {
   saveProject(): Promise<ProjectSummary> {
     return this.answer('SaveProject', () => {
       const project = this.require();
+      // Every save first keeps the previous one as a backup (the newest ten).
+      const previous = this.disk.get(project.path);
+      if (previous) {
+        const backups = this.backupSets.get(project.path) ?? [];
+        backups.unshift({
+          backup: { id: `bak_${this.nextId++}`, saved: new Date(this.now()).toISOString() },
+          project: structuredClone(previous)
+        });
+        this.backupSets.set(project.path, backups.slice(0, 10));
+      }
       this.project = { ...project, dirty: false };
       this.disk.set(project.path, structuredClone(this.project));
       const summary = this.remember(this.project);
@@ -397,6 +445,189 @@ export class FakeAnodeServer implements AnodeApi {
     });
   }
 
+  flashbackCapture(): Promise<void> {
+    return this.answer('FlashbackCapture', () => {
+      const project = this.require();
+      this.advance();
+      const played =
+        this.transportState === 'playing'
+          ? { ...(this.played ?? { from: 0, wraps: 0 }), to: this.positionTick }
+          : this.played;
+      if (!played || played.to <= played.from + 1) {
+        throw new ApiError(422, 'Nothing was played to capture: play first, then capture.');
+      }
+      if (!project.tracks.some(t => t.recordArmed)) {
+        throw new ApiError(422, 'Record-enable the tracks to capture first.');
+      }
+      this.commit(
+        project,
+        this.recordedTakes(project, played.from, played.to, played.wraps, true),
+        'Flashback Capture'
+      );
+    });
+  }
+
+  alternatives(): Promise<ProjectAlternative[]> {
+    return this.answer('ListAlternatives', () => this.alternativeSet().map(a => ({ ...a.alternative })));
+  }
+
+  createAlternative(name: string): Promise<ProjectAlternative> {
+    return this.answer('CreateAlternative', () => {
+      const project = this.require();
+      if (!name.trim()) {
+        throw new ApiError(422, 'An alternative needs a name.');
+      }
+      const set = this.alternativeSet();
+      const modified = new Date(this.now()).toISOString();
+      for (const entry of set) {
+        if (entry.alternative.current) {
+          entry.project = structuredClone(project);
+          entry.alternative = { ...entry.alternative, current: false };
+        }
+      }
+      const alternative: ProjectAlternative = {
+        id: `alt_${this.nextId++}`,
+        name: name.trim(),
+        modified,
+        current: true
+      };
+      set.push({ alternative, project: null });
+      return { ...alternative };
+    });
+  }
+
+  openAlternative(id: string): Promise<Project> {
+    return this.answer('OpenAlternative', () => {
+      const project = this.require();
+      const set = this.alternativeSet();
+      const target = set.find(a => a.alternative.id === id);
+      if (!target) {
+        throw new ApiError(404, `No alternative ${id}.`);
+      }
+      if (target.alternative.current) {
+        return structuredClone(project);
+      }
+      const current = set.find(a => a.alternative.current);
+      if (current) {
+        current.project = structuredClone(project);
+        current.alternative = { ...current.alternative, current: false };
+      }
+      target.alternative = { ...target.alternative, current: true };
+      const next = { ...structuredClone(target.project ?? project), revision: 0, dirty: false };
+      target.project = null;
+      this.open(next);
+      return structuredClone(next);
+    });
+  }
+
+  deleteAlternative(id: string): Promise<void> {
+    return this.answer('DeleteAlternative', () => {
+      const set = this.alternativeSet();
+      const index = set.findIndex(a => a.alternative.id === id);
+      if (index < 0) {
+        throw new ApiError(404, `No alternative ${id}.`);
+      }
+      if (set[index]?.alternative.current) {
+        throw new ApiError(422, 'The current alternative cannot be deleted.');
+      }
+      set.splice(index, 1);
+    });
+  }
+
+  backups(): Promise<ProjectBackup[]> {
+    return this.answer('ListBackups', () =>
+      (this.backupSets.get(this.require().path) ?? []).map(b => ({ ...b.backup }))
+    );
+  }
+
+  revertToBackup(id: string): Promise<Project> {
+    return this.answer('RevertToBackup', () => {
+      const project = this.require();
+      const backup = (this.backupSets.get(project.path) ?? []).find(b => b.backup.id === id);
+      if (!backup) {
+        throw new ApiError(404, `No backup ${id}.`);
+      }
+      const next = { ...structuredClone(backup.project), revision: project.revision + 1, dirty: true };
+      this.open(next);
+      return structuredClone(next);
+    });
+  }
+
+  screensets(): Promise<Screenset[]> {
+    return this.answer('ListScreensets', () => structuredClone(this.screensetSets.get(this.require().path) ?? []));
+  }
+
+  saveScreenset(screenset: Screenset): Promise<Screenset> {
+    return this.answer('SaveScreenset', () => {
+      const project = this.require();
+      if (!Number.isInteger(screenset.number) || screenset.number < 1 || screenset.number > 9) {
+        throw new ApiError(422, 'Screensets are numbered 1 to 9.');
+      }
+      const list = (this.screensetSets.get(project.path) ?? []).filter(s => s.number !== screenset.number);
+      this.screensetSets.set(
+        project.path,
+        [...list, structuredClone(screenset)].sort((a, b) => a.number - b.number)
+      );
+      this.project = { ...project, dirty: true };
+      return structuredClone(screenset);
+    });
+  }
+
+  importMidiFile(path: string): Promise<CommandResult> {
+    return this.answer('ImportMidiFile', () => {
+      const before = this.require();
+      if (fileKind(path) !== 'midi') {
+        throw new ApiError(422, `${path} is not a Standard MIDI File.`);
+      }
+      if (path.startsWith(FakeHome) && !fakeFileExists(path)) {
+        throw new ApiError(422, `No file ${path}.`);
+      }
+      return this.commit(before, this.midiFileTracks(before, path), 'Import MIDI File');
+    });
+  }
+
+  keyCommands(): Promise<KeyCommandSet> {
+    return this.answer('GetKeyCommands', () => structuredClone(this.keyCommandSet));
+  }
+
+  saveKeyCommands(set: KeyCommandSet): Promise<KeyCommandSet> {
+    return this.answer('SaveKeyCommands', () => {
+      for (const list of Object.values(set.bindings)) {
+        if (list.some(binding => !binding.trim())) {
+          throw new ApiError(422, 'A key binding cannot be empty.');
+        }
+      }
+      this.keyCommandSet = structuredClone(set);
+      return structuredClone(set);
+    });
+  }
+
+  bookmarks(): Promise<Bookmarks> {
+    return this.answer('GetBookmarks', () => structuredClone(this.bookmarkSet));
+  }
+
+  saveBookmarks(bookmarks: Bookmarks): Promise<Bookmarks> {
+    return this.answer('SaveBookmarks', () => {
+      this.bookmarkSet = { paths: [...new Set(bookmarks.paths)] };
+      return structuredClone(this.bookmarkSet);
+    });
+  }
+
+  listFiles(path?: string | null): Promise<DirectoryListing> {
+    return this.answer('ListFiles', () =>
+      listFakeFolder(path, this.project?.sampleRate ?? 48_000, new Date(this.now()).toISOString())
+    );
+  }
+
+  previewFile(path: string | null): Promise<void> {
+    return this.answer('PreviewFile', () => {
+      if (path !== null && !/\.wave?$/i.test(path)) {
+        throw new ApiError(422, `The preview plays WAV files; ${path} is not one.`);
+      }
+      this.previewing = path;
+    });
+  }
+
   /** The track live MIDI goes to when none is armed (tests). */
   get thruTrack(): string | null {
     return this.thru;
@@ -418,11 +649,15 @@ export class FakeAnodeServer implements AnodeApi {
       return;
     }
 
-    const { tempo, cycle } = this.project.settings;
-    let tick = this.positionTick + ((now - this.lastAdvance) / 1000) * (tempo / 60) * Ppq;
-    if (cycle.enabled && this.transportState === 'playing' && cycle.endTick > cycle.startTick) {
+    const { cycle } = this.project.settings;
+    const map = tempoOf(this.project);
+    let tick = map.tickAt(map.secondsAt(this.positionTick) + (now - this.lastAdvance) / 1000);
+    // The engine cycles while playing and while recording (cycle recording: one pass per wrap).
+    if (cycle.enabled && cycle.endTick > cycle.startTick) {
       if (this.positionTick < cycle.endTick && tick >= cycle.endTick) {
-        tick = cycle.startTick + ((tick - cycle.startTick) % (cycle.endTick - cycle.startTick));
+        const length = cycle.endTick - cycle.startTick;
+        this.wraps += Math.floor((tick - cycle.startTick) / length);
+        tick = cycle.startTick + ((tick - cycle.startTick) % length);
       }
     }
 
@@ -439,6 +674,10 @@ export class FakeAnodeServer implements AnodeApi {
 
     this.transportState = state;
     this.lastAdvance = this.now();
+    this.wraps = 0;
+    if (state === 'playing') {
+      this.played = { from: this.positionTick, to: this.positionTick, wraps: 0 };
+    }
     this.emitTransport();
     if (this.realtime && !this.timer) {
       this.timer = setInterval(() => this.advance(), FrameMs);
@@ -452,6 +691,9 @@ export class FakeAnodeServer implements AnodeApi {
     }
 
     const wasRecording = this.transportState === 'recording';
+    if (this.transportState === 'playing' && this.played) {
+      this.played = { ...this.played, to: this.positionTick, wraps: this.wraps };
+    }
     if (this.transportState !== 'stopped') {
       this.transportState = 'stopped';
       if (wasRecording) {
@@ -467,48 +709,196 @@ export class FakeAnodeServer implements AnodeApi {
     }
   }
 
-  /** A finished take per armed track, applied as one undoable "Record" batch (docs/02-phase-1.md). */
+  /**
+   * A finished recording, applied as one undoable "Record" batch (docs/02-phase-1.md, docs/04-phase-3.md): per armed
+   * audio track a file and, per cycle pass, a take in a take folder or a region; per armed MIDI track its notes.
+   */
   private finishRecording(): void {
     const before = this.project;
-    if (!before || this.positionTick <= this.recordFrom) {
+    if (!before || (this.positionTick <= this.recordFrom && this.wraps === 0)) {
       return;
     }
 
-    const frames = Math.round(
-      ((this.positionTick - this.recordFrom) / Ppq) * (60 / before.settings.tempo) * before.sampleRate
-    );
-    let after = before;
-    for (const [index, track] of before.tracks.entries()) {
-      if (!track.recordArmed) {
-        continue;
-      }
-
-      if (track.kind !== 'audio') {
+    let after = this.recordedTakes(before, this.recordFrom, this.positionTick, this.wraps, false);
+    for (const track of before.tracks) {
+      if (track.recordArmed && track.kind !== 'audio' && track.kind !== 'stack') {
         after = this.addMidiTake(after, track, this.takeNotes(track.id));
-        continue;
       }
-
-      const file: AudioFile = {
-        id: `aud_${this.nextId++}`,
-        name: `${index + 1}-${new Date(this.now()).toISOString().replace(/[-:.]/g, '')}.wav`,
-        path: `Audio Files/${index + 1}-take.wav`,
-        sampleRate: before.sampleRate,
-        channels: track.input.stereo ? 2 : 1,
-        bitDepth: 24,
-        frames
-      };
-      after = { ...after, audioFiles: [...after.audioFiles, file] };
-      after = this.applyCommand(after, {
-        type: 'addRegion',
-        trackId: track.id,
-        fileId: file.id,
-        startTick: Math.round(this.recordFrom)
-      });
     }
 
     this.held.clear();
     this.captured.clear();
     this.commit(before, after, 'Record');
+  }
+
+  /**
+   * What the armed audio tracks recorded from `from` to `to` with `wraps` cycle wraps: one file per track for the whole
+   * recording; each pass a take of one take folder (`cycleMode = takeFolder`, with a comp of the last pass) or a region.
+   * A recording keeps only the punch range under autopunch, and replace mode clears what it covers first. Flashback
+   * Capture makes the same from what was played.
+   */
+  private recordedTakes(before: Project, from: number, to: number, wraps: number, flashback: boolean): Project {
+    const { cycle, recording } = before.settings;
+    const passes: [number, number][] =
+      wraps === 0
+        ? [[from, to]]
+        : [
+            [from, cycle.endTick],
+            ...Array.from({ length: wraps - 1 }, (): [number, number] => [cycle.startTick, cycle.endTick]),
+            [cycle.startTick, to]
+          ];
+    const frames = passes.map(([a, b]) => Math.max(0, framesBetween(before, a, b)));
+    const total = frames.reduce((sum, f) => sum + f, 0);
+    if (total <= 0) {
+      return before;
+    }
+    let after = before;
+    for (const [index, track] of before.tracks.entries()) {
+      if (!track.recordArmed || track.kind !== 'audio') {
+        continue;
+      }
+      const file: AudioFile = {
+        id: `aud_${this.nextId++}`,
+        name: `${track.name}#${String(index + 1).padStart(2, '0')}${flashback ? ' (Flashback)' : ''}.wav`,
+        path: `Audio Files/${index + 1}-take-${this.nextId}.wav`,
+        sampleRate: before.sampleRate,
+        channels: track.input.stereo ? 2 : 1,
+        bitDepth: 24,
+        frames: total
+      };
+      after = { ...after, audioFiles: [...after.audioFiles, file] };
+      // Each pass: where it is in the song and in the file, cut to the punch range under autopunch.
+      let offset = 0;
+      const spans = passes.flatMap(([a, b], i) => {
+        const fileStart = offset;
+        offset += frames[i] ?? 0;
+        const punch = recording.autopunch && !flashback;
+        const start = punch ? Math.max(a, recording.punchInTick) : a;
+        const end = punch ? Math.min(b, recording.punchOutTick) : b;
+        if (end - start < 1) {
+          return [];
+        }
+        return [
+          {
+            start,
+            end,
+            fileOffset: fileStart + framesBetween(before, a, start),
+            length: framesBetween(before, start, end)
+          }
+        ];
+      });
+      if (spans.length === 0) {
+        continue;
+      }
+      const lo = Math.min(...spans.map(p => p.start));
+      const hi = Math.max(...spans.map(p => p.end));
+      if (recording.replace && !flashback) {
+        after = replaceRange(after, track.id, lo, hi, prefix => `${prefix}_${this.nextId++}`);
+      }
+      if (spans.length > 1 && recording.cycleMode === 'takeFolder') {
+        const takes = spans.map((p, i) => ({
+          id: `tak_${this.nextId++}`,
+          name: `Take ${i + 1}`,
+          fileId: file.id,
+          startTick: Math.round(p.start),
+          fileOffset: p.fileOffset,
+          length: Math.max(1, p.length)
+        }));
+        const last = takes.at(-1) as (typeof takes)[number];
+        const lastSpan = spans.at(-1) as (typeof spans)[number];
+        const folder: TakeFolder = {
+          id: `tkf_${this.nextId++}`,
+          trackId: track.id,
+          name: `${track.name}: Take Folder`,
+          startTick: Math.round(lo),
+          lengthTicks: Math.round(hi - lo),
+          takes,
+          comp: [{ startTick: last.startTick, endTick: Math.round(lastSpan.end), takeId: last.id }],
+          crossfade: Math.round(before.sampleRate / 100),
+          muted: false
+        };
+        after = { ...after, takeFolders: [...after.takeFolders, folder] };
+      } else {
+        for (const p of spans) {
+          after = this.applyCommand(after, {
+            type: 'addRegion',
+            trackId: track.id,
+            fileId: file.id,
+            startTick: Math.round(p.start),
+            fileOffset: p.fileOffset,
+            length: Math.max(1, Math.min(p.length, total - p.fileOffset))
+          });
+        }
+      }
+    }
+    return after;
+  }
+
+  /** A Standard MIDI File as the fake reads one: two instrument tracks of four bars, and the file's tempo. */
+  private midiFileTracks(before: Project, path: string): Project {
+    const name = (path.split('/').pop() ?? path).replace(/\.midi?$/i, '');
+    const seed = hash(path);
+    const bpm = 84 + (seed % 48);
+    let project = this.applyCommand(before, { type: 'setTempoEvents', events: [{ tick: 0, bpm, curve: 'step' }] });
+    project = this.applyCommand(project, {
+      type: 'setSignatures',
+      events: [{ tick: 0, numerator: 4, denominator: 4 }]
+    });
+    const bar = 4 * Ppq;
+    const parts: { name: string; notes: { pitch: number; startTick: number; lengthTicks: number }[] }[] = [
+      {
+        name: `${name}: Keys`,
+        notes: [0, 1, 2, 3].flatMap(i =>
+          [0, 4, 7].map(k => ({ pitch: 60 + ((seed + i * 5) % 7) + k, startTick: i * bar, lengthTicks: bar - Ppq / 4 }))
+        )
+      },
+      {
+        name: `${name}: Bass`,
+        notes: Array.from({ length: 16 }, (_, i) => ({
+          pitch: 36 + ((seed + Math.floor(i / 4) * 5) % 7),
+          startTick: i * Ppq,
+          lengthTicks: Ppq / 2
+        }))
+      }
+    ];
+    for (const part of parts) {
+      project = this.applyCommand(project, { type: 'addTrack', name: part.name, stereo: true, kind: 'instrument' });
+      const track = project.tracks.at(-1) as Track;
+      project = this.applyCommand(project, {
+        type: 'addMidiRegion',
+        trackId: track.id,
+        startTick: 0,
+        lengthTicks: 4 * bar,
+        name: part.name
+      });
+      const region = project.midiRegions.at(-1) as MidiRegion;
+      project = this.applyCommand(project, {
+        type: 'addNotes',
+        regionId: region.id,
+        notes: part.notes.map(n => ({ ...n, velocity: 96, channel: 1 }))
+      });
+    }
+    return project;
+  }
+
+  private alternativeSet(): { alternative: ProjectAlternative; project: Project | null }[] {
+    const project = this.require();
+    let set = this.alternativeSets.get(project.path);
+    if (!set) {
+      set = [
+        {
+          alternative: {
+            id: `alt_${this.nextId++}`,
+            name: project.name,
+            modified: new Date(this.now()).toISOString(),
+            current: true
+          },
+          project: null
+        }
+      ];
+      this.alternativeSets.set(project.path, set);
+    }
+    return set;
   }
 
   /** Live note-ons and note-offs on an armed track while recording, kept for its take. */
@@ -611,11 +1001,11 @@ export class FakeAnodeServer implements AnodeApi {
   private status(): TransportStatus {
     const project = this.project;
     const sampleRate = project?.sampleRate ?? 48_000;
-    const tempo = project?.settings.tempo ?? 120;
+    const seconds = project ? tempoOf(project).secondsAt(this.positionTick) : (this.positionTick / Ppq) * 0.5;
     return {
       state: this.transportState,
       positionTick: Math.round(this.positionTick),
-      positionSamples: Math.round((this.positionTick / Ppq) * (60 / tempo) * sampleRate),
+      positionSamples: Math.round(seconds * sampleRate),
       sampleRate
     };
   }
@@ -631,14 +1021,16 @@ export class FakeAnodeServer implements AnodeApi {
       return { tracks: [], master: { trackId: '', peakLeft: 0, peakRight: 0 } };
     }
 
-    const framesPerTick = (project.sampleRate * 60) / (project.settings.tempo * Ppq);
     const soloed = project.tracks.some(t => t.strip.solo);
     let masterLevel = 0;
     const tracks = project.tracks.map(track => {
       const tick = this.positionTick;
       const playing =
         project.regions.some(
-          r => r.trackId === track.id && r.startTick <= tick && tick < r.startTick + r.length / framesPerTick
+          r => r.trackId === track.id && !r.muted && r.startTick <= tick && tick < audioEnd(project, r)
+        ) ||
+        project.takeFolders.some(
+          f => f.trackId === track.id && !f.muted && f.comp.some(c => c.startTick <= tick && tick < c.endTick)
         ) ||
         project.midiRegions.some(
           r =>
@@ -664,7 +1056,6 @@ export class FakeAnodeServer implements AnodeApi {
 
   /** Applies one command to a snapshot, or throws 422 for one that does not apply. */
   applyCommand(project: Project, command: EditCommand): Project {
-    const framesPerTick = (project.sampleRate * 60) / (project.settings.tempo * Ppq);
     const track = (id: string | null | undefined): Track => {
       const found = project.tracks.find(t => t.id === id);
       if (!found) {
@@ -726,6 +1117,18 @@ export class FakeAnodeServer implements AnodeApi {
       }
       return found;
     };
+    const id = (prefix: string) => `${prefix}_${this.nextId++}`;
+    const folder = (folderId: string): TakeFolder => {
+      const found = project.takeFolders.find(f => f.id === folderId);
+      if (!found) {
+        throw new ApiError(422, `No take folder ${folderId}.`);
+      }
+      return found;
+    };
+    const withFolder = (next: TakeFolder): Project => ({
+      ...project,
+      takeFolders: project.takeFolders.map(f => (f.id === next.id ? next : f))
+    });
     const nonNegative = (value: number, what: string) => {
       if (!Number.isFinite(value) || value < 0) {
         throw new ApiError(422, `${what} must not be negative.`);
@@ -766,15 +1169,19 @@ export class FakeAnodeServer implements AnodeApi {
         track(command.trackId);
         return {
           ...project,
-          tracks: project.tracks.filter(t => t.id !== command.trackId),
+          // A removed stack's members stay, outside any stack.
+          tracks: project.tracks
+            .filter(t => t.id !== command.trackId)
+            .map(t => (t.parentId === command.trackId ? { ...t, parentId: null } : t)),
           regions: project.regions.filter(r => r.trackId !== command.trackId),
-          midiRegions: project.midiRegions.filter(r => r.trackId !== command.trackId)
+          midiRegions: project.midiRegions.filter(r => r.trackId !== command.trackId),
+          takeFolders: project.takeFolders.filter(f => f.trackId !== command.trackId)
         };
       case 'moveTrack': {
         const moved = track(command.trackId);
         const tracks = project.tracks.filter(t => t.id !== moved.id);
         tracks.splice(Math.min(tracks.length, Math.max(0, command.index)), 0, moved);
-        return { ...project, tracks };
+        return { ...project, tracks: groupStacks(tracks) };
       }
       case 'setTrack': {
         const t = track(command.trackId);
@@ -783,8 +1190,10 @@ export class FakeAnodeServer implements AnodeApi {
           name: command.name ?? t.name,
           color: command.color ?? t.color,
           input: command.input ?? t.input,
-          recordArmed: command.recordArmed ?? t.recordArmed,
-          inputMonitoring: command.inputMonitoring ?? t.inputMonitoring
+          recordArmed: t.kind === 'stack' ? false : (command.recordArmed ?? t.recordArmed),
+          inputMonitoring: command.inputMonitoring ?? t.inputMonitoring,
+          collapsed: command.collapsed ?? t.collapsed,
+          notes: command.notes ?? t.notes
         });
       }
       case 'setStrip': {
@@ -828,6 +1237,14 @@ export class FakeAnodeServer implements AnodeApi {
       }
       case 'moveRegion': {
         nonNegative(command.startTick, 'A region start');
+        if (command.regionId.startsWith('tkf_')) {
+          const f = folder(command.regionId);
+          const trackId = command.trackId ?? f.trackId;
+          if (track(trackId).kind !== 'audio') {
+            throw new ApiError(422, 'A take folder goes on an audio track.');
+          }
+          return withFolder({ ...shiftFolder(f, Math.round(command.startTick) - f.startTick), trackId });
+        }
         if (isMidiRegionId(command.regionId)) {
           const r = midiRegion(command.regionId);
           const trackId = command.trackId ?? r.trackId;
@@ -864,12 +1281,15 @@ export class FakeAnodeServer implements AnodeApi {
         if (isMidiRegionId(command.regionId)) {
           return this.splitMidiRegion(project, midiRegion(command.regionId), command.atTick);
         }
+        if (command.regionId.startsWith('tkf_')) {
+          throw new ApiError(422, 'A take folder does not split: flatten it first.');
+        }
         const r = region(command.regionId);
-        const endTick = r.startTick + r.length / framesPerTick;
+        const endTick = audioEnd(project, r);
         if (command.atTick <= r.startTick || command.atTick >= endTick) {
           throw new ApiError(422, 'A split must fall inside the region.');
         }
-        const left = Math.round((command.atTick - r.startTick) * framesPerTick);
+        const left = framesBetween(project, r.startTick, command.atTick);
         const right: AudioRegion = {
           ...r,
           id: `rgn_${this.nextId++}`,
@@ -886,20 +1306,50 @@ export class FakeAnodeServer implements AnodeApi {
         const r = region(command.regionId);
         const fadeIn = Math.max(0, Math.min(r.length, command.fadeIn ?? r.fadeIn));
         const fadeOut = Math.max(0, Math.min(r.length - fadeIn, command.fadeOut ?? r.fadeOut));
-        return withRegion({ ...r, name: command.name ?? r.name, gainDb: command.gainDb ?? r.gainDb, fadeIn, fadeOut });
+        const curve = (value: number | null | undefined, current: number) => {
+          const c = value ?? current;
+          if (!(c >= -1 && c <= 1)) {
+            throw new ApiError(422, 'A fade curve is -1 to 1.');
+          }
+          return c;
+        };
+        return withRegion({
+          ...r,
+          name: command.name ?? r.name,
+          gainDb: Math.min(30, Math.max(-96, command.gainDb ?? r.gainDb)),
+          fadeIn,
+          fadeOut,
+          fadeInCurve: curve(command.fadeInCurve, r.fadeInCurve),
+          fadeOutCurve: curve(command.fadeOutCurve, r.fadeOutCurve),
+          muted: command.muted ?? r.muted
+        });
       }
       case 'deleteRegions':
-        command.regionIds.forEach(id => (isMidiRegionId(id) ? midiRegion(id) : region(id)));
+        command.regionIds.forEach(regionId =>
+          regionId.startsWith('tkf_')
+            ? folder(regionId)
+            : isMidiRegionId(regionId)
+              ? midiRegion(regionId)
+              : region(regionId)
+        );
         return {
           ...project,
           regions: project.regions.filter(r => !command.regionIds.includes(r.id)),
-          midiRegions: project.midiRegions.filter(r => !command.regionIds.includes(r.id))
+          midiRegions: project.midiRegions.filter(r => !command.regionIds.includes(r.id)),
+          takeFolders: project.takeFolders.filter(f => !command.regionIds.includes(f.id))
         };
       case 'setTempo':
         if (!(command.bpm >= 20 && command.bpm <= 999)) {
           throw new ApiError(422, 'The tempo must be 20 to 999 bpm.');
         }
-        return { ...project, settings: { ...project.settings, tempo: command.bpm } };
+        return {
+          ...project,
+          settings: {
+            ...project.settings,
+            tempo: command.bpm,
+            tempoEvents: project.settings.tempoEvents.map((e, i) => (i === 0 ? { ...e, bpm: command.bpm } : e))
+          }
+        };
       case 'setSignature':
         if (command.numerator < 1 || command.numerator > 32 || ![1, 2, 4, 8, 16, 32].includes(command.denominator)) {
           throw new ApiError(
@@ -911,7 +1361,10 @@ export class FakeAnodeServer implements AnodeApi {
           ...project,
           settings: {
             ...project.settings,
-            signature: { numerator: command.numerator, denominator: command.denominator }
+            signature: { numerator: command.numerator, denominator: command.denominator },
+            signatures: project.settings.signatures.map((e, i) =>
+              i === 0 ? { ...e, numerator: command.numerator, denominator: command.denominator } : e
+            )
           }
         };
       case 'setCycle': {
@@ -1050,7 +1503,7 @@ export class FakeAnodeServer implements AnodeApi {
         if (playback.quantizeTicks < 0 || !inUnit(playback.quantizeStrength) || !inUnit(playback.swing)) {
           throw new ApiError(422, 'Quantise needs a grid of 0 or more ticks, and strength and swing of 0…1.');
         }
-        return withMidiRegion({ ...r, name: command.name ?? r.name, playback });
+        return withMidiRegion({ ...r, name: command.name ?? r.name, playback, muted: command.muted ?? r.muted });
       }
       case 'addNotes': {
         const r = midiRegion(command.regionId);
@@ -1125,31 +1578,274 @@ export class FakeAnodeServer implements AnodeApi {
       }
       case 'setMidiRecording':
         return { ...project, settings: { ...project.settings, mergeMidiRecording: command.merge } };
-      case 'setTempoEvents':
-      case 'setSignatures':
-      case 'setKeys':
-      case 'addMarker':
-      case 'setMarker':
+      case 'setTempoEvents': {
+        const events = command.events.map(e => ({ ...e, tick: Math.round(e.tick) }));
+        if (events[0]?.tick !== 0) {
+          throw new ApiError(422, 'The tempo track starts at tick 0.');
+        }
+        events.forEach((e, i) => {
+          if (!(e.bpm >= 20 && e.bpm <= 999)) {
+            throw new ApiError(422, 'Tempos are 20 to 999 bpm.');
+          }
+          if (i > 0 && e.tick <= (events[i - 1]?.tick ?? 0)) {
+            throw new ApiError(422, 'Tempo events are in order, one per tick.');
+          }
+        });
+        return {
+          ...project,
+          settings: { ...project.settings, tempoEvents: events, tempo: events[0].bpm }
+        };
+      }
+      case 'setSignatures': {
+        const events = command.events.map(e => ({ ...e, tick: Math.round(e.tick) }));
+        const first = events[0];
+        if (first?.tick !== 0) {
+          throw new ApiError(422, 'The signature track starts at tick 0.');
+        }
+        for (const [i, e] of events.entries()) {
+          if (e.numerator < 1 || e.numerator > 32 || ![1, 2, 4, 8, 16, 32].includes(e.denominator)) {
+            throw new ApiError(422, `${e.numerator}/${e.denominator} is not a time signature Anode supports.`);
+          }
+          const previous = events[i - 1];
+          if (previous) {
+            const bar = ((Ppq * 4) / previous.denominator) * previous.numerator;
+            if (e.tick <= previous.tick || (e.tick - previous.tick) % bar !== 0) {
+              throw new ApiError(422, 'A signature change goes on a bar line of the signature before it.');
+            }
+          }
+        }
+        return {
+          ...project,
+          settings: {
+            ...project.settings,
+            signatures: events,
+            signature: { numerator: first.numerator, denominator: first.denominator }
+          }
+        };
+      }
+      case 'setKeys': {
+        const events = command.events.map(e => ({ ...e, tick: Math.round(e.tick) }));
+        if (events[0]?.tick !== 0 || events.some(e => e.tonic < 0 || e.tonic > 11 || !Number.isInteger(e.tonic))) {
+          throw new ApiError(422, 'The key track starts at tick 0, with tonics 0 (C) to 11 (B).');
+        }
+        return { ...project, settings: { ...project.settings, keys: events.sort((a, b) => a.tick - b.tick) } };
+      }
+      case 'addMarker': {
+        nonNegative(command.tick, 'A marker');
+        const added = {
+          id: `mrk_${this.nextId++}`,
+          name: command.name || `Marker ${project.markers.length + 1}`,
+          tick: Math.round(command.tick),
+          lengthTicks: Math.max(0, Math.round(command.lengthTicks)),
+          color: command.color ?? null,
+          text: ''
+        };
+        return { ...project, markers: [...project.markers, added].sort((a, b) => a.tick - b.tick) };
+      }
+      case 'setMarker': {
+        const m = project.markers.find(x => x.id === command.markerId);
+        if (!m) {
+          throw new ApiError(422, `No marker ${command.markerId}.`);
+        }
+        const next = {
+          ...m,
+          name: command.name ?? m.name,
+          tick: Math.round(command.tick ?? m.tick),
+          lengthTicks: Math.round(command.lengthTicks ?? m.lengthTicks),
+          color: command.color ?? m.color ?? null,
+          text: command.text ?? m.text
+        };
+        nonNegative(next.tick, 'A marker');
+        nonNegative(next.lengthTicks, 'A marker length');
+        return {
+          ...project,
+          markers: project.markers.map(x => (x.id === m.id ? next : x)).sort((a, b) => a.tick - b.tick)
+        };
+      }
       case 'deleteMarkers':
-      case 'addSection':
-      case 'setSection':
+        command.markerIds.forEach(id => {
+          if (!project.markers.some(m => m.id === id)) {
+            throw new ApiError(422, `No marker ${id}.`);
+          }
+        });
+        return { ...project, markers: project.markers.filter(m => !command.markerIds.includes(m.id)) };
+      case 'addSection': {
+        const added = {
+          id: `sec_${this.nextId++}`,
+          name: command.name || 'Section',
+          startTick: Math.round(command.startTick),
+          lengthTicks: Math.round(command.lengthTicks),
+          color: command.color ?? SectionColors[project.arrangement.length % SectionColors.length] ?? '#f5a623'
+        };
+        const arrangement = sortSections([...project.arrangement, added]);
+        checkSections(arrangement);
+        return { ...project, arrangement };
+      }
+      case 'setSection': {
+        const section = project.arrangement.find(x => x.id === command.sectionId);
+        if (!section) {
+          throw new ApiError(422, `No section ${command.sectionId}.`);
+        }
+        const arrangement = project.arrangement.map(x =>
+          x.id === section.id
+            ? {
+                ...x,
+                name: command.name ?? x.name,
+                lengthTicks: Math.round(command.lengthTicks ?? x.lengthTicks),
+                color: command.color ?? x.color
+              }
+            : x
+        );
+        checkSections(arrangement);
+        return { ...project, arrangement };
+      }
       case 'deleteSections':
+        return deleteSections(project, command.sectionIds, command.removeContent);
       case 'moveSection':
-      case 'setComp':
-      case 'selectTake':
-      case 'setTakeFolder':
-      case 'deleteTake':
+        return moveSection(project, command.sectionId, Math.round(command.toTick), command.copy, id);
+      case 'setComp': {
+        const f = folder(command.folderId);
+        return withFolder({ ...f, comp: checkComp(f, command.segments) });
+      }
+      case 'selectTake': {
+        const f = folder(command.folderId);
+        if (!f.takes.some(t => t.id === command.takeId)) {
+          throw new ApiError(422, `${f.name} has no take ${command.takeId}.`);
+        }
+        return withFolder({
+          ...f,
+          comp: [{ startTick: f.startTick, endTick: f.startTick + f.lengthTicks, takeId: command.takeId }]
+        });
+      }
+      case 'setTakeFolder': {
+        const f = folder(command.folderId);
+        if (command.takeName !== undefined && command.takeName !== null && !command.takeId) {
+          throw new ApiError(422, 'Renaming a take needs its takeId.');
+        }
+        if (command.takeId && !f.takes.some(t => t.id === command.takeId)) {
+          throw new ApiError(422, `${f.name} has no take ${command.takeId}.`);
+        }
+        return withFolder({
+          ...f,
+          name: command.name ?? f.name,
+          crossfade: Math.max(0, Math.round(command.crossfade ?? f.crossfade)),
+          muted: command.muted ?? f.muted,
+          takes: f.takes.map(t => (t.id === command.takeId && command.takeName ? { ...t, name: command.takeName } : t))
+        });
+      }
+      case 'deleteTake': {
+        const f = folder(command.folderId);
+        if (!f.takes.some(t => t.id === command.takeId)) {
+          throw new ApiError(422, `${f.name} has no take ${command.takeId}.`);
+        }
+        if (f.takes.length === 1) {
+          throw new ApiError(422, "A take folder's last take cannot be deleted.");
+        }
+        return withFolder({
+          ...f,
+          takes: f.takes.filter(t => t.id !== command.takeId),
+          comp: f.comp.filter(s => s.takeId !== command.takeId)
+        });
+      }
       case 'flattenTakeFolder':
+        return flattenTakeFolder(project, command.folderId, id);
       case 'packTakeFolder':
-      case 'setRecording':
-      case 'createStack':
-      case 'removeStack':
-      case 'setTrackParent':
+        return packTakeFolder(project, command.regionIds, command.name, id);
+      case 'setRecording': {
+        const r = project.settings.recording;
+        const next = {
+          cycleMode: command.cycleMode ?? r.cycleMode,
+          replace: command.replace ?? r.replace,
+          autopunch: command.autopunch ?? r.autopunch,
+          punchInTick: Math.round(command.punchInTick ?? r.punchInTick),
+          punchOutTick: Math.round(command.punchOutTick ?? r.punchOutTick)
+        };
+        if (next.punchInTick < 0 || next.punchOutTick <= next.punchInTick) {
+          throw new ApiError(422, 'The punch range must end after it starts.');
+        }
+        return { ...project, settings: { ...project.settings, recording: next } };
+      }
+      case 'createStack': {
+        const members = command.trackIds.map(t => track(t));
+        if (members.length === 0) {
+          throw new ApiError(422, 'A stack needs tracks.');
+        }
+        if (members.some(m => m.kind === 'stack')) {
+          throw new ApiError(422, 'Stacks do not nest.');
+        }
+        const first = Math.min(...members.map(m => project.tracks.indexOf(m)));
+        const stack: Track = {
+          id: `trk_${this.nextId++}`,
+          name: command.name || 'Track Stack',
+          kind: 'stack',
+          color: members[0]?.color ?? '#8e8e93',
+          input: { channel: 0, stereo: true },
+          recordArmed: false,
+          inputMonitoring: false,
+          strip: strip(),
+          instrument: null,
+          midiInput: { device: null, channel: 0 },
+          midiOutput: null,
+          parentId: null,
+          collapsed: false,
+          notes: ''
+        };
+        const ids = new Set(members.map(m => m.id));
+        const rest = project.tracks.filter(t => !ids.has(t.id));
+        const inserted = rest.slice(0, first).length;
+        const tracks = [
+          ...rest.slice(0, inserted),
+          stack,
+          ...members.map(m => ({ ...m, parentId: stack.id })),
+          ...rest.slice(inserted)
+        ];
+        // Stacks the members left behind empty are removed with them.
+        const emptied = new Set(
+          project.tracks.filter(t => t.kind === 'stack' && !tracks.some(m => m.parentId === t.id)).map(t => t.id)
+        );
+        return { ...project, tracks: groupStacks(tracks.filter(t => !emptied.has(t.id))) };
+      }
+      case 'removeStack': {
+        const stack = track(command.stackId);
+        if (stack.kind !== 'stack') {
+          throw new ApiError(422, `${stack.name} is not a track stack.`);
+        }
+        return {
+          ...project,
+          tracks: project.tracks
+            .filter(t => t.id !== stack.id)
+            .map(t => (t.parentId === stack.id ? { ...t, parentId: null } : t))
+        };
+      }
+      case 'setTrackParent': {
+        const t = track(command.trackId);
+        if (t.kind === 'stack') {
+          throw new ApiError(422, 'Stacks do not nest.');
+        }
+        if (command.parentId) {
+          const parent = track(command.parentId);
+          if (parent.kind !== 'stack') {
+            throw new ApiError(422, `${parent.name} is not a track stack.`);
+          }
+        }
+        const moved = { ...t, parentId: command.parentId ?? null };
+        const others = project.tracks.filter(x => x.id !== t.id);
+        const anchor = command.parentId ?? t.parentId;
+        // Into a stack: after its last member; out of one: right after the stack's members.
+        let index = others.findIndex(x => x.id === anchor);
+        while (index >= 0 && others[index + 1]?.parentId === anchor) {
+          index++;
+        }
+        const tracks = [...others];
+        tracks.splice(index < 0 ? tracks.length : index + 1, 0, moved);
+        return { ...project, tracks: groupStacks(tracks) };
+      }
       case 'setProjectNotes':
+        return { ...project, notes: command.text };
       case 'joinRegions':
+        return joinRegions(project, command.regionIds);
       case 'copyRegions':
-        // Arranging and editing depth: Phase 3, the editor features workstream (docs/04-phase-3.md).
-        throw new ApiError(422, `${command.type}: not in the fake Server yet.`);
+        return copyRegions(project, command.regionIds, Math.round(command.offsetTicks), command.trackId, id);
     }
   }
 
@@ -1366,9 +2062,56 @@ export class FakeAnodeServer implements AnodeApi {
       }
     });
     project = this.demoMidi(project);
+    project = this.demoArrangement(project);
     this.disk.set(disk, structuredClone(project));
     this.recent = [{ id: project.id, name: project.name, path: disk, modified: new Date(this.now()).toISOString() }];
     this.project = project;
+  }
+
+  /** The demo's arrangement, markers, a vocal take folder of two takes, and a note: Phase 3's material. */
+  private demoArrangement(base: Project): Project {
+    const bar = 4 * Ppq;
+    let project = base;
+    for (const [name, start, bars] of [
+      ['Intro', 0, 4],
+      ['Verse', 4, 8],
+      ['Chorus', 12, 8]
+    ] as const) {
+      project = this.applyCommand(project, {
+        type: 'addSection',
+        name,
+        startTick: start * bar,
+        lengthTicks: bars * bar
+      });
+    }
+    project = this.applyCommand(project, { type: 'addMarker', name: 'Vocals in', tick: 4 * bar, lengthTicks: 0 });
+    project = this.applyCommand(project, {
+      type: 'addMarker',
+      name: 'Drop',
+      tick: 12 * bar,
+      lengthTicks: 0,
+      color: '#d0021b'
+    });
+    const vocals = project.regions.find(r => r.name === 'Lead vocal');
+    if (vocals) {
+      project = this.applyCommand(project, {
+        type: 'addRegion',
+        trackId: vocals.trackId,
+        fileId: vocals.fileId,
+        startTick: vocals.startTick,
+        fileOffset: 48_000,
+        length: vocals.length - 48_000
+      });
+      const second = project.regions.at(-1);
+      if (second) {
+        project = this.applyCommand(project, {
+          type: 'packTakeFolder',
+          regionIds: [vocals.id, second.id],
+          name: 'Lead vocal'
+        });
+      }
+    }
+    return { ...project, notes: 'Demo session.\nTry Quick Swipe comping on the Lead vocal takes.' };
   }
 
   /** The demo's instrument tracks: a synth with chords and a melody, and a sampler with a drum pattern. */
@@ -1498,6 +2241,9 @@ function coalesceKey(commands: readonly EditCommand[]): string | undefined {
   return `${only.trackId ?? 'master'}:${fields.join(',')}`;
 }
 
+/** Logic's arrangement marker colours, in the order new sections take them. */
+const SectionColors = ['#f5a623', '#4a90e2', '#d0021b', '#7ed321', '#9013fe', '#50e3c2', '#f8e71c', '#bd10e0'];
+
 const KindNames: Record<Track['kind'], string> = { audio: 'Audio', instrument: 'Inst', midi: 'MIDI', stack: 'Stack' };
 
 /** MIDI region ids are `mid_…` (docs/03-phase-2.md). */
@@ -1590,5 +2336,51 @@ export function diff(before: Project, after: Project): DeltaOp[] {
       ops.push({ op: 'midiRegionUpserted', region });
     }
   }
+  diffList(
+    before.takeFolders,
+    after.takeFolders,
+    same,
+    id => ops.push({ op: 'takeFolderRemoved', id }),
+    folder => ops.push({ op: 'takeFolderUpserted', folder })
+  );
+  diffList(
+    before.markers,
+    after.markers,
+    same,
+    id => ops.push({ op: 'markerRemoved', id }),
+    marker => ops.push({ op: 'markerUpserted', marker })
+  );
+  diffList(
+    before.arrangement,
+    after.arrangement,
+    same,
+    id => ops.push({ op: 'sectionRemoved', id }),
+    section => ops.push({ op: 'sectionUpserted', section })
+  );
+  if (before.notes !== after.notes) {
+    ops.push({ op: 'notesChanged', text: after.notes });
+  }
   return ops;
+}
+
+/** Removals, then upserts, of one entity list. */
+function diffList<T extends { id: string }>(
+  before: readonly T[],
+  after: readonly T[],
+  same: (a: unknown, b: unknown) => boolean,
+  removed: (id: string) => void,
+  upserted: (item: T) => void
+): void {
+  const kept = new Set(after.map(x => x.id));
+  for (const item of before) {
+    if (!kept.has(item.id)) {
+      removed(item.id);
+    }
+  }
+  const previous = new Map(before.map(x => [x.id, x]));
+  for (const item of after) {
+    if (!same(previous.get(item.id), item)) {
+      upserted(item);
+    }
+  }
 }
