@@ -311,3 +311,60 @@ Five, in parallel, each on its own branch; they meet only at the contracts above
 2. Run the two-process tests through the real host: warped playback, Varispeed, bounce in place.
 3. Run the Playwright golden path for the exit criterion.
 4. Fix the seams.
+
+## Status (2026-10-28)
+
+**Exit criterion met on macOS.** The Playwright golden path `advanced-audio-golden-path.spec.ts` passes on the real
+desktop app with the null device, with all eleven steps. All six e2e specs pass, twice in a row.
+
+| Criterion | Measured | Limit |
+|---|---|---|
+| Adapted tempo | 100.000 bpm | 100 ± 0.5 |
+| Follow: worst onset off the 120 bpm grid | 1 ms | 5 ms |
+| Flex marker move: marked onset off target | 1 ms | 2 ms |
+| Quantise audio: worst onset off the 1/16 grid | 2 ms | 5 ms |
+| Flex Pitch: notes off target | 1.0–6.4 ¢ | 10 ¢ |
+| Varispeed speed only: length ratio / pitch | 1.11110 / 0.5 ¢ | 1/0.9 / 5 ¢ |
+| Varispeed speed and pitch: pitch change | −179.7 ¢ (2.7 ¢ off) | −182.4 ± 5 ¢ |
+| Strip Silence | 4 regions, one per note | exact |
+
+Onsets are measured in 1 ms steps.
+
+| Check | Result |
+|---|---|
+| Engine tests (`dotnet test --solution engine/Anode.slnx --max-parallel-test-modules 2`) | 1159 pass, 13 skipped (opt-in) |
+| Two-process, real host | warped playback and bounces; a locate into stretched regions starts in 62 ms median, 99 ms worst (29 ms unflexed) |
+| Analysis ([docs/analysis](analysis/README.md)) | transients ≤ 0.2 ms, beats ≤ 0.04 ms, pitch ≤ 1.6 ¢, notes ≤ 2.5 ms; pitch at 54× real time |
+| Flex ([docs/flex](flex/README.md)) | onsets 0.13 ms median, 0.81 ms worst; transposed pitch ≤ 10 ¢; 64 Polyphonic stereo tracks ≈ 60 % of one core on the disk thread |
+| Editor (`nx run-many -t typecheck lint test build`) | 5 projects pass; Storybook + axe 80 tests |
+| e2e (`nx e2e desktop`) | Phase 5, mixing, arranging, MIDI and Phase 1 golden paths, smoke; twice in a row |
+| Skala, Prettier, generated client | clean |
+
+**Contract changes and decisions at integration:**
+- Strip Silence's minimum time is the shortest silence that splits a region, as in Logic, not the shortest sound kept.
+- Polyphony comes from `Polyphony.IsPolyphonic` (workstream D), not the server's interim heuristic.
+- A track's `alternatives` lists the active alternative too, with empty snapshots, so it keeps its name.
+- Stretch restarts at fixed anchors (every 1.92 s, with a 60 ms crossfade) so a render does not depend on where its fill
+  started; the an_stretch shim reseeds Signalsmith's random engine on reset and seek.
+- While stopped, a stream drops other fills' audio at once: two quick edits could otherwise fill its ring with stale
+  fills and stall the next bounce.
+- Quick key presses on pitch notes and tempo-curve handles build on each other instead of each starting from the last
+  answer.
+- Importing audio analyses it first, so the import is slower; tests wait for the region.
+- Flex Pitch to MIDI names its track like any new instrument track.
+
+**Open:**
+- The beat tracker puts beats on the hats of a loop whose kicks fall on the beats (the phase is half a beat off; the
+  tempo is right). Follow `bars` and `barsAndBeats`, and the downbeats shown in the Smart Tempo Editor, are off by that.
+  Choosing the phase by low-band onset strength is the likely fix.
+- Small Flex Pitch corrections land only partly (a note 7 ¢ sharp, corrected to 0, measures +4.9 ¢): Stretch's own
+  pitch accuracy.
+- Transposed sustained material dips by about 2.5 dB for 60 ms at each Stretch anchor (every 1.92 s).
+- Tempo detection doubles 60–65 bpm loops and halves 170–180 bpm ones (5 of 25 test tempi); the Smart Tempo Editor's
+  double and halve fix them by hand.
+- Monophonic is out of tune below 200 Hz at every block size; a PSOLA path (S5) remains out of scope.
+- Splitting a region with flex markers shifts the audio near the cut.
+- A menu opened while an import lands closes.
+- The editor's fake server anchors beat mapping differently from the server when a ramp ends at the anchor.
+- Selection-based processing takes built-in effects only.
+- Linux and Windows.
