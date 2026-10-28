@@ -25,11 +25,11 @@ public sealed class AnodeSampler : IInstrument {
     readonly Engine engine = new();
 
     public static IReadOnlyList<InstrumentParameter> Parameters { get; } = [
-        new(Volume, "volume", "Volume", -60, 12, 0, "dB"),
-        new(Tune, "tune", "Tune", -24, 24, 0, "st"),
-        new(Attack, "attack", "Attack", 0, 10_000, 0, "ms"),
-        new(Release, "release", "Release", 0, 10_000, 0, "ms"),
-        new(VelocitySensitivity, "velocitySensitivity", "Velocity Sensitivity", 0, 100, 100, "%")
+        new(Volume, "volume", "Volume", -60, 12, 0, "dB", Macro: 5),
+        new(Tune, "tune", "Tune", -24, 24, 0, "st", Macro: 1),
+        new(Attack, "attack", "Attack", 0, 10_000, 0, "ms", Macro: 2),
+        new(Release, "release", "Release", 0, 10_000, 0, "ms", Macro: 3),
+        new(VelocitySensitivity, "velocitySensitivity", "Velocity Sensitivity", 0, 100, 100, "%", Macro: 4)
     ];
 
     public static InstrumentDescriptor Info { get; } =
