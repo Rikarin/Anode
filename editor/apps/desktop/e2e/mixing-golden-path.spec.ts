@@ -114,6 +114,11 @@ test('mixes, automates, freezes and bounces a session: inserts, sends, routing, 
       dialog.showOpenDialog = () => Promise.resolve({ canceled: false, filePaths: [path] });
     }, wav);
     await window.getByRole('button', { name: 'Import audio' }).click();
+    // The import analyses the file's tempo first; a menu opened meanwhile closes when it lands.
+    await expect(window.getByRole('img', { name: /^Tracks area:/ })).toHaveAttribute(
+      'aria-label',
+      'Tracks area: 1 region on 1 track'
+    );
     await window.getByTestId('add-track-menu').click();
     await window.getByTestId('add-instrument-track').click();
     await window.getByRole('group', { name: 'Track 2: Inst 1' }).click();
