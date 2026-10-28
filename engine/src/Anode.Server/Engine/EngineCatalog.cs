@@ -92,16 +92,22 @@ public sealed class EngineCatalog(EventHub hub) {
             p.Name,
             p.Vendor,
             p.Version,
-            string.Equals(p.Format, "clap", StringComparison.OrdinalIgnoreCase)
-                ? PluginFormat.Clap
-                : PluginFormat.Builtin,
+            p.Format.ToLowerInvariant() switch {
+                "clap" => PluginFormat.Clap,
+                "vst3" => PluginFormat.Vst3,
+                "au" => PluginFormat.Au,
+                _ => PluginFormat.Builtin
+            },
             p.IsInstrument,
             p.FileTypes ?? [],
             [
                 ..(p.Parameters ?? []).Select(static q =>
                     new ParameterInfo(q.Id, q.Name, q.Min, q.Max, q.Default, q.Unit, q.Steps, q.ValueNames)
                 )
-            ]
+            ],
+            p.IsInstrument ? "Instrument" : p.Category,
+            p.HasSidechain,
+            p.HasEditor
         );
 
     /// <summary>A built-in instrument as the engine lists it.</summary>

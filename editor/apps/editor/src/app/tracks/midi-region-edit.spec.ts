@@ -57,13 +57,26 @@ describe('MIDI region edits in the Tracks area', () => {
       input: { channel: 1, stereo: false },
       recordArmed: false,
       inputMonitoring: false,
-      strip: { volumeDb: 0, pan: 0, mute: false, solo: false },
+      strip: {
+        volumeDb: 0,
+        pan: 0,
+        mute: false,
+        solo: false,
+        inserts: [],
+        sends: [],
+        output: 'master',
+        groups: [],
+        vcaId: null
+      },
       instrument: null,
       midiInput: { device: null, channel: 0 },
       midiOutput: null,
       parentId: null,
       collapsed: false,
-      notes: ''
+      notes: '',
+      inputBus: 0,
+      automationMode: 'read',
+      frozenFileId: null
     };
     const midi: MidiRegion = {
       id: 'mid_1',

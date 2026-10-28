@@ -34,6 +34,17 @@ namespace Anode.Ipc;
 [JsonDerivedType(typeof(SetPunchMessage), "setPunch")]
 [JsonDerivedType(typeof(FlashbackCaptureMessage), "flashbackCapture")]
 [JsonDerivedType(typeof(PreviewFileMessage), "previewFile")]
+[JsonDerivedType(typeof(SetChannelMessage), "setChannel")]
+[JsonDerivedType(typeof(SetInsertParameterMessage), "setInsertParameter")]
+[JsonDerivedType(typeof(SetSendLevelMessage), "setSendLevel")]
+[JsonDerivedType(typeof(SetMixerMessage), "setMixer")]
+[JsonDerivedType(typeof(RenderMessage), "render")]
+[JsonDerivedType(typeof(CancelRenderMessage), "cancelRender")]
+[JsonDerivedType(typeof(RenderProgressMessage), "renderProgress")]
+[JsonDerivedType(typeof(RenderFinishedMessage), "renderFinished")]
+[JsonDerivedType(typeof(OpenPluginEditorMessage), "openPluginEditor")]
+[JsonDerivedType(typeof(ParameterChangedMessage), "parameterChanged")]
+[JsonDerivedType(typeof(PluginProblemMessage), "pluginProblem")]
 public abstract record IpcMessage;
 
 /// <summary>
@@ -63,12 +74,42 @@ public sealed record SegmentRef(string Name, long Length, long Version);
 /// <summary>An audio file the host may stream: its engine id, absolute path and format.</summary>
 public sealed record EngineFile(int Id, string Path, int Channels, int SampleRate, long Frames);
 
-/// <summary>A channel strip in engine units: linear gain, pan −1…1.</summary>
-public sealed record EngineStrip(float Gain, float Pan, bool Mute, bool Solo);
+/// <summary>
+///     A channel strip in engine units: linear gain (the server folds VCA offsets in), pan −1…1, mute and solo, its
+///     inserts in order, its sends, and its output (0: the master, 1…64: that bus, −N: the device's output pair N).
+/// </summary>
+public sealed record EngineStrip(
+    float Gain,
+    float Pan,
+    bool Mute,
+    bool Solo,
+    IReadOnlyList<EngineInsert>? Inserts = null,
+    IReadOnlyList<EngineSend>? Sends = null,
+    int Output = 0
+);
+
+/// <summary>
+///     An insert effect: the plugin, bypass, parameter values by id, saved opaque state (base64), and its sidechain
+///     (another engine track's post-fader signal, or a bus; −1 and 0 for none).
+/// </summary>
+public sealed record EngineInsert(
+    string Id,
+    string PluginId,
+    bool Bypassed,
+    IReadOnlyDictionary<string, double> Parameters,
+    string? State = null,
+    int SidechainTrack = -1,
+    int SidechainBus = 0
+);
+
+/// <summary>A send to bus 1…64 at linear gain, with its pan, taken before or after the fader.</summary>
+public sealed record EngineSend(string Id, int Bus, float Gain, float Pan, bool PreFader);
 
 /// <summary>
 ///     A track's runtime settings. <paramref name="InputChannel" /> is the 0-based first device input (−1: none);
-///     a stereo track takes it and the next one.
+///     a stereo track takes it and the next one. An aux track plays bus <paramref name="InputBus" /> (1…64; 0 for
+///     other tracks). A frozen track plays <paramref name="FreezeFile" /> (a stereo WAV of its source and inserts, from
+///     the project start) instead of its regions, instrument and inserts, into its fader.
 /// </summary>
 public sealed record EngineTrack(
     int Id,
@@ -78,7 +119,9 @@ public sealed record EngineTrack(
     bool Monitoring,
     EngineStrip Strip,
     EngineInstrument? Instrument = null,
-    EngineMidiIo? Midi = null
+    EngineMidiIo? Midi = null,
+    int InputBus = 0,
+    string? FreezeFile = null
 );
 
 /// <summary>
@@ -113,8 +156,24 @@ public sealed record LoadModelMessage(
     IReadOnlyList<EngineTrack> Tracks,
     IReadOnlyList<EngineFile> Files,
     EngineStrip Master,
-    string RecordDirectory
+    string RecordDirectory,
+    IReadOnlyList<EngineAutomationTarget>? AutomationTargets = null
 ) : IpcMessage;
+
+/// <summary>
+///     What automation events of target index <paramref name="Index" /> drive
+///     (<see cref="Segments.PlaybackEvent.Target" />):
+///     <paramref name="Kind" /> <c>volume</c> (linear gain), <c>pan</c>, <c>mute</c> (0/1), <c>send</c> (linear gain of
+///     send <paramref name="Id" />), <c>insert</c> (parameter <paramref name="ParameterId" /> of insert
+///     <paramref name="Id" />) or <c>instrument</c> (its parameter); on engine track <paramref name="TrackId" /> (−1: the
+///     master). Sent with every model; indices are stable while the project is open.
+/// </summary>
+public sealed record EngineAutomationTarget(
+    int Index,
+    int TrackId,
+    string Kind,
+    string? Id = null,
+    string? ParameterId = null);
 
 public sealed record ModelLoadedMessage(long Version) : IpcMessage;
 
@@ -210,7 +269,10 @@ public sealed record EngineParameter(
     IReadOnlyList<string>? ValueNames = null
 );
 
-/// <summary>A plugin the host can load. <paramref name="Format" /> is <c>builtin</c> or <c>clap</c>.</summary>
+/// <summary>
+///     A plugin the host can load. <paramref name="Format" /> is <c>builtin</c>, <c>clap</c>, <c>vst3</c> or
+///     <c>au</c>.
+/// </summary>
 public sealed record EnginePlugin(
     string Id,
     string Name,
@@ -219,7 +281,10 @@ public sealed record EnginePlugin(
     string Format,
     bool IsInstrument,
     IReadOnlyList<string> FileTypes,
-    IReadOnlyList<EngineParameter> Parameters
+    IReadOnlyList<EngineParameter> Parameters,
+    string Category = "",
+    bool HasSidechain = false,
+    bool HasEditor = false
 );
 
 /// <summary>Host → server: every plugin it can load; sent after the hello and after each scan.</summary>
@@ -286,3 +351,54 @@ public sealed record FlashbackCaptureMessage : IpcMessage;
 
 /// <summary>Server → host: play a file through the preview channel at <paramref name="Gain" /> (null path: stop).</summary>
 public sealed record PreviewFileMessage(string? Path, float Gain) : IpcMessage;
+
+/// <summary>
+///     Server → host: a strip's structure changed (inserts added, removed, moved, bypassed, re-sidechained; sends;
+///     output). The host keeps the instances of inserts whose id and plugin are unchanged. −1 is the master.
+/// </summary>
+public sealed record SetChannelMessage(int TrackId, EngineStrip Strip) : IpcMessage;
+
+public sealed record SetInsertParameterMessage(int TrackId, string InsertId, string ParameterId, double Value)
+    : IpcMessage;
+
+public sealed record SetSendLevelMessage(int TrackId, string SendId, float Gain, float Pan) : IpcMessage;
+
+/// <summary>
+///     Server → host: plugin delay compensation (<c>all</c>, <c>tracks</c>, <c>off</c>) and low-latency mode with its
+///     limit in milliseconds.
+/// </summary>
+public sealed record SetMixerMessage(string Pdc, bool LowLatency, double LowLatencyLimitMs) : IpcMessage;
+
+/// <summary>
+///     Server → host: render <paramref name="StartSample" />…<paramref name="EndSample" /> to 32-bit float stereo WAV,
+///     offline (faster than real time, transport stopped, device output silent) unless <paramref name="Realtime" />.
+///     <paramref name="Tracks" /> null: the master output to <paramref name="Path" />; otherwise one file per engine
+///     track, <c>{Path}/{trackId}.wav</c>, post-fader as it reaches its output; with <paramref name="Freeze" />, the one
+///     track's source and inserts before its fader. The host answers with progress and a finish.
+/// </summary>
+public sealed record RenderMessage(
+    int JobId,
+    long StartSample,
+    long EndSample,
+    string Path,
+    IReadOnlyList<int>? Tracks = null,
+    bool Freeze = false,
+    bool Realtime = false
+) : IpcMessage;
+
+public sealed record CancelRenderMessage(int JobId) : IpcMessage;
+
+public sealed record RenderProgressMessage(int JobId, double Fraction) : IpcMessage;
+
+/// <summary>Host → server: a render finished (<paramref name="Error" /> null) or failed; the files it wrote.</summary>
+public sealed record RenderFinishedMessage(int JobId, IReadOnlyList<string> Files, string? Error = null) : IpcMessage;
+
+/// <summary>Server → host: open or close a plugin's own editor window (an insert, or the instrument when null).</summary>
+public sealed record OpenPluginEditorMessage(int TrackId, string? InsertId, bool Open) : IpcMessage;
+
+/// <summary>Host → server: a plugin's own editor changed a parameter (not automation playback).</summary>
+public sealed record ParameterChangedMessage(int TrackId, string? InsertId, string ParameterId, double Value)
+    : IpcMessage;
+
+/// <summary>Host → server: a plugin crashed or failed to load and is bypassed.</summary>
+public sealed record PluginProblemMessage(int TrackId, string? InsertId, string PluginId, string Message) : IpcMessage;

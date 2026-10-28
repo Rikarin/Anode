@@ -207,7 +207,8 @@ export class FakeAnodeServer implements AnodeApi {
             autopunch: false,
             punchInTick: 0,
             punchOutTick: 4 * 4 * Ppq
-          }
+          },
+          mixer: { pdc: 'all', lowLatency: false, lowLatencyLimitMs: 10 }
         },
         master: strip(),
         tracks: [],
@@ -217,7 +218,9 @@ export class FakeAnodeServer implements AnodeApi {
         takeFolders: [],
         markers: [],
         arrangement: [],
-        notes: ''
+        notes: '',
+        groups: [],
+        automation: []
       };
       this.disk.set(path, structuredClone(project));
       this.open(project);
@@ -1157,6 +1160,9 @@ export class FakeAnodeServer implements AnodeApi {
           parentId: null,
           collapsed: false,
           notes: '',
+          inputBus: 0,
+          automationMode: 'read',
+          frozenFileId: null,
           // An external MIDI track sends nowhere until setMidiIo picks a port (as the Server does).
           midiOutput: null
         };
@@ -1193,7 +1199,10 @@ export class FakeAnodeServer implements AnodeApi {
           recordArmed: t.kind === 'stack' ? false : (command.recordArmed ?? t.recordArmed),
           inputMonitoring: command.inputMonitoring ?? t.inputMonitoring,
           collapsed: command.collapsed ?? t.collapsed,
-          notes: command.notes ?? t.notes
+          notes: command.notes ?? t.notes,
+          inputBus: 0,
+          automationMode: 'read',
+          frozenFileId: null
         });
       }
       case 'setStrip': {
@@ -1201,7 +1210,12 @@ export class FakeAnodeServer implements AnodeApi {
           volumeDb: Math.min(6, Math.max(-144, command.volumeDb ?? s.volumeDb)),
           pan: Math.min(1, Math.max(-1, command.pan ?? s.pan)),
           mute: command.mute ?? s.mute,
-          solo: command.solo ?? s.solo
+          solo: command.solo ?? s.solo,
+          inserts: s.inserts,
+          sends: s.sends,
+          output: s.output,
+          groups: s.groups,
+          vcaId: s.vcaId ?? null
         });
         if (command.trackId === null || command.trackId === undefined) {
           return { ...project, master: patch(project.master) };
@@ -1788,7 +1802,10 @@ export class FakeAnodeServer implements AnodeApi {
           midiOutput: null,
           parentId: null,
           collapsed: false,
-          notes: ''
+          notes: '',
+          inputBus: 0,
+          automationMode: 'read',
+          frozenFileId: null
         };
         const ids = new Set(members.map(m => m.id));
         const rest = project.tracks.filter(t => !ids.has(t.id));
@@ -1846,6 +1863,28 @@ export class FakeAnodeServer implements AnodeApi {
         return joinRegions(project, command.regionIds);
       case 'copyRegions':
         return copyRegions(project, command.regionIds, Math.round(command.offsetTicks), command.trackId, id);
+      case 'addInsert':
+      case 'removeInsert':
+      case 'moveInsert':
+      case 'setInsert':
+      case 'setInsertParameter':
+      case 'addSend':
+      case 'setSend':
+      case 'removeSend':
+      case 'setOutput':
+      case 'addAux':
+      case 'setGroup':
+      case 'deleteGroup':
+      case 'setTrackGroups':
+      case 'addVca':
+      case 'assignVca':
+      case 'setAutomation':
+      case 'setAutomationMode':
+      case 'setMixerSettings':
+      case 'applyPatch':
+      case 'unfreezeTrack':
+        // Mixing, automation and export: Phase 4, the editor workstream (docs/05-phase-4.md).
+        throw new ApiError(422, `${command.type}: not in the fake Server yet.`);
     }
   }
 
@@ -2018,7 +2057,8 @@ export class FakeAnodeServer implements AnodeApi {
           autopunch: false,
           punchInTick: 0,
           punchOutTick: 4 * 4 * Ppq
-        }
+        },
+        mixer: { pdc: 'all', lowLatency: false, lowLatencyLimitMs: 10 }
       },
       master: strip(),
       tracks: [],
@@ -2028,7 +2068,9 @@ export class FakeAnodeServer implements AnodeApi {
       takeFolders: [],
       markers: [],
       arrangement: [],
-      notes: ''
+      notes: '',
+      groups: [],
+      automation: []
     };
     let project = base;
     for (const name of ['Drums', 'Bass', 'Guitar', 'Vocals']) {
@@ -2218,7 +2260,17 @@ function readBytes(blob: Blob): Promise<ArrayBuffer> {
 }
 
 function strip(): ChannelStrip {
-  return { volumeDb: 0, pan: 0, mute: false, solo: false };
+  return {
+    volumeDb: 0,
+    pan: 0,
+    mute: false,
+    solo: false,
+    inserts: [],
+    sends: [],
+    output: 'master',
+    groups: [],
+    vcaId: null
+  };
 }
 
 /**
@@ -2244,7 +2296,14 @@ function coalesceKey(commands: readonly EditCommand[]): string | undefined {
 /** Logic's arrangement marker colours, in the order new sections take them. */
 const SectionColors = ['#f5a623', '#4a90e2', '#d0021b', '#7ed321', '#9013fe', '#50e3c2', '#f8e71c', '#bd10e0'];
 
-const KindNames: Record<Track['kind'], string> = { audio: 'Audio', instrument: 'Inst', midi: 'MIDI', stack: 'Stack' };
+const KindNames: Record<Track['kind'], string> = {
+  audio: 'Audio',
+  instrument: 'Inst',
+  midi: 'MIDI',
+  stack: 'Stack',
+  aux: 'Aux',
+  vca: 'VCA'
+};
 
 /** MIDI region ids are `mid_…` (docs/03-phase-2.md). */
 function isMidiRegionId(id: string): boolean {

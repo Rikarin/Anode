@@ -70,7 +70,10 @@ export const FakeCatalogue: readonly PluginInfo[] = [
       continuous('velocity', 'Velocity Sens', 0, 1, 0.6),
       stepped('bendRange', 'Bend Range', 0, 24, 2, 'st'),
       continuous('volume', 'Volume', -60, 6, -6, 'dB')
-    ]
+    ],
+    category: 'Instrument',
+    hasSidechain: false,
+    hasEditor: false
   },
   {
     id: 'anode.sampler',
@@ -86,7 +89,10 @@ export const FakeCatalogue: readonly PluginInfo[] = [
       continuous('attack', 'Attack', 0, 10, 0.002, 's'),
       continuous('release', 'Release', 0, 10, 0.3, 's'),
       continuous('velocity', 'Velocity Sens', 0, 1, 1)
-    ]
+    ],
+    category: 'Instrument',
+    hasSidechain: false,
+    hasEditor: false
   },
   {
     id: 'org.anode.test-sine',
@@ -96,7 +102,10 @@ export const FakeCatalogue: readonly PluginInfo[] = [
     format: 'clap',
     isInstrument: true,
     fileTypes: [],
-    parameters: [continuous('0', 'Gain', -48, 0, -12, 'dB'), continuous('1', 'Detune', -50, 50, 0, 'ct')]
+    parameters: [continuous('0', 'Gain', -48, 0, -12, 'dB'), continuous('1', 'Detune', -50, 50, 0, 'ct')],
+    category: 'Instrument',
+    hasSidechain: false,
+    hasEditor: true
   }
 ];
 

@@ -26,7 +26,9 @@ public sealed record Project(
     IReadOnlyList<TakeFolder> TakeFolders,
     IReadOnlyList<Marker> Markers,
     IReadOnlyList<ArrangementMarker> Arrangement,
-    string Notes
+    string Notes,
+    IReadOnlyList<MixerGroup> Groups,
+    IReadOnlyList<AutomationLane> Automation
 );
 
 /// <summary>
@@ -45,7 +47,8 @@ public sealed record ProjectSettings(
     IReadOnlyList<TempoEvent> TempoEvents,
     IReadOnlyList<SignatureEvent> Signatures,
     IReadOnlyList<KeyEvent> Keys,
-    RecordingSettings Recording
+    RecordingSettings Recording,
+    MixerSettings Mixer
 );
 
 public sealed record TimeSignature(int Numerator, int Denominator);
@@ -73,7 +76,15 @@ public enum TrackKind {
     ///     mute and solo apply to all of them; it plays nothing itself.
     /// </summary>
     [JsonStringEnumMemberName("stack")]
-    Stack
+    Stack,
+
+    /// <summary>An aux channel: it plays what reaches bus <c>inputBus</c> through its strip.</summary>
+    [JsonStringEnumMemberName("aux")]
+    Aux,
+
+    /// <summary>A VCA: its volume, mute and solo control the tracks whose strip names it in <c>vcaId</c>.</summary>
+    [JsonStringEnumMemberName("vca")]
+    Vca
 }
 
 /// <summary>
@@ -95,14 +106,32 @@ public sealed record Track(
     MidiOutputSettings? MidiOutput,
     string? ParentId,
     bool Collapsed,
-    string Notes
+    string Notes,
+    int InputBus,
+    AutomationMode AutomationMode,
+    string? FrozenFileId
 );
 
 /// <summary>The device input: 1-based first channel (0: none); a stereo input takes that channel and the next.</summary>
 public sealed record TrackInput(int Channel, bool Stereo);
 
-/// <summary>Volume in dB (−∞ as −144), pan −1 (left) … 1 (right), mute and solo.</summary>
-public sealed record ChannelStrip(double VolumeDb, double Pan, bool Mute, bool Solo);
+/// <summary>
+///     A channel strip: volume in dB (−∞ as −144), pan −1 (left) … 1 (right), mute and solo; its insert effects in
+///     order; its sends to buses; where it goes (<c>output</c>: <c>master</c>, <c>bus:N</c> for bus 1…64, or
+///     <c>output:N</c> for the device's stereo output pair N); the mixer groups it belongs to (1…32); and the VCA track
+///     that offsets its volume, if any. The master strip uses only volume, pan, mute and its inserts.
+/// </summary>
+public sealed record ChannelStrip(
+    double VolumeDb,
+    double Pan,
+    bool Mute,
+    bool Solo,
+    IReadOnlyList<Insert> Inserts,
+    IReadOnlyList<Send> Sends,
+    string Output,
+    IReadOnlyList<int> Groups,
+    string? VcaId
+);
 
 /// <summary>
 ///     A region of an audio file on a track: it starts at <c>startTick</c> and plays <c>length</c> frames of the file

@@ -60,6 +60,26 @@ namespace Anode.Contracts;
 [JsonDerivedType(typeof(SetProjectNotesCommand), "setProjectNotes")]
 [JsonDerivedType(typeof(JoinRegionsCommand), "joinRegions")]
 [JsonDerivedType(typeof(CopyRegionsCommand), "copyRegions")]
+[JsonDerivedType(typeof(AddInsertCommand), "addInsert")]
+[JsonDerivedType(typeof(RemoveInsertCommand), "removeInsert")]
+[JsonDerivedType(typeof(MoveInsertCommand), "moveInsert")]
+[JsonDerivedType(typeof(SetInsertCommand), "setInsert")]
+[JsonDerivedType(typeof(SetInsertParameterCommand), "setInsertParameter")]
+[JsonDerivedType(typeof(AddSendCommand), "addSend")]
+[JsonDerivedType(typeof(SetSendCommand), "setSend")]
+[JsonDerivedType(typeof(RemoveSendCommand), "removeSend")]
+[JsonDerivedType(typeof(SetOutputCommand), "setOutput")]
+[JsonDerivedType(typeof(AddAuxCommand), "addAux")]
+[JsonDerivedType(typeof(SetGroupCommand), "setGroup")]
+[JsonDerivedType(typeof(DeleteGroupCommand), "deleteGroup")]
+[JsonDerivedType(typeof(SetTrackGroupsCommand), "setTrackGroups")]
+[JsonDerivedType(typeof(AddVcaCommand), "addVca")]
+[JsonDerivedType(typeof(AssignVcaCommand), "assignVca")]
+[JsonDerivedType(typeof(SetAutomationCommand), "setAutomation")]
+[JsonDerivedType(typeof(SetAutomationModeCommand), "setAutomationMode")]
+[JsonDerivedType(typeof(SetMixerSettingsCommand), "setMixerSettings")]
+[JsonDerivedType(typeof(ApplyPatchCommand), "applyPatch")]
+[JsonDerivedType(typeof(UnfreezeTrackCommand), "unfreezeTrack")]
 public abstract record EditCommand;
 
 /// <summary>
@@ -89,7 +109,12 @@ public sealed record SetTrackCommand(
     string? Notes = null
 ) : EditCommand;
 
-/// <summary>Changes a track's channel strip, or the master's when <c>trackId</c> is left out.</summary>
+/// <summary>
+///     Changes a track's volume, pan, mute or solo, or the master's when <c>trackId</c> is left out. Members of the
+///     track's enabled mixer groups that link the property follow it (volume keeps their offsets). During playback, a
+///     track whose automation mode is touch, latch or write records the change into its lane (and the batch coalesces as
+///     a drag does).
+/// </summary>
 public sealed record SetStripCommand(
     string? TrackId = null,
     double? VolumeDb = null,
@@ -324,3 +349,88 @@ public sealed record JoinRegionsCommand(IReadOnlyList<string> RegionIds) : EditC
 /// </summary>
 public sealed record CopyRegionsCommand(IReadOnlyList<string> RegionIds, long OffsetTicks, string? TrackId = null)
     : EditCommand;
+
+/// <summary>Adds an insert effect at <c>index</c> (the end when left out); the master's when <c>trackId</c> is left out.</summary>
+public sealed record AddInsertCommand(string PluginId, string? TrackId = null, int? Index = null) : EditCommand;
+
+public sealed record RemoveInsertCommand(string InsertId, string? TrackId = null) : EditCommand;
+
+/// <summary>Moves an insert to another slot of the same strip.</summary>
+public sealed record MoveInsertCommand(string InsertId, int Index, string? TrackId = null) : EditCommand;
+
+/// <summary>Bypasses an insert, or sets its sidechain (a track id, <c>bus:N</c>, or an empty string for none).</summary>
+public sealed record SetInsertCommand(
+    string InsertId,
+    string? TrackId = null,
+    bool? Bypassed = null,
+    string? Sidechain = null
+) : EditCommand;
+
+/// <summary>
+///     Sets one insert parameter; coalesces like <c>setParameter</c>, and records automation like <c>setStrip</c>.
+/// </summary>
+public sealed record SetInsertParameterCommand(
+    string InsertId,
+    string ParameterId,
+    double Value,
+    string? TrackId = null)
+    : EditCommand;
+
+/// <summary>Adds a send to bus 1…64 (post-fader at −∞ dB unless told otherwise, as Logic does).</summary>
+public sealed record AddSendCommand(string TrackId, int Bus, double? LevelDb = null, bool? PreFader = null)
+    : EditCommand;
+
+/// <summary>Changes a send; coalesces and records automation like <c>setStrip</c>.</summary>
+public sealed record SetSendCommand(
+    string TrackId,
+    string SendId,
+    double? LevelDb = null,
+    double? Pan = null,
+    bool? PreFader = null,
+    int? Bus = null
+) : EditCommand;
+
+public sealed record RemoveSendCommand(string TrackId, string SendId) : EditCommand;
+
+/// <summary>Routes a track to <c>master</c>, <c>bus:N</c> or <c>output:N</c>; a route that would make a loop is refused.</summary>
+public sealed record SetOutputCommand(string TrackId, string Output) : EditCommand;
+
+/// <summary>Adds an aux track listening to bus <c>bus</c> (the lowest unused bus when left out).</summary>
+public sealed record AddAuxCommand(int? Bus = null, string? Name = null) : EditCommand;
+
+/// <summary>Creates or changes mixer group 1…32.</summary>
+public sealed record SetGroupCommand(
+    int Number,
+    string? Name = null,
+    string? Color = null,
+    bool? Enabled = null,
+    GroupProperties? Properties = null
+) : EditCommand;
+
+/// <summary>Deletes a mixer group; its members leave it.</summary>
+public sealed record DeleteGroupCommand(int Number) : EditCommand;
+
+public sealed record SetTrackGroupsCommand(string TrackId, IReadOnlyList<int> Groups) : EditCommand;
+
+public sealed record AddVcaCommand(string? Name = null) : EditCommand;
+
+/// <summary>Assigns a track to a VCA track, or removes it from its VCA (null).</summary>
+public sealed record AssignVcaCommand(string TrackId, string? VcaId) : EditCommand;
+
+/// <summary>Replaces one automation lane's points (an empty list removes the lane); the master's when no track.</summary>
+public sealed record SetAutomationCommand(string Target, IReadOnlyList<AutomationPoint> Points, string? TrackId = null)
+    : EditCommand;
+
+public sealed record SetAutomationModeCommand(AutomationMode Mode, string? TrackId = null) : EditCommand;
+
+public sealed record SetMixerSettingsCommand(
+    PdcMode? Pdc = null,
+    bool? LowLatency = null,
+    double? LowLatencyLimitMs = null)
+    : EditCommand;
+
+/// <summary>Replaces a track's instrument, inserts and sends with a saved patch's.</summary>
+public sealed record ApplyPatchCommand(string TrackId, string PatchId) : EditCommand;
+
+/// <summary>Plays a frozen track live again (its freeze file stays in the project's audio).</summary>
+public sealed record UnfreezeTrackCommand(string TrackId) : EditCommand;

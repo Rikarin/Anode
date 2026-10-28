@@ -39,7 +39,10 @@ static class RandomProjects {
                     new("resonance", "Resonance", 0, 1, 0.2, string.Empty, 0, null),
                     new("wave", "Waveform", 0, 3, 0, string.Empty, 3, ["Saw", "Square", "Triangle", "Sine"]),
                     new("volume", "Volume", -60, 6, -6, "dB", 0, null)
-                ]
+                ],
+                "Instrument",
+                false,
+                false
             ),
             new(
                 "anode.sampler",
@@ -49,7 +52,10 @@ static class RandomProjects {
                 PluginFormat.Builtin,
                 true,
                 [".sfz", ".wav"],
-                [new("volume", "Volume", -60, 6, 0, "dB", 0, null), new("tune", "Tune", -100, 100, 0, "ct", 0, null)]
+                [new("volume", "Volume", -60, 6, 0, "dB", 0, null), new("tune", "Tune", -100, 100, 0, "ct", 0, null)],
+                "Instrument",
+                false,
+                false
             ),
             new(
                 "com.example.sine",
@@ -62,9 +68,24 @@ static class RandomProjects {
                 [
                     new("1", "Gain", 0, 1, 0.5, string.Empty, 0, null),
                     new("2", "Detune", -1, 1, 0, string.Empty, 0, null)
-                ]
+                ],
+                "Instrument",
+                false,
+                false
             ),
-            new("com.example.fx", "Test Delay", "Example", "0.1", PluginFormat.Clap, false, [], [])
+            new(
+                "com.example.fx",
+                "Test Delay",
+                "Example",
+                "0.1",
+                PluginFormat.Clap,
+                false,
+                [],
+                [],
+                "Delay",
+                false,
+                false
+            )
         ]
     );
 
@@ -117,6 +138,30 @@ static class RandomProjects {
     }
 
     static string? FirstAudioTrack(ProjectState state) => state.Tracks.Find(static t => t.Kind == TrackKind.Audio)?.Id;
+
+    /// <summary>Phase 4 commands the model rejects until workstream B implements them; the identity property skips them.</summary>
+    public static readonly IReadOnlySet<string> PendingPhase4 = new HashSet<string>(StringComparer.Ordinal) {
+        nameof(AddInsertCommand),
+        nameof(RemoveInsertCommand),
+        nameof(MoveInsertCommand),
+        nameof(SetInsertCommand),
+        nameof(SetInsertParameterCommand),
+        nameof(AddSendCommand),
+        nameof(SetSendCommand),
+        nameof(RemoveSendCommand),
+        nameof(SetOutputCommand),
+        nameof(AddAuxCommand),
+        nameof(SetGroupCommand),
+        nameof(DeleteGroupCommand),
+        nameof(SetTrackGroupsCommand),
+        nameof(AddVcaCommand),
+        nameof(AssignVcaCommand),
+        nameof(SetAutomationCommand),
+        nameof(SetAutomationModeCommand),
+        nameof(SetMixerSettingsCommand),
+        nameof(ApplyPatchCommand),
+        nameof(UnfreezeTrackCommand)
+    };
 
     /// <summary>A random command of <paramref name="type" /> for <paramref name="s" />, or null when none can be made.</summary>
     public static EditCommand? Command(Type type, ProjectState s, Random r) {
@@ -340,6 +385,33 @@ static class RandomProjects {
                     r.Next(3) == 0 ? Track() : null
                 )
                 : null,
+            // Phase 4 commands (docs/05-phase-4.md): placeholders until the model implements them (workstream B
+            // replaces these with generators that make commands that apply).
+            nameof(AddInsertCommand) => new AddInsertCommand(
+                "com.example.fx",
+                plain.Length > 0 ? Pick(r, plain).Id : null
+            ),
+            nameof(RemoveInsertCommand) => new RemoveInsertCommand("ins_none"),
+            nameof(MoveInsertCommand) => new MoveInsertCommand("ins_none", 0),
+            nameof(SetInsertCommand) => new SetInsertCommand("ins_none", Bypassed: true),
+            nameof(SetInsertParameterCommand) => new SetInsertParameterCommand("ins_none", "1", r.NextDouble()),
+            nameof(AddSendCommand) => plain.Length > 0 ? new AddSendCommand(Pick(r, plain).Id, 1 + r.Next(4)) : null,
+            nameof(SetSendCommand) => plain.Length > 0 ? new SetSendCommand(Pick(r, plain).Id, "snd_none", -6) : null,
+            nameof(RemoveSendCommand) => plain.Length > 0 ? new RemoveSendCommand(Pick(r, plain).Id, "snd_none") : null,
+            nameof(SetOutputCommand) => plain.Length > 0 ? new SetOutputCommand(Pick(r, plain).Id, "bus:1") : null,
+            nameof(AddAuxCommand) => new AddAuxCommand(),
+            nameof(SetGroupCommand) => new SetGroupCommand(1 + r.Next(4), "Drums"),
+            nameof(DeleteGroupCommand) => new DeleteGroupCommand(1 + r.Next(4)),
+            nameof(SetTrackGroupsCommand) => plain.Length > 0
+                ? new SetTrackGroupsCommand(Pick(r, plain).Id, [1])
+                : null,
+            nameof(AddVcaCommand) => new AddVcaCommand(),
+            nameof(AssignVcaCommand) => plain.Length > 0 ? new AssignVcaCommand(Pick(r, plain).Id, null) : null,
+            nameof(SetAutomationCommand) => new SetAutomationCommand("volume", [new(0, -6, 0), new(3840, 0, 0)]),
+            nameof(SetAutomationModeCommand) => new SetAutomationModeCommand(AutomationMode.Touch),
+            nameof(SetMixerSettingsCommand) => new SetMixerSettingsCommand(LowLatency: r.Next(2) == 0),
+            nameof(ApplyPatchCommand) => plain.Length > 0 ? new ApplyPatchCommand(Pick(r, plain).Id, "pat_none") : null,
+            nameof(UnfreezeTrackCommand) => plain.Length > 0 ? new UnfreezeTrackCommand(Pick(r, plain).Id) : null,
             _ => throw new InvalidOperationException($"No generator for {type.Name}.")
         };
         string? Track() => tracks.Count == 0 ? null : Pick(r, tracks).Id;

@@ -35,4 +35,11 @@ namespace Anode.Contracts;
 [JsonSerializable(typeof(Bookmarks))]
 [JsonSerializable(typeof(DirectoryListing))]
 [JsonSerializable(typeof(PreviewRequest))]
+[JsonSerializable(typeof(Job))]
+[JsonSerializable(typeof(BounceRequest))]
+[JsonSerializable(typeof(IoLabels))]
+[JsonSerializable(typeof(IReadOnlyList<PatchInfo>))]
+[JsonSerializable(typeof(PatchInfo))]
+[JsonSerializable(typeof(SavePatchRequest))]
+[JsonSerializable(typeof(PluginEditorRequest))]
 public sealed partial class ContractsJsonContext : JsonSerializerContext;

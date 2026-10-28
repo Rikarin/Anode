@@ -83,13 +83,26 @@ describe('lane rows', () => {
     input: { channel: 1, stereo: false },
     recordArmed: false,
     inputMonitoring: false,
-    strip: { volumeDb: 0, pan: 0, mute: false, solo: false },
+    strip: {
+      volumeDb: 0,
+      pan: 0,
+      mute: false,
+      solo: false,
+      inserts: [],
+      sends: [],
+      output: 'master',
+      groups: [],
+      vcaId: null
+    },
     instrument: null,
     midiInput: { device: null, channel: 0 },
     midiOutput: null,
     parentId: null,
     collapsed: false,
     notes: '',
+    inputBus: 0,
+    automationMode: 'read',
+    frozenFileId: null,
     ...extra
   });
   const folder = {

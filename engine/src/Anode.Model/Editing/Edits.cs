@@ -202,7 +202,10 @@ public static partial class Edits {
             null,
             null,
             false,
-            string.Empty
+            string.Empty,
+            0,
+            AutomationMode.Read,
+            null
         );
         return [new TrackUpserted(track, index)];
     }
@@ -307,7 +310,12 @@ public static partial class Edits {
     }
 
     static ChannelStrip Changed(ChannelStrip strip, SetStripCommand c) =>
-        new(c.VolumeDb ?? strip.VolumeDb, c.Pan ?? strip.Pan, c.Mute ?? strip.Mute, c.Solo ?? strip.Solo);
+        strip with {
+            VolumeDb = c.VolumeDb ?? strip.VolumeDb,
+            Pan = c.Pan ?? strip.Pan,
+            Mute = c.Mute ?? strip.Mute,
+            Solo = c.Solo ?? strip.Solo
+        };
 
     static DeltaOp[] AddRegion(ProjectState state, AddRegionCommand c, IIdSource ids) {
         var track = AudioTrackOf(state, c.TrackId);

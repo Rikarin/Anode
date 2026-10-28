@@ -63,6 +63,28 @@ export type FileEntry = Schemas['FileEntry'];
 export type FileKind = Schemas['FileKind'];
 export type DirectoryListing = Schemas['DirectoryListing'];
 
+export type Insert = Schemas['Insert'];
+export type Send = Schemas['Send'];
+export type MixerGroup = Schemas['MixerGroup'];
+export type GroupProperties = Schemas['GroupProperties'];
+export type AutomationMode = Schemas['AutomationMode'];
+export type AutomationPoint = Schemas['AutomationPoint'];
+export type AutomationLane = Schemas['AutomationLane'];
+export type MixerSettings = Schemas['MixerSettings'];
+export type PdcMode = Schemas['PdcMode'];
+export type IoLabels = Schemas['IoLabels'];
+export type IoLabel = Schemas['IoLabel'];
+export type PatchInfo = Schemas['PatchInfo'];
+export type Job = Schemas['Job'];
+export type JobKind = Schemas['JobKind'];
+export type JobState = Schemas['JobState'];
+export type BounceRequest = Schemas['BounceRequest'];
+export type BounceSource = Schemas['BounceSource'];
+export type AudioFormat = Schemas['AudioFormat'];
+export type DitherMode = Schemas['DitherMode'];
+export type NormalizeMode = Schemas['NormalizeMode'];
+export type PluginFormat = Schemas['PluginFormat'];
+
 export type TransportState = Schemas['TransportState'];
 export type TransportStatus = Schemas['TransportStatus'];
 export type TransportRequest = Schemas['TransportRequest'];
@@ -88,7 +110,8 @@ export interface MidiActivity {
  * message after connecting is `connected`; `engine` reports a change of the link to the engine host; `resync` replaces
  * events a client fell too far behind to receive, so it refetches what it shows. `projectChanged` carries the delta of
  * every edit, undo, redo or finished recording; `transport` and `meters` stream while the engine runs; `midiActivity`
- * streams live MIDI; `pluginsChanged` and `midiDevicesChanged` ask for a refetch.
+ * streams live MIDI; `pluginsChanged` and `midiDevicesChanged` ask for a refetch; `job` reports bounce and freeze progress; `pluginProblem` a
+ * plugin the engine had to bypass.
  */
 export type ServerMessage =
   | { type: 'connected'; version: string }
@@ -102,4 +125,6 @@ export type ServerMessage =
   | { type: 'meters'; tracks: TrackMeter[]; master: TrackMeter }
   | { type: 'midiActivity'; events: MidiActivity[] }
   | { type: 'pluginsChanged' }
-  | { type: 'midiDevicesChanged' };
+  | { type: 'midiDevicesChanged' }
+  | { type: 'job'; job: Job }
+  | { type: 'pluginProblem'; trackId: string | null; insertId: string | null; pluginId: string; message: string };

@@ -13,13 +13,15 @@ import type { Track } from '@anode/api-client';
 import { faderDb, faderPosition, formatDb } from '@anode/audio-ui';
 import { provideIcons } from '@ng-icons/core';
 import {
+  matCallSplitRound,
   matChevronRightRound,
   matExpandMoreRound,
   matFolderRound,
   matGraphicEqRound,
   matMoreHorizRound,
   matPianoRound,
-  matSettingsInputComponentRound
+  matSettingsInputComponentRound,
+  matTuneRound
 } from '@ng-icons/material-icons/round';
 import { XuiButtonImports } from '@xui/button';
 import { XuiIconImports } from '@xui/icon';
@@ -55,13 +57,15 @@ import { setTrack, setTrackLabel, type TrackChange } from '../state/track-comman
   ],
   providers: [
     provideIcons({
+      matCallSplitRound,
       matChevronRightRound,
       matExpandMoreRound,
       matFolderRound,
       matGraphicEqRound,
       matMoreHorizRound,
       matPianoRound,
-      matSettingsInputComponentRound
+      matSettingsInputComponentRound,
+      matTuneRound
     })
   ],
   host: {
@@ -278,6 +282,8 @@ export class TrackHeader {
         audio: 'matGraphicEqRound',
         instrument: 'matPianoRound',
         midi: 'matSettingsInputComponentRound',
+        aux: 'matCallSplitRound',
+        vca: 'matTuneRound',
         stack: 'matFolderRound'
       })[this.track().kind]
   );

@@ -191,7 +191,11 @@ public sealed class ArrangementEditTests {
             new SetStripCommand(Track("Stack"), -3, Mute: true, Solo: true)
         );
         var a = state.FindTrack(Track("A"))!;
-        Assert.Equal(new(-9, 0.5, true, true), Stacks.EffectiveStrip(state, a));
+        Assert.Equal(
+            (-9d, 0.5, true, true),
+            (Stacks.EffectiveStrip(state, a).VolumeDb, Stacks.EffectiveStrip(state, a).Pan,
+                Stacks.EffectiveStrip(state, a).Mute, Stacks.EffectiveStrip(state, a).Solo)
+        );
         Assert.Equal(state.FindTrack(Track("B"))!.Strip, Stacks.EffectiveStrip(state, state.FindTrack(Track("B"))!));
         Apply(new SetStripCommand(Track("Stack"), Units.SilenceDb));
         Assert.Equal(Units.SilenceDb, Stacks.EffectiveStrip(state, state.FindTrack(Track("A"))!).VolumeDb);

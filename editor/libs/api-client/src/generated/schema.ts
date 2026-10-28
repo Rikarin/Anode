@@ -21,6 +21,23 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/api/v1/plugins/editor': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Opens or closes a plugin's own editor window on the machine the engine runs on (the desktop app); 409 when the plugin has none or the engine runs headless. */
+    post: operations['OpenPluginEditor'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/api/v1/projects/recent': {
     parameters: {
       query?: never;
@@ -558,6 +575,122 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/api/v1/project/bounce': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Starts a bounce (export) job; its progress streams as job events on /ws. */
+    post: operations['Bounce'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/project/tracks/{trackId}/freeze': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Renders a track's source and inserts to a file and plays that instead (an undoable step when it finishes). */
+    post: operations['FreezeTrack'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/jobs/{id}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: operations['GetJob'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/jobs/{id}/cancel': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations['CancelJob'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/library/patches': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** The user's saved channel-strip patches, by category. */
+    get: operations['ListPatches'];
+    put?: never;
+    /** Saves a track's instrument, inserts and sends as a patch. */
+    post: operations['SavePatch'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/library/patches/{id}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    delete: operations['DeletePatch'];
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/settings/io-labels': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: operations['GetIoLabels'];
+    put: operations['SaveIoLabels'];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -590,6 +723,11 @@ export interface components {
       bitDepth: number;
     };
     /**
+     * @default wav
+     * @enum {unknown}
+     */
+    AudioFormat: 'wav' | 'aiff';
+    /**
      * @description A region of an audio file on a track: it starts at `startTick` and plays `length` frames of the file
      *     from `fileOffset`, at `gainDb`, with fades of `fadeIn` and `fadeOut` frames whose curves run
      *     from −1 (slow start, exponential-looking) through 0 (linear) to 1 (fast start, logarithmic-looking): a fade-in's
@@ -620,11 +758,83 @@ export interface components {
       fadeOutCurve: number;
       muted: boolean;
     };
+    /**
+     * @description Track automation of one parameter. `trackId` null is the master strip. `target` is `volume` (dB),
+     *     `pan` (−1…1), `mute` (0/1), `send:{sendId}` (dB), `insert:{insertId}:{parameterId}` or
+     *     `instrument:{parameterId}` (the parameter's unit). Points are sorted by tick.
+     */
+    AutomationLane: {
+      id: string;
+      trackId?: null | string;
+      target: string;
+      points: components['schemas']['AutomationPoint'][];
+    };
+    /** @enum {unknown} */
+    AutomationMode: 'off' | 'read' | 'touch' | 'latch' | 'write';
+    /** @description A point of an automation lane, in the target's own unit; `curve` −1…1 shapes the segment to the next. */
+    AutomationPoint: {
+      /** Format: int64 */
+      tick: number;
+      /** Format: double */
+      value: number;
+      /** Format: double */
+      curve: number;
+    };
     /** @description Folders pinned in the All Files browser. */
     Bookmarks: {
       paths: string[];
     };
-    /** @description Volume in dB (−∞ as −144), pan −1 (left) … 1 (right), mute and solo. */
+    /**
+     * @description Bounce (export): the range (ticks; left out: the cycle when it is on, else the project start to its end), the
+     *     source, and the file: format, bit depth (16, 24, or 32 for float), sample rate (left out: the project's), dither
+     *     (applied below 32 bits), normalisation. `realtime` plays the bounce through the device instead of rendering
+     *     offline; `addToProject` adds the result to the project's audio files.
+     */
+    BounceRequest: {
+      fileName: string;
+      directory?: null | string;
+      /** Format: int64 */
+      startTick?: null | number;
+      /** Format: int64 */
+      endTick?: null | number;
+      source: components['schemas']['BounceSource'];
+      trackIds?: null | string[];
+      format: components['schemas']['AudioFormat'];
+      /**
+       * Format: int32
+       * @default 24
+       */
+      bitDepth: number;
+      /** Format: int32 */
+      sampleRate?: null | number;
+      dither: components['schemas']['DitherMode'];
+      normalize: components['schemas']['NormalizeMode'];
+      /**
+       * Format: double
+       * @default -14
+       */
+      loudnessLufs: number;
+      /**
+       * Format: double
+       * @default -1
+       */
+      peakCeilingDb: number;
+      /** @default false */
+      realtime: boolean;
+      /** @default false */
+      addToProject: boolean;
+    };
+    /**
+     * @default mix
+     * @enum {unknown}
+     */
+    BounceSource: 'mix' | 'stems';
+    /**
+     * @description A channel strip: volume in dB (−∞ as −144), pan −1 (left) … 1 (right), mute and solo; its insert effects in
+     *     order; its sends to buses; where it goes (`output`: `master`, `bus:N` for bus 1…64, or
+     *     `output:N` for the device's stereo output pair N); the mixer groups it belongs to (1…32); and the VCA track
+     *     that offsets its volume, if any. The master strip uses only volume, pan, mute and its inserts.
+     */
     ChannelStrip: {
       /** Format: double */
       volumeDb: number;
@@ -632,6 +842,11 @@ export interface components {
       pan: number;
       mute: boolean;
       solo: boolean;
+      inserts: components['schemas']['Insert'][];
+      sends: components['schemas']['Send'][];
+      output: string;
+      groups: number[];
+      vcaId?: null | string;
     };
     /** @description Edits applied as one undo step; `label` names it in the undo history ("Move Region"). */
     CommandBatch: {
@@ -703,11 +918,36 @@ export interface components {
       | components['schemas']['DeltaOpMarkerRemoved']
       | components['schemas']['DeltaOpSectionUpserted']
       | components['schemas']['DeltaOpSectionRemoved']
-      | components['schemas']['DeltaOpNotesChanged'];
+      | components['schemas']['DeltaOpNotesChanged']
+      | components['schemas']['DeltaOpAutomationLaneUpserted']
+      | components['schemas']['DeltaOpAutomationLaneRemoved']
+      | components['schemas']['DeltaOpGroupUpserted']
+      | components['schemas']['DeltaOpGroupRemoved'];
     DeltaOpAudioFileUpserted: {
       /** @enum {string} */
       op: 'audioFileUpserted';
       file: components['schemas']['AudioFile'];
+    };
+    DeltaOpAutomationLaneRemoved: {
+      /** @enum {string} */
+      op: 'automationLaneRemoved';
+      id: string;
+    };
+    DeltaOpAutomationLaneUpserted: {
+      /** @enum {string} */
+      op: 'automationLaneUpserted';
+      lane: components['schemas']['AutomationLane'];
+    };
+    DeltaOpGroupRemoved: {
+      /** @enum {string} */
+      op: 'groupRemoved';
+      /** Format: int32 */
+      number: number;
+    };
+    DeltaOpGroupUpserted: {
+      /** @enum {string} */
+      op: 'groupUpserted';
+      group: components['schemas']['MixerGroup'];
     };
     DeltaOpMarkerRemoved: {
       /** @enum {string} */
@@ -801,6 +1041,11 @@ export interface components {
       entries: components['schemas']['FileEntry'][];
     };
     /**
+     * @default tpdf
+     * @enum {unknown}
+     */
+    DitherMode: 'none' | 'tpdf' | 'shaped';
+    /**
      * @description An edit of the open project (docs/adr/0004-state-ownership.md). A batch of them is applied atomically as one
      *     undo step. Optional properties left out are left unchanged.
      */
@@ -857,12 +1102,49 @@ export interface components {
       | components['schemas']['EditCommandSetTrackParentCommand']
       | components['schemas']['EditCommandSetProjectNotesCommand']
       | components['schemas']['EditCommandJoinRegionsCommand']
-      | components['schemas']['EditCommandCopyRegionsCommand'];
+      | components['schemas']['EditCommandCopyRegionsCommand']
+      | components['schemas']['EditCommandAddInsertCommand']
+      | components['schemas']['EditCommandRemoveInsertCommand']
+      | components['schemas']['EditCommandMoveInsertCommand']
+      | components['schemas']['EditCommandSetInsertCommand']
+      | components['schemas']['EditCommandSetInsertParameterCommand']
+      | components['schemas']['EditCommandAddSendCommand']
+      | components['schemas']['EditCommandSetSendCommand']
+      | components['schemas']['EditCommandRemoveSendCommand']
+      | components['schemas']['EditCommandSetOutputCommand']
+      | components['schemas']['EditCommandAddAuxCommand']
+      | components['schemas']['EditCommandSetGroupCommand']
+      | components['schemas']['EditCommandDeleteGroupCommand']
+      | components['schemas']['EditCommandSetTrackGroupsCommand']
+      | components['schemas']['EditCommandAddVcaCommand']
+      | components['schemas']['EditCommandAssignVcaCommand']
+      | components['schemas']['EditCommandSetAutomationCommand']
+      | components['schemas']['EditCommandSetAutomationModeCommand']
+      | components['schemas']['EditCommandSetMixerSettingsCommand']
+      | components['schemas']['EditCommandApplyPatchCommand']
+      | components['schemas']['EditCommandUnfreezeTrackCommand'];
+    /** @description Adds an aux track listening to bus `bus` (the lowest unused bus when left out). */
+    EditCommandAddAuxCommand: {
+      /** @enum {string} */
+      type: 'addAux';
+      /** Format: int32 */
+      bus?: null | number;
+      name?: null | string;
+    };
     EditCommandAddControlsCommand: {
       /** @enum {string} */
       type: 'addControls';
       regionId: string;
       events: components['schemas']['NewControlEvent'][];
+    };
+    /** @description Adds an insert effect at `index` (the end when left out); the master's when `trackId` is left out. */
+    EditCommandAddInsertCommand: {
+      /** @enum {string} */
+      type: 'addInsert';
+      pluginId: string;
+      trackId?: null | string;
+      /** Format: int32 */
+      index?: null | number;
     };
     EditCommandAddMarkerCommand: {
       /** @enum {string} */
@@ -918,6 +1200,17 @@ export interface components {
       lengthTicks: number;
       color?: null | string;
     };
+    /** @description Adds a send to bus 1…64 (post-fader at −∞ dB unless told otherwise, as Logic does). */
+    EditCommandAddSendCommand: {
+      /** @enum {string} */
+      type: 'addSend';
+      trackId: string;
+      /** Format: int32 */
+      bus: number;
+      /** Format: double */
+      levelDb?: null | number;
+      preFader?: null | boolean;
+    };
     /**
      * @description Adds a track at `index` (the end when left out): audio by default; an instrument track gets
      *     `pluginId` (the default synth when left out).
@@ -932,6 +1225,25 @@ export interface components {
       stereo: boolean;
       kind?: null | components['schemas']['TrackKind'];
       pluginId?: null | string;
+    };
+    EditCommandAddVcaCommand: {
+      /** @enum {string} */
+      type: 'addVca';
+      name?: null | string;
+    };
+    /** @description Replaces a track's instrument, inserts and sends with a saved patch's. */
+    EditCommandApplyPatchCommand: {
+      /** @enum {string} */
+      type: 'applyPatch';
+      trackId: string;
+      patchId: string;
+    };
+    /** @description Assigns a track to a VCA track, or removes it from its VCA (null). */
+    EditCommandAssignVcaCommand: {
+      /** @enum {string} */
+      type: 'assignVca';
+      trackId: string;
+      vcaId?: null | string;
     };
     /**
      * @description Copies regions (of any kind) `offsetTicks` later (or earlier), onto `trackId` when given (⌥-drag,
@@ -957,6 +1269,13 @@ export interface components {
       type: 'deleteControls';
       regionId: string;
       eventIds: number[];
+    };
+    /** @description Deletes a mixer group; its members leave it. */
+    EditCommandDeleteGroupCommand: {
+      /** @enum {string} */
+      type: 'deleteGroup';
+      /** Format: int32 */
+      number: number;
     };
     EditCommandDeleteMarkersCommand: {
       /** @enum {string} */
@@ -1020,6 +1339,15 @@ export interface components {
       trackId: string;
       path: string;
     };
+    /** @description Moves an insert to another slot of the same strip. */
+    EditCommandMoveInsertCommand: {
+      /** @enum {string} */
+      type: 'moveInsert';
+      insertId: string;
+      /** Format: int32 */
+      index: number;
+      trackId?: null | string;
+    };
     /**
      * @description Moves a region (audio, MIDI, or a take folder) in time, and to another track of a kind that can hold it when
      *     `trackId` is given. `deleteRegions` also takes every kind; `splitRegion` takes audio and MIDI.
@@ -1082,6 +1410,18 @@ export interface components {
       swing: number;
       noteIds?: null | number[];
     };
+    EditCommandRemoveInsertCommand: {
+      /** @enum {string} */
+      type: 'removeInsert';
+      insertId: string;
+      trackId?: null | string;
+    };
+    EditCommandRemoveSendCommand: {
+      /** @enum {string} */
+      type: 'removeSend';
+      trackId: string;
+      sendId: string;
+    };
     /** @description Removes a folder stack; its tracks stay, outside any stack. */
     EditCommandRemoveStackCommand: {
       /** @enum {string} */
@@ -1130,6 +1470,20 @@ export interface components {
       folderId: string;
       takeId: string;
     };
+    /** @description Replaces one automation lane's points (an empty list removes the lane); the master's when no track. */
+    EditCommandSetAutomationCommand: {
+      /** @enum {string} */
+      type: 'setAutomation';
+      target: string;
+      points: components['schemas']['AutomationPoint'][];
+      trackId?: null | string;
+    };
+    EditCommandSetAutomationModeCommand: {
+      /** @enum {string} */
+      type: 'setAutomationMode';
+      mode: components['schemas']['AutomationMode'];
+      trackId?: null | string;
+    };
     /** @description Replaces a take folder's comp (Quick Swipe Comping sends the whole comp after each swipe). */
     EditCommandSetCompCommand: {
       /** @enum {string} */
@@ -1145,6 +1499,36 @@ export interface components {
       startTick?: null | number;
       /** Format: int64 */
       endTick?: null | number;
+    };
+    /** @description Creates or changes mixer group 1…32. */
+    EditCommandSetGroupCommand: {
+      /** @enum {string} */
+      type: 'setGroup';
+      /** Format: int32 */
+      number: number;
+      name?: null | string;
+      color?: null | string;
+      enabled?: null | boolean;
+      properties: null | components['schemas']['GroupProperties'];
+    };
+    /** @description Bypasses an insert, or sets its sidechain (a track id, `bus:N`, or an empty string for none). */
+    EditCommandSetInsertCommand: {
+      /** @enum {string} */
+      type: 'setInsert';
+      insertId: string;
+      trackId?: null | string;
+      bypassed?: null | boolean;
+      sidechain?: null | string;
+    };
+    /** @description Sets one insert parameter; coalesces like `setParameter`, and records automation like `setStrip`. */
+    EditCommandSetInsertParameterCommand: {
+      /** @enum {string} */
+      type: 'setInsertParameter';
+      insertId: string;
+      parameterId: string;
+      /** Format: double */
+      value: number;
+      trackId?: null | string;
     };
     /** @description Replaces an instrument track's instrument; its parameters start at their defaults. */
     EditCommandSetInstrumentCommand: {
@@ -1208,6 +1592,21 @@ export interface components {
       swing?: null | number;
       muted?: null | boolean;
     };
+    EditCommandSetMixerSettingsCommand: {
+      /** @enum {string} */
+      type: 'setMixerSettings';
+      pdc?: null | components['schemas']['PdcMode'];
+      lowLatency?: null | boolean;
+      /** Format: double */
+      lowLatencyLimitMs?: null | number;
+    };
+    /** @description Routes a track to `master`, `bus:N` or `output:N`; a route that would make a loop is refused. */
+    EditCommandSetOutputCommand: {
+      /** @enum {string} */
+      type: 'setOutput';
+      trackId: string;
+      output: string;
+    };
     /**
      * @description Sets one parameter of a track's instrument. Consecutive batches on the same parameter within 1 s coalesce into
      *     one undo step, as `setStrip` does.
@@ -1263,6 +1662,20 @@ export interface components {
       lengthTicks?: null | number;
       color?: null | string;
     };
+    /** @description Changes a send; coalesces and records automation like `setStrip`. */
+    EditCommandSetSendCommand: {
+      /** @enum {string} */
+      type: 'setSend';
+      trackId: string;
+      sendId: string;
+      /** Format: double */
+      levelDb?: null | number;
+      /** Format: double */
+      pan?: null | number;
+      preFader?: null | boolean;
+      /** Format: int32 */
+      bus?: null | number;
+    };
     /** @description Sets the signature at the project start (the first signature event), keeping later changes. */
     EditCommandSetSignatureCommand: {
       /** @enum {string} */
@@ -1278,7 +1691,12 @@ export interface components {
       type: 'setSignatures';
       events: components['schemas']['SignatureEvent'][];
     };
-    /** @description Changes a track's channel strip, or the master's when `trackId` is left out. */
+    /**
+     * @description Changes a track's volume, pan, mute or solo, or the master's when `trackId` is left out. Members of the
+     *     track's enabled mixer groups that link the property follow it (volume keeps their offsets). During playback, a
+     *     track whose automation mode is touch, latch or write records the change into its lane (and the batch coalesces as
+     *     a drag does).
+     */
     EditCommandSetStripCommand: {
       /** @enum {string} */
       type: 'setStrip';
@@ -1326,6 +1744,12 @@ export interface components {
       collapsed?: null | boolean;
       notes?: null | string;
     };
+    EditCommandSetTrackGroupsCommand: {
+      /** @enum {string} */
+      type: 'setTrackGroups';
+      trackId: string;
+      groups: number[];
+    };
     /** @description Moves a track into a stack (`parentId`) or out of one (null). Stacks do not nest. */
     EditCommandSetTrackParentCommand: {
       /** @enum {string} */
@@ -1340,6 +1764,12 @@ export interface components {
       regionId: string;
       /** Format: int64 */
       atTick: number;
+    };
+    /** @description Plays a frozen track live again (its freeze file stays in the project's audio). */
+    EditCommandUnfreezeTrackCommand: {
+      /** @enum {string} */
+      type: 'unfreezeTrack';
+      trackId: string;
     };
     /** @enum {unknown} */
     EngineState: 'disconnected' | 'connected' | 'inprocess';
@@ -1375,6 +1805,17 @@ export interface components {
     };
     /** @enum {unknown} */
     FileKind: 'folder' | 'audio' | 'midi' | 'project' | 'instrument' | 'other';
+    /** @description What a mixer group links among its members (Logic's group settings). */
+    GroupProperties: {
+      volume: boolean;
+      mute: boolean;
+      solo: boolean;
+      pan: boolean;
+      sends: boolean;
+      recordArm: boolean;
+      automation: boolean;
+      selection: boolean;
+    };
     HistoryEntry: {
       label: string;
       /** Format: int64 */
@@ -1385,6 +1826,21 @@ export interface components {
     /** @description Import an audio file the server can read from its own disk (the desktop app, a headless box's library). */
     ImportFileRequest: {
       path: string;
+    };
+    /**
+     * @description An insert effect on a channel strip: the plugin, whether it is bypassed, its parameter values by parameter id
+     *     (all of them), and its sidechain source (a track id or `bus:N`; null: none). A plugin's opaque state lives in
+     *     the project's `Plugin States` folder.
+     */
+    Insert: {
+      id: string;
+      pluginId: string;
+      name: string;
+      bypassed: boolean;
+      parameters: {
+        [key: string]: number;
+      };
+      sidechain?: null | string;
     };
     /**
      * @description A track's instrument: the plugin, its parameter values by parameter id (all of them), and the file it loaded
@@ -1399,6 +1855,31 @@ export interface components {
       };
       file?: null | string;
     };
+    /** @description A user name for an input, output pair or bus (Logic's I/O Labels). */
+    IoLabel: {
+      /** Format: int32 */
+      number: number;
+      name: string;
+    };
+    IoLabels: {
+      inputs: components['schemas']['IoLabel'][];
+      outputs: components['schemas']['IoLabel'][];
+      buses: components['schemas']['IoLabel'][];
+    };
+    /** @description A long-running job; `progress` 0…1; `files` are what it wrote (absolute paths), when done. */
+    Job: {
+      id: string;
+      kind: components['schemas']['JobKind'];
+      state: components['schemas']['JobState'];
+      /** Format: double */
+      progress: number;
+      message?: null | string;
+      files: string[];
+    };
+    /** @enum {unknown} */
+    JobKind: 'bounce' | 'freeze';
+    /** @enum {unknown} */
+    JobState: 'queued' | 'running' | 'done' | 'failed' | 'cancelled';
     /** @description Key bindings by command id (`transport.play`); each binding like `Space` or `Meta+Shift+Z`. */
     KeyCommandSet: {
       bindings: {
@@ -1493,6 +1974,25 @@ export interface components {
     MidiThruRequest: {
       trackId?: null | string;
     };
+    /** @description A mixer group 1…32; tracks join it through their strip's `groups`. */
+    MixerGroup: {
+      /** Format: int32 */
+      number: number;
+      name: string;
+      color: string;
+      enabled: boolean;
+      properties: components['schemas']['GroupProperties'];
+    };
+    /**
+     * @description Plugin delay compensation, and low-latency mode: while it is on, plugins on the path of record-armed or
+     *     monitored tracks whose latency exceeds `lowLatencyLimitMs` are bypassed.
+     */
+    MixerSettings: {
+      pdc: components['schemas']['PdcMode'];
+      lowLatency: boolean;
+      /** Format: double */
+      lowLatencyLimitMs: number;
+    };
     /** @description A controller event to add; `tick` relative to the region's start. */
     NewControlEvent: {
       kind: components['schemas']['ControlKind'];
@@ -1518,6 +2018,11 @@ export interface components {
       /** Format: int64 */
       lengthTicks: number;
     };
+    /**
+     * @default off
+     * @enum {unknown}
+     */
+    NormalizeMode: 'off' | 'peak' | 'loudness';
     /** @description A note. `id` is unique in the project; `channel` is 1…16. */
     Note: {
       /** Format: int64 */
@@ -1569,10 +2074,27 @@ export interface components {
       steps: number;
       valueNames?: null | string[];
     };
+    /** @description A saved channel strip (Logic's patch): its instrument, inserts and sends, for a kind of track. */
+    PatchInfo: {
+      id: string;
+      name: string;
+      category: string;
+      kind: components['schemas']['TrackKind'];
+    };
     /** @enum {unknown} */
-    PluginFormat: 'builtin' | 'clap';
+    PdcMode: 'all' | 'tracks' | 'off';
+    /** @description Opens (or closes) a plugin's own editor window: an insert, or with no `insertId` the instrument. */
+    PluginEditorRequest: {
+      trackId?: null | string;
+      insertId?: null | string;
+      open: boolean;
+    };
+    /** @enum {unknown} */
+    PluginFormat: 'builtin' | 'clap' | 'vst3' | 'au';
     /**
-     * @description A plugin the engine can load. `fileTypes` (extensions such as `.sfz`, `.wav`) lists what an
+     * @description A plugin the engine can load: an instrument, or an effect in `category` (EQ, Dynamics, Delay, Reverb,
+     *     Modulation, Distortion, Filter, Utility, Metering). `hasEditor`: it has its own editor window (desktop app
+     *     only; everywhere else the generic editor). `fileTypes` (extensions such as `.sfz`, `.wav`) lists what an
      *     instrument loads with `loadInstrumentFile`, empty when it loads none.
      */
     PluginInfo: {
@@ -1584,6 +2106,9 @@ export interface components {
       isInstrument: boolean;
       fileTypes: string[];
       parameters: components['schemas']['ParameterInfo'][];
+      category: string;
+      hasSidechain: boolean;
+      hasEditor: boolean;
     };
     /** @description Plays a file through the engine's preview channel (null stops it). */
     PreviewRequest: {
@@ -1621,6 +2146,8 @@ export interface components {
       markers: components['schemas']['Marker'][];
       arrangement: components['schemas']['ArrangementMarker'][];
       notes: string;
+      groups: components['schemas']['MixerGroup'][];
+      automation: components['schemas']['AutomationLane'][];
     };
     /** @description A saved alternative of the open project (Logic's project alternatives); one is current. */
     ProjectAlternative: {
@@ -1664,6 +2191,7 @@ export interface components {
       signatures: components['schemas']['SignatureEvent'][];
       keys: components['schemas']['KeyEvent'][];
       recording: components['schemas']['RecordingSettings'];
+      mixer: components['schemas']['MixerSettings'];
     };
     /** @description A project in the recent list. */
     ProjectSummary: {
@@ -1704,6 +2232,11 @@ export interface components {
       /** Format: double */
       swing: number;
     };
+    SavePatchRequest: {
+      trackId: string;
+      name: string;
+      category: string;
+    };
     /**
      * @description A saved layout of the editor's windows (Logic's screensets), recalled with keys 1–9. `layout` is the
      *     editor's own serialised layout, opaque to the server.
@@ -1714,6 +2247,17 @@ export interface components {
       name: string;
       locked: boolean;
       layout: string;
+    };
+    /** @description A send from a channel strip to bus 1…64, at `levelDb`, before or after the fader. */
+    Send: {
+      id: string;
+      /** Format: int32 */
+      bus: number;
+      /** Format: double */
+      levelDb: number;
+      /** Format: double */
+      pan: number;
+      preFader: boolean;
     };
     /** @description A time signature change, on a bar line of the signature before it. The first is at tick 0. */
     SignatureEvent: {
@@ -1796,6 +2340,10 @@ export interface components {
       parentId?: null | string;
       collapsed: boolean;
       notes: string;
+      /** Format: int32 */
+      inputBus: number;
+      automationMode: components['schemas']['AutomationMode'];
+      frozenFileId?: null | string;
     };
     /** @description The device input: 1-based first channel (0: none); a stereo input takes that channel and the next. */
     TrackInput: {
@@ -1804,7 +2352,7 @@ export interface components {
       stereo: boolean;
     };
     /** @enum {unknown} */
-    TrackKind: 'audio' | 'instrument' | 'midi' | 'stack';
+    TrackKind: 'audio' | 'instrument' | 'midi' | 'stack' | 'aux' | 'vca';
     /** @enum {unknown} */
     TransportCommand: 'play' | 'stop' | 'record' | 'locate';
     /** @description Play, stop or record (from `tick` when given), or locate the playhead to `tick`. */
@@ -1856,6 +2404,44 @@ export interface operations {
         content: {
           'application/json': components['schemas']['SystemInfo'];
         };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  OpenPluginEditor: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['PluginEditorRequest'];
+      };
+    };
+    responses: {
+      /** @description No Content */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
       };
       /** @description Internal Server Error */
       500: {
@@ -3126,6 +3712,327 @@ export interface operations {
           [name: string]: unknown;
         };
         content?: never;
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  Bounce: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['BounceRequest'];
+      };
+    };
+    responses: {
+      /** @description Accepted */
+      202: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Job'];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  FreezeTrack: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        trackId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Accepted */
+      202: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Job'];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  GetJob: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Job'];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  CancelJob: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Job'];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  ListPatches: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PatchInfo'][];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  SavePatch: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['SavePatchRequest'];
+      };
+    };
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PatchInfo'];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  DeletePatch: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description No Content */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  GetIoLabels: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['IoLabels'];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  SaveIoLabels: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['IoLabels'];
+      };
+    };
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['IoLabels'];
+        };
       };
       /** @description Internal Server Error */
       500: {

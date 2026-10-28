@@ -133,7 +133,9 @@ public sealed record ProjectState(
             [..TakeFolders.Values],
             [..Markers.Values],
             [..Sections.Values],
-            Notes
+            Notes,
+            [], // Mixer groups and automation: Phase 4, workstream B (docs/05-phase-4.md).
+            []
         );
 
     /// <summary>Applies one delta operation (an edit's primitive step, also what clients apply).</summary>

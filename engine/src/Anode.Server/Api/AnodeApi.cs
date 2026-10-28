@@ -15,6 +15,7 @@ public static class AnodeApi {
         PluginsApi.Map(api);
         MidiApi.Map(api);
         LibraryApi.Map(api);
+        MixApi.Map(api);
         RealtimeApi.Map(app);
     }
 }

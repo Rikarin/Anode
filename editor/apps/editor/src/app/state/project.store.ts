@@ -46,10 +46,21 @@ export const DefaultSettings: ProjectSettings = {
   tempoEvents: [{ tick: 0, bpm: 120, curve: 'step' }],
   signatures: [{ tick: 0, numerator: 4, denominator: 4 }],
   keys: [{ tick: 0, tonic: 0, mode: 'major' }],
-  recording: { cycleMode: 'takeFolder', replace: false, autopunch: false, punchInTick: 0, punchOutTick: 4 * 4 * Ppq }
+  recording: { cycleMode: 'takeFolder', replace: false, autopunch: false, punchInTick: 0, punchOutTick: 4 * 4 * Ppq },
+  mixer: { pdc: 'all', lowLatency: false, lowLatencyLimitMs: 10 }
 };
 
-const SilentStrip: ChannelStrip = { volumeDb: 0, pan: 0, mute: false, solo: false };
+const SilentStrip: ChannelStrip = {
+  volumeDb: 0,
+  pan: 0,
+  mute: false,
+  solo: false,
+  inserts: [],
+  sends: [],
+  output: 'master',
+  groups: [],
+  vcaId: null
+};
 
 /** Audio frames per tick at a tempo and sample rate (one tempo per project in Phase 1). */
 export function framesPerTick(sampleRate: number, tempo: number): number {
@@ -479,6 +490,12 @@ export class ProjectStore {
         break;
       case 'notesChanged':
         this.notes.set(op.text);
+        break;
+      case 'automationLaneUpserted':
+      case 'automationLaneRemoved':
+      case 'groupUpserted':
+      case 'groupRemoved':
+        // Automation lanes and mixer groups: Phase 4, the editor workstream (docs/05-phase-4.md).
         break;
     }
   }

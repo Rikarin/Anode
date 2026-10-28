@@ -41,6 +41,43 @@
         }
       }
     },
+    "/api/v1/plugins/editor": {
+      "post": {
+        "tags": [
+          "Plugins"
+        ],
+        "summary": "Opens or closes a plugin\u0027s own editor window on the machine the engine runs on (the desktop app); 409 when the plugin has none or the engine runs headless.",
+        "operationId": "OpenPluginEditor",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PluginEditorRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "No Content"
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
     "/api/v1/projects/recent": {
       "get": {
         "tags": [
@@ -1400,6 +1437,360 @@
           }
         }
       }
+    },
+    "/api/v1/project/bounce": {
+      "post": {
+        "tags": [
+          "Project"
+        ],
+        "summary": "Starts a bounce (export) job; its progress streams as job events on /ws.",
+        "operationId": "Bounce",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BounceRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Job"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/api/v1/project/tracks/{trackId}/freeze": {
+      "post": {
+        "tags": [
+          "Project"
+        ],
+        "summary": "Renders a track\u0027s source and inserts to a file and plays that instead (an undoable step when it finishes).",
+        "operationId": "FreezeTrack",
+        "parameters": [
+          {
+            "name": "trackId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Job"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/api/v1/jobs/{id}": {
+      "get": {
+        "tags": [
+          "Jobs"
+        ],
+        "operationId": "GetJob",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Job"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/api/v1/jobs/{id}/cancel": {
+      "post": {
+        "tags": [
+          "Jobs"
+        ],
+        "operationId": "CancelJob",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Job"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/api/v1/library/patches": {
+      "get": {
+        "tags": [
+          "Library"
+        ],
+        "summary": "The user\u0027s saved channel-strip patches, by category.",
+        "operationId": "ListPatches",
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PatchInfo"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Library"
+        ],
+        "summary": "Saves a track\u0027s instrument, inserts and sends as a patch.",
+        "operationId": "SavePatch",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SavePatchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PatchInfo"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/api/v1/library/patches/{id}": {
+      "delete": {
+        "tags": [
+          "Library"
+        ],
+        "operationId": "DeletePatch",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "No Content"
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/api/v1/settings/io-labels": {
+      "get": {
+        "tags": [
+          "Settings"
+        ],
+        "operationId": "GetIoLabels",
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IoLabels"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Settings"
+        ],
+        "operationId": "SaveIoLabels",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IoLabels"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IoLabels"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -1474,6 +1865,13 @@
         },
         "description": "An audio file of the project; \u0060path\u0060 is relative to the project folder."
       },
+      "AudioFormat": {
+        "enum": [
+          "wav",
+          "aiff"
+        ],
+        "default": "wav"
+      },
       "AudioRegion": {
         "required": [
           "id",
@@ -1542,6 +1940,67 @@
         },
         "description": "A region of an audio file on a track: it starts at \u0060startTick\u0060 and plays \u0060length\u0060 frames of the file\nfrom \u0060fileOffset\u0060, at \u0060gainDb\u0060, with fades of \u0060fadeIn\u0060 and \u0060fadeOut\u0060 frames whose curves run\nfrom \u22121 (slow start, exponential-looking) through 0 (linear) to 1 (fast start, logarithmic-looking): a fade-in\u0027s\ngain at position x (0\u20261) is x^(2^(\u22122c)), a fade-out the mirror. A muted region\ndoes not play. Two regions on a track may overlap only as a crossfade: where the earlier fades out and the later\nfades in."
       },
+      "AutomationLane": {
+        "required": [
+          "id",
+          "target",
+          "points"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "trackId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "target": {
+            "type": "string"
+          },
+          "points": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AutomationPoint"
+            }
+          }
+        },
+        "description": "Track automation of one parameter. \u0060trackId\u0060 null is the master strip. \u0060target\u0060 is \u0060volume\u0060 (dB),\n\u0060pan\u0060 (\u22121\u20261), \u0060mute\u0060 (0/1), \u0060send:{sendId}\u0060 (dB), \u0060insert:{insertId}:{parameterId}\u0060 or\n\u0060instrument:{parameterId}\u0060 (the parameter\u0027s unit). Points are sorted by tick."
+      },
+      "AutomationMode": {
+        "enum": [
+          "off",
+          "read",
+          "touch",
+          "latch",
+          "write"
+        ]
+      },
+      "AutomationPoint": {
+        "required": [
+          "tick",
+          "value",
+          "curve"
+        ],
+        "type": "object",
+        "properties": {
+          "tick": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "value": {
+            "type": "number",
+            "format": "double"
+          },
+          "curve": {
+            "type": "number",
+            "format": "double"
+          }
+        },
+        "description": "A point of an automation lane, in the target\u0027s own unit; \u0060curve\u0060 \u22121\u20261 shapes the segment to the next."
+      },
       "Bookmarks": {
         "required": [
           "paths"
@@ -1557,12 +2016,115 @@
         },
         "description": "Folders pinned in the All Files browser."
       },
+      "BounceRequest": {
+        "required": [
+          "fileName",
+          "source",
+          "format",
+          "bitDepth",
+          "dither",
+          "normalize",
+          "loudnessLufs",
+          "peakCeilingDb",
+          "realtime",
+          "addToProject"
+        ],
+        "type": "object",
+        "properties": {
+          "fileName": {
+            "type": "string"
+          },
+          "directory": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "startTick": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int64"
+          },
+          "endTick": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int64"
+          },
+          "source": {
+            "$ref": "#/components/schemas/BounceSource"
+          },
+          "trackIds": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "type": "string"
+            }
+          },
+          "format": {
+            "$ref": "#/components/schemas/AudioFormat"
+          },
+          "bitDepth": {
+            "type": "integer",
+            "format": "int32",
+            "default": 24
+          },
+          "sampleRate": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int32"
+          },
+          "dither": {
+            "$ref": "#/components/schemas/DitherMode"
+          },
+          "normalize": {
+            "$ref": "#/components/schemas/NormalizeMode"
+          },
+          "loudnessLufs": {
+            "type": "number",
+            "format": "double",
+            "default": -14
+          },
+          "peakCeilingDb": {
+            "type": "number",
+            "format": "double",
+            "default": -1
+          },
+          "realtime": {
+            "type": "boolean",
+            "default": false
+          },
+          "addToProject": {
+            "type": "boolean",
+            "default": false
+          }
+        },
+        "description": "Bounce (export): the range (ticks; left out: the cycle when it is on, else the project start to its end), the\nsource, and the file: format, bit depth (16, 24, or 32 for float), sample rate (left out: the project\u0027s), dither\n(applied below 32 bits), normalisation. \u0060realtime\u0060 plays the bounce through the device instead of rendering\noffline; \u0060addToProject\u0060 adds the result to the project\u0027s audio files."
+      },
+      "BounceSource": {
+        "enum": [
+          "mix",
+          "stems"
+        ],
+        "default": "mix"
+      },
       "ChannelStrip": {
         "required": [
           "volumeDb",
           "pan",
           "mute",
-          "solo"
+          "solo",
+          "inserts",
+          "sends",
+          "output",
+          "groups"
         ],
         "type": "object",
         "properties": {
@@ -1579,9 +2141,37 @@
           },
           "solo": {
             "type": "boolean"
+          },
+          "inserts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Insert"
+            }
+          },
+          "sends": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Send"
+            }
+          },
+          "output": {
+            "type": "string"
+          },
+          "groups": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          "vcaId": {
+            "type": [
+              "null",
+              "string"
+            ]
           }
         },
-        "description": "Volume in dB (\u2212\u221E as \u2212144), pan \u22121 (left) \u2026 1 (right), mute and solo."
+        "description": "A channel strip: volume in dB (\u2212\u221E as \u2212144), pan \u22121 (left) \u2026 1 (right), mute and solo; its insert effects in\norder; its sends to buses; where it goes (\u0060output\u0060: \u0060master\u0060, \u0060bus:N\u0060 for bus 1\u202664, or\n\u0060output:N\u0060 for the device\u0027s stereo output pair N); the mixer groups it belongs to (1\u202632); and the VCA track\nthat offsets its volume, if any. The master strip uses only volume, pan, mute and its inserts."
       },
       "CommandBatch": {
         "required": [
@@ -1806,6 +2396,18 @@
           },
           {
             "$ref": "#/components/schemas/DeltaOpNotesChanged"
+          },
+          {
+            "$ref": "#/components/schemas/DeltaOpAutomationLaneUpserted"
+          },
+          {
+            "$ref": "#/components/schemas/DeltaOpAutomationLaneRemoved"
+          },
+          {
+            "$ref": "#/components/schemas/DeltaOpGroupUpserted"
+          },
+          {
+            "$ref": "#/components/schemas/DeltaOpGroupRemoved"
           }
         ],
         "discriminator": {
@@ -1827,7 +2429,11 @@
             "markerRemoved": "#/components/schemas/DeltaOpMarkerRemoved",
             "sectionUpserted": "#/components/schemas/DeltaOpSectionUpserted",
             "sectionRemoved": "#/components/schemas/DeltaOpSectionRemoved",
-            "notesChanged": "#/components/schemas/DeltaOpNotesChanged"
+            "notesChanged": "#/components/schemas/DeltaOpNotesChanged",
+            "automationLaneUpserted": "#/components/schemas/DeltaOpAutomationLaneUpserted",
+            "automationLaneRemoved": "#/components/schemas/DeltaOpAutomationLaneRemoved",
+            "groupUpserted": "#/components/schemas/DeltaOpGroupUpserted",
+            "groupRemoved": "#/components/schemas/DeltaOpGroupRemoved"
           }
         }
       },
@@ -1845,6 +2451,75 @@
           },
           "file": {
             "$ref": "#/components/schemas/AudioFile"
+          }
+        }
+      },
+      "DeltaOpAutomationLaneRemoved": {
+        "required": [
+          "id",
+          "op"
+        ],
+        "properties": {
+          "op": {
+            "enum": [
+              "automationLaneRemoved"
+            ],
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          }
+        }
+      },
+      "DeltaOpAutomationLaneUpserted": {
+        "required": [
+          "lane",
+          "op"
+        ],
+        "properties": {
+          "op": {
+            "enum": [
+              "automationLaneUpserted"
+            ],
+            "type": "string"
+          },
+          "lane": {
+            "$ref": "#/components/schemas/AutomationLane"
+          }
+        }
+      },
+      "DeltaOpGroupRemoved": {
+        "required": [
+          "number",
+          "op"
+        ],
+        "properties": {
+          "op": {
+            "enum": [
+              "groupRemoved"
+            ],
+            "type": "string"
+          },
+          "number": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "DeltaOpGroupUpserted": {
+        "required": [
+          "group",
+          "op"
+        ],
+        "properties": {
+          "op": {
+            "enum": [
+              "groupUpserted"
+            ],
+            "type": "string"
+          },
+          "group": {
+            "$ref": "#/components/schemas/MixerGroup"
           }
         }
       },
@@ -2153,6 +2828,14 @@
         },
         "description": "A folder\u0027s entries, folders first; \u0060parent\u0060 is null at a root."
       },
+      "DitherMode": {
+        "enum": [
+          "none",
+          "tpdf",
+          "shaped"
+        ],
+        "default": "tpdf"
+      },
       "EditCommand": {
         "required": [
           "type"
@@ -2317,6 +3000,66 @@
           },
           {
             "$ref": "#/components/schemas/EditCommandCopyRegionsCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandAddInsertCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandRemoveInsertCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandMoveInsertCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandSetInsertCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandSetInsertParameterCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandAddSendCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandSetSendCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandRemoveSendCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandSetOutputCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandAddAuxCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandSetGroupCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandDeleteGroupCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandSetTrackGroupsCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandAddVcaCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandAssignVcaCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandSetAutomationCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandSetAutomationModeCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandSetMixerSettingsCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandApplyPatchCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandUnfreezeTrackCommand"
           }
         ],
         "description": "An edit of the open project (docs/adr/0004-state-ownership.md). A batch of them is applied atomically as one\nundo step. Optional properties left out are left unchanged.",
@@ -2375,9 +3118,56 @@
             "setTrackParent": "#/components/schemas/EditCommandSetTrackParentCommand",
             "setProjectNotes": "#/components/schemas/EditCommandSetProjectNotesCommand",
             "joinRegions": "#/components/schemas/EditCommandJoinRegionsCommand",
-            "copyRegions": "#/components/schemas/EditCommandCopyRegionsCommand"
+            "copyRegions": "#/components/schemas/EditCommandCopyRegionsCommand",
+            "addInsert": "#/components/schemas/EditCommandAddInsertCommand",
+            "removeInsert": "#/components/schemas/EditCommandRemoveInsertCommand",
+            "moveInsert": "#/components/schemas/EditCommandMoveInsertCommand",
+            "setInsert": "#/components/schemas/EditCommandSetInsertCommand",
+            "setInsertParameter": "#/components/schemas/EditCommandSetInsertParameterCommand",
+            "addSend": "#/components/schemas/EditCommandAddSendCommand",
+            "setSend": "#/components/schemas/EditCommandSetSendCommand",
+            "removeSend": "#/components/schemas/EditCommandRemoveSendCommand",
+            "setOutput": "#/components/schemas/EditCommandSetOutputCommand",
+            "addAux": "#/components/schemas/EditCommandAddAuxCommand",
+            "setGroup": "#/components/schemas/EditCommandSetGroupCommand",
+            "deleteGroup": "#/components/schemas/EditCommandDeleteGroupCommand",
+            "setTrackGroups": "#/components/schemas/EditCommandSetTrackGroupsCommand",
+            "addVca": "#/components/schemas/EditCommandAddVcaCommand",
+            "assignVca": "#/components/schemas/EditCommandAssignVcaCommand",
+            "setAutomation": "#/components/schemas/EditCommandSetAutomationCommand",
+            "setAutomationMode": "#/components/schemas/EditCommandSetAutomationModeCommand",
+            "setMixerSettings": "#/components/schemas/EditCommandSetMixerSettingsCommand",
+            "applyPatch": "#/components/schemas/EditCommandApplyPatchCommand",
+            "unfreezeTrack": "#/components/schemas/EditCommandUnfreezeTrackCommand"
           }
         }
+      },
+      "EditCommandAddAuxCommand": {
+        "required": [
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "addAux"
+            ],
+            "type": "string"
+          },
+          "bus": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int32"
+          },
+          "name": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        },
+        "description": "Adds an aux track listening to bus \u0060bus\u0060 (the lowest unused bus when left out)."
       },
       "EditCommandAddControlsCommand": {
         "required": [
@@ -2402,6 +3192,37 @@
             }
           }
         }
+      },
+      "EditCommandAddInsertCommand": {
+        "required": [
+          "pluginId",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "addInsert"
+            ],
+            "type": "string"
+          },
+          "pluginId": {
+            "type": "string"
+          },
+          "trackId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "index": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int32"
+          }
+        },
+        "description": "Adds an insert effect at \u0060index\u0060 (the end when left out); the master\u0027s when \u0060trackId\u0060 is left out."
       },
       "EditCommandAddMarkerCommand": {
         "required": [
@@ -2570,6 +3391,42 @@
         },
         "description": "Adds an arrangement section; it must not overlap another."
       },
+      "EditCommandAddSendCommand": {
+        "required": [
+          "trackId",
+          "bus",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "addSend"
+            ],
+            "type": "string"
+          },
+          "trackId": {
+            "type": "string"
+          },
+          "bus": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "levelDb": {
+            "type": [
+              "null",
+              "number"
+            ],
+            "format": "double"
+          },
+          "preFader": {
+            "type": [
+              "null",
+              "boolean"
+            ]
+          }
+        },
+        "description": "Adds a send to bus 1\u202664 (post-fader at \u2212\u221E dB unless told otherwise, as Logic does)."
+      },
       "EditCommandAddTrackCommand": {
         "required": [
           "type",
@@ -2617,6 +3474,71 @@
           }
         },
         "description": "Adds a track at \u0060index\u0060 (the end when left out): audio by default; an instrument track gets\n\u0060pluginId\u0060 (the default synth when left out)."
+      },
+      "EditCommandAddVcaCommand": {
+        "required": [
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "addVca"
+            ],
+            "type": "string"
+          },
+          "name": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "EditCommandApplyPatchCommand": {
+        "required": [
+          "trackId",
+          "patchId",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "applyPatch"
+            ],
+            "type": "string"
+          },
+          "trackId": {
+            "type": "string"
+          },
+          "patchId": {
+            "type": "string"
+          }
+        },
+        "description": "Replaces a track\u0027s instrument, inserts and sends with a saved patch\u0027s."
+      },
+      "EditCommandAssignVcaCommand": {
+        "required": [
+          "trackId",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "assignVca"
+            ],
+            "type": "string"
+          },
+          "trackId": {
+            "type": "string"
+          },
+          "vcaId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        },
+        "description": "Assigns a track to a VCA track, or removes it from its VCA (null)."
       },
       "EditCommandCopyRegionsCommand": {
         "required": [
@@ -2701,6 +3623,25 @@
             }
           }
         }
+      },
+      "EditCommandDeleteGroupCommand": {
+        "required": [
+          "number",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "deleteGroup"
+            ],
+            "type": "string"
+          },
+          "number": {
+            "type": "integer",
+            "format": "int32"
+          }
+        },
+        "description": "Deletes a mixer group; its members leave it."
       },
       "EditCommandDeleteMarkersCommand": {
         "required": [
@@ -2900,6 +3841,35 @@
         },
         "description": "Loads a file (a sampler instrument, a sample) into a track\u0027s instrument; a path on the server\u0027s disk."
       },
+      "EditCommandMoveInsertCommand": {
+        "required": [
+          "insertId",
+          "index",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "moveInsert"
+            ],
+            "type": "string"
+          },
+          "insertId": {
+            "type": "string"
+          },
+          "index": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "trackId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        },
+        "description": "Moves an insert to another slot of the same strip."
+      },
       "EditCommandMoveRegionCommand": {
         "required": [
           "regionId",
@@ -3051,6 +4021,50 @@
         },
         "description": "Moves note starts towards the grid (destructive; \u0060noteIds\u0060 left out: every note of the region), with the\nsame strength and swing meaning as RegionPlayback."
       },
+      "EditCommandRemoveInsertCommand": {
+        "required": [
+          "insertId",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "removeInsert"
+            ],
+            "type": "string"
+          },
+          "insertId": {
+            "type": "string"
+          },
+          "trackId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "EditCommandRemoveSendCommand": {
+        "required": [
+          "trackId",
+          "sendId",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "removeSend"
+            ],
+            "type": "string"
+          },
+          "trackId": {
+            "type": "string"
+          },
+          "sendId": {
+            "type": "string"
+          }
+        }
+      },
       "EditCommandRemoveStackCommand": {
         "required": [
           "stackId",
@@ -3186,6 +4200,60 @@
         },
         "description": "Makes one take the whole comp."
       },
+      "EditCommandSetAutomationCommand": {
+        "required": [
+          "target",
+          "points",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "setAutomation"
+            ],
+            "type": "string"
+          },
+          "target": {
+            "type": "string"
+          },
+          "points": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AutomationPoint"
+            }
+          },
+          "trackId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        },
+        "description": "Replaces one automation lane\u0027s points (an empty list removes the lane); the master\u0027s when no track."
+      },
+      "EditCommandSetAutomationModeCommand": {
+        "required": [
+          "mode",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "setAutomationMode"
+            ],
+            "type": "string"
+          },
+          "mode": {
+            "$ref": "#/components/schemas/AutomationMode"
+          },
+          "trackId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
       "EditCommandSetCompCommand": {
         "required": [
           "folderId",
@@ -3243,6 +4311,123 @@
             "format": "int64"
           }
         }
+      },
+      "EditCommandSetGroupCommand": {
+        "required": [
+          "number",
+          "type",
+          "properties"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "setGroup"
+            ],
+            "type": "string"
+          },
+          "number": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "name": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "color": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "enabled": {
+            "type": [
+              "null",
+              "boolean"
+            ]
+          },
+          "properties": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/GroupProperties"
+              }
+            ]
+          }
+        },
+        "description": "Creates or changes mixer group 1\u202632."
+      },
+      "EditCommandSetInsertCommand": {
+        "required": [
+          "insertId",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "setInsert"
+            ],
+            "type": "string"
+          },
+          "insertId": {
+            "type": "string"
+          },
+          "trackId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "bypassed": {
+            "type": [
+              "null",
+              "boolean"
+            ]
+          },
+          "sidechain": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        },
+        "description": "Bypasses an insert, or sets its sidechain (a track id, \u0060bus:N\u0060, or an empty string for none)."
+      },
+      "EditCommandSetInsertParameterCommand": {
+        "required": [
+          "insertId",
+          "parameterId",
+          "value",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "setInsertParameter"
+            ],
+            "type": "string"
+          },
+          "insertId": {
+            "type": "string"
+          },
+          "parameterId": {
+            "type": "string"
+          },
+          "value": {
+            "type": "number",
+            "format": "double"
+          },
+          "trackId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        },
+        "description": "Sets one insert parameter; coalesces like \u0060setParameter\u0060, and records automation like \u0060setStrip\u0060."
       },
       "EditCommandSetInstrumentCommand": {
         "required": [
@@ -3488,6 +4673,64 @@
           }
         }
       },
+      "EditCommandSetMixerSettingsCommand": {
+        "required": [
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "setMixerSettings"
+            ],
+            "type": "string"
+          },
+          "pdc": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PdcMode"
+              }
+            ]
+          },
+          "lowLatency": {
+            "type": [
+              "null",
+              "boolean"
+            ]
+          },
+          "lowLatencyLimitMs": {
+            "type": [
+              "null",
+              "number"
+            ],
+            "format": "double"
+          }
+        }
+      },
+      "EditCommandSetOutputCommand": {
+        "required": [
+          "trackId",
+          "output",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "setOutput"
+            ],
+            "type": "string"
+          },
+          "trackId": {
+            "type": "string"
+          },
+          "output": {
+            "type": "string"
+          }
+        },
+        "description": "Routes a track to \u0060master\u0060, \u0060bus:N\u0060 or \u0060output:N\u0060; a route that would make a loop is refused."
+      },
       "EditCommandSetParameterCommand": {
         "required": [
           "trackId",
@@ -3682,6 +4925,55 @@
         },
         "description": "Renames, recolours or resizes a section (from its end); it must not come to overlap another."
       },
+      "EditCommandSetSendCommand": {
+        "required": [
+          "trackId",
+          "sendId",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "setSend"
+            ],
+            "type": "string"
+          },
+          "trackId": {
+            "type": "string"
+          },
+          "sendId": {
+            "type": "string"
+          },
+          "levelDb": {
+            "type": [
+              "null",
+              "number"
+            ],
+            "format": "double"
+          },
+          "pan": {
+            "type": [
+              "null",
+              "number"
+            ],
+            "format": "double"
+          },
+          "preFader": {
+            "type": [
+              "null",
+              "boolean"
+            ]
+          },
+          "bus": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int32"
+          }
+        },
+        "description": "Changes a send; coalesces and records automation like \u0060setStrip\u0060."
+      },
       "EditCommandSetSignatureCommand": {
         "required": [
           "numerator",
@@ -3771,7 +5063,7 @@
             ]
           }
         },
-        "description": "Changes a track\u0027s channel strip, or the master\u0027s when \u0060trackId\u0060 is left out."
+        "description": "Changes a track\u0027s volume, pan, mute or solo, or the master\u0027s when \u0060trackId\u0060 is left out. Members of the\ntrack\u0027s enabled mixer groups that link the property follow it (volume keeps their offsets). During playback, a\ntrack whose automation mode is touch, latch or write records the change into its lane (and the batch coalesces as\na drag does)."
       },
       "EditCommandSetTakeFolderCommand": {
         "required": [
@@ -3925,6 +5217,31 @@
           }
         }
       },
+      "EditCommandSetTrackGroupsCommand": {
+        "required": [
+          "trackId",
+          "groups",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "setTrackGroups"
+            ],
+            "type": "string"
+          },
+          "trackId": {
+            "type": "string"
+          },
+          "groups": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        }
+      },
       "EditCommandSetTrackParentCommand": {
         "required": [
           "trackId",
@@ -3971,6 +5288,24 @@
           }
         },
         "description": "Splits a region in two at \u0060atTick\u0060, which must fall inside it."
+      },
+      "EditCommandUnfreezeTrackCommand": {
+        "required": [
+          "trackId",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "unfreezeTrack"
+            ],
+            "type": "string"
+          },
+          "trackId": {
+            "type": "string"
+          }
+        },
+        "description": "Plays a frozen track live again (its freeze file stays in the project\u0027s audio)."
       },
       "EngineState": {
         "enum": [
@@ -4070,6 +5405,46 @@
           "other"
         ]
       },
+      "GroupProperties": {
+        "required": [
+          "volume",
+          "mute",
+          "solo",
+          "pan",
+          "sends",
+          "recordArm",
+          "automation",
+          "selection"
+        ],
+        "type": "object",
+        "properties": {
+          "volume": {
+            "type": "boolean"
+          },
+          "mute": {
+            "type": "boolean"
+          },
+          "solo": {
+            "type": "boolean"
+          },
+          "pan": {
+            "type": "boolean"
+          },
+          "sends": {
+            "type": "boolean"
+          },
+          "recordArm": {
+            "type": "boolean"
+          },
+          "automation": {
+            "type": "boolean"
+          },
+          "selection": {
+            "type": "boolean"
+          }
+        },
+        "description": "What a mixer group links among its members (Logic\u0027s group settings)."
+      },
       "HistoryEntry": {
         "required": [
           "label",
@@ -4102,6 +5477,44 @@
         },
         "description": "Import an audio file the server can read from its own disk (the desktop app, a headless box\u0027s library)."
       },
+      "Insert": {
+        "required": [
+          "id",
+          "pluginId",
+          "name",
+          "bypassed",
+          "parameters"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "pluginId": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "bypassed": {
+            "type": "boolean"
+          },
+          "parameters": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "number",
+              "format": "double"
+            }
+          },
+          "sidechain": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        },
+        "description": "An insert effect on a channel strip: the plugin, whether it is bypassed, its parameter values by parameter id\n(all of them), and its sidechain source (a track id or \u0060bus:N\u0060; null: none). A plugin\u0027s opaque state lives in\nthe project\u0027s \u0060Plugin States\u0060 folder."
+      },
       "InstrumentSlot": {
         "required": [
           "pluginId",
@@ -4131,6 +5544,104 @@
           }
         },
         "description": "A track\u0027s instrument: the plugin, its parameter values by parameter id (all of them), and the file it loaded\n(a sampler\u0027s instrument), relative to the project folder when inside it. A plugin\u0027s opaque state lives in the\nproject\u0027s \u0060Plugin States\u0060 folder."
+      },
+      "IoLabel": {
+        "required": [
+          "number",
+          "name"
+        ],
+        "type": "object",
+        "properties": {
+          "number": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "description": "A user name for an input, output pair or bus (Logic\u0027s I/O Labels)."
+      },
+      "IoLabels": {
+        "required": [
+          "inputs",
+          "outputs",
+          "buses"
+        ],
+        "type": "object",
+        "properties": {
+          "inputs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/IoLabel"
+            }
+          },
+          "outputs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/IoLabel"
+            }
+          },
+          "buses": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/IoLabel"
+            }
+          }
+        }
+      },
+      "Job": {
+        "required": [
+          "id",
+          "kind",
+          "state",
+          "progress",
+          "files"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/JobKind"
+          },
+          "state": {
+            "$ref": "#/components/schemas/JobState"
+          },
+          "progress": {
+            "type": "number",
+            "format": "double"
+          },
+          "message": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "files": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "description": "A long-running job; \u0060progress\u0060 0\u20261; \u0060files\u0060 are what it wrote (absolute paths), when done."
+      },
+      "JobKind": {
+        "enum": [
+          "bounce",
+          "freeze"
+        ]
+      },
+      "JobState": {
+        "enum": [
+          "queued",
+          "running",
+          "done",
+          "failed",
+          "cancelled"
+        ]
       },
       "KeyCommandSet": {
         "required": [
@@ -4414,6 +5925,56 @@
         },
         "description": "Which track hears live MIDI when no instrument track is record-armed (Logic sends input to the selected\ntrack); null: none."
       },
+      "MixerGroup": {
+        "required": [
+          "number",
+          "name",
+          "color",
+          "enabled",
+          "properties"
+        ],
+        "type": "object",
+        "properties": {
+          "number": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "name": {
+            "type": "string"
+          },
+          "color": {
+            "type": "string"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "properties": {
+            "$ref": "#/components/schemas/GroupProperties"
+          }
+        },
+        "description": "A mixer group 1\u202632; tracks join it through their strip\u0027s \u0060groups\u0060."
+      },
+      "MixerSettings": {
+        "required": [
+          "pdc",
+          "lowLatency",
+          "lowLatencyLimitMs"
+        ],
+        "type": "object",
+        "properties": {
+          "pdc": {
+            "$ref": "#/components/schemas/PdcMode"
+          },
+          "lowLatency": {
+            "type": "boolean"
+          },
+          "lowLatencyLimitMs": {
+            "type": "number",
+            "format": "double"
+          }
+        },
+        "description": "Plugin delay compensation, and low-latency mode: while it is on, plugins on the path of record-armed or\nmonitored tracks whose latency exceeds \u0060lowLatencyLimitMs\u0060 are bypassed."
+      },
       "NewControlEvent": {
         "required": [
           "kind",
@@ -4478,6 +6039,14 @@
           }
         },
         "description": "A note to add; positions relative to the region\u0027s start."
+      },
+      "NormalizeMode": {
+        "enum": [
+          "off",
+          "peak",
+          "loudness"
+        ],
+        "default": "off"
       },
       "Note": {
         "required": [
@@ -4625,10 +6194,67 @@
         },
         "description": "A plugin parameter. \u0060steps\u0060 \u0026gt; 0 makes it discrete (\u0060steps\u0060 \u002B 1 values from \u0060min\u0060 to\n\u0060max\u0060), with \u0060valueNames\u0060 naming them when it is a choice."
       },
+      "PatchInfo": {
+        "required": [
+          "id",
+          "name",
+          "category",
+          "kind"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "category": {
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/TrackKind"
+          }
+        },
+        "description": "A saved channel strip (Logic\u0027s patch): its instrument, inserts and sends, for a kind of track."
+      },
+      "PdcMode": {
+        "enum": [
+          "all",
+          "tracks",
+          "off"
+        ]
+      },
+      "PluginEditorRequest": {
+        "required": [
+          "open"
+        ],
+        "type": "object",
+        "properties": {
+          "trackId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "insertId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "open": {
+            "type": "boolean"
+          }
+        },
+        "description": "Opens (or closes) a plugin\u0027s own editor window: an insert, or with no \u0060insertId\u0060 the instrument."
+      },
       "PluginFormat": {
         "enum": [
           "builtin",
-          "clap"
+          "clap",
+          "vst3",
+          "au"
         ]
       },
       "PluginInfo": {
@@ -4640,7 +6266,10 @@
           "format",
           "isInstrument",
           "fileTypes",
-          "parameters"
+          "parameters",
+          "category",
+          "hasSidechain",
+          "hasEditor"
         ],
         "type": "object",
         "properties": {
@@ -4673,9 +6302,18 @@
             "items": {
               "$ref": "#/components/schemas/ParameterInfo"
             }
+          },
+          "category": {
+            "type": "string"
+          },
+          "hasSidechain": {
+            "type": "boolean"
+          },
+          "hasEditor": {
+            "type": "boolean"
           }
         },
-        "description": "A plugin the engine can load. \u0060fileTypes\u0060 (extensions such as \u0060.sfz\u0060, \u0060.wav\u0060) lists what an\ninstrument loads with \u0060loadInstrumentFile\u0060, empty when it loads none."
+        "description": "A plugin the engine can load: an instrument, or an effect in \u0060category\u0060 (EQ, Dynamics, Delay, Reverb,\nModulation, Distortion, Filter, Utility, Metering). \u0060hasEditor\u0060: it has its own editor window (desktop app\nonly; everywhere else the generic editor). \u0060fileTypes\u0060 (extensions such as \u0060.sfz\u0060, \u0060.wav\u0060) lists what an\ninstrument loads with \u0060loadInstrumentFile\u0060, empty when it loads none."
       },
       "PreviewRequest": {
         "type": "object",
@@ -4742,7 +6380,9 @@
           "takeFolders",
           "markers",
           "arrangement",
-          "notes"
+          "notes",
+          "groups",
+          "automation"
         ],
         "type": "object",
         "properties": {
@@ -4816,6 +6456,18 @@
           },
           "notes": {
             "type": "string"
+          },
+          "groups": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MixerGroup"
+            }
+          },
+          "automation": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AutomationLane"
+            }
           }
         },
         "description": "The open project (docs/01-implementation-plan.md \u00A75). Musical positions are ticks at 960 PPQ; audio offsets,\nlengths and fades are frames at the project\u0027s \u0060sampleRate\u0060. \u0060revision\u0060 grows with every edit and is\nthe ETag; \u0060dirty\u0060 says whether it has unsaved edits."
@@ -4893,7 +6545,8 @@
           "tempoEvents",
           "signatures",
           "keys",
-          "recording"
+          "recording",
+          "mixer"
         ],
         "type": "object",
         "properties": {
@@ -4937,6 +6590,9 @@
           },
           "recording": {
             "$ref": "#/components/schemas/RecordingSettings"
+          },
+          "mixer": {
+            "$ref": "#/components/schemas/MixerSettings"
           }
         },
         "description": "Global settings. \u0060tempo\u0060 and \u0060signature\u0060 are the values at the project start (the first of\n\u0060tempoEvents\u0060 and \u0060signatures\u0060, which are the global tempo and signature tracks).\n\u0060endTick\u0060 is the project end marker. \u0060mergeMidiRecording\u0060: a MIDI recording over an\nexisting MIDI region adds its notes to that region instead of making a new one."
@@ -5029,6 +6685,25 @@
         },
         "description": "How a MIDI region plays, without changing its notes (Logic\u0027s Region inspector): transpose in semitones,\nvelocity offset (\u2212127\u2026127), quantise grid in ticks (0: off) with strength (0\u20261, 1 = all the way) and swing\n(0\u20261, 0 = straight; delays every second grid step by up to half a step)."
       },
+      "SavePatchRequest": {
+        "required": [
+          "trackId",
+          "name",
+          "category"
+        ],
+        "type": "object",
+        "properties": {
+          "trackId": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "category": {
+            "type": "string"
+          }
+        }
+      },
       "Screenset": {
         "required": [
           "number",
@@ -5053,6 +6728,37 @@
           }
         },
         "description": "A saved layout of the editor\u0027s windows (Logic\u0027s screensets), recalled with keys 1\u20139. \u0060layout\u0060 is the\neditor\u0027s own serialised layout, opaque to the server."
+      },
+      "Send": {
+        "required": [
+          "id",
+          "bus",
+          "levelDb",
+          "pan",
+          "preFader"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "bus": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "levelDb": {
+            "type": "number",
+            "format": "double"
+          },
+          "pan": {
+            "type": "number",
+            "format": "double"
+          },
+          "preFader": {
+            "type": "boolean"
+          }
+        },
+        "description": "A send from a channel strip to bus 1\u202664, at \u0060levelDb\u0060, before or after the fader."
       },
       "SignatureEvent": {
         "required": [
@@ -5240,7 +6946,9 @@
           "midiInput",
           "midiOutput",
           "collapsed",
-          "notes"
+          "notes",
+          "inputBus",
+          "automationMode"
         ],
         "type": "object",
         "properties": {
@@ -5302,6 +7010,19 @@
           },
           "notes": {
             "type": "string"
+          },
+          "inputBus": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "automationMode": {
+            "$ref": "#/components/schemas/AutomationMode"
+          },
+          "frozenFileId": {
+            "type": [
+              "null",
+              "string"
+            ]
           }
         },
         "description": "A track and its channel strip. \u0060color\u0060 is a CSS colour; \u0060input\u0060 is where an audio track records from.\nAn instrument track has an \u0060instrument\u0060; instrument and external MIDI tracks take MIDI from\n\u0060midiInput\u0060, and an external MIDI track sends its regions to \u0060midiOutput\u0060."
@@ -5328,7 +7049,9 @@
           "audio",
           "instrument",
           "midi",
-          "stack"
+          "stack",
+          "aux",
+          "vca"
         ]
       },
       "TransportCommand": {
@@ -5421,6 +7144,9 @@
       "name": "System"
     },
     {
+      "name": "Plugins"
+    },
+    {
       "name": "Projects"
     },
     {
@@ -5430,9 +7156,6 @@
       "name": "Transport"
     },
     {
-      "name": "Plugins"
-    },
-    {
       "name": "MIDI"
     },
     {
@@ -5440,6 +7163,12 @@
     },
     {
       "name": "Files"
+    },
+    {
+      "name": "Jobs"
+    },
+    {
+      "name": "Library"
     }
   ]
 }

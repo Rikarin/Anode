@@ -14,13 +14,26 @@ function track(id: string, name = id): Track {
     input: { channel: 1, stereo: false },
     recordArmed: false,
     inputMonitoring: false,
-    strip: { volumeDb: 0, pan: 0, mute: false, solo: false },
+    strip: {
+      volumeDb: 0,
+      pan: 0,
+      mute: false,
+      solo: false,
+      inserts: [],
+      sends: [],
+      output: 'master',
+      groups: [],
+      vcaId: null
+    },
     instrument: null,
     midiInput: { device: null, channel: 0 },
     midiOutput: null,
     parentId: null,
     collapsed: false,
-    notes: ''
+    notes: '',
+    inputBus: 0,
+    automationMode: 'read',
+    frozenFileId: null
   };
 }
 
@@ -60,9 +73,20 @@ function snapshot(revision = 3): Project {
       tempoEvents: [{ tick: 0, bpm: 120, curve: 'step' }],
       signatures: [{ tick: 0, numerator: 4, denominator: 4 }],
       keys: [{ tick: 0, tonic: 0, mode: 'major' }],
-      recording: { cycleMode: 'takeFolder', replace: false, autopunch: false, punchInTick: 0, punchOutTick: 15_360 }
+      recording: { cycleMode: 'takeFolder', replace: false, autopunch: false, punchInTick: 0, punchOutTick: 15_360 },
+      mixer: { pdc: 'all', lowLatency: false, lowLatencyLimitMs: 10 }
     },
-    master: { volumeDb: 0, pan: 0, mute: false, solo: false },
+    master: {
+      volumeDb: 0,
+      pan: 0,
+      mute: false,
+      solo: false,
+      inserts: [],
+      sends: [],
+      output: 'master',
+      groups: [],
+      vcaId: null
+    },
     tracks: [track('trk_1'), track('trk_2')],
     regions: [region('rgn_1', 'trk_1')],
     audioFiles: [
@@ -80,7 +104,9 @@ function snapshot(revision = 3): Project {
     takeFolders: [],
     markers: [],
     arrangement: [],
-    notes: ''
+    notes: '',
+    groups: [],
+    automation: []
   };
 }
 
@@ -111,7 +137,20 @@ describe('ProjectStore deltas', () => {
         { op: 'trackRemoved', id: 'trk_1' },
         { op: 'regionUpserted', region: region('rgn_2', 'trk_2', 960) },
         { op: 'settingsChanged', settings: { ...snapshot().settings, tempo: 90 } },
-        { op: 'masterChanged', strip: { volumeDb: -3, pan: 0, mute: false, solo: false } },
+        {
+          op: 'masterChanged',
+          strip: {
+            volumeDb: -3,
+            pan: 0,
+            mute: false,
+            solo: false,
+            inserts: [],
+            sends: [],
+            output: 'master',
+            groups: [],
+            vcaId: null
+          }
+        },
         { op: 'projectRenamed', name: 'Renamed' }
       ])
     );

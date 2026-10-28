@@ -28,7 +28,14 @@ public enum PlaybackEventKind : byte {
     ChannelPressure = 6,
 
     /// <summary>Data1 = program.</summary>
-    ProgramChange = 7
+    ProgramChange = 7,
+
+    /// <summary>
+    ///     An automation value for target <see cref="PlaybackEvent.Target" /> at this sample, in
+    ///     <see cref="PlaybackEvent.Value" />; the value ramps linearly to the target's next event (curves are sampled by
+    ///     the server). Data1 = 1: a step, no ramp from the previous event.
+    /// </summary>
+    Automation = 8
 }
 
 /// <summary>One compiled event of a track, at an absolute sample position. 24 bytes, no implicit padding.</summary>
@@ -44,7 +51,9 @@ public struct PlaybackEvent {
     public byte Channel;
 
     public float Value;
-    public int Reserved2;
+
+    /// <summary>For <see cref="PlaybackEventKind.Automation" />: the index of its target in the model's automation targets.</summary>
+    public int Target;
 }
 
 /// <summary>

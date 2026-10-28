@@ -26,6 +26,10 @@ public sealed record ProjectDelta(long Revision, IReadOnlyList<DeltaOp> Ops);
 [JsonDerivedType(typeof(SectionUpserted), "sectionUpserted")]
 [JsonDerivedType(typeof(SectionRemoved), "sectionRemoved")]
 [JsonDerivedType(typeof(NotesChanged), "notesChanged")]
+[JsonDerivedType(typeof(AutomationLaneUpserted), "automationLaneUpserted")]
+[JsonDerivedType(typeof(AutomationLaneRemoved), "automationLaneRemoved")]
+[JsonDerivedType(typeof(GroupUpserted), "groupUpserted")]
+[JsonDerivedType(typeof(GroupRemoved), "groupRemoved")]
 public abstract record DeltaOp;
 
 /// <summary>A track was added or changed; <c>index</c> is its position in the track list.</summary>
@@ -64,3 +68,11 @@ public sealed record SectionRemoved(string Id) : DeltaOp;
 
 /// <summary>The project notes changed.</summary>
 public sealed record NotesChanged(string Text) : DeltaOp;
+
+public sealed record AutomationLaneUpserted(AutomationLane Lane) : DeltaOp;
+
+public sealed record AutomationLaneRemoved(string Id) : DeltaOp;
+
+public sealed record GroupUpserted(MixerGroup Group) : DeltaOp;
+
+public sealed record GroupRemoved(int Number) : DeltaOp;

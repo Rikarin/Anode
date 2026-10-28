@@ -16,6 +16,8 @@ namespace Anode.Contracts;
 [JsonDerivedType(typeof(MidiActivityEvent), "midiActivity")]
 [JsonDerivedType(typeof(PluginsChangedEvent), "pluginsChanged")]
 [JsonDerivedType(typeof(MidiDevicesChangedEvent), "midiDevicesChanged")]
+[JsonDerivedType(typeof(JobEvent), "job")]
+[JsonDerivedType(typeof(PluginProblemEvent), "pluginProblem")]
 public abstract record RealtimeEvent;
 
 /// <summary>The socket is open; the client fetches the state it needs now.</summary>
@@ -61,3 +63,10 @@ public sealed record PluginsChangedEvent : RealtimeEvent;
 
 /// <summary>A MIDI device was connected or removed; clients refetch <c>/midi/devices</c>.</summary>
 public sealed record MidiDevicesChangedEvent : RealtimeEvent;
+
+/// <summary>A job changed state or progressed (at most a few times a second).</summary>
+public sealed record JobEvent(Job Job) : RealtimeEvent;
+
+/// <summary>A plugin crashed or failed to load; the engine bypasses it. <c>insertId</c> null is the instrument.</summary>
+public sealed record PluginProblemEvent(string? TrackId, string? InsertId, string PluginId, string Message)
+    : RealtimeEvent;

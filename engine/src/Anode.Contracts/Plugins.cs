@@ -9,7 +9,14 @@ public enum PluginFormat {
     Builtin,
 
     [JsonStringEnumMemberName("clap")]
-    Clap
+    Clap,
+
+    [JsonStringEnumMemberName("vst3")]
+    Vst3,
+
+    /// <summary>Audio Units (macOS).</summary>
+    [JsonStringEnumMemberName("au")]
+    Au
 }
 
 /// <summary>
@@ -28,7 +35,10 @@ public sealed record ParameterInfo(
 );
 
 /// <summary>
-///     A plugin the engine can load. <c>fileTypes</c> (extensions such as <c>.sfz</c>, <c>.wav</c>) lists what an
+///     A plugin the engine can load: an instrument, or an effect in <c>category</c> (EQ, Dynamics, Delay, Reverb,
+///     Modulation, Distortion, Filter, Utility, Metering). <c>hasEditor</c>: it has its own editor window (desktop app
+///     only; everywhere else the generic editor). <c>fileTypes</c> (extensions such as <c>.sfz</c>, <c>.wav</c>) lists
+///     what an
 ///     instrument loads with <c>loadInstrumentFile</c>, empty when it loads none.
 /// </summary>
 public sealed record PluginInfo(
@@ -39,7 +49,10 @@ public sealed record PluginInfo(
     PluginFormat Format,
     bool IsInstrument,
     IReadOnlyList<string> FileTypes,
-    IReadOnlyList<ParameterInfo> Parameters
+    IReadOnlyList<ParameterInfo> Parameters,
+    string Category,
+    bool HasSidechain,
+    bool HasEditor
 );
 
 /// <summary>
