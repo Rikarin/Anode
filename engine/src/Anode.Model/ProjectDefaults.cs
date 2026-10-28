@@ -20,6 +20,19 @@ public static class ProjectDefaults {
 
     public static ChannelStrip Strip { get; } = new(0, 0, false, false);
 
+    /// <summary>Arrangement sections' colour when none is given.</summary>
+    public const string SectionColor = "#8a8f98";
+
+    /// <summary>The crossfade at a comp's boundaries, in milliseconds (Logic's default is about this).</summary>
+    public const int CompCrossfadeMs = 10;
+
+    /// <summary>A new take folder's crossfade at <paramref name="sampleRate" />.</summary>
+    public static long CompCrossfade(int sampleRate) => (long)sampleRate * CompCrossfadeMs / 1000;
+
+    /// <summary>Take folder recording, no replace, no autopunch; punch locators over the first four bars.</summary>
+    public static RecordingSettings Recording(TimeSignature signature) =>
+        new(CycleRecordMode.TakeFolder, false, false, 0, 4L * BarTicks(signature));
+
     /// <summary>A new region's playback: as recorded, no quantise.</summary>
     public static RegionPlayback Playback { get; } = new(0, 0, 0, 1, 0);
 
@@ -42,7 +55,7 @@ public static class ProjectDefaults {
                 [new(0, Tempo, TempoCurve.Step)],
                 [new(0, signature.Numerator, signature.Denominator)],
                 [new(0, 0, KeyMode.Major)],
-                new(CycleRecordMode.TakeFolder, false, false, 0, 4L * BarTicks(signature))
+                Recording(signature)
             ),
             Strip,
             [],

@@ -1,0 +1,46 @@
+{
+  "schemaVersion": 2,
+  "id": "prj_phase2fixture",
+  "name": "Phase 2 Song",
+  "sampleRate": 48000,
+  "settings": {
+    "tempo": 132,
+    "signature": {
+      "numerator": 6,
+      "denominator": 8
+    },
+    "cycle": {
+      "enabled": false,
+      "startTick": 0,
+      "endTick": 11520
+    },
+    "metronome": {
+      "enabled": false,
+      "countIn": false,
+      "levelDb": -6
+    },
+    "endTick": 368640,
+    "mergeMidiRecording": true
+  },
+  "master": {
+    "volumeDb": 0,
+    "pan": 0,
+    "mute": false,
+    "solo": false
+  },
+  "tracks": [
+    "trk_drums0000001",
+    "trk_keys00000002"
+  ],
+  "audioFiles": [
+    {
+      "id": "aud_loop00000001",
+      "name": "Loop",
+      "path": "Audio Files/Loop.wav",
+      "sampleRate": 48000,
+      "channels": 2,
+      "frames": 192000,
+      "bitDepth": 24
+    }
+  ]
+}

@@ -1,5 +1,6 @@
 using Anode.Contracts;
 using Anode.Model.Editing;
+using Anode.Model.Time;
 using System.Collections.Immutable;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -9,7 +10,8 @@ namespace Anode.Model.Storage;
 
 /// <summary>
 ///     <c>project.json</c>: the project's root (docs/01-implementation-plan.md §5.6). <c>tracks</c> lists the track ids
-///     in order; each track and its regions are in <c>tracks/&lt;id&gt;.json</c>.
+///     in order; each track and its regions are in <c>tracks/&lt;id&gt;.json</c>. Schema 3 adds the global tracks (in
+///     <c>settings</c>), markers, arrangement sections, the project's notes and the editor's screensets.
 /// </summary>
 public sealed record ProjectFile(
     int SchemaVersion,
@@ -19,15 +21,23 @@ public sealed record ProjectFile(
     ProjectSettings Settings,
     ChannelStrip Master,
     IReadOnlyList<string> Tracks,
-    IReadOnlyList<AudioFile> AudioFiles
+    IReadOnlyList<AudioFile> AudioFiles,
+    IReadOnlyList<Marker>? Markers = null,
+    IReadOnlyList<ArrangementMarker>? Arrangement = null,
+    string? Notes = null,
+    IReadOnlyList<Screenset>? Screensets = null
 );
 
-/// <summary><c>tracks/&lt;id&gt;.json</c>: one track and its regions, audio and MIDI (schema 2).</summary>
+/// <summary>
+///     <c>tracks/&lt;id&gt;.json</c>: one track and its regions, audio and MIDI (schema 2), and its take folders
+///     (schema 3).
+/// </summary>
 public sealed record TrackFile(
     int SchemaVersion,
     Track Track,
     IReadOnlyList<AudioRegion> Regions,
-    IReadOnlyList<MidiRegion>? MidiRegions = null
+    IReadOnlyList<MidiRegion>? MidiRegions = null,
+    IReadOnlyList<TakeFolder>? TakeFolders = null
 );
 
 /// <summary>A package that cannot be read: missing, damaged, or from a newer Anode.</summary>
@@ -67,8 +77,17 @@ public static class ProjectPackage {
         Directory.CreateDirectory(Path.Combine(folder, PeaksFolder));
     }
 
-    public static void Save(string folder, ProjectState state) {
-        CreateFolders(folder);
+    /// <summary>
+    ///     Writes <paramref name="state" />'s document; with <paramref name="media" />, also creates the media folders
+    ///     (a backup has none of its own).
+    /// </summary>
+    public static void Save(string folder, ProjectState state, bool media = true) {
+        if (media) {
+            CreateFolders(folder);
+        } else {
+            Directory.CreateDirectory(Path.Combine(folder, TracksFolder));
+        }
+
         var tracksFolder = Path.Combine(folder, TracksFolder);
         var byTrack = state.Regions.Values.ToLookup(static r => r.TrackId, StringComparer.Ordinal);
         var midiByTrack = state.MidiRegions.Values.ToLookup(static r => r.TrackId, StringComparer.Ordinal);
@@ -81,7 +100,8 @@ public static class ProjectPackage {
                     ..midiByTrack[track.Id]
                         .OrderBy(static r => r.StartTick)
                         .ThenBy(static r => r.Id, StringComparer.Ordinal)
-                ]
+                ],
+                [..state.TakeFoldersOf(track.Id)]
             );
             AtomicRename.Write(
                 Path.Combine(tracksFolder, TrackFileName(track.Id)),
@@ -97,7 +117,11 @@ public static class ProjectPackage {
             state.Settings,
             state.Master,
             [..state.Tracks.Select(static t => t.Id)],
-            [..state.Files.Values]
+            [..state.Files.Values],
+            [..state.Markers.Values.OrderBy(static m => m.Tick).ThenBy(static m => m.Id, StringComparer.Ordinal)],
+            [..state.Sections.Values.OrderBy(static s => s.StartTick)],
+            state.Notes,
+            [..state.Screensets.Values]
         );
         AtomicRename.Write(
             Path.Combine(folder, ProjectFileName),
@@ -135,25 +159,108 @@ public static class ProjectPackage {
         var tracks = ImmutableList.CreateBuilder<Track>();
         var regions = ImmutableSortedDictionary.CreateBuilder<string, AudioRegion>(StringComparer.Ordinal);
         var midiRegions = ImmutableSortedDictionary.CreateBuilder<string, MidiRegion>(StringComparer.Ordinal);
+        var folders = ImmutableSortedDictionary.CreateBuilder<string, TakeFolder>(StringComparer.Ordinal);
+        var trackFiles = new List<TrackFile>();
         foreach (var id in (root.Tracks ?? []).Distinct(StringComparer.Ordinal)) {
             if (ReadTrack(folder, id) is { } file) {
                 var track = Normalise(file.Track);
                 tracks.Add(track);
-                AddRegions(file, track, files, regions, midiRegions);
+                trackFiles.Add(file with { Track = track });
             }
+        }
+
+        // Stacks do not nest, and a member's stack is one of the project's.
+        var stacks = tracks.Where(static t => t.Kind == TrackKind.Stack).Select(static t => t.Id).ToHashSet();
+        for (var i = 0; i < tracks.Count; i++) {
+            var t = tracks[i];
+            if (t.ParentId is not null && (t.Kind == TrackKind.Stack || !stacks.Contains(t.ParentId))) {
+                tracks[i] = t with { ParentId = null };
+            }
+        }
+
+        foreach (var file in trackFiles) {
+            AddRegions(file, file.Track, files, regions, midiRegions, folders);
         }
 
         return new(
             root.Id,
             root.Name,
             root.SampleRate,
-            root.Settings,
+            Normalise(root.Settings),
             root.Master,
             tracks.ToImmutable(),
             regions.ToImmutable(),
             files,
             midiRegions.ToImmutable()
-        ) { LastEventId = midiRegions.Values.Select(ProjectState.MaxEventId).DefaultIfEmpty().Max() };
+        ) {
+            LastEventId = midiRegions.Values.Select(ProjectState.MaxEventId).DefaultIfEmpty().Max(),
+            TakeFolders = folders.ToImmutable(),
+            Markers = Keyed(
+                root.Markers?.Select(static m => m is { Text: null } ? m with { Text = string.Empty } : m).ToArray(),
+                static m => m?.Id is not null && m.Name is not null,
+                static m => m.Id
+            ),
+            Sections = Keyed(
+                root.Arrangement,
+                static s => s?.Id is not null && s.Name is not null && s.Color is not null,
+                static s => s.Id
+            ),
+            Notes = root.Notes ?? string.Empty,
+            Screensets = ImmutableSortedDictionary.CreateRange(
+                (root.Screensets ?? [])
+                    .Where(static s => s is { Number: >= 1 and <= 9, Name: not null, Layout: not null })
+                    .Select(static s => KeyValuePair.Create(s.Number, s))
+                    .DistinctBy(static p => p.Key)
+            )
+        };
+    }
+
+    /// <summary>The items that pass <paramref name="valid" />, keyed by id (the first of each id).</summary>
+    static ImmutableSortedDictionary<string, T> Keyed<T>(
+        IReadOnlyList<T>? items,
+        Func<T, bool> valid,
+        Func<T, string> id
+    ) where T : class =>
+        ImmutableSortedDictionary.CreateRange(
+            StringComparer.Ordinal,
+            (items ?? []).Where(valid).Select(i => KeyValuePair.Create(id(i), i)).DistinctBy(static p => p.Key)
+        );
+
+    /// <summary>
+    ///     Settings as read: the global tracks present and well formed (else the project-start values alone), the first
+    ///     events equal to <c>tempo</c> and <c>signature</c>, and recording settings.
+    /// </summary>
+    static ProjectSettings Normalise(ProjectSettings settings) {
+        var signature = settings.Signature ?? new TimeSignature(4, 4);
+        TempoEvent[] tempo = settings.TempoEvents is { Count: > 0 } t ? [..t] : [new(0, settings.Tempo, TempoCurve.Step)];
+        SignatureEvent[] signatures = settings.Signatures is { Count: > 0 } s
+            ? [..s]
+            : [new(0, signature.Numerator, signature.Denominator)];
+        KeyEvent[] keys = settings.Keys is { Count: > 0 } k ? [..k] : [new(0, 0, KeyMode.Major)];
+        try {
+            _ = TempoMap.Of(tempo);
+        } catch (ArgumentException) {
+            tempo = [new(0, Math.Clamp(settings.Tempo, TempoMap.MinBpm, TempoMap.MaxBpm), TempoCurve.Step)];
+        }
+
+        try {
+            _ = new SignatureMap(signatures);
+        } catch (Exception e) when (e is ArgumentException or NullReferenceException or DivideByZeroException) {
+            signatures = [new(0, signature.Numerator, signature.Denominator)];
+        }
+
+        if (keys.Any(static e => e is null) || keys[0].Tick != 0) {
+            keys = [new(0, 0, KeyMode.Major)];
+        }
+
+        return settings with {
+            Tempo = tempo[0].Bpm,
+            TempoEvents = tempo,
+            Signature = new(signatures[0].Numerator, signatures[0].Denominator),
+            Signatures = signatures,
+            Keys = keys,
+            Recording = settings.Recording ?? ProjectDefaults.Recording(signature)
+        };
     }
 
     /// <summary>
@@ -165,7 +272,8 @@ public static class ProjectPackage {
         Track track,
         ImmutableSortedDictionary<string, AudioFile> files,
         ImmutableSortedDictionary<string, AudioRegion>.Builder regions,
-        ImmutableSortedDictionary<string, MidiRegion>.Builder midiRegions
+        ImmutableSortedDictionary<string, MidiRegion>.Builder midiRegions,
+        ImmutableSortedDictionary<string, TakeFolder>.Builder folders
     ) {
         foreach (var region in file.Regions ?? []) {
             if (region?.TrackId == track.Id && track.Kind == TrackKind.Audio && files.ContainsKey(region.FileId)) {
@@ -176,6 +284,20 @@ public static class ProjectPackage {
         foreach (var region in file.MidiRegions ?? []) {
             if (region?.TrackId == track.Id && Edits.IsMidiKind(track.Kind) && region.Id is not null) {
                 midiRegions[region.Id] = Normalise(region);
+            }
+        }
+
+        foreach (var folder in file.TakeFolders ?? []) {
+            if (folder?.TrackId == track.Id
+                && track.Kind == TrackKind.Audio
+                && folder.Id is not null
+                && folder.Takes is { Count: > 0 } takes
+                && takes.All(t => t is not null && files.ContainsKey(t.FileId ?? string.Empty))) {
+                var ids = takes.Select(static t => t.Id).ToHashSet();
+                folders[folder.Id] = folder with {
+                    Name = folder.Name ?? track.Name,
+                    Comp = [..(folder.Comp ?? []).Where(s => s is not null && ids.Contains(s.TakeId))]
+                };
             }
         }
     }
@@ -234,7 +356,8 @@ public static class ProjectPackage {
                 ? slot with { Parameters = PluginCatalog.Sorted(slot.Parameters) }
                 : null,
             MidiInput = track.MidiInput ?? ProjectDefaults.MidiInput,
-            MidiOutput = track.Kind == TrackKind.Midi ? track.MidiOutput : null
+            MidiOutput = track.Kind == TrackKind.Midi ? track.MidiOutput : null,
+            Notes = track.Notes ?? string.Empty
         };
 
     static MidiRegion Normalise(MidiRegion region) =>
@@ -304,11 +427,11 @@ public static class ProjectPackage {
 ///     refused rather than read wrongly.
 /// </remarks>
 public static class PackageMigrations {
-    public const int CurrentSchemaVersion = 2;
+    public const int CurrentSchemaVersion = 3;
     const string VersionField = "schemaVersion";
 
     /// <summary><c>Steps[n]</c> takes schema <c>n + 1</c> to <c>n + 2</c>; it gets the kind of file and its JSON.</summary>
-    static readonly Func<string, JsonObject, JsonObject>[] Steps = [ToSchema2];
+    static readonly Func<string, JsonObject, JsonObject>[] Steps = [ToSchema2, ToSchema3];
 
     public static JsonObject Upgrade(JsonObject json, string kind) {
         var version = json[VersionField] is JsonValue v && v.TryGetValue<int>(out var n) ? n : 1;
@@ -346,6 +469,65 @@ public static class PackageMigrations {
 
         return json;
     }
+
+    /// <summary>
+    ///     Schema 2 (Phase 2) to 3 (Phase 3, arranging and takes): the tempo, signature and key tracks are the
+    ///     project-start values alone; recording makes take folders, without replace or autopunch, with the punch
+    ///     locators over the first four bars; no markers, sections, notes or screensets; tracks are outside any stack,
+    ///     expanded, without notes; regions are unmuted with linear fades; tracks have no take folders.
+    /// </summary>
+    static JsonObject ToSchema3(string kind, JsonObject json) {
+        if (kind == "project") {
+            if (json["settings"] is JsonObject settings) {
+                var tempo = settings["tempo"]?.DeepClone() ?? JsonValue.Create(ProjectDefaults.Tempo);
+                var signature = settings["signature"] as JsonObject;
+                var numerator = signature?["numerator"]?.GetValue<int>() ?? 4;
+                var denominator = signature?["denominator"]?.GetValue<int>() ?? 4;
+                settings["tempoEvents"] ??= new JsonArray(
+                    new JsonObject { ["tick"] = 0, ["bpm"] = tempo, ["curve"] = "step" }
+                );
+                settings["signatures"] ??= new JsonArray(
+                    new JsonObject { ["tick"] = 0, ["numerator"] = numerator, ["denominator"] = denominator }
+                );
+                settings["keys"] ??= new JsonArray(new JsonObject { ["tick"] = 0, ["tonic"] = 0, ["mode"] = "major" });
+                settings["recording"] ??= new JsonObject {
+                    ["cycleMode"] = "takeFolder",
+                    ["replace"] = false,
+                    ["autopunch"] = false,
+                    ["punchInTick"] = 0,
+                    ["punchOutTick"] = 4L * TempoMap.Ppq * 4 / denominator * numerator
+                };
+            }
+
+            json["markers"] ??= new JsonArray();
+            json["arrangement"] ??= new JsonArray();
+            json["notes"] ??= string.Empty;
+            json["screensets"] ??= new JsonArray();
+        } else if (kind == "track") {
+            if (json["track"] is JsonObject track) {
+                track["collapsed"] ??= false;
+                track["notes"] ??= string.Empty;
+            }
+
+            foreach (var region in json["regions"] as JsonArray ?? []) {
+                if (region is JsonObject r) {
+                    r["fadeInCurve"] ??= 0;
+                    r["fadeOutCurve"] ??= 0;
+                    r["muted"] ??= false;
+                }
+            }
+
+            foreach (var region in json["midiRegions"] as JsonArray ?? []) {
+                if (region is JsonObject r) {
+                    r["muted"] ??= false;
+                }
+            }
+
+            json["takeFolders"] ??= new JsonArray();
+        }
+
+        return json;
+    }
 }
 
 /// <summary>Source-generated serialisation of the package files (camelCase, indented, nulls omitted).</summary>
@@ -357,4 +539,5 @@ public static class PackageMigrations {
 [JsonSerializable(typeof(ProjectFile))]
 [JsonSerializable(typeof(TrackFile))]
 [JsonSerializable(typeof(List<ProjectSummary>))]
+[JsonSerializable(typeof(AlternativesFile))]
 public sealed partial class PackageJsonContext : JsonSerializerContext;

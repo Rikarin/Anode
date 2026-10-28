@@ -1,6 +1,7 @@
 using Anode.Contracts;
 using Anode.Model.Time;
 using System.Collections.Immutable;
+using System.Runtime.CompilerServices;
 
 namespace Anode.Model;
 
@@ -22,10 +23,42 @@ public sealed record ProjectState(
     ImmutableSortedDictionary<string, AudioFile> Files,
     ImmutableSortedDictionary<string, MidiRegion> MidiRegions
 ) {
+    static readonly ConditionalWeakTable<IReadOnlyList<TempoEvent>, TempoMap> TempoMaps = new();
+    static readonly ConditionalWeakTable<IReadOnlyList<SignatureEvent>, SignatureMap> SignatureMaps = new();
+
     public long LastEventId { get; init; }
 
-    /// <summary>The project's tempo map (one tempo in Phase 1).</summary>
-    public TempoMap TempoMap => TempoMap.Constant(Settings.Tempo);
+    /// <summary>The take folders, by id (docs/04-phase-3.md, "Take folders").</summary>
+    public ImmutableSortedDictionary<string, TakeFolder> TakeFolders { get; init; } =
+        ImmutableSortedDictionary.Create<string, TakeFolder>(StringComparer.Ordinal);
+
+    public ImmutableSortedDictionary<string, Marker> Markers { get; init; } =
+        ImmutableSortedDictionary.Create<string, Marker>(StringComparer.Ordinal);
+
+    /// <summary>The arrangement track's sections, by id; they never overlap.</summary>
+    public ImmutableSortedDictionary<string, ArrangementMarker> Sections { get; init; } =
+        ImmutableSortedDictionary.Create<string, ArrangementMarker>(StringComparer.Ordinal);
+
+    /// <summary>The project's Note Pad.</summary>
+    public string Notes { get; init; } = string.Empty;
+
+    /// <summary>
+    ///     The editor's screensets by number (1…9): saved with the project, but not part of its content as edits and
+    ///     undo see it, nor of the contract's <see cref="Project" />.
+    /// </summary>
+    public ImmutableSortedDictionary<int, Screenset> Screensets { get; init; } = ImmutableSortedDictionary<int, Screenset>.Empty;
+
+    /// <summary>The project's tempo map: its tempo track (built once per track, as the lists are immutable).</summary>
+    public TempoMap TempoMap =>
+        Settings.TempoEvents is { Count: > 0 } events
+            ? TempoMaps.GetValue(events, static e => TempoMap.Of(e))
+            : TempoMap.Constant(Settings.Tempo);
+
+    /// <summary>The project's signature track as bars and beats.</summary>
+    public SignatureMap SignatureMap =>
+        Settings.Signatures is { Count: > 0 } events
+            ? SignatureMaps.GetValue(events, static e => new SignatureMap(e))
+            : SignatureMap.Constant(Settings.Signature.Numerator, Settings.Signature.Denominator);
 
     /// <summary>The position of the track <paramref name="id" /> in the track list, or −1.</summary>
     public int IndexOfTrack(string id) {
@@ -63,6 +96,15 @@ public sealed record ProjectState(
         return max;
     }
 
+    /// <summary>The take folders of a track, by start.</summary>
+    public IEnumerable<TakeFolder> TakeFoldersOf(string trackId) =>
+        TakeFolders.Values.Where(f => f.TrackId == trackId)
+            .OrderBy(static f => f.StartTick)
+            .ThenBy(static f => f.Id, StringComparer.Ordinal);
+
+    /// <summary>The members of a folder stack, in track order.</summary>
+    public IEnumerable<Track> MembersOf(string stackId) => Tracks.Where(t => t.ParentId == stackId);
+
     /// <summary>The regions of a track, by start.</summary>
     public IEnumerable<AudioRegion> RegionsOf(string trackId) =>
         Regions.Values.Where(r => r.TrackId == trackId)
@@ -87,10 +129,10 @@ public sealed record ProjectState(
             [..Regions.Values],
             [..Files.Values],
             [..MidiRegions.Values],
-            [], // Take folders, markers, arrangement and notes: Phase 3, workstream B (docs/04-phase-3.md).
-            [],
-            [],
-            string.Empty
+            [..TakeFolders.Values],
+            [..Markers.Values],
+            [..Sections.Values],
+            Notes
         );
 
     /// <summary>Applies one delta operation (an edit's primitive step, also what clients apply).</summary>
@@ -102,6 +144,9 @@ public sealed record ProjectState(
                 Regions = Regions.RemoveRange(Regions.Values.Where(r => r.TrackId == id).Select(static r => r.Id)),
                 MidiRegions = MidiRegions.RemoveRange(
                     MidiRegions.Values.Where(r => r.TrackId == id).Select(static r => r.Id)
+                ),
+                TakeFolders = TakeFolders.RemoveRange(
+                    TakeFolders.Values.Where(f => f.TrackId == id).Select(static f => f.Id)
                 )
             },
             RegionUpserted(var region) => this with { Regions = Regions.SetItem(region.Id, region) },
@@ -115,6 +160,13 @@ public sealed record ProjectState(
                 LastEventId = Math.Max(LastEventId, MaxEventId(region))
             },
             MidiRegionRemoved(var id) => this with { MidiRegions = MidiRegions.Remove(id) },
+            TakeFolderUpserted(var folder) => this with { TakeFolders = TakeFolders.SetItem(folder.Id, folder) },
+            TakeFolderRemoved(var id) => this with { TakeFolders = TakeFolders.Remove(id) },
+            MarkerUpserted(var marker) => this with { Markers = Markers.SetItem(marker.Id, marker) },
+            MarkerRemoved(var id) => this with { Markers = Markers.Remove(id) },
+            SectionUpserted(var section) => this with { Sections = Sections.SetItem(section.Id, section) },
+            SectionRemoved(var id) => this with { Sections = Sections.Remove(id) },
+            NotesChanged(var text) => this with { Notes = text },
             _ => throw new ArgumentException($"Unknown delta operation {op.GetType().Name}.", nameof(op))
         };
 
@@ -146,6 +198,12 @@ public sealed record ProjectState(
             MasterChanged => new MasterChanged(Master),
             ProjectRenamed => new ProjectRenamed(Name),
             MidiRegionUpserted or MidiRegionRemoved => InverseMidi(op),
+            TakeFolderUpserted(var folder) => TakeFolders.TryGetValue(folder.Id, out var old)
+                ? new TakeFolderUpserted(old)
+                : new TakeFolderRemoved(folder.Id),
+            TakeFolderRemoved(var id) => TakeFolders.TryGetValue(id, out var old) ? new TakeFolderUpserted(old) : null,
+            MarkerUpserted or MarkerRemoved or SectionUpserted or SectionRemoved => InverseArrangement(op),
+            NotesChanged => new NotesChanged(Notes),
             _ => throw new ArgumentException($"Unknown delta operation {op.GetType().Name}.", nameof(op))
         };
 
@@ -155,6 +213,19 @@ public sealed record ProjectState(
                 ? new MidiRegionUpserted(old)
                 : new MidiRegionRemoved(region.Id),
             MidiRegionRemoved(var id) => MidiRegions.TryGetValue(id, out var old) ? new MidiRegionUpserted(old) : null,
+            _ => null
+        };
+
+    DeltaOp? InverseArrangement(DeltaOp op) =>
+        op switch {
+            MarkerUpserted(var marker) => Markers.TryGetValue(marker.Id, out var old)
+                ? new MarkerUpserted(old)
+                : new MarkerRemoved(marker.Id),
+            MarkerRemoved(var id) => Markers.TryGetValue(id, out var old) ? new MarkerUpserted(old) : null,
+            SectionUpserted(var section) => Sections.TryGetValue(section.Id, out var old)
+                ? new SectionUpserted(old)
+                : new SectionRemoved(section.Id),
+            SectionRemoved(var id) => Sections.TryGetValue(id, out var old) ? new SectionUpserted(old) : null,
             _ => null
         };
 

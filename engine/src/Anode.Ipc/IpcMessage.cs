@@ -158,14 +158,25 @@ public sealed record SetCycleMessage(bool Enabled, long StartSample, long EndSam
 /// </summary>
 public sealed record SetMetronomeMessage(bool Enabled, float Gain, bool CountIn = false) : IpcMessage;
 
-/// <summary>One recorded take: a WAV file the host finished writing.</summary>
+/// <summary>
+///     One recorded take: a WAV file the host finished writing. A cycle recording (or one across autopunch) is one file
+///     per track whose <paramref name="Passes" /> say where each part of it was played; without them (null or empty)
+///     the whole file is one pass from <paramref name="StartSample" />.
+/// </summary>
 public sealed record RecordedTake(
     int TrackId,
     string Path,
     long StartSample,
     long Frames,
     int Channels,
-    int SampleRate);
+    int SampleRate,
+    IReadOnlyList<RecordedPass>? Passes = null);
+
+/// <summary>
+///     One pass of a take (a cycle wrap starts the next): <paramref name="Frames" /> frames of the take's file from
+///     <paramref name="FileOffset" />, recorded at project sample <paramref name="StartSample" />.
+/// </summary>
+public sealed record RecordedPass(long StartSample, long FileOffset, long Frames);
 
 /// <summary>One live MIDI message at an absolute project sample (status 0x80…0xEF).</summary>
 public sealed record RecordedMidiEvent(long Sample, int Status, int Data1, int Data2);

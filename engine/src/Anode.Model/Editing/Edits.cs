@@ -135,6 +135,29 @@ public static partial class Edits {
             SetMidiRecordingCommand c => [
                 new SettingsChanged(state.Settings with { MergeMidiRecording = c.Merge })
             ],
+            SetTempoEventsCommand c => SetTempoEvents(state, c),
+            SetSignaturesCommand c => SetSignatures(state, c),
+            SetKeysCommand c => SetKeys(state, c),
+            AddMarkerCommand c => AddMarker(state, c, ids),
+            SetMarkerCommand c => SetMarker(state, c),
+            DeleteMarkersCommand c => DeleteMarkers(state, c),
+            AddSectionCommand c => AddSection(state, c, ids),
+            SetSectionCommand c => SetSection(state, c),
+            DeleteSectionsCommand c => DeleteSections(state, c),
+            MoveSectionCommand c => MoveSection(state, c, ids),
+            SetCompCommand c => SetComp(state, c),
+            SelectTakeCommand c => SelectTake(state, c),
+            SetTakeFolderCommand c => SetTakeFolder(state, c),
+            DeleteTakeCommand c => DeleteTake(state, c),
+            FlattenTakeFolderCommand c => FlattenTakeFolder(state, c, ids),
+            PackTakeFolderCommand c => PackTakeFolder(state, c, ids),
+            SetRecordingCommand c => SetRecording(state, c),
+            CreateStackCommand c => CreateStack(state, c, ids),
+            RemoveStackCommand c => RemoveStack(state, c),
+            SetTrackParentCommand c => SetTrackParent(state, c),
+            SetProjectNotesCommand c => SetProjectNotes(c),
+            JoinRegionsCommand c => JoinRegions(state, c),
+            CopyRegionsCommand c => CopyRegions(state, c, ids),
             _ => throw new EditException($"Unknown command {command.GetType().Name}.")
         };
 
@@ -189,6 +212,7 @@ public static partial class Edits {
         var prefix = kind switch {
             TrackKind.Instrument => "Inst",
             TrackKind.Midi => "MIDI",
+            TrackKind.Stack => "Stack",
             _ => "Audio"
         };
         // Numbered by kind, as Logic does: the first instrument track is "Inst 1" whatever else the project holds.
@@ -218,6 +242,15 @@ public static partial class Edits {
             ops.Add(new MidiRegionRemoved(region.Id));
         }
 
+        foreach (var folder in state.TakeFoldersOf(track.Id)) {
+            ops.Add(new TakeFolderRemoved(folder.Id));
+        }
+
+        // A stack goes with its members, as in Logic (removeStack keeps them).
+        foreach (var member in state.MembersOf(track.Id).ToArray()) {
+            ops.AddRange(RemoveTrack(state, new(member.Id)));
+        }
+
         ops.Add(new TrackRemoved(track.Id));
         return ops;
     }
@@ -241,12 +274,18 @@ public static partial class Edits {
             throw new EditException($"Input channel {input.Channel} is outside 0…{MaxInputChannel}.");
         }
 
+        if (track.Kind == TrackKind.Stack && (c.RecordArmed == true || c.InputMonitoring == true)) {
+            throw new EditException("A stack records and monitors nothing itself: arm its members.");
+        }
+
         var changed = track with {
             Name = c.Name is null ? track.Name : Name(c.Name, "track name"),
             Color = c.Color ?? track.Color,
             Input = c.Input ?? track.Input,
             RecordArmed = c.RecordArmed ?? track.RecordArmed,
-            InputMonitoring = c.InputMonitoring ?? track.InputMonitoring
+            InputMonitoring = c.InputMonitoring ?? track.InputMonitoring,
+            Collapsed = c.Collapsed ?? track.Collapsed,
+            Notes = c.Notes is null ? track.Notes : Text(c.Notes, "track notes")
         };
         return [new TrackUpserted(changed, state.IndexOfTrack(track.Id))];
     }
@@ -303,7 +342,16 @@ public static partial class Edits {
             return [new MidiRegionUpserted(midi with { StartTick = c.StartTick, TrackId = midiTrack })];
         }
 
-        var region = RegionOf(state, c.RegionId);
+        if (state.TakeFolders.TryGetValue(c.RegionId ?? string.Empty, out var folder)) {
+            var folderTrack = c.TrackId is null ? folder.TrackId : AudioTrackOf(state, c.TrackId).Id;
+            return [
+                new TakeFolderUpserted(
+                    Timeline.Shifted(folder, c.StartTick - folder.StartTick) with { TrackId = folderTrack }
+                )
+            ];
+        }
+
+        var region = RegionOf(state, c.RegionId ?? string.Empty);
         var trackId = c.TrackId is null ? region.TrackId : AudioTrackOf(state, c.TrackId).Id;
         return [new RegionUpserted(region with { StartTick = c.StartTick, TrackId = trackId })];
     }
@@ -336,7 +384,11 @@ public static partial class Edits {
             return SplitMidiRegion(midi, c.AtTick, ids);
         }
 
-        var region = RegionOf(state, c.RegionId);
+        if (state.TakeFolders.ContainsKey(c.RegionId ?? string.Empty)) {
+            throw new EditException($"'{c.RegionId}' is a take folder: flatten it to split its regions.");
+        }
+
+        var region = RegionOf(state, c.RegionId!);
         var map = state.TempoMap;
         var start = map.SampleAt(region.StartTick, state.SampleRate);
         var at = c.AtTick > region.StartTick ? map.SampleAt(c.AtTick, state.SampleRate) - start : 0;
@@ -377,13 +429,18 @@ public static partial class Edits {
             throw new EditException("Fades are at least 0 frames and together no longer than the region.");
         }
 
+        CheckCurve(c.FadeInCurve);
+        CheckCurve(c.FadeOutCurve);
         return [
             new RegionUpserted(
                 region with {
                     Name = c.Name is null ? region.Name : Name(c.Name, "region name"),
                     GainDb = c.GainDb ?? region.GainDb,
                     FadeIn = fadeIn,
-                    FadeOut = fadeOut
+                    FadeOut = fadeOut,
+                    FadeInCurve = c.FadeInCurve ?? region.FadeInCurve,
+                    FadeOutCurve = c.FadeOutCurve ?? region.FadeOutCurve,
+                    Muted = c.Muted ?? region.Muted
                 }
             )
         ];
@@ -396,31 +453,18 @@ public static partial class Edits {
 
         return [
             ..c.RegionIds.Distinct(StringComparer.Ordinal)
-                .Select(DeltaOp(id) => id is not null && state.MidiRegions.ContainsKey(id)
-                        ? new MidiRegionRemoved(id)
-                        : new RegionRemoved(RegionOf(state, id ?? string.Empty).Id)
+                .Select(id => Timeline.Region(state, id) is { } item
+                    ? Timeline.Remove(item)
+                    : throw new EditException($"No region '{id}'.")
                 )
         ];
     }
 
-    static DeltaOp[] SetTempo(ProjectState state, SetTempoCommand c) {
-        if (!(c.Bpm is >= TempoMap.MinBpm and <= TempoMap.MaxBpm)) {
-            throw new EditException($"Tempo {c.Bpm} is outside {TempoMap.MinBpm}…{TempoMap.MaxBpm} BPM.");
+    /// <summary>A fade curve is −1…1 (0 linear).</summary>
+    static void CheckCurve(double? curve) {
+        if (curve is { } c && !(c is >= -1 and <= 1)) {
+            throw new EditException($"A fade curve is −1…1, not {c}.");
         }
-
-        return [new SettingsChanged(state.Settings with { Tempo = c.Bpm })];
-    }
-
-    static DeltaOp[] SetSignature(ProjectState state, SetSignatureCommand c) {
-        if (c.Numerator is < 1 or > 32) {
-            throw new EditException($"A signature's numerator is 1…32, not {c.Numerator}.");
-        }
-
-        if (c.Denominator is not (1 or 2 or 4 or 8 or 16 or 32)) {
-            throw new EditException($"A signature's denominator is 1, 2, 4, 8, 16 or 32, not {c.Denominator}.");
-        }
-
-        return [new SettingsChanged(state.Settings with { Signature = new(c.Numerator, c.Denominator) })];
     }
 
     static DeltaOp[] SetCycle(ProjectState state, SetCycleCommand c) {

@@ -3,7 +3,8 @@ using System.Security.Cryptography;
 namespace Anode.Model;
 
 /// <summary>
-///     Makes domain ids: a kind prefix (<c>trk</c>, <c>rgn</c>, <c>mid</c>, <c>aud</c>, <c>prj</c>), an underscore, a
+///     Makes domain ids: a kind prefix (<c>trk</c>, <c>rgn</c>, <c>mid</c>, <c>aud</c>, <c>prj</c>, <c>tkf</c>, <c>tak</c>,
+///     <c>mrk</c>, <c>sec</c>, <c>alt</c>), an underscore, a
 ///     suffix.
 /// </summary>
 public interface IIdSource {
@@ -32,4 +33,9 @@ public static class IdPrefix {
     public const string Region = "rgn";
     public const string File = "aud";
     public const string MidiRegion = "mid";
+    public const string TakeFolder = "tkf";
+    public const string Take = "tak";
+    public const string Marker = "mrk";
+    public const string Section = "sec";
+    public const string Alternative = "alt";
 }
