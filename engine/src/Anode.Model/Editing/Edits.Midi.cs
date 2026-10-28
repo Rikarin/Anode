@@ -198,7 +198,11 @@ public static partial class Edits {
         CheckUnit(playback.Swing, "swing");
         return [
             new MidiRegionUpserted(
-                region with { Name = c.Name is null ? region.Name : Name(c.Name, "region name"), Playback = playback }
+                region with {
+                    Name = c.Name is null ? region.Name : Name(c.Name, "region name"),
+                    Playback = playback,
+                    Muted = c.Muted ?? region.Muted
+                }
             )
         ];
     }

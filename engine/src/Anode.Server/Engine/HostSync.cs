@@ -63,8 +63,9 @@ public sealed class HostLink(Stream stream) : IDisposable {
 ///     sent with the current one and sends only the difference — a whole model through the pool on the first sync (and
 ///     after every reconnect: a fresh <see cref="HostSync" />), when tracks went away, after a tempo change or when
 ///     many tracks changed; otherwise per-track segments; then strips, track IO, instruments, parameters, MIDI I/O,
-///     cycle and metronome messages, and the MIDI-thru track. A track's settings (<see cref="EngineTrack" />) travel
-///     whole with its segment; its instrument's saved state only when the host does not have the track yet.
+///     cycle, autopunch and metronome messages, and the MIDI-thru track. A track's settings (<see cref="EngineTrack" />)
+///     travel whole with its segment; its instrument's saved state only when the host does not have the track yet. A
+///     folder stack has no engine track: its members get their effective strips (docs/04-phase-3.md, "Stacks").
 /// </summary>
 public sealed class HostSync(HostLink link, SegmentPool pool, ILogger logger) {
     /// <summary>More dirty tracks than this go as one whole model.</summary>
@@ -137,7 +138,7 @@ public sealed class HostSync(HostLink link, SegmentPool pool, ILogger logger) {
             await LoadWholeAsync(
                     model.Tracks,
                     model.LengthSamples,
-                    [..target.State.Tracks.Select(t => Engine(t, target, true))],
+                    [..target.State.Tracks.Where(Stacks.IsPlayable).Select(t => Engine(t, target, true))],
                     NewFiles(target),
                     Engine(target.State.Master),
                     target.AudioFolder,
@@ -174,8 +175,8 @@ public sealed class HostSync(HostLink link, SegmentPool pool, ILogger logger) {
 
     bool NeedsWhole(OpenProjectView previous, OpenProjectView target, CompiledModel model) {
         // A global change (the tempo map) recompiles every track: one whole swap (docs/adr/0006-bulk-ipc.md).
-        if (previous.State.Settings.Tempo != target.State.Settings.Tempo
-            || previous.State.Tracks.Exists(t => target.State.FindTrack(t.Id) is null)) {
+        if (TempoChanged(previous.State, target.State)
+            || previous.State.Tracks.Exists(t => Stacks.IsPlayable(t) && target.State.FindTrack(t.Id) is null)) {
             return true;
         }
 
@@ -283,7 +284,12 @@ public sealed class HostSync(HostLink link, SegmentPool pool, ILogger logger) {
         return files;
     }
 
-    /// <summary>Strips, track IO, cycle and metronome that changed (all of them after a whole load).</summary>
+    static bool TempoChanged(ProjectState before, ProjectState now) =>
+        before.SampleRate != now.SampleRate
+        || before.Settings.Tempo != now.Settings.Tempo
+        || !(before.Settings.TempoEvents ?? []).SequenceEqual(now.Settings.TempoEvents ?? []);
+
+    /// <summary>Strips, track IO, cycle, punch and metronome that changed (all of them after a whole load).</summary>
     static IEnumerable<IpcMessage> Messages(
         OpenProjectView? previous,
         OpenProjectView target,
@@ -296,23 +302,38 @@ public sealed class HostSync(HostLink link, SegmentPool pool, ILogger logger) {
         }
 
         foreach (var track in state.Tracks) {
-            if (!carried.Contains(track.Id) && before?.FindTrack(track.Id) is { } old) {
-                foreach (var message in TrackMessages(old, track, target)) {
+            if (Stacks.IsPlayable(track) && !carried.Contains(track.Id) && before?.FindTrack(track.Id) is { } old) {
+                foreach (var message in TrackMessages(before, old, track, target)) {
                     yield return message;
                 }
             }
         }
 
+        foreach (var message in SettingsMessages(before, state)) {
+            yield return message;
+        }
+    }
+
+    /// <summary>Cycle, punch and metronome that changed (all of them without <paramref name="before" />).</summary>
+    static IEnumerable<IpcMessage> SettingsMessages(ProjectState? before, ProjectState state) {
         var settings = state.Settings;
-        if (before is null
-            || before.Settings.Cycle != settings.Cycle
-            || before.Settings.Tempo != settings.Tempo
-            || before.SampleRate != state.SampleRate) {
-            var map = state.TempoMap;
+        var tempoChanged = before is null || TempoChanged(before, state);
+        var map = state.TempoMap;
+        if (tempoChanged || before!.Settings.Cycle != settings.Cycle) {
             yield return new SetCycleMessage(
                 settings.Cycle.Enabled,
                 map.SampleAt(settings.Cycle.StartTick, state.SampleRate),
                 map.SampleAt(settings.Cycle.EndTick, state.SampleRate)
+            );
+        }
+
+        // Autopunch in samples, whenever the settings, the tempo or the project change (docs/04-phase-3.md).
+        if (tempoChanged || before!.Settings.Recording != settings.Recording) {
+            var recording = settings.Recording;
+            yield return new SetPunchMessage(
+                recording.Autopunch,
+                map.SampleAt(recording.PunchInTick, state.SampleRate),
+                map.SampleAt(recording.PunchOutTick, state.SampleRate)
             );
         }
 
@@ -328,11 +349,12 @@ public sealed class HostSync(HostLink link, SegmentPool pool, ILogger logger) {
         }
     }
 
-    /// <summary>What changed in a track the host has and is not sent whole.</summary>
-    static IEnumerable<IpcMessage> TrackMessages(Track old, Track track, OpenProjectView target) {
+    /// <summary>What changed in a track the host has and is not sent whole (its effective strip: a stack's change too).</summary>
+    static IEnumerable<IpcMessage> TrackMessages(ProjectState before, Track old, Track track, OpenProjectView target) {
         var id = target.Ids.Track(track.Id);
-        if (old.Strip != track.Strip) {
-            yield return new SetStripMessage(id, Engine(track.Strip));
+        var strip = Stacks.EffectiveStrip(target.State, track);
+        if (Stacks.EffectiveStrip(before, old) != strip) {
+            yield return new SetStripMessage(id, Engine(strip));
         }
 
         if (old.Input != track.Input
@@ -392,7 +414,7 @@ public sealed class HostSync(HostLink link, SegmentPool pool, ILogger logger) {
             track.Input.Stereo,
             track.RecordArmed,
             track.InputMonitoring,
-            Engine(track.Strip),
+            Engine(Stacks.EffectiveStrip(view.State, track)),
             track.Instrument is { } slot ? Engine(slot, view, state) : null,
             Midi(track)
         );

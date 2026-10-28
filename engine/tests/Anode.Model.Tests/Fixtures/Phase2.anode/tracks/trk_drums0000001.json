@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 2,
+  "track": {
+    "id": "trk_drums0000001",
+    "name": "Drums",
+    "kind": "audio",
+    "color": "#e5604d",
+    "input": {
+      "channel": 1,
+      "stereo": true
+    },
+    "recordArmed": false,
+    "inputMonitoring": false,
+    "strip": {
+      "volumeDb": -1,
+      "pan": 0,
+      "mute": false,
+      "solo": false
+    },
+    "midiInput": {
+      "channel": 0
+    }
+  },
+  "regions": [
+    {
+      "id": "rgn_loop00000001",
+      "trackId": "trk_drums0000001",
+      "fileId": "aud_loop00000001",
+      "name": "Loop",
+      "startTick": 0,
+      "fileOffset": 0,
+      "length": 192000,
+      "gainDb": -3,
+      "fadeIn": 100,
+      "fadeOut": 200
+    }
+  ],
+  "midiRegions": []
+}

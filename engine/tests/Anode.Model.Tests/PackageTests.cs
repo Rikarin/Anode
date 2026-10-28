@@ -1,6 +1,7 @@
 using Anode.Contracts;
 using Anode.Model.Editing;
 using Anode.Model.Storage;
+using Anode.Model.Time;
 using System.Text.Json.Nodes;
 
 namespace Anode.Model.Tests;
@@ -29,12 +30,9 @@ public sealed class PackageTests : IDisposable {
 
     [Fact]
     public void Saving_removes_the_files_of_removed_tracks() {
-        var (state, _, _) = RandomProjects.Build(3, 30);
+        var (state, ids, _) = RandomProjects.Build(3, 30);
         ProjectPackage.Save(folder, state);
-        var fewer = state with { Tracks = state.Tracks.RemoveAt(0) };
-        fewer = fewer with {
-            Regions = fewer.Regions.RemoveRange(state.RegionsOf(state.Tracks[0].Id).Select(static r => r.Id))
-        };
+        var fewer = Edits.Apply(state, new RemoveTrackCommand(state.Tracks[0].Id), ids).State;
         ProjectPackage.Save(folder, fewer);
         Assert.Equal(fewer.Tracks.Count, Directory.EnumerateFiles(Path.Combine(folder, "tracks")).Count());
         Assert.Equal(RandomProjects.Json(fewer), RandomProjects.Json(ProjectPackage.Load(folder)));
@@ -57,7 +55,7 @@ public sealed class PackageTests : IDisposable {
     }
 
     [Fact]
-    public void A_Phase_1_package_opens_as_audio_tracks_without_MIDI_and_saves_as_schema_2() {
+    public void A_Phase_1_package_opens_as_audio_tracks_without_MIDI_and_saves_as_the_current_schema() {
         CopyFixture("Phase1.anode");
         var state = ProjectPackage.Load(folder);
         Assert.Equal(("prj_phase1fixture", "Phase 1 Song", 96.0), (state.Id, state.Name, state.Settings.Tempo));
@@ -78,12 +76,66 @@ public sealed class PackageTests : IDisposable {
         Assert.Equal((2880L, 96_000L, 480L), (region.StartTick, region.Length, region.FadeOut));
         Assert.Empty(state.MidiRegions);
 
-        // Saved again, it is schema 2 (with a MIDI region list per track) and reads back the same.
+        // Saved again, it is the current schema (with a MIDI region list per track) and reads back the same.
         ProjectPackage.Save(folder, state);
         var track = JsonNode.Parse(File.ReadAllText(Path.Combine(folder, "tracks", "trk_vocal0000001.json")))!;
-        Assert.Equal(2, track["schemaVersion"]!.GetValue<int>());
+        Assert.Equal(PackageMigrations.CurrentSchemaVersion, track["schemaVersion"]!.GetValue<int>());
         Assert.Empty(track["midiRegions"]!.AsArray());
         Assert.Equal(RandomProjects.Json(state), RandomProjects.Json(ProjectPackage.Load(folder)));
+    }
+
+    [Fact]
+    public void A_Phase_2_package_opens_with_global_tracks_of_its_tempo_and_signature_and_saves_as_schema_3() {
+        CopyFixture("Phase2.anode");
+        var state = ProjectPackage.Load(folder);
+        var settings = state.Settings;
+        Assert.Equal((132.0, new TimeSignature(6, 8)), (settings.Tempo, settings.Signature));
+        Assert.Equal([new TempoEvent(0, 132, TempoCurve.Step)], settings.TempoEvents);
+        Assert.Equal([new SignatureEvent(0, 6, 8)], settings.Signatures);
+        Assert.Equal([new KeyEvent(0, 0, KeyMode.Major)], settings.Keys);
+        // Four bars of 6/8 for the punch locators.
+        Assert.Equal(new(CycleRecordMode.TakeFolder, false, false, 0, 4 * 2880), settings.Recording);
+        Assert.True(settings.MergeMidiRecording);
+        Assert.Empty(state.TakeFolders);
+        Assert.Empty(state.Markers);
+        Assert.Empty(state.Sections);
+        Assert.Empty(state.Screensets);
+        Assert.Equal(string.Empty, state.Notes);
+        Assert.All(
+            state.Tracks,
+            static t => Assert.Equal(((string?)null, false, string.Empty), (t.ParentId, t.Collapsed, t.Notes))
+        );
+        var region = Assert.Single(state.Regions.Values);
+        Assert.Equal(
+            (0.0, 0.0, false, 100L, 200L),
+            (region.FadeInCurve, region.FadeOutCurve, region.Muted, region.FadeIn, region.FadeOut)
+        );
+        var midi = Assert.Single(state.MidiRegions.Values);
+        Assert.False(midi.Muted);
+        Assert.Equal(2, midi.Notes.Count);
+        Assert.Equal(3, state.LastEventId);
+        Assert.Equal(TempoMap.Constant(132).SecondsAt(960), state.TempoMap.SecondsAt(960));
+
+        ProjectPackage.Save(folder, state);
+        var root = JsonNode.Parse(File.ReadAllText(Path.Combine(folder, "project.json")))!;
+        Assert.Equal(3, root["schemaVersion"]!.GetValue<int>());
+        Assert.Single(root["settings"]!["tempoEvents"]!.AsArray());
+        var track = JsonNode.Parse(File.ReadAllText(Path.Combine(folder, "tracks", "trk_drums0000001.json")))!;
+        Assert.Equal(3, track["schemaVersion"]!.GetValue<int>());
+        Assert.Empty(track["takeFolders"]!.AsArray());
+        Assert.Equal(RandomProjects.Json(state), RandomProjects.Json(ProjectPackage.Load(folder)));
+    }
+
+    [Fact]
+    public void Screensets_and_notes_are_saved_with_the_project() {
+        var (state, _, _) = RandomProjects.Build(17, 30);
+        state = state with {
+            Notes = "Bridge needs work", Screensets = state.Screensets.SetItem(2, new(2, "Mixing", true, "{}"))
+        };
+        ProjectPackage.Save(folder, state);
+        var loaded = ProjectPackage.Load(folder);
+        Assert.Equal("Bridge needs work", loaded.Notes);
+        Assert.Equal(new(2, "Mixing", true, "{}"), Assert.Single(loaded.Screensets.Values));
     }
 
     [Fact]

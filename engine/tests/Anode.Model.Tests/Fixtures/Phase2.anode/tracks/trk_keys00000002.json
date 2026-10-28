@@ -1,0 +1,56 @@
+{
+  "schemaVersion": 2,
+  "track": {
+    "id": "trk_keys00000002",
+    "name": "Keys",
+    "kind": "instrument",
+    "color": "#a46be8",
+    "input": {
+      "channel": 0,
+      "stereo": false
+    },
+    "recordArmed": true,
+    "inputMonitoring": false,
+    "strip": {
+      "volumeDb": 0,
+      "pan": 0.5,
+      "mute": false,
+      "solo": false
+    },
+    "instrument": {
+      "pluginId": "anode.synth",
+      "name": "Synth",
+      "parameters": {
+        "cutoff": 4000,
+        "resonance": 0.2
+      }
+    },
+    "midiInput": {
+      "channel": 1
+    }
+  },
+  "regions": [],
+  "midiRegions": [
+    {
+      "id": "mid_chords000001",
+      "trackId": "trk_keys00000002",
+      "name": "Chords",
+      "startTick": 2880,
+      "lengthTicks": 5760,
+      "playback": {
+        "transpose": 2,
+        "velocity": 0,
+        "quantizeTicks": 0,
+        "quantizeStrength": 1,
+        "swing": 0
+      },
+      "notes": [
+        { "id": 1, "pitch": 60, "velocity": 100, "channel": 1, "startTick": 0, "lengthTicks": 960 },
+        { "id": 2, "pitch": 64, "velocity": 90, "channel": 1, "startTick": 960, "lengthTicks": 960 }
+      ],
+      "controls": [
+        { "id": 3, "kind": "controlChange", "channel": 1, "number": 64, "value": 127, "tick": 0 }
+      ]
+    }
+  ]
+}

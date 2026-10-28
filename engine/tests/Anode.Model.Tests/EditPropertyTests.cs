@@ -18,10 +18,6 @@ public sealed class EditPropertyTests {
     [Theory]
     [MemberData(nameof(Commands))]
     public void Applying_then_inverting_a_command_is_the_identity(string command) {
-        Assert.SkipWhen(
-            RandomProjects.PendingPhase3.Contains(command),
-            "Phase 3 command the model does not implement yet (docs/04-phase-3.md, workstream B)."
-        );
         var type = RandomProjects.CommandTypes.Single(t => t.Name == command);
         var applied = 0;
         Gen.Int.Sample(
@@ -156,6 +152,10 @@ public sealed class EditPropertyTests {
         readonly Dictionary<string, AudioRegion> regions = project.Regions.ToDictionary(static r => r.Id);
         readonly Dictionary<string, AudioFile> files = project.AudioFiles.ToDictionary(static f => f.Id);
         readonly Dictionary<string, MidiRegion> midiRegions = project.MidiRegions.ToDictionary(static r => r.Id);
+        readonly Dictionary<string, TakeFolder> folders = project.TakeFolders.ToDictionary(static f => f.Id);
+        readonly Dictionary<string, Marker> markers = project.Markers.ToDictionary(static m => m.Id);
+        readonly Dictionary<string, ArrangementMarker> sections = project.Arrangement.ToDictionary(static s => s.Id);
+        string notes = project.Notes;
         string name = project.Name;
         ProjectSettings settings = project.Settings;
         ChannelStrip master = project.Master;
@@ -171,6 +171,14 @@ public sealed class EditPropertyTests {
                         tracks.RemoveAll(t => t.Id == id);
                         foreach (var gone in midiRegions.Values.Where(r => r.TrackId == id).ToArray()) {
                             midiRegions.Remove(gone.Id);
+                        }
+
+                        foreach (var gone in regions.Values.Where(r => r.TrackId == id).ToArray()) {
+                            regions.Remove(gone.Id);
+                        }
+
+                        foreach (var gone in folders.Values.Where(f => f.TrackId == id).ToArray()) {
+                            folders.Remove(gone.Id);
                         }
 
                         break;
@@ -198,6 +206,27 @@ public sealed class EditPropertyTests {
                     case MidiRegionRemoved(var id):
                         midiRegions.Remove(id);
                         break;
+                    case TakeFolderUpserted(var folder):
+                        folders[folder.Id] = folder;
+                        break;
+                    case TakeFolderRemoved(var id):
+                        folders.Remove(id);
+                        break;
+                    case MarkerUpserted(var marker):
+                        markers[marker.Id] = marker;
+                        break;
+                    case MarkerRemoved(var id):
+                        markers.Remove(id);
+                        break;
+                    case SectionUpserted(var section):
+                        sections[section.Id] = section;
+                        break;
+                    case SectionRemoved(var id):
+                        sections.Remove(id);
+                        break;
+                    case NotesChanged(var text):
+                        notes = text;
+                        break;
                 }
             }
         }
@@ -214,7 +243,11 @@ public sealed class EditPropertyTests {
                     Tracks = tracks,
                     Regions = [..regions.Values.OrderBy(static r => r.Id, StringComparer.Ordinal)],
                     AudioFiles = [..files.Values.OrderBy(static f => f.Id, StringComparer.Ordinal)],
-                    MidiRegions = [..midiRegions.Values.OrderBy(static r => r.Id, StringComparer.Ordinal)]
+                    MidiRegions = [..midiRegions.Values.OrderBy(static r => r.Id, StringComparer.Ordinal)],
+                    TakeFolders = [..folders.Values.OrderBy(static f => f.Id, StringComparer.Ordinal)],
+                    Markers = [..markers.Values.OrderBy(static m => m.Id, StringComparer.Ordinal)],
+                    Arrangement = [..sections.Values.OrderBy(static s => s.Id, StringComparer.Ordinal)],
+                    Notes = notes
                 },
                 ContractsJsonContext.Default.Project
             );

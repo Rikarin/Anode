@@ -1,5 +1,6 @@
 using Anode.Contracts;
 using Anode.Model.Editing;
+using Anode.Model.Time;
 using System.Text.Json;
 
 namespace Anode.Model.Tests;
@@ -94,9 +95,16 @@ static class RandomProjects {
                 < 10 => typeof(AddMidiRegionCommand),
                 < 14 => typeof(AddNotesCommand),
                 < 16 => typeof(AddControlsCommand),
+                16 => typeof(PackTakeFolderCommand),
+                17 => typeof(AddMarkerCommand),
+                < 20 => typeof(AddSectionCommand),
+                20 => typeof(CreateStackCommand),
                 _ => Pick(random, CommandTypes)
             };
-            if (Command(type, state, random) is { } command) {
+            var command = i is >= 4 and < 7 && FirstAudioTrack(state) is { } audio && state.Files.Count > 0
+                ? AddRegion(audio, Pick(random, [..state.Files.Values]), random)
+                : Command(type, state, random);
+            if (command is not null) {
                 try {
                     state = Edits.Apply(state, command, ids, Plugins).State;
                 } catch (EditException) {
@@ -108,32 +116,7 @@ static class RandomProjects {
         return (state, ids, random);
     }
 
-    /// <summary>Phase 3 commands the model rejects until workstream B implements them; the identity property skips them.</summary>
-    public static readonly IReadOnlySet<string> PendingPhase3 = new HashSet<string>(StringComparer.Ordinal) {
-        nameof(SetTempoEventsCommand),
-        nameof(SetSignaturesCommand),
-        nameof(SetKeysCommand),
-        nameof(AddMarkerCommand),
-        nameof(SetMarkerCommand),
-        nameof(DeleteMarkersCommand),
-        nameof(AddSectionCommand),
-        nameof(SetSectionCommand),
-        nameof(DeleteSectionsCommand),
-        nameof(MoveSectionCommand),
-        nameof(SetCompCommand),
-        nameof(SelectTakeCommand),
-        nameof(SetTakeFolderCommand),
-        nameof(DeleteTakeCommand),
-        nameof(FlattenTakeFolderCommand),
-        nameof(PackTakeFolderCommand),
-        nameof(SetRecordingCommand),
-        nameof(CreateStackCommand),
-        nameof(RemoveStackCommand),
-        nameof(SetTrackParentCommand),
-        nameof(SetProjectNotesCommand),
-        nameof(JoinRegionsCommand),
-        nameof(CopyRegionsCommand)
-    };
+    static string? FirstAudioTrack(ProjectState state) => state.Tracks.Find(static t => t.Kind == TrackKind.Audio)?.Id;
 
     /// <summary>A random command of <paramref name="type" /> for <paramref name="s" />, or null when none can be made.</summary>
     public static EditCommand? Command(Type type, ProjectState s, Random r) {
@@ -143,6 +126,11 @@ static class RandomProjects {
         var files = s.Files.Values.ToArray();
         var instruments = tracks.Where(static t => t.Kind == TrackKind.Instrument).ToArray();
         var midiTracks = tracks.Where(static t => Edits.IsMidiKind(t.Kind)).ToArray();
+        var folders = s.TakeFolders.Values.ToArray();
+        var markers = s.Markers.Values.ToArray();
+        var sections = s.Sections.Values.ToArray();
+        var stacks = tracks.Where(static t => t.Kind == TrackKind.Stack).ToArray();
+        var plain = tracks.Where(static t => t.Kind != TrackKind.Stack).ToArray();
         return type.Name switch {
             nameof(AddTrackCommand) => AddTrack(r, tracks.Count),
             nameof(RemoveTrackCommand) => Track() is { } t ? new RemoveTrackCommand(t) : null,
@@ -154,7 +142,9 @@ static class RandomProjects {
                     MaybeText("#123456"),
                     r.Next(2) == 0 ? null : new TrackInput(r.Next(0, 9), r.Next(2) == 0),
                     Maybe(r.Next(2) == 0),
-                    Maybe(r.Next(2) == 0)
+                    Maybe(r.Next(2) == 0),
+                    Maybe(r.Next(2) == 0),
+                    MaybeText($"Notes {r.Next(100)}")
                 )
                 : null,
             nameof(SetStripCommand) => new SetStripCommand(
@@ -218,7 +208,8 @@ static class RandomProjects {
                     Maybe(r.Next(-64, 65)),
                     Maybe(Pick(r, [0, 120, 240, 480, 960])),
                     Maybe(Math.Round(r.NextDouble(), 2)),
-                    Maybe(Math.Round(r.NextDouble(), 2))
+                    Maybe(Math.Round(r.NextDouble(), 2)),
+                    Maybe(r.Next(2) == 0)
                 )
                 : null,
             nameof(AddNotesCommand) => MidiRegion() is { } m
@@ -244,31 +235,111 @@ static class RandomProjects {
                 ? new DeleteControlsCommand(m.Id, [..Some(m.Controls, r).Select(static e => e.Id)])
                 : null,
             nameof(SetMidiRecordingCommand) => new SetMidiRecordingCommand(r.Next(2) == 0),
-            // Phase 3 commands (docs/04-phase-3.md): placeholders until the model implements them (workstream B
-            // replaces these with generators that make commands that apply).
-            nameof(SetTempoEventsCommand) => new SetTempoEventsCommand([new(0, 100 + r.Next(60), TempoCurve.Step)]),
-            nameof(SetSignaturesCommand) => new SetSignaturesCommand([new(0, 3, 4)]),
-            nameof(SetKeysCommand) => new SetKeysCommand([new(0, r.Next(12), KeyMode.Minor)]),
-            nameof(AddMarkerCommand) => new AddMarkerCommand("Marker", r.Next(16) * 960L),
-            nameof(SetMarkerCommand) => new SetMarkerCommand("mrk_none", "Renamed"),
-            nameof(DeleteMarkersCommand) => new DeleteMarkersCommand(["mrk_none"]),
-            nameof(AddSectionCommand) => new AddSectionCommand("Verse", r.Next(8) * 3840L, 3840),
-            nameof(SetSectionCommand) => new SetSectionCommand("sec_none", "Chorus"),
-            nameof(DeleteSectionsCommand) => new DeleteSectionsCommand(["sec_none"]),
-            nameof(MoveSectionCommand) => new MoveSectionCommand("sec_none", 0),
-            nameof(SetCompCommand) => new SetCompCommand("tkf_none", []),
-            nameof(SelectTakeCommand) => new SelectTakeCommand("tkf_none", "tak_none"),
-            nameof(SetTakeFolderCommand) => new SetTakeFolderCommand("tkf_none", "Takes"),
-            nameof(DeleteTakeCommand) => new DeleteTakeCommand("tkf_none", "tak_none"),
-            nameof(FlattenTakeFolderCommand) => new FlattenTakeFolderCommand("tkf_none"),
-            nameof(PackTakeFolderCommand) => new PackTakeFolderCommand(["rgn_none"]),
-            nameof(SetRecordingCommand) => new SetRecordingCommand(Replace: r.Next(2) == 0),
-            nameof(CreateStackCommand) => Track() is { } t ? new CreateStackCommand([t]) : null,
-            nameof(RemoveStackCommand) => new RemoveStackCommand("trk_none"),
-            nameof(SetTrackParentCommand) => Track() is { } t ? new SetTrackParentCommand(t, null) : null,
+            nameof(SetTempoEventsCommand) => new SetTempoEventsCommand(TempoEvents(r)),
+            nameof(SetSignaturesCommand) => new SetSignaturesCommand(Signatures(r)),
+            nameof(SetKeysCommand) => new SetKeysCommand(
+                [
+                    new(0, r.Next(12), Pick(r, [KeyMode.Major, KeyMode.Minor])),
+                    ..r.Next(2) == 0 ? [] : new[] { new KeyEvent(r.Next(1, 64) * 960L, r.Next(12), KeyMode.Minor) }
+                ]
+            ),
+            nameof(AddMarkerCommand) => new AddMarkerCommand(
+                $"Marker {r.Next(100)}",
+                r.Next(64) * 480L,
+                r.Next(3) == 0 ? r.Next(1, 8) * 960L : 0,
+                MaybeText("#ffaa00")
+            ),
+            nameof(SetMarkerCommand) => markers.Length > 0
+                ? new SetMarkerCommand(
+                    Pick(r, markers).Id,
+                    MaybeText($"Renamed {r.Next(100)}"),
+                    r.Next(2) == 0 ? null : r.Next(64) * 480L,
+                    r.Next(2) == 0 ? null : r.Next(4) * 960L,
+                    MaybeText("#00aaff"),
+                    MaybeText($"Text {r.Next(100)}")
+                )
+                : null,
+            nameof(DeleteMarkersCommand) => markers.Length > 0
+                ? new DeleteMarkersCommand([..Some(markers, r).Select(static m => m.Id)])
+                : null,
+            nameof(AddSectionCommand) => new AddSectionCommand(
+                Pick(r, ["Intro", "Verse", "Chorus", "Bridge"]),
+                r.Next(16) * 3840L,
+                r.Next(1, 5) * 3840L,
+                MaybeText("#5fa86b")
+            ),
+            nameof(SetSectionCommand) => sections.Length > 0
+                ? new SetSectionCommand(
+                    Pick(r, sections).Id,
+                    MaybeText($"Part {r.Next(10)}"),
+                    r.Next(2) == 0 ? null : r.Next(1, 5) * 1920L,
+                    MaybeText("#a86b5f")
+                )
+                : null,
+            nameof(DeleteSectionsCommand) => sections.Length > 0
+                ? new DeleteSectionsCommand([..Some(sections, r).Select(static x => x.Id)], r.Next(2) == 0)
+                : null,
+            nameof(MoveSectionCommand) => sections.Length > 0
+                ? new MoveSectionCommand(
+                    Pick(r, sections).Id,
+                    Pick(r, sections) is var to && r.Next(2) == 0 ? to.StartTick : to.StartTick + to.LengthTicks,
+                    r.Next(3) == 0
+                )
+                : null,
+            nameof(SetCompCommand) => folders.Length > 0 ? Comp(Pick(r, folders), r) : null,
+            nameof(SelectTakeCommand) => folders.Length > 0 && Pick(r, folders) is var f
+                ? new SelectTakeCommand(f.Id, Pick(r, f.Takes).Id)
+                : null,
+            nameof(SetTakeFolderCommand) => folders.Length > 0 && Pick(r, folders) is var f
+                ? new SetTakeFolderCommand(
+                    f.Id,
+                    MaybeText($"Takes {r.Next(100)}"),
+                    r.Next(2) == 0 ? null : r.Next(0, 4800),
+                    Maybe(r.Next(2) == 0),
+                    r.Next(2) == 0 ? null : Pick(r, f.Takes).Id,
+                    null
+                ) is var set
+                && set.TakeId is not null
+                && r.Next(2) == 0
+                    ? set with { TakeName = $"Take {r.Next(100)}" }
+                    : set
+                : null,
+            nameof(DeleteTakeCommand) => folders.Where(static x => x.Takes.Count > 1).ToArray() is { Length: > 0 } many
+                && Pick(r, many) is var f
+                    ? new DeleteTakeCommand(f.Id, Pick(r, f.Takes).Id)
+                    : null,
+            nameof(FlattenTakeFolderCommand) => folders.Length > 0
+                ? new FlattenTakeFolderCommand(Pick(r, folders).Id)
+                : null,
+            nameof(PackTakeFolderCommand) => Pack(regions, r),
+            nameof(SetRecordingCommand) => r.Next(32) is var bar
+                ? new SetRecordingCommand(
+                    r.Next(2) == 0 ? null : Pick(r, [CycleRecordMode.TakeFolder, CycleRecordMode.Regions]),
+                    Maybe(r.Next(2) == 0),
+                    Maybe(r.Next(2) == 0),
+                    r.Next(3) == 0 ? null : bar * 3840L,
+                    r.Next(3) == 0 ? null : (bar + r.Next(1, 8)) * 3840L
+                )
+                : null,
+            nameof(CreateStackCommand) => plain.Length > 0
+                ? new CreateStackCommand([..Some(plain, r).Select(static t => t.Id)], MaybeText($"Stack {r.Next(10)}"))
+                : null,
+            nameof(RemoveStackCommand) => stacks.Length > 0 ? new RemoveStackCommand(Pick(r, stacks).Id) : null,
+            nameof(SetTrackParentCommand) => plain.Length > 0
+                ? new SetTrackParentCommand(
+                    Pick(r, plain).Id,
+                    stacks.Length > 0 && r.Next(3) > 0 ? Pick(r, stacks).Id : null
+                )
+                : null,
             nameof(SetProjectNotesCommand) => new SetProjectNotesCommand($"Notes {r.Next(100)}"),
-            nameof(JoinRegionsCommand) => new JoinRegionsCommand(["rgn_none"]),
-            nameof(CopyRegionsCommand) => new CopyRegionsCommand(["rgn_none"], 3840),
+            nameof(JoinRegionsCommand) => Join(regions, midiRegions, r),
+            nameof(CopyRegionsCommand) => AnyRegion() is not null
+                ? new CopyRegionsCommand(
+                    [..Enumerable.Range(0, r.Next(1, 3)).Select(_ => AnyRegion()!)],
+                    r.Next(-4, 16) * 960L,
+                    r.Next(3) == 0 ? Track() : null
+                )
+                : null,
             _ => throw new InvalidOperationException($"No generator for {type.Name}.")
         };
         string? Track() => tracks.Count == 0 ? null : Pick(r, tracks).Id;
@@ -293,11 +364,13 @@ static class RandomProjects {
                 : null;
 
         string? AnyRegion() =>
-            regions.Length + midiRegions.Length == 0
+            regions.Length + midiRegions.Length + folders.Length == 0
                 ? null
-                : r.Next(regions.Length + midiRegions.Length) is var i && i < regions.Length
+                : r.Next(regions.Length + midiRegions.Length + folders.Length) is var i && i < regions.Length
                     ? regions[i].Id
-                    : midiRegions[i - regions.Length].Id;
+                    : i < regions.Length + midiRegions.Length
+                        ? midiRegions[i - regions.Length].Id
+                        : folders[i - regions.Length - midiRegions.Length].Id;
 
         T? Maybe<T>(T value) where T : struct => r.Next(2) == 0 ? null : value;
         string? MaybeText(string value) => r.Next(2) == 0 ? null : value;
@@ -423,8 +496,79 @@ static class RandomProjects {
             r.Next(2) == 0 ? null : $"Region {r.Next(100)}",
             r.Next(2) == 0 ? null : Math.Round(r.NextDouble() * 48 - 24, 2),
             r.Next(2) == 0 ? null : r.NextInt64(0, region.Length / 2 + 1),
-            r.Next(2) == 0 ? null : r.NextInt64(0, region.Length / 2 + 1)
+            r.Next(2) == 0 ? null : r.NextInt64(0, region.Length / 2 + 1),
+            r.Next(2) == 0 ? null : Math.Round(r.NextDouble() * 2 - 1, 2),
+            r.Next(2) == 0 ? null : Math.Round(r.NextDouble() * 2 - 1, 2),
+            r.Next(2) == 0 ? null : r.Next(2) == 0
         );
+
+    static TempoEvent[] TempoEvents(Random r) {
+        var events = new List<TempoEvent> { new(0, Math.Round(40 + r.NextDouble() * 200, 1), Curve(r)) };
+        for (var n = r.Next(0, 4); n > 0; n--) {
+            events.Add(new(events[^1].Tick + r.Next(1, 16) * 960L, Math.Round(40 + r.NextDouble() * 200, 1), Curve(r)));
+        }
+
+        return [..events];
+
+        static TempoCurve Curve(Random r) => r.Next(2) == 0 ? TempoCurve.Step : TempoCurve.Ramp;
+    }
+
+    static SignatureEvent[] Signatures(Random r) {
+        var events = new List<SignatureEvent> { new(0, r.Next(1, 13), Pick(r, [2, 4, 8, 16])) };
+        for (var n = r.Next(0, 3); n > 0; n--) {
+            var previous = events[^1];
+            events.Add(
+                new(previous.Tick + r.Next(1, 8) * SignatureMap.BarTicks(previous), r.Next(1, 13), Pick(r, [4, 8]))
+            );
+        }
+
+        return [..events];
+    }
+
+    static SetCompCommand Comp(TakeFolder folder, Random r) {
+        var end = folder.StartTick + folder.LengthTicks;
+        var cuts = Enumerable.Range(0, r.Next(0, 4))
+            .Select(_ => r.NextInt64(folder.StartTick, end))
+            .Append(folder.StartTick)
+            .Append(end)
+            .Distinct()
+            .Order()
+            .ToArray();
+        var segments = new List<CompSegment>();
+        for (var i = 0; i + 1 < cuts.Length; i++) {
+            if (r.Next(4) > 0) {
+                segments.Add(new(cuts[i], cuts[i + 1], Pick(r, folder.Takes).Id));
+            }
+        }
+
+        return new(folder.Id, segments);
+    }
+
+    /// <summary>Some regions of the track with the most, to pack.</summary>
+    static PackTakeFolderCommand? Pack(AudioRegion[] regions, Random r) {
+        if (regions.Length == 0) {
+            return null;
+        }
+
+        var track = regions.GroupBy(static x => x.TrackId).MaxBy(static g => g.Count())!.ToArray();
+        return new([..Some(track, r).Select(static x => x.Id)], r.Next(2) == 0 ? null : $"Folder {r.Next(10)}");
+    }
+
+    /// <summary>Two or more regions of one track: MIDI ones join; audio ones mostly do not (they rarely meet).</summary>
+    static JoinRegionsCommand? Join(AudioRegion[] regions, MidiRegion[] midiRegions, Random r) {
+        if (r.Next(4) > 0
+            && midiRegions.GroupBy(static x => x.TrackId).Where(static g => g.Count() > 1).ToArray() is {
+                Length: > 0
+            } midi) {
+            return new([..Pick(r, midi).Select(static x => x.Id)]);
+        }
+
+        return regions.GroupBy(static x => x.TrackId).Where(static g => g.Count() > 1).ToArray() is {
+            Length: > 0
+        } audio
+            ? new([..Pick(r, audio).Take(2).Select(static x => x.Id)])
+            : null;
+    }
 
     static SetCycleCommand Cycle(Random r) {
         var start = r.NextInt64(0, 960 * 32);

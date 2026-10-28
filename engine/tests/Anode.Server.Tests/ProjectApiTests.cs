@@ -242,7 +242,9 @@ public sealed class ProjectApiTests {
         var first = await client.CreateProjectAsync("One");
         await client.EditAsync(new AddTrackCommand());
         await client.CreateProjectAsync("Two");
-        Assert.True(File.Exists(Path.Combine(first.Path, "Backups", "Unsaved", "project.json")));
+        // Kept as a backup (Backups/<timestamp>/) that holds the unsaved track.
+        var backup = Assert.Single(Directory.GetDirectories(Path.Combine(first.Path, "Backups")));
+        Assert.Single(Anode.Model.Storage.ProjectPackage.Load(backup).Tracks);
     }
 
     static ProjectSettings ProjectDefaults() => Anode.Model.ProjectDefaults.NewProject("p", "p", 48_000).Settings;

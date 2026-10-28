@@ -3,6 +3,7 @@ using Anode.EngineHost;
 using Anode.Server;
 using Anode.Server.Api;
 using Anode.Server.Engine;
+using Anode.Server.Library;
 using Anode.Server.Projects;
 using Anode.Server.Realtime;
 using System.Text.Json.Serialization;
@@ -44,6 +45,7 @@ builder.Services.AddSingleton<EngineDevice>();
 builder.Services.AddSingleton<EngineCatalog>();
 builder.Services.AddSingleton<ProjectSession>();
 builder.Services.AddSingleton<AudioImport>();
+builder.Services.AddSingleton<UserSettings>();
 builder.Services.AddSingleton<EngineConnection>();
 builder.Services.AddHostedService(static s => s.GetRequiredService<EngineConnection>());
 
