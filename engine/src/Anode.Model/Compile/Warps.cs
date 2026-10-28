@@ -164,8 +164,12 @@ public static class Warps {
             continue;
 
             void Add(long frame) {
-                if (points.Count > 0 && frame <= points[^1].FileFrame) {
+                if (frame < points[^1].FileFrame) {
                     return;
+                }
+
+                if (frame == points[^1].FileFrame) {
+                    points.RemoveAt(points.Count - 1);
                 }
 
                 var trend = intercept + slope * frame;

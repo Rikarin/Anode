@@ -8,7 +8,7 @@ namespace Anode.Model.Time;
 ///     ramp, changes along the ramp's shape (docs/06-phase-5.md): at fraction x of the way the tempo is
 ///     <c>b₀ + (b₁ − b₀)·x^(2^(−2·shape))</c>, and seconds are its integral. A linear ramp (shape 0) is integrated
 ///     exactly: across <c>Δ</c> ticks, with slope <c>k = (b₁ − b₀) / Δ</c>, the time to tick offset <c>t</c> is
-///     <c>60 / (PPQ·k) · ln(1 + k·t / b₀)</c>; a curved one numerically (Gauss–Legendre over
+///     <c>60 / (PPQ·k) · ln(1 + k·t / b₀)</c>; a curved one numerically (Gauss–Legendre, after the substitution t = span·uᵐ that smooths a concave start, over
 ///     <see cref="ShapeSteps" /> equal steps, about 1e-9 s), and inverted by Newton's method. A ramp on the last change
 ///     holds its tempo. Immutable; lookups are a binary search over the changes.
 ///     <para>
@@ -207,28 +207,47 @@ public sealed class TempoMap {
                 return curve[ShapeSteps] + (offset - span) * SecondsPerTick(bpms[i + 1]);
             }
 
-            var step = span / (double)ShapeSteps;
-            var j = Math.Min((int)(offset / step), ShapeSteps - 1);
-            return curve[j] + Integral(i, j * step, offset);
+            var u = U(i, offset);
+            var j = Math.Min((int)(u * ShapeSteps), ShapeSteps - 1);
+            return curve[j] + Integral(i, j / (double)ShapeSteps, u);
         }
 
         // ∫ 60 / (PPQ · (b₀ + k·t)) dt from 0 to offset.
         return 60.0 / (Ppq * k) * LogP1(k * offset / bpms[i]);
     }
 
-    /// <summary>A curved ramp's cumulative seconds at its step boundaries.</summary>
+    /// <summary>
+    ///     A curved ramp's integration variable at tick offset <paramref name="offset" />: u with offset = span·uᵐ, m the
+    ///     smallest whole number making the tempo smooth in u (1 for convex ramps; ⌈1/p⌉ for concave ones, whose x^p
+    ///     is steep at the start).
+    /// </summary>
+    double U(int i, double offset) {
+        var x = Math.Clamp(offset / (ticks[i + 1] - ticks[i]), 0, 1);
+        var m = Substitution(i);
+        return m == 1 ? x : Math.Pow(x, 1.0 / m);
+    }
+
+    int Substitution(int i) => powers[i] < 1 ? (int)Math.Ceiling(1 / powers[i]) : 1;
+
+    /// <summary>A curved ramp's cumulative seconds at its steps' boundaries (equal steps of u).</summary>
     double[] Curve(int i) {
-        var span = ticks[i + 1] - ticks[i];
-        var step = span / (double)ShapeSteps;
         var curve = new double[ShapeSteps + 1];
         for (var j = 0; j < ShapeSteps; j++) {
-            curve[j + 1] = curve[j] + Integral(i, j * step, (j + 1) * step);
+            curve[j + 1] = curve[j] + Integral(i, j / (double)ShapeSteps, (j + 1) / (double)ShapeSteps);
         }
 
         return curve;
     }
 
-    /// <summary>∫ 60 / (PPQ · bpm(t)) dt over ticks <paramref name="from" />…<paramref name="to" /> of segment i.</summary>
+    /// <summary>Seconds per unit of u at <paramref name="u" /> on curved segment i.</summary>
+    double Rate(int i, double u) {
+        var span = ticks[i + 1] - ticks[i];
+        var m = Substitution(i);
+        var dt = m == 1 ? span : span * m * Math.Pow(u, m - 1);
+        return 60.0 / Ppq * dt / Bpm(i, span * (m == 1 ? u : Math.Pow(u, m)));
+    }
+
+    /// <summary>Seconds over u = <paramref name="from" />…<paramref name="to" /> of curved segment i (Gauss–Legendre).</summary>
     double Integral(int i, double from, double to) {
         if (to <= from) {
             return 0;
@@ -238,10 +257,10 @@ public sealed class TempoMap {
         var mid = (to + from) / 2;
         double sum = 0;
         for (var n = 0; n < Nodes.Length; n++) {
-            sum += Weights[n] / Bpm(i, mid + half * Nodes[n]);
+            sum += Weights[n] * Rate(i, mid + half * Nodes[n]);
         }
 
-        return 60.0 / Ppq * half * sum;
+        return half * sum;
     }
 
     /// <summary>The tick offset into curved segment i at which <paramref name="elapsed" /> seconds have passed.</summary>
@@ -253,21 +272,23 @@ public sealed class TempoMap {
 
         var j = Array.BinarySearch(curve, elapsed);
         j = j >= 0 ? Math.Min(j, ShapeSteps - 1) : Math.Max(0, ~j - 1);
-        var step = span / (double)ShapeSteps;
-        var (lo, hi) = (j * step, (j + 1) * step);
-        // Newton's method from the linear guess, kept inside the step.
-        var t = lo + (elapsed - curve[j]) / (curve[j + 1] - curve[j]) * step;
-        for (var n = 0; n < 20; n++) {
-            var error = curve[j] + Integral(i, lo, t) - elapsed;
-            var next = Math.Clamp(t - error / SecondsPerTick(Bpm(i, t)), lo, hi);
-            if (Math.Abs(next - t) < 1e-9) {
-                return next;
+        var (lo, hi) = (j / (double)ShapeSteps, (j + 1) / (double)ShapeSteps);
+        // Newton's method in u from the linear guess, kept inside the step.
+        var u = lo + (elapsed - curve[j]) / (curve[j + 1] - curve[j]) * (hi - lo);
+        for (var n = 0; n < 30; n++) {
+            var error = curve[j] + Integral(i, lo, u) - elapsed;
+            var rate = Rate(i, u);
+            var next = rate > 0 ? Math.Clamp(u - error / rate, lo, hi) : (lo + u) / 2;
+            if (Math.Abs(next - u) < 1e-14) {
+                u = next;
+                break;
             }
 
-            t = next;
+            u = next;
         }
 
-        return t;
+        var m = Substitution(i);
+        return span * (m == 1 ? u : Math.Pow(u, m));
     }
 
     /// <summary>ln(1 + x), accurate for small x (Goldberg's trick).</summary>
