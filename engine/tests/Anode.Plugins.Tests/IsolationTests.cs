@@ -44,7 +44,7 @@ public sealed class IsolationTests : IDisposable {
         Assert.True(watch.Elapsed < TimeSpan.FromSeconds(5), $"processing around the crash took {watch.Elapsed}");
         SpinWait.SpinUntil(() => !problems.IsEmpty, TimeSpan.FromSeconds(5));
         var problem = Assert.Single(problems);
-        Assert.Equal(new PluginOwner(1, "a"), problem.Owner);
+        Assert.Equal(new(1, "a"), problem.Owner);
         Assert.Equal(MisbehaveId, problem.PluginId);
         Assert.Contains("crashed", problem.Message, StringComparison.Ordinal);
         var hosted = (IHostedPlugin)crasher;

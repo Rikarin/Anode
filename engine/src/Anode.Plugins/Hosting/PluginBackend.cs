@@ -1,7 +1,7 @@
-using System.Runtime.InteropServices;
 using Anode.Dsp.Instruments;
 using Anode.Plugins.Native;
 using Anode.Plugins.Sandbox;
+using System.Runtime.InteropServices;
 
 namespace Anode.Plugins.Hosting;
 
@@ -307,13 +307,13 @@ internal sealed unsafe class InHostBackend(PluginEntry entry) : PluginBackend {
         var hasInput = !inL.IsEmpty;
         var hasSidechain = !scL.IsEmpty;
         if (hasInput) {
-            inL[..frames].CopyTo(new Span<float>(buffers[0], frames));
-            inR[..frames].CopyTo(new Span<float>(buffers[1], frames));
+            inL[..frames].CopyTo(new(buffers[0], frames));
+            inR[..frames].CopyTo(new(buffers[1], frames));
         }
 
         if (hasSidechain) {
-            scL[..frames].CopyTo(new Span<float>(buffers[2], frames));
-            scR[..frames].CopyTo(new Span<float>(buffers[3], frames));
+            scL[..frames].CopyTo(new(buffers[2], frames));
+            scR[..frames].CopyTo(new(buffers[3], frames));
         }
 
         PlugMidi* midi = stackalloc PlugMidi[Math.Min(events.Length, 256)];

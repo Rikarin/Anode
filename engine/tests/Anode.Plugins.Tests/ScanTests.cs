@@ -37,7 +37,7 @@ public sealed class ScanTests : IDisposable {
 
         var synth = Assert.Single(catalog, p => p.Id == SynthId);
         Assert.True(synth.IsInstrument);
-        Assert.Equal("", synth.Category);
+        Assert.Equal(string.Empty, synth.Category);
     }
 
     [Fact]
