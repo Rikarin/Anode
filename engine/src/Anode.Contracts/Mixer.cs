@@ -5,7 +5,8 @@ namespace Anode.Contracts;
 /// <summary>
 ///     An insert effect on a channel strip: the plugin, whether it is bypassed, its parameter values by parameter id
 ///     (all of them), and its sidechain source (a track id or <c>bus:N</c>; null: none). A plugin's opaque state lives in
-///     the project's <c>Plugin States</c> folder.
+///     the project's <c>Plugin States</c> folder. A MIDI FX slot (<c>ChannelStrip.midiEffects</c>) has the same shape,
+///     never a sidechain.
 /// </summary>
 public sealed record Insert(
     string Id,
@@ -63,7 +64,9 @@ public sealed record AutomationPoint(long Tick, double Value, double Curve);
 /// <summary>
 ///     Track automation of one parameter. <c>trackId</c> null is the master strip. <c>target</c> is <c>volume</c> (dB),
 ///     <c>pan</c> (−1…1), <c>mute</c> (0/1), <c>send:{sendId}</c> (dB), <c>insert:{insertId}:{parameterId}</c> or
-///     <c>instrument:{parameterId}</c> (the parameter's unit). Points are sorted by tick.
+///     <c>instrument:{parameterId}</c> (the parameter's unit). Phase 6 adds <c>midiEffect:{slotId}:{parameterId}</c> (a
+///     MIDI FX slot's parameter) and <c>smartControl:{controlId}</c> (0…1; it compiles to automation of every
+///     parameter the control maps). Points are sorted by tick.
 /// </summary>
 public sealed record AutomationLane(string Id, string? TrackId, string Target, IReadOnlyList<AutomationPoint> Points);
 

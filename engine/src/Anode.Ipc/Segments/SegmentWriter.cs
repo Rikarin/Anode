@@ -6,22 +6,29 @@ namespace Anode.Ipc.Segments;
 ///     which removes the name; the host's mapping keeps the memory alive.
 /// </summary>
 public static unsafe class SegmentWriter {
-    /// <summary>The bytes a segment of <paramref name="tracks" /> needs.</summary>
-    public static long Size(IReadOnlyList<TrackModel> tracks) {
-        long events = 0, playlists = 0, warps = 0, pitches = 0;
-        foreach (var t in tracks) {
-            events += t.Events.Length;
-            playlists += t.Playlist.Length;
-            warps += t.Warp?.Length ?? 0;
-            pitches += t.Pitch?.Length ?? 0;
-        }
-
-        return Layout.Offsets(tracks.Count, events, playlists, warps, pitches).Total;
+    /// <summary>The bytes a segment of <paramref name="tracks" /> (and the tempo points and cells) needs.</summary>
+    public static long Size(
+        IReadOnlyList<TrackModel> tracks,
+        IReadOnlyList<TempoMapPoint>? tempo = null,
+        IReadOnlyList<CellModel>? cells = null
+    ) {
+        var counts = Count(tracks, cells);
+        return Layout.Offsets(
+                tracks.Count,
+                counts.Events,
+                counts.Playlists,
+                counts.Warps,
+                counts.Pitches,
+                tempo?.Count ?? 0,
+                cells?.Count ?? 0
+            )
+            .Total;
     }
 
     /// <summary>
-    ///     Writes <paramref name="tracks" /> into <paramref name="into" /> (a pooled segment the host has released) or
-    ///     a new segment named <c>{prefix}-{id}</c>.
+    ///     Writes <paramref name="tracks" />, then the cells' content, into <paramref name="into" /> (a pooled segment the
+    ///     host has released) or a new segment named <c>{prefix}-{id}</c>, with <paramref name="tempo" /> (format 4;
+    ///     none for a per-track segment) and the cell table of <paramref name="cells" />.
     /// </summary>
     public static SharedSegment Write(
         IReadOnlyList<TrackModel> tracks,
@@ -30,17 +37,22 @@ public static unsafe class SegmentWriter {
         string prefix,
         long id,
         bool checksum,
-        SharedSegment? into = null
+        SharedSegment? into = null,
+        IReadOnlyList<TempoMapPoint>? tempo = null,
+        IReadOnlyList<CellModel>? cells = null
     ) {
-        long eventCount = 0, playlistCount = 0, warpCount = 0, pitchCount = 0;
-        foreach (var t in tracks) {
-            eventCount += t.Events.Length;
-            playlistCount += t.Playlist.Length;
-            warpCount += t.Warp?.Length ?? 0;
-            pitchCount += t.Pitch?.Length ?? 0;
-        }
-
-        var offsets = Layout.Offsets(tracks.Count, eventCount, playlistCount, warpCount, pitchCount);
+        tempo ??= [];
+        cells ??= [];
+        var counts = Count(tracks, cells);
+        var offsets = Layout.Offsets(
+            tracks.Count,
+            counts.Events,
+            counts.Playlists,
+            counts.Warps,
+            counts.Pitches,
+            tempo.Count,
+            cells.Count
+        );
         var segment = into
             ?? SharedSegment.Create(DefaultBackend, SharedSegment.DefaultDirectory(), prefix, id, offsets.Total);
         if (segment.Length < offsets.Total) {
@@ -50,10 +62,13 @@ public static unsafe class SegmentWriter {
         var basePointer = segment.Pointer;
         var header = (SegmentHeader*)basePointer;
         var table = (TrackEntry*)(basePointer + offsets.Tracks);
-        var eventsOut = (PlaybackEvent*)(basePointer + offsets.Events);
-        var playlistsOut = (AudioPlaylistEntry*)(basePointer + offsets.Playlists);
-        var warpsOut = (WarpPoint*)(basePointer + offsets.Warps);
-        var pitchesOut = (PitchPoint*)(basePointer + offsets.Pitches);
+        var cellTable = (CellEntry*)(basePointer + offsets.Cells);
+        var arrays = new Arrays(
+            (PlaybackEvent*)(basePointer + offsets.Events),
+            (AudioPlaylistEntry*)(basePointer + offsets.Playlists),
+            (WarpPoint*)(basePointer + offsets.Warps),
+            (PitchPoint*)(basePointer + offsets.Pitches)
+        );
         long e = 0, p = 0, w = 0, q = 0;
         for (var i = 0; i < tracks.Count; i++) {
             var track = tracks[i];
@@ -64,21 +79,26 @@ public static unsafe class SegmentWriter {
                 PlaylistStart = p,
                 PlaylistCount = track.Playlist.Length
             };
-            track.Events.AsSpan().CopyTo(new(eventsOut + e, track.Events.Length));
-            var playlist = new Span<AudioPlaylistEntry>(playlistsOut + p, track.Playlist.Length);
-            track.Playlist.AsSpan().CopyTo(playlist);
-            foreach (ref var entry in playlist) {
-                // A track's warp and pitch ranges index its own arrays; the segment's hold every track's.
-                entry.WarpStart += entry.WarpCount > 0 ? (int)w : 0;
-                entry.PitchStart += entry.PitchCount > 0 ? (int)q : 0;
-            }
+            arrays.Copy(track.Events, track.Playlist, track.Warp, track.Pitch, ref e, ref p, ref w, ref q);
+        }
 
-            track.Warp.AsSpan().CopyTo(new(warpsOut + w, track.Warp?.Length ?? 0));
-            track.Pitch.AsSpan().CopyTo(new(pitchesOut + q, track.Pitch?.Length ?? 0));
-            e += track.Events.Length;
-            p += track.Playlist.Length;
-            w += track.Warp?.Length ?? 0;
-            q += track.Pitch?.Length ?? 0;
+        for (var i = 0; i < cells.Count; i++) {
+            var cell = cells[i];
+            cellTable[i] = new() {
+                Index = cell.Index,
+                TrackId = cell.TrackId,
+                EventStart = e,
+                EventCount = cell.Events.Length,
+                PlaylistStart = p,
+                PlaylistCount = cell.Playlist.Length,
+                Length = cell.Length,
+                Mode = cell.Mode
+            };
+            arrays.Copy(cell.Events, cell.Playlist, cell.Warp, cell.Pitch, ref e, ref p, ref w, ref q);
+        }
+
+        for (var i = 0; i < tempo.Count; i++) {
+            ((TempoMapPoint*)(basePointer + offsets.Tempo))[i] = tempo[i];
         }
 
         *header = new() {
@@ -91,13 +111,17 @@ public static unsafe class SegmentWriter {
             Flags = checksum ? SegmentHeader.FlagChecksum : 0,
             TrackTableOffset = offsets.Tracks,
             EventsOffset = offsets.Events,
-            EventCount = eventCount,
+            EventCount = counts.Events,
             PlaylistOffset = offsets.Playlists,
-            PlaylistCount = playlistCount,
+            PlaylistCount = counts.Playlists,
             WarpOffset = offsets.Warps,
-            WarpCount = warpCount,
+            WarpCount = counts.Warps,
             PitchOffset = offsets.Pitches,
-            PitchCount = pitchCount,
+            PitchCount = counts.Pitches,
+            TempoOffset = offsets.Tempo,
+            TempoCount = tempo.Count,
+            CellOffset = offsets.Cells,
+            CellCount = cells.Count,
             LengthSamples = lengthSamples
         };
         if (checksum) {
@@ -105,6 +129,66 @@ public static unsafe class SegmentWriter {
         }
 
         return segment;
+    }
+
+    /// <summary>The element counts of the shared arrays: every track's slices, then every cell's.</summary>
+    static (long Events, long Playlists, long Warps, long Pitches) Count(
+        IReadOnlyList<TrackModel> tracks,
+        IReadOnlyList<CellModel>? cells
+    ) {
+        long events = 0, playlists = 0, warps = 0, pitches = 0;
+        foreach (var t in tracks) {
+            events += t.Events.Length;
+            playlists += t.Playlist.Length;
+            warps += t.Warp?.Length ?? 0;
+            pitches += t.Pitch?.Length ?? 0;
+        }
+
+        foreach (var c in cells ?? []) {
+            events += c.Events.Length;
+            playlists += c.Playlist.Length;
+            warps += c.Warp?.Length ?? 0;
+            pitches += c.Pitch?.Length ?? 0;
+        }
+
+        return (events, playlists, warps, pitches);
+    }
+
+    /// <summary>The segment's shared arrays, which tracks' and cells' slices are copied into in turn.</summary>
+    readonly struct Arrays(
+        PlaybackEvent* events,
+        AudioPlaylistEntry* playlists,
+        WarpPoint* warps,
+        PitchPoint* pitches) {
+        /// <summary>
+        ///     Copies one slice at the cursors and advances them. A slice's warp and pitch ranges index its own arrays;
+        ///     the segment's hold every slice's, so they are rebased.
+        /// </summary>
+        public void Copy(
+            PlaybackEvent[] sliceEvents,
+            AudioPlaylistEntry[] slicePlaylist,
+            WarpPoint[]? sliceWarp,
+            PitchPoint[]? slicePitch,
+            ref long e,
+            ref long p,
+            ref long w,
+            ref long q
+        ) {
+            sliceEvents.AsSpan().CopyTo(new(events + e, sliceEvents.Length));
+            var playlist = new Span<AudioPlaylistEntry>(playlists + p, slicePlaylist.Length);
+            slicePlaylist.AsSpan().CopyTo(playlist);
+            foreach (ref var entry in playlist) {
+                entry.WarpStart += entry.WarpCount > 0 ? (int)w : 0;
+                entry.PitchStart += entry.PitchCount > 0 ? (int)q : 0;
+            }
+
+            sliceWarp.AsSpan().CopyTo(new(warps + w, sliceWarp?.Length ?? 0));
+            slicePitch.AsSpan().CopyTo(new(pitches + q, slicePitch?.Length ?? 0));
+            e += sliceEvents.Length;
+            p += slicePlaylist.Length;
+            w += sliceWarp?.Length ?? 0;
+            q += slicePitch?.Length ?? 0;
+        }
     }
 
     /// <summary>

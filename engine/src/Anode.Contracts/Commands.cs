@@ -96,6 +96,28 @@ namespace Anode.Contracts;
 [JsonDerivedType(typeof(DeleteTrackAlternativeCommand), "deleteTrackAlternative")]
 [JsonDerivedType(typeof(SetVarispeedCommand), "setVarispeed")]
 [JsonDerivedType(typeof(SetSmartTempoCommand), "setSmartTempo")]
+[JsonDerivedType(typeof(AddPatternRegionCommand), "addPatternRegion")]
+[JsonDerivedType(typeof(SetPatternRegionCommand), "setPatternRegion")]
+[JsonDerivedType(typeof(SetPatternCommand), "setPattern")]
+[JsonDerivedType(typeof(ConvertPatternToMidiCommand), "convertPatternToMidi")]
+[JsonDerivedType(typeof(ReseedPatternCommand), "reseedPattern")]
+[JsonDerivedType(typeof(CreateDrumMachineCommand), "createDrumMachine")]
+[JsonDerivedType(typeof(AddDrumPadCommand), "addDrumPad")]
+[JsonDerivedType(typeof(SetDrumPadCommand), "setDrumPad")]
+[JsonDerivedType(typeof(RemoveDrumPadCommand), "removeDrumPad")]
+[JsonDerivedType(typeof(SetSmartControlsCommand), "setSmartControls")]
+[JsonDerivedType(typeof(SetSmartControlCommand), "setSmartControl")]
+[JsonDerivedType(typeof(SetSmartMappingsCommand), "setSmartMappings")]
+[JsonDerivedType(typeof(AutoMapSmartControlsCommand), "autoMapSmartControls")]
+[JsonDerivedType(typeof(CompareSmartControlsCommand), "compareSmartControls")]
+[JsonDerivedType(typeof(AddSceneCommand), "addScene")]
+[JsonDerivedType(typeof(RemoveSceneCommand), "removeScene")]
+[JsonDerivedType(typeof(SetSceneCommand), "setScene")]
+[JsonDerivedType(typeof(SetCellCommand), "setCell")]
+[JsonDerivedType(typeof(DeleteCellsCommand), "deleteCells")]
+[JsonDerivedType(typeof(MoveCellCommand), "moveCell")]
+[JsonDerivedType(typeof(SetLiveLoopsCommand), "setLiveLoops")]
+[JsonDerivedType(typeof(SetTrackActivationCommand), "setTrackActivation")]
 public abstract record EditCommand;
 
 /// <summary>
@@ -149,8 +171,9 @@ public sealed record AddRegionCommand(
 ) : EditCommand;
 
 /// <summary>
-///     Moves a region (audio, MIDI, or a take folder) in time, and to another track of a kind that can hold it when
-///     <c>trackId</c> is given. <c>deleteRegions</c> also takes every kind; <c>splitRegion</c> takes audio and MIDI.
+///     Moves a region (audio, MIDI, pattern, or a take folder) in time, and to another track of a kind that can hold it
+///     when <c>trackId</c> is given. <c>deleteRegions</c> and <c>copyRegions</c> also take every kind;
+///     <c>splitRegion</c> takes audio and MIDI.
 /// </summary>
 public sealed record MoveRegionCommand(string RegionId, long StartTick, string? TrackId = null) : EditCommand;
 
@@ -366,20 +389,47 @@ public sealed record JoinRegionsCommand(IReadOnlyList<string> RegionIds) : EditC
 public sealed record CopyRegionsCommand(IReadOnlyList<string> RegionIds, long OffsetTicks, string? TrackId = null)
     : EditCommand;
 
-/// <summary>Adds an insert effect at <c>index</c> (the end when left out); the master's when <c>trackId</c> is left out.</summary>
-public sealed record AddInsertCommand(string PluginId, string? TrackId = null, int? Index = null) : EditCommand;
+/// <summary>
+///     Which slots of a strip an insert command edits: its inserts (the default), or its MIDI FX slots (Phase 6; an
+///     instrument or external MIDI track's only, and only plugins of category <c>MIDI Effect</c>).
+/// </summary>
+[JsonConverter(typeof(JsonStringEnumConverter<InsertChain>))]
+public enum InsertChain {
+    [JsonStringEnumMemberName("inserts")]
+    Inserts,
 
-public sealed record RemoveInsertCommand(string InsertId, string? TrackId = null) : EditCommand;
+    [JsonStringEnumMemberName("midiEffects")]
+    MidiEffects
+}
 
-/// <summary>Moves an insert to another slot of the same strip.</summary>
-public sealed record MoveInsertCommand(string InsertId, int Index, string? TrackId = null) : EditCommand;
+/// <summary>
+///     Adds an insert effect at <c>index</c> (the end when left out); the master's when <c>trackId</c> is left out. With
+///     <c>chain</c> <c>midiEffects</c>, a MIDI FX slot instead, as for every insert command.
+/// </summary>
+public sealed record AddInsertCommand(
+    string PluginId,
+    string? TrackId = null,
+    int? Index = null,
+    InsertChain? Chain = null
+) : EditCommand;
 
-/// <summary>Bypasses an insert, or sets its sidechain (a track id, <c>bus:N</c>, or an empty string for none).</summary>
+public sealed record RemoveInsertCommand(string InsertId, string? TrackId = null, InsertChain? Chain = null)
+    : EditCommand;
+
+/// <summary>Moves an insert to another slot of the same strip (and chain).</summary>
+public sealed record MoveInsertCommand(string InsertId, int Index, string? TrackId = null, InsertChain? Chain = null)
+    : EditCommand;
+
+/// <summary>
+///     Bypasses an insert, or sets its sidechain (a track id, <c>bus:N</c>, or an empty string for none; never on a MIDI
+///     FX slot).
+/// </summary>
 public sealed record SetInsertCommand(
     string InsertId,
     string? TrackId = null,
     bool? Bypassed = null,
-    string? Sidechain = null
+    string? Sidechain = null,
+    InsertChain? Chain = null
 ) : EditCommand;
 
 /// <summary>
@@ -389,7 +439,8 @@ public sealed record SetInsertParameterCommand(
     string InsertId,
     string ParameterId,
     double Value,
-    string? TrackId = null)
+    string? TrackId = null,
+    InsertChain? Chain = null)
     : EditCommand;
 
 /// <summary>Adds a send to bus 1…64 (post-fader at −∞ dB unless told otherwise, as Logic does).</summary>
@@ -551,3 +602,153 @@ public sealed record SetSmartTempoCommand(
     FlexFollow? DefaultFollow = null,
     bool? AnalyzeImports = null
 ) : EditCommand;
+
+/// <summary>
+///     Adds a pattern region to an instrument track: <c>lengthTicks</c> (left out: one bar at <c>startTick</c>'s
+///     signature) and <c>pattern</c> (left out: the default pattern: on a Drum Machine Designer track one pad row per
+///     pad, else one note row on C3 (60); each 16 steps of a 16th, all off, no swing).
+/// </summary>
+public sealed record AddPatternRegionCommand(
+    string TrackId,
+    long StartTick,
+    long? LengthTicks = null,
+    Pattern? Pattern = null,
+    string? Name = null
+) : EditCommand;
+
+/// <summary>
+///     Moves (in time), resizes, renames or mutes a pattern region; <c>moveRegion</c>, <c>copyRegions</c> and
+///     <c>deleteRegions</c> take pattern regions too.
+/// </summary>
+public sealed record SetPatternRegionCommand(
+    string RegionId,
+    long? StartTick = null,
+    long? LengthTicks = null,
+    string? Name = null,
+    bool? Muted = null
+) : EditCommand;
+
+/// <summary>
+///     Replaces a pattern region's whole pattern (every Step Sequencer edit sends it). Rows: unique ids, length 1…64
+///     with as many steps, step values in their ranges (<see cref="PatternStep" />); swing 0…1; else 422.
+/// </summary>
+public sealed record SetPatternCommand(string RegionId, Pattern Pattern) : EditCommand;
+
+/// <summary>
+///     Replaces a pattern region with a MIDI region of exactly the notes it plays over its length (one pass of the
+///     region), at the same place, with its name and mute.
+/// </summary>
+public sealed record ConvertPatternToMidiCommand(string RegionId) : EditCommand;
+
+/// <summary>Sets a pattern's seed (left out: a new one the server draws), so chance and random steps draw anew.</summary>
+public sealed record ReseedPatternCommand(string RegionId, long? Seed = null) : EditCommand;
+
+/// <summary>
+///     Makes a Drum Machine Designer: a new DMD stack at the end, or, with <c>trackId</c>, an instrument track turned
+///     into one in place (its regions and pattern regions stay on the DMD track, its instrument goes). The pads come
+///     from kit patch <c>kitPatchId</c> (left out: no pads).
+/// </summary>
+public sealed record CreateDrumMachineCommand(string? TrackId = null, string? KitPatchId = null, string? Name = null)
+    : EditCommand;
+
+/// <summary>
+///     Adds a pad on note <c>note</c> (0…127, free on this DMD) to a DMD track: a new member instrument track playing
+///     <c>pluginId</c> (left out: the Drum Synth, <c>anode.drum-synth</c>), named <c>name</c>.
+/// </summary>
+public sealed record AddDrumPadCommand(string TrackId, int Note, string? Name = null, string? PluginId = null)
+    : EditCommand;
+
+/// <summary>
+///     Changes the pad on note <c>note</c> of a DMD track: renames it (and its track), gives its track another
+///     instrument (<c>pluginId</c>, parameters at their defaults), or moves it to free note <c>toNote</c>. Its channel
+///     strip is edited through the pad track's own strip and insert commands.
+/// </summary>
+public sealed record SetDrumPadCommand(
+    string TrackId,
+    int Note,
+    string? Name = null,
+    string? PluginId = null,
+    int? ToNote = null
+) : EditCommand;
+
+/// <summary>Removes the pad on note <c>note</c> of a DMD track, with its track.</summary>
+public sealed record RemoveDrumPadCommand(string TrackId, int Note) : EditCommand;
+
+/// <summary>
+///     Sets a track's Smart Controls layout (controls a smaller layout drops lose their mappings) or turns its
+///     arpeggiator button on or off (adding, bypassing or unbypassing <c>anode.arpeggiator</c> in its first MIDI FX
+///     slot). Sets the Smart Controls up when they are null.
+/// </summary>
+public sealed record SetSmartControlsCommand(
+    string TrackId,
+    SmartControlsLayout? Layout = null,
+    bool? Arpeggiator = null
+) : EditCommand;
+
+/// <summary>
+///     Sets a Smart Control's value (0…1; applying every mapping's parameter, coalesced as <c>setParameter</c>, and
+///     recording automation of <c>smartControl:{controlId}</c> as <c>setStrip</c> records volume) or renames it.
+/// </summary>
+public sealed record SetSmartControlCommand(
+    string TrackId,
+    string ControlId,
+    double? Value = null,
+    string? Name = null
+) : EditCommand;
+
+/// <summary>Replaces a Smart Control's mappings (targets that exist on the track; graphs as <see cref="SmartMapping" />).</summary>
+public sealed record SetSmartMappingsCommand(string TrackId, string ControlId, IReadOnlyList<SmartMapping> Mappings)
+    : EditCommand;
+
+/// <summary>
+///     Automatic mapping: replaces the knobs' names and mappings with the plugins' macro hints in order (the
+///     instrument's, then each insert's), up to the layout's knobs; each knob takes its parameter's current value.
+/// </summary>
+public sealed record AutoMapSmartControlsCommand(string TrackId) : EditCommand;
+
+/// <summary>
+///     Compare: on, the controls show (and their parameters take) their saved values; off, the edited ones again. The
+///     server applies it without an undo step (its delta still reaches every client).
+/// </summary>
+public sealed record CompareSmartControlsCommand(string TrackId, bool On) : EditCommand;
+
+/// <summary>Adds an empty scene to the Live Loops grid at <c>index</c> (the end when left out).</summary>
+public sealed record AddSceneCommand(string? Name = null, int? Index = null) : EditCommand;
+
+/// <summary>Removes a scene and its cells.</summary>
+public sealed record RemoveSceneCommand(string SceneId) : EditCommand;
+
+/// <summary>Renames a scene, or moves it to <c>index</c>.</summary>
+public sealed record SetSceneCommand(string SceneId, string? Name = null, int? Index = null) : EditCommand;
+
+/// <summary>
+///     Creates or changes the cell of <c>trackId</c> and <c>sceneId</c>. <c>content</c> creates it or replaces what it
+///     plays (its kind follows; it must suit the track: audio on an audio track, MIDI or pattern on an instrument
+///     track; ids as <see cref="CellContent" /> says, the server renumbering what clashes); a cell that does not exist
+///     needs it. <c>quantize</c> sets its own launch quantise; <c>gridQuantize</c> true clears it, so it follows the
+///     grid's.
+/// </summary>
+public sealed record SetCellCommand(
+    string TrackId,
+    string SceneId,
+    CellContent? Content = null,
+    string? Name = null,
+    long? LengthTicks = null,
+    CellPlayMode? PlayMode = null,
+    LaunchQuantize? Quantize = null,
+    bool? GridQuantize = null
+) : EditCommand;
+
+public sealed record DeleteCellsCommand(IReadOnlyList<string> CellIds) : EditCommand;
+
+/// <summary>
+///     Moves (or with <c>copy</c>, copies) a cell to the slot of <c>trackId</c> and <c>sceneId</c>, replacing the cell
+///     there; the track must suit its content.
+/// </summary>
+public sealed record MoveCellCommand(string CellId, string TrackId, string SceneId, bool Copy = false) : EditCommand;
+
+/// <summary>Sets the Live Loops grid's launch quantise, or shows or hides it.</summary>
+public sealed record SetLiveLoopsCommand(LaunchQuantize? Quantize = null, bool? Shown = null) : EditCommand;
+
+/// <summary>Track activation: the tracks play their Live Loops cells (on) or their Tracks-area regions (off).</summary>
+public sealed record SetTrackActivationCommand(IReadOnlyList<string> TrackIds, bool LiveLoopsActive) : EditCommand;

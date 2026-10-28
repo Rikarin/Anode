@@ -1967,10 +1967,581 @@
           }
         }
       }
+    },
+    "/api/v1/library/loops": {
+      "get": {
+        "tags": [
+          "Library"
+        ],
+        "summary": "Searches the loop index (installed packs and the user\u0027s loops) by text, tags (all of them), kind (a LoopKind), key (a tonic 0\u202611), scale (a LoopScale) and favourites, a page at a time (offset, limit: 100 by default, at most 500), sorted by name.",
+        "operationId": "QueryLoops",
+        "parameters": [
+          {
+            "name": "text",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "tags",
+            "in": "query",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          {
+            "name": "kind",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "key",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "scale",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "favouritesOnly",
+            "in": "query",
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoopPage"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Library"
+        ],
+        "summary": "Add to Loop Library: saves a region of the open project as a user loop, with a sidecar, in the index.",
+        "operationId": "AddToLoopLibrary",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddToLoopLibraryRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoopInfo"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/api/v1/library/loops/{id}/preview": {
+      "post": {
+        "tags": [
+          "Library"
+        ],
+        "summary": "Plays a loop through the preview channel at the project\u0027s tempo and key, starting on the next bar while the transport plays; POST /files/preview with a null path stops it.",
+        "operationId": "PreviewLoop",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "No Content"
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/api/v1/library/loops/{id}/favourite": {
+      "put": {
+        "tags": [
+          "Library"
+        ],
+        "summary": "Marks a loop a favourite, or not.",
+        "operationId": "SetLoopFavourite",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoopFavouriteRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoopInfo"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/api/v1/library/packs": {
+      "get": {
+        "tags": [
+          "Library"
+        ],
+        "summary": "The installed content packs.",
+        "operationId": "ListPacks",
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Pack"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Library"
+        ],
+        "summary": "Installs a .anodepack from the server\u0027s disk and adds its loops to the index.",
+        "operationId": "InstallPack",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InstallPackRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Pack"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/api/v1/library/packs/{id}": {
+      "delete": {
+        "tags": [
+          "Library"
+        ],
+        "summary": "Removes an installed pack and its loops from the index; projects keep the copies of the loops they use.",
+        "operationId": "RemovePack",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "No Content"
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/api/v1/project/loops": {
+      "post": {
+        "tags": [
+          "Project"
+        ],
+        "summary": "Adds a loop to the open project (its file copied in), following the project\u0027s tempo and key, at a position or into a Live Loops cell, as one undoable step.",
+        "operationId": "AddLoop",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddLoopRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommandResult"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/api/v1/project/live-loops/launch": {
+      "post": {
+        "tags": [
+          "Project"
+        ],
+        "summary": "Launches Live Loops cells or a scene at their quantise boundaries; cell events on /ws report their states.",
+        "operationId": "LaunchCells",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LaunchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "No Content"
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/api/v1/project/live-loops/stop": {
+      "post": {
+        "tags": [
+          "Project"
+        ],
+        "summary": "Stops the cells playing on some tracks (or every track) at the grid\u0027s quantise boundary.",
+        "operationId": "StopCells",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StopRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "No Content"
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/api/v1/project/live-loops/record": {
+      "post": {
+        "tags": [
+          "Project"
+        ],
+        "summary": "Starts or stops recording into a cell, or a performance recording into the Tracks area (one undo step when it stops).",
+        "operationId": "RecordLiveLoops",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LiveRecordRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "No Content"
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
     }
   },
   "components": {
     "schemas": {
+      "AddLoopRequest": {
+        "required": [
+          "loopId",
+          "tick"
+        ],
+        "type": "object",
+        "properties": {
+          "loopId": {
+            "type": "string"
+          },
+          "trackId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "tick": {
+            "type": "integer",
+            "format": "int64",
+            "default": 0
+          },
+          "cellSceneId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        },
+        "description": "Adds a loop to the open project, as one undoable step: at \u0060tick\u0060 on \u0060trackId\u0060 (left out: a new track\nof the loop\u0027s kind), or, with \u0060cellSceneId\u0060, into the Live Loops cell of \u0060trackId\u0060 and that scene."
+      },
+      "AddToLoopLibraryRequest": {
+        "required": [
+          "regionId",
+          "name",
+          "tags",
+          "oneShot"
+        ],
+        "type": "object",
+        "properties": {
+          "regionId": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "key": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int32"
+          },
+          "scale": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/LoopScale"
+              }
+            ]
+          },
+          "oneShot": {
+            "type": "boolean",
+            "default": false
+          }
+        },
+        "description": "\u0022Add to Loop Library\u0022: saves an audio, MIDI or pattern region as a user loop (its file copied into the library,\nwith a sidecar), at the project\u0027s tempo, with the given key (a tonic 0\u202611; null: none), scale (null: neither)\nand tags; as a one-shot (no tempo) when \u0060oneShot\u0060."
+      },
       "ArrangementMarker": {
         "required": [
           "id",
@@ -2182,7 +2753,7 @@
             }
           }
         },
-        "description": "Track automation of one parameter. \u0060trackId\u0060 null is the master strip. \u0060target\u0060 is \u0060volume\u0060 (dB),\n\u0060pan\u0060 (\u22121\u20261), \u0060mute\u0060 (0/1), \u0060send:{sendId}\u0060 (dB), \u0060insert:{insertId}:{parameterId}\u0060 or\n\u0060instrument:{parameterId}\u0060 (the parameter\u0027s unit). Points are sorted by tick."
+        "description": "Track automation of one parameter. \u0060trackId\u0060 null is the master strip. \u0060target\u0060 is \u0060volume\u0060 (dB),\n\u0060pan\u0060 (\u22121\u20261), \u0060mute\u0060 (0/1), \u0060send:{sendId}\u0060 (dB), \u0060insert:{insertId}:{parameterId}\u0060 or\n\u0060instrument:{parameterId}\u0060 (the parameter\u0027s unit). Phase 6 adds \u0060midiEffect:{slotId}:{parameterId}\u0060 (a\nMIDI FX slot\u0027s parameter) and \u0060smartControl:{controlId}\u0060 (0\u20261; it compiles to automation of every\nparameter the control maps). Points are sorted by tick."
       },
       "AutomationMode": {
         "enum": [
@@ -2422,6 +2993,112 @@
         ],
         "default": "mute"
       },
+      "Cell": {
+        "required": [
+          "id",
+          "trackId",
+          "sceneId",
+          "kind",
+          "name",
+          "lengthTicks",
+          "playMode",
+          "content"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "trackId": {
+            "type": "string"
+          },
+          "sceneId": {
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/CellKind"
+          },
+          "name": {
+            "type": "string"
+          },
+          "lengthTicks": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "playMode": {
+            "$ref": "#/components/schemas/CellPlayMode"
+          },
+          "quantize": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/LaunchQuantize"
+              }
+            ]
+          },
+          "content": {
+            "$ref": "#/components/schemas/CellContent"
+          }
+        },
+        "description": "A Live Loops cell: at most one per (track, scene). \u0060lengthTicks\u0060 is its loop length; \u0060quantize\u0060\noverrides the grid\u0027s for launching it (null: the grid\u0027s)."
+      },
+      "CellContent": {
+        "required": [
+          "audio",
+          "midi",
+          "pattern"
+        ],
+        "type": "object",
+        "properties": {
+          "audio": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/AudioRegion"
+              }
+            ]
+          },
+          "midi": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/MidiRegion"
+              }
+            ]
+          },
+          "pattern": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PatternRegion"
+              }
+            ]
+          }
+        },
+        "description": "What a cell plays: exactly one of a snapshot of an audio region, a MIDI region or a pattern region, the one of\nits \u0060kind\u0060. The snapshot\u0027s \u0060id\u0060 is the cell\u0027s, its \u0060trackId\u0060 the cell\u0027s track and its\n\u0060startTick\u0060 0; note and controller ids are unique project-wide, as in any MIDI region."
+      },
+      "CellKind": {
+        "enum": [
+          "audio",
+          "midi",
+          "pattern"
+        ]
+      },
+      "CellPlayMode": {
+        "enum": [
+          "loop",
+          "oneShot",
+          "retrigger"
+        ]
+      },
       "ChannelStrip": {
         "required": [
           "volumeDb",
@@ -2431,7 +3108,8 @@
           "inserts",
           "sends",
           "output",
-          "groups"
+          "groups",
+          "midiEffects"
         ],
         "type": "object",
         "properties": {
@@ -2476,9 +3154,15 @@
               "null",
               "string"
             ]
+          },
+          "midiEffects": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Insert"
+            }
           }
         },
-        "description": "A channel strip: volume in dB (\u2212\u221E as \u2212144), pan \u22121 (left) \u2026 1 (right), mute and solo; its insert effects in\norder; its sends to buses; where it goes (\u0060output\u0060: \u0060master\u0060, \u0060bus:N\u0060 for bus 1\u202664, or\n\u0060output:N\u0060 for the device\u0027s stereo output pair N); the mixer groups it belongs to (1\u202632); and the VCA track\nthat offsets its volume, if any. The master strip uses only volume, pan, mute and its inserts."
+        "description": "A channel strip: volume in dB (\u2212\u221E as \u2212144), pan \u22121 (left) \u2026 1 (right), mute and solo; its insert effects in\norder; its sends to buses; where it goes (\u0060output\u0060: \u0060master\u0060, \u0060bus:N\u0060 for bus 1\u202664, or\n\u0060output:N\u0060 for the device\u0027s stereo output pair N); the mixer groups it belongs to (1\u202632); and the VCA track\nthat offsets its volume, if any. The master strip uses only volume, pan, mute and its inserts. Phase 6:\n\u0060midiEffects\u0060 are its MIDI FX slots (instrument and external MIDI tracks only; empty elsewhere), in the\nsame shape as inserts: they run in slot order on the block\u0027s MIDI (regions, live and step input) before the\ninstrument; bypassed slots pass it through."
       },
       "CommandBatch": {
         "required": [
@@ -2715,6 +3399,15 @@
           },
           {
             "$ref": "#/components/schemas/DeltaOpGroupRemoved"
+          },
+          {
+            "$ref": "#/components/schemas/DeltaOpPatternRegionUpserted"
+          },
+          {
+            "$ref": "#/components/schemas/DeltaOpPatternRegionRemoved"
+          },
+          {
+            "$ref": "#/components/schemas/DeltaOpLiveLoopsChanged"
           }
         ],
         "discriminator": {
@@ -2740,7 +3433,10 @@
             "automationLaneUpserted": "#/components/schemas/DeltaOpAutomationLaneUpserted",
             "automationLaneRemoved": "#/components/schemas/DeltaOpAutomationLaneRemoved",
             "groupUpserted": "#/components/schemas/DeltaOpGroupUpserted",
-            "groupRemoved": "#/components/schemas/DeltaOpGroupRemoved"
+            "groupRemoved": "#/components/schemas/DeltaOpGroupRemoved",
+            "patternRegionUpserted": "#/components/schemas/DeltaOpPatternRegionUpserted",
+            "patternRegionRemoved": "#/components/schemas/DeltaOpPatternRegionRemoved",
+            "liveLoopsChanged": "#/components/schemas/DeltaOpLiveLoopsChanged"
           }
         }
       },
@@ -2829,6 +3525,24 @@
             "$ref": "#/components/schemas/MixerGroup"
           }
         }
+      },
+      "DeltaOpLiveLoopsChanged": {
+        "required": [
+          "liveLoops",
+          "op"
+        ],
+        "properties": {
+          "op": {
+            "enum": [
+              "liveLoopsChanged"
+            ],
+            "type": "string"
+          },
+          "liveLoops": {
+            "$ref": "#/components/schemas/LiveLoopsGrid"
+          }
+        },
+        "description": "The Live Loops grid changed: its scenes, cells, quantise or visibility (the whole grid)."
       },
       "DeltaOpMarkerRemoved": {
         "required": [
@@ -2933,6 +3647,41 @@
           }
         },
         "description": "The project notes changed."
+      },
+      "DeltaOpPatternRegionRemoved": {
+        "required": [
+          "id",
+          "op"
+        ],
+        "properties": {
+          "op": {
+            "enum": [
+              "patternRegionRemoved"
+            ],
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          }
+        }
+      },
+      "DeltaOpPatternRegionUpserted": {
+        "required": [
+          "region",
+          "op"
+        ],
+        "properties": {
+          "op": {
+            "enum": [
+              "patternRegionUpserted"
+            ],
+            "type": "string"
+          },
+          "region": {
+            "$ref": "#/components/schemas/PatternRegion"
+          }
+        },
+        "description": "A pattern region was added or changed (its pattern included)."
       },
       "DeltaOpProjectRenamed": {
         "required": [
@@ -3142,6 +3891,42 @@
           "shaped"
         ],
         "default": "tpdf"
+      },
+      "DrumMachine": {
+        "required": [
+          "pads"
+        ],
+        "type": "object",
+        "properties": {
+          "pads": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DrumPad"
+            }
+          }
+        },
+        "description": "A Drum Machine Designer (docs/07-phase-6.md): the track is a stack whose members are its pads, each an instrument\ntrack with its own channel strip; \u0060pads\u0060 (at most one per note, sorted by note) map a note to a pad. The\nDMD track\u0027s region and pattern notes are routed to the pad tracks by note (live MIDI too, by the host), each\nplayed at the pad\u0027s base note: a pad always plays its own sound (Drum Synth ignores pitch; Quick Sampler plays\nat its root)."
+      },
+      "DrumPad": {
+        "required": [
+          "note",
+          "name",
+          "trackId"
+        ],
+        "type": "object",
+        "properties": {
+          "note": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "name": {
+            "type": "string"
+          },
+          "trackId": {
+            "type": "string"
+          }
+        },
+        "description": "A pad of a Drum Machine Designer: note \u0060note\u0060 (0\u2026127) plays sub-track \u0060trackId\u0060."
       },
       "EditCommand": {
         "required": [
@@ -3415,6 +4200,72 @@
           },
           {
             "$ref": "#/components/schemas/EditCommandSetSmartTempoCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandAddPatternRegionCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandSetPatternRegionCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandSetPatternCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandConvertPatternToMidiCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandReseedPatternCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandCreateDrumMachineCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandAddDrumPadCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandSetDrumPadCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandRemoveDrumPadCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandSetSmartControlsCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandSetSmartControlCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandSetSmartMappingsCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandAutoMapSmartControlsCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandCompareSmartControlsCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandAddSceneCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandRemoveSceneCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandSetSceneCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandSetCellCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandDeleteCellsCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandMoveCellCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandSetLiveLoopsCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandSetTrackActivationCommand"
           }
         ],
         "description": "An edit of the open project (docs/adr/0004-state-ownership.md). A batch of them is applied atomically as one\nundo step. Optional properties left out are left unchanged.",
@@ -3509,7 +4360,29 @@
             "setTrackAlternative": "#/components/schemas/EditCommandSetTrackAlternativeCommand",
             "deleteTrackAlternative": "#/components/schemas/EditCommandDeleteTrackAlternativeCommand",
             "setVarispeed": "#/components/schemas/EditCommandSetVarispeedCommand",
-            "setSmartTempo": "#/components/schemas/EditCommandSetSmartTempoCommand"
+            "setSmartTempo": "#/components/schemas/EditCommandSetSmartTempoCommand",
+            "addPatternRegion": "#/components/schemas/EditCommandAddPatternRegionCommand",
+            "setPatternRegion": "#/components/schemas/EditCommandSetPatternRegionCommand",
+            "setPattern": "#/components/schemas/EditCommandSetPatternCommand",
+            "convertPatternToMidi": "#/components/schemas/EditCommandConvertPatternToMidiCommand",
+            "reseedPattern": "#/components/schemas/EditCommandReseedPatternCommand",
+            "createDrumMachine": "#/components/schemas/EditCommandCreateDrumMachineCommand",
+            "addDrumPad": "#/components/schemas/EditCommandAddDrumPadCommand",
+            "setDrumPad": "#/components/schemas/EditCommandSetDrumPadCommand",
+            "removeDrumPad": "#/components/schemas/EditCommandRemoveDrumPadCommand",
+            "setSmartControls": "#/components/schemas/EditCommandSetSmartControlsCommand",
+            "setSmartControl": "#/components/schemas/EditCommandSetSmartControlCommand",
+            "setSmartMappings": "#/components/schemas/EditCommandSetSmartMappingsCommand",
+            "autoMapSmartControls": "#/components/schemas/EditCommandAutoMapSmartControlsCommand",
+            "compareSmartControls": "#/components/schemas/EditCommandCompareSmartControlsCommand",
+            "addScene": "#/components/schemas/EditCommandAddSceneCommand",
+            "removeScene": "#/components/schemas/EditCommandRemoveSceneCommand",
+            "setScene": "#/components/schemas/EditCommandSetSceneCommand",
+            "setCell": "#/components/schemas/EditCommandSetCellCommand",
+            "deleteCells": "#/components/schemas/EditCommandDeleteCellsCommand",
+            "moveCell": "#/components/schemas/EditCommandMoveCellCommand",
+            "setLiveLoops": "#/components/schemas/EditCommandSetLiveLoopsCommand",
+            "setTrackActivation": "#/components/schemas/EditCommandSetTrackActivationCommand"
           }
         }
       },
@@ -3582,6 +4455,41 @@
           }
         }
       },
+      "EditCommandAddDrumPadCommand": {
+        "required": [
+          "trackId",
+          "note",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "addDrumPad"
+            ],
+            "type": "string"
+          },
+          "trackId": {
+            "type": "string"
+          },
+          "note": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "name": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "pluginId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        },
+        "description": "Adds a pad on note \u0060note\u0060 (0\u2026127, free on this DMD) to a DMD track: a new member instrument track playing\n\u0060pluginId\u0060 (left out: the Drum Synth, \u0060anode.drum-synth\u0060), named \u0060name\u0060."
+      },
       "EditCommandAddInsertCommand": {
         "required": [
           "pluginId",
@@ -3609,9 +4517,19 @@
               "integer"
             ],
             "format": "int32"
+          },
+          "chain": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/InsertChain"
+              }
+            ]
           }
         },
-        "description": "Adds an insert effect at \u0060index\u0060 (the end when left out); the master\u0027s when \u0060trackId\u0060 is left out."
+        "description": "Adds an insert effect at \u0060index\u0060 (the end when left out); the master\u0027s when \u0060trackId\u0060 is left out. With\n\u0060chain\u0060\u0060midiEffects\u0060, a MIDI FX slot instead, as for every insert command."
       },
       "EditCommandAddMarkerCommand": {
         "required": [
@@ -3705,6 +4623,53 @@
           }
         }
       },
+      "EditCommandAddPatternRegionCommand": {
+        "required": [
+          "trackId",
+          "startTick",
+          "type",
+          "pattern"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "addPatternRegion"
+            ],
+            "type": "string"
+          },
+          "trackId": {
+            "type": "string"
+          },
+          "startTick": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "lengthTicks": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int64"
+          },
+          "pattern": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/Pattern"
+              }
+            ]
+          },
+          "name": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        },
+        "description": "Adds a pattern region to an instrument track: \u0060lengthTicks\u0060 (left out: one bar at \u0060startTick\u0060\u0027s\nsignature) and \u0060pattern\u0060 (left out: the default pattern: on a Drum Machine Designer track one pad row per\npad, else one note row on C3 (60); each 16 steps of a 16th, all off, no swing)."
+      },
       "EditCommandAddRegionCommand": {
         "required": [
           "trackId",
@@ -3745,6 +4710,33 @@
           }
         },
         "description": "Places a file on a track; the whole file unless \u0060fileOffset\u0060 and \u0060length\u0060 say otherwise."
+      },
+      "EditCommandAddSceneCommand": {
+        "required": [
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "addScene"
+            ],
+            "type": "string"
+          },
+          "name": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "index": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int32"
+          }
+        },
+        "description": "Adds an empty scene to the Live Loops grid at \u0060index\u0060 (the end when left out)."
       },
       "EditCommandAddSectionCommand": {
         "required": [
@@ -3929,6 +4921,64 @@
         },
         "description": "Assigns a track to a VCA track, or removes it from its VCA (null)."
       },
+      "EditCommandAutoMapSmartControlsCommand": {
+        "required": [
+          "trackId",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "autoMapSmartControls"
+            ],
+            "type": "string"
+          },
+          "trackId": {
+            "type": "string"
+          }
+        },
+        "description": "Automatic mapping: replaces the knobs\u0027 names and mappings with the plugins\u0027 macro hints in order (the\ninstrument\u0027s, then each insert\u0027s), up to the layout\u0027s knobs; each knob takes its parameter\u0027s current value."
+      },
+      "EditCommandCompareSmartControlsCommand": {
+        "required": [
+          "trackId",
+          "on",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "compareSmartControls"
+            ],
+            "type": "string"
+          },
+          "trackId": {
+            "type": "string"
+          },
+          "on": {
+            "type": "boolean"
+          }
+        },
+        "description": "Compare: on, the controls show (and their parameters take) their saved values; off, the edited ones again. The\nserver applies it without an undo step (its delta still reaches every client)."
+      },
+      "EditCommandConvertPatternToMidiCommand": {
+        "required": [
+          "regionId",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "convertPatternToMidi"
+            ],
+            "type": "string"
+          },
+          "regionId": {
+            "type": "string"
+          }
+        },
+        "description": "Replaces a pattern region with a MIDI region of exactly the notes it plays over its length (one pass of the\nregion), at the same place, with its name and mute."
+      },
       "EditCommandCopyRegionsCommand": {
         "required": [
           "regionIds",
@@ -3961,6 +5011,38 @@
         },
         "description": "Copies regions (of any kind) \u0060offsetTicks\u0060 later (or earlier), onto \u0060trackId\u0060 when given (\u2325-drag,\nrepeat)."
       },
+      "EditCommandCreateDrumMachineCommand": {
+        "required": [
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "createDrumMachine"
+            ],
+            "type": "string"
+          },
+          "trackId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "kitPatchId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "name": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        },
+        "description": "Makes a Drum Machine Designer: a new DMD stack at the end, or, with \u0060trackId\u0060, an instrument track turned\ninto one in place (its regions and pattern regions stay on the DMD track, its instrument goes). The pads come\nfrom kit patch \u0060kitPatchId\u0060 (left out: no pads)."
+      },
       "EditCommandCreateStackCommand": {
         "required": [
           "trackIds",
@@ -3987,6 +5069,26 @@
           }
         },
         "description": "Puts tracks into a new folder stack, inserted where the first of them was."
+      },
+      "EditCommandDeleteCellsCommand": {
+        "required": [
+          "cellIds",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "deleteCells"
+            ],
+            "type": "string"
+          },
+          "cellIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
       },
       "EditCommandDeleteControlsCommand": {
         "required": [
@@ -4297,6 +5399,37 @@
         },
         "description": "Beat mapping: for each mapping in order, sets tempo events so that its tick lands on its sample, keeping earlier\nmappings and the positions before them."
       },
+      "EditCommandMoveCellCommand": {
+        "required": [
+          "cellId",
+          "trackId",
+          "sceneId",
+          "type",
+          "copy"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "moveCell"
+            ],
+            "type": "string"
+          },
+          "cellId": {
+            "type": "string"
+          },
+          "trackId": {
+            "type": "string"
+          },
+          "sceneId": {
+            "type": "string"
+          },
+          "copy": {
+            "type": "boolean",
+            "default": false
+          }
+        },
+        "description": "Moves (or with \u0060copy\u0060, copies) a cell to the slot of \u0060trackId\u0060 and \u0060sceneId\u0060, replacing the cell\nthere; the track must suit its content."
+      },
       "EditCommandMoveInsertCommand": {
         "required": [
           "insertId",
@@ -4322,9 +5455,19 @@
               "null",
               "string"
             ]
+          },
+          "chain": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/InsertChain"
+              }
+            ]
           }
         },
-        "description": "Moves an insert to another slot of the same strip."
+        "description": "Moves an insert to another slot of the same strip (and chain)."
       },
       "EditCommandMoveRegionCommand": {
         "required": [
@@ -4353,7 +5496,7 @@
             ]
           }
         },
-        "description": "Moves a region (audio, MIDI, or a take folder) in time, and to another track of a kind that can hold it when\n\u0060trackId\u0060 is given. \u0060deleteRegions\u0060 also takes every kind; \u0060splitRegion\u0060 takes audio and MIDI."
+        "description": "Moves a region (audio, MIDI, pattern, or a take folder) in time, and to another track of a kind that can hold it\nwhen \u0060trackId\u0060 is given. \u0060deleteRegions\u0060 and \u0060copyRegions\u0060 also take every kind;\n\u0060splitRegion\u0060 takes audio and MIDI."
       },
       "EditCommandMoveSectionCommand": {
         "required": [
@@ -4544,6 +5687,29 @@
         },
         "description": "Moves note starts towards the grid (destructive; \u0060noteIds\u0060 left out: every note of the region), with the\nsame strength and swing meaning as RegionPlayback."
       },
+      "EditCommandRemoveDrumPadCommand": {
+        "required": [
+          "trackId",
+          "note",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "removeDrumPad"
+            ],
+            "type": "string"
+          },
+          "trackId": {
+            "type": "string"
+          },
+          "note": {
+            "type": "integer",
+            "format": "int32"
+          }
+        },
+        "description": "Removes the pad on note \u0060note\u0060 of a DMD track, with its track."
+      },
       "EditCommandRemoveInsertCommand": {
         "required": [
           "insertId",
@@ -4564,8 +5730,36 @@
               "null",
               "string"
             ]
+          },
+          "chain": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/InsertChain"
+              }
+            ]
           }
         }
+      },
+      "EditCommandRemoveSceneCommand": {
+        "required": [
+          "sceneId",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "removeScene"
+            ],
+            "type": "string"
+          },
+          "sceneId": {
+            "type": "string"
+          }
+        },
+        "description": "Removes a scene and its cells."
       },
       "EditCommandRemoveSendCommand": {
         "required": [
@@ -4639,6 +5833,31 @@
             "type": "string"
           }
         }
+      },
+      "EditCommandReseedPatternCommand": {
+        "required": [
+          "regionId",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "reseedPattern"
+            ],
+            "type": "string"
+          },
+          "regionId": {
+            "type": "string"
+          },
+          "seed": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int64"
+          }
+        },
+        "description": "Sets a pattern\u0027s seed (left out: a new one the server draws), so chance and random steps draw anew."
       },
       "EditCommandResizeMidiRegionCommand": {
         "required": [
@@ -4799,6 +6018,78 @@
           }
         }
       },
+      "EditCommandSetCellCommand": {
+        "required": [
+          "trackId",
+          "sceneId",
+          "type",
+          "content"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "setCell"
+            ],
+            "type": "string"
+          },
+          "trackId": {
+            "type": "string"
+          },
+          "sceneId": {
+            "type": "string"
+          },
+          "content": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/CellContent"
+              }
+            ]
+          },
+          "name": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "lengthTicks": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int64"
+          },
+          "playMode": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/CellPlayMode"
+              }
+            ]
+          },
+          "quantize": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/LaunchQuantize"
+              }
+            ]
+          },
+          "gridQuantize": {
+            "type": [
+              "null",
+              "boolean"
+            ]
+          }
+        },
+        "description": "Creates or changes the cell of \u0060trackId\u0060 and \u0060sceneId\u0060. \u0060content\u0060 creates it or replaces what it\nplays (its kind follows; it must suit the track: audio on an audio track, MIDI or pattern on an instrument\ntrack; ids as CellContent says, the server renumbering what clashes); a cell that does not exist\nneeds it. \u0060quantize\u0060 sets its own launch quantise; \u0060gridQuantize\u0060 true clears it, so it follows the\ngrid\u0027s."
+      },
       "EditCommandSetCompCommand": {
         "required": [
           "folderId",
@@ -4856,6 +6147,48 @@
             "format": "int64"
           }
         }
+      },
+      "EditCommandSetDrumPadCommand": {
+        "required": [
+          "trackId",
+          "note",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "setDrumPad"
+            ],
+            "type": "string"
+          },
+          "trackId": {
+            "type": "string"
+          },
+          "note": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "name": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "pluginId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "toNote": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int32"
+          }
+        },
+        "description": "Changes the pad on note \u0060note\u0060 of a DMD track: renames it (and its track), gives its track another\ninstrument (\u0060pluginId\u0060, parameters at their defaults), or moves it to free note \u0060toNote\u0060. Its channel\nstrip is edited through the pad track\u0027s own strip and insert commands."
       },
       "EditCommandSetFileTempoCommand": {
         "required": [
@@ -4991,9 +6324,19 @@
               "null",
               "string"
             ]
+          },
+          "chain": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/InsertChain"
+              }
+            ]
           }
         },
-        "description": "Bypasses an insert, or sets its sidechain (a track id, \u0060bus:N\u0060, or an empty string for none)."
+        "description": "Bypasses an insert, or sets its sidechain (a track id, \u0060bus:N\u0060, or an empty string for none; never on a MIDI\nFX slot)."
       },
       "EditCommandSetInsertParameterCommand": {
         "required": [
@@ -5023,6 +6366,16 @@
             "type": [
               "null",
               "string"
+            ]
+          },
+          "chain": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/InsertChain"
+              }
             ]
           }
         },
@@ -5070,6 +6423,36 @@
           }
         },
         "description": "Replaces the key track; the first event at tick 0."
+      },
+      "EditCommandSetLiveLoopsCommand": {
+        "required": [
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "setLiveLoops"
+            ],
+            "type": "string"
+          },
+          "quantize": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/LaunchQuantize"
+              }
+            ]
+          },
+          "shown": {
+            "type": [
+              "null",
+              "boolean"
+            ]
+          }
+        },
+        "description": "Sets the Live Loops grid\u0027s launch quantise, or shows or hides it."
       },
       "EditCommandSetMarkerCommand": {
         "required": [
@@ -5357,6 +6740,72 @@
         },
         "description": "Sets one parameter of a track\u0027s instrument. Consecutive batches on the same parameter within 1 s coalesce into\none undo step, as \u0060setStrip\u0060 does."
       },
+      "EditCommandSetPatternCommand": {
+        "required": [
+          "regionId",
+          "pattern",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "setPattern"
+            ],
+            "type": "string"
+          },
+          "regionId": {
+            "type": "string"
+          },
+          "pattern": {
+            "$ref": "#/components/schemas/Pattern"
+          }
+        },
+        "description": "Replaces a pattern region\u0027s whole pattern (every Step Sequencer edit sends it). Rows: unique ids, length 1\u202664\nwith as many steps, step values in their ranges (PatternStep); swing 0\u20261; else 422."
+      },
+      "EditCommandSetPatternRegionCommand": {
+        "required": [
+          "regionId",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "setPatternRegion"
+            ],
+            "type": "string"
+          },
+          "regionId": {
+            "type": "string"
+          },
+          "startTick": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int64"
+          },
+          "lengthTicks": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int64"
+          },
+          "name": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "muted": {
+            "type": [
+              "null",
+              "boolean"
+            ]
+          }
+        },
+        "description": "Moves (in time), resizes, renames or mutes a pattern region; \u0060moveRegion\u0060, \u0060copyRegions\u0060 and\n\u0060deleteRegions\u0060 take pattern regions too."
+      },
       "EditCommandSetPitchNotesCommand": {
         "required": [
           "regionId",
@@ -5554,6 +7003,37 @@
         },
         "description": "Sets an audio region\u0027s Flex \u0026amp; Follow, transpose (semitones) or fine tune (cents). A transpose or fine tune\nneeds Flex or Follow (the track\u0027s flex on, or a \u0060follow\u0060 other than \u0060off\u0060), else 422."
       },
+      "EditCommandSetSceneCommand": {
+        "required": [
+          "sceneId",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "setScene"
+            ],
+            "type": "string"
+          },
+          "sceneId": {
+            "type": "string"
+          },
+          "name": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "index": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int32"
+          }
+        },
+        "description": "Renames a scene, or moves it to \u0060index\u0060."
+      },
       "EditCommandSetSectionCommand": {
         "required": [
           "sectionId",
@@ -5684,6 +7164,104 @@
           }
         },
         "description": "Replaces the signature track; the first event at tick 0, each later one on a bar line."
+      },
+      "EditCommandSetSmartControlCommand": {
+        "required": [
+          "trackId",
+          "controlId",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "setSmartControl"
+            ],
+            "type": "string"
+          },
+          "trackId": {
+            "type": "string"
+          },
+          "controlId": {
+            "type": "string"
+          },
+          "value": {
+            "type": [
+              "null",
+              "number"
+            ],
+            "format": "double"
+          },
+          "name": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        },
+        "description": "Sets a Smart Control\u0027s value (0\u20261; applying every mapping\u0027s parameter, coalesced as \u0060setParameter\u0060, and\nrecording automation of \u0060smartControl:{controlId}\u0060 as \u0060setStrip\u0060 records volume) or renames it."
+      },
+      "EditCommandSetSmartControlsCommand": {
+        "required": [
+          "trackId",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "setSmartControls"
+            ],
+            "type": "string"
+          },
+          "trackId": {
+            "type": "string"
+          },
+          "layout": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SmartControlsLayout"
+              }
+            ]
+          },
+          "arpeggiator": {
+            "type": [
+              "null",
+              "boolean"
+            ]
+          }
+        },
+        "description": "Sets a track\u0027s Smart Controls layout (controls a smaller layout drops lose their mappings) or turns its\narpeggiator button on or off (adding, bypassing or unbypassing \u0060anode.arpeggiator\u0060 in its first MIDI FX\nslot). Sets the Smart Controls up when they are null."
+      },
+      "EditCommandSetSmartMappingsCommand": {
+        "required": [
+          "trackId",
+          "controlId",
+          "mappings",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "setSmartMappings"
+            ],
+            "type": "string"
+          },
+          "trackId": {
+            "type": "string"
+          },
+          "controlId": {
+            "type": "string"
+          },
+          "mappings": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SmartMapping"
+            }
+          }
+        },
+        "description": "Replaces a Smart Control\u0027s mappings (targets that exist on the track; graphs as SmartMapping)."
       },
       "EditCommandSetSmartTempoCommand": {
         "required": [
@@ -5858,6 +7436,31 @@
           }
         },
         "description": "Replaces the tempo track; the first event must be at tick 0. Audio regions keep their musical positions."
+      },
+      "EditCommandSetTrackActivationCommand": {
+        "required": [
+          "trackIds",
+          "liveLoopsActive",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "setTrackActivation"
+            ],
+            "type": "string"
+          },
+          "trackIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "liveLoopsActive": {
+            "type": "boolean"
+          }
+        },
+        "description": "Track activation: the tracks play their Live Loops cells (on) or their Tracks-area regions (off)."
       },
       "EditCommandSetTrackAlternativeCommand": {
         "required": [
@@ -6383,6 +7986,24 @@
         ],
         "description": "A track\u0027s flex algorithm (docs/06-phase-5.md). A region is \u003Cem\u003Ewarped\u003C/em\u003E when its track\u0027s flex is on, its\n\u0060follow\u0060 is not \u0060off\u0060, or it has a transpose or pitch notes; warped regions play through the track\u0027s\nalgorithm (Polyphonic while flex is off)."
       },
+      "GraphPoint": {
+        "required": [
+          "x",
+          "y"
+        ],
+        "type": "object",
+        "properties": {
+          "x": {
+            "type": "number",
+            "format": "double"
+          },
+          "y": {
+            "type": "number",
+            "format": "double"
+          }
+        },
+        "description": "A point of a mapping graph: input \u0060x\u0060 (0\u20261) gives output \u0060y\u0060 (0\u20261)."
+      },
       "GroupProperties": {
         "required": [
           "volume",
@@ -6491,7 +8112,26 @@
             ]
           }
         },
-        "description": "An insert effect on a channel strip: the plugin, whether it is bypassed, its parameter values by parameter id\n(all of them), and its sidechain source (a track id or \u0060bus:N\u0060; null: none). A plugin\u0027s opaque state lives in\nthe project\u0027s \u0060Plugin States\u0060 folder."
+        "description": "An insert effect on a channel strip: the plugin, whether it is bypassed, its parameter values by parameter id\n(all of them), and its sidechain source (a track id or \u0060bus:N\u0060; null: none). A plugin\u0027s opaque state lives in\nthe project\u0027s \u0060Plugin States\u0060 folder. A MIDI FX slot (\u0060ChannelStrip.midiEffects\u0060) has the same shape,\nnever a sidechain."
+      },
+      "InsertChain": {
+        "enum": [
+          "inserts",
+          "midiEffects",
+          null
+        ]
+      },
+      "InstallPackRequest": {
+        "required": [
+          "path"
+        ],
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string"
+          }
+        },
+        "description": "Installs a \u0060.anodepack\u0060 from the server\u0027s disk (replacing an installed version of the same pack)."
       },
       "InstrumentSlot": {
         "required": [
@@ -6670,6 +8310,70 @@
           "minor"
         ]
       },
+      "LaunchQuantize": {
+        "enum": [
+          "off",
+          "sixteenth",
+          "eighth",
+          "quarter",
+          "half",
+          "bar",
+          "twoBars",
+          "fourBars",
+          null
+        ]
+      },
+      "LaunchRequest": {
+        "type": "object",
+        "properties": {
+          "cellIds": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "type": "string"
+            }
+          },
+          "sceneId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        },
+        "description": "Launches Live Loops cells, or a scene (its cells; tracks with no cell in it stop), each at its quantise boundary."
+      },
+      "LiveLoopsGrid": {
+        "required": [
+          "scenes",
+          "cells",
+          "quantize",
+          "shown"
+        ],
+        "type": "object",
+        "properties": {
+          "scenes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Scene"
+            }
+          },
+          "cells": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Cell"
+            }
+          },
+          "quantize": {
+            "$ref": "#/components/schemas/LaunchQuantize"
+          },
+          "shown": {
+            "type": "boolean"
+          }
+        },
+        "description": "The Live Loops grid (docs/07-phase-6.md): its scenes in order, its cells, the launch quantise, and whether the\ngrid is shown beside the Tracks area. A track whose \u0060liveLoopsActive\u0060 is on plays its playing cell instead\nof its Tracks-area regions; launching a scene launches its cells and stops the cells of tracks with none in it."
+      },
       "LiveMidiEvent": {
         "required": [
           "status",
@@ -6711,6 +8415,149 @@
           }
         },
         "description": "Plays MIDI on a track now, as if it came from a keyboard (the on-screen keyboard, musical typing)."
+      },
+      "LiveRecordRequest": {
+        "required": [
+          "on"
+        ],
+        "type": "object",
+        "properties": {
+          "on": {
+            "type": "boolean"
+          },
+          "trackId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "sceneId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        },
+        "description": "Starts or stops recording in Live Loops: into the cell of \u0060trackId\u0060 and \u0060sceneId\u0060 (the track\u0027s input,\nfrom the next quantise boundary, for the cell\u0027s length or until stopped); without them, a performance recording\n(cells and Remix FX into the Tracks area, one undo step when it stops)."
+      },
+      "LoopFavouriteRequest": {
+        "required": [
+          "favourite"
+        ],
+        "type": "object",
+        "properties": {
+          "favourite": {
+            "type": "boolean"
+          }
+        },
+        "description": "Marks a loop a favourite, or not."
+      },
+      "LoopInfo": {
+        "required": [
+          "id",
+          "name",
+          "kind",
+          "path",
+          "scale",
+          "tags",
+          "oneShot",
+          "favourite"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/LoopKind"
+          },
+          "packId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "path": {
+            "type": "string"
+          },
+          "tempo": {
+            "type": [
+              "null",
+              "number"
+            ],
+            "format": "double"
+          },
+          "beats": {
+            "type": [
+              "null",
+              "number"
+            ],
+            "format": "double"
+          },
+          "key": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int32"
+          },
+          "scale": {
+            "$ref": "#/components/schemas/LoopScale"
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "oneShot": {
+            "type": "boolean"
+          },
+          "favourite": {
+            "type": "boolean"
+          }
+        },
+        "description": "A loop of the loop index (\u0060\u0026lt;DataDirectory\u0026gt;/Library/Loops/index.json\u0060, rebuilt from the installed\npacks and the user\u0027s loops): its pack (null: a user loop), its file on the server\u0027s disk, its tempo (bpm) and\nlength in beats (null for a one-shot), its key (a tonic 0 (C) \u2026 11 (B); null: none, as drums), scale and tags\n(the keyword buttons: Drums, Bass \u2026), whether it is a one-shot, and whether the user marked it a favourite."
+      },
+      "LoopKind": {
+        "enum": [
+          "audio",
+          "midi",
+          "pattern"
+        ],
+        "description": "What a tagged loop holds, and what adding it to a project makes."
+      },
+      "LoopPage": {
+        "required": [
+          "items",
+          "total"
+        ],
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LoopInfo"
+            }
+          },
+          "total": {
+            "type": "integer",
+            "format": "int32"
+          }
+        },
+        "description": "A page of a loop search, and how many loops match in all."
+      },
+      "LoopScale": {
+        "enum": [
+          "major",
+          "minor",
+          "neither",
+          "both"
+        ],
+        "description": "The scale a loop suits, for the Loop Browser\u0027s scale filter."
       },
       "Marker": {
         "required": [
@@ -7126,6 +8973,44 @@
           }
         }
       },
+      "Pack": {
+        "required": [
+          "id",
+          "name",
+          "version",
+          "author",
+          "loopCount",
+          "size",
+          "installed"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          },
+          "author": {
+            "type": "string"
+          },
+          "loopCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "size": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "installed": {
+            "type": "boolean"
+          }
+        },
+        "description": "A content pack (\u0060.anodepack\u0060: a zip of loops, patches, kits and IRs with a \u0060pack.json\u0060 manifest),\ninstalled under \u0060\u0026lt;DataDirectory\u0026gt;/Library/Packs/\u0026lt;id\u0026gt;/\u0060. \u0060size\u0060 is in bytes."
+      },
       "ParameterInfo": {
         "required": [
           "id",
@@ -7171,9 +9056,16 @@
             "items": {
               "type": "string"
             }
+          },
+          "macro": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int32"
           }
         },
-        "description": "A plugin parameter. \u0060steps\u0060 \u0026gt; 0 makes it discrete (\u0060steps\u0060 \u002B 1 values from \u0060min\u0060 to\n\u0060max\u0060), with \u0060valueNames\u0060 naming them when it is a choice."
+        "description": "A plugin parameter. \u0060steps\u0060 \u0026gt; 0 makes it discrete (\u0060steps\u0060 \u002B 1 values from \u0060min\u0060 to\n\u0060max\u0060), with \u0060valueNames\u0060 naming them when it is a choice. \u0060macro\u0060 (Phase 6) is its macro hint:\nautomatic Smart Controls mapping takes a plugin\u0027s hinted parameters in ascending \u0060macro\u0060 order (null: not a\nmacro)."
       },
       "PatchInfo": {
         "required": [
@@ -7198,6 +9090,181 @@
           }
         },
         "description": "A saved channel strip (Logic\u0027s patch): its instrument, inserts and sends, for a kind of track."
+      },
+      "Pattern": {
+        "required": [
+          "rows",
+          "swing",
+          "seed",
+          "stepTicks"
+        ],
+        "type": "object",
+        "properties": {
+          "rows": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PatternRow"
+            }
+          },
+          "swing": {
+            "type": "number",
+            "format": "double"
+          },
+          "seed": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "stepTicks": {
+            "type": "integer",
+            "format": "int32",
+            "default": 240
+          }
+        },
+        "description": "A Step Sequencer pattern: its rows; \u0060swing\u0060 0\u20261 delays every even 16th (the second, fourth \u2026 of each beat)\nby \u0060swing\u0060 \u00D7 half a 16th; \u0060seed\u0060 seeds the deterministic generator that draws chance and random steps;\n\u0060stepTicks\u0060 is the rows\u0027 step length (240, a 16th, unless set)."
+      },
+      "PatternPlayMode": {
+        "enum": [
+          "forward",
+          "reverse",
+          "pingPong",
+          "random"
+        ],
+        "description": "The order a pattern row walks its steps in, each pass."
+      },
+      "PatternRegion": {
+        "required": [
+          "id",
+          "trackId",
+          "name",
+          "startTick",
+          "lengthTicks",
+          "muted",
+          "pattern"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "trackId": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "startTick": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "lengthTicks": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "muted": {
+            "type": "boolean"
+          },
+          "pattern": {
+            "$ref": "#/components/schemas/Pattern"
+          }
+        },
+        "description": "A pattern region on an instrument track: it plays \u0060pattern\u0060 from \u0060startTick\u0060 for\n\u0060lengthTicks\u0060, every row cycling from the region\u0027s start."
+      },
+      "PatternRow": {
+        "required": [
+          "id",
+          "kind",
+          "note",
+          "name",
+          "length",
+          "playMode",
+          "muted",
+          "steps"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/PatternRowKind"
+          },
+          "note": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "name": {
+            "type": "string"
+          },
+          "length": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "stepTicks": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int32"
+          },
+          "playMode": {
+            "$ref": "#/components/schemas/PatternPlayMode"
+          },
+          "muted": {
+            "type": "boolean"
+          },
+          "steps": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PatternStep"
+            }
+          }
+        },
+        "description": "A row of a pattern: what it plays (\u0060kind\u0060 and \u0060note\u0060), its name, its length in steps (1\u202664; it cycles\nindependently of other rows\u0027 lengths), its step length in ticks (\u0060stepTicks\u0060; null: the pattern\u0027s), its\nplay mode, and whether it is muted. \u0060steps\u0060 always has exactly \u0060length\u0060 entries."
+      },
+      "PatternRowKind": {
+        "enum": [
+          "note",
+          "chordDegree",
+          "pad"
+        ],
+        "description": "What a pattern row plays (docs/07-phase-6.md, \u0022Pattern regions\u0022)."
+      },
+      "PatternStep": {
+        "required": [
+          "on",
+          "velocity",
+          "gate",
+          "repeats",
+          "chance",
+          "offset"
+        ],
+        "type": "object",
+        "properties": {
+          "on": {
+            "type": "boolean"
+          },
+          "velocity": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "gate": {
+            "type": "number",
+            "format": "double"
+          },
+          "repeats": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "chance": {
+            "type": "number",
+            "format": "double"
+          },
+          "offset": {
+            "type": "number",
+            "format": "double"
+          }
+        },
+        "description": "One step of a pattern row. \u0060velocity\u0060 1\u2026127; \u0060gate\u0060 is the note\u0027s length in steps, 0\u202616 (exclusive of\n0; 1 is the whole step, over 1 holds into the next steps, a tie); \u0060repeats\u0060 1\u20268 split the gate evenly into\nthat many notes (ratchets); \u0060chance\u0060 0\u20261 is the probability the step plays on a pass; \u0060offset\u0060 \u22120.5\u20260.5\nmoves it by that fraction of a step. An off step plays nothing but keeps its values."
       },
       "PdcMode": {
         "enum": [
@@ -7370,7 +9437,7 @@
             "type": "boolean"
           }
         },
-        "description": "A plugin the engine can load: an instrument, or an effect in \u0060category\u0060 (EQ, Dynamics, Delay, Reverb,\nModulation, Distortion, Filter, Utility, Metering). \u0060hasEditor\u0060: it has its own editor window (desktop app\nonly; everywhere else the generic editor). \u0060fileTypes\u0060 (extensions such as \u0060.sfz\u0060, \u0060.wav\u0060) lists\nwhat an\ninstrument loads with \u0060loadInstrumentFile\u0060, empty when it loads none."
+        "description": "A plugin the engine can load: an instrument (\u0060category\u0060\u0060Instrument\u0060), a MIDI effect (\u0060MIDI\nEffect\u0060, Phase 6: it goes in a strip\u0027s MIDI FX slots), or an effect in \u0060category\u0060 (EQ, Dynamics, Delay,\nReverb, Modulation, Distortion, Filter, Utility, Metering). \u0060hasEditor\u0060: it has its own editor window (desktop app\nonly; everywhere else the generic editor). \u0060fileTypes\u0060 (extensions such as \u0060.sfz\u0060, \u0060.wav\u0060) lists\nwhat an\ninstrument loads with \u0060loadInstrumentFile\u0060, empty when it loads none."
       },
       "PreviewRequest": {
         "type": "object",
@@ -7502,7 +9569,9 @@
           "arrangement",
           "notes",
           "groups",
-          "automation"
+          "automation",
+          "patternRegions",
+          "liveLoops"
         ],
         "type": "object",
         "properties": {
@@ -7588,9 +9657,18 @@
             "items": {
               "$ref": "#/components/schemas/AutomationLane"
             }
+          },
+          "patternRegions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PatternRegion"
+            }
+          },
+          "liveLoops": {
+            "$ref": "#/components/schemas/LiveLoopsGrid"
           }
         },
-        "description": "The open project (docs/01-implementation-plan.md \u00A75). Musical positions are ticks at 960 PPQ; audio offsets,\nlengths and fades are frames at the project\u0027s \u0060sampleRate\u0060. \u0060revision\u0060 grows with every edit and is\nthe ETag; \u0060dirty\u0060 says whether it has unsaved edits."
+        "description": "The open project (docs/01-implementation-plan.md \u00A75). Musical positions are ticks at 960 PPQ; audio offsets,\nlengths and fades are frames at the project\u0027s \u0060sampleRate\u0060. \u0060revision\u0060 grows with every edit and is\nthe ETag; \u0060dirty\u0060 says whether it has unsaved edits. Phase 6 (docs/07-phase-6.md): \u0060patternRegions\u0060\nare the Step Sequencer\u0027s regions; \u0060liveLoops\u0060 is the Live Loops grid."
       },
       "ProjectAlternative": {
         "required": [
@@ -7840,6 +9918,22 @@
           }
         }
       },
+      "Scene": {
+        "required": [
+          "id",
+          "name"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "description": "A row of the Live Loops grid."
+      },
       "Screenset": {
         "required": [
           "number",
@@ -7919,6 +10013,120 @@
         },
         "description": "A time signature change, on a bar line of the signature before it. The first is at tick 0."
       },
+      "SmartControl": {
+        "required": [
+          "id",
+          "name",
+          "kind",
+          "value",
+          "mappings"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/SmartControlKind"
+          },
+          "value": {
+            "type": "number",
+            "format": "double"
+          },
+          "savedValue": {
+            "type": [
+              "null",
+              "number"
+            ],
+            "format": "double"
+          },
+          "mappings": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SmartMapping"
+            }
+          }
+        },
+        "description": "A Smart Control: its id (\u0060knob1\u0060\u2026\u0060knob12\u0060, \u0060switch1\u0060, \u0060switch2\u0060, \u0060padX\u0060, \u0060padY\u0060),\nname, kind, value (0\u20261) and mappings (any number). \u0060savedValue\u0060 is the other side of Compare: while not\ncomparing, the value the project was last saved with (null: unchanged since); while comparing, the edited value\nthat Compare will restore."
+      },
+      "SmartControlKind": {
+        "enum": [
+          "knob",
+          "switch",
+          "pad"
+        ]
+      },
+      "SmartControls": {
+        "required": [
+          "layout",
+          "controls",
+          "comparing"
+        ],
+        "type": "object",
+        "properties": {
+          "layout": {
+            "$ref": "#/components/schemas/SmartControlsLayout"
+          },
+          "controls": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SmartControl"
+            }
+          },
+          "arpeggiator": {
+            "type": [
+              "null",
+              "boolean"
+            ]
+          },
+          "comparing": {
+            "type": "boolean"
+          }
+        },
+        "description": "A track\u0027s Smart Controls (docs/07-phase-6.md): the layout and its controls in order (knobs, then\n\u0060switch1\u0060, \u0060switch2\u0060, then \u0060padX\u0060, \u0060padY\u0060: every control of the layout); the arpeggiator\nbutton (null on a track without MIDI FX; on, the track\u0027s first MIDI FX slot is an unbypassed\n\u0060anode.arpeggiator\u0060); and whether Compare shows the saved values."
+      },
+      "SmartControlsLayout": {
+        "enum": [
+          "knobs8",
+          "knobs12"
+        ]
+      },
+      "SmartMapping": {
+        "required": [
+          "target",
+          "min",
+          "max",
+          "invert",
+          "graph"
+        ],
+        "type": "object",
+        "properties": {
+          "target": {
+            "type": "string"
+          },
+          "min": {
+            "type": "number",
+            "format": "double"
+          },
+          "max": {
+            "type": "number",
+            "format": "double"
+          },
+          "invert": {
+            "type": "boolean"
+          },
+          "graph": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GraphPoint"
+            }
+          }
+        },
+        "description": "A Smart Control\u0027s mapping to one parameter. \u0060target\u0060 addresses it as automation lanes do (\u0060volume\u0060,\n\u0060pan\u0060, \u0060send:{sendId}\u0060, \u0060instrument:{parameterId}\u0060, \u0060insert:{insertId}:{parameterId}\u0060,\n\u0060midiEffect:{slotId}:{parameterId}\u0060; see AutomationLane). The control\u0027s value goes through\n\u0060graph\u0060 (piecewise linear, 2\u201316 points sorted by x, the first at x 0 and the last at x 1; the default is\nthe line (0, 0)\u2013(1, 1)), is inverted (1 \u2212 y) when \u0060invert\u0060, then scaled to \u0060min\u0060 \u2026 \u0060max\u0060 in the\nparameter\u0027s unit."
+      },
       "SmartTempoSettings": {
         "required": [
           "mode",
@@ -7938,6 +10146,21 @@
           }
         },
         "description": "Smart Tempo: the project tempo mode, the \u0060follow\u0060 new audio regions get, and whether imports are analysed\n(transients and beats) as they arrive."
+      },
+      "StopRequest": {
+        "type": "object",
+        "properties": {
+          "trackIds": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "description": "Stops the cells playing on \u0060trackIds\u0060 (left out: every track) at the grid\u0027s quantise boundary."
       },
       "SystemInfo": {
         "required": [
@@ -8113,7 +10336,10 @@
           "automationMode",
           "flexOn",
           "flexMode",
-          "alternatives"
+          "alternatives",
+          "drumMachine",
+          "smartControls",
+          "liveLoopsActive"
         ],
         "type": "object",
         "properties": {
@@ -8206,9 +10432,32 @@
               "null",
               "string"
             ]
+          },
+          "drumMachine": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/DrumMachine"
+              }
+            ]
+          },
+          "smartControls": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SmartControls"
+              }
+            ]
+          },
+          "liveLoopsActive": {
+            "type": "boolean"
           }
         },
-        "description": "A track and its channel strip. \u0060color\u0060 is a CSS colour; \u0060input\u0060 is where an audio track records from.\nAn instrument track has an \u0060instrument\u0060; instrument and external MIDI tracks take MIDI from\n\u0060midiInput\u0060, and an external MIDI track sends its regions to \u0060midiOutput\u0060. Phase 5: \u0060flexOn\u0060 and\n\u0060flexMode\u0060 are its flex algorithm; \u0060alternatives\u0060 are its inactive track alternatives, and\n\u0060alternativeId\u0060 names the active one (null until the track has alternatives)."
+        "description": "A track and its channel strip. \u0060color\u0060 is a CSS colour; \u0060input\u0060 is where an audio track records from.\nAn instrument track has an \u0060instrument\u0060; instrument and external MIDI tracks take MIDI from\n\u0060midiInput\u0060, and an external MIDI track sends its regions to \u0060midiOutput\u0060. Phase 5: \u0060flexOn\u0060 and\n\u0060flexMode\u0060 are its flex algorithm; \u0060alternatives\u0060 are its inactive track alternatives, and\n\u0060alternativeId\u0060 names the active one (null until the track has alternatives). Phase 6: a Drum Machine\nDesigner stack has a \u0060drumMachine\u0060 (null on every other track); \u0060smartControls\u0060 are its Smart Controls\n(null until set up: the editor shows the 8-knob layout, unnamed, at 0 and unmapped, and the first Smart Controls\ncommand sets them up); \u0060liveLoopsActive\u0060: the track plays its Live Loops cells, not its Tracks-area\nregions."
       },
       "TrackAlternative": {
         "required": [

@@ -174,6 +174,13 @@ public static partial class Edits {
             SetProjectNotesCommand c => SetProjectNotes(c),
             JoinRegionsCommand c => JoinRegions(state, c),
             CopyRegionsCommand c => CopyRegions(state, c, ids),
+            AddInsertCommand { Chain: InsertChain.MidiEffects }
+                or RemoveInsertCommand { Chain: InsertChain.MidiEffects }
+                or MoveInsertCommand { Chain: InsertChain.MidiEffects }
+                or SetInsertCommand { Chain: InsertChain.MidiEffects }
+                or SetInsertParameterCommand { Chain: InsertChain.MidiEffects } =>
+                // MIDI FX slots: Phase 6, workstream B (docs/07-phase-6.md).
+                throw new EditException("MIDI FX slots are not implemented yet (Phase 6)."),
             AddInsertCommand c => AddInsert(state, c, ids, plugins),
             RemoveInsertCommand c => RemoveInsert(state, c),
             MoveInsertCommand c => MoveInsert(state, c),
@@ -254,7 +261,10 @@ public static partial class Edits {
             false,
             FlexMode.Polyphonic,
             [],
-            null
+            null,
+            null,
+            null,
+            false
         );
         return [new TrackUpserted(track, index)];
     }

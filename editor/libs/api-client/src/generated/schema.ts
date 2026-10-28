@@ -759,10 +759,194 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/api/v1/library/loops': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Searches the loop index (installed packs and the user's loops) by text, tags (all of them), kind (a LoopKind), key (a tonic 0…11), scale (a LoopScale) and favourites, a page at a time (offset, limit: 100 by default, at most 500), sorted by name. */
+    get: operations['QueryLoops'];
+    put?: never;
+    /** Add to Loop Library: saves a region of the open project as a user loop, with a sidecar, in the index. */
+    post: operations['AddToLoopLibrary'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/library/loops/{id}/preview': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Plays a loop through the preview channel at the project's tempo and key, starting on the next bar while the transport plays; POST /files/preview with a null path stops it. */
+    post: operations['PreviewLoop'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/library/loops/{id}/favourite': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    /** Marks a loop a favourite, or not. */
+    put: operations['SetLoopFavourite'];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/library/packs': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** The installed content packs. */
+    get: operations['ListPacks'];
+    put?: never;
+    /** Installs a .anodepack from the server's disk and adds its loops to the index. */
+    post: operations['InstallPack'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/library/packs/{id}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    /** Removes an installed pack and its loops from the index; projects keep the copies of the loops they use. */
+    delete: operations['RemovePack'];
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/project/loops': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Adds a loop to the open project (its file copied in), following the project's tempo and key, at a position or into a Live Loops cell, as one undoable step. */
+    post: operations['AddLoop'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/project/live-loops/launch': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Launches Live Loops cells or a scene at their quantise boundaries; cell events on /ws report their states. */
+    post: operations['LaunchCells'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/project/live-loops/stop': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Stops the cells playing on some tracks (or every track) at the grid's quantise boundary. */
+    post: operations['StopCells'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/project/live-loops/record': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Starts or stops recording into a cell, or a performance recording into the Tracks area (one undo step when it stops). */
+    post: operations['RecordLiveLoops'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
 }
 export type webhooks = Record<string, never>;
 export interface components {
   schemas: {
+    /**
+     * @description Adds a loop to the open project, as one undoable step: at `tick` on `trackId` (left out: a new track
+     *     of the loop's kind), or, with `cellSceneId`, into the Live Loops cell of `trackId` and that scene.
+     */
+    AddLoopRequest: {
+      loopId: string;
+      trackId?: null | string;
+      /**
+       * Format: int64
+       * @default 0
+       */
+      tick: number;
+      cellSceneId?: null | string;
+    };
+    /**
+     * @description "Add to Loop Library": saves an audio, MIDI or pattern region as a user loop (its file copied into the library,
+     *     with a sidecar), at the project's tempo, with the given key (a tonic 0…11; null: none), scale (null: neither)
+     *     and tags; as a one-shot (no tempo) when `oneShot`.
+     */
+    AddToLoopLibraryRequest: {
+      regionId: string;
+      name: string;
+      tags: string[];
+      /** Format: int32 */
+      key?: null | number;
+      scale?: null | components['schemas']['LoopScale'];
+      /** @default false */
+      oneShot: boolean;
+    };
     /**
      * @description A section of the song on the arrangement track (Intro, Verse, Chorus). Sections do not overlap; moving or copying
      *     one with `moveSection` moves or copies everything in its time range.
@@ -840,7 +1024,9 @@ export interface components {
     /**
      * @description Track automation of one parameter. `trackId` null is the master strip. `target` is `volume` (dB),
      *     `pan` (−1…1), `mute` (0/1), `send:{sendId}` (dB), `insert:{insertId}:{parameterId}` or
-     *     `instrument:{parameterId}` (the parameter's unit). Points are sorted by tick.
+     *     `instrument:{parameterId}` (the parameter's unit). Phase 6 adds `midiEffect:{slotId}:{parameterId}` (a
+     *     MIDI FX slot's parameter) and `smartControl:{controlId}` (0…1; it compiles to automation of every
+     *     parameter the control maps). Points are sorted by tick.
      */
     AutomationLane: {
       id: string;
@@ -951,10 +1137,43 @@ export interface components {
      */
     BounceSourceAction: 'leave' | 'mute' | 'delete';
     /**
+     * @description A Live Loops cell: at most one per (track, scene). `lengthTicks` is its loop length; `quantize`
+     *     overrides the grid's for launching it (null: the grid's).
+     */
+    Cell: {
+      id: string;
+      trackId: string;
+      sceneId: string;
+      kind: components['schemas']['CellKind'];
+      name: string;
+      /** Format: int64 */
+      lengthTicks: number;
+      playMode: components['schemas']['CellPlayMode'];
+      quantize?: null | components['schemas']['LaunchQuantize'];
+      content: components['schemas']['CellContent'];
+    };
+    /**
+     * @description What a cell plays: exactly one of a snapshot of an audio region, a MIDI region or a pattern region, the one of
+     *     its `kind`. The snapshot's `id` is the cell's, its `trackId` the cell's track and its
+     *     `startTick` 0; note and controller ids are unique project-wide, as in any MIDI region.
+     */
+    CellContent: {
+      audio: null | components['schemas']['AudioRegion'];
+      midi: null | components['schemas']['MidiRegion'];
+      pattern: null | components['schemas']['PatternRegion'];
+    };
+    /** @enum {unknown} */
+    CellKind: 'audio' | 'midi' | 'pattern';
+    /** @enum {unknown} */
+    CellPlayMode: 'loop' | 'oneShot' | 'retrigger';
+    /**
      * @description A channel strip: volume in dB (−∞ as −144), pan −1 (left) … 1 (right), mute and solo; its insert effects in
      *     order; its sends to buses; where it goes (`output`: `master`, `bus:N` for bus 1…64, or
      *     `output:N` for the device's stereo output pair N); the mixer groups it belongs to (1…32); and the VCA track
-     *     that offsets its volume, if any. The master strip uses only volume, pan, mute and its inserts.
+     *     that offsets its volume, if any. The master strip uses only volume, pan, mute and its inserts. Phase 6:
+     *     `midiEffects` are its MIDI FX slots (instrument and external MIDI tracks only; empty elsewhere), in the
+     *     same shape as inserts: they run in slot order on the block's MIDI (regions, live and step input) before the
+     *     instrument; bypassed slots pass it through.
      */
     ChannelStrip: {
       /** Format: double */
@@ -968,6 +1187,7 @@ export interface components {
       output: string;
       groups: number[];
       vcaId?: null | string;
+      midiEffects: components['schemas']['Insert'][];
     };
     /** @description Edits applied as one undo step; `label` names it in the undo history ("Move Region"). */
     CommandBatch: {
@@ -1043,7 +1263,10 @@ export interface components {
       | components['schemas']['DeltaOpAutomationLaneUpserted']
       | components['schemas']['DeltaOpAutomationLaneRemoved']
       | components['schemas']['DeltaOpGroupUpserted']
-      | components['schemas']['DeltaOpGroupRemoved'];
+      | components['schemas']['DeltaOpGroupRemoved']
+      | components['schemas']['DeltaOpPatternRegionUpserted']
+      | components['schemas']['DeltaOpPatternRegionRemoved']
+      | components['schemas']['DeltaOpLiveLoopsChanged'];
     DeltaOpAudioFileUpserted: {
       /** @enum {string} */
       op: 'audioFileUpserted';
@@ -1069,6 +1292,12 @@ export interface components {
       /** @enum {string} */
       op: 'groupUpserted';
       group: components['schemas']['MixerGroup'];
+    };
+    /** @description The Live Loops grid changed: its scenes, cells, quantise or visibility (the whole grid). */
+    DeltaOpLiveLoopsChanged: {
+      /** @enum {string} */
+      op: 'liveLoopsChanged';
+      liveLoops: components['schemas']['LiveLoopsGrid'];
     };
     DeltaOpMarkerRemoved: {
       /** @enum {string} */
@@ -1101,6 +1330,17 @@ export interface components {
       /** @enum {string} */
       op: 'notesChanged';
       text: string;
+    };
+    DeltaOpPatternRegionRemoved: {
+      /** @enum {string} */
+      op: 'patternRegionRemoved';
+      id: string;
+    };
+    /** @description A pattern region was added or changed (its pattern included). */
+    DeltaOpPatternRegionUpserted: {
+      /** @enum {string} */
+      op: 'patternRegionUpserted';
+      region: components['schemas']['PatternRegion'];
     };
     DeltaOpProjectRenamed: {
       /** @enum {string} */
@@ -1166,6 +1406,23 @@ export interface components {
      * @enum {unknown}
      */
     DitherMode: 'none' | 'tpdf' | 'shaped';
+    /**
+     * @description A Drum Machine Designer (docs/07-phase-6.md): the track is a stack whose members are its pads, each an instrument
+     *     track with its own channel strip; `pads` (at most one per note, sorted by note) map a note to a pad. The
+     *     DMD track's region and pattern notes are routed to the pad tracks by note (live MIDI too, by the host), each
+     *     played at the pad's base note: a pad always plays its own sound (Drum Synth ignores pitch; Quick Sampler plays
+     *     at its root).
+     */
+    DrumMachine: {
+      pads: components['schemas']['DrumPad'][];
+    };
+    /** @description A pad of a Drum Machine Designer: note `note` (0…127) plays sub-track `trackId`. */
+    DrumPad: {
+      /** Format: int32 */
+      note: number;
+      name: string;
+      trackId: string;
+    };
     /**
      * @description An edit of the open project (docs/adr/0004-state-ownership.md). A batch of them is applied atomically as one
      *     undo step. Optional properties left out are left unchanged.
@@ -1259,7 +1516,29 @@ export interface components {
       | components['schemas']['EditCommandSetTrackAlternativeCommand']
       | components['schemas']['EditCommandDeleteTrackAlternativeCommand']
       | components['schemas']['EditCommandSetVarispeedCommand']
-      | components['schemas']['EditCommandSetSmartTempoCommand'];
+      | components['schemas']['EditCommandSetSmartTempoCommand']
+      | components['schemas']['EditCommandAddPatternRegionCommand']
+      | components['schemas']['EditCommandSetPatternRegionCommand']
+      | components['schemas']['EditCommandSetPatternCommand']
+      | components['schemas']['EditCommandConvertPatternToMidiCommand']
+      | components['schemas']['EditCommandReseedPatternCommand']
+      | components['schemas']['EditCommandCreateDrumMachineCommand']
+      | components['schemas']['EditCommandAddDrumPadCommand']
+      | components['schemas']['EditCommandSetDrumPadCommand']
+      | components['schemas']['EditCommandRemoveDrumPadCommand']
+      | components['schemas']['EditCommandSetSmartControlsCommand']
+      | components['schemas']['EditCommandSetSmartControlCommand']
+      | components['schemas']['EditCommandSetSmartMappingsCommand']
+      | components['schemas']['EditCommandAutoMapSmartControlsCommand']
+      | components['schemas']['EditCommandCompareSmartControlsCommand']
+      | components['schemas']['EditCommandAddSceneCommand']
+      | components['schemas']['EditCommandRemoveSceneCommand']
+      | components['schemas']['EditCommandSetSceneCommand']
+      | components['schemas']['EditCommandSetCellCommand']
+      | components['schemas']['EditCommandDeleteCellsCommand']
+      | components['schemas']['EditCommandMoveCellCommand']
+      | components['schemas']['EditCommandSetLiveLoopsCommand']
+      | components['schemas']['EditCommandSetTrackActivationCommand'];
     /**
      * @description Sets the project's tempo events from an audio region's file tempo (analysed now if need be) over the region's
      *     range, and makes the region play unwarped there.
@@ -1283,7 +1562,23 @@ export interface components {
       regionId: string;
       events: components['schemas']['NewControlEvent'][];
     };
-    /** @description Adds an insert effect at `index` (the end when left out); the master's when `trackId` is left out. */
+    /**
+     * @description Adds a pad on note `note` (0…127, free on this DMD) to a DMD track: a new member instrument track playing
+     *     `pluginId` (left out: the Drum Synth, `anode.drum-synth`), named `name`.
+     */
+    EditCommandAddDrumPadCommand: {
+      /** @enum {string} */
+      type: 'addDrumPad';
+      trackId: string;
+      /** Format: int32 */
+      note: number;
+      name?: null | string;
+      pluginId?: null | string;
+    };
+    /**
+     * @description Adds an insert effect at `index` (the end when left out); the master's when `trackId` is left out. With
+     *     `chain``midiEffects`, a MIDI FX slot instead, as for every insert command.
+     */
     EditCommandAddInsertCommand: {
       /** @enum {string} */
       type: 'addInsert';
@@ -1291,6 +1586,7 @@ export interface components {
       trackId?: null | string;
       /** Format: int32 */
       index?: null | number;
+      chain?: null | components['schemas']['InsertChain'];
     };
     EditCommandAddMarkerCommand: {
       /** @enum {string} */
@@ -1322,6 +1618,22 @@ export interface components {
       regionId: string;
       notes: components['schemas']['NewNote'][];
     };
+    /**
+     * @description Adds a pattern region to an instrument track: `lengthTicks` (left out: one bar at `startTick`'s
+     *     signature) and `pattern` (left out: the default pattern: on a Drum Machine Designer track one pad row per
+     *     pad, else one note row on C3 (60); each 16 steps of a 16th, all off, no swing).
+     */
+    EditCommandAddPatternRegionCommand: {
+      /** @enum {string} */
+      type: 'addPatternRegion';
+      trackId: string;
+      /** Format: int64 */
+      startTick: number;
+      /** Format: int64 */
+      lengthTicks?: null | number;
+      pattern: null | components['schemas']['Pattern'];
+      name?: null | string;
+    };
     /** @description Places a file on a track; the whole file unless `fileOffset` and `length` say otherwise. */
     EditCommandAddRegionCommand: {
       /** @enum {string} */
@@ -1334,6 +1646,14 @@ export interface components {
       fileOffset?: null | number;
       /** Format: int64 */
       length?: null | number;
+    };
+    /** @description Adds an empty scene to the Live Loops grid at `index` (the end when left out). */
+    EditCommandAddSceneCommand: {
+      /** @enum {string} */
+      type: 'addScene';
+      name?: null | string;
+      /** Format: int32 */
+      index?: null | number;
     };
     /** @description Adds an arrangement section; it must not overlap another. */
     EditCommandAddSectionCommand: {
@@ -1392,6 +1712,34 @@ export interface components {
       vcaId?: null | string;
     };
     /**
+     * @description Automatic mapping: replaces the knobs' names and mappings with the plugins' macro hints in order (the
+     *     instrument's, then each insert's), up to the layout's knobs; each knob takes its parameter's current value.
+     */
+    EditCommandAutoMapSmartControlsCommand: {
+      /** @enum {string} */
+      type: 'autoMapSmartControls';
+      trackId: string;
+    };
+    /**
+     * @description Compare: on, the controls show (and their parameters take) their saved values; off, the edited ones again. The
+     *     server applies it without an undo step (its delta still reaches every client).
+     */
+    EditCommandCompareSmartControlsCommand: {
+      /** @enum {string} */
+      type: 'compareSmartControls';
+      trackId: string;
+      on: boolean;
+    };
+    /**
+     * @description Replaces a pattern region with a MIDI region of exactly the notes it plays over its length (one pass of the
+     *     region), at the same place, with its name and mute.
+     */
+    EditCommandConvertPatternToMidiCommand: {
+      /** @enum {string} */
+      type: 'convertPatternToMidi';
+      regionId: string;
+    };
+    /**
      * @description Copies regions (of any kind) `offsetTicks` later (or earlier), onto `trackId` when given (⌥-drag,
      *     repeat).
      */
@@ -1403,12 +1751,29 @@ export interface components {
       offsetTicks: number;
       trackId?: null | string;
     };
+    /**
+     * @description Makes a Drum Machine Designer: a new DMD stack at the end, or, with `trackId`, an instrument track turned
+     *     into one in place (its regions and pattern regions stay on the DMD track, its instrument goes). The pads come
+     *     from kit patch `kitPatchId` (left out: no pads).
+     */
+    EditCommandCreateDrumMachineCommand: {
+      /** @enum {string} */
+      type: 'createDrumMachine';
+      trackId?: null | string;
+      kitPatchId?: null | string;
+      name?: null | string;
+    };
     /** @description Puts tracks into a new folder stack, inserted where the first of them was. */
     EditCommandCreateStackCommand: {
       /** @enum {string} */
       type: 'createStack';
       trackIds: string[];
       name?: null | string;
+    };
+    EditCommandDeleteCellsCommand: {
+      /** @enum {string} */
+      type: 'deleteCells';
+      cellIds: string[];
     };
     EditCommandDeleteControlsCommand: {
       /** @enum {string} */
@@ -1511,7 +1876,20 @@ export interface components {
       type: 'mapBeats';
       mappings: components['schemas']['BeatMapping'][];
     };
-    /** @description Moves an insert to another slot of the same strip. */
+    /**
+     * @description Moves (or with `copy`, copies) a cell to the slot of `trackId` and `sceneId`, replacing the cell
+     *     there; the track must suit its content.
+     */
+    EditCommandMoveCellCommand: {
+      /** @enum {string} */
+      type: 'moveCell';
+      cellId: string;
+      trackId: string;
+      sceneId: string;
+      /** @default false */
+      copy: boolean;
+    };
+    /** @description Moves an insert to another slot of the same strip (and chain). */
     EditCommandMoveInsertCommand: {
       /** @enum {string} */
       type: 'moveInsert';
@@ -1519,10 +1897,12 @@ export interface components {
       /** Format: int32 */
       index: number;
       trackId?: null | string;
+      chain?: null | components['schemas']['InsertChain'];
     };
     /**
-     * @description Moves a region (audio, MIDI, or a take folder) in time, and to another track of a kind that can hold it when
-     *     `trackId` is given. `deleteRegions` also takes every kind; `splitRegion` takes audio and MIDI.
+     * @description Moves a region (audio, MIDI, pattern, or a take folder) in time, and to another track of a kind that can hold it
+     *     when `trackId` is given. `deleteRegions` and `copyRegions` also take every kind;
+     *     `splitRegion` takes audio and MIDI.
      */
     EditCommandMoveRegionCommand: {
       /** @enum {string} */
@@ -1616,11 +1996,26 @@ export interface components {
       swing: number;
       noteIds?: null | number[];
     };
+    /** @description Removes the pad on note `note` of a DMD track, with its track. */
+    EditCommandRemoveDrumPadCommand: {
+      /** @enum {string} */
+      type: 'removeDrumPad';
+      trackId: string;
+      /** Format: int32 */
+      note: number;
+    };
     EditCommandRemoveInsertCommand: {
       /** @enum {string} */
       type: 'removeInsert';
       insertId: string;
       trackId?: null | string;
+      chain?: null | components['schemas']['InsertChain'];
+    };
+    /** @description Removes a scene and its cells. */
+    EditCommandRemoveSceneCommand: {
+      /** @enum {string} */
+      type: 'removeScene';
+      sceneId: string;
     };
     EditCommandRemoveSendCommand: {
       /** @enum {string} */
@@ -1643,6 +2038,14 @@ export interface components {
       /** @enum {string} */
       type: 'renameProject';
       name: string;
+    };
+    /** @description Sets a pattern's seed (left out: a new one the server draws), so chance and random steps draw anew. */
+    EditCommandReseedPatternCommand: {
+      /** @enum {string} */
+      type: 'reseedPattern';
+      regionId: string;
+      /** Format: int64 */
+      seed?: null | number;
     };
     /**
      * @description Moves a MIDI region's start and end. Its notes stay where they are in time: moving the start shifts their
@@ -1697,6 +2100,26 @@ export interface components {
       mode: components['schemas']['AutomationMode'];
       trackId?: null | string;
     };
+    /**
+     * @description Creates or changes the cell of `trackId` and `sceneId`. `content` creates it or replaces what it
+     *     plays (its kind follows; it must suit the track: audio on an audio track, MIDI or pattern on an instrument
+     *     track; ids as CellContent says, the server renumbering what clashes); a cell that does not exist
+     *     needs it. `quantize` sets its own launch quantise; `gridQuantize` true clears it, so it follows the
+     *     grid's.
+     */
+    EditCommandSetCellCommand: {
+      /** @enum {string} */
+      type: 'setCell';
+      trackId: string;
+      sceneId: string;
+      content: null | components['schemas']['CellContent'];
+      name?: null | string;
+      /** Format: int64 */
+      lengthTicks?: null | number;
+      playMode?: null | components['schemas']['CellPlayMode'];
+      quantize?: null | components['schemas']['LaunchQuantize'];
+      gridQuantize?: null | boolean;
+    };
     /** @description Replaces a take folder's comp (Quick Swipe Comping sends the whole comp after each swipe). */
     EditCommandSetCompCommand: {
       /** @enum {string} */
@@ -1712,6 +2135,22 @@ export interface components {
       startTick?: null | number;
       /** Format: int64 */
       endTick?: null | number;
+    };
+    /**
+     * @description Changes the pad on note `note` of a DMD track: renames it (and its track), gives its track another
+     *     instrument (`pluginId`, parameters at their defaults), or moves it to free note `toNote`. Its channel
+     *     strip is edited through the pad track's own strip and insert commands.
+     */
+    EditCommandSetDrumPadCommand: {
+      /** @enum {string} */
+      type: 'setDrumPad';
+      trackId: string;
+      /** Format: int32 */
+      note: number;
+      name?: null | string;
+      pluginId?: null | string;
+      /** Format: int32 */
+      toNote?: null | number;
     };
     /** @description Sets a file's tempo, beats and downbeats (the Smart Tempo Editor), or clears them (null). */
     EditCommandSetFileTempoCommand: {
@@ -1741,7 +2180,10 @@ export interface components {
       enabled?: null | boolean;
       properties: null | components['schemas']['GroupProperties'];
     };
-    /** @description Bypasses an insert, or sets its sidechain (a track id, `bus:N`, or an empty string for none). */
+    /**
+     * @description Bypasses an insert, or sets its sidechain (a track id, `bus:N`, or an empty string for none; never on a MIDI
+     *     FX slot).
+     */
     EditCommandSetInsertCommand: {
       /** @enum {string} */
       type: 'setInsert';
@@ -1749,6 +2191,7 @@ export interface components {
       trackId?: null | string;
       bypassed?: null | boolean;
       sidechain?: null | string;
+      chain?: null | components['schemas']['InsertChain'];
     };
     /** @description Sets one insert parameter; coalesces like `setParameter`, and records automation like `setStrip`. */
     EditCommandSetInsertParameterCommand: {
@@ -1759,6 +2202,7 @@ export interface components {
       /** Format: double */
       value: number;
       trackId?: null | string;
+      chain?: null | components['schemas']['InsertChain'];
     };
     /** @description Replaces an instrument track's instrument; its parameters start at their defaults. */
     EditCommandSetInstrumentCommand: {
@@ -1772,6 +2216,13 @@ export interface components {
       /** @enum {string} */
       type: 'setKeys';
       events: components['schemas']['KeyEvent'][];
+    };
+    /** @description Sets the Live Loops grid's launch quantise, or shows or hides it. */
+    EditCommandSetLiveLoopsCommand: {
+      /** @enum {string} */
+      type: 'setLiveLoops';
+      quantize?: null | components['schemas']['LaunchQuantize'];
+      shown?: null | boolean;
     };
     EditCommandSetMarkerCommand: {
       /** @enum {string} */
@@ -1850,6 +2301,31 @@ export interface components {
       value: number;
     };
     /**
+     * @description Replaces a pattern region's whole pattern (every Step Sequencer edit sends it). Rows: unique ids, length 1…64
+     *     with as many steps, step values in their ranges (PatternStep); swing 0…1; else 422.
+     */
+    EditCommandSetPatternCommand: {
+      /** @enum {string} */
+      type: 'setPattern';
+      regionId: string;
+      pattern: components['schemas']['Pattern'];
+    };
+    /**
+     * @description Moves (in time), resizes, renames or mutes a pattern region; `moveRegion`, `copyRegions` and
+     *     `deleteRegions` take pattern regions too.
+     */
+    EditCommandSetPatternRegionCommand: {
+      /** @enum {string} */
+      type: 'setPatternRegion';
+      regionId: string;
+      /** Format: int64 */
+      startTick?: null | number;
+      /** Format: int64 */
+      lengthTicks?: null | number;
+      name?: null | string;
+      muted?: null | boolean;
+    };
+    /**
      * @description Replaces an audio region's Flex Pitch notes (edits, splits and joins); notes need Flex or Follow, as a
      *     transpose does.
      */
@@ -1906,6 +2382,15 @@ export interface components {
       /** Format: int32 */
       fineTune?: null | number;
     };
+    /** @description Renames a scene, or moves it to `index`. */
+    EditCommandSetSceneCommand: {
+      /** @enum {string} */
+      type: 'setScene';
+      sceneId: string;
+      name?: null | string;
+      /** Format: int32 */
+      index?: null | number;
+    };
     /** @description Renames, recolours or resizes a section (from its end); it must not come to overlap another. */
     EditCommandSetSectionCommand: {
       /** @enum {string} */
@@ -1944,6 +2429,39 @@ export interface components {
       /** @enum {string} */
       type: 'setSignatures';
       events: components['schemas']['SignatureEvent'][];
+    };
+    /**
+     * @description Sets a Smart Control's value (0…1; applying every mapping's parameter, coalesced as `setParameter`, and
+     *     recording automation of `smartControl:{controlId}` as `setStrip` records volume) or renames it.
+     */
+    EditCommandSetSmartControlCommand: {
+      /** @enum {string} */
+      type: 'setSmartControl';
+      trackId: string;
+      controlId: string;
+      /** Format: double */
+      value?: null | number;
+      name?: null | string;
+    };
+    /**
+     * @description Sets a track's Smart Controls layout (controls a smaller layout drops lose their mappings) or turns its
+     *     arpeggiator button on or off (adding, bypassing or unbypassing `anode.arpeggiator` in its first MIDI FX
+     *     slot). Sets the Smart Controls up when they are null.
+     */
+    EditCommandSetSmartControlsCommand: {
+      /** @enum {string} */
+      type: 'setSmartControls';
+      trackId: string;
+      layout?: null | components['schemas']['SmartControlsLayout'];
+      arpeggiator?: null | boolean;
+    };
+    /** @description Replaces a Smart Control's mappings (targets that exist on the track; graphs as SmartMapping). */
+    EditCommandSetSmartMappingsCommand: {
+      /** @enum {string} */
+      type: 'setSmartMappings';
+      trackId: string;
+      controlId: string;
+      mappings: components['schemas']['SmartMapping'][];
     };
     /** @description Sets the project tempo mode, the follow new audio regions get, or whether imports are analysed. */
     EditCommandSetSmartTempoCommand: {
@@ -1993,6 +2511,13 @@ export interface components {
       /** @enum {string} */
       type: 'setTempoEvents';
       events: components['schemas']['TempoEvent'][];
+    };
+    /** @description Track activation: the tracks play their Live Loops cells (on) or their Tracks-area regions (off). */
+    EditCommandSetTrackActivationCommand: {
+      /** @enum {string} */
+      type: 'setTrackActivation';
+      trackIds: string[];
+      liveLoopsActive: boolean;
     };
     /** @description Renames a track alternative. */
     EditCommandSetTrackAlternativeCommand: {
@@ -2172,6 +2697,13 @@ export interface components {
      * @enum {unknown}
      */
     FlexMode: 'monophonic' | 'slicing' | 'rhythmic' | 'polyphonic' | 'speed' | 'tempophone' | 'pitch';
+    /** @description A point of a mapping graph: input `x` (0…1) gives output `y` (0…1). */
+    GraphPoint: {
+      /** Format: double */
+      x: number;
+      /** Format: double */
+      y: number;
+    };
     /** @description What a mixer group links among its members (Logic's group settings). */
     GroupProperties: {
       volume: boolean;
@@ -2197,7 +2729,8 @@ export interface components {
     /**
      * @description An insert effect on a channel strip: the plugin, whether it is bypassed, its parameter values by parameter id
      *     (all of them), and its sidechain source (a track id or `bus:N`; null: none). A plugin's opaque state lives in
-     *     the project's `Plugin States` folder.
+     *     the project's `Plugin States` folder. A MIDI FX slot (`ChannelStrip.midiEffects`) has the same shape,
+     *     never a sidechain.
      */
     Insert: {
       id: string;
@@ -2208,6 +2741,12 @@ export interface components {
         [key: string]: number;
       };
       sidechain?: null | string;
+    };
+    /** @enum {unknown} */
+    InsertChain: 'inserts' | 'midiEffects' | null;
+    /** @description Installs a `.anodepack` from the server's disk (replacing an installed version of the same pack). */
+    InstallPackRequest: {
+      path: string;
     };
     /**
      * @description A track's instrument: the plugin, its parameter values by parameter id (all of them), and the file it loaded
@@ -2263,6 +2802,24 @@ export interface components {
     };
     /** @enum {unknown} */
     KeyMode: 'major' | 'minor';
+    /** @enum {unknown} */
+    LaunchQuantize: 'off' | 'sixteenth' | 'eighth' | 'quarter' | 'half' | 'bar' | 'twoBars' | 'fourBars' | null;
+    /** @description Launches Live Loops cells, or a scene (its cells; tracks with no cell in it stop), each at its quantise boundary. */
+    LaunchRequest: {
+      cellIds?: null | string[];
+      sceneId?: null | string;
+    };
+    /**
+     * @description The Live Loops grid (docs/07-phase-6.md): its scenes in order, its cells, the launch quantise, and whether the
+     *     grid is shown beside the Tracks area. A track whose `liveLoopsActive` is on plays its playing cell instead
+     *     of its Tracks-area regions; launching a scene launches its cells and stops the cells of tracks with none in it.
+     */
+    LiveLoopsGrid: {
+      scenes: components['schemas']['Scene'][];
+      cells: components['schemas']['Cell'][];
+      quantize: components['schemas']['LaunchQuantize'];
+      shown: boolean;
+    };
     /** @description One raw MIDI message (status 0x80…0xEF, data bytes 0…127). */
     LiveMidiEvent: {
       /** Format: int32 */
@@ -2277,6 +2834,59 @@ export interface components {
       trackId: string;
       events: components['schemas']['LiveMidiEvent'][];
     };
+    /**
+     * @description Starts or stops recording in Live Loops: into the cell of `trackId` and `sceneId` (the track's input,
+     *     from the next quantise boundary, for the cell's length or until stopped); without them, a performance recording
+     *     (cells and Remix FX into the Tracks area, one undo step when it stops).
+     */
+    LiveRecordRequest: {
+      on: boolean;
+      trackId?: null | string;
+      sceneId?: null | string;
+    };
+    /** @description Marks a loop a favourite, or not. */
+    LoopFavouriteRequest: {
+      favourite: boolean;
+    };
+    /**
+     * @description A loop of the loop index (`&lt;DataDirectory&gt;/Library/Loops/index.json`, rebuilt from the installed
+     *     packs and the user's loops): its pack (null: a user loop), its file on the server's disk, its tempo (bpm) and
+     *     length in beats (null for a one-shot), its key (a tonic 0 (C) … 11 (B); null: none, as drums), scale and tags
+     *     (the keyword buttons: Drums, Bass …), whether it is a one-shot, and whether the user marked it a favourite.
+     */
+    LoopInfo: {
+      id: string;
+      name: string;
+      kind: components['schemas']['LoopKind'];
+      packId?: null | string;
+      path: string;
+      /** Format: double */
+      tempo?: null | number;
+      /** Format: double */
+      beats?: null | number;
+      /** Format: int32 */
+      key?: null | number;
+      scale: components['schemas']['LoopScale'];
+      tags: string[];
+      oneShot: boolean;
+      favourite: boolean;
+    };
+    /**
+     * @description What a tagged loop holds, and what adding it to a project makes.
+     * @enum {unknown}
+     */
+    LoopKind: 'audio' | 'midi' | 'pattern';
+    /** @description A page of a loop search, and how many loops match in all. */
+    LoopPage: {
+      items: components['schemas']['LoopInfo'][];
+      /** Format: int32 */
+      total: number;
+    };
+    /**
+     * @description The scale a loop suits, for the Loop Browser's scale filter.
+     * @enum {unknown}
+     */
+    LoopScale: 'major' | 'minor' | 'neither' | 'both';
     /** @description A marker: a named position, with an optional length, colour and text (Logic's Marker List). */
     Marker: {
       id: string;
@@ -2424,8 +3034,25 @@ export interface components {
       path: string;
     };
     /**
+     * @description A content pack (`.anodepack`: a zip of loops, patches, kits and IRs with a `pack.json` manifest),
+     *     installed under `&lt;DataDirectory&gt;/Library/Packs/&lt;id&gt;/`. `size` is in bytes.
+     */
+    Pack: {
+      id: string;
+      name: string;
+      version: string;
+      author: string;
+      /** Format: int32 */
+      loopCount: number;
+      /** Format: int64 */
+      size: number;
+      installed: boolean;
+    };
+    /**
      * @description A plugin parameter. `steps` &gt; 0 makes it discrete (`steps` + 1 values from `min` to
-     *     `max`), with `valueNames` naming them when it is a choice.
+     *     `max`), with `valueNames` naming them when it is a choice. `macro` (Phase 6) is its macro hint:
+     *     automatic Smart Controls mapping takes a plugin's hinted parameters in ascending `macro` order (null: not a
+     *     macro).
      */
     ParameterInfo: {
       id: string;
@@ -2440,6 +3067,8 @@ export interface components {
       /** Format: int32 */
       steps: number;
       valueNames?: null | string[];
+      /** Format: int32 */
+      macro?: null | number;
     };
     /** @description A saved channel strip (Logic's patch): its instrument, inserts and sends, for a kind of track. */
     PatchInfo: {
@@ -2447,6 +3076,86 @@ export interface components {
       name: string;
       category: string;
       kind: components['schemas']['TrackKind'];
+    };
+    /**
+     * @description A Step Sequencer pattern: its rows; `swing` 0…1 delays every even 16th (the second, fourth … of each beat)
+     *     by `swing` × half a 16th; `seed` seeds the deterministic generator that draws chance and random steps;
+     *     `stepTicks` is the rows' step length (240, a 16th, unless set).
+     */
+    Pattern: {
+      rows: components['schemas']['PatternRow'][];
+      /** Format: double */
+      swing: number;
+      /** Format: int64 */
+      seed: number;
+      /**
+       * Format: int32
+       * @default 240
+       */
+      stepTicks: number;
+    };
+    /**
+     * @description The order a pattern row walks its steps in, each pass.
+     * @enum {unknown}
+     */
+    PatternPlayMode: 'forward' | 'reverse' | 'pingPong' | 'random';
+    /**
+     * @description A pattern region on an instrument track: it plays `pattern` from `startTick` for
+     *     `lengthTicks`, every row cycling from the region's start.
+     */
+    PatternRegion: {
+      id: string;
+      trackId: string;
+      name: string;
+      /** Format: int64 */
+      startTick: number;
+      /** Format: int64 */
+      lengthTicks: number;
+      muted: boolean;
+      pattern: components['schemas']['Pattern'];
+    };
+    /**
+     * @description A row of a pattern: what it plays (`kind` and `note`), its name, its length in steps (1…64; it cycles
+     *     independently of other rows' lengths), its step length in ticks (`stepTicks`; null: the pattern's), its
+     *     play mode, and whether it is muted. `steps` always has exactly `length` entries.
+     */
+    PatternRow: {
+      id: string;
+      kind: components['schemas']['PatternRowKind'];
+      /** Format: int32 */
+      note: number;
+      name: string;
+      /** Format: int32 */
+      length: number;
+      /** Format: int32 */
+      stepTicks?: null | number;
+      playMode: components['schemas']['PatternPlayMode'];
+      muted: boolean;
+      steps: components['schemas']['PatternStep'][];
+    };
+    /**
+     * @description What a pattern row plays (docs/07-phase-6.md, "Pattern regions").
+     * @enum {unknown}
+     */
+    PatternRowKind: 'note' | 'chordDegree' | 'pad';
+    /**
+     * @description One step of a pattern row. `velocity` 1…127; `gate` is the note's length in steps, 0…16 (exclusive of
+     *     0; 1 is the whole step, over 1 holds into the next steps, a tie); `repeats` 1…8 split the gate evenly into
+     *     that many notes (ratchets); `chance` 0…1 is the probability the step plays on a pass; `offset` −0.5…0.5
+     *     moves it by that fraction of a step. An off step plays nothing but keeps its values.
+     */
+    PatternStep: {
+      on: boolean;
+      /** Format: int32 */
+      velocity: number;
+      /** Format: double */
+      gate: number;
+      /** Format: int32 */
+      repeats: number;
+      /** Format: double */
+      chance: number;
+      /** Format: double */
+      offset: number;
     };
     /** @enum {unknown} */
     PdcMode: 'all' | 'tracks' | 'off';
@@ -2494,8 +3203,9 @@ export interface components {
     /** @enum {unknown} */
     PluginFormat: 'builtin' | 'clap' | 'vst3' | 'au';
     /**
-     * @description A plugin the engine can load: an instrument, or an effect in `category` (EQ, Dynamics, Delay, Reverb,
-     *     Modulation, Distortion, Filter, Utility, Metering). `hasEditor`: it has its own editor window (desktop app
+     * @description A plugin the engine can load: an instrument (`category``Instrument`), a MIDI effect (`MIDI
+     *     Effect`, Phase 6: it goes in a strip's MIDI FX slots), or an effect in `category` (EQ, Dynamics, Delay,
+     *     Reverb, Modulation, Distortion, Filter, Utility, Metering). `hasEditor`: it has its own editor window (desktop app
      *     only; everywhere else the generic editor). `fileTypes` (extensions such as `.sfz`, `.wav`) lists
      *     what an
      *     instrument loads with `loadInstrumentFile`, empty when it loads none.
@@ -2551,7 +3261,8 @@ export interface components {
     /**
      * @description The open project (docs/01-implementation-plan.md §5). Musical positions are ticks at 960 PPQ; audio offsets,
      *     lengths and fades are frames at the project's `sampleRate`. `revision` grows with every edit and is
-     *     the ETag; `dirty` says whether it has unsaved edits.
+     *     the ETag; `dirty` says whether it has unsaved edits. Phase 6 (docs/07-phase-6.md): `patternRegions`
+     *     are the Step Sequencer's regions; `liveLoops` is the Live Loops grid.
      */
     Project: {
       id: string;
@@ -2574,6 +3285,8 @@ export interface components {
       notes: string;
       groups: components['schemas']['MixerGroup'][];
       automation: components['schemas']['AutomationLane'][];
+      patternRegions: components['schemas']['PatternRegion'][];
+      liveLoops: components['schemas']['LiveLoopsGrid'];
     };
     /** @description A saved alternative of the open project (Logic's project alternatives); one is current. */
     ProjectAlternative: {
@@ -2671,6 +3384,11 @@ export interface components {
       name: string;
       category: string;
     };
+    /** @description A row of the Live Loops grid. */
+    Scene: {
+      id: string;
+      name: string;
+    };
     /**
      * @description A saved layout of the editor's windows (Logic's screensets), recalled with keys 1–9. `layout` is the
      *     editor's own serialised layout, opaque to the server.
@@ -2703,6 +3421,55 @@ export interface components {
       denominator: number;
     };
     /**
+     * @description A Smart Control: its id (`knob1`…`knob12`, `switch1`, `switch2`, `padX`, `padY`),
+     *     name, kind, value (0…1) and mappings (any number). `savedValue` is the other side of Compare: while not
+     *     comparing, the value the project was last saved with (null: unchanged since); while comparing, the edited value
+     *     that Compare will restore.
+     */
+    SmartControl: {
+      id: string;
+      name: string;
+      kind: components['schemas']['SmartControlKind'];
+      /** Format: double */
+      value: number;
+      /** Format: double */
+      savedValue?: null | number;
+      mappings: components['schemas']['SmartMapping'][];
+    };
+    /** @enum {unknown} */
+    SmartControlKind: 'knob' | 'switch' | 'pad';
+    /**
+     * @description A track's Smart Controls (docs/07-phase-6.md): the layout and its controls in order (knobs, then
+     *     `switch1`, `switch2`, then `padX`, `padY`: every control of the layout); the arpeggiator
+     *     button (null on a track without MIDI FX; on, the track's first MIDI FX slot is an unbypassed
+     *     `anode.arpeggiator`); and whether Compare shows the saved values.
+     */
+    SmartControls: {
+      layout: components['schemas']['SmartControlsLayout'];
+      controls: components['schemas']['SmartControl'][];
+      arpeggiator?: null | boolean;
+      comparing: boolean;
+    };
+    /** @enum {unknown} */
+    SmartControlsLayout: 'knobs8' | 'knobs12';
+    /**
+     * @description A Smart Control's mapping to one parameter. `target` addresses it as automation lanes do (`volume`,
+     *     `pan`, `send:{sendId}`, `instrument:{parameterId}`, `insert:{insertId}:{parameterId}`,
+     *     `midiEffect:{slotId}:{parameterId}`; see AutomationLane). The control's value goes through
+     *     `graph` (piecewise linear, 2–16 points sorted by x, the first at x 0 and the last at x 1; the default is
+     *     the line (0, 0)–(1, 1)), is inverted (1 − y) when `invert`, then scaled to `min` … `max` in the
+     *     parameter's unit.
+     */
+    SmartMapping: {
+      target: string;
+      /** Format: double */
+      min: number;
+      /** Format: double */
+      max: number;
+      invert: boolean;
+      graph: components['schemas']['GraphPoint'][];
+    };
+    /**
      * @description Smart Tempo: the project tempo mode, the `follow` new audio regions get, and whether imports are analysed
      *     (transients and beats) as they arrive.
      */
@@ -2710,6 +3477,10 @@ export interface components {
       mode: components['schemas']['ProjectTempoMode'];
       defaultFollow: components['schemas']['FlexFollow'];
       analyzeImports: boolean;
+    };
+    /** @description Stops the cells playing on `trackIds` (left out: every track) at the grid's quantise boundary. */
+    StopRequest: {
+      trackIds?: null | string[];
     };
     /** @description What `GET /api/v1/system` answers: the server's version and its link to the engine host. */
     SystemInfo: {
@@ -2776,7 +3547,11 @@ export interface components {
      *     An instrument track has an `instrument`; instrument and external MIDI tracks take MIDI from
      *     `midiInput`, and an external MIDI track sends its regions to `midiOutput`. Phase 5: `flexOn` and
      *     `flexMode` are its flex algorithm; `alternatives` are its inactive track alternatives, and
-     *     `alternativeId` names the active one (null until the track has alternatives).
+     *     `alternativeId` names the active one (null until the track has alternatives). Phase 6: a Drum Machine
+     *     Designer stack has a `drumMachine` (null on every other track); `smartControls` are its Smart Controls
+     *     (null until set up: the editor shows the 8-knob layout, unnamed, at 0 and unmapped, and the first Smart Controls
+     *     command sets them up); `liveLoopsActive`: the track plays its Live Loops cells, not its Tracks-area
+     *     regions.
      */
     Track: {
       id: string;
@@ -2801,6 +3576,9 @@ export interface components {
       flexMode: components['schemas']['FlexMode'];
       alternatives: components['schemas']['TrackAlternative'][];
       alternativeId?: null | string;
+      drumMachine: null | components['schemas']['DrumMachine'];
+      smartControls: null | components['schemas']['SmartControls'];
+      liveLoopsActive: boolean;
     };
     /**
      * @description An inactive alternative of a track: a snapshot of its regions, MIDI regions and take folders. The track's live
@@ -4663,6 +5441,421 @@ export interface operations {
         content: {
           'application/json': components['schemas']['Job'];
         };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  QueryLoops: {
+    parameters: {
+      query?: {
+        text?: string;
+        tags?: string[];
+        kind?: string;
+        key?: number;
+        scale?: string;
+        favouritesOnly?: boolean;
+        offset?: number;
+        limit?: number;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['LoopPage'];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  AddToLoopLibrary: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['AddToLoopLibraryRequest'];
+      };
+    };
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['LoopInfo'];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  PreviewLoop: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description No Content */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  SetLoopFavourite: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['LoopFavouriteRequest'];
+      };
+    };
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['LoopInfo'];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  ListPacks: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Pack'][];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  InstallPack: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['InstallPackRequest'];
+      };
+    };
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Pack'];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  RemovePack: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description No Content */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  AddLoop: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['AddLoopRequest'];
+      };
+    };
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['CommandResult'];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  LaunchCells: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['LaunchRequest'];
+      };
+    };
+    responses: {
+      /** @description No Content */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  StopCells: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['StopRequest'];
+      };
+    };
+    responses: {
+      /** @description No Content */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  RecordLiveLoops: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['LiveRecordRequest'];
+      };
+    };
+    responses: {
+      /** @description No Content */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
       };
       /** @description Not Found */
       404: {

@@ -42,7 +42,10 @@ public static partial class Edits {
             false,
             FlexMode.Polyphonic,
             [],
-            null
+            null,
+            null,
+            null,
+            false
         );
         // Upserts in final order from the first member's place: the stack, then its members right after it.
         var at = state.IndexOfTrack(members[0].Id);

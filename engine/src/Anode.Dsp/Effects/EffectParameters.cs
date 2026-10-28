@@ -34,6 +34,12 @@ internal sealed class EffectParameters {
 
     public int Toggle(string id, string name, bool value) => Choice(id, name, OffOn, value ? 1 : 0);
 
+    /// <summary>
+    ///     Gives parameter <paramref name="index" /> macro hint <paramref name="order" /> (Smart Controls map hinted
+    ///     parameters in ascending order).
+    /// </summary>
+    public void Macro(int index, int order) => list[index] = list[index] with { Macro = order };
+
     /// <summary>The descriptor of an effect with these parameters.</summary>
     public EffectDescriptor Describe(string id, string name, string category, bool sidechain = false) =>
         new(id, name, Vendor, Version, category, list.ToArray(), sidechain);
@@ -50,6 +56,9 @@ public static class EffectCategories {
     public const string Filter = "Filter";
     public const string Utility = "Utility";
     public const string Metering = "Metering";
+
+    /// <summary>A MIDI effect's category in the plugin catalogue (Phase 6; its descriptor has none of its own).</summary>
+    public const string MidiEffect = "MIDI Effect";
 }
 
 /// <summary>Decibel conversions.</summary>

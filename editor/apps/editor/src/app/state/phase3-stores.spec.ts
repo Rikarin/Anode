@@ -92,7 +92,8 @@ describe('lane rows', () => {
       sends: [],
       output: 'master',
       groups: [],
-      vcaId: null
+      vcaId: null,
+      midiEffects: []
     },
     instrument: null,
     midiInput: { device: null, channel: 0 },
@@ -107,6 +108,9 @@ describe('lane rows', () => {
     flexMode: 'polyphonic',
     alternatives: [],
     alternativeId: null,
+    drumMachine: null,
+    smartControls: null,
+    liveLoopsActive: false,
     ...extra
   });
   const folder = {

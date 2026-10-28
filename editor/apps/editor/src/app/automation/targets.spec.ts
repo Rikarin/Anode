@@ -11,6 +11,7 @@ const strip = (extra: Partial<ChannelStrip> = {}): ChannelStrip => ({
   output: 'master',
   groups: [],
   vcaId: null,
+  midiEffects: [],
   ...extra
 });
 

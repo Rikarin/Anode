@@ -96,6 +96,34 @@ public sealed class PackageTests : IDisposable {
     }
 
     [Fact]
+    public void A_schema_5_package_without_the_Phase_6_fields_reads_them_at_their_defaults() {
+        var (state, _, _) = RandomProjects.Build(12, 30);
+        ProjectPackage.Save(folder, state);
+        var path = Path.Combine(folder, "project.json");
+        var root = JsonNode.Parse(File.ReadAllText(path))!.AsObject();
+        root["master"]!.AsObject().Remove("midiEffects");
+        File.WriteAllText(path, root.ToJsonString());
+        foreach (var file in Directory.EnumerateFiles(Path.Combine(folder, "tracks"))) {
+            var json = JsonNode.Parse(File.ReadAllText(file))!.AsObject();
+            var track = json["track"]!.AsObject();
+            track["strip"]!.AsObject().Remove("midiEffects");
+            track.Remove("liveLoopsActive");
+            File.WriteAllText(file, json.ToJsonString());
+        }
+
+        var loaded = ProjectPackage.Load(folder);
+        Assert.Equal(RandomProjects.Json(state), RandomProjects.Json(loaded));
+        Assert.Empty(loaded.Master.MidiEffects);
+        Assert.All(
+            loaded.Tracks,
+            static t => Assert.Equal(
+                (0, false, null, null),
+                (t.Strip.MidiEffects.Count, t.LiveLoopsActive, t.DrumMachine, t.SmartControls)
+            )
+        );
+    }
+
+    [Fact]
     public void A_Phase_1_package_opens_as_audio_tracks_without_MIDI_and_saves_as_the_current_schema() {
         CopyFixture("Phase1.anode");
         var state = ProjectPackage.Load(folder);

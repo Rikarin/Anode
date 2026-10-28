@@ -295,7 +295,10 @@ public static partial class Edits {
             false,
             FlexMode.Polyphonic,
             [],
-            null
+            null,
+            null,
+            null,
+            false
         );
 
     static List<DeltaOp> AssignVca(ProjectState state, AssignVcaCommand c) {

@@ -12,3 +12,20 @@ public sealed record TrackModel(
     WarpPoint[]? Warp = null,
     PitchPoint[]? Pitch = null
 );
+
+/// <summary>
+///     One Live Loops cell's compiled content (format 4, docs/07-phase-6.md): <see cref="Index" /> in the cell table, on
+///     engine track <see cref="TrackId" />, <see cref="Length" /> samples, played as <see cref="Mode" />; its arrays as
+///     a track's, positions relative to the cell's start (its own <see cref="Warp" /> and <see cref="Pitch" />, which
+///     the writer rebases).
+/// </summary>
+public sealed record CellModel(
+    int Index,
+    int TrackId,
+    CellMode Mode,
+    long Length,
+    PlaybackEvent[] Events,
+    AudioPlaylistEntry[] Playlist,
+    WarpPoint[]? Warp = null,
+    PitchPoint[]? Pitch = null
+);

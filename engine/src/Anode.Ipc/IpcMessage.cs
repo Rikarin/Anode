@@ -46,6 +46,10 @@ namespace Anode.Ipc;
 [JsonDerivedType(typeof(ParameterChangedMessage), "parameterChanged")]
 [JsonDerivedType(typeof(PluginProblemMessage), "pluginProblem")]
 [JsonDerivedType(typeof(InsertReadingsMessage), "insertReadings")]
+[JsonDerivedType(typeof(LaunchCellsMessage), "launchCells")]
+[JsonDerivedType(typeof(StopCellsMessage), "stopCells")]
+[JsonDerivedType(typeof(CellStateMessage), "cellState")]
+[JsonDerivedType(typeof(SetPreviewSyncMessage), "setPreviewSync")]
 public abstract record IpcMessage;
 
 /// <summary>
@@ -78,6 +82,10 @@ public sealed record EngineFile(int Id, string Path, int Channels, int SampleRat
 /// <summary>
 ///     A channel strip in engine units: linear gain (the server folds VCA offsets in), pan −1…1, mute and solo, its
 ///     inserts in order, its sends, and its output (0: the master, 1…64: that bus, −N: the device's output pair N).
+///     <paramref name="MidiEffects" /> (Phase 6) are its MIDI FX slots in order, as inserts (no sidechain): the host
+///     runs them on the track's block MIDI (regions, live and step input) before the instrument, a bypassed slot
+///     passing it through; <see cref="SetChannelMessage" /> keeps the instances whose id and plugin are unchanged, as
+///     for inserts.
 /// </summary>
 public sealed record EngineStrip(
     float Gain,
@@ -86,7 +94,8 @@ public sealed record EngineStrip(
     bool Solo,
     IReadOnlyList<EngineInsert>? Inserts = null,
     IReadOnlyList<EngineSend>? Sends = null,
-    int Output = 0
+    int Output = 0,
+    IReadOnlyList<EngineInsert>? MidiEffects = null
 );
 
 /// <summary>
@@ -111,6 +120,11 @@ public sealed record EngineSend(string Id, int Bus, float Gain, float Pan, bool 
 ///     a stereo track takes it and the next one. An aux track plays bus <paramref name="InputBus" /> (1…64; 0 for
 ///     other tracks). A frozen track plays <paramref name="FreezeFile" /> (a stereo WAV of its source and inserts, from
 ///     the project start) instead of its regions, instrument and inserts, into its fader.
+///     <para>
+///         Phase 6: a Drum Machine Designer track's <paramref name="NoteRoutes" /> send the live MIDI it receives to
+///         its pad tracks by note (a note with no route is dropped; its regions' notes the server routes itself). A
+///         track whose <paramref name="LiveLoopsActive" /> is on plays its playing cell and not its segment slice.
+///     </para>
 /// </summary>
 public sealed record EngineTrack(
     int Id,
@@ -122,8 +136,16 @@ public sealed record EngineTrack(
     EngineInstrument? Instrument = null,
     EngineMidiIo? Midi = null,
     int InputBus = 0,
-    string? FreezeFile = null
+    string? FreezeFile = null,
+    IReadOnlyList<EngineNoteRoute>? NoteRoutes = null,
+    bool LiveLoopsActive = false
 );
+
+/// <summary>
+///     A Drum Machine Designer route: live MIDI note <paramref name="Note" /> goes to engine track
+///     <paramref name="TrackId" /> (a pad), played there as the pad's base note.
+/// </summary>
+public sealed record EngineNoteRoute(int Note, int TrackId);
 
 /// <summary>
 ///     An instrument for a track: the plugin, its parameter values by parameter id, the file it loads (absolute path)
@@ -151,6 +173,12 @@ public sealed record EngineMidiIo(string? InputDevice, int InputChannel, string?
 ///     <see cref="ModelLoadedMessage" /> once it has mapped the segment and the model it replaces is no longer in use,
 ///     and the server then disposes the segment.
 /// </summary>
+/// <remarks>
+///     Format 4 (Phase 6, docs/07-phase-6.md): a whole model carries the tempo points (the compiled tempo map the
+///     engine computes every block's transport context from) and every Live Loops cell; a per-track segment carries no
+///     tempo points (the model's stay) and the cells of the tracks it holds, which replace those tracks' cells. Cell
+///     indices, like automation target indices, are stable while the project is open.
+/// </remarks>
 public sealed record LoadModelMessage(
     SegmentRef Segment,
     bool Replace,
@@ -166,8 +194,10 @@ public sealed record LoadModelMessage(
 ///     (<see cref="Segments.PlaybackEvent.Target" />):
 ///     <paramref name="Kind" /> <c>volume</c> (linear gain), <c>pan</c>, <c>mute</c> (0/1), <c>send</c> (linear gain of
 ///     send <paramref name="Id" />), <c>insert</c> (parameter <paramref name="ParameterId" /> of insert
-///     <paramref name="Id" />) or <c>instrument</c> (its parameter); on engine track <paramref name="TrackId" /> (−1: the
-///     master). Sent with every model; indices are stable while the project is open.
+///     <paramref name="Id" />), <c>midiEffect</c> (parameter <paramref name="ParameterId" /> of MIDI FX slot
+///     <paramref name="Id" />, Phase 6) or <c>instrument</c> (its parameter); on engine track
+///     <paramref name="TrackId" /> (−1: the master). Sent with every model; indices are stable while the project is
+///     open. (Smart Control automation reaches the engine as automation of the parameters it maps.)
 /// </summary>
 public sealed record EngineAutomationTarget(
     int Index,
@@ -258,7 +288,7 @@ public sealed record RecordingFinishedMessage(
     bool Flashback = false
 ) : IpcMessage;
 
-/// <summary>A plugin parameter as the engine numbers it.</summary>
+/// <summary>A plugin parameter as the engine numbers it; <paramref name="Macro" /> is its macro hint (Phase 6).</summary>
 public sealed record EngineParameter(
     string Id,
     string Name,
@@ -267,12 +297,14 @@ public sealed record EngineParameter(
     double Default,
     string Unit,
     int Steps,
-    IReadOnlyList<string>? ValueNames = null
+    IReadOnlyList<string>? ValueNames = null,
+    int? Macro = null
 );
 
 /// <summary>
 ///     A plugin the host can load. <paramref name="Format" /> is <c>builtin</c>, <c>clap</c>, <c>vst3</c> or
-///     <c>au</c>.
+///     <c>au</c>. A MIDI effect (Phase 6) is not an instrument and has <paramref name="Category" />
+///     <c>MIDI Effect</c>.
 /// </summary>
 public sealed record EnginePlugin(
     string Id,
@@ -423,3 +455,88 @@ public sealed record InsertReadingEntry(int TrackId, string InsertId, float Valu
 ///     second while any insert has one.
 /// </summary>
 public sealed record InsertReadingsMessage(IReadOnlyList<InsertReadingEntry> Readings) : IpcMessage;
+
+/// <summary>A Live Loops quantise (the contract's <c>LaunchQuantize</c>): the boundary a launch or stop waits for.</summary>
+[JsonConverter(typeof(JsonStringEnumConverter<EngineQuantize>))]
+public enum EngineQuantize {
+    [JsonStringEnumMemberName("off")]
+    Off,
+
+    [JsonStringEnumMemberName("sixteenth")]
+    Sixteenth,
+
+    [JsonStringEnumMemberName("eighth")]
+    Eighth,
+
+    [JsonStringEnumMemberName("quarter")]
+    Quarter,
+
+    [JsonStringEnumMemberName("half")]
+    Half,
+
+    [JsonStringEnumMemberName("bar")]
+    Bar,
+
+    [JsonStringEnumMemberName("twoBars")]
+    TwoBars,
+
+    [JsonStringEnumMemberName("fourBars")]
+    FourBars
+}
+
+/// <summary>A cell's state in the launcher (the contract's <c>CellState</c>).</summary>
+[JsonConverter(typeof(JsonStringEnumConverter<EngineCellState>))]
+public enum EngineCellState {
+    [JsonStringEnumMemberName("queued")]
+    Queued,
+
+    [JsonStringEnumMemberName("playing")]
+    Playing,
+
+    [JsonStringEnumMemberName("stopping")]
+    Stopping,
+
+    [JsonStringEnumMemberName("stopped")]
+    Stopped
+}
+
+/// <summary>
+///     Launch cell <paramref name="Cell" /> (its index in the segment's cell table) at the next
+///     <paramref name="Quantize" /> boundary.
+/// </summary>
+public sealed record CellLaunch(int Cell, EngineQuantize Quantize);
+
+/// <summary>
+///     Stop the cell playing on engine track <paramref name="TrackId" /> at the next <paramref name="Quantize" />
+///     boundary.
+/// </summary>
+public sealed record CellStop(int TrackId, EngineQuantize Quantize);
+
+/// <summary>
+///     Server → host: launch cells and stop others, as one decision (a scene launch: its cells, and stops on the
+///     tracks with none in it; the server resolves scenes and each cell's quantise). The host starts and stops them
+///     sample-accurately at their boundaries, computed from the segment's tempo points; a request within 1 ms of a
+///     boundary takes the next one. A launch replaces the track's playing cell at that boundary; a retrigger cell
+///     launched while playing restarts.
+/// </summary>
+public sealed record LaunchCellsMessage(IReadOnlyList<CellLaunch> Cells, IReadOnlyList<CellStop>? Stops = null)
+    : IpcMessage;
+
+/// <summary>Server → host: stop cells, each at its quantise boundary.</summary>
+public sealed record StopCellsMessage(IReadOnlyList<CellStop> Stops) : IpcMessage;
+
+/// <summary>
+///     Host → server: cell <paramref name="Cell" /> (its index in the cell table) changed state at project sample
+///     <paramref name="Sample" /> (for queued and stopping, the boundary it waits for); pushed from the control
+///     thread as the launcher changes, never from the audio callback.
+/// </summary>
+public sealed record CellStateMessage(int Cell, EngineCellState State, long Sample) : IpcMessage;
+
+/// <summary>
+///     Server → host: how the preview channel plays the next <see cref="PreviewFileMessage" /> (and the current one):
+///     at <paramref name="TempoRatio" /> of its own speed (the project tempo over the loop's), transposed by
+///     <paramref name="TransposeSemitones" />, rendered with the Stretch renderer on the disk thread; with
+///     <paramref name="StartOnBar" />, it starts on the next bar while the transport plays. A ratio of 1 and no
+///     transpose play the file as it is (the default).
+/// </summary>
+public sealed record SetPreviewSyncMessage(double TempoRatio, int TransposeSemitones, bool StartOnBar) : IpcMessage;

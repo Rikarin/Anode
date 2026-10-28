@@ -30,6 +30,9 @@ public sealed record ProjectDelta(long Revision, IReadOnlyList<DeltaOp> Ops);
 [JsonDerivedType(typeof(AutomationLaneRemoved), "automationLaneRemoved")]
 [JsonDerivedType(typeof(GroupUpserted), "groupUpserted")]
 [JsonDerivedType(typeof(GroupRemoved), "groupRemoved")]
+[JsonDerivedType(typeof(PatternRegionUpserted), "patternRegionUpserted")]
+[JsonDerivedType(typeof(PatternRegionRemoved), "patternRegionRemoved")]
+[JsonDerivedType(typeof(LiveLoopsChanged), "liveLoopsChanged")]
 public abstract record DeltaOp;
 
 /// <summary>A track was added or changed; <c>index</c> is its position in the track list.</summary>
@@ -76,3 +79,11 @@ public sealed record AutomationLaneRemoved(string Id) : DeltaOp;
 public sealed record GroupUpserted(MixerGroup Group) : DeltaOp;
 
 public sealed record GroupRemoved(int Number) : DeltaOp;
+
+/// <summary>A pattern region was added or changed (its pattern included).</summary>
+public sealed record PatternRegionUpserted(PatternRegion Region) : DeltaOp;
+
+public sealed record PatternRegionRemoved(string Id) : DeltaOp;
+
+/// <summary>The Live Loops grid changed: its scenes, cells, quantise or visibility (the whole grid).</summary>
+public sealed record LiveLoopsChanged(LiveLoopsGrid LiveLoops) : DeltaOp;

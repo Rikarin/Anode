@@ -21,7 +21,9 @@ public enum PluginFormat {
 
 /// <summary>
 ///     A plugin parameter. <c>steps</c> &gt; 0 makes it discrete (<c>steps</c> + 1 values from <c>min</c> to
-///     <c>max</c>), with <c>valueNames</c> naming them when it is a choice.
+///     <c>max</c>), with <c>valueNames</c> naming them when it is a choice. <c>macro</c> (Phase 6) is its macro hint:
+///     automatic Smart Controls mapping takes a plugin's hinted parameters in ascending <c>macro</c> order (null: not a
+///     macro).
 /// </summary>
 public sealed record ParameterInfo(
     string Id,
@@ -31,12 +33,14 @@ public sealed record ParameterInfo(
     double Default,
     string Unit,
     int Steps,
-    IReadOnlyList<string>? ValueNames
+    IReadOnlyList<string>? ValueNames,
+    int? Macro = null
 );
 
 /// <summary>
-///     A plugin the engine can load: an instrument, or an effect in <c>category</c> (EQ, Dynamics, Delay, Reverb,
-///     Modulation, Distortion, Filter, Utility, Metering). <c>hasEditor</c>: it has its own editor window (desktop app
+///     A plugin the engine can load: an instrument (<c>category</c> <c>Instrument</c>), a MIDI effect (<c>MIDI
+///     Effect</c>, Phase 6: it goes in a strip's MIDI FX slots), or an effect in <c>category</c> (EQ, Dynamics, Delay,
+///     Reverb, Modulation, Distortion, Filter, Utility, Metering). <c>hasEditor</c>: it has its own editor window (desktop app
 ///     only; everywhere else the generic editor). <c>fileTypes</c> (extensions such as <c>.sfz</c>, <c>.wav</c>) lists
 ///     what an
 ///     instrument loads with <c>loadInstrumentFile</c>, empty when it loads none.

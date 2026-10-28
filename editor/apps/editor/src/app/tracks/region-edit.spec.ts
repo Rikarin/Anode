@@ -137,7 +137,8 @@ describe('buildScene', () => {
       sends: [],
       output: 'master',
       groups: [],
-      vcaId: null
+      vcaId: null,
+      midiEffects: []
     },
     instrument: null,
     midiInput: { device: null, channel: 0 },
@@ -151,7 +152,10 @@ describe('buildScene', () => {
     flexOn: false,
     flexMode: 'polyphonic',
     alternatives: [],
-    alternativeId: null
+    alternativeId: null,
+    drumMachine: null,
+    smartControls: null,
+    liveLoopsActive: false
   });
 
   it('lays regions on their tracks’ lanes in their colours, with selection, mute and file mapping', () => {

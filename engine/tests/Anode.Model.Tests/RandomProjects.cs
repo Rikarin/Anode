@@ -258,6 +258,36 @@ static class RandomProjects {
 
     static string? FirstAudioTrack(ProjectState state) => state.Tracks.Find(static t => t.Kind == TrackKind.Audio)?.Id;
 
+    /// <summary>
+    ///     Phase 6 commands (docs/07-phase-6.md) the model rejects until workstream B implements them; the identity
+    ///     property skips them. (MIDI FX slots, the insert commands' <c>chain: midiEffects</c>, are rejected too, and the
+    ///     generators never ask for them yet.)
+    /// </summary>
+    public static readonly IReadOnlySet<string> PendingPhase6 = new HashSet<string>(StringComparer.Ordinal) {
+        nameof(AddPatternRegionCommand),
+        nameof(SetPatternRegionCommand),
+        nameof(SetPatternCommand),
+        nameof(ConvertPatternToMidiCommand),
+        nameof(ReseedPatternCommand),
+        nameof(CreateDrumMachineCommand),
+        nameof(AddDrumPadCommand),
+        nameof(SetDrumPadCommand),
+        nameof(RemoveDrumPadCommand),
+        nameof(SetSmartControlsCommand),
+        nameof(SetSmartControlCommand),
+        nameof(SetSmartMappingsCommand),
+        nameof(AutoMapSmartControlsCommand),
+        nameof(CompareSmartControlsCommand),
+        nameof(AddSceneCommand),
+        nameof(RemoveSceneCommand),
+        nameof(SetSceneCommand),
+        nameof(SetCellCommand),
+        nameof(DeleteCellsCommand),
+        nameof(MoveCellCommand),
+        nameof(SetLiveLoopsCommand),
+        nameof(SetTrackActivationCommand)
+    };
+
     /// <summary>A random command of <paramref name="type" /> for <paramref name="s" />, or null when none can be made.</summary>
     public static EditCommand? Command(Type type, ProjectState s, Random r) {
         var tracks = s.Tracks;
@@ -657,6 +687,51 @@ static class RandomProjects {
                 r.Next(2) == 0 ? null : Pick(r, Enum.GetValues<FlexFollow>()),
                 Maybe(r.Next(2) == 0)
             ),
+            // Phase 6 commands (docs/07-phase-6.md): placeholders until the model implements them (workstream B
+            // replaces these with generators that make commands that apply, and removes PendingPhase6).
+            nameof(AddPatternRegionCommand) => Instrument() is { } t
+                ? new AddPatternRegionCommand(t.Id, r.Next(0, 16) * 960L)
+                : null,
+            nameof(SetPatternRegionCommand) => new SetPatternRegionCommand("pat_none", Muted: r.Next(2) == 0),
+            nameof(SetPatternCommand) => new SetPatternCommand("pat_none", new([], 0, r.Next())),
+            nameof(ConvertPatternToMidiCommand) => new ConvertPatternToMidiCommand("pat_none"),
+            nameof(ReseedPatternCommand) => new ReseedPatternCommand("pat_none", r.Next()),
+            nameof(CreateDrumMachineCommand) => new CreateDrumMachineCommand(),
+            nameof(AddDrumPadCommand) => Instrument() is { } t ? new AddDrumPadCommand(t.Id, 36 + r.Next(16)) : null,
+            nameof(SetDrumPadCommand) => Instrument() is { } t
+                ? new SetDrumPadCommand(t.Id, 36 + r.Next(16), "Kick")
+                : null,
+            nameof(RemoveDrumPadCommand) => Instrument() is { } t
+                ? new RemoveDrumPadCommand(t.Id, 36 + r.Next(16))
+                : null,
+            nameof(SetSmartControlsCommand) => Track() is { } t
+                ? new SetSmartControlsCommand(t, Pick(r, Enum.GetValues<SmartControlsLayout>()))
+                : null,
+            nameof(SetSmartControlCommand) => Track() is { } t
+                ? new SetSmartControlCommand(t, "knob1", Math.Round(r.NextDouble(), 3))
+                : null,
+            nameof(SetSmartMappingsCommand) => Track() is { } t
+                ? new SetSmartMappingsCommand(t, "knob1", [new("volume", -12, 0, false, [new(0, 0), new(1, 1)])])
+                : null,
+            nameof(AutoMapSmartControlsCommand) => Track() is { } t ? new AutoMapSmartControlsCommand(t) : null,
+            nameof(CompareSmartControlsCommand) => Track() is { } t
+                ? new CompareSmartControlsCommand(t, r.Next(2) == 0)
+                : null,
+            nameof(AddSceneCommand) => new AddSceneCommand(MaybeText("Scene")),
+            nameof(RemoveSceneCommand) => new RemoveSceneCommand("scn_none"),
+            nameof(SetSceneCommand) => new SetSceneCommand("scn_none", "Verse"),
+            nameof(SetCellCommand) => Track() is { } t
+                ? new SetCellCommand(t, "scn_none", PlayMode: Pick(r, Enum.GetValues<CellPlayMode>()))
+                : null,
+            nameof(DeleteCellsCommand) => new DeleteCellsCommand(["cel_none"]),
+            nameof(MoveCellCommand) => Track() is { } t ? new MoveCellCommand("cel_none", t, "scn_none") : null,
+            nameof(SetLiveLoopsCommand) => new SetLiveLoopsCommand(
+                r.Next(2) == 0 ? null : Pick(r, Enum.GetValues<LaunchQuantize>()),
+                Maybe(r.Next(2) == 0)
+            ),
+            nameof(SetTrackActivationCommand) => Track() is { } t
+                ? new SetTrackActivationCommand([t], r.Next(2) == 0)
+                : null,
             _ => throw new InvalidOperationException($"No generator for {type.Name}.")
         };
         string? Track() => tracks.Count == 0 ? null : Pick(r, tracks).Id;

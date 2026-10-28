@@ -23,7 +23,8 @@ function track(id: string, name = id): Track {
       sends: [],
       output: 'master',
       groups: [],
-      vcaId: null
+      vcaId: null,
+      midiEffects: []
     },
     instrument: null,
     midiInput: { device: null, channel: 0 },
@@ -37,7 +38,10 @@ function track(id: string, name = id): Track {
     flexOn: false,
     flexMode: 'polyphonic',
     alternatives: [],
-    alternativeId: null
+    alternativeId: null,
+    drumMachine: null,
+    smartControls: null,
+    liveLoopsActive: false
   };
 }
 
@@ -96,7 +100,8 @@ function snapshot(revision = 3): Project {
       sends: [],
       output: 'master',
       groups: [],
-      vcaId: null
+      vcaId: null,
+      midiEffects: []
     },
     tracks: [track('trk_1'), track('trk_2')],
     regions: [region('rgn_1', 'trk_1')],
@@ -118,7 +123,9 @@ function snapshot(revision = 3): Project {
     arrangement: [],
     notes: '',
     groups: [],
-    automation: []
+    automation: [],
+    patternRegions: [],
+    liveLoops: { scenes: [], cells: [], quantize: 'bar', shown: false }
   };
 }
 
@@ -160,7 +167,8 @@ describe('ProjectStore deltas', () => {
             sends: [],
             output: 'master',
             groups: [],
-            vcaId: null
+            vcaId: null,
+            midiEffects: []
           }
         },
         { op: 'projectRenamed', name: 'Renamed' }

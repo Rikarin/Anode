@@ -17,6 +17,7 @@ public static class AnodeApi {
         LibraryApi.Map(api);
         MixApi.Map(api);
         FlexApi.Map(api);
+        LoopsApi.Map(api);
         RealtimeApi.Map(app);
     }
 }

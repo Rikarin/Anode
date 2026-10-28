@@ -1,10 +1,12 @@
 using Anode.Dsp.Instruments;
+using Anode.Dsp.Transport;
 
 namespace Anode.Dsp.Effects;
 
 /// <summary>
 ///     What an effect is: its stable id (<c>anode.channel-eq</c>), names, category (EQ, Dynamics, Delay, Reverb,
-///     Modulation, Distortion, Filter, Utility, Metering), parameters, and whether it takes a sidechain.
+///     Modulation, Distortion, Filter, Utility, Metering), parameters (with their macro hints, Phase 6), and whether it
+///     takes a sidechain.
 /// </summary>
 public sealed record EffectDescriptor(
     string Id,
@@ -49,6 +51,12 @@ public interface IAudioEffect : IDisposable {
         ReadOnlySpan<float> sidechainLeft,
         ReadOnlySpan<float> sidechainRight
     );
+
+    /// <summary>
+    ///     The transport for the block about to be processed (docs/07-phase-6.md), on the audio thread once per block
+    ///     before <see cref="Process" />. Tempo-synced effects keep what they need of it; the default ignores it.
+    /// </summary>
+    void SetTransport(in TransportContext transport) { }
 
     /// <summary>Clears tails and history (stop, locate) at once.</summary>
     void Reset();

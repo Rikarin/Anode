@@ -1,13 +1,15 @@
 using Anode.Dsp.Effects;
 using Anode.Dsp.Instruments;
+using Anode.Dsp.MidiEffects;
 using Anode.Engine.Plugins.Clap;
 using Anode.Ipc;
 
 namespace Anode.Engine.Plugins;
 
 /// <summary>
-///     The plugins the engine can load: Anode's built-in instruments (<see cref="BuiltinInstruments" />) and effects
-///     (<see cref="BuiltinEffects" />), plus any registered with <see cref="AddBuiltin" /> and
+///     The plugins the engine can load: Anode's built-in instruments (<see cref="BuiltinInstruments" />), effects
+///     (<see cref="BuiltinEffects" />) and MIDI effects (<see cref="BuiltinMidiEffects" />, listed only: creating
+///     them is Phase 6's workstream A), plus any registered with <see cref="AddBuiltin" /> and
 ///     <see cref="AddBuiltinEffect" /> (tests, tools); the CLAP instruments found by <see cref="ScanClap" />; and
 ///     whatever the third-party <see cref="Factory" /> hosts (VST3, AU; docs/05-phase-4.md, workstream E). It answers
 ///     the catalogue the host sends the server (built-ins first, then CLAP, then the factory's) and creates instances by
@@ -68,6 +70,10 @@ public sealed class PluginRegistry {
         }
 
         foreach (var d in BuiltinEffects.All) {
+            list.Add(Builtin(d));
+        }
+
+        foreach (var d in BuiltinMidiEffects.All) {
             list.Add(Builtin(d));
         }
 
@@ -355,6 +361,19 @@ public sealed class PluginRegistry {
             d.HasSidechain
         );
 
+    static EnginePlugin Builtin(MidiEffectDescriptor d) =>
+        new(
+            d.Id,
+            d.Name,
+            d.Vendor,
+            d.Version,
+            "builtin",
+            false,
+            [],
+            [..d.Parameters.Select(Map)],
+            EffectCategories.MidiEffect
+        );
+
     static EngineParameter Map(InstrumentParameter p) =>
-        new(p.Id, p.Name, p.Min, p.Max, p.Default, p.Unit, p.Steps, p.ValueNames);
+        new(p.Id, p.Name, p.Min, p.Max, p.Default, p.Unit, p.Steps, p.ValueNames, p.Macro);
 }

@@ -64,7 +64,8 @@ const SilentStrip: ChannelStrip = {
   sends: [],
   output: 'master',
   groups: [],
-  vcaId: null
+  vcaId: null,
+  midiEffects: []
 };
 
 /** Audio frames per tick at a tempo and sample rate (one tempo per project in Phase 1). */
@@ -559,6 +560,11 @@ export class ProjectStore {
         break;
       case 'groupRemoved':
         maps.groups.delete(op.number);
+        break;
+      case 'patternRegionUpserted':
+      case 'patternRegionRemoved':
+      case 'liveLoopsChanged':
+        // Pattern regions and Live Loops: Phase 6, the editor workstream (docs/07-phase-6.md).
         break;
     }
   }

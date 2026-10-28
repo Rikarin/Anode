@@ -299,7 +299,8 @@ function newTrack(project: Project, kind: 'aux' | 'vca', name: string, inputBus:
       sends: [],
       output: 'master',
       groups: [],
-      vcaId: null
+      vcaId: null,
+      midiEffects: []
     },
     instrument: null,
     midiInput: { device: null, channel: 0 },
@@ -313,7 +314,10 @@ function newTrack(project: Project, kind: 'aux' | 'vca', name: string, inputBus:
     flexOn: false,
     flexMode: 'polyphonic',
     alternatives: [],
-    alternativeId: null
+    alternativeId: null,
+    drumMachine: null,
+    smartControls: null,
+    liveLoopsActive: false
   };
 }
 

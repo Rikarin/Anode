@@ -10,6 +10,8 @@ public sealed unsafe class SegmentTests {
         Assert.Equal(40, sizeof(TrackEntry));
         Assert.Equal(16, sizeof(WarpPoint));
         Assert.Equal(24, sizeof(PitchPoint));
+        Assert.Equal(48, sizeof(TempoMapPoint));
+        Assert.Equal(56, sizeof(CellEntry));
         Assert.Equal(sizeof(WarpPoint), sizeof(Dsp.Flex.FlexWarpPoint));
         Assert.Equal(sizeof(PitchPoint), sizeof(Dsp.Flex.FlexPitchPoint));
         Assert.Equal(
@@ -169,5 +171,101 @@ public sealed unsafe class SegmentTests {
                 [new() { FileFrame = 100 }, new() { FileFrame = 50 }]
             )
         );
+    }
+
+    [Fact]
+    public void Tempo_points_and_cells_are_written_after_the_tracks() {
+        static PlaybackEvent Note(long at, int track) =>
+            new() {
+                SamplePos = at,
+                Track = track,
+                Kind = PlaybackEventKind.NoteOn,
+                Data1 = 60,
+                Data2 = 100
+            };
+
+        TrackModel[] tracks =
+            [new(1, [Note(0, 1), Note(10, 1)], [new() { Start = 0, Length = 10, FileId = 1, Gain = 1 }])];
+        TempoMapPoint[] tempo = [
+            new() {
+                Sample = 0,
+                Quarter = 0,
+                Bpm = 120,
+                Numerator = 4,
+                Denominator = 4
+            },
+            new() {
+                Sample = 96_000,
+                Quarter = 4,
+                Bpm = 120,
+                Slope = -10,
+                Numerator = 3,
+                Denominator = 4,
+                BarQuarter = 4
+            }
+        ];
+        CellModel[] cells = [
+            new(7, 1, CellMode.OneShot, 48_000, [Note(5, 1)], [], null, null),
+            new(
+                2,
+                1,
+                CellMode.Loop,
+                96_000,
+                [],
+                [
+                    new() {
+                        Start = 0,
+                        Length = 1_000,
+                        FileId = 2,
+                        Gain = 1,
+                        WarpStart = 0,
+                        WarpCount = 2,
+                        Algorithm = FlexAlgorithm.Polyphonic
+                    }
+                ],
+                [new() { Offset = 0, FileFrame = 0 }, new() { Offset = 1_000, FileFrame = 500 }]
+            )
+        ];
+        using var written = SegmentWriter.Write(
+            tracks,
+            1,
+            48_000,
+            "an-test-cells",
+            Environment.ProcessId,
+            true,
+            tempo: tempo,
+            cells: cells
+        );
+        Assert.Equal(written.Length, SegmentWriter.Size(tracks, tempo, cells));
+        using var mapped = MappedSegment.Map(3, written.Name, written.Length);
+        mapped.ValidateLayout();
+        mapped.Verify();
+
+        Assert.Equal(SegmentHeader.CurrentFormat, mapped.Header->Format);
+        Assert.Equal(2, mapped.TempoCount);
+        Assert.Equal(-10, mapped.Tempo[1].Slope);
+        Assert.Equal(3, mapped.Tempo[1].Numerator);
+        Assert.Equal(2, mapped.CellCount);
+        Assert.Equal(2, mapped.Track(0).EventCount);
+        var oneShot = mapped.Cell(0);
+        Assert.Equal(
+            (7, 1, CellMode.OneShot, 48_000L),
+            (oneShot.Entry.Index, oneShot.Entry.TrackId, oneShot.Entry.Mode, oneShot.Entry.Length)
+        );
+        Assert.Equal(5, oneShot.View.Events[0].SamplePos);
+        var loop = mapped.Cell(1).View;
+        Assert.Equal(1, loop.PlaylistCount);
+        Assert.Equal(500, loop.Warp[loop.Playlist[0].WarpStart + 1].FileFrame);
+    }
+
+    [Fact]
+    public void A_segment_without_tempo_points_or_cells_is_as_before() {
+        TrackModel[] tracks = [new(1, [], [])];
+        using var written = SegmentWriter.Write(tracks, 1, 0, "an-test-plain", Environment.ProcessId, false);
+        using var mapped = MappedSegment.Map(4, written.Name, written.Length);
+        mapped.ValidateLayout();
+        mapped.Verify();
+        Assert.Equal(0, mapped.TempoCount);
+        Assert.Equal(0, mapped.CellCount);
     }
 }

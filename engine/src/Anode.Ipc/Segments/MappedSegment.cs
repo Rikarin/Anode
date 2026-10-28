@@ -25,6 +25,15 @@ public readonly unsafe struct TrackView(
 }
 
 /// <summary>
+///     A Live Loops cell of a mapped segment (format 4): its table entry, and its content as a track's view
+///     (positions relative to the cell's start).
+/// </summary>
+public readonly struct CellView(CellEntry entry, TrackView view) {
+    public CellEntry Entry { get; } = entry;
+    public TrackView View { get; } = view;
+}
+
+/// <summary>
 ///     A segment the host has mapped (read-only) and validated. The engine reference-counts it by the published models
 ///     that use it, on its control thread.
 /// </summary>
@@ -72,16 +81,30 @@ public sealed unsafe class MappedSegment : IDisposable {
             || h->WarpCount < 0
             || h->PitchCount < 0
             || h->WarpCount > segment.Length / sizeof(WarpPoint)
-            || h->PitchCount > segment.Length / sizeof(PitchPoint)) {
+            || h->PitchCount > segment.Length / sizeof(PitchPoint)
+            || h->TempoCount < 0
+            || h->CellCount < 0
+            || h->TempoCount > segment.Length / sizeof(TempoMapPoint)
+            || h->CellCount > segment.Length / sizeof(CellEntry)) {
             throw new InvalidDataException("Segment counts out of range.");
         }
 
-        var expected = Layout.Offsets(h->TrackCount, h->EventCount, h->PlaylistCount, h->WarpCount, h->PitchCount);
+        var expected = Layout.Offsets(
+            h->TrackCount,
+            h->EventCount,
+            h->PlaylistCount,
+            h->WarpCount,
+            h->PitchCount,
+            h->TempoCount,
+            h->CellCount
+        );
         if (expected.Tracks != h->TrackTableOffset
             || expected.Events != h->EventsOffset
             || expected.Playlists != h->PlaylistOffset
             || expected.Warps != h->WarpOffset
             || expected.Pitches != h->PitchOffset
+            || expected.Tempo != h->TempoOffset
+            || expected.Cells != h->CellOffset
             || expected.Total != h->TotalLength) {
             throw new InvalidDataException("Segment offsets do not match its counts.");
         }
@@ -99,8 +122,31 @@ public sealed unsafe class MappedSegment : IDisposable {
             }
         }
 
+        CheckCells(h);
         for (var i = 0; i < h->TrackCount; i++) {
             CheckFlex(i, Track(i));
+        }
+
+        for (var i = 0; i < h->CellCount; i++) {
+            CheckFlex(i, Cell(i).View);
+        }
+    }
+
+    /// <summary>Every cell's slices lie inside the segment's arrays (format 4).</summary>
+    static void CheckCells(SegmentHeader* h) {
+        var cells = (CellEntry*)((byte*)h + h->CellOffset);
+        for (var i = 0; i < h->CellCount; i++) {
+            var c = cells[i];
+            if (c.EventStart < 0
+                || c.EventCount < 0
+                || c.EventStart + c.EventCount > h->EventCount
+                || c.PlaylistStart < 0
+                || c.PlaylistCount < 0
+                || c.PlaylistStart + c.PlaylistCount > h->PlaylistCount
+                || c.Length < 0
+                || c.Mode > CellMode.Retrigger) {
+                throw new InvalidDataException($"Cell entry {i} out of bounds.");
+            }
         }
     }
 
@@ -132,14 +178,41 @@ public sealed unsafe class MappedSegment : IDisposable {
         }
 
         for (var i = 0; i < h->TrackCount; i++) {
-            var t = Track(i);
-            for (long e = 1; e < t.EventCount; e++) {
-                if (t.Events[e].SamplePos < t.Events[e - 1].SamplePos) {
-                    throw new InvalidDataException($"Track {i} events are not sorted.");
-                }
-            }
+            CheckSorted($"Track {i}", i, Track(i));
+        }
 
-            CheckPlaylist(i, t);
+        for (var i = 0; i < h->CellCount; i++) {
+            CheckSorted($"Cell {i}", i, Cell(i).View);
+        }
+
+        CheckTempo();
+    }
+
+    /// <summary>A track's or cell's events are sorted by sample, and its playlist as <see cref="CheckPlaylist" /> says.</summary>
+    static void CheckSorted(string what, int index, TrackView t) {
+        for (long e = 1; e < t.EventCount; e++) {
+            if (t.Events[e].SamplePos < t.Events[e - 1].SamplePos) {
+                throw new InvalidDataException($"{what} events are not sorted.");
+            }
+        }
+
+        CheckPlaylist(index, t);
+    }
+
+    /// <summary>The tempo points start at sample 0, increase strictly, and hold finite values (format 4).</summary>
+    void CheckTempo() {
+        var tempo = Tempo;
+        for (var i = 0; i < TempoCount; i++) {
+            var point = tempo[i];
+            if ((i == 0 ? point.Sample != 0 : point.Sample <= tempo[i - 1].Sample)
+                || !double.IsFinite(point.Quarter)
+                || !(point.Bpm > 0)
+                || !double.IsFinite(point.Slope)
+                || !double.IsFinite(point.BarQuarter)
+                || point.Numerator < 1
+                || point.Denominator < 1) {
+                throw new InvalidDataException($"Tempo point {i} is out of order or invalid.");
+            }
         }
     }
 
@@ -159,6 +232,32 @@ public sealed unsafe class MappedSegment : IDisposable {
             h->WarpCount,
             (PitchPoint*)((byte*)h + h->PitchOffset),
             h->PitchCount
+        );
+    }
+
+    /// <summary>The compiled tempo map (format 4): <see cref="TempoCount" /> points, none in a per-track segment.</summary>
+    public TempoMapPoint* Tempo => (TempoMapPoint*)((byte*)Header + Header->TempoOffset);
+
+    public long TempoCount => Header->TempoCount;
+
+    public long CellCount => Header->CellCount;
+
+    /// <summary>Cell <paramref name="index" /> of the cell table (its position here, not its <see cref="CellEntry.Index" />).</summary>
+    public CellView Cell(long index) {
+        var h = Header;
+        var entry = ((CellEntry*)((byte*)h + h->CellOffset))[index];
+        return new(
+            entry,
+            new(
+                (PlaybackEvent*)((byte*)h + h->EventsOffset) + entry.EventStart,
+                entry.EventCount,
+                (AudioPlaylistEntry*)((byte*)h + h->PlaylistOffset) + entry.PlaylistStart,
+                entry.PlaylistCount,
+                (WarpPoint*)((byte*)h + h->WarpOffset),
+                h->WarpCount,
+                (PitchPoint*)((byte*)h + h->PitchOffset),
+                h->PitchCount
+            )
         );
     }
 

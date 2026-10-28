@@ -29,7 +29,8 @@ function track(id: string, extra: Partial<Track> = {}, output = 'master', sends:
       sends: sends.map((bus, i): Send => ({ id: `${id}_s${i}`, bus, levelDb: 0, pan: 0, preFader: false })),
       output,
       groups: [],
-      vcaId: null
+      vcaId: null,
+      midiEffects: []
     },
     instrument: null,
     midiInput: { device: null, channel: 0 },
@@ -44,6 +45,9 @@ function track(id: string, extra: Partial<Track> = {}, output = 'master', sends:
     flexMode: 'polyphonic',
     alternatives: [],
     alternativeId: null,
+    drumMachine: null,
+    smartControls: null,
+    liveLoopsActive: false,
     ...extra
   };
 }

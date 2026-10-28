@@ -106,6 +106,44 @@ export type BounceSourceAction = Schemas['BounceSourceAction'];
 export type ProcessRequest = Schemas['ProcessRequest'];
 export type ProcessEffect = Schemas['ProcessEffect'];
 
+export type PatternRegion = Schemas['PatternRegion'];
+export type Pattern = Schemas['Pattern'];
+export type PatternRow = Schemas['PatternRow'];
+export type PatternRowKind = Schemas['PatternRowKind'];
+export type PatternPlayMode = Schemas['PatternPlayMode'];
+export type PatternStep = Schemas['PatternStep'];
+export type DrumMachine = Schemas['DrumMachine'];
+export type DrumPad = Schemas['DrumPad'];
+export type InsertChain = Schemas['InsertChain'];
+export type SmartControls = Schemas['SmartControls'];
+export type SmartControlsLayout = Schemas['SmartControlsLayout'];
+export type SmartControl = Schemas['SmartControl'];
+export type SmartControlKind = Schemas['SmartControlKind'];
+export type SmartMapping = Schemas['SmartMapping'];
+export type GraphPoint = Schemas['GraphPoint'];
+export type LiveLoopsGrid = Schemas['LiveLoopsGrid'];
+export type Scene = Schemas['Scene'];
+export type Cell = Schemas['Cell'];
+export type CellContent = Schemas['CellContent'];
+export type CellKind = Schemas['CellKind'];
+export type CellPlayMode = Schemas['CellPlayMode'];
+export type LaunchQuantize = Schemas['LaunchQuantize'];
+export type LoopInfo = Schemas['LoopInfo'];
+export type LoopKind = Schemas['LoopKind'];
+export type LoopScale = Schemas['LoopScale'];
+export type LoopPage = Schemas['LoopPage'];
+export type LoopFavouriteRequest = Schemas['LoopFavouriteRequest'];
+export type Pack = Schemas['Pack'];
+export type InstallPackRequest = Schemas['InstallPackRequest'];
+export type AddLoopRequest = Schemas['AddLoopRequest'];
+export type AddToLoopLibraryRequest = Schemas['AddToLoopLibraryRequest'];
+export type LaunchRequest = Schemas['LaunchRequest'];
+export type StopRequest = Schemas['StopRequest'];
+export type LiveRecordRequest = Schemas['LiveRecordRequest'];
+
+/** A Live Loops cell's state in the launcher (engine/src/Anode.Contracts/LiveLoops.cs; only on `/ws`). */
+export type CellState = 'queued' | 'playing' | 'stopping' | 'stopped';
+
 export type TransportState = Schemas['TransportState'];
 export type TransportStatus = Schemas['TransportStatus'];
 export type TransportRequest = Schemas['TransportRequest'];
@@ -144,7 +182,8 @@ export interface MidiActivity {
  * events a client fell too far behind to receive, so it refetches what it shows. `projectChanged` carries the delta of
  * every edit, undo, redo or finished recording; `transport` and `meters` stream while the engine runs; `midiActivity`
  * streams live MIDI; `pluginsChanged` and `midiDevicesChanged` ask for a refetch; `job` reports job progress (bounce, freeze, analyze, bounce in place, process); `pluginProblem` a
- * plugin the engine had to bypass; `analysis` says a file's analysis changed, so a client refetches it.
+ * plugin the engine had to bypass; `analysis` says a file's analysis changed, so a client refetches it; `cell` reports a
+ * Live Loops cell's launcher state at a project sample (for queued and stopping, the boundary it waits for).
  */
 export type ServerMessage =
   | { type: 'connected'; version: string }
@@ -161,4 +200,5 @@ export type ServerMessage =
   | { type: 'midiDevicesChanged' }
   | { type: 'job'; job: Job }
   | { type: 'pluginProblem'; trackId: string | null; insertId: string | null; pluginId: string; message: string }
-  | { type: 'analysis'; fileId: string };
+  | { type: 'analysis'; fileId: string }
+  | { type: 'cell'; cellId: string; state: CellState; sample: number };

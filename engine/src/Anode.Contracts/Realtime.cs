@@ -19,6 +19,7 @@ namespace Anode.Contracts;
 [JsonDerivedType(typeof(JobEvent), "job")]
 [JsonDerivedType(typeof(PluginProblemEvent), "pluginProblem")]
 [JsonDerivedType(typeof(AnalysisEvent), "analysis")]
+[JsonDerivedType(typeof(CellEvent), "cell")]
 public abstract record RealtimeEvent;
 
 /// <summary>The socket is open; the client fetches the state it needs now.</summary>
@@ -85,3 +86,9 @@ public sealed record PluginProblemEvent(string? TrackId, string? InsertId, strin
 
 /// <summary>A file's analysis changed (it was built or rebuilt); clients refetch <c>/project/files/{fileId}/analysis</c>.</summary>
 public sealed record AnalysisEvent(string FileId) : RealtimeEvent;
+
+/// <summary>
+///     A Live Loops cell changed state in the launcher, at project sample <c>sample</c> (for queued and stopping, the
+///     boundary it waits for).
+/// </summary>
+public sealed record CellEvent(string CellId, CellState State, long Sample) : RealtimeEvent;

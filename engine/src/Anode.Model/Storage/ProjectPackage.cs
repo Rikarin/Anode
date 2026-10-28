@@ -529,7 +529,8 @@ public static class ProjectPackage {
                 : [],
             Sends = full && track is not null ? [..sends] : [],
             Output = Routing.Normalise(strip.Output) ?? Routing.Master,
-            Groups = strip.Groups ?? []
+            Groups = strip.Groups ?? [],
+            MidiEffects = strip.MidiEffects ?? [] // Phase 6, workstream B normalises them (docs/07-phase-6.md)
         };
     }
 
@@ -671,6 +672,7 @@ public static class PackageMigrations {
         }
 
         json[VersionField] = CurrentSchemaVersion;
+        Phase6Fields.Fill(kind, json);
         return json;
     }
 
@@ -820,6 +822,29 @@ public static class PackageMigrations {
         }
 
         return json;
+    }
+}
+
+/// <summary>
+///     The Phase 6 fields (docs/07-phase-6.md) at their defaults where a file lacks them, so schema-5 packages read with
+///     the Phase 6 contracts: interim, until workstream B adds schema 6 and its migration from 5 (which replaces this,
+///     with the same defaults). Strips have no MIDI FX; tracks have no drum machine, no Smart Controls (null) and play
+///     their Tracks-area regions. Leaves fields that are present alone.
+/// </summary>
+static class Phase6Fields {
+    public static void Fill(string kind, JsonObject json) {
+        if (kind == "project") {
+            Strip(json["master"] as JsonObject);
+        } else if (kind == "track" && json["track"] is JsonObject track) {
+            Strip(track["strip"] as JsonObject);
+            track["liveLoopsActive"] ??= false;
+        }
+    }
+
+    static void Strip(JsonObject? strip) {
+        if (strip is not null) {
+            strip["midiEffects"] ??= new JsonArray();
+        }
     }
 }
 

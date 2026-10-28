@@ -1,3 +1,5 @@
+using Anode.Dsp.Transport;
+
 namespace Anode.Dsp.Instruments;
 
 /// <summary>A MIDI message <paramref name="Frame" /> frames into the buffer being rendered.</summary>
@@ -6,7 +8,9 @@ public readonly record struct MidiEvent(int Frame, byte Status, byte Data1, byte
 /// <summary>
 ///     A parameter as an instrument numbers it (<paramref name="Index" />) and names it (<paramref name="Id" />, stable
 ///     across versions, stored in projects). Values are in the parameter's own unit, <paramref name="Min" /> …
-///     <paramref name="Max" />; <paramref name="Steps" /> &gt; 0 makes it discrete.
+///     <paramref name="Max" />; <paramref name="Steps" /> &gt; 0 makes it discrete. <paramref name="Macro" /> is its
+///     macro hint (Phase 6): automatic Smart Controls mapping takes a plugin's hinted parameters in ascending order
+///     (null: not a macro).
 /// </summary>
 public sealed record InstrumentParameter(
     int Index,
@@ -17,7 +21,8 @@ public sealed record InstrumentParameter(
     float Default,
     string Unit,
     int Steps = 0,
-    IReadOnlyList<string>? ValueNames = null
+    IReadOnlyList<string>? ValueNames = null,
+    int? Macro = null
 );
 
 /// <summary>What an instrument is: its stable id (<c>anode.synth</c>), names, parameters and loadable file types.</summary>
@@ -57,6 +62,12 @@ public interface IInstrument : IDisposable {
     ///     buffers, overwriting them, playing <paramref name="events" /> (sorted by frame) at their frames.
     /// </summary>
     void Process(ReadOnlySpan<MidiEvent> events, Span<float> left, Span<float> right);
+
+    /// <summary>
+    ///     The transport for the block about to be rendered (docs/07-phase-6.md), on the audio thread once per block
+    ///     before <see cref="Process" />. Tempo-synced instruments keep what they need of it; the default ignores it.
+    /// </summary>
+    void SetTransport(in TransportContext transport) { }
 
     /// <summary>Silences every voice at once (stop, locate): no release tails.</summary>
     void Reset();

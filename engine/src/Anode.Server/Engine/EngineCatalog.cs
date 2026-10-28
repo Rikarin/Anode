@@ -1,6 +1,7 @@
 using Anode.Contracts;
 using Anode.Dsp.Effects;
 using Anode.Dsp.Instruments;
+using Anode.Dsp.MidiEffects;
 using Anode.Ipc;
 using Anode.Model;
 using Anode.Server.Realtime;
@@ -103,7 +104,7 @@ public sealed class EngineCatalog(EventHub hub) {
             p.FileTypes ?? [],
             [
                 ..(p.Parameters ?? []).Select(static q =>
-                    new ParameterInfo(q.Id, q.Name, q.Min, q.Max, q.Default, q.Unit, q.Steps, q.ValueNames)
+                    new ParameterInfo(q.Id, q.Name, q.Min, q.Max, q.Default, q.Unit, q.Steps, q.ValueNames, q.Macro)
                 )
             ],
             p.IsInstrument ? "Instrument" : p.Category,
@@ -131,7 +132,8 @@ public sealed class EngineCatalog(EventHub hub) {
                         Widen(p.Default),
                         p.Unit,
                         p.Steps,
-                        p.ValueNames
+                        p.ValueNames,
+                        p.Macro
                     )
                 )
             ]
@@ -157,7 +159,8 @@ public sealed class EngineCatalog(EventHub hub) {
                         Widen(p.Default),
                         p.Unit,
                         p.Steps,
-                        p.ValueNames
+                        p.ValueNames,
+                        p.Macro
                     )
                 )
             ],
@@ -165,16 +168,45 @@ public sealed class EngineCatalog(EventHub hub) {
             d.HasSidechain
         );
 
+    /// <summary>A built-in MIDI effect as the engine lists it (category <c>MIDI Effect</c>, Phase 6).</summary>
+    public static EnginePlugin From(MidiEffectDescriptor d) =>
+        new(
+            d.Id,
+            d.Name,
+            d.Vendor,
+            d.Version,
+            "builtin",
+            false,
+            [],
+            [
+                ..d.Parameters.Select(static p =>
+                    new EngineParameter(
+                        p.Id,
+                        p.Name,
+                        Widen(p.Min),
+                        Widen(p.Max),
+                        Widen(p.Default),
+                        p.Unit,
+                        p.Steps,
+                        p.ValueNames,
+                        p.Macro
+                    )
+                )
+            ],
+            EffectCategories.MidiEffect
+        );
+
     /// <summary>A float as the decimal it prints as (0.2f is 0.2, not 0.20000000298…).</summary>
     static double Widen(float value) =>
         double.Parse(value.ToString(CultureInfo.InvariantCulture), CultureInfo.InvariantCulture);
 
     /// <summary>
-    ///     Anode's built-in instruments and effects (<see cref="BuiltinInstruments.All" />,
-    ///     <see cref="BuiltinEffects.All" />).
+    ///     Anode's built-in instruments, effects and MIDI effects (<see cref="BuiltinInstruments.All" />,
+    ///     <see cref="BuiltinEffects.All" />, <see cref="BuiltinMidiEffects.All" />).
     /// </summary>
     public static PluginInfo[] Builtins() => [
         ..BuiltinInstruments.All.Select(static d => From(From(d))),
-        ..BuiltinEffects.All.Select(static d => From(From(d)))
+        ..BuiltinEffects.All.Select(static d => From(From(d))),
+        ..BuiltinMidiEffects.All.Select(static d => From(From(d)))
     ];
 }

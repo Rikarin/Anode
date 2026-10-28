@@ -8,7 +8,8 @@ public sealed record ProjectSummary(string Id, string Name, string Path, DateTim
 /// <summary>
 ///     The open project (docs/01-implementation-plan.md §5). Musical positions are ticks at 960 PPQ; audio offsets,
 ///     lengths and fades are frames at the project's <c>sampleRate</c>. <c>revision</c> grows with every edit and is
-///     the ETag; <c>dirty</c> says whether it has unsaved edits.
+///     the ETag; <c>dirty</c> says whether it has unsaved edits. Phase 6 (docs/07-phase-6.md): <c>patternRegions</c>
+///     are the Step Sequencer's regions; <c>liveLoops</c> is the Live Loops grid.
 /// </summary>
 public sealed record Project(
     string Id,
@@ -28,7 +29,9 @@ public sealed record Project(
     IReadOnlyList<ArrangementMarker> Arrangement,
     string Notes,
     IReadOnlyList<MixerGroup> Groups,
-    IReadOnlyList<AutomationLane> Automation
+    IReadOnlyList<AutomationLane> Automation,
+    IReadOnlyList<PatternRegion> PatternRegions,
+    LiveLoopsGrid LiveLoops
 );
 
 /// <summary>
@@ -95,7 +98,11 @@ public enum TrackKind {
 ///     An instrument track has an <c>instrument</c>; instrument and external MIDI tracks take MIDI from
 ///     <c>midiInput</c>, and an external MIDI track sends its regions to <c>midiOutput</c>. Phase 5: <c>flexOn</c> and
 ///     <c>flexMode</c> are its flex algorithm; <c>alternatives</c> are its inactive track alternatives, and
-///     <c>alternativeId</c> names the active one (null until the track has alternatives).
+///     <c>alternativeId</c> names the active one (null until the track has alternatives). Phase 6: a Drum Machine
+///     Designer stack has a <c>drumMachine</c> (null on every other track); <c>smartControls</c> are its Smart Controls
+///     (null until set up: the editor shows the 8-knob layout, unnamed, at 0 and unmapped, and the first Smart Controls
+///     command sets them up); <c>liveLoopsActive</c>: the track plays its Live Loops cells, not its Tracks-area
+///     regions.
 /// </summary>
 public sealed record Track(
     string Id,
@@ -118,7 +125,10 @@ public sealed record Track(
     bool FlexOn,
     FlexMode FlexMode,
     IReadOnlyList<TrackAlternative> Alternatives,
-    string? AlternativeId
+    string? AlternativeId,
+    DrumMachine? DrumMachine,
+    SmartControls? SmartControls,
+    bool LiveLoopsActive
 );
 
 /// <summary>The device input: 1-based first channel (0: none); a stereo input takes that channel and the next.</summary>
@@ -128,7 +138,10 @@ public sealed record TrackInput(int Channel, bool Stereo);
 ///     A channel strip: volume in dB (−∞ as −144), pan −1 (left) … 1 (right), mute and solo; its insert effects in
 ///     order; its sends to buses; where it goes (<c>output</c>: <c>master</c>, <c>bus:N</c> for bus 1…64, or
 ///     <c>output:N</c> for the device's stereo output pair N); the mixer groups it belongs to (1…32); and the VCA track
-///     that offsets its volume, if any. The master strip uses only volume, pan, mute and its inserts.
+///     that offsets its volume, if any. The master strip uses only volume, pan, mute and its inserts. Phase 6:
+///     <c>midiEffects</c> are its MIDI FX slots (instrument and external MIDI tracks only; empty elsewhere), in the
+///     same shape as inserts: they run in slot order on the block's MIDI (regions, live and step input) before the
+///     instrument; bypassed slots pass it through.
 /// </summary>
 public sealed record ChannelStrip(
     double VolumeDb,
@@ -139,7 +152,8 @@ public sealed record ChannelStrip(
     IReadOnlyList<Send> Sends,
     string Output,
     IReadOnlyList<int> Groups,
-    string? VcaId
+    string? VcaId,
+    IReadOnlyList<Insert> MidiEffects
 );
 
 /// <summary>

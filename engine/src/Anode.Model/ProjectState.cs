@@ -166,7 +166,9 @@ public sealed record ProjectState(
             [..Sections.Values],
             Notes,
             [..Groups.Values],
-            [..Automation.Values]
+            [..Automation.Values],
+            [], // Pattern regions and Live Loops: Phase 6, workstream B (docs/07-phase-6.md).
+            ProjectDefaults.LiveLoops
         );
 
     /// <summary>Applies one delta operation (an edit's primitive step, also what clients apply).</summary>

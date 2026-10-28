@@ -275,7 +275,9 @@ export class FakeAnodeServer implements AnodeApi {
         arrangement: [],
         notes: '',
         groups: [],
-        automation: []
+        automation: [],
+        patternRegions: [],
+        liveLoops: { scenes: [], cells: [], quantize: 'bar', shown: false }
       };
       this.disk.set(path, structuredClone(project));
       this.open(project);
@@ -1875,6 +1877,9 @@ export class FakeAnodeServer implements AnodeApi {
           flexMode: 'polyphonic',
           alternatives: [],
           alternativeId: null,
+          drumMachine: null,
+          smartControls: null,
+          liveLoopsActive: false,
           // An external MIDI track sends nowhere until setMidiIo picks a port (as the Server does).
           midiOutput: null
         };
@@ -2546,7 +2551,10 @@ export class FakeAnodeServer implements AnodeApi {
           flexOn: false,
           flexMode: 'polyphonic',
           alternatives: [],
-          alternativeId: null
+          alternativeId: null,
+          drumMachine: null,
+          smartControls: null,
+          liveLoopsActive: false
         };
         const ids = new Set(members.map(m => m.id));
         const rest = project.tracks.filter(t => !ids.has(t.id));
@@ -2624,7 +2632,36 @@ export class FakeAnodeServer implements AnodeApi {
       case 'setMixerSettings':
       case 'applyPatch':
       case 'unfreezeTrack':
+        if ('chain' in command && command.chain === 'midiEffects') {
+          // MIDI FX slots: Phase 6, the editor workstream (docs/07-phase-6.md).
+          throw new ApiError(422, `${command.type} on MIDI FX slots: not in the fake Server yet.`);
+        }
         return applyMixCommand(project, command, this.mixContext()) ?? project;
+      case 'addPatternRegion':
+      case 'setPatternRegion':
+      case 'setPattern':
+      case 'convertPatternToMidi':
+      case 'reseedPattern':
+      case 'createDrumMachine':
+      case 'addDrumPad':
+      case 'setDrumPad':
+      case 'removeDrumPad':
+      case 'setSmartControls':
+      case 'setSmartControl':
+      case 'setSmartMappings':
+      case 'autoMapSmartControls':
+      case 'compareSmartControls':
+      case 'addScene':
+      case 'removeScene':
+      case 'setScene':
+      case 'setCell':
+      case 'deleteCells':
+      case 'moveCell':
+      case 'setLiveLoops':
+      case 'setTrackActivation':
+        // Patterns, Drum Machine Designer, Smart Controls and Live Loops: Phase 6, the editor workstream
+        // (docs/07-phase-6.md).
+        throw new ApiError(422, `${command.type}: not in the fake Server yet.`);
       default:
         // Flex, Smart Tempo, Varispeed and track alternatives (Phase 5).
         return applyFlexCommand(project, command, this.flexContext()) ?? project;
@@ -2884,7 +2921,9 @@ export class FakeAnodeServer implements AnodeApi {
       arrangement: [],
       notes: '',
       groups: [],
-      automation: []
+      automation: [],
+      patternRegions: [],
+      liveLoops: { scenes: [], cells: [], quantize: 'bar', shown: false }
     };
     let project = base;
     for (const name of ['Drums', 'Bass', 'Guitar', 'Vocals']) {
@@ -3172,7 +3211,8 @@ function strip(): ChannelStrip {
     sends: [],
     output: 'master',
     groups: [],
-    vcaId: null
+    vcaId: null,
+    midiEffects: []
   };
 }
 

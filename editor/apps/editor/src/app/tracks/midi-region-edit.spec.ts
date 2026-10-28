@@ -66,7 +66,8 @@ describe('MIDI region edits in the Tracks area', () => {
         sends: [],
         output: 'master',
         groups: [],
-        vcaId: null
+        vcaId: null,
+        midiEffects: []
       },
       instrument: null,
       midiInput: { device: null, channel: 0 },
@@ -80,7 +81,10 @@ describe('MIDI region edits in the Tracks area', () => {
       flexOn: false,
       flexMode: 'polyphonic',
       alternatives: [],
-      alternativeId: null
+      alternativeId: null,
+      drumMachine: null,
+      smartControls: null,
+      liveLoopsActive: false
     };
     const midi: MidiRegion = {
       id: 'mid_1',
