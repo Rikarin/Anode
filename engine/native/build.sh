@@ -1,15 +1,17 @@
 #!/usr/bin/env bash
 # Builds the native libraries into engine/artifacts/native. Re-run after changing native code.
-# Signalsmith Stretch and Signalsmith Linear (pinned in an_stretch/CMakeLists.txt) are fetched once into
-# engine/artifacts/deps, with retries, and reused from there, so CI can cache that folder.
+# Third-party sources pinned in the CMakeLists (Signalsmith Stretch and Linear in an_stretch, the CLAP headers in
+# an_testclap) are fetched once into engine/artifacts/deps, with retries, and reused from there, so CI can cache that
+# folder.
 set -euo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"
 deps="$here/../artifacts/deps"
 
-# fetch <FetchContent name> <repository>: clones the commit pinned in an_stretch/CMakeLists.txt; prints its folder.
+# fetch <FetchContent name> <repository> <CMakeLists.txt>: clones the commit pinned there; prints its folder.
 fetch() {
-  local name="$1" url="$2" tag dir attempt
-  tag="$(sed -n "/FetchContent_Declare($name/,/)/s/.*GIT_TAG \([0-9a-f]\{40\}\).*/\1/p" "$here/an_stretch/CMakeLists.txt")"
+  local name="$1" url="$2" pins="$3" tag dir attempt
+  tag="$(sed -n "/FetchContent_Declare($name/,/)/s/.*GIT_TAG \([0-9a-f]\{40\}\).*/\1/p" "$pins")"
+  [ -n "$tag" ] || { echo "no pinned GIT_TAG for $name in $pins" >&2; exit 1; }
   dir="$deps/$name-$tag"
   if [ ! -f "$dir/.complete" ]; then
     for attempt in 1 2 3 4 5; do
@@ -26,9 +28,11 @@ fetch() {
   echo "$dir"
 }
 
-stretch="$(fetch signalsmith_stretch https://github.com/Signalsmith-Audio/signalsmith-stretch.git)"
-linear="$(fetch signalsmith_linear https://github.com/Signalsmith-Audio/linear.git)"
+stretch="$(fetch signalsmith_stretch https://github.com/Signalsmith-Audio/signalsmith-stretch.git "$here/an_stretch/CMakeLists.txt")"
+linear="$(fetch signalsmith_linear https://github.com/Signalsmith-Audio/linear.git "$here/an_stretch/CMakeLists.txt")"
+clap="$(fetch clap https://github.com/free-audio/clap.git "$here/an_testclap/CMakeLists.txt")"
 
 cmake -S "$here" -B "$here/../artifacts/obj/native" -DCMAKE_BUILD_TYPE=Release \
-  -DFETCHCONTENT_SOURCE_DIR_SIGNALSMITH_STRETCH="$stretch" -DFETCHCONTENT_SOURCE_DIR_SIGNALSMITH_LINEAR="$linear" "$@"
+  -DFETCHCONTENT_SOURCE_DIR_SIGNALSMITH_STRETCH="$stretch" -DFETCHCONTENT_SOURCE_DIR_SIGNALSMITH_LINEAR="$linear" \
+  -DFETCHCONTENT_SOURCE_DIR_CLAP="$clap" "$@"
 cmake --build "$here/../artifacts/obj/native" --config Release --parallel

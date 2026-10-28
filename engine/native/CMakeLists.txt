@@ -35,3 +35,6 @@ add_subdirectory(an_sys)
 
 # Time stretch / pitch shift over Signalsmith Stretch (spike S5, docs/spikes/S5-time-stretch.md).
 add_subdirectory(an_stretch)
+
+# A CLAP instrument the tests host (docs/03-phase-2.md, workstream A).
+add_subdirectory(an_testclap)

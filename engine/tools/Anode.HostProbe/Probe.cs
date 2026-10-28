@@ -1,6 +1,7 @@
 using Anode.Audio;
 using Anode.Audio.Native;
 using Anode.Engine;
+using Anode.Engine.Plugins;
 using Anode.Engine.Recording;
 using Anode.Ipc;
 using Anode.Ipc.Segments;
@@ -48,7 +49,7 @@ static class Media {
 static class Smoke {
     static int failures;
 
-    static void Check(bool ok, string what) {
+    internal static void Check(bool ok, string what) {
         Console.WriteLine($"  {(ok ? "ok  " : "FAIL")} {what}");
         failures += ok ? 0 : 1;
     }
@@ -62,15 +63,9 @@ static class Smoke {
         await socket.ConnectAsync(new UnixDomainSocketEndPoint(socketPath), cancellationToken);
         await using var stream = new NetworkStream(socket);
 
-        async Task<IpcMessage?> Request(IpcMessage message) {
-            await IpcFraming.WriteAsync(stream, message, cancellationToken);
-            return await IpcFraming.ReadAsync(stream, cancellationToken);
-        }
-
-        async Task Send(IpcMessage message) {
-            await IpcFraming.WriteAsync(stream, message, cancellationToken);
-            Check(await Request(new PingMessage(0)) is PongMessage, $"{message.GetType().Name} accepted");
-        }
+        var link = new ProbeLink(stream, cancellationToken);
+        Task<IpcMessage?> Request(IpcMessage message) => link.Request(message);
+        Task Send(IpcMessage message) => link.Send(message);
 
         var hello = (HelloMessage)(await Request(new HelloMessage("probe")))!;
         Console.WriteLine(
@@ -203,6 +198,8 @@ static class Smoke {
 
         var error = await Request(new SetStripMessage(99, unity));
         Check(error is ErrorMessage { Request: "setStrip" }, $"unknown track: {error}");
+
+        await Phase2.RunAsync(link, region, rate, dir, unity);
         var end = Read(region, out _);
         Console.WriteLine(
             $"callbacks {end.Callbacks}, overloads {end.Overloads}, underruns {end.Underruns}, model {end.ModelVersion}"
@@ -211,7 +208,7 @@ static class Smoke {
         return failures == 0 ? 0 : 1;
     }
 
-    static void Report(string label, TelemetryHeader h, MeterEntry[] meters) {
+    internal static void Report(string label, TelemetryHeader h, MeterEntry[] meters) {
         Console.WriteLine(
             $"  [{label}] state {h.State}, position {h.PositionSamples}, callbacks {h.Callbacks}, overloads {h.Overloads}, "
             + $"underruns {h.Underruns}, meters "
@@ -222,7 +219,7 @@ static class Smoke {
         );
     }
 
-    static unsafe TelemetryHeader Read(SharedSegment region, out MeterEntry[] meters) {
+    internal static unsafe TelemetryHeader Read(SharedSegment region, out MeterEntry[] meters) {
         meters = new MeterEntry[TelemetryHeader.MaxTracks + 1];
         return TelemetryWriter.TryRead(region.Pointer, out var header, meters)
             ? header
@@ -231,12 +228,17 @@ static class Smoke {
 }
 
 static class Bench {
+    // instruments: instrument tracks besides the audio tracks; instrument: what they play, probe.sine (a managed
+    // sine), a built-in id, or a CLAP id found in clapPath (default: CLAP_PATH, else engine/artifacts/native/clap).
     public static async Task<int> RunAsync(
         bool useNull,
         string? device,
         int tracks,
         int seconds,
         int buffer,
+        int instruments = 0,
+        string instrument = ProbeSine.Id,
+        string? clapPath = null,
         CancellationToken cancellationToken = default
     ) {
         IAudioDevice audio = useNull
@@ -268,9 +270,25 @@ static class Bench {
                     ]
                 )
             )
+            .Concat(Enumerable.Range(0, instruments).Select(i => new TrackModel(1000 + i, Chords(rate, i, 60), [])))
             .Append(new(TrackEntry.MetronomeTrack, Media.Clicks(rate, 60), []))
             .ToArray();
-        using var controller = new EngineController(new(rate, audio.BufferFrames));
+        var plugins = new PluginRegistry { Log = static m => Console.WriteLine($"  {m}") };
+        plugins.AddBuiltin(ProbeSine.Info, static () => new ProbeSine());
+        if (instruments > 0 && instrument.Contains('.', StringComparison.Ordinal) && instrument != ProbeSine.Id) {
+            plugins.ScanClap([clapPath ?? Environment.GetEnvironmentVariable("CLAP_PATH") ?? DefaultClapFolder()]);
+        }
+
+        var catalogEntry = plugins.Catalog().FirstOrDefault(p => p.Id == instrument);
+        if (instruments > 0 && catalogEntry is null) {
+            Console.WriteLine(
+                $"no instrument '{instrument}' (catalogue: {string.Join(", ", plugins.Catalog().Select(static p => p.Id))})"
+            );
+            return 2;
+        }
+
+        var parameters = catalogEntry?.Parameters.ToDictionary(static p => p.Id, static p => p.Default) ?? [];
+        using var controller = new EngineController(new(rate, audio.BufferFrames), plugins);
         using (var segment = SegmentWriter.Write(models, 1, 60L * rate, "an-bench", Environment.ProcessId, true)) {
             controller.LoadModel(
                 new(
@@ -285,6 +303,17 @@ static class Bench {
                                     false,
                                     false,
                                     new(0.8f, t % 3 - 1, false, false)
+                                )
+                            ),
+                        ..Enumerable.Range(0, instruments)
+                            .Select(i => new EngineTrack(
+                                    1000 + i,
+                                    -1,
+                                    true,
+                                    false,
+                                    false,
+                                    new(0.5f, 0f, false, false),
+                                    new(instrument, parameters)
                                 )
                             )
                     ],
@@ -309,7 +338,8 @@ static class Bench {
         var (p50, p99, max, count, allocated) = timed.Summary();
         var period = 1e6 * audio.BufferFrames / rate;
         Console.WriteLine(
-            $"{audio.Backend}, {rate} Hz, {audio.BufferFrames} frames ({period:0} µs), {tracks} mono tracks + click, {seconds} s, "
+            $"{audio.Backend}, {rate} Hz, {audio.BufferFrames} frames ({period:0} µs), {tracks} mono tracks + "
+            + $"{instruments} × {(instruments > 0 ? instrument : "no instrument")} (4-note chords) + click, {seconds} s, "
             + "cycle 10-18 s from 5 s"
         );
         Console.WriteLine(
@@ -331,6 +361,45 @@ static class Bench {
         audio.Stop();
         audio.Dispose();
         return 0;
+    }
+
+    /// <summary>
+    ///     Four-note chords every half second, each held for 0.4 s, on instrument track <paramref name="index" />
+    ///     (a different chord per track): four voices sounding most of the time, eight at each overlap.
+    /// </summary>
+    static PlaybackEvent[] Chords(int rate, int index, int seconds) {
+        var events = new List<PlaybackEvent>();
+        for (var c = 0; c < seconds * 2; c++) {
+            long on = c * (long)rate / 2, off = on + rate * 4 / 10;
+            for (var n = 0; n < 4; n++) {
+                var note = (byte)(48 + index % 12 + n * 4 + c % 3);
+                events.Add(
+                    new() {
+                        SamplePos = on,
+                        Track = 1000 + index,
+                        Kind = PlaybackEventKind.NoteOn,
+                        Data1 = note,
+                        Data2 = 90
+                    }
+                );
+                events.Add(
+                    new() { SamplePos = off, Track = 1000 + index, Kind = PlaybackEventKind.NoteOff, Data1 = note }
+                );
+            }
+        }
+
+        return [
+            ..events.OrderBy(static e => e.SamplePos).ThenBy(static e => e.Kind == PlaybackEventKind.NoteOn ? 1 : 0)
+        ];
+    }
+
+    static string DefaultClapFolder() {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir is not null && !Directory.Exists(Path.Combine(dir.FullName, "artifacts", "native", "clap"))) {
+            dir = dir.Parent;
+        }
+
+        return dir is null ? "clap" : Path.Combine(dir.FullName, "artifacts", "native", "clap");
     }
 
     /// <summary>Times each callback into a histogram of 0.5 µs bins; allocation-free.</summary>

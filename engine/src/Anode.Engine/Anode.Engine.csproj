@@ -1,9 +1,10 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <Description>The real-time engine: transport, disk streaming, mixing, metronome, recording and telemetry.</Description>
+    <Description>The real-time engine: transport, disk streaming, mixing, instruments and MIDI, metronome, recording and telemetry.</Description>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../Anode.Audio/Anode.Audio.csproj"/>
+    <ProjectReference Include="../Anode.Dsp/Anode.Dsp.csproj"/>
     <ProjectReference Include="../Anode.Ipc/Anode.Ipc.csproj"/>
   </ItemGroup>
 </Project>

@@ -1,3 +1,5 @@
+using Anode.Dsp.Instruments;
+using Anode.Engine.Midi;
 using Anode.Engine.Recording;
 using Anode.Engine.Streaming;
 using Anode.Ipc;
@@ -7,18 +9,23 @@ namespace Anode.Engine;
 
 /// <summary>
 ///     A track as the engine runs it: its stream from the disk thread, its strip, its input settings and, while a
-///     recording pass runs, its take. One object per engine track id lives across model swaps (its stream keeps
-///     playing); it is replaced only when the track's channel count changes.
+///     recording pass runs, its take; for an instrument or external MIDI track also its instrument, its MIDI settings
+///     and the audio thread's MIDI state. One object per engine track id lives across model swaps (its stream keeps
+///     playing); it is replaced only when the track's channel count changes, and the replacement takes over the
+///     instrument and MIDI state.
 /// </summary>
 public sealed class TrackState : IDisposable {
     int inputChannel;
     bool armed;
     bool monitoring;
     RecordTake? take;
+    InstrumentSlot? instrument;
+    EngineMidiIo? midiIo;
 
-    public TrackState(int id, bool stereo, int streamFrames) {
+    public TrackState(int id, bool stereo, int streamFrames, MidiTrackState? midi = null) {
         Id = id;
         Stream = new(stereo ? 2 : 1, streamFrames);
+        Midi = midi ?? new();
     }
 
     public int Id { get; }
@@ -42,6 +49,24 @@ public sealed class TrackState : IDisposable {
         set => Volatile.Write(ref take, value);
     }
 
+    /// <summary>The track's instrument (an instrument track), swapped whole by the control thread.</summary>
+    public InstrumentSlot? Instrument {
+        get => Volatile.Read(ref instrument);
+        set => Volatile.Write(ref instrument, value);
+    }
+
+    /// <summary>The track's MIDI input and output (instrument and external MIDI tracks).</summary>
+    public EngineMidiIo? MidiIo {
+        get => Volatile.Read(ref midiIo);
+        set => Volatile.Write(ref midiIo, value);
+    }
+
+    /// <summary>An instrument or external MIDI track: it plays MIDI, and records MIDI rather than audio.</summary>
+    public bool IsMidi => Instrument is not null || MidiIo is not null;
+
+    /// <summary>The audio thread's MIDI state, and the queue live MIDI reaches it through.</summary>
+    public MidiTrackState Midi { get; }
+
     /// <summary>Control thread.</summary>
     public void SetIo(int input, bool recordArmed, bool inputMonitoring) {
         Volatile.Write(ref inputChannel, input);
@@ -53,9 +78,59 @@ public sealed class TrackState : IDisposable {
     public void Apply(EngineTrack settings) {
         SetIo(settings.InputChannel, settings.RecordArmed, settings.Monitoring);
         Strip.Set(settings.Strip);
+        MidiIo = settings.Midi;
     }
 
     public void Dispose() => Stream.Dispose();
+}
+
+/// <summary>
+///     One track's MIDI as the audio thread renders it: the block's events (preallocated), the notes its playback holds
+///     (released on stop, locate, cycle wrap and recompiles), and live MIDI queued for it by the MIDI thread and the
+///     control thread.
+/// </summary>
+public sealed class MidiTrackState {
+    /// <summary>Most events one block passes to an instrument; more are dropped.</summary>
+    public const int MaxEvents = 1024;
+
+    /// <summary>The block's events, sorted by frame before an instrument sees them.</summary>
+    public MidiEvent[] Events { get; } = new MidiEvent[MaxEvents];
+
+    public int Count { get; set; }
+
+    /// <summary>Notes the track's regions started and have not ended (by their own channel).</summary>
+    public NoteSet Held { get; } = new();
+
+    /// <summary>Live MIDI for the track (producers: the MIDI thread and the control thread, under its gate).</summary>
+    public SpscChannel<LiveMidi> Live { get; } = new(1024);
+
+    /// <summary>The compile generation the held notes came from.</summary>
+    public int Generation { get; set; } = -1;
+
+    /// <summary>The engine's stop/locate count the track has acted on.</summary>
+    public long Panic { get; set; }
+
+    /// <summary>Audio thread: appends an event (dropped when the block is full).</summary>
+    public void Add(int frame, byte status, byte data1, byte data2) {
+        if (Count < MaxEvents) {
+            Events[Count++] = new(frame, status, data1, data2);
+        }
+    }
+
+    /// <summary>Audio thread: a stable insertion sort by frame (a block holds few events, mostly in order).</summary>
+    public void Sort() {
+        var events = Events;
+        for (var i = 1; i < Count; i++) {
+            var e = events[i];
+            var j = i - 1;
+            while (j >= 0 && events[j].Frame > e.Frame) {
+                events[j + 1] = events[j];
+                j--;
+            }
+
+            events[j + 1] = e;
+        }
+    }
 }
 
 /// <summary>

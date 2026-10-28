@@ -105,4 +105,87 @@ public sealed unsafe class AllocationTests : IDisposable {
             NativeMemory.AlignedFree(region);
         }
     }
+
+    /// <summary>
+    ///     The callback with instruments active: the built-in synth and sampler, a test instrument and a CLAP plugin
+    ///     playing dense regions across a cycle wrap, live MIDI arriving, parameters changing, an external MIDI track
+    ///     sending and an armed track capturing while recording, then a stop and a locate (note bookkeeping). Neither
+    ///     the callback nor anything it calls allocates.
+    /// </summary>
+    [Fact]
+    public void Callbacks_with_instruments_live_midi_and_parameters_allocate_nothing() {
+        var (registry, _) = MidiFixtures.Registry();
+        registry.ScanClap([MidiFixtures.ClapFolder]);
+        var notes = Enumerable.Range(0, 400)
+            .Select(static i => ((long)i * 300, 450L, 36 + i % 48))
+            .ToArray();
+        var models = new List<TrackModel>();
+        var tracks = new List<EngineTrack>();
+        for (var t = 0; t < 6; t++) {
+            models.Add(new(t, MidiFixtures.Notes(notes), []));
+            var instrument = t switch {
+                5 => new EngineInstrument(
+                    MidiFixtures.ClapId,
+                    new Dictionary<string, double> { ["1"] = 0.5, ["7"] = 0 }
+                ),
+                2 or 3 => new EngineInstrument("anode.synth", new Dictionary<string, double>()), // its defaults
+                4 => new EngineInstrument("anode.sampler", new Dictionary<string, double>()),
+                _ => MidiFixtures.Instrument()
+            };
+            tracks.Add(MidiFixtures.InstrumentTrack(t, instrument, t == 0));
+        }
+
+        models.Add(new(6, MidiFixtures.Notes(notes), []));
+        tracks.Add(MidiFixtures.ExternalTrack(6, "out-a", 2));
+        using var segment = TestAudio.Segment(models, 1);
+        using var controller = new EngineController(new(Rate, 64), registry, new FakeMidi());
+        controller.LoadModel(TestAudio.Load(segment, 1, true, tracks, [], dir));
+        using var driver = new OfflineDriver(controller, 64);
+        Assert.IsType<Plugins.Clap.ClapInstrument>(controller.Engine.Root.Tracks[5].Instrument!.Instrument);
+        Assert.Equal("anode.synth", controller.Engine.Root.Tracks[2].Instrument!.Instrument.Descriptor.Id);
+
+        void Callbacks() {
+            for (var i = 0; i < 100; i++) {
+                driver.Process(false);
+            }
+        }
+
+        // Between measurements, on the control and MIDI threads: live MIDI, parameters, draining the queues.
+        void Feed(int round) {
+            controller.LiveMidi(0, [new(0x90, 60 + round % 12, 100), new(0x80, 59 + round % 12, 0)]);
+            controller.LiveMidi(5, [new(0x90, 72, 100), new(0xB0, 1, round % 128)]);
+            controller.LiveMidi(2, [new(0x90, 50 + round % 7, 90), new(0xE0, 0, 64 + round % 32), new(0xB0, 64, 127)]);
+            controller.SetParameter(1, "gain", 0.2 + round % 5 * 0.1);
+            controller.SetParameter(5, "1", 0.2 + round % 5 * 0.1);
+            controller.Midi.Pump();
+            driver.Pump();
+        }
+
+        driver.Send(new(EngineCommandKind.SetCycle, 20_000, 90_000, true));
+        driver.PlayFrom(10_000);
+        var callbackBytes = Least(Callbacks);
+        for (var round = 0; round < 20; round++) {
+            Feed(round);
+            callbackBytes = Math.Max(callbackBytes, Least(Callbacks));
+            if (round == 10) {
+                driver.Send(new(EngineCommandKind.Record)); // punch in: the armed track captures live MIDI
+            }
+        }
+
+        // Stop and locate release and reset what sounds.
+        driver.Send(new(EngineCommandKind.Stop));
+        callbackBytes = Math.Max(callbackBytes, Least(Callbacks));
+        driver.Send(new(EngineCommandKind.Locate, 40_000));
+        Feed(99);
+        callbackBytes = Math.Max(callbackBytes, Least(Callbacks));
+
+        Assert.Equal(0, callbackBytes);
+        Assert.True(controller.Engine.Snapshot.Callbacks > 4_000);
+        var captured = controller.Midi.EndCapture();
+        Assert.True(captured.TryGetValue(0, out var take) && take.Count > 0);
+        Assert.Equal(
+            0,
+            ((Plugins.Clap.ClapInstrument)controller.Engine.Root.Tracks[5].Instrument!.Instrument).AudioThreadLogs
+        );
+    }
 }

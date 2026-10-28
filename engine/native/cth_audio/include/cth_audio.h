@@ -110,7 +110,7 @@ typedef struct cth_midi_event {
     uint64_t time_ns;
     uint8_t data[3];
     uint8_t length;
-    uint8_t reserved[4];
+    int32_t source; /* the input's index as cth_midi_port_info numbered it at the last cth_midi_open; -1 unknown */
 } cth_midi_event;
 
 CTH_API int32_t cth_midi_port_count(void);
@@ -121,6 +121,10 @@ CTH_API int32_t cth_midi_open(void);
 CTH_API int32_t cth_midi_read(cth_midi_event *events, int32_t max);
 /* Sends a short message to the destination with this uid, or to every destination when uid is NULL. */
 CTH_API int32_t cth_midi_send(const char *destination_uid, const uint8_t *data, int32_t length);
+/* As cth_midi_send, delivered at time_ns on the cth_midi_now_ns clock (0 or a past time: now). CoreMIDI schedules it;
+ * the other backends send at once, so their callers hold an event until it is due. Returns 1 when the backend
+ * scheduled it, 0 when it sent it at once, negative on failure. */
+CTH_API int32_t cth_midi_send_at(const char *destination_uid, const uint8_t *data, int32_t length, uint64_t time_ns);
 CTH_API void cth_midi_close(void);
 CTH_API uint64_t cth_midi_now_ns(void);
 

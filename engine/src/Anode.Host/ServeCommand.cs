@@ -63,10 +63,12 @@ static class ServeCommand {
             device = session;
         }
 
-        using var host = new EngineHost.EngineHost(device, version);
+        using var host = new EngineHost.EngineHost(device, version, midi: Midi(options));
         host.Log = Print;
-        host.Start();
         await using var server = new EngineHostServer(socket, host.HandleAsync, Print);
+        host.Push = server.Push;
+        server.HelloAnswered = host.HelloAnswered;
+        host.Start();
         server.Start();
         var hello = host.Hello;
         // The desktop app waits for this line (apps/desktop/src/sidecars.ts).
@@ -112,6 +114,10 @@ static class ServeCommand {
             return 0;
         }
     }
+
+    /// <summary>MIDI devices through the native shim, unless <c>--no-midi</c> (or the shim is not built).</summary>
+    static NativeMidiBackend? Midi(CommandLine options) =>
+        !options.Flag("no-midi") && NativeMidiBackend.IsAvailable ? new NativeMidiBackend() : null;
 
     static void Print(string message) => Console.Error.WriteLine($"{DateTime.Now:HH:mm:ss.fff} {message}");
 }

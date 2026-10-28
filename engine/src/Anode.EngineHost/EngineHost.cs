@@ -1,6 +1,8 @@
 using Anode.Audio;
+using Anode.Audio.Midi;
 using Anode.Audio.Native;
 using Anode.Engine;
+using Anode.Engine.Plugins;
 using Anode.Ipc;
 using Anode.Ipc.Segments;
 using Anode.Ipc.Telemetry;
@@ -10,13 +12,20 @@ namespace Anode.EngineHost;
 
 /// <summary>
 ///     The engine as anode-host runs it: a device (or the null device) calling the <see cref="AudioEngine" />, the
-///     controller, the disk and writer threads, and the telemetry region the server reads. <see cref="HandleAsync" />
-///     answers every server → host message of <see cref="IpcMessage" />.
+///     controller, the disk, writer and MIDI threads, the plugin catalogue and the telemetry region the server reads.
+///     <see cref="HandleAsync" /> answers every server → host message of <see cref="IpcMessage" />; what the host says
+///     unasked (the catalogue and the MIDI ports after the hello and when they change, MIDI activity) goes through
+///     <see cref="Push" />.
 /// </summary>
 public sealed class EngineHost : IDisposable {
     readonly SharedSegment? sharedTelemetry;
     readonly unsafe byte* localTelemetry;
     readonly TelemetryWriter telemetry;
+    readonly IReadOnlyList<string>? clapFolders;
+    readonly Lock scanGate = new();
+    readonly Lock pushGate = new();
+    Task scanning = Task.CompletedTask;
+    bool catalogReady;
     bool started;
 
     /// <param name="device">The opened (not started) device; the host starts and owns it.</param>
@@ -25,12 +34,28 @@ public sealed class EngineHost : IDisposable {
     ///     Put the telemetry region in shared memory and name it in the hello (anode-host); false keeps it in this
     ///     process (tests).
     /// </param>
-    public unsafe EngineHost(IAudioDevice device, string version, bool sharedTelemetry = true) {
+    /// <param name="plugins">The instruments it can load (default: the built-ins, then the CLAP scan).</param>
+    /// <param name="midi">The MIDI devices (null: none).</param>
+    /// <param name="clapFolders">Where to scan for CLAP plugins (null: CLAP_PATH and the standard folders).</param>
+    public unsafe EngineHost(
+        IAudioDevice device,
+        string version,
+        bool sharedTelemetry = true,
+        PluginRegistry? plugins = null,
+        IMidiBackend? midi = null,
+        IReadOnlyList<string>? clapFolders = null
+    ) {
         Device = device;
+        this.clapFolders = clapFolders;
         var latency = device.Latency;
-        Controller = new(new(device.SampleRate, device.BufferFrames, latency.Input + latency.Output)) {
-            Log = message => Log?.Invoke(message)
-        };
+        Controller = new(
+            new(device.SampleRate, device.BufferFrames, latency.Input + latency.Output, latency.Output),
+            plugins,
+            midi
+        ) { Log = message => Log?.Invoke(message) };
+        Controller.Plugins.Log = message => Log?.Invoke(message);
+        Controller.Midi.PortsChanged = ports => Push?.Invoke(new MidiPortsMessage(ports));
+        Controller.Midi.Activity = batch => Push?.Invoke(batch);
         string? telemetryName = null;
         byte* region;
         if (sharedTelemetry) {
@@ -74,20 +99,79 @@ public sealed class EngineHost : IDisposable {
     /// <summary>Where the host reports what the server need not act on (missing files, dropped frames).</summary>
     public Action<string>? Log { get; set; }
 
+    /// <summary>
+    ///     Sends a message the host offers unasked to the connected server (<see cref="EngineHostServer.Push" />); any
+    ///     thread.
+    /// </summary>
+    public Action<IpcMessage>? Push { get; set; }
+
     public AudioDeviceStatus DeviceStatus => Device.Status;
 
-    /// <summary>Starts the disk thread, the device and the telemetry writer.</summary>
+    /// <summary>Starts the disk and MIDI threads, the device, the telemetry writer and the first CLAP scan.</summary>
     public void Start() {
         Controller.Start();
         Device.Start(Controller.Engine);
         telemetry.Start();
         started = true;
+        _ = ScanAsync(true);
+    }
+
+    /// <summary>
+    ///     The server's hello was answered (<see cref="EngineHostServer.HelloAnswered" />): the catalogue (once the
+    ///     first scan is done; until then, the scan pushes it) and the MIDI ports follow it.
+    /// </summary>
+    public void HelloAnswered() {
+        lock (pushGate) { // with the scan's push: exactly one catalogue follows the hello
+            if (catalogReady) {
+                Push?.Invoke(Catalog());
+            }
+        }
+
+        Push?.Invoke(new MidiPortsMessage(Controller.Midi.Ports));
+    }
+
+    /// <summary>The catalogue as the host reports it: built-ins first, then CLAP.</summary>
+    public PluginCatalogMessage Catalog() => new(Controller.Plugins.Catalog());
+
+    /// <summary>
+    ///     Scans the CLAP folders, one scan at a time (a request during a scan scans again after it), and returns the
+    ///     new catalogue; <paramref name="push" /> also pushes it to the server.
+    /// </summary>
+    public Task<PluginCatalogMessage> ScanAsync(bool push) {
+        lock (scanGate) {
+            Controller.Plugins.BeginScan(); // from now on, loading an unknown plugin waits for the scan
+            var next = Scan(scanning);
+            scanning = next;
+            return next;
+        }
+
+        async Task<PluginCatalogMessage> Scan(Task before) {
+            try {
+                await before.ConfigureAwait(ConfigureAwaitOptions.SuppressThrowing);
+                await Task.Run(() => Controller.Plugins.ScanClap(clapFolders)).ConfigureAwait(false);
+            } finally {
+                Controller.Plugins.EndScan();
+            }
+
+            var catalog = Catalog();
+            lock (pushGate) {
+                catalogReady = true;
+                if (push) {
+                    Push?.Invoke(catalog);
+                }
+            }
+
+            return catalog;
+        }
     }
 
     /// <summary>
     ///     Carries out one message from the server; returns the reply, or null when the message has none
-    ///     (<c>setStrip</c>, <c>setTrackIo</c>, <c>setCycle</c>, <c>setMetronome</c>, and <c>transport</c> unless a
-    ///     stop ends a recording pass, which answers <see cref="RecordingFinishedMessage" />).
+    ///     (<c>setStrip</c>, <c>setTrackIo</c>, <c>setCycle</c>, <c>setMetronome</c>, <c>setInstrument</c>,
+    ///     <c>setParameter</c>, <c>setMidiIo</c>, <c>setMidiThru</c>, <c>liveMidi</c>, and <c>transport</c> unless a
+    ///     stop ends a recording pass, which answers <see cref="RecordingFinishedMessage" />). <c>scanPlugins</c>
+    ///     answers the new <see cref="PluginCatalogMessage" />, <c>requestInstrumentStates</c>
+    ///     <see cref="InstrumentStatesMessage" />; a request it cannot carry out answers <see cref="ErrorMessage" />.
     /// </summary>
     public async ValueTask<IpcMessage?> HandleAsync(IpcMessage message, CancellationToken cancellationToken) {
         try {
@@ -114,6 +198,31 @@ public sealed class EngineHost : IDisposable {
                     return null;
                 case TransportMessage transport:
                     return await TransportAsync(transport, cancellationToken).ConfigureAwait(false);
+                case ScanPluginsMessage:
+                    return await ScanAsync(false).WaitAsync(cancellationToken).ConfigureAwait(false);
+                case SetInstrumentMessage set:
+                    Controller.SetInstrument(set.TrackId, set.Instrument);
+                    return null;
+                case SetParameterMessage parameter:
+                    return Controller.SetParameter(parameter.TrackId, parameter.ParameterId, parameter.Value)
+                        ? null
+                        : new ErrorMessage(
+                            $"Track {parameter.TrackId} has no instrument parameter '{parameter.ParameterId}'.",
+                            "setParameter"
+                        );
+                case SetMidiIoMessage io:
+                    return Controller.SetMidiIo(io.TrackId, io.Midi)
+                        ? null
+                        : new ErrorMessage($"No track {io.TrackId}.", "setMidiIo");
+                case SetMidiThruMessage thru:
+                    Controller.SetMidiThru(thru.TrackId);
+                    return null;
+                case LiveMidiMessage live:
+                    return Controller.LiveMidi(live.TrackId, live.Events)
+                        ? null
+                        : new ErrorMessage($"No track {live.TrackId}.", "liveMidi");
+                case RequestInstrumentStatesMessage:
+                    return new InstrumentStatesMessage(Controller.InstrumentStates());
                 default:
                     return new ErrorMessage($"The host does not take '{Name(message)}' messages.", Name(message));
             }
@@ -142,8 +251,8 @@ public sealed class EngineHost : IDisposable {
                 Controller.Locate(message.PositionSamples);
                 return null;
             default:
-                var takes = Controller.Stop();
-                return takes is null ? null : new RecordingFinishedMessage(takes);
+                var result = Controller.Stop();
+                return result is null ? null : new RecordingFinishedMessage(result.Takes, result.MidiTakes);
         }
     }
 
@@ -161,6 +270,17 @@ public sealed class EngineHost : IDisposable {
             SetCycleMessage => "setCycle",
             SetMetronomeMessage => "setMetronome",
             RecordingFinishedMessage => "recordingFinished",
+            PluginCatalogMessage => "pluginCatalog",
+            ScanPluginsMessage => "scanPlugins",
+            MidiPortsMessage => "midiPorts",
+            SetInstrumentMessage => "setInstrument",
+            SetParameterMessage => "setParameter",
+            SetMidiIoMessage => "setMidiIo",
+            SetMidiThruMessage => "setMidiThru",
+            LiveMidiMessage => "liveMidi",
+            MidiActivityMessage => "midiActivity",
+            RequestInstrumentStatesMessage => "requestInstrumentStates",
+            InstrumentStatesMessage => "instrumentStates",
             _ => message.GetType().Name
         };
 

@@ -9,6 +9,11 @@ int32_t cth_midi_port_info(int32_t index, cth_midi_port *port) { (void)index; (v
 int32_t cth_midi_open(void) { return -1; }
 int32_t cth_midi_read(cth_midi_event *events, int32_t max) { (void)events; (void)max; return 0; }
 int32_t cth_midi_send(const char *uid, const uint8_t *data, int32_t length) { (void)uid; (void)data; (void)length; return -1; }
+int32_t cth_midi_send_at(const char *uid, const uint8_t *data, int32_t length, uint64_t time_ns)
+{
+    (void)uid; (void)data; (void)length; (void)time_ns;
+    return -1;
+}
 void cth_midi_close(void) { }
 
 uint64_t cth_midi_now_ns(void)

@@ -49,7 +49,7 @@ static _Atomic uint32_t ring_tail; /* written by cth_midi_read */
 
 uint64_t cth_midi_now_ns(void) { return cth_linux_now_ns(); }
 
-static void push(uint64_t time_ns, uint8_t status, uint8_t d1, uint8_t d2, uint8_t length)
+static void push(uint64_t time_ns, uint8_t status, uint8_t d1, uint8_t d2, uint8_t length, int32_t source)
 {
     uint32_t head = atomic_load_explicit(&ring_head, memory_order_relaxed);
     uint32_t tail = atomic_load_explicit(&ring_tail, memory_order_acquire);
@@ -60,6 +60,7 @@ static void push(uint64_t time_ns, uint8_t status, uint8_t d1, uint8_t d2, uint8
     e->data[1] = d1;
     e->data[2] = d2;
     e->length = length;
+    e->source = source;
     atomic_store_explicit(&ring_head, head + 1, memory_order_release);
 }
 
@@ -74,19 +75,32 @@ static uint8_t channel_length(uint8_t status)
 
 /* One sequencer event can decode to several messages (a 14-bit controller is two, an RPN four). Channel messages
  * and system real-time are queued; SysEx and system common are dropped, as with CoreMIDI. */
+/* The port index of the sender in the table the last scan filled (read without the lock: a stale answer can only
+ * misattribute an event while the ports are being rescanned). */
+static int32_t source_of(const snd_seq_event_t *event)
+{
+    int32_t total = port_total;
+    for (int32_t i = 0; i < total && i < MAX_PORTS; i++) {
+        if (ports[i].info.is_input && ports[i].client == event->source.client && ports[i].port == event->source.port)
+            return i;
+    }
+    return -1;
+}
+
 static void receive(const snd_seq_event_t *event, uint64_t time)
 {
     if (event->type == SND_SEQ_EVENT_SYSEX) return;
+    int32_t source = source_of(event);
     unsigned char bytes[16];
     long length = snd_midi_event_decode(decoder, bytes, sizeof bytes, event);
     for (long i = 0; i < length;) {
         uint8_t status = bytes[i];
         if (status >= 0xF8) {
-            push(time, status, 0, 0, 1);
+            push(time, status, 0, 0, 1, source);
             i++;
         } else if (status >= 0x80 && status < 0xF0 && i + channel_length(status) <= length) {
             uint8_t n = channel_length(status);
-            push(time, status, bytes[i + 1] & 0x7F, n > 2 ? bytes[i + 2] & 0x7F : 0, n);
+            push(time, status, bytes[i + 1] & 0x7F, n > 2 ? bytes[i + 2] & 0x7F : 0, n, source);
             i += n;
         } else {
             break;
@@ -306,6 +320,12 @@ int32_t cth_midi_send(const char *destination_uid, const uint8_t *data, int32_t 
     }
     pthread_mutex_unlock(&lock);
     return sent > 0 ? 0 : -3;
+}
+
+int32_t cth_midi_send_at(const char *destination_uid, const uint8_t *data, int32_t length, uint64_t time_ns)
+{
+    (void)time_ns; /* sent directly: the caller holds the event until it is due */
+    return cth_midi_send(destination_uid, data, length);
 }
 
 void cth_midi_close(void)
