@@ -93,7 +93,7 @@ public sealed unsafe class MetronomeTests : IDisposable {
         using var controller = Controller(Clicks(16, 4, 2_400)); // short beats keep the test small
         controller.Engine.SetMetronome(false, 1f); // the count-in sounds even with the metronome off
         using var driver = new OfflineDriver(controller, 64);
-        var take = new RecordTake(1, Path.Combine(dir, "count-in.wav"), 1, Rate, 0);
+        var take = new RecordTake(1, Path.Combine(dir, "count-in.wav"), 1, Rate);
         using var segment = TestAudio.Segment([new(1, [], [])], 2);
         controller.LoadModel(TestAudio.Load(segment, 2, false, [TestAudio.Track(1, input: 0, armed: true)], [], dir));
         controller.Engine.Root.Tracks[0].Take = take;

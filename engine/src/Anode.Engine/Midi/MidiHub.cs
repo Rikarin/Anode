@@ -23,6 +23,7 @@ public sealed class MidiHub : IDisposable {
     readonly MidiInputMessage[] input = new MidiInputMessage[ReadBatch];
     readonly List<OutgoingMidi> due = [];
     readonly Dictionary<int, List<RecordedMidiEvent>> captured = [];
+    readonly Dictionary<int, List<(long Clock, RecordedMidiEvent Event)>> history = [];
     readonly byte[] message = new byte[3];
     List<MidiActivityEntry> activity = [];
     IReadOnlyList<MidiPortInfo> ports = [];
@@ -125,6 +126,28 @@ public sealed class MidiHub : IDisposable {
             DrainCaptured();
             var result = new Dictionary<int, List<RecordedMidiEvent>>(captured);
             captured.Clear();
+            return result;
+        }
+    }
+
+    /// <summary>How far back, in transport clocks, Flashback Capture's MIDI history reaches (default 10 minutes).</summary>
+    public long HistoryFrames { get; set; } = 600L * 48_000;
+
+    /// <summary>
+    ///     Control thread, for a Flashback Capture: the live MIDI each track received while playing at clocks
+    ///     [<paramref name="from" />, <paramref name="to" />), by track id, in the order played.
+    /// </summary>
+    public Dictionary<int, List<RecordedMidiEvent>> History(long from, long to) {
+        lock (pumpGate) {
+            DrainCaptured();
+            var result = new Dictionary<int, List<RecordedMidiEvent>>();
+            foreach (var (trackId, events) in history) {
+                var list = events.Where(e => e.Clock >= from && e.Clock < to).Select(static e => e.Event).ToList();
+                if (list.Count > 0) {
+                    result[trackId] = list;
+                }
+            }
+
             return result;
         }
     }
@@ -298,12 +321,37 @@ public sealed class MidiHub : IDisposable {
     }
 
     void DrainCaptured() {
+        var newest = long.MinValue;
         while (engine.CapturedMidi.TryDequeue(out var e)) {
+            if (e.Flashback) {
+                if (!history.TryGetValue(e.TrackId, out var past)) {
+                    history[e.TrackId] = past = [];
+                }
+
+                past.Add((e.Clock, new(e.Sample, e.Status, e.Data1, e.Data2)));
+                newest = Math.Max(newest, e.Clock);
+                continue;
+            }
+
             if (!captured.TryGetValue(e.TrackId, out var list)) {
                 captured[e.TrackId] = list = [];
             }
 
             list.Add(new(e.Sample, e.Status, e.Data1, e.Data2));
+        }
+
+        if (newest == long.MinValue) {
+            return;
+        }
+
+        // Forget what is older than the history reaches.
+        foreach (var past in history.Values) {
+            var old = 0;
+            while (old < past.Count && past[old].Clock < newest - HistoryFrames) {
+                old++;
+            }
+
+            past.RemoveRange(0, old);
         }
     }
 

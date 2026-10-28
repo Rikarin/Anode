@@ -11,8 +11,9 @@ function moving(scale: number): MeterSource {
 }
 
 /**
- * A stereo peak meter that reads its level from a function every animation frame (no change detection). Green to
- * amber to red at 0 dBFS, a held peak line, and a clip light that stays on until clicked.
+ * A stereo LED peak meter that reads its level from a function every animation frame (no change detection): lit
+ * segments green to −12 dB, yellow towards −6, red near 0 dBFS, a held peak segment, and a clip light that stays on
+ * until clicked.
  */
 const meta: Meta<AnPeakMeter> = {
   title: 'Audio UI/Peak meter',

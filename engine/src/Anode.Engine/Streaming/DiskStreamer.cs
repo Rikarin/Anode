@@ -2,7 +2,8 @@ namespace Anode.Engine.Streaming;
 
 /// <summary>
 ///     The disk thread (spike S2's design, docs/spikes/S2-disk-streaming.md): one thread for every track, each pass
-///     refilling the track with the least audio queued ahead of the playhead, once it is below two thirds of its 2 s
+///     refilling the stream with the least audio queued ahead of the playhead (a track with crossfades has two, one
+///     per playlist lane, and the preview channel one), once it is below two thirds of its 2 s
 ///     target, with one page-aligned read of about 96 KiB (32,768 mono frames) through <c>F_NOCACHE</c>. It renders in
 ///     play order, following the cycle, so a cycle jump needs nothing of the audio thread; and it starts a new fill
 ///     whenever the play order (the anchor) or a track's compiled playlist changes.
@@ -57,7 +58,8 @@ public sealed class DiskStreamer : IDisposable {
     public bool IsGraceOver(long grace) => Interlocked.Read(ref completed) >= grace;
 
     /// <summary>
-    ///     One pass: refills the most urgent track by one read. Returns false when no track needs anything.
+    ///     One pass: refills the most urgent stream (a track's, its crossfade stream's, or the preview's) by one read.
+    ///     Returns false when no stream needs anything.
     /// </summary>
     public bool Pass() {
         Interlocked.Increment(ref started);
@@ -66,24 +68,17 @@ public sealed class DiskStreamer : IDisposable {
             var snapshot = engine.Snapshot;
             var anchor = snapshot.Anchor;
             var rolling = snapshot.State != TransportState.Stopped && !snapshot.CountIn;
-            var tracks = model.Tracks;
-            var best = -1;
-            var bestAhead = long.MaxValue;
-            var bestFrames = 0;
-            for (var i = 0; i < tracks.Length; i++) {
-                var (ahead, frames) = Plan(tracks[i].Stream, model.Generations[i], snapshot, rolling);
-                if (frames > 0 && ahead < bestAhead) {
-                    best = i;
-                    bestAhead = ahead;
-                    bestFrames = frames;
-                }
+            var best = MostUrgent(model, snapshot, rolling);
+            if (engine.Preview is { } preview && preview.Ahead < best.Ahead) {
+                return preview.Fill() || best.Track >= 0;
             }
 
-            if (best < 0) {
+            if (best.Track < 0) {
                 return false;
             }
 
-            Fill(tracks[best].Stream, model, best, anchor, bestFrames);
+            var track = model.Tracks[best.Track];
+            Fill(best.Lane == 0 ? track.Stream : track.Crossfade!, model, best.Track, best.Lane, anchor, best.Frames);
             return true;
         } finally {
             Interlocked.Increment(ref completed);
@@ -91,21 +86,56 @@ public sealed class DiskStreamer : IDisposable {
     }
 
     /// <summary>
-    ///     Starts a new fill when the play order or the track's compile changed; then how much audio the stream holds
-    ///     ahead of the playhead, and how many frames it should read now (0: none, it is above two thirds of its target
-    ///     or has no room for a useful read).
+    ///     Brings every track's streams in line with the play order and its compile, and picks the stream with the least
+    ///     audio ahead that needs a read (track −1: none).
     /// </summary>
-    (long Ahead, int Frames) Plan(TrackFeed stream, int generation, in EngineSnapshot snapshot, bool rolling) {
-        var anchor = snapshot.Anchor;
-        var identity = TrackFeed.Identity(anchor.Id, generation);
-        if (stream.FillIdentity != identity) {
-            // A locate restarts at once (the old audio is dropped); anything else starts a little ahead, so the old
-            // audio plays on until the new fill begins.
-            var hard = anchor.Hard && TrackFeed.AnchorOf(stream.FillIdentity) != anchor.Id;
-            var lead = rolling && !hard ? LeadFrames : 0;
-            stream.BeginFill(identity, Math.Max(anchor.Clock, snapshot.Clock + lead));
+    (int Track, int Lane, long Ahead, int Frames) MostUrgent(
+        ModelRoot model,
+        in EngineSnapshot snapshot,
+        bool rolling
+    ) {
+        var tracks = model.Tracks;
+        (int Track, int Lane, long Ahead, int Frames) best = (-1, 0, long.MaxValue, 0);
+        for (var i = 0; i < tracks.Length; i++) {
+            var main = tracks[i].Stream;
+            var second = model.Lanes[i] is null ? null : tracks[i].Crossfade;
+            var identity = TrackFeed.Identity(snapshot.Anchor.Id, model.Generations[i]);
+            Sync(main, second, identity, snapshot, rolling);
+            for (var lane = 0; lane < (second is null ? 1 : 2); lane++) {
+                var (ahead, frames) = Plan(lane == 0 ? main : second!, identity, snapshot, rolling);
+                if (frames > 0 && ahead < best.Ahead) {
+                    best = (i, lane, ahead, frames);
+                }
+            }
         }
 
+        return best;
+    }
+
+    /// <summary>
+    ///     Starts a new fill when the play order or the track's compile changed: the track's streams start together, at
+    ///     the same clock, so a crossfade's two halves splice in on the same frame.
+    /// </summary>
+    void Sync(TrackFeed main, TrackFeed? second, long identity, in EngineSnapshot snapshot, bool rolling) {
+        var anchor = snapshot.Anchor;
+        if (main.FillIdentity != identity) {
+            // A locate restarts at once (the old audio is dropped); anything else starts a little ahead, so the old
+            // audio plays on until the new fill begins.
+            var hard = anchor.Hard && TrackFeed.AnchorOf(main.FillIdentity) != anchor.Id;
+            var lead = rolling && !hard ? LeadFrames : 0;
+            var start = Math.Max(anchor.Clock, snapshot.Clock + lead);
+            main.BeginFill(identity, start);
+            second?.BeginFill(identity, start);
+        } else if (second is not null && second.FillIdentity != identity) {
+            second.BeginFill(identity, Math.Max(main.FillStart, snapshot.Clock + (rolling ? LeadFrames : 0)));
+        }
+    }
+
+    /// <summary>
+    ///     How much audio the stream holds ahead of the playhead, and how many frames it should read now (0: none, it
+    ///     is above two thirds of its target or has no room for a useful read).
+    /// </summary>
+    (long Ahead, int Frames) Plan(TrackFeed stream, long identity, in EngineSnapshot snapshot, bool rolling) {
         var ahead = stream.FillCursor - snapshot.Clock;
         if (ahead < 0) {
             // The playhead overtook the fill (the disk stalled): skip ahead rather than read audio that is already
@@ -123,17 +153,21 @@ public sealed class DiskStreamer : IDisposable {
         return (ahead, frames < Math.Min(1_024, chunk) ? 0 : frames);
     }
 
-    /// <summary>Renders the next <paramref name="frames" /> of the stream's fill, in play order, and queues them.</summary>
-    void Fill(TrackFeed stream, ModelRoot model, int index, Anchor anchor, int frames) {
+    /// <summary>
+    ///     Renders the next <paramref name="frames" /> of the stream's fill (the track's entries in
+    ///     <paramref name="lane" />), in play order, and queues them.
+    /// </summary>
+    void Fill(TrackFeed stream, ModelRoot model, int index, int lane, Anchor anchor, int frames) {
         var channels = stream.Channels;
         var buffer = chunk.AsSpan(0, frames * channels);
         var clock = stream.FillCursor;
         var view = model.Views[index];
+        var lanes = model.Lanes[index];
         var done = 0;
         while (done < frames) {
             var position = anchor.PositionAt(clock + done);
             var count = (int)Math.Min(frames - done, anchor.Cycle.UntilJump(position));
-            renderer.Render(view, model.Files, position, count, channels, buffer[(done * channels)..]);
+            renderer.Render(view, lanes, lane, model.Files, position, count, channels, buffer[(done * channels)..]);
             done += count;
         }
 

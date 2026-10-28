@@ -18,7 +18,13 @@ public enum EngineCommandKind : byte {
     ///     The cycle: <see cref="EngineCommand.Flag" /> enabled, <see cref="EngineCommand.A" /> start,
     ///     <see cref="EngineCommand.B" /> end.
     /// </summary>
-    SetCycle
+    SetCycle,
+
+    /// <summary>
+    ///     Autopunch: <see cref="EngineCommand.Flag" /> enabled, <see cref="EngineCommand.A" /> punch-in,
+    ///     <see cref="EngineCommand.B" /> punch-out.
+    /// </summary>
+    SetPunch
 }
 
 public readonly record struct EngineCommand(EngineCommandKind Kind, long A = 0, long B = 0, bool Flag = false);

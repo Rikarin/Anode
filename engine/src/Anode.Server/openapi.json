@@ -1540,7 +1540,7 @@
             "type": "boolean"
           }
         },
-        "description": "A region of an audio file on a track: it starts at \u0060startTick\u0060 and plays \u0060length\u0060 frames of the file\nfrom \u0060fileOffset\u0060, at \u0060gainDb\u0060, with fades of \u0060fadeIn\u0060 and \u0060fadeOut\u0060 frames whose curves run\nfrom \u22121 (fast start, logarithmic-looking) through 0 (linear) to 1 (slow start, exponential-looking). A muted region\ndoes not play. Two regions on a track may overlap only as a crossfade: where the earlier fades out and the later\nfades in."
+        "description": "A region of an audio file on a track: it starts at \u0060startTick\u0060 and plays \u0060length\u0060 frames of the file\nfrom \u0060fileOffset\u0060, at \u0060gainDb\u0060, with fades of \u0060fadeIn\u0060 and \u0060fadeOut\u0060 frames whose curves run\nfrom \u22121 (slow start, exponential-looking) through 0 (linear) to 1 (fast start, logarithmic-looking): a fade-in\u0027s\ngain at position x (0\u20261) is x^(2^(\u22122c)), a fade-out the mirror. A muted region\ndoes not play. Two regions on a track may overlap only as a crossfade: where the earlier fades out and the later\nfades in."
       },
       "Bookmarks": {
         "required": [

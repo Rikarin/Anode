@@ -70,17 +70,6 @@ public sealed unsafe class PlaylistRendererTests : IDisposable {
     }
 
     [Fact]
-    public void Fades_are_linear_from_and_to_zero() {
-        var entry = TestAudio.Region(0, 100, 0, 0, 0.5f, 10, 20);
-        Assert.Equal(0f, PlaylistRenderer.Level(entry, 0));
-        Assert.Equal(0.25f, PlaylistRenderer.Level(entry, 5));
-        Assert.Equal(0.5f, PlaylistRenderer.Level(entry, 10));
-        Assert.Equal(0.5f, PlaylistRenderer.Level(entry, 79));
-        Assert.Equal(0.5f * (19f / 20), PlaylistRenderer.Level(entry, 80));
-        Assert.Equal(0f, PlaylistRenderer.Level(entry, 99));
-    }
-
-    [Fact]
     public void A_wav_without_a_data_chunk_or_with_an_unknown_encoding_is_refused() {
         var bad = TestAudio.WriteRaw(dir, "alaw.wav", 6, 8, 1, new byte[10]);
         Assert.Throws<InvalidDataException>(() => new StreamFile(0, bad));

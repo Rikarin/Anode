@@ -159,9 +159,9 @@ public sealed record SetCycleMessage(bool Enabled, long StartSample, long EndSam
 public sealed record SetMetronomeMessage(bool Enabled, float Gain, bool CountIn = false) : IpcMessage;
 
 /// <summary>
-///     One recorded take: a WAV file the host finished writing. A cycle recording (or one across autopunch) is one file
-///     per track whose <paramref name="Passes" /> say where each part of it was played; without them (null or empty)
-///     the whole file is one pass from <paramref name="StartSample" />.
+///     One recorded take: a WAV file the host finished writing. A take that wrapped (cycle recording, or a Flashback
+///     Capture that looped) lists its <paramref name="Passes" /> in order; null when it is one linear pass from
+///     <paramref name="StartSample" />.
 /// </summary>
 public sealed record RecordedTake(
     int TrackId,
@@ -173,8 +173,8 @@ public sealed record RecordedTake(
     IReadOnlyList<RecordedPass>? Passes = null);
 
 /// <summary>
-///     One pass of a take (a cycle wrap starts the next): <paramref name="Frames" /> frames of the take's file from
-///     <paramref name="FileOffset" />, recorded at project sample <paramref name="StartSample" />.
+///     One pass of a take: file frames [<paramref name="FileOffset" />, + <paramref name="Frames" />) were played at
+///     project samples [<paramref name="StartSample" />, + <paramref name="Frames" />).
 /// </summary>
 public sealed record RecordedPass(long StartSample, long FileOffset, long Frames);
 

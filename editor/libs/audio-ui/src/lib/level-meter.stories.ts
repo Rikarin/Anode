@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/angular-vite';
 import { AnLevelMeter } from './level-meter';
 
+/** A single-channel LED level meter (the placeholder the canvas meters will replace): green, yellow near −6 dB, red at 0. */
 const meta: Meta<AnLevelMeter> = {
   title: 'Audio UI/Level meter',
   component: AnLevelMeter,

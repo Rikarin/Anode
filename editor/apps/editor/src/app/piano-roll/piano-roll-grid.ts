@@ -14,6 +14,7 @@ import {
 import type { EditCommand, MidiRegion } from '@anode/api-client';
 import {
   cloneScene,
+  documentTheme,
   hitTest,
   type ItemOverride,
   itemsInRect,
@@ -204,7 +205,7 @@ export class PianoRollGrid {
   private pushScene(scene: NotesScene, ready: boolean): void {
     this.drawn = { ...scene, index: new LaneIntervalIndex(scene.scene.items, scene.scene.laneCount) };
     if (ready) {
-      this.surface?.setScene(cloneScene(scene.scene));
+      this.surface?.setScene({ ...cloneScene(scene.scene), theme: documentTheme() });
       this.dirty = true;
     }
   }

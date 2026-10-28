@@ -13,21 +13,21 @@ import { TrackInspector } from './track-inspector';
   selector: 'an-inspector',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [RegionInspector, TrackInspector],
-  host: { class: 'flex h-full flex-col gap-4 overflow-y-auto p-3', role: 'region', 'aria-label': 'Inspector' },
+  host: { class: 'flex h-full flex-col gap-3 overflow-y-auto px-3 pb-3', role: 'region', 'aria-label': 'Inspector' },
   template: `
     @if (region(); as r) {
       <an-region-inspector [region]="r" />
     }
     @if (track(); as t) {
       @if (t.kind === 'audio') {
-        <p class="text-foreground-muted text-xs">
+        <p class="text-foreground-muted pt-3 text-xs">
           {{ t.name }} is an audio track: its region and channel settings are in the Tracks area and the Mixer.
         </p>
       } @else {
         <an-track-inspector [track]="t" />
       }
     } @else if (!region()) {
-      <p class="text-foreground-muted text-xs">Select a track or a MIDI region to see its settings here.</p>
+      <p class="text-foreground-muted pt-3 text-xs">Select a track or a MIDI region to see its settings here.</p>
     }
   `
 })

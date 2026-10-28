@@ -1,4 +1,4 @@
-import { FrameBuilder, Layer, RULER_HEIGHT, RectStyle, darkTheme, shadeColor } from './frame-builder';
+import { FrameBuilder, Layer, RULER_HEIGHT, RectStyle, darkTheme, lightTheme, waveformColor } from './frame-builder';
 import { ItemFlag, createItems, createRegionDetails, type TimelineScene, type TimelineView } from './items';
 import { WaveformSet } from './waveform';
 
@@ -128,7 +128,7 @@ describe('FrameBuilder with region details', () => {
     waveforms.add(7, { channels: 1, framesPerPeak: 64, firstPeak: 0, peakCount: 100_000, data });
     const builder = new FrameBuilder(regionScene(), darkTheme, waveforms);
     const batch = builder.build(regionView, 400, RULER_HEIGHT + 60);
-    const color = shadeColor(0xff3366cc, 0.42);
+    const color = waveformColor(0xff3366cc);
     const columns = layer(batch, Layer.Details).filter(row => row[4] === color);
     expect(columns).toHaveLength(80); // 2 beats at 40 px
     // Lane 0 is y 24…84, inset 1: the waveform spans the name bar's bottom (37) to the region's bottom - 1 (82).
@@ -142,13 +142,19 @@ describe('FrameBuilder with region details', () => {
     expect(layer(batch, Layer.Details).some(row => row[4] === darkTheme.fade)).toBe(true);
   });
 
-  it('cuts a name to the region width and outlines a selected region', () => {
+  it('cuts a name to the region width and rings a selected region', () => {
     const scene = regionScene();
     scene.regions?.flags.set([ItemFlag.Selected]);
     const builder = new FrameBuilder(scene);
     const batch = builder.build({ ...regionView, pixelsPerTick: 10 / 960 }, 400, RULER_HEIGHT + 60);
-    // 20 px wide: 15 px for text after the 3 px pad and 2 px margin, so two 6 px glyphs.
+    // 20 px wide: 14 px for text after the 4 px pad and 2 px margin, so two 6 px glyphs.
     expect(batch.texts.slice(0, batch.textCount)).toContain('Gu');
-    expect(layer(batch, Layer.Details)).toContainEqual([10, RULER_HEIGHT + 1, 20, 1, darkTheme.selection]);
+    const itemsFrom = batch.layerEnds[Layer.Grid] ?? 0;
+    expect(batch.styles[itemsFrom]).toBe(RectStyle.Region | RectStyle.Selected);
+  });
+
+  it('draws in the scene theme', () => {
+    const batch = new FrameBuilder({ ...regionScene(), theme: 'light' }).build(regionView, 400, RULER_HEIGHT + 60);
+    expect(layer(batch, Layer.Background)[0]?.[4]).toBe(lightTheme.background);
   });
 });

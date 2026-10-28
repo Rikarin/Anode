@@ -60,7 +60,7 @@ public sealed unsafe class AllocationTests : IDisposable {
         controller.LoadModel(TestAudio.Load(segment, 1, true, tracks, files, dir));
         controller.Engine.SetMetronome(true, 0.5f);
         using var driver = new OfflineDriver(controller, 64);
-        using var take = new RecordTake(2, Path.Combine(dir, "2-take.wav"), 1, Rate, 0);
+        using var take = new RecordTake(2, Path.Combine(dir, "2-take.wav"), 1, Rate);
         controller.Engine.Root.Tracks[2].Take = take;
         var region = NativeMemory.AlignedAlloc((nuint)TelemetryLayout.Size, 64);
         using var telemetry = new TelemetryWriter(controller.Engine, (byte*)region, static () => 0);
@@ -104,6 +104,86 @@ public sealed unsafe class AllocationTests : IDisposable {
             controller.Engine.Root.Tracks[2].Take = null;
             NativeMemory.AlignedFree(region);
         }
+    }
+
+    /// <summary>
+    ///     Phase 3's paths: tracks crossfading continuously through curved fades (two streams each), the preview channel,
+    ///     Flashback Capture's buffers and MIDI history while playing, then cycle recording with autopunch (passes
+    ///     wrapping), a stop and a locate. Neither the callback nor the disk thread's passes allocate.
+    /// </summary>
+    [Fact]
+    public void Crossfades_preview_flashback_cycle_recording_and_punch_allocate_nothing() {
+        var mono = TestAudio.Write24(dir, "mono.wav", 1, 20 * Rate, 1);
+        var stereo = TestAudio.Write24(dir, "stereo.wav", 2, 20 * Rate, 2);
+        var preview = TestAudio.Write24(dir, "preview.wav", 2, 20 * Rate, 3);
+        EngineFile[] files = [new(0, mono, 1, Rate, 20 * Rate), new(1, stereo, 2, Rate, 20 * Rate)];
+        var models = new List<TrackModel>();
+        var tracks = new List<EngineTrack>();
+        for (var t = 0; t < 6; t++) {
+            // Regions of 12,000 frames every 10,000: each crossfades into the next over 2,000 frames.
+            var regions = Enumerable.Range(0, 30)
+                .Select(r => TestAudio.Region(r * 10_000L, 12_000, t & 1, r * 3_000L, 0.7f, 2_000, 2_000) with {
+                        FadeInCurve = (r % 5 - 2) * 0.4f, FadeOutCurve = (2 - r % 5) * 0.3f
+                    }
+                )
+                .ToArray();
+            models.Add(new(t, [], regions));
+            tracks.Add(TestAudio.Track(t, (t & 1) == 1, input: t & 1, armed: t is 2 or 3, monitoring: t == 3));
+        }
+
+        var (registry, _) = MidiFixtures.Registry();
+        models.Add(new(6, [], []));
+        tracks.Add(MidiFixtures.InstrumentTrack(6));
+        using var segment = TestAudio.Segment(models, 1);
+        using var controller = new EngineController(new(Rate, 64, 100, FlashbackSeconds: 30), registry);
+        controller.LoadModel(TestAudio.Load(segment, 1, true, tracks, files, dir));
+        controller.SetMidiThru(6);
+        Assert.All(controller.Engine.Root.Tracks[..6], static t => Assert.NotNull(t.Crossfade));
+        Assert.NotNull(controller.Engine.Root.Tracks[2].Flashback);
+        using var driver = new OfflineDriver(controller, 64);
+        using var take = new RecordTake(3, Path.Combine(dir, "3-take.wav"), 2, Rate);
+        controller.Engine.Root.Tracks[3].Take = take;
+        controller.Preview(preview, 0.5f);
+        var scratch = new float[8192];
+
+        void Callbacks() {
+            for (var i = 0; i < 100; i++) {
+                driver.Process(false);
+            }
+        }
+
+        driver.Send(new(EngineCommandKind.SetCycle, 30_000, 75_000, true));
+        driver.PlayFrom(20_000);
+        var callbackBytes = Least(Callbacks);
+        var pumps = 0L;
+        for (var round = 0; round < 30; round++) {
+            if (round == 10) {
+                driver.Send(new(EngineCommandKind.SetPunch, 40_000, 70_000, true));
+                driver.Send(new(EngineCommandKind.Record)); // cycle recording, punched
+            }
+
+            if (round == 25) {
+                driver.Send(new(EngineCommandKind.Stop));
+                driver.PlayFrom(50_000); // a new Flashback run
+            }
+
+            controller.LiveMidi(6, [new(0x90, 60 + round % 12, 100), new(0x80, 59 + round % 12, 0)]);
+            controller.Midi.Pump();
+            pumps = Math.Max(pumps, Least(driver.Pump));
+            take.Drain(scratch);
+            callbackBytes = Math.Max(callbackBytes, Least(Callbacks));
+        }
+
+        Assert.Equal(0, callbackBytes);
+        Assert.Equal(0, pumps);
+        Assert.True(take.Pushed > 0);
+        Assert.Equal(0, take.Dropped);
+        Assert.Equal(0, controller.Engine.Snapshot.Underruns);
+        controller.Engine.Root.Tracks[3].Take = null;
+        var result = take.Complete(scratch);
+        Assert.True(result.Passes is { Count: > 1 }, "the punched cycle recording made passes");
+        Assert.All(result.Passes!, static p => Assert.Equal(40_000, p.StartSample));
+        Assert.NotEmpty(controller.FlashbackCapture().Takes);
     }
 
     /// <summary>

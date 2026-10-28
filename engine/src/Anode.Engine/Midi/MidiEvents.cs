@@ -9,8 +9,19 @@ public readonly record struct LiveMidi(long TimeNs, byte Status, byte Data1, byt
 /// <summary>A message the audio thread sends to an external MIDI track's port, due at <see cref="TimeNs" />.</summary>
 public readonly record struct OutgoingMidi(int TrackId, long TimeNs, byte Status, byte Data1, byte Data2);
 
-/// <summary>Live MIDI an armed track received while recording, at a project sample (latency already compensated).</summary>
-public readonly record struct CapturedMidi(int TrackId, long Sample, byte Status, byte Data1, byte Data2);
+/// <summary>
+///     Live MIDI a track received, at the project sample it was played at (latency already compensated): an armed
+///     track's while recording, or, with <see cref="Flashback" />, any track's while playing (Flashback Capture's
+///     history, with the transport <see cref="Clock" /> it was played at).
+/// </summary>
+public readonly record struct CapturedMidi(
+    int TrackId,
+    long Sample,
+    byte Status,
+    byte Data1,
+    byte Data2,
+    long Clock = 0,
+    bool Flashback = false);
 
 /// <summary>A parameter change on its way from the control thread to the audio thread.</summary>
 public readonly record struct ParameterChange(int Index, float Value);

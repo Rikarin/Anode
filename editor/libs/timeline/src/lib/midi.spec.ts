@@ -1,4 +1,4 @@
-import { darkTheme, FrameBuilder, Layer, RULER_HEIGHT, shadeColor } from './frame-builder';
+import { darkTheme, FrameBuilder, Layer, miniatureColor, RectStyle, RULER_HEIGHT, shadeColor } from './frame-builder';
 import { hitTest } from './hit-test';
 import {
   cloneScene,
@@ -55,7 +55,7 @@ describe('note miniatures', () => {
   it('draws the notes inside a MIDI region, highest at the top, cut at its end', () => {
     const builder = new FrameBuilder(regionsScene());
     const batch = builder.build(view, 400, RULER_HEIGHT + 60);
-    const color = shadeColor(0xff0000ff, 0.35);
+    const color = miniatureColor(0xff0000ff);
     const notes = layer(batch, Layer.Details).filter(row => row[4] === color);
     expect(notes).toHaveLength(2);
     const [low = [], high = []] = notes;
@@ -67,7 +67,7 @@ describe('note miniatures', () => {
 
   it('keeps the notes in place when a trim moves the start (fileOffset in ticks)', () => {
     const builder = new FrameBuilder(regionsScene());
-    const color = shadeColor(0xff0000ff, 0.35);
+    const color = miniatureColor(0xff0000ff);
     const trimmed = builder.build(
       { ...view, overrides: [{ index: 0, start: 960, length: 3 * 960, fileOffset: 960 }] },
       400,
@@ -106,13 +106,15 @@ describe('a notes scene (the Piano Roll)', () => {
   }
   const notesView: TimelineView = { ...view, firstLane: 127 - 70, laneHeight: 10 };
 
-  it('outlines selected notes and greys out the ones that do not play', () => {
+  it('rings selected notes and greys out the ones that do not play', () => {
     const batch = new FrameBuilder(notesScene()).build(notesView, 400, RULER_HEIGHT + 200);
     const items = layer(batch, Layer.Items);
     expect(items.map(row => row[4]).sort()).toEqual([shadeColor(0xff112233, 1.25), darkTheme.muted].sort());
-    const outline = layer(batch, Layer.Details);
-    expect(outline).toHaveLength(4);
-    expect(outline.every(row => row[4] === darkTheme.selection)).toBe(true);
+    const itemsFrom = batch.layerEnds[Layer.Grid] ?? 0;
+    const styles = [batch.styles[itemsFrom], batch.styles[itemsFrom + 1]];
+    expect(styles).toContain(RectStyle.Note | RectStyle.Selected);
+    expect(styles).toContain(RectStyle.Note);
+    expect(layer(batch, Layer.Details)).toHaveLength(0);
   });
 
   it('shades the time outside the spans in play', () => {

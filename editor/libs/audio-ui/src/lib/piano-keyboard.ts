@@ -86,7 +86,7 @@ function whiteIndex(degree: number): number {
       @for (key of keys(); track key.pitch) {
         <button
           type="button"
-          class="focus-visible:outline-focus absolute top-0 rounded-b-sm border focus-visible:z-20 focus-visible:outline-2 focus-visible:-outline-offset-2"
+          class="focus-visible:outline-focus absolute top-0 rounded-b-[3px] border focus-visible:z-20 focus-visible:outline-2 focus-visible:-outline-offset-2"
           [class]="key.black ? blackClass(key.pitch) : whiteClass(key.pitch)"
           [style.left.px]="key.left * keyWidth()"
           [style.width.px]="key.width * keyWidth()"
@@ -103,10 +103,7 @@ function whiteIndex(degree: number): number {
           (blur)="keyUp(null, key.pitch)"
         >
           @if (!key.black && key.pitch % 12 === 0 && !lit(key.pitch)) {
-            <span
-              aria-hidden="true"
-              class="text-surface-inset pointer-events-none absolute inset-x-0 bottom-0.5 text-[9px]"
-            >
+            <span aria-hidden="true" class="pointer-events-none absolute inset-x-0 bottom-1 text-[9px] font-medium">
               {{ key.name }}
             </span>
           }
@@ -142,11 +139,11 @@ export class AnPianoKeyboard {
   }
 
   protected whiteClass(pitch: number): string {
-    return this.lit(pitch) ? 'bg-primary border-primary-emphasis z-0' : 'bg-foreground border-border-strong z-0';
+    return this.lit(pitch) ? 'key-lit z-0' : 'key-white z-0';
   }
 
   protected blackClass(pitch: number): string {
-    return this.lit(pitch) ? 'bg-primary-emphasis border-primary z-10' : 'bg-surface-inset border-border z-10';
+    return this.lit(pitch) ? 'key-lit z-10' : 'key-black z-10';
   }
 
   protected press(event: PointerEvent, pitch: number): void {

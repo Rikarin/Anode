@@ -25,11 +25,15 @@ const SampleRates: XuiSegmentedOption<number>[] = [
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [XuiButtonImports, XuiIconImports, XuiInputImports, XuiSegmentedControlImports],
   providers: [provideIcons({ matFolderOpenRound, matHistoryRound })],
-  host: { class: 'flex h-full items-start justify-center overflow-auto p-8', role: 'region', 'aria-label': 'Projects' },
+  host: {
+    class: 'flex h-full items-start justify-center overflow-auto p-8 pt-16',
+    role: 'region',
+    'aria-label': 'Projects'
+  },
   template: `
     <div class="grid w-full max-w-4xl gap-6 md:grid-cols-2">
-      <section class="bg-surface border-border flex flex-col gap-4 rounded-lg border p-5" aria-labelledby="new-project">
-        <h2 id="new-project" class="text-base font-semibold">New project</h2>
+      <section class="panel flex flex-col gap-4 p-5" aria-labelledby="new-project">
+        <h2 id="new-project" class="text-[15px] font-semibold">New project</h2>
         <form class="flex flex-col gap-3" (submit)="$event.preventDefault(); create()">
           <label class="flex flex-col gap-1 text-sm">
             Name
@@ -83,8 +87,8 @@ const SampleRates: XuiSegmentedOption<number>[] = [
         </form>
       </section>
       <section class="flex flex-col gap-4" aria-labelledby="open-project">
-        <div class="bg-surface border-border flex flex-col gap-3 rounded-lg border p-5">
-          <h2 id="open-project" class="text-base font-semibold">Open</h2>
+        <div class="panel flex flex-col gap-3 p-5">
+          <h2 id="open-project" class="text-[15px] font-semibold">Open</h2>
           @if (dialogs) {
             <button xuiButton type="button" variant="outline" (click)="openWithDialog()">
               <ng-icon xui name="matFolderOpenRound" size="sm" />
@@ -106,15 +110,15 @@ const SampleRates: XuiSegmentedOption<number>[] = [
             <button xuiButton type="submit" variant="outline" [disabled]="!path().trim()">Open</button>
           </form>
         </div>
-        <div class="bg-surface border-border flex flex-col gap-2 rounded-lg border p-5">
-          <h2 class="flex items-center gap-2 text-base font-semibold">
+        <div class="panel flex flex-col gap-2 p-5">
+          <h2 class="flex items-center gap-2 text-[15px] font-semibold">
             <ng-icon xui name="matHistoryRound" size="sm" />
             Recent
           </h2>
           @for (project of session.recent(); track project.path) {
             <button
               type="button"
-              class="hover:bg-surface-raised focus-visible:outline-focus flex flex-col items-start rounded px-2 py-1.5 text-start focus-visible:outline-2"
+              class="hover:bg-hover-overlay focus-visible:outline-focus -mx-2 flex flex-col items-start rounded-md px-2 py-1.5 text-start transition-colors duration-100 focus-visible:outline-2"
               [attr.data-testid]="'recent-' + project.name"
               (click)="session.open(project.path)"
             >

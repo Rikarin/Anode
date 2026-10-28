@@ -23,7 +23,7 @@ function point(normal: number, r: number): { x: number; y: number } {
   template: `
     <div
       role="slider"
-      class="focus-visible:outline-focus size-7 cursor-ns-resize touch-none rounded-full outline-offset-2 focus-visible:outline-2"
+      class="focus-visible:outline-focus relative size-8 cursor-ns-resize touch-none rounded-full outline-offset-2 focus-visible:outline-2"
       [class.opacity-50]="disabled()"
       [attr.tabindex]="disabled() ? -1 : 0"
       [attr.aria-label]="label()"
@@ -40,22 +40,26 @@ function point(normal: number, r: number): { x: number; y: number } {
       (dblclick)="reset()"
       (keydown)="key($event)"
     >
-      <svg viewBox="0 0 24 24" class="size-full" aria-hidden="true">
-        <path [attr.d]="track" class="stroke-border fill-none" stroke-width="2.5" stroke-linecap="round" />
-        <path [attr.d]="arc()" class="stroke-primary fill-none" stroke-width="2.5" stroke-linecap="round" />
-        <circle cx="12" cy="12" r="6.5" class="fill-surface-raised stroke-border-strong" stroke-width="1" />
+      <span class="knob-body absolute inset-[23%]" aria-hidden="true"></span>
+      <svg viewBox="0 0 24 24" class="absolute inset-0 size-full" aria-hidden="true">
+        <path [attr.d]="track" class="stroke-knob-track fill-none" stroke-width="2.25" stroke-linecap="round" />
+        <path [attr.d]="arc()" class="stroke-knob-arc fill-none" stroke-width="2.25" stroke-linecap="round" />
         <line
-          x1="12"
-          y1="12"
+          [attr.x1]="pointerFrom().x"
+          [attr.y1]="pointerFrom().y"
           [attr.x2]="pointer().x"
           [attr.y2]="pointer().y"
-          class="stroke-foreground"
+          class="stroke-knob-pointer"
           stroke-width="1.5"
           stroke-linecap="round"
         />
       </svg>
     </div>
-    <span class="text-foreground text-[10px] tabular-nums" aria-hidden="true">{{ display() }}</span>
+    <span
+      class="readout text-foreground bg-surface-inset border-hairline min-w-9 rounded-[4px] border px-1 py-px text-center text-[10px] font-medium shadow-[inset_0_1px_1px_rgb(0_0_0/0.2)]"
+      aria-hidden="true"
+      >{{ display() }}</span
+    >
   `
 })
 export class AnPanKnob {
@@ -69,7 +73,8 @@ export class AnPanKnob {
   protected readonly track = arcPath(0, 1);
   protected readonly normal = computed(() => (Math.min(1, Math.max(-1, this.value())) + 1) / 2);
   protected readonly arc = computed(() => arcPath(Math.min(0.5, this.normal()), Math.max(0.5, this.normal())));
-  protected readonly pointer = computed(() => point(this.normal(), 6));
+  protected readonly pointer = computed(() => point(this.normal(), 5.25));
+  protected readonly pointerFrom = computed(() => point(this.normal(), 2));
   protected readonly display = computed(() => formatPan(this.value()));
   protected readonly rounded = computed(() => Math.round(this.value() * 100) / 100);
 

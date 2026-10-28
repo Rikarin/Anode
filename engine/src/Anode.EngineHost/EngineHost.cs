@@ -168,8 +168,11 @@ public sealed class EngineHost : IDisposable {
     /// <summary>
     ///     Carries out one message from the server; returns the reply, or null when the message has none
     ///     (<c>setStrip</c>, <c>setTrackIo</c>, <c>setCycle</c>, <c>setMetronome</c>, <c>setInstrument</c>,
-    ///     <c>setParameter</c>, <c>setMidiIo</c>, <c>setMidiThru</c>, <c>liveMidi</c>, and <c>transport</c> unless a
-    ///     stop ends a recording pass, which answers <see cref="RecordingFinishedMessage" />). <c>scanPlugins</c>
+    ///     <c>setParameter</c>, <c>setMidiIo</c>, <c>setMidiThru</c>, <c>liveMidi</c>, <c>setPunch</c>,
+    ///     <c>previewFile</c>, and <c>transport</c> unless a stop ends a recording pass, which answers
+    ///     <see cref="RecordingFinishedMessage" />). <c>flashbackCapture</c> answers a
+    ///     <see cref="RecordingFinishedMessage" /> with <c>Flashback</c> set (no takes when nothing was played).
+    ///     <c>scanPlugins</c>
     ///     answers the new <see cref="PluginCatalogMessage" />, <c>requestInstrumentStates</c>
     ///     <see cref="InstrumentStatesMessage" />; a request it cannot carry out answers <see cref="ErrorMessage" />.
     /// </summary>
@@ -223,6 +226,15 @@ public sealed class EngineHost : IDisposable {
                         : new ErrorMessage($"No track {live.TrackId}.", "liveMidi");
                 case RequestInstrumentStatesMessage:
                     return new InstrumentStatesMessage(Controller.InstrumentStates());
+                case SetPunchMessage punch:
+                    Controller.SetPunch(punch.Enabled, punch.InSample, punch.OutSample);
+                    return null;
+                case FlashbackCaptureMessage:
+                    var captured = await Task.Run(Controller.FlashbackCapture, cancellationToken).ConfigureAwait(false);
+                    return new RecordingFinishedMessage(captured.Takes, captured.MidiTakes, true);
+                case PreviewFileMessage preview:
+                    Controller.Preview(preview.Path, preview.Gain);
+                    return null;
                 default:
                     return new ErrorMessage($"The host does not take '{Name(message)}' messages.", Name(message));
             }
@@ -281,6 +293,9 @@ public sealed class EngineHost : IDisposable {
             MidiActivityMessage => "midiActivity",
             RequestInstrumentStatesMessage => "requestInstrumentStates",
             InstrumentStatesMessage => "instrumentStates",
+            SetPunchMessage => "setPunch",
+            FlashbackCaptureMessage => "flashbackCapture",
+            PreviewFileMessage => "previewFile",
             _ => message.GetType().Name
         };
 

@@ -16,6 +16,7 @@ import {
   cloneScene,
   CYCLE_BAND_TOP,
   type CycleArea,
+  documentTheme,
   hitTest,
   type ItemOverride,
   itemsInRect,
@@ -237,7 +238,7 @@ export class Timeline {
   private pushScene(scene: TracksScene, ready: boolean): void {
     this.drawn = { ...scene, index: new LaneIntervalIndex(scene.scene.items, scene.scene.laneCount) };
     if (ready) {
-      this.surface?.setScene(cloneScene(scene.scene));
+      this.surface?.setScene({ ...cloneScene(scene.scene), theme: documentTheme() });
       this.dirty = true;
     }
   }

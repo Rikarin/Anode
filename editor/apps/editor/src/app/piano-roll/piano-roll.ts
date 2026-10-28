@@ -46,11 +46,7 @@ import { VelocityLane } from './velocity-lane';
     '(pointerdown)': 'focus($event)'
   },
   template: `
-    <div
-      class="border-border flex h-9 shrink-0 items-center gap-2 border-b px-2"
-      role="toolbar"
-      aria-label="Piano Roll tools"
-    >
+    <div class="glass-bar flex h-9 shrink-0 items-center gap-2 px-2" role="toolbar" aria-label="Piano Roll tools">
       <xui-segmented-control
         size="sm"
         ariaLabel="Piano Roll tool"
@@ -116,8 +112,10 @@ import { VelocityLane } from './velocity-lane';
         <an-piano-roll-keys class="w-14 shrink-0" [visibleLanes]="gridRef.visibleLanes()" />
         <an-piano-roll-grid #gridRef class="min-w-0 flex-1" />
       </div>
-      <div class="border-border flex h-16 shrink-0 border-t">
-        <div class="border-border text-foreground-muted flex w-14 shrink-0 items-start border-e p-1 text-[10px]">
+      <div class="border-hairline flex h-16 shrink-0 border-t">
+        <div
+          class="border-hairline bg-surface text-foreground-muted flex w-14 shrink-0 items-start border-e p-1.5 text-[10px] font-semibold"
+        >
           Velocity
         </div>
         <an-velocity-lane class="min-w-0 flex-1" />
