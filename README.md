@@ -7,7 +7,7 @@ Anode shares its stack and architecture with Cathode: a NativeAOT real-time engi
 server that owns the project and drives the host over IPC (`anode-server`), and an Angular + Tailwind + xUI editor. The
 full plan is in [docs/01-implementation-plan.md](docs/01-implementation-plan.md); decisions are in [docs/adr](docs/adr).
 
-> Status: bootstrap (Phase 0). The projects build and talk to each other; nothing makes sound yet.
+> Status: beta (Phase 4) on macOS. Records, arranges, edits and mixes audio and MIDI, hosts sandboxed plugins and bounces.
 
 ## Layout
 

@@ -82,9 +82,17 @@ const Lane = 72;
 const Bar = 192;
 
 // The Phase 4 exit criterion (docs/05-phase-4.md): mix, automate, freeze, patch and bounce on the real app with the null
-// device. It needs workstreams A (the mixer graph, automation, rendering), B (the Server's Phase 4 commands, jobs and
-// bounce post-processing), D (the built-in effects) and E (the sandboxed test VST3), so it is fixme until the
-// integration; it compiles and its steps drive the editor's Phase 4 UI by role and test id.
+// device, through the mixer graph, the Server's jobs and bounce post-processing, the built-in effects and the sandboxed
+// test VST3. Its steps drive the editor's Phase 4 UI by role and test id.
+/** The vertical middle of an element, in its own coordinates. */
+async function middleOf(locator: Locator): Promise<number> {
+  const box = await locator.boundingBox();
+  if (!box) {
+    throw new Error('The element is not on screen.');
+  }
+  return box.height / 2;
+}
+
 test('mixes, automates, freezes and bounces a session: inserts, sends, routing, a group, a VCA, touch automation, freeze, patches, bounces and reopening', async ({
   app,
   window
@@ -188,19 +196,22 @@ test('mixes, automates, freezes and bounces a session: inserts, sends, routing, 
     // 3. Automate: volume drawn in the Tracks area, the compressor's threshold, and a touch-recorded fader pass.
     await window.keyboard.press('a');
     await expect(window.getByTestId('automation-mode').first()).toBeVisible();
-    const laneY = (row: number) => Ruler + row * Lane + Lane / 2;
-    // Audio 1's volume sub-lane is row 1 (under its track): two points.
-    await timeline.click({ position: { x: Bar, y: laneY(1) } });
-    await timeline.click({ position: { x: 3 * Bar, y: laneY(1) - 20 } });
+    // Audio 1's volume lane (under its track; the lane takes the clicks over the timeline): two points.
+    const volumeLane = window.getByRole('group', { name: 'Audio 1 Volume automation' });
+    const volumeMiddle = await middleOf(volumeLane);
+    await volumeLane.click({ position: { x: Bar, y: volumeMiddle } });
+    await volumeLane.click({ position: { x: 3 * Bar, y: volumeMiddle - 20 } });
     await expect(window.getByRole('slider', { name: /Volume automation point 2/ })).toBeVisible();
     // A lane for the compressor's threshold.
     await window.getByTestId('add-automation-lane').first().click();
-    await window.getByTestId('automation-parameter').last().click();
+    // The lane just added to Audio 1 shows the next target it did not show (pan); switch it to the threshold.
+    await window.getByRole('button', { name: 'Automation parameter of Audio 1: Pan' }).click();
     await window
-      .getByRole('menuitem', { name: /Threshold/ })
+      .getByRole('menuitemradio', { name: /Threshold/ })
       .first()
       .click();
-    await timeline.click({ position: { x: 2 * Bar, y: laneY(2) } });
+    const thresholdLane = window.getByRole('group', { name: 'Audio 1 Threshold automation' });
+    await thresholdLane.click({ position: { x: 2 * Bar, y: await middleOf(thresholdLane) } });
     // Touch mode, then move the fader while playing.
     await window.getByTestId('automation-mode').first().click();
     await window.getByRole('menuitemradio', { name: 'Touch' }).click();
@@ -225,6 +236,8 @@ test('mixes, automates, freezes and bounces a session: inserts, sends, routing, 
 
     // 5. Save Audio 1's strip as a patch, apply it to a new audio track.
     await window.getByRole('group', { name: 'Track 1: Audio 1' }).click();
+    // The Library follows the selection: wait for it to offer Audio 1's strip before naming the patch.
+    await expect(window.getByText('Save Audio 1 as a patch')).toBeVisible();
     await window.getByTestId('patch-name').fill('Tone Chain');
     await window.getByTestId('patch-category').fill('Golden');
     await window.getByTestId('save-patch').click();
@@ -276,10 +289,9 @@ test('mixes, automates, freezes and bounces a session: inserts, sends, routing, 
     await expect(reopened.getByTestId('group-slot')).toContainText('Band');
     await expect(window.getByRole('group', { name: 'Aux 1 channel strip' })).toBeVisible();
     await expect(window.getByRole('group', { name: 'VCA 1 channel strip' })).toBeVisible();
-    await expect(window.getByRole('group', { name: 'Track 2: Inst 1' }).getByTestId('freeze-track')).toHaveAttribute(
-      'aria-pressed',
-      'true'
-    );
+    await expect(
+      window.getByRole('group', { name: /^Track \d+: Inst 1$/ }).getByTestId('freeze-track')
+    ).toHaveAttribute('aria-pressed', 'true');
   } finally {
     rmSync(scratch, { recursive: true, force: true });
   }

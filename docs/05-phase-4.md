@@ -269,3 +269,46 @@ The T1 suite, behind `IAudioEffect`, in `BuiltinEffects`:
 2. Run the two-process tests: routing, automation, freeze and bounce through the real host, with a sandboxed test VST3.
 3. Run the Playwright golden path for the beta exit criterion.
 4. Fix the seams.
+
+## Status (2026-10-28)
+
+**Exit criterion met on macOS: beta.** The Playwright mixing golden path passes against the real desktop app on the
+null device. In one run it:
+- adds Channel EQ, Compressor and the in-repo test VST3 (in its sandbox), bypasses one and reorders them;
+- sends to an aux with a reverb, routes the instrument to a second bus, and refuses a routing loop;
+- groups the two tracks and puts them under a VCA;
+- draws volume automation, adds the compressor's threshold lane and touch-records a fader pass;
+- freezes the instrument track;
+- saves Audio 1's strip as a patch and applies it to a new track;
+- bounces the mix to WAV normalised to a loudness target (checked within a dB), and stems to AIFF with dither;
+- saves, closes and reopens the project with the mix intact.
+
+All five e2e specs pass, twice in a row.
+
+| Check | Result |
+|---|---|
+| Engine tests (`dotnet test --solution engine/Anode.slnx --max-parallel-test-modules 2`) | 996 pass, 10 skipped (opt-in) |
+| Two-process, real host | routing, automation, freeze and bounce; sandboxed test VST3, crash isolation |
+| Editor (`nx run-many -t typecheck lint test build`) | 5 projects pass |
+| e2e (`nx e2e desktop`) | mixing, arranging, MIDI and Phase 1 golden paths, smoke; twice in a row |
+| Skala, Prettier, generated client | clean |
+
+**Contract changes and decisions at integration:**
+- Test runs take at most two modules at a time (`--max-parallel-test-modules 2`): timing tests flaked under full
+  parallel load. CI and the README use the same flag.
+- `MetersEvent.Readings` carries insert readings (a level meter's, a compressor's gain reduction), pushed by the host
+  on a timer at most 15 times a second.
+- Adding a plugin into the empty slot appends it rather than passing an index, so quick adds keep their order.
+- Musical typing is off until ⌘K (View ▸ Show/Hide Musical Typing); on by default it swallowed the A key.
+- The desktop app passes the host its data folder (`--data-dir`), and packaging publishes `anode-plugin` beside it.
+- In small windows the Mixer scrolls instead of squeezing its strips, and the control bar folds its labels into icons
+  below 1280 px.
+
+**Open:**
+- Tempo-synced effects take the tempo from the click, not the tempo track.
+- Touch automation releases on the next change, not on mouse-up.
+- Real-time renders stop at the end of the range, without effect tails.
+- A patch name typed while the selection changes saves the patch on the new track.
+- The light theme has not had an axe pass.
+- In the desktop app ⌘B and ⌘S are both menu accelerators and editor shortcuts.
+- Plugin windows and sandboxes on Linux and Windows.
