@@ -107,7 +107,8 @@ public sealed record ChannelStrip(double VolumeDb, double Pan, bool Mute, bool S
 /// <summary>
 ///     A region of an audio file on a track: it starts at <c>startTick</c> and plays <c>length</c> frames of the file
 ///     from <c>fileOffset</c>, at <c>gainDb</c>, with fades of <c>fadeIn</c> and <c>fadeOut</c> frames whose curves run
-///     from −1 (fast start, logarithmic-looking) through 0 (linear) to 1 (slow start, exponential-looking). A muted region
+///     from −1 (slow start, exponential-looking) through 0 (linear) to 1 (fast start, logarithmic-looking): a fade-in's
+///     gain at position x (0…1) is x^(2^(−2c)), a fade-out the mirror. A muted region
 ///     does not play. Two regions on a track may overlap only as a crossfade: where the earlier fades out and the later
 ///     fades in.
 /// </summary>
