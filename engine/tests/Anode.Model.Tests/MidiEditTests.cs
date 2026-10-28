@@ -19,7 +19,7 @@ public sealed class MidiEditTests {
             new AddTrackCommand(Kind: TrackKind.Midi),
             new AddTrackCommand()
         );
-        Assert.Equal(["Inst 1", "Inst 2", "MIDI 3", "Audio 4"], state.Tracks.Select(static t => t.Name));
+        Assert.Equal(["Inst 1", "Inst 2", "MIDI 1", "Audio 1"], state.Tracks.Select(static t => t.Name));
         var synth = state.Tracks[0].Instrument!;
         Assert.Equal(("anode.synth", "Synth", null), (synth.PluginId, synth.Name, synth.File));
         Assert.Equal(

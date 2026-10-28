@@ -195,7 +195,9 @@ sealed class FakeMidi : IMidiBackend {
     public bool Send(string uid, ReadOnlySpan<byte> message, long timeNs) {
         lock (gate) {
             Sent.Add((uid, message.ToArray(), timeNs));
-            SentAt.Add((long)(System.Diagnostics.Stopwatch.GetTimestamp() * (1e9 / System.Diagnostics.Stopwatch.Frequency)));
+            SentAt.Add(
+                (long)(System.Diagnostics.Stopwatch.GetTimestamp() * (1e9 / System.Diagnostics.Stopwatch.Frequency))
+            );
         }
 
         return true;

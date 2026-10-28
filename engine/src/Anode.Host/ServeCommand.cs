@@ -1,4 +1,5 @@
 using Anode.Audio;
+using Anode.Audio.Midi;
 using Anode.Audio.Native;
 using Anode.EngineHost;
 using System.Runtime.InteropServices;
@@ -115,9 +116,14 @@ static class ServeCommand {
         }
     }
 
-    /// <summary>MIDI devices through the native shim, unless <c>--no-midi</c> (or the shim is not built).</summary>
-    static NativeMidiBackend? Midi(CommandLine options) =>
-        !options.Flag("no-midi") && NativeMidiBackend.IsAvailable ? new NativeMidiBackend() : null;
+    /// <summary>
+    ///     MIDI devices through the native shim, unless <c>--no-midi</c> (or the shim is not built); with
+    ///     <c>--virtual-midi</c>, one virtual input and output instead (tests and machines without MIDI ports).
+    /// </summary>
+    static IMidiBackend? Midi(CommandLine options) =>
+        options.Flag("virtual-midi") ? new VirtualMidiBackend()
+        : !options.Flag("no-midi") && NativeMidiBackend.IsAvailable ? new NativeMidiBackend()
+        : null;
 
     static void Print(string message) => Console.Error.WriteLine($"{DateTime.Now:HH:mm:ss.fff} {message}");
 }

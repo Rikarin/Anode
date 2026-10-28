@@ -52,9 +52,8 @@ const Ruler = 24;
 const Lane = 72;
 const laneY = (lane: number) => Ruler + lane * Lane + Lane / 2;
 
-// The Phase 2 golden path (docs/03-phase-2.md, exit criterion) against the real app on the null device. It needs
-// workstreams A, B and D: until they are merged the Server answers the MIDI endpoints with 501, so it is fixme.
-test.fixme('makes a song with MIDI and audio: synth, sampler, CLAP, external MIDI, Piano Roll, save and reopen', async ({
+// The Phase 2 golden path (docs/03-phase-2.md, exit criterion) against the real app on the null device.
+test('makes a song with MIDI and audio: synth, sampler, CLAP, external MIDI, Piano Roll, save and reopen', async ({
   app,
   window
 }) => {

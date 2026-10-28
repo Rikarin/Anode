@@ -188,7 +188,15 @@ public static partial class Edits {
             TrackKind.Midi => "MIDI",
             _ => "Audio"
         };
-        for (var n = state.Tracks.Count + 1;; n++) {
+        // Numbered by kind, as Logic does: the first instrument track is "Inst 1" whatever else the project holds.
+        var sameKind = 0;
+        foreach (var track in state.Tracks) {
+            if (track.Kind == kind) {
+                sameKind++;
+            }
+        }
+
+        for (var n = sameKind + 1;; n++) {
             var name = $"{prefix} {n}";
             if (!state.Tracks.Exists(t => t.Name == name)) {
                 return name;

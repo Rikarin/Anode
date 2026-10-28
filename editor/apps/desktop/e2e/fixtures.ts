@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
 const main = resolve(__dirname, '../../../dist/apps/desktop/main.js');
+const TestClapFolder = resolve(__dirname, '../../../../engine/artifacts/native/clap');
 
 /**
  * Each test gets a fresh app: throwaway settings and data, its own sidecars (null audio). `desktopSettings` starts it
@@ -27,7 +28,11 @@ export const test = base.extend<{
       env: {
         ...process.env,
         ANODE_USER_DATA: join(scratch, 'user-data'),
-        ANODE_DATA_DIR: join(scratch, 'server-data')
+        ANODE_DATA_DIR: join(scratch, 'server-data'),
+        // The engine's test CLAP instrument (engine/native/an_testclap), so the golden paths can load a CLAP plugin.
+        CLAP_PATH: TestClapFolder,
+        // A virtual MIDI output, so external MIDI tracks have a port on any machine.
+        ANODE_VIRTUAL_MIDI: '1'
       }
     });
     await use(app);

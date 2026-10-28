@@ -275,6 +275,8 @@ export class Sidecars {
   private hostCommand(): Command & { env: NodeJS.ProcessEnv } {
     const host = engine.host();
     const audio = this.audio.device ? ['--device', this.audio.device] : ['--null-audio'];
+    // End-to-end tests (and machines without MIDI ports): a virtual MIDI input and output instead of the OS's.
+    const midi = process.env['ANODE_VIRTUAL_MIDI'] === '1' ? ['--virtual-midi'] : [];
     return {
       command: host.command,
       args: [
@@ -284,6 +286,7 @@ export class Sidecars {
         this.socket,
         '--watch-stdin',
         ...audio,
+        ...midi,
         '--rate',
         String(this.audio.sampleRate),
         '--buffer',

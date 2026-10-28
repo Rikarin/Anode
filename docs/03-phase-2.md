@@ -235,3 +235,49 @@ Four, in parallel, each on its own branch, meeting only at the contracts above.
    `/midi/live` on the null device.
 3. Run the Playwright golden path extended to MIDI.
 4. Fix the seams.
+
+## Status (2026-10-28)
+
+**Exit criterion met on macOS.** The Playwright MIDI golden path passes against the real desktop app on the null device:
+- an instrument track with the synth and a parameter change;
+- recording from the on-screen keyboard;
+- Piano Roll pencil and quantise;
+- a sampler loading an SFZ;
+- the engine's test CLAP instrument;
+- an external MIDI track sending to a port;
+- playback;
+- save and reopen with parameters and the sampler file kept.
+
+The Phase 1 golden path and the smoke test still pass.
+
+| Check | Result |
+|---|---|
+| Engine tests (`dotnet test --solution engine/Anode.slnx`) | 392 pass, 2 skipped (D's opt-in demo and CPU renders); stable over repeated runs |
+| Editor (`nx run-many -t typecheck lint test build`) | 5 projects pass; Storybook + axe 36 stories |
+| e2e (`nx e2e desktop`) | MIDI golden path, Phase 1 golden path, smoke |
+| Skala, Prettier, generated client | clean |
+| Callback, CoreAudio, 64 frames, 16 × `anode.synth` | p50 141 µs, p99 160 µs, worst 204 µs of 1,333 µs; with 128 audio tracks added, worst 251 µs; 0 allocations |
+
+**Decided at integration:**
+- New tracks are numbered by kind, as Logic numbers them: the first instrument track is "Inst 1" whatever else the
+  project holds.
+- `anode-host --virtual-midi` offers one virtual MIDI input and one output instead of the OS's ports. The desktop app
+  passes it when `ANODE_VIRTUAL_MIDI=1`, and the e2e sets it with `CLAP_PATH` pointing at the test CLAP plugin.
+- The host's playback-pace test asserts that the playhead moves and never runs ahead of real time. How far a starved
+  null clock falls behind is a property of the machine, not the engine.
+
+**Contract and vendored changes:**
+- `cth_audio`'s `cth_midi_event` carries its `source` port, and `cth_midi_send_at` schedules output. Both are noted in
+  `engine/native/cth_audio/VENDORED.md` for Cathode; the ALSA and WinMM edits were not compiled here.
+- Recorded MIDI is shifted back by one buffer plus the output latency, so notes land where the player heard the music.
+
+**Open:**
+- Plugin latency compensation (reported, not applied).
+- CLAP `request_restart` (only logged).
+- `SaveState` is called while the instrument may be processing: allowed for CLAP, and the built-ins should be
+  confirmed safe.
+- Controller, pitch-bend and pressure editing UI.
+- Physical MIDI devices on real hardware.
+- Linux and Windows.
+- An instrument-file upload endpoint for remote browsers.
+- On-screen keyboard colours in the light theme.
