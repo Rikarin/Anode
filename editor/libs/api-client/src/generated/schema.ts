@@ -2094,7 +2094,8 @@ export interface components {
     /**
      * @description A plugin the engine can load: an instrument, or an effect in `category` (EQ, Dynamics, Delay, Reverb,
      *     Modulation, Distortion, Filter, Utility, Metering). `hasEditor`: it has its own editor window (desktop app
-     *     only; everywhere else the generic editor). `fileTypes` (extensions such as `.sfz`, `.wav`) lists what an
+     *     only; everywhere else the generic editor). `fileTypes` (extensions such as `.sfz`, `.wav`) lists
+     *     what an
      *     instrument loads with `loadInstrumentFile`, empty when it loads none.
      */
     PluginInfo: {

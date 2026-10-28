@@ -6313,7 +6313,7 @@
             "type": "boolean"
           }
         },
-        "description": "A plugin the engine can load: an instrument, or an effect in \u0060category\u0060 (EQ, Dynamics, Delay, Reverb,\nModulation, Distortion, Filter, Utility, Metering). \u0060hasEditor\u0060: it has its own editor window (desktop app\nonly; everywhere else the generic editor). \u0060fileTypes\u0060 (extensions such as \u0060.sfz\u0060, \u0060.wav\u0060) lists what an\ninstrument loads with \u0060loadInstrumentFile\u0060, empty when it loads none."
+        "description": "A plugin the engine can load: an instrument, or an effect in \u0060category\u0060 (EQ, Dynamics, Delay, Reverb,\nModulation, Distortion, Filter, Utility, Metering). \u0060hasEditor\u0060: it has its own editor window (desktop app\nonly; everywhere else the generic editor). \u0060fileTypes\u0060 (extensions such as \u0060.sfz\u0060, \u0060.wav\u0060) lists\nwhat an\ninstrument loads with \u0060loadInstrumentFile\u0060, empty when it loads none."
       },
       "PreviewRequest": {
         "type": "object",
