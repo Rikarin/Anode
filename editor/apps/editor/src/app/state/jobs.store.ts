@@ -1,5 +1,5 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
-import type { BounceRequest, Job } from '@anode/api-client';
+import type { BounceInPlaceRequest, BounceRequest, Job, JobKind, ProcessRequest } from '@anode/api-client';
 import { ANODE_API } from '../core/api';
 import { ConnectionService } from '../core/connection';
 import { EventStream } from '../core/events';
@@ -10,6 +10,15 @@ import { ProjectStore } from './project.store';
 export function isActive(job: Job | undefined | null): boolean {
   return job?.state === 'queued' || job?.state === 'running';
 }
+
+/** What a job is called in messages. */
+const JobNames: Record<JobKind, string> = {
+  bounce: 'Bounce',
+  freeze: 'Freeze',
+  analyze: 'Analysis',
+  bounceInPlace: 'Bounce in place',
+  process: 'Processing'
+};
 
 /** A file's name from its absolute path. */
 export function fileName(path: string): string {
@@ -80,6 +89,49 @@ export class JobsStore {
     return job;
   }
 
+  /** Starts a file's pitch analysis (Flex Pitch); an `analysis` event follows when it is cached. */
+  async analyze(fileId: string): Promise<Job | null> {
+    const job = await this.notify.run(() => this.api.analyzeFile(fileId), 'Could not analyse the audio');
+    if (job) {
+      this.update(job);
+    }
+    return job;
+  }
+
+  /** The Bounce in Place dialog follows this job. */
+  readonly inPlaceId = signal<string | null>(null);
+  readonly inPlaceJob = computed(() => {
+    const id = this.inPlaceId();
+    return id ? (this.jobs().get(id) ?? null) : null;
+  });
+
+  /** Starts a bounce in place; the edit comes when the job is done. */
+  async bounceInPlace(request: BounceInPlaceRequest): Promise<Job | null> {
+    const job = await this.notify.run(() => this.api.bounceInPlace(request), 'Could not bounce in place');
+    if (job) {
+      this.inPlaceId.set(job.id);
+      this.update(job);
+    }
+    return job;
+  }
+
+  /** The Selection-Based Processing window follows this job. */
+  readonly processId = signal<string | null>(null);
+  readonly processJob = computed(() => {
+    const id = this.processId();
+    return id ? (this.jobs().get(id) ?? null) : null;
+  });
+
+  /** Starts selection-based processing; the edit comes when the job is done. */
+  async process(request: ProcessRequest): Promise<Job | null> {
+    const job = await this.notify.run(() => this.api.processRegions(request), 'Could not process the selection');
+    if (job) {
+      this.processId.set(job.id);
+      this.update(job);
+    }
+    return job;
+  }
+
   async cancel(id: string): Promise<void> {
     const job = await this.notify.run(() => this.api.cancelJob(id), 'Could not cancel');
     if (job) {
@@ -120,9 +172,7 @@ export class JobsStore {
         }
         break;
       case 'failed':
-        this.notify.error(
-          `${job.kind === 'bounce' ? 'Bounce' : 'Freeze'} failed${job.message ? `: ${job.message}` : ''}`
-        );
+        this.notify.error(`${JobNames[job.kind]} failed${job.message ? `: ${job.message}` : ''}`);
         break;
       default:
         break;

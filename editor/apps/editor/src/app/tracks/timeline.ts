@@ -259,6 +259,7 @@ export class Timeline {
       takeFolders: this.project.takeFolderList(),
       framesPerTick: this.project.framesPerTick(),
       rate: span => this.project.regionRate(span),
+      timing: region => this.project.timing(region),
       beatsPerBar: (signature.numerator * 4) / signature.denominator,
       meter: settings.signatures,
       selected: this.selection.regions(),

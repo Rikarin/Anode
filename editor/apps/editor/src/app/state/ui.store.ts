@@ -6,6 +6,9 @@ export interface PluginWindow {
   insertId: string;
 }
 
+/** The editors of the Editors pane. */
+export type EditorView = 'pianoRoll' | 'audio' | 'smartTempo';
+
 function same(a: PluginWindow, b: PluginWindow): boolean {
   return a.trackId === b.trackId && a.insertId === b.insertId;
 }
@@ -22,6 +25,12 @@ export class UiStore {
   readonly ioLabelsOpen = signal(false);
   /** The group whose settings show, or null when the window is closed. */
   readonly groupSettings = signal<number | null>(null);
+  /** Phase 5's Functions: Strip Silence, Bounce in Place and Selection-Based Processing. */
+  readonly stripSilenceOpen = signal(false);
+  readonly bounceInPlaceOpen = signal(false);
+  readonly processingOpen = signal(false);
+  /** Which editor the Editors pane shows: the Piano Roll, the Audio Track Editor or the Smart Tempo Editor. */
+  readonly editorView = signal<EditorView>('pianoRoll');
   /** The generic plugin editor windows, in the order they opened (the last is in front). */
   readonly pluginWindows = signal<readonly PluginWindow[]>([]);
 

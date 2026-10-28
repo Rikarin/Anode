@@ -3,6 +3,7 @@ import type { CycleRecordMode, TransportRequest, TransportState, TransportStatus
 import { ANODE_API } from '../core/api';
 import { EventStream } from '../core/events';
 import { Notify } from '../core/notify';
+import { compiledSamplesToTick, effectiveSpeed } from '../music/varispeed';
 import { Ppq, ProjectStore } from './project.store';
 
 export { Ppq } from './project.store';
@@ -115,7 +116,9 @@ export class TransportStore {
     }
 
     const map = this.project.tempoMap();
-    const tick = map.tickAt(map.secondsAt(anchor) + Math.max(0, now - this.anchorTime) / 1000);
+    // Varispeed: the project plays at its speed.
+    const speed = effectiveSpeed(this.project.settings().varispeed);
+    const tick = map.tickAt(map.secondsAt(anchor) + (Math.max(0, now - this.anchorTime) / 1000) * speed);
     const cycle = this.project.settings().cycle;
     if (this.state() === 'playing' && cycle.enabled && cycle.endTick > cycle.startTick && anchor < cycle.endTick) {
       if (tick >= cycle.endTick) {
@@ -134,7 +137,14 @@ export class TransportStore {
   /** A transport frame from the Server (or the answer to a command). */
   applyStatus(status: TransportStatus, now = performance.now()): void {
     this.state.set(status.state);
-    this.anchorTicks.set(status.positionTick);
+    // Under Varispeed the position is compiled samples (every position scaled by 1/speed): the tick through the tempo
+    // track at the speed (docs/06-phase-5.md).
+    const varispeed = this.project.settings().varispeed;
+    const tick =
+      varispeed.enabled && status.sampleRate > 0
+        ? compiledSamplesToTick(status.positionSamples, status.sampleRate, this.project.tempoMap(), varispeed.speed)
+        : status.positionTick;
+    this.anchorTicks.set(tick);
     this.anchorTime = now;
   }
 

@@ -10,6 +10,7 @@ import {
   type Track
 } from '@anode/api-client';
 import { MeterMap } from '@anode/timeline';
+import { RegionTiming } from '../../music/region-timing';
 import { TempoMap } from '../../music/tempo-map';
 import { normalizeComp, swipeComp } from '../../tracks/comp';
 
@@ -24,8 +25,21 @@ export function meterOf(project: Project): MeterMap {
   return new MeterMap(project.settings.signatures);
 }
 
-/** Where an audio region ends, in ticks, under the project's tempo track. */
+/**
+ * Where an audio region ends, in ticks: through its timing (Phase 5's RegionTiming: flex, follow) for a whole region,
+ * else (a take) under the project's tempo track.
+ */
 export function audioEnd(project: Project, region: Pick<AudioRegion, 'startTick' | 'length'>): number {
+  if ('follow' in region && 'trackId' in region && 'fileId' in region) {
+    const r = region as AudioRegion;
+    const track = project.tracks.find(t => t.id === r.trackId);
+    const file = project.audioFiles.find(f => f.id === r.fileId);
+    return new RegionTiming(r, track?.flexOn ?? false, file?.tempo ?? null, {
+      tempo: tempoOf(project),
+      meter: meterOf(project),
+      sampleRate: project.sampleRate
+    }).endTick;
+  }
   return tempoOf(project).tickAfterFrames(region.startTick, region.length, project.sampleRate);
 }
 

@@ -149,6 +149,38 @@ export interface RegionDetails {
   readonly framesPerTick: number;
   /** MIDI regions' note miniatures (regions flagged {@link ItemFlag.Midi}). */
   readonly notes?: NoteMiniatures;
+  /** Warped audio regions' maps (Phase 5: flex and follow), so their waveforms are drawn where they play. */
+  readonly warp?: WarpMaps;
+}
+
+/**
+ * Warped regions' maps, as columns: item `i`'s points are `offset[i]..offset[i + 1]`, each a tick relative to the item's
+ * start and the file frame that plays there, ascending; the waveform is drawn linearly between them. An item without
+ * points (or with one) is drawn at its {@link RegionDetails.rate}.
+ */
+export interface WarpMaps {
+  readonly offset: Uint32Array;
+  readonly tick: Float64Array;
+  readonly frame: Float64Array;
+}
+
+/** Warp maps for items (one list per item, in item order; empty for an unwarped item). */
+export function createWarpMaps(items: readonly (readonly { tick: number; frame: number }[])[]): WarpMaps {
+  const total = items.reduce((sum, points) => sum + points.length, 0);
+  const offset = new Uint32Array(items.length + 1);
+  const tick = new Float64Array(total);
+  const frame = new Float64Array(total);
+  let k = 0;
+  items.forEach((points, i) => {
+    offset[i] = k;
+    for (const point of points) {
+      tick[k] = point.tick;
+      frame[k] = point.frame;
+      k++;
+    }
+  });
+  offset[items.length] = k;
+  return { offset, tick, frame };
 }
 
 /** Region details with room for `count` regions. */
@@ -188,6 +220,10 @@ export function sceneBuffers(scene: TimelineScene): ArrayBuffer[] {
         ...[n.offset, n.start, n.length, n.pitch, n.low, n.high].map(column => column.buffer as ArrayBuffer)
       );
     }
+    const w = r.warp;
+    if (w) {
+      buffers.push(...[w.offset, w.tick, w.frame].map(column => column.buffer as ArrayBuffer));
+    }
   }
   if (scene.noteFlags) {
     buffers.push(scene.noteFlags.buffer as ArrayBuffer);
@@ -223,6 +259,15 @@ export function cloneScene(scene: TimelineScene): TimelineScene {
             rate: regions.rate.slice(),
             gain: regions.gain.slice(),
             flags: regions.flags.slice(),
+            ...(regions.warp
+              ? {
+                  warp: {
+                    offset: regions.warp.offset.slice(),
+                    tick: regions.warp.tick.slice(),
+                    frame: regions.warp.frame.slice()
+                  }
+                }
+              : {}),
             ...(notes
               ? {
                   notes: {

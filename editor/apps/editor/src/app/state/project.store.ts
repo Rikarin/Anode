@@ -22,6 +22,7 @@ import { MeterMap } from '@anode/timeline';
 import { ANODE_API } from '../core/api';
 import { EventStream } from '../core/events';
 import { Notify } from '../core/notify';
+import { RegionTiming } from '../music/region-timing';
 import { TempoMap } from '../music/tempo-map';
 
 /** Ticks per quarter note: the project's musical time base (docs/01-implementation-plan.md §5.1). */
@@ -324,8 +325,24 @@ export class ProjectStore {
     return this.tracks().get(id);
   }
 
-  /** The end of a region in ticks, under the tempo track. */
+  /**
+   * A region's timing (docs/06-phase-5.md, RegionTiming): its file frames to ticks and back, through its track's flex,
+   * its follow, its file's tempo and its flex markers.
+   */
+  timing(region: AudioRegion): RegionTiming {
+    return new RegionTiming(
+      region,
+      this.tracks().get(region.trackId)?.flexOn ?? false,
+      this.files().get(region.fileId)?.tempo ?? null,
+      { tempo: this.tempoMap(), meter: this.meter(), sampleRate: this.info()?.sampleRate ?? 48_000 }
+    );
+  }
+
+  /** The end of a region in ticks: through its timing for a whole region, else (a take) under the tempo track. */
   regionEnd(region: Pick<AudioRegion, 'startTick' | 'length'>): number {
+    if (isRegion(region)) {
+      return this.timing(region).endTick;
+    }
     const map = this.tempoMap();
     return map.constant
       ? region.startTick + regionTicks(region, this.framesPerTick())
@@ -552,6 +569,11 @@ export class ProjectStore {
       this.gapTimer = null;
     }
   }
+}
+
+/** Whether a span is a whole audio region (with its Phase 5 fields), not a take. */
+function isRegion(span: Pick<AudioRegion, 'startTick' | 'length'>): span is AudioRegion {
+  return 'follow' in span && 'trackId' in span && 'fileId' in span;
 }
 
 function byTick(markers: readonly Marker[]): Marker[] {

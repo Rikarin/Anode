@@ -3,11 +3,13 @@ import {
   createItems,
   createNoteMiniatures,
   createRegionDetails,
+  createWarpMaps,
   ItemFlag,
   type MeterEvent,
   parseHexColor,
   type TimelineScene
 } from '@anode/timeline';
+import type { RegionTiming } from '../music/region-timing';
 import type { LaneRow } from '../state/lanes';
 import { Ppq } from '../state/project.store';
 import { wholeTake } from './comp';
@@ -44,6 +46,8 @@ export interface SceneInput {
   selected: ReadonlySet<string>;
   /** The waveform key the renderer knows a file's peaks by. */
   waveformKey: (fileId: string) => number;
+  /** A region's timing (Phase 5): a warped region is drawn through its map, its length where its last frame lands. */
+  timing?: (region: AudioRegion) => RegionTiming;
 }
 
 /** A track colour for the renderer: `#rgb` and `#rrggbb` (the Server's colours); anything else falls back. */
@@ -76,6 +80,7 @@ interface Draft {
   rate?: number;
   gain?: number;
   notes?: { start: number; length: number; pitch: number }[];
+  warp?: { tick: number; frame: number }[];
 }
 
 /**
@@ -107,13 +112,16 @@ export function buildScene(input: SceneInput): TracksScene {
     if (lane === undefined) {
       continue;
     }
-    const r = rate(region);
+    const timing = input.timing?.(region);
+    const warped = timing?.warped ? timing : null;
+    const r = warped ? warped.averageRate || rate(region) : rate(region);
     drafts.push({
       id: region.id,
       whole: true,
       lane,
       start: region.startTick,
-      length: region.length / r,
+      length: warped ? warped.lengthTicks : region.length / r,
+      ...(warped ? { warp: warped.drawPoints() } : {}),
       color: colors.get(region.trackId) ?? Fallback,
       flags: flagsOf(region.id, region.trackId, region.muted),
       name: region.name,
@@ -230,6 +238,7 @@ export function buildScene(input: SceneInput): TracksScene {
     }
   });
   const notes = createNoteMiniatures(drafts.map(d => d.notes ?? []));
+  const warp = drafts.some(d => d.warp) ? createWarpMaps(drafts.map(d => d.warp ?? [])) : undefined;
 
   return {
     scene: {
@@ -238,7 +247,7 @@ export function buildScene(input: SceneInput): TracksScene {
       beatsPerBar: input.beatsPerBar,
       laneCount: Math.max(1, rows.length),
       items,
-      regions: { ...details, notes },
+      regions: { ...details, notes, ...(warp ? { warp } : {}) },
       ...(input.meter ? { meter: input.meter } : {})
     },
     regionIds,
