@@ -239,6 +239,71 @@ public sealed class HostLinkTests : IAsyncDisposable {
         await ServerFixture.Eventually(() => Task.FromResult(host!.Thru == inst));
     }
 
+    [Fact]
+    public async Task Punch_tempo_tracks_stacks_comps_preview_and_flashback_reach_the_host() {
+        StartHost();
+        await using var server = new ServerFixture(socketPath);
+        using var client = server.CreateClient();
+        await using var events = await EventStream.ConnectAsync(server);
+        await WaitConnectedAsync(server, client);
+        await client.CreateProjectAsync();
+        await WaitForAsync<LoadModelMessage>(static m => m.Replace);
+        // The punch range travels in samples with every project.
+        Assert.Equal(new SetPunchMessage(false, 0, 4 * 96_000), await WaitForAsync<SetPunchMessage>());
+
+        await client.EditAsync(new SetRecordingCommand(Autopunch: true, PunchInTick: 960, PunchOutTick: 1920));
+        Assert.Equal(new SetPunchMessage(true, 24_000, 48_000), await WaitForAsync<SetPunchMessage>(static m => m.Enabled));
+
+        // A tempo track change: the whole model again, and the punch range moves with the tempo.
+        var wholes = Received<LoadModelMessage>().Count(static m => m.Replace);
+        await client.EditAsync(new SetTempoEventsCommand([new(0, 60, TempoCurve.Step), new(3840, 120, TempoCurve.Ramp)]));
+        await ServerFixture.Eventually(() => Task.FromResult(Received<LoadModelMessage>().Count(static m => m.Replace) > wholes));
+        Assert.Equal(new SetPunchMessage(true, 48_000, 96_000), await WaitForAsync<SetPunchMessage>(static m => m.InSample == 48_000));
+        Assert.Equal(48_000, host!.EventsOf(TrackEntry.MetronomeTrack)[1].SamplePos); // a beat at 60 BPM
+
+        // A stack has no engine track; its strip reaches its members.
+        await client.EditAsync(new AddTrackCommand("A"), new AddTrackCommand("B"));
+        var tracks = (await client.ProjectAsync()).Tracks;
+        await WaitForAsync<LoadModelMessage>(static m => m.Tracks.Any(static t => t.Id == 1));
+        await client.EditAsync(new CreateStackCommand([tracks[0].Id, tracks[1].Id], "Stack"));
+        var stack = (await client.ProjectAsync()).Tracks[0];
+        Assert.Equal(TrackKind.Stack, stack.Kind);
+        await client.EditAsync(new SetStripCommand(tracks[0].Id, -6), new SetStripCommand(stack.Id, -3, Mute: true));
+        var a = await WaitForAsync<SetStripMessage>(static m => m is { TrackId: 0, Strip.Mute: true });
+        Assert.Equal(Units.DbToGain(-9), a.Strip.Gain);
+        var b = await WaitForAsync<SetStripMessage>(static m => m is { TrackId: 1, Strip.Mute: true });
+        Assert.Equal(Units.DbToGain(-3), b.Strip.Gain);
+        Assert.Equal([TrackEntry.MetronomeTrack, 0, 1], host.Model.Tracks);
+
+        // A comp reaches the host as crossfading playlist entries.
+        var file = await client.ImportAsync(TestWav.Write(media, "Take.wav", frames: 192_000));
+        await client.EditAsync(new AddRegionCommand(tracks[0].Id, file.Id, 0), new AddRegionCommand(tracks[0].Id, file.Id, 0));
+        var project = await client.ProjectAsync();
+        await client.EditAsync(new PackTakeFolderCommand([..project.Regions.Select(static r => r.Id)]));
+        var folder = (await client.ProjectAsync()).TakeFolders[0];
+        await client.EditAsync(
+            new SetCompCommand(folder.Id, [new(0, 960, folder.Takes[0].Id), new(960, 1920, folder.Takes[1].Id)])
+        );
+        await ServerFixture.Eventually(() => Task.FromResult(host.Model.Tracks.Contains(0) && PlaylistOf(0).Length == 2));
+        var playlist = PlaylistOf(0);
+        Assert.True(playlist[0].Start + playlist[0].Length > playlist[1].Start); // they overlap ...
+        Assert.Equal(playlist[0].FadeOut, playlist[1].FadeIn); // ... as a crossfade
+
+        // Preview and Flashback Capture.
+        var wav = TestWav.Write(media, "Preview.wav");
+        await client.PostAsJsonAsync("/api/v1/files/preview", new PreviewRequest(wav), ContractsJsonContext.Default.PreviewRequest, TestContext.Current.CancellationToken);
+        Assert.Equal(wav, (await WaitForAsync<PreviewFileMessage>()).Path);
+        await client.EditAsync(new SetTrackCommand(tracks[1].Id, RecordArmed: true));
+        await client.TransportAsync(TransportCommand.Play, 0);
+        await events.WaitAsync<TransportEvent>(static e => e.Transport is { State: TransportState.Playing, PositionSamples: > 12_000 });
+        await client.PostAsync("/api/v1/transport/capture", null, TestContext.Current.CancellationToken);
+        await WaitForAsync<FlashbackCaptureMessage>();
+        var captured = await events.WaitAsync<ProjectChangedEvent>(static e => e.Delta.Ops.Any(static o => o is RegionUpserted r && r.Region.StartTick == 0 && r.Region.Name == "B"));
+        Assert.Contains(captured.Delta.Ops, static o => o is AudioFileUpserted);
+    }
+
+    AudioPlaylistEntry[] PlaylistOf(int track) => host!.PlaylistOf(track);
+
     void StartHost() {
         host = new(EngineConnection.Version);
         host.Listen(socketPath);

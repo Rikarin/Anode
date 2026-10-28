@@ -181,6 +181,13 @@ public sealed class FakeHost : IAsyncDisposable {
         }
     }
 
+    /// <summary>The playlist of engine track <paramref name="trackId" /> in the loaded model.</summary>
+    public AudioPlaylistEntry[] PlaylistOf(int trackId) {
+        lock (gate) {
+            return [..playlists.GetValueOrDefault(trackId) ?? []];
+        }
+    }
+
     /// <summary>The MIDI-thru track (−1: none).</summary>
     public int Thru {
         get {

@@ -105,7 +105,8 @@ public static class StandardMidiFile {
                     case 0x51 when data.Length >= 3:
                         var microseconds = (data[0] << 16) | (data[1] << 8) | data[2];
                         if (microseconds > 0) {
-                            tempo[tick] = Math.Clamp(60_000_000.0 / microseconds, TempoMap.MinBpm, TempoMap.MaxBpm);
+                            // To a thousandth of a BPM: a file stores whole microseconds per beat, so 90 BPM reads as 89.99995.
+                            tempo[tick] = Math.Clamp(Math.Round(60_000_000.0 / microseconds, 3), TempoMap.MinBpm, TempoMap.MaxBpm);
                         }
 
                         break;
