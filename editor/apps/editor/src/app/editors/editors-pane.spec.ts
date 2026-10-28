@@ -56,6 +56,36 @@ describe('Editors pane', () => {
     expect(corrected.every(n => n.targetCents % 100 === 0)).toBe(true);
   });
 
+  it('builds quick pitch edits on each other, before the Server answers', async () => {
+    const { server, project, fixture, element } = await open();
+    const region = project.regionList()[0];
+    TestBed.inject(SelectionStore).select([region?.id ?? '']);
+    await fixture.whenStable();
+    element.querySelector<HTMLButtonElement>('[data-testid="flex-pitch-enable"]')?.click();
+    await settle();
+    server.runJobs();
+    await settle();
+    await settle();
+    await fixture.whenStable();
+    const first = project.regions().get(region?.id ?? '')?.pitchNotes[0];
+    const note = () => element.querySelectorAll<HTMLElement>('[data-testid="pitch-note"]')[0];
+    const vibrato = () => element.querySelectorAll<HTMLElement>('[data-testid="pitch-hotspot-vibrato"]')[0];
+    // Two nudges and five vibrato steps in a row, none waiting for the last edit to come back.
+    for (const target of [note, note]) {
+      target()?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true }));
+      fixture.detectChanges();
+    }
+    for (let i = 0; i < 5; i++) {
+      vibrato()?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+      fixture.detectChanges();
+    }
+    await settle();
+    await settle();
+    const after = project.regions().get(region?.id ?? '')?.pitchNotes[0];
+    expect(after?.targetCents).toBe((first?.targetCents ?? 0) + 200);
+    expect(after?.vibrato).toBeCloseTo((first?.vibrato ?? 1) - 0.5, 5);
+  });
+
   it('edits the file tempo in the Smart Tempo Editor', async () => {
     const { project, fixture, element } = await open();
     const region = project.regionList()[0];

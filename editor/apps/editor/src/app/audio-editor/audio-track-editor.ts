@@ -330,7 +330,12 @@ export class AudioTrackEditor {
   /** A gesture's preview: the notes as they are dragged. */
   private readonly draft = signal<PitchNote[] | null>(null);
   private originals: PitchNote[] | null = null;
-  readonly notes = computed(() => this.draft() ?? this.region()?.pitchNotes ?? []);
+  /**
+   * The last committed notes until the Server answers, so a quick run of edits (key presses) builds on each other
+   * instead of each on the notes from before the run.
+   */
+  private readonly pending = signal<PitchNote[] | null>(null);
+  readonly notes = computed(() => this.draft() ?? this.pending() ?? this.region()?.pitchNotes ?? []);
   /** Selected notes, by index. */
   readonly selected = signal<ReadonlySet<number>>(new Set());
   protected readonly percent = signal(100);
@@ -465,6 +470,7 @@ export class AudioTrackEditor {
       untracked(() => {
         this.selected.set(new Set());
         this.draft.set(null);
+        this.pending.set(null);
         this.originals = null;
       });
     });
@@ -609,7 +615,12 @@ export class AudioTrackEditor {
   private commit(notes: PitchNote[], label: string): void {
     const region = this.region();
     if (region) {
-      void this.flex.setPitchNotes(region.id, notes, label);
+      this.pending.set(notes);
+      void this.flex.setPitchNotes(region.id, notes, label).finally(() => {
+        if (this.pending() === notes) {
+          this.pending.set(null);
+        }
+      });
     }
   }
 }
