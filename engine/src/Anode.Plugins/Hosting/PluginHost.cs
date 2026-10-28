@@ -346,6 +346,10 @@ public sealed class PluginHost : IDisposable {
         SandboxProcess? idle = null;
         lock (gate) {
             inHost.Remove(instance);
+            if (disposed) {
+                return; // the host already stopped (and unmapped) every sandbox
+            }
+
             if (backend is SandboxBackend sb && instances.TryGetValue(sb.Box, out var slots)) {
                 slots.Remove(sb.Slot);
                 sb.Box.FreeSlot(sb.Slot);
@@ -368,9 +372,14 @@ public sealed class PluginHost : IDisposable {
 
     internal void RaiseProblem(PluginProblem problem) => Problem?.Invoke(problem);
 
-    /// <summary>Stops every sandbox. Instances still alive are bypassed.</summary>
+    /// <summary>
+    ///     Stops every sandbox. Instances still alive are bypassed from then on: their <c>Process</c> leaves the block
+    ///     dry (instruments silent), and their <c>Dispose</c> is harmless. Stop processing them before disposing the
+    ///     host: a block in flight on another thread while the sandboxes go away is not safe.
+    /// </summary>
     public void Dispose() {
         List<SandboxProcess> all;
+        List<PluginInstance> outstanding;
         lock (gate) {
             if (disposed) {
                 return;
@@ -378,7 +387,14 @@ public sealed class PluginHost : IDisposable {
 
             disposed = true;
             all = [..sandboxes];
+            outstanding = [..inHost, ..instances.Values.SelectMany(static s => s.Values)];
             sandboxes.Clear();
+            instances.Clear();
+            inHost.Clear();
+        }
+
+        foreach (var instance in outstanding) {
+            instance.Abandon();
         }
 
         foreach (var box in all) {

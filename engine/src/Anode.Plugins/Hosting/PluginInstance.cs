@@ -192,6 +192,14 @@ internal sealed class PluginInstance : IDisposable {
 
     public void OnLatency(int samples) => latency = samples;
 
+    /// <summary>Its host was disposed: bypassed from now on, without a problem report.</summary>
+    public void Abandon() {
+        failure ??= "its plugin host was disposed";
+        if (backend is InHostBackend local) {
+            local.Unload();
+        }
+    }
+
     public void Fail(string message) {
         if (failure is not null) {
             return;

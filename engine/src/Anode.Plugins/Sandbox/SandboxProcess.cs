@@ -23,6 +23,7 @@ internal sealed unsafe class SandboxProcess : IDisposable {
     Thread? monitor;
     int nextId;
     int dying;
+    int disposed;
     volatile bool dead;
 
     /// <summary>A request's reply, as the reader thread hands it over.</summary>
@@ -353,8 +354,15 @@ internal sealed unsafe class SandboxProcess : IDisposable {
         Died?.Invoke(this);
     }
 
-    /// <summary>Asks the sandbox to quit, then kills it if it does not.</summary>
+    /// <summary>
+    ///     Asks the sandbox to quit, then kills it if it does not, and unmaps the segment. Idempotent; the sandbox
+    ///     counts as dead before anything is unmapped, so slots that check <see cref="IsDead" /> first never touch it.
+    /// </summary>
     public void Dispose() {
+        if (Interlocked.Exchange(ref disposed, 1) != 0) {
+            return;
+        }
+
         if (!dead && started is not null) {
             Request(new() { Op = "quit" }, TimeSpan.FromSeconds(2));
             try {
@@ -370,6 +378,7 @@ internal sealed unsafe class SandboxProcess : IDisposable {
             }
         }
 
+        Die("disposed"); // a no-op when it already died; dead from here on
         monitor?.Join(1000);
         Volatile.Write(ref Header->Stop, 1);
         foreach (var d in DoneWords) {

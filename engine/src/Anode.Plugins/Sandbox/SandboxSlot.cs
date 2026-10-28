@@ -194,7 +194,7 @@ internal sealed unsafe class SandboxSlot {
         }
 
         var frames = Math.Min(submittedFrames, outL.Length);
-        if (!WaitDone(request, deadlineNs)) {
+        if (box.IsDead || !WaitDone(request, deadlineNs)) {
             Misses++;
             return false;
         }
@@ -215,6 +215,11 @@ internal sealed unsafe class SandboxSlot {
 
     bool WaitDone(long request, long deadlineNs) {
         while (true) {
+            // A dead sandbox's segment may be unmapped already: never read it.
+            if (box.IsDead) {
+                return false;
+            }
+
             if (Volatile.Read(ref control->Completed) == request) {
                 return true;
             }
@@ -240,5 +245,5 @@ internal sealed unsafe class SandboxSlot {
     }
 
     /// <summary>True while the sandbox still owes the last block (control thread: wait before unloading).</summary>
-    public bool Busy => Volatile.Read(ref control->Completed) != lastRequested;
+    public bool Busy => !box.IsDead && Volatile.Read(ref control->Completed) != lastRequested;
 }
