@@ -25,8 +25,10 @@ static class TransportApi {
             .WithSummary("Play, stop, record or locate. Recording needs an open project and a record-armed track.");
         transport.MapPost(
                 "/capture",
-                static Results<Accepted, NotFound, ProblemHttpResult>() =>
-                    throw Pending.Phase3("FlashbackCapture")
+                static Results<Accepted, NotFound, ProblemHttpResult>(EngineConnection engine) => {
+                    engine.Capture();
+                    return TypedResults.Accepted((string?)null);
+                }
             )
             .WithName("FlashbackCapture")
             .WithSummary(

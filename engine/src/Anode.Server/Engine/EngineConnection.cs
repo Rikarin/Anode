@@ -33,6 +33,9 @@ public sealed class EngineConnection(
     ILogger<EngineConnection> logger
 ) : BackgroundService {
     public const int MaxLiveEvents = 1024;
+
+    /// <summary>The preview channel's level: −6 dB, so a full-scale file does not jump out over the mix.</summary>
+    public const float PreviewGain = 0.5f;
     static readonly TimeSpan RetryDelay = TimeSpan.FromMilliseconds(250);
     static readonly TimeSpan TelemetryInterval = TimeSpan.FromMilliseconds(33);
     static readonly TimeSpan StatesTimeout = TimeSpan.FromSeconds(3);
@@ -156,6 +159,46 @@ public sealed class EngineConnection(
         Volatile.Write(ref thru, request.TrackId);
         Kick();
         return true;
+    }
+
+    /// <summary>
+    ///     Flashback Capture: asks the host to write what the armed tracks heard since playback last started; its
+    ///     answer becomes an undoable "Flashback Capture" step (<see cref="ProjectSession.ApplyRecording" />).
+    /// </summary>
+    public void Capture() {
+        if (session.View is null) {
+            throw ProjectException.NoProject();
+        }
+
+        Send(new FlashbackCaptureMessage());
+    }
+
+    /// <summary>
+    ///     Plays an audio file on the server's disk through the engine's preview channel (straight to the master), or
+    ///     with a null path stops it.
+    /// </summary>
+    public void Preview(string? path) {
+        if (path is null) {
+            Send(new PreviewFileMessage(null, 0));
+            return;
+        }
+
+        string full;
+        try {
+            full = Path.GetFullPath(path);
+        } catch (Exception e) when (e is ArgumentException or NotSupportedException or PathTooLongException) {
+            throw ProjectException.Unprocessable($"'{path}' is not a file path: {e.Message}");
+        }
+
+        if (!File.Exists(full)) {
+            throw ProjectException.NotFound($"No file '{full}'.");
+        }
+
+        if (Library.FileBrowser.KindOf(full, false) != FileKind.Audio) {
+            throw ProjectException.Unprocessable($"'{full}' is not an audio file.");
+        }
+
+        Send(new PreviewFileMessage(full, PreviewGain));
     }
 
     /// <summary>Asks the host to rescan its plugin folders; the new catalogue follows as <c>pluginsChanged</c>.</summary>
@@ -383,7 +426,7 @@ public sealed class EngineConnection(
 
     void ApplyRecording(RecordingFinishedMessage finished) {
         try {
-            session.ApplyRecording(finished.Takes ?? [], finished.MidiTakes);
+            session.ApplyRecording(finished.Takes ?? [], finished.MidiTakes, finished.Flashback);
         } catch (Exception e) when (e is IOException
                                         or UnauthorizedAccessException
                                         or ProjectException

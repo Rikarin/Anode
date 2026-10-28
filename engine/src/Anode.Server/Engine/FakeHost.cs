@@ -20,7 +20,11 @@ namespace Anode.Server.Engine;
 ///     MIDI it received (or, without any, a few notes), reported in <see cref="RecordingFinishedMessage" />. Phase 2: it
 ///     serves a plugin catalogue (<see cref="Catalogue" />) and MIDI ports after its hello, keeps instruments,
 ///     parameters, MIDI I/O and the MIDI-thru track, answers live MIDI with activity, and reports a state per
-///     instrument (the one it was given, else a made-up one).
+///     instrument (the one it was given, else a made-up one). Phase 3: a recording across cycle wraps is one take per
+///     track with its <see cref="RecordedTake.Passes" />, and with autopunch (<see cref="SetPunchMessage" />) only
+///     the punch range is recorded; while playing, it keeps what armed tracks (and MIDI on armed or thru tracks) would
+///     have recorded since playback started, which <see cref="FlashbackCaptureMessage" /> writes as a Flashback
+///     recording; and it keeps the file the preview channel plays (<see cref="Preview" />).
 /// </summary>
 public sealed class FakeHost : IAsyncDisposable {
     public const string Backend = "null";
@@ -40,10 +44,16 @@ public sealed class FakeHost : IAsyncDisposable {
     readonly Dictionary<int, EngineFile> files = [];
     readonly Dictionary<int, string> states = [];
     readonly Dictionary<int, List<RecordedMidiEvent>> live = [];
+    readonly Dictionary<int, List<RecordedMidiEvent>> heard = [];
     readonly CancellationTokenSource stopping;
     EngineStrip master = new(1, 0, false, false);
     string? recordDirectory;
     SetCycleMessage cycle = new(false, 0, 0);
+    SetPunchMessage punch = new(false, 0, 0);
+    string? preview;
+    long playStart = -1;
+    long playTimestamp;
+    long playedFrames = -1;
     TelemetryTransportState state;
     long anchorPosition;
     long anchorTimestamp;
@@ -150,6 +160,24 @@ public sealed class FakeHost : IAsyncDisposable {
     public IReadOnlyList<PlaybackEvent> EventsOf(int trackId) {
         lock (gate) {
             return events.GetValueOrDefault(trackId) ?? [];
+        }
+    }
+
+    /// <summary>The autopunch range last set.</summary>
+    public SetPunchMessage Punch {
+        get {
+            lock (gate) {
+                return punch;
+            }
+        }
+    }
+
+    /// <summary>The file the preview channel plays, or null.</summary>
+    public string? Preview {
+        get {
+            lock (gate) {
+                return preview;
+            }
         }
     }
 
@@ -332,6 +360,21 @@ public sealed class FakeHost : IAsyncDisposable {
                 break;
             case SetMetronomeMessage:
                 break;
+            case SetPunchMessage set:
+                lock (gate) {
+                    punch = set;
+                }
+
+                break;
+            case PreviewFileMessage play:
+                lock (gate) {
+                    preview = play.Path;
+                }
+
+                break;
+            case FlashbackCaptureMessage:
+                yield return Capture();
+                break;
             case TransportMessage transport:
                 if (Transport(transport) is { } finished) {
                     yield return finished;
@@ -411,6 +454,17 @@ public sealed class FakeHost : IAsyncDisposable {
 
                 var at = Position();
                 events.AddRange(message.Events.Select(e => new RecordedMidiEvent(at, e.Status, e.Data1, e.Data2)));
+            } else if (state == TelemetryTransportState.Playing
+                       && tracks.TryGetValue(message.TrackId, out var played)
+                       && (played.RecordArmed || message.TrackId == thru)) {
+                if (!heard.TryGetValue(message.TrackId, out var kept)) {
+                    heard[message.TrackId] = kept = [];
+                }
+
+                if (kept.Count < MaxLog) {
+                    var at = Position();
+                    kept.AddRange(message.Events.Select(e => new RecordedMidiEvent(at, e.Status, e.Data1, e.Data2)));
+                }
             }
         }
 
@@ -440,7 +494,7 @@ public sealed class FakeHost : IAsyncDisposable {
     }
 
     RecordingFinishedMessage? Transport(TransportMessage message) {
-        List<(EngineTrack Track, long Start, long Frames)>? takes = null;
+        List<(EngineTrack Track, IReadOnlyList<RecordedPass> Passes)>? takes = null;
         List<RecordedMidiTake> midiTakes = [];
         string? directory;
         lock (gate) {
@@ -449,15 +503,22 @@ public sealed class FakeHost : IAsyncDisposable {
                 case TransportAction.Play:
                 case TransportAction.Record:
                     takes = Finish(midiTakes);
+                    EndPlayback();
                     anchorPosition = message.PositionSamples >= 0 ? message.PositionSamples : now;
                     anchorTimestamp = Stopwatch.GetTimestamp();
                     state = message.Action == TransportAction.Play
                         ? TelemetryTransportState.Playing
                         : TelemetryTransportState.Recording;
                     recordStart = anchorPosition;
+                    if (state == TelemetryTransportState.Playing) {
+                        (playStart, playTimestamp, playedFrames) = (anchorPosition, anchorTimestamp, -1);
+                        heard.Clear();
+                    }
+
                     break;
                 case TransportAction.Stop:
                     takes = Finish(midiTakes);
+                    EndPlayback();
                     anchorPosition = now;
                     state = TelemetryTransportState.Stopped;
                     break;
@@ -474,54 +535,141 @@ public sealed class FakeHost : IAsyncDisposable {
             return midiTakes.Count > 0 ? new([], midiTakes) : null;
         }
 
-        Directory.CreateDirectory(directory);
-        var stamp = DateTime.UtcNow.ToString("yyyyMMdd'T'HHmmssfff'Z'", CultureInfo.InvariantCulture);
-        var recorded = new List<RecordedTake>();
-        foreach (var (track, start, frames) in takes) {
-            var channels = track.Stereo ? 2 : 1;
-            var path = Path.Combine(directory, $"{track.Id}-{stamp}.wav");
-            WriteTake(path, channels, frames);
-            recorded.Add(new(track.Id, path, start, frames, channels, SampleRate));
-        }
+        return new(Write(directory, takes), midiTakes.Count > 0 ? midiTakes : null);
+    }
 
-        return new(recorded, midiTakes.Count > 0 ? midiTakes : null);
+    /// <summary>Playback stops (or restarts): the Flashback window is what it played.</summary>
+    void EndPlayback() {
+        if (state == TelemetryTransportState.Playing && playStart >= 0) {
+            playedFrames = Elapsed(playTimestamp);
+        }
     }
 
     /// <summary>
-    ///     The audio takes of the recording that ends now, if one was running; its MIDI takes go to
-    ///     <paramref name="midiTakes" />.
+    ///     Flashback Capture: what armed tracks heard since playback last started (up to now, or to where it stopped),
+    ///     as takes at the positions they were played.
     /// </summary>
-    List<(EngineTrack, long, long)>? Finish(List<RecordedMidiTake> midiTakes) {
+    RecordingFinishedMessage Capture() {
+        List<(EngineTrack, IReadOnlyList<RecordedPass>)> takes;
+        var midiTakes = new List<RecordedMidiTake>();
+        string? directory;
+        lock (gate) {
+            var frames = state == TelemetryTransportState.Playing ? Elapsed(playTimestamp) : playedFrames;
+            directory = recordDirectory;
+            if (playStart < 0 || frames <= 0 || directory is null) {
+                return new([], null, true);
+            }
+
+            frames = Math.Min(frames, 600L * SampleRate);
+            var passes = Passes(playStart, frames, false);
+            takes = [
+                ..tracks.Values.Where(static t => t.RecordArmed && !IsMidi(t))
+                    .OrderBy(static t => t.Id)
+                    .Select(t => (t, passes))
+            ];
+            var end = playStart + Math.Min(frames, passes[0].Frames);
+            foreach (var track in tracks.Values.Where(t => IsMidi(t) && (t.RecordArmed || t.Id == thru)).OrderBy(static t => t.Id)) {
+                if (heard.GetValueOrDefault(track.Id) is { Count: > 0 } played) {
+                    midiTakes.Add(new(track.Id, playStart, end, [..played]));
+                } else if (track.RecordArmed) {
+                    midiTakes.Add(new(track.Id, playStart, end, FakeNotes(playStart, end - playStart)));
+                }
+            }
+        }
+
+        return new(takes.Count > 0 ? Write(directory, takes) : [], midiTakes.Count > 0 ? midiTakes : null, true);
+    }
+
+    /// <summary>Writes each take's file (a quiet sine as long as its passes) and describes it.</summary>
+    List<RecordedTake> Write(string directory, List<(EngineTrack Track, IReadOnlyList<RecordedPass> Passes)> takes) {
+        Directory.CreateDirectory(directory);
+        var stamp = DateTime.UtcNow.ToString("yyyyMMdd'T'HHmmssfff'Z'", CultureInfo.InvariantCulture);
+        var recorded = new List<RecordedTake>();
+        foreach (var (track, passes) in takes) {
+            var channels = track.Stereo ? 2 : 1;
+            var frames = passes.Sum(static p => p.Frames);
+            var path = Path.Combine(directory, $"{track.Id}-{stamp}.wav");
+            WriteTake(path, channels, frames);
+            recorded.Add(new(track.Id, path, passes[0].StartSample, frames, channels, SampleRate, passes));
+        }
+
+        return recorded;
+    }
+
+    /// <summary>
+    ///     The audio takes of the recording that ends now, if one was running, each with its passes; its MIDI takes go
+    ///     to <paramref name="midiTakes" />.
+    /// </summary>
+    List<(EngineTrack, IReadOnlyList<RecordedPass>)>? Finish(List<RecordedMidiTake> midiTakes) {
         if (state != TelemetryTransportState.Recording) {
             return null;
         }
 
-        var heard = new Dictionary<int, List<RecordedMidiEvent>>(live);
+        var played = new Dictionary<int, List<RecordedMidiEvent>>(live);
         live.Clear();
 
-        var elapsed = (long)(Stopwatch.GetElapsedTime(anchorTimestamp).TotalSeconds * SampleRate);
-        if (cycle.Enabled && recordStart < cycle.EndSample) {
-            elapsed = Math.Min(elapsed, cycle.EndSample - recordStart);
-        }
-
-        elapsed = Math.Clamp(elapsed, 0, 600L * SampleRate);
+        var elapsed = Math.Clamp(Elapsed(anchorTimestamp), 0, 600L * SampleRate);
         if (elapsed == 0) {
             return null;
         }
 
+        var passes = Passes(recordStart, elapsed, punch.Enabled);
+        // MIDI takes keep the first pass (MIDI cycle recording makes no take folders).
+        var midiFrames = Math.Min(elapsed, cycle.Enabled && recordStart < cycle.EndSample ? cycle.EndSample - recordStart : elapsed);
         foreach (var track in tracks.Values.Where(static t => t.RecordArmed && IsMidi(t)).OrderBy(static t => t.Id)) {
-            var events = heard.GetValueOrDefault(track.Id) is { Count: > 0 } played
-                ? played
-                : FakeNotes(recordStart, elapsed);
-            midiTakes.Add(new(track.Id, recordStart, recordStart + elapsed, events));
+            var events = played.GetValueOrDefault(track.Id) is { Count: > 0 } heardLive
+                ? heardLive
+                : FakeNotes(recordStart, midiFrames);
+            midiTakes.Add(new(track.Id, recordStart, recordStart + midiFrames, events));
+        }
+
+        if (passes.Count == 0) {
+            return null;
         }
 
         return [
             ..tracks.Values.Where(static t => t.RecordArmed && !IsMidi(t))
                 .OrderBy(static t => t.Id)
-                .Select(t => (t, recordStart, elapsed))
+                .Select(t => (t, (IReadOnlyList<RecordedPass>)passes))
         ];
     }
+
+    /// <summary>
+    ///     The passes of <paramref name="frames" /> frames played from <paramref name="start" />: one per cycle wrap
+    ///     once the playhead is in the cycle, each clipped to the punch range with <paramref name="punched" />; file
+    ///     offsets count only what was kept.
+    /// </summary>
+    List<RecordedPass> Passes(long start, long frames, bool punched) {
+        var spans = new List<(long Start, long Frames)>();
+        if (cycle.Enabled && cycle.EndSample > cycle.StartSample && start < cycle.EndSample) {
+            var first = Math.Min(frames, cycle.EndSample - start);
+            spans.Add((start, first));
+            var length = cycle.EndSample - cycle.StartSample;
+            for (var done = first; done < frames; done += length) {
+                spans.Add((cycle.StartSample, Math.Min(length, frames - done)));
+            }
+        } else {
+            spans.Add((start, frames));
+        }
+
+        var passes = new List<RecordedPass>();
+        long offset = 0;
+        foreach (var (from, count) in spans) {
+            var (a, b) = (from, from + count);
+            if (punched) {
+                (a, b) = (Math.Max(a, punch.InSample), Math.Min(b, punch.OutSample));
+            }
+
+            if (b > a) {
+                passes.Add(new(a, offset, b - a));
+                offset += b - a;
+            }
+        }
+
+        return passes;
+    }
+
+    long Elapsed(long since) => (long)(Stopwatch.GetElapsedTime(since).TotalSeconds * SampleRate);
 
     static bool IsMidi(EngineTrack track) => track.Instrument is not null || track.Midi is not null;
 

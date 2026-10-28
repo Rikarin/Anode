@@ -103,16 +103,13 @@ public static partial class Edits {
         var ops = new List<DeltaOp> { new TakeFolderRemoved(folder.Id) };
         var takes = folder.Takes.ToDictionary(static t => t.Id, StringComparer.Ordinal);
         foreach (var piece in Comps.Pieces(state, folder)) {
-            // A region starts on a tick: from the tick nearest the piece's start, the file follows exactly.
-            var tick = Math.Max(0, map.TickAtSample(piece.Start, state.SampleRate));
+            // A region starts on a tick: from the first tick at or after the piece's start (within a tick of it),
+            // with the file following exactly and the fade-in as much shorter, so a crossfade stays one.
+            var tick = Recordings.CeilingTick(map, Math.Max(0, piece.Start), state.SampleRate);
             var shift = map.SampleAt(tick, state.SampleRate) - piece.Start;
             var offset = piece.FileOffset + shift;
             var length = piece.Length - shift;
-            if (offset < 0) {
-                (length, offset) = (length + offset, 0);
-            }
-
-            if (length <= 0 || !state.Files.TryGetValue(piece.FileId, out var file)) {
+            if (length <= 0 || offset < 0 || !state.Files.TryGetValue(piece.FileId, out var file)) {
                 continue;
             }
 
@@ -121,7 +118,7 @@ public static partial class Edits {
                 continue;
             }
 
-            var fadeIn = Math.Min(piece.FadeIn, length);
+            var fadeIn = Math.Min(Math.Max(0, piece.FadeIn - shift), length);
             ops.Add(
                 new RegionUpserted(
                     new(

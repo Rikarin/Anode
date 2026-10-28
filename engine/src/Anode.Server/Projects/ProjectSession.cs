@@ -5,6 +5,7 @@ using Anode.Model.Audio;
 using Anode.Model.Compile;
 using Anode.Model.Editing;
 using Anode.Model.History;
+using Anode.Model.Midi;
 using Anode.Model.Storage;
 using Anode.Server.Engine;
 using Anode.Server.Realtime;
@@ -58,6 +59,9 @@ public sealed class ProjectSession(
     TimeProvider time,
     ILogger<ProjectSession> logger
 ) {
+    /// <summary>The largest screenset layout the server keeps, in characters.</summary>
+    public const int MaxLayoutLength = 1 << 20;
+
     readonly Lock gate = new();
     readonly RandomIds ids = RandomIds.Instance;
     Open? open;
@@ -144,24 +148,248 @@ public sealed class ProjectSession(
     public ProjectSummary Save(IReadOnlyDictionary<string, byte[]?>? hostStates = null) {
         ProjectSummary summary;
         lock (gate) {
-            var o = Required();
-            var states = States(o, hostStates);
-            try {
-                ProjectPackage.Save(o.Folder, o.State);
-                ProjectPackage.SaveStates(o.Folder, states.ToDictionary(static s => s.Key, static s => s.Value.Bytes));
-            } catch (Exception e) when (e is IOException or UnauthorizedAccessException) {
-                throw ProjectException.Unprocessable($"Could not save '{o.Folder}': {e.Message}");
-            }
-
-            o.States = states;
-            Publish();
-            o.Dirty = false;
-            summary = o.Summary(time.GetUtcNow());
-            recent.Touch(summary);
-            hub.Publish(new ProjectSavedEvent(summary, o.Revision));
+            summary = SaveLocked(Required(), hostStates);
         }
 
         return summary;
+    }
+
+    /// <summary>
+    ///     Saves under the lock: first the previous save goes to <c>Backups/</c> (the newest ten are kept), then the
+    ///     project and its instruments' states.
+    /// </summary>
+    ProjectSummary SaveLocked(Open o, IReadOnlyDictionary<string, byte[]?>? hostStates) {
+        var states = States(o, hostStates);
+        try {
+            ProjectHistory.Backup(o.Folder, time.GetUtcNow());
+            ProjectPackage.Save(o.Folder, o.State);
+            ProjectPackage.SaveStates(o.Folder, states.ToDictionary(static s => s.Key, static s => s.Value.Bytes));
+        } catch (Exception e) when (e is IOException or UnauthorizedAccessException) {
+            throw ProjectException.Unprocessable($"Could not save '{o.Folder}': {e.Message}");
+        }
+
+        o.States = states;
+        Publish();
+        o.Dirty = false;
+        var summary = o.Summary(time.GetUtcNow());
+        recent.Touch(summary);
+        hub.Publish(new ProjectSavedEvent(summary, o.Revision));
+        return summary;
+    }
+
+    /// <summary>The open project's screensets, by number.</summary>
+    public IReadOnlyList<Screenset> Screensets() {
+        lock (gate) {
+            return [..Required().State.Screensets.Values];
+        }
+    }
+
+    /// <summary>Saves a screenset in the project: it marks the project unsaved, but is not an undo step.</summary>
+    public Screenset SaveScreenset(int number, Screenset screenset) {
+        if (number is < 1 or > 9) {
+            throw ProjectException.NotFound($"No screenset {number}: they are 1…9.");
+        }
+
+        var name = (screenset?.Name ?? string.Empty).Trim();
+        if (name.Length is 0 or > Edits.MaxNameLength) {
+            throw ProjectException.Unprocessable($"A screenset name has 1…{Edits.MaxNameLength} characters.");
+        }
+
+        if (screenset!.Layout is not { Length: <= MaxLayoutLength } layout) {
+            throw ProjectException.Unprocessable($"A screenset layout has at most {MaxLayoutLength} characters.");
+        }
+
+        var saved = new Screenset(number, name, screenset.Locked, layout);
+        lock (gate) {
+            var o = Required();
+            o.State = o.State with { Screensets = o.State.Screensets.SetItem(number, saved) };
+            o.Dirty = true;
+            Publish();
+        }
+
+        return saved;
+    }
+
+    /// <summary>The open project's alternatives, the current one marked.</summary>
+    public IReadOnlyList<ProjectAlternative> Alternatives() {
+        lock (gate) {
+            var o = Required();
+            var manifest = ProjectHistory.Alternatives(o.Folder, o.State.Name);
+            return [
+                ..manifest.Alternatives.Select(a => new ProjectAlternative(
+                        a.Id,
+                        a.Name,
+                        a.Id == manifest.Current
+                            ? ProjectHistory.Modified(o.Folder)
+                            : ProjectHistory.Modified(ProjectHistory.AlternativeFolder(o.Folder, a.Id)),
+                        a.Id == manifest.Current
+                    )
+                )
+            ];
+        }
+    }
+
+    /// <summary>
+    ///     Saves the open project as a new alternative and makes it current: the alternative it was keeps its last
+    ///     save.
+    /// </summary>
+    public ProjectAlternative CreateAlternative(string? name, IReadOnlyDictionary<string, byte[]?>? hostStates) {
+        var trimmed = (name ?? string.Empty).Trim();
+        if (trimmed.Length is 0 or > Edits.MaxNameLength) {
+            throw ProjectException.Unprocessable($"An alternative's name has 1…{Edits.MaxNameLength} characters.");
+        }
+
+        lock (gate) {
+            var o = Required();
+            var id = ids.Next(IdPrefix.Alternative);
+            var now = time.GetUtcNow();
+            try {
+                ProjectHistory.CreateAlternative(o.Folder, o.State.Name, id, trimmed, now);
+            } catch (Exception e) when (e is IOException or UnauthorizedAccessException or PackageException) {
+                throw ProjectException.Unprocessable($"Could not save the alternative: {e.Message}");
+            }
+
+            SaveLocked(o, hostStates);
+            return new(id, trimmed, now, true);
+        }
+    }
+
+    /// <summary>Switches to another alternative; unsaved edits of the current one are kept in a backup first.</summary>
+    public Project OpenAlternative(string id) {
+        string folder;
+        lock (gate) {
+            var o = Required();
+            var manifest = ProjectHistory.Alternatives(o.Folder, o.State.Name);
+            if (id == manifest.Current) {
+                return o.ToProject();
+            }
+
+            if (!manifest.Alternatives.Any(a => a.Id == id)
+                || !ProjectPackage.IsSafeId(id)
+                || !ProjectPackage.Exists(ProjectHistory.AlternativeFolder(o.Folder, id))) {
+                throw ProjectException.NotFound($"No alternative '{id}'.");
+            }
+
+            try {
+                KeepUnsaved(o);
+                ProjectHistory.OpenAlternative(o.Folder, o.State.Name, id, time.GetUtcNow());
+            } catch (Exception e) when (e is IOException or UnauthorizedAccessException or PackageException) {
+                throw ProjectException.Unprocessable($"Could not open the alternative: {e.Message}");
+            }
+
+            folder = o.Folder;
+        }
+
+        return OpenFolder(folder);
+    }
+
+    public void DeleteAlternative(string id) {
+        lock (gate) {
+            var o = Required();
+            var manifest = ProjectHistory.Alternatives(o.Folder, o.State.Name);
+            if (!manifest.Alternatives.Any(a => a.Id == id)) {
+                throw ProjectException.NotFound($"No alternative '{id}'.");
+            }
+
+            try {
+                ProjectHistory.DeleteAlternative(o.Folder, o.State.Name, id);
+            } catch (PackageException e) {
+                throw ProjectException.Unprocessable(e.Message);
+            } catch (Exception e) when (e is IOException or UnauthorizedAccessException) {
+                throw ProjectException.Unprocessable($"Could not delete the alternative: {e.Message}");
+            }
+        }
+    }
+
+    /// <summary>The open project's backups, newest first.</summary>
+    public IReadOnlyList<ProjectBackup> Backups() {
+        lock (gate) {
+            return ProjectHistory.Backups(Required().Folder);
+        }
+    }
+
+    /// <summary>
+    ///     Replaces the open project with a backup, like reopening it: the project as last saved and any unsaved edits
+    ///     are kept as backups first.
+    /// </summary>
+    public Project RevertToBackup(string id) {
+        string folder;
+        lock (gate) {
+            var o = Required();
+            var backup = ProjectHistory.BackupFolder(o.Folder, id) ?? throw ProjectException.NotFound($"No backup '{id}'.");
+            try {
+                var state = ProjectPackage.Load(backup);
+                var states = ProjectPackage.LoadStates(backup, state);
+                KeepUnsaved(o);
+                ProjectHistory.Backup(o.Folder, time.GetUtcNow());
+                ProjectPackage.Save(o.Folder, state);
+                ProjectPackage.SaveStates(o.Folder, states);
+            } catch (PackageException e) {
+                throw ProjectException.Unprocessable(e.Message);
+            } catch (Exception e) when (e is IOException or UnauthorizedAccessException) {
+                throw ProjectException.Unprocessable($"Could not revert to the backup: {e.Message}");
+            }
+
+            folder = o.Folder;
+        }
+
+        return OpenFolder(folder);
+    }
+
+    /// <summary>Unsaved edits go to a backup (and the project then counts as saved, so they are not kept twice).</summary>
+    void KeepUnsaved(Open o) {
+        if (o.Dirty) {
+            ProjectHistory.BackupState(o.Folder, o.State, time.GetUtcNow());
+            o.Dirty = false;
+        }
+    }
+
+    /// <summary>
+    ///     Imports a Standard MIDI File from the server's disk as one undoable step: an instrument track per MIDI track
+    ///     with notes, and the file's tempo and signature tracks.
+    /// </summary>
+    public CommandResult ImportMidi(string? path) {
+        if (string.IsNullOrWhiteSpace(path)) {
+            throw ProjectException.Unprocessable("Name the MIDI file to import.");
+        }
+
+        string full;
+        try {
+            full = Path.GetFullPath(path);
+        } catch (Exception e) when (e is ArgumentException or NotSupportedException or PathTooLongException) {
+            throw ProjectException.Unprocessable($"'{path}' is not a file path: {e.Message}");
+        }
+
+        Required();
+        if (!File.Exists(full)) {
+            throw ProjectException.NotFound($"No file '{full}'.");
+        }
+
+        SmfFile file;
+        try {
+            file = StandardMidiFile.Read(full);
+        } catch (FormatException e) {
+            throw ProjectException.Unprocessable(e.Message);
+        } catch (Exception e) when (e is IOException or UnauthorizedAccessException) {
+            throw ProjectException.Unprocessable($"Could not read '{full}': {e.Message}");
+        }
+
+        CommandResult result;
+        lock (gate) {
+            var o = Required();
+            EditResult edit;
+            try {
+                edit = Edits.ImportMidi(o.State, file, Path.GetFileNameWithoutExtension(full), ids, catalog.ForEdits);
+            } catch (EditException e) {
+                throw ProjectException.Unprocessable(e.Message);
+            }
+
+            result = Commit(o, edit.State, edit.Forward);
+            o.History.Push("Import MIDI File", o.Revision, new(edit.Forward, edit.Inverse), null);
+        }
+
+        Changed?.Invoke();
+        return result;
     }
 
     public void Close() {
@@ -295,14 +523,18 @@ public sealed class ProjectSession(
     }
 
     /// <summary>
-    ///     Applies a finished recording as one undoable batch, "Record": each take's file joins the pool (that part
-    ///     stays on undo) and becomes a region on its track at the position it was recorded at; each MIDI take becomes
-    ///     a MIDI region spanning the pass, rounded out to bars, or with <c>mergeMidiRecording</c> joins the MIDI region
-    ///     under the start of the pass (docs/03-phase-2.md, "Recording").
+    ///     Applies a finished recording (or with <paramref name="flashback" /> a Flashback Capture) as one undoable
+    ///     batch, "Record" (or "Flashback Capture"): each take's file joins the pool (that part stays on undo) and its
+    ///     passes become a take folder or regions on its track where they were played, after replace mode cleared what
+    ///     they cover, and only inside the punch range with autopunch (<see cref="Recordings" />, docs/04-phase-3.md);
+    ///     each MIDI take becomes a MIDI region spanning the pass, rounded out to bars, or with
+    ///     <c>mergeMidiRecording</c> joins the MIDI region under the start of the pass (docs/03-phase-2.md,
+    ///     "Recording").
     /// </summary>
     public CommandResult? ApplyRecording(
         IReadOnlyList<RecordedTake> takes,
-        IReadOnlyList<RecordedMidiTake>? midiTakes = null
+        IReadOnlyList<RecordedMidiTake>? midiTakes = null,
+        bool flashback = false
     ) {
         midiTakes ??= [];
         var probed = new List<(RecordedTake Take, WavInfo Info)>();
@@ -325,25 +557,25 @@ public sealed class ProjectSession(
             var inverse = new List<DeltaOp>();
             var state = o.State;
             foreach (var (take, info) in probed) {
-                if (Take(o, state, take, info) is not { } taken) {
+                if (Take(o, state, take, info, flashback) is not { } taken) {
                     continue;
                 }
 
-                var (file, region) = taken;
+                var (file, ops) = taken;
                 files.Add(file);
-                state = Edits.Step(state, [new AudioFileUpserted(file), new RegionUpserted(region)], forward, inverse);
+                state = Edits.Step(state, ops, forward, inverse);
             }
 
             foreach (var take in midiTakes) {
-                if (MidiTake(o, state, take) is { } region) {
-                    state = Edits.Step(state, [new MidiRegionUpserted(region)], forward, inverse);
+                if (MidiTake(o, state, take, flashback) is { } ops) {
+                    state = Edits.Step(state, ops, forward, inverse);
                 }
             }
 
             if (forward.Count > 0) {
                 inverse.Reverse();
                 result = Commit(o, state, forward);
-                o.History.Push("Record", o.Revision, new(forward, inverse), null);
+                o.History.Push(flashback ? "Flashback Capture" : "Record", o.Revision, new(forward, inverse), null);
             }
         }
 
@@ -355,8 +587,8 @@ public sealed class ProjectSession(
         return result;
     }
 
-    /// <summary>The file and region a recorded take becomes, or null (logged) when it cannot be used.</summary>
-    (AudioFile File, AudioRegion Region)? Take(Open o, ProjectState state, RecordedTake take, WavInfo info) {
+    /// <summary>The file a recorded take becomes and what places it, or null (logged) when it cannot be used.</summary>
+    (AudioFile File, List<DeltaOp> Ops)? Take(Open o, ProjectState state, RecordedTake take, WavInfo info, bool flashback) {
         var trackId = o.Ids.TrackOf(take.TrackId);
         var track = trackId is null ? null : state.FindTrack(trackId);
         if (track is null) {
@@ -369,31 +601,28 @@ public sealed class ProjectSession(
             return null;
         }
 
+        if (track.Kind != TrackKind.Audio) {
+            ProjectLog.TakeSkipped(logger, take.Path, "its track is not an audio track");
+            return null;
+        }
+
         var file = Describe(o, take.Path, info);
-        var start = state.TempoMap.TickAtSample(Math.Max(0, take.StartSample), state.SampleRate);
-        return (file,
-            new(
-                ids.Next(IdPrefix.Region),
-                track.Id,
-                file.Id,
-                track.Name,
-                Math.Max(0, start),
-                0,
-                info.Frames,
-                0,
-                0,
-                0,
-                0,
-                0,
-                false
-            ));
+        IReadOnlyList<TakePass> passes = take.Passes is { Count: > 0 } reported
+            ? [..reported.Where(static p => p is not null).Select(static p => new TakePass(p.StartSample, p.FileOffset, p.Frames))]
+            : [new(Math.Max(0, take.StartSample), 0, info.Frames)];
+        if (!flashback) {
+            passes = Recordings.Punched(state, passes);
+        }
+
+        return (file, Recordings.Audio(state, track, file, passes, flashback, ids));
     }
 
     /// <summary>
-    ///     The MIDI region a take becomes (a new one, or the one it merges into), or null when there is nothing to
-    ///     keep. Positions come in project samples, already shifted back by the device's input latency.
+    ///     What places a MIDI take: replace mode's clearing (not when merging), then the region it becomes (a new one,
+    ///     or the one it merges into); null when there is nothing to keep. Positions come in project samples, already
+    ///     shifted back by the device's input latency; with autopunch only the punch range is kept.
     /// </summary>
-    MidiRegion? MidiTake(Open o, ProjectState state, RecordedMidiTake take) {
+    List<DeltaOp>? MidiTake(Open o, ProjectState state, RecordedMidiTake take, bool flashback) {
         var trackId = o.Ids.TrackOf(take.TrackId);
         if (trackId is null || state.FindTrack(trackId) is not { } track || !Edits.IsMidiKind(track.Kind)) {
             ProjectLog.MidiTakeSkipped(logger, take.TrackId, "its track is gone or takes no MIDI");
@@ -405,26 +634,41 @@ public sealed class ProjectSession(
         var passStart = map.TickAtSample(Math.Max(0, take.StartSample), rate);
         var passEnd = Math.Max(passStart + 1, map.TickAtSample(Math.Max(0, take.EndSample), rate));
         var (notes, controls) = MidiRecording.Events(take, map, rate, passEnd);
+        var recording = state.Settings.Recording;
+        if (!flashback && recording.Autopunch) {
+            var (from, to) = (recording.PunchInTick, recording.PunchOutTick);
+            notes = [..notes.Where(n => n.StartTick >= from && n.StartTick < to)];
+            controls = [..controls.Where(e => e.Tick >= from && e.Tick < to)];
+            (passStart, passEnd) = (Math.Max(passStart, from), Math.Max(Math.Max(passStart, from) + 1, Math.Min(passEnd, to)));
+        }
+
         if (notes.Count + controls.Count == 0) {
             return null;
         }
 
-        var bar = ProjectDefaults.BarTicks(state.Settings.Signature);
+        var ops = new List<DeltaOp>();
+        var merge = state.Settings.MergeMidiRecording;
+        if (!flashback && !merge && recording.Replace) {
+            ops.AddRange(Recordings.ReplaceMidi(state, track.Id, passStart, passEnd, ids));
+            state = state.Apply(ops);
+        }
+
+        var bars = state.SignatureMap;
         var end = Math.Max(passEnd, notes.Count == 0 ? 0 : notes.Max(static n => n.StartTick + n.LengthTicks));
-        var roundedEnd = (end + bar - 1) / bar * bar;
-        var target = state.Settings.MergeMidiRecording
+        var roundedEnd = bars.BarLineAtOrAfter(end);
+        var target = merge
             ? state.MidiRegionsOf(track.Id)
                 .LastOrDefault(r => r.StartTick <= passStart && passStart < r.StartTick + r.LengthTicks)
             : null;
         var next = state.LastEventId;
         if (target is null) {
-            var start = passStart / bar * bar;
+            var start = bars.BarLineAtOrBefore(passStart);
             target = new(
                 ids.Next(IdPrefix.MidiRegion),
                 track.Id,
                 track.Name,
                 start,
-                Math.Max(bar, roundedEnd - start),
+                Math.Max(Model.Time.SignatureMap.BarTicks(bars.At(start)), roundedEnd - start),
                 ProjectDefaults.Playback,
                 [],
                 [],
@@ -435,14 +679,19 @@ public sealed class ProjectSession(
         }
 
         var origin = target.StartTick;
-        return target with {
-            Notes = Edits.Sorted(
-                target.Notes.Concat(notes.Select(n => n with { Id = ++next, StartTick = n.StartTick - origin }))
-            ),
-            Controls = Edits.Sorted(
-                target.Controls.Concat(controls.Select(e => e with { Id = ++next, Tick = e.Tick - origin }))
+        ops.Add(
+            new MidiRegionUpserted(
+                target with {
+                    Notes = Edits.Sorted(
+                        target.Notes.Concat(notes.Select(n => n with { Id = ++next, StartTick = n.StartTick - origin }))
+                    ),
+                    Controls = Edits.Sorted(
+                        target.Controls.Concat(controls.Select(e => e with { Id = ++next, Tick = e.Tick - origin }))
+                    )
+                }
             )
-        };
+        );
+        return ops;
     }
 
     /// <summary>
@@ -534,9 +783,9 @@ public sealed class ProjectSession(
         Project project;
         lock (gate) {
             if (open is { Dirty: true } old) {
-                // Unsaved edits of the project being replaced are kept beside it.
+                // Unsaved edits of the project being replaced are kept beside it, as a backup.
                 try {
-                    ProjectPackage.Save(Path.Combine(old.Folder, ProjectPackage.BackupsFolder, "Unsaved"), old.State);
+                    ProjectHistory.BackupState(old.Folder, old.State, time.GetUtcNow());
                 } catch (Exception e) when (e is IOException or UnauthorizedAccessException) {
                     ProjectLog.BackupFailed(logger, old.Folder, e.Message);
                 }
