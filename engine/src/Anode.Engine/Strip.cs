@@ -3,19 +3,14 @@ using Anode.Ipc;
 namespace Anode.Engine;
 
 /// <summary>
-///     A channel strip's settings (linear gain, pan −1…1, mute, solo), written by the control thread and read by the
-///     audio thread field by field, plus the audio thread's smoothed level and its peak meter.
+///     A channel strip's fader settings (linear gain, pan −1…1, mute, solo), written by the control thread and read by
+///     the audio thread field by field, plus its peak meter. The mixer (<c>AudioEngine.Mix.cs</c>) applies them.
 /// </summary>
 public sealed class Strip {
     float gain = 1f;
     float pan;
     bool mute;
     bool solo;
-
-    // Audio thread: the level each side is at (ramps to the target over one block when it changes).
-    float levelLeft;
-    float levelRight;
-    bool levelSet;
 
     // Meters: the audio thread accumulates peaks and publishes them; the reader asks for a reset by bumping a counter.
     float accumulatedLeft;
@@ -67,77 +62,6 @@ public sealed class Strip {
         return ((float)(Math.Sqrt(2) * Math.Cos(angle)), (float)(Math.Sqrt(2) * Math.Sin(angle)));
     }
 
-    /// <summary>
-    ///     Audio thread: scales <paramref name="left" /> and <paramref name="right" /> (a mono source passes the same
-    ///     span twice) by the strip's gain and pan, gated by <paramref name="audible" />, and adds them into the bus.
-    ///     A changed level ramps linearly across the block. Accumulates the post-fader peaks.
-    /// </summary>
-    public void MixInto(
-        ReadOnlySpan<float> left,
-        ReadOnlySpan<float> right,
-        bool stereoSource,
-        bool audible,
-        Span<float> busLeft,
-        Span<float> busRight
-    ) {
-        var (targetLeft, targetRight) = Targets(stereoSource, audible);
-        var frames = left.Length;
-        var startLeft = levelSet ? levelLeft : targetLeft;
-        var startRight = levelSet ? levelRight : targetRight;
-        float peakLeft = 0, peakRight = 0;
-        if (startLeft == targetLeft && startRight == targetRight) {
-            for (var i = 0; i < frames; i++) {
-                var l = left[i] * targetLeft;
-                var r = right[i] * targetRight;
-                busLeft[i] += l;
-                busRight[i] += r;
-                peakLeft = Math.Max(peakLeft, Math.Abs(l));
-                peakRight = Math.Max(peakRight, Math.Abs(r));
-            }
-        } else {
-            var stepLeft = (targetLeft - startLeft) / frames;
-            var stepRight = (targetRight - startRight) / frames;
-            for (var i = 0; i < frames; i++) {
-                var l = left[i] * (startLeft + stepLeft * (i + 1));
-                var r = right[i] * (startRight + stepRight * (i + 1));
-                busLeft[i] += l;
-                busRight[i] += r;
-                peakLeft = Math.Max(peakLeft, Math.Abs(l));
-                peakRight = Math.Max(peakRight, Math.Abs(r));
-            }
-        }
-
-        levelLeft = targetLeft;
-        levelRight = targetRight;
-        levelSet = true;
-        Meter(peakLeft, peakRight);
-    }
-
-    /// <summary>Audio thread: as <see cref="MixInto" /> for a stereo bus processed in place (the master).</summary>
-    public void Process(Span<float> left, Span<float> right) {
-        var (targetLeft, targetRight) = Targets(true, true);
-        var frames = left.Length;
-        var startLeft = levelSet ? levelLeft : targetLeft;
-        var startRight = levelSet ? levelRight : targetRight;
-        var stepLeft = (targetLeft - startLeft) / frames;
-        var stepRight = (targetRight - startRight) / frames;
-        var ramp = stepLeft != 0 || stepRight != 0;
-        float peakLeft = 0, peakRight = 0;
-        for (var i = 0; i < frames; i++) {
-            var l = left[i] * (ramp ? startLeft + stepLeft * (i + 1) : targetLeft);
-            var r = right[i] * (ramp ? startRight + stepRight * (i + 1) : targetRight);
-            left[i] = l;
-            right[i] = r;
-            peakLeft = Math.Max(peakLeft, Math.Abs(l));
-            peakRight = Math.Max(peakRight, Math.Abs(r));
-        }
-
-        levelLeft = targetLeft;
-        levelRight = targetRight;
-        levelSet = true;
-        Meter(peakLeft, peakRight);
-    }
-
     /// <summary>Reader (telemetry): the peaks since the previous call.</summary>
     public (float Left, float Right) TakePeaks() {
         var peaks = (Volatile.Read(ref publishedLeft), Volatile.Read(ref publishedRight));
@@ -145,17 +69,8 @@ public sealed class Strip {
         return peaks;
     }
 
-    (float, float) Targets(bool stereoSource, bool audible) {
-        if (!audible || Mute) {
-            return (0f, 0f);
-        }
-
-        var g = Gain;
-        var (l, r) = PanGains(Pan, stereoSource);
-        return (g * l, g * r);
-    }
-
-    void Meter(float left, float right) {
+    /// <summary>Audio thread: adds a block's post-fader peaks to the meter.</summary>
+    internal void Meter(float left, float right) {
         var request = Volatile.Read(ref resetRequested);
         if (request != resetSeen) {
             resetSeen = request;

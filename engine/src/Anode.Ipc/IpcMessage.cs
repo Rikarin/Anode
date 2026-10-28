@@ -323,8 +323,11 @@ public sealed record MidiActivityMessage(IReadOnlyList<MidiActivityEntry> Events
 /// <summary>Server → host: send every instrument's opaque state (before a save).</summary>
 public sealed record RequestInstrumentStatesMessage : IpcMessage;
 
-/// <summary>A track's instrument state, base64; null when its instrument keeps none beyond its parameters.</summary>
-public sealed record InstrumentState(int TrackId, string? State);
+/// <summary>
+///     A track's instrument state, base64; null when its instrument keeps none beyond its parameters. With
+///     <paramref name="InsertId" />, the state of that insert of the track (−1: the master) instead (Phase 4).
+/// </summary>
+public sealed record InstrumentState(int TrackId, string? State, string? InsertId = null);
 
 public sealed record InstrumentStatesMessage(IReadOnlyList<InstrumentState> States) : IpcMessage;
 

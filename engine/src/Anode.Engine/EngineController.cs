@@ -1,5 +1,6 @@
 using Anode.Audio.Midi;
 using Anode.Engine.Midi;
+using Anode.Engine.Mixing;
 using Anode.Engine.Plugins;
 using Anode.Engine.Recording;
 using Anode.Engine.Streaming;
@@ -128,8 +129,10 @@ public sealed partial class EngineController : IDisposable {
     ///     <see cref="MidiHub.Pump" /> instead).
     /// </summary>
     public void Start() {
+        Engine.CycleObserver = Plugins.Factory as IAudioCycleObserver;
         Streamer.Start();
         Midi.Start();
+        StartMaintenance();
     }
 
     /// <summary>Where diagnostics go (missing files and the like).</summary>
@@ -160,10 +163,14 @@ public sealed partial class EngineController : IDisposable {
                 }
             }
 
+            draft.AddListed(message.Tracks, current);
             draft.Apply(settings);
             var replaced = draft.ApplyInstruments(settings);
+            var inserts = new List<InsertSlot>();
+            draft.ApplyChannels(settings, inserts);
+            SetFader(-1, Engine.Master, message.Master);
+            ApplyChannel(Engine.MasterChannel, -1, message.Master, inserts);
             draft.PrepareStreams();
-            Engine.Master.Set(message.Master);
             RecordDirectory = message.RecordDirectory;
             long length;
             unsafe {
@@ -172,9 +179,13 @@ public sealed partial class EngineController : IDisposable {
                     : Math.Max(current.LengthSamples, segment.Header->LengthSamples);
             }
 
-            Swap(draft.Build(message.Segment.Version, length, FileTable()));
+            Swap(draft.Build(message.Segment.Version, length, FileTable(), message.AutomationTargets));
             foreach (var slot in replaced) {
                 slot.Dispose(); // the swap's grace period covered the instruments set before it
+            }
+
+            foreach (var slot in inserts) {
+                slot.Dispose();
             }
 
             SyncFlashback();
@@ -191,22 +202,28 @@ public sealed partial class EngineController : IDisposable {
         readonly List<int> generations = [];
         readonly List<MappedSegment?> owners = [];
         readonly List<byte[]?> lanes = [];
+        readonly ModelRoot? previous;
         TrackView metronome;
         MappedSegment? metronomeOwner;
+        TrackView masterView;
+        MappedSegment? masterOwner;
 
         public ModelDraft(EngineController owner, ModelRoot? from) {
             this.owner = owner;
+            previous = from;
             if (from is null) {
                 return;
             }
 
             tracks.AddRange(from.Tracks);
-            views.AddRange(from.Views);
+            views.AddRange(from.SourceViews);
             generations.AddRange(from.Generations);
             owners.AddRange(from.Owners);
             lanes.AddRange(from.Lanes);
             metronome = from.Metronome;
             metronomeOwner = from.MetronomeOwner;
+            masterView = from.MasterView;
+            masterOwner = from.MasterOwner;
         }
 
         /// <summary>Takes track <paramref name="k" /> of <paramref name="segment" />: a new compile of it.</summary>
@@ -218,9 +235,15 @@ public sealed partial class EngineController : IDisposable {
                 return;
             }
 
+            if (id == -1) {
+                masterView = segment.Track(k); // the master's automation
+                masterOwner = segment;
+                return;
+            }
+
             var index = tracks.FindIndex(t => t.Id == id);
             var existing = index >= 0 ? tracks[index] : Find(current, id);
-            var stereo = settings.TryGetValue(id, out var s) ? s.Stereo : existing?.Stereo ?? false;
+            var stereo = settings.TryGetValue(id, out var s) ? StreamStereo(s) : existing?.Stereo ?? false;
             var state = existing is not null && existing.Stereo == stereo
                 ? existing
                 : owner.NewTrack(id, stereo, existing);
@@ -240,19 +263,59 @@ public sealed partial class EngineController : IDisposable {
             }
         }
 
-        /// <summary>Applies the listed tracks' settings; a changed channel count gets a new stream.</summary>
+        /// <summary>
+        ///     Adds the listed tracks the segment does not hold (an aux track without events): they play nothing of their
+        ///     own, but their strips run.
+        /// </summary>
+        public void AddListed(IReadOnlyList<EngineTrack> listed, ModelRoot current) {
+            foreach (var t in listed) {
+                if (t.Id < 0 || tracks.Exists(x => x.Id == t.Id)) {
+                    continue;
+                }
+
+                var existing = Find(current, t.Id);
+                tracks.Add(
+                    existing is not null && existing.Stereo == StreamStereo(t)
+                        ? existing
+                        : owner.NewTrack(t.Id, StreamStereo(t), existing)
+                );
+                var index = current.IndexOf(t.Id);
+                views.Add(index >= 0 ? current.SourceViews[index] : default);
+                generations.Add(++owner.generations);
+                owners.Add(index >= 0 ? current.Owners[index] : null);
+                lanes.Add(index >= 0 ? current.Lanes[index] : null);
+            }
+        }
+
+        /// <summary>
+        ///     Applies the listed tracks' settings; a changed channel count gets a new stream, and freezing or unfreezing
+        ///     a new fill.
+        /// </summary>
         public void Apply(Dictionary<int, EngineTrack> settings) {
             for (var i = 0; i < tracks.Count; i++) {
                 if (!settings.TryGetValue(tracks[i].Id, out var s)) {
                     continue;
                 }
 
-                if (s.Stereo != tracks[i].Stereo) {
-                    tracks[i] = owner.NewTrack(s.Id, s.Stereo, tracks[i]);
+                if (StreamStereo(s) != tracks[i].Stereo) {
+                    tracks[i] = owner.NewTrack(s.Id, StreamStereo(s), tracks[i]);
                     generations[i] = ++owner.generations;
                 }
 
+                var frozen = tracks[i].FreezeFile;
                 tracks[i].Apply(s);
+                if (tracks[i].FreezeFile != frozen) {
+                    generations[i] = ++owner.generations;
+                }
+            }
+        }
+
+        /// <summary>Applies the listed tracks' channel structures; instances they drop go to <paramref name="replaced" />.</summary>
+        public void ApplyChannels(Dictionary<int, EngineTrack> settings, List<InsertSlot> replaced) {
+            foreach (var track in tracks) {
+                if (settings.TryGetValue(track.Id, out var s)) {
+                    owner.ApplyChannel(track.Channel, track.Id, s.Strip, replaced);
+                }
             }
         }
 
@@ -292,31 +355,67 @@ public sealed partial class EngineController : IDisposable {
             }
         }
 
-        public ModelRoot Build(long version, long length, StreamFile?[] files) =>
-            new(
+        /// <summary>
+        ///     The next model: frozen tracks' views play their freeze files, the automation lanes are collected from
+        ///     every view (and the master's), and the mixer plan is built.
+        /// </summary>
+        public ModelRoot Build(
+            long version,
+            long length,
+            StreamFile?[] files,
+            IReadOnlyList<EngineAutomationTarget>? targets
+        ) {
+            var array = tracks.ToArray();
+            var sourceViews = views.ToArray();
+            var runtimeViews = views.ToArray();
+            var runtimeLanes = lanes.ToArray();
+            var freeze = new FreezeSource?[array.Length];
+            for (var i = 0; i < array.Length; i++) {
+                if (owner.FreezeFor(array[i], previous ?? owner.Engine.Root) is not { } source) {
+                    continue;
+                }
+
+                freeze[i] = source;
+                runtimeViews[i] = source.View(sourceViews[i]);
+                runtimeLanes[i] = null;
+            }
+
+            var automation = owner.Automation(targets, sourceViews, masterView);
+            var root = new ModelRoot(
                 version,
                 length,
-                [..tracks],
-                [..views],
+                array,
+                runtimeViews,
                 [..generations],
                 [..owners],
                 metronome,
                 metronomeOwner,
                 files,
-                [..lanes]
-            );
+                runtimeLanes
+            ) {
+                SourceViews = sourceViews,
+                Freeze = freeze,
+                MasterView = masterView,
+                MasterOwner = masterOwner,
+                Automation = automation
+            };
+            return root.With(mix: owner.BuildPlan(array, automation));
+        }
     }
 
     /// <summary>Control thread: a strip changed; <paramref name="trackId" /> −1 is the master. False for an unknown track.</summary>
     public bool SetStrip(int trackId, EngineStrip strip) {
         lock (gate) {
             if (trackId == -1) {
-                Engine.Master.Set(strip);
+                SetFader(-1, Engine.Master, strip);
                 return true;
             }
 
             var track = Find(Engine.Root, trackId);
-            track?.Strip.Set(strip);
+            if (track is not null) {
+                SetFader(trackId, track.Strip, strip);
+            }
+
             return track is not null;
         }
     }
@@ -331,27 +430,16 @@ public sealed partial class EngineController : IDisposable {
             }
 
             var track = current.Tracks[index];
-            if (track.Stereo != stereo) {
+            var streamStereo = stereo || track.Frozen;
+            if (track.Stereo != streamStereo) {
                 var tracks = (TrackState[])current.Tracks.Clone();
                 var gens = (int[])current.Generations.Clone();
-                tracks[index] = track = NewTrack(trackId, stereo, track);
+                tracks[index] = track = NewTrack(trackId, streamStereo, track);
                 gens[index] = ++generations;
-                Swap(
-                    new(
-                        current.Version,
-                        current.LengthSamples,
-                        tracks,
-                        current.Views,
-                        gens,
-                        current.Owners,
-                        current.Metronome,
-                        current.MetronomeOwner,
-                        current.Files,
-                        current.Lanes
-                    )
-                );
+                Swap(current.With(tracks, gens, BuildPlan(tracks, current.Automation)));
             }
 
+            track.SourceStereo = stereo;
             track.SetIo(inputChannel, armed, monitoring);
             SyncFlashback();
             return true;
@@ -368,10 +456,9 @@ public sealed partial class EngineController : IDisposable {
         lock (gate) {
             var track = Find(Engine.Root, trackId)
                 ?? throw new InvalidOperationException($"No track {trackId}.");
-            if (ApplyInstrument(track, instrument) is { } old) {
-                WaitGrace();
-                old.Dispose();
-            }
+            var old = ApplyInstrument(track, instrument);
+            PublishPlan(); // the instrument's automated parameters; the swap's grace covers the old instrument
+            old?.Dispose();
 
             SyncFlashback();
         }
@@ -380,7 +467,13 @@ public sealed partial class EngineController : IDisposable {
     /// <summary>Queues a parameter change for the track's instrument; false for an unknown track or parameter.</summary>
     public bool SetParameter(int trackId, string parameterId, double value) {
         lock (gate) {
-            return Find(Engine.Root, trackId)?.Instrument is { } slot && slot.Set(parameterId, value);
+            var root = Engine.Root;
+            if (Find(root, trackId)?.Instrument is not { } slot || !slot.Set(parameterId, value)) {
+                return false;
+            }
+
+            Hold(root, trackId, AutomationKind.Instrument, null, parameterId);
+            return true;
         }
     }
 
@@ -400,7 +493,10 @@ public sealed partial class EngineController : IDisposable {
     /// <summary>Plays live MIDI (the server's on-screen keyboard) on a track; false for an unknown track.</summary>
     public bool LiveMidi(int trackId, IReadOnlyList<EngineMidiEvent> events) => Midi.Live(trackId, events);
 
-    /// <summary>Every instrument's opaque state (base64, null when it keeps none), by track.</summary>
+    /// <summary>
+    ///     Every instrument's opaque state (base64, null when it keeps none), by track, then every insert's, by track
+    ///     and insert id (<see cref="InstrumentState.InsertId" />).
+    /// </summary>
     public IReadOnlyList<InstrumentState> InstrumentStates() {
         lock (gate) {
             var states = new List<InstrumentState>();
@@ -419,6 +515,7 @@ public sealed partial class EngineController : IDisposable {
                 states.Add(new(track.Id, state));
             }
 
+            states.AddRange(InsertStates(Engine.Root));
             return states;
         }
     }
@@ -455,12 +552,16 @@ public sealed partial class EngineController : IDisposable {
             state = current.Instrument.SaveState() is { } bytes ? Convert.ToBase64String(bytes) : null;
         }
 
-        track.Instrument = Build(spec, state);
+        track.Instrument = Build(track.Id, spec, state);
         return current;
     }
 
-    InstrumentSlot Build(EngineInstrument spec, string? state) {
-        var instrument = Plugins.Create(spec.PluginId)
+    InstrumentSlot Build(int trackId, EngineInstrument spec, string? state) {
+        var instrument = Plugins.Create(
+                spec.PluginId,
+                new(trackId, null, spec.PluginId, Options.SampleRate, AudioEngine.MaxFrames,
+                    new PluginCallbacks(this, trackId, null, spec.PluginId))
+            )
             ?? throw new InvalidOperationException($"No plugin '{spec.PluginId}'.");
         try {
             instrument.Prepare(Options.SampleRate, AudioEngine.MaxFrames);
@@ -506,8 +607,10 @@ public sealed partial class EngineController : IDisposable {
 
     // ---- Transport ---------------------------------------------------------------------------------------------------
 
-    public void SetCycle(bool enabled, long start, long end) =>
-        Send(new(EngineCommandKind.SetCycle, Math.Max(0, start), Math.Max(0, end), enabled));
+    public void SetCycle(bool enabled, long start, long end) {
+        cycle = new(enabled, Math.Max(0, start), Math.Max(0, end));
+        Send(new(EngineCommandKind.SetCycle, cycle.Start, cycle.End, enabled));
+    }
 
     /// <summary>The click's level and whether it sounds; <paramref name="countInEnabled" /> adds a bar before recording.</summary>
     public void SetMetronome(bool enabled, float gain, bool countInEnabled) {
@@ -519,6 +622,7 @@ public sealed partial class EngineController : IDisposable {
 
     /// <summary>Moves the playhead; while rolling, playback resumes there once the disk has caught up (a short gap).</summary>
     public void Locate(long position) {
+        RefuseWhileRendering();
         Send(new(EngineCommandKind.Locate, Math.Max(0, position)));
         Streamer.Wake();
     }
@@ -528,6 +632,7 @@ public sealed partial class EngineController : IDisposable {
     ///     (up to 2 s) until every track's stream holds audio there, so the start is not cut.
     /// </summary>
     public async Task PlayAsync(long position, CancellationToken cancellationToken = default) {
+        RefuseWhileRendering();
         var snapshot = Engine.Snapshot;
         if (snapshot.State != TransportState.Stopped) {
             if (position >= 0) {
@@ -550,6 +655,7 @@ public sealed partial class EngineController : IDisposable {
             throw new InvalidOperationException("No model loaded, so there is no directory to record into.");
         }
 
+        RefuseWhileRendering();
         var snapshot = Engine.Snapshot;
         if (snapshot.State == TransportState.Recording) {
             return;
@@ -578,6 +684,10 @@ public sealed partial class EngineController : IDisposable {
     ///     recording pass ran.
     /// </summary>
     public RecordingResult? Stop() {
+        if (Engine.IsOffline) {
+            return null; // an offline render owns the transport; it restores it when it finishes
+        }
+
         lock (gate) {
             var sent = Send(new(EngineCommandKind.Stop));
             WaitApplied(sent);
@@ -826,6 +936,12 @@ public sealed partial class EngineController : IDisposable {
             }
         }
 
+        foreach (var freeze in previous.Freeze) {
+            if (freeze is not null && Array.IndexOf(next.Freeze, freeze) < 0) {
+                freeze.Dispose();
+            }
+        }
+
         TrimPool();
     }
 
@@ -833,6 +949,14 @@ public sealed partial class EngineController : IDisposable {
     static void RetireTrack(TrackState track, ModelRoot next, List<FlashbackBuffer> memories) {
         if (track.Instrument is { } slot && !next.Tracks.Any(t => t.Instrument == slot)) {
             slot.Dispose(); // the track went away
+        }
+
+        if (!next.Tracks.Any(t => t.Channel == track.Channel)) {
+            foreach (var insert in track.Channel.Config.Inserts) {
+                insert.Slot.Dispose();
+            }
+
+            track.Channel.Config = ChannelConfig.Empty;
         }
 
         if (track.Flashback is { } memory) {
@@ -852,6 +976,10 @@ public sealed partial class EngineController : IDisposable {
 
         if (root.MetronomeOwner is not null) {
             set.Add(root.MetronomeOwner);
+        }
+
+        if (root.MasterOwner is not null) {
+            set.Add(root.MasterOwner);
         }
     }
 
@@ -986,9 +1114,11 @@ public sealed partial class EngineController : IDisposable {
     }
 
     TrackState NewTrack(int id, bool stereo, TrackState? previous) {
-        var state = new TrackState(id, stereo, streamFrames, previous?.Midi);
+        var state = new TrackState(id, stereo, streamFrames, previous?.Midi, previous?.Channel);
         if (previous is not null) {
-            state.Strip.Set(previous.Strip.Settings);
+            state.InputBus = previous.InputBus;
+            state.FreezeFile = previous.FreezeFile;
+            state.SourceStereo = previous.SourceStereo;
             state.SetIo(previous.InputChannel, previous.Armed, previous.Monitoring);
             state.Instrument = previous.Instrument;
             state.MidiIo = previous.MidiIo;
@@ -1000,12 +1130,63 @@ public sealed partial class EngineController : IDisposable {
         return state;
     }
 
+    /// <summary>A frozen track's stream is stereo (its freeze file is).</summary>
+    static bool StreamStereo(EngineTrack track) => track.Stereo || track.FreezeFile is not null;
+
+    /// <summary>
+    ///     The freeze source of <paramref name="track" />: the one <paramref name="current" /> plays when the file is
+    ///     the same, else the file opened (null when not frozen, or when the file cannot be read: it then plays its
+    ///     source, and the failure is logged).
+    /// </summary>
+    FreezeSource? FreezeFor(TrackState track, ModelRoot current) {
+        if (track.FreezeFile is not { } path) {
+            return null;
+        }
+
+        var index = current.IndexOf(track.Id);
+        if (index >= 0 && index < current.Freeze.Length && current.Freeze[index] is { } known && known.Path == path) {
+            return known;
+        }
+
+        try {
+            return new(path);
+        } catch (Exception e) when (e is IOException or InvalidDataException or UnauthorizedAccessException) {
+            Log?.Invoke($"track {track.Id}: freeze file {path}: {e.Message}; it plays unfrozen");
+            return null;
+        }
+    }
+
+    /// <summary>The automation targets (null: the current ones) with their lanes from the model's events.</summary>
+    AutomationSet Automation(
+        IReadOnlyList<EngineAutomationTarget>? targets,
+        TrackView[] views,
+        TrackView masterView
+    ) {
+        EngineAutomationTarget?[] byIndex;
+        if (targets is null) {
+            byIndex = Engine.Root.Automation.Targets;
+        } else {
+            var count = targets.Count == 0 ? 0 : targets.Max(static t => t.Index) + 1;
+            byIndex = new EngineAutomationTarget?[Math.Clamp(count, 0, 1 << 20)];
+            foreach (var t in targets) {
+                if ((uint)t.Index < (uint)byIndex.Length) {
+                    byIndex[t.Index] = t;
+                }
+            }
+        }
+
+        var lanes = AutomationLane.Collect(views.Append(masterView), byIndex.Length);
+        Engine.Overrides.EnsureCapacity(byIndex.Length);
+        return new(byIndex, lanes);
+    }
+
     static TrackState? Find(ModelRoot root, int id) {
         var index = root.IndexOf(id);
         return index < 0 ? null : root.Tracks[index];
     }
 
     public void Dispose() {
+        maintenance?.Dispose();
         lock (gate) {
             if (takes.Length > 0) {
                 Writer.Retire();
@@ -1028,7 +1209,21 @@ public sealed partial class EngineController : IDisposable {
         foreach (var track in root.Tracks) {
             track.Instrument?.Dispose();
             track.Instrument = null;
+            foreach (var insert in track.Channel.Config.Inserts) {
+                insert.Slot.Dispose();
+            }
+
+            track.Channel.Config = ChannelConfig.Empty;
             track.Dispose();
+        }
+
+        foreach (var insert in Engine.MasterChannel.Config.Inserts) {
+            insert.Slot.Dispose();
+        }
+
+        Engine.MasterChannel.Config = ChannelConfig.Empty;
+        foreach (var freeze in root.Freeze) {
+            freeze?.Dispose();
         }
 
         var segments = new HashSet<MappedSegment>(pool.Values);

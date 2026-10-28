@@ -24,6 +24,8 @@ public sealed class EngineHost : IDisposable {
     readonly IReadOnlyList<string>? clapFolders;
     readonly Lock scanGate = new();
     readonly Lock pushGate = new();
+    readonly Lock renderGate = new();
+    readonly Dictionary<int, CancellationTokenSource> renders = [];
     Task scanning = Task.CompletedTask;
     bool catalogReady;
     bool started;
@@ -56,6 +58,8 @@ public sealed class EngineHost : IDisposable {
         Controller.Plugins.Log = message => Log?.Invoke(message);
         Controller.Midi.PortsChanged = ports => Push?.Invoke(new MidiPortsMessage(ports));
         Controller.Midi.Activity = batch => Push?.Invoke(batch);
+        Controller.ParameterChanged = changed => Push?.Invoke(changed);
+        Controller.PluginProblem = problem => Push?.Invoke(problem);
         string? telemetryName = null;
         byte* region;
         if (sharedTelemetry) {
@@ -148,7 +152,7 @@ public sealed class EngineHost : IDisposable {
         async Task<PluginCatalogMessage> Scan(Task before) {
             try {
                 await before.ConfigureAwait(ConfigureAwaitOptions.SuppressThrowing);
-                await Task.Run(() => Controller.Plugins.ScanClap(clapFolders)).ConfigureAwait(false);
+                await Task.Run(() => Controller.Plugins.ScanAll(clapFolders)).ConfigureAwait(false);
             } finally {
                 Controller.Plugins.EndScan();
             }
@@ -235,6 +239,44 @@ public sealed class EngineHost : IDisposable {
                 case PreviewFileMessage preview:
                     Controller.Preview(preview.Path, preview.Gain);
                     return null;
+                case SetChannelMessage channel:
+                    return Controller.SetChannel(channel.TrackId, channel.Strip)
+                        ? null
+                        : new ErrorMessage($"No track {channel.TrackId}.", "setChannel");
+                case SetInsertParameterMessage parameter:
+                    return Controller.SetInsertParameter(
+                        parameter.TrackId,
+                        parameter.InsertId,
+                        parameter.ParameterId,
+                        parameter.Value
+                    )
+                        ? null
+                        : new ErrorMessage(
+                            $"Track {parameter.TrackId} has no insert '{parameter.InsertId}' with a parameter "
+                            + $"'{parameter.ParameterId}'.",
+                            "setInsertParameter"
+                        );
+                case SetSendLevelMessage send:
+                    return Controller.SetSendLevel(send.TrackId, send.SendId, send.Gain, send.Pan)
+                        ? null
+                        : new ErrorMessage($"Track {send.TrackId} has no send '{send.SendId}'.", "setSendLevel");
+                case SetMixerMessage mixer:
+                    Controller.SetMixer(mixer.Pdc, mixer.LowLatency, mixer.LowLatencyLimitMs);
+                    return null;
+                case RenderMessage render:
+                    Render(render);
+                    return null;
+                case CancelRenderMessage cancel:
+                    CancelRender(cancel.JobId);
+                    return null;
+                case OpenPluginEditorMessage editor:
+                    return Controller.OpenPluginEditor(editor.TrackId, editor.InsertId, editor.Open)
+                        ? null
+                        : new ErrorMessage(
+                            $"Track {editor.TrackId} has no plugin editor"
+                            + (editor.InsertId is null ? "." : $" for insert '{editor.InsertId}'."),
+                            "openPluginEditor"
+                        );
                 default:
                     return new ErrorMessage($"The host does not take '{Name(message)}' messages.", Name(message));
             }
@@ -244,6 +286,59 @@ public sealed class EngineHost : IDisposable {
                                         or UnauthorizedAccessException
                                         or ArgumentException) {
             return new ErrorMessage(e.Message, Name(message));
+        }
+    }
+
+    /// <summary>
+    ///     Starts render job <paramref name="message" /> in the background: <see cref="RenderProgressMessage" />s, then
+    ///     one <see cref="RenderFinishedMessage" /> (with an error when it failed or was cancelled), are pushed.
+    /// </summary>
+    void Render(RenderMessage message) {
+        var cancel = new CancellationTokenSource();
+        lock (renderGate) {
+            if (!renders.TryAdd(message.JobId, cancel)) {
+                cancel.Dispose();
+                Push?.Invoke(new RenderFinishedMessage(message.JobId, [], $"Job {message.JobId} is already rendering."));
+                return;
+            }
+        }
+
+        _ = Task.Run(async () => {
+                RenderFinishedMessage finished;
+                try {
+                    var files = await Controller.RenderAsync(
+                            message,
+                            fraction => Push?.Invoke(new RenderProgressMessage(message.JobId, fraction)),
+                            cancel.Token
+                        )
+                        .ConfigureAwait(false);
+                    finished = new(message.JobId, files);
+                } catch (OperationCanceledException) {
+                    finished = new(message.JobId, [], "cancelled");
+                } catch (Exception e) when (e is IOException
+                                                or InvalidOperationException
+                                                or InvalidDataException
+                                                or UnauthorizedAccessException
+                                                or ArgumentException) {
+                    finished = new(message.JobId, [], e.Message);
+                } finally {
+                    lock (renderGate) {
+                        renders.Remove(message.JobId);
+                    }
+
+                    cancel.Dispose();
+                }
+
+                Push?.Invoke(finished);
+            }
+        );
+    }
+
+    void CancelRender(int jobId) {
+        lock (renderGate) {
+            if (renders.TryGetValue(jobId, out var cancel)) {
+                cancel.Cancel();
+            }
         }
     }
 
@@ -296,10 +391,27 @@ public sealed class EngineHost : IDisposable {
             SetPunchMessage => "setPunch",
             FlashbackCaptureMessage => "flashbackCapture",
             PreviewFileMessage => "previewFile",
+            SetChannelMessage => "setChannel",
+            SetInsertParameterMessage => "setInsertParameter",
+            SetSendLevelMessage => "setSendLevel",
+            SetMixerMessage => "setMixer",
+            RenderMessage => "render",
+            CancelRenderMessage => "cancelRender",
+            RenderProgressMessage => "renderProgress",
+            RenderFinishedMessage => "renderFinished",
+            OpenPluginEditorMessage => "openPluginEditor",
+            ParameterChangedMessage => "parameterChanged",
+            PluginProblemMessage => "pluginProblem",
             _ => message.GetType().Name
         };
 
     public unsafe void Dispose() {
+        lock (renderGate) {
+            foreach (var cancel in renders.Values) {
+                cancel.Cancel();
+            }
+        }
+
         telemetry.Dispose();
         if (started) {
             Device.Stop();
