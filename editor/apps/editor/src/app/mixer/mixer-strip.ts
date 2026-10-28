@@ -77,7 +77,7 @@ const BusPages = Array.from({ length: BusCount / 16 }, (_, page) => ({
     XuiMenuImports,
     XuiTooltipImports
   ],
-  host: { class: 'flex h-full' },
+  host: { class: 'flex h-full min-h-max' },
   template: `
     <an-channel-strip
       [name]="name()"
@@ -665,7 +665,9 @@ export class MixerStrip {
         void this.mixer.replaceInsert(trackId, slot.insert, plugin.id, slot.index);
       }
     } else {
-      void this.mixer.addInsert(trackId, plugin.id, slot.index);
+      // The empty slot is always the one after the last insert: append, rather than send its index, which is stale
+      // when another add has not come back from the Server yet (two quick adds would land in reverse order).
+      void this.mixer.addInsert(trackId, plugin.id);
     }
   }
 

@@ -60,7 +60,10 @@ import { TransportStore, clockTime, parseSignature } from '../state/transport.st
       }
       <span class="text-lcd-muted mt-1 text-[9px] font-semibold tracking-[0.08em] uppercase">bpm</span>
     </div>
-    <div class="flex flex-col items-center justify-center border-s border-(--lcd-divider) px-3 leading-none">
+    <!-- Time signature and key: from 1280 px wide (narrower, the global tracks show and edit them). -->
+    <div
+      class="flex flex-col items-center justify-center border-s border-(--lcd-divider) px-3 leading-none max-xl:hidden"
+    >
       @if (editing() === 'signature') {
         <input
           #editor
@@ -85,7 +88,9 @@ import { TransportStore, clockTime, parseSignature } from '../state/transport.st
       }
       <span class="text-lcd-muted mt-1 text-[9px] font-semibold tracking-[0.08em] uppercase">time</span>
     </div>
-    <div class="flex flex-col items-center justify-center border-s border-(--lcd-divider) px-3 leading-none">
+    <div
+      class="flex flex-col items-center justify-center border-s border-(--lcd-divider) px-3 leading-none max-xl:hidden"
+    >
       <span class="text-[15px] font-semibold" data-testid="lcd-key">{{ keyText() }}</span>
       <span class="text-lcd-muted mt-1 text-[9px] font-semibold tracking-[0.08em] uppercase">key</span>
     </div>

@@ -17,7 +17,8 @@ import { SystemStore } from '../state/system.store';
       [xuiTooltip]="detail()"
     >
       <span class="size-2 rounded-full shadow-[0_0_0_1px_var(--hairline)]" [class]="dot()" aria-hidden="true"></span>
-      <span class="text-foreground-muted">{{ label() }}</span>
+      <!-- Below 1536 px only the dot shows; the label stays for screen readers and the tooltip. -->
+      <span class="text-foreground-muted whitespace-nowrap max-2xl:sr-only">{{ label() }}</span>
     </span>
   `
 })

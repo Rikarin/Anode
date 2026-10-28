@@ -10,21 +10,27 @@ import {
 } from '@angular/core';
 import { provideIcons } from '@ng-icons/core';
 import {
+  matAvTimerRound,
   matDarkModeRound,
   matDashboardRound,
   matExpandMoreRound,
   matFiberManualRecordRound,
   matFolderOpenRound,
   matHistoryRound,
+  matInputRound,
   matKeyboardRound,
+  matLayersRound,
   matLightModeRound,
   matLockRound,
+  matLooksOneRound,
   matLoopRound,
+  matMergeTypeRound,
   matPlayArrowRound,
   matRedoRound,
   matSaveRound,
   matSkipPreviousRound,
   matStopRound,
+  matSwapHorizRound,
   matUndoRound
 } from '@ng-icons/material-icons/round';
 
@@ -56,13 +62,18 @@ import { Lcd } from './lcd';
   imports: [EngineStatus, Lcd, XuiIconImports, XuiInputImports, XuiMenuImports, XuiTooltipImports],
   providers: [
     provideIcons({
+      matAvTimerRound,
       matDarkModeRound,
       matDashboardRound,
       matExpandMoreRound,
       matHistoryRound,
+      matInputRound,
       matKeyboardRound,
+      matLayersRound,
+      matLooksOneRound,
       matLightModeRound,
       matLockRound,
+      matMergeTypeRound,
       matFiberManualRecordRound,
       matFolderOpenRound,
       matLoopRound,
@@ -71,13 +82,14 @@ import { Lcd } from './lcd';
       matSaveRound,
       matSkipPreviousRound,
       matStopRound,
+      matSwapHorizRound,
       matUndoRound
     })
   ],
-  host: { class: 'chrome-bar relative z-10 flex h-13 shrink-0 items-center gap-3 px-3' },
+  host: { class: 'chrome-bar relative z-10 flex h-13 shrink-0 items-center gap-3 px-3 max-xl:gap-2 max-xl:px-2' },
   template: `
     <ng-content />
-    <div class="flex min-w-0 flex-1 items-center gap-2">
+    <div class="flex min-w-max flex-1 items-center gap-2">
       @if (project.info(); as info) {
         <div class="flex min-w-0 items-center gap-2" role="toolbar" aria-label="Project">
           <button
@@ -226,7 +238,7 @@ import { Lcd } from './lcd';
         </div>
       }
     </div>
-    <div class="flex shrink-0 items-center gap-3">
+    <div class="flex shrink-0 items-center gap-3 max-xl:gap-2">
       <div class="bezel-group text-foreground h-8" role="toolbar" aria-label="Transport">
         <button
           type="button"
@@ -296,30 +308,33 @@ import { Lcd } from './lcd';
             xuiTooltip="What cycle recording makes of its passes"
             [xuiMenuTriggerFor]="cycleModeMenu"
           >
-            {{ recording().cycleMode === 'takeFolder' ? 'Takes' : 'Regions' }}
+            <span class="flex xl:hidden"><ng-icon xui name="matLayersRound" size="14px" /></span>
+            <span class="max-xl:sr-only">{{ recording().cycleMode === 'takeFolder' ? 'Takes' : 'Regions' }}</span>
             <ng-icon xui name="matExpandMoreRound" size="14px" />
           </button>
           <button
             type="button"
-            class="px-2.5"
+            class="flex items-center px-2.5"
             data-testid="autopunch"
             [class.text-transport-record]="recording().autopunch"
             [attr.aria-pressed]="recording().autopunch ? 'true' : 'false'"
             [xuiTooltip]="'Autopunch: record only between the punch locators (' + keyOf('transport.autopunch') + ')'"
             (click)="transport.toggleAutopunch()"
           >
-            Punch
+            <span class="flex xl:hidden"><ng-icon xui name="matInputRound" size="14px" /></span>
+            <span class="max-xl:sr-only">Punch</span>
           </button>
           <button
             type="button"
-            class="px-2.5"
+            class="flex items-center px-2.5"
             data-testid="replace"
             [class.text-lit]="recording().replace"
             [attr.aria-pressed]="recording().replace ? 'true' : 'false'"
             [xuiTooltip]="'Replace: a recording removes what it covers (' + keyOf('transport.replace') + ')'"
             (click)="transport.toggleReplace()"
           >
-            Replace
+            <span class="flex xl:hidden"><ng-icon xui name="matSwapHorizRound" size="14px" /></span>
+            <span class="max-xl:sr-only">Replace</span>
           </button>
           <button
             type="button"
@@ -360,39 +375,42 @@ import { Lcd } from './lcd';
         <div class="bezel-group text-foreground h-6.5 text-[11px] font-semibold" role="toolbar" aria-label="Metronome">
           <button
             type="button"
-            class="px-2.5"
+            class="flex items-center px-2.5"
             [class.text-lit]="transport.metronome()"
             [attr.aria-pressed]="transport.metronome() ? 'true' : 'false'"
             xuiTooltip="Metronome click"
             (click)="transport.toggleMetronome()"
           >
-            Click
+            <span class="flex xl:hidden"><ng-icon xui name="matAvTimerRound" size="14px" /></span>
+            <span class="max-xl:sr-only">Click</span>
           </button>
           <button
             type="button"
-            class="px-2.5"
+            class="flex items-center px-2.5"
             [class.text-lit]="transport.countIn()"
             [attr.aria-pressed]="transport.countIn() ? 'true' : 'false'"
             xuiTooltip="One bar of count-in before recording"
             (click)="transport.toggleCountIn()"
           >
-            Count-in
+            <span class="flex xl:hidden"><ng-icon xui name="matLooksOneRound" size="14px" /></span>
+            <span class="max-xl:sr-only">Count-in</span>
           </button>
           <button
             type="button"
-            class="px-2.5"
+            class="flex items-center px-2.5"
             data-testid="merge-recording"
             [class.text-lit]="mergeMidi()"
-            [attr.aria-pressed]="mergeMidi()"
+            [attr.aria-pressed]="mergeMidi() ? 'true' : 'false'"
             xuiTooltip="Merge new MIDI recordings into the region under the playhead"
             (click)="toggleMerge()"
           >
-            Merge
+            <span class="flex xl:hidden"><ng-icon xui name="matMergeTypeRound" size="14px" /></span>
+            <span class="max-xl:sr-only">Merge</span>
           </button>
         </div>
       }
     </div>
-    <div class="flex min-w-0 flex-1 items-center justify-end gap-2">
+    <div class="flex min-w-max flex-1 items-center justify-end gap-2">
       @if (project.isOpen()) {
         @if (renamingScreenset()) {
           <input
@@ -416,7 +434,7 @@ import { Lcd } from './lcd';
           >
             <ng-icon xui name="matDashboardRound" size="14px" class="text-foreground-muted" />
             <span class="readout" data-testid="screenset-number">{{ screensets.current() }}</span>
-            <span class="truncate">{{ screensets.name() }}</span>
+            <span class="truncate max-xl:hidden">{{ screensets.name() }}</span>
             @if (screensets.locked()) {
               <ng-icon xui name="matLockRound" size="12px" aria-label="Locked" />
             }
@@ -449,9 +467,10 @@ import { Lcd } from './lcd';
             </button>
           </xui-menu>
         </ng-template>
+        <!-- Narrower than 1100 px the appearance is switched from the project menu (or its key command). -->
         <button
           type="button"
-          class="bezel text-foreground grid h-6.5 w-8 place-items-center"
+          class="bezel text-foreground grid h-6.5 w-8 place-items-center max-[1100px]:hidden"
           [attr.aria-label]="theme.appearance() === 'dark' ? 'Light appearance' : 'Dark appearance'"
           data-testid="appearance"
           [xuiTooltip]="

@@ -15,7 +15,7 @@ import { AnPeakMeter, type MeterSource } from './peak-meter';
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [AnFader, AnPanKnob, AnPeakMeter],
   host: {
-    class: 'strip-body flex h-full min-h-72 w-21 shrink-0 flex-col items-center gap-2 pt-2.5',
+    class: 'strip-body flex h-full min-h-max w-21 shrink-0 flex-col items-center gap-2 pt-2.5',
     role: 'group',
     '[attr.aria-label]': 'name() + " channel strip"',
     '[attr.data-vca]': 'vca() || null',
@@ -34,7 +34,7 @@ import { AnPeakMeter, type MeterSource } from './peak-meter';
         (committed)="panCommit.emit($event)"
       />
     }
-    <div class="flex min-h-0 flex-1 items-stretch gap-1">
+    <div class="flex min-h-40 flex-1 items-stretch gap-1">
       <an-fader
         class="h-auto!"
         [label]="name() + ' volume'"
