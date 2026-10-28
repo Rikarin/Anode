@@ -7,6 +7,9 @@ import { XuiSpinnerImports } from '@xui/spinner';
 import type { AppCommand } from './core/desktop';
 import { Startup } from './core/startup';
 import { BounceDialog } from './export/bounce-dialog';
+import { BounceInPlaceDialog } from './functions/bounce-in-place-dialog';
+import { ProcessingDialog } from './functions/processing-dialog';
+import { StripSilenceDialog } from './functions/strip-silence-dialog';
 import { KeyCommandsEditor } from './keys/key-commands-editor';
 import { GroupSettings } from './mixer/group-settings';
 import { IoLabelsDialog } from './mixer/io-labels-dialog';
@@ -32,13 +35,16 @@ import { AudioImport } from './tracks/audio-import';
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     BounceDialog,
+    BounceInPlaceDialog,
     ControlBar,
     GroupSettings,
     IoLabelsDialog,
     KeyCommandsEditor,
     PluginWindowsHost,
+    ProcessingDialog,
     RouterOutlet,
     SaveAlternativeDialog,
+    StripSilenceDialog,
     XuiButtonImports,
     XuiInputImports,
     XuiNonIdealStateImports,
@@ -100,6 +106,9 @@ import { AudioImport } from './tracks/audio-import';
         <an-save-alternative />
         @if (project.isOpen()) {
           <an-bounce-dialog />
+          <an-strip-silence-dialog />
+          <an-bounce-in-place-dialog />
+          <an-processing-dialog />
           <an-io-labels-dialog />
           <an-group-settings />
           <an-plugin-windows />
@@ -171,6 +180,9 @@ export class App {
       'view.lists': () => this.screensets.showPane('lists'),
       'view.notes': () => this.screensets.showPane('notes'),
       'project.bounce': () => this.ui.bounceOpen.set(true),
+      'region.stripSilence': () => this.ui.stripSilenceOpen.set(true),
+      'region.bounceInPlace': () => this.ui.bounceInPlaceOpen.set(true),
+      'region.process': () => this.ui.processingOpen.set(true),
       'mixer.ioLabels': () => this.ui.ioLabelsOpen.set(true),
       'mixer.groupSettings': () => this.openGroupSettings(),
       'track.newAux': () => void this.mixer.addAux(),
