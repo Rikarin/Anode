@@ -3,6 +3,7 @@
 
 #include <exception>
 #include <memory>
+#include <random>
 #include <string>
 
 #include "signalsmith-stretch/signalsmith-stretch.h"
@@ -13,8 +14,24 @@
 
 namespace
 {
-using Stretch = signalsmith::stretch::SignalsmithStretch<float>;
 constexpr long kSeed = 0x416e6f64; // fixed, so renders are reproducible
+
+// The stretcher's random engine (it randomises phases when slowing down more than 2x). Upstream keeps its engine
+// private and never reseeds it, so a reset stream would depend on everything processed before the reset. This one
+// forwards to the engine of the instance being called (set by an_stretch::use), which reset and output_seek reseed: a stream
+// started by either is a function of its input alone, as Anode's flex renderers need (docs/flex/README.md).
+struct Random
+{
+  using result_type = std::minstd_rand::result_type;
+  static constexpr result_type min() { return std::minstd_rand::min(); }
+  static constexpr result_type max() { return std::minstd_rand::max(); }
+  explicit Random(long) {}
+  result_type operator()() { return (*current)(); }
+  static thread_local std::minstd_rand* current;
+};
+thread_local std::minstd_rand* Random::current = nullptr;
+
+using Stretch = signalsmith::stretch::SignalsmithStretch<float, Random>;
 
 thread_local std::string last_error;
 
@@ -28,7 +45,15 @@ int32_t fail(const std::string& message)
 struct an_stretch
 {
   Stretch stretch{kSeed};
+  std::minstd_rand random{static_cast<std::minstd_rand::result_type>(kSeed)};
   double sample_rate = 0;
+
+  // Points the stretcher's random engine at this instance's for the duration of a call.
+  Stretch& use()
+  {
+    Random::current = &random;
+    return stretch;
+  }
 };
 
 namespace
@@ -89,6 +114,7 @@ void an_stretch_destroy(an_stretch* stretch)
 
 void an_stretch_reset(an_stretch* stretch)
 {
+  stretch->random.seed(static_cast<std::minstd_rand::result_type>(kSeed));
   stretch->stretch.reset();
 }
 
@@ -117,12 +143,12 @@ void an_stretch_set_formant_base(an_stretch* stretch, double base_hz)
 void an_stretch_process(an_stretch* stretch, const float* const* input, int32_t input_frames, float* const* output,
                         int32_t output_frames)
 {
-  stretch->stretch.process(input, input_frames, output, output_frames);
+  stretch->use().process(input, input_frames, output, output_frames);
 }
 
 void an_stretch_seek(an_stretch* stretch, const float* const* input, int32_t input_frames, double playback_rate)
 {
-  stretch->stretch.seek(input, input_frames, playback_rate);
+  stretch->use().seek(input, input_frames, playback_rate);
 }
 
 int32_t an_stretch_seek_length(const an_stretch* stretch)
@@ -132,7 +158,8 @@ int32_t an_stretch_seek_length(const an_stretch* stretch)
 
 void an_stretch_output_seek(an_stretch* stretch, const float* const* input, int32_t input_frames)
 {
-  stretch->stretch.outputSeek(input, input_frames);
+  stretch->random.seed(static_cast<std::minstd_rand::result_type>(kSeed));
+  stretch->use().outputSeek(input, input_frames);
 }
 
 int32_t an_stretch_output_seek_length(const an_stretch* stretch, double playback_rate)
@@ -142,7 +169,7 @@ int32_t an_stretch_output_seek_length(const an_stretch* stretch, double playback
 
 void an_stretch_flush(an_stretch* stretch, float* const* output, int32_t output_frames, double playback_rate)
 {
-  stretch->stretch.flush(output, output_frames, static_cast<float>(playback_rate));
+  stretch->use().flush(output, output_frames, static_cast<float>(playback_rate));
 }
 
 int32_t an_stretch_exact(an_stretch* stretch, const float* const* input, int32_t input_frames, float* const* output,
@@ -152,7 +179,8 @@ int32_t an_stretch_exact(an_stretch* stretch, const float* const* input, int32_t
     return fail("output_frames must be positive");
   try
   {
-    return stretch->stretch.exact(input, input_frames, output, output_frames) ? 0
+    stretch->random.seed(static_cast<std::minstd_rand::result_type>(kSeed));
+    return stretch->use().exact(input, input_frames, output, output_frames) ? 0
                                                                                : fail("input shorter than a seek");
   }
   catch (const std::exception& e)

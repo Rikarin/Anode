@@ -42,7 +42,8 @@ AN_STRETCH_API int32_t an_stretch_create_custom(int32_t channels, double sample_
 
 AN_STRETCH_API void an_stretch_destroy(an_stretch *stretch);
 
-/* Clears all internal state; the configuration and the pitch/formant settings are kept. */
+/* Clears all internal state, the random engine included (it is reseeded, so a stream started after a reset depends on
+ * its input alone); the configuration and the pitch/formant settings are kept. */
 AN_STRETCH_API void an_stretch_reset(an_stretch *stretch);
 
 /* Pitch: a frequency factor (2 = up an octave) or semitones. tonality_limit_hz > 0 keeps the timbre above that
@@ -67,8 +68,8 @@ AN_STRETCH_API void an_stretch_seek(an_stretch *stretch, const float *const *inp
                                     double playback_rate);
 AN_STRETCH_API int32_t an_stretch_seek_length(const an_stretch *stretch);
 
-/* Starts a sound so the next output frame is aligned to its first input frame: resets, then consumes input_frames
- * (an_stretch_output_seek_length(rate) of them) and pre-computes the pre-roll. */
+/* Starts a sound so the next output frame is aligned to its first input frame: resets (as an_stretch_reset), then
+ * consumes input_frames (an_stretch_output_seek_length(rate) of them) and pre-computes the pre-roll. */
 AN_STRETCH_API void an_stretch_output_seek(an_stretch *stretch, const float *const *input, int32_t input_frames);
 AN_STRETCH_API int32_t an_stretch_output_seek_length(const an_stretch *stretch, double playback_rate);
 
