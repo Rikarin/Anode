@@ -21,7 +21,7 @@ namespace Anode.Server.Projects;
 ///     play that as one undoable step. Every change of state, and progress at most a few times a second, goes out as a
 ///     <see cref="JobEvent" />. Cancelling a queued job drops it; a running one asks the engine to stop.
 /// </summary>
-public sealed class Jobs : IDisposable {
+public sealed partial class Jobs : IDisposable {
     public const double FreezeTailSeconds = 2;
 
     /// <summary>Where freeze files go in the project folder.</summary>
@@ -33,6 +33,7 @@ public sealed class Jobs : IDisposable {
     readonly EngineConnection engine;
     readonly EventHub hub;
     readonly AudioImport import;
+    readonly FileAnalyses analyses;
     readonly TimeProvider time;
     readonly ILogger<Jobs> logger;
     readonly ConcurrentDictionary<string, Entry> jobs = new(StringComparer.Ordinal);
@@ -46,9 +47,11 @@ public sealed class Jobs : IDisposable {
         EngineConnection engine,
         EventHub hub,
         AudioImport import,
+        FileAnalyses analyses,
         TimeProvider time,
         ILogger<Jobs> logger
     ) {
+        this.analyses = analyses;
         this.session = session;
         this.engine = engine;
         this.hub = hub;
@@ -191,9 +194,9 @@ public sealed class Jobs : IDisposable {
 
     /// <summary>Where a track's last region (audio, MIDI or take folder) ends, in samples, or null when it has none.</summary>
     static long? LastSample(ProjectState state, string trackId) {
-        var map = state.TempoMap;
+        var map = state.PlaybackMap;
         var ends = state.RegionsOf(trackId)
-            .Select(r => Edits.EndSample(state, r))
+            .Select(r => Model.Compile.Varispeed.Of(state).Sample(Edits.EndSample(state, r)))
             .Concat(
                 state.MidiRegionsOf(trackId).Select(r => map.SampleAt(r.StartTick + r.LengthTicks, state.SampleRate))
             )
@@ -217,7 +220,7 @@ public sealed class Jobs : IDisposable {
             throw ProjectException.Unprocessable("A bounce ends after it starts, inside the project.");
         }
 
-        var map = state.TempoMap;
+        var map = state.PlaybackMap;
         return (map.SampleAt(from, state.SampleRate), map.SampleAt(to, state.SampleRate));
     }
 
@@ -251,6 +254,7 @@ public sealed class Jobs : IDisposable {
                 } catch (OperationCanceledException) when (entry.Cancel.IsCancellationRequested) {
                     Set(entry, entry.Job with { State = JobState.Cancelled, Message = "Cancelled." });
                 } catch (Exception e) when (e is ProjectException
+                                                or AnalysisException
                                                 or IOException
                                                 or UnauthorizedAccessException
                                                 or WavFormatException

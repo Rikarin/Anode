@@ -181,13 +181,29 @@ public sealed class ArrangementCompilerTests {
                 var (state, ids, random) = RandomProjects.Build(seed, 40);
                 // Fades on every region, so overlaps are often crossfades.
                 foreach (var region in state.Regions.Values.ToArray()) {
-                    var fade = random.NextInt64(0, region.Length / 2 + 1);
+                    var fade = random.NextInt64(0, Edits.SpanSamples(state, region) / 2 + 1);
                     state = Edits.Apply(state, new SetRegionCommand(region.Id, FadeIn: fade, FadeOut: fade), ids).State;
                 }
 
                 var model = new ModelCompiler().Compile(state, EngineIds.Empty.With(state));
                 foreach (var track in model.Tracks) {
                     AssertHostAccepts(track.Playlist);
+                    AssertWarpsValid(track);
+                }
+
+                // And at a Varispeed speed, where every entry is warped.
+                var speed = state with {
+                    Settings = state.Settings with {
+                        Varispeed = new(
+                            true,
+                            RandomProjects.Pick(random, Enum.GetValues<VarispeedMode>()),
+                            0.5 + random.NextDouble()
+                        )
+                    }
+                };
+                foreach (var track in new ModelCompiler().Compile(speed, EngineIds.Empty.With(speed)).Tracks) {
+                    AssertHostAccepts(track.Playlist);
+                    AssertWarpsValid(track);
                 }
             },
             iter: 200
@@ -208,6 +224,28 @@ public sealed class ArrangementCompilerTests {
         }
 
         Assert.All(playlist, static e => Assert.True(e.FadeIn + e.FadeOut <= e.Length && e.Length > 0));
+    }
+
+    /// <summary>What the engine's validator checks of warped entries (docs/06-phase-5.md, workstream A).</summary>
+    internal static void AssertWarpsValid(TrackModel track) {
+        foreach (var e in track.Playlist.Where(static e => e.WarpCount > 0)) {
+            Assert.NotEqual(FlexAlgorithm.None, e.Algorithm);
+            Assert.True(e.WarpCount >= 2);
+            var warp = track.Warp![e.WarpStart..(e.WarpStart + e.WarpCount)];
+            Assert.Equal(0, warp[0].Offset);
+            Assert.Equal(e.Length, warp[^1].Offset);
+            for (var i = 1; i < warp.Length; i++) {
+                Assert.True(warp[i].Offset > warp[i - 1].Offset, "warp offsets increase");
+                Assert.True(double.IsFinite(warp[i].FileFrame));
+            }
+
+            if (e.PitchCount > 0) {
+                var pitch = track.Pitch![e.PitchStart..(e.PitchStart + e.PitchCount)];
+                for (var i = 1; i < pitch.Length; i++) {
+                    Assert.True(pitch[i].FileFrame >= pitch[i - 1].FileFrame, "pitch points sorted");
+                }
+            }
+        }
     }
 
     CompiledModel Compile() => new ModelCompiler().Compile(state, EngineIds.Empty.With(state));

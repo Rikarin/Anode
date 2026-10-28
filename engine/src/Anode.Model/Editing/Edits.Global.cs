@@ -32,6 +32,10 @@ public static partial class Edits {
             if (!Enum.IsDefined(e.Curve)) {
                 throw new EditException($"Unknown tempo curve {e.Curve}.");
             }
+
+            if (!(e.Shape is >= -1 and <= 1)) {
+                throw new EditException($"A tempo ramp's shape is −1…1, not {e.Shape}.");
+            }
         }
 
         return [new SettingsChanged(state.Settings with { Tempo = events[0].Bpm, TempoEvents = [..events] })];

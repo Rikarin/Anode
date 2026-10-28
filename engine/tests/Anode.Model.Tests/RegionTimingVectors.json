@@ -1,0 +1,1443 @@
+{
+  "about": "RegionTiming vectors (docs/06-phase-5.md): Anode.Model\u0027s RegionTiming computes these; the editor\u0027s mirror must match ticks and samples within 1e-6 (relative 1e-9 on ramps). Ticks are absolute project ticks (960 per quarter note), samples project samples (fractional), frames file frames.",
+  "cases": [
+    {
+      "name": "unwarped",
+      "sampleRate": 48000,
+      "tempoEvents": [
+        {
+          "tick": 0,
+          "bpm": 120,
+          "curve": "step",
+          "shape": 0
+        }
+      ],
+      "signatures": [
+        {
+          "tick": 0,
+          "numerator": 4,
+          "denominator": 4
+        }
+      ],
+      "flexOn": false,
+      "region": {
+        "id": "rgn_1",
+        "trackId": "trk_1",
+        "fileId": "aud_1",
+        "name": "R",
+        "startTick": 960,
+        "fileOffset": 1000,
+        "length": 96000,
+        "gainDb": 0,
+        "fadeIn": 0,
+        "fadeOut": 0,
+        "fadeInCurve": 0,
+        "fadeOutCurve": 0,
+        "muted": false,
+        "follow": "off",
+        "flexMarkers": [],
+        "transpose": 0,
+        "fineTune": 0,
+        "pitchNotes": []
+      },
+      "fileTempo": null,
+      "expected": {
+        "warped": false,
+        "follow": "off",
+        "startSample": 24000,
+        "endSample": 120000,
+        "endTick": 4800,
+        "points": [
+          {
+            "frame": 1000,
+            "tick": 960,
+            "sample": 24000
+          },
+          {
+            "frame": 25000,
+            "tick": 1920,
+            "sample": 48000
+          },
+          {
+            "frame": 49000,
+            "tick": 2880,
+            "sample": 72000
+          },
+          {
+            "frame": 73000,
+            "tick": 3840,
+            "sample": 96000
+          },
+          {
+            "frame": 97000,
+            "tick": 4800,
+            "sample": 120000
+          }
+        ]
+      }
+    },
+    {
+      "name": "flex, time",
+      "sampleRate": 48000,
+      "tempoEvents": [
+        {
+          "tick": 0,
+          "bpm": 120,
+          "curve": "step",
+          "shape": 0
+        }
+      ],
+      "signatures": [
+        {
+          "tick": 0,
+          "numerator": 4,
+          "denominator": 4
+        }
+      ],
+      "flexOn": true,
+      "region": {
+        "id": "rgn_1",
+        "trackId": "trk_1",
+        "fileId": "aud_1",
+        "name": "R",
+        "startTick": 960,
+        "fileOffset": 1000,
+        "length": 96000,
+        "gainDb": 0,
+        "fadeIn": 0,
+        "fadeOut": 0,
+        "fadeInCurve": 0,
+        "fadeOutCurve": 0,
+        "muted": false,
+        "follow": "off",
+        "flexMarkers": [],
+        "transpose": 0,
+        "fineTune": 0,
+        "pitchNotes": []
+      },
+      "fileTempo": {
+        "bpm": 100,
+        "variable": false,
+        "beats": [
+          0,
+          28800,
+          57600,
+          86400,
+          115200,
+          144000,
+          172800,
+          201600,
+          230400,
+          259200,
+          288000,
+          316800,
+          345600,
+          374400,
+          403200,
+          432000,
+          460800,
+          489600,
+          518400,
+          547200
+        ],
+        "downbeats": [
+          0,
+          115200,
+          230400,
+          345600,
+          460800
+        ]
+      },
+      "expected": {
+        "warped": true,
+        "follow": "off",
+        "startSample": 24000,
+        "endSample": 120000,
+        "endTick": 4800,
+        "points": [
+          {
+            "frame": 1000,
+            "tick": 960,
+            "sample": 24000
+          },
+          {
+            "frame": 25000,
+            "tick": 1920,
+            "sample": 48000
+          },
+          {
+            "frame": 49000,
+            "tick": 2880,
+            "sample": 72000
+          },
+          {
+            "frame": 73000,
+            "tick": 3840,
+            "sample": 96000
+          },
+          {
+            "frame": 97000,
+            "tick": 4800,
+            "sample": 120000
+          }
+        ]
+      }
+    },
+    {
+      "name": "follow on",
+      "sampleRate": 48000,
+      "tempoEvents": [
+        {
+          "tick": 0,
+          "bpm": 120,
+          "curve": "step",
+          "shape": 0
+        }
+      ],
+      "signatures": [
+        {
+          "tick": 0,
+          "numerator": 4,
+          "denominator": 4
+        }
+      ],
+      "flexOn": false,
+      "region": {
+        "id": "rgn_1",
+        "trackId": "trk_1",
+        "fileId": "aud_1",
+        "name": "R",
+        "startTick": 3840,
+        "fileOffset": 14400,
+        "length": 288000,
+        "gainDb": 0,
+        "fadeIn": 0,
+        "fadeOut": 0,
+        "fadeInCurve": 0,
+        "fadeOutCurve": 0,
+        "muted": false,
+        "follow": "on",
+        "flexMarkers": [],
+        "transpose": 0,
+        "fineTune": 0,
+        "pitchNotes": []
+      },
+      "fileTempo": {
+        "bpm": 100,
+        "variable": false,
+        "beats": [
+          0,
+          28800,
+          57600,
+          86400,
+          115200,
+          144000,
+          172800,
+          201600,
+          230400,
+          259200,
+          288000,
+          316800,
+          345600,
+          374400,
+          403200,
+          432000,
+          460800,
+          489600,
+          518400,
+          547200
+        ],
+        "downbeats": [
+          0,
+          115200,
+          230400,
+          345600,
+          460800
+        ]
+      },
+      "expected": {
+        "warped": true,
+        "follow": "on",
+        "startSample": 96000,
+        "endSample": 336000,
+        "endTick": 13440,
+        "points": [
+          {
+            "frame": 14400,
+            "tick": 3840,
+            "sample": 96000
+          },
+          {
+            "frame": 50400,
+            "tick": 5040,
+            "sample": 126000
+          },
+          {
+            "frame": 86400,
+            "tick": 6240,
+            "sample": 156000
+          },
+          {
+            "frame": 122400,
+            "tick": 7440,
+            "sample": 186000
+          },
+          {
+            "frame": 158400,
+            "tick": 8640,
+            "sample": 216000
+          },
+          {
+            "frame": 194400,
+            "tick": 9840,
+            "sample": 246000
+          },
+          {
+            "frame": 230400,
+            "tick": 11040,
+            "sample": 276000
+          },
+          {
+            "frame": 266400,
+            "tick": 12240,
+            "sample": 306000
+          },
+          {
+            "frame": 302400,
+            "tick": 13440,
+            "sample": 336000
+          }
+        ]
+      }
+    },
+    {
+      "name": "follow on, no file tempo",
+      "sampleRate": 48000,
+      "tempoEvents": [
+        {
+          "tick": 0,
+          "bpm": 120,
+          "curve": "step",
+          "shape": 0
+        }
+      ],
+      "signatures": [
+        {
+          "tick": 0,
+          "numerator": 4,
+          "denominator": 4
+        }
+      ],
+      "flexOn": false,
+      "region": {
+        "id": "rgn_1",
+        "trackId": "trk_1",
+        "fileId": "aud_1",
+        "name": "R",
+        "startTick": 0,
+        "fileOffset": 0,
+        "length": 48000,
+        "gainDb": 0,
+        "fadeIn": 0,
+        "fadeOut": 0,
+        "fadeInCurve": 0,
+        "fadeOutCurve": 0,
+        "muted": false,
+        "follow": "on",
+        "flexMarkers": [],
+        "transpose": 0,
+        "fineTune": 0,
+        "pitchNotes": []
+      },
+      "fileTempo": null,
+      "expected": {
+        "warped": true,
+        "follow": "off",
+        "startSample": 0,
+        "endSample": 48000,
+        "endTick": 1920,
+        "points": [
+          {
+            "frame": 0,
+            "tick": 0,
+            "sample": 0
+          },
+          {
+            "frame": 24000,
+            "tick": 960,
+            "sample": 24000
+          },
+          {
+            "frame": 48000,
+            "tick": 1920,
+            "sample": 48000
+          }
+        ]
+      }
+    },
+    {
+      "name": "follow bars",
+      "sampleRate": 48000,
+      "tempoEvents": [
+        {
+          "tick": 0,
+          "bpm": 120,
+          "curve": "step",
+          "shape": 0
+        }
+      ],
+      "signatures": [
+        {
+          "tick": 0,
+          "numerator": 4,
+          "denominator": 4
+        }
+      ],
+      "flexOn": false,
+      "region": {
+        "id": "rgn_1",
+        "trackId": "trk_1",
+        "fileId": "aud_1",
+        "name": "R",
+        "startTick": 0,
+        "fileOffset": 0,
+        "length": 300000,
+        "gainDb": 0,
+        "fadeIn": 0,
+        "fadeOut": 0,
+        "fadeInCurve": 0,
+        "fadeOutCurve": 0,
+        "muted": false,
+        "follow": "bars",
+        "flexMarkers": [],
+        "transpose": 0,
+        "fineTune": 0,
+        "pitchNotes": []
+      },
+      "fileTempo": {
+        "bpm": 100,
+        "variable": true,
+        "beats": [],
+        "downbeats": [
+          0,
+          120000,
+          230400
+        ]
+      },
+      "expected": {
+        "warped": true,
+        "follow": "bars",
+        "startSample": 0,
+        "endSample": 250000,
+        "endTick": 10000,
+        "points": [
+          {
+            "frame": 0,
+            "tick": 0,
+            "sample": 0
+          },
+          {
+            "frame": 60000,
+            "tick": 1920,
+            "sample": 48000
+          },
+          {
+            "frame": 120000,
+            "tick": 3840,
+            "sample": 96000
+          },
+          {
+            "frame": 175200,
+            "tick": 5760,
+            "sample": 144000
+          },
+          {
+            "frame": 230400,
+            "tick": 7680,
+            "sample": 192000
+          },
+          {
+            "frame": 300000,
+            "tick": 10000,
+            "sample": 250000
+          }
+        ]
+      }
+    },
+    {
+      "name": "follow bars and beats",
+      "sampleRate": 48000,
+      "tempoEvents": [
+        {
+          "tick": 0,
+          "bpm": 120,
+          "curve": "step",
+          "shape": 0
+        }
+      ],
+      "signatures": [
+        {
+          "tick": 0,
+          "numerator": 4,
+          "denominator": 4
+        }
+      ],
+      "flexOn": false,
+      "region": {
+        "id": "rgn_1",
+        "trackId": "trk_1",
+        "fileId": "aud_1",
+        "name": "R",
+        "startTick": 480,
+        "fileOffset": 10000,
+        "length": 100000,
+        "gainDb": 0,
+        "fadeIn": 0,
+        "fadeOut": 0,
+        "fadeInCurve": 0,
+        "fadeOutCurve": 0,
+        "muted": false,
+        "follow": "barsAndBeats",
+        "flexMarkers": [],
+        "transpose": 0,
+        "fineTune": 0,
+        "pitchNotes": []
+      },
+      "fileTempo": {
+        "bpm": 100,
+        "variable": false,
+        "beats": [
+          0,
+          30000,
+          60000,
+          90000
+        ],
+        "downbeats": [
+          0
+        ]
+      },
+      "expected": {
+        "warped": true,
+        "follow": "barsAndBeats",
+        "startSample": 12000,
+        "endSample": 88667,
+        "endTick": 3546.666667,
+        "points": [
+          {
+            "frame": 10000,
+            "tick": 480,
+            "sample": 12000
+          },
+          {
+            "frame": 20000,
+            "tick": 720,
+            "sample": 18000
+          },
+          {
+            "frame": 30000,
+            "tick": 960,
+            "sample": 24000
+          },
+          {
+            "frame": 60000,
+            "tick": 1920,
+            "sample": 48000
+          },
+          {
+            "frame": 90000,
+            "tick": 2880,
+            "sample": 72000
+          },
+          {
+            "frame": 110000,
+            "tick": 3546.666667,
+            "sample": 88666.666667
+          }
+        ]
+      }
+    },
+    {
+      "name": "follow bars in 7/8 after a signature change",
+      "sampleRate": 48000,
+      "tempoEvents": [
+        {
+          "tick": 0,
+          "bpm": 120,
+          "curve": "step",
+          "shape": 0
+        }
+      ],
+      "signatures": [
+        {
+          "tick": 0,
+          "numerator": 4,
+          "denominator": 4
+        },
+        {
+          "tick": 3840,
+          "numerator": 7,
+          "denominator": 8
+        }
+      ],
+      "flexOn": false,
+      "region": {
+        "id": "rgn_1",
+        "trackId": "trk_1",
+        "fileId": "aud_1",
+        "name": "R",
+        "startTick": 0,
+        "fileOffset": 0,
+        "length": 400000,
+        "gainDb": 0,
+        "fadeIn": 0,
+        "fadeOut": 0,
+        "fadeInCurve": 0,
+        "fadeOutCurve": 0,
+        "muted": false,
+        "follow": "bars",
+        "flexMarkers": [],
+        "transpose": 0,
+        "fineTune": 0,
+        "pitchNotes": []
+      },
+      "fileTempo": {
+        "bpm": 100,
+        "variable": false,
+        "beats": [],
+        "downbeats": [
+          0,
+          115200,
+          230400,
+          345600
+        ]
+      },
+      "expected": {
+        "warped": true,
+        "follow": "bars",
+        "startSample": 0,
+        "endSample": 309333,
+        "endTick": 12373.333333,
+        "points": [
+          {
+            "frame": 0,
+            "tick": 0,
+            "sample": 0
+          },
+          {
+            "frame": 115200,
+            "tick": 3840,
+            "sample": 96000
+          },
+          {
+            "frame": 230400,
+            "tick": 7200,
+            "sample": 180000
+          },
+          {
+            "frame": 345600,
+            "tick": 10560,
+            "sample": 264000
+          },
+          {
+            "frame": 400000,
+            "tick": 12373.333333,
+            "sample": 309333.333333
+          }
+        ]
+      }
+    },
+    {
+      "name": "markers",
+      "sampleRate": 48000,
+      "tempoEvents": [
+        {
+          "tick": 0,
+          "bpm": 120,
+          "curve": "step",
+          "shape": 0
+        }
+      ],
+      "signatures": [
+        {
+          "tick": 0,
+          "numerator": 4,
+          "denominator": 4
+        }
+      ],
+      "flexOn": true,
+      "region": {
+        "id": "rgn_1",
+        "trackId": "trk_1",
+        "fileId": "aud_1",
+        "name": "R",
+        "startTick": 0,
+        "fileOffset": 0,
+        "length": 288000,
+        "gainDb": 0,
+        "fadeIn": 0,
+        "fadeOut": 0,
+        "fadeInCurve": 0,
+        "fadeOutCurve": 0,
+        "muted": false,
+        "follow": "on",
+        "flexMarkers": [
+          {
+            "fileFrame": 144000,
+            "tick": 4000
+          }
+        ],
+        "transpose": 0,
+        "fineTune": 0,
+        "pitchNotes": []
+      },
+      "fileTempo": {
+        "bpm": 100,
+        "variable": false,
+        "beats": [
+          0,
+          28800,
+          57600,
+          86400,
+          115200,
+          144000,
+          172800,
+          201600,
+          230400,
+          259200,
+          288000,
+          316800,
+          345600,
+          374400,
+          403200,
+          432000,
+          460800,
+          489600,
+          518400,
+          547200
+        ],
+        "downbeats": [
+          0,
+          115200,
+          230400,
+          345600,
+          460800
+        ]
+      },
+      "expected": {
+        "warped": true,
+        "follow": "on",
+        "startSample": 0,
+        "endSample": 240000,
+        "endTick": 9600,
+        "points": [
+          {
+            "frame": 0,
+            "tick": 0,
+            "sample": 0
+          },
+          {
+            "frame": 72000,
+            "tick": 2000,
+            "sample": 50000
+          },
+          {
+            "frame": 144000,
+            "tick": 4000,
+            "sample": 100000
+          },
+          {
+            "frame": 216000,
+            "tick": 6800,
+            "sample": 170000
+          },
+          {
+            "frame": 288000,
+            "tick": 9600,
+            "sample": 240000
+          }
+        ]
+      }
+    },
+    {
+      "name": "markers ignored",
+      "sampleRate": 48000,
+      "tempoEvents": [
+        {
+          "tick": 0,
+          "bpm": 120,
+          "curve": "step",
+          "shape": 0
+        }
+      ],
+      "signatures": [
+        {
+          "tick": 0,
+          "numerator": 4,
+          "denominator": 4
+        }
+      ],
+      "flexOn": true,
+      "region": {
+        "id": "rgn_1",
+        "trackId": "trk_1",
+        "fileId": "aud_1",
+        "name": "R",
+        "startTick": 0,
+        "fileOffset": 0,
+        "length": 288000,
+        "gainDb": 0,
+        "fadeIn": 0,
+        "fadeOut": 0,
+        "fadeInCurve": 0,
+        "fadeOutCurve": 0,
+        "muted": false,
+        "follow": "on",
+        "flexMarkers": [
+          {
+            "fileFrame": 144000,
+            "tick": 4000
+          },
+          {
+            "fileFrame": 150000,
+            "tick": 3000
+          },
+          {
+            "fileFrame": 400000,
+            "tick": 100
+          }
+        ],
+        "transpose": 0,
+        "fineTune": 0,
+        "pitchNotes": []
+      },
+      "fileTempo": {
+        "bpm": 100,
+        "variable": false,
+        "beats": [
+          0,
+          28800,
+          57600,
+          86400,
+          115200,
+          144000,
+          172800,
+          201600,
+          230400,
+          259200,
+          288000,
+          316800,
+          345600,
+          374400,
+          403200,
+          432000,
+          460800,
+          489600,
+          518400,
+          547200
+        ],
+        "downbeats": [
+          0,
+          115200,
+          230400,
+          345600,
+          460800
+        ]
+      },
+      "expected": {
+        "warped": true,
+        "follow": "on",
+        "startSample": 0,
+        "endSample": 240000,
+        "endTick": 9600,
+        "points": [
+          {
+            "frame": 0,
+            "tick": 0,
+            "sample": 0
+          },
+          {
+            "frame": 144000,
+            "tick": 4000,
+            "sample": 100000
+          },
+          {
+            "frame": 150000,
+            "tick": 4233.333333,
+            "sample": 105833.333333
+          },
+          {
+            "frame": 288000,
+            "tick": 9600,
+            "sample": 240000
+          }
+        ]
+      }
+    },
+    {
+      "name": "markers on time",
+      "sampleRate": 48000,
+      "tempoEvents": [
+        {
+          "tick": 0,
+          "bpm": 120,
+          "curve": "step",
+          "shape": 0
+        }
+      ],
+      "signatures": [
+        {
+          "tick": 0,
+          "numerator": 4,
+          "denominator": 4
+        }
+      ],
+      "flexOn": true,
+      "region": {
+        "id": "rgn_1",
+        "trackId": "trk_1",
+        "fileId": "aud_1",
+        "name": "R",
+        "startTick": 1920,
+        "fileOffset": 0,
+        "length": 96000,
+        "gainDb": 0,
+        "fadeIn": 0,
+        "fadeOut": 0,
+        "fadeInCurve": 0,
+        "fadeOutCurve": 0,
+        "muted": false,
+        "follow": "off",
+        "flexMarkers": [
+          {
+            "fileFrame": 48000,
+            "tick": 1000
+          }
+        ],
+        "transpose": 0,
+        "fineTune": 0,
+        "pitchNotes": []
+      },
+      "fileTempo": null,
+      "expected": {
+        "warped": true,
+        "follow": "off",
+        "startSample": 48000,
+        "endSample": 144000,
+        "endTick": 5760,
+        "points": [
+          {
+            "frame": 0,
+            "tick": 1920,
+            "sample": 48000
+          },
+          {
+            "frame": 24000,
+            "tick": 2420,
+            "sample": 60500
+          },
+          {
+            "frame": 48000,
+            "tick": 2920,
+            "sample": 73000
+          },
+          {
+            "frame": 72000,
+            "tick": 4340,
+            "sample": 108500
+          },
+          {
+            "frame": 96000,
+            "tick": 5760,
+            "sample": 144000
+          }
+        ]
+      }
+    },
+    {
+      "name": "unwarped over a linear ramp",
+      "sampleRate": 48000,
+      "tempoEvents": [
+        {
+          "tick": 0,
+          "bpm": 60,
+          "curve": "ramp",
+          "shape": 0
+        },
+        {
+          "tick": 3840,
+          "bpm": 120,
+          "curve": "step",
+          "shape": 0
+        }
+      ],
+      "signatures": [
+        {
+          "tick": 0,
+          "numerator": 4,
+          "denominator": 4
+        }
+      ],
+      "flexOn": false,
+      "region": {
+        "id": "rgn_1",
+        "trackId": "trk_1",
+        "fileId": "aud_1",
+        "name": "R",
+        "startTick": 0,
+        "fileOffset": 0,
+        "length": 240000,
+        "gainDb": 0,
+        "fadeIn": 0,
+        "fadeOut": 0,
+        "fadeInCurve": 0,
+        "fadeOutCurve": 0,
+        "muted": false,
+        "follow": "off",
+        "flexMarkers": [],
+        "transpose": 0,
+        "fineTune": 0,
+        "pitchNotes": []
+      },
+      "fileTempo": null,
+      "expected": {
+        "warped": false,
+        "follow": "off",
+        "startSample": 0,
+        "endSample": 240000,
+        "endTick": 8116.629653,
+        "points": [
+          {
+            "frame": 0,
+            "tick": 0,
+            "sample": 0
+          },
+          {
+            "frame": 48000,
+            "tick": 1090.6576,
+            "sample": 48000
+          },
+          {
+            "frame": 96000,
+            "tick": 2491.089679,
+            "sample": 96000
+          },
+          {
+            "frame": 144000,
+            "tick": 4276.629653,
+            "sample": 144000
+          },
+          {
+            "frame": 192000,
+            "tick": 6196.629653,
+            "sample": 192000
+          },
+          {
+            "frame": 240000,
+            "tick": 8116.629653,
+            "sample": 240000
+          }
+        ]
+      }
+    },
+    {
+      "name": "follow on over a linear ramp",
+      "sampleRate": 48000,
+      "tempoEvents": [
+        {
+          "tick": 0,
+          "bpm": 60,
+          "curve": "ramp",
+          "shape": 0
+        },
+        {
+          "tick": 3840,
+          "bpm": 120,
+          "curve": "step",
+          "shape": 0
+        }
+      ],
+      "signatures": [
+        {
+          "tick": 0,
+          "numerator": 4,
+          "denominator": 4
+        }
+      ],
+      "flexOn": false,
+      "region": {
+        "id": "rgn_1",
+        "trackId": "trk_1",
+        "fileId": "aud_1",
+        "name": "R",
+        "startTick": 0,
+        "fileOffset": 0,
+        "length": 240000,
+        "gainDb": 0,
+        "fadeIn": 0,
+        "fadeOut": 0,
+        "fadeInCurve": 0,
+        "fadeOutCurve": 0,
+        "muted": false,
+        "follow": "on",
+        "flexMarkers": [],
+        "transpose": 0,
+        "fineTune": 0,
+        "pitchNotes": []
+      },
+      "fileTempo": {
+        "bpm": 60,
+        "variable": false,
+        "beats": [
+          0,
+          48000,
+          96000,
+          144000,
+          192000
+        ],
+        "downbeats": [
+          0,
+          192000
+        ]
+      },
+      "expected": {
+        "warped": true,
+        "follow": "on",
+        "startSample": 0,
+        "endSample": 157084,
+        "endTick": 4800,
+        "points": [
+          {
+            "frame": 0,
+            "tick": 0,
+            "sample": 0
+          },
+          {
+            "frame": 48000,
+            "tick": 960,
+            "sample": 42843.561852
+          },
+          {
+            "frame": 96000,
+            "tick": 1920,
+            "sample": 77849.300757
+          },
+          {
+            "frame": 144000,
+            "tick": 2880,
+            "sample": 107446.231284
+          },
+          {
+            "frame": 192000,
+            "tick": 3840,
+            "sample": 133084.258668
+          },
+          {
+            "frame": 240000,
+            "tick": 4800,
+            "sample": 157084.258668
+          }
+        ]
+      }
+    },
+    {
+      "name": "follow on over a convex ramp",
+      "sampleRate": 48000,
+      "tempoEvents": [
+        {
+          "tick": 0,
+          "bpm": 60,
+          "curve": "ramp",
+          "shape": -0.5
+        },
+        {
+          "tick": 3840,
+          "bpm": 120,
+          "curve": "step",
+          "shape": 0
+        }
+      ],
+      "signatures": [
+        {
+          "tick": 0,
+          "numerator": 4,
+          "denominator": 4
+        }
+      ],
+      "flexOn": false,
+      "region": {
+        "id": "rgn_1",
+        "trackId": "trk_1",
+        "fileId": "aud_1",
+        "name": "R",
+        "startTick": 0,
+        "fileOffset": 0,
+        "length": 240000,
+        "gainDb": 0,
+        "fadeIn": 0,
+        "fadeOut": 0,
+        "fadeInCurve": 0,
+        "fadeOutCurve": 0,
+        "muted": false,
+        "follow": "on",
+        "flexMarkers": [],
+        "transpose": 0,
+        "fineTune": 0,
+        "pitchNotes": []
+      },
+      "fileTempo": {
+        "bpm": 60,
+        "variable": false,
+        "beats": [
+          0,
+          48000,
+          96000,
+          144000,
+          192000
+        ],
+        "downbeats": [
+          0,
+          192000
+        ]
+      },
+      "expected": {
+        "warped": true,
+        "follow": "on",
+        "startSample": 0,
+        "endSample": 174796,
+        "endTick": 4800,
+        "points": [
+          {
+            "frame": 0,
+            "tick": 0,
+            "sample": 0
+          },
+          {
+            "frame": 48000,
+            "tick": 960,
+            "sample": 47035.90332
+          },
+          {
+            "frame": 96000,
+            "tick": 1920,
+            "sample": 89020.340928
+          },
+          {
+            "frame": 144000,
+            "tick": 2880,
+            "sample": 123552.212888
+          },
+          {
+            "frame": 192000,
+            "tick": 3840,
+            "sample": 150796.447372
+          },
+          {
+            "frame": 240000,
+            "tick": 4800,
+            "sample": 174796.447372
+          }
+        ]
+      }
+    },
+    {
+      "name": "follow on over a concave ramp",
+      "sampleRate": 48000,
+      "tempoEvents": [
+        {
+          "tick": 0,
+          "bpm": 60,
+          "curve": "ramp",
+          "shape": 0.5
+        },
+        {
+          "tick": 3840,
+          "bpm": 120,
+          "curve": "step",
+          "shape": 0
+        }
+      ],
+      "signatures": [
+        {
+          "tick": 0,
+          "numerator": 4,
+          "denominator": 4
+        }
+      ],
+      "flexOn": false,
+      "region": {
+        "id": "rgn_1",
+        "trackId": "trk_1",
+        "fileId": "aud_1",
+        "name": "R",
+        "startTick": 0,
+        "fileOffset": 0,
+        "length": 240000,
+        "gainDb": 0,
+        "fadeIn": 0,
+        "fadeOut": 0,
+        "fadeInCurve": 0,
+        "fadeOutCurve": 0,
+        "muted": false,
+        "follow": "on",
+        "flexMarkers": [],
+        "transpose": 0,
+        "fineTune": 0,
+        "pitchNotes": []
+      },
+      "fileTempo": {
+        "bpm": 60,
+        "variable": false,
+        "beats": [
+          0,
+          48000,
+          96000,
+          144000,
+          192000
+        ],
+        "downbeats": [
+          0,
+          192000
+        ]
+      },
+      "expected": {
+        "warped": true,
+        "follow": "on",
+        "startSample": 0,
+        "endSample": 141831,
+        "endTick": 4800,
+        "points": [
+          {
+            "frame": 0,
+            "tick": 0,
+            "sample": 0
+          },
+          {
+            "frame": 48000,
+            "tick": 960,
+            "sample": 36301.398486
+          },
+          {
+            "frame": 96000,
+            "tick": 1920,
+            "sample": 66165.805228
+          },
+          {
+            "frame": 144000,
+            "tick": 2880,
+            "sample": 93010.439969
+          },
+          {
+            "frame": 192000,
+            "tick": 3840,
+            "sample": 117831.482665
+          },
+          {
+            "frame": 240000,
+            "tick": 4800,
+            "sample": 141831.482665
+          }
+        ]
+      }
+    },
+    {
+      "name": "markers over a concave ramp",
+      "sampleRate": 48000,
+      "tempoEvents": [
+        {
+          "tick": 0,
+          "bpm": 60,
+          "curve": "ramp",
+          "shape": 0.5
+        },
+        {
+          "tick": 3840,
+          "bpm": 120,
+          "curve": "step",
+          "shape": 0
+        }
+      ],
+      "signatures": [
+        {
+          "tick": 0,
+          "numerator": 4,
+          "denominator": 4
+        }
+      ],
+      "flexOn": true,
+      "region": {
+        "id": "rgn_1",
+        "trackId": "trk_1",
+        "fileId": "aud_1",
+        "name": "R",
+        "startTick": 480,
+        "fileOffset": 0,
+        "length": 192000,
+        "gainDb": 0,
+        "fadeIn": 0,
+        "fadeOut": 0,
+        "fadeInCurve": 0,
+        "fadeOutCurve": 0,
+        "muted": false,
+        "follow": "on",
+        "flexMarkers": [
+          {
+            "fileFrame": 96000,
+            "tick": 2000
+          }
+        ],
+        "transpose": 0,
+        "fineTune": 0,
+        "pitchNotes": []
+      },
+      "fileTempo": {
+        "bpm": 60,
+        "variable": false,
+        "beats": [
+          0,
+          48000,
+          96000,
+          144000,
+          192000
+        ],
+        "downbeats": [
+          0,
+          192000
+        ]
+      },
+      "expected": {
+        "warped": true,
+        "follow": "on",
+        "startSample": 19515,
+        "endSample": 129831,
+        "endTick": 4320,
+        "points": [
+          {
+            "frame": 0,
+            "tick": 480,
+            "sample": 19514.924152
+          },
+          {
+            "frame": 48000,
+            "tick": 1480,
+            "sample": 52948.82205
+          },
+          {
+            "frame": 96000,
+            "tick": 2480,
+            "sample": 82111.514556
+          },
+          {
+            "frame": 144000,
+            "tick": 3400,
+            "sample": 106667.567406
+          },
+          {
+            "frame": 192000,
+            "tick": 4320,
+            "sample": 129831.482665
+          }
+        ]
+      }
+    }
+  ]
+}

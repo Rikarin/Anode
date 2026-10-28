@@ -18,10 +18,6 @@ public sealed class EditPropertyTests {
     [Theory]
     [MemberData(nameof(Commands))]
     public void Applying_then_inverting_a_command_is_the_identity(string command) {
-        Assert.SkipWhen(
-            RandomProjects.PendingPhase5.Contains(command),
-            "Phase 5 command the model does not implement yet (docs/06-phase-5.md, workstream B)."
-        );
         var type = RandomProjects.CommandTypes.Single(t => t.Name == command);
         var applied = 0;
         Gen.Int.Sample(
@@ -33,7 +29,14 @@ public sealed class EditPropertyTests {
 
                 EditResult result;
                 try {
-                    result = Edits.Apply(state, edit, ids, RandomProjects.Plugins, RandomProjects.Patches);
+                    result = Edits.Apply(
+                        state,
+                        edit,
+                        ids,
+                        RandomProjects.Plugins,
+                        RandomProjects.Patches,
+                        RandomProjects.Analysis
+                    );
                 } catch (EditException) {
                     return;
                 }
@@ -66,7 +69,14 @@ public sealed class EditPropertyTests {
                 }
 
                 try {
-                    var result = Edits.Apply(state, batch, ids, RandomProjects.Plugins, RandomProjects.Patches);
+                    var result = Edits.Apply(
+                        state,
+                        batch,
+                        ids,
+                        RandomProjects.Plugins,
+                        RandomProjects.Patches,
+                        RandomProjects.Analysis
+                    );
                     Assert.Equal(RandomProjects.Json(state), RandomProjects.Json(result.State.Apply(result.Inverse)));
                 } catch (EditException) {
                     // a batch with an edit that does not apply changes nothing: nothing to check
@@ -135,7 +145,14 @@ public sealed class EditPropertyTests {
 
                         try {
                             var result =
-                                Edits.Apply(state, command, ids, RandomProjects.Plugins, RandomProjects.Patches);
+                                Edits.Apply(
+                                    state,
+                                    command,
+                                    ids,
+                                    RandomProjects.Plugins,
+                                    RandomProjects.Patches,
+                                    RandomProjects.Analysis
+                                );
                             history.Push(type.Name, step, new(result.Forward, result.Inverse), null);
                             ops = result.Forward;
                         } catch (EditException) {

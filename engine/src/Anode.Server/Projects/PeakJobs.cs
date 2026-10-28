@@ -102,6 +102,9 @@ static partial class ProjectLog {
     )]
     public static partial void HostParameterIgnored(ILogger logger, string parameter, string reason);
 
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Could not analyse {Path}: {Error}")]
+    public static partial void AnalysisFailed(ILogger logger, string path, string error);
+
     [LoggerMessage(Level = LogLevel.Warning, Message = "Job {Job} failed: {Error}")]
     public static partial void JobFailed(ILogger logger, string job, string error);
 }

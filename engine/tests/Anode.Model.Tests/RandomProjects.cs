@@ -123,6 +123,9 @@ static class RandomProjects {
         ]
     );
 
+    /// <summary>The analysis edits ask for (<see cref="FakeAnalysis" />).</summary>
+    public static FakeAnalysis Analysis { get; } = new();
+
     /// <summary>The effects of <see cref="Plugins" />.</summary>
     public static IReadOnlyList<PluginInfo> Effects { get; } = [..Plugins.Plugins.Where(static p => !p.IsInstrument)];
 
@@ -222,14 +225,21 @@ static class RandomProjects {
                 28 => typeof(AddVcaCommand),
                 29 => typeof(AssignVcaCommand),
                 < 32 => typeof(SetAutomationCommand),
+                32 => typeof(SetTrackFlexCommand),
+                33 => Pick(
+                    random,
+                    [typeof(SetPitchNotesCommand), typeof(NewTrackAlternativeCommand), typeof(SetRegionFlexCommand)]
+                ),
                 _ => Pick(random, CommandTypes)
             };
             var command = i is >= 4 and < 7 && FirstAudioTrack(state) is { } audio && state.Files.Count > 0
                 ? AddRegion(audio, Pick(random, [..state.Files.Values]), random)
-                : Command(type, state, random);
+                : i == 32 && FirstAudioTrack(state) is { } flexed && random.Next(2) == 0
+                    ? new SetTrackFlexCommand(flexed, true, Pick(random, Enum.GetValues<FlexMode>()))
+                    : Command(type, state, random);
             if (command is not null) {
                 try {
-                    state = Edits.Apply(state, command, ids, Plugins, Patches).State;
+                    state = Edits.Apply(state, command, ids, Plugins, Patches, Analysis).State;
                 } catch (EditException) {
                     // not every random edit applies
                 }
@@ -247,26 +257,6 @@ static class RandomProjects {
     }
 
     static string? FirstAudioTrack(ProjectState state) => state.Tracks.Find(static t => t.Kind == TrackKind.Audio)?.Id;
-
-    /// <summary>Phase 5 commands the model rejects until workstream B implements them; the identity property skips them.</summary>
-    public static readonly IReadOnlySet<string> PendingPhase5 = new HashSet<string>(StringComparer.Ordinal) {
-        nameof(SetTrackFlexCommand),
-        nameof(SetRegionFlexCommand),
-        nameof(SetFlexMarkersCommand),
-        nameof(QuantizeAudioCommand),
-        nameof(SetPitchNotesCommand),
-        nameof(FlexPitchToMidiCommand),
-        nameof(SetFileTempoCommand),
-        nameof(AdaptTempoCommand),
-        nameof(MapBeatsCommand),
-        nameof(StripSilenceCommand),
-        nameof(NewTrackAlternativeCommand),
-        nameof(SelectTrackAlternativeCommand),
-        nameof(SetTrackAlternativeCommand),
-        nameof(DeleteTrackAlternativeCommand),
-        nameof(SetVarispeedCommand),
-        nameof(SetSmartTempoCommand)
-    };
 
     /// <summary>A random command of <paramref name="type" /> for <paramref name="s" />, or null when none can be made.</summary>
     public static EditCommand? Command(Type type, ProjectState s, Random r) {
@@ -600,54 +590,67 @@ static class RandomProjects {
                 : plain.Length > 0 && r.Next(4) == 0
                     ? new UnfreezeTrackCommand(Pick(r, plain).Id)
                     : null,
-            // Phase 5 commands (docs/06-phase-5.md): placeholders until the model implements them (workstream B
-            // replaces these with generators that make commands that apply).
-            nameof(SetTrackFlexCommand) => Track() is { } t
+            // Phase 5 commands (docs/06-phase-5.md).
+            nameof(SetTrackFlexCommand) => AudioTrack() is { } t
                 ? new SetTrackFlexCommand(
-                    t,
-                    Maybe(r.Next(2) == 0),
+                    t.Id,
+                    r.Next(4) == 0 ? null : r.Next(3) > 0,
                     r.Next(2) == 0 ? null : Pick(r, Enum.GetValues<FlexMode>())
                 )
                 : null,
             nameof(SetRegionFlexCommand) => regions.Length > 0
-                ? new SetRegionFlexCommand(Pick(r, regions).Id, FlexFollow.On, Maybe(r.Next(-12, 13)))
+                ? new SetRegionFlexCommand(
+                    Pick(r, regions).Id,
+                    r.Next(3) == 0 ? null : Pick(r, Enum.GetValues<FlexFollow>()),
+                    r.Next(2) == 0 ? null : r.Next(-12, 13),
+                    r.Next(2) == 0 ? null : r.Next(-50, 51)
+                )
                 : null,
-            nameof(SetFlexMarkersCommand) => regions.Length > 0
-                ? new SetFlexMarkersCommand(Pick(r, regions).Id, [new(Pick(r, regions).FileOffset, 0)])
-                : null,
+            nameof(SetFlexMarkersCommand) => Flexed() is { } region ? Markers(s, region, r) : null,
             nameof(QuantizeAudioCommand) => regions.Length > 0
-                ? new QuantizeAudioCommand([Pick(r, regions).Id], 240)
+                ? new QuantizeAudioCommand(
+                    [..Some(regions, r).Select(static x => x.Id)],
+                    Pick(r, [120L, 240, 480, 960]),
+                    Math.Round(r.NextDouble(), 2),
+                    r.Next(2) == 0 ? 0 : Math.Round(r.NextDouble(), 2)
+                )
                 : null,
-            nameof(SetPitchNotesCommand) => regions.Length > 0
-                ? new SetPitchNotesCommand(Pick(r, regions).Id, [new(0, 4_800, 6_900, 7_000, 1, 1, 0, 0)])
-                : null,
-            nameof(FlexPitchToMidiCommand) => regions.Length > 0
-                ? new FlexPitchToMidiCommand(Pick(r, regions).Id)
-                : null,
-            nameof(SetFileTempoCommand) => files.Length > 0
-                ? new SetFileTempoCommand(Pick(r, files).Id, new(100, false, [0, 28_800], [0]))
-                : null,
+            nameof(SetPitchNotesCommand) => regions.Length > 0 ? PitchNotes(Pick(r, regions), r) : null,
+            nameof(FlexPitchToMidiCommand) =>
+                regions.Where(static x => x.PitchNotes.Count > 0).ToArray() is { Length: > 0 } pitched
+                    ? new FlexPitchToMidiCommand(
+                        Pick(r, pitched).Id,
+                        r.Next(2) == 0 || midiTracks.Length == 0 ? null : Pick(r, midiTracks).Id
+                    )
+                    : null,
+            nameof(SetFileTempoCommand) => files.Length > 0 ? FileTempo(Pick(r, files), r) : null,
             nameof(AdaptTempoCommand) => regions.Length > 0 ? new AdaptTempoCommand(Pick(r, regions).Id) : null,
-            nameof(MapBeatsCommand) => new MapBeatsCommand([new(3_840, 96_000 + r.Next(-4_800, 4_800))]),
+            nameof(MapBeatsCommand) => MapBeats(s, r),
             nameof(StripSilenceCommand) => regions.Length > 0
-                ? new StripSilenceCommand([Pick(r, regions).Id])
+                ? new StripSilenceCommand(
+                    [..Some(regions, r).Select(static x => x.Id)],
+                    -40 - r.Next(20),
+                    r.Next(0, 200),
+                    r.Next(0, 50),
+                    r.Next(0, 100)
+                )
                 : null,
             nameof(NewTrackAlternativeCommand) => plain.Length > 0
                 ? new NewTrackAlternativeCommand(Pick(r, plain).Id, MaybeText("Alt"), r.Next(2) == 0)
                 : null,
-            nameof(SelectTrackAlternativeCommand) => plain.Length > 0
-                ? new SelectTrackAlternativeCommand(Pick(r, plain).Id, "alt_none")
+            nameof(SelectTrackAlternativeCommand) => Alternating() is { } t
+                ? new SelectTrackAlternativeCommand(t.Id, Pick(r, t.Alternatives).Id)
                 : null,
-            nameof(SetTrackAlternativeCommand) => plain.Length > 0
-                ? new SetTrackAlternativeCommand(Pick(r, plain).Id, "alt_none", "Take B")
+            nameof(SetTrackAlternativeCommand) => Alternating() is { } t
+                ? new SetTrackAlternativeCommand(t.Id, Pick(r, t.Alternatives).Id, $"Take {r.Next(10)}")
                 : null,
-            nameof(DeleteTrackAlternativeCommand) => plain.Length > 0
-                ? new DeleteTrackAlternativeCommand(Pick(r, plain).Id, "alt_none")
+            nameof(DeleteTrackAlternativeCommand) => Alternating() is { } t
+                ? new DeleteTrackAlternativeCommand(t.Id, Pick(r, t.Alternatives).Id)
                 : null,
             nameof(SetVarispeedCommand) => new SetVarispeedCommand(
                 Maybe(r.Next(2) == 0),
                 r.Next(2) == 0 ? null : Pick(r, Enum.GetValues<VarispeedMode>()),
-                Maybe(Math.Round(0.5 + r.NextDouble(), 2))
+                Maybe(Math.Round(0.4 + r.NextDouble() * 1.2, 2))
             ),
             nameof(SetSmartTempoCommand) => new SetSmartTempoCommand(
                 r.Next(2) == 0 ? null : Pick(r, Enum.GetValues<ProjectTempoMode>()),
@@ -657,6 +660,19 @@ static class RandomProjects {
             _ => throw new InvalidOperationException($"No generator for {type.Name}.")
         };
         string? Track() => tracks.Count == 0 ? null : Pick(r, tracks).Id;
+
+        Track? AudioTrack() =>
+            tracks.Where(static t => t.Kind == TrackKind.Audio).ToArray() is { Length: > 0 } audio
+                ? Pick(r, audio)
+                : null;
+
+        AudioRegion? Flexed() =>
+            regions.Where(x => s.FindTrack(x.TrackId)?.FlexOn == true).ToArray() is { Length: > 0 } flexed
+                ? Pick(r, flexed)
+                : null;
+
+        Track? Alternating() =>
+            tracks.Where(static t => t.Alternatives.Count > 0).ToArray() is { Length: > 0 } some ? Pick(r, some) : null;
 
         // A strip with inserts: a track's (its id) or the master's (null).
         (string? TrackId, ChannelStrip? Strip) WithInserts() {
@@ -702,6 +718,121 @@ static class RandomProjects {
 
         T? Maybe<T>(T value) where T : struct => r.Next(2) == 0 ? null : value;
         string? MaybeText(string value) => r.Next(2) == 0 ? null : value;
+    }
+
+    /// <summary>Flex markers on a region of a flexed track: mostly valid (inside, in order), sometimes not.</summary>
+    static SetFlexMarkersCommand Markers(ProjectState s, AudioRegion region, Random r) {
+        var timing = RegionTiming.Of(s, region with { FlexMarkers = [] });
+        var frames = Enumerable.Range(0, r.Next(0, 5))
+            .Select(_ => region.FileOffset + r.NextInt64(1, Math.Max(2, region.Length)))
+            .Distinct()
+            .Order()
+            .ToArray();
+        var markers = new List<FlexMarker>();
+        foreach (var frame in frames) {
+            var tick = (long)Math.Round(timing.Base(frame) * (0.9 + 0.2 * r.NextDouble()));
+            markers.Add(new(frame, r.Next(12) == 0 ? -tick : tick));
+        }
+
+        return new(region.Id, markers);
+    }
+
+    /// <summary>Pitch notes over parts of a region, mostly in range.</summary>
+    static SetPitchNotesCommand PitchNotes(AudioRegion region, Random r) {
+        var notes = new List<PitchNote>();
+        var frame = region.FileOffset;
+        var end = region.FileOffset + region.Length;
+        for (var n = r.Next(0, 5); n > 0 && frame < end - 1; n--) {
+            var start = frame + r.NextInt64(0, Math.Max(1, (end - frame) / 4));
+            var stop = Math.Min(end, start + r.NextInt64(1, Math.Max(2, (end - frame) / 2)));
+            if (stop <= start) {
+                break;
+            }
+
+            var detected = r.Next(4_000, 8_000) + Math.Round(r.NextDouble() * 100 - 50, 1);
+            notes.Add(
+                new(
+                    start,
+                    stop,
+                    detected,
+                    r.Next(10) == 0 ? -1 : Math.Round(detected / 100) * 100 + r.Next(-3, 4) * 100,
+                    Math.Round(r.NextDouble() * 2, 2),
+                    Math.Round(r.NextDouble() * 2, 2),
+                    r.Next(-200, 201),
+                    r.Next(-6, 7)
+                )
+            );
+            frame = stop;
+        }
+
+        return new(region.Id, notes);
+    }
+
+    static SetFileTempoCommand FileTempo(AudioFile file, Random r) {
+        if (r.Next(5) == 0) {
+            return new(file.Id, null);
+        }
+
+        var bpm = Math.Round(70 + r.NextDouble() * 100, 2);
+        var step = (long)(60 * file.SampleRate / bpm);
+        var first = r.NextInt64(0, step);
+        long[] beats =
+            [..Enumerable.Range(0, (int)Math.Max(0, (file.Frames - first) / step)).Select(i => first + i * step)];
+        return new(file.Id, new(bpm, r.Next(2) == 0, beats, [..beats.Where(static (_, i) => i % 4 == 0)]));
+    }
+
+    /// <summary>One to three beats mapped near where they play now (sometimes impossibly).</summary>
+    static MapBeatsCommand MapBeats(ProjectState s, Random r) {
+        var map = s.TempoMap;
+        var mappings = new List<BeatMapping>();
+        for (var n = r.Next(1, 4); n > 0; n--) {
+            var tick = r.Next(1, 64) * 480L;
+            var sample = map.SampleAt(tick, s.SampleRate) + r.Next(-4_800, 4_800);
+            mappings.Add(new(tick, r.Next(16) == 0 ? -1 : Math.Max(0, sample)));
+        }
+
+        return new(mappings);
+    }
+
+    /// <summary>
+    ///     A deterministic analysis for the properties: transients every 1/16 at 100 bpm, nudged by the file's frames;
+    ///     beats at 100 bpm (downbeats every fourth); sound in 20 000-frame stretches with 10 000 frames of silence.
+    /// </summary>
+    public sealed class FakeAnalysis : IAnalysisSource {
+        public const double Bpm = 100;
+
+        public FileAnalysis? Rhythm(AudioFile file) {
+            var beat = (long)(60 * file.SampleRate / Bpm);
+            var nudge = file.Frames % 97;
+            long[] transients = [
+                ..Enumerable.Range(0, (int)(file.Frames / (beat / 4)))
+                    .Select(i => i * (beat / 4) + nudge * (i % 3))
+                    .Where(f => f < file.Frames)
+            ];
+            long[] beats = [..Enumerable.Range(0, (int)(file.Frames / beat)).Select(i => i * beat)];
+            return new(
+                file.Id,
+                240,
+                transients,
+                new(Bpm, file.Frames % 2 == 0, beats, [..beats.Where(static (_, i) => i % 4 == 0)]),
+                [],
+                [],
+                false
+            );
+        }
+
+        public IReadOnlyList<(long Start, long End)>? Silence(
+            AudioFile file,
+            double thresholdDb,
+            double minTimeMs,
+            double preAttackMs,
+            double postReleaseMs
+        ) =>
+            [
+                ..Enumerable.Range(0, (int)(file.Frames / 30_000) + 1)
+                    .Select(i => (i * 30_000L, Math.Min(file.Frames, i * 30_000L + 20_000)))
+                    .Where(static x => x.Item1 < x.Item2)
+            ];
     }
 
     /// <summary>The project as canonical JSON: two states are the same project when these are equal.</summary>

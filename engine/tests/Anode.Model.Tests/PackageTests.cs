@@ -55,11 +55,12 @@ public sealed class PackageTests : IDisposable {
     }
 
     [Fact]
-    public void A_schema_4_package_without_the_Phase_5_fields_reads_them_at_their_defaults() {
+    public void A_schema_4_package_migrates_to_schema_5_with_the_Phase_5_fields_at_their_defaults() {
         var (state, _, _) = RandomProjects.Build(11, 30);
         ProjectPackage.Save(folder, state);
         var path = Path.Combine(folder, "project.json");
         var root = JsonNode.Parse(File.ReadAllText(path))!.AsObject();
+        root["schemaVersion"] = 4;
         root["settings"]!.AsObject().Remove("smartTempo");
         root["settings"]!.AsObject().Remove("varispeed");
         foreach (var tempo in root["settings"]!["tempoEvents"]!.AsArray()) {
@@ -69,6 +70,7 @@ public sealed class PackageTests : IDisposable {
         File.WriteAllText(path, root.ToJsonString());
         foreach (var file in Directory.EnumerateFiles(Path.Combine(folder, "tracks"))) {
             var json = JsonNode.Parse(File.ReadAllText(file))!.AsObject();
+            json["schemaVersion"] = 4;
             foreach (var field in new[] { "flexOn", "flexMode", "alternatives" }) {
                 json["track"]!.AsObject().Remove(field);
             }
@@ -86,6 +88,11 @@ public sealed class PackageTests : IDisposable {
         Assert.Equal(RandomProjects.Json(state), RandomProjects.Json(loaded));
         Assert.Equal(ProjectDefaults.SmartTempo, loaded.Settings.SmartTempo);
         Assert.All(loaded.Tracks, static t => Assert.Equal((false, FlexMode.Polyphonic), (t.FlexOn, t.FlexMode)));
+        ProjectPackage.Save(folder, loaded);
+        var saved = JsonNode.Parse(File.ReadAllText(path))!;
+        Assert.Equal(5, saved["schemaVersion"]!.GetValue<int>());
+        Assert.Equal("keep", saved["settings"]!["smartTempo"]!["mode"]!.GetValue<string>());
+        Assert.Equal(0, saved["settings"]!["tempoEvents"]![0]!["shape"]!.GetValue<double>());
     }
 
     [Fact]
@@ -161,7 +168,7 @@ public sealed class PackageTests : IDisposable {
     }
 
     [Fact]
-    public void A_Phase_3_package_opens_with_plain_channel_strips_and_saves_as_schema_4() {
+    public void A_Phase_3_package_opens_with_plain_channel_strips_and_saves_as_the_current_schema() {
         CopyFixture("Phase3.anode");
         var state = ProjectPackage.Load(folder);
         Assert.Equal(new(PdcMode.All, false, 10), state.Settings.Mixer);
@@ -197,12 +204,12 @@ public sealed class PackageTests : IDisposable {
 
         ProjectPackage.Save(folder, state);
         var root = JsonNode.Parse(File.ReadAllText(Path.Combine(folder, "project.json")))!;
-        Assert.Equal(4, root["schemaVersion"]!.GetValue<int>());
+        Assert.Equal(PackageMigrations.CurrentSchemaVersion, root["schemaVersion"]!.GetValue<int>());
         Assert.Equal("all", root["settings"]!["mixer"]!["pdc"]!.GetValue<string>());
         Assert.Empty(root["master"]!["inserts"]!.AsArray());
         Assert.Empty(root["groups"]!.AsArray());
         var track = JsonNode.Parse(File.ReadAllText(Path.Combine(folder, "tracks", "trk_vocal0000002.json")))!;
-        Assert.Equal(4, track["schemaVersion"]!.GetValue<int>());
+        Assert.Equal(PackageMigrations.CurrentSchemaVersion, track["schemaVersion"]!.GetValue<int>());
         Assert.Equal("read", track["track"]!["automationMode"]!.GetValue<string>());
         Assert.Empty(track["automation"]!.AsArray());
         Assert.Equal(RandomProjects.Json(state), RandomProjects.Json(ProjectPackage.Load(folder)));

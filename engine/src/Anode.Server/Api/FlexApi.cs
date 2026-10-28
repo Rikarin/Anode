@@ -1,4 +1,5 @@
 using Anode.Contracts;
+using Anode.Server.Projects;
 using Microsoft.AspNetCore.Http.HttpResults;
 
 namespace Anode.Server.Api;
@@ -6,10 +7,11 @@ namespace Anode.Server.Api;
 /// <summary>File analysis (transients, beats, pitch), bounce in place and selection-based processing (Phase 5).</summary>
 static class FlexApi {
     public static void Map(RouteGroupBuilder api) {
-        var project = api.MapGroup("/project").WithTags("Project");
+        var project = api.MapGroup("/project").WithTags("Project").AddEndpointFilter<ProblemFilter>();
         project.MapGet(
                 "/files/{fileId}/analysis",
-                static Results<Ok<FileAnalysis>, NotFound>(string fileId) => throw Pending.Phase5("GetFileAnalysis")
+                static Results<Ok<FileAnalysis>, NotFound>(string fileId, ProjectSession session) =>
+                    TypedResults.Ok(session.Analysis(fileId))
             )
             .WithName("GetFileAnalysis")
             .WithSummary(
@@ -18,8 +20,8 @@ static class FlexApi {
             );
         project.MapPost(
                 "/files/{fileId}/analyze",
-                static Results<Accepted<Job>, NotFound, ProblemHttpResult>(string fileId) =>
-                    throw Pending.Phase5("AnalyzeFile")
+                static Results<Accepted<Job>, NotFound, ProblemHttpResult>(string fileId, Jobs jobs) =>
+                    Accepted(jobs.Analyze(fileId))
             )
             .WithName("AnalyzeFile")
             .WithSummary(
@@ -27,8 +29,8 @@ static class FlexApi {
             );
         project.MapPost(
                 "/bounce-in-place",
-                static Results<Accepted<Job>, NotFound, ProblemHttpResult>(BounceInPlaceRequest request) =>
-                    throw Pending.Phase5("BounceInPlace")
+                static Results<Accepted<Job>, NotFound, ProblemHttpResult>(BounceInPlaceRequest request, Jobs jobs) =>
+                    Accepted(jobs.BounceInPlace(request))
             )
             .WithName("BounceInPlace")
             .WithSummary(
@@ -37,8 +39,8 @@ static class FlexApi {
             );
         project.MapPost(
                 "/process",
-                static Results<Accepted<Job>, NotFound, ProblemHttpResult>(ProcessRequest request) =>
-                    throw Pending.Phase5("ProcessRegions")
+                static Results<Accepted<Job>, NotFound, ProblemHttpResult>(ProcessRequest request, Jobs jobs) =>
+                    Accepted(jobs.Process(request))
             )
             .WithName("ProcessRegions")
             .WithSummary(
@@ -46,4 +48,6 @@ static class FlexApi {
                 + "finishes, that part becomes a new file and region, in one undo step."
             );
     }
+
+    static Accepted<Job> Accepted(Job job) => TypedResults.Accepted($"/api/v1/jobs/{job.Id}", job);
 }
