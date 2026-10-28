@@ -56,6 +56,8 @@ export const KeyCommands: readonly KeyCommand[] = [
   { id: 'mixer.viewTracks', label: 'Mixer: Tracks View', group: 'Mixer', defaults: [] },
   { id: 'mixer.viewBuses', label: 'Mixer: Buses and Outputs View', group: 'Mixer', defaults: [] },
   { id: 'view.automation', label: 'Show/Hide Automation', group: 'Automation', defaults: ['A'] },
+  { id: 'view.flex', label: 'Show/Hide Flex', group: 'View', defaults: ['Meta+F'] },
+  { id: 'region.quantizeAudio', label: 'Quantize Selected Audio Regions', group: 'Regions', defaults: ['Q'] },
   { id: 'automation.read', label: 'Set Automation Mode to Read', group: 'Automation', defaults: [] },
   { id: 'automation.touch', label: 'Set Automation Mode to Touch', group: 'Automation', defaults: [] },
   { id: 'automation.latch', label: 'Set Automation Mode to Latch', group: 'Automation', defaults: [] },

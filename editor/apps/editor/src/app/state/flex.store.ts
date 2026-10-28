@@ -44,6 +44,10 @@ export class FlexStore {
 
   /** Show/Hide Flex (⌘F): flex buttons in the track headers, markers over the regions of flexed tracks. */
   readonly showFlex = signal(false);
+  /** The Region inspector's Quantise (audio): its grid in ticks (0: off), strength and swing (0…1). */
+  readonly quantizeGrid = signal(0);
+  readonly quantizeStrength = signal(1);
+  readonly quantizeSwing = signal(0);
   /** Analyses by file id. */
   readonly analyses = signal<ReadonlyMap<string, FileAnalysis>>(new Map());
   /** Files whose analysis is being fetched. */

@@ -4,6 +4,7 @@ export * from './lib/channel-strip';
 export * from './lib/choice';
 export * from './lib/fade-curve';
 export * from './lib/fader';
+export * from './lib/flex-marker';
 export * from './lib/insert-slot';
 export * from './lib/knob';
 export * from './lib/level-meter';

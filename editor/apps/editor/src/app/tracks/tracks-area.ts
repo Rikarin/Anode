@@ -14,6 +14,7 @@ import {
   matGridOnRound,
   matHeadphonesRound,
   matHighlightAltRound,
+  matHourglassEmptyRound,
   matJoinFullRound,
   matLayersRound,
   matNearMeRound,
@@ -41,6 +42,7 @@ import { GlobalHeaders } from '../global/global-headers';
 import { GlobalTracks } from '../global/global-lanes';
 import { GlobalLaneHeights } from '../global/global-math';
 import { formatBinding } from '../keys/key-commands';
+import { FlexStore } from '../state/flex.store';
 import { JobsStore } from '../state/jobs.store';
 import { KeyCommandsStore } from '../state/key-commands.store';
 import { LanesStore } from '../state/lanes.store';
@@ -97,6 +99,7 @@ import { TrackHeader } from './track-header';
       matGridOnRound,
       matHeadphonesRound,
       matHighlightAltRound,
+      matHourglassEmptyRound,
       matJoinFullRound,
       matLayersRound,
       matNearMeRound,
@@ -317,6 +320,18 @@ import { TrackHeader } from './track-header';
       >
         <ng-icon xui name="matShowChartRound" size="15px" />
       </button>
+      <button
+        type="button"
+        class="bezel text-foreground grid h-6.5 w-8 place-items-center"
+        aria-label="Flex"
+        data-testid="flex-toggle"
+        [xuiTooltip]="(flex.showFlex() ? 'Hide' : 'Show') + ' Flex (' + keyOf('view.flex') + ')'"
+        [attr.aria-pressed]="flex.showFlex() ? 'true' : 'false'"
+        [class.text-lit]="flex.showFlex()"
+        (click)="flex.toggleShowFlex()"
+      >
+        <ng-icon xui name="matHourglassEmptyRound" size="15px" class="rotate-90" />
+      </button>
       <div class="ms-auto flex items-center gap-1">
         @if (audioImport.importing() > 0) {
           <xui-spinner size="sm" aria-label="Importing audio" />
@@ -480,6 +495,7 @@ export class TracksArea {
   protected readonly automation = inject(AutomationStore);
   private readonly jobs = inject(JobsStore);
   protected readonly ui = inject(UiStore);
+  protected readonly flex = inject(FlexStore);
   protected readonly timeline = viewChild.required(Timeline);
   private readonly menuTrigger = viewChild(CdkContextMenuTrigger);
   private readonly globalLanes = viewChild<GlobalTracks>('global');
@@ -546,6 +562,8 @@ export class TracksArea {
       ['track.newInstrument', () => this.addTrack('instrument')],
       ['edit.selectAll', () => this.selectAll()],
       ['view.automation', () => this.automation.toggleShown()],
+      ['view.flex', () => this.flex.toggleShowFlex()],
+      ['region.quantizeAudio', () => this.quantizeAudio()],
       ['track.freeze', () => this.toggleFreeze()],
       ['automation.off', () => this.setMode('off')],
       ['automation.read', () => this.setMode('read')],
@@ -556,6 +574,15 @@ export class TracksArea {
     ];
     const unregister = register.map(([id, action]) => this.keys.register(id, action));
     inject(DestroyRef).onDestroy(() => unregister.forEach(off => off()));
+  }
+
+  /** Quantises the selected audio regions at the Region inspector's grid (Q). */
+  private quantizeAudio(): void {
+    const ids = [...this.selection.regions()].filter(id => this.project.regions().has(id));
+    const grid = this.flex.quantizeGrid();
+    if (ids.length > 0 && grid > 0) {
+      void this.flex.quantize(ids, grid, this.flex.quantizeStrength(), this.flex.quantizeSwing());
+    }
   }
 
   /** Freezes the selected track, or plays it live again when it is frozen. */
