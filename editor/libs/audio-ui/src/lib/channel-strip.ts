@@ -4,27 +4,36 @@ import { AnPanKnob } from './pan-knob';
 import { AnPeakMeter, type MeterSource } from './peak-meter';
 
 /**
- * One mixer channel strip, top to bottom as in Logic: pan, then the fader beside its meter, mute and solo, and the
- * channel's name on a bar of its colour. Values come in as inputs and go out as events; the owner decides what a
- * change does (the editor sends it, coalesced). The master has no solo.
+ * One mixer channel strip, top to bottom as in Logic: the owner's slot rows (inserts, sends, output, group, automation:
+ * projected content), pan, then the fader beside its meter, mute and solo, and the channel's name on a bar of its
+ * colour. Values come in as inputs and go out as events; the owner decides what a change does (the editor sends it,
+ * coalesced). The master has no solo; a VCA strip has no pan and no meter; `flow` lights the strips the selected
+ * strip's signal passes through.
  */
 @Component({
   selector: 'an-channel-strip',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [AnFader, AnPanKnob, AnPeakMeter],
   host: {
-    class: 'strip-body flex h-full max-h-96 min-h-72 w-21 shrink-0 flex-col items-center gap-2 pt-2.5',
+    class: 'strip-body flex h-full min-h-72 w-21 shrink-0 flex-col items-center gap-2 pt-2.5',
     role: 'group',
     '[attr.aria-label]': 'name() + " channel strip"',
-    '[class.strip-selected]': 'selected()'
+    '[attr.data-vca]': 'vca() || null',
+    '[class.strip-selected]': 'selected()',
+    '[class.strip-flow]': 'flow()'
   },
   template: `
-    <an-pan-knob
-      [label]="name() + ' pan'"
-      [value]="pan()"
-      (valueChange)="panChange.emit($event)"
-      (committed)="panCommit.emit($event)"
-    />
+    <div class="flex w-full flex-col gap-0.5 px-1 empty:hidden"><ng-content /></div>
+    @if (vca()) {
+      <div class="h-12 shrink-0" aria-hidden="true"></div>
+    } @else {
+      <an-pan-knob
+        [label]="name() + ' pan'"
+        [value]="pan()"
+        (valueChange)="panChange.emit($event)"
+        (committed)="panCommit.emit($event)"
+      />
+    }
     <div class="flex min-h-0 flex-1 items-stretch gap-1">
       <an-fader
         class="h-auto!"
@@ -33,7 +42,9 @@ import { AnPeakMeter, type MeterSource } from './peak-meter';
         (valueChange)="volumeChange.emit($event)"
         (committed)="volumeCommit.emit($event)"
       />
-      <an-peak-meter class="h-auto! pt-6 pb-2" [label]="name() + ' level'" [source]="meter()" [mono]="mono()" />
+      @if (!vca()) {
+        <an-peak-meter class="h-auto! pt-6 pb-2" [label]="name() + ' level'" [source]="meter()" [mono]="mono()" />
+      }
     </div>
     <div class="flex gap-1">
       <button
@@ -79,6 +90,10 @@ export class AnChannelStrip {
   readonly master = input(false, { transform: booleanAttribute });
   readonly selected = input(false, { transform: booleanAttribute });
   readonly mono = input(false, { transform: booleanAttribute });
+  /** A VCA strip: a fader that offsets its members, with no pan and no meter of its own. */
+  readonly vca = input(false, { transform: booleanAttribute });
+  /** On the selected strip's signal flow (Logic's signal-flow highlight). */
+  readonly flow = input(false, { transform: booleanAttribute });
   /** Where the meter reads its level each animation frame. */
   readonly meter = input<MeterSource | null>(null);
 

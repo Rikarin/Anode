@@ -109,6 +109,172 @@ export const FakeCatalogue: readonly PluginInfo[] = [
   }
 ];
 
+function effect(
+  id: string,
+  name: string,
+  category: string,
+  parameters: ParameterInfo[],
+  extra: Partial<PluginInfo> = {}
+): PluginInfo {
+  return {
+    id,
+    name,
+    vendor: 'Anode',
+    version: '0.4.0',
+    format: 'builtin',
+    isInstrument: false,
+    fileTypes: [],
+    parameters,
+    category,
+    hasSidechain: false,
+    hasEditor: false,
+    ...extra
+  };
+}
+
+const Bands = [
+  ['low', 'Low Shelf', 80],
+  ['peak1', 'Peak 1', 250],
+  ['peak2', 'Peak 2', 1_000],
+  ['peak3', 'Peak 3', 3_000],
+  ['peak4', 'Peak 4', 6_000],
+  ['high', 'High Shelf', 12_000]
+] as const;
+
+/**
+ * The fake engine's effects (docs/05-phase-4.md, workstream D's T1 suite, by category), then third-party ones as the
+ * sandboxed scanner would list them: a VST3 with its own editor (like the in-repo test plugin), an Audio Unit, and a
+ * VST3 that crashes when playback starts (the fake reports `pluginProblem` for it).
+ */
+export const FakeEffects: readonly PluginInfo[] = [
+  effect('anode.channel-eq', 'Channel EQ', 'EQ', [
+    continuous('hpf.frequency', 'HPF Frequency', 20, 20_000, 30, 'Hz'),
+    continuous('lpf.frequency', 'LPF Frequency', 20, 20_000, 20_000, 'Hz'),
+    ...Bands.flatMap(([id, label, hz]) => [
+      continuous(`${id}.frequency`, `${label} Frequency`, 20, 20_000, hz, 'Hz'),
+      continuous(`${id}.gain`, `${label} Gain`, -24, 24, 0, 'dB'),
+      continuous(`${id}.q`, `${label} Q`, 0.1, 10, 0.71)
+    ]),
+    continuous('output.gain', 'Gain', -24, 24, 0, 'dB')
+  ]),
+  effect(
+    'anode.compressor',
+    'Compressor',
+    'Dynamics',
+    [
+      choice('character', 'Character', ['VCA', 'FET', 'Opto']),
+      continuous('threshold', 'Threshold', -60, 0, -18, 'dB'),
+      continuous('ratio', 'Ratio', 1, 30, 4, ':1'),
+      continuous('knee', 'Knee', 0, 24, 6, 'dB'),
+      continuous('attack', 'Attack', 0.0001, 0.2, 0.01, 's'),
+      continuous('release', 'Release', 0.005, 5, 0.15, 's'),
+      continuous('makeup', 'Makeup', 0, 30, 0, 'dB'),
+      choice('autoGain', 'Auto Gain', ['Off', 'On']),
+      continuous('sidechain.hpf', 'Sidechain HPF', 20, 2_000, 20, 'Hz')
+    ],
+    { hasSidechain: true }
+  ),
+  effect('anode.limiter', 'Limiter', 'Dynamics', [
+    continuous('gain', 'Gain', 0, 24, 0, 'dB'),
+    continuous('ceiling', 'Ceiling', -12, 0, -1, 'dB'),
+    continuous('lookahead', 'Lookahead', 0.001, 0.01, 0.002, 's'),
+    continuous('release', 'Release', 0.01, 1, 0.1, 's'),
+    choice('truePeak', 'True Peak', ['Off', 'On'], 1)
+  ]),
+  effect(
+    'anode.noise-gate',
+    'Noise Gate',
+    'Dynamics',
+    [
+      continuous('threshold', 'Threshold', -96, 0, -50, 'dB'),
+      continuous('reduction', 'Reduction', -100, 0, -100, 'dB'),
+      continuous('attack', 'Attack', 0.0001, 0.1, 0.001, 's'),
+      continuous('hold', 'Hold', 0, 1, 0.05, 's'),
+      continuous('release', 'Release', 0.005, 2, 0.1, 's')
+    ],
+    { hasSidechain: true }
+  ),
+  effect('anode.deesser', 'DeEsser', 'Dynamics', [
+    continuous('frequency', 'Frequency', 2_000, 12_000, 6_000, 'Hz'),
+    continuous('threshold', 'Threshold', -60, 0, -24, 'dB'),
+    continuous('reduction', 'Max Reduction', 0, 24, 6, 'dB')
+  ]),
+  effect('anode.stereo-delay', 'Stereo Delay', 'Delay', [
+    choice('sync', 'Sync', ['Off', 'On'], 1),
+    continuous('left.time', 'Left Time', 0.001, 4, 0.375, 's'),
+    continuous('right.time', 'Right Time', 0.001, 4, 0.5, 's'),
+    continuous('feedback', 'Feedback', 0, 1, 0.35),
+    continuous('mix', 'Mix', 0, 1, 0.25)
+  ]),
+  effect('anode.tape-delay', 'Tape Delay', 'Delay', [
+    continuous('time', 'Time', 0.01, 2, 0.3, 's'),
+    continuous('feedback', 'Feedback', 0, 1, 0.4),
+    continuous('wow', 'Wow', 0, 1, 0.2),
+    continuous('flutter', 'Flutter', 0, 1, 0.1),
+    continuous('saturation', 'Saturation', 0, 1, 0.3),
+    continuous('mix', 'Mix', 0, 1, 0.3)
+  ]),
+  effect('anode.reverb', 'Reverb', 'Reverb', [
+    choice('room', 'Room', ['Plate', 'Room', 'Hall'], 2),
+    continuous('size', 'Size', 0, 1, 0.6),
+    continuous('decay', 'Decay', 0.1, 20, 2.4, 's'),
+    continuous('damping', 'Damping', 0, 1, 0.4),
+    continuous('predelay', 'Predelay', 0, 0.25, 0.02, 's'),
+    continuous('mix', 'Mix', 0, 1, 1)
+  ]),
+  effect('anode.chorus', 'Chorus', 'Modulation', [
+    continuous('rate', 'Rate', 0.05, 10, 0.8, 'Hz'),
+    continuous('depth', 'Depth', 0, 1, 0.4),
+    continuous('mix', 'Mix', 0, 1, 0.5)
+  ]),
+  effect('anode.phaser', 'Phaser', 'Modulation', [
+    continuous('rate', 'Rate', 0.05, 10, 0.5, 'Hz'),
+    continuous('depth', 'Depth', 0, 1, 0.6),
+    continuous('feedback', 'Feedback', 0, 0.95, 0.4),
+    continuous('mix', 'Mix', 0, 1, 0.5)
+  ]),
+  effect('anode.overdrive', 'Overdrive', 'Distortion', [
+    continuous('drive', 'Drive', 0, 1, 0.4),
+    continuous('tone', 'Tone', 200, 8_000, 2_000, 'Hz'),
+    continuous('output', 'Output', -24, 12, 0, 'dB')
+  ]),
+  effect('anode.autofilter', 'AutoFilter', 'Filter', [
+    choice('type', 'Type', ['Low-pass', 'High-pass', 'Band-pass']),
+    continuous('cutoff', 'Cutoff', 20, 20_000, 1_200, 'Hz'),
+    continuous('resonance', 'Resonance', 0, 1, 0.3),
+    continuous('lfo.rate', 'LFO Rate', 0.05, 20, 2, 'Hz'),
+    continuous('lfo.depth', 'LFO Depth', 0, 1, 0.5)
+  ]),
+  effect('anode.gain', 'Gain', 'Utility', [
+    continuous('gain', 'Gain', -96, 24, 0, 'dB'),
+    choice('invert', 'Phase Invert', ['Off', 'On']),
+    choice('mono', 'Mono', ['Off', 'On'])
+  ]),
+  effect('anode.loudness-meter', 'Loudness Meter', 'Metering', [continuous('target', 'Target', -36, 0, -14, 'LUFS')]),
+  effect(
+    'com.anode.test-gain',
+    'Test Gain',
+    'Utility',
+    [continuous('0', 'Gain', -48, 12, 0, 'dB'), continuous('1', 'Tone', -1, 1, 0)],
+    { vendor: 'Anode Tests', version: '1.0.0', format: 'vst3', hasEditor: true }
+  ),
+  effect(
+    'com.example.au-delay',
+    'AUDelay',
+    'Delay',
+    [continuous('time', 'Delay Time', 0, 2, 1, 's'), continuous('feedback', 'Feedback', -100, 100, 50, '%')],
+    { vendor: 'Example', version: '1.6.0', format: 'au', hasEditor: true }
+  ),
+  effect('com.example.crashy', 'Crashy', 'Distortion', [continuous('drive', 'Drive', 0, 1, 0.5)], {
+    vendor: 'Example',
+    version: '0.0.1',
+    format: 'vst3'
+  })
+];
+
+/** The plugin that crashes in the fake engine as soon as it plays. */
+export const CrashyPluginId = 'com.example.crashy';
+
 /** The fake engine's MIDI ports. */
 export const FakeMidiDevices: MidiDevices = {
   inputs: [
