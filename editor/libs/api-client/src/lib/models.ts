@@ -75,6 +75,8 @@ export type PdcMode = Schemas['PdcMode'];
 export type IoLabels = Schemas['IoLabels'];
 export type IoLabel = Schemas['IoLabel'];
 export type PatchInfo = Schemas['PatchInfo'];
+export type SavePatchRequest = Schemas['SavePatchRequest'];
+export type PluginEditorRequest = Schemas['PluginEditorRequest'];
 export type Job = Schemas['Job'];
 export type JobKind = Schemas['JobKind'];
 export type JobState = Schemas['JobState'];
@@ -94,6 +96,18 @@ export interface TrackMeter {
   trackId: string;
   peakLeft: number;
   peakRight: number;
+}
+
+/**
+ * A reading of an insert effect (`IAudioEffect.Reading`: a compressor's gain reduction in dB, a meter's LUFS), for the
+ * generic plugin editor. Not in the committed contracts yet: the editor reads `meters.readings` when a Server sends it
+ * (the fake Server does), and shows no reading otherwise.
+ */
+export interface InsertReading {
+  /** The track, or null for the master strip. */
+  trackId: string | null;
+  insertId: string;
+  value: number;
 }
 
 /** Live MIDI the engine received; `trackId` is the track that played it, if any. */
@@ -122,7 +136,7 @@ export type ServerMessage =
   | { type: 'projectSaved'; project: ProjectSummary; revision: number }
   | { type: 'projectChanged'; delta: ProjectDelta }
   | { type: 'transport'; transport: TransportStatus }
-  | { type: 'meters'; tracks: TrackMeter[]; master: TrackMeter }
+  | { type: 'meters'; tracks: TrackMeter[]; master: TrackMeter; readings?: InsertReading[] }
   | { type: 'midiActivity'; events: MidiActivity[] }
   | { type: 'pluginsChanged' }
   | { type: 'midiDevicesChanged' }

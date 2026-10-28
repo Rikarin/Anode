@@ -49,7 +49,9 @@ export type AppCommand =
   | 'importAudio'
   | 'importMidi'
   | 'saveAlternative'
-  | 'keyCommands';
+  | 'keyCommands'
+  | 'bounce'
+  | 'ioLabels';
 
 /** Native file dialogs (apps/desktop/src/main.ts, `anode:dialog:*`); each resolves empty when cancelled. */
 export interface DesktopDialogs {
@@ -73,6 +75,8 @@ export interface AnodeDesktop {
   /** The path on disk of a file dropped on the window ('' for one with none, such as a dragged browser image). */
   pathForFile?(file: File): string;
   dialogs?: DesktopDialogs;
+  /** Shows a file the engine wrote (a bounce) in Finder or the file manager; false when there is no such file here. */
+  reveal?(path: string): Promise<boolean>;
   /** Called when an app menu item (File ▸ Save…) asks the editor to act. */
   onCommand?(listener: (command: AppCommand) => void): void;
   /** Node's `process.platform` of the desktop app ('darwin' on macOS). */

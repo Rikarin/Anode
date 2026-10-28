@@ -631,6 +631,60 @@ export class FakeAnodeServer implements AnodeApi {
     });
   }
 
+  // ---- Phase 4 (placeholders until the fake implements them)
+
+  bounce(): Promise<never> {
+    return this.answer('Bounce', () => {
+      throw new ApiError(501, 'Bounce: not in the fake Server yet.');
+    });
+  }
+
+  freezeTrack(): Promise<never> {
+    return this.answer('FreezeTrack', () => {
+      throw new ApiError(501, 'Freeze: not in the fake Server yet.');
+    });
+  }
+
+  job(): Promise<never> {
+    return this.answer('GetJob', () => {
+      throw new ApiError(404, 'No such job.');
+    });
+  }
+
+  cancelJob(): Promise<never> {
+    return this.answer('CancelJob', () => {
+      throw new ApiError(404, 'No such job.');
+    });
+  }
+
+  patches(): Promise<never[]> {
+    return this.answer('ListPatches', () => []);
+  }
+
+  savePatch(): Promise<never> {
+    return this.answer('SavePatch', () => {
+      throw new ApiError(501, 'Patches: not in the fake Server yet.');
+    });
+  }
+
+  deletePatch(): Promise<void> {
+    return this.answer('DeletePatch', () => undefined);
+  }
+
+  ioLabels(): Promise<{ inputs: never[]; outputs: never[]; buses: never[] }> {
+    return this.answer('GetIoLabels', () => ({ inputs: [], outputs: [], buses: [] }));
+  }
+
+  saveIoLabels(labels: { inputs: never[]; outputs: never[]; buses: never[] }): Promise<typeof labels> {
+    return this.answer('SaveIoLabels', () => labels);
+  }
+
+  openPluginEditor(): Promise<void> {
+    return this.answer('OpenPluginEditor', () => {
+      throw new ApiError(409, 'No plugin editors in the fake Server yet.');
+    });
+  }
+
   /** The track live MIDI goes to when none is armed (tests). */
   get thruTrack(): string | null {
     return this.thru;
