@@ -19,9 +19,9 @@ static unsafe class ClapHostCallbacks {
     static readonly byte* Name = ClapModule.Utf8("Anode");
     static readonly byte* Vendor = ClapModule.Utf8("Anode contributors");
     static readonly byte* Url = ClapModule.Utf8("https://github.com/anode-daw/anode");
-    static readonly byte* Version = ClapModule.Utf8(
-        typeof(ClapHostCallbacks).Assembly.GetName().Version?.ToString(3) ?? "0.1.0"
-    );
+
+    static readonly byte* Version =
+        ClapModule.Utf8(typeof(ClapHostCallbacks).Assembly.GetName().Version?.ToString(3) ?? "0.1.0");
 
     static ClapHostCallbacks() {
         Params = Alloc<ClapHostParams>();

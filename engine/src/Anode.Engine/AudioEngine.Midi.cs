@@ -113,9 +113,7 @@ public sealed unsafe partial class AudioEngine {
             var frame = Math.Clamp(at - blockOffset, 0, frames - 1);
             midi.Add(frame, e.Status, e.Data1, e.Data2);
             if (capture) {
-                CapturedMidi.TryEnqueue(
-                    new(track.Id, position + frame - MidiRecordShift, e.Status, e.Data1, e.Data2)
-                );
+                CapturedMidi.TryEnqueue(new(track.Id, position + frame - MidiRecordShift, e.Status, e.Data1, e.Data2));
             }
         }
     }

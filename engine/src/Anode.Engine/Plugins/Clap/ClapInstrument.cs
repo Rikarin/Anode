@@ -175,20 +175,7 @@ public sealed unsafe class ClapInstrument : IInstrument, IHostedInstrument {
                     return;
                 }
 
-                if (preActivation.Count > 0 && parameters is not null) {
-                    var count = 0;
-                    foreach (var (index, value) in preActivation) {
-                        if (count < EventCapacity) {
-                            WriteParam(count++, 0, index, value);
-                        }
-                    }
-
-                    inputContext->Size = (uint)count;
-                    parameters->Flush(plugin, flushEvents, outputEvents);
-                    inputContext->Size = 0;
-                    preActivation.Clear();
-                }
-
+                FlushPreActivation();
                 if (plugin->Activate(plugin, sampleRate, 1, (uint)maxFrames) == 0) {
                     throw new IOException($"{Descriptor.Id}: activate failed.");
                 }
@@ -201,6 +188,23 @@ public sealed unsafe class ClapInstrument : IInstrument, IHostedInstrument {
                 }
             }
         );
+
+    /// <summary>Plugin thread, inactive: sends the parameter values set while the instance was being built.</summary>
+    void FlushPreActivation() {
+        if (preActivation.Count == 0 || parameters is null) {
+            return;
+        }
+
+        var count = 0;
+        foreach (var (index, value) in preActivation.Take(EventCapacity)) {
+            WriteParam(count++, 0, index, value);
+        }
+
+        inputContext->Size = (uint)count;
+        parameters->Flush(plugin, flushEvents, outputEvents);
+        inputContext->Size = 0;
+        preActivation.Clear();
+    }
 
     public void SetParameter(int index, float value) {
         if ((uint)index >= (uint)ParameterCount) {
@@ -259,21 +263,22 @@ public sealed unsafe class ClapInstrument : IInstrument, IHostedInstrument {
         }
 
         inputContext->Size = (uint)count;
-        fixed (float* l = left)
-        fixed (float* r = right) {
-            channels[0] = l;
-            channels[1] = r;
-            process->SteadyTime = steadyTime;
-            process->FramesCount = (uint)frames;
-            output->ConstantMask = 0;
-            if (plugin->Process(plugin, process) == 0) {
-                left.Clear();
-                right.Clear();
-            } else if (outputChannels == 1) {
-                left.CopyTo(right);
-            }
+        fixed (float* l = left) {
+            fixed (float* r = right) {
+                channels[0] = l;
+                channels[1] = r;
+                process->SteadyTime = steadyTime;
+                process->FramesCount = (uint)frames;
+                output->ConstantMask = 0;
+                if (plugin->Process(plugin, process) == 0) {
+                    left.Clear();
+                    right.Clear();
+                } else if (outputChannels == 1) {
+                    left.CopyTo(right);
+                }
 
-            channels[0] = channels[1] = null;
+                channels[0] = channels[1] = null;
+            }
         }
 
         inputContext->Size = 0;
@@ -425,17 +430,9 @@ public sealed unsafe class ClapInstrument : IInstrument, IHostedInstrument {
             var max = (float)info.MaxValue;
             var stepped = (info.Flags & ClapParamFlags.IsStepped) != 0;
             var steps = stepped ? (int)Math.Clamp(Math.Round(info.MaxValue - info.MinValue), 0, int.MaxValue) : 0;
-            List<string>? names = null;
-            if (stepped && (info.Flags & ClapParamFlags.IsEnum) != 0 && steps is > 0 and <= 128) {
-                names = [];
-                for (var s = 0; s <= steps; s++) {
-                    names.Add(
-                        parameters->ValueToText(plugin, info.Id, info.MinValue + s, buffer, 256) != 0
-                            ? ClapModule.Text(buffer)
-                            : (info.MinValue + s).ToString(CultureInfo.InvariantCulture)
-                    );
-                }
-            }
+            var names = stepped && (info.Flags & ClapParamFlags.IsEnum) != 0 && steps is > 0 and <= 128
+                ? ValueNames(info.Id, info.MinValue, steps, buffer)
+                : null;
 
             list.Add(
                 new(
@@ -456,6 +453,20 @@ public sealed unsafe class ClapInstrument : IInstrument, IHostedInstrument {
         return list;
     }
 
+    /// <summary>A choice parameter's value names, as the plugin prints its values.</summary>
+    List<string> ValueNames(uint id, double min, int steps, byte* buffer) {
+        var names = new List<string>(steps + 1);
+        for (var s = 0; s <= steps; s++) {
+            names.Add(
+                parameters->ValueToText(plugin, id, min + s, buffer, 256) != 0
+                    ? ClapModule.Text(buffer)
+                    : (min + s).ToString(CultureInfo.InvariantCulture)
+            );
+        }
+
+        return names;
+    }
+
     /// <summary>Main thread: reads every parameter's current value from the plugin.</summary>
     void ReadValues() {
         if (parameters is null) {
@@ -473,9 +484,7 @@ public sealed unsafe class ClapInstrument : IInstrument, IHostedInstrument {
     void WriteParam(int slot, uint time, int index, float value) {
         var e = (ClapEventParamValue*)eventList[slot];
         *e = default;
-        e->Header = new() {
-            Size = (uint)sizeof(ClapEventParamValue), Time = time, Type = ClapEventType.ParamValue
-        };
+        e->Header = new() { Size = (uint)sizeof(ClapEventParamValue), Time = time, Type = ClapEventType.ParamValue };
         e->ParamId = parameterIds[index];
         e->NoteId = -1;
         e->PortIndex = -1;
@@ -615,7 +624,7 @@ public sealed unsafe class ClapInstrument : IInstrument, IHostedInstrument {
         }
 
         var count = (int)Math.Min(size, int.MaxValue);
-        sink.Write(new ReadOnlySpan<byte>(buffer, count));
+        sink.Write(new(buffer, count));
         return count;
     }
 
@@ -625,6 +634,6 @@ public sealed unsafe class ClapInstrument : IInstrument, IHostedInstrument {
             return -1;
         }
 
-        return source.Read(new Span<byte>(buffer, (int)Math.Min(size, int.MaxValue)));
+        return source.Read(new(buffer, (int)Math.Min(size, int.MaxValue)));
     }
 }

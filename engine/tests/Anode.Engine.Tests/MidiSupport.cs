@@ -20,7 +20,10 @@ sealed class TestInstrument : IInstrument {
         "Test Sine",
         "Anode tests",
         "1.0",
-        [new(0, "gain", "Gain", 0, 1, 0.5f, ""), new(1, "shape", "Shape", 0, 2, 0, "", 2, ["sine", "square", "saw"])],
+        [
+            new(0, "gain", "Gain", 0, 1, 0.5f, string.Empty),
+            new(1, "shape", "Shape", 0, 2, 0, string.Empty, 2, ["sine", "square", "saw"])
+        ],
         [".txt"]
     );
 
@@ -125,7 +128,7 @@ sealed class TestInstrument : IInstrument {
     public byte[]? SaveState() => State;
 
     public bool LoadState(ReadOnlySpan<byte> state) {
-        State = state.ToArray();
+        State = [..state];
         return true;
     }
 
@@ -145,6 +148,9 @@ sealed class FakeMidi : IMidiBackend {
     public int Opens { get; private set; }
 
     public List<(string Uid, byte[] Message, long TimeNs)> Sent { get; } = [];
+
+    /// <summary>When each message of <see cref="Sent" /> was handed over, on the same clock as its time.</summary>
+    public List<long> SentAt { get; } = [];
 
     public void SetPorts(IEnumerable<MidiPortInfo> list) {
         lock (gate) {
@@ -189,9 +195,17 @@ sealed class FakeMidi : IMidiBackend {
     public bool Send(string uid, ReadOnlySpan<byte> message, long timeNs) {
         lock (gate) {
             Sent.Add((uid, message.ToArray(), timeNs));
+            SentAt.Add((long)(System.Diagnostics.Stopwatch.GetTimestamp() * (1e9 / System.Diagnostics.Stopwatch.Frequency)));
         }
 
         return true;
+    }
+
+    public void ClearSent() {
+        lock (gate) {
+            Sent.Clear();
+            SentAt.Clear();
+        }
     }
 
     public (string Uid, byte[] Message, long TimeNs)[] SentNow() {
@@ -215,8 +229,7 @@ static class MidiFixtures {
         };
 
     /// <summary>Notes as region events: (start, length, pitch), note-offs before note-ons at equal samples.</summary>
-    public static PlaybackEvent[] Notes(params (long Start, long Length, int Pitch)[] notes) =>
-    [
+    public static PlaybackEvent[] Notes(params (long Start, long Length, int Pitch)[] notes) => [
         ..notes.SelectMany(static n => new[] { Note(n.Start, n.Pitch, true), Note(n.Start + n.Length, n.Pitch, false) })
             .OrderBy(static e => e.SamplePos)
             .ThenBy(static e => e.Kind == PlaybackEventKind.NoteOn ? 1 : 0)

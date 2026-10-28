@@ -105,7 +105,9 @@ public sealed class EngineHostServer(
                 outbox.Queue.Writer.TryComplete();
                 try {
                     await writing.ConfigureAwait(false);
-                } catch (Exception e) when (e is IOException or SocketException or OperationCanceledException
+                } catch (Exception e) when (e is IOException
+                                                or SocketException
+                                                or OperationCanceledException
                                                 or ObjectDisposedException) {
                     // the connection is gone
                 }

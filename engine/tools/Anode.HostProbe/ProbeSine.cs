@@ -15,7 +15,7 @@ sealed class ProbeSine : IInstrument {
         "Probe Sine",
         "Anode",
         "1.0",
-        [new(0, "gain", "Gain", 0, 1, 0.5f, "")],
+        [new(0, "gain", "Gain", 0, 1, 0.5f, string.Empty)],
         []
     );
 

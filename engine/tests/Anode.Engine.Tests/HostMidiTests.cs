@@ -1,5 +1,4 @@
 using Anode.Audio;
-using Anode.Audio.Midi;
 using Anode.EngineHost;
 using Anode.Ipc;
 using Anode.Ipc.Segments;
@@ -16,11 +15,11 @@ public sealed class HostMidiTests : IAsyncLifetime {
     const int Rate = 48_000;
     readonly string dir = TestAudio.TempDirectory();
     readonly string socketPath = Path.Combine(Path.GetTempPath(), $"an-{Guid.NewGuid().ToString("n")[..8]}.sock");
-    readonly FakeMidi midi = new();
     readonly List<IpcMessage> pushed = [];
     readonly List<string> log = [];
     EngineHost.EngineHost? host;
     EngineHostServer? server;
+    FakeMidi midi = null!; // the host owns and disposes it
     Socket? socket;
     NetworkStream? stream;
 
@@ -30,6 +29,7 @@ public sealed class HostMidiTests : IAsyncLifetime {
 
     public async ValueTask InitializeAsync() {
         var (registry, _) = MidiFixtures.Registry();
+        midi = new();
         host = new(new NullAudioDevice(Rate, 64, 2, 2), "test", false, registry, midi, [MidiFixtures.ClapFolder]);
         host.Log = message => {
             lock (log) {
@@ -118,11 +118,15 @@ public sealed class HostMidiTests : IAsyncLifetime {
     public async Task The_catalogue_and_ports_follow_the_hello_and_a_rescan_answers_the_catalogue() {
         Assert.IsType<HelloMessage>(await Request(new HelloMessage("server")));
         var catalog = await Pushed<PluginCatalogMessage>();
+        // Built-ins first (Anode's, then the test's), then CLAP.
         Assert.Equal(
-            [(TestInstrument.Id, "builtin"), (MidiFixtures.ClapId, "clap")],
+            [
+                ("anode.synth", "builtin"), ("anode.sampler", "builtin"), (TestInstrument.Id, "builtin"),
+                (MidiFixtures.ClapId, "clap")
+            ],
             catalog.Plugins.Select(static p => (p.Id, p.Format))
         );
-        var test = catalog.Plugins[0];
+        var test = catalog.Plugins[2];
         Assert.Equal([".txt"], test.FileTypes);
         Assert.Equal(["sine", "square", "saw"], test.Parameters[1].ValueNames);
         Assert.Equal(2, test.Parameters[1].Steps);
@@ -144,7 +148,9 @@ public sealed class HostMidiTests : IAsyncLifetime {
     public async Task Instruments_parameters_midi_io_live_midi_and_states() {
         Assert.IsType<HelloMessage>(await Request(new HelloMessage("server")));
         await LoadAsync(MidiFixtures.InstrumentTrack(1), TestAudio.Track(2));
-        Assert.Null(await Send(new SetInstrumentMessage(2, new(MidiFixtures.ClapId, new Dictionary<string, double>()))));
+        Assert.Null(
+            await Send(new SetInstrumentMessage(2, new(MidiFixtures.ClapId, new Dictionary<string, double>())))
+        );
         Assert.IsType<Plugins.Clap.ClapInstrument>(Host.Controller.Engine.Root.Tracks[1].Instrument!.Instrument);
         Assert.Equal(
             "setInstrument",
@@ -162,16 +168,22 @@ public sealed class HostMidiTests : IAsyncLifetime {
             Assert.IsType<ErrorMessage>(await Send(new SetParameterMessage(2, "gain", 0.25))).Request
         );
         Assert.Null(await Send(new SetMidiIoMessage(1, new("in-b", 0, null, 1))));
-        Assert.Equal("setMidiIo", Assert.IsType<ErrorMessage>(await Send(new SetMidiIoMessage(9, new(null, 0, null, 1)))).Request);
+        Assert.Equal(
+            "setMidiIo",
+            Assert.IsType<ErrorMessage>(await Send(new SetMidiIoMessage(9, new(null, 0, null, 1)))).Request
+        );
         Assert.Equal(new("in-b", 0, null, 1), Host.Controller.Engine.Root.Tracks[0].MidiIo);
         Assert.Null(await Send(new SetMidiThruMessage(2)));
 
         // Live MIDI from the server and from a device, then the activity they make.
         Assert.Null(await Send(new LiveMidiMessage(1, [new(0x90, 60, 100)])));
-        Assert.Equal("liveMidi", Assert.IsType<ErrorMessage>(await Send(new LiveMidiMessage(9, [new(0x90, 60, 100)]))).Request);
+        Assert.Equal(
+            "liveMidi",
+            Assert.IsType<ErrorMessage>(await Send(new LiveMidiMessage(9, [new(0x90, 60, 100)]))).Request
+        );
         midi.Play(0, 0x90, 64, 90);
         var activity = await Pushed<MidiActivityMessage>(static m => m.Events.Any(static e => e.Device == "in-a"));
-        Assert.Contains(new MidiActivityEntry(2, "in-a", 0x90, 64, 90), activity.Events); // thru: nothing is armed
+        Assert.Contains(new(2, "in-a", 0x90, 64, 90), activity.Events); // thru: nothing is armed
         lock (pushed) {
             Assert.Contains(
                 pushed.OfType<MidiActivityMessage>().SelectMany(static m => m.Events),

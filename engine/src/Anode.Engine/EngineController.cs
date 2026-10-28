@@ -1,5 +1,4 @@
 using Anode.Audio.Midi;
-using Anode.Dsp.Instruments;
 using Anode.Engine.Midi;
 using Anode.Engine.Plugins;
 using Anode.Engine.Recording;
@@ -68,8 +67,7 @@ public sealed class EngineController : IDisposable {
     public EngineController(EngineOptions options, PluginRegistry? plugins = null, IMidiBackend? midi = null) {
         Options = options;
         Engine = new(options.SampleRate) {
-            OutputLatency = options.OutputLatency,
-            MidiRecordShift = options.BufferFrames + options.OutputLatency
+            OutputLatency = options.OutputLatency, MidiRecordShift = options.BufferFrames + options.OutputLatency
         };
         streamFrames = (int)(options.StreamSeconds * options.SampleRate);
         Streamer = new(Engine, Math.Max(4 * options.BufferFrames, options.SampleRate * 15 / 100));
@@ -359,9 +357,7 @@ public sealed class EngineController : IDisposable {
     public bool SetMidiIo(int trackId, EngineMidiIo midi) {
         lock (gate) {
             var track = Find(Engine.Root, trackId);
-            if (track is not null) {
-                track.MidiIo = midi;
-            }
+            track?.MidiIo = midi;
 
             return track is not null;
         }
@@ -459,8 +455,13 @@ public sealed class EngineController : IDisposable {
     }
 
     static bool IsInstrumentFailure(Exception e) =>
-        e is IOException or InvalidOperationException or FormatException or BadImageFormatException
-            or DllNotFoundException or EntryPointNotFoundException or ArgumentException;
+        e is IOException
+            or InvalidOperationException
+            or FormatException
+            or BadImageFormatException
+            or DllNotFoundException
+            or EntryPointNotFoundException
+            or ArgumentException;
 
     /// <summary>Waits until no callback that may have read what was just replaced is still running.</summary>
     void WaitGrace() {

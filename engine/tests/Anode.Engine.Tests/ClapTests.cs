@@ -101,7 +101,11 @@ public sealed class ClapTests : IDisposable {
             try {
                 clap.SetParameter(0, 0.25f);
                 clap.SetParameter(1, -1f);
-                clap.Process([new(0, 0x90, 60, 100), new(5, 0x90, 64, 100), new(9, 0x90, 67, 100)], new float[64], new float[64]);
+                clap.Process(
+                    [new(0, 0x90, 60, 100), new(5, 0x90, 64, 100), new(9, 0x90, 67, 100)],
+                    new float[64],
+                    new float[64]
+                );
             } finally {
                 AudioThread.Mark(false);
             }
@@ -130,7 +134,8 @@ public sealed class ClapTests : IDisposable {
     public void An_instrument_track_plays_the_clap_plugin_and_reports_its_state() {
         var registry = new PluginRegistry { Log = Log };
         registry.ScanClap([MidiFixtures.ClapFolder]);
-        using var controller = new EngineController(new(Rate, 64), registry) { Log = Log };
+        using var controller = new EngineController(new(Rate, 64), registry);
+        controller.Log = Log;
         using (var segment = TestAudio.Segment([new(1, MidiFixtures.Notes((0, 48_000, 69)), [])], 1)) {
             controller.LoadModel(
                 TestAudio.Load(
@@ -181,7 +186,7 @@ public sealed class ClapTests : IDisposable {
     static int Crossings(float[] samples) {
         var count = 0;
         for (var i = 1; i < samples.Length; i++) {
-            if ((samples[i - 1] < 0) != (samples[i] < 0)) {
+            if (samples[i - 1] < 0 != samples[i] < 0) {
                 count++;
             }
         }

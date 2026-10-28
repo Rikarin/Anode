@@ -20,7 +20,10 @@ public sealed class PluginRegistry {
     public Action<string>? Log { get; set; }
 
     /// <summary>A CLAP plugin found by a scan: its file and what it reported.</summary>
-    public sealed record ClapEntry(string Path, ClapDescriptor Descriptor, IReadOnlyList<InstrumentParameter> Parameters);
+    public sealed record ClapEntry(
+        string Path,
+        ClapDescriptor Descriptor,
+        IReadOnlyList<InstrumentParameter> Parameters);
 
     /// <summary>The CLAP plugins of the last scan.</summary>
     public IReadOnlyList<ClapEntry> Clap {
@@ -161,8 +164,11 @@ public sealed class PluginRegistry {
                     using var instance = ClapInstrument.Create(file, descriptor.Id, Log);
                     found.Add(new(file, descriptor, instance.Descriptor.Parameters));
                 }
-            } catch (Exception e) when (e is IOException or BadImageFormatException or DllNotFoundException
-                                            or EntryPointNotFoundException or UnauthorizedAccessException) {
+            } catch (Exception e) when (e is IOException
+                                            or BadImageFormatException
+                                            or DllNotFoundException
+                                            or EntryPointNotFoundException
+                                            or UnauthorizedAccessException) {
                 Log?.Invoke($"CLAP {file}: {e.Message}");
             }
         }
@@ -187,9 +193,7 @@ public sealed class PluginRegistry {
             folders.Add(Path.Combine(home, "Library", "Audio", "Plug-Ins", "CLAP"));
             folders.Add("/Library/Audio/Plug-Ins/CLAP");
         } else if (OperatingSystem.IsWindows()) {
-            folders.Add(
-                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonProgramFiles), "CLAP")
-            );
+            folders.Add(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonProgramFiles), "CLAP"));
             folders.Add(
                 Path.Combine(
                     Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
@@ -215,27 +219,26 @@ public sealed class PluginRegistry {
 
             var pending = new Stack<string>([folder]);
             while (pending.TryPop(out var dir)) {
-                string[] entries;
-                try {
-                    entries = Directory.GetFileSystemEntries(dir);
-                } catch (Exception e) when (e is IOException or UnauthorizedAccessException) {
-                    continue;
-                }
-
-                Array.Sort(entries, StringComparer.Ordinal);
-                foreach (var entry in entries) {
+                foreach (var entry in Entries(dir)) {
                     var isClap = entry.EndsWith(".clap", StringComparison.OrdinalIgnoreCase);
-                    if (Directory.Exists(entry)) {
-                        if (isClap && OperatingSystem.IsMacOS()) {
-                            yield return entry;
-                        } else {
-                            pending.Push(entry);
-                        }
-                    } else if (isClap && !OperatingSystem.IsMacOS()) {
-                        yield return entry;
+                    var isFolder = Directory.Exists(entry);
+                    if (isClap && isFolder == OperatingSystem.IsMacOS()) {
+                        yield return entry; // a bundle on macOS, a shared library elsewhere
+                    } else if (isFolder) {
+                        pending.Push(entry);
                     }
                 }
             }
+        }
+    }
+
+    static string[] Entries(string dir) {
+        try {
+            var entries = Directory.GetFileSystemEntries(dir);
+            Array.Sort(entries, StringComparer.Ordinal);
+            return entries;
+        } catch (Exception e) when (e is IOException or UnauthorizedAccessException) {
+            return [];
         }
     }
 

@@ -134,7 +134,8 @@ sealed unsafe partial class ClapModule {
     [GeneratedRegex(@"<key>CFBundleExecutable</key>\s*<string>([^<]+)</string>")]
     private static partial Regex ExecutableKey();
 
-    public static string Text(byte* text) => text is null ? string.Empty : Marshal.PtrToStringUTF8((nint)text) ?? "";
+    public static string Text(byte* text) =>
+        text is null ? string.Empty : Marshal.PtrToStringUTF8((nint)text) ?? string.Empty;
 
     /// <summary>A NUL-terminated UTF-8 copy in native memory (free with <see cref="NativeMemory.Free" />).</summary>
     public static byte* Utf8(string text) {

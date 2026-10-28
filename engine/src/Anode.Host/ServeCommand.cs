@@ -1,5 +1,4 @@
 using Anode.Audio;
-using Anode.Audio.Midi;
 using Anode.Audio.Native;
 using Anode.EngineHost;
 using System.Runtime.InteropServices;
@@ -64,9 +63,7 @@ static class ServeCommand {
             device = session;
         }
 
-        // MIDI devices through the native shim, unless --no-midi (or it is not built).
-        IMidiBackend? midi = !options.Flag("no-midi") && NativeMidiBackend.IsAvailable ? new NativeMidiBackend() : null;
-        using var host = new EngineHost.EngineHost(device, version, midi: midi);
+        using var host = new EngineHost.EngineHost(device, version, midi: Midi(options));
         host.Log = Print;
         await using var server = new EngineHostServer(socket, host.HandleAsync, Print);
         host.Push = server.Push;
@@ -117,6 +114,10 @@ static class ServeCommand {
             return 0;
         }
     }
+
+    /// <summary>MIDI devices through the native shim, unless <c>--no-midi</c> (or the shim is not built).</summary>
+    static NativeMidiBackend? Midi(CommandLine options) =>
+        !options.Flag("no-midi") && NativeMidiBackend.IsAvailable ? new NativeMidiBackend() : null;
 
     static void Print(string message) => Console.Error.WriteLine($"{DateTime.Now:HH:mm:ss.fff} {message}");
 }

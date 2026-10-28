@@ -53,19 +53,25 @@ public sealed class PluginThread : IDisposable {
             return function();
         }
 
-        var done = new TaskCompletionSource<T>(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var done = new ManualResetEventSlim();
+        T? result = default;
+        System.Runtime.ExceptionServices.ExceptionDispatchInfo? failure = null;
         work.Add(() => {
                 try {
-                    done.SetResult(function());
+                    result = function();
                 }
 #pragma warning disable CA1031 // handed to the caller, which rethrows it on its own thread
                 catch (Exception e) {
 #pragma warning restore CA1031
-                    done.SetException(e);
+                    failure = System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(e);
+                } finally {
+                    done.Set();
                 }
             }
         );
-        return done.Task.GetAwaiter().GetResult();
+        done.Wait();
+        failure?.Throw();
+        return result!;
     }
 
     /// <summary>Adds work that runs on the plugin main thread about every 10 ms (plugins' requested callbacks).</summary>
