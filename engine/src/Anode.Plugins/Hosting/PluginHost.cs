@@ -220,7 +220,7 @@ public sealed class PluginHost : IDisposable {
 
     internal unsafe (int RtStatus, int WorkgroupStatus, long Wakes)? SandboxStatus(int pid) {
         lock (gate) {
-            var box = sandboxes.FirstOrDefault(s => s.Pid == pid);
+            var box = sandboxes.Find(s => s.Pid == pid);
             return box is null ? null : (box.Header->RtStatus, box.Header->WorkgroupStatus, box.Header->Wakes);
         }
     }

@@ -48,7 +48,7 @@ public sealed class PluginCatalog {
     public PluginEntry? Find(string pluginId) {
         lock (gate) {
             return entries.FirstOrDefault(e => e.PluginId == pluginId)
-                ?? registered.FirstOrDefault(e => e.PluginId == pluginId);
+                ?? registered.Find(e => e.PluginId == pluginId);
         }
     }
 
@@ -72,8 +72,8 @@ public sealed class PluginCatalog {
             var results = new List<(string Key, IReadOnlyList<PluginDescription> Plugins)>();
             var todo = new List<(string Key, string Stamp)>();
             foreach (var (key, stamp) in items) {
-                var cached = cache.Items.FirstOrDefault(i => i.Key == key);
-                var blocked = blocklist.Items.FirstOrDefault(i => i.Key == key);
+                var cached = cache.Items.Find(i => i.Key == key);
+                var blocked = blocklist.Items.Find(i => i.Key == key);
                 if (!force && cached is not null && cached.Stamp == stamp) {
                     results.Add((key, cached.Plugins));
                 } else if (!force && blocked is not null && blocked.Stamp == stamp) {
@@ -210,31 +210,38 @@ public sealed class PluginCatalog {
     /// <summary>The bundles (macOS) or files with <paramref name="extension" /> under the folders, recursively.</summary>
     static IEnumerable<string> Bundles(IEnumerable<string> folders, string extension) {
         var seen = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var folder in folders) {
-            if (!Directory.Exists(folder)) {
-                continue;
-            }
-
-            var pending = new Stack<string>([folder]);
-            while (pending.TryPop(out var dir)) {
-                string[] children;
-                try {
-                    children = Directory.GetFileSystemEntries(dir);
-                } catch (Exception e) when (e is IOException or UnauthorizedAccessException) {
-                    continue;
-                }
-
-                Array.Sort(children, StringComparer.Ordinal);
-                foreach (var child in children) {
-                    if (child.EndsWith(extension, StringComparison.OrdinalIgnoreCase)) {
-                        if (seen.Add(Path.GetFullPath(child))) {
-                            yield return Path.GetFullPath(child);
-                        }
-                    } else if (Directory.Exists(child)) {
-                        pending.Push(child);
-                    }
+        foreach (var folder in folders.Where(Directory.Exists)) {
+            foreach (var bundle in BundlesIn(folder, extension)) {
+                var full = Path.GetFullPath(bundle);
+                if (seen.Add(full)) {
+                    yield return full;
                 }
             }
+        }
+    }
+
+    /// <summary>The entries ending in <paramref name="extension" /> under one folder; other folders are searched.</summary>
+    static IEnumerable<string> BundlesIn(string folder, string extension) {
+        var pending = new Stack<string>([folder]);
+        while (pending.TryPop(out var dir)) {
+            foreach (var child in SortedEntries(dir)) {
+                if (child.EndsWith(extension, StringComparison.OrdinalIgnoreCase)) {
+                    yield return child;
+                } else if (Directory.Exists(child)) {
+                    pending.Push(child);
+                }
+            }
+        }
+    }
+
+    /// <summary>A folder's entries in ordinal order; none when it cannot be read.</summary>
+    static string[] SortedEntries(string dir) {
+        try {
+            var children = Directory.GetFileSystemEntries(dir);
+            Array.Sort(children, StringComparer.Ordinal);
+            return children;
+        } catch (Exception e) when (e is IOException or UnauthorizedAccessException) {
+            return [];
         }
     }
 
@@ -316,49 +323,13 @@ public sealed class PluginCatalog {
     ) {
         current = null;
         reason = string.Empty;
-        var dll = executable.EndsWith(".dll", StringComparison.OrdinalIgnoreCase);
-        var start = new ProcessStartInfo(dll ? "dotnet" : executable) {
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-            StandardOutputEncoding = Encoding.UTF8
-        };
-        if (dll) {
-            start.ArgumentList.Add("exec");
-            start.ArgumentList.Add(executable);
-        }
-
-        start.ArgumentList.Add("scan");
-        foreach (var item in items) {
-            start.ArgumentList.Add(item);
-        }
-
-        using var process = Process.Start(start);
+        using var process = StartScanner(items);
         if (process is null) {
             reason = "could not start " + executable;
             return true;
         }
 
-        process.ErrorDataReceived += (_, e) => {
-            if (e.Data is { Length: > 0 } line) {
-                options.Log?.Invoke("plugin scan: " + line);
-            }
-        };
-        process.BeginErrorReadLine();
-        var lines = new System.Collections.Concurrent.BlockingCollection<string?>();
-        var reader = new Thread(() => {
-                try {
-                    while (process.StandardOutput.ReadLine() is { } line) {
-                        lines.Add(line, cancellation);
-                    }
-
-                    lines.Add(null, cancellation);
-                } catch (Exception e) when (e is IOException or OperationCanceledException) {
-                    // ended, or nobody listens any more
-                }
-            }
-        ) { IsBackground = true, Name = "plugin scan reader" };
-        reader.Start();
+        var lines = ReadLines(process, cancellation);
         var since = Stopwatch.StartNew();
         while (true) {
             if (cancellation.IsCancellationRequested) {
@@ -378,41 +349,108 @@ public sealed class PluginCatalog {
             }
 
             if (line is null) {
+                // The scanner ended: after every item, or in the middle of one.
                 process.WaitForExit();
-                if (current is null) {
-                    return false; // finished every item
-                }
-
-                var code = process.ExitCode;
-                reason = code > 128 ? $"crashed the scanner (signal {code - 128})" : $"stopped the scanner ({code})";
-                return true;
+                reason = current is null ? string.Empty : ExitReason(process.ExitCode);
+                return current is not null;
             }
 
-            SandboxReply? e;
-            try {
-                e = SandboxJson.ReadReply(line);
-            } catch (JsonException) {
-                continue;
-            }
+            OnScanLine(line, found, ref current, since);
+        }
+    }
 
-            if (e?.Event == "begin") {
-                current = e.Item;
-                since.Restart();
-            } else if (e?.Event == "scanned" && e.Item is { } item) {
-                IReadOnlyList<PluginDescription> plugins = [];
-                var error = e.Error ?? "failed";
-                if (e.Ok && e.Plugins is { } json) {
-                    try {
-                        plugins = SandboxJson.ReadDescriptions(json);
-                        error = null;
-                    } catch (JsonException x) {
-                        error = "unreadable description: " + x.Message;
+    /// <summary>Starts <c>anode-plugin scan</c> on the items, its stderr going to the log; null when it cannot start.</summary>
+    Process? StartScanner(IReadOnlyList<string> items) {
+        var dll = executable.EndsWith(".dll", StringComparison.OrdinalIgnoreCase);
+        var start = new ProcessStartInfo(dll ? "dotnet" : executable) {
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            StandardOutputEncoding = Encoding.UTF8
+        };
+        if (dll) {
+            start.ArgumentList.Add("exec");
+            start.ArgumentList.Add(executable);
+        }
+
+        start.ArgumentList.Add("scan");
+        foreach (var item in items) {
+            start.ArgumentList.Add(item);
+        }
+
+        var process = Process.Start(start);
+        if (process is null) {
+            return null;
+        }
+
+        process.ErrorDataReceived += (_, e) => {
+            if (e.Data is { Length: > 0 } line) {
+                options.Log?.Invoke("plugin scan: " + line);
+            }
+        };
+        process.BeginErrorReadLine();
+        return process;
+    }
+
+    /// <summary>The scanner's stdout, line by line, from a reader thread; a null line when it ends.</summary>
+    static System.Collections.Concurrent.BlockingCollection<string?> ReadLines(
+        Process process,
+        CancellationToken cancellation
+    ) {
+        var lines = new System.Collections.Concurrent.BlockingCollection<string?>();
+        var reader = new Thread(() => {
+                try {
+                    while (process.StandardOutput.ReadLine() is { } line) {
+                        lines.Add(line, cancellation);
                     }
-                }
 
-                found(item, plugins, error);
-                current = null;
+                    lines.Add(null, cancellation);
+                } catch (Exception e) when (e is IOException or OperationCanceledException) {
+                    // ended, or nobody listens any more
+                }
             }
+        ) { IsBackground = true, Name = "plugin scan reader" };
+        reader.Start();
+        return lines;
+    }
+
+    static string ExitReason(int code) =>
+        code > 128 ? $"crashed the scanner (signal {code - 128})" : $"stopped the scanner ({code})";
+
+    /// <summary>One event from the scanner: an item begins (<paramref name="current" />), or its result arrives.</summary>
+    static void OnScanLine(
+        string line,
+        Action<string, IReadOnlyList<PluginDescription>, string?> found,
+        ref string? current,
+        Stopwatch since
+    ) {
+        SandboxReply? e;
+        try {
+            e = SandboxJson.ReadReply(line);
+        } catch (JsonException) {
+            return;
+        }
+
+        if (e?.Event == "begin") {
+            current = e.Item;
+            since.Restart();
+        } else if (e?.Event == "scanned" && e.Item is { } item) {
+            var (plugins, error) = ScannedPlugins(e);
+            found(item, plugins, error);
+            current = null;
+        }
+    }
+
+    /// <summary>A <c>scanned</c> event's plugins, or why there are none.</summary>
+    static (IReadOnlyList<PluginDescription> Plugins, string? Error) ScannedPlugins(SandboxReply e) {
+        if (!e.Ok || e.Plugins is not { } json) {
+            return ([], e.Error ?? "failed");
+        }
+
+        try {
+            return (SandboxJson.ReadDescriptions(json), null);
+        } catch (JsonException x) {
+            return ([], "unreadable description: " + x.Message);
         }
     }
 

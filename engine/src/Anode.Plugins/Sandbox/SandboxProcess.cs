@@ -285,22 +285,33 @@ internal sealed unsafe class SandboxProcess : IDisposable {
 
             var now = IpcWake.Now();
             for (var s = 0; s < used.Length; s++) {
-                var c = SharedLayout.Control(Segment, s);
-                var requested = Volatile.Read(ref c->Requested);
-                if (requested == Volatile.Read(ref c->Completed)) {
-                    stuckSince[s] = 0;
-                    continue;
-                }
-
-                if (stuckOn[s] != requested || stuckSince[s] == 0) {
-                    stuckOn[s] = requested;
-                    stuckSince[s] = now;
-                } else if (now - stuckSince[s] > hangTimeout.Ticks * 100) {
+                if (IsStuck(s, now, stuckSince, stuckOn)) {
                     Kill($"hung (a plugin has not returned for {hangTimeout.TotalSeconds:0.#} s)");
                     return;
                 }
             }
         }
+    }
+
+    /// <summary>
+    ///     True when slot <paramref name="s" /> has owed the same block for longer than the hang timeout; keeps, per
+    ///     slot, which request it owes and since when.
+    /// </summary>
+    bool IsStuck(int s, long now, long[] stuckSince, long[] stuckOn) {
+        var c = SharedLayout.Control(Segment, s);
+        var requested = Volatile.Read(ref c->Requested);
+        if (requested == Volatile.Read(ref c->Completed)) {
+            stuckSince[s] = 0;
+            return false;
+        }
+
+        if (stuckOn[s] != requested || stuckSince[s] == 0) {
+            stuckOn[s] = requested;
+            stuckSince[s] = now;
+            return false;
+        }
+
+        return now - stuckSince[s] > hangTimeout.Ticks * 100;
     }
 
     /// <summary>Ends the process (a hang, a protocol failure, disposal) and treats it as dead.</summary>

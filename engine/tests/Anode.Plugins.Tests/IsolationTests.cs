@@ -107,7 +107,9 @@ public sealed class IsolationTests : IDisposable {
         var missesBefore = hosted.Stats.Misses;
         slow.SetParameter(1, 0.2f); // "Stall": 20 ms per block, 15 periods
         var worst = TimeSpan.Zero;
+        var clock = new DeviceClock();
         for (var b = 0; b < 40; b++) {
+            clock.WaitForNextCycle();
             var (l, r) = Signal(Frames, b * Frames);
             var dry = (float[])l.Clone();
             var watch = Stopwatch.StartNew();
@@ -115,7 +117,6 @@ public sealed class IsolationTests : IDisposable {
             slow.Process(l, r, [], []);
             worst = watch.Elapsed > worst ? watch.Elapsed : worst;
             Assert.Equal(dry, l); // the pass-through is bypassed with the dry signal: identical either way
-            Thread.Sleep(1); // the device's period
         }
 
         // Never waited past the deadline (80 % of 1.33 ms), give or take scheduling of this non-real-time test thread.
@@ -130,10 +131,10 @@ public sealed class IsolationTests : IDisposable {
         var completed = stats.Completed;
         var until = Stopwatch.StartNew();
         while (hosted.Stats.Completed < completed + 10 && until.Elapsed < TimeSpan.FromSeconds(5)) {
+            clock.WaitForNextCycle();
             var (l, r) = Signal(Frames);
             host.BeginCycle();
             slow.Process(l, r, [], []);
-            Thread.Sleep(1);
         }
 
         Assert.True(hosted.Stats.Completed >= completed + 10);
@@ -147,23 +148,42 @@ public sealed class IsolationTests : IDisposable {
         using var host = new PluginHost(options);
         host.Catalog.Scan(false, TestContext.Current.CancellationToken);
         var problems = new ConcurrentQueue<PluginProblem>();
-        host.Problem += problems.Enqueue;
+        using var reported = new ManualResetEventSlim();
+        host.Problem += p => {
+            problems.Enqueue(p);
+            reported.Set();
+        };
         using var stuck = host.CreateEffect(MisbehaveId, new(1, "a"))!;
         stuck.Prepare(48000, 512);
         stuck.SetParameter(1, 1f); // "Stall" at 1: the plugin never returns
         var watch = Stopwatch.StartNew();
-        while (problems.IsEmpty && watch.Elapsed < TimeSpan.FromSeconds(10)) {
+        var clock = new DeviceClock();
+        while (!reported.IsSet && watch.Elapsed < TimeSpan.FromSeconds(10)) {
+            clock.WaitForNextCycle();
             var (l, r) = Signal(Frames);
             var dry = (float[])l.Clone();
             host.BeginCycle();
             stuck.Process(l, r, [], []);
             Assert.Equal(dry, l);
-            Thread.Sleep(1);
         }
 
         var problem = Assert.Single(problems);
         Assert.Contains("hung", problem.Message, StringComparison.Ordinal);
         Assert.True(((IHostedPlugin)stuck).IsFailed);
         Assert.InRange(watch.Elapsed, TimeSpan.FromSeconds(0.9), TimeSpan.FromSeconds(5));
+    }
+
+    /// <summary>
+    ///     The device's clock for these tests: one 64-frame cycle at 48 kHz after another, on absolute deadlines (the
+    ///     engine is called back by the device at its period; the test stands in for it).
+    /// </summary>
+    sealed class DeviceClock {
+        const long PeriodNs = Frames * 1_000_000_000L / 48000;
+        long next = Native.IpcWake.Now();
+
+        public void WaitForNextCycle() {
+            next += PeriodNs;
+            Native.IpcWake.SleepUntil(next);
+        }
     }
 }

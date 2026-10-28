@@ -181,42 +181,16 @@ internal sealed unsafe class SandboxServer {
             case "unload":
                 Unload(r.Slot);
                 return new() { Ok = true };
-            case "saveState": {
-                var plug = PlugOf(r.Slot);
-                var state = PlugNative.SaveState(plug, out var error);
-                return state is null ? Fail(error) : new() { Ok = true, State = Convert.ToBase64String(state) };
-            }
-            case "loadState": {
-                var plug = PlugOf(r.Slot);
-                if (!PlugNative.LoadState(plug, Convert.FromBase64String(r.State ?? string.Empty), out var error)) {
-                    return Fail(error);
-                }
-
-                return new() { Ok = true, Values = Values(plug), Latency = PlugNative.Latency(plug) };
-            }
+            case "saveState":
+                return SaveState(PlugOf(r.Slot));
+            case "loadState":
+                return LoadState(PlugOf(r.Slot), r.State);
             case "values": {
                 var plug = PlugOf(r.Slot);
                 return new() { Ok = true, Values = Values(plug), Latency = PlugNative.Latency(plug) };
             }
-            case "editor": {
-                var plug = PlugOf(r.Slot);
-                if (!r.Open) {
-                    PlugNative.EditorClose(plug);
-                    return new() { Ok = true };
-                }
-
-                // The app's window: found by its process, the handle never travels (docs/spikes/S6-plugin-windows.md).
-                var parent = r.Parent < 0 ? r.AppPid > 0 ? PlugNative.AppWindow(r.AppPid) : 0 : r.Parent;
-                var window = PlugNative.EditorOpen(
-                    plug,
-                    r.Title ?? "Plugin",
-                    parent,
-                    r.X,
-                    r.Y,
-                    r.Floating ? PlugNative.EditorFloating : 0
-                );
-                return window < 0 ? Fail(PlugNative.LastError) : new() { Ok = true, Window = window };
-            }
+            case "editor":
+                return Editor(PlugOf(r.Slot), r);
             case "crash":
                 // Tests: the whole sandbox goes down as if a plugin crashed it.
                 PlugNative.Crash();
@@ -227,6 +201,72 @@ internal sealed unsafe class SandboxServer {
     }
 
     static SandboxReply Fail(string? error) => new() { Ok = false, Error = error ?? "failed" };
+
+    static SandboxReply SaveState(nint plug) {
+        var state = PlugNative.SaveState(plug, out var error);
+        return state is null ? Fail(error) : new() { Ok = true, State = Convert.ToBase64String(state) };
+    }
+
+    static SandboxReply LoadState(nint plug, string? state) {
+        if (!PlugNative.LoadState(plug, Convert.FromBase64String(state ?? string.Empty), out var error)) {
+            return Fail(error);
+        }
+
+        return new() { Ok = true, Values = Values(plug), Latency = PlugNative.Latency(plug) };
+    }
+
+    /// <summary>Opens (moves) or closes a slot's editor window.</summary>
+    static SandboxReply Editor(nint plug, SandboxRequest r) {
+        if (!r.Open) {
+            PlugNative.EditorClose(plug);
+            return new() { Ok = true };
+        }
+
+        var window = PlugNative.EditorOpen(
+            plug,
+            r.Title ?? "Plugin",
+            EditorParent(r),
+            r.X,
+            r.Y,
+            r.Floating ? PlugNative.EditorFloating : 0
+        );
+        return window < 0 ? Fail(PlugNative.LastError) : new() { Ok = true, Window = window };
+    }
+
+    /// <summary>
+    ///     The window to put an editor over: the one asked for, or (negative) the app's main window, found by its
+    ///     process, so the handle never travels (docs/spikes/S6-plugin-windows.md).
+    /// </summary>
+    static long EditorParent(SandboxRequest r) {
+        if (r.Parent >= 0) {
+            return r.Parent;
+        }
+
+        return r.AppPid > 0 ? PlugNative.AppWindow(r.AppPid) : 0;
+    }
+
+    /// <summary>A scan item's format (<c>vst3:</c>, <c>au:</c>, <c>clap:</c>), or 0 when it names none.</summary>
+    static int ScanFormat(string kind) =>
+        kind switch {
+            "vst3" => PlugNative.Vst3,
+            "au" => PlugNative.Au,
+            "clap" => PlugNative.Clap,
+            _ => 0
+        };
+
+    /// <summary>Describes one scan item: its plugins' JSON, or null with the reason.</summary>
+    static string? ScanItem(string item, out string? error) {
+        var colon = item.IndexOf(':', StringComparison.Ordinal);
+        var format = colon > 0 ? ScanFormat(item[..colon]) : 0;
+        if (format == 0) {
+            error = "unknown plugin format";
+            return null;
+        }
+
+        var target = item[(colon + 1)..];
+        var all = target == "*";
+        return PlugNative.Scan(format, all ? null : target, !all, out error);
+    }
 
     nint PlugOf(int slot) =>
         slot >= 0 && slot < slots.Length && slots[slot].Plug != 0
@@ -534,19 +574,7 @@ internal sealed unsafe class SandboxServer {
 
         foreach (var item in items) {
             Write(new() { Event = "begin", Item = item });
-            var colon = item.IndexOf(':', StringComparison.Ordinal);
-            var kind = colon > 0 ? item[..colon] : string.Empty;
-            var target = colon > 0 ? item[(colon + 1)..] : item;
-            var format = kind switch {
-                "vst3" => PlugNative.Vst3,
-                "au" => PlugNative.Au,
-                "clap" => PlugNative.Clap,
-                _ => 0
-            };
-            var error = "unknown plugin format";
-            var json = format == 0
-                ? null
-                : PlugNative.Scan(format, target == "*" ? null : target, target != "*", out error);
+            var json = ScanItem(item, out var error);
             Write(
                 json is null
                     ? new() { Event = "scanned", Item = item, Ok = false, Error = error }
