@@ -10,6 +10,8 @@
  *                         above 0 (it then sleeps Stall x 100 ms per block): for crash isolation and deadline tests.
  *   Anode Test Synth      a sine per note (an instrument), at "Level".
  *
+ * A copy of the bundle whose name contains "CrashOnScan" or "HangOnScan" crashes or hangs as soon as it is loaded.
+ *
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 #include "an_testvst3.h"
@@ -374,7 +376,22 @@ FUnknown *createController(void *) {
 
 using namespace antest;
 
-bool InitModule() { return true; }
+extern char gPath[]; // the bundle's path (macmain.cpp)
+
+// A copy of the bundle renamed to contain "CrashOnScan" or "HangOnScan" misbehaves as soon as it is loaded: the
+// scanner tests' blocklist cases.
+bool InitModule() {
+    if (std::strstr(gPath, "CrashOnScan")) {
+        volatile int *crash = nullptr;
+        *crash = 1;
+    }
+    if (std::strstr(gPath, "HangOnScan")) {
+        for (;;) {
+            sleep(1);
+        }
+    }
+    return true;
+}
 bool DeinitModule() { return true; }
 
 #define AN_TEST_CLASS(name, cats, proc, ctrl, kind)                                                                  \

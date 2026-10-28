@@ -163,6 +163,9 @@ AN_PLUG_API void an_plug_main_call(void (*fn)(void *), void *ctx);
  * descriptor 2, so whatever plugins print goes to stderr instead of the sandbox's protocol. */
 AN_PLUG_API int32_t an_plug_redirect_stdout(void);
 
+/* Flushes denormals to zero on the calling thread (the sandbox's audio thread). */
+AN_PLUG_API void an_plug_flush_denormals(void);
+
 /* Deliberately crashes the process (SIGSEGV), for crash-isolation tests. */
 AN_PLUG_API void an_plug_crash(void);
 

@@ -440,6 +440,20 @@ int32_t an_plug_redirect_stdout(void) {
     return fd;
 }
 
+void an_plug_flush_denormals(void) {
+#if defined(__aarch64__)
+    uint64_t fpcr;
+    __asm__ volatile("mrs %0, fpcr" : "=r"(fpcr));
+    fpcr |= (1ULL << 24); // FZ
+    __asm__ volatile("msr fpcr, %0" : : "r"(fpcr));
+#elif defined(__x86_64__)
+    unsigned int csr;
+    __asm__ volatile("stmxcsr %0" : "=m"(csr));
+    csr |= 0x8040; // FTZ | DAZ
+    __asm__ volatile("ldmxcsr %0" : : "m"(csr));
+#endif
+}
+
 void an_plug_crash(void) {
     volatile int *p = nullptr;
     *p = 1;

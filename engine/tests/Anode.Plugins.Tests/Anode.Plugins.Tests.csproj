@@ -1,0 +1,8 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <ProjectReference Include="../../src/Anode.Plugins/Anode.Plugins.csproj"/>
+    <!-- Built, not referenced: the tests run it as the sandbox and scanner processes. -->
+    <ProjectReference Include="../../src/Anode.PluginSandbox/Anode.PluginSandbox.csproj" ReferenceOutputAssembly="false"
+                      Private="false"/>
+  </ItemGroup>
+</Project>
