@@ -3,6 +3,7 @@ import { XuiDockManagerImports } from '@xui/dock-manager';
 import { XuiSpinnerImports } from '@xui/spinner';
 import { BrowsersPane } from '../browsers/browsers-pane';
 import { Inspector } from '../inspector/inspector';
+import { LibraryPane } from '../library/library-pane';
 import { MarkerList } from '../lists/marker-list';
 import { KeyboardPane } from '../live/keyboard-pane';
 import { MixerPane } from '../mixer/mixer-pane';
@@ -28,6 +29,7 @@ export { defaultLayout } from './layout';
     BrowsersPane,
     Inspector,
     KeyboardPane,
+    LibraryPane,
     MarkerList,
     MixerPane,
     NotePad,
@@ -48,7 +50,7 @@ export { defaultLayout } from './layout';
     } @else {
       <xui-dock-manager class="h-full" [(layout)]="screensets.layout">
         <ng-template xuiDockContent="library">
-          <section class="text-foreground-muted p-3 text-sm" aria-label="Library">Patches and presets.</section>
+          <an-library-pane />
         </ng-template>
         <ng-template xuiDockContent="inspector">
           <an-inspector />

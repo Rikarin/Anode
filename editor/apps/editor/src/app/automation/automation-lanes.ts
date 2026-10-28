@@ -80,7 +80,7 @@ export function laneNormal(y: number, height: number): number {
   template: `
     @for (lane of visible(); track lane.id) {
       <an-automation-lane
-        class="bg-surface-sunken/70 border-hairline pointer-events-auto absolute inset-x-0 touch-none border-b"
+        class="bg-surface-sunken/70 border-hairline pointer-events-auto absolute! inset-x-0 touch-none border-b"
         [attr.data-lane]="lane.id"
         [style.top.px]="lane.top"
         [style.cursor]="cursor()"
