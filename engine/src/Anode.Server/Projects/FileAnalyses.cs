@@ -191,6 +191,7 @@ public sealed class FileAnalyses(IAudioAnalyzer analyzer) {
             throw new AnalysisException($"Could not find the silence of '{file.Name}': {e.Message}", e);
         }
     }
+
     static (float[] Mono, int Rate) Mono(string projectFolder, AudioFile file) {
         try {
             var (channels, rate) = BounceProcessor.Read(Path.Combine(projectFolder, file.Path));
