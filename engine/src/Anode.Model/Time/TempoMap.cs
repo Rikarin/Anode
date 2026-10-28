@@ -44,14 +44,7 @@ public sealed class TempoMap {
         ramps = new bool[list.Length];
         for (var i = 0; i < list.Length; i++) {
             var (tick, bpm, ramp) = list[i];
-            if (i > 0 && tick <= ticks[i - 1]) {
-                throw new ArgumentException("Tempo changes must be in strictly increasing tick order.", nameof(points));
-            }
-
-            if (bpm is < MinBpm or > MaxBpm || double.IsNaN(bpm)) {
-                throw new ArgumentOutOfRangeException(nameof(points), bpm, $"Tempo must be {MinBpm}–{MaxBpm} BPM.");
-            }
-
+            Check(tick, bpm, i > 0 ? ticks[i - 1] : null);
             ticks[i] = tick;
             bpms[i] = bpm;
             ramps[i] = ramp;
@@ -65,6 +58,16 @@ public sealed class TempoMap {
             if (i > 0) {
                 starts[i] = starts[i - 1] + Seconds(i - 1, ticks[i] - ticks[i - 1]);
             }
+        }
+    }
+
+    static void Check(long tick, double bpm, long? previous) {
+        if (tick <= previous) {
+            throw new ArgumentException("Tempo changes must be in strictly increasing tick order.", nameof(tick));
+        }
+
+        if (bpm is < MinBpm or > MaxBpm || double.IsNaN(bpm)) {
+            throw new ArgumentOutOfRangeException(nameof(bpm), bpm, $"Tempo must be {MinBpm}–{MaxBpm} BPM.");
         }
     }
 

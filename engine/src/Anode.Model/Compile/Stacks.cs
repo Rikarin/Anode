@@ -17,7 +17,7 @@ public static class Stacks {
         var volume = own.VolumeDb <= Units.SilenceDb || outer.VolumeDb <= Units.SilenceDb
             ? Units.SilenceDb
             : Math.Max(Units.SilenceDb, own.VolumeDb + outer.VolumeDb);
-        return new(volume, own.Pan, own.Mute || outer.Mute, own.Solo || outer.Solo);
+        return own with { VolumeDb = volume, Mute = own.Mute || outer.Mute, Solo = own.Solo || outer.Solo };
     }
 
     /// <summary>Whether the engine has a track for <paramref name="track" /> (every kind but a stack).</summary>

@@ -176,8 +176,8 @@ public static partial class Edits {
         return [
             ..c.MarkerIds.Distinct(StringComparer.Ordinal)
                 .Select(id => id is not null && state.Markers.ContainsKey(id)
-                    ? new MarkerRemoved(id)
-                    : throw new EditException($"No marker '{id}'.")
+                        ? new MarkerRemoved(id)
+                        : throw new EditException($"No marker '{id}'.")
                 )
         ];
     }
@@ -260,30 +260,19 @@ public static partial class Edits {
             return []; // already there
         }
 
-        // Where each kind of item goes: content (what starts in the section) and everything else.
-        long Other(long x) =>
-            c.Copy
-                ? x >= to ? x + length : x
-                : to < start
-                    ? x >= to && x < start ? x + length : x
-                    : x >= end && x < to
-                        ? x - length
-                        : x;
-
-        long Content(long x) => (c.Copy ? to : to < start ? to : to - length) + (x - start);
-
+        var move = new SectionMove(start, length, to, c.Copy);
         var ops = new List<DeltaOp>();
         var copies = new List<DeltaOp>();
         var next = state.LastEventId;
         foreach (var item in Timeline.Items(state)) {
             var inside = item.Start >= start && item.Start < end;
             if (inside && c.Copy) {
-                var copied = Timeline.Copy(state, item, Content(item.Start) - item.Start, null, ids, ref next);
-                CheckTick(Content(item.Start), "position");
+                var copied = Timeline.Copy(state, item, move.Content(item.Start) - item.Start, null, ids, ref next);
+                CheckTick(move.Content(item.Start), "position");
                 copies.Add(copied);
             }
 
-            var target = inside && !c.Copy ? Content(item.Start) : Other(item.Start);
+            var target = inside && !c.Copy ? move.Content(item.Start) : move.Other(item.Start);
             if (target != item.Start) {
                 CheckTick(target, "position");
                 ops.Add(Timeline.Move(state, item, target));
@@ -292,6 +281,27 @@ public static partial class Edits {
 
         ops.AddRange(copies);
         return ops;
+    }
+
+    /// <summary>Where a section move or copy takes each position: its own content's, and everything else's.</summary>
+    readonly record struct SectionMove(long Start, long Length, long To, bool Copy) {
+        long End => Start + Length;
+
+        /// <summary>A position that does not start in the section: after the insertion point it makes room.</summary>
+        public long Other(long x) {
+            if (Copy) {
+                return x >= To ? x + Length : x;
+            }
+
+            if (To < Start) {
+                return x >= To && x < Start ? x + Length : x;
+            }
+
+            return x >= End && x < To ? x - Length : x;
+        }
+
+        /// <summary>A position in the section: it goes with it to where it is inserted.</summary>
+        public long Content(long x) => (Copy || To < Start ? To : To - Length) + (x - Start);
     }
 
     static ArrangementMarker SectionOf(ProjectState state, string? id) =>
@@ -306,7 +316,9 @@ public static partial class Edits {
         CheckTick(section.StartTick + section.LengthTicks, "section end");
         var end = section.StartTick + section.LengthTicks;
         foreach (var other in state.Sections.Values) {
-            if (other.Id != section.Id && other.StartTick < end && section.StartTick < other.StartTick + other.LengthTicks) {
+            if (other.Id != section.Id
+                && other.StartTick < end
+                && section.StartTick < other.StartTick + other.LengthTicks) {
                 throw new EditException($"Section '{section.Name}' would overlap section '{other.Name}'.");
             }
         }

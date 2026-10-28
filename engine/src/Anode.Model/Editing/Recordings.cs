@@ -3,7 +3,10 @@ using Anode.Model.Time;
 
 namespace Anode.Model.Editing;
 
-/// <summary>One pass of a recording: <c>Frames</c> frames of its file from <c>FileOffset</c>, played at project sample <c>StartSample</c>.</summary>
+/// <summary>
+///     One pass of a recording: <c>Frames</c> frames of its file from <c>FileOffset</c>, played at project sample
+///     <c>StartSample</c>.
+/// </summary>
 public readonly record struct TakePass(long StartSample, long FileOffset, long Frames);
 
 /// <summary>
@@ -73,7 +76,8 @@ public static class Recordings {
             return ops;
         }
 
-        var takeFolder = placed.Length > 1 && (flashback || state.Settings.Recording.CycleMode == CycleRecordMode.TakeFolder);
+        var takeFolder = placed.Length > 1
+            && (flashback || state.Settings.Recording.CycleMode == CycleRecordMode.TakeFolder);
         if (takeFolder) {
             ops.Add(new TakeFolderUpserted(Folder(state, track, file, placed, ids)));
             return ops;
@@ -102,29 +106,7 @@ public static class Recordings {
         var rate = state.SampleRate;
         var ops = new List<DeltaOp>();
         foreach (var r in state.RegionsOf(trackId)) {
-            var start = map.SampleAt(r.StartTick, rate);
-            var end = start + r.Length;
-            if (end <= from || start >= to) {
-                continue;
-            }
-
-            if (start >= from && end <= to) {
-                ops.Add(new RegionRemoved(r.Id));
-                continue;
-            }
-
-            if (start < from) {
-                ops.Add(new RegionUpserted(Trimmed(r, r.FileOffset, from - start)));
-            }
-
-            if (end > to) {
-                var tick = CeilingTick(map, to, rate);
-                var shift = map.SampleAt(tick, rate) - start;
-                if (shift < r.Length) {
-                    var right = Trimmed(r, r.FileOffset + shift, r.Length - shift) with { StartTick = tick };
-                    ops.Add(new RegionUpserted(start < from ? right with { Id = ids.Next(IdPrefix.Region) } : right));
-                }
-            }
+            Carve(state, r, from, to, ids, ops);
         }
 
         foreach (var f in state.TakeFoldersOf(trackId)) {
@@ -134,6 +116,33 @@ public static class Recordings {
         }
 
         return ops;
+    }
+
+    /// <summary>What clearing samples <paramref name="from" />…<paramref name="to" /> does to one audio region.</summary>
+    static void Carve(ProjectState state, AudioRegion r, long from, long to, IIdSource ids, List<DeltaOp> ops) {
+        var map = state.TempoMap;
+        var rate = state.SampleRate;
+        var start = map.SampleAt(r.StartTick, rate);
+        var end = start + r.Length;
+        if (end <= from || start >= to) {
+            return;
+        }
+
+        if (start >= from && end <= to) {
+            ops.Add(new RegionRemoved(r.Id));
+            return;
+        }
+
+        if (start < from) {
+            ops.Add(new RegionUpserted(Trimmed(r, r.FileOffset, from - start)));
+        }
+
+        var tick = CeilingTick(map, to, rate);
+        var shift = map.SampleAt(tick, rate) - start;
+        if (end > to && shift < r.Length) {
+            var right = Trimmed(r, r.FileOffset + shift, r.Length - shift) with { StartTick = tick };
+            ops.Add(new RegionUpserted(start < from ? right with { Id = ids.Next(IdPrefix.Region) } : right));
+        }
     }
 
     /// <summary>Clears ticks <paramref name="from" />…<paramref name="to" /> of a track's MIDI regions (replace mode).</summary>
@@ -168,10 +177,16 @@ public static class Recordings {
                 var right = r with {
                     StartTick = to,
                     LengthTicks = end - to,
-                    Notes = [..r.Notes.Where(n => n.StartTick >= cut).Select(n => n with { StartTick = n.StartTick - cut })],
+                    Notes = [
+                        ..r.Notes.Where(n => n.StartTick >= cut).Select(n => n with { StartTick = n.StartTick - cut })
+                    ],
                     Controls = [..r.Controls.Where(e => e.Tick >= cut).Select(e => e with { Tick = e.Tick - cut })]
                 };
-                ops.Add(new MidiRegionUpserted(r.StartTick < from ? right with { Id = ids.Next(IdPrefix.MidiRegion) } : right));
+                ops.Add(
+                    new MidiRegionUpserted(
+                        r.StartTick < from ? right with { Id = ids.Next(IdPrefix.MidiRegion) } : right
+                    )
+                );
             }
         }
 
@@ -230,6 +245,8 @@ public static class Recordings {
 
     static AudioRegion Trimmed(AudioRegion r, long offset, long length) {
         var fadeIn = Math.Min(r.FadeIn, length);
-        return r with { FileOffset = offset, Length = length, FadeIn = fadeIn, FadeOut = Math.Min(r.FadeOut, length - fadeIn) };
+        return r with {
+            FileOffset = offset, Length = length, FadeIn = fadeIn, FadeOut = Math.Min(r.FadeOut, length - fadeIn)
+        };
     }
 }

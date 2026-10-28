@@ -23,6 +23,32 @@ public sealed record CompPiece(
 ///     the compiler plays and what <c>flattenTakeFolder</c> leaves are the same pieces.
 /// </summary>
 public static class Comps {
+    /// <summary>
+    ///     How far each span extends before its start (into the previous one) and after its end (into the next) for
+    ///     the crossfades centred on the boundaries where spans meet.
+    /// </summary>
+    static (long[] Before, long[] After) Extensions(
+        List<(Take Take, long TakeStart, long From, long To)> spans,
+        long crossfade
+    ) {
+        var before = new long[spans.Count];
+        var after = new long[spans.Count];
+        for (var i = 0; i + 1 < spans.Count; i++) {
+            var (left, right) = (spans[i], spans[i + 1]);
+            var length = Math.Min(crossfade, Math.Min(left.To - left.From, right.To - right.From) / 2);
+            if (left.To != right.From || length < 2) {
+                continue;
+            }
+
+            var boundary = left.To;
+            // The right take starts earlier, the left goes on: as far as each has material.
+            before[i + 1] = Math.Max(0, Math.Min(length / 2, boundary - right.TakeStart));
+            after[i] = Math.Max(0, Math.Min(length - length / 2, left.TakeStart + left.Take.Length - boundary));
+        }
+
+        return (before, after);
+    }
+
     public static IReadOnlyList<CompPiece> Pieces(ProjectState state, TakeFolder folder) {
         var map = state.TempoMap;
         var rate = state.SampleRate;
@@ -41,27 +67,7 @@ public static class Comps {
             }
         }
 
-        // Extensions before (into the previous piece) and after (into the next) each piece's span.
-        var before = new long[spans.Count];
-        var after = new long[spans.Count];
-        for (var i = 0; i + 1 < spans.Count; i++) {
-            var (left, right) = (spans[i], spans[i + 1]);
-            if (left.To != right.From) {
-                continue;
-            }
-
-            var length = Math.Min(folder.Crossfade, Math.Min(left.To - left.From, right.To - right.From) / 2);
-            if (length < 2) {
-                continue;
-            }
-
-            var boundary = left.To;
-            var early = Math.Min(length / 2, boundary - right.TakeStart); // the right take starts earlier
-            var late = Math.Min(length - length / 2, left.TakeStart + left.Take.Length - boundary); // the left goes on
-            before[i + 1] = Math.Max(0, early);
-            after[i] = Math.Max(0, late);
-        }
-
+        var (before, after) = Extensions(spans, folder.Crossfade);
         var pieces = new CompPiece[spans.Count];
         for (var i = 0; i < spans.Count; i++) {
             var (take, takeStart, from, to) = spans[i];

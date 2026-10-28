@@ -36,6 +36,7 @@ public sealed class EngineConnection(
 
     /// <summary>The preview channel's level: −6 dB, so a full-scale file does not jump out over the mix.</summary>
     public const float PreviewGain = 0.5f;
+
     static readonly TimeSpan RetryDelay = TimeSpan.FromMilliseconds(250);
     static readonly TimeSpan TelemetryInterval = TimeSpan.FromMilliseconds(33);
     static readonly TimeSpan StatesTimeout = TimeSpan.FromSeconds(3);

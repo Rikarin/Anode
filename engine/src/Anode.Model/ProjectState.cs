@@ -46,7 +46,8 @@ public sealed record ProjectState(
     ///     The editor's screensets by number (1…9): saved with the project, but not part of its content as edits and
     ///     undo see it, nor of the contract's <see cref="Project" />.
     /// </summary>
-    public ImmutableSortedDictionary<int, Screenset> Screensets { get; init; } = ImmutableSortedDictionary<int, Screenset>.Empty;
+    public ImmutableSortedDictionary<int, Screenset> Screensets { get; init; } =
+        ImmutableSortedDictionary<int, Screenset>.Empty;
 
     /// <summary>The project's tempo map: its tempo track (built once per track, as the lists are immutable).</summary>
     public TempoMap TempoMap =>
@@ -57,7 +58,7 @@ public sealed record ProjectState(
     /// <summary>The project's signature track as bars and beats.</summary>
     public SignatureMap SignatureMap =>
         Settings.Signatures is { Count: > 0 } events
-            ? SignatureMaps.GetValue(events, static e => new SignatureMap(e))
+            ? SignatureMaps.GetValue(events, static e => new(e))
             : SignatureMap.Constant(Settings.Signature.Numerator, Settings.Signature.Denominator);
 
     /// <summary>The position of the track <paramref name="id" /> in the track list, or −1.</summary>
@@ -197,11 +198,7 @@ public sealed record ProjectState(
             SettingsChanged => new SettingsChanged(Settings),
             MasterChanged => new MasterChanged(Master),
             ProjectRenamed => new ProjectRenamed(Name),
-            MidiRegionUpserted or MidiRegionRemoved => InverseMidi(op),
-            TakeFolderUpserted(var folder) => TakeFolders.TryGetValue(folder.Id, out var old)
-                ? new TakeFolderUpserted(old)
-                : new TakeFolderRemoved(folder.Id),
-            TakeFolderRemoved(var id) => TakeFolders.TryGetValue(id, out var old) ? new TakeFolderUpserted(old) : null,
+            MidiRegionUpserted or MidiRegionRemoved or TakeFolderUpserted or TakeFolderRemoved => InverseMidi(op),
             MarkerUpserted or MarkerRemoved or SectionUpserted or SectionRemoved => InverseArrangement(op),
             NotesChanged => new NotesChanged(Notes),
             _ => throw new ArgumentException($"Unknown delta operation {op.GetType().Name}.", nameof(op))
@@ -213,6 +210,10 @@ public sealed record ProjectState(
                 ? new MidiRegionUpserted(old)
                 : new MidiRegionRemoved(region.Id),
             MidiRegionRemoved(var id) => MidiRegions.TryGetValue(id, out var old) ? new MidiRegionUpserted(old) : null,
+            TakeFolderUpserted(var folder) => TakeFolders.TryGetValue(folder.Id, out var old)
+                ? new TakeFolderUpserted(old)
+                : new TakeFolderRemoved(folder.Id),
+            TakeFolderRemoved(var id) => TakeFolders.TryGetValue(id, out var old) ? new TakeFolderUpserted(old) : null,
             _ => null
         };
 

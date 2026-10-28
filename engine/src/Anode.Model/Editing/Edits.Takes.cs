@@ -50,7 +50,8 @@ public static partial class Edits {
 
     static DeltaOp[] SetTakeFolder(ProjectState state, SetTakeFolderCommand c) {
         var folder = FolderOf(state, c.FolderId);
-        if (c.Crossfade is { } crossfade && (crossfade < 0 || crossfade > (long)state.SampleRate * MaxCrossfadeSeconds)) {
+        if (c.Crossfade is { } crossfade
+            && (crossfade < 0 || crossfade > (long)state.SampleRate * MaxCrossfadeSeconds)) {
             throw new EditException($"A comp crossfade is 0…{MaxCrossfadeSeconds} s of frames, not {crossfade}.");
         }
 
@@ -162,7 +163,15 @@ public static partial class Edits {
         var map = state.TempoMap;
         var start = regions[0].StartTick;
         var end = regions.Max(r => map.TickAtSample(EndSample(state, r), state.SampleRate));
-        var takes = regions.Select(r => new Take(ids.Next(IdPrefix.Take), r.Name, r.FileId, r.StartTick, r.FileOffset, r.Length))
+        var takes = regions.Select(r => new Take(
+                    ids.Next(IdPrefix.Take),
+                    r.Name,
+                    r.FileId,
+                    r.StartTick,
+                    r.FileOffset,
+                    r.Length
+                )
+            )
             .ToArray();
         var last = takes[^1];
         var lastEnd = Math.Min(end, map.TickAtSample(EndSample(state, regions[^1]), state.SampleRate));
@@ -210,12 +219,18 @@ public static partial class Edits {
         }
 
         var end = regions.Max(static r => r.StartTick + r.LengthTicks);
-        var notes = regions.SelectMany(r => r.Notes.Select(n => n with { StartTick = n.StartTick + r.StartTick - first.StartTick }));
-        var controls = regions.SelectMany(r => r.Controls.Select(e => e with { Tick = e.Tick + r.StartTick - first.StartTick }));
+        var notes = regions.SelectMany(r => r.Notes.Select(n => n with {
+                    StartTick = n.StartTick + r.StartTick - first.StartTick
+                }
+            )
+        );
+        var controls = regions.SelectMany(r => r.Controls.Select(e => e with {
+                    Tick = e.Tick + r.StartTick - first.StartTick
+                }
+            )
+        );
         var joined = first with {
-            LengthTicks = end - first.StartTick,
-            Notes = Sorted(notes),
-            Controls = Sorted(controls)
+            LengthTicks = end - first.StartTick, Notes = Sorted(notes), Controls = Sorted(controls)
         };
         if ((long)joined.Notes.Count + joined.Controls.Count > MaxEventsPerRegion) {
             throw new EditException($"A MIDI region holds at most {MaxEventsPerRegion} notes and events.");
@@ -226,8 +241,8 @@ public static partial class Edits {
 
     static List<DeltaOp> JoinAudio(ProjectState state, string[] ids) {
         var regions = ids.Select(id => state.MidiRegions.ContainsKey(id ?? string.Empty)
-                ? throw new EditException("Join regions of one kind: audio or MIDI.")
-                : RegionOf(state, id ?? string.Empty)
+                    ? throw new EditException("Join regions of one kind: audio or MIDI.")
+                    : RegionOf(state, id ?? string.Empty)
             )
             .OrderBy(static r => r.StartTick)
             .ThenBy(static r => r.Id, StringComparer.Ordinal)
@@ -267,7 +282,9 @@ public static partial class Edits {
             var item = Timeline.Region(state, id) ?? throw new EditException($"No region '{id}'.");
             CheckTick(item.Start + c.OffsetTicks, "copy's start");
             if (target is not null) {
-                var fits = item.Kind == TimelineKind.MidiRegion ? IsMidiKind(target.Kind) : target.Kind == TrackKind.Audio;
+                var fits = item.Kind == TimelineKind.MidiRegion
+                    ? IsMidiKind(target.Kind)
+                    : target.Kind == TrackKind.Audio;
                 if (!fits) {
                     throw new EditException($"Track '{target.Id}' cannot hold region '{id}'.");
                 }

@@ -3,7 +3,8 @@ using System.Security.Cryptography;
 namespace Anode.Model;
 
 /// <summary>
-///     Makes domain ids: a kind prefix (<c>trk</c>, <c>rgn</c>, <c>mid</c>, <c>aud</c>, <c>prj</c>, <c>tkf</c>, <c>tak</c>,
+///     Makes domain ids: a kind prefix (<c>trk</c>, <c>rgn</c>, <c>mid</c>, <c>aud</c>, <c>prj</c>, <c>tkf</c>,
+///     <c>tak</c>,
 ///     <c>mrk</c>, <c>sec</c>, <c>alt</c>), an underscore, a
 ///     suffix.
 /// </summary>

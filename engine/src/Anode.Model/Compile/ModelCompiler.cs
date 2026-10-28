@@ -111,17 +111,14 @@ public sealed class ModelCompiler {
     ) {
         // Regions and folders in one order (start tick, then id): later in it wins an overlap.
         var placed = new List<(long Tick, string Id, AudioRegion? Region, TakeFolder? Folder)>(regions.Count);
-        foreach (var r in regions) {
-            if (!r.Muted) {
-                placed.Add((r.StartTick, r.Id, r, null));
-            }
-        }
-
-        foreach (var f in folders ?? []) {
-            if (!f.Muted) {
-                placed.Add((f.StartTick, f.Id, null, f));
-            }
-        }
+        placed.AddRange(
+            regions.Where(static r => !r.Muted)
+                .Select(static r => (r.StartTick, r.Id, (AudioRegion?)r, (TakeFolder?)null))
+        );
+        placed.AddRange(
+            (folders ?? []).Where(static f => !f.Muted)
+            .Select(static f => (f.StartTick, f.Id, (AudioRegion?)null, (TakeFolder?)f))
+        );
 
         placed.Sort(static (a, b) => a.Tick != b.Tick ? a.Tick.CompareTo(b.Tick) : string.CompareOrdinal(a.Id, b.Id));
         var entries = new List<(AudioPlaylistEntry Entry, int Order)>();
@@ -140,10 +137,11 @@ public sealed class ModelCompiler {
             .ThenBy(static x => x.Order)
             .Select(static x => x.Entry)
             .ToArray();
-        if (!Overlaps(sorted)) {
-            return sorted;
-        }
+        return Overlaps(sorted) ? Resolve(sorted) : sorted;
+    }
 
+    /// <summary>Sorted, overlapping entries as the host plays them: crossfades kept, other overlaps flattened.</summary>
+    static AudioPlaylistEntry[] Resolve(AudioPlaylistEntry[] sorted) {
         // Each run of overlapping entries stays as it is when it is a chain of crossfades, else is flattened.
         var result = new List<AudioPlaylistEntry>(sorted.Length);
         for (var i = 0; i < sorted.Length;) {

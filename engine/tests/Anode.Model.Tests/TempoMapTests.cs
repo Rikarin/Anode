@@ -117,12 +117,12 @@ public sealed class TempoMapTests {
         const int n = 2048;
         var seconds = 0.0;
         for (var i = 0; i < map.Count && map[i].Tick < tick; i++) {
-            var from = (double)map[i].Tick;
+            double from = map[i].Tick;
             var to = i + 1 < map.Count ? Math.Min(map[i + 1].Tick, tick) : tick;
             var h = (to - from) / n;
             var sum = 0.0;
             for (var k = 0; k <= n; k++) {
-                var weight = k == 0 || k == n ? 1 : k % 2 == 1 ? 4 : 2;
+                var weight = k == 0 || k == n ? 1 : (k & 1) == 1 ? 4 : 2;
                 // The tempo inside segment i: at its own end, just before the next change.
                 var bpm = Bpm(map, i, from + k * h);
                 sum += weight * 60 / (bpm * TempoMap.Ppq);

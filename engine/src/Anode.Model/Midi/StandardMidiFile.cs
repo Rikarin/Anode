@@ -23,7 +23,10 @@ public sealed record SmfFile(
     IReadOnlyList<SignatureEvent> Signatures
 );
 
-/// <summary>Reads Standard MIDI Files, format 0 and 1, with a PPQ time division. A damaged file throws <see cref="FormatException" />.</summary>
+/// <summary>
+///     Reads Standard MIDI Files, format 0 and 1, with a PPQ time division. A damaged file throws
+///     <see cref="FormatException" />.
+/// </summary>
 public static class StandardMidiFile {
     public const long MaxBytes = 64L << 20;
     const double DefaultBpm = 120;
@@ -38,7 +41,7 @@ public static class StandardMidiFile {
     }
 
     public static SmfFile Read(ReadOnlySpan<byte> data) {
-        var reader = new Reader(data.ToArray());
+        var reader = new Reader([..data]);
         if (reader.Tag() != "MThd") {
             throw new FormatException("Not a Standard MIDI File: no MThd header.");
         }
@@ -85,64 +88,73 @@ public static class StandardMidiFile {
         SortedDictionary<long, double> tempo,
         SortedDictionary<long, (int, int)> signatures
     ) {
-        string? name = null;
-        var notes = new List<Note>();
-        var controls = new List<ControlEvent>();
-        var held = new Dictionary<(int Channel, int Pitch), Queue<(long Tick, int Velocity)>>();
+        var track = new TrackParser(tempo, signatures);
         long ticks = 0;
         var status = 0;
         while (!r.AtEnd) {
             ticks += r.VarInt();
             var tick = ticks * TempoMap.Ppq / division;
             var b = r.Byte();
-            if (b == 0xFF) {
-                var type = r.Byte();
-                var data = r.Bytes(r.VarInt());
-                switch (type) {
-                    case 0x03 when name is null:
-                        name = Encoding.Latin1.GetString(data).Trim();
-                        break;
-                    case 0x51 when data.Length >= 3:
-                        var microseconds = (data[0] << 16) | (data[1] << 8) | data[2];
-                        if (microseconds > 0) {
-                            // To a thousandth of a BPM: a file stores whole microseconds per beat, so 90 BPM reads as 89.99995.
-                            tempo[tick] = Math.Clamp(Math.Round(60_000_000.0 / microseconds, 3), TempoMap.MinBpm, TempoMap.MaxBpm);
-                        }
-
-                        break;
-                    case 0x58 when data.Length >= 2 && data[0] is >= 1 and <= 32 && data[1] <= 5:
-                        signatures[tick] = (data[0], 1 << data[1]);
-                        break;
-                    case 0x2F:
-                        r.SkipToEnd();
-                        break;
-                }
-
+            if (b is 0xFF or 0xF0 or 0xF7) {
+                SystemEvent(r, b, track, tick);
                 continue;
             }
 
-            if (b is 0xF0 or 0xF7) {
-                r.Skip(r.VarInt());
-                continue;
-            }
-
-            int data1;
-            if (b < 0x80) {
-                if (status == 0) {
-                    throw new FormatException("A MIDI track starts with running status.");
-                }
-
-                data1 = b;
-            } else {
+            if (b >= 0x80) {
                 status = b;
-                data1 = r.Byte();
+            } else if (status == 0) {
+                throw new FormatException("A MIDI track starts with running status.");
             }
 
+            var data1 = b >= 0x80 ? r.Byte() : b;
+            var data2 = (status & 0xF0) is 0xC0 or 0xD0 ? 0 : r.Byte();
+            track.Channel(status, data1 & 0x7F, data2 & 0x7F, tick);
+        }
+
+        return track.Finish(ticks * TempoMap.Ppq / division);
+    }
+
+    /// <summary>A meta event (kept when it is one the import uses; end of track ends the read) or a SysEx (skipped).</summary>
+    static void SystemEvent(Reader r, byte b, TrackParser track, long tick) {
+        if (b != 0xFF) {
+            r.Skip(r.VarInt());
+            return;
+        }
+
+        var type = r.Byte();
+        var data = r.Bytes(r.VarInt());
+        if (type == 0x2F) {
+            r.SkipToEnd();
+        } else {
+            track.Meta(type, data, tick);
+        }
+    }
+
+    /// <summary>One track's events as they are read: notes paired up, controllers, and the meta events kept.</summary>
+    sealed class TrackParser(SortedDictionary<long, double> tempo, SortedDictionary<long, (int, int)> signatures) {
+        readonly List<Note> notes = [];
+        readonly List<ControlEvent> controls = [];
+        readonly Dictionary<(int Channel, int Pitch), Queue<(long Tick, int Velocity)>> held = [];
+        string? name;
+
+        public void Meta(int type, byte[] data, long tick) {
+            switch (type) {
+                case 0x03 when name is null:
+                    name = Encoding.Latin1.GetString(data).Trim();
+                    break;
+                case 0x51 when data.Length >= 3 && ((data[0] << 16) | (data[1] << 8) | data[2]) is > 0 and var micros:
+                    // To a thousandth of a BPM: a file stores whole microseconds per beat, so 90 BPM reads as 89.99995.
+                    tempo[tick] = Math.Clamp(Math.Round(60_000_000.0 / micros, 3), TempoMap.MinBpm, TempoMap.MaxBpm);
+                    break;
+                case 0x58 when data.Length >= 2 && data[0] is >= 1 and <= 32 && data[1] <= 5:
+                    signatures[tick] = (data[0], 1 << data[1]);
+                    break;
+            }
+        }
+
+        public void Channel(int status, int data1, int data2, long tick) {
             var channel = (status & 0x0F) + 1;
-            var kind = status & 0xF0;
-            var data2 = kind is 0xC0 or 0xD0 ? 0 : r.Byte();
-            (data1, data2) = (data1 & 0x7F, data2 & 0x7F);
-            switch (kind) {
+            switch (status & 0xF0) {
                 case 0x90 when data2 > 0:
                     if (!held.TryGetValue((channel, data1), out var queue)) {
                         held[(channel, data1)] = queue = new();
@@ -172,15 +184,16 @@ public static class StandardMidiFile {
             }
         }
 
-        // Notes still held at the track's end end there.
-        var end = ticks * TempoMap.Ppq / division;
-        foreach (var ((channel, pitch), queue) in held) {
-            foreach (var (tick, velocity) in queue) {
-                notes.Add(new(0, pitch, velocity, channel, tick, Math.Max(1, end - tick)));
+        /// <summary>The track, with notes still held at its end ending there.</summary>
+        public SmfTrack Finish(long end) {
+            foreach (var ((channel, pitch), queue) in held) {
+                foreach (var (tick, velocity) in queue) {
+                    notes.Add(new(0, pitch, velocity, channel, tick, Math.Max(1, end - tick)));
+                }
             }
-        }
 
-        return new(name is { Length: > 0 } ? name : null, notes, controls);
+            return new(name is { Length: > 0 } ? name : null, notes, controls);
+        }
     }
 
     static TempoEvent[] TempoTrack(SortedDictionary<long, double> tempo) {

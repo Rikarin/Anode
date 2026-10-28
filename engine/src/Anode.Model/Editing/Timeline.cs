@@ -113,7 +113,9 @@ static class Timeline {
             case TimelineKind.AudioRegion: {
                 var r = state.Regions[item.Id];
                 return new RegionUpserted(
-                    r with { Id = ids.Next(IdPrefix.Region), StartTick = r.StartTick + offset, TrackId = trackId ?? r.TrackId }
+                    r with {
+                        Id = ids.Next(IdPrefix.Region), StartTick = r.StartTick + offset, TrackId = trackId ?? r.TrackId
+                    }
                 );
             }
             case TimelineKind.MidiRegion: {
@@ -140,7 +142,11 @@ static class Timeline {
             }
             case TimelineKind.TakeFolder: {
                 var f = Shifted(state.TakeFolders[item.Id], offset);
-                var renamed = f.Takes.ToDictionary(static t => t.Id, _ => ids.Next(IdPrefix.Take), StringComparer.Ordinal);
+                var renamed = f.Takes.ToDictionary(
+                    static t => t.Id,
+                    _ => ids.Next(IdPrefix.Take),
+                    StringComparer.Ordinal
+                );
                 return new TakeFolderUpserted(
                     f with {
                         Id = ids.Next(IdPrefix.TakeFolder),

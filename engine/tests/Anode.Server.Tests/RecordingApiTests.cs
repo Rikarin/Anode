@@ -21,7 +21,10 @@ public sealed class RecordingApiTests {
         await client.EditAsync(new SetCycleCommand(true, 0, Beat)); // half a second
 
         await RecordAsync(client, events, 1400);
-        var folder = (await events.WaitAsync<ProjectChangedEvent>(static e => e.Delta.Ops.Any(static o => o is TakeFolderUpserted)))
+        var folder = (await events.WaitAsync<ProjectChangedEvent>(static e => e.Delta.Ops.Any(static o =>
+                    o is TakeFolderUpserted
+                )
+            ))
             .Delta.Ops.OfType<TakeFolderUpserted>()
             .Single()
             .Folder;
@@ -33,7 +36,10 @@ public sealed class RecordingApiTests {
 
         // Quick Swipe: the first half from take 1, the rest from take 2; then flatten.
         await client.EditAsync(
-            new SetCompCommand(folder.Id, [new(0, Beat / 2, folder.Takes[0].Id), new(Beat / 2, Beat, folder.Takes[1].Id)])
+            new SetCompCommand(
+                folder.Id,
+                [new(0, Beat / 2, folder.Takes[0].Id), new(Beat / 2, Beat, folder.Takes[1].Id)]
+            )
         );
         await client.EditAsync(new FlattenTakeFolderCommand(folder.Id));
         var project = await client.ProjectAsync();
@@ -50,7 +56,10 @@ public sealed class RecordingApiTests {
         var track = await ArmedTrackAsync(server, client);
         await client.EditAsync(new SetCycleCommand(true, 0, Beat), new SetRecordingCommand(CycleRecordMode.Regions));
         await RecordAsync(client, events, 1400);
-        var regions = (await events.WaitAsync<ProjectChangedEvent>(static e => e.Delta.Ops.Any(static o => o is RegionUpserted)))
+        var regions = (await events.WaitAsync<ProjectChangedEvent>(static e => e.Delta.Ops.Any(static o =>
+                    o is RegionUpserted
+                )
+            ))
             .Delta.Ops.OfType<RegionUpserted>()
             .Select(static r => r.Region)
             .ToArray();
@@ -65,9 +74,18 @@ public sealed class RecordingApiTests {
         using var client = server.CreateClient();
         await using var events = await EventStream.ConnectAsync(server);
         var track = await ArmedTrackAsync(server, client);
-        var file = await client.ImportAsync(TestWav.Write(Directory.CreateTempSubdirectory("anode-punch-").FullName, "Bed.wav", frames: 96_000));
+        var file = await client.ImportAsync(
+            TestWav.Write(Directory.CreateTempSubdirectory("anode-punch-").FullName, "Bed.wav", frames: 96_000)
+        );
         await client.EditAsync(new AddRegionCommand(track, file.Id, 0));
-        await client.EditAsync(new SetRecordingCommand(Replace: true, Autopunch: true, PunchInTick: Beat / 2, PunchOutTick: Beat + Beat / 2));
+        await client.EditAsync(
+            new SetRecordingCommand(
+                Replace: true,
+                Autopunch: true,
+                PunchInTick: Beat / 2,
+                PunchOutTick: Beat + Beat / 2
+            )
+        );
 
         await RecordAsync(client, events, 1100);
         await events.WaitAsync<ProjectChangedEvent>(static e => e.Delta.Ops.OfType<RegionUpserted>().Count() >= 2);
@@ -86,16 +104,29 @@ public sealed class RecordingApiTests {
         await using var events = await EventStream.ConnectAsync(server);
         var track = await ArmedTrackAsync(server, client);
         await client.TransportAsync(TransportCommand.Play, Beat);
-        await events.WaitAsync<TransportEvent>(static e => e.Transport is { State: TransportState.Playing, PositionSamples: > 24_000 + 12_000 });
-        Assert.Equal(HttpStatusCode.Accepted, (await client.PostAsync("/api/v1/transport/capture", null, Token)).StatusCode);
+        await events.WaitAsync<TransportEvent>(static e => e.Transport is {
+                State: TransportState.Playing, PositionSamples: > 24_000 + 12_000
+            }
+        );
+        Assert.Equal(
+            HttpStatusCode.Accepted,
+            (await client.PostAsync("/api/v1/transport/capture", null, Token)).StatusCode
+        );
 
-        var region = (await events.WaitAsync<ProjectChangedEvent>(static e => e.Delta.Ops.Any(static o => o is RegionUpserted)))
+        var region = (await events.WaitAsync<ProjectChangedEvent>(static e => e.Delta.Ops.Any(static o =>
+                    o is RegionUpserted
+                )
+            ))
             .Delta.Ops.OfType<RegionUpserted>()
             .Single()
             .Region;
         Assert.Equal((track, Beat), (region.TrackId, region.StartTick));
         Assert.True(region.Length >= 12_000);
-        var history = await client.GetFromJsonAsync("/api/v1/project/history", ContractsJsonContext.Default.UndoHistory, Token);
+        var history = await client.GetFromJsonAsync(
+            "/api/v1/project/history",
+            ContractsJsonContext.Default.UndoHistory,
+            Token
+        );
         Assert.Equal("Flashback Capture", history!.Undo[0].Label);
         await client.TransportAsync(TransportCommand.Stop);
         await client.PostResultAsync("/api/v1/project/undo");
@@ -106,7 +137,10 @@ public sealed class RecordingApiTests {
     public async Task Flashback_Capture_needs_the_engine_and_a_project() {
         await using var server = new ServerFixture();
         using var client = server.CreateClient();
-        await ApiCalls.AssertProblemAsync(await client.PostAsync("/api/v1/transport/capture", null, Token), HttpStatusCode.NotFound);
+        await ApiCalls.AssertProblemAsync(
+            await client.PostAsync("/api/v1/transport/capture", null, Token),
+            HttpStatusCode.NotFound
+        );
     }
 
     static async Task<string> ArmedTrackAsync(ServerFixture server, HttpClient client) {
@@ -114,7 +148,9 @@ public sealed class RecordingApiTests {
         await client.EditAsync(new AddTrackCommand("Vox"));
         var track = (await client.ProjectAsync()).Tracks[0].Id;
         await client.EditAsync(new SetTrackCommand(track, RecordArmed: true));
-        await ServerFixture.Eventually(async () => (await server.SystemAsync(client)).Engine.State == EngineState.InProcess);
+        await ServerFixture.Eventually(async () =>
+            (await server.SystemAsync(client)).Engine.State == EngineState.InProcess
+        );
         return track;
     }
 

@@ -45,7 +45,11 @@ public static class ProjectHistory {
         }
 
         // The root file last, so a copy cut short is not a readable package.
-        File.Copy(Path.Combine(from, ProjectPackage.ProjectFileName), Path.Combine(to, ProjectPackage.ProjectFileName), true);
+        File.Copy(
+            Path.Combine(from, ProjectPackage.ProjectFileName),
+            Path.Combine(to, ProjectPackage.ProjectFileName),
+            true
+        );
     }
 
     /// <summary>Removes a package's document (not its media).</summary>
@@ -117,7 +121,10 @@ public static class ProjectHistory {
         AlternativesFile? manifest = null;
         try {
             if (File.Exists(path)) {
-                manifest = JsonSerializer.Deserialize(File.ReadAllText(path), PackageJsonContext.Default.AlternativesFile);
+                manifest = JsonSerializer.Deserialize(
+                    File.ReadAllText(path),
+                    PackageJsonContext.Default.AlternativesFile
+                );
             }
         } catch (Exception e) when (e is JsonException or IOException or UnauthorizedAccessException) {
             // A damaged manifest: start again from what is on disk.
@@ -128,7 +135,8 @@ public static class ProjectHistory {
             .DistinctBy(static a => a.Id)
             .ToList();
         var current = manifest?.Current is { } c && ProjectPackage.IsSafeId(c) ? c : FirstAlternative;
-        entries.RemoveAll(a => a.Id != current && !ProjectPackage.Exists(Path.Combine(folder, AlternativesFolder, a.Id)));
+        entries.RemoveAll(a => a.Id != current && !ProjectPackage.Exists(Path.Combine(folder, AlternativesFolder, a.Id))
+        );
         if (!entries.Exists(a => a.Id == current)) {
             entries.Insert(0, new(current, projectName, Modified(folder)));
         }
@@ -195,7 +203,9 @@ public static class ProjectHistory {
     /// <summary>When the document at <paramref name="folder" /> was last written.</summary>
     public static DateTimeOffset Modified(string folder) {
         var root = Path.Combine(folder, ProjectPackage.ProjectFileName);
-        return File.Exists(root) ? new DateTimeOffset(File.GetLastWriteTimeUtc(root), TimeSpan.Zero) : DateTimeOffset.UnixEpoch;
+        return File.Exists(root)
+            ? new DateTimeOffset(File.GetLastWriteTimeUtc(root), TimeSpan.Zero)
+            : DateTimeOffset.UnixEpoch;
     }
 
     public static string AlternativeFolder(string folder, string id) =>
@@ -237,14 +247,14 @@ public static class ProjectHistory {
     static DateTimeOffset SavedAt(string backup) {
         var name = Path.GetFileName(backup);
         return name.Length >= 19
-               && DateTime.TryParseExact(
-                   name[..19],
-                   StampFormat,
-                   CultureInfo.InvariantCulture,
-                   DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal,
-                   out var stamp
-               )
-            ? new(stamp, TimeSpan.Zero)
-            : Modified(backup);
+            && DateTime.TryParseExact(
+                name[..19],
+                StampFormat,
+                CultureInfo.InvariantCulture,
+                DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal,
+                out var stamp
+            )
+                ? new(stamp, TimeSpan.Zero)
+                : Modified(backup);
     }
 }

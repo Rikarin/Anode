@@ -35,7 +35,9 @@ public sealed class TakeEditTests {
         Apply(new SetCompCommand(folder.Id, [new(0, Beat, a), new(Beat, 4 * Beat, b)]));
         Assert.Equal(2, state.TakeFolders[folder.Id].Comp.Count);
         Assert.Throws<EditException>(() => Apply(new SetCompCommand(folder.Id, [new(0, 5 * Beat, a)])));
-        Assert.Throws<EditException>(() => Apply(new SetCompCommand(folder.Id, [new(Beat, 2 * Beat, a), new(0, Beat, b)])));
+        Assert.Throws<EditException>(() =>
+            Apply(new SetCompCommand(folder.Id, [new(Beat, 2 * Beat, a), new(0, Beat, b)]))
+        );
         Assert.Throws<EditException>(() => Apply(new SetCompCommand(folder.Id, [new(0, Beat, "tak_none")])));
         Apply(new SetCompCommand(folder.Id, []));
         Assert.Empty(state.TakeFolders[folder.Id].Comp);
@@ -59,7 +61,10 @@ public sealed class TakeEditTests {
         var folder = PackThree();
         Apply(new SetTakeFolderCommand(folder.Id, "Vox", 480, true, folder.Takes[0].Id, "Best"));
         var changed = state.TakeFolders[folder.Id];
-        Assert.Equal(("Vox", 480L, true, "Best"), (changed.Name, changed.Crossfade, changed.Muted, changed.Takes[0].Name));
+        Assert.Equal(
+            ("Vox", 480L, true, "Best"),
+            (changed.Name, changed.Crossfade, changed.Muted, changed.Takes[0].Name)
+        );
         Assert.Throws<EditException>(() => Apply(new SetTakeFolderCommand(folder.Id, TakeName: "No take")));
         Assert.Throws<EditException>(() => Apply(new SetTakeFolderCommand(folder.Id, Crossfade: -1)));
     }
@@ -75,8 +80,14 @@ public sealed class TakeEditTests {
         var pieces = Comps.Pieces(state, state.TakeFolders[folder.Id]);
         Assert.Equal(2, pieces.Count);
         // The first plays on 240 frames past the boundary, the second starts 240 before it; both fade over 480.
-        Assert.Equal((0L, 2 * BeatFrames + 240, 0L, 480L), (pieces[0].Start, pieces[0].Length, pieces[0].FadeIn, pieces[0].FadeOut));
-        Assert.Equal((2 * BeatFrames - 240, 2 * BeatFrames - 240, 480L, 0L), (pieces[1].Start, pieces[1].FileOffset, pieces[1].FadeIn, pieces[1].FadeOut));
+        Assert.Equal(
+            (0L, 2 * BeatFrames + 240, 0L, 480L),
+            (pieces[0].Start, pieces[0].Length, pieces[0].FadeIn, pieces[0].FadeOut)
+        );
+        Assert.Equal(
+            (2 * BeatFrames - 240, 2 * BeatFrames - 240, 480L, 0L),
+            (pieces[1].Start, pieces[1].FileOffset, pieces[1].FadeIn, pieces[1].FadeOut)
+        );
         Assert.Equal(2 * BeatFrames + 240, pieces[1].Length);
     }
 
@@ -102,7 +113,10 @@ public sealed class TakeEditTests {
                 var (comp, region) = p;
                 var shift = region.Start - comp.Start;
                 Assert.InRange(shift, 0, 25);
-                Assert.Equal((comp.FileId, comp.FileOffset + shift, comp.Length - shift), (region.FileId, region.FileOffset, region.Length));
+                Assert.Equal(
+                    (comp.FileId, comp.FileOffset + shift, comp.Length - shift),
+                    (region.FileId, region.FileOffset, region.Length)
+                );
                 Assert.Equal(comp.FadeOut, region.FadeOut);
                 Assert.Equal(Math.Max(0, comp.FadeIn - shift), region.FadeIn);
             }
@@ -173,7 +187,10 @@ public sealed class TakeEditTests {
         Apply(new AddRegionCommand(state.Tracks[0].Id, "aud_1", 0));
         var region = state.Regions.Keys.Single();
         Apply(new SetRegionCommand(region, FadeIn: 100, FadeInCurve: -0.5, FadeOutCurve: 1, Muted: true));
-        Assert.Equal((-0.5, 1.0, true), (state.Regions[region].FadeInCurve, state.Regions[region].FadeOutCurve, state.Regions[region].Muted));
+        Assert.Equal(
+            (-0.5, 1.0, true),
+            (state.Regions[region].FadeInCurve, state.Regions[region].FadeOutCurve, state.Regions[region].Muted)
+        );
         Assert.Throws<EditException>(() => Apply(new SetRegionCommand(region, FadeInCurve: 1.5)));
     }
 
@@ -181,7 +198,8 @@ public sealed class TakeEditTests {
     public void A_cycle_recording_becomes_a_take_folder_with_the_comp_on_the_last_pass() {
         Apply(new AddTrackCommand("Vox"));
         var track = state.Tracks[0];
-        TakePass[] passes = [new(0, 0, 4 * BeatFrames), new(0, 4 * BeatFrames, 4 * BeatFrames), new(0, 8 * BeatFrames, 2 * BeatFrames)];
+        TakePass[] passes =
+            [new(0, 0, 4 * BeatFrames), new(0, 4 * BeatFrames, 4 * BeatFrames), new(0, 8 * BeatFrames, 2 * BeatFrames)];
         Record(track, passes);
         var folder = Assert.Single(state.TakeFolders.Values);
         Assert.Equal(["Take 1", "Take 2", "Take 3"], folder.Takes.Select(static t => t.Name));
@@ -207,13 +225,19 @@ public sealed class TakeEditTests {
     public void Replace_mode_clears_what_the_recording_covers() {
         Apply(new AddTrackCommand("Vox"));
         var track = state.Tracks[0];
-        Apply(new AddRegionCommand(track.Id, "aud_2", 0, 0, 8 * BeatFrames), new AddRegionCommand(track.Id, "aud_3", 2 * Beat, 0, BeatFrames));
+        Apply(
+            new AddRegionCommand(track.Id, "aud_2", 0, 0, 8 * BeatFrames),
+            new AddRegionCommand(track.Id, "aud_3", 2 * Beat, 0, BeatFrames)
+        );
         Apply(new SetRecordingCommand(Replace: true));
         Record(track, [new(BeatFrames, 0, 4 * BeatFrames)]);
         var regions = state.RegionsOf(track.Id).ToArray();
         // The long region is cut around the take (left: beat 0–1, right: beat 5–8); the short one inside it is gone.
         Assert.Equal(
-            [("aud_2", 0L, 0L, BeatFrames), ("aud_1", Beat, 0L, 4 * BeatFrames), ("aud_2", 5 * Beat, 5 * BeatFrames, 3 * BeatFrames)],
+            [
+                ("aud_2", 0L, 0L, BeatFrames), ("aud_1", Beat, 0L, 4 * BeatFrames),
+                ("aud_2", 5 * Beat, 5 * BeatFrames, 3 * BeatFrames)
+            ],
             regions.Select(static r => (r.FileId, r.StartTick, r.FileOffset, r.Length))
         );
     }
@@ -222,7 +246,13 @@ public sealed class TakeEditTests {
     public void Autopunch_keeps_only_the_punch_range() {
         Apply(new SetRecordingCommand(Autopunch: true, PunchInTick: Beat, PunchOutTick: 3 * Beat));
         var punched = Recordings.Punched(state, [new(0, 0, 4 * BeatFrames), new(0, 4 * BeatFrames, 4 * BeatFrames)]);
-        Assert.Equal([new TakePass(BeatFrames, BeatFrames, 2 * BeatFrames), new TakePass(BeatFrames, 5 * BeatFrames, 2 * BeatFrames)], punched);
+        Assert.Equal(
+            [
+                new TakePass(BeatFrames, BeatFrames, 2 * BeatFrames),
+                new TakePass(BeatFrames, 5 * BeatFrames, 2 * BeatFrames)
+            ],
+            punched
+        );
     }
 
     [Fact]

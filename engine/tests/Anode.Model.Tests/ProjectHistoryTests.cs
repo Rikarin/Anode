@@ -61,6 +61,12 @@ public sealed class ProjectHistoryTests : IDisposable {
         Assert.Throws<PackageException>(() => ProjectHistory.DeleteAlternative(folder, "Song", "alt_two"));
         ProjectHistory.DeleteAlternative(folder, "Song", ProjectHistory.FirstAlternative);
         Assert.Equal(["Two"], ProjectHistory.Alternatives(folder, "Song").Alternatives.Select(static a => a.Name));
-        Assert.Throws<PackageException>(() => ProjectHistory.OpenAlternative(folder, "Song", ProjectHistory.FirstAlternative, start));
+        Assert.Throws<PackageException>(() => ProjectHistory.OpenAlternative(
+                folder,
+                "Song",
+                ProjectHistory.FirstAlternative,
+                start
+            )
+        );
     }
 }

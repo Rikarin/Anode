@@ -316,7 +316,8 @@ public sealed class ProjectSession(
         string folder;
         lock (gate) {
             var o = Required();
-            var backup = ProjectHistory.BackupFolder(o.Folder, id) ?? throw ProjectException.NotFound($"No backup '{id}'.");
+            var backup = ProjectHistory.BackupFolder(o.Folder, id)
+                ?? throw ProjectException.NotFound($"No backup '{id}'.");
             try {
                 var state = ProjectPackage.Load(backup);
                 var states = ProjectPackage.LoadStates(backup, state);
@@ -537,14 +538,7 @@ public sealed class ProjectSession(
         bool flashback = false
     ) {
         midiTakes ??= [];
-        var probed = new List<(RecordedTake Take, WavInfo Info)>();
-        foreach (var take in takes) {
-            try {
-                probed.Add((take, WavReader.Probe(take.Path)));
-            } catch (Exception e) when (e is IOException or UnauthorizedAccessException or WavFormatException) {
-                ProjectLog.TakeSkipped(logger, take.Path, e.Message);
-            }
-        }
+        var probed = Probe(takes);
 
         CommandResult? result = null;
         var files = new List<AudioFile>();
@@ -587,8 +581,28 @@ public sealed class ProjectSession(
         return result;
     }
 
+    /// <summary>The takes whose files can be read, with their formats (the others logged).</summary>
+    List<(RecordedTake Take, WavInfo Info)> Probe(IReadOnlyList<RecordedTake> takes) {
+        var probed = new List<(RecordedTake Take, WavInfo Info)>();
+        foreach (var take in takes) {
+            try {
+                probed.Add((take, WavReader.Probe(take.Path)));
+            } catch (Exception e) when (e is IOException or UnauthorizedAccessException or WavFormatException) {
+                ProjectLog.TakeSkipped(logger, take.Path, e.Message);
+            }
+        }
+
+        return probed;
+    }
+
     /// <summary>The file a recorded take becomes and what places it, or null (logged) when it cannot be used.</summary>
-    (AudioFile File, List<DeltaOp> Ops)? Take(Open o, ProjectState state, RecordedTake take, WavInfo info, bool flashback) {
+    (AudioFile File, List<DeltaOp> Ops)? Take(
+        Open o,
+        ProjectState state,
+        RecordedTake take,
+        WavInfo info,
+        bool flashback
+    ) {
         var trackId = o.Ids.TrackOf(take.TrackId);
         var track = trackId is null ? null : state.FindTrack(trackId);
         if (track is null) {
@@ -608,7 +622,10 @@ public sealed class ProjectSession(
 
         var file = Describe(o, take.Path, info);
         IReadOnlyList<TakePass> passes = take.Passes is { Count: > 0 } reported
-            ? [..reported.Where(static p => p is not null).Select(static p => new TakePass(p.StartSample, p.FileOffset, p.Frames))]
+            ? [
+                ..reported.Where(static p => p is not null)
+                    .Select(static p => new TakePass(p.StartSample, p.FileOffset, p.Frames))
+            ]
             : [new(Math.Max(0, take.StartSample), 0, info.Frames)];
         if (!flashback) {
             passes = Recordings.Punched(state, passes);
@@ -639,7 +656,8 @@ public sealed class ProjectSession(
             var (from, to) = (recording.PunchInTick, recording.PunchOutTick);
             notes = [..notes.Where(n => n.StartTick >= from && n.StartTick < to)];
             controls = [..controls.Where(e => e.Tick >= from && e.Tick < to)];
-            (passStart, passEnd) = (Math.Max(passStart, from), Math.Max(Math.Max(passStart, from) + 1, Math.Min(passEnd, to)));
+            (passStart, passEnd) = (Math.Max(passStart, from),
+                Math.Max(Math.Max(passStart, from) + 1, Math.Min(passEnd, to)));
         }
 
         if (notes.Count + controls.Count == 0) {

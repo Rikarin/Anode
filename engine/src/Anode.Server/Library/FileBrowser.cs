@@ -14,7 +14,16 @@ public static class FileBrowser {
     public const int MaxEntries = 10_000;
 
     static readonly HashSet<string> AudioExtensions = new(StringComparer.OrdinalIgnoreCase) {
-        ".wav", ".wave", ".aif", ".aiff", ".aifc", ".caf", ".flac", ".mp3", ".m4a", ".ogg"
+        ".wav",
+        ".wave",
+        ".aif",
+        ".aiff",
+        ".aifc",
+        ".caf",
+        ".flac",
+        ".mp3",
+        ".m4a",
+        ".ogg"
     };
 
     static readonly HashSet<string> MidiExtensions = new(StringComparer.OrdinalIgnoreCase) { ".mid", ".midi", ".smf" };
@@ -24,22 +33,28 @@ public static class FileBrowser {
     /// <summary>The user's home folder: where the browser starts.</summary>
     public static string Home => Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
 
-    public static DirectoryListing List(string? path) {
+    /// <summary>The folder to list: <paramref name="path" /> (absolute and existing), or the home folder.</summary>
+    static string FolderOf(string? path) {
+        if (path is not { Length: > 0 }) {
+            return Home;
+        }
+
         string folder;
         try {
-            folder = path is { Length: > 0 } given ? Path.GetFullPath(given) : Home;
+            folder = Path.GetFullPath(path);
         } catch (Exception e) when (e is ArgumentException or NotSupportedException or PathTooLongException) {
             throw ProjectException.Unprocessable($"'{path}' is not a folder path: {e.Message}");
         }
 
-        if (path is { Length: > 0 } && !Path.IsPathFullyQualified(path)) {
-            throw ProjectException.Unprocessable($"'{path}' is not an absolute path.");
-        }
+        return !Path.IsPathFullyQualified(path)
+            ? throw ProjectException.Unprocessable($"'{path}' is not an absolute path.")
+            : Directory.Exists(folder)
+                ? folder
+                : throw ProjectException.NotFound($"No folder '{folder}'.");
+    }
 
-        if (!Directory.Exists(folder)) {
-            throw ProjectException.NotFound($"No folder '{folder}'.");
-        }
-
+    public static DirectoryListing List(string? path) {
+        var folder = FolderOf(path);
         var directory = new DirectoryInfo(folder);
         var entries = new List<FileEntry>();
         try {
@@ -52,13 +67,17 @@ public static class FileBrowser {
                     entries.Add(entry);
                 }
             }
-        } catch (Exception e) when (e is IOException or UnauthorizedAccessException or System.Security.SecurityException) {
+        } catch (Exception e) when (e is IOException
+                                        or UnauthorizedAccessException
+                                        or System.Security.SecurityException) {
             throw ProjectException.Unprocessable($"Could not read '{folder}': {e.Message}");
         }
 
         var parent = directory.Parent?.FullName;
         return new(
-            Path.TrimEndingDirectorySeparator(directory.FullName) is { Length: > 0 } trimmed ? trimmed : directory.FullName,
+            Path.TrimEndingDirectorySeparator(directory.FullName) is { Length: > 0 } trimmed
+                ? trimmed
+                : directory.FullName,
             parent,
             [
                 ..entries.OrderBy(static e => e.Kind == FileKind.Folder ? 0 : 1)
@@ -98,8 +117,10 @@ public static class FileBrowser {
             var modified = new DateTimeOffset(info.LastWriteTimeUtc, TimeSpan.Zero);
             int? rate = null, channels = null;
             long? frames = null;
-            if (kind == FileKind.Audio && Path.GetExtension(info.Name) is var ext
-                && (ext.Equals(".wav", StringComparison.OrdinalIgnoreCase) || ext.Equals(".wave", StringComparison.OrdinalIgnoreCase))) {
+            if (kind == FileKind.Audio
+                && Path.GetExtension(info.Name) is var ext
+                && (ext.Equals(".wav", StringComparison.OrdinalIgnoreCase)
+                    || ext.Equals(".wave", StringComparison.OrdinalIgnoreCase))) {
                 try {
                     var wav = WavReader.Probe(info.FullName);
                     (rate, channels, frames) = (wav.SampleRate, wav.Channels, wav.Frames);

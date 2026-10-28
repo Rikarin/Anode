@@ -309,6 +309,13 @@ public sealed class HostSync(HostLink link, SegmentPool pool, ILogger logger) {
             }
         }
 
+        foreach (var message in SettingsMessages(before, state)) {
+            yield return message;
+        }
+    }
+
+    /// <summary>Cycle, punch and metronome that changed (all of them without <paramref name="before" />).</summary>
+    static IEnumerable<IpcMessage> SettingsMessages(ProjectState? before, ProjectState state) {
         var settings = state.Settings;
         var tempoChanged = before is null || TempoChanged(before, state);
         var map = state.TempoMap;

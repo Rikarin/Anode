@@ -116,8 +116,7 @@ static class RandomProjects {
         return (state, ids, random);
     }
 
-    static string? FirstAudioTrack(ProjectState state) =>
-        state.Tracks.FirstOrDefault(static t => t.Kind == TrackKind.Audio)?.Id;
+    static string? FirstAudioTrack(ProjectState state) => state.Tracks.Find(static t => t.Kind == TrackKind.Audio)?.Id;
 
     /// <summary>A random command of <paramref name="type" /> for <paramref name="s" />, or null when none can be made.</summary>
     public static EditCommand? Command(Type type, ProjectState s, Random r) {
@@ -299,7 +298,9 @@ static class RandomProjects {
                     Maybe(r.Next(2) == 0),
                     r.Next(2) == 0 ? null : Pick(r, f.Takes).Id,
                     null
-                ) is var set && set.TakeId is not null && r.Next(2) == 0
+                ) is var set
+                && set.TakeId is not null
+                && r.Next(2) == 0
                     ? set with { TakeName = $"Take {r.Next(100)}" }
                     : set
                 : null,
@@ -555,12 +556,16 @@ static class RandomProjects {
 
     /// <summary>Two or more regions of one track: MIDI ones join; audio ones mostly do not (they rarely meet).</summary>
     static JoinRegionsCommand? Join(AudioRegion[] regions, MidiRegion[] midiRegions, Random r) {
-        if (r.Next(4) > 0 && midiRegions.GroupBy(static x => x.TrackId).Where(static g => g.Count() > 1).ToArray() is
-                { Length: > 0 } midi) {
+        if (r.Next(4) > 0
+            && midiRegions.GroupBy(static x => x.TrackId).Where(static g => g.Count() > 1).ToArray() is {
+                Length: > 0
+            } midi) {
             return new([..Pick(r, midi).Select(static x => x.Id)]);
         }
 
-        return regions.GroupBy(static x => x.TrackId).Where(static g => g.Count() > 1).ToArray() is { Length: > 0 } audio
+        return regions.GroupBy(static x => x.TrackId).Where(static g => g.Count() > 1).ToArray() is {
+            Length: > 0
+        } audio
             ? new([..Pick(r, audio).Take(2).Select(static x => x.Id)])
             : null;
     }

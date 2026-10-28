@@ -43,7 +43,8 @@ public sealed class UserSettings(IOptions<ServerOptions> options) {
             }
 
             if (keys is not { Count: <= MaxBindingsPerCommand }
-                || keys.Any(static k => k is not { Length: > 0 and <= MaxBindingLength } || string.IsNullOrWhiteSpace(k))) {
+                || keys.Any(static k => k is not { Length: > 0 and <= MaxBindingLength } || string.IsNullOrWhiteSpace(k)
+                )) {
                 throw ProjectException.Unprocessable(
                     $"Command '{command}' has at most {MaxBindingsPerCommand} bindings of 1…{MaxBindingLength} characters."
                 );
@@ -71,7 +72,9 @@ public sealed class UserSettings(IOptions<ServerOptions> options) {
         var clean = new List<string>();
         foreach (var path in paths) {
             if (path is not { Length: > 0 and <= MaxPathLength } || !System.IO.Path.IsPathFullyQualified(path)) {
-                throw ProjectException.Unprocessable($"A bookmark is an absolute path of at most {MaxPathLength} characters.");
+                throw ProjectException.Unprocessable(
+                    $"A bookmark is an absolute path of at most {MaxPathLength} characters."
+                );
             }
 
             var full = System.IO.Path.TrimEndingDirectorySeparator(System.IO.Path.GetFullPath(path));

@@ -39,7 +39,9 @@ public static partial class Edits {
             var source = tracks[i];
             var trackName = source.Name is { Length: > 0 and <= MaxNameLength } own
                 ? own
-                : tracks.Length == 1 ? Name(name, "track name") : $"{Name(name, "track name")} {i + 1}";
+                : tracks.Length == 1
+                    ? Name(name, "track name")
+                    : $"{Name(name, "track name")} {i + 1}";
             state = Step(
                 state,
                 AddTrack(state, new(trackName, Kind: TrackKind.Instrument), ids, plugins),

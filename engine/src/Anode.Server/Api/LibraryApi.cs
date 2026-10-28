@@ -100,7 +100,10 @@ static class LibraryApi {
             );
 
         var settings = api.MapGroup("/settings").WithTags("Settings").AddEndpointFilter<ProblemFilter>();
-        settings.MapGet("/key-commands", static Ok<KeyCommandSet>(UserSettings user) => TypedResults.Ok(user.KeyCommands()))
+        settings.MapGet(
+                "/key-commands",
+                static Ok<KeyCommandSet>(UserSettings user) => TypedResults.Ok(user.KeyCommands())
+            )
             .WithName("GetKeyCommands")
             .WithSummary("The user's key bindings; empty bindings mean the editor's defaults.");
         settings.MapPut(
@@ -128,7 +131,10 @@ static class LibraryApi {
             .WithSummary("A folder on the server's disk (the user's home when path is left out).");
         files.MapPost(
                 "/preview",
-                static Results<NoContent, NotFound, ProblemHttpResult>(PreviewRequest request, EngineConnection engine) => {
+                static Results<NoContent, NotFound, ProblemHttpResult>(
+                    PreviewRequest request,
+                    EngineConnection engine
+                ) => {
                     engine.Preview(request.Path);
                     return TypedResults.NoContent();
                 }

@@ -4,7 +4,8 @@ namespace Anode.Model.Compile;
 
 /// <summary>
 ///     The stable <c>int</c> ids the engine knows tracks and files by (docs/02-phase-1.md, "Ids"): assigned in order of
-///     first sight from 0 and never reused while the project is open (a folder stack has none: the engine has no track for it), so the host's state and meters stay attached to
+///     first sight from 0 and never reused while the project is open (a folder stack has none: the engine has no track for
+///     it), so the host's state and meters stay attached to
 ///     the right track across edits, undo and reconnects. Immutable: <see cref="With" /> returns an extended map.
 /// </summary>
 public sealed class EngineIds {

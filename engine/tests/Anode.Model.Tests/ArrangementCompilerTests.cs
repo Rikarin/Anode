@@ -50,7 +50,15 @@ public sealed class ArrangementCompilerTests {
     public void Fade_curves_go_into_the_entries() {
         Apply(new AddTrackCommand());
         Apply(new AddRegionCommand(state.Tracks[0].Id, "aud_1", 0, 0, 10_000));
-        Apply(new SetRegionCommand(state.Regions.Keys.Single(), FadeIn: 100, FadeOut: 200, FadeInCurve: 0.5, FadeOutCurve: -1));
+        Apply(
+            new SetRegionCommand(
+                state.Regions.Keys.Single(),
+                FadeIn: 100,
+                FadeOut: 200,
+                FadeInCurve: 0.5,
+                FadeOutCurve: -1
+            )
+        );
         var entry = Assert.Single(Compile().Tracks[0].Playlist);
         Assert.Equal((100, 200, 0.5f, -1f), (entry.FadeIn, entry.FadeOut, entry.FadeInCurve, entry.FadeOutCurve));
     }
@@ -60,7 +68,10 @@ public sealed class ArrangementCompilerTests {
         Apply(new AddTrackCommand());
         var track = state.Tracks[0].Id;
         // A: 0…48 000, B from 47 000 (sample) – an overlap of 1 000 frames.
-        Apply(new AddRegionCommand(track, "aud_1", 0, 0, 48_000), new AddRegionCommand(track, "aud_2", 1880, 0, 48_000));
+        Apply(
+            new AddRegionCommand(track, "aud_1", 0, 0, 48_000),
+            new AddRegionCommand(track, "aud_2", 1880, 0, 48_000)
+        );
         var (a, b) = (state.RegionsOf(track).First().Id, state.RegionsOf(track).Last().Id);
         Assert.Equal(47_000, state.TempoMap.SampleAt(1880, 48_000));
 
@@ -87,7 +98,10 @@ public sealed class ArrangementCompilerTests {
         var midiRegion = state.MidiRegions.Keys.Single();
         Apply(new AddNotesCommand(midiRegion, [new(60, 100, 1, 0, 480)]));
         Assert.NotEmpty(Compile().Tracks[1].Events);
-        Apply(new SetRegionCommand(state.Regions.Keys.Single(), Muted: true), new SetMidiRegionCommand(midiRegion, Muted: true));
+        Apply(
+            new SetRegionCommand(state.Regions.Keys.Single(), Muted: true),
+            new SetMidiRegionCommand(midiRegion, Muted: true)
+        );
         var model = Compile();
         Assert.Empty(model.Tracks[0].Playlist);
         Assert.Empty(model.Tracks[1].Events);
@@ -109,14 +123,20 @@ public sealed class ArrangementCompilerTests {
         Apply(
             new SetCompCommand(
                 folder.Id,
-                [new(0, 960, folder.Takes[0].Id), new(960, 1920, folder.Takes[1].Id), new(1920, Bar, folder.Takes[0].Id)]
+                [
+                    new(0, 960, folder.Takes[0].Id), new(960, 1920, folder.Takes[1].Id),
+                    new(1920, Bar, folder.Takes[0].Id)
+                ]
             )
         );
         var engine = EngineIds.Empty.With(state);
         var playlist = new ModelCompiler().Compile(state, engine).Tracks[0].Playlist;
         Assert.Equal(3, playlist.Length);
         Assert.Equal(
-            [engine.File(folder.Takes[0].FileId), engine.File(folder.Takes[1].FileId), engine.File(folder.Takes[0].FileId)],
+            [
+                engine.File(folder.Takes[0].FileId), engine.File(folder.Takes[1].FileId),
+                engine.File(folder.Takes[0].FileId)
+            ],
             playlist.Select(static e => e.FileId)
         );
         var crossfade = (int)folder.Crossfade;
@@ -181,7 +201,10 @@ public sealed class ArrangementCompilerTests {
             var overlap = previous.Start + previous.Length - current.Start;
             var threeAtOnce = e >= 2 && playlist[e - 2].Start + playlist[e - 2].Length > current.Start;
             Assert.True(current.Start >= previous.Start, "sorted");
-            Assert.False(overlap > 0 && (overlap > previous.FadeOut || overlap > current.FadeIn || threeAtOnce), "crossfade");
+            Assert.False(
+                overlap > 0 && (overlap > previous.FadeOut || overlap > current.FadeIn || threeAtOnce),
+                "crossfade"
+            );
         }
 
         Assert.All(playlist, static e => Assert.True(e.FadeIn + e.FadeOut <= e.Length && e.Length > 0));

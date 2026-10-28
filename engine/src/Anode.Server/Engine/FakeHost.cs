@@ -575,7 +575,8 @@ public sealed class FakeHost : IAsyncDisposable {
                     .Select(t => (t, passes))
             ];
             var end = playStart + Math.Min(frames, passes[0].Frames);
-            foreach (var track in tracks.Values.Where(t => IsMidi(t) && (t.RecordArmed || t.Id == thru)).OrderBy(static t => t.Id)) {
+            foreach (var track in tracks.Values.Where(t => IsMidi(t) && (t.RecordArmed || t.Id == thru))
+                         .OrderBy(static t => t.Id)) {
                 if (heard.GetValueOrDefault(track.Id) is { Count: > 0 } played) {
                     midiTakes.Add(new(track.Id, playStart, end, [..played]));
                 } else if (track.RecordArmed) {
@@ -622,7 +623,10 @@ public sealed class FakeHost : IAsyncDisposable {
 
         var passes = Passes(recordStart, elapsed, punch.Enabled);
         // MIDI takes keep the first pass (MIDI cycle recording makes no take folders).
-        var midiFrames = Math.Min(elapsed, cycle.Enabled && recordStart < cycle.EndSample ? cycle.EndSample - recordStart : elapsed);
+        var midiFrames = Math.Min(
+            elapsed,
+            cycle.Enabled && recordStart < cycle.EndSample ? cycle.EndSample - recordStart : elapsed
+        );
         foreach (var track in tracks.Values.Where(static t => t.RecordArmed && IsMidi(t)).OrderBy(static t => t.Id)) {
             var events = played.GetValueOrDefault(track.Id) is { Count: > 0 } heardLive
                 ? heardLive

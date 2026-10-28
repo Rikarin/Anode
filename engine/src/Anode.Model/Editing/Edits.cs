@@ -1,5 +1,4 @@
 using Anode.Contracts;
-using Anode.Model.Time;
 
 namespace Anode.Model.Editing;
 
@@ -454,8 +453,8 @@ public static partial class Edits {
         return [
             ..c.RegionIds.Distinct(StringComparer.Ordinal)
                 .Select(id => Timeline.Region(state, id) is { } item
-                    ? Timeline.Remove(item)
-                    : throw new EditException($"No region '{id}'.")
+                        ? Timeline.Remove(item)
+                        : throw new EditException($"No region '{id}'.")
                 )
         ];
     }

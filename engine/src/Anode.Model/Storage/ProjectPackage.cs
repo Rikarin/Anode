@@ -169,15 +169,7 @@ public static class ProjectPackage {
             }
         }
 
-        // Stacks do not nest, and a member's stack is one of the project's.
-        var stacks = tracks.Where(static t => t.Kind == TrackKind.Stack).Select(static t => t.Id).ToHashSet();
-        for (var i = 0; i < tracks.Count; i++) {
-            var t = tracks[i];
-            if (t.ParentId is not null && (t.Kind == TrackKind.Stack || !stacks.Contains(t.ParentId))) {
-                tracks[i] = t with { ParentId = null };
-            }
-        }
-
+        Unnest(tracks);
         foreach (var file in trackFiles) {
             AddRegions(file, file.Track, files, regions, midiRegions, folders);
         }
@@ -208,11 +200,22 @@ public static class ProjectPackage {
             Notes = root.Notes ?? string.Empty,
             Screensets = ImmutableSortedDictionary.CreateRange(
                 (root.Screensets ?? [])
-                    .Where(static s => s is { Number: >= 1 and <= 9, Name: not null, Layout: not null })
-                    .Select(static s => KeyValuePair.Create(s.Number, s))
-                    .DistinctBy(static p => p.Key)
+                .Where(static s => s is { Number: >= 1 and <= 9, Name: not null, Layout: not null })
+                .Select(static s => KeyValuePair.Create(s.Number, s))
+                .DistinctBy(static p => p.Key)
             )
         };
+    }
+
+    /// <summary>Stacks do not nest, and a member's stack is one of the project's: other parents are dropped.</summary>
+    static void Unnest(ImmutableList<Track>.Builder tracks) {
+        var stacks = tracks.Where(static t => t.Kind == TrackKind.Stack).Select(static t => t.Id).ToHashSet();
+        for (var i = 0; i < tracks.Count; i++) {
+            var t = tracks[i];
+            if (t.ParentId is not null && (t.Kind == TrackKind.Stack || !stacks.Contains(t.ParentId))) {
+                tracks[i] = t with { ParentId = null };
+            }
+        }
     }
 
     /// <summary>The items that pass <paramref name="valid" />, keyed by id (the first of each id).</summary>
@@ -232,7 +235,8 @@ public static class ProjectPackage {
     /// </summary>
     static ProjectSettings Normalise(ProjectSettings settings) {
         var signature = settings.Signature ?? new TimeSignature(4, 4);
-        TempoEvent[] tempo = settings.TempoEvents is { Count: > 0 } t ? [..t] : [new(0, settings.Tempo, TempoCurve.Step)];
+        TempoEvent[] tempo =
+            settings.TempoEvents is { Count: > 0 } t ? [..t] : [new(0, settings.Tempo, TempoCurve.Step)];
         SignatureEvent[] signatures = settings.Signatures is { Count: > 0 } s
             ? [..s]
             : [new(0, signature.Numerator, signature.Denominator)];
@@ -478,55 +482,58 @@ public static class PackageMigrations {
     /// </summary>
     static JsonObject ToSchema3(string kind, JsonObject json) {
         if (kind == "project") {
-            if (json["settings"] is JsonObject settings) {
-                var tempo = settings["tempo"]?.DeepClone() ?? JsonValue.Create(ProjectDefaults.Tempo);
-                var signature = settings["signature"] as JsonObject;
-                var numerator = signature?["numerator"]?.GetValue<int>() ?? 4;
-                var denominator = signature?["denominator"]?.GetValue<int>() ?? 4;
-                settings["tempoEvents"] ??= new JsonArray(
-                    new JsonObject { ["tick"] = 0, ["bpm"] = tempo, ["curve"] = "step" }
-                );
-                settings["signatures"] ??= new JsonArray(
-                    new JsonObject { ["tick"] = 0, ["numerator"] = numerator, ["denominator"] = denominator }
-                );
-                settings["keys"] ??= new JsonArray(new JsonObject { ["tick"] = 0, ["tonic"] = 0, ["mode"] = "major" });
-                settings["recording"] ??= new JsonObject {
-                    ["cycleMode"] = "takeFolder",
-                    ["replace"] = false,
-                    ["autopunch"] = false,
-                    ["punchInTick"] = 0,
-                    ["punchOutTick"] = 4L * TempoMap.Ppq * 4 / denominator * numerator
-                };
-            }
-
-            json["markers"] ??= new JsonArray();
-            json["arrangement"] ??= new JsonArray();
-            json["notes"] ??= string.Empty;
-            json["screensets"] ??= new JsonArray();
+            ProjectToSchema3(json);
         } else if (kind == "track") {
-            if (json["track"] is JsonObject track) {
-                track["collapsed"] ??= false;
-                track["notes"] ??= string.Empty;
-            }
-
-            foreach (var region in json["regions"] as JsonArray ?? []) {
-                if (region is JsonObject r) {
-                    r["fadeInCurve"] ??= 0;
-                    r["fadeOutCurve"] ??= 0;
-                    r["muted"] ??= false;
-                }
-            }
-
-            foreach (var region in json["midiRegions"] as JsonArray ?? []) {
-                if (region is JsonObject r) {
-                    r["muted"] ??= false;
-                }
-            }
-
-            json["takeFolders"] ??= new JsonArray();
+            TrackToSchema3(json);
         }
 
         return json;
+    }
+
+    static void ProjectToSchema3(JsonObject json) {
+        if (json["settings"] is JsonObject settings) {
+            var tempo = settings["tempo"]?.DeepClone() ?? JsonValue.Create(ProjectDefaults.Tempo);
+            var signature = settings["signature"] as JsonObject;
+            var numerator = signature?["numerator"]?.GetValue<int>() ?? 4;
+            var denominator = signature?["denominator"]?.GetValue<int>() ?? 4;
+            settings["tempoEvents"] ??=
+                new JsonArray(new JsonObject { ["tick"] = 0, ["bpm"] = tempo, ["curve"] = "step" });
+            settings["signatures"] ??= new JsonArray(
+                new JsonObject { ["tick"] = 0, ["numerator"] = numerator, ["denominator"] = denominator }
+            );
+            settings["keys"] ??= new JsonArray(new JsonObject { ["tick"] = 0, ["tonic"] = 0, ["mode"] = "major" });
+            settings["recording"] ??= new JsonObject {
+                ["cycleMode"] = "takeFolder",
+                ["replace"] = false,
+                ["autopunch"] = false,
+                ["punchInTick"] = 0,
+                ["punchOutTick"] = 4L * TempoMap.Ppq * 4 / denominator * numerator
+            };
+        }
+
+        json["markers"] ??= new JsonArray();
+        json["arrangement"] ??= new JsonArray();
+        json["notes"] ??= string.Empty;
+        json["screensets"] ??= new JsonArray();
+    }
+
+    static void TrackToSchema3(JsonObject json) {
+        if (json["track"] is JsonObject track) {
+            track["collapsed"] ??= false;
+            track["notes"] ??= string.Empty;
+        }
+
+        foreach (var region in (json["regions"] as JsonArray ?? []).OfType<JsonObject>()) {
+            region["fadeInCurve"] ??= 0;
+            region["fadeOutCurve"] ??= 0;
+            region["muted"] ??= false;
+        }
+
+        foreach (var region in (json["midiRegions"] as JsonArray ?? []).OfType<JsonObject>()) {
+            region["muted"] ??= false;
+        }
+
+        json["takeFolders"] ??= new JsonArray();
     }
 }
 

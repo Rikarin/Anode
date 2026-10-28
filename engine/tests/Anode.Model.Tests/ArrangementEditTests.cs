@@ -1,7 +1,6 @@
 using Anode.Contracts;
 using Anode.Model.Compile;
 using Anode.Model.Editing;
-using Anode.Model.Time;
 
 namespace Anode.Model.Tests;
 
@@ -23,10 +22,10 @@ public sealed class ArrangementEditTests {
             state.Settings.TempoEvents
         );
         Assert.Equal(100, state.TempoMap.BpmAt(0));
-        Assert.Equal(120, state.TempoMap.BpmAt(Bar / 2), 9);
+        Assert.Equal(120, state.TempoMap.BpmAt(Bar / 2.0), 9);
 
         Apply(new SetSignaturesCommand([new(0, 3, 4), new(2880 * 2, 7, 8)]));
-        Assert.Equal(new TimeSignature(3, 4), state.Settings.Signature);
+        Assert.Equal(new(3, 4), state.Settings.Signature);
         // Changing the first signature keeps the later change at its bar (bar 2): two bars of 4/4 now.
         Apply(new SetSignatureCommand(4, 4));
         Assert.Equal([new SignatureEvent(0, 4, 4), new SignatureEvent(2 * Bar, 7, 8)], state.Settings.Signatures);
@@ -55,9 +54,9 @@ public sealed class ArrangementEditTests {
     public void Bars_and_beats_follow_the_signature_track() {
         Apply(new SetSignaturesCommand([new(0, 4, 4), new(2 * Bar, 6, 8)]));
         var bars = state.SignatureMap;
-        Assert.Equal(new BarBeat(2, 0, 0), bars.Position(2 * Bar));
-        Assert.Equal(new BarBeat(2, 3, 0), bars.Position(2 * Bar + 3 * 480));
-        Assert.Equal(new BarBeat(3, 0, 10), bars.Position(2 * Bar + 2880 + 10));
+        Assert.Equal(new(2, 0, 0), bars.Position(2 * Bar));
+        Assert.Equal(new(2, 3, 0), bars.Position(2 * Bar + 3 * 480));
+        Assert.Equal(new(3, 0, 10), bars.Position(2 * Bar + 2880 + 10));
         Assert.Equal(2 * Bar + 2880, bars.BarStart(3));
         Assert.Equal(2 * Bar + 2880, bars.TickOf(new(3, 0, 0)));
         Assert.True(bars.IsBarLine(2 * Bar + 2880));
@@ -75,7 +74,10 @@ public sealed class ArrangementEditTests {
         var marker = Assert.Single(state.Markers.Values);
         Assert.StartsWith("mrk_", marker.Id, StringComparison.Ordinal);
         Apply(new SetMarkerCommand(marker.Id, Tick: Bar, Text: "Count in"));
-        Assert.Equal((Bar, "Count in", "Intro"), (state.Markers[marker.Id].Tick, state.Markers[marker.Id].Text, state.Markers[marker.Id].Name));
+        Assert.Equal(
+            (Bar, "Count in", "Intro"),
+            (state.Markers[marker.Id].Tick, state.Markers[marker.Id].Text, state.Markers[marker.Id].Name)
+        );
         Assert.Throws<EditException>(() => Apply(new SetMarkerCommand("mrk_none", "X")));
         Assert.Throws<EditException>(() => Apply(new AddMarkerCommand("Bad", -1)));
         Apply(new DeleteMarkersCommand([marker.Id]));
@@ -90,7 +92,10 @@ public sealed class ArrangementEditTests {
         var verse = Section("Verse");
         Assert.Throws<EditException>(() => Apply(new SetSectionCommand(verse.Id, LengthTicks: 5 * Bar)));
         Apply(new SetSectionCommand(verse.Id, "Verse 1", 2 * Bar, "#123456"));
-        Assert.Equal(("Verse 1", 2 * Bar, "#123456"), (state.Sections[verse.Id].Name, state.Sections[verse.Id].LengthTicks, state.Sections[verse.Id].Color));
+        Assert.Equal(
+            ("Verse 1", 2 * Bar, "#123456"),
+            (state.Sections[verse.Id].Name, state.Sections[verse.Id].LengthTicks, state.Sections[verse.Id].Color)
+        );
     }
 
     [Fact]
@@ -99,7 +104,10 @@ public sealed class ArrangementEditTests {
         SongWithSections();
         var chorus = Section("Chorus");
         Apply(new MoveSectionCommand(chorus.Id, Bar)); // to the start of the Verse
-        Assert.Equal((0L, Bar, 3 * Bar), (Section("Intro").StartTick, Section("Chorus").StartTick, Section("Verse").StartTick));
+        Assert.Equal(
+            (0L, Bar, 3 * Bar),
+            (Section("Intro").StartTick, Section("Chorus").StartTick, Section("Verse").StartTick)
+        );
         Assert.Equal(
             ["Intro", "Chorus", "Verse"],
             state.Regions.Values.OrderBy(static r => r.StartTick).Select(static r => r.Name)
@@ -108,11 +116,14 @@ public sealed class ArrangementEditTests {
             [0L, Bar, 3 * Bar],
             state.Markers.Values.OrderBy(static m => m.Tick).Select(static m => m.Tick)
         );
-        Assert.Equal("Chorus", state.Markers.Values.Single(m => m.Tick == Bar).Name);
+        Assert.Equal("Chorus", state.Markers.Values.Single(static m => m.Tick == Bar).Name);
 
         // And back to the end of the last section.
         Apply(new MoveSectionCommand(chorus.Id, 5 * Bar));
-        Assert.Equal((0L, Bar, 3 * Bar), (Section("Intro").StartTick, Section("Verse").StartTick, Section("Chorus").StartTick));
+        Assert.Equal(
+            (0L, Bar, 3 * Bar),
+            (Section("Intro").StartTick, Section("Verse").StartTick, Section("Chorus").StartTick)
+        );
 
         Assert.Throws<EditException>(() => Apply(new MoveSectionCommand(chorus.Id, Bar / 2)));
     }
@@ -139,7 +150,10 @@ public sealed class ArrangementEditTests {
             [("Intro", 0L), ("Chorus", Bar)],
             state.Sections.Values.OrderBy(static s => s.StartTick).Select(static s => (s.Name, s.StartTick))
         );
-        Assert.Equal(["Intro", "Chorus"], state.Regions.Values.OrderBy(static r => r.StartTick).Select(static r => r.Name));
+        Assert.Equal(
+            ["Intro", "Chorus"],
+            state.Regions.Values.OrderBy(static r => r.StartTick).Select(static r => r.Name)
+        );
 
         Apply(new DeleteSectionsCommand([Section("Chorus").Id]));
         Assert.Equal(2, state.Regions.Count); // without content: only the section goes
@@ -172,9 +186,12 @@ public sealed class ArrangementEditTests {
     public void A_stacks_strip_offsets_its_members_volume_and_its_mute_and_solo_apply_to_them() {
         Apply(new AddTrackCommand("A"), new AddTrackCommand("B"));
         Apply(new CreateStackCommand([Track("A")], "Stack"));
-        Apply(new SetStripCommand(Track("A"), -6, 0.5), new SetStripCommand(Track("Stack"), -3, Mute: true, Solo: true));
+        Apply(
+            new SetStripCommand(Track("A"), -6, 0.5),
+            new SetStripCommand(Track("Stack"), -3, Mute: true, Solo: true)
+        );
         var a = state.FindTrack(Track("A"))!;
-        Assert.Equal(new ChannelStrip(-9, 0.5, true, true), Stacks.EffectiveStrip(state, a));
+        Assert.Equal(new(-9, 0.5, true, true), Stacks.EffectiveStrip(state, a));
         Assert.Equal(state.FindTrack(Track("B"))!.Strip, Stacks.EffectiveStrip(state, state.FindTrack(Track("B"))!));
         Apply(new SetStripCommand(Track("Stack"), Units.SilenceDb));
         Assert.Equal(Units.SilenceDb, Stacks.EffectiveStrip(state, state.FindTrack(Track("A"))!).VolumeDb);
@@ -200,7 +217,10 @@ public sealed class ArrangementEditTests {
         Apply(new SetTrackCommand(Track("A"), Collapsed: true, Notes: "Room mic"));
         Assert.Equal((true, "Room mic"), (state.Tracks[0].Collapsed, state.Tracks[0].Notes));
         Apply(new SetRecordingCommand(CycleRecordMode.Regions, true, true, Bar, 2 * Bar));
-        Assert.Equal(new RecordingSettings(CycleRecordMode.Regions, true, true, Bar, 2 * Bar), state.Settings.Recording);
+        Assert.Equal(
+            new(CycleRecordMode.Regions, true, true, Bar, 2 * Bar),
+            state.Settings.Recording
+        );
         Assert.Throws<EditException>(() => Apply(new SetRecordingCommand(PunchOutTick: Bar)));
     }
 

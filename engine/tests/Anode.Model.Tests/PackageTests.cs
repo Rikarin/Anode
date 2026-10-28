@@ -94,7 +94,7 @@ public sealed class PackageTests : IDisposable {
         Assert.Equal([new SignatureEvent(0, 6, 8)], settings.Signatures);
         Assert.Equal([new KeyEvent(0, 0, KeyMode.Major)], settings.Keys);
         // Four bars of 6/8 for the punch locators.
-        Assert.Equal(new RecordingSettings(CycleRecordMode.TakeFolder, false, false, 0, 4 * 2880), settings.Recording);
+        Assert.Equal(new(CycleRecordMode.TakeFolder, false, false, 0, 4 * 2880), settings.Recording);
         Assert.True(settings.MergeMidiRecording);
         Assert.Empty(state.TakeFolders);
         Assert.Empty(state.Markers);
@@ -130,13 +130,12 @@ public sealed class PackageTests : IDisposable {
     public void Screensets_and_notes_are_saved_with_the_project() {
         var (state, _, _) = RandomProjects.Build(17, 30);
         state = state with {
-            Notes = "Bridge needs work",
-            Screensets = state.Screensets.SetItem(2, new(2, "Mixing", true, "{}"))
+            Notes = "Bridge needs work", Screensets = state.Screensets.SetItem(2, new(2, "Mixing", true, "{}"))
         };
         ProjectPackage.Save(folder, state);
         var loaded = ProjectPackage.Load(folder);
         Assert.Equal("Bridge needs work", loaded.Notes);
-        Assert.Equal(new Screenset(2, "Mixing", true, "{}"), Assert.Single(loaded.Screensets.Values));
+        Assert.Equal(new(2, "Mixing", true, "{}"), Assert.Single(loaded.Screensets.Values));
     }
 
     [Fact]
