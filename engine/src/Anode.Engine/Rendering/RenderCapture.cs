@@ -10,7 +10,10 @@ public enum RenderKind {
     /// <summary>Each listed track's post-fader output as it reaches its destination.</summary>
     Stems,
 
-    /// <summary>One track's source and inserts, before its fader.</summary>
+    /// <summary>
+    ///     Each listed track's source and inserts, before its fader: a freeze (one track), or a bounce in place (several;
+    ///     optionally without the inserts or with the fader and pan, <see cref="RenderCapture" />).
+    /// </summary>
     Freeze
 }
 
@@ -101,6 +104,15 @@ public sealed class RenderCapture(RenderKind kind, RenderTarget? master, Diction
 
     /// <summary>The stems' or the frozen track's targets (alloc-free lookups on the audio thread).</summary>
     public Dictionary<int, RenderTarget> Tracks { get; } = tracks;
+
+    /// <summary>
+    ///     A freeze render (bounce in place, docs/06-phase-5.md) captures each track after its fader and pan (their
+    ///     automation included; not its mute or the solos: the track renders isolated).
+    /// </summary>
+    public bool IncludeVolumePan { get; init; }
+
+    /// <summary>A freeze render skips the captured tracks' inserts (and their latency) while it runs.</summary>
+    public bool BypassInserts { get; init; }
 
     /// <summary>Every target has its frames.</summary>
     public bool Complete {

@@ -107,4 +107,67 @@ public sealed unsafe class SegmentTests {
         Assert.Equal(200, second.Pitch[entry.PitchStart].Cents);
         Assert.Equal(10, mapped.Track(0).Warp[mapped.Track(0).Playlist[1].WarpStart].FileFrame);
     }
+
+    static long ids;
+
+    /// <summary>Maps a segment of one track and runs the layout check (which the engine always runs).</summary>
+    static void Validate(
+        AudioPlaylistEntry entry,
+        WarpPoint[] warp,
+        PitchPoint[]? pitch = null,
+        ushort? format = null
+    ) {
+        using var written = SegmentWriter.Write(
+            [new(1, [], [entry], warp, pitch)],
+            1,
+            48_000,
+            "an-test-flex",
+            Environment.ProcessId * 100L + Interlocked.Increment(ref ids),
+            false
+        );
+        if (format is { } f) {
+            ((SegmentHeader*)written.Pointer)->Format = f;
+        }
+
+        using var mapped = MappedSegment.Map(3, written.Name, written.Length);
+        mapped.ValidateLayout();
+    }
+
+    [Fact]
+    public void Format_2_and_warp_maps_a_renderer_cannot_play_are_refused() {
+        var entry = new AudioPlaylistEntry {
+            Start = 0,
+            Length = 1_000,
+            FileId = 0,
+            Gain = 1,
+            WarpCount = 3,
+            Algorithm = FlexAlgorithm.Slicing
+        };
+        WarpPoint[] good = [
+            new() { Offset = 0, FileFrame = 0 }, new() { Offset = 400, FileFrame = 600 },
+            new() { Offset = 1_000, FileFrame = 1_200 }
+        ];
+        Validate(entry, good, [new() { FileFrame = 0, Cents = 50 }, new() { FileFrame = 100, Cents = 70 }]);
+        Validate(entry with { WarpCount = 0, Algorithm = FlexAlgorithm.None }, good); // unwarped, the points unused
+
+        Assert.Throws<InvalidDataException>(() => Validate(entry, good, format: 2));
+        Assert.Throws<InvalidDataException>(() => Validate(entry with { Algorithm = FlexAlgorithm.None }, good));
+        Assert.Throws<InvalidDataException>(() => Validate(entry with { Algorithm = (FlexAlgorithm)9 }, good));
+        Assert.Throws<InvalidDataException>(() => Validate(entry with { WarpCount = 1 }, good));
+        Assert.Throws<InvalidDataException>(() => Validate(entry with { WarpCount = 4 }, good));
+        Assert.Throws<InvalidDataException>(() => Validate(entry with { Length = 999 }, good));
+        Assert.Throws<InvalidDataException>(() => Validate(entry with { PitchCount = 1, PitchStart = 2 }, good, []));
+        WarpPoint[] late = [good[0] with { Offset = 1 }, good[1], good[2]];
+        Assert.Throws<InvalidDataException>(() => Validate(entry, late));
+        WarpPoint[] backwards = [good[0], good[1] with { Offset = 1_000 }, good[2]];
+        Assert.Throws<InvalidDataException>(() => Validate(entry, backwards));
+        WarpPoint[] nan = [good[0], good[1] with { FileFrame = double.NaN }, good[2]];
+        Assert.Throws<InvalidDataException>(() => Validate(entry, nan));
+        Assert.Throws<InvalidDataException>(() => Validate(
+                entry with { PitchCount = 2 },
+                good,
+                [new() { FileFrame = 100 }, new() { FileFrame = 50 }]
+            )
+        );
+    }
 }

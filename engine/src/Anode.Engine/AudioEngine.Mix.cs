@@ -404,7 +404,7 @@ public sealed unsafe partial class AudioEngine {
         var live = aux ? destLive[node.InputBus] : node.Track!.Armed || node.Track.Monitoring;
         var implied = aux && destSolo[node.InputBus];
         ch.Live = live;
-        ch.ChainLatency = InsertLatency(node.Config, live);
+        ch.ChainLatency = BypassedForRender(node) ? 0 : InsertLatency(node.Config, live);
         ch.Latency = mode switch {
             DelayCompensation.Off => 0,
             DelayCompensation.Tracks when aux => input,
@@ -504,7 +504,11 @@ public sealed unsafe partial class AudioEngine {
         if (blockCapture is { Kind: RenderKind.Freeze } freeze
             && node.Track is { } frozen
             && freeze.Tracks.TryGetValue(frozen.Id, out var target)) {
-            target.Write(left, source, ch.ChainLatency);
+            if (freeze.IncludeVolumePan) {
+                CaptureFaded(node, target, left, source, stereo);
+            } else {
+                target.Write(left, source, ch.ChainLatency);
+            }
         }
 
         var line = ch.Delay;
@@ -536,6 +540,42 @@ public sealed unsafe partial class AudioEngine {
             }
         }
     }
+
+    /// <summary>
+    ///     A bounce in place with volume and pan: the channel's signal through its fader and pan (and their automation),
+    ///     not its mute or the solos, into <paramref name="target" />.
+    /// </summary>
+    void CaptureFaded(
+        MixNode node,
+        RenderTarget target,
+        ReadOnlySpan<float> left,
+        ReadOnlySpan<float> right,
+        bool stereo
+    ) {
+        var strip = node.Channel.Strip;
+        var automation = blockModel.Automation;
+        var pan = LaneFor(automation, node.PanTarget);
+        Lane(LaneFor(automation, node.VolumeTarget), volumeLane, strip.Gain);
+        Lane(pan, panLane, strip.Pan);
+        Pan(panLane.AsSpan(0, blockFrames), pan is not null, stereo);
+        var l = edgeLeft.AsSpan(0, blockFrames);
+        var r = edgeRight.AsSpan(0, blockFrames);
+        for (var i = 0; i < l.Length; i++) {
+            l[i] = left[i] * volumeLane[i] * coefLeft[i];
+            r[i] = right[i] * volumeLane[i] * coefRight[i];
+        }
+
+        target.Write(l, r, node.Channel.ChainLatency);
+    }
+
+    /// <summary>
+    ///     Whether a bounce in place without effects renders this channel: its inserts (and their latency) are skipped
+    ///     while the render runs.
+    /// </summary>
+    bool BypassedForRender(MixNode node) =>
+        blockCapture is { Kind: RenderKind.Freeze, BypassInserts: true } render
+        && node.Track is { } track
+        && render.Tracks.ContainsKey(track.Id);
 
     /// <summary>The post-fader signal another insert takes as a sidechain (undelayed).</summary>
     void WritePost(ChannelState ch, ReadOnlySpan<float> left, ReadOnlySpan<float> right) {
@@ -825,6 +865,10 @@ public sealed unsafe partial class AudioEngine {
     bool Inserts(MixNode node, Span<float> left, Span<float> right, bool stereo, int first = 0) {
         var inserts = node.Config.Inserts;
         var live = node.Channel.Live;
+        if (BypassedForRender(node)) {
+            first = inserts.Length;
+        }
+
         for (var k = first; k < inserts.Length; k++) {
             var insert = inserts[k];
             insert.Slot.ApplyParameters();
@@ -858,7 +902,7 @@ public sealed unsafe partial class AudioEngine {
         var right = ch.WorkRight.AsSpan(0, blockFrames);
         var stereo = Source(node, left, right);
         var inserts = node.Config.Inserts;
-        var k = 0;
+        var k = BypassedForRender(node) ? inserts.Length : 0;
         ch.Begun = false;
         for (; k < inserts.Length && !ch.Begun; k++) {
             var insert = inserts[k];

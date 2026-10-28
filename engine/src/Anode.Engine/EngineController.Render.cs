@@ -7,7 +7,9 @@ using System.Runtime.InteropServices;
 namespace Anode.Engine;
 
 // Rendering (docs/05-phase-4.md, "Rendering"): the master, stems (each track's post-fader output as it reaches its
-// destination) or a freeze (one track's source and inserts before its fader), to 32-bit float stereo WAV. Offline, the
+// destination) or a freeze (one track's source and inserts before its fader), to 32-bit float stereo WAV. Bounce in
+// place (docs/06-phase-5.md) is a freeze of several tracks, each isolated, optionally without its inserts or with its
+// fader and pan; the server extends the range by the tail it wants. Offline, the
 // render's thread takes the engine over from the device (whose output stays silent) and runs it as fast as the disk
 // allows; in real time, the device plays it and the callback captures it. Either way each file drops the latency its
 // path had at the start, so it lines up with the project.
@@ -103,8 +105,8 @@ public sealed partial class EngineController {
             var kind = message.Freeze ? RenderKind.Freeze
                 : message.Tracks is null ? RenderKind.Master
                 : RenderKind.Stems;
-            if (kind == RenderKind.Freeze && message.Tracks is not { Count: 1 }) {
-                throw new ArgumentException("A freeze renders exactly one track.", nameof(message));
+            if (kind == RenderKind.Freeze && message.Tracks is not { Count: > 0 }) {
+                throw new ArgumentException("A freeze renders at least one track.", nameof(message));
             }
 
             var frames = message.EndSample - message.StartSample;
@@ -131,7 +133,10 @@ public sealed partial class EngineController {
                 Open(target);
             }
 
-            return new(kind, null, tracks);
+            return new(kind, null, tracks) {
+                IncludeVolumePan = message.IncludeVolumePan, // both read only by a freeze
+                BypassInserts = message.BypassInserts
+            };
         }
 
         void Open(RenderTarget target) {

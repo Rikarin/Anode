@@ -37,6 +37,7 @@ public sealed unsafe class TrackFeed : IDisposable {
         Channels = channels;
         TargetFrames = targetFrames;
         Ring = new(checked((targetFrames + targetFrames / 2) * channels));
+        Flex = new(channels);
     }
 
     public int Channels { get; }
@@ -45,6 +46,9 @@ public sealed unsafe class TrackFeed : IDisposable {
     public int TargetFrames { get; }
 
     public SpscRing Ring { get; }
+
+    /// <summary>The flex renderers of the warped entries this stream plays (docs/06-phase-5.md).</summary>
+    public FlexLane Flex { get; }
 
     /// <summary>
     ///     The identity of a fill for anchor <paramref name="anchorId" /> and compiled generation
@@ -236,7 +240,10 @@ public sealed unsafe class TrackFeed : IDisposable {
         }
     }
 
-    public void Dispose() => Ring.Dispose();
+    public void Dispose() {
+        Ring.Dispose();
+        Flex.Dispose();
+    }
 
     readonly record struct Chunk(long StartClock, int Frames, long Identity);
 }
