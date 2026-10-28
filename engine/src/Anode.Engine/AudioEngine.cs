@@ -281,8 +281,8 @@ public sealed unsafe partial class AudioEngine : IAudioProcessor {
         var identity = TrackFeed.Identity(transport.Anchor.Id, generation);
         var second = track.Crossfade;
         if (!transport.Rolling) {
-            track.Stream.Align(transport.Clock, identity, hardFloor);
-            second?.Align(transport.Clock, identity, hardFloor);
+            track.Stream.Align(transport.Clock, identity);
+            second?.Align(transport.Clock, identity);
             return;
         }
 
@@ -295,7 +295,7 @@ public sealed unsafe partial class AudioEngine : IAudioProcessor {
         }
 
         if (lanes is null) {
-            second.Align(transport.Clock, identity, hardFloor); // drops what an earlier compile left in it
+            second.Align(transport.Clock, identity); // drops what an earlier compile left in it
             return;
         }
 

@@ -142,14 +142,16 @@ public sealed unsafe class TrackFeed : IDisposable {
     }
 
     /// <summary>
-    ///     While the transport is held: drops what can never play at <paramref name="clock" /> (stale, or before it),
-    ///     so a new fill has room. Consumes nothing playable.
+    ///     While the transport is held: drops what can never play at <paramref name="clock" /> (another fill's audio, or
+    ///     audio before it), so a new fill has room. Consumes nothing playable. Nothing plays while held, so another
+    ///     fill's audio goes at once, without waiting for the current fill to be queued: two quick edits could
+    ///     otherwise fill the ring with two stale fills and leave the current one no room to start.
     /// </summary>
-    public void Align(long clock, long identity, long hardFloor) {
+    public void Align(long clock, long identity) {
         while (Peek(out var chunk)) {
             var at = chunk.StartClock + headConsumed;
             var remaining = chunk.Frames - headConsumed;
-            if (Superseded(chunk, identity, hardFloor, clock, out _)) {
+            if (chunk.Identity != identity) {
                 Drop(remaining);
                 continue;
             }
@@ -203,6 +205,13 @@ public sealed unsafe class TrackFeed : IDisposable {
 
         startClock = -1;
         return false;
+    }
+
+    /// <summary>What is queued, for an error message: chunks, frames, and the first chunk's fill and clock.</summary>
+    public string Describe() {
+        var (h, t) = (Volatile.Read(ref head), Volatile.Read(ref tail));
+        var first = h < t ? queue[h & (QueueCapacity - 1)] : default;
+        return $"{t - h} chunks, {Ring.Available / Channels} frames queued, the first of fill {first.Identity:x} at {first.StartClock}";
     }
 
     void Drop(int frames) {

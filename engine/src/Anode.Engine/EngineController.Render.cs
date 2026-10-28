@@ -282,7 +282,7 @@ public sealed partial class EngineController {
             }
 
             if (DateTime.UtcNow > deadline) {
-                throw new IOException("The disk did not keep up with the render.");
+                throw new IOException("The disk did not keep up with the render: " + Unprimed(frames) + ".");
             }
 
             Streamer.Wake();
@@ -292,6 +292,29 @@ public sealed partial class EngineController {
                 Thread.Sleep(1);
             }
         }
+    }
+
+    /// <summary>Which stream a render waits for, and where its fill stands (for the error).</summary>
+    string Unprimed(int frames) {
+        var root = Engine.Root;
+        var (clock, anchor) = Engine.RenderTransport;
+        for (var i = 0; i < root.Tracks.Length; i++) {
+            var identity = TrackFeed.Identity(anchor, root.Generations[i]);
+            var track = root.Tracks[i];
+            foreach (var (stream, name) in new[] { (track.Stream, "stream"), (track.Crossfade, "crossfade stream") }) {
+                if (stream is null || (name != "stream" && root.Lanes[i] is null)) {
+                    continue;
+                }
+
+                if (stream.FillIdentity != identity || stream.FillCursor - clock < Math.Min(frames, stream.TargetFrames)) {
+                    return $"track {i}'s {name} (fill {stream.FillIdentity:x}, wanted {identity:x}; "
+                        + $"{stream.FillCursor - clock} of {Math.Min(frames, stream.TargetFrames)} frames ahead, "
+                        + $"{stream.FreeFrames} free; {stream.Describe()}; render clock {clock})";
+                }
+            }
+        }
+
+        return "no stream";
     }
 
     bool RenderPrimed(int frames) {

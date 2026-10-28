@@ -76,7 +76,23 @@ public sealed class TrackFeedTests {
         var current = TrackFeed.Identity(1, 2);
         feed.BeginFill(current, 0);
         Append(feed, 1_000, 2f);
-        feed.Align(0, current, 0);
+        feed.Align(0, current);
         Assert.Equal(6_144 - 1_000, feed.FreeFrames);
+    }
+
+    [Fact]
+    public void Align_makes_room_for_a_fill_that_two_stale_fills_left_no_room_to_start() {
+        // Two quick edits while stopped: the first edit's fill took what the original left, the second's has no room.
+        using var feed = new TrackFeed(1, 4_096);
+        feed.BeginFill(TrackFeed.Identity(1, 1), 0);
+        Append(feed, 4_096, 1f);
+        feed.BeginFill(TrackFeed.Identity(1, 2), 0);
+        Append(feed, feed.FreeFrames, 2f);
+        Assert.Equal(0, feed.FreeFrames);
+        var current = TrackFeed.Identity(1, 3);
+        feed.BeginFill(current, 0);
+
+        feed.Align(0, current);
+        Assert.Equal(6_144, feed.FreeFrames);
     }
 }
