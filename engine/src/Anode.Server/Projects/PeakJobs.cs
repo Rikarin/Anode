@@ -95,4 +95,10 @@ static partial class ProjectLog {
         Message = "Could not keep a backup of the unsaved project {Path}: {Error}"
     )]
     public static partial void BackupFailed(ILogger logger, string path, string error);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Ignored a parameter change {Parameter} from the engine: {Reason}")]
+    public static partial void HostParameterIgnored(ILogger logger, string parameter, string reason);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Job {Job} failed: {Error}")]
+    public static partial void JobFailed(ILogger logger, string job, string error);
 }

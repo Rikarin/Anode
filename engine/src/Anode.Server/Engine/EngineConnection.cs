@@ -2,6 +2,7 @@ using Anode.Contracts;
 using Anode.Ipc;
 using Anode.Ipc.Telemetry;
 using Anode.Model;
+using Anode.Model.Compile;
 using Anode.Model.Time;
 using Anode.Server.Projects;
 using Anode.Server.Realtime;
@@ -21,8 +22,11 @@ namespace Anode.Server.Engine;
 ///     once when it stops) and <see cref="MetersEvent" />s (about 30 Hz while there is something to show), and applies
 ///     the host's finished recordings to the project. It keeps the host's plugin catalogue and MIDI ports
 ///     (<see cref="EngineCatalog" />), relays its MIDI activity as <see cref="MidiActivityEvent" />s with track ids, and
-///     carries live MIDI, the MIDI-thru track and instrument-state requests to it. <see cref="Changed" /> fires on
-///     every status change.
+///     carries live MIDI, the MIDI-thru track and instrument-state requests to it. Phase 4: it keeps
+///     <see cref="TransportClock" /> (whose stops end automation passes), runs renders for jobs
+///     (<see cref="RenderAsync" />), relays plugin editor windows, applies parameter changes from plugins' own editors
+///     as edits and relays plugin problems as <see cref="PluginProblemEvent" />s. <see cref="Changed" /> fires on every
+///     status change.
 /// </summary>
 public sealed class EngineConnection(
     IOptions<ServerOptions> options,
@@ -30,6 +34,7 @@ public sealed class EngineConnection(
     EngineDevice device,
     EngineCatalog catalog,
     EventHub hub,
+    TransportClock clock,
     ILogger<EngineConnection> logger
 ) : BackgroundService {
     public const int MaxLiveEvents = 1024;
@@ -206,8 +211,74 @@ public sealed class EngineConnection(
     public void Rescan() => Send(new ScanPluginsMessage());
 
     /// <summary>
-    ///     The instruments' opaque states, by domain track id (a null state: the instrument keeps none), as the host
-    ///     reports them, or null without an engine or when it does not answer in time.
+    ///     Opens or closes a plugin's own editor window: an insert of a track (or of the master without a track), or a
+    ///     track's instrument without an insert. 404 for an unknown track or insert, 409 when the plugin has no editor of
+    ///     its own or no engine runs.
+    /// </summary>
+    public void OpenEditor(PluginEditorRequest request) {
+        var view = session.View ?? throw ProjectException.NoProject();
+        string pluginId;
+        var engineTrack = -1;
+        if (request.TrackId is not null) {
+            var track = view.State.FindTrack(request.TrackId) ?? throw ProjectException.NotFound($"No track '{request.TrackId}'.");
+            if (!Stacks.IsPlayable(track)) {
+                throw ProjectException.Unprocessable($"Track '{track.Name}' has no plugins.");
+            }
+
+            engineTrack = view.Ids.Track(track.Id);
+            pluginId = request.InsertId is null
+                ? track.Instrument?.PluginId ?? throw ProjectException.NotFound($"Track '{track.Name}' has no instrument.")
+                : track.Strip.Inserts.FirstOrDefault(i => i.Id == request.InsertId)?.PluginId
+                ?? throw ProjectException.NotFound($"No insert '{request.InsertId}' on track '{track.Name}'.");
+        } else {
+            pluginId = view.State.Master.Inserts.FirstOrDefault(i => i.Id == request.InsertId)?.PluginId
+                ?? throw ProjectException.NotFound($"No insert '{request.InsertId}' on the master.");
+        }
+
+        if (request.Open && catalog.ForEdits.Find(pluginId) is not { HasEditor: true }) {
+            throw ProjectException.Conflict($"Plugin '{pluginId}' has no editor of its own: use the generic one.");
+        }
+
+        if (Volatile.Read(ref current) is not { } link
+            || !link.Work.Writer.TryWrite(new OpenPluginEditorMessage(engineTrack, request.InsertId, request.Open))) {
+            throw ProjectException.Conflict("No engine runs to open the plugin's window.");
+        }
+    }
+
+    /// <summary>
+    ///     Renders through the host (after it has every edit made before): progress fractions go to
+    ///     <paramref name="progress" />; cancelling asks the host to stop (the answer then carries its error). Throws
+    ///     <see cref="ProjectException" /> without an engine; a lost connection fails the render.
+    /// </summary>
+    public async Task<RenderFinishedMessage> RenderAsync(
+        RenderMessage message,
+        Action<double> progress,
+        CancellationToken cancellationToken
+    ) {
+        if (Volatile.Read(ref current) is not { } link) {
+            throw ProjectException.Conflict("The engine is not connected.");
+        }
+
+        var render = link.StartRender(message.JobId, progress);
+        if (!link.Work.Writer.TryWrite(message)) {
+            link.EndRender(message.JobId);
+            throw ProjectException.Conflict("The engine is not connected.");
+        }
+
+        await using (cancellationToken.Register(() => link.Work.Writer.TryWrite(new CancelRenderMessage(message.JobId)))
+                         .ConfigureAwait(false)) {
+            try {
+                return await render.ConfigureAwait(false);
+            } finally {
+                link.EndRender(message.JobId);
+            }
+        }
+    }
+
+    /// <summary>
+    ///     The plugins' opaque states by state key (<see cref="Model.Storage.ProjectPackage.StateKey" />: a track id for
+    ///     an instrument, track and insert id for an insert; a null state: the plugin keeps none), as the host reports
+    ///     them, or null without an engine or when it does not answer in time.
     /// </summary>
     public async Task<IReadOnlyDictionary<string, byte[]?>?> InstrumentStatesAsync(
         CancellationToken cancellationToken
@@ -231,12 +302,14 @@ public sealed class EngineConnection(
 
         var states = new Dictionary<string, byte[]?>(StringComparer.Ordinal);
         foreach (var state in answer.States ?? []) {
-            if (state is null || view.Ids.TrackOf(state.TrackId) is not { } trackId) {
+            var trackId = state?.TrackId == -1 && state.InsertId is not null ? null : view.Ids.TrackOf(state?.TrackId ?? -1);
+            if (state is null || (trackId is null && state.InsertId is null)) {
                 continue;
             }
 
             try {
-                states[trackId] = state.State is { Length: > 0 } text ? Convert.FromBase64String(text) : null;
+                states[Model.Storage.ProjectPackage.StateKey(trackId, state.InsertId)] =
+                    state.State is { Length: > 0 } text ? Convert.FromBase64String(text) : null;
             } catch (FormatException) {
                 EngineLog.BadState(logger, state.TrackId);
             }
@@ -253,11 +326,13 @@ public sealed class EngineConnection(
 
     public override async Task StartAsync(CancellationToken cancellationToken) {
         session.Changed += Kick;
+        clock.Stopped += session.EndPass;
         await base.StartAsync(cancellationToken).ConfigureAwait(false);
     }
 
     public override async Task StopAsync(CancellationToken cancellationToken) {
         session.Changed -= Kick;
+        clock.Stopped -= session.EndPass;
         await base.StopAsync(cancellationToken).ConfigureAwait(false);
         if (InProcessHost is { } host) {
             await host.DisposeAsync().ConfigureAwait(false);
@@ -355,6 +430,8 @@ public sealed class EngineConnection(
             Volatile.Write(ref transport, null);
             connection.Work.Writer.TryComplete();
             connection.CancelStates();
+            connection.FailRenders("The engine connection was lost.");
+            clock.Update(false, 0);
             catalog.Clear();
             await stop.CancelAsync().ConfigureAwait(false);
             foreach (var task in new[] { reading, pumping, publishing }) {
@@ -393,12 +470,34 @@ public sealed class EngineConnection(
                 case RecordingFinishedMessage finished:
                     _ = Task.Run(() => ApplyRecording(finished), CancellationToken.None);
                     break;
+                case RenderProgressMessage progress:
+                    connection.RenderProgress(progress);
+                    break;
+                case RenderFinishedMessage done:
+                    connection.RenderFinished(done);
+                    break;
+                case ParameterChangedMessage changed when changed.ParameterId is not null:
+                    _ = Task.Run(
+                        () => session.ApplyHostParameter(changed.TrackId, changed.InsertId, changed.ParameterId, changed.Value),
+                        CancellationToken.None
+                    );
+                    break;
+                case PluginProblemMessage problem:
+                    Relay(problem);
+                    break;
                 case ErrorMessage error:
                     EngineLog.HostError(logger, error.Message, error.Request);
                     link.Error(error);
                     break;
             }
         }
+    }
+
+    /// <summary>A plugin the host bypassed (it crashed or did not load), with domain ids.</summary>
+    void Relay(PluginProblemMessage problem) {
+        var trackId = problem.TrackId >= 0 ? session.View?.Ids.TrackOf(problem.TrackId) : null;
+        EngineLog.PluginProblem(logger, problem.PluginId ?? string.Empty, problem.Message ?? string.Empty);
+        hub.Publish(new PluginProblemEvent(trackId, problem.InsertId, problem.PluginId ?? string.Empty, problem.Message ?? string.Empty));
     }
 
     /// <summary>The host's MIDI activity, with domain track ids, for keyboards and activity lights.</summary>
@@ -460,6 +559,7 @@ public sealed class EngineConnection(
             var view = session.View;
             var now = Status(frame.Header, view);
             Volatile.Write(ref transport, now);
+            clock.Update(now.State != TransportState.Stopped, now.PositionTick);
             // While it moves, and once more when it stops or is located.
             var moving = now.State != TransportState.Stopped;
             if (moving || last is null || last.State != now.State || last.PositionSamples != now.PositionSamples) {
@@ -544,6 +644,52 @@ public sealed class EngineConnection(
             }
 
             done?.TrySetResult(message);
+        }
+
+        readonly Dictionary<int, (TaskCompletionSource<RenderFinishedMessage> Done, Action<double> Progress)> renders = [];
+
+        public Task<RenderFinishedMessage> StartRender(int jobId, Action<double> progress) {
+            var done = new TaskCompletionSource<RenderFinishedMessage>(TaskCreationOptions.RunContinuationsAsynchronously);
+            lock (gate) {
+                renders[jobId] = (done, progress);
+            }
+
+            return done.Task;
+        }
+
+        public void EndRender(int jobId) {
+            lock (gate) {
+                renders.Remove(jobId);
+            }
+        }
+
+        public void RenderProgress(RenderProgressMessage message) {
+            Action<double>? progress;
+            lock (gate) {
+                progress = renders.TryGetValue(message.JobId, out var r) ? r.Progress : null;
+            }
+
+            progress?.Invoke(Math.Clamp(message.Fraction, 0, 1));
+        }
+
+        public void RenderFinished(RenderFinishedMessage message) {
+            TaskCompletionSource<RenderFinishedMessage>? done;
+            lock (gate) {
+                done = renders.TryGetValue(message.JobId, out var r) ? r.Done : null;
+            }
+
+            done?.TrySetResult(message);
+        }
+
+        public void FailRenders(string error) {
+            List<(int, TaskCompletionSource<RenderFinishedMessage>)> pending;
+            lock (gate) {
+                pending = [..renders.Select(static r => (r.Key, r.Value.Done))];
+            }
+
+            foreach (var (id, done) in pending) {
+                done.TrySetResult(new(id, [], error));
+            }
         }
 
         public void CancelStates() {

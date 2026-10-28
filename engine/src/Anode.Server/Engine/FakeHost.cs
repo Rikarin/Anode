@@ -1,3 +1,4 @@
+using Anode.Dsp.Effects;
 using Anode.Dsp.Instruments;
 using Anode.Ipc;
 using Anode.Ipc.Segments;
@@ -24,7 +25,14 @@ namespace Anode.Server.Engine;
 ///     track with its <see cref="RecordedTake.Passes" />, and with autopunch (<see cref="SetPunchMessage" />) only
 ///     the punch range is recorded; while playing, it keeps what armed tracks (and MIDI on armed or thru tracks) would
 ///     have recorded since playback started, which <see cref="FlashbackCaptureMessage" /> writes as a Flashback
-///     recording; and it keeps the file the preview channel plays (<see cref="Preview" />).
+///     recording; and it keeps the file the preview channel plays (<see cref="Preview" />). Phase 4: it lists the built-in
+///     effects and a fake VST3 effect with an editor, keeps channel structure, insert parameters, send levels and the
+///     mixer settings, reports insert states too, keeps which plugin editors are open, and renders: for
+///     <see cref="RenderMessage" /> it writes 32-bit float stereo WAVs of a sine per track (<see cref="RenderFrequency" />,
+///     at <see cref="RenderAmplitude" /> times the track's fader gain, its mute and solo heeded; summed and through the
+///     master's gain for the mix; before the fader for a freeze), reporting progress, finishing, or stopping when
+///     cancelled. <see cref="ChangeParameterAsync" /> and <see cref="ReportProblemAsync" /> play a plugin's own editor
+///     and a crash for tests.
 /// </summary>
 public sealed class FakeHost : IAsyncDisposable {
     public const string Backend = "null";
@@ -43,6 +51,12 @@ public sealed class FakeHost : IAsyncDisposable {
     readonly Dictionary<int, EngineTrack> tracks = [];
     readonly Dictionary<int, EngineFile> files = [];
     readonly Dictionary<int, string> states = [];
+    readonly Dictionary<(int Track, string Insert), string> insertStates = [];
+    readonly Dictionary<int, CancellationTokenSource> renders = [];
+    readonly HashSet<(int Track, string? Insert)> editors = [];
+    readonly SemaphoreSlim writing = new(1, 1);
+    Stream? connection;
+    SetMixerMessage mixer = new("all", false, 10);
     readonly Dictionary<int, List<RecordedMidiEvent>> live = [];
     readonly Dictionary<int, List<RecordedMidiEvent>> heard = [];
     readonly CancellationTokenSource stopping;
@@ -97,6 +111,15 @@ public sealed class FakeHost : IAsyncDisposable {
     /// <summary>The fake CLAP instrument in <see cref="Catalogue" />.</summary>
     public const string FakeClapId = "org.anode.fake.sine";
 
+    /// <summary>The fake VST3 effect in <see cref="Catalogue" />: a gain with its own editor and a sidechain.</summary>
+    public const string FakeVst3Id = "org.anode.fake.gain";
+
+    /// <summary>The level of a rendered track's sine at unity gain.</summary>
+    public const float RenderAmplitude = 0.25f;
+
+    /// <summary>The frequency of engine track <paramref name="trackId" />'s rendered sine: 220 Hz, then up a fifth per id.</summary>
+    public static double RenderFrequency(int trackId) => 220 * Math.Pow(1.5, trackId % 6);
+
     /// <summary>
     ///     What this host can load: the built-in instruments (Anode.Dsp's descriptors, or stand-ins with the same ids
     ///     while those are not filled in), then a fake CLAP instrument with decimal parameter ids.
@@ -139,8 +162,67 @@ public sealed class FakeHost : IAsyncDisposable {
             true,
             [],
             [new("0", "Gain", 0, 1, 0.5, string.Empty, 0), new("1", "Detune", -1, 1, 0, string.Empty, 0)]
+        ),
+        ..BuiltinEffects.All.Select(EngineCatalog.From),
+        new EnginePlugin(
+            FakeVst3Id,
+            "Fake Gain",
+            "Anode tests",
+            "0.1",
+            "vst3",
+            false,
+            [],
+            [new("0", "Gain", -24, 24, 0, "dB", 0), new("1", "Mix", 0, 1, 1, string.Empty, 0)],
+            "Utility",
+            true,
+            true
         )
     ];
+
+    /// <summary>The plugin editors open now: (engine track, insert id; null the instrument).</summary>
+    public IReadOnlyCollection<(int Track, string? Insert)> Editors {
+        get {
+            lock (gate) {
+                return [..editors];
+            }
+        }
+    }
+
+    /// <summary>The master strip as last set.</summary>
+    public EngineStrip Master {
+        get {
+            lock (gate) {
+                return master;
+            }
+        }
+    }
+
+    /// <summary>The mixer settings as last set.</summary>
+    public SetMixerMessage Mixer {
+        get {
+            lock (gate) {
+                return mixer;
+            }
+        }
+    }
+
+    /// <summary>Plays a plugin's own editor moving a parameter: the host tells the server.</summary>
+    public Task ChangeParameterAsync(int trackId, string? insertId, string parameterId, double value) =>
+        SendAsync(new ParameterChangedMessage(trackId, insertId, parameterId, value));
+
+    /// <summary>Plays a plugin crashing: the host bypasses it and tells the server.</summary>
+    public Task ReportProblemAsync(int trackId, string? insertId, string pluginId, string message) =>
+        SendAsync(new PluginProblemMessage(trackId, insertId, pluginId, message));
+
+    async Task SendAsync(IpcMessage message) {
+        var stream = Volatile.Read(ref connection) ?? throw new InvalidOperationException("No server is connected.");
+        await writing.WaitAsync().ConfigureAwait(false);
+        try {
+            await IpcFraming.WriteAsync(stream, message, CancellationToken.None).ConfigureAwait(false);
+        } finally {
+            writing.Release();
+        }
+    }
 
     /// <summary>The MIDI ports this host reports.</summary>
     public static IReadOnlyList<EngineMidiPort> Ports { get; } = [
@@ -222,11 +304,17 @@ public sealed class FakeHost : IAsyncDisposable {
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, stopping.Token);
         telemetryLoop ??= TelemetryLoopAsync(stopping.Token);
         var token = linked.Token;
+        Volatile.Write(ref connection, stream);
         try {
             while (await IpcFraming.ReadAsync(stream, token).ConfigureAwait(false) is { } message) {
                 Log(message);
                 foreach (var reply in Handle(message)) {
-                    await IpcFraming.WriteAsync(stream, reply, token).ConfigureAwait(false);
+                    await writing.WaitAsync(token).ConfigureAwait(false);
+                    try {
+                        await IpcFraming.WriteAsync(stream, reply, token).ConfigureAwait(false);
+                    } finally {
+                        writing.Release();
+                    }
                 }
             }
         } catch (Exception e) when (e is OperationCanceledException
@@ -234,6 +322,13 @@ public sealed class FakeHost : IAsyncDisposable {
                                         or InvalidDataException
                                         or ObjectDisposedException) {
             // The server went away (or this host is stopping).
+        } finally {
+            Interlocked.CompareExchange(ref connection, null, stream);
+            lock (gate) {
+                foreach (var render in renders.Values) {
+                    render.Cancel();
+                }
+            }
         }
     }
 
@@ -256,6 +351,7 @@ public sealed class FakeHost : IAsyncDisposable {
 
         telemetry.Dispose();
         stopping.Dispose();
+        writing.Dispose();
     }
 
     async Task AcceptAsync(Socket socket, string socketPath, CancellationToken cancellationToken) {
@@ -382,6 +478,67 @@ public sealed class FakeHost : IAsyncDisposable {
             case FlashbackCaptureMessage:
                 yield return Capture();
                 break;
+            case SetChannelMessage channel:
+                lock (gate) {
+                    if (channel.TrackId == -1) {
+                        master = channel.Strip;
+                    } else if (tracks.TryGetValue(channel.TrackId, out var t)) {
+                        tracks[channel.TrackId] = t with { Strip = channel.Strip };
+                    }
+
+                    RememberInserts(channel.TrackId, channel.Strip);
+                }
+
+                break;
+            case SetInsertParameterMessage parameter:
+                lock (gate) {
+                    SetStripOf(parameter.TrackId, strip => strip with {
+                        Inserts = [
+                            ..(strip.Inserts ?? []).Select(i => i.Id != parameter.InsertId
+                                ? i
+                                : i with {
+                                    Parameters = new Dictionary<string, double>(i.Parameters) { [parameter.ParameterId] = parameter.Value }
+                                })
+                        ]
+                    });
+                }
+
+                break;
+            case SetSendLevelMessage send:
+                lock (gate) {
+                    SetStripOf(send.TrackId, strip => strip with {
+                        Sends = [..(strip.Sends ?? []).Select(x => x.Id == send.SendId ? x with { Gain = send.Gain, Pan = send.Pan } : x)]
+                    });
+                }
+
+                break;
+            case SetMixerMessage set:
+                lock (gate) {
+                    mixer = set;
+                }
+
+                break;
+            case OpenPluginEditorMessage editor:
+                lock (gate) {
+                    if (editor.Open) {
+                        editors.Add((editor.TrackId, editor.InsertId));
+                    } else {
+                        editors.Remove((editor.TrackId, editor.InsertId));
+                    }
+                }
+
+                break;
+            case RenderMessage render:
+                StartRender(render);
+                break;
+            case CancelRenderMessage cancel:
+                lock (gate) {
+                    if (renders.TryGetValue(cancel.JobId, out var running)) {
+                        running.Cancel();
+                    }
+                }
+
+                break;
             case TransportMessage transport:
                 if (Transport(transport) is { } finished) {
                     yield return finished;
@@ -426,7 +583,11 @@ public sealed class FakeHost : IAsyncDisposable {
                 if (track.Instrument is { State: not null } || !states.ContainsKey(track.Id)) {
                     Remember(track.Id, track.Instrument);
                 }
+
+                RememberInserts(track.Id, track.Strip);
             }
+
+            RememberInserts(-1, load.Master);
 
             foreach (var file in load.Files) {
                 files[file.Id] = file;
@@ -447,6 +608,111 @@ public sealed class FakeHost : IAsyncDisposable {
         } else {
             states.Remove(trackId);
         }
+    }
+
+    /// <summary>The states inserts were given (new instances); the others keep theirs.</summary>
+    void RememberInserts(int trackId, EngineStrip strip) {
+        foreach (var insert in strip.Inserts ?? []) {
+            if (insert.State is { } state) {
+                insertStates[(trackId, insert.Id)] = state;
+            }
+        }
+    }
+
+    void SetStripOf(int trackId, Func<EngineStrip, EngineStrip> change) {
+        if (trackId == -1) {
+            master = change(master);
+        } else if (tracks.TryGetValue(trackId, out var t)) {
+            tracks[trackId] = t with { Strip = change(t.Strip) };
+        }
+    }
+
+    void StartRender(RenderMessage render) {
+        var cancel = new CancellationTokenSource();
+        lock (gate) {
+            renders[render.JobId] = cancel;
+        }
+
+        _ = Task.Run(async () => {
+                RenderFinishedMessage finished;
+                try {
+                    finished = new(render.JobId, await RenderAsync(render, cancel.Token).ConfigureAwait(false));
+                } catch (OperationCanceledException) {
+                    finished = new(render.JobId, [], "Cancelled.");
+                } catch (Exception e) when (e is IOException or UnauthorizedAccessException) {
+                    finished = new(render.JobId, [], e.Message);
+                } finally {
+                    lock (gate) {
+                        renders.Remove(render.JobId);
+                    }
+
+                    cancel.Dispose();
+                }
+
+                try {
+                    await SendAsync(finished).ConfigureAwait(false);
+                } catch (Exception e) when (e is IOException or InvalidOperationException or ObjectDisposedException) {
+                    // the server went away
+                }
+            },
+            CancellationToken.None
+        );
+    }
+
+    /// <summary>Writes the render's files: a sine per track (see the class summary), in tenths, reporting each.</summary>
+    async Task<IReadOnlyList<string>> RenderAsync(RenderMessage render, CancellationToken token) {
+        List<(string Path, (EngineTrack Track, float Gain)[] Sources)> outputs;
+        float masterGain;
+        lock (gate) {
+            masterGain = master.Mute ? 0 : master.Gain;
+            var soloed = tracks.Values.Any(static t => t.Strip.Solo);
+            float Gain(EngineTrack t) => render.Freeze ? 1 : t.Strip.Mute || (soloed && !t.Strip.Solo) ? 0 : t.Strip.Gain;
+            if (render.Tracks is null) {
+                outputs = [(render.Path, [..tracks.Values.OrderBy(static t => t.Id).Select(t => (t, Gain(t)))])];
+            } else {
+                outputs = [
+                    ..render.Tracks.Where(tracks.ContainsKey)
+                        .Select(id => (render.Freeze ? render.Path : Path.Combine(render.Path, $"{id}.wav"), new[] { (tracks[id], Gain(tracks[id])) }))
+                ];
+                masterGain = 1;
+            }
+        }
+
+        var frames = Math.Max(0, render.EndSample - render.StartSample);
+        var written = new List<string>();
+        foreach (var (path, sources) in outputs) {
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            using var writer = new WavWriter(path, 2, SampleRate, WavEncoding.Float32);
+            var block = new float[4096 * 2];
+            var tenth = Math.Max(1, frames / 10);
+            long reported = 0;
+            for (long done = 0; done < frames;) {
+                token.ThrowIfCancellationRequested();
+                var n = (int)Math.Min(4096, frames - done);
+                for (var i = 0; i < n; i++) {
+                    var at = render.StartSample + done + i;
+                    double x = 0;
+                    foreach (var (track, gain) in sources) {
+                        x += RenderAmplitude * gain * Math.Sin(2 * Math.PI * RenderFrequency(track.Id) * at / SampleRate);
+                    }
+
+                    block[2 * i] = block[(2 * i) + 1] = (float)(x * masterGain);
+                }
+
+                writer.Write(block.AsSpan(0, n * 2));
+                done += n;
+                if (done / tenth > reported) {
+                    reported = done / tenth;
+                    var fraction = (written.Count + (double)done / frames) / outputs.Count;
+                    await SendAsync(new RenderProgressMessage(render.JobId, fraction)).ConfigureAwait(false);
+                    await Task.Delay(1, token).ConfigureAwait(false);
+                }
+            }
+
+            written.Add(path);
+        }
+
+        return written;
     }
 
     /// <summary>Plays live MIDI: kept for the take while the track records, and echoed as activity.</summary>
@@ -480,24 +746,34 @@ public sealed class FakeHost : IAsyncDisposable {
         );
     }
 
-    /// <summary>Every instrument's state: the one it was given, else a made-up one naming its plugin.</summary>
+    /// <summary>
+    ///     Every instrument's and insert's state: the one it was given, else a made-up one naming its plugin (and the
+    ///     insert).
+    /// </summary>
     InstrumentStatesMessage States() {
         lock (gate) {
-            return new(
-                [
-                    ..tracks.Values.Where(static t => t.Instrument is not null)
-                        .OrderBy(static t => t.Id)
-                        .Select(t => new InstrumentState(
-                                t.Id,
-                                states.GetValueOrDefault(t.Id)
-                                ?? Convert.ToBase64String(
-                                    Encoding.UTF8.GetBytes($"fake-state:{t.Instrument!.PluginId}")
-                                )
-                            )
-                        )
-                ]
-            );
+            var all = new List<InstrumentState>();
+            foreach (var t in tracks.Values.OrderBy(static t => t.Id)) {
+                if (t.Instrument is { } instrument) {
+                    all.Add(new(t.Id, states.GetValueOrDefault(t.Id) ?? Fake($"fake-state:{instrument.PluginId}")));
+                }
+
+                all.AddRange(InsertStates(t.Id, t.Strip));
+            }
+
+            all.AddRange(InsertStates(-1, master));
+            return new(all);
         }
+
+        IEnumerable<InstrumentState> InsertStates(int trackId, EngineStrip strip) =>
+            (strip.Inserts ?? []).Select(i => new InstrumentState(
+                    trackId,
+                    insertStates.GetValueOrDefault((trackId, i.Id)) ?? Fake($"fake-state:{i.PluginId}:{i.Id}"),
+                    i.Id
+                )
+            );
+
+        static string Fake(string text) => Convert.ToBase64String(Encoding.UTF8.GetBytes(text));
     }
 
     RecordingFinishedMessage? Transport(TransportMessage message) {
