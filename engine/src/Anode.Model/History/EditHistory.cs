@@ -200,6 +200,11 @@ public static class UndoLabels {
                     SetProjectNotesCommand => "Change Project Notes",
                     JoinRegionsCommand => "Join Regions",
                     CopyRegionsCommand => "Copy Regions",
+                    AddInsertCommand { Chain: InsertChain.MidiEffects } => "Add MIDI FX",
+                    RemoveInsertCommand { Chain: InsertChain.MidiEffects } => "Remove MIDI FX",
+                    MoveInsertCommand { Chain: InsertChain.MidiEffects } => "Move MIDI FX",
+                    SetInsertCommand { Chain: InsertChain.MidiEffects } => "Change MIDI FX",
+                    SetInsertParameterCommand { Chain: InsertChain.MidiEffects } => "Change MIDI FX Parameter",
                     AddInsertCommand => "Add Plug-in",
                     RemoveInsertCommand => "Remove Plug-in",
                     MoveInsertCommand => "Move Plug-in",
@@ -220,7 +225,35 @@ public static class UndoLabels {
                     SetMixerSettingsCommand => "Change Mixer Settings",
                     ApplyPatchCommand => "Load Patch",
                     UnfreezeTrackCommand => "Unfreeze Track",
-                    _ => "Edit"
+                    _ => Phase6(batch.Commands[0])
+                };
+
+    static string Phase6(EditCommand command) =>
+        command switch {
+            AddPatternRegionCommand => "Create Pattern Region",
+            SetPatternRegionCommand => "Change Pattern Region",
+            SetPatternCommand => "Edit Pattern",
+            ConvertPatternToMidiCommand => "Convert Pattern to MIDI Region",
+            ReseedPatternCommand => "Randomize Pattern",
+            CreateDrumMachineCommand => "Create Drum Machine Designer",
+            AddDrumPadCommand => "Add Pad",
+            SetDrumPadCommand => "Change Pad",
+            RemoveDrumPadCommand => "Remove Pad",
+            SetSmartControlsCommand => "Change Smart Controls",
+            SetSmartControlCommand => "Change Smart Control",
+            SetSmartMappingsCommand => "Change Smart Control Mapping",
+            AutoMapSmartControlsCommand => "Map Smart Controls",
+            CompareSmartControlsCommand => "Compare Smart Controls",
+            AddSceneCommand => "Create Scene",
+            RemoveSceneCommand => "Delete Scene",
+            SetSceneCommand => "Change Scene",
+            SetCellCommand => "Change Cell",
+            DeleteCellsCommand => "Delete Cells",
+            MoveCellCommand { Copy: true } => "Copy Cell",
+            MoveCellCommand => "Move Cell",
+            SetLiveLoopsCommand => "Change Live Loops",
+            SetTrackActivationCommand => "Change Track Activation",
+            _ => "Edit"
                 };
 
     /// <summary>
@@ -237,6 +270,8 @@ public static class UndoLabels {
                 SetParameterCommand parameter => $"parameter|{parameter.TrackId}|{parameter.ParameterId}",
                 SetInsertParameterCommand insert =>
                     $"insert|{insert.TrackId ?? "master"}|{insert.InsertId}|{insert.ParameterId}",
+                SetSmartControlCommand { Name: null, Value: not null } smart =>
+                    $"smart|{smart.TrackId}|{smart.ControlId}",
                 SetSendCommand { Bus: null, PreFader: null } send =>
                     $"send|{send.TrackId}|{send.SendId}|{send.LevelDb.HasValue}{send.Pan.HasValue}",
                 SetAutomationCommand lane => $"automation|{lane.TrackId ?? "master"}|{lane.Target}",

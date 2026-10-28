@@ -303,8 +303,8 @@ public static partial class Edits {
             var item = Timeline.Region(state, id) ?? throw new EditException($"No region '{id}'.");
             CheckTick(item.Start + c.OffsetTicks, "copy's start");
             if (target is not null) {
-                var fits = item.Kind == TimelineKind.MidiRegion
-                    ? IsMidiKind(target.Kind)
+                var fits = item.Kind is TimelineKind.MidiRegion or TimelineKind.PatternRegion
+                    ? HoldsMidi(target)
                     : target.Kind == TrackKind.Audio;
                 if (!fits) {
                     throw new EditException($"Track '{target.Id}' cannot hold region '{id}'.");

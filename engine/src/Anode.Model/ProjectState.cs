@@ -47,6 +47,13 @@ public sealed record ProjectState(
     public ImmutableSortedDictionary<string, AutomationLane> Automation { get; init; } =
         ImmutableSortedDictionary.Create<string, AutomationLane>(StringComparer.Ordinal);
 
+    /// <summary>The Step Sequencer's pattern regions, by id (docs/07-phase-6.md).</summary>
+    public ImmutableSortedDictionary<string, PatternRegion> PatternRegions { get; init; } =
+        ImmutableSortedDictionary.Create<string, PatternRegion>(StringComparer.Ordinal);
+
+    /// <summary>The Live Loops grid (docs/07-phase-6.md).</summary>
+    public LiveLoopsGrid LiveLoops { get; init; } = ProjectDefaults.LiveLoops;
+
     /// <summary>The project's Note Pad.</summary>
     public string Notes { get; init; } = string.Empty;
 
@@ -128,6 +135,27 @@ public sealed record ProjectState(
         return max;
     }
 
+    /// <summary>The highest note or controller id of the Live Loops grid's MIDI cells (0 when they have none).</summary>
+    public static long MaxEventId(LiveLoopsGrid grid) {
+        long max = 0;
+        foreach (var cell in grid.Cells) {
+            if (cell.Content.Midi is { } midi) {
+                max = Math.Max(max, MaxEventId(midi));
+            }
+        }
+
+        return max;
+    }
+
+    /// <summary>The pattern regions of a track, by start.</summary>
+    public IEnumerable<PatternRegion> PatternRegionsOf(string trackId) =>
+        PatternRegions.Values.Where(r => r.TrackId == trackId)
+            .OrderBy(static r => r.StartTick)
+            .ThenBy(static r => r.Id, StringComparer.Ordinal);
+
+    /// <summary>The Live Loops cells of a track.</summary>
+    public IEnumerable<Cell> CellsOf(string trackId) => LiveLoops.Cells.Where(c => c.TrackId == trackId);
+
     /// <summary>The take folders of a track, by start.</summary>
     public IEnumerable<TakeFolder> TakeFoldersOf(string trackId) =>
         TakeFolders.Values.Where(f => f.TrackId == trackId)
@@ -167,8 +195,8 @@ public sealed record ProjectState(
             Notes,
             [..Groups.Values],
             [..Automation.Values],
-            [], // Pattern regions and Live Loops: Phase 6, workstream B (docs/07-phase-6.md).
-            ProjectDefaults.LiveLoops
+            [..PatternRegions.Values],
+            LiveLoops
         );
 
     /// <summary>Applies one delta operation (an edit's primitive step, also what clients apply).</summary>
@@ -183,6 +211,9 @@ public sealed record ProjectState(
                 ),
                 TakeFolders = TakeFolders.RemoveRange(
                     TakeFolders.Values.Where(f => f.TrackId == id).Select(static f => f.Id)
+                ),
+                PatternRegions = PatternRegions.RemoveRange(
+                    PatternRegions.Values.Where(r => r.TrackId == id).Select(static r => r.Id)
                 ),
                 Automation = Automation.RemoveRange(
                     Automation.Values.Where(l => l.TrackId == id).Select(static l => l.Id)
@@ -210,6 +241,11 @@ public sealed record ProjectState(
             AutomationLaneRemoved(var id) => this with { Automation = Automation.Remove(id) },
             GroupUpserted(var group) => this with { Groups = Groups.SetItem(group.Number, group) },
             GroupRemoved(var number) => this with { Groups = Groups.Remove(number) },
+            PatternRegionUpserted(var region) => this with { PatternRegions = PatternRegions.SetItem(region.Id, region) },
+            PatternRegionRemoved(var id) => this with { PatternRegions = PatternRegions.Remove(id) },
+            LiveLoopsChanged(var grid) => this with {
+                LiveLoops = grid, LastEventId = Math.Max(LastEventId, MaxEventId(grid))
+            },
             _ => throw new ArgumentException($"Unknown delta operation {op.GetType().Name}.", nameof(op))
         };
 
@@ -241,6 +277,13 @@ public sealed record ProjectState(
             MarkerUpserted or MarkerRemoved or SectionUpserted or SectionRemoved => InverseArrangement(op),
             NotesChanged => new NotesChanged(Notes),
             AutomationLaneUpserted or AutomationLaneRemoved or GroupUpserted or GroupRemoved => InverseMixer(op),
+            PatternRegionUpserted(var region) => PatternRegions.TryGetValue(region.Id, out var old)
+                ? new PatternRegionUpserted(old)
+                : new PatternRegionRemoved(region.Id),
+            PatternRegionRemoved(var id) => PatternRegions.TryGetValue(id, out var old)
+                ? new PatternRegionUpserted(old)
+                : null,
+            LiveLoopsChanged => new LiveLoopsChanged(LiveLoops),
             _ => throw new ArgumentException($"Unknown delta operation {op.GetType().Name}.", nameof(op))
         };
 

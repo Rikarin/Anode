@@ -13,7 +13,8 @@ namespace Anode.Model.Storage;
 ///     in order; each track and its regions are in <c>tracks/&lt;id&gt;.json</c>. Schema 3 adds the global tracks (in
 ///     <c>settings</c>), markers, arrangement sections, the project's notes and the editor's screensets; schema 4 the
 ///     mixer (the master's inserts, mixer settings), the mixer groups and the master's automation lanes; schema 5
-///     Smart Tempo and Varispeed (in <c>settings</c>), tempo ramps' shapes and files' tempos.
+///     Smart Tempo and Varispeed (in <c>settings</c>), tempo ramps' shapes and files' tempos; schema 6 the master's MIDI
+///     FX (empty) and the Live Loops grid.
 /// </summary>
 public sealed record ProjectFile(
     int SchemaVersion,
@@ -29,12 +30,14 @@ public sealed record ProjectFile(
     string? Notes = null,
     IReadOnlyList<Screenset>? Screensets = null,
     IReadOnlyList<MixerGroup>? Groups = null,
-    IReadOnlyList<AutomationLane>? Automation = null
+    IReadOnlyList<AutomationLane>? Automation = null,
+    LiveLoopsGrid? LiveLoops = null
 );
 
 /// <summary>
 ///     <c>tracks/&lt;id&gt;.json</c>: one track and its regions, audio and MIDI (schema 2), its take folders (schema 3),
-///     its automation lanes (schema 4), and its flex and alternatives, and its regions' flex (schema 5).
+///     its automation lanes (schema 4), and its flex and alternatives, and its regions' flex (schema 5); its MIDI FX,
+///     drum machine, Smart Controls and Live Loops activation, and its pattern regions (schema 6).
 /// </summary>
 public sealed record TrackFile(
     int SchemaVersion,
@@ -42,7 +45,8 @@ public sealed record TrackFile(
     IReadOnlyList<AudioRegion> Regions,
     IReadOnlyList<MidiRegion>? MidiRegions = null,
     IReadOnlyList<TakeFolder>? TakeFolders = null,
-    IReadOnlyList<AutomationLane>? Automation = null
+    IReadOnlyList<AutomationLane>? Automation = null,
+    IReadOnlyList<PatternRegion>? PatternRegions = null
 );
 
 /// <summary>A package that cannot be read: missing, damaged, or from a newer Anode.</summary>
@@ -109,7 +113,8 @@ public static class ProjectPackage {
                         .ThenBy(static r => r.Id, StringComparer.Ordinal)
                 ],
                 [..state.TakeFoldersOf(track.Id)],
-                [..state.LanesOf(track.Id)]
+                [..state.LanesOf(track.Id)],
+                [..state.PatternRegionsOf(track.Id)]
             );
             AtomicRename.Write(
                 Path.Combine(tracksFolder, TrackFileName(track.Id)),
@@ -131,7 +136,8 @@ public static class ProjectPackage {
             state.Notes,
             [..state.Screensets.Values],
             [..state.Groups.Values],
-            [..state.LanesOf(null)]
+            [..state.LanesOf(null)],
+            state.LiveLoops
         );
         AtomicRename.Write(
             Path.Combine(folder, ProjectFileName),
@@ -170,6 +176,7 @@ public static class ProjectPackage {
         var regions = ImmutableSortedDictionary.CreateBuilder<string, AudioRegion>(StringComparer.Ordinal);
         var midiRegions = ImmutableSortedDictionary.CreateBuilder<string, MidiRegion>(StringComparer.Ordinal);
         var folders = ImmutableSortedDictionary.CreateBuilder<string, TakeFolder>(StringComparer.Ordinal);
+        var patterns = ImmutableSortedDictionary.CreateBuilder<string, PatternRegion>(StringComparer.Ordinal);
         var trackFiles = new List<TrackFile>();
         foreach (var id in (root.Tracks ?? []).Distinct(StringComparer.Ordinal)) {
             if (ReadTrack(folder, id) is { } file) {
@@ -182,6 +189,7 @@ public static class ProjectPackage {
         Unnest(tracks);
         foreach (var file in trackFiles) {
             AddRegions(file, file.Track, files, regions, midiRegions, folders);
+            AddPatterns(file, file.Track, patterns);
         }
 
         var groups = ImmutableSortedDictionary.CreateRange(
@@ -194,6 +202,7 @@ public static class ProjectPackage {
             .DistinctBy(static p => p.Key)
         );
         Relink(tracks, groups, files);
+        DrumMachines(tracks);
         var master = Normalise(root.Master, null);
         var trackIds = tracks.Select(static t => t.Id).ToHashSet(StringComparer.Ordinal);
         var loaded = new ProjectState(
@@ -209,9 +218,15 @@ public static class ProjectPackage {
             files,
             midiRegions.ToImmutable()
         ) { Groups = groups };
+        var liveLoops = LiveLoops(root.LiveLoops, tracks, files);
         return loaded with {
-            LastEventId = midiRegions.Values.Select(ProjectState.MaxEventId).DefaultIfEmpty().Max(),
+            LastEventId = Math.Max(
+                midiRegions.Values.Select(ProjectState.MaxEventId).DefaultIfEmpty().Max(),
+                ProjectState.MaxEventId(liveLoops)
+            ),
             TakeFolders = folders.ToImmutable(),
+            PatternRegions = patterns.ToImmutable(),
+            LiveLoops = liveLoops,
             Markers = Keyed(
                 root.Markers?.Select(static m => m is { Text: null } ? m with { Text = string.Empty } : m).ToArray(),
                 static m => m?.Id is not null && m.Name is not null,
@@ -402,7 +417,7 @@ public static class ProjectPackage {
         }
 
         foreach (var region in file.MidiRegions ?? []) {
-            if (region?.TrackId == track.Id && Edits.IsMidiKind(track.Kind) && region.Id is not null) {
+            if (region?.TrackId == track.Id && Edits.HoldsMidi(track) && region.Id is not null) {
                 midiRegions[region.Id] = Normalise(region);
             }
         }
@@ -419,6 +434,116 @@ public static class ProjectPackage {
                     Comp = [..(folder.Comp ?? []).Where(s => s is not null && ids.Contains(s.TakeId))]
                 };
             }
+        }
+    }
+
+    /// <summary>A track file's pattern regions that belong to it: well formed, on a track that holds MIDI.</summary>
+    static void AddPatterns(
+        TrackFile file,
+        Track track,
+        ImmutableSortedDictionary<string, PatternRegion>.Builder patterns
+    ) {
+        if (!Edits.HoldsMidi(track)) {
+            return;
+        }
+
+        foreach (var region in file.PatternRegions ?? []) {
+            if (region?.Id is not null && region.TrackId == track.Id && region.Name is not null && Valid(region.Pattern)) {
+                patterns[region.Id] = region with { Pattern = region.Pattern with { Rows = [..region.Pattern.Rows] } };
+            }
+        }
+    }
+
+    static bool Valid(Pattern? pattern) {
+        try {
+            _ = Edits.CheckPattern(pattern);
+            return true;
+        } catch (EditException) {
+            return false;
+        }
+    }
+
+    /// <summary>
+    ///     The Live Loops grid as read: scenes with ids, cells on tracks and scenes of the project with exactly one
+    ///     content of a kind their track holds (an audio cell of a known file), one per slot.
+    /// </summary>
+    static LiveLoopsGrid LiveLoops(
+        LiveLoopsGrid? grid,
+        ImmutableList<Track>.Builder tracks,
+        ImmutableSortedDictionary<string, AudioFile> files
+    ) {
+        if (grid is null) {
+            return ProjectDefaults.LiveLoops;
+        }
+
+        var scenes = (grid.Scenes ?? []).Where(static s => s?.Id is not null && s.Name is not null)
+            .DistinctBy(static s => s.Id)
+            .ToArray();
+        var sceneIds = scenes.Select(static s => s.Id).ToHashSet(StringComparer.Ordinal);
+        var byId = tracks.ToDictionary(static t => t.Id, StringComparer.Ordinal);
+        var cells = (grid.Cells ?? [])
+            .Where(c => c?.Id is not null
+                && c.Name is not null
+                && c.Content is not null
+                && sceneIds.Contains(c.SceneId ?? string.Empty)
+                && byId.TryGetValue(c.TrackId ?? string.Empty, out var track)
+                && Enum.IsDefined(c.PlayMode)
+                && c.LengthTicks > 0
+                && Fits(c, track, files)
+            )
+            .Select(static c => c.Content.Midi is { } m ? c with { Content = new(Midi: Normalise(m)) } : c)
+            .Select(static c => c.Content.Audio is { } a ? c with { Content = new(Audio: Normalise(a)) } : c)
+            .DistinctBy(static c => c.Id)
+            .DistinctBy(static c => (c.TrackId, c.SceneId))
+            .ToArray();
+        return new(
+            scenes,
+            cells,
+            Enum.IsDefined(grid.Quantize) ? grid.Quantize : ProjectDefaults.LiveLoops.Quantize,
+            grid.Shown
+        );
+    }
+
+    /// <summary>Whether a cell's content is one snapshot of its kind, on a track that holds it.</summary>
+    static bool Fits(Cell cell, Track track, ImmutableSortedDictionary<string, AudioFile> files) =>
+        cell.Kind switch {
+            CellKind.Audio => cell.Content is { Audio: { } a, Midi: null, Pattern: null }
+                && track.Kind == TrackKind.Audio
+                && files.ContainsKey(a.FileId ?? string.Empty),
+            CellKind.Midi => cell.Content is { Midi: not null, Audio: null, Pattern: null } && Edits.HoldsMidi(track),
+            CellKind.Pattern => cell.Content is { Pattern: { } p, Audio: null, Midi: null }
+                && Edits.HoldsMidi(track)
+                && Valid(p.Pattern),
+            _ => false
+        };
+
+    /// <summary>
+    ///     A Drum Machine Designer is a stack; its pads are its own members, one per note, sorted; other tracks have no
+    ///     drum machine.
+    /// </summary>
+    static void DrumMachines(ImmutableList<Track>.Builder tracks) {
+        for (var i = 0; i < tracks.Count; i++) {
+            var t = tracks[i];
+            if (t.DrumMachine is null) {
+                continue;
+            }
+
+            if (t.Kind != TrackKind.Stack) {
+                tracks[i] = t with { DrumMachine = null };
+                continue;
+            }
+
+            var pads = (t.DrumMachine.Pads ?? [])
+                .Where(p => p?.TrackId is not null
+                    && p.Name is not null
+                    && p.Note is >= 0 and <= 127
+                    && tracks.Any(m => m.Id == p.TrackId && m.ParentId == t.Id)
+                )
+                .DistinctBy(static p => p.Note)
+                .DistinctBy(static p => p.TrackId)
+                .OrderBy(static p => p.Note)
+                .ToArray();
+            tracks[i] = t with { DrumMachine = new(pads) };
         }
     }
 
@@ -507,8 +632,37 @@ public static class ProjectPackage {
             MidiOutput = track.Kind == TrackKind.Midi ? track.MidiOutput : null,
             Notes = track.Notes ?? string.Empty,
             Strip = Normalise(track.Strip, track),
-            AutomationMode = Enum.IsDefined(track.AutomationMode) ? track.AutomationMode : AutomationMode.Read
+            AutomationMode = Enum.IsDefined(track.AutomationMode) ? track.AutomationMode : AutomationMode.Read,
+            SmartControls = Normalise(track.SmartControls, track)
         };
+
+    /// <summary>A track's Smart Controls as read: every control of its layout, mappings well formed (null: none yet).</summary>
+    static SmartControls? Normalise(SmartControls? smart, Track track) {
+        if (smart is null || !Edits.HasAudioStrip(track.Kind)) {
+            return null;
+        }
+
+        var layout = Enum.IsDefined(smart.Layout) ? smart.Layout : SmartControlsLayout.Knobs8;
+        var defaults = Edits.SmartControlsOf(track with { SmartControls = null, Strip = Normalise(track.Strip, track) });
+        var saved = (smart.Controls ?? []).Where(static c => c?.Id is not null)
+            .DistinctBy(static c => c.Id)
+            .ToDictionary(static c => c.Id, StringComparer.Ordinal);
+        var controls = Edits.ControlIds(layout)
+            .Select(id => saved.TryGetValue(id, out var c)
+                ? c with {
+                    Name = c.Name ?? string.Empty,
+                    Kind = Edits.SmartControlKindOf(id),
+                    Value = double.IsFinite(c.Value) ? Math.Clamp(c.Value, 0, 1) : 0,
+                    Mappings = [
+                        ..(c.Mappings ?? []).Where(static m => m?.Target is not null)
+                            .Select(static m => m with { Graph = m.Graph ?? SmartMath.Line })
+                    ]
+                }
+                : new SmartControl(id, string.Empty, Edits.SmartControlKindOf(id), 0, null, [])
+            )
+            .ToArray();
+        return new(layout, controls, defaults.Arpeggiator, smart.Comparing);
+    }
 
     /// <summary>A strip as read: its lists present and well formed, its output one there is.</summary>
     static ChannelStrip Normalise(ChannelStrip? strip, Track? track) {
@@ -530,7 +684,18 @@ public static class ProjectPackage {
             Sends = full && track is not null ? [..sends] : [],
             Output = Routing.Normalise(strip.Output) ?? Routing.Master,
             Groups = strip.Groups ?? [],
-            MidiEffects = strip.MidiEffects ?? [] // Phase 6, workstream B normalises them (docs/07-phase-6.md)
+            MidiEffects = track is not null && Edits.IsMidiKind(track.Kind)
+                ? [
+                    ..(strip.MidiEffects ?? []).Where(static i => i?.Id is not null && i.PluginId is not null)
+                        .Select(static i => i with {
+                                Name = i.Name ?? i.PluginId,
+                                Parameters = PluginCatalog.Sorted(i.Parameters),
+                                Sidechain = null
+                            }
+                        )
+                        .DistinctBy(static i => i.Id)
+                ]
+                : []
         };
     }
 
@@ -653,11 +818,11 @@ public static class ProjectPackage {
 ///     refused rather than read wrongly.
 /// </remarks>
 public static class PackageMigrations {
-    public const int CurrentSchemaVersion = 5;
+    public const int CurrentSchemaVersion = 6;
     const string VersionField = "schemaVersion";
 
     /// <summary><c>Steps[n]</c> takes schema <c>n + 1</c> to <c>n + 2</c>; it gets the kind of file and its JSON.</summary>
-    static readonly Func<string, JsonObject, JsonObject>[] Steps = [ToSchema2, ToSchema3, ToSchema4, ToSchema5];
+    static readonly Func<string, JsonObject, JsonObject>[] Steps = [ToSchema2, ToSchema3, ToSchema4, ToSchema5, ToSchema6];
 
     public static JsonObject Upgrade(JsonObject json, string kind) {
         var version = json[VersionField] is JsonValue v && v.TryGetValue<int>(out var n) ? n : 1;
@@ -672,7 +837,6 @@ public static class PackageMigrations {
         }
 
         json[VersionField] = CurrentSchemaVersion;
-        Phase6Fields.Fill(kind, json);
         return json;
     }
 
@@ -823,25 +987,35 @@ public static class PackageMigrations {
 
         return json;
     }
+
+    /// <summary>
+    ///     Schema 5 (Phase 5) to 6 (Phase 6, loops, patterns and performance; docs/07-phase-6.md): strips have no MIDI
+    ///     FX; tracks have no drum machine, no Smart Controls and play their Tracks-area regions, and no pattern regions;
+    ///     the Live Loops grid is empty, launching on the bar, hidden.
+    /// </summary>
+    static JsonObject ToSchema6(string kind, JsonObject json) {
+        if (kind == "project") {
+            Schema6.Strip(json["master"] as JsonObject);
+            json["liveLoops"] ??= new JsonObject {
+                ["scenes"] = new JsonArray(), ["cells"] = new JsonArray(), ["quantize"] = "bar", ["shown"] = false
+            };
+        } else if (kind == "track") {
+            if (json["track"] is JsonObject track) {
+                Schema6.Strip(track["strip"] as JsonObject);
+                track["liveLoopsActive"] ??= false;
+            }
+
+            json["patternRegions"] ??= new JsonArray();
+        }
+
+        return json;
+    }
 }
 
-/// <summary>
-///     The Phase 6 fields (docs/07-phase-6.md) at their defaults where a file lacks them, so schema-5 packages read with
-///     the Phase 6 contracts: interim, until workstream B adds schema 6 and its migration from 5 (which replaces this,
-///     with the same defaults). Strips have no MIDI FX; tracks have no drum machine, no Smart Controls (null) and play
-///     their Tracks-area regions. Leaves fields that are present alone.
-/// </summary>
-static class Phase6Fields {
-    public static void Fill(string kind, JsonObject json) {
-        if (kind == "project") {
-            Strip(json["master"] as JsonObject);
-        } else if (kind == "track" && json["track"] is JsonObject track) {
-            Strip(track["strip"] as JsonObject);
-            track["liveLoopsActive"] ??= false;
-        }
-    }
-
-    static void Strip(JsonObject? strip) {
+/// <summary>The Phase 6 additions to a schema-5 file (docs/07-phase-6.md).</summary>
+static class Schema6 {
+    /// <summary>A channel strip without MIDI FX.</summary>
+    public static void Strip(JsonObject? strip) {
         if (strip is not null) {
             strip["midiEffects"] ??= new JsonArray();
         }

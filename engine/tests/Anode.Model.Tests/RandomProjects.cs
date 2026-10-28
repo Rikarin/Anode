@@ -35,8 +35,8 @@ static class RandomProjects {
                 true,
                 [],
                 [
-                    new("cutoff", "Cutoff", 20, 20_000, 8_000, "Hz", 0, null),
-                    new("resonance", "Resonance", 0, 1, 0.2, string.Empty, 0, null),
+                    new("cutoff", "Cutoff", 20, 20_000, 8_000, "Hz", 0, null, 1),
+                    new("resonance", "Resonance", 0, 1, 0.2, string.Empty, 0, null, 2),
                     new("wave", "Waveform", 0, 3, 0, string.Empty, 3, ["Saw", "Square", "Triangle", "Sine"]),
                     new("volume", "Volume", -60, 6, -6, "dB", 0, null)
                 ],
@@ -95,8 +95,8 @@ static class RandomProjects {
                 false,
                 [],
                 [
-                    new("threshold", "Threshold", -60, 0, -20, "dB", 0, null),
-                    new("ratio", "Ratio", 1, 20, 4, string.Empty, 0, null),
+                    new("threshold", "Threshold", -60, 0, -20, "dB", 0, null, 2),
+                    new("ratio", "Ratio", 1, 20, 4, string.Empty, 0, null, 1),
                     new("character", "Character", 0, 2, 0, string.Empty, 2, ["VCA", "FET", "Opto"])
                 ],
                 "Dynamics",
@@ -119,15 +119,50 @@ static class RandomProjects {
                 "Utility",
                 false,
                 true
+            ),
+            new(
+                "anode.arpeggiator",
+                "Arpeggiator",
+                "Anode",
+                "1.0",
+                PluginFormat.Builtin,
+                false,
+                [],
+                [
+                    new("rate", "Rate", 0, 7, 3, string.Empty, 7, null, 1),
+                    new("octaves", "Octaves", 1, 4, 1, string.Empty, 3, null, 2),
+                    new("gate", "Gate", 0.05, 1, 0.5, string.Empty, 0, null)
+                ],
+                "MIDI Effect",
+                false,
+                false
+            ),
+            new(
+                "anode.transposer",
+                "Transposer",
+                "Anode",
+                "1.0",
+                PluginFormat.Builtin,
+                false,
+                [],
+                [new("semitones", "Semitones", -24, 24, 0, "st", 48, null)],
+                "MIDI Effect",
+                false,
+                false
             )
         ]
     );
+
+    /// <summary>The MIDI effects of <see cref="Plugins" />.</summary>
+    public static IReadOnlyList<PluginInfo> MidiEffects { get; } =
+        [..Plugins.Plugins.Where(static p => p.Category == "MIDI Effect")];
 
     /// <summary>The analysis edits ask for (<see cref="FakeAnalysis" />).</summary>
     public static FakeAnalysis Analysis { get; } = new();
 
     /// <summary>The effects of <see cref="Plugins" />.</summary>
-    public static IReadOnlyList<PluginInfo> Effects { get; } = [..Plugins.Plugins.Where(static p => !p.IsInstrument)];
+    public static IReadOnlyList<PluginInfo> Effects { get; } =
+        [..Plugins.Plugins.Where(static p => !p.IsInstrument && p.Category != "MIDI Effect")];
 
     /// <summary>Two saved patches: an audio channel strip and an instrument one.</summary>
     public static TestPatches Patches { get; } = new(
@@ -175,7 +210,28 @@ static class RandomProjects {
                     )
                 ],
                 []
-            )
+            ),
+            new ChannelPatch("pat_kit", "Test Kit", "Drums", TrackKind.Stack, null, [], []) {
+                Pads = [
+                    new(36, "Kick", new("anode.synth", "Synth", new Dictionary<string, double> { ["cutoff"] = 200 }, null), []),
+                    new(38, "Snare", new("anode.sampler", "Sampler", new Dictionary<string, double>(), null), []),
+                    new(
+                        42,
+                        "Hat",
+                        new("anode.synth", "Synth", new Dictionary<string, double>(), null),
+                        [
+                            new(
+                                "ins_k1",
+                                "anode.test-compressor",
+                                "Test Compressor",
+                                false,
+                                new Dictionary<string, double> { ["threshold"] = -10 },
+                                null
+                            )
+                        ]
+                    )
+                ]
+            }
         ]
     );
 
@@ -253,40 +309,44 @@ static class RandomProjects {
             state = Edits.Freeze(state, frozen.Id, state.Files.Keys.First()).State;
         }
 
+        // Phase 6 content (docs/07-phase-6.md): pattern regions, a drum machine, MIDI FX, Smart Controls, scenes and
+        // cells, so their commands find something to edit.
+        if (edits > 20) {
+            Type[] phase6 = [
+                typeof(AddPatternRegionCommand),
+                typeof(CreateDrumMachineCommand),
+                typeof(AddPatternRegionCommand),
+                typeof(AddInsertCommand),
+                typeof(SetSmartMappingsCommand),
+                typeof(AddSceneCommand),
+                typeof(AddSceneCommand),
+                typeof(SetCellCommand),
+                typeof(SetCellCommand),
+                typeof(SetCellCommand)
+            ];
+            foreach (var type in phase6) {
+                var command = type == typeof(AddInsertCommand) && MidiTracks(state).FirstOrDefault() is { } t
+                    ? new AddInsertCommand(Pick(random, MidiEffects).Id, t.Id, Chain: InsertChain.MidiEffects)
+                    : Command(type, state, random);
+                if (command is null) {
+                    continue;
+                }
+
+                try {
+                    state = Edits.Apply(state, command, ids, Plugins, Patches, Analysis).State;
+                } catch (EditException) {
+                    // not every random edit applies
+                }
+            }
+        }
+
         return (state, ids, random);
     }
 
     static string? FirstAudioTrack(ProjectState state) => state.Tracks.Find(static t => t.Kind == TrackKind.Audio)?.Id;
 
-    /// <summary>
-    ///     Phase 6 commands (docs/07-phase-6.md) the model rejects until workstream B implements them; the identity
-    ///     property skips them. (MIDI FX slots, the insert commands' <c>chain: midiEffects</c>, are rejected too, and the
-    ///     generators never ask for them yet.)
-    /// </summary>
-    public static readonly IReadOnlySet<string> PendingPhase6 = new HashSet<string>(StringComparer.Ordinal) {
-        nameof(AddPatternRegionCommand),
-        nameof(SetPatternRegionCommand),
-        nameof(SetPatternCommand),
-        nameof(ConvertPatternToMidiCommand),
-        nameof(ReseedPatternCommand),
-        nameof(CreateDrumMachineCommand),
-        nameof(AddDrumPadCommand),
-        nameof(SetDrumPadCommand),
-        nameof(RemoveDrumPadCommand),
-        nameof(SetSmartControlsCommand),
-        nameof(SetSmartControlCommand),
-        nameof(SetSmartMappingsCommand),
-        nameof(AutoMapSmartControlsCommand),
-        nameof(CompareSmartControlsCommand),
-        nameof(AddSceneCommand),
-        nameof(RemoveSceneCommand),
-        nameof(SetSceneCommand),
-        nameof(SetCellCommand),
-        nameof(DeleteCellsCommand),
-        nameof(MoveCellCommand),
-        nameof(SetLiveLoopsCommand),
-        nameof(SetTrackActivationCommand)
-    };
+    static IEnumerable<Track> MidiTracks(ProjectState state) =>
+        state.Tracks.Where(static t => Edits.IsMidiKind(t.Kind) && t.FrozenFileId is null);
 
     /// <summary>A random command of <paramref name="type" /> for <paramref name="s" />, or null when none can be made.</summary>
     public static EditCommand? Command(Type type, ProjectState s, Random r) {
@@ -295,7 +355,7 @@ static class RandomProjects {
         var midiRegions = s.MidiRegions.Values.ToArray();
         var files = s.Files.Values.ToArray();
         var instruments = tracks.Where(static t => t.Kind == TrackKind.Instrument).ToArray();
-        var midiTracks = tracks.Where(static t => Edits.IsMidiKind(t.Kind)).ToArray();
+        var midiTracks = tracks.Where(static t => Edits.HoldsMidi(t)).ToArray();
         var folders = s.TakeFolders.Values.ToArray();
         var markers = s.Markers.Values.ToArray();
         var sections = s.Sections.Values.ToArray();
@@ -304,6 +364,11 @@ static class RandomProjects {
         var mixed = tracks.Where(static t => Edits.HasAudioStrip(t.Kind)).ToArray();
         var vcas = tracks.Where(static t => t.Kind == TrackKind.Vca).ToArray();
         var groups = s.Groups.Keys.ToArray();
+        var patterns = s.PatternRegions.Values.ToArray();
+        var machines = tracks.Where(static t => t.DrumMachine is not null).ToArray();
+        var scenes = s.LiveLoops.Scenes;
+        var cells = s.LiveLoops.Cells;
+        var withFx = tracks.Where(static t => t.Strip.MidiEffects.Count > 0).ToArray();
         return type.Name switch {
             nameof(AddTrackCommand) => AddTrack(r, tracks.Count),
             nameof(RemoveTrackCommand) => Track() is { } t ? new RemoveTrackCommand(t) : null,
@@ -513,21 +578,45 @@ static class RandomProjects {
                     r.Next(3) == 0 ? Track() : null
                 )
                 : null,
-            nameof(AddInsertCommand) => new AddInsertCommand(
-                r.Next(12) == 0 ? Pick(r, Plugins.Plugins).Id : Pick(r, Effects).Id,
-                r.Next(5) == 0 || mixed.Length == 0 ? null : Pick(r, mixed).Id,
-                r.Next(2) == 0 ? null : r.Next(0, 3)
-            ),
-            nameof(RemoveInsertCommand) => WithInserts() is var (t, strip) && strip is not null
-                ? new RemoveInsertCommand(Pick(r, strip.Inserts).Id, t)
-                : null,
-            nameof(MoveInsertCommand) => WithInserts() is var (t, strip) && strip is not null
-                ? new MoveInsertCommand(
-                    Pick(r, strip.Inserts).Id,
-                    r.Next(0, strip.Inserts.Count + (r.Next(8) == 0 ? 1 : 0)),
-                    t
+            nameof(AddInsertCommand) => r.Next(4) == 0 && midiTracks.Length > 0
+                ? new AddInsertCommand(
+                    r.Next(8) == 0 ? Pick(r, Effects).Id : Pick(r, MidiEffects).Id,
+                    Pick(r, midiTracks).Id,
+                    r.Next(2) == 0 ? null : r.Next(0, 2),
+                    InsertChain.MidiEffects
                 )
-                : null,
+                : new AddInsertCommand(
+                    r.Next(12) == 0 ? Pick(r, Plugins.Plugins).Id : Pick(r, Effects).Id,
+                    r.Next(5) == 0 || mixed.Length == 0 ? null : Pick(r, mixed).Id,
+                    r.Next(2) == 0 ? null : r.Next(0, 3)
+                ),
+            nameof(RemoveInsertCommand) => r.Next(3) == 0 && withFx.Length > 0 && Pick(r, withFx) is var fx
+                ? new RemoveInsertCommand(Pick(r, fx.Strip.MidiEffects).Id, fx.Id, InsertChain.MidiEffects)
+                : WithInserts() is var (t, strip) && strip is not null
+                    ? new RemoveInsertCommand(Pick(r, strip.Inserts).Id, t)
+                    : null,
+            nameof(MoveInsertCommand) => r.Next(3) == 0 && withFx.Length > 0 && Pick(r, withFx) is var fx
+                ? new MoveInsertCommand(
+                    Pick(r, fx.Strip.MidiEffects).Id,
+                    r.Next(0, fx.Strip.MidiEffects.Count),
+                    fx.Id,
+                    InsertChain.MidiEffects
+                )
+                : WithInserts() is var (t, strip) && strip is not null
+                    ? new MoveInsertCommand(
+                        Pick(r, strip.Inserts).Id,
+                        r.Next(0, strip.Inserts.Count + (r.Next(8) == 0 ? 1 : 0)),
+                        t
+                    )
+                    : null,
+            nameof(SetInsertCommand) when r.Next(3) == 0 && withFx.Length > 0 && Pick(r, withFx) is var fx =>
+                new SetInsertCommand(
+                    Pick(r, fx.Strip.MidiEffects).Id,
+                    fx.Id,
+                    r.Next(2) == 0,
+                    r.Next(8) == 0 ? "bus:1" : null,
+                    InsertChain.MidiEffects
+                ),
             nameof(SetInsertCommand) => WithInserts() is var (t, strip) && strip is not null
                 ? new SetInsertCommand(
                     Pick(r, strip.Inserts).Id,
@@ -540,6 +629,8 @@ static class RandomProjects {
                     }
                 )
                 : null,
+            nameof(SetInsertParameterCommand) when r.Next(3) == 0 && withFx.Length > 0 && Pick(r, withFx) is var fx =>
+                InsertParameter(Pick(r, fx.Strip.MidiEffects), fx.Id, r) with { Chain = InsertChain.MidiEffects },
             nameof(SetInsertParameterCommand) => WithInserts() is var (t, strip) && strip is not null
                 ? InsertParameter(Pick(r, strip.Inserts), t, r)
                 : null,
@@ -687,50 +778,115 @@ static class RandomProjects {
                 r.Next(2) == 0 ? null : Pick(r, Enum.GetValues<FlexFollow>()),
                 Maybe(r.Next(2) == 0)
             ),
-            // Phase 6 commands (docs/07-phase-6.md): placeholders until the model implements them (workstream B
-            // replaces these with generators that make commands that apply, and removes PendingPhase6).
-            nameof(AddPatternRegionCommand) => Instrument() is { } t
-                ? new AddPatternRegionCommand(t.Id, r.Next(0, 16) * 960L)
+            // Phase 6 commands (docs/07-phase-6.md).
+            nameof(AddPatternRegionCommand) => (r.Next(2) == 0 && machines.Length > 0 ? Pick(r, machines) : MidiTrack())
+                is { } t
+                ? new AddPatternRegionCommand(
+                    t.Id,
+                    r.Next(0, 16) * 960L,
+                    r.Next(3) == 0 ? null : r.Next(1, 9) * 960L,
+                    r.Next(2) == 0 ? null : RandomPattern(r, t),
+                    MaybeText($"Beat {r.Next(10)}")
+                )
                 : null,
-            nameof(SetPatternRegionCommand) => new SetPatternRegionCommand("pat_none", Muted: r.Next(2) == 0),
-            nameof(SetPatternCommand) => new SetPatternCommand("pat_none", new([], 0, r.Next())),
-            nameof(ConvertPatternToMidiCommand) => new ConvertPatternToMidiCommand("pat_none"),
-            nameof(ReseedPatternCommand) => new ReseedPatternCommand("pat_none", r.Next()),
-            nameof(CreateDrumMachineCommand) => new CreateDrumMachineCommand(),
-            nameof(AddDrumPadCommand) => Instrument() is { } t ? new AddDrumPadCommand(t.Id, 36 + r.Next(16)) : null,
-            nameof(SetDrumPadCommand) => Instrument() is { } t
-                ? new SetDrumPadCommand(t.Id, 36 + r.Next(16), "Kick")
+            nameof(SetPatternRegionCommand) => patterns.Length > 0
+                ? new SetPatternRegionCommand(
+                    Pick(r, patterns).Id,
+                    r.Next(2) == 0 ? null : r.Next(0, 32) * 480L,
+                    r.Next(2) == 0 ? null : r.Next(r.Next(16) == 0 ? -1 : 1, 16) * 480L,
+                    MaybeText($"Groove {r.Next(10)}"),
+                    Maybe(r.Next(2) == 0)
+                )
                 : null,
-            nameof(RemoveDrumPadCommand) => Instrument() is { } t
-                ? new RemoveDrumPadCommand(t.Id, 36 + r.Next(16))
+            nameof(SetPatternCommand) => patterns.Length > 0 && Pick(r, patterns) is var p
+                ? new SetPatternCommand(p.Id, RandomPattern(r, s.FindTrack(p.TrackId)!))
                 : null,
-            nameof(SetSmartControlsCommand) => Track() is { } t
-                ? new SetSmartControlsCommand(t, Pick(r, Enum.GetValues<SmartControlsLayout>()))
+            nameof(ConvertPatternToMidiCommand) => patterns.Length > 0
+                ? new ConvertPatternToMidiCommand(Pick(r, patterns).Id)
                 : null,
-            nameof(SetSmartControlCommand) => Track() is { } t
-                ? new SetSmartControlCommand(t, "knob1", Math.Round(r.NextDouble(), 3))
+            nameof(ReseedPatternCommand) => patterns.Length > 0
+                ? new ReseedPatternCommand(Pick(r, patterns).Id, r.Next(4) == 0 ? null : r.Next())
                 : null,
-            nameof(SetSmartMappingsCommand) => Track() is { } t
-                ? new SetSmartMappingsCommand(t, "knob1", [new("volume", -12, 0, false, [new(0, 0), new(1, 1)])])
+            nameof(CreateDrumMachineCommand) => r.Next(3) == 0 && Instrument() is { ParentId: null } it
+                ? new CreateDrumMachineCommand(it.Id, r.Next(2) == 0 ? "pat_kit" : null, MaybeText("Beats"))
+                : new CreateDrumMachineCommand(null, r.Next(4) == 0 ? null : r.Next(8) == 0 ? "pat_none" : "pat_kit"),
+            nameof(AddDrumPadCommand) => machines.Length > 0
+                ? new AddDrumPadCommand(
+                    Pick(r, machines).Id,
+                    r.Next(16) == 0 ? 128 : 36 + r.Next(16),
+                    MaybeText($"Perc {r.Next(10)}"),
+                    r.Next(2) == 0 ? null : Pick(r, ["anode.synth", "anode.sampler", "com.example.fx"])
+                )
                 : null,
-            nameof(AutoMapSmartControlsCommand) => Track() is { } t ? new AutoMapSmartControlsCommand(t) : null,
-            nameof(CompareSmartControlsCommand) => Track() is { } t
-                ? new CompareSmartControlsCommand(t, r.Next(2) == 0)
+            nameof(SetDrumPadCommand) => Padded() is { } m && Pick(r, m.DrumMachine!.Pads) is var pad
+                ? new SetDrumPadCommand(
+                    m.Id,
+                    pad.Note,
+                    MaybeText($"Pad {r.Next(10)}"),
+                    r.Next(3) == 0 ? Pick(r, ["anode.synth", "anode.sampler"]) : null,
+                    r.Next(2) == 0 ? null : 36 + r.Next(16)
+                )
                 : null,
-            nameof(AddSceneCommand) => new AddSceneCommand(MaybeText("Scene")),
-            nameof(RemoveSceneCommand) => new RemoveSceneCommand("scn_none"),
-            nameof(SetSceneCommand) => new SetSceneCommand("scn_none", "Verse"),
-            nameof(SetCellCommand) => Track() is { } t
-                ? new SetCellCommand(t, "scn_none", PlayMode: Pick(r, Enum.GetValues<CellPlayMode>()))
+            nameof(RemoveDrumPadCommand) => Padded() is { } m
+                ? new RemoveDrumPadCommand(m.Id, Pick(r, m.DrumMachine!.Pads).Note)
                 : null,
-            nameof(DeleteCellsCommand) => new DeleteCellsCommand(["cel_none"]),
-            nameof(MoveCellCommand) => Track() is { } t ? new MoveCellCommand("cel_none", t, "scn_none") : null,
+            nameof(SetSmartControlsCommand) => (r.Next(2) == 0 && midiTracks.Length > 0
+                    ? Pick(r, midiTracks).Id
+                    : mixed.Length > 0
+                        ? Pick(r, mixed).Id
+                        : null) is { } t
+                ? new SetSmartControlsCommand(
+                    t,
+                    r.Next(2) == 0 ? null : Pick(r, Enum.GetValues<SmartControlsLayout>()),
+                    Maybe(r.Next(2) == 0)
+                )
+                : null,
+            nameof(SetSmartControlCommand) => mixed.Length > 0 && Pick(r, mixed) is var t
+                ? new SetSmartControlCommand(
+                    t.Id,
+                    Pick(r, Edits.SmartControlsOf(t).Controls).Id,
+                    r.Next(4) == 0 ? null : r.Next(16) == 0 ? 1.5 : Math.Round(r.NextDouble(), 3),
+                    r.Next(3) == 0 ? $"Knob {r.Next(10)}" : null
+                )
+                : null,
+            nameof(SetSmartMappingsCommand) => mixed.Length > 0 && Pick(r, mixed) is var t
+                ? new SetSmartMappingsCommand(
+                    t.Id,
+                    Pick(r, Edits.SmartControlsOf(t).Controls).Id,
+                    [..Enumerable.Range(0, r.Next(0, 4)).Select(_ => RandomMapping(s, t, r))]
+                )
+                : null,
+            nameof(AutoMapSmartControlsCommand) => mixed.Length > 0
+                ? new AutoMapSmartControlsCommand(Pick(r, mixed).Id)
+                : null,
+            nameof(CompareSmartControlsCommand) => mixed.Length > 0
+                ? new CompareSmartControlsCommand(Pick(r, mixed).Id, r.Next(2) == 0)
+                : null,
+            nameof(AddSceneCommand) => new AddSceneCommand(
+                MaybeText($"Scene {r.Next(10)}"),
+                r.Next(2) == 0 ? null : r.Next(0, scenes.Count + 1)
+            ),
+            nameof(RemoveSceneCommand) => scenes.Count > 0 ? new RemoveSceneCommand(Pick(r, scenes).Id) : null,
+            nameof(SetSceneCommand) => scenes.Count > 0
+                ? new SetSceneCommand(
+                    Pick(r, scenes).Id,
+                    MaybeText($"Verse {r.Next(10)}"),
+                    r.Next(2) == 0 ? null : r.Next(0, scenes.Count)
+                )
+                : null,
+            nameof(SetCellCommand) => scenes.Count > 0 ? RandomCell(s, r) : null,
+            nameof(DeleteCellsCommand) => cells.Count > 0
+                ? new DeleteCellsCommand([..Some(cells, r).Select(static c => c.Id)])
+                : null,
+            nameof(MoveCellCommand) => cells.Count > 0 && Track() is { } t
+                ? new MoveCellCommand(Pick(r, cells).Id, t, Pick(r, scenes).Id, r.Next(2) == 0)
+                : null,
             nameof(SetLiveLoopsCommand) => new SetLiveLoopsCommand(
                 r.Next(2) == 0 ? null : Pick(r, Enum.GetValues<LaunchQuantize>()),
                 Maybe(r.Next(2) == 0)
             ),
             nameof(SetTrackActivationCommand) => Track() is { } t
-                ? new SetTrackActivationCommand([t], r.Next(2) == 0)
+                ? new SetTrackActivationCommand([t, ..r.Next(2) == 0 ? [] : new[] { Track()! }], r.Next(2) == 0)
                 : null,
             _ => throw new InvalidOperationException($"No generator for {type.Name}.")
         };
@@ -772,6 +928,11 @@ static class RandomProjects {
                 : null;
 
         Track? MidiTrack() => midiTracks.Length == 0 ? null : Pick(r, midiTracks);
+
+        Track? Padded() =>
+            machines.Where(static m => m.DrumMachine!.Pads.Count > 0).ToArray() is { Length: > 0 } some
+                ? Pick(r, some)
+                : null;
         MidiRegion? MidiRegion() => midiRegions.Length == 0 ? null : Pick(r, midiRegions);
 
         MidiRegion? WithNotes() =>
@@ -783,13 +944,15 @@ static class RandomProjects {
                 : null;
 
         string? AnyRegion() =>
-            regions.Length + midiRegions.Length + folders.Length == 0
-                ? null
-                : r.Next(regions.Length + midiRegions.Length + folders.Length) is var i && i < regions.Length
-                    ? regions[i].Id
-                    : i < regions.Length + midiRegions.Length
-                        ? midiRegions[i - regions.Length].Id
-                        : folders[i - regions.Length - midiRegions.Length].Id;
+            patterns.Length > 0 && r.Next(5) == 0
+                ? Pick(r, patterns).Id
+                : regions.Length + midiRegions.Length + folders.Length == 0
+                    ? null
+                    : r.Next(regions.Length + midiRegions.Length + folders.Length) is var i && i < regions.Length
+                        ? regions[i].Id
+                        : i < regions.Length + midiRegions.Length
+                            ? midiRegions[i - regions.Length].Id
+                            : folders[i - regions.Length - midiRegions.Length].Id;
 
         T? Maybe<T>(T value) where T : struct => r.Next(2) == 0 ? null : value;
         string? MaybeText(string value) => r.Next(2) == 0 ? null : value;
@@ -910,6 +1073,153 @@ static class RandomProjects {
             ];
     }
 
+    /// <summary>A pattern for a track (pad rows on a drum machine), mostly in range, sometimes not.</summary>
+    public static Pattern RandomPattern(Random r, Track track) {
+        var rows = new List<PatternRow>();
+        var pads = track.DrumMachine?.Pads ?? [];
+        for (var n = r.Next(1, 5); n > 0; n--) {
+            var kind = pads.Count > 0 ? PatternRowKind.Pad : Pick(r, Enum.GetValues<PatternRowKind>());
+            var length = r.Next(1, 17);
+            rows.Add(
+                new(
+                    $"row_{n}",
+                    kind,
+                    kind switch {
+                        PatternRowKind.ChordDegree => r.Next(1, 8),
+                        PatternRowKind.Pad when pads.Count > 0 => Pick(r, pads).Note,
+                        _ => r.Next(36, 84)
+                    },
+                    $"Row {n}",
+                    length,
+                    r.Next(3) == 0 ? Pick(r, [120, 160, 240, 320, 480]) : null,
+                    Pick(r, Enum.GetValues<PatternPlayMode>()),
+                    r.Next(8) == 0,
+                    [
+                        ..Enumerable.Range(0, r.Next(24) == 0 ? length + 1 : length)
+                            .Select(_ => new PatternStep(
+                                    r.Next(2) == 0,
+                                    r.Next(1, 128),
+                                    Math.Round(0.1 + r.NextDouble() * 2, 2),
+                                    r.Next(1, 5),
+                                    r.Next(3) == 0 ? Math.Round(r.NextDouble(), 2) : 1,
+                                    r.Next(3) == 0 ? Math.Round(r.NextDouble() - 0.5, 2) : 0
+                                )
+                            )
+                    ]
+                )
+            );
+        }
+
+        return new(rows, r.Next(3) == 0 ? Math.Round(r.NextDouble(), 2) : 0, r.Next(), r.Next(8) == 0 ? 120 : 240);
+    }
+
+    /// <summary>A mapping of one of a track's parameters (sometimes out of range or of no parameter).</summary>
+    static SmartMapping RandomMapping(ProjectState s, Track track, Random r) {
+        var targets = new List<string> { "volume", "pan" };
+        targets.AddRange(track.Strip.Sends.Select(static x => $"send:{x.Id}"));
+        targets.AddRange(track.Strip.Inserts.SelectMany(static i => i.Parameters.Keys.Select(p => $"insert:{i.Id}:{p}")));
+        targets.AddRange(
+            track.Strip.MidiEffects.SelectMany(static i => i.Parameters.Keys.Select(p => $"midiEffect:{i.Id}:{p}"))
+        );
+        if (track.Instrument is { } slot) {
+            targets.AddRange(slot.Parameters.Keys.Select(static p => $"instrument:{p}"));
+        }
+
+        var target = r.Next(16) == 0 ? "insert:none:x" : Pick(r, targets);
+        Edits.LaneRange range;
+        try {
+            range = Edits.TargetRangeOf(s, track.Id, target, Plugins);
+        } catch (EditException) {
+            range = new(0, 1, false);
+        }
+
+        var (min, max) = (Math.Max(range.Min, -1000), Math.Min(range.Max, 1000));
+        var a = Math.Round(min + r.NextDouble() * (max - min), 3);
+        var b = Math.Round(min + r.NextDouble() * (max - min), 3);
+        IReadOnlyList<GraphPoint> graph = r.Next(3) switch {
+            0 => [],
+            1 => [new(0, 1), new(0.5, Math.Round(r.NextDouble(), 2)), new(1, 0)],
+            _ => [new(0, 0), new(1, 1)]
+        };
+        return new(target, Math.Min(a, b), r.Next(20) == 0 ? max + 1 : Math.Max(a, b), r.Next(2) == 0, graph);
+    }
+
+    /// <summary>A cell for a random slot: content that suits the track (mostly), or a change to the cell there.</summary>
+    static SetCellCommand? RandomCell(ProjectState s, Random r) {
+        var track = Pick(r, s.Tracks);
+        var scene = Pick(r, s.LiveLoops.Scenes);
+        var exists = s.LiveLoops.Cells.Any(c => c.TrackId == track.Id && c.SceneId == scene.Id);
+        CellContent? content = null;
+        if (!exists || r.Next(3) == 0) {
+            if (track.Kind == TrackKind.Audio && s.Files.Count > 0 && r.Next(8) > 0) {
+                var file = Pick(r, [..s.Files.Values]);
+                var length = r.NextInt64(1, file.Frames + 1);
+                content = new(
+                    Audio: new(
+                        "x",
+                        track.Id,
+                        file.Id,
+                        "Loop",
+                        0,
+                        0,
+                        length,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        false,
+                        Pick(r, Enum.GetValues<FlexFollow>()),
+                        [],
+                        r.Next(-6, 6),
+                        0,
+                        []
+                    )
+                );
+            } else if (r.Next(2) == 0) {
+                content = new(
+                    Midi: new(
+                        "x",
+                        track.Id,
+                        "Riff",
+                        0,
+                        r.Next(1, 5) * 960L,
+                        ProjectDefaults.Playback,
+                        [
+                            ..Enumerable.Range(0, r.Next(0, 5))
+                                .Select(i => new Note(
+                                        r.Next(3) == 0 ? 1 : 1_000_000 + i,
+                                        r.Next(36, 84),
+                                        r.Next(1, 128),
+                                        1,
+                                        r.Next(0, 8) * 240L,
+                                        r.Next(1, 4) * 120L
+                                    )
+                                )
+                        ],
+                        [],
+                        false
+                    )
+                );
+            } else {
+                content = new(
+                    Pattern: new("x", track.Id, "Beat", 0, r.Next(1, 5) * 960L, false, RandomPattern(r, track))
+                );
+            }
+        }
+
+        return new(
+            track.Id,
+            scene.Id,
+            content,
+            r.Next(3) == 0 ? $"Cell {r.Next(10)}" : null,
+            r.Next(3) == 0 ? r.Next(1, 9) * 960L : null,
+            r.Next(2) == 0 ? null : Pick(r, Enum.GetValues<CellPlayMode>()),
+            r.Next(2) == 0 ? null : Pick(r, Enum.GetValues<LaunchQuantize>()),
+            r.Next(4) == 0 ? true : null
+        );
+    }
+
     /// <summary>The project as canonical JSON: two states are the same project when these are equal.</summary>
     public static string Json(ProjectState state) =>
         JsonSerializer.Serialize(state.ToProject(string.Empty, 0, false), ContractsJsonContext.Default.Project);
@@ -971,6 +1281,15 @@ static class RandomProjects {
 
         if (track?.Instrument is { } slot) {
             targets.AddRange(slot.Parameters.Keys.Select(static p => $"instrument:{p}"));
+        }
+
+        if (track is not null) {
+            targets.AddRange(
+                track.Strip.MidiEffects.SelectMany(static i => i.Parameters.Keys.Select(p => $"midiEffect:{i.Id}:{p}"))
+            );
+            if (Edits.HasAudioStrip(track.Kind)) {
+                targets.AddRange(Edits.SmartControlsOf(track).Controls.Select(static c => $"smartControl:{c.Id}"));
+            }
         }
 
         var target = r.Next(20) == 0 ? "send:none" : Pick(r, targets);

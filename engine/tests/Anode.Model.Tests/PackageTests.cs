@@ -90,21 +90,26 @@ public sealed class PackageTests : IDisposable {
         Assert.All(loaded.Tracks, static t => Assert.Equal((false, FlexMode.Polyphonic), (t.FlexOn, t.FlexMode)));
         ProjectPackage.Save(folder, loaded);
         var saved = JsonNode.Parse(File.ReadAllText(path))!;
-        Assert.Equal(5, saved["schemaVersion"]!.GetValue<int>());
+        Assert.Equal(PackageMigrations.CurrentSchemaVersion, saved["schemaVersion"]!.GetValue<int>());
         Assert.Equal("keep", saved["settings"]!["smartTempo"]!["mode"]!.GetValue<string>());
         Assert.Equal(0, saved["settings"]!["tempoEvents"]![0]!["shape"]!.GetValue<double>());
     }
 
     [Fact]
-    public void A_schema_5_package_without_the_Phase_6_fields_reads_them_at_their_defaults() {
-        var (state, _, _) = RandomProjects.Build(12, 30);
+    public void A_schema_5_package_migrates_to_schema_6_with_the_Phase_6_fields_at_their_defaults() {
+        // Twenty edits: a project without Phase 6 content, as a schema-5 package holds.
+        var (state, _, _) = RandomProjects.Build(12, 20);
         ProjectPackage.Save(folder, state);
         var path = Path.Combine(folder, "project.json");
         var root = JsonNode.Parse(File.ReadAllText(path))!.AsObject();
+        root["schemaVersion"] = 5;
         root["master"]!.AsObject().Remove("midiEffects");
+        root.Remove("liveLoops");
         File.WriteAllText(path, root.ToJsonString());
         foreach (var file in Directory.EnumerateFiles(Path.Combine(folder, "tracks"))) {
             var json = JsonNode.Parse(File.ReadAllText(file))!.AsObject();
+            json["schemaVersion"] = 5;
+            json.Remove("patternRegions");
             var track = json["track"]!.AsObject();
             track["strip"]!.AsObject().Remove("midiEffects");
             track.Remove("liveLoopsActive");
@@ -114,6 +119,8 @@ public sealed class PackageTests : IDisposable {
         var loaded = ProjectPackage.Load(folder);
         Assert.Equal(RandomProjects.Json(state), RandomProjects.Json(loaded));
         Assert.Empty(loaded.Master.MidiEffects);
+        Assert.Empty(loaded.PatternRegions);
+        Assert.Equal((0, 0, LaunchQuantize.Bar, false), (loaded.LiveLoops.Scenes.Count, loaded.LiveLoops.Cells.Count, loaded.LiveLoops.Quantize, loaded.LiveLoops.Shown));
         Assert.All(
             loaded.Tracks,
             static t => Assert.Equal(
@@ -121,6 +128,19 @@ public sealed class PackageTests : IDisposable {
                 (t.Strip.MidiEffects.Count, t.LiveLoopsActive, t.DrumMachine, t.SmartControls)
             )
         );
+        ProjectPackage.Save(folder, loaded);
+        var saved = JsonNode.Parse(File.ReadAllText(path))!;
+        Assert.Equal(6, saved["schemaVersion"]!.GetValue<int>());
+        Assert.Equal("bar", saved["liveLoops"]!["quantize"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public void Phase_6_content_survives_the_package_format() {
+        var (state, _, _) = RandomProjects.Build(3, 40);
+        Assert.NotEmpty(state.PatternRegions);
+        Assert.NotEmpty(state.LiveLoops.Scenes);
+        ProjectPackage.Save(folder, state);
+        Assert.Equal(RandomProjects.Json(state), RandomProjects.Json(ProjectPackage.Load(folder)));
     }
 
     [Fact]

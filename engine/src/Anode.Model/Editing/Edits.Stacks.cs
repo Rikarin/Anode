@@ -65,6 +65,18 @@ public static partial class Edits {
             ops.Add(new TrackUpserted(member with { ParentId = null }, state.IndexOfTrack(member.Id)));
         }
 
+        // A Drum Machine Designer's own regions, cells and lanes go with it.
+        ops.AddRange(state.MidiRegionsOf(stack.Id).Select(static r => new MidiRegionRemoved(r.Id)));
+        ops.AddRange(state.PatternRegionsOf(stack.Id).Select(static r => new PatternRegionRemoved(r.Id)));
+        ops.AddRange(state.LanesOf(stack.Id).ToArray().Select(static l => new AutomationLaneRemoved(l.Id)));
+        if (state.CellsOf(stack.Id).Any()) {
+            ops.Add(
+                new LiveLoopsChanged(
+                    state.LiveLoops with { Cells = [..state.LiveLoops.Cells.Where(x => x.TrackId != stack.Id)] }
+                )
+            );
+        }
+
         ops.Add(new TrackRemoved(stack.Id));
         return ops;
     }
@@ -78,7 +90,9 @@ public static partial class Edits {
             }
 
             var rest = state with { Tracks = state.Tracks.RemoveAll(t => t.Id == track.Id) };
-            return [new TrackUpserted(track with { ParentId = null }, AfterStack(rest, track.ParentId))];
+            DeltaOp moved = new TrackUpserted(track with { ParentId = null }, AfterStack(rest, track.ParentId));
+            // A pad that leaves its Drum Machine Designer is no longer a pad.
+            return PadOwner(state, track.Id) is { } left ? [WithoutPad(state, left, track.Id), moved] : [moved];
         }
 
         if (track.Kind == TrackKind.Stack) {
@@ -91,7 +105,8 @@ public static partial class Edits {
         }
 
         var without = state with { Tracks = state.Tracks.RemoveAll(t => t.Id == track.Id) };
-        return [new TrackUpserted(track with { ParentId = stack.Id }, AfterStack(without, stack.Id))];
+        DeltaOp into = new TrackUpserted(track with { ParentId = stack.Id }, AfterStack(without, stack.Id));
+        return PadOwner(state, track.Id) is { } owner ? [WithoutPad(state, owner, track.Id), into] : [into];
     }
 
     /// <summary>The index just after a stack and its members in <paramref name="state" />'s track list.</summary>

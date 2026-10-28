@@ -43,6 +43,10 @@ public static partial class Edits {
             throw new EditException($"Plugin '{plugin.Id}' is an instrument, not an effect.");
         }
 
+        if (IsMidiEffect(plugin)) {
+            throw new EditException($"Plugin '{plugin.Id}' is a MIDI effect: it goes in a MIDI FX slot.");
+        }
+
         if (strip.Inserts.Count >= MaxInserts) {
             throw new EditException($"A channel strip holds at most {MaxInserts} inserts.");
         }
@@ -484,6 +488,14 @@ public static partial class Edits {
                 return ParameterRange(plugins, insert.PluginId, insert.Parameters, parameter);
             case ["instrument", var parameter] when track?.Instrument is { } slot:
                 return ParameterRange(plugins, slot.PluginId, slot.Parameters, parameter);
+            case ["midiEffect", var id, var parameter] when track is not null:
+                var midiEffect = strip.MidiEffects.FirstOrDefault(i => i.Id == id)
+                    ?? throw new EditException($"No MIDI FX slot '{id}' on that strip.");
+                return ParameterRange(plugins, midiEffect.PluginId, midiEffect.Parameters, parameter);
+            case ["smartControl", var id] when track is not null
+                && HasAudioStrip(track.Kind)
+                && ControlIds(SmartControlsOf(track).Layout).Contains(id):
+                return new(0, 1, false);
             default:
                 throw new EditException($"'{target}' is not an automation target of that strip.");
         }
@@ -870,7 +882,10 @@ public sealed record ChannelPatch(
     InstrumentSlot? Instrument,
     IReadOnlyList<Insert> Inserts,
     IReadOnlyList<Send> Sends
-);
+) {
+    /// <summary>A drum kit's pads (Phase 6: a kit is a patch of kind stack that <c>createDrumMachine</c> takes).</summary>
+    public IReadOnlyList<KitPad>? Pads { get; init; }
+}
 
 /// <summary>Where <c>applyPatch</c> finds patches (the server's library).</summary>
 public interface IPatchSource {

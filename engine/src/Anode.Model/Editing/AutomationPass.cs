@@ -32,6 +32,7 @@ public sealed class AutomationPass(long number, long startTick) {
             or SetSendCommand { Bus: null }
             or SetInsertParameterCommand
             or SetParameterCommand
+            or SetSmartControlCommand { Name: null, Value: not null }
         );
 
     /// <summary>Whether a track in <paramref name="mode" /> records control moves.</summary>
@@ -50,8 +51,17 @@ public sealed class AutomationPass(long number, long startTick) {
             }
 
             var was = Controls(old);
-            foreach (var (target, value) in Controls(track)) {
-                if (was.TryGetValue(target, out var previous) && previous.Equals(value)) {
+            var now = Controls(track);
+            // A Smart Control that moved records its own lane, not the parameters it drives.
+            var driven = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var control in track.SmartControls?.Controls ?? []) {
+                if (was.TryGetValue($"smartControl:{control.Id}", out var moved) && !moved.Equals(control.Value)) {
+                    driven.UnionWith(control.Mappings.Select(static m => m.Target));
+                }
+            }
+
+            foreach (var (target, value) in now) {
+                if ((was.TryGetValue(target, out var previous) && previous.Equals(value)) || driven.Contains(target)) {
                     continue;
                 }
 
@@ -151,6 +161,18 @@ public sealed class AutomationPass(long number, long startTick) {
         if (track.Instrument is { } slot) {
             foreach (var (parameter, value) in slot.Parameters) {
                 controls[$"instrument:{parameter}"] = value;
+            }
+        }
+
+        foreach (var fx in strip.MidiEffects) {
+            foreach (var (parameter, value) in fx.Parameters) {
+                controls[$"midiEffect:{fx.Id}:{parameter}"] = value;
+            }
+        }
+
+        if (Edits.HasAudioStrip(track.Kind)) {
+            foreach (var control in Edits.SmartControlsOf(track).Controls) {
+                controls[$"smartControl:{control.Id}"] = control.Value;
             }
         }
 
