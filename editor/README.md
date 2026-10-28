@@ -2,13 +2,13 @@
 
 The desktop editor (../docs/01-implementation-plan.md §6): an Angular 22 renderer styled with [xUI](https://xuijs.org) and Tailwind 4, in an Electron shell that runs the engine (anode-host and anode-server) as sidecars. The same build is served by anode-server to browsers and tablets on the local network.
 
-| Project           | Role                                                                                                                                        |
-| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| `apps/editor`     | The renderer: project chooser, control bar, Tracks area, Piano Roll, Inspector, Keyboard, Mixer; stores fed by REST and `/ws` deltas        |
-| `apps/desktop`    | Electron main (sidecar supervision, `app://` scheme with CSP) and the preload bridge; Playwright E2E in `e2e/`                              |
-| `libs/api-client` | Types generated from `engine/src/Anode.Server/openapi.json`, plus a typed `fetch` client                                                    |
-| `libs/audio-ui`   | Audio controls xUI does not have (fader, pan knob, knob, choice, on-screen keyboard, peak meter, channel strip), stories that must pass axe |
-| `libs/timeline`   | The canvas/WebGL2 timeline engine behind the Tracks area: regions, waveforms, ruler, hit-testing (its README)                               |
+| Project           | Role                                                                                                                                                                                                                     |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `apps/editor`     | The renderer: project chooser, control bar, Tracks area (global tracks, tools, take folders), Piano Roll, Inspector, Keyboard, Mixer, Browsers, Marker List, Note Pad, Key Commands; stores fed by REST and `/ws` deltas |
+| `apps/desktop`    | Electron main (sidecar supervision, `app://` scheme with CSP) and the preload bridge; Playwright E2E in `e2e/`                                                                                                           |
+| `libs/api-client` | Types generated from `engine/src/Anode.Server/openapi.json`, plus a typed `fetch` client                                                                                                                                 |
+| `libs/audio-ui`   | Audio controls xUI does not have (fader, pan knob, knob, choice, fade curve, on-screen keyboard, peak meter, channel strip), stories that must pass axe                                                                  |
+| `libs/timeline`   | The canvas/WebGL2 timeline engine behind the Tracks area: regions, waveforms, ruler, hit-testing (its README)                                                                                                            |
 
 ## Develop
 
@@ -36,6 +36,13 @@ Or run the editor against an in-memory fake Server (no engine needed): `pnpm exe
 recording on armed tracks (audio takes, and MIDI takes from live MIDI or a few faked notes), meters, synthetic peaks, a
 plugin catalogue (`anode.synth`, `anode.sampler`, a CLAP test instrument), MIDI devices, live MIDI with activity, and
 the MIDI-thru track. The demo has two instrument tracks with MIDI regions. Unit tests use it too.
+
+It also follows the Phase 3 contracts (docs/04-phase-3.md): every arranging command (tempo, signature and key tracks,
+markers, arrangement sections with move/copy/delete-with-content, take folders with comps, pack and flatten, stacks,
+notes, join, copy), cycle recording into take folders or regions, replace, autopunch, Flashback Capture, alternatives,
+backups, screensets, key commands, bookmarks, a small fake disk for the All Files browser (`/Users/anode`), WAV preview
+and Standard MIDI File import (the fake makes two instrument tracks from any `.mid` path). The demo project adds
+arrangement sections, markers, a two-take vocal folder and a project note.
 
 Or run the whole desktop app. Build the engine first with `dotnet build -c Release` in `engine/`:
 

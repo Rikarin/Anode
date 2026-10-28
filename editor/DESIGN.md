@@ -165,3 +165,42 @@ To change a timeline colour, edit both themes in `frame-builder.ts`; to change a
 - States: hover, `focus-visible` (xUI's ring in `--focus`), pressed (`aria-pressed`), disabled (`disabled:opacity-35`
   in bezels), empty (a sentence of guidance in `text-foreground-muted`).
 - A new audio control gets a Storybook story with an axe-clean render and a keyboard `play` test.
+
+## Phase 3 patterns
+
+**Tracks area toolbar.** A `glass-bar` row: new track (+ and its kind menu), the left-click tool as a `bezel-group`
+radiogroup of 15 px icons (`role="radio"`, the checked one `text-lit`), the ⌘-click tool as a `bezel` popup button
+(`⌘` in `text-foreground-muted`, then the tool's name), Snap as a `bezel-group` of a grid toggle (`aria-pressed`,
+`text-lit`) and a mode popup, the drag mode as a `bezel` popup (`Drag` muted, then the mode), and the global tracks
+toggle. Popups are xUI menus with `menuitemradio` items. The tool menu (right-click on an empty lane, or T) lists the
+tools with their key in a muted `kbd`.
+
+**Global tracks.** Between the ruler and the lanes, over the timeline canvas (which leaves `lanesTop` free for them):
+lanes of `GlobalLaneHeights` with hairlines, on `bg-surface/85` so the grid shows through. Arrangement sections are
+4 px-rounded blocks in their stored colour with a `--hairline-strong` inset edge and a semibold 11 px name with a soft
+text shadow; markers are `bg-surface-raised` tags with a 2 px start edge in their colour (else `--color-primary`); the
+tempo track is a 1.5 px `--color-primary` polyline with 10 px handles (`border-primary`, filled when the point ramps);
+signature and key events are 11 px semibold labels. Their headers sit in the header column on `bg-surface-raised`.
+
+**Track stacks and takes.** A stack's header has a disclosure chevron before its number; its members are indented
+14 px. A take row's header (`an-take-header`) is `bg-surface-raised`, indented 24 px, with a 6 px dot (`bg-primary`
+when the comp plays any of it). On the canvas, a take folder is a region (`ItemFlag.Folder`) with its comp drawn inside
+(`ItemFlag.Inner`: flat, under the name bar, 0.92× the colour); an open folder's takes are greyed (`muted`) with the
+comped stretches in colour.
+
+**Control bar, Phase 3.** After the transport, a Recording `bezel-group` (11 px semibold): the cycle mode popup
+(Takes/Regions), Punch (`text-transport-record` when on), Replace (`text-lit`), and Flashback Capture as a red history
+icon. On the right, the screenset popup (a `bezel` with the number in `readout` and the name, a lock when locked) and
+the appearance toggle (sun/moon). The project's name has a `bezel` chevron for the project menu (alternatives,
+backups, Key Commands…, appearance).
+
+**Fade curve** (`an-fade-curve`, audio-ui): a 56 × 36 px `well` with the gain curve in `stroke-knob-arc` over a
+`fill-primary/20` area; label and value under it like a knob. A slider (−1…1, keyboard and vertical drag).
+
+**Appearance.** `ThemeStore` sets `dark`/`light` and `color-scheme` on the root; the timeline canvases take the
+appearance from it (not from `documentTheme()`), so they repaint at once. The ruler's autopunch band uses the timeline
+theme's `punch`/`punchOff` colours (both themes).
+
+**Browsers, Marker List, Note Pad.** Right-hand panes, tucked away by default (F, D, ⌥⌘P bring them forward). Rows are
+28 px (`h-7`) with a 16 px kind icon (folders `text-primary`), the name, and muted `readout` details; bookmarks are
+small `bezel` chips. Tabs inside a pane are xUI tabs.

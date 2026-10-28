@@ -1,5 +1,5 @@
 import { DestroyRef, Injectable, computed, effect, inject, signal, untracked } from '@angular/core';
-import type { Screenset } from '@anode/api-client';
+import { ApiError, type Screenset } from '@anode/api-client';
 import type { XuiDockManagerLayout } from '@xui/dock-manager';
 import { ANODE_API } from '../core/api';
 import { Notify } from '../core/notify';
@@ -30,6 +30,8 @@ export class ScreensetStore {
   readonly locked = computed(() => this.currentSet()?.locked ?? false);
 
   private saveTimer: ReturnType<typeof setTimeout> | null = null;
+  /** False once the Server answered that it keeps no screensets (not implemented): they then live in this window. */
+  private remote = true;
   /** The layout as last applied or saved, so a recall does not count as a change. */
   private settled = '';
 
@@ -49,8 +51,10 @@ export class ScreensetStore {
   async load(): Promise<void> {
     try {
       const list = await this.api.screensets();
+      this.remote = true;
       this.screensets.set(new Map(list.map(s => [s.number, s])));
-    } catch {
+    } catch (error) {
+      this.remote = !unavailable(error);
       this.screensets.set(new Map());
     }
     this.apply(1);
@@ -138,11 +142,18 @@ export class ScreensetStore {
       this.settled = screenset.layout;
     }
     this.screensets.update(map => new Map(map).set(number, screenset));
+    if (!this.remote) {
+      return;
+    }
     try {
       await this.api.saveScreenset(screenset);
       this.project.markDirty();
     } catch (error) {
-      this.notify.failure(error, 'Could not save the screenset');
+      if (unavailable(error)) {
+        this.remote = false;
+      } else {
+        this.notify.failure(error, 'Could not save the screenset');
+      }
     }
   }
 
@@ -152,4 +163,9 @@ export class ScreensetStore {
       this.saveTimer = null;
     }
   }
+}
+
+/** Whether an error says the Server has no screensets at all (a Server before Phase 3), rather than a refusal. */
+function unavailable(error: unknown): boolean {
+  return error instanceof ApiError && (error.status >= 500 || error.status === 405);
 }
