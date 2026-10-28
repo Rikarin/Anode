@@ -1,6 +1,6 @@
 import { CdkContextMenuTrigger } from '@angular/cdk/menu';
 import { ChangeDetectionStrategy, Component, computed, DestroyRef, inject, viewChild } from '@angular/core';
-import type { EditCommand, TrackKind } from '@anode/api-client';
+import type { AutomationMode, EditCommand, TrackKind } from '@anode/api-client';
 import { RULER_HEIGHT } from '@anode/timeline';
 import { provideIcons } from '@ng-icons/core';
 import {
@@ -20,6 +20,7 @@ import {
   matPianoRound,
   matPublicRound,
   matSettingsInputComponentRound,
+  matShowChartRound,
   matTextFieldsRound,
   matTrendingUpRound,
   matVolumeOffRound,
@@ -32,11 +33,15 @@ import { XuiIconImports } from '@xui/icon';
 import { XuiMenuImports } from '@xui/menu';
 import { XuiSpinnerImports } from '@xui/spinner';
 import { XuiTooltipImports } from '@xui/tooltip';
+import { AutomationHeader } from '../automation/automation-header';
+import { AutomationLanes } from '../automation/automation-lanes';
+import { AutomationStore } from '../automation/automation.store';
 import { ConnectionService } from '../core/connection';
 import { GlobalHeaders } from '../global/global-headers';
 import { GlobalTracks } from '../global/global-lanes';
 import { GlobalLaneHeights } from '../global/global-math';
 import { formatBinding } from '../keys/key-commands';
+import { JobsStore } from '../state/jobs.store';
 import { KeyCommandsStore } from '../state/key-commands.store';
 import { LanesStore } from '../state/lanes.store';
 import { ProjectStore } from '../state/project.store';
@@ -65,6 +70,8 @@ import { TrackHeader } from './track-header';
   selector: 'an-tracks-area',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
+    AutomationHeader,
+    AutomationLanes,
     GlobalHeaders,
     GlobalTracks,
     TakeHeader,
@@ -94,6 +101,7 @@ import { TrackHeader } from './track-header';
       matNearMeRound,
       matPianoRound,
       matPublicRound,
+      matShowChartRound,
       matSettingsInputComponentRound,
       matTextFieldsRound,
       matTrendingUpRound,
@@ -296,6 +304,18 @@ import { TrackHeader } from './track-header';
       >
         <ng-icon xui name="matPublicRound" size="15px" />
       </button>
+      <button
+        type="button"
+        class="bezel text-foreground grid h-6.5 w-8 place-items-center"
+        aria-label="Automation"
+        data-testid="show-automation"
+        [xuiTooltip]="'Show automation (' + keyOf('view.automation') + ')'"
+        [attr.aria-pressed]="automation.shown() ? 'true' : 'false'"
+        [class.text-lit]="automation.shown()"
+        (click)="automation.toggleShown()"
+      >
+        <ng-icon xui name="matShowChartRound" size="15px" />
+      </button>
       <div class="ms-auto flex items-center gap-1">
         @if (audioImport.importing() > 0) {
           <xui-spinner size="sm" aria-label="Importing audio" />
@@ -327,8 +347,15 @@ import { TrackHeader } from './track-header';
                 [depth]="row.depth"
                 [style.height.px]="view.laneHeight()"
               />
-            } @else {
+            } @else if (row.kind === 'take') {
               <an-take-header [folder]="row.folder" [take]="row.take" [style.height.px]="view.laneHeight()" />
+            } @else {
+              <an-automation-header
+                [track]="row.track"
+                [target]="row.target"
+                [depth]="row.depth"
+                [style.height.px]="view.laneHeight()"
+              />
             }
           }
           @if (project.trackList().length === 0) {
@@ -340,6 +367,13 @@ import { TrackHeader } from './track-header';
       </div>
       <div class="relative flex min-w-0 flex-1" [xuiContextMenuTriggerFor]="timelineMenu">
         <an-timeline class="flex-1" [globalHeight]="globalHeight()" />
+        @if (automation.shown()) {
+          <an-automation-lanes
+            class="absolute inset-x-0 bottom-0"
+            [style.top.px]="ruler + globalHeight()"
+            (scrollWheel)="timeline().wheel($event)"
+          />
+        }
         @if (view.globalTracks()) {
           <an-global-lanes
             #global
@@ -432,6 +466,8 @@ export class TracksArea {
   private readonly transport = inject(TransportStore);
   private readonly keys = inject(KeyCommandsStore);
   protected readonly desktop = inject(ConnectionService).desktop;
+  protected readonly automation = inject(AutomationStore);
+  private readonly jobs = inject(JobsStore);
   protected readonly timeline = viewChild.required(Timeline);
   private readonly menuTrigger = viewChild(CdkContextMenuTrigger);
   private readonly globalLanes = viewChild<GlobalTracks>('global');
@@ -497,10 +533,39 @@ export class TracksArea {
       ['track.newAudio', () => this.addTrack('audio')],
       ['track.newInstrument', () => this.addTrack('instrument')],
       ['edit.selectAll', () => this.selectAll()],
+      ['view.automation', () => this.automation.toggleShown()],
+      ['track.freeze', () => this.toggleFreeze()],
+      ['automation.off', () => this.setMode('off')],
+      ['automation.read', () => this.setMode('read')],
+      ['automation.touch', () => this.setMode('touch')],
+      ['automation.latch', () => this.setMode('latch')],
+      ['automation.write', () => this.setMode('write')],
       ['edit.delete', () => this.deleteSelected()]
     ];
     const unregister = register.map(([id, action]) => this.keys.register(id, action));
     inject(DestroyRef).onDestroy(() => unregister.forEach(off => off()));
+  }
+
+  /** Freezes the selected track, or plays it live again when it is frozen. */
+  private toggleFreeze(): void {
+    const track = this.project.track(this.selection.track() ?? '');
+    if (track?.kind !== 'audio' && track?.kind !== 'instrument') {
+      return;
+    }
+    if (track.frozenFileId) {
+      void this.jobs.unfreeze(track.id);
+    } else {
+      void this.jobs.freeze(track.id);
+    }
+  }
+
+  /** The selected tracks' automation mode. */
+  private setMode(mode: AutomationMode): void {
+    for (const id of this.selection.trackSelection()) {
+      if (this.project.track(id)) {
+        void this.automation.setMode(id, mode);
+      }
+    }
   }
 
   protected keyOf(id: string): string {
@@ -668,8 +733,11 @@ export class TracksArea {
     ]);
   }
 
-  /** Delete: the marquee tool's range when there is one, else the selected regions. */
+  /** Delete: selected automation (points or a range), else the marquee tool's range, else the selected regions. */
   deleteSelected(): void {
+    if (this.automation.deleteSelection()) {
+      return;
+    }
     const range = this.view.marquee();
     if (range) {
       const tracks = new Set(

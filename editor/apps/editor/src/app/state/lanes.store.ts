@@ -1,4 +1,5 @@
 import { Injectable, computed, inject } from '@angular/core';
+import { AutomationStore } from '../automation/automation.store';
 import { type LaneRow, laneRows } from './lanes';
 import { ProjectStore } from './project.store';
 import { TracksViewStore } from './tracks-view.store';
@@ -11,9 +12,15 @@ import { TracksViewStore } from './tracks-view.store';
 export class LanesStore {
   private readonly project = inject(ProjectStore);
   private readonly view = inject(TracksViewStore);
+  private readonly automation = inject(AutomationStore);
 
   readonly rows = computed<readonly LaneRow[]>(() =>
-    laneRows(this.project.trackList(), this.project.takeFolderList(), this.view.expandedFolders())
+    laneRows(
+      this.project.trackList(),
+      this.project.takeFolderList(),
+      this.view.expandedFolders(),
+      this.automation.shown() ? this.automation.lanesShown() : null
+    )
   );
 
   /** The track on a lane (a take row's is its folder's track). */

@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    anode-plugin: the plugin sandbox and scanner (docs/adr/0003-plugin-hosting.md, docs/05-phase-4.md workstream E).
+    One process hosts the plugins of one group (by default one vendor) over shared memory and an_ipcwake, or scans
+    plugin files for the catalogue. Published NativeAOT with anode-host's GC settings.
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>anode-plugin</AssemblyName>
+    <RootNamespace>Anode.PluginSandbox</RootNamespace>
+    <PublishAot>true</PublishAot>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <ServerGarbageCollection>false</ServerGarbageCollection>
+    <ConcurrentGarbageCollection>false</ConcurrentGarbageCollection>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../Anode.Plugins/Anode.Plugins.csproj"/>
+  </ItemGroup>
+</Project>

@@ -10,7 +10,8 @@ export interface KeyCommand {
   readonly defaults: readonly string[];
 }
 
-export type KeyCommandGroup = 'Transport' | 'Edit' | 'Regions' | 'Tracks' | 'Tools' | 'View' | 'Screensets' | 'Project';
+export type KeyCommandGroup =
+  'Transport' | 'Edit' | 'Regions' | 'Tracks' | 'Mixer' | 'Automation' | 'Tools' | 'View' | 'Screensets' | 'Project';
 
 const screensets: KeyCommand[] = Array.from({ length: 9 }, (_, i) => ({
   id: `screenset.recall${i + 1}`,
@@ -43,6 +44,20 @@ export const KeyCommands: readonly KeyCommand[] = [
   { id: 'track.newInstrument', label: 'New Software Instrument Track', group: 'Tracks', defaults: ['Meta+Alt+S'] },
   { id: 'track.stack', label: 'Create Track Stack', group: 'Tracks', defaults: ['Meta+Shift+D'] },
   { id: 'track.marker', label: 'Create Marker', group: 'Tracks', defaults: ["Alt+'"] },
+  { id: 'track.newAux', label: 'New Auxiliary Channel Strip', group: 'Mixer', defaults: [] },
+  { id: 'track.newVca', label: 'New VCA Channel Strip', group: 'Mixer', defaults: [] },
+  { id: 'track.freeze', label: 'Freeze/Unfreeze Track', group: 'Tracks', defaults: [] },
+  { id: 'mixer.ioLabels', label: 'I/O Labels…', group: 'Mixer', defaults: [] },
+  { id: 'mixer.groupSettings', label: 'Open Group Settings…', group: 'Mixer', defaults: [] },
+  { id: 'mixer.viewAll', label: 'Mixer: All View', group: 'Mixer', defaults: [] },
+  { id: 'mixer.viewTracks', label: 'Mixer: Tracks View', group: 'Mixer', defaults: [] },
+  { id: 'mixer.viewBuses', label: 'Mixer: Buses and Outputs View', group: 'Mixer', defaults: [] },
+  { id: 'view.automation', label: 'Show/Hide Automation', group: 'Automation', defaults: ['A'] },
+  { id: 'automation.read', label: 'Set Automation Mode to Read', group: 'Automation', defaults: [] },
+  { id: 'automation.touch', label: 'Set Automation Mode to Touch', group: 'Automation', defaults: [] },
+  { id: 'automation.latch', label: 'Set Automation Mode to Latch', group: 'Automation', defaults: [] },
+  { id: 'automation.write', label: 'Set Automation Mode to Write', group: 'Automation', defaults: [] },
+  { id: 'automation.off', label: 'Set Automation Mode to Off', group: 'Automation', defaults: [] },
   { id: 'tools.menu', label: 'Show Tool Menu', group: 'Tools', defaults: ['T'] },
   { id: 'view.globalTracks', label: 'Show/Hide Global Tracks', group: 'View', defaults: ['G'] },
   { id: 'view.zoomIn', label: 'Zoom Horizontal In', group: 'View', defaults: ['Meta+ArrowRight'] },
@@ -56,7 +71,8 @@ export const KeyCommands: readonly KeyCommand[] = [
   { id: 'view.theme', label: 'Toggle Light/Dark Appearance', group: 'View', defaults: ['Meta+Ctrl+T'] },
   ...screensets,
   { id: 'project.save', label: 'Save', group: 'Project', defaults: ['Meta+S'] },
-  { id: 'project.saveAlternative', label: 'Save as Alternative…', group: 'Project', defaults: [] }
+  { id: 'project.saveAlternative', label: 'Save as Alternative…', group: 'Project', defaults: [] },
+  { id: 'project.bounce', label: 'Bounce Project or Section…', group: 'Project', defaults: ['Meta+B'] }
 ];
 
 /** Modifier order in a binding. */

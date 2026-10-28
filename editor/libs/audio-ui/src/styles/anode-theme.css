@@ -62,6 +62,12 @@
   --color-meter-unlit: var(--meter-unlit);
   --color-fader-groove: var(--fader-groove);
 
+  --color-automation-off: var(--automation-off);
+  --color-automation-read: var(--automation-read);
+  --color-automation-touch: var(--automation-touch);
+  --color-automation-latch: var(--automation-latch);
+  --color-automation-write: var(--automation-write);
+
   --color-knob-arc: var(--knob-arc);
   --color-knob-track: var(--knob-track);
   --color-knob-pointer: var(--knob-pointer);
@@ -202,6 +208,21 @@
   --strip-bottom: #e9e9ec;
   --strip-selected-top: #ffffff;
   --strip-selected-bottom: #f1f1f4;
+
+  --slot-top: #fbfbfc;
+  --slot-bottom: #eeeef1;
+  --slot-hover-top: #ffffff;
+  --slot-hover-bottom: #f5f5f7;
+  --slot-empty: rgb(0 0 0 / 0.05);
+  --strip-flow: #0071e3;
+  --strip-flow-top: #ffffff;
+  --strip-flow-bottom: #edf3fb;
+
+  --automation-off: #8e8e93;
+  --automation-read: #28a745;
+  --automation-touch: #e09b00;
+  --automation-latch: #9b4fd6;
+  --automation-write: #e0352b;
 }
 
 /* -------------------------------------------------------------------------------------------- dark theme (primary) */
@@ -297,6 +318,21 @@
   --strip-bottom: #242427;
   --strip-selected-top: #3c3c40;
   --strip-selected-bottom: #313135;
+
+  --slot-top: #3a3a3e;
+  --slot-bottom: #313134;
+  --slot-hover-top: #444448;
+  --slot-hover-bottom: #39393c;
+  --slot-empty: rgb(0 0 0 / 0.22);
+  --strip-flow: #4aa3ff;
+  --strip-flow-top: #34383f;
+  --strip-flow-bottom: #2a2d33;
+
+  --automation-off: #8e8e93;
+  --automation-read: #30d158;
+  --automation-touch: #ffb340;
+  --automation-latch: #bf5af2;
+  --automation-write: #ff453a;
 }
 
 /* --------------------------------------------------------------------------------------------------- composites */
@@ -584,4 +620,55 @@
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
+}
+
+/* ------------------------------------------------------------------------------------------------- Phase 4: mixing */
+
+/*
+ * A strip slot (Logic's Audio FX, Sends, Output and Group rows): an 18 px row with a flat graded face and a hairline
+ * edge, lighter on hover. `[data-empty]` makes it an empty sunken well.
+ */
+@utility strip-slot {
+  display: flex;
+  align-items: center;
+  height: 1.125rem;
+  min-width: 0;
+  font-size: 10px;
+  line-height: 1;
+  color: var(--color-foreground);
+  background-image: linear-gradient(to bottom, var(--slot-top), var(--slot-bottom));
+  border: 1px solid var(--hairline-strong);
+  border-radius: 0.25rem;
+  box-shadow: inset 0 1px 0 var(--highlight);
+
+  &:hover {
+    background-image: linear-gradient(to bottom, var(--slot-hover-top), var(--slot-hover-bottom));
+  }
+
+  &:has(:focus-visible) {
+    outline: 2px solid var(--color-focus);
+    outline-offset: 1px;
+  }
+
+  &[data-problem] {
+    border-color: var(--meter-high);
+    box-shadow:
+      inset 0 1px 0 var(--highlight),
+      inset 0 0 0 1px var(--meter-high);
+  }
+
+  &[data-empty] {
+    background-image: none;
+    background-color: var(--slot-empty);
+    border-color: var(--hairline);
+    box-shadow: inset 0 1px 1px rgb(0 0 0 / 0.18);
+  }
+}
+
+/* Logic's signal-flow highlight: the strips the selected strip's signal passes through, outlined and lit. */
+@utility strip-flow {
+  background-image: linear-gradient(to bottom, var(--strip-flow-top), var(--strip-flow-bottom));
+  box-shadow:
+    inset 0 1px 0 var(--highlight),
+    inset 0 0 0 1px var(--strip-flow);
 }
