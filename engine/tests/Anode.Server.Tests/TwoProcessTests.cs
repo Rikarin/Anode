@@ -1,6 +1,6 @@
-using System.Net;
 using Anode.Contracts;
 using System.Diagnostics;
+using System.Net;
 using System.Text;
 
 namespace Anode.Server.Tests;
