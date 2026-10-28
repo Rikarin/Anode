@@ -37,10 +37,16 @@ public sealed class TimingTests : IDisposable {
             Run(host, effects, cycles, true, out var times);
             Array.Sort(times);
             var misses = effects.Sum(e => ((IHostedPlugin)e).Stats.Misses);
-            string P(double q) => (times[(int)(q * (times.Length - 1))] / 1000.0).ToString("0.0", System.Globalization.CultureInfo.InvariantCulture);
+
+            string P(double q) =>
+                (times[(int)(q * (times.Length - 1))] / 1000.0).ToString(
+                    "0.0",
+                    System.Globalization.CultureInfo.InvariantCulture
+                );
+
             Log(
-                $"timing {instances} x gain ({mode}, {host.Sandboxes.Count} sandbox(es)), 64 frames: cycle p50 {P(0.5)} / " +
-                $"p99 {P(0.99)} / max {P(1)} µs; misses {misses} / {cycles * instances}"
+                $"timing {instances} x gain ({mode}, {host.Sandboxes.Count} sandbox(es)), 64 frames: cycle p50 {P(0.5)} / "
+                + $"p99 {P(0.99)} / max {P(1)} µs; misses {misses} / {cycles * instances}"
             );
             // Generous: this is a test thread on a busy machine, not CoreAudio's; S4 measured the protocol itself.
             Assert.True(misses <= cycles * instances / 50, $"{misses} misses");

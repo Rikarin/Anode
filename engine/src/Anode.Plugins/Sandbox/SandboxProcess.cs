@@ -1,7 +1,7 @@
+using Anode.Plugins.Native;
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Text;
-using Anode.Plugins.Native;
 
 namespace Anode.Plugins.Sandbox;
 
@@ -11,19 +11,67 @@ namespace Anode.Plugins.Sandbox;
 /// </summary>
 internal sealed unsafe class SandboxProcess : IDisposable {
     readonly nint shm;
-    readonly Process process;
-    readonly ConcurrentDictionary<int, TaskCompletionSource<SandboxReply>> pending = new();
+    readonly ConcurrentDictionary<int, Waiter> pending = new();
+    readonly ProcessStartInfo startInfo;
+    readonly Lock startGate = new();
+    Process? started;
     readonly bool[] used;
     readonly Lock gate = new();
     readonly Queue<string> stderrTail = new();
     readonly Action<string>? log;
     readonly TimeSpan hangTimeout;
-    readonly Thread monitor;
+    Thread? monitor;
     int nextId;
     int dying;
     volatile bool dead;
 
-    public SandboxProcess(
+    /// <summary>A request's reply, as the reader thread hands it over.</summary>
+    sealed class Waiter : IDisposable {
+        public readonly ManualResetEventSlim Done = new();
+        public SandboxReply? Reply;
+
+        public void Set(SandboxReply reply) {
+            Reply = reply;
+            Done.Set();
+        }
+
+        public void Dispose() => Done.Dispose();
+    }
+
+    /// <summary>Creates the segment and starts <c>anode-plugin</c> on it; returns once its audio thread is ready.</summary>
+    public static SandboxProcess Start(
+        string executable,
+        string group,
+        int index,
+        int maxSlots,
+        int maxFrames,
+        long periodNs,
+        int workgroup,
+        TimeSpan hangTimeout,
+        Action<string>? log
+    ) {
+        var box = new SandboxProcess(
+            executable,
+            group,
+            index,
+            maxSlots,
+            maxFrames,
+            periodNs,
+            workgroup,
+            hangTimeout,
+            log
+        );
+        try {
+            box.Launch();
+        } catch {
+            box.Dispose();
+            throw;
+        }
+
+        return box;
+    }
+
+    SandboxProcess(
         string executable,
         string group,
         int index,
@@ -76,7 +124,16 @@ internal sealed unsafe class SandboxProcess : IDisposable {
         start.ArgumentList.Add("host");
         start.ArgumentList.Add("--shm");
         start.ArgumentList.Add(Name);
-        process = Process.Start(start) ?? throw new InvalidOperationException("could not start " + executable);
+        startInfo = start;
+    }
+
+    void Launch() {
+        var executable = startInfo.FileName;
+        lock (startGate) {
+            started = Process.Start(startInfo) ?? throw new InvalidOperationException("could not start " + executable);
+        }
+
+        var process = started;
         Pid = process.Id;
         process.StandardInput.AutoFlush = true;
         new Thread(ReadReplies) { IsBackground = true, Name = "anode-plugin replies " + Pid }.Start();
@@ -84,6 +141,7 @@ internal sealed unsafe class SandboxProcess : IDisposable {
         monitor = new(Monitor) { IsBackground = true, Name = "anode-plugin watchdog " + Pid };
         monitor.Start();
 
+        var h = Header;
         var until = Stopwatch.StartNew();
         while (Volatile.Read(ref h->AudioReady) == 0) {
             if (dead || until.Elapsed > TimeSpan.FromSeconds(30)) {
@@ -98,7 +156,9 @@ internal sealed unsafe class SandboxProcess : IDisposable {
 
     public string Group { get; }
     public string Name { get; }
-    public int Pid { get; }
+    public int Pid { get; private set; }
+
+    Process Child => started ?? throw new InvalidOperationException("the sandbox has not started");
     public byte* Segment { get; }
     public nint Go { get; }
     public nint[] DoneWords { get; }
@@ -118,7 +178,7 @@ internal sealed unsafe class SandboxProcess : IDisposable {
     public int SlotsInUse {
         get {
             lock (gate) {
-                return used.Count(u => u);
+                return used.Count(static u => u);
             }
         }
     }
@@ -149,29 +209,29 @@ internal sealed unsafe class SandboxProcess : IDisposable {
         }
 
         request.Id = Interlocked.Increment(ref nextId);
-        var reply = new TaskCompletionSource<SandboxReply>(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var reply = new Waiter();
         pending[request.Id] = reply;
         try {
             lock (gate) {
-                process.StandardInput.WriteLine(SandboxJson.Write(request));
+                Child.StandardInput.WriteLine(SandboxJson.Write(request));
             }
         } catch (IOException) {
             pending.TryRemove(request.Id, out _);
             return new() { Ok = false, Error = DeathReason ?? "the sandbox is gone" };
         }
 
-        if (!reply.Task.Wait(timeout)) {
+        if (!reply.Done.Wait(timeout)) {
             pending.TryRemove(request.Id, out _);
             Kill($"did not answer '{request.Op}' within {timeout.TotalSeconds:0.#} s");
             return new() { Ok = false, Error = DeathReason };
         }
 
-        return reply.Task.Result;
+        return reply.Reply ?? new() { Ok = false, Error = DeathReason };
     }
 
     void ReadReplies() {
         try {
-            while (process.StandardOutput.ReadLine() is { } line) {
+            while (Child.StandardOutput.ReadLine() is { } line) {
                 SandboxReply? reply;
                 try {
                     reply = SandboxJson.ReadReply(line);
@@ -187,7 +247,7 @@ internal sealed unsafe class SandboxProcess : IDisposable {
                 if (reply.Event is not null) {
                     EventReceived?.Invoke(reply.Slot, reply);
                 } else if (pending.TryRemove(reply.Id, out var waiter)) {
-                    waiter.TrySetResult(reply);
+                    waiter.Set(reply);
                 }
             }
         } catch (IOException) {
@@ -197,7 +257,7 @@ internal sealed unsafe class SandboxProcess : IDisposable {
 
     void ReadErrors() {
         try {
-            while (process.StandardError.ReadLine() is { } line) {
+            while (Child.StandardError.ReadLine() is { } line) {
                 lock (stderrTail) {
                     stderrTail.Enqueue(line);
                     if (stderrTail.Count > 20) {
@@ -217,8 +277,8 @@ internal sealed unsafe class SandboxProcess : IDisposable {
         var stuckSince = new long[used.Length];
         var stuckOn = new long[used.Length];
         while (!dead) {
-            if (process.WaitForExit(100)) {
-                var code = process.ExitCode;
+            if (Child.WaitForExit(100)) {
+                var code = Child.ExitCode;
                 Die(code > 128 ? $"crashed (signal {code - 128})" : $"exited ({code})");
                 return;
             }
@@ -246,8 +306,8 @@ internal sealed unsafe class SandboxProcess : IDisposable {
     /// <summary>Ends the process (a hang, a protocol failure, disposal) and treats it as dead.</summary>
     public void Kill(string reason) {
         try {
-            if (!process.HasExited) {
-                process.Kill();
+            if (!Child.HasExited) {
+                Child.Kill();
             }
         } catch (InvalidOperationException) {
             // already gone
@@ -273,8 +333,10 @@ internal sealed unsafe class SandboxProcess : IDisposable {
             IpcWake.Signal(d);
         }
 
-        foreach (var waiter in pending.Values) {
-            waiter.TrySetResult(new() { Ok = false, Error = DeathReason });
+        foreach (var id in pending.Keys) {
+            if (pending.TryRemove(id, out var waiter)) {
+                waiter.Set(new() { Ok = false, Error = DeathReason });
+            }
         }
 
         Died?.Invoke(this);
@@ -282,22 +344,22 @@ internal sealed unsafe class SandboxProcess : IDisposable {
 
     /// <summary>Asks the sandbox to quit, then kills it if it does not.</summary>
     public void Dispose() {
-        if (!dead) {
+        if (!dead && started is not null) {
             Request(new() { Op = "quit" }, TimeSpan.FromSeconds(2));
             try {
-                process.StandardInput.Close();
+                Child.StandardInput.Close();
             } catch (IOException) {
                 // gone
             }
 
-            if (!process.WaitForExit(2000)) {
+            if (!Child.WaitForExit(2000)) {
                 Kill("did not quit");
             } else {
                 Die("quit");
             }
         }
 
-        monitor.Join(1000);
+        monitor?.Join(1000);
         Volatile.Write(ref Header->Stop, 1);
         foreach (var d in DoneWords) {
             IpcWake.Destroy(d, 0);
@@ -305,6 +367,6 @@ internal sealed unsafe class SandboxProcess : IDisposable {
 
         IpcWake.Destroy(Go, 0);
         IpcWake.ShmClose(shm, 1);
-        process.Dispose();
+        started?.Dispose();
     }
 }

@@ -40,21 +40,20 @@ public sealed record PluginDescription(
     int Latency,
     IReadOnlyList<PluginParameterDescription> Parameters
 ) {
-    public IReadOnlyList<InstrumentParameter> InstrumentParameters() =>
-        [
-            ..Parameters.Select((p, i) => new InstrumentParameter(
-                    i,
-                    p.Id,
-                    p.Name,
-                    (float)p.Min,
-                    (float)p.Max,
-                    (float)p.Default,
-                    p.Unit,
-                    p.Steps,
-                    p.ValueNames
-                )
+    public IReadOnlyList<InstrumentParameter> InstrumentParameters() => [
+        ..Parameters.Select(static (p, i) => new InstrumentParameter(
+                i,
+                p.Id,
+                p.Name,
+                (float)p.Min,
+                (float)p.Max,
+                (float)p.Default,
+                p.Unit,
+                p.Steps,
+                p.ValueNames
             )
-        ];
+        )
+    ];
 }
 
 /// <summary>
@@ -88,8 +87,20 @@ public sealed record PluginEntry(string PluginId, HostedFormat Format, string Pa
             FormatName(Format),
             d.IsInstrument,
             [],
-            [..d.Parameters.Select(p => new EngineParameter(p.Id, p.Name, p.Min, p.Max, p.Default, p.Unit, p.Steps, p.ValueNames))],
-            d.IsInstrument ? "" : d.Category,
+            [
+                ..d.Parameters.Select(static p => new EngineParameter(
+                        p.Id,
+                        p.Name,
+                        p.Min,
+                        p.Max,
+                        p.Default,
+                        p.Unit,
+                        p.Steps,
+                        p.ValueNames
+                    )
+                )
+            ],
+            d.IsInstrument ? string.Empty : d.Category,
             d.HasSidechain,
             d.HasEditor
         );
@@ -114,8 +125,8 @@ internal sealed class PluginCacheFile {
 
 /// <summary>One scanned item (a bundle, or one AU component) and its stamp (modification time or AU version).</summary>
 internal sealed class PluginCacheItem {
-    public string Key { get; set; } = "";
-    public string Stamp { get; set; } = "";
+    public string Key { get; set; } = string.Empty;
+    public string Stamp { get; set; } = string.Empty;
     public List<PluginDescription> Plugins { get; set; } = [];
 }
 
@@ -129,7 +140,7 @@ internal sealed class PluginBlocklistFile {
 }
 
 internal sealed class PluginBlocklistItem {
-    public string Key { get; set; } = "";
-    public string Stamp { get; set; } = "";
-    public string Reason { get; set; } = "";
+    public string Key { get; set; } = string.Empty;
+    public string Stamp { get; set; } = string.Empty;
+    public string Reason { get; set; } = string.Empty;
 }

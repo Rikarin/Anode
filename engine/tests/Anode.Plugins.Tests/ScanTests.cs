@@ -113,8 +113,8 @@ public sealed class ScanTests : IDisposable {
         Log($"scanned in {watch.Elapsed.TotalSeconds:0.0} s");
         foreach (var e in host.Catalog.Entries) {
             Log(
-                $"{e.PluginId,-48} {e.Description.Name,-28} {e.Description.Vendor,-12} {(e.Description.IsInstrument ? "instrument" : e.Description.Category),-10} " +
-                $"params={e.Description.Parameters.Count} sidechain={e.Description.HasSidechain} editor={e.Description.HasEditor} latency={e.Description.Latency}"
+                $"{e.PluginId,-48} {e.Description.Name,-28} {e.Description.Vendor,-12} {(e.Description.IsInstrument ? "instrument" : e.Description.Category),-10} "
+                + $"params={e.Description.Parameters.Count} sidechain={e.Description.HasSidechain} editor={e.Description.HasEditor} latency={e.Description.Latency}"
             );
         }
 
@@ -160,8 +160,8 @@ public sealed class ScanTests : IDisposable {
             }
 
             Log(
-                $"loaded {e.PluginId,-48} {(plugin.IsFailed ? "FAILED " + plugin.Failure : "ok")} in {watch.ElapsedMilliseconds} ms; " +
-                $"blocks {plugin.Stats.Completed}, peak {peak:0.000}"
+                $"loaded {e.PluginId,-48} {(plugin.IsFailed ? "FAILED " + plugin.Failure : "ok")} in {watch.ElapsedMilliseconds} ms; "
+                + $"blocks {plugin.Stats.Completed}, peak {peak:0.000}"
             );
         }
     }

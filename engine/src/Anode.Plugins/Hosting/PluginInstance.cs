@@ -7,7 +7,7 @@ namespace Anode.Plugins.Hosting;
 ///     The state of one hosted instance shared by the effect and instrument adapters: its backend, parameter values,
 ///     latency, a state stashed until it is prepared, and its failure.
 /// </summary>
-internal sealed class PluginInstance {
+internal sealed class PluginInstance : IDisposable {
     readonly PluginHost host;
     readonly double[] values;
     readonly bool[] set;
@@ -18,14 +18,20 @@ internal sealed class PluginInstance {
     volatile string? failure;
     volatile int latency;
 
-    public PluginInstance(PluginHost host, PluginEntry entry, PluginOwner owner, PluginBackend? backend, string? failure) {
+    public PluginInstance(
+        PluginHost host,
+        PluginEntry entry,
+        PluginOwner owner,
+        PluginBackend? backend,
+        string? failure
+    ) {
         this.host = host;
         Entry = entry;
         Owner = owner;
         this.backend = backend;
         this.failure = failure;
         latency = entry.Description.Latency;
-        values = [..entry.Description.Parameters.Select(p => p.Default)];
+        values = [..entry.Description.Parameters.Select(static p => p.Default)];
         set = new bool[values.Length];
     }
 
@@ -66,7 +72,16 @@ internal sealed class PluginInstance {
         // Values the engine set before this first load go with it; on a reload the state carries them.
         var indices = stashedState is null ? Enumerable.Range(0, set.Length).Where(i => set[i]).ToArray() : [];
         var initial = indices.Select(i => values[i]).ToArray();
-        if (!backend.Load(rate, maxFrames, Entry.Description.HasSidechain, indices, initial, out _, out var l, out var error)) {
+        if (!backend.Load(
+                rate,
+                maxFrames,
+                Entry.Description.HasSidechain,
+                indices,
+                initial,
+                out _,
+                out var l,
+                out var error
+            )) {
             Fail("could not be loaded: " + error);
             return;
         }
@@ -129,7 +144,7 @@ internal sealed class PluginInstance {
         }
 
         if (!Prepared) {
-            stashedState = state.ToArray();
+            stashedState = [..state];
             return true;
         }
 
@@ -182,7 +197,12 @@ internal sealed class PluginInstance {
             return 0;
         }
 
-        var window = backend.OpenEditor(Entry.Description.Name, placement ?? new(), host.Options.AppProcessId, out var error);
+        var window = backend.OpenEditor(
+            Entry.Description.Name,
+            placement ?? new(),
+            host.Options.AppProcessId,
+            out var error
+        );
         if (window < 0) {
             host.Log?.Invoke($"{Entry.Description.Name}: no editor window ({error})");
             return -1;
@@ -232,7 +252,12 @@ internal sealed class HostedEffect(PluginInstance instance) : IAudioEffect, IHos
     public float GetParameter(int index) => (float)instance.GetParameter(index);
 
     /// <summary>In place; on a miss or a failure the block passes through dry.</summary>
-    public void Process(Span<float> left, Span<float> right, ReadOnlySpan<float> sidechainLeft, ReadOnlySpan<float> sidechainRight) =>
+    public void Process(
+        Span<float> left,
+        Span<float> right,
+        ReadOnlySpan<float> sidechainLeft,
+        ReadOnlySpan<float> sidechainRight
+    ) =>
         instance.Process(left, right, sidechainLeft, sidechainRight, [], left, right);
 
     public void Reset() => instance.Reset();

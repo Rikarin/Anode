@@ -44,12 +44,14 @@ public sealed class FormatTests : IDisposable {
         b.Prepare(48000, 512);
         a.SetParameter(1, 1f); // an octave up
         b.SetParameter(1, 1f);
+
         MidiEvent[] Events(int block) =>
             block switch {
                 2 => [new(5, 0x90, 57, 110)],
                 20 => [new(30, 0x80, 57, 0)],
                 _ => []
             };
+
         var x = Render(a, 40, Frames, Events);
         var y = Render(b, 40, Frames, Events);
         Assert.Equal(y.Left, x.Left);

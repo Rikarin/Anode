@@ -84,7 +84,8 @@ internal static unsafe partial class IpcWake {
     [LibraryImport(Library, EntryPoint = "an_wg_last_error")]
     private static partial byte* WorkgroupLastErrorRaw();
 
-    public static string WorkgroupLastError => Marshal.PtrToStringUTF8((nint)WorkgroupLastErrorRaw()) ?? "unknown error";
+    public static string WorkgroupLastError =>
+        Marshal.PtrToStringUTF8((nint)WorkgroupLastErrorRaw()) ?? "unknown error";
 
     /// <summary>A wake word over <paramref name="word" /> (inside a shared segment), or throws.</summary>
     public static nint CreateWord(uint* word) {

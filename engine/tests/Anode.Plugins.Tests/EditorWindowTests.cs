@@ -1,5 +1,5 @@
-using System.Diagnostics;
 using Anode.Plugins.Native;
+using System.Diagnostics;
 using static Anode.Plugins.Tests.PluginFixtures;
 
 namespace Anode.Plugins.Tests;
@@ -20,7 +20,17 @@ public sealed class EditorWindowTests : IDisposable {
         );
 
     static (int Pid, int X, int Y, int Width, int Height, int Layer, bool OnScreen)? Info(long window) =>
-        PlugNative.WindowInfo(window, out var pid, out var x, out var y, out var w, out var h, out var layer, out var on) == 0
+        PlugNative.WindowInfo(
+            window,
+            out var pid,
+            out var x,
+            out var y,
+            out var w,
+            out var h,
+            out var layer,
+            out var on
+        )
+        == 0
             ? (pid, x, y, w, h, layer, on == 1)
             : null;
 

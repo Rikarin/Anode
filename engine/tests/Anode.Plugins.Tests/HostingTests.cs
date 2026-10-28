@@ -133,6 +133,7 @@ public sealed class HostingTests : IDisposable {
         Assert.Null(sandboxed.CreateEffect(SynthId, Owner));
         a.Prepare(48000, 512);
         b.Prepare(48000, 512);
+
         MidiEvent[] Events(int block) =>
             block switch {
                 1 => [new(10, 0x90, 60, 100), new(20, 0x90, 67, 90)],

@@ -1,8 +1,7 @@
+using Anode.Plugins.Native;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Text;
-using Anode.Plugins.Native;
-using Microsoft.Win32.SafeHandles;
 
 namespace Anode.Plugins.Sandbox;
 
@@ -30,7 +29,8 @@ internal sealed unsafe class SandboxServer {
     volatile bool stopping;
     volatile int processingSlot = -1;
 
-    sealed class Slot {
+    sealed class Slot(SandboxServer server) {
+        public readonly SandboxServer Server = server;
         public nint Plug;
         public nint Done;
         public bool Sidechain;
@@ -50,7 +50,7 @@ internal sealed unsafe class SandboxServer {
         go = IpcWake.CreateWord(SharedLayout.Go(segment));
         slots = new Slot[header->MaxSlots];
         for (var s = 0; s < slots.Length; s++) {
-            var slot = new Slot { Index = s, Done = IpcWake.CreateWord(&SharedLayout.Control(segment, s)->Done) };
+            var slot = new Slot(this) { Index = s, Done = IpcWake.CreateWord(&SharedLayout.Control(segment, s)->Done) };
             slot.In = (float**)NativeMemory.AllocZeroed(2, (nuint)sizeof(float*));
             slot.Sidechains = (float**)NativeMemory.AllocZeroed(2, (nuint)sizeof(float*));
             slot.Out = (float**)NativeMemory.AllocZeroed(2, (nuint)sizeof(float*));
@@ -72,7 +72,7 @@ internal sealed unsafe class SandboxServer {
             return 1;
         }
 
-        using var protocol = new FileStream(new SafeFileHandle(fd, true), FileAccess.Write, 1);
+        using var protocol = new FileStream(new(fd, true), FileAccess.Write, 1);
         if (IpcWake.ShmOpen(shmName, out var shm) != 0) {
             Console.Error.WriteLine("anode-plugin: " + IpcWake.LastError);
             return 1;
@@ -89,7 +89,6 @@ internal sealed unsafe class SandboxServer {
     }
 
     int Serve() {
-        current = this;
         header->SandboxPid = Environment.ProcessId;
         var audio = new Thread(AudioLoop) { Name = "anode-plugin audio", IsBackground = true };
         audio.Start();
@@ -189,7 +188,7 @@ internal sealed unsafe class SandboxServer {
             }
             case "loadState": {
                 var plug = PlugOf(r.Slot);
-                if (!PlugNative.LoadState(plug, Convert.FromBase64String(r.State ?? ""), out var error)) {
+                if (!PlugNative.LoadState(plug, Convert.FromBase64String(r.State ?? string.Empty), out var error)) {
                     return Fail(error);
                 }
 
@@ -207,7 +206,7 @@ internal sealed unsafe class SandboxServer {
                 }
 
                 // The app's window: found by its process, the handle never travels (docs/spikes/S6-plugin-windows.md).
-                var parent = r.Parent < 0 ? (r.AppPid > 0 ? PlugNative.AppWindow(r.AppPid) : 0) : r.Parent;
+                var parent = r.Parent < 0 ? r.AppPid > 0 ? PlugNative.AppWindow(r.AppPid) : 0 : r.Parent;
                 var window = PlugNative.EditorOpen(
                     plug,
                     r.Title ?? "Plugin",
@@ -254,7 +253,7 @@ internal sealed unsafe class SandboxServer {
             Unload(r.Slot);
         }
 
-        if (PlugNative.Open(r.Format, r.Path, r.Plugin ?? "", out var plug) != 0) {
+        if (PlugNative.Open(r.Format, r.Path, r.Plugin ?? string.Empty, out var plug) != 0) {
             return Fail(PlugNative.LastError);
         }
 
@@ -310,7 +309,7 @@ internal sealed unsafe class SandboxServer {
     [UnmanagedCallersOnly]
     static void OnPluginEvent(nint user, int kind, int index, double value) {
         var slot = (Slot)GCHandle.FromIntPtr(user).Target!;
-        var server = current!;
+        var server = slot.Server;
         switch (kind) {
             case 0:
                 server.Reply(new() { Event = "param", Slot = slot.Index, Index = index, Value = value });
@@ -323,8 +322,6 @@ internal sealed unsafe class SandboxServer {
                 break;
         }
     }
-
-    static SandboxServer? current;
 
     void Reply(SandboxReply reply) {
         var bytes = Encoding.UTF8.GetBytes(SandboxJson.Write(reply) + "\n");
@@ -396,9 +393,13 @@ internal sealed unsafe class SandboxServer {
         var host = header->HostPid;
         while (!stopping) {
             if (IpcWake.ProcessAlive(host) != 1) {
-                // A sandbox never outlives its host.
+                // A sandbox never outlives its host: stop, and if a plugin holds the main thread, leave anyway (there
+                // is nothing left to flush or clean up for a host that is gone).
                 Stop();
+                Thread.Sleep(2000);
+#pragma warning disable SK7091 // the host is gone; a plugin may hold the main thread forever
                 Environment.Exit(0);
+#pragma warning restore SK7091
             }
 
             Thread.Sleep(200);
@@ -524,7 +525,8 @@ internal sealed unsafe class SandboxServer {
     /// </summary>
     public static int Scan(IReadOnlyList<string> items) {
         var fd = PlugNative.RedirectStdout();
-        using var protocol = new FileStream(new SafeFileHandle(fd, true), FileAccess.Write, 1);
+        using var protocol = new FileStream(new(fd, true), FileAccess.Write, 1);
+
         void Write(SandboxReply reply) {
             protocol.Write(Encoding.UTF8.GetBytes(SandboxJson.Write(reply) + "\n"));
             protocol.Flush();
@@ -533,7 +535,7 @@ internal sealed unsafe class SandboxServer {
         foreach (var item in items) {
             Write(new() { Event = "begin", Item = item });
             var colon = item.IndexOf(':', StringComparison.Ordinal);
-            var kind = colon > 0 ? item[..colon] : "";
+            var kind = colon > 0 ? item[..colon] : string.Empty;
             var target = colon > 0 ? item[(colon + 1)..] : item;
             var format = kind switch {
                 "vst3" => PlugNative.Vst3,
@@ -541,8 +543,10 @@ internal sealed unsafe class SandboxServer {
                 "clap" => PlugNative.Clap,
                 _ => 0
             };
-            string? error = "unknown plugin format";
-            var json = format == 0 ? null : PlugNative.Scan(format, target == "*" ? null : target, target != "*", out error);
+            var error = "unknown plugin format";
+            var json = format == 0
+                ? null
+                : PlugNative.Scan(format, target == "*" ? null : target, target != "*", out error);
             Write(
                 json is null
                     ? new() { Event = "scanned", Item = item, Ok = false, Error = error }

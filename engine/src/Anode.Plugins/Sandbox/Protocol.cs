@@ -9,7 +9,7 @@ namespace Anode.Plugins.Sandbox;
 /// </summary>
 internal sealed class SandboxRequest {
     public int Id { get; set; }
-    public string Op { get; set; } = "";
+    public string Op { get; set; } = string.Empty;
     public int Slot { get; set; }
     public int Format { get; set; }
     public string? Path { get; set; }

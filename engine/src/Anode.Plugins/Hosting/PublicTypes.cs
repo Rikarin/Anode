@@ -36,7 +36,11 @@ public sealed record PluginProblem(PluginOwner Owner, string PluginId, string Me
 ///     screen's top-left; negative places it over the parent's top-left corner, or centres it without one.
 ///     <paramref name="Floating" />: a floating utility panel (above every normal window) rather than a normal window.
 /// </summary>
-public sealed record EditorPlacement(long ParentWindow = EditorPlacement.AppWindow, int X = -1, int Y = -1, bool Floating = true) {
+public sealed record EditorPlacement(
+    long ParentWindow = EditorPlacement.AppWindow,
+    int X = -1,
+    int Y = -1,
+    bool Floating = true) {
     /// <summary>The desktop app's main window.</summary>
     public const long AppWindow = -1;
 }
@@ -60,7 +64,10 @@ public interface IHostedPlugin {
     /// <summary>It has its own editor window (otherwise the generic editor).</summary>
     bool HasEditor { get; }
 
-    /// <summary>True once it crashed, hung or failed to load: it is bypassed (effects pass their input; instruments are silent).</summary>
+    /// <summary>
+    ///     True once it crashed, hung or failed to load: it is bypassed (effects pass their input; instruments are
+    ///     silent).
+    /// </summary>
     bool IsFailed { get; }
 
     /// <summary>Why it failed, or null.</summary>
@@ -68,7 +75,10 @@ public interface IHostedPlugin {
 
     HostedPluginStats Stats { get; }
 
-    /// <summary>Opens or closes the plugin's own editor window (control thread); the window number, 0 when closed, negative on failure.</summary>
+    /// <summary>
+    ///     Opens or closes the plugin's own editor window (control thread); the window number, 0 when closed, negative on
+    ///     failure.
+    /// </summary>
     int OpenEditor(bool open, EditorPlacement? placement = null);
 
     /// <summary>The open editor's window number, or 0.</summary>

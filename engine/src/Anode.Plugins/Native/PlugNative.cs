@@ -173,19 +173,18 @@ internal static unsafe partial class PlugNative {
     }
 
     public static bool LoadState(nint plug, ReadOnlySpan<byte> state, out string? error) {
-        fixed (byte* p = state) {
-            if (StateLoadRaw(plug, p, state.Length) != 0) {
-                error = LastError;
-                return false;
-            }
+        int result;
+        var length = state.Length;
+        fixed (byte* p = &MemoryMarshal.GetReference(state)) {
+            result = StateLoadRaw(plug, p, length);
         }
 
-        error = null;
-        return true;
+        error = result != 0 ? LastError : null;
+        return result == 0;
     }
 
     static string TakeString(byte* p) {
-        var s = Marshal.PtrToStringUTF8((nint)p) ?? "";
+        var s = Marshal.PtrToStringUTF8((nint)p) ?? string.Empty;
         Free(p);
         return s;
     }

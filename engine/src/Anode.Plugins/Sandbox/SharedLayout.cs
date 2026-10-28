@@ -159,12 +159,13 @@ internal static unsafe class SharedLayout {
 
     /// <summary>Channel <paramref name="channel" /> (0–5: in L/R, sidechain L/R, out L/R) of a slot.</summary>
     public static float* Channel(byte* segment, int slot, int channel) =>
-        (float*)(SlotData(segment, slot) + MaxParams * sizeof(ParamChange) + MaxMidi * 8) +
-        (long)channel * Header(segment)->MaxFrames;
+        (float*)(SlotData(segment, slot) + MaxParams * sizeof(ParamChange) + MaxMidi * 8)
+        + (long)channel * Header(segment)->MaxFrames;
 
     /// <summary>A segment name (at most 30 characters, as macOS allows).</summary>
     public static string ShmName(int hostPid, int sandbox) => $"/anp.{hostPid}.{sandbox}";
 
     /// <summary>The Mach bootstrap service the host publishes the device's IO workgroup under (per publication).</summary>
-    public static string WorkgroupService(int hostPid, int generation) => $"org.anode.plugins.wg.{hostPid}.{generation}";
+    public static string WorkgroupService(int hostPid, int generation) =>
+        $"org.anode.plugins.wg.{hostPid}.{generation}";
 }

@@ -1,8 +1,8 @@
+using Anode.Plugins.Sandbox;
 using System.Diagnostics;
 using System.Globalization;
 using System.Text;
 using System.Text.Json;
-using Anode.Plugins.Sandbox;
 
 namespace Anode.Plugins;
 
@@ -25,7 +25,7 @@ public sealed class PluginCatalog {
         this.options = options;
         this.executable = executable;
         var cache = ReadCache();
-        entries = Build(cache.Items.Select(i => (i.Key, (IReadOnlyList<PluginDescription>)i.Plugins)));
+        entries = Build(cache.Items.Select(static i => (i.Key, (IReadOnlyList<PluginDescription>)i.Plugins)));
     }
 
     string Folder => Path.Combine(options.DataDirectory, "plugins");
@@ -43,12 +43,12 @@ public sealed class PluginCatalog {
 
     /// <summary>The items skipped because they crashed or hung a scan: (item, reason).</summary>
     public IReadOnlyList<(string Item, string Reason)> Blocklist =>
-        [..ReadBlocklist().Items.Select(i => (i.Key, i.Reason))];
+        [..ReadBlocklist().Items.Select(static i => (i.Key, i.Reason))];
 
     public PluginEntry? Find(string pluginId) {
         lock (gate) {
-            return entries.FirstOrDefault(e => e.PluginId == pluginId) ??
-                   registered.FirstOrDefault(e => e.PluginId == pluginId);
+            return entries.FirstOrDefault(e => e.PluginId == pluginId)
+                ?? registered.FirstOrDefault(e => e.PluginId == pluginId);
         }
     }
 
@@ -83,8 +83,8 @@ public sealed class PluginCatalog {
                 }
             }
 
-            var stamps = todo.ToDictionary(t => t.Key, t => t.Stamp);
-            foreach (var (key, plugins, failure) in Describe([..todo.Select(t => t.Key)], cancellation)) {
+            var stamps = todo.ToDictionary(static t => t.Key, static t => t.Stamp);
+            foreach (var (key, plugins, failure) in Describe([..todo.Select(static t => t.Key)], cancellation)) {
                 blocklist.Items.RemoveAll(i => i.Key == key);
                 if (failure is { Crashed: true }) {
                     blocklist.Items.Add(new() { Key = key, Stamp = stamps[key], Reason = failure.Value.Reason });
@@ -99,9 +99,7 @@ public sealed class PluginCatalog {
             var newCache = new PluginCacheFile {
                 Items = [
                     ..results.Select(r => new PluginCacheItem {
-                            Key = r.Key,
-                            Stamp = items.First(i => i.Key == r.Key).Stamp,
-                            Plugins = [..r.Plugins]
+                            Key = r.Key, Stamp = items.First(i => i.Key == r.Key).Stamp, Plugins = [..r.Plugins]
                         }
                     )
                 ]
@@ -132,7 +130,7 @@ public sealed class PluginCatalog {
             foreach (var d in plugins) {
                 var id = PluginEntry.MakeId(format, d.Id);
                 if (seen.Add(id)) {
-                    list.Add(new(id, format, format == HostedFormat.Au ? "" : target, d));
+                    list.Add(new(id, format, format == HostedFormat.Au ? string.Empty : target, d));
                 }
             }
         }
@@ -242,8 +240,12 @@ public sealed class PluginCatalog {
 
     /// <summary>A bundle's stamp: the latest modification time of the bundle and its binary folder.</summary>
     static string Stamp(string bundle) {
-        var times = new List<DateTime> { Directory.Exists(bundle) ? Directory.GetLastWriteTimeUtc(bundle) : File.GetLastWriteTimeUtc(bundle) };
-        foreach (var inner in new[] { "Contents/MacOS", "Contents/Info.plist", "Contents/x86_64-linux", "Contents/x86_64-win" }) {
+        var times = new List<DateTime> {
+            Directory.Exists(bundle) ? Directory.GetLastWriteTimeUtc(bundle) : File.GetLastWriteTimeUtc(bundle)
+        };
+        foreach (var inner in new[] {
+                     "Contents/MacOS", "Contents/Info.plist", "Contents/x86_64-linux", "Contents/x86_64-win"
+                 }) {
             var p = Path.Combine(bundle, inner);
             if (Directory.Exists(p)) {
                 times.Add(Directory.GetLastWriteTimeUtc(p));
@@ -273,7 +275,9 @@ public sealed class PluginCatalog {
         while (remaining.Count > 0 && !cancellation.IsCancellationRequested) {
             var batch = remaining.ToList();
             var done = new HashSet<string>(StringComparer.Ordinal);
-            var failed = RunScanner(batch, (item, plugins, error) => {
+            var failed = RunScanner(
+                batch,
+                (item, plugins, error) => {
                     done.Add(item);
                     results.Add(error is null ? (item, plugins, null) : (item, [], new ScanFailure(false, error)));
                 },
@@ -311,7 +315,7 @@ public sealed class PluginCatalog {
         CancellationToken cancellation
     ) {
         current = null;
-        reason = "";
+        reason = string.Empty;
         var dll = executable.EndsWith(".dll", StringComparison.OrdinalIgnoreCase);
         var start = new ProcessStartInfo(dll ? "dotnet" : executable) {
             RedirectStandardOutput = true,
@@ -345,13 +349,13 @@ public sealed class PluginCatalog {
         var reader = new Thread(() => {
                 try {
                     while (process.StandardOutput.ReadLine() is { } line) {
-                        lines.Add(line);
+                        lines.Add(line, cancellation);
                     }
-                } catch (IOException) {
-                    // ended
-                }
 
-                lines.Add(null);
+                    lines.Add(null, cancellation);
+                } catch (Exception e) when (e is IOException or OperationCanceledException) {
+                    // ended, or nobody listens any more
+                }
             }
         ) { IsBackground = true, Name = "plugin scan reader" };
         reader.Start();
@@ -396,7 +400,7 @@ public sealed class PluginCatalog {
                 since.Restart();
             } else if (e?.Event == "scanned" && e.Item is { } item) {
                 IReadOnlyList<PluginDescription> plugins = [];
-                string? error = e.Error ?? "failed";
+                var error = e.Error ?? "failed";
                 if (e.Ok && e.Plugins is { } json) {
                     try {
                         plugins = SandboxJson.ReadDescriptions(json);

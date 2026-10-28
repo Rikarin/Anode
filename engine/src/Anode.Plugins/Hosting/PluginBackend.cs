@@ -1,3 +1,4 @@
+using System.Runtime.InteropServices;
 using Anode.Dsp.Instruments;
 using Anode.Plugins.Native;
 using Anode.Plugins.Sandbox;
@@ -6,7 +7,10 @@ namespace Anode.Plugins.Hosting;
 
 /// <summary>Where one plugin instance runs: in a sandbox slot, or in this process.</summary>
 internal abstract class PluginBackend : IDisposable {
-    /// <summary>Loads and activates the plugin (control thread), setting parameters <paramref name="indices" /> to <paramref name="values" />.</summary>
+    /// <summary>
+    ///     Loads and activates the plugin (control thread), setting parameters <paramref name="indices" /> to
+    ///     <paramref name="values" />.
+    /// </summary>
     public abstract bool Load(
         double sampleRate,
         int maxFrames,
@@ -160,7 +164,8 @@ internal sealed class SandboxBackend(SandboxProcess box, int slot, PluginEntry e
         return reply.Ok ? reply.Window : -1;
     }
 
-    public override void CloseEditor() => box.Request(new() { Op = "editor", Slot = slot, Open = false }, RequestTimeout);
+    public override void CloseEditor() =>
+        box.Request(new() { Op = "editor", Slot = slot, Open = false }, RequestTimeout);
 
     public override bool IsFailed => box.IsDead;
 
@@ -188,8 +193,10 @@ internal sealed class SandboxBackend(SandboxProcess box, int slot, PluginEntry e
 /// <summary>An instance in this process (<see cref="SandboxMode.InHost" />): no isolation, no deadline.</summary>
 internal sealed unsafe class InHostBackend(PluginEntry entry) : PluginBackend {
     nint plug;
-    float[] scratchLeft = [];
-    float[] scratchRight = [];
+    int maxFrames;
+
+    // Six channels (input, sidechain, output; left and right) and the pointer array over them.
+    float** buffers;
 
     public override bool Load(
         double sampleRate,
@@ -203,7 +210,13 @@ internal sealed unsafe class InHostBackend(PluginEntry entry) : PluginBackend {
     ) {
         description = null;
         latency = 0;
-        if (PlugNative.Open((int)entry.Format, entry.Path.Length > 0 ? entry.Path : null, entry.Description.Id, out plug) != 0) {
+        if (PlugNative.Open(
+                (int)entry.Format,
+                entry.Path.Length > 0 ? entry.Path : null,
+                entry.Description.Id,
+                out plug
+            )
+            != 0) {
             error = PlugNative.LastError;
             plug = 0;
             return false;
@@ -220,8 +233,12 @@ internal sealed unsafe class InHostBackend(PluginEntry entry) : PluginBackend {
             PlugNative.ParamSet(plug, indices[i], values[i]);
         }
 
-        scratchLeft = new float[maxFrames];
-        scratchRight = new float[maxFrames];
+        this.maxFrames = maxFrames;
+        buffers = (float**)NativeMemory.AllocZeroed(6, (nuint)sizeof(float*));
+        for (var c = 0; c < 6; c++) {
+            buffers[c] = (float*)NativeMemory.AllocZeroed((nuint)maxFrames, sizeof(float));
+        }
+
         description = SandboxJson.ReadDescription(PlugNative.Describe(plug));
         latency = PlugNative.Latency(plug);
         error = null;
@@ -232,6 +249,15 @@ internal sealed unsafe class InHostBackend(PluginEntry entry) : PluginBackend {
         if (plug != 0) {
             PlugNative.Close(plug);
             plug = 0;
+        }
+
+        if (buffers != null) {
+            for (var c = 0; c < 6; c++) {
+                NativeMemory.Free(buffers[c]);
+            }
+
+            NativeMemory.Free(buffers);
+            buffers = null;
         }
     }
 
@@ -245,17 +271,23 @@ internal sealed unsafe class InHostBackend(PluginEntry entry) : PluginBackend {
         Span<float> outR,
         long deadlineNs
     ) {
-        if (plug == 0) {
+        if (plug == 0 || buffers == null) {
             return false;
         }
 
-        var frames = Math.Min(outL.Length, scratchLeft.Length);
-        if (!inL.IsEmpty) {
-            // Plugins are not required to process in place: hand them a copy of the input.
-            inL[..frames].CopyTo(scratchLeft);
-            inR[..frames].CopyTo(scratchRight);
-            inL = scratchLeft.AsSpan(0, frames);
-            inR = scratchRight.AsSpan(0, frames);
+        // Plugins are not required to process in place: they get the block in buffers of their own (unmanaged, so
+        // nothing has to be pinned).
+        var frames = Math.Min(outL.Length, maxFrames);
+        var hasInput = !inL.IsEmpty;
+        var hasSidechain = !scL.IsEmpty;
+        if (hasInput) {
+            inL[..frames].CopyTo(new Span<float>(buffers[0], frames));
+            inR[..frames].CopyTo(new Span<float>(buffers[1], frames));
+        }
+
+        if (hasSidechain) {
+            scL[..frames].CopyTo(new Span<float>(buffers[2], frames));
+            scR[..frames].CopyTo(new Span<float>(buffers[3], frames));
         }
 
         PlugMidi* midi = stackalloc PlugMidi[Math.Min(events.Length, 256)];
@@ -265,21 +297,27 @@ internal sealed unsafe class InHostBackend(PluginEntry entry) : PluginBackend {
                 break;
             }
 
-            midi[count++] = new() { Frame = Math.Clamp(e.Frame, 0, frames - 1), Status = e.Status, Data1 = e.Data1, Data2 = e.Data2 };
+            midi[count++] = new() {
+                Frame = Math.Clamp(e.Frame, 0, frames - 1), Status = e.Status, Data1 = e.Data1, Data2 = e.Data2
+            };
         }
 
-        fixed (float* il = inL, ir = inR, sl = scL, sr = scR, ol = outL, or = outR) {
-            float** input = stackalloc float*[2];
-            float** sc = stackalloc float*[2];
-            float** output = stackalloc float*[2];
-            input[0] = il;
-            input[1] = ir;
-            sc[0] = sl;
-            sc[1] = sr;
-            output[0] = ol;
-            output[1] = or;
-            return PlugNative.Process(plug, inL.IsEmpty ? null : input, scL.IsEmpty ? null : sc, output, frames, midi, count) == 0;
+        var ok = PlugNative.Process(
+                plug,
+                hasInput ? buffers : null,
+                hasSidechain ? buffers + 2 : null,
+                buffers + 4,
+                frames,
+                midi,
+                count
+            )
+            == 0;
+        if (ok) {
+            new ReadOnlySpan<float>(buffers[4], frames).CopyTo(outL);
+            new ReadOnlySpan<float>(buffers[5], frames).CopyTo(outR);
         }
+
+        return ok;
     }
 
     public override void SetParameter(int index, double value) {

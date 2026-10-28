@@ -56,7 +56,7 @@ public sealed class PluginHostOptions {
     /// </summary>
     public int AppProcessId { get; set; } = ParentProcessId();
 
-    static int ParentProcessId() => OperatingSystem.IsWindows() ? 0 : Native.Libc.GetParentPid();
+    static int ParentProcessId() => OperatingSystem.IsWindows() ? 0 : Libc.GetParentPid();
 
     /// <summary>Diagnostics (sandbox output, plugins that failed to scan).</summary>
     public Action<string>? Log { get; set; }
@@ -112,7 +112,7 @@ public sealed class PluginHost : IDisposable {
     public event Action<PluginProblem>? Problem;
 
     /// <summary>The catalogue as the host reports it to the server.</summary>
-    public IReadOnlyList<EnginePlugin> CatalogEntries() => [..Catalog.Entries.Select(e => e.ToEngine())];
+    public IReadOnlyList<EnginePlugin> CatalogEntries() => [..Catalog.Entries.Select(static e => e.ToEngine())];
 
     /// <summary>Rescans (see <see cref="PluginCatalog.Scan" />) on a background thread.</summary>
     public Task<IReadOnlyList<PluginEntry>> ScanAsync(bool force = false, CancellationToken cancellation = default) =>
@@ -158,7 +158,8 @@ public sealed class PluginHost : IDisposable {
                         deviceUid.Length == 0 ? null : deviceUid,
                         SharedLayout.WorkgroupService(Environment.ProcessId, g),
                         out workgroup
-                    ) == 0) {
+                    )
+                    == 0) {
                     workgroupGeneration = g;
                     generation = g;
                 } else {
@@ -212,7 +213,7 @@ public sealed class PluginHost : IDisposable {
     public IReadOnlyList<(string Group, int Pid, int Instances)> Sandboxes {
         get {
             lock (gate) {
-                return [..sandboxes.Where(s => !s.IsDead).Select(s => (s.Group, s.Pid, s.SlotsInUse))];
+                return [..sandboxes.Where(static s => !s.IsDead).Select(static s => (s.Group, s.Pid, s.SlotsInUse))];
             }
         }
     }
@@ -245,7 +246,13 @@ public sealed class PluginHost : IDisposable {
             return failed;
         }
 
-        var instance = new PluginInstance(this, entry, owner, new SandboxBackend(box, slot, entry, options.LoadTimeout), null);
+        var instance = new PluginInstance(
+            this,
+            entry,
+            owner,
+            new SandboxBackend(box, slot, entry, options.LoadTimeout),
+            null
+        );
         lock (gate) {
             instances[box][slot] = instance;
         }
@@ -256,9 +263,11 @@ public sealed class PluginHost : IDisposable {
     (SandboxProcess, int) AcquireSlot(PluginEntry entry) {
         var group = options.Mode == SandboxMode.PerInstance
             ? $"instance-{Interlocked.Increment(ref sandboxCount)}"
-            : entry.Description.Vendor.Length > 0 ? entry.Description.Vendor : entry.PluginId;
+            : entry.Description.Vendor.Length > 0
+                ? entry.Description.Vendor
+                : entry.PluginId;
         lock (gate) {
-            var live = sandboxes.Where(s => !s.IsDead).ToList();
+            var live = sandboxes.Where(static s => !s.IsDead).ToList();
             foreach (var box in live.Where(s => s.Group == group)) {
                 var slot = box.AllocateSlot();
                 if (slot >= 0) {
@@ -269,7 +278,7 @@ public sealed class PluginHost : IDisposable {
             var cap = options.MaxSandboxes > 0 ? options.MaxSandboxes : Math.Max(1, PerformanceCores() - 2);
             if (options.Mode == SandboxMode.Grouped && live.Count >= cap) {
                 // Over the cap: share the least busy sandbox.
-                foreach (var box in live.OrderBy(s => s.SlotsInUse)) {
+                foreach (var box in live.OrderBy(static s => s.SlotsInUse)) {
                     var slot = box.AllocateSlot();
                     if (slot >= 0) {
                         return (box, slot);
@@ -283,7 +292,7 @@ public sealed class PluginHost : IDisposable {
     }
 
     SandboxProcess StartSandbox(string group) {
-        var box = new SandboxProcess(
+        var box = SandboxProcess.Start(
             executable,
             group,
             Interlocked.Increment(ref sandboxCount),
@@ -315,9 +324,7 @@ public sealed class PluginHost : IDisposable {
                 instance?.OnLatency(e.Latency);
                 break;
             case "editorClosed":
-                if (instance is not null) {
-                    instance.EditorWindow = 0;
-                }
+                instance?.EditorWindow = 0;
 
                 break;
         }

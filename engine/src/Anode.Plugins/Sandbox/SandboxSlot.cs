@@ -1,6 +1,6 @@
-using System.Runtime.CompilerServices;
 using Anode.Dsp.Instruments;
 using Anode.Plugins.Native;
+using System.Runtime.CompilerServices;
 
 namespace Anode.Plugins.Sandbox;
 
@@ -105,14 +105,14 @@ internal sealed unsafe class SandboxSlot {
         }
 
         if (!inL.IsEmpty) {
-            inL[..frames].CopyTo(new Span<float>(inLeft, frames));
-            inR[..frames].CopyTo(new Span<float>(inRight, frames));
+            inL[..frames].CopyTo(new(inLeft, frames));
+            inR[..frames].CopyTo(new(inRight, frames));
         }
 
         var flags = 0;
         if (!scL.IsEmpty) {
-            scL[..frames].CopyTo(new Span<float>(scLeft, frames));
-            scR[..frames].CopyTo(new Span<float>(scRight, frames));
+            scL[..frames].CopyTo(new(scLeft, frames));
+            scR[..frames].CopyTo(new(scRight, frames));
             flags |= SlotControl.FlagSidechain;
         }
 
@@ -141,7 +141,9 @@ internal sealed unsafe class SandboxSlot {
                 break;
             }
 
-            midiArea[midi++] = new() { Frame = Math.Clamp(e.Frame, 0, frames - 1), Status = e.Status, Data1 = e.Data1, Data2 = e.Data2 };
+            midiArea[midi++] = new() {
+                Frame = Math.Clamp(e.Frame, 0, frames - 1), Status = e.Status, Data1 = e.Data1, Data2 = e.Data2
+            };
         }
 
         control->Frames = frames;

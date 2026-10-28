@@ -102,7 +102,12 @@ public static class PluginFixtures {
     }
 
     /// <summary>Processes <paramref name="blocks" /> blocks of the test signal; the output, concatenated.</summary>
-    public static (float[] Left, float[] Right) Render(IAudioEffect effect, int blocks, int frames, Action<int>? before = null) {
+    public static (float[] Left, float[] Right) Render(
+        IAudioEffect effect,
+        int blocks,
+        int frames,
+        Action<int>? before = null
+    ) {
         var left = new float[blocks * frames];
         var right = new float[blocks * frames];
         for (var b = 0; b < blocks; b++) {
@@ -116,7 +121,12 @@ public static class PluginFixtures {
         return (left, right);
     }
 
-    public static (float[] Left, float[] Right) Render(IInstrument instrument, int blocks, int frames, Func<int, MidiEvent[]> events) {
+    public static (float[] Left, float[] Right) Render(
+        IInstrument instrument,
+        int blocks,
+        int frames,
+        Func<int, MidiEvent[]> events
+    ) {
         var left = new float[blocks * frames];
         var right = new float[blocks * frames];
         for (var b = 0; b < blocks; b++) {
@@ -134,7 +144,10 @@ public static class PluginFixtures {
 /// <summary>A temporary directory, deleted on disposal.</summary>
 public sealed class TempDirectory : IDisposable {
     public TempDirectory() {
-        Path = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "anode-plugins-" + Guid.NewGuid().ToString("N")[..8]);
+        Path = System.IO.Path.Combine(
+            System.IO.Path.GetTempPath(),
+            "anode-plugins-" + Guid.NewGuid().ToString("N")[..8]
+        );
         Directory.CreateDirectory(Path);
     }
 
