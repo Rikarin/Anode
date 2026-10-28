@@ -20,8 +20,8 @@ public static partial class Edits {
     /// <summary>The send level a new send has unless told otherwise: −∞, as Logic's.</summary>
     public const double NewSendLevelDb = Units.SilenceDb;
 
-    /// <summary>What a new mixer group links (Logic's group settings, with selection and the mixer basics on).</summary>
-    public static GroupProperties DefaultGroupProperties { get; } = new(true, true, true, false, false, true, true, true);
+    /// <summary>What a new mixer group links: volume, mute, solo, pan, record arm and selection (not sends or automation).</summary>
+    public static GroupProperties DefaultGroupProperties { get; } = new(true, true, true, true, false, true, false, true);
 
     public const string GroupColor = "#8a8f98";
 

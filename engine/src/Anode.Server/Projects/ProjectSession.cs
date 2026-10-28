@@ -706,6 +706,41 @@ public sealed class ProjectSession(
         return file;
     }
 
+    /// <summary>
+    ///     Adds bounced files (already in the project's <c>Audio Files</c>) to the pool as one undo step, "Add Bounce"
+    ///     (a file stays in the pool on undo, as an import's does: the step is there to name what happened).
+    /// </summary>
+    public CommandResult AddBounce(long session, IReadOnlyList<(string Path, WavInfo Info)> files) {
+        CommandResult result;
+        var added = new List<AudioFile>();
+        lock (gate) {
+            var o = Required();
+            if (o.Session != session) {
+                throw ProjectException.Conflict("The project was closed while it bounced.");
+            }
+
+            var forward = new List<DeltaOp>();
+            var inverse = new List<DeltaOp>();
+            var state = o.State;
+            foreach (var (path, info) in files) {
+                var file = Describe(o, path, info);
+                added.Add(file);
+                state = Edits.Step(state, [new AudioFileUpserted(file)], forward, inverse);
+            }
+
+            inverse.Reverse();
+            result = Commit(o, state, forward);
+            o.History.Push("Add Bounce", o.Revision, new(forward, inverse), null);
+        }
+
+        foreach (var file in added) {
+            StartPeaks(file);
+        }
+
+        Changed?.Invoke();
+        return result;
+    }
+
     /// <summary>Waits until the peaks of a file of the open project exist; its level file's path.</summary>
     public async Task<string> PeaksAsync(string fileId, int framesPerPeak, CancellationToken cancellationToken) {
         string folder;

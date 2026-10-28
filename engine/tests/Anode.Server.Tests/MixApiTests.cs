@@ -111,6 +111,7 @@ public sealed class MixApiTests {
         Assert.Equal(JobKind.Freeze, job.Kind);
         var done = await events.WaitAsync<JobEvent>(e => e.Job.Id == job.Id && e.Job.State == JobState.Done, 30);
         var file = Assert.Single(done.Job.Files);
+        Assert.Equal("Freeze Files", Path.GetFileName(Path.GetDirectoryName(file)));
         // Two seconds of 120 BPM bar, plus two seconds of tail, at 48 kHz.
         Assert.Equal(4 * 48_000L, WavReader.Probe(file).Frames);
         var project = await client.ProjectAsync();
@@ -166,6 +167,7 @@ public sealed class MixApiTests {
         // Added at the project's rate.
         var added = (await client.ProjectAsync()).AudioFiles.Single();
         Assert.Equal((48_000, "Mix"), (added.SampleRate, added.Name));
+        Assert.Equal("Add Bounce", (await History(client)).Undo[0].Label);
 
         var status = await client.GetFromJsonAsync($"/api/v1/jobs/{job.Id}", ContractsJsonContext.Default.Job, Token);
         Assert.Equal(JobState.Done, status!.State);
@@ -328,6 +330,10 @@ public sealed class MixApiTests {
         await host.ChangeParameterAsync(0, inserts[0].Id, "0", 6);
         await ServerFixture.Eventually(async () => (await client.ProjectAsync()).Tracks[0].Strip.Inserts[0].Parameters["0"] == 6);
         Assert.Equal(undo + 1, (await History(client)).Undo.Count);
+
+        await host.ReportReadingsAsync([new(0, inserts[1].Id, -4.5f), new(7, "ins_gone", 1)]);
+        var meters = await events.WaitAsync<MetersEvent>(static e => e.Readings is { Count: > 0 });
+        Assert.Equal(new InsertReading(gtr, inserts[1].Id, -4.5), Assert.Single(meters.Readings!));
 
         await host.ReportProblemAsync(0, inserts[0].Id, FakeHost.FakeVst3Id, "The plugin crashed.");
         var problem = await events.WaitAsync<PluginProblemEvent>();

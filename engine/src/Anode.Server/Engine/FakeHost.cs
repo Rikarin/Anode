@@ -210,6 +210,9 @@ public sealed class FakeHost : IAsyncDisposable {
     public Task ChangeParameterAsync(int trackId, string? insertId, string parameterId, double value) =>
         SendAsync(new ParameterChangedMessage(trackId, insertId, parameterId, value));
 
+    /// <summary>Plays inserts reporting readings (a compressor's gain reduction).</summary>
+    public Task ReportReadingsAsync(IReadOnlyList<InsertReadingEntry> readings) => SendAsync(new InsertReadingsMessage(readings));
+
     /// <summary>Plays a plugin crashing: the host bypasses it and tells the server.</summary>
     public Task ReportProblemAsync(int trackId, string? insertId, string pluginId, string message) =>
         SendAsync(new PluginProblemMessage(trackId, insertId, pluginId, message));

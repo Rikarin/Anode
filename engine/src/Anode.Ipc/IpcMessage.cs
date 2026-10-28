@@ -45,6 +45,7 @@ namespace Anode.Ipc;
 [JsonDerivedType(typeof(OpenPluginEditorMessage), "openPluginEditor")]
 [JsonDerivedType(typeof(ParameterChangedMessage), "parameterChanged")]
 [JsonDerivedType(typeof(PluginProblemMessage), "pluginProblem")]
+[JsonDerivedType(typeof(InsertReadingsMessage), "insertReadings")]
 public abstract record IpcMessage;
 
 /// <summary>
@@ -406,3 +407,9 @@ public sealed record ParameterChangedMessage(int TrackId, string? InsertId, stri
 
 /// <summary>Host → server: a plugin crashed or failed to load and is bypassed.</summary>
 public sealed record PluginProblemMessage(int TrackId, string? InsertId, string PluginId, string Message) : IpcMessage;
+
+/// <summary>One insert's reading; <paramref name="TrackId" /> −1 is the master.</summary>
+public sealed record InsertReadingEntry(int TrackId, string InsertId, float Value);
+
+/// <summary>Host → server: inserts' readings (gain reduction, meter levels), at most 15 times a second.</summary>
+public sealed record InsertReadingsMessage(IReadOnlyList<InsertReadingEntry> Readings) : IpcMessage;

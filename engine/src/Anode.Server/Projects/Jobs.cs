@@ -19,12 +19,15 @@ namespace Anode.Server.Projects;
 ///     a scratch folder in the project, post-processes each file (<see cref="BounceProcessor" />) into
 ///     <c>directory</c> (default <c>&lt;project&gt;/Bounces</c>) and, with <c>addToProject</c>, adds a copy at the
 ///     project's rate to its audio files. A freeze renders a track's source and inserts into the project's
-///     <c>Audio Files</c>, from the start to its last region's end plus <see cref="FreezeTailSeconds" /> s, and makes it
+///     <c>Freeze Files</c> folder, from the start to its last region's end plus <see cref="FreezeTailSeconds" /> s, and makes it
 ///     play that as one undoable step. Every change of state, and progress at most a few times a second, goes out as a
 ///     <see cref="JobEvent" />. Cancelling a queued job drops it; a running one asks the engine to stop.
 /// </summary>
 public sealed class Jobs : IDisposable {
     public const double FreezeTailSeconds = 2;
+
+    /// <summary>Where freeze files go in the project folder.</summary>
+    public const string FreezeFolder = "Freeze Files";
     static readonly TimeSpan ProgressInterval = TimeSpan.FromMilliseconds(250);
 
     readonly ProjectSession session;
@@ -243,6 +246,7 @@ public sealed class Jobs : IDisposable {
 
             Directory.CreateDirectory(plan.Directory);
             var outputs = new List<string>();
+            var added = new List<(string, WavInfo)>();
             var sources = tracks is null
                 ? [(Path.Combine(scratch, "mix.wav"), plan.Name)]
                 : plan.Stems.Select(t => (Path.Combine(scratch, $"{view.Ids.Track(t.Id)}.wav"), $"{plan.Name} - {Safe(t.Name)}")).ToList();
@@ -255,10 +259,14 @@ public sealed class Jobs : IDisposable {
                 BounceProcessor.Write(output, processed, plan.Format, i);
                 outputs.Add(output);
                 if (plan.Request.AddToProject) {
-                    AddToProject(plan, output, audio, rate, processed, scratch, name);
+                    added.Add(AddToProject(plan, output, audio, rate, processed, scratch, name));
                 }
 
                 Progress(entry, 0.8 + 0.2 * (i + 1) / sources.Count);
+            }
+
+            if (added.Count > 0) {
+                session.AddBounce(plan.Session, added);
             }
 
             return outputs;
@@ -272,13 +280,13 @@ public sealed class Jobs : IDisposable {
     }
 
     /// <summary>
-    ///     Adds a bounced file to the project: as it is when it is a WAV at the project's rate, else a 32-bit float WAV
-    ///     of the same mix at the project's rate.
+    ///     Copies a bounced file into the project's audio files: as it is when it is a WAV at the project's rate, else a
+    ///     32-bit float WAV of the same mix at the project's rate.
     /// </summary>
-    void AddToProject(BouncePlan plan, string output, float[][] render, int renderRate, float[][] processed, string scratch, string name) {
+    (string Path, WavInfo Info) AddToProject(BouncePlan plan, string output, float[][] render, int renderRate, float[][] processed, string scratch, string name) {
         if (plan.Format.Format == AudioFormat.Wav && plan.Format.SampleRate == renderRate) {
-            import.Import(output);
-            return;
+            var (_, brought, info) = import.Bring(output);
+            return (brought, info);
         }
 
         var copy = plan.Format.SampleRate == renderRate
@@ -286,7 +294,8 @@ public sealed class Jobs : IDisposable {
             : BounceProcessor.Process(render, renderRate, plan.Format with { SampleRate = renderRate });
         var path = Path.Combine(scratch, name + ".wav");
         BounceProcessor.Write(path, copy, plan.Format with { Format = AudioFormat.Wav, BitDepth = 32, SampleRate = renderRate });
-        import.Import(path);
+        var (_, copied, copiedInfo) = import.Bring(path);
+        return (copied, copiedInfo);
     }
 
     async Task<IReadOnlyList<string>> FreezeAsync(
@@ -298,7 +307,7 @@ public sealed class Jobs : IDisposable {
         CancellationToken token
     ) {
         var view = session.View is { } v && v.Session == sessionId ? v : throw ProjectException.Conflict("The project was closed.");
-        var audio = Path.Combine(folder, ProjectPackage.AudioFolder);
+        var audio = Path.Combine(folder, FreezeFolder);
         Directory.CreateDirectory(audio);
         var stamp = time.GetUtcNow().ToString("yyyyMMdd'T'HHmmss", CultureInfo.InvariantCulture);
         var path = Path.Combine(audio, $"Freeze {Safe(track.Name)} {stamp}.wav");

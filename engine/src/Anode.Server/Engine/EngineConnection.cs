@@ -53,6 +53,7 @@ public sealed class EngineConnection(
     Connection? current;
     TransportStatus? transport;
     string? thru;
+    List<InsertReading>? pendingReadings;
 
     public static string Version =>
         typeof(EngineConnection).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()
@@ -483,12 +484,33 @@ public sealed class EngineConnection(
                 case PluginProblemMessage problem:
                     Relay(problem);
                     break;
+                case InsertReadingsMessage readings:
+                    Keep(readings);
+                    break;
                 case ErrorMessage error:
                     EngineLog.HostError(logger, error.Message, error.Request);
                     link.Error(error);
                     break;
             }
         }
+    }
+
+    /// <summary>The inserts' latest readings with domain track ids, for the next meters frame.</summary>
+    void Keep(InsertReadingsMessage message) {
+        var ids = session.View?.Ids;
+        var readings = new List<InsertReading>();
+        foreach (var r in message.Readings ?? []) {
+            if (r?.InsertId is null || !float.IsFinite(r.Value)) {
+                continue;
+            }
+
+            var trackId = r.TrackId < 0 ? null : ids?.TrackOf(r.TrackId);
+            if (r.TrackId < 0 || trackId is not null) {
+                readings.Add(new(trackId, r.InsertId, r.Value));
+            }
+        }
+
+        Volatile.Write(ref pendingReadings, readings);
     }
 
     /// <summary>A plugin the host bypassed (it crashed or did not load), with domain ids.</summary>
@@ -565,8 +587,11 @@ public sealed class EngineConnection(
             }
 
             last = now;
-            if (view is not null && Meters(frame, view) is var (meters, live) && (moving || live || metersLive)) {
-                hub.Publish(meters);
+            var readings = Interlocked.Exchange(ref pendingReadings, null);
+            if (view is not null
+                && Meters(frame, view) is var (meters, live)
+                && (moving || live || metersLive || readings is { Count: > 0 })) {
+                hub.Publish(readings is { Count: > 0 } ? meters with { Readings = readings } : meters);
                 metersLive = live;
             }
         }
