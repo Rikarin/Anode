@@ -8,6 +8,9 @@ using System.Globalization;
 //                                            measure the audio callback in-process on a device (muted) or the null clock,
 //                                            with audio tracks (the first --crossfading of them always inside a
 //                                            curved crossfade) and instrument tracks playing chords
+//   mixbench [--null] [--device <uid>] [--tracks 64] [--seconds 10] [--buffer 64]
+//                                            measure the Phase 4 mixer: tracks with 4 built-in inserts and 2 sends, 4 aux
+//                                            buses, master inserts (delay compensation), automation
 
 var command = args.Length > 0 ? args[0] : "help";
 
@@ -35,12 +38,19 @@ return command switch {
         Option("clap-path"),
         Int("crossfading", 0)
     ),
+    "mixbench" => await MixBench.RunAsync(
+        args.Contains("--null"),
+        Option("device"),
+        Int("tracks", 64),
+        Int("seconds", 10),
+        Int("buffer", 64)
+    ),
     _ => Help()
 };
 
 static int Help() {
     Console.WriteLine(
-        "anode-host-probe smoke --socket <path> [--dir <dir>] | bench [--null] [--device <uid>] [--tracks n] [--crossfading n] [--seconds s] [--buffer n] [--instruments n] [--instrument id] [--clap-path dir]"
+        "anode-host-probe smoke --socket <path> [--dir <dir>] | bench [--null] [--device <uid>] [--tracks n] [--crossfading n] [--seconds s] [--buffer n] [--instruments n] [--instrument id] [--clap-path dir] | mixbench [--null] [--device <uid>] [--tracks n] [--seconds s] [--buffer n]"
     );
     return 2;
 }

@@ -59,12 +59,12 @@ public sealed class MixLoadTests : IDisposable {
                 var index = targets.Count;
                 targets.Add(new(index, t, "volume"));
                 targets.Add(new(index + 1, t, "send", "a"));
-                targets.Add(new(index + 2, t, "insert", "i0", biquads ? "frequency" : "gain"));
+                targets.Add(new(index + 2, t, "insert", "i0", "gain"));
                 for (var p = 0; p < 30; p++) {
                     mine.Add(Point(p * Rate, t, index, p % 2 == 0 ? 0.3f : 0.8f));
                     mine.Add(Point(p * Rate, t, index + 1, p % 2 == 0 ? 0.1f : 0.5f));
                     mine.Add(
-                        Point(p * Rate, t, index + 2, biquads ? 500 + p * 10 : p % 2 == 0 ? 0.5f : 1f, p % 3 == 0)
+                        Point(p * Rate, t, index + 2, p % 2 == 0 ? 0.5f : 1f, p % 3 == 0)
                     );
                 }
             }

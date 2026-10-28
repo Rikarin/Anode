@@ -48,6 +48,12 @@ public sealed class MixNode {
     /// <summary>Audio thread: the value each insert's automated parameters were last set to.</summary>
     public float[][] InsertLast { get; init; } = [];
 
+    /// <summary>
+    ///     Each insert's <c>tempo</c> parameter (−1: none), which the engine sets from the project's tempo at the playhead
+    ///     (tempo-synced delays, tremolo, auto filter).
+    /// </summary>
+    public int[] TempoParameters { get; init; } = [];
+
     public ParameterBinding[] InstrumentBindings { get; init; } = [];
 
     public float[] InstrumentLast { get; init; } = [];
@@ -239,6 +245,7 @@ public sealed class MixPlan {
                 Sidechains = sidechains,
                 InsertBindings = bindings,
                 InsertLast = [..bindings.Select(static b => Enumerable.Repeat(float.NaN, b.Length).ToArray())],
+                TempoParameters = [..config.Inserts.Select(static i => i.Slot.IndexOf("tempo"))],
                 InstrumentBindings = [..instrument],
                 InstrumentLast = [..Enumerable.Repeat(float.NaN, instrument.Count)],
                 VolumeTarget = Lane(AutomationKind.Volume),
@@ -296,6 +303,7 @@ public sealed class MixPlan {
             Sidechains = node.Sidechains,
             InsertBindings = node.InsertBindings,
             InsertLast = node.InsertLast,
+            TempoParameters = node.TempoParameters,
             InstrumentBindings = node.InstrumentBindings,
             InstrumentLast = node.InstrumentLast,
             VolumeTarget = node.VolumeTarget,

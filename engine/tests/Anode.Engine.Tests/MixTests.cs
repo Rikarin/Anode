@@ -394,6 +394,29 @@ public sealed class MixTests : IDisposable {
         Assert.All(o[0], static v => Assert.Equal(0f, v));
     }
 
+    [Fact]
+    public void Tempo_synced_inserts_follow_the_project_tempo_at_the_playhead() {
+        // Clicks every 24,000 frames (120 bpm) up to 96,000, then every 16,000 (180 bpm).
+        var clicks = Enumerable.Range(0, 4)
+            .Select(static i => TestAudio.Click(i * 24_000L, i == 0))
+            .Concat(Enumerable.Range(0, 6).Select(static i => TestAudio.Click(96_000 + i * 16_000L, false)))
+            .ToArray();
+        using var rig = new Rig(
+            dir,
+            64,
+            [Model(1, 0), new(TrackEntry.MetronomeTrack, clicks, [])],
+            [Track(1, false, Strip(inserts: [TestEffects.Insert("d", "anode.stereo-delay")]))],
+            Files
+        );
+        var effect = rig.Controller.Engine.Root.Tracks[0].Channel.Config.Inserts[0].Slot.Effect!;
+        var tempo = effect.Descriptor.Parameters.Single(static p => p.Id == "tempo").Index;
+        rig.Render(640);
+        Assert.Equal(120f, effect.GetParameter(tempo));
+        rig.Driver.Send(new(EngineCommandKind.Locate, 100_000));
+        rig.Driver.Process();
+        Assert.Equal(180f, effect.GetParameter(tempo));
+    }
+
     static PlaybackEvent Point(long position, int target, float value, bool step = false, int track = 1) =>
         new() {
             SamplePos = position,

@@ -79,6 +79,8 @@ public sealed unsafe partial class AudioEngine {
 
     // The gains of the edge being mixed: constant (gainLeft, gainRight) or per frame (coefLeft, coefRight).
     bool gainConstant;
+    float appliedTempo;
+    MixPlan? tempoPlan;
     float gainLeft;
     float gainRight;
 
@@ -170,6 +172,7 @@ public sealed unsafe partial class AudioEngine {
         }
 
         Latencies(plan);
+        FollowTempo(model, plan, position);
         foreach (var node in plan.Order) {
             var left = trackLeft.AsSpan(0, frames);
             var right = trackRight.AsSpan(0, frames);
@@ -279,6 +282,49 @@ public sealed unsafe partial class AudioEngine {
         for (var i = 0; i < destination.Length; i++) {
             destination[i] += source[i];
         }
+    }
+
+    // ---- Tempo -------------------------------------------------------------------------------------------------------
+
+    /// <summary>
+    ///     Sets every insert's <c>tempo</c> parameter to the project's tempo at <paramref name="position" /> when it or
+    ///     the plan changed. The tempo comes from the model's metronome clicks (one per beat): 60 s over the interval
+    ///     between the beat at or before the playhead and the next. Without clicks the parameters keep their value.
+    /// </summary>
+    void FollowTempo(ModelRoot model, MixPlan plan, long position) {
+        var tempo = TempoAt(model.Metronome, position);
+        if (tempo <= 0 || (tempo == appliedTempo && ReferenceEquals(plan, tempoPlan))) {
+            return;
+        }
+
+        appliedTempo = tempo;
+        tempoPlan = plan;
+        foreach (var node in plan.Order) {
+            SetTempo(node, tempo);
+        }
+
+        SetTempo(plan.Master, tempo);
+    }
+
+    static void SetTempo(MixNode node, float tempo) {
+        var inserts = node.Config.Inserts;
+        for (var k = 0; k < inserts.Length; k++) {
+            if (node.TempoParameters[k] >= 0) {
+                inserts[k].Slot.Effect?.SetParameter(node.TempoParameters[k], tempo);
+            }
+        }
+    }
+
+    /// <summary>The tempo (bpm) at <paramref name="position" /> from the clicks' spacing; 0 without two clicks.</summary>
+    float TempoAt(in Ipc.Segments.TrackView clicks, long position) {
+        var count = clicks.EventCount;
+        if (count < 2) {
+            return 0;
+        }
+
+        var at = Math.Clamp(LowerBound(clicks.Events, count, position + 1) - 1, 0, count - 2);
+        var interval = clicks.Events[at + 1].SamplePos - clicks.Events[at].SamplePos;
+        return interval <= 0 ? 0 : (float)Math.Round(60.0 * SampleRate / interval, 3);
     }
 
     // ---- Latency, liveness, solo -------------------------------------------------------------------------------------
@@ -869,6 +915,7 @@ public sealed unsafe partial class AudioEngine {
         }
 
         Array.Clear(snapshotFrames);
+        tempoPlan = null; // the tempo is set again
     }
 
     static void ResetNode(MixNode node) {
