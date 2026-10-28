@@ -12,57 +12,11 @@ public sealed record BeatTrack(double Bpm, bool Variable, long[] Beats, long[] D
 /// </summary>
 public sealed record PitchTrack(int Hop, float[] Cents, float[] Voicing);
 
-/// <summary>A note found in a pitch curve: frames <c>startFrame</c>…<c>endFrame</c>, its pitch in MIDI cents.</summary>
+/// <summary>
+///     A note found in a pitch curve: frames <c>startFrame</c> (inclusive) to <c>endFrame</c> (exclusive), its pitch in
+///     MIDI cents (the median of its curve) and a confidence 0…1 (its mean voicing probability).
+/// </summary>
 public sealed record NoteSegment(long StartFrame, long EndFrame, double Cents, double Confidence);
-
-/// <summary>
-///     Transient detection: spectral flux with an adaptive threshold. Deterministic, and about 50× real time or better
-///     on one core.
-/// </summary>
-public static class Transients {
-    /// <summary>The frames of the onsets in <paramref name="mono" />, ascending; <paramref name="sensitivity" /> 0…1.</summary>
-    public static long[] Detect(ReadOnlySpan<float> mono, int sampleRate, double sensitivity = 0.5) =>
-        throw Pending.WorkstreamD();
-}
-
-/// <summary>
-///     Beat tracking: an onset envelope, a tempo estimate and a dynamic-programming beat tracker, plus a downbeat
-///     estimate and whether the tempo varies. Deterministic.
-/// </summary>
-public static class BeatTracker {
-    public static BeatTrack Track(ReadOnlySpan<float> mono, int sampleRate) => throw Pending.WorkstreamD();
-}
-
-/// <summary>Pitch tracking: pYIN, with voicing. Deterministic.</summary>
-public static class PitchTracker {
-    /// <summary>The pitch curve of <paramref name="mono" /> at one value per <paramref name="hop" /> frames (about 5 ms).</summary>
-    public static PitchTrack Track(ReadOnlySpan<float> mono, int sampleRate, int hop) => throw Pending.WorkstreamD();
-}
-
-/// <summary>Note segmentation: stable voiced runs of a pitch curve. Deterministic.</summary>
-public static class NoteSegmenter {
-    public static NoteSegment[] Segment(PitchTrack track, int sampleRate) => throw Pending.WorkstreamD();
-}
-
-/// <summary>
-///     Silence detection (Strip Silence): an RMS gate. Deterministic, and about 50× real time or better on one core.
-/// </summary>
-public static class Silence {
-    /// <summary>
-    ///     The non-silent ranges of <paramref name="mono" /> (start inclusive, end exclusive, in frames, ascending): above
-    ///     <paramref name="thresholdDb" /> for at least <paramref name="minTimeMs" />, widened by
-    ///     <paramref name="preAttackMs" /> before and <paramref name="postReleaseMs" /> after, merged where they meet.
-    /// </summary>
-    public static (long Start, long End)[] Detect(
-        ReadOnlySpan<float> mono,
-        int sampleRate,
-        double thresholdDb,
-        double minTimeMs,
-        double preAttackMs,
-        double postReleaseMs
-    ) =>
-        throw Pending.WorkstreamD();
-}
 
 /// <summary>Mixes interleaved audio down to mono, the input every analysis takes.</summary>
 public static class Downmix {
@@ -101,12 +55,4 @@ public static class Downmix {
 
         return mono;
     }
-}
-
-/// <summary>
-///     The analyses whose contract is fixed (docs/06-phase-5.md) but whose implementation is still to come. Every use
-///     goes away with the analysis workstream (D).
-/// </summary>
-static class Pending {
-    public static NotImplementedException WorkstreamD() => new("Phase 5 workstream D");
 }
