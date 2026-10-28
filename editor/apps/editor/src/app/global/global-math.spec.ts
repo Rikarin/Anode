@@ -5,6 +5,7 @@ import {
   addTempoPoint,
   bpmAtY,
   bpmRange,
+  curveHandle,
   moveTempoPoint,
   nearestBoundary,
   nextSection,
@@ -12,8 +13,11 @@ import {
   parseKey,
   removeTempoPoint,
   sectionBoundaries,
+  shapeAfterDrag,
   tempoPath,
   toggleRamp,
+  transientTicks,
+  withShape,
   yAtBpm
 } from './global-math';
 
@@ -93,5 +97,44 @@ describe('signature and arrangement maths', () => {
     expect(nearestBoundary(sections, 3840 * 9)).toBe(3840 * 12);
     expect(nextSection(sections, meter)).toEqual({ startTick: 3840 * 12, lengthTicks: 3840 * 8 });
     expect(nextSectionName(sections)).toBe('Chorus');
+  });
+});
+
+describe('tempo curves', () => {
+  const shaped: TempoEvent[] = [
+    { tick: 0, bpm: 100, curve: 'ramp', shape: 0.5 },
+    { tick: 2400, bpm: 200, curve: 'step', shape: 0 }
+  ];
+
+  it('draws a shaped ramp through its curve', () => {
+    const points = tempoPath(
+      shaped,
+      t => t / 100,
+      b => b,
+      30
+    ).split(' ');
+    // The start, 23 samples, the next point and the hold.
+    expect(points).toHaveLength(26);
+    expect(points[12]).toBe(`12.0,${(100 + 100 * Math.SQRT1_2).toFixed(1)}`);
+  });
+
+  it('puts the handle halfway along a ramp, on its curve', () => {
+    expect(curveHandle(shaped, 0)).toEqual({ tick: 1200, bpm: 100 + 100 * Math.SQRT1_2 });
+    expect(curveHandle(shaped, 1)).toBeNull();
+    expect(curveHandle(track, 0)).toBeNull();
+    expect(curveHandle(track, 1)?.tick).toBe(5760);
+  });
+
+  it('bends a ramp the way its handle is dragged', () => {
+    expect(shapeAfterDrag(0, 20, 100, 200)).toBe(0.5);
+    expect(shapeAfterDrag(0, 20, 200, 100)).toBe(-0.5);
+    expect(shapeAfterDrag(0.8, 40, 100, 200)).toBe(1);
+    expect(withShape(shaped, 0, 1.5)[0]?.shape).toBe(1);
+  });
+
+  it('maps transients inside a region to ticks', () => {
+    expect(transientTicks({ fileOffset: 1000, length: 3000 }, [500, 1000, 2500, 4000], f => f / 10)).toEqual([
+      100, 250
+    ]);
   });
 });

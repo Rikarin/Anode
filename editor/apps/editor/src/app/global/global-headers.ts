@@ -89,6 +89,7 @@ export class GlobalHeaders {
     arrangement: 'Arrangement',
     marker: 'Marker',
     tempo: 'Tempo',
+    beatMapping: 'Beat Mapping',
     signature: 'Signature',
     key: 'Key'
   };

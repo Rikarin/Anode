@@ -10,19 +10,21 @@ import {
   viewChild
 } from '@angular/core';
 import { XuiInputImports } from '@xui/input';
+import { XuiMenuImports } from '@xui/menu';
 import { KeyNames } from '../global/global-math';
 import { ProjectStore } from '../state/project.store';
+import { SmartTempoStore, TempoModes } from '../state/smart-tempo.store';
 import { TransportStore, clockTime, parseSignature } from '../state/transport.store';
 
 /**
  * The LCD in the control bar (Logic's, in its glossy glass): the playhead as bars/beats/divisions/ticks and as clock
  * time, the tempo and time signature, each editable in place (click, type, Return; Escape cancels), and the project's
- * key. It reads the playhead from its own animation frames while playing, not through change detection.
+ * key. Under the tempo, Logic's project tempo mode menu (Keep, Adapt, Automatic: Smart Tempo). It reads the playhead from its own animation frames while playing, not through change detection.
  */
 @Component({
   selector: 'an-lcd',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [XuiInputImports],
+  imports: [XuiInputImports, XuiMenuImports],
   host: {
     class: 'an-lcd lcd-glass flex h-10 items-stretch px-1 font-sans',
     role: 'group',
@@ -58,7 +60,34 @@ import { TransportStore, clockTime, parseSignature } from '../state/transport.st
           {{ transport.tempo() }}
         </button>
       }
-      <span class="text-lcd-muted mt-1 text-[9px] font-semibold tracking-[0.08em] uppercase">bpm</span>
+      <button
+        type="button"
+        class="text-lcd-muted hover:text-lcd-accent mt-1 flex items-center gap-0.5 text-[9px] font-semibold tracking-[0.08em] uppercase transition-colors duration-100"
+        aria-label="Project tempo mode"
+        data-testid="tempo-mode"
+        [attr.title]="'Project tempo mode: ' + tempoModeLabel()"
+        [xuiMenuTriggerFor]="tempoModeMenu"
+      >
+        bpm · {{ tempoModeShort() }}
+        <svg class="size-2 fill-current" viewBox="0 0 8 8" aria-hidden="true"><path d="M1 2.5h6L4 6z" /></svg>
+      </button>
+      <ng-template #tempoModeMenu>
+        <xui-menu class="min-w-60">
+          @for (mode of tempoModes; track mode.value) {
+            <button
+              xuiMenuItem
+              type="button"
+              role="menuitemradio"
+              [attr.aria-checked]="smartTempo.mode() === mode.value"
+              [attr.data-testid]="'tempo-mode-' + mode.value"
+              [attr.title]="mode.detail"
+              (click)="smartTempo.setMode(mode.value)"
+            >
+              {{ smartTempo.mode() === mode.value ? '✓ ' : '' }}{{ mode.label }}
+            </button>
+          }
+        </xui-menu>
+      </ng-template>
     </div>
     <!-- Time signature and key: from 1280 px wide (narrower, the global tracks show and edit them). -->
     <div
@@ -104,6 +133,15 @@ export class Lcd {
     const key = this.project.settings().keys[0];
     return key ? `${KeyNames[key.tonic] ?? '?'} ${key.mode === 'minor' ? 'min' : 'maj'}` : '—';
   });
+  protected readonly smartTempo = inject(SmartTempoStore);
+  protected readonly tempoModes = TempoModes;
+  protected readonly tempoModeLabel = computed(
+    () => TempoModes.find(m => m.value === this.smartTempo.mode())?.label ?? ''
+  );
+  /** The mode as the LCD abbreviates it under the tempo: KEEP, ADAPT or AUTO. */
+  protected readonly tempoModeShort = computed(
+    () => ({ keep: 'Keep', adapt: 'Adapt', auto: 'Auto' })[this.smartTempo.mode()]
+  );
   protected readonly bars = signal('1 1 1   1');
   protected readonly time = signal(clockTime(0));
   protected readonly editing = signal<'tempo' | 'signature' | null>(null);
