@@ -511,9 +511,9 @@ public sealed record AdaptTempoCommand(string RegionId) : EditCommand;
 public sealed record MapBeatsCommand(IReadOnlyList<BeatMapping> Mappings) : EditCommand;
 
 /// <summary>
-///     Strip Silence: splits each audio region into one region per stretch above <c>thresholdDb</c> (RMS) lasting at
-///     least <c>minTimeMs</c>, each widened by <c>preAttackMs</c> before and <c>postReleaseMs</c> after; the silence
-///     between them is removed.
+///     Strip Silence: splits each audio region into one region per stretch above <c>thresholdDb</c> (RMS), each widened
+///     by <c>preAttackMs</c> before and <c>postReleaseMs</c> after; the silence between them is removed. As in Logic,
+///     <c>minTimeMs</c> is the shortest silence that splits: stretches separated by less stay in one region.
 /// </summary>
 public sealed record StripSilenceCommand(
     IReadOnlyList<string> RegionIds,

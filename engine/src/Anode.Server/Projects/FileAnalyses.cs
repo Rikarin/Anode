@@ -44,11 +44,8 @@ public sealed class DspAudioAnalyzer : IAudioAnalyzer {
 
     public NoteSegment[] Notes(PitchTrack track, int sampleRate) => NoteSegmenter.Segment(track, sampleRate);
 
-    /// <summary>
-    ///     Fewer than half of the loud frames voiced (pYIN finds no single pitch in a chord). Workstream D's
-    ///     <c>Polyphony.IsPolyphonic</c> replaces this when it merges.
-    /// </summary>
-    public bool Polyphonic(float[] mono, int sampleRate, PitchTrack track) => FileAnalyses.Polyphonic(mono, track);
+    public bool Polyphonic(float[] mono, int sampleRate, PitchTrack track) =>
+        Polyphony.IsPolyphonic(mono, sampleRate, track);
 
     public (long Start, long End)[] Silence(
         float[] mono,
@@ -71,9 +68,6 @@ public sealed class AnalysisException(string message, Exception? inner = null) :
 /// </summary>
 public sealed class FileAnalyses(IAudioAnalyzer analyzer) {
     public const string Folder = "Analysis";
-
-    /// <summary>A voiced frame below this RMS (dBFS) does not count when deciding whether a file is polyphonic.</summary>
-    const double QuietDb = -50;
 
     readonly ConcurrentDictionary<string, Lock> locks = new(StringComparer.Ordinal);
 
@@ -197,38 +191,6 @@ public sealed class FileAnalyses(IAudioAnalyzer analyzer) {
             throw new AnalysisException($"Could not find the silence of '{file.Name}': {e.Message}", e);
         }
     }
-
-    /// <summary>
-    ///     Whether a file sounds polyphonic: fewer than half of its frames loud enough to matter are voiced (pYIN finds
-    ///     no single pitch in a chord).
-    /// </summary>
-    public static bool Polyphonic(float[] mono, PitchTrack track) {
-        int loud = 0, voiced = 0;
-        var threshold = Math.Pow(10, QuietDb / 20);
-        for (var k = 0; k < track.Cents.Length; k++) {
-            var (from, to) = (k * track.Hop, Math.Min(mono.Length, (k + 1) * track.Hop));
-            if (to <= from) {
-                break;
-            }
-
-            double sum = 0;
-            for (var n = from; n < to; n++) {
-                sum += mono[n] * mono[n];
-            }
-
-            if (Math.Sqrt(sum / (to - from)) < threshold) {
-                continue;
-            }
-
-            loud++;
-            if (float.IsFinite(track.Cents[k])) {
-                voiced++;
-            }
-        }
-
-        return loud > 0 && voiced * 2 < loud;
-    }
-
     static (float[] Mono, int Rate) Mono(string projectFolder, AudioFile file) {
         try {
             var (channels, rate) = BounceProcessor.Read(Path.Combine(projectFolder, file.Path));

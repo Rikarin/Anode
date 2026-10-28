@@ -6135,7 +6135,7 @@
             "default": 50
           }
         },
-        "description": "Strip Silence: splits each audio region into one region per stretch above \u0060thresholdDb\u0060 (RMS) lasting at\nleast \u0060minTimeMs\u0060, each widened by \u0060preAttackMs\u0060 before and \u0060postReleaseMs\u0060 after; the silence\nbetween them is removed."
+        "description": "Strip Silence: splits each audio region into one region per stretch above \u0060thresholdDb\u0060 (RMS), each widened\nby \u0060preAttackMs\u0060 before and \u0060postReleaseMs\u0060 after; the silence between them is removed. As in Logic,\n\u0060minTimeMs\u0060 is the shortest silence that splits: stretches separated by less stay in one region."
       },
       "EditCommandUnfreezeTrackCommand": {
         "required": [

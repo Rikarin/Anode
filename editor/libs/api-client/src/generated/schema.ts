@@ -2053,9 +2053,9 @@ export interface components {
       atTick: number;
     };
     /**
-     * @description Strip Silence: splits each audio region into one region per stretch above `thresholdDb` (RMS) lasting at
-     *     least `minTimeMs`, each widened by `preAttackMs` before and `postReleaseMs` after; the silence
-     *     between them is removed.
+     * @description Strip Silence: splits each audio region into one region per stretch above `thresholdDb` (RMS), each widened
+     *     by `preAttackMs` before and `postReleaseMs` after; the silence between them is removed. As in Logic,
+     *     `minTimeMs` is the shortest silence that splits: stretches separated by less stay in one region.
      */
     EditCommandStripSilenceCommand: {
       /** @enum {string} */
