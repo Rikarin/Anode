@@ -11,6 +11,7 @@ export * from './lib/pan-knob';
 export * from './lib/parameter-values';
 export * from './lib/peak-meter';
 export * from './lib/piano-keyboard';
+export * from './lib/pitch-note';
 export * from './lib/reading-meter';
 export * from './lib/send-knob';
 export * from './lib/taper';
