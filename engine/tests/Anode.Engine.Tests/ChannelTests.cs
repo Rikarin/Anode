@@ -210,12 +210,23 @@ public sealed class ChannelTests : IDisposable {
         Assert.Null(finished.Error);
         Assert.Equal([path], finished.Files);
         Assert.True(new FileInfo(path).Length > Rate * 8);
-        lock (pushed) {
-            Assert.Contains(
-                pushed.OfType<InsertReadingsMessage>().SelectMany(static m => m.Readings),
-                static r => r is { TrackId: 1, InsertId: "m" }
-            ); // the meter's reading, pushed while it has one
+        // The meter's reading, pushed while it has one: by a timer (at most 15 a second), so a busy machine may
+        // finish the render before the first push.
+        var readingDeadline = DateTime.UtcNow.AddSeconds(10);
+        var reading = false;
+        while (!reading && DateTime.UtcNow < readingDeadline) {
+            lock (pushed) {
+                reading = pushed.OfType<InsertReadingsMessage>()
+                    .SelectMany(static m => m.Readings)
+                    .Any(static r => r is { TrackId: 1, InsertId: "m" });
+            }
+
+            if (!reading) {
+                await Task.Delay(20, Token);
+            }
         }
+
+        Assert.True(reading, "No reading of the meter was pushed.");
 
         var states = Assert.IsType<InstrumentStatesMessage>(
             await host.HandleAsync(new RequestInstrumentStatesMessage(), Token)
