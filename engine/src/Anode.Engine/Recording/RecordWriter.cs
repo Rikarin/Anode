@@ -7,10 +7,12 @@ namespace Anode.Engine.Recording;
 /// </summary>
 public sealed class RecordWriter : IDisposable {
     static readonly RecordTake[] None = [];
+    static readonly FlashbackBuffer[] NoMemory = [];
 
     readonly float[] scratch = new float[64 * 1024];
     readonly Thread thread;
     RecordTake[] active = None;
+    FlashbackBuffer[] memories = NoMemory;
     long passesStarted;
     long passesCompleted;
     volatile bool running = true;
@@ -27,9 +29,22 @@ public sealed class RecordWriter : IDisposable {
     /// <summary>Control thread: starts draining <paramref name="takes" />.</summary>
     public void Activate(RecordTake[] takes) => Volatile.Write(ref active, takes);
 
+    /// <summary>
+    ///     Control thread: the Flashback buffers whose pages the writer faults in ahead of the audio thread
+    ///     (<see cref="FlashbackBuffer.Touch" />); returns once it has let go of any it no longer lists.
+    /// </summary>
+    public void Touch(FlashbackBuffer[] buffers) {
+        Volatile.Write(ref memories, buffers);
+        WaitPass();
+    }
+
     /// <summary>Control thread: stops draining every take and waits until the writer has let go of them.</summary>
     public void Retire() {
         Volatile.Write(ref active, None);
+        WaitPass();
+    }
+
+    void WaitPass() {
         var grace = Interlocked.Read(ref passesStarted);
         var spin = new SpinWait();
         while (Interlocked.Read(ref passesCompleted) < grace && running) {
@@ -52,6 +67,10 @@ public sealed class RecordWriter : IDisposable {
                 } catch (IOException e) {
                     Interlocked.CompareExchange(ref failure, e, null);
                 }
+            }
+
+            foreach (var memory in Volatile.Read(ref memories)) {
+                memory.Touch();
             }
 
             Interlocked.Increment(ref passesCompleted);

@@ -45,6 +45,7 @@ public sealed unsafe partial class AudioEngine {
     void BeginRecording() {
         Volatile.Write(ref recordStart, transport.Position);
         Volatile.Write(ref recordEnd, -1);
+        BeginRecordRange();
     }
 
     void RenderMidi(
@@ -53,6 +54,7 @@ public sealed unsafe partial class AudioEngine {
         int generation,
         int blockOffset,
         long position,
+        long clock,
         bool countIn,
         Span<float> left,
         Span<float> right
@@ -79,7 +81,7 @@ public sealed unsafe partial class AudioEngine {
             Release(midi, 0);
         }
 
-        LiveInput(track, midi, blockOffset, frames, position, countIn);
+        LiveInput(track, midi, blockOffset, frames, clock, countIn);
         if (transport.Rolling && !countIn) {
             Playback(midi, view, position, frames);
         }
@@ -99,9 +101,14 @@ public sealed unsafe partial class AudioEngine {
         }
     }
 
-    /// <summary>Takes the track's live MIDI due in this block; captures it while recording an armed track.</summary>
-    void LiveInput(TrackState track, MidiTrackState midi, int blockOffset, int frames, long position, bool countIn) {
-        var capture = transport.State == TransportState.Recording && !countIn && track.Armed;
+    /// <summary>
+    ///     Takes the track's live MIDI due in this block; captures it at the position it was played (through the cycle):
+    ///     while recording an armed track (inside the punch range, with autopunch), and for Flashback Capture while
+    ///     playing.
+    /// </summary>
+    void LiveInput(TrackState track, MidiTrackState midi, int blockOffset, int frames, long clock, bool countIn) {
+        var recording = transport.State == TransportState.Recording && !countIn && track.Armed;
+        var flashback = flashbackActive;
         var period = callbackNs - previousCallbackNs;
         while (midi.Live.TryPeek(out var e)) {
             var at = Offset(e.TimeNs, period);
@@ -112,8 +119,16 @@ public sealed unsafe partial class AudioEngine {
             midi.Live.TryDequeue(out _);
             var frame = Math.Clamp(at - blockOffset, 0, frames - 1);
             midi.Add(frame, e.Status, e.Data1, e.Data2);
-            if (capture) {
-                CapturedMidi.TryEnqueue(new(track.Id, position + frame - MidiRecordShift, e.Status, e.Data1, e.Data2));
+            if (!recording && !flashback) {
+                continue;
+            }
+
+            var played = clock + frame - MidiRecordShift;
+            var sample = PlayedPosition(played);
+            if (recording && (!punch.Active || (sample >= punch.In && sample < punch.Out))) {
+                CapturedMidi.TryEnqueue(new(track.Id, sample, e.Status, e.Data1, e.Data2));
+            } else if (flashback) {
+                CapturedMidi.TryEnqueue(new(track.Id, sample, e.Status, e.Data1, e.Data2, played, true));
             }
         }
     }

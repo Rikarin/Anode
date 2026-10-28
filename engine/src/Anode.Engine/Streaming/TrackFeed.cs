@@ -173,6 +173,9 @@ public sealed unsafe class TrackFeed : IDisposable {
         return AnchorOf(chunk.Identity) < hardFloor || (FindCurrent(identity, out next) && next <= clock);
     }
 
+    /// <summary>Consumer: whether fill <paramref name="identity" /> is queued and has begun by <paramref name="clock" />.</summary>
+    public bool Started(long identity, long clock) => FindCurrent(identity, out var start) && start <= clock;
+
     bool Peek(out Chunk chunk) {
         if (head == Volatile.Read(ref tail)) {
             chunk = default;

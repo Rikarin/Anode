@@ -102,23 +102,19 @@ public sealed class TransportTests {
             );
 
     [Fact]
-    public void Recording_ignores_the_cycle_and_changes_the_anchor() {
+    public void Recording_follows_the_cycle_without_a_new_anchor() {
         var transport = new Transport();
         transport.SetCycle(new(true, 0, 1_000));
         transport.Locate(900);
         var located = transport.Anchor;
         transport.PrepareRecord();
-        Assert.Equal(Cycle.Off, transport.PlayOrder);
-        Assert.False(transport.Anchor.Hard);
-        Assert.True(transport.Anchor.Id > located.Id);
-        var pending = transport.Anchor;
-        transport.Record();
-        Assert.Equal(pending, transport.Anchor); // same play order: no new anchor
-        transport.Advance(200);
-        Assert.Equal(1_100, transport.Position); // linear through the cycle end
-        transport.Stop();
         Assert.Equal(new(true, 0, 1_000), transport.PlayOrder);
-        Assert.True(transport.Anchor.Id > pending.Id);
+        Assert.Equal(located, transport.Anchor);
+        transport.Record();
+        transport.Advance(200);
+        Assert.Equal(100, transport.Position); // cycle recording wraps
+        transport.Stop();
+        Assert.Equal(located, transport.Anchor);
     }
 
     [Fact]

@@ -266,4 +266,86 @@ public sealed class HostTests : IAsyncLifetime {
         await Eventually(() => Telemetry(out _).ModelVersion == 2);
         Assert.Equal(0, Telemetry(out _).Underruns);
     }
+
+    [Fact]
+    public async Task Cycle_recording_reports_one_file_with_its_passes() {
+        await LoadAsync(1, [TestAudio.Track(4, input: 0, armed: true)], [new(4, [], [])], []);
+        await Send(new SetMetronomeMessage(false, 1f, false));
+        await Send(new SetCycleMessage(true, 24_000, 36_000));
+        await Send(new TransportMessage(TransportAction.Record, 24_000));
+        await Eventually(() => Telemetry(out _).State == TelemetryTransportState.Recording);
+        await Task.Delay(800, Token); // three passes of a quarter second, or more
+        var finished = Assert.IsType<RecordingFinishedMessage>(
+            await Request(new TransportMessage(TransportAction.Stop))
+        );
+        Assert.False(finished.Flashback);
+        var take = Assert.Single(finished.Takes);
+        Assert.Equal(24_000, take.StartSample);
+        var passes = take.Passes!;
+        Assert.True(passes.Count >= 3, $"{passes.Count} passes");
+        Assert.All(passes, static p => Assert.Equal(24_000, p.StartSample));
+        Assert.All(passes.SkipLast(1), static p => Assert.Equal(12_000, p.Frames));
+        Assert.Equal(take.Frames, passes.Sum(static p => p.Frames));
+        Assert.Equal(passes.Select(static (p, i) => i * 12_000L), passes.Select(static p => p.FileOffset));
+        Assert.Equal(take.Frames, TestAudio.Read24(take.Path, out _).Length);
+    }
+
+    [Fact]
+    public async Task Autopunch_keeps_only_the_punch_range() {
+        await LoadAsync(1, [TestAudio.Track(4, input: 0, armed: true)], [new(4, [], [])], []);
+        await Send(new SetPunchMessage(true, 30_000, 40_000));
+        await Send(new TransportMessage(TransportAction.Record, 24_000));
+        await Eventually(() => Telemetry(out _).PositionSamples > 45_000);
+        var finished = Assert.IsType<RecordingFinishedMessage>(
+            await Request(new TransportMessage(TransportAction.Stop))
+        );
+        var take = Assert.Single(finished.Takes);
+        Assert.Equal((30_000, 10_000), (take.StartSample, take.Frames));
+        Assert.Null(take.Passes);
+        Assert.InRange(TestAudio.Read24(take.Path, out _).Max(), 800_000, 850_000); // the input tone
+
+        // A punch range the pass never reaches records nothing.
+        await Send(new SetPunchMessage(true, 40 * Rate, 41 * Rate));
+        await Send(new TransportMessage(TransportAction.Record, 0));
+        await Eventually(() => Telemetry(out _).PositionSamples > 1_000);
+        var none = Assert.IsType<RecordingFinishedMessage>(await Request(new TransportMessage(TransportAction.Stop)));
+        Assert.Empty(none.Takes);
+    }
+
+    [Fact]
+    public async Task Flashback_capture_writes_what_was_played_while_not_recording() {
+        await LoadAsync(1, [TestAudio.Track(4, true, input: 0, armed: true)], [new(4, [], [])], []);
+        var empty = Assert.IsType<RecordingFinishedMessage>(await Request(new FlashbackCaptureMessage()));
+        Assert.True(empty.Flashback);
+        Assert.Empty(empty.Takes); // nothing played yet
+
+        await Send(new TransportMessage(TransportAction.Play, Rate));
+        await Eventually(() => Telemetry(out _).PositionSamples > Rate + Rate / 2);
+        var captured = Assert.IsType<RecordingFinishedMessage>(await Request(new FlashbackCaptureMessage()));
+        Assert.True(captured.Flashback);
+        var take = Assert.Single(captured.Takes);
+        Assert.Equal((4, 2, Rate), (take.TrackId, take.Channels, take.StartSample));
+        Assert.InRange(take.Frames, Rate / 2, 4 * Rate);
+        var samples = TestAudio.Read24(take.Path, out var channels);
+        Assert.Equal(take.Frames * channels, samples.Length);
+        Assert.InRange(samples.Max(), 800_000, 850_000);
+        Assert.Null(await SendAndPeek(new TransportMessage(TransportAction.Stop))); // playing, not recording
+    }
+
+    [Fact]
+    public async Task Preview_plays_a_file_to_the_master_until_stopped() {
+        var file = TestAudio.Write24(dir, "preview.wav", 1, 10 * Rate, 3);
+        await LoadAsync(1, [TestAudio.Track(1)], [new(1, [], [])], []);
+        Assert.Null(await SendAndPeek(new PreviewFileMessage(file, 1f)));
+        await Eventually(() => {
+                Telemetry(out var m);
+                return m[1] is { TrackId: -1, PeakLeft: > 0.1f };
+            }
+        );
+        Assert.Equal(TelemetryTransportState.Stopped, Telemetry(out _).State);
+        Assert.Null(await SendAndPeek(new PreviewFileMessage(null, 1f)));
+        Assert.Null(Host.Controller.Engine.Preview);
+        var error = await Expect<ErrorMessage>(new PreviewFileMessage(Path.Combine(dir, "missing.wav"), 1f));
+        Assert.Equal("previewFile", error.Request);
+    }
 }
