@@ -1,0 +1,57 @@
+{
+  "schemaVersion": 3,
+  "track": {
+    "id": "trk_keys00000003",
+    "name": "Keys",
+    "kind": "instrument",
+    "color": "#a46be8",
+    "input": {
+      "channel": 0,
+      "stereo": false
+    },
+    "recordArmed": true,
+    "inputMonitoring": false,
+    "strip": {
+      "volumeDb": 0,
+      "pan": 0.5,
+      "mute": false,
+      "solo": true
+    },
+    "instrument": {
+      "pluginId": "anode.synth",
+      "name": "Synth",
+      "parameters": {
+        "cutoff": 4000,
+        "resonance": 0.2
+      }
+    },
+    "midiInput": {
+      "channel": 1
+    },
+    "collapsed": true,
+    "notes": ""
+  },
+  "regions": [],
+  "midiRegions": [
+    {
+      "id": "mid_chords000001",
+      "trackId": "trk_keys00000003",
+      "name": "Chords",
+      "startTick": 3840,
+      "lengthTicks": 7680,
+      "playback": {
+        "transpose": 0,
+        "velocity": 0,
+        "quantizeTicks": 0,
+        "quantizeStrength": 1,
+        "swing": 0
+      },
+      "notes": [
+        { "id": 1, "pitch": 57, "velocity": 100, "channel": 1, "startTick": 0, "lengthTicks": 1920 }
+      ],
+      "controls": [],
+      "muted": false
+    }
+  ],
+  "takeFolders": []
+}

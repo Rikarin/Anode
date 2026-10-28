@@ -12,6 +12,15 @@ namespace Anode.Server.Projects;
 public sealed class AudioImport(ProjectSession session) {
     /// <summary>Imports a file from the server's own disk.</summary>
     public AudioFile Import(string path) {
+        var (sessionId, absolute, info) = Bring(path);
+        return session.AddFile(sessionId, absolute, info);
+    }
+
+    /// <summary>
+    ///     Copies a file from the server's own disk into the open project's <c>Audio Files</c> (checked first), without
+    ///     adding it to the pool: which opening of the project it is for, where it now is, and its format.
+    /// </summary>
+    public (long Session, string Path, WavInfo Info) Bring(string path) {
         var (sessionId, folder, rate) = session.Target();
         if (string.IsNullOrWhiteSpace(path)) {
             throw ProjectException.Unprocessable("Name the file to import.");
@@ -26,13 +35,13 @@ public sealed class AudioImport(ProjectSession session) {
         var audio = Path.Combine(folder, ProjectPackage.AudioFolder);
         Directory.CreateDirectory(audio);
         if (string.Equals(Path.GetDirectoryName(source), Path.GetFullPath(audio), StringComparison.Ordinal)) {
-            return session.AddFile(sessionId, source, info);
+            return (sessionId, source, info);
         }
 
         var temporary = Path.Combine(audio, $".import-{Guid.NewGuid():n}.tmp");
         try {
             File.Copy(source, temporary);
-            return session.AddFile(sessionId, Claim(temporary, audio, Path.GetFileNameWithoutExtension(source)), info);
+            return (sessionId, Claim(temporary, audio, Path.GetFileNameWithoutExtension(source)), info);
         } finally {
             File.Delete(temporary);
         }

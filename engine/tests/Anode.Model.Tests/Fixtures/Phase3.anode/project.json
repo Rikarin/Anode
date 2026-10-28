@@ -1,0 +1,74 @@
+{
+  "schemaVersion": 3,
+  "id": "prj_phase3fixture",
+  "name": "Phase 3 Song",
+  "sampleRate": 48000,
+  "settings": {
+    "tempo": 96,
+    "signature": {
+      "numerator": 4,
+      "denominator": 4
+    },
+    "cycle": {
+      "enabled": true,
+      "startTick": 3840,
+      "endTick": 19200
+    },
+    "metronome": {
+      "enabled": true,
+      "countIn": true,
+      "levelDb": -9
+    },
+    "endTick": 491520,
+    "mergeMidiRecording": false,
+    "tempoEvents": [
+      { "tick": 0, "bpm": 96, "curve": "step" },
+      { "tick": 30720, "bpm": 104, "curve": "ramp" }
+    ],
+    "signatures": [
+      { "tick": 0, "numerator": 4, "denominator": 4 }
+    ],
+    "keys": [
+      { "tick": 0, "tonic": 9, "mode": "minor" }
+    ],
+    "recording": {
+      "cycleMode": "takeFolder",
+      "replace": false,
+      "autopunch": true,
+      "punchInTick": 7680,
+      "punchOutTick": 15360
+    }
+  },
+  "master": {
+    "volumeDb": -1.5,
+    "pan": 0,
+    "mute": false,
+    "solo": false
+  },
+  "tracks": [
+    "trk_stack0000001",
+    "trk_vocal0000002",
+    "trk_keys00000003"
+  ],
+  "audioFiles": [
+    {
+      "id": "aud_vocal0000001",
+      "name": "Vocal",
+      "path": "Audio Files/Vocal.wav",
+      "sampleRate": 48000,
+      "channels": 1,
+      "frames": 480000,
+      "bitDepth": 24
+    }
+  ],
+  "markers": [
+    { "id": "mrk_verse0000001", "name": "Verse", "tick": 3840, "lengthTicks": 0, "text": "" }
+  ],
+  "arrangement": [
+    { "id": "sec_intro0000001", "name": "Intro", "startTick": 0, "lengthTicks": 15360, "color": "#5fa86b" }
+  ],
+  "notes": "Phase 3 fixture",
+  "screensets": [
+    { "number": 1, "name": "Tracks", "locked": false, "layout": "{}" }
+  ]
+}

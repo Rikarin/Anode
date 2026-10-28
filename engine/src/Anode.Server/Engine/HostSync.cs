@@ -64,8 +64,13 @@ public sealed class HostLink(Stream stream) : IDisposable {
 ///     after every reconnect: a fresh <see cref="HostSync" />), when tracks went away, after a tempo change or when
 ///     many tracks changed; otherwise per-track segments; then strips, track IO, instruments, parameters, MIDI I/O,
 ///     cycle, autopunch and metronome messages, and the MIDI-thru track. A track's settings (<see cref="EngineTrack" />)
-///     travel whole with its segment; its instrument's saved state only when the host does not have the track yet. A
-///     folder stack has no engine track: its members get their effective strips (docs/04-phase-3.md, "Stacks").
+///     travel whole with its segment; its plugins' saved states only when the host does not have them yet. A folder
+///     stack and a VCA have no engine track: their members get their effective strips (docs/04-phase-3.md, "Stacks").
+///     Phase 4 (docs/05-phase-4.md): a strip whose structure changed (inserts, sends, output) goes as
+///     <see cref="SetChannelMessage" />, its levels alone as <see cref="SetStripMessage" />, a send's level and pan as
+///     <see cref="SetSendLevelMessage" />, an insert's parameters as <see cref="SetInsertParameterMessage" />; the mixer
+///     settings as <see cref="SetMixerMessage" />; every model carries the automation targets, and a track whose aux
+///     bus or freeze file changed is sent again with its segment.
 /// </summary>
 public sealed class HostSync(HostLink link, SegmentPool pool, ILogger logger) {
     /// <summary>More dirty tracks than this go as one whole model.</summary>
@@ -113,6 +118,7 @@ public sealed class HostSync(HostLink link, SegmentPool pool, ILogger logger) {
                     [],
                     new(1, 0, false, false),
                     Path.GetTempPath(),
+                    [],
                     cancellationToken
                 )
                 .ConfigureAwait(false);
@@ -140,8 +146,9 @@ public sealed class HostSync(HostLink link, SegmentPool pool, ILogger logger) {
                     model.LengthSamples,
                     [..target.State.Tracks.Where(Stacks.IsPlayable).Select(t => Engine(t, target, true))],
                     NewFiles(target),
-                    Engine(target.State.Master),
+                    Master(target, true),
                     target.AudioFolder,
+                    target.Ids.AutomationTargets(target.State),
                     cancellationToken
                 )
                 .ConfigureAwait(false);
@@ -183,9 +190,26 @@ public sealed class HostSync(HostLink link, SegmentPool pool, ILogger logger) {
         return Dirty(model).Count > MaxPatchTracks;
     }
 
-    List<TrackModel> Dirty(CompiledModel model) {
+    List<TrackModel> Dirty(CompiledModel model, OpenProjectView? target = null) {
         var before = sentModel?.Tracks.ToDictionary(static t => t.TrackId) ?? [];
-        return [..model.Tracks.Where(t => !before.TryGetValue(t.TrackId, out var old) || !ReferenceEquals(old, t))];
+        return [
+            ..model.Tracks.Where(t => !before.TryGetValue(t.TrackId, out var old)
+                || !ReferenceEquals(old, t)
+                || (target is not null && Rerouted(target, t.TrackId))
+            )
+        ];
+    }
+
+    /// <summary>Whether a track's aux bus or freeze file changed since the last sync (it then goes with a segment).</summary>
+    bool Rerouted(OpenProjectView target, int engineId) {
+        if (sent is null || target.Ids.TrackOf(engineId) is not { } id) {
+            return false;
+        }
+
+        var (old, now) = (sent.State.FindTrack(id), target.State.FindTrack(id));
+        return old is not null
+            && now is not null
+            && (old.InputBus != now.InputBus || old.FrozenFileId != now.FrozenFileId);
     }
 
     async Task PatchAsync(
@@ -195,7 +219,8 @@ public sealed class HostSync(HostLink link, SegmentPool pool, ILogger logger) {
         CancellationToken cancellationToken
     ) {
         var files = NewFiles(target);
-        foreach (var track in Dirty(model)) {
+        var targets = target.Ids.AutomationTargets(target.State);
+        foreach (var track in Dirty(model, target)) {
             var domainId = target.Ids.TrackOf(track.TrackId);
             var domainTrack = domainId is null ? null : target.State.FindTrack(domainId);
             var version = pool.NextVersion();
@@ -207,8 +232,9 @@ public sealed class HostSync(HostLink link, SegmentPool pool, ILogger logger) {
                     ? []
                     : [Engine(domainTrack, target, sent?.State.FindTrack(domainTrack.Id) is null)],
                 files,
-                Engine(target.State.Master),
-                target.AudioFolder
+                Master(target, false),
+                target.AudioFolder,
+                targets
             );
             if (!await link.LoadAsync(message, LoadTimeout, cancellationToken).ConfigureAwait(false)) {
                 EngineLog.LoadFailed(logger, version);
@@ -231,8 +257,9 @@ public sealed class HostSync(HostLink link, SegmentPool pool, ILogger logger) {
                         false,
                         [],
                         files,
-                        Engine(target.State.Master),
-                        target.AudioFolder
+                        Master(target, false),
+                        target.AudioFolder,
+                        targets
                     ),
                     LoadTimeout,
                     cancellationToken
@@ -248,6 +275,7 @@ public sealed class HostSync(HostLink link, SegmentPool pool, ILogger logger) {
         IReadOnlyList<EngineFile> files,
         EngineStrip master,
         string recordDirectory,
+        IReadOnlyList<EngineAutomationTarget> targets,
         CancellationToken cancellationToken
     ) {
         var version = pool.NextVersion();
@@ -260,7 +288,8 @@ public sealed class HostSync(HostLink link, SegmentPool pool, ILogger logger) {
             engineTracks,
             files,
             master,
-            recordDirectory
+            recordDirectory,
+            targets
         );
         if (await link.LoadAsync(message, LoadTimeout, cancellationToken).ConfigureAwait(false)) {
             pool.Loaded(slot);
@@ -297,13 +326,17 @@ public sealed class HostSync(HostLink link, SegmentPool pool, ILogger logger) {
     ) {
         var state = target.State;
         var before = previous?.State;
-        if (before is null || before.Master != state.Master) {
-            yield return new SetStripMessage(-1, Engine(state.Master));
+        if (before is null) {
+            yield return new SetStripMessage(-1, Master(target, false));
+        } else if (!ReferenceEquals(before.Master, state.Master)) {
+            foreach (var message in StripMessages(-1, Master(previous!, false), Master(target, false), target, null)) {
+                yield return message;
+            }
         }
 
         foreach (var track in state.Tracks) {
             if (Stacks.IsPlayable(track) && !carried.Contains(track.Id) && before?.FindTrack(track.Id) is { } old) {
-                foreach (var message in TrackMessages(before, old, track, target)) {
+                foreach (var message in TrackMessages(previous!, old, track, target)) {
                     yield return message;
                 }
             }
@@ -312,6 +345,56 @@ public sealed class HostSync(HostLink link, SegmentPool pool, ILogger logger) {
         foreach (var message in SettingsMessages(before, state)) {
             yield return message;
         }
+    }
+
+    /// <summary>
+    ///     What changed in a strip the host has: its structure (then the whole strip, with the saved states of inserts it
+    ///     does not have yet), or its levels, sends' levels and inserts' parameters.
+    /// </summary>
+    static IEnumerable<IpcMessage> StripMessages(
+        int id,
+        EngineStrip old,
+        EngineStrip now,
+        OpenProjectView target,
+        string? trackId
+    ) {
+        if (Strips.StructureDiffers(old, now)) {
+            return [Channel(id, old, target, trackId)];
+        }
+
+        IEnumerable<IpcMessage> levels =
+            old.Gain != now.Gain || old.Pan != now.Pan || old.Mute != now.Mute || old.Solo != now.Solo
+                ? [new SetStripMessage(id, now)]
+                : [];
+        return levels.Concat(
+                (old.Sends ?? []).Zip(now.Sends ?? [])
+                .Where(static p => p.First.Gain != p.Second.Gain || p.First.Pan != p.Second.Pan)
+                .Select(p => new SetSendLevelMessage(id, p.Second.Id, p.Second.Gain, p.Second.Pan))
+            )
+            .Concat(
+                (old.Inserts ?? []).Zip(now.Inserts ?? [])
+                .SelectMany(p => p.Second.Parameters
+                    .Where(q => !p.First.Parameters.TryGetValue(q.Key, out var was) || !was.Equals(q.Value))
+                    .Select(q => new SetInsertParameterMessage(id, p.Second.Id, q.Key, q.Value))
+                )
+            );
+    }
+
+    /// <summary>A strip whole, with the saved states of the inserts the host does not have yet (by id and plugin).</summary>
+    static SetChannelMessage Channel(int id, EngineStrip old, OpenProjectView target, string? trackId) {
+        var known = (old.Inserts ?? []).Select(static i => (i.Id, i.PluginId)).ToHashSet();
+        var strip = trackId is null
+            ? Master(target, true)
+            : Engine(target.State.FindTrack(trackId)!, target, true).Strip;
+        return new(
+            id,
+            strip with {
+                Inserts = [
+                    ..(strip.Inserts ?? []).Select(i => known.Contains((i.Id, i.PluginId)) ? i with { State = null } : i
+                    )
+                ]
+            }
+        );
     }
 
     /// <summary>Cycle, punch and metronome that changed (all of them without <paramref name="before" />).</summary>
@@ -337,6 +420,19 @@ public sealed class HostSync(HostLink link, SegmentPool pool, ILogger logger) {
             );
         }
 
+        if (before is null || before.Settings.Mixer != settings.Mixer) {
+            var mixer = settings.Mixer;
+            yield return new SetMixerMessage(
+                mixer.Pdc switch {
+                    PdcMode.Tracks => "tracks",
+                    PdcMode.Off => "off",
+                    _ => "all"
+                },
+                mixer.LowLatency,
+                mixer.LowLatencyLimitMs
+            );
+        }
+
         if (before is null
             || before.Settings.Metronome.Enabled != settings.Metronome.Enabled
             || before.Settings.Metronome.LevelDb != settings.Metronome.LevelDb
@@ -350,11 +446,22 @@ public sealed class HostSync(HostLink link, SegmentPool pool, ILogger logger) {
     }
 
     /// <summary>What changed in a track the host has and is not sent whole (its effective strip: a stack's change too).</summary>
-    static IEnumerable<IpcMessage> TrackMessages(ProjectState before, Track old, Track track, OpenProjectView target) {
+    static IEnumerable<IpcMessage> TrackMessages(
+        OpenProjectView previous,
+        Track old,
+        Track track,
+        OpenProjectView target
+    ) {
         var id = target.Ids.Track(track.Id);
-        var strip = Stacks.EffectiveStrip(target.State, track);
-        if (Stacks.EffectiveStrip(before, old) != strip) {
-            yield return new SetStripMessage(id, Engine(strip));
+        var strip = Engine(track, target, false).Strip;
+        foreach (var message in StripMessages(
+                     id,
+                     Engine(old, previous with { Ids = target.Ids }, false).Strip,
+                     strip,
+                     target,
+                     track.Id
+                 )) {
+            yield return message;
         }
 
         if (old.Input != track.Input
@@ -388,7 +495,10 @@ public sealed class HostSync(HostLink link, SegmentPool pool, ILogger logger) {
         }
 
         if (old is null || now is null || old.PluginId != now.PluginId || old.File != now.File) {
-            yield return new SetInstrumentMessage(id, now is null ? null : Engine(now, target, null));
+            // A patch's instrument comes with its state; any other new instrument starts from its parameters.
+            var track = target.State.Tracks.Find(t => target.Ids.TrackOf(id) == t.Id);
+            var state = track is null ? null : target.StateOf(track);
+            yield return new SetInstrumentMessage(id, now is null ? null : Engine(now, target, state));
             yield break;
         }
 
@@ -399,12 +509,14 @@ public sealed class HostSync(HostLink link, SegmentPool pool, ILogger logger) {
         }
     }
 
-    public static EngineStrip Engine(ChannelStrip strip) =>
-        new(Units.DbToGain(strip.VolumeDb), (float)strip.Pan, strip.Mute, strip.Solo);
+    /// <summary>The master's engine strip; its inserts' saved states when <paramref name="withState" />.</summary>
+    public static EngineStrip Master(OpenProjectView view, bool withState) =>
+        Strips.Engine(view.State, null, view.Ids, withState ? i => Base64(view.StateOf(null, i)) : null);
 
     /// <summary>
-    ///     A track's runtime settings; its instrument with its saved state when <paramref name="withState" /> (the host
-    ///     is to build it from scratch).
+    ///     A track's runtime settings; its instrument and inserts with their saved states when
+    ///     <paramref name="withState" /> (the host is to build them from scratch); an aux's input bus; a frozen track's
+    ///     freeze file.
     /// </summary>
     public static EngineTrack Engine(Track track, OpenProjectView view, bool withState) {
         var state = withState ? view.StateOf(track) : null;
@@ -414,9 +526,13 @@ public sealed class HostSync(HostLink link, SegmentPool pool, ILogger logger) {
             track.Input.Stereo,
             track.RecordArmed,
             track.InputMonitoring,
-            Engine(Stacks.EffectiveStrip(view.State, track)),
+            Strips.Engine(view.State, track, view.Ids, withState ? i => Base64(view.StateOf(track.Id, i)) : null),
             track.Instrument is { } slot ? Engine(slot, view, state) : null,
-            Midi(track)
+            Midi(track),
+            track.Kind == TrackKind.Aux ? track.InputBus : 0,
+            track.FrozenFileId is { } frozen && view.State.Files.TryGetValue(frozen, out var file)
+                ? Path.GetFullPath(Path.Combine(view.Folder, file.Path))
+                : null
         );
     }
 
@@ -443,6 +559,9 @@ static partial class EngineLog {
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "The host reported: {Message} ({Request})")]
     public static partial void HostError(ILogger logger, string message, string? request);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "The engine bypassed plugin {PluginId}: {Message}")]
+    public static partial void PluginProblem(ILogger logger, string pluginId, string message);
 
     [LoggerMessage(Level = LogLevel.Error, Message = "Applying a finished recording failed")]
     public static partial void RecordingFailed(ILogger logger, Exception exception);

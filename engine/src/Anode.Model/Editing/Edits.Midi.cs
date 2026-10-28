@@ -30,14 +30,26 @@ public static partial class Edits {
             : throw new EditException($"Plugin '{pluginId}' is not an instrument.");
     }
 
-    static DeltaOp[] SetInstrument(ProjectState state, SetInstrumentCommand c, PluginCatalog plugins) {
+    /// <summary>A new instrument: the old one's lanes go (its parameters are not the new one's).</summary>
+    static List<DeltaOp> SetInstrument(ProjectState state, SetInstrumentCommand c, PluginCatalog plugins) {
         var track = InstrumentTrackOf(state, c.TrackId);
+        CheckNotFrozen(track);
         var slot = NewInstrument(plugins, c.PluginId, true);
-        return [new TrackUpserted(track with { Instrument = slot }, state.IndexOfTrack(track.Id))];
+        var ops = new List<DeltaOp>();
+        ops.AddRange(LanesFor(state, track.Id, "instrument:").Select(static l => new AutomationLaneRemoved(l.Id)));
+        ops.Add(new TrackUpserted(track with { Instrument = slot }, state.IndexOfTrack(track.Id)));
+        return ops;
+    }
+
+    static void CheckNotFrozen(Track track) {
+        if (track.FrozenFileId is not null) {
+            throw new EditException($"Track '{track.Name}' is frozen: unfreeze it to change its instrument.");
+        }
     }
 
     static DeltaOp[] SetParameter(ProjectState state, SetParameterCommand c, PluginCatalog plugins) {
         var track = InstrumentTrackOf(state, c.TrackId);
+        CheckNotFrozen(track);
         var slot = track.Instrument!;
         if (string.IsNullOrEmpty(c.ParameterId) || c.ParameterId.Length > MaxParameterIdLength) {
             throw new EditException("Name a parameter.");
@@ -73,6 +85,7 @@ public static partial class Edits {
 
     static DeltaOp[] LoadInstrumentFile(ProjectState state, LoadInstrumentFileCommand c, PluginCatalog plugins) {
         var track = InstrumentTrackOf(state, c.TrackId);
+        CheckNotFrozen(track);
         var slot = track.Instrument!;
         var path = c.Path?.Trim() ?? string.Empty;
         if (path.Length is 0 or > MaxPathLength) {

@@ -88,6 +88,60 @@ public sealed class UserSettings(IOptions<ServerOptions> options) {
         return saved;
     }
 
+    public const int MaxIoNumber = 256;
+
+    /// <summary>The user's names for inputs, output pairs and buses (Logic's I/O Labels; none: the defaults).</summary>
+    public IoLabels IoLabels() =>
+        Read("io-labels.json", ContractsJsonContext.Default.IoLabels) is {
+            Inputs: not null, Outputs: not null, Buses: not null
+        } labels
+            ? labels
+            : new([], [], []);
+
+    /// <summary>
+    ///     Saves the I/O labels: numbers 1…256 (buses 1…64), unique per list, names 1…128 characters; an empty name
+    ///     drops the label (the default name shows).
+    /// </summary>
+    public IoLabels SaveIoLabels(IoLabels? labels) {
+        if (labels is null) {
+            throw ProjectException.Unprocessable("Send the inputs, outputs and buses lists.");
+        }
+
+        var saved = new IoLabels(
+            Clean(labels.Inputs, MaxIoNumber, "input"),
+            Clean(labels.Outputs, MaxIoNumber, "output pair"),
+            Clean(labels.Buses, Model.Editing.Edits.MaxBus, "bus")
+        );
+        Write("io-labels.json", saved, ContractsJsonContext.Default.IoLabels);
+        return saved;
+
+        static IReadOnlyList<IoLabel> Clean(IReadOnlyList<IoLabel>? list, int max, string what) {
+            if (list is null) {
+                throw ProjectException.Unprocessable($"Send the {what} labels (an empty list for none).");
+            }
+
+            var clean = new SortedDictionary<int, IoLabel>();
+            foreach (var label in list) {
+                if (label is null || label.Number < 1 || label.Number > max) {
+                    throw ProjectException.Unprocessable($"An {what} label's number is 1…{max}.");
+                }
+
+                var name = (label.Name ?? string.Empty).Trim();
+                if (name.Length > Model.Editing.Edits.MaxNameLength) {
+                    throw ProjectException.Unprocessable(
+                        $"A label has at most {Model.Editing.Edits.MaxNameLength} characters."
+                    );
+                }
+
+                if (!clean.TryAdd(label.Number, label with { Name = name })) {
+                    throw ProjectException.Unprocessable($"Two labels for {what} {label.Number}.");
+                }
+            }
+
+            return [..clean.Values.Where(static l => l.Name.Length > 0)];
+        }
+    }
+
     T? Read<T>(string name, JsonTypeInfo<T> type) where T : class {
         lock (gate) {
             try {

@@ -1,0 +1,46 @@
+{
+  "schemaVersion": 3,
+  "track": {
+    "id": "trk_vocal0000002",
+    "name": "Vocal",
+    "kind": "audio",
+    "color": "#4f8ff7",
+    "input": {
+      "channel": 1,
+      "stereo": false
+    },
+    "recordArmed": false,
+    "inputMonitoring": false,
+    "strip": {
+      "volumeDb": -4.5,
+      "pan": -0.25,
+      "mute": false,
+      "solo": false
+    },
+    "midiInput": {
+      "channel": 0
+    },
+    "parentId": "trk_stack0000001",
+    "collapsed": false,
+    "notes": "Lead"
+  },
+  "regions": [
+    {
+      "id": "rgn_vocal0000001",
+      "trackId": "trk_vocal0000002",
+      "fileId": "aud_vocal0000001",
+      "name": "Vocal",
+      "startTick": 3840,
+      "fileOffset": 0,
+      "length": 240000,
+      "gainDb": -2,
+      "fadeIn": 480,
+      "fadeOut": 4800,
+      "fadeInCurve": 0,
+      "fadeOutCurve": -0.5,
+      "muted": false
+    }
+  ],
+  "midiRegions": [],
+  "takeFolders": []
+}

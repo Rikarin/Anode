@@ -1,6 +1,7 @@
 using Anode.Contracts;
 using Anode.Ipc.Segments;
 using Anode.Model.Time;
+using System.Runtime.InteropServices;
 
 namespace Anode.Model.Compile;
 
@@ -15,75 +16,68 @@ public sealed record CompiledModel(IReadOnlyList<TrackModel> Tracks, long Length
 ///     Compiles a <see cref="ProjectState" /> into what the host plays (docs/adr/0006-bulk-ipc.md): each track's
 ///     regions and take folder comps as a playlist in samples (ticks through the <see cref="TempoMap" /> and its ramps,
 ///     ADR-0005), its MIDI regions as events (<see cref="MidiEvents" />), and the metronome's clicks on the beats of the
-///     signature track. Muted regions and folders play nothing, and a folder stack has no engine track of its own.
+///     signature track; its automation lanes as automation events (<see cref="AutomationEvents" />), and the master's
+///     under engine track −1 when it has any. Muted regions and folders play nothing, and a folder stack and a VCA have
+///     no engine track of their own.
 ///     Incremental: a track is recompiled only when its regions (audio or MIDI), take folders, their files, the tempo
 ///     track or the sample rate changed since the previous call; otherwise the previous <see cref="TrackModel" />
 ///     instance is reused, so a caller finds the dirty tracks by reference.
 /// </summary>
 public sealed class ModelCompiler {
     readonly Dictionary<int, (TrackKey Key, TrackModel Model)> cache = [];
+    readonly Dictionary<int, (TrackModel Base, PlaybackEvent[] Automation, TrackModel Model)> automated = [];
+    readonly Dictionary<int, TrackModel> previous = [];
+    readonly TrackModel masterBase = new(AutomationEvents.MasterTrack, [], []);
+    bool masterAutomated;
     (ClickKey Key, TrackModel Model)? metronome;
 
     public CompiledModel Compile(ProjectState state, EngineIds ids) {
         var map = state.TempoMap;
-        var byTrack = state.Regions.Values.ToLookup(static r => r.TrackId, StringComparer.Ordinal);
-        var midiByTrack = state.MidiRegions.Values.ToLookup(static r => r.TrackId, StringComparer.Ordinal);
-        var foldersByTrack = state.TakeFolders.Values.ToLookup(static f => f.TrackId, StringComparer.Ordinal);
-        var tempo = state.Settings.TempoEvents ?? [];
-        var models = new List<TrackModel>(state.Tracks.Count + 1);
-        var recompiled = new List<int>();
+        var source = new Source(
+            state,
+            ids,
+            map,
+            state.Regions.Values.ToLookup(static r => r.TrackId, StringComparer.Ordinal),
+            state.MidiRegions.Values.ToLookup(static r => r.TrackId, StringComparer.Ordinal),
+            state.TakeFolders.Values.ToLookup(static f => f.TrackId, StringComparer.Ordinal)
+        );
+        var models = new List<TrackModel>(state.Tracks.Count + 2);
         var seen = new HashSet<int>();
         long end = 0;
-        foreach (var track in state.Tracks) {
-            if (track.Kind == TrackKind.Stack) {
-                continue;
-            }
-
-            var engineId = ids.Track(track.Id);
-            seen.Add(engineId);
-            var regions = byTrack[track.Id]
-                .OrderBy(static r => r.StartTick)
-                .ThenBy(static r => r.Id, StringComparer.Ordinal)
-                .ToArray();
-            var midi = midiByTrack[track.Id]
-                .OrderBy(static r => r.StartTick)
-                .ThenBy(static r => r.Id, StringComparer.Ordinal)
-                .ToArray();
-            var folders = foldersByTrack[track.Id]
-                .OrderBy(static f => f.StartTick)
-                .ThenBy(static f => f.Id, StringComparer.Ordinal)
-                .ToArray();
-            var key = new TrackKey(
-                tempo,
-                state.Settings.Tempo,
-                state.SampleRate,
-                [..regions.Select(r => (r, state.Files[r.FileId]))],
-                midi,
-                [..folders.Select(f => (f, FilesOf(state, f)))]
-            );
-            if (!cache.TryGetValue(engineId, out var cached) || !cached.Key.Equals(key)) {
-                cached = (key,
-                    new(engineId, MidiEvents(state, map, engineId, midi), Playlist(state, map, ids, regions, folders)));
-                cache[engineId] = cached;
-                recompiled.Add(engineId);
-            }
-
-            models.Add(cached.Model);
-            if (cached.Model.Playlist is [.., var last]) {
+        foreach (var track in state.Tracks.Where(Stacks.IsPlayable)) {
+            var model = Track(source, track);
+            seen.Add(model.TrackId);
+            models.Add(model);
+            if (model.Playlist is [.., var last]) {
                 end = Math.Max(end, last.Start + last.Length);
             }
 
-            if (cached.Model.Events is [.., var lastEvent]) {
+            if (cache[model.TrackId].Model.Events is [.., var lastEvent]) {
                 end = Math.Max(end, lastEvent.SamplePos + 1);
             }
         }
 
-        foreach (var stale in cache.Keys.Where(k => !seen.Contains(k)).ToArray()) {
-            cache.Remove(stale);
+        // Once the master has had lanes, its entry stays (empty when they are gone), so a patch clears it.
+        var master = AutomationEvents.Compile(state, map, ids, null, AutomationEvents.MasterTrack);
+        masterAutomated |= master.Length > 0;
+        if (masterAutomated) {
+            seen.Add(AutomationEvents.MasterTrack);
+            models.Add(WithAutomation(masterBase, master));
         }
 
+        var recompiled = models
+            .Where(m => !previous.TryGetValue(m.TrackId, out var before) || !ReferenceEquals(before, m))
+            .Select(static m => m.TrackId)
+            .ToList();
+        previous.Clear();
+        foreach (var model in models) {
+            previous[model.TrackId] = model;
+        }
+
+        Forget(seen);
         var settings = state.Settings;
         var endTick = Math.Max(settings.EndTick, settings.Cycle.EndTick);
+        var tempo = settings.TempoEvents ?? [];
         var clickKey = new ClickKey(tempo, settings.Signatures ?? [], settings.Signature, endTick, state.SampleRate);
         if (metronome is not { } m || !m.Key.Equals(clickKey)) {
             metronome = m = (clickKey, new(TrackEntry.MetronomeTrack, Clicks(state, map, endTick), []));
@@ -93,6 +87,91 @@ public sealed class ModelCompiler {
         models.Add(m.Model);
         end = Math.Max(end, map.SampleAt(endTick, state.SampleRate));
         return new(models, end, recompiled);
+    }
+
+    /// <summary>What a compilation reads: the project, its ids and tempo map, and its regions by track.</summary>
+    sealed record Source(
+        ProjectState State,
+        EngineIds Ids,
+        TempoMap Map,
+        ILookup<string, AudioRegion> Regions,
+        ILookup<string, MidiRegion> Midi,
+        ILookup<string, TakeFolder> Folders
+    );
+
+    /// <summary>A track's model: its cached regions and events when they did not change, with its automation.</summary>
+    TrackModel Track(Source source, Track track) {
+        var (state, ids, map) = (source.State, source.Ids, source.Map);
+        var engineId = ids.Track(track.Id);
+        var regions = source.Regions[track.Id]
+            .OrderBy(static r => r.StartTick)
+            .ThenBy(static r => r.Id, StringComparer.Ordinal)
+            .ToArray();
+        var midi = source.Midi[track.Id]
+            .OrderBy(static r => r.StartTick)
+            .ThenBy(static r => r.Id, StringComparer.Ordinal)
+            .ToArray();
+        var folders = source.Folders[track.Id]
+            .OrderBy(static f => f.StartTick)
+            .ThenBy(static f => f.Id, StringComparer.Ordinal)
+            .ToArray();
+        var key = new TrackKey(
+            state.Settings.TempoEvents ?? [],
+            state.Settings.Tempo,
+            state.SampleRate,
+            [..regions.Select(r => (r, state.Files[r.FileId]))],
+            midi,
+            [..folders.Select(f => (f, FilesOf(state, f)))]
+        );
+        if (!cache.TryGetValue(engineId, out var cached) || !cached.Key.Equals(key)) {
+            cached = (key,
+                new(engineId, MidiEvents(state, map, engineId, midi), Playlist(state, map, ids, regions, folders)));
+            cache[engineId] = cached;
+        }
+
+        return WithAutomation(cached.Model, AutomationEvents.Compile(state, map, ids, track, engineId));
+    }
+
+    /// <summary>Drops the cached models of engine tracks that are gone.</summary>
+    void Forget(HashSet<int> seen) {
+        foreach (var stale in cache.Keys.Where(k => !seen.Contains(k)).ToArray()) {
+            cache.Remove(stale);
+        }
+
+        foreach (var stale in automated.Keys.Where(k => !seen.Contains(k)).ToArray()) {
+            automated.Remove(stale);
+        }
+    }
+
+    /// <summary>
+    ///     A track's model with its automation events merged in (before other events at an equal sample): the very
+    ///     instance of the previous compilation when neither changed.
+    /// </summary>
+    TrackModel WithAutomation(TrackModel model, PlaybackEvent[] automation) {
+        if (automated.TryGetValue(model.TrackId, out var cached)
+            && ReferenceEquals(cached.Base, model)
+            && MemoryMarshal.AsBytes(cached.Automation.AsSpan())
+                .SequenceEqual(MemoryMarshal.AsBytes(automation.AsSpan()))) {
+            return cached.Model;
+        }
+
+        var merged = automation.Length == 0
+            ? model
+            : new TrackModel(
+                model.TrackId,
+                [
+                    ..automation.Select(static e => (e, 0))
+                        .Concat(model.Events.Select(static e => (e, 1)))
+                        .Select(static (x, i) => (x.e, x.Item2, i))
+                        .OrderBy(static x => x.e.SamplePos)
+                        .ThenBy(static x => x.Item2)
+                        .ThenBy(static x => x.i)
+                        .Select(static x => x.e)
+                ],
+                model.Playlist
+            );
+        automated[model.TrackId] = (model, automation, merged);
+        return merged;
     }
 
     /// <summary>

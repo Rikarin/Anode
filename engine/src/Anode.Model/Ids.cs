@@ -5,7 +5,8 @@ namespace Anode.Model;
 /// <summary>
 ///     Makes domain ids: a kind prefix (<c>trk</c>, <c>rgn</c>, <c>mid</c>, <c>aud</c>, <c>prj</c>, <c>tkf</c>,
 ///     <c>tak</c>,
-///     <c>mrk</c>, <c>sec</c>, <c>alt</c>), an underscore, a
+///     <c>mrk</c>, <c>sec</c>, <c>alt</c>, and Phase 4's <c>ins</c>, <c>snd</c>, <c>aut</c>, <c>pat</c>, <c>job</c>), an
+///     underscore, a
 ///     suffix.
 /// </summary>
 public interface IIdSource {
@@ -39,4 +40,9 @@ public static class IdPrefix {
     public const string Marker = "mrk";
     public const string Section = "sec";
     public const string Alternative = "alt";
+    public const string Insert = "ins";
+    public const string Send = "snd";
+    public const string Automation = "aut";
+    public const string Patch = "pat";
+    public const string Job = "job";
 }

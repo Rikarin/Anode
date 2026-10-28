@@ -11,7 +11,8 @@ namespace Anode.Model.Storage;
 /// <summary>
 ///     <c>project.json</c>: the project's root (docs/01-implementation-plan.md §5.6). <c>tracks</c> lists the track ids
 ///     in order; each track and its regions are in <c>tracks/&lt;id&gt;.json</c>. Schema 3 adds the global tracks (in
-///     <c>settings</c>), markers, arrangement sections, the project's notes and the editor's screensets.
+///     <c>settings</c>), markers, arrangement sections, the project's notes and the editor's screensets; schema 4 the
+///     mixer (the master's inserts, mixer settings), the mixer groups and the master's automation lanes.
 /// </summary>
 public sealed record ProjectFile(
     int SchemaVersion,
@@ -25,19 +26,22 @@ public sealed record ProjectFile(
     IReadOnlyList<Marker>? Markers = null,
     IReadOnlyList<ArrangementMarker>? Arrangement = null,
     string? Notes = null,
-    IReadOnlyList<Screenset>? Screensets = null
+    IReadOnlyList<Screenset>? Screensets = null,
+    IReadOnlyList<MixerGroup>? Groups = null,
+    IReadOnlyList<AutomationLane>? Automation = null
 );
 
 /// <summary>
-///     <c>tracks/&lt;id&gt;.json</c>: one track and its regions, audio and MIDI (schema 2), and its take folders
-///     (schema 3).
+///     <c>tracks/&lt;id&gt;.json</c>: one track and its regions, audio and MIDI (schema 2), its take folders (schema 3),
+///     and its automation lanes (schema 4).
 /// </summary>
 public sealed record TrackFile(
     int SchemaVersion,
     Track Track,
     IReadOnlyList<AudioRegion> Regions,
     IReadOnlyList<MidiRegion>? MidiRegions = null,
-    IReadOnlyList<TakeFolder>? TakeFolders = null
+    IReadOnlyList<TakeFolder>? TakeFolders = null,
+    IReadOnlyList<AutomationLane>? Automation = null
 );
 
 /// <summary>A package that cannot be read: missing, damaged, or from a newer Anode.</summary>
@@ -51,8 +55,10 @@ public sealed class PackageException : Exception {
 
 /// <summary>
 ///     Reads and writes a project package: a folder with <c>project.json</c>, <c>tracks/&lt;id&gt;.json</c>,
-///     <c>Audio Files/</c>, <c>Peaks/</c> (docs/02-phase-1.md) and <c>Plugin States/&lt;track id&gt;.bin</c>, each
-///     instrument's opaque state (docs/03-phase-2.md, "State"). Every file is written atomically
+///     <c>Audio Files/</c>, <c>Peaks/</c> (docs/02-phase-1.md) and <c>Plugin States/</c>: each instrument's opaque state
+///     as <c>&lt;track id&gt;.bin</c> (docs/03-phase-2.md, "State") and each insert's as
+///     <c>&lt;track id&gt;.&lt;insert id&gt;.bin</c> (<c>master.&lt;insert id&gt;.bin</c> on the master;
+///     docs/05-phase-4.md). Every file is written atomically
 ///     (<see cref="AtomicRename" />): the track files first, then <c>project.json</c>, which names the tracks, so a save
 ///     cut short leaves the previous project readable; track files no longer named are removed last.
 /// </summary>
@@ -101,7 +107,8 @@ public static class ProjectPackage {
                         .OrderBy(static r => r.StartTick)
                         .ThenBy(static r => r.Id, StringComparer.Ordinal)
                 ],
-                [..state.TakeFoldersOf(track.Id)]
+                [..state.TakeFoldersOf(track.Id)],
+                [..state.LanesOf(track.Id)]
             );
             AtomicRename.Write(
                 Path.Combine(tracksFolder, TrackFileName(track.Id)),
@@ -121,7 +128,9 @@ public static class ProjectPackage {
             [..state.Markers.Values.OrderBy(static m => m.Tick).ThenBy(static m => m.Id, StringComparer.Ordinal)],
             [..state.Sections.Values.OrderBy(static s => s.StartTick)],
             state.Notes,
-            [..state.Screensets.Values]
+            [..state.Screensets.Values],
+            [..state.Groups.Values],
+            [..state.LanesOf(null)]
         );
         AtomicRename.Write(
             Path.Combine(folder, ProjectFileName),
@@ -174,17 +183,32 @@ public static class ProjectPackage {
             AddRegions(file, file.Track, files, regions, midiRegions, folders);
         }
 
-        return new(
+        var groups = ImmutableSortedDictionary.CreateRange(
+            (root.Groups ?? [])
+            .Where(static g => g is {
+                    Number: >= 1 and <= Edits.MaxGroup, Name: not null, Color: not null, Properties: not null
+                }
+            )
+            .Select(static g => KeyValuePair.Create(g.Number, g))
+            .DistinctBy(static p => p.Key)
+        );
+        Relink(tracks, groups, files);
+        var master = Normalise(root.Master, null);
+        var trackIds = tracks.Select(static t => t.Id).ToHashSet(StringComparer.Ordinal);
+        var loaded = new ProjectState(
             root.Id,
             root.Name,
             root.SampleRate,
             Normalise(root.Settings),
-            root.Master,
+            master with {
+                Inserts = [..master.Inserts.Select(i => i with { Sidechain = Sidechain(trackIds, i.Sidechain) })]
+            },
             tracks.ToImmutable(),
             regions.ToImmutable(),
             files,
             midiRegions.ToImmutable()
-        ) {
+        ) { Groups = groups };
+        return loaded with {
             LastEventId = midiRegions.Values.Select(ProjectState.MaxEventId).DefaultIfEmpty().Max(),
             TakeFolders = folders.ToImmutable(),
             Markers = Keyed(
@@ -203,9 +227,82 @@ public static class ProjectPackage {
                 .Where(static s => s is { Number: >= 1 and <= 9, Name: not null, Layout: not null })
                 .Select(static s => KeyValuePair.Create(s.Number, s))
                 .DistinctBy(static p => p.Key)
+            ),
+            Automation = Lanes(
+                loaded,
+                [
+                    ..trackFiles.SelectMany(static f => (f.Automation ?? []).Select(l => l with { TrackId = f.Track.Id }
+                        )
+                    ),
+                    ..(root.Automation ?? []).Where(static l => l is not null)
+                        .Select(static l => l with { TrackId = null })
+                ]
             )
         };
     }
+
+    /// <summary>
+    ///     The lanes that belong: of a known strip and target, with sorted, well-formed points; one per strip and
+    ///     target (the first).
+    /// </summary>
+    static ImmutableSortedDictionary<string, AutomationLane> Lanes(
+        ProjectState state,
+        IEnumerable<AutomationLane> lanes
+    ) {
+        var builder = ImmutableSortedDictionary.CreateBuilder<string, AutomationLane>(StringComparer.Ordinal);
+        var seen = new HashSet<(string?, string)>();
+        foreach (var lane in lanes) {
+            if (lane?.Id is null
+                || lane.Target is null
+                || builder.ContainsKey(lane.Id)
+                || !seen.Add((lane.TrackId, lane.Target))
+                || !Edits.TargetExists(state, lane.TrackId, lane.Target)) {
+                continue;
+            }
+
+            var points = (lane.Points ?? []).Where(static p => p is not null && double.IsFinite(p.Value) && p.Tick >= 0)
+                .Select(static p => p with { Curve = double.IsFinite(p.Curve) ? Math.Clamp(p.Curve, -1, 1) : 0 })
+                .OrderBy(static p => p.Tick)
+                .ToArray();
+            if (points.Length > 0) {
+                builder[lane.Id] = lane with { Points = points };
+            }
+        }
+
+        return builder.ToImmutable();
+    }
+
+    /// <summary>
+    ///     References between tracks made safe: a VCA that is one, groups that exist, a frozen file of the project, an
+    ///     aux's input bus, sidechains from tracks of the project.
+    /// </summary>
+    static void Relink(
+        ImmutableList<Track>.Builder tracks,
+        ImmutableSortedDictionary<int, MixerGroup> groups,
+        ImmutableSortedDictionary<string, AudioFile> files
+    ) {
+        var vcas = tracks.Where(static t => t.Kind == TrackKind.Vca).Select(static t => t.Id).ToHashSet();
+        var ids = tracks.Select(static t => t.Id).ToHashSet(StringComparer.Ordinal);
+        for (var i = 0; i < tracks.Count; i++) {
+            var t = tracks[i];
+            var strip = t.Strip;
+            tracks[i] = t with {
+                Strip = strip with {
+                    VcaId = strip.VcaId is { } vca && vcas.Contains(vca) && t.Kind != TrackKind.Vca ? vca : null,
+                    Groups = [..strip.Groups.Where(groups.ContainsKey).Distinct().Order()],
+                    Inserts = [..strip.Inserts.Select(x => x with { Sidechain = Sidechain(ids, x.Sidechain) })]
+                },
+                FrozenFileId = t.FrozenFileId is { } frozen && files.ContainsKey(frozen) ? frozen : null,
+                InputBus = t.Kind == TrackKind.Aux ? Math.Clamp(t.InputBus, 1, Edits.MaxBus) : 0
+            };
+        }
+    }
+
+    /// <summary>A sidechain source that exists (a track of the project, a bus), else none.</summary>
+    static string? Sidechain(HashSet<string> trackIds, string? source) =>
+        source is not null && (trackIds.Contains(source) || Routing.BusOf(source) is >= 1 and <= Edits.MaxBus)
+            ? source
+            : null;
 
     /// <summary>Stacks do not nest, and a member's stack is one of the project's: other parents are dropped.</summary>
     static void Unnest(ImmutableList<Track>.Builder tracks) {
@@ -263,7 +360,10 @@ public static class ProjectPackage {
             Signature = new(signatures[0].Numerator, signatures[0].Denominator),
             Signatures = signatures,
             Keys = keys,
-            Recording = settings.Recording ?? ProjectDefaults.Recording(signature)
+            Recording = settings.Recording ?? ProjectDefaults.Recording(signature),
+            Mixer = settings.Mixer is { } mixer && Enum.IsDefined(mixer.Pdc) && double.IsFinite(mixer.LowLatencyLimitMs)
+                ? mixer
+                : ProjectDefaults.Mixer
         };
     }
 
@@ -307,8 +407,8 @@ public static class ProjectPackage {
     }
 
     /// <summary>
-    ///     Writes the instruments' opaque states, <c>Plugin States/&lt;track id&gt;.bin</c> each, and removes the state
-    ///     files of tracks not in <paramref name="states" />.
+    ///     Writes the plugins' opaque states by key (<see cref="StateKey" />): <c>Plugin States/&lt;key&gt;.bin</c> each,
+    ///     and removes the state files of keys not in <paramref name="states" />.
     /// </summary>
     public static void SaveStates(string folder, IReadOnlyDictionary<string, byte[]> states) {
         var statesFolder = Path.Combine(folder, PluginStatesFolder);
@@ -329,31 +429,59 @@ public static class ProjectPackage {
         }
     }
 
-    /// <summary>The saved states of <paramref name="state" />'s instrument tracks, by track id (unreadable ones left out).</summary>
+    /// <summary>
+    ///     The saved states of <paramref name="state" />'s plugins by key (<see cref="StateKey" />): instruments and
+    ///     inserts, the master's too (unreadable ones left out).
+    /// </summary>
     public static Dictionary<string, byte[]> LoadStates(string folder, ProjectState state) {
         var states = new Dictionary<string, byte[]>(StringComparer.Ordinal);
-        foreach (var track in state.Tracks) {
-            if (track.Instrument is null || !IsSafeId(track.Id)) {
-                continue;
-            }
-
-            var path = Path.Combine(folder, PluginStatesFolder, StateFileName(track.Id));
+        foreach (var key in StateKeys(state)) {
+            var path = Path.Combine(folder, PluginStatesFolder, StateFileName(key));
             try {
                 if (File.Exists(path)) {
-                    states[track.Id] = File.ReadAllBytes(path);
+                    states[key] = File.ReadAllBytes(path);
                 }
             } catch (Exception e) when (e is IOException or UnauthorizedAccessException) {
-                // An unreadable state: the instrument starts from its parameters.
+                // An unreadable state: the plugin starts from its parameters.
             }
         }
 
         return states;
     }
 
-    public static string StateFileName(string trackId) =>
-        IsSafeId(trackId) ? trackId + StateExtension : throw new ArgumentException($"Unsafe track id '{trackId}'.");
+    /// <summary>The state key of every plugin of the project (with a safe id), and the plugin it names.</summary>
+    public static IEnumerable<string> StateKeys(ProjectState state) {
+        foreach (var track in state.Tracks.Where(static t => IsSafeId(t.Id))) {
+            if (track.Instrument is not null) {
+                yield return track.Id;
+            }
 
-    /// <summary>A track as read, in the model's canonical form (parameters in ordinal order).</summary>
+            foreach (var insert in track.Strip.Inserts.Where(static i => IsSafeId(i.Id))) {
+                yield return StateKey(track.Id, insert.Id);
+            }
+        }
+
+        foreach (var insert in state.Master.Inserts.Where(static i => IsSafeId(i.Id))) {
+            yield return StateKey(null, insert.Id);
+        }
+    }
+
+    /// <summary>The master's name in state keys.</summary>
+    public const string MasterKey = "master";
+
+    /// <summary>
+    ///     The key of a plugin's state: the track id for its instrument, <c>&lt;track id&gt;.&lt;insert id&gt;</c> for an
+    ///     insert (<c>master.&lt;insert id&gt;</c> on the master).
+    /// </summary>
+    public static string StateKey(string? trackId, string? insertId) =>
+        insertId is null ? trackId ?? MasterKey : $"{trackId ?? MasterKey}.{insertId}";
+
+    public static string StateFileName(string key) =>
+        key.Split('.') is { Length: 1 or 2 } parts && parts.All(IsSafeId)
+            ? key + StateExtension
+            : throw new ArgumentException($"Unsafe state key '{key}'.");
+
+    /// <summary>A track as read, in the model's canonical form (parameters in ordinal order, lists present).</summary>
     static Track Normalise(Track track) =>
         track with {
             Instrument = track.Instrument is { } slot
@@ -361,8 +489,33 @@ public static class ProjectPackage {
                 : null,
             MidiInput = track.MidiInput ?? ProjectDefaults.MidiInput,
             MidiOutput = track.Kind == TrackKind.Midi ? track.MidiOutput : null,
-            Notes = track.Notes ?? string.Empty
+            Notes = track.Notes ?? string.Empty,
+            Strip = Normalise(track.Strip, track),
+            AutomationMode = Enum.IsDefined(track.AutomationMode) ? track.AutomationMode : AutomationMode.Read
         };
+
+    /// <summary>A strip as read: its lists present and well formed, its output one there is.</summary>
+    static ChannelStrip Normalise(ChannelStrip? strip, Track? track) {
+        strip ??= ProjectDefaults.Strip;
+        var full = track is null || Edits.HasAudioStrip(track.Kind);
+        var sends = (strip.Sends ?? []).Where(static s => s?.Id is not null && s.Bus is >= 1 and <= Edits.MaxBus)
+            .DistinctBy(static s => s.Bus);
+        return strip with {
+            Inserts = full
+                ? [
+                    ..(strip.Inserts ?? []).Where(static i => i?.Id is not null && i.PluginId is not null)
+                        .Select(static i => i with {
+                                Name = i.Name ?? i.PluginId, Parameters = PluginCatalog.Sorted(i.Parameters)
+                            }
+                        )
+                        .DistinctBy(static i => i.Id)
+                ]
+                : [],
+            Sends = full && track is not null ? [..sends] : [],
+            Output = Routing.Normalise(strip.Output) ?? Routing.Master,
+            Groups = strip.Groups ?? []
+        };
+    }
 
     static MidiRegion Normalise(MidiRegion region) =>
         region with {
@@ -431,11 +584,11 @@ public static class ProjectPackage {
 ///     refused rather than read wrongly.
 /// </remarks>
 public static class PackageMigrations {
-    public const int CurrentSchemaVersion = 3;
+    public const int CurrentSchemaVersion = 4;
     const string VersionField = "schemaVersion";
 
     /// <summary><c>Steps[n]</c> takes schema <c>n + 1</c> to <c>n + 2</c>; it gets the kind of file and its JSON.</summary>
-    static readonly Func<string, JsonObject, JsonObject>[] Steps = [ToSchema2, ToSchema3];
+    static readonly Func<string, JsonObject, JsonObject>[] Steps = [ToSchema2, ToSchema3, ToSchema4];
 
     public static JsonObject Upgrade(JsonObject json, string kind) {
         var version = json[VersionField] is JsonValue v && v.TryGetValue<int>(out var n) ? n : 1;
@@ -534,6 +687,50 @@ public static class PackageMigrations {
         }
 
         json["takeFolders"] ??= new JsonArray();
+    }
+
+    /// <summary>
+    ///     Schema 3 (Phase 3) to 4 (Phase 4, mixing and automation): every strip has no inserts or sends and goes to the
+    ///     master, outside any group or VCA; delay compensation is on for everything, low-latency mode off at 10 ms;
+    ///     there are no groups and no automation; tracks read automation, take no bus and are not frozen.
+    /// </summary>
+    static JsonObject ToSchema4(string kind, JsonObject json) {
+        if (kind == "project") {
+            if (json["settings"] is JsonObject settings) {
+                settings["mixer"] ??= new JsonObject {
+                    ["pdc"] = "all", ["lowLatency"] = false, ["lowLatencyLimitMs"] = 10
+                };
+            }
+
+            Schema4.Strip(json["master"] as JsonObject);
+            json["groups"] ??= new JsonArray();
+            json["automation"] ??= new JsonArray();
+        } else if (kind == "track") {
+            if (json["track"] is JsonObject track) {
+                Schema4.Strip(track["strip"] as JsonObject);
+                track["inputBus"] ??= 0;
+                track["automationMode"] ??= "read";
+            }
+
+            json["automation"] ??= new JsonArray();
+        }
+
+        return json;
+    }
+}
+
+/// <summary>The Phase 4 additions to a schema-3 file (docs/05-phase-4.md).</summary>
+static class Schema4 {
+    /// <summary>A channel strip without inserts or sends, to the master, in no group and no VCA.</summary>
+    public static void Strip(JsonObject? strip) {
+        if (strip is null) {
+            return;
+        }
+
+        strip["inserts"] ??= new JsonArray();
+        strip["sends"] ??= new JsonArray();
+        strip["output"] ??= "master";
+        strip["groups"] ??= new JsonArray();
     }
 }
 

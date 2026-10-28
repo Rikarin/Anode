@@ -46,7 +46,18 @@ public sealed record ProjectChangedEvent(ProjectDelta Delta) : RealtimeEvent;
 public sealed record TransportEvent(TransportStatus Transport) : RealtimeEvent;
 
 /// <summary>Peak levels (linear, 0…1+) since the previous frame, per track id and for the master.</summary>
-public sealed record MetersEvent(IReadOnlyList<TrackMeter> Tracks, TrackMeter Master) : RealtimeEvent;
+/// <remarks>
+///     <c>readings</c> (Phase 4) are what inserts report for the generic editor (a compressor's gain reduction, a
+///     meter's level), since the previous frame; left out when there are none.
+/// </remarks>
+public sealed record MetersEvent(
+    IReadOnlyList<TrackMeter> Tracks,
+    TrackMeter Master,
+    IReadOnlyList<InsertReading>? Readings = null
+) : RealtimeEvent;
+
+/// <summary>An insert's reading (<c>IAudioEffect.Reading</c>); <c>trackId</c> null is the master.</summary>
+public sealed record InsertReading(string? TrackId, string InsertId, double Value);
 
 public sealed record TrackMeter(string TrackId, float PeakLeft, float PeakRight);
 

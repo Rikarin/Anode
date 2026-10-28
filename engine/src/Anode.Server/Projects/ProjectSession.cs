@@ -8,6 +8,7 @@ using Anode.Model.History;
 using Anode.Model.Midi;
 using Anode.Model.Storage;
 using Anode.Server.Engine;
+using Anode.Server.Library;
 using Anode.Server.Realtime;
 using Microsoft.Extensions.Options;
 using System.Collections.Immutable;
@@ -16,8 +17,9 @@ namespace Anode.Server.Projects;
 
 /// <summary>
 ///     What the engine link needs of the open project: the snapshot, its folder, the engine ids, which opening of a
-///     project it belongs to (<see cref="Session" /> changes with every open, create and close), and the instrument
-///     states last saved or opened, by track id.
+///     project it belongs to (<see cref="Session" /> changes with every open, create and close), and the plugin states
+///     last saved, opened or brought by a patch, by state key (<see cref="ProjectPackage.StateKey" />: the track id for
+///     an instrument, <c>&lt;track id&gt;.&lt;insert id&gt;</c> for an insert).
 /// </summary>
 public sealed record OpenProjectView(
     long Session,
@@ -35,12 +37,19 @@ public sealed record OpenProjectView(
             ? saved.Bytes
             : null;
 
+    /// <summary>The state saved for an insert of a track (null: the master), when it is still that plugin's.</summary>
+    public byte[]? StateOf(string? trackId, Insert insert) =>
+        States.TryGetValue(ProjectPackage.StateKey(trackId, insert.Id), out var saved)
+        && saved.PluginId == insert.PluginId
+            ? saved.Bytes
+            : null;
+
     /// <summary>Where an instrument's file is on disk: <c>instrument.file</c> is relative to the project inside it.</summary>
     public string? InstrumentFile(InstrumentSlot slot) =>
         slot.File is { } file ? Path.GetFullPath(Path.Combine(Folder, file)) : null;
 }
 
-/// <summary>An instrument's opaque state (<c>Plugin States/&lt;track id&gt;.bin</c>) and the plugin it belongs to.</summary>
+/// <summary>A plugin's opaque state (<c>Plugin States/&lt;key&gt;.bin</c>) and the plugin it belongs to.</summary>
 public sealed record SavedState(string PluginId, byte[] Bytes);
 
 /// <summary>
@@ -56,6 +65,8 @@ public sealed class ProjectSession(
     PeakJobs peaks,
     EngineDevice device,
     EngineCatalog catalog,
+    PatchLibrary patches,
+    TransportClock clock,
     TimeProvider time,
     ILogger<ProjectSession> logger
 ) {
@@ -131,10 +142,12 @@ public sealed class ProjectSession(
         }
 
         ProjectPackage.CreateFolders(folder);
+        var plugins = PluginsByKey(state);
         var states = ProjectPackage.LoadStates(folder, state)
+            .Where(s => plugins.ContainsKey(s.Key))
             .ToImmutableDictionary(
                 static s => s.Key,
-                s => new SavedState(state.FindTrack(s.Key)!.Instrument!.PluginId, s.Value),
+                s => new SavedState(plugins[s.Key], s.Value),
                 StringComparer.Ordinal
             );
         return Replace(folder, state, states);
@@ -164,6 +177,7 @@ public sealed class ProjectSession(
             ProjectHistory.Backup(o.Folder, time.GetUtcNow());
             ProjectPackage.Save(o.Folder, o.State);
             ProjectPackage.SaveStates(o.Folder, states.ToDictionary(static s => s.Key, static s => s.Value.Bytes));
+            ProjectPackage.CreateFolders(o.Folder);
         } catch (Exception e) when (e is IOException or UnauthorizedAccessException) {
             throw ProjectException.Unprocessable($"Could not save '{o.Folder}': {e.Message}");
         }
@@ -404,6 +418,10 @@ public sealed class ProjectSession(
         Changed?.Invoke();
     }
 
+    /// <summary>
+    ///     Applies a batch as one undo step. During playback, control moves on tracks in touch, latch or write mode also
+    ///     record into their lanes (<see cref="AutomationPass" />), and the pass's batches coalesce into one step.
+    /// </summary>
     public CommandResult Apply(CommandBatch batch, long? expected) {
         CommandResult result;
         lock (gate) {
@@ -415,20 +433,222 @@ public sealed class ProjectSession(
 
             EditResult edit;
             try {
-                edit = Edits.Apply(o.State, Resolve(o, batch.Commands), ids, catalog.ForEdits);
+                edit = Edits.Apply(o.State, Resolve(o, batch.Commands), ids, catalog.ForEdits, patches);
             } catch (EditException e) {
                 throw ProjectException.Unprocessable(e.Message);
             }
 
-            result = Commit(o, edit.State, edit.Forward);
-            o.History.Push(
-                UndoLabels.For(batch),
-                o.Revision,
-                new(edit.Forward, edit.Inverse),
-                UndoLabels.CoalesceKey(batch)
-            );
+            var forward = edit.Forward;
+            var inverse = edit.Inverse;
+            var state = edit.State;
+            var key = UndoLabels.CoalesceKey(batch);
+            if (AutomationPass.Records(batch.Commands) && PassOf(o) is var (pass, tick)) {
+                var recorded = pass.Record(o.State, state, tick, ids);
+                if (recorded.Count > 0) {
+                    var more = new List<DeltaOp>(forward);
+                    var back = new List<DeltaOp>();
+                    state = Edits.Step(state, recorded, more, back);
+                    back.Reverse();
+                    (forward, inverse, key) = (more, [..back, ..inverse], pass.CoalesceKey);
+                }
+            }
+
+            KeepStates(o, o.State, state, batch.Commands);
+            result = Commit(o, state, forward);
+            o.History.Push(UndoLabels.For(batch), o.Revision, new(forward, inverse), key);
         }
 
+        Changed?.Invoke();
+        return result;
+    }
+
+    /// <summary>The pass recording now (started when playback did), with the playhead's tick; null while stopped.</summary>
+    (AutomationPass Pass, long Tick)? PassOf(Open o) {
+        if (clock.Playing is not var (number, start, tick)) {
+            return null;
+        }
+
+        if (o.Pass?.Number != number) {
+            o.Pass = new(number, start);
+        }
+
+        return (o.Pass, tick);
+    }
+
+    /// <summary>
+    ///     Playback stopped: the pass's latch and write lanes are completed to <paramref name="stopTick" />, in the
+    ///     pass's undo step when it is still the last one.
+    /// </summary>
+    public void EndPass(long number, long stopTick) {
+        lock (gate) {
+            if (open is not { Pass: { } pass } o || pass.Number != number) {
+                return;
+            }
+
+            o.Pass = null;
+            var ops = pass.Finish(o.State, stopTick, ids);
+            if (ops.Count == 0) {
+                return;
+            }
+
+            var forward = new List<DeltaOp>();
+            var inverse = new List<DeltaOp>();
+            var state = Edits.Step(o.State, ops, forward, inverse);
+            inverse.Reverse();
+            Commit(o, state, forward);
+            o.History.Push("Automation", o.Revision, new(forward, inverse), pass.CoalesceKey);
+        }
+
+        Changed?.Invoke();
+    }
+
+    /// <summary>
+    ///     A plugin's own editor (or a controller) moved a parameter: applied as <c>setInsertParameter</c> (or
+    ///     <c>setParameter</c> for the instrument), coalescing like a drag and recording automation like one; ignored
+    ///     when it does not apply.
+    /// </summary>
+    public void ApplyHostParameter(int engineTrack, string? insertId, string parameterId, double value) {
+        var view = View;
+        if (view is null) {
+            return;
+        }
+
+        string? trackId = null;
+        if (engineTrack >= 0 && (trackId = view.Ids.TrackOf(engineTrack)) is null) {
+            return;
+        }
+
+        EditCommand? command = insertId is not null
+            ? new SetInsertParameterCommand(insertId, parameterId, value, trackId)
+            : trackId is not null
+                ? new SetParameterCommand(trackId, parameterId, value)
+                : null;
+        if (command is null) {
+            return;
+        }
+
+        try {
+            Apply(new([command]), null);
+        } catch (ProjectException e) {
+            ProjectLog.HostParameterIgnored(logger, parameterId, e.Message);
+        }
+    }
+
+    /// <summary>
+    ///     Keeps the plugin states in step with an edit: a patch brings its plugins' states (for the inserts it adds, in
+    ///     order, and its instrument), and a plugin that changed or went loses its state.
+    /// </summary>
+    void KeepStates(Open o, ProjectState before, ProjectState after, IReadOnlyList<EditCommand> commands) {
+        var states = o.States.ToBuilder();
+        var patched = false;
+        foreach (var apply in commands.OfType<ApplyPatchCommand>()) {
+            patched = true;
+            if (patches.Read(apply.PatchId ?? string.Empty) is { } patch
+                && after.FindTrack(apply.TrackId) is { } track) {
+                PatchStates(states, patch, track);
+            }
+        }
+
+        var plugins = PluginsByKey(after);
+        var previous = PluginsByKey(before);
+        foreach (var key in states.Keys.ToArray()) {
+            // A state stays with its plugin: gone, or another plugin in its place (an instrument replaced).
+            if (!plugins.TryGetValue(key, out var plugin)
+                || (!patched && previous.TryGetValue(key, out var was) && was != plugin)) {
+                states.Remove(key);
+            }
+        }
+
+        o.States = states.ToImmutable();
+    }
+
+    /// <summary>A patch's plugin states, for the inserts it gave the track (in order) and its instrument.</summary>
+    static void PatchStates(ImmutableDictionary<string, SavedState>.Builder states, PatchFile patch, Track track) {
+        var inserts = track.Strip.Inserts;
+        for (var i = 0; i < Math.Min(inserts.Count, patch.Inserts.Count); i++) {
+            if (Bytes(patch.InsertStates?.GetValueOrDefault(patch.Inserts[i].Id)) is { } bytes) {
+                states[ProjectPackage.StateKey(track.Id, inserts[i].Id)] = new(inserts[i].PluginId, bytes);
+            }
+        }
+
+        if (track.Instrument is { } slot && patch.Instrument is not null && Bytes(patch.InstrumentState) is { } b) {
+            states[track.Id] = new(slot.PluginId, b);
+        }
+
+        static byte[]? Bytes(string? base64) {
+            try {
+                return base64 is null ? null : Convert.FromBase64String(base64);
+            } catch (FormatException) {
+                return null;
+            }
+        }
+    }
+
+    /// <summary>Every plugin of the project by state key: instruments by track id, inserts by track and insert id.</summary>
+    static Dictionary<string, string> PluginsByKey(ProjectState state) {
+        var plugins = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var track in state.Tracks) {
+            if (track.Instrument is { } slot) {
+                plugins[track.Id] = slot.PluginId;
+            }
+
+            foreach (var insert in track.Strip.Inserts) {
+                plugins[ProjectPackage.StateKey(track.Id, insert.Id)] = insert.PluginId;
+            }
+        }
+
+        foreach (var insert in state.Master.Inserts) {
+            plugins[ProjectPackage.StateKey(null, insert.Id)] = insert.PluginId;
+        }
+
+        return plugins;
+    }
+
+    /// <summary>A track and the states of its plugins (by state key), for a patch; the host's when it reports them.</summary>
+    public (Track Track, IReadOnlyDictionary<string, byte[]> States) PatchSource(
+        string trackId,
+        IReadOnlyDictionary<string, byte[]?>? hostStates
+    ) {
+        lock (gate) {
+            var o = Required();
+            var track = o.State.FindTrack(trackId) ?? throw ProjectException.NotFound($"No track '{trackId}'.");
+            var states = States(o, hostStates)
+                .ToDictionary(static s => s.Key, static s => s.Value.Bytes, StringComparer.Ordinal);
+            return (track, states);
+        }
+    }
+
+    /// <summary>
+    ///     A freeze job finished: the file it rendered (already in the project's <c>Audio Files</c>) joins the pool
+    ///     and the track plays it, as one undoable step "Freeze Track" (the file stays in the pool on undo).
+    /// </summary>
+    public CommandResult Freeze(long session, string trackId, string absolutePath, WavInfo info) {
+        CommandResult result;
+        AudioFile file;
+        lock (gate) {
+            var o = Required();
+            if (o.Session != session) {
+                throw ProjectException.Conflict("The project was closed while the track was frozen.");
+            }
+
+            file = Describe(o, absolutePath, info);
+            var forward = new List<DeltaOp>();
+            var inverse = new List<DeltaOp>();
+            var state = Edits.Step(o.State, [new AudioFileUpserted(file)], forward, inverse);
+            EditResult frozen;
+            try {
+                frozen = Edits.Freeze(state, trackId, file.Id);
+            } catch (EditException e) {
+                throw ProjectException.Unprocessable(e.Message);
+            }
+
+            forward.AddRange(frozen.Forward);
+            inverse.Reverse();
+            result = Commit(o, frozen.State, forward);
+            o.History.Push("Freeze Track", o.Revision, new(forward, [..frozen.Inverse, ..inverse]), null);
+        }
+
+        StartPeaks(file);
         Changed?.Invoke();
         return result;
     }
@@ -495,6 +715,41 @@ public sealed class ProjectSession(
         StartPeaks(file);
         Changed?.Invoke();
         return file;
+    }
+
+    /// <summary>
+    ///     Adds bounced files (already in the project's <c>Audio Files</c>) to the pool as one undo step, "Add Bounce"
+    ///     (a file stays in the pool on undo, as an import's does: the step is there to name what happened).
+    /// </summary>
+    public CommandResult AddBounce(long session, IReadOnlyList<(string Path, WavInfo Info)> files) {
+        CommandResult result;
+        var added = new List<AudioFile>();
+        lock (gate) {
+            var o = Required();
+            if (o.Session != session) {
+                throw ProjectException.Conflict("The project was closed while it bounced.");
+            }
+
+            var forward = new List<DeltaOp>();
+            var inverse = new List<DeltaOp>();
+            var state = o.State;
+            foreach (var (path, info) in files) {
+                var file = Describe(o, path, info);
+                added.Add(file);
+                state = Edits.Step(state, [new AudioFileUpserted(file)], forward, inverse);
+            }
+
+            inverse.Reverse();
+            result = Commit(o, state, forward);
+            o.History.Push("Add Bounce", o.Revision, new(forward, inverse), null);
+        }
+
+        foreach (var file in added) {
+            StartPeaks(file);
+        }
+
+        Changed?.Invoke();
+        return result;
     }
 
     /// <summary>Waits until the peaks of a file of the open project exist; its level file's path.</summary>
@@ -747,22 +1002,18 @@ public sealed class ProjectSession(
     }
 
     /// <summary>
-    ///     The states to save: the engine's answers for the instruments it reported, the earlier ones for the rest when
-    ///     they still belong to the track's instrument.
+    ///     The states to save, by state key: the engine's answers for the plugins it reported (instruments and inserts),
+    ///     the earlier ones for the rest when they still belong to the same plugin.
     /// </summary>
     static ImmutableDictionary<string, SavedState> States(Open o, IReadOnlyDictionary<string, byte[]?>? hostStates) {
         var states = ImmutableDictionary.CreateBuilder<string, SavedState>(StringComparer.Ordinal);
-        foreach (var track in o.State.Tracks) {
-            if (track.Instrument is not { } slot) {
-                continue;
-            }
-
-            if (hostStates is not null && hostStates.TryGetValue(track.Id, out var reported)) {
+        foreach (var (key, plugin) in PluginsByKey(o.State)) {
+            if (hostStates is not null && hostStates.TryGetValue(key, out var reported)) {
                 if (reported is { Length: > 0 }) {
-                    states[track.Id] = new(slot.PluginId, reported);
+                    states[key] = new(plugin, reported);
                 }
-            } else if (o.States.TryGetValue(track.Id, out var saved) && saved.PluginId == slot.PluginId) {
-                states[track.Id] = saved;
+            } else if (o.States.TryGetValue(key, out var saved) && saved.PluginId == plugin) {
+                states[key] = saved;
             }
         }
 
@@ -862,6 +1113,9 @@ public sealed class ProjectSession(
         public bool Dirty { get; set; }
         public EditHistory History { get; } = history;
         public EngineIds Ids { get; set; } = EngineIds.Empty;
+
+        /// <summary>The automation recording pass of the current playback, once a move recorded.</summary>
+        public AutomationPass? Pass { get; set; }
 
         public ImmutableDictionary<string, SavedState> States { get; set; } =
             ImmutableDictionary.Create<string, SavedState>(StringComparer.Ordinal);

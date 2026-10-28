@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 3,
+  "track": {
+    "id": "trk_stack0000001",
+    "name": "Band",
+    "kind": "stack",
+    "color": "#8a8f98",
+    "input": {
+      "channel": 0,
+      "stereo": false
+    },
+    "recordArmed": false,
+    "inputMonitoring": false,
+    "strip": {
+      "volumeDb": -3,
+      "pan": 0,
+      "mute": false,
+      "solo": false
+    },
+    "midiInput": {
+      "channel": 0
+    },
+    "collapsed": false,
+    "notes": ""
+  },
+  "regions": [],
+  "midiRegions": [],
+  "takeFolders": []
+}

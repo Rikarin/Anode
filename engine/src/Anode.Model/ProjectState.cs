@@ -39,6 +39,14 @@ public sealed record ProjectState(
     public ImmutableSortedDictionary<string, ArrangementMarker> Sections { get; init; } =
         ImmutableSortedDictionary.Create<string, ArrangementMarker>(StringComparer.Ordinal);
 
+    /// <summary>The mixer groups, by number (1…32; docs/05-phase-4.md).</summary>
+    public ImmutableSortedDictionary<int, MixerGroup> Groups { get; init; } =
+        ImmutableSortedDictionary<int, MixerGroup>.Empty;
+
+    /// <summary>The automation lanes, by id: at most one per strip (a track, or the master) and target.</summary>
+    public ImmutableSortedDictionary<string, AutomationLane> Automation { get; init; } =
+        ImmutableSortedDictionary.Create<string, AutomationLane>(StringComparer.Ordinal);
+
     /// <summary>The project's Note Pad.</summary>
     public string Notes { get; init; } = string.Empty;
 
@@ -73,6 +81,20 @@ public sealed record ProjectState(
     }
 
     public Track? FindTrack(string id) => IndexOfTrack(id) is >= 0 and var i ? Tracks[i] : null;
+
+    /// <summary>The lane of <paramref name="target" /> on a track (null: the master), or null.</summary>
+    public AutomationLane? LaneOf(string? trackId, string target) {
+        foreach (var lane in Automation.Values) {
+            if (lane.TrackId == trackId && lane.Target == target) {
+                return lane;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>The lanes of a track (null: the master), by id.</summary>
+    public IEnumerable<AutomationLane> LanesOf(string? trackId) => Automation.Values.Where(l => l.TrackId == trackId);
 
     /// <summary>The MIDI regions of a track, by start.</summary>
     public IEnumerable<MidiRegion> MidiRegionsOf(string trackId) =>
@@ -134,8 +156,8 @@ public sealed record ProjectState(
             [..Markers.Values],
             [..Sections.Values],
             Notes,
-            [], // Mixer groups and automation: Phase 4, workstream B (docs/05-phase-4.md).
-            []
+            [..Groups.Values],
+            [..Automation.Values]
         );
 
     /// <summary>Applies one delta operation (an edit's primitive step, also what clients apply).</summary>
@@ -150,6 +172,9 @@ public sealed record ProjectState(
                 ),
                 TakeFolders = TakeFolders.RemoveRange(
                     TakeFolders.Values.Where(f => f.TrackId == id).Select(static f => f.Id)
+                ),
+                Automation = Automation.RemoveRange(
+                    Automation.Values.Where(l => l.TrackId == id).Select(static l => l.Id)
                 )
             },
             RegionUpserted(var region) => this with { Regions = Regions.SetItem(region.Id, region) },
@@ -170,6 +195,10 @@ public sealed record ProjectState(
             SectionUpserted(var section) => this with { Sections = Sections.SetItem(section.Id, section) },
             SectionRemoved(var id) => this with { Sections = Sections.Remove(id) },
             NotesChanged(var text) => this with { Notes = text },
+            AutomationLaneUpserted(var lane) => this with { Automation = Automation.SetItem(lane.Id, lane) },
+            AutomationLaneRemoved(var id) => this with { Automation = Automation.Remove(id) },
+            GroupUpserted(var group) => this with { Groups = Groups.SetItem(group.Number, group) },
+            GroupRemoved(var number) => this with { Groups = Groups.Remove(number) },
             _ => throw new ArgumentException($"Unknown delta operation {op.GetType().Name}.", nameof(op))
         };
 
@@ -192,10 +221,7 @@ public sealed record ProjectState(
                 ? new TrackUpserted(Tracks[i], i)
                 : new TrackRemoved(track.Id),
             TrackRemoved(var id) => IndexOfTrack(id) is >= 0 and var i ? new TrackUpserted(Tracks[i], i) : null,
-            RegionUpserted(var region) => Regions.TryGetValue(region.Id, out var old)
-                ? new RegionUpserted(old)
-                : new RegionRemoved(region.Id),
-            RegionRemoved(var id) => Regions.TryGetValue(id, out var old) ? new RegionUpserted(old) : null,
+            RegionUpserted or RegionRemoved => InverseRegion(op),
             AudioFileUpserted(var file) => Files.TryGetValue(file.Id, out var old) ? new AudioFileUpserted(old) : null,
             SettingsChanged => new SettingsChanged(Settings),
             MasterChanged => new MasterChanged(Master),
@@ -203,6 +229,7 @@ public sealed record ProjectState(
             MidiRegionUpserted or MidiRegionRemoved or TakeFolderUpserted or TakeFolderRemoved => InverseMidi(op),
             MarkerUpserted or MarkerRemoved or SectionUpserted or SectionRemoved => InverseArrangement(op),
             NotesChanged => new NotesChanged(Notes),
+            AutomationLaneUpserted or AutomationLaneRemoved or GroupUpserted or GroupRemoved => InverseMixer(op),
             _ => throw new ArgumentException($"Unknown delta operation {op.GetType().Name}.", nameof(op))
         };
 
@@ -216,6 +243,30 @@ public sealed record ProjectState(
                 ? new TakeFolderUpserted(old)
                 : new TakeFolderRemoved(folder.Id),
             TakeFolderRemoved(var id) => TakeFolders.TryGetValue(id, out var old) ? new TakeFolderUpserted(old) : null,
+            _ => null
+        };
+
+    DeltaOp? InverseRegion(DeltaOp op) =>
+        op switch {
+            RegionUpserted(var region) => Regions.TryGetValue(region.Id, out var old)
+                ? new RegionUpserted(old)
+                : new RegionRemoved(region.Id),
+            RegionRemoved(var id) => Regions.TryGetValue(id, out var old) ? new RegionUpserted(old) : null,
+            _ => null
+        };
+
+    DeltaOp? InverseMixer(DeltaOp op) =>
+        op switch {
+            AutomationLaneUpserted(var lane) => Automation.TryGetValue(lane.Id, out var old)
+                ? new AutomationLaneUpserted(old)
+                : new AutomationLaneRemoved(lane.Id),
+            AutomationLaneRemoved(var id) => Automation.TryGetValue(id, out var old)
+                ? new AutomationLaneUpserted(old)
+                : null,
+            GroupUpserted(var group) => Groups.TryGetValue(group.Number, out var old)
+                ? new GroupUpserted(old)
+                : new GroupRemoved(group.Number),
+            GroupRemoved(var number) => Groups.TryGetValue(number, out var old) ? new GroupUpserted(old) : null,
             _ => null
         };
 

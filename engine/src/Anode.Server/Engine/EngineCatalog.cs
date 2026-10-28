@@ -1,4 +1,5 @@
 using Anode.Contracts;
+using Anode.Dsp.Effects;
 using Anode.Dsp.Instruments;
 using Anode.Ipc;
 using Anode.Model;
@@ -11,8 +12,8 @@ namespace Anode.Server.Engine;
 ///     What the engine host can play with (docs/03-phase-2.md, "Catalogue"): the plugins of its last
 ///     <see cref="PluginCatalogMessage" /> and the MIDI ports of its last <see cref="MidiPortsMessage" />, both empty
 ///     without an engine. A change publishes <see cref="PluginsChangedEvent" /> or <see cref="MidiDevicesChangedEvent" />.
-///     Edits name plugins from <see cref="ForEdits" />: the host's catalogue, or Anode's built-in instruments while there
-///     is none.
+///     Edits name plugins from <see cref="ForEdits" />: the host's catalogue, or Anode's built-in instruments and effects
+///     while there is none.
 /// </summary>
 public sealed class EngineCatalog(EventHub hub) {
     readonly Lock gate = new();
@@ -136,10 +137,44 @@ public sealed class EngineCatalog(EventHub hub) {
             ]
         );
 
+    /// <summary>A built-in effect as the engine lists it.</summary>
+    public static EnginePlugin From(EffectDescriptor d) =>
+        new(
+            d.Id,
+            d.Name,
+            d.Vendor,
+            d.Version,
+            "builtin",
+            false,
+            [],
+            [
+                ..d.Parameters.Select(static p =>
+                    new EngineParameter(
+                        p.Id,
+                        p.Name,
+                        Widen(p.Min),
+                        Widen(p.Max),
+                        Widen(p.Default),
+                        p.Unit,
+                        p.Steps,
+                        p.ValueNames
+                    )
+                )
+            ],
+            d.Category,
+            d.HasSidechain
+        );
+
     /// <summary>A float as the decimal it prints as (0.2f is 0.2, not 0.20000000298…).</summary>
     static double Widen(float value) =>
         double.Parse(value.ToString(CultureInfo.InvariantCulture), CultureInfo.InvariantCulture);
 
-    /// <summary>Anode's built-in instruments (<see cref="BuiltinInstruments.All" />).</summary>
-    public static PluginInfo[] Builtins() => [..BuiltinInstruments.All.Select(static d => From(From(d)))];
+    /// <summary>
+    ///     Anode's built-in instruments and effects (<see cref="BuiltinInstruments.All" />,
+    ///     <see cref="BuiltinEffects.All" />).
+    /// </summary>
+    public static PluginInfo[] Builtins() => [
+        ..BuiltinInstruments.All.Select(static d => From(From(d))),
+        ..BuiltinEffects.All.Select(static d => From(From(d)))
+    ];
 }
