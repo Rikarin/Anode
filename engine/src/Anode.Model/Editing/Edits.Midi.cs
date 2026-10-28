@@ -149,7 +149,8 @@ public static partial class Edits {
             c.LengthTicks,
             ProjectDefaults.Playback,
             [],
-            []
+            [],
+            false
         );
         return [new MidiRegionUpserted(region)];
     }

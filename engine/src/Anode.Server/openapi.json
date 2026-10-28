@@ -620,6 +620,33 @@
         }
       }
     },
+    "/api/v1/transport/capture": {
+      "post": {
+        "tags": [
+          "Transport"
+        ],
+        "summary": "Flashback Capture: what the armed tracks heard during the last playback becomes a recording (an undoable step, announced as projectChanged).",
+        "operationId": "FlashbackCapture",
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Accepted"
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
     "/api/v1/plugins": {
       "get": {
         "tags": [
@@ -782,10 +809,631 @@
           }
         }
       }
+    },
+    "/api/v1/project/alternatives": {
+      "get": {
+        "tags": [
+          "Project"
+        ],
+        "operationId": "ListAlternatives",
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ProjectAlternative"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Project"
+        ],
+        "summary": "Saves the open project as a new alternative and makes it current.",
+        "operationId": "CreateAlternative",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateAlternativeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectAlternative"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/api/v1/project/alternatives/{id}/open": {
+      "post": {
+        "tags": [
+          "Project"
+        ],
+        "summary": "Switches to another alternative (unsaved edits are kept in a backup first).",
+        "operationId": "OpenAlternative",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Project"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/api/v1/project/alternatives/{id}": {
+      "delete": {
+        "tags": [
+          "Project"
+        ],
+        "summary": "Deletes an alternative other than the current one.",
+        "operationId": "DeleteAlternative",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "No Content"
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/api/v1/project/backups": {
+      "get": {
+        "tags": [
+          "Project"
+        ],
+        "operationId": "ListBackups",
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ProjectBackup"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/api/v1/project/backups/{id}/revert": {
+      "post": {
+        "tags": [
+          "Project"
+        ],
+        "summary": "Replaces the open project with a backup of it (an undoable step is not kept: like reopening).",
+        "operationId": "RevertToBackup",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Project"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/api/v1/project/screensets": {
+      "get": {
+        "tags": [
+          "Project"
+        ],
+        "operationId": "ListScreensets",
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Screenset"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/api/v1/project/screensets/{number}": {
+      "put": {
+        "tags": [
+          "Project"
+        ],
+        "summary": "Saves screenset 1\u20269 in the project (not an undo step; it marks the project unsaved).",
+        "operationId": "SaveScreenset",
+        "parameters": [
+          {
+            "name": "number",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Screenset"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Screenset"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/api/v1/project/files/import-midi": {
+      "post": {
+        "tags": [
+          "Project"
+        ],
+        "summary": "Imports a Standard MIDI File from the server\u0027s disk as new instrument tracks with its tempo and signature events, as one undoable step.",
+        "operationId": "ImportMidiFile",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImportFileRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommandResult"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/api/v1/settings/key-commands": {
+      "get": {
+        "tags": [
+          "Settings"
+        ],
+        "summary": "The user\u0027s key bindings; empty bindings mean the editor\u0027s defaults.",
+        "operationId": "GetKeyCommands",
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KeyCommandSet"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Settings"
+        ],
+        "operationId": "SaveKeyCommands",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/KeyCommandSet"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KeyCommandSet"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/settings/bookmarks": {
+      "get": {
+        "tags": [
+          "Settings"
+        ],
+        "operationId": "GetBookmarks",
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Bookmarks"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Settings"
+        ],
+        "operationId": "SaveBookmarks",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Bookmarks"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Bookmarks"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/files": {
+      "get": {
+        "tags": [
+          "Files"
+        ],
+        "summary": "A folder on the server\u0027s disk (the user\u0027s home when path is left out).",
+        "operationId": "ListFiles",
+        "parameters": [
+          {
+            "name": "path",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DirectoryListing"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/api/v1/files/preview": {
+      "post": {
+        "tags": [
+          "Files"
+        ],
+        "summary": "Plays an audio file through the engine\u0027s preview channel; a null path stops it.",
+        "operationId": "PreviewFile",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PreviewRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "No Content"
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
     }
   },
   "components": {
     "schemas": {
+      "ArrangementMarker": {
+        "required": [
+          "id",
+          "name",
+          "startTick",
+          "lengthTicks",
+          "color"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "startTick": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "lengthTicks": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "color": {
+            "type": "string"
+          }
+        },
+        "description": "A section of the song on the arrangement track (Intro, Verse, Chorus). Sections do not overlap; moving or copying\none with \u0060moveSection\u0060 moves or copies everything in its time range."
+      },
       "AudioFile": {
         "required": [
           "id",
@@ -837,7 +1485,10 @@
           "length",
           "gainDb",
           "fadeIn",
-          "fadeOut"
+          "fadeOut",
+          "fadeInCurve",
+          "fadeOutCurve",
+          "muted"
         ],
         "type": "object",
         "properties": {
@@ -876,9 +1527,35 @@
           "fadeOut": {
             "type": "integer",
             "format": "int64"
+          },
+          "fadeInCurve": {
+            "type": "number",
+            "format": "double"
+          },
+          "fadeOutCurve": {
+            "type": "number",
+            "format": "double"
+          },
+          "muted": {
+            "type": "boolean"
           }
         },
-        "description": "A region of an audio file on a track: it starts at \u0060startTick\u0060 and plays \u0060length\u0060 frames of the file\nfrom \u0060fileOffset\u0060, at \u0060gainDb\u0060, with linear fades of \u0060fadeIn\u0060 and \u0060fadeOut\u0060 frames."
+        "description": "A region of an audio file on a track: it starts at \u0060startTick\u0060 and plays \u0060length\u0060 frames of the file\nfrom \u0060fileOffset\u0060, at \u0060gainDb\u0060, with fades of \u0060fadeIn\u0060 and \u0060fadeOut\u0060 frames whose curves run\nfrom \u22121 (fast start, logarithmic-looking) through 0 (linear) to 1 (slow start, exponential-looking). A muted region\ndoes not play. Two regions on a track may overlap only as a crossfade: where the earlier fades out and the later\nfades in."
+      },
+      "Bookmarks": {
+        "required": [
+          "paths"
+        ],
+        "type": "object",
+        "properties": {
+          "paths": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "description": "Folders pinned in the All Files browser."
       },
       "ChannelStrip": {
         "required": [
@@ -944,6 +1621,28 @@
         },
         "description": "What an edit, undo or redo did: the new revision and the delta every client receives too."
       },
+      "CompSegment": {
+        "required": [
+          "startTick",
+          "endTick",
+          "takeId"
+        ],
+        "type": "object",
+        "properties": {
+          "startTick": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "endTick": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "takeId": {
+            "type": "string"
+          }
+        },
+        "description": "Part of a comp: take \u0060takeId\u0060 plays from \u0060startTick\u0060 to \u0060endTick\u0060."
+      },
       "ControlEvent": {
         "required": [
           "id",
@@ -988,6 +1687,17 @@
           "channelPressure",
           "programChange"
         ]
+      },
+      "CreateAlternativeRequest": {
+        "required": [
+          "name"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          }
+        }
       },
       "CreateProjectRequest": {
         "required": [
@@ -1034,6 +1744,12 @@
           }
         }
       },
+      "CycleRecordMode": {
+        "enum": [
+          "takeFolder",
+          "regions"
+        ]
+      },
       "DeltaOp": {
         "required": [
           "op"
@@ -1069,6 +1785,27 @@
           },
           {
             "$ref": "#/components/schemas/DeltaOpMidiRegionRemoved"
+          },
+          {
+            "$ref": "#/components/schemas/DeltaOpTakeFolderUpserted"
+          },
+          {
+            "$ref": "#/components/schemas/DeltaOpTakeFolderRemoved"
+          },
+          {
+            "$ref": "#/components/schemas/DeltaOpMarkerUpserted"
+          },
+          {
+            "$ref": "#/components/schemas/DeltaOpMarkerRemoved"
+          },
+          {
+            "$ref": "#/components/schemas/DeltaOpSectionUpserted"
+          },
+          {
+            "$ref": "#/components/schemas/DeltaOpSectionRemoved"
+          },
+          {
+            "$ref": "#/components/schemas/DeltaOpNotesChanged"
           }
         ],
         "discriminator": {
@@ -1083,7 +1820,14 @@
             "masterChanged": "#/components/schemas/DeltaOpMasterChanged",
             "projectRenamed": "#/components/schemas/DeltaOpProjectRenamed",
             "midiRegionUpserted": "#/components/schemas/DeltaOpMidiRegionUpserted",
-            "midiRegionRemoved": "#/components/schemas/DeltaOpMidiRegionRemoved"
+            "midiRegionRemoved": "#/components/schemas/DeltaOpMidiRegionRemoved",
+            "takeFolderUpserted": "#/components/schemas/DeltaOpTakeFolderUpserted",
+            "takeFolderRemoved": "#/components/schemas/DeltaOpTakeFolderRemoved",
+            "markerUpserted": "#/components/schemas/DeltaOpMarkerUpserted",
+            "markerRemoved": "#/components/schemas/DeltaOpMarkerRemoved",
+            "sectionUpserted": "#/components/schemas/DeltaOpSectionUpserted",
+            "sectionRemoved": "#/components/schemas/DeltaOpSectionRemoved",
+            "notesChanged": "#/components/schemas/DeltaOpNotesChanged"
           }
         }
       },
@@ -1101,6 +1845,40 @@
           },
           "file": {
             "$ref": "#/components/schemas/AudioFile"
+          }
+        }
+      },
+      "DeltaOpMarkerRemoved": {
+        "required": [
+          "id",
+          "op"
+        ],
+        "properties": {
+          "op": {
+            "enum": [
+              "markerRemoved"
+            ],
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          }
+        }
+      },
+      "DeltaOpMarkerUpserted": {
+        "required": [
+          "marker",
+          "op"
+        ],
+        "properties": {
+          "op": {
+            "enum": [
+              "markerUpserted"
+            ],
+            "type": "string"
+          },
+          "marker": {
+            "$ref": "#/components/schemas/Marker"
           }
         }
       },
@@ -1156,6 +1934,24 @@
         },
         "description": "A MIDI region was added or changed (its notes included)."
       },
+      "DeltaOpNotesChanged": {
+        "required": [
+          "text",
+          "op"
+        ],
+        "properties": {
+          "op": {
+            "enum": [
+              "notesChanged"
+            ],
+            "type": "string"
+          },
+          "text": {
+            "type": "string"
+          }
+        },
+        "description": "The project notes changed."
+      },
       "DeltaOpProjectRenamed": {
         "required": [
           "name",
@@ -1207,6 +2003,40 @@
           }
         }
       },
+      "DeltaOpSectionRemoved": {
+        "required": [
+          "id",
+          "op"
+        ],
+        "properties": {
+          "op": {
+            "enum": [
+              "sectionRemoved"
+            ],
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          }
+        }
+      },
+      "DeltaOpSectionUpserted": {
+        "required": [
+          "section",
+          "op"
+        ],
+        "properties": {
+          "op": {
+            "enum": [
+              "sectionUpserted"
+            ],
+            "type": "string"
+          },
+          "section": {
+            "$ref": "#/components/schemas/ArrangementMarker"
+          }
+        }
+      },
       "DeltaOpSettingsChanged": {
         "required": [
           "settings",
@@ -1221,6 +2051,40 @@
           },
           "settings": {
             "$ref": "#/components/schemas/ProjectSettings"
+          }
+        }
+      },
+      "DeltaOpTakeFolderRemoved": {
+        "required": [
+          "id",
+          "op"
+        ],
+        "properties": {
+          "op": {
+            "enum": [
+              "takeFolderRemoved"
+            ],
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          }
+        }
+      },
+      "DeltaOpTakeFolderUpserted": {
+        "required": [
+          "folder",
+          "op"
+        ],
+        "properties": {
+          "op": {
+            "enum": [
+              "takeFolderUpserted"
+            ],
+            "type": "string"
+          },
+          "folder": {
+            "$ref": "#/components/schemas/TakeFolder"
           }
         }
       },
@@ -1263,6 +2127,31 @@
           }
         },
         "description": "A track was added or changed; \u0060index\u0060 is its position in the track list."
+      },
+      "DirectoryListing": {
+        "required": [
+          "path",
+          "entries"
+        ],
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "parent": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "entries": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FileEntry"
+            }
+          }
+        },
+        "description": "A folder\u0027s entries, folders first; \u0060parent\u0060 is null at a root."
       },
       "EditCommand": {
         "required": [
@@ -1359,6 +2248,75 @@
           },
           {
             "$ref": "#/components/schemas/EditCommandSetMidiRecordingCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandSetTempoEventsCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandSetSignaturesCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandSetKeysCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandAddMarkerCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandSetMarkerCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandDeleteMarkersCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandAddSectionCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandSetSectionCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandDeleteSectionsCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandMoveSectionCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandSetCompCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandSelectTakeCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandSetTakeFolderCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandDeleteTakeCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandFlattenTakeFolderCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandPackTakeFolderCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandSetRecordingCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandCreateStackCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandRemoveStackCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandSetTrackParentCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandSetProjectNotesCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandJoinRegionsCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandCopyRegionsCommand"
           }
         ],
         "description": "An edit of the open project (docs/adr/0004-state-ownership.md). A batch of them is applied atomically as one\nundo step. Optional properties left out are left unchanged.",
@@ -1394,7 +2352,30 @@
             "quantizeNotes": "#/components/schemas/EditCommandQuantizeNotesCommand",
             "addControls": "#/components/schemas/EditCommandAddControlsCommand",
             "deleteControls": "#/components/schemas/EditCommandDeleteControlsCommand",
-            "setMidiRecording": "#/components/schemas/EditCommandSetMidiRecordingCommand"
+            "setMidiRecording": "#/components/schemas/EditCommandSetMidiRecordingCommand",
+            "setTempoEvents": "#/components/schemas/EditCommandSetTempoEventsCommand",
+            "setSignatures": "#/components/schemas/EditCommandSetSignaturesCommand",
+            "setKeys": "#/components/schemas/EditCommandSetKeysCommand",
+            "addMarker": "#/components/schemas/EditCommandAddMarkerCommand",
+            "setMarker": "#/components/schemas/EditCommandSetMarkerCommand",
+            "deleteMarkers": "#/components/schemas/EditCommandDeleteMarkersCommand",
+            "addSection": "#/components/schemas/EditCommandAddSectionCommand",
+            "setSection": "#/components/schemas/EditCommandSetSectionCommand",
+            "deleteSections": "#/components/schemas/EditCommandDeleteSectionsCommand",
+            "moveSection": "#/components/schemas/EditCommandMoveSectionCommand",
+            "setComp": "#/components/schemas/EditCommandSetCompCommand",
+            "selectTake": "#/components/schemas/EditCommandSelectTakeCommand",
+            "setTakeFolder": "#/components/schemas/EditCommandSetTakeFolderCommand",
+            "deleteTake": "#/components/schemas/EditCommandDeleteTakeCommand",
+            "flattenTakeFolder": "#/components/schemas/EditCommandFlattenTakeFolderCommand",
+            "packTakeFolder": "#/components/schemas/EditCommandPackTakeFolderCommand",
+            "setRecording": "#/components/schemas/EditCommandSetRecordingCommand",
+            "createStack": "#/components/schemas/EditCommandCreateStackCommand",
+            "removeStack": "#/components/schemas/EditCommandRemoveStackCommand",
+            "setTrackParent": "#/components/schemas/EditCommandSetTrackParentCommand",
+            "setProjectNotes": "#/components/schemas/EditCommandSetProjectNotesCommand",
+            "joinRegions": "#/components/schemas/EditCommandJoinRegionsCommand",
+            "copyRegions": "#/components/schemas/EditCommandCopyRegionsCommand"
           }
         }
       },
@@ -1419,6 +2400,40 @@
             "items": {
               "$ref": "#/components/schemas/NewControlEvent"
             }
+          }
+        }
+      },
+      "EditCommandAddMarkerCommand": {
+        "required": [
+          "name",
+          "tick",
+          "type",
+          "lengthTicks"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "addMarker"
+            ],
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "tick": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "lengthTicks": {
+            "type": "integer",
+            "format": "int64",
+            "default": 0
+          },
+          "color": {
+            "type": [
+              "null",
+              "string"
+            ]
           }
         }
       },
@@ -1521,6 +2536,40 @@
         },
         "description": "Places a file on a track; the whole file unless \u0060fileOffset\u0060 and \u0060length\u0060 say otherwise."
       },
+      "EditCommandAddSectionCommand": {
+        "required": [
+          "name",
+          "startTick",
+          "lengthTicks",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "addSection"
+            ],
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "startTick": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "lengthTicks": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "color": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        },
+        "description": "Adds an arrangement section; it must not overlap another."
+      },
       "EditCommandAddTrackCommand": {
         "required": [
           "type",
@@ -1569,6 +2618,65 @@
         },
         "description": "Adds a track at \u0060index\u0060 (the end when left out): audio by default; an instrument track gets\n\u0060pluginId\u0060 (the default synth when left out)."
       },
+      "EditCommandCopyRegionsCommand": {
+        "required": [
+          "regionIds",
+          "offsetTicks",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "copyRegions"
+            ],
+            "type": "string"
+          },
+          "regionIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "offsetTicks": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "trackId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        },
+        "description": "Copies regions (of any kind) \u0060offsetTicks\u0060 later (or earlier), onto \u0060trackId\u0060 when given (\u2325-drag,\nrepeat)."
+      },
+      "EditCommandCreateStackCommand": {
+        "required": [
+          "trackIds",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "createStack"
+            ],
+            "type": "string"
+          },
+          "trackIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "name": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        },
+        "description": "Puts tracks into a new folder stack, inserted where the first of them was."
+      },
       "EditCommandDeleteControlsCommand": {
         "required": [
           "regionId",
@@ -1590,6 +2698,26 @@
             "items": {
               "type": "integer",
               "format": "int64"
+            }
+          }
+        }
+      },
+      "EditCommandDeleteMarkersCommand": {
+        "required": [
+          "markerIds",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "deleteMarkers"
+            ],
+            "type": "string"
+          },
+          "markerIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
             }
           }
         }
@@ -1639,6 +2767,54 @@
           }
         }
       },
+      "EditCommandDeleteSectionsCommand": {
+        "required": [
+          "sectionIds",
+          "type",
+          "removeContent"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "deleteSections"
+            ],
+            "type": "string"
+          },
+          "sectionIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "removeContent": {
+            "type": "boolean",
+            "default": false
+          }
+        },
+        "description": "Deletes sections. With \u0060removeContent\u0060, also everything that starts in them, and later material closes the\ngap (Logic\u0027s \u0022delete the section and its content\u0022)."
+      },
+      "EditCommandDeleteTakeCommand": {
+        "required": [
+          "folderId",
+          "takeId",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "deleteTake"
+            ],
+            "type": "string"
+          },
+          "folderId": {
+            "type": "string"
+          },
+          "takeId": {
+            "type": "string"
+          }
+        },
+        "description": "Removes a take (and its comp segments) from a folder; the folder\u0027s last take cannot be removed."
+      },
       "EditCommandEditNotesCommand": {
         "required": [
           "regionId",
@@ -1662,6 +2838,45 @@
             }
           }
         }
+      },
+      "EditCommandFlattenTakeFolderCommand": {
+        "required": [
+          "folderId",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "flattenTakeFolder"
+            ],
+            "type": "string"
+          },
+          "folderId": {
+            "type": "string"
+          }
+        },
+        "description": "Replaces a take folder with regions playing its comp, crossfaded at the boundaries."
+      },
+      "EditCommandJoinRegionsCommand": {
+        "required": [
+          "regionIds",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "joinRegions"
+            ],
+            "type": "string"
+          },
+          "regionIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "description": "Glues regions of one track into one: MIDI regions merge their notes; audio regions only when they play one\ncontiguous stretch of the same file (others need a bounce, Phase 4), else 422."
       },
       "EditCommandLoadInstrumentFileCommand": {
         "required": [
@@ -1712,7 +2927,35 @@
             ]
           }
         },
-        "description": "Moves a region (audio or MIDI) in time, and to another track of a kind that can hold it when \u0060trackId\u0060 is\ngiven. \u0060splitRegion\u0060 and \u0060deleteRegions\u0060 also take either kind."
+        "description": "Moves a region (audio, MIDI, or a take folder) in time, and to another track of a kind that can hold it when\n\u0060trackId\u0060 is given. \u0060deleteRegions\u0060 also takes every kind; \u0060splitRegion\u0060 takes audio and MIDI."
+      },
+      "EditCommandMoveSectionCommand": {
+        "required": [
+          "sectionId",
+          "toTick",
+          "type",
+          "copy"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "moveSection"
+            ],
+            "type": "string"
+          },
+          "sectionId": {
+            "type": "string"
+          },
+          "toTick": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "copy": {
+            "type": "boolean",
+            "default": false
+          }
+        },
+        "description": "Moves (or with \u0060copy\u0060, copies) a section and everything that starts in it to \u0060toTick\u0060, which must be a\nsection boundary or the end of the last section: the section is inserted there and the material after it moves\nlater by its length; a move then closes the gap it left. Regions, take folders and markers move with it."
       },
       "EditCommandMoveTrackCommand": {
         "required": [
@@ -1735,6 +2978,33 @@
             "format": "int32"
           }
         }
+      },
+      "EditCommandPackTakeFolderCommand": {
+        "required": [
+          "regionIds",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "packTakeFolder"
+            ],
+            "type": "string"
+          },
+          "regionIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "name": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        },
+        "description": "Packs overlapping or adjacent audio regions of one track into a new take folder, one take each."
       },
       "EditCommandQuantizeNotesCommand": {
         "required": [
@@ -1780,6 +3050,24 @@
           }
         },
         "description": "Moves note starts towards the grid (destructive; \u0060noteIds\u0060 left out: every note of the region), with the\nsame strength and swing meaning as RegionPlayback."
+      },
+      "EditCommandRemoveStackCommand": {
+        "required": [
+          "stackId",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "removeStack"
+            ],
+            "type": "string"
+          },
+          "stackId": {
+            "type": "string"
+          }
+        },
+        "description": "Removes a folder stack; its tracks stay, outside any stack."
       },
       "EditCommandRemoveTrackCommand": {
         "required": [
@@ -1876,6 +3164,53 @@
         },
         "description": "Trims a region: its new start, and the part of the file it plays."
       },
+      "EditCommandSelectTakeCommand": {
+        "required": [
+          "folderId",
+          "takeId",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "selectTake"
+            ],
+            "type": "string"
+          },
+          "folderId": {
+            "type": "string"
+          },
+          "takeId": {
+            "type": "string"
+          }
+        },
+        "description": "Makes one take the whole comp."
+      },
+      "EditCommandSetCompCommand": {
+        "required": [
+          "folderId",
+          "segments",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "setComp"
+            ],
+            "type": "string"
+          },
+          "folderId": {
+            "type": "string"
+          },
+          "segments": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CompSegment"
+            }
+          }
+        },
+        "description": "Replaces a take folder\u0027s comp (Quick Swipe Comping sends the whole comp after each swipe)."
+      },
       "EditCommandSetCycleCommand": {
         "required": [
           "type"
@@ -1930,6 +3265,76 @@
           }
         },
         "description": "Replaces an instrument track\u0027s instrument; its parameters start at their defaults."
+      },
+      "EditCommandSetKeysCommand": {
+        "required": [
+          "events",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "setKeys"
+            ],
+            "type": "string"
+          },
+          "events": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/KeyEvent"
+            }
+          }
+        },
+        "description": "Replaces the key track; the first event at tick 0."
+      },
+      "EditCommandSetMarkerCommand": {
+        "required": [
+          "markerId",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "setMarker"
+            ],
+            "type": "string"
+          },
+          "markerId": {
+            "type": "string"
+          },
+          "name": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "tick": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int64"
+          },
+          "lengthTicks": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int64"
+          },
+          "color": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "text": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
       },
       "EditCommandSetMetronomeCommand": {
         "required": [
@@ -2074,6 +3479,12 @@
               "number"
             ],
             "format": "double"
+          },
+          "muted": {
+            "type": [
+              "null",
+              "boolean"
+            ]
           }
         }
       },
@@ -2103,6 +3514,72 @@
           }
         },
         "description": "Sets one parameter of a track\u0027s instrument. Consecutive batches on the same parameter within 1 s coalesce into\none undo step, as \u0060setStrip\u0060 does."
+      },
+      "EditCommandSetProjectNotesCommand": {
+        "required": [
+          "text",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "setProjectNotes"
+            ],
+            "type": "string"
+          },
+          "text": {
+            "type": "string"
+          }
+        }
+      },
+      "EditCommandSetRecordingCommand": {
+        "required": [
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "setRecording"
+            ],
+            "type": "string"
+          },
+          "cycleMode": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/CycleRecordMode"
+              }
+            ]
+          },
+          "replace": {
+            "type": [
+              "null",
+              "boolean"
+            ]
+          },
+          "autopunch": {
+            "type": [
+              "null",
+              "boolean"
+            ]
+          },
+          "punchInTick": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int64"
+          },
+          "punchOutTick": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int64"
+          }
+        }
       },
       "EditCommandSetRegionCommand": {
         "required": [
@@ -2145,8 +3622,65 @@
               "integer"
             ],
             "format": "int64"
+          },
+          "fadeInCurve": {
+            "type": [
+              "null",
+              "number"
+            ],
+            "format": "double"
+          },
+          "fadeOutCurve": {
+            "type": [
+              "null",
+              "number"
+            ],
+            "format": "double"
+          },
+          "muted": {
+            "type": [
+              "null",
+              "boolean"
+            ]
           }
         }
+      },
+      "EditCommandSetSectionCommand": {
+        "required": [
+          "sectionId",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "setSection"
+            ],
+            "type": "string"
+          },
+          "sectionId": {
+            "type": "string"
+          },
+          "name": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "lengthTicks": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int64"
+          },
+          "color": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        },
+        "description": "Renames, recolours or resizes a section (from its end); it must not come to overlap another."
       },
       "EditCommandSetSignatureCommand": {
         "required": [
@@ -2169,7 +3703,29 @@
             "type": "integer",
             "format": "int32"
           }
-        }
+        },
+        "description": "Sets the signature at the project start (the first signature event), keeping later changes."
+      },
+      "EditCommandSetSignaturesCommand": {
+        "required": [
+          "events",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "setSignatures"
+            ],
+            "type": "string"
+          },
+          "events": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SignatureEvent"
+            }
+          }
+        },
+        "description": "Replaces the signature track; the first event at tick 0, each later one on a bar line."
       },
       "EditCommandSetStripCommand": {
         "required": [
@@ -2217,6 +3773,54 @@
         },
         "description": "Changes a track\u0027s channel strip, or the master\u0027s when \u0060trackId\u0060 is left out."
       },
+      "EditCommandSetTakeFolderCommand": {
+        "required": [
+          "folderId",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "setTakeFolder"
+            ],
+            "type": "string"
+          },
+          "folderId": {
+            "type": "string"
+          },
+          "name": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "crossfade": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int64"
+          },
+          "muted": {
+            "type": [
+              "null",
+              "boolean"
+            ]
+          },
+          "takeId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "takeName": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
       "EditCommandSetTempoCommand": {
         "required": [
           "bpm",
@@ -2233,7 +3837,29 @@
             "type": "number",
             "format": "double"
           }
-        }
+        },
+        "description": "Sets the tempo at the project start (the first tempo event), keeping the rest of the tempo track."
+      },
+      "EditCommandSetTempoEventsCommand": {
+        "required": [
+          "events",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "setTempoEvents"
+            ],
+            "type": "string"
+          },
+          "events": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TempoEvent"
+            }
+          }
+        },
+        "description": "Replaces the tempo track; the first event must be at tick 0. Audio regions keep their musical positions."
       },
       "EditCommandSetTrackCommand": {
         "required": [
@@ -2284,8 +3910,44 @@
               "null",
               "boolean"
             ]
+          },
+          "collapsed": {
+            "type": [
+              "null",
+              "boolean"
+            ]
+          },
+          "notes": {
+            "type": [
+              "null",
+              "string"
+            ]
           }
         }
+      },
+      "EditCommandSetTrackParentCommand": {
+        "required": [
+          "trackId",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "setTrackParent"
+            ],
+            "type": "string"
+          },
+          "trackId": {
+            "type": "string"
+          },
+          "parentId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        },
+        "description": "Moves a track into a stack (\u0060parentId\u0060) or out of one (null). Stacks do not nest."
       },
       "EditCommandSplitRegionCommand": {
         "required": [
@@ -2346,6 +4008,67 @@
           }
         },
         "description": "The server\u0027s link to the engine host: whether it is reachable (\u0060state\u0060), the host\u0027s version and audio\nbackend (\u0060coreaudio\u0060, \u0060wasapi\u0060, \u0060alsa\u0060, \u0060null\u0060) from its hello while connected, and why the\nlink is down when it is (\u0060message\u0060)."
+      },
+      "FileEntry": {
+        "required": [
+          "name",
+          "path",
+          "kind",
+          "size",
+          "modified"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/FileKind"
+          },
+          "size": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "modified": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "sampleRate": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int32"
+          },
+          "channels": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int32"
+          },
+          "frames": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int64"
+          }
+        },
+        "description": "An entry of a folder on the server\u0027s disk. Audio files carry their format when it could be read\n(\u0060sampleRate\u0060, \u0060channels\u0060, \u0060frames\u0060)."
+      },
+      "FileKind": {
+        "enum": [
+          "folder",
+          "audio",
+          "midi",
+          "project",
+          "instrument",
+          "other"
+        ]
       },
       "HistoryEntry": {
         "required": [
@@ -2409,6 +4132,52 @@
         },
         "description": "A track\u0027s instrument: the plugin, its parameter values by parameter id (all of them), and the file it loaded\n(a sampler\u0027s instrument), relative to the project folder when inside it. A plugin\u0027s opaque state lives in the\nproject\u0027s \u0060Plugin States\u0060 folder."
       },
+      "KeyCommandSet": {
+        "required": [
+          "bindings"
+        ],
+        "type": "object",
+        "properties": {
+          "bindings": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "description": "Key bindings by command id (\u0060transport.play\u0060); each binding like \u0060Space\u0060 or \u0060Meta\u002BShift\u002BZ\u0060."
+      },
+      "KeyEvent": {
+        "required": [
+          "tick",
+          "tonic",
+          "mode"
+        ],
+        "type": "object",
+        "properties": {
+          "tick": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "tonic": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "mode": {
+            "$ref": "#/components/schemas/KeyMode"
+          }
+        },
+        "description": "A key change; \u0060tonic\u0060 is a pitch class 0 (C) \u2026 11 (B). The first is at tick 0."
+      },
+      "KeyMode": {
+        "enum": [
+          "major",
+          "minor"
+        ]
+      },
       "LiveMidiEvent": {
         "required": [
           "status",
@@ -2450,6 +4219,42 @@
           }
         },
         "description": "Plays MIDI on a track now, as if it came from a keyboard (the on-screen keyboard, musical typing)."
+      },
+      "Marker": {
+        "required": [
+          "id",
+          "name",
+          "tick",
+          "lengthTicks",
+          "text"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "tick": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "lengthTicks": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "color": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "text": {
+            "type": "string"
+          }
+        },
+        "description": "A marker: a named position, with an optional length, colour and text (Logic\u0027s Marker List)."
       },
       "MetronomeSettings": {
         "required": [
@@ -2554,7 +4359,8 @@
           "lengthTicks",
           "playback",
           "notes",
-          "controls"
+          "controls",
+          "muted"
         ],
         "type": "object",
         "properties": {
@@ -2589,6 +4395,9 @@
             "items": {
               "$ref": "#/components/schemas/ControlEvent"
             }
+          },
+          "muted": {
+            "type": "boolean"
           }
         },
         "description": "A MIDI region: it starts at \u0060startTick\u0060 and lasts \u0060lengthTicks\u0060; its notes and controller events are\npositioned relative to its start (ticks at 960 PPQ). Events past the end do not play; a note that crosses the end\nis cut there. \u0060playback\u0060 holds the non-destructive region parameters."
@@ -2868,6 +4677,18 @@
         },
         "description": "A plugin the engine can load. \u0060fileTypes\u0060 (extensions such as \u0060.sfz\u0060, \u0060.wav\u0060) lists what an\ninstrument loads with \u0060loadInstrumentFile\u0060, empty when it loads none."
       },
+      "PreviewRequest": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        },
+        "description": "Plays a file through the engine\u0027s preview channel (null stops it)."
+      },
       "ProblemDetails": {
         "type": "object",
         "properties": {
@@ -2917,7 +4738,11 @@
           "tracks",
           "regions",
           "audioFiles",
-          "midiRegions"
+          "midiRegions",
+          "takeFolders",
+          "markers",
+          "arrangement",
+          "notes"
         ],
         "type": "object",
         "properties": {
@@ -2970,9 +4795,72 @@
             "items": {
               "$ref": "#/components/schemas/MidiRegion"
             }
+          },
+          "takeFolders": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TakeFolder"
+            }
+          },
+          "markers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Marker"
+            }
+          },
+          "arrangement": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ArrangementMarker"
+            }
+          },
+          "notes": {
+            "type": "string"
           }
         },
         "description": "The open project (docs/01-implementation-plan.md \u00A75). Musical positions are ticks at 960 PPQ; audio offsets,\nlengths and fades are frames at the project\u0027s \u0060sampleRate\u0060. \u0060revision\u0060 grows with every edit and is\nthe ETag; \u0060dirty\u0060 says whether it has unsaved edits."
+      },
+      "ProjectAlternative": {
+        "required": [
+          "id",
+          "name",
+          "modified",
+          "current"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "modified": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "current": {
+            "type": "boolean"
+          }
+        },
+        "description": "A saved alternative of the open project (Logic\u0027s project alternatives); one is current."
+      },
+      "ProjectBackup": {
+        "required": [
+          "id",
+          "saved"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "saved": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "description": "An automatic backup, made at each save of the current alternative (the newest ten are kept)."
       },
       "ProjectDelta": {
         "required": [
@@ -3001,7 +4889,11 @@
           "cycle",
           "metronome",
           "endTick",
-          "mergeMidiRecording"
+          "mergeMidiRecording",
+          "tempoEvents",
+          "signatures",
+          "keys",
+          "recording"
         ],
         "type": "object",
         "properties": {
@@ -3024,9 +4916,30 @@
           },
           "mergeMidiRecording": {
             "type": "boolean"
+          },
+          "tempoEvents": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TempoEvent"
+            }
+          },
+          "signatures": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SignatureEvent"
+            }
+          },
+          "keys": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/KeyEvent"
+            }
+          },
+          "recording": {
+            "$ref": "#/components/schemas/RecordingSettings"
           }
         },
-        "description": "Global settings. \u0060endTick\u0060 is the project end marker. \u0060mergeMidiRecording\u0060: a MIDI recording over an\nexisting MIDI region adds its notes to that region instead of making a new one."
+        "description": "Global settings. \u0060tempo\u0060 and \u0060signature\u0060 are the values at the project start (the first of\n\u0060tempoEvents\u0060 and \u0060signatures\u0060, which are the global tempo and signature tracks).\n\u0060endTick\u0060 is the project end marker. \u0060mergeMidiRecording\u0060: a MIDI recording over an\nexisting MIDI region adds its notes to that region instead of making a new one."
       },
       "ProjectSummary": {
         "required": [
@@ -3052,6 +4965,36 @@
           }
         },
         "description": "A project in the recent list."
+      },
+      "RecordingSettings": {
+        "required": [
+          "cycleMode",
+          "replace",
+          "autopunch",
+          "punchInTick",
+          "punchOutTick"
+        ],
+        "type": "object",
+        "properties": {
+          "cycleMode": {
+            "$ref": "#/components/schemas/CycleRecordMode"
+          },
+          "replace": {
+            "type": "boolean"
+          },
+          "autopunch": {
+            "type": "boolean"
+          },
+          "punchInTick": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "punchOutTick": {
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "description": "How recording works: cycle recording mode; replace mode (a recording removes what it covers on its track); and\nautopunch, which records only between \u0060punchInTick\u0060 and \u0060punchOutTick\u0060 while playback continues around\nthem."
       },
       "RegionPlayback": {
         "required": [
@@ -3086,6 +5029,54 @@
         },
         "description": "How a MIDI region plays, without changing its notes (Logic\u0027s Region inspector): transpose in semitones,\nvelocity offset (\u2212127\u2026127), quantise grid in ticks (0: off) with strength (0\u20261, 1 = all the way) and swing\n(0\u20261, 0 = straight; delays every second grid step by up to half a step)."
       },
+      "Screenset": {
+        "required": [
+          "number",
+          "name",
+          "locked",
+          "layout"
+        ],
+        "type": "object",
+        "properties": {
+          "number": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "name": {
+            "type": "string"
+          },
+          "locked": {
+            "type": "boolean"
+          },
+          "layout": {
+            "type": "string"
+          }
+        },
+        "description": "A saved layout of the editor\u0027s windows (Logic\u0027s screensets), recalled with keys 1\u20139. \u0060layout\u0060 is the\neditor\u0027s own serialised layout, opaque to the server."
+      },
+      "SignatureEvent": {
+        "required": [
+          "tick",
+          "numerator",
+          "denominator"
+        ],
+        "type": "object",
+        "properties": {
+          "tick": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "numerator": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "denominator": {
+            "type": "integer",
+            "format": "int32"
+          }
+        },
+        "description": "A time signature change, on a bar line of the signature before it. The first is at tick 0."
+      },
       "SystemInfo": {
         "required": [
           "version",
@@ -3101,6 +5092,122 @@
           }
         },
         "description": "What \u0060GET /api/v1/system\u0060 answers: the server\u0027s version and its link to the engine host."
+      },
+      "Take": {
+        "required": [
+          "id",
+          "name",
+          "fileId",
+          "startTick",
+          "fileOffset",
+          "length"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "fileId": {
+            "type": "string"
+          },
+          "startTick": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "fileOffset": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "length": {
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "description": "A take: \u0060length\u0060 frames of a file from \u0060fileOffset\u0060, starting at \u0060startTick\u0060."
+      },
+      "TakeFolder": {
+        "required": [
+          "id",
+          "trackId",
+          "name",
+          "startTick",
+          "lengthTicks",
+          "takes",
+          "comp",
+          "crossfade",
+          "muted"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "trackId": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "startTick": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "lengthTicks": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "takes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Take"
+            }
+          },
+          "comp": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CompSegment"
+            }
+          },
+          "crossfade": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "muted": {
+            "type": "boolean"
+          }
+        },
+        "description": "A take folder: the takes of a cycle recording (or regions packed together) at one place on an audio track. Only\nthe comp plays: each segment plays its take from \u0060startTick\u0060 to \u0060endTick\u0060, with \u0060crossfade\u0060\nframes of crossfade at every boundary between segments. An empty comp plays nothing."
+      },
+      "TempoCurve": {
+        "enum": [
+          "step",
+          "ramp"
+        ]
+      },
+      "TempoEvent": {
+        "required": [
+          "tick",
+          "bpm",
+          "curve"
+        ],
+        "type": "object",
+        "properties": {
+          "tick": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "bpm": {
+            "type": "number",
+            "format": "double"
+          },
+          "curve": {
+            "$ref": "#/components/schemas/TempoCurve"
+          }
+        },
+        "description": "A point of the tempo track. The first is at tick 0."
       },
       "TimeSignature": {
         "required": [
@@ -3131,7 +5238,9 @@
           "strip",
           "instrument",
           "midiInput",
-          "midiOutput"
+          "midiOutput",
+          "collapsed",
+          "notes"
         ],
         "type": "object",
         "properties": {
@@ -3181,6 +5290,18 @@
                 "$ref": "#/components/schemas/MidiOutputSettings"
               }
             ]
+          },
+          "parentId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "collapsed": {
+            "type": "boolean"
+          },
+          "notes": {
+            "type": "string"
           }
         },
         "description": "A track and its channel strip. \u0060color\u0060 is a CSS colour; \u0060input\u0060 is where an audio track records from.\nAn instrument track has an \u0060instrument\u0060; instrument and external MIDI tracks take MIDI from\n\u0060midiInput\u0060, and an external MIDI track sends its regions to \u0060midiOutput\u0060."
@@ -3206,7 +5327,8 @@
         "enum": [
           "audio",
           "instrument",
-          "midi"
+          "midi",
+          "stack"
         ]
       },
       "TransportCommand": {
@@ -3312,6 +5434,12 @@
     },
     {
       "name": "MIDI"
+    },
+    {
+      "name": "Settings"
+    },
+    {
+      "name": "Files"
     }
   ]
 }

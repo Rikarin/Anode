@@ -115,11 +115,7 @@ public sealed unsafe class MappedSegment : IDisposable {
                 }
             }
 
-            for (long e = 1; e < t.PlaylistCount; e++) {
-                if (t.Playlist[e].Start < t.Playlist[e - 1].Start + t.Playlist[e - 1].Length) {
-                    throw new InvalidDataException($"Track {i} playlist entries overlap or are not sorted.");
-                }
-            }
+            CheckPlaylist(i, t);
         }
     }
 
@@ -139,4 +135,20 @@ public sealed unsafe class MappedSegment : IDisposable {
     }
 
     public void Dispose() => segment.Dispose();
+
+    /// <summary>A track's playlist is sorted by start and overlaps only as crossfades, never three entries at once.</summary>
+    static void CheckPlaylist(int track, TrackView t) {
+        for (long e = 1; e < t.PlaylistCount; e++) {
+            var previous = t.Playlist[e - 1];
+            var current = t.Playlist[e];
+            var overlap = previous.Start + previous.Length - current.Start;
+            var threeAtOnce = e >= 2 && t.Playlist[e - 2].Start + t.Playlist[e - 2].Length > current.Start;
+            var notACrossfade = overlap > 0 && (overlap > previous.FadeOut || overlap > current.FadeIn || threeAtOnce);
+            if (current.Start < previous.Start || notACrossfade) {
+                throw new InvalidDataException(
+                    $"Track {track} playlist entries are not sorted, or overlap other than as a crossfade."
+                );
+            }
+        }
+    }
 }

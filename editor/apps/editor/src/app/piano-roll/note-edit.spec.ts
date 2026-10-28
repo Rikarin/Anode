@@ -40,7 +40,8 @@ function region(
       startTick: start,
       lengthTicks: length
     })),
-    controls: []
+    controls: [],
+    muted: false
   };
 }
 

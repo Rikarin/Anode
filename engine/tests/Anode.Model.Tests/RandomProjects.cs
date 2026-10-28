@@ -108,6 +108,33 @@ static class RandomProjects {
         return (state, ids, random);
     }
 
+    /// <summary>Phase 3 commands the model rejects until workstream B implements them; the identity property skips them.</summary>
+    public static readonly IReadOnlySet<string> PendingPhase3 = new HashSet<string>(StringComparer.Ordinal) {
+        nameof(SetTempoEventsCommand),
+        nameof(SetSignaturesCommand),
+        nameof(SetKeysCommand),
+        nameof(AddMarkerCommand),
+        nameof(SetMarkerCommand),
+        nameof(DeleteMarkersCommand),
+        nameof(AddSectionCommand),
+        nameof(SetSectionCommand),
+        nameof(DeleteSectionsCommand),
+        nameof(MoveSectionCommand),
+        nameof(SetCompCommand),
+        nameof(SelectTakeCommand),
+        nameof(SetTakeFolderCommand),
+        nameof(DeleteTakeCommand),
+        nameof(FlattenTakeFolderCommand),
+        nameof(PackTakeFolderCommand),
+        nameof(SetRecordingCommand),
+        nameof(CreateStackCommand),
+        nameof(RemoveStackCommand),
+        nameof(SetTrackParentCommand),
+        nameof(SetProjectNotesCommand),
+        nameof(JoinRegionsCommand),
+        nameof(CopyRegionsCommand)
+    };
+
     /// <summary>A random command of <paramref name="type" /> for <paramref name="s" />, or null when none can be made.</summary>
     public static EditCommand? Command(Type type, ProjectState s, Random r) {
         var tracks = s.Tracks;
@@ -217,6 +244,31 @@ static class RandomProjects {
                 ? new DeleteControlsCommand(m.Id, [..Some(m.Controls, r).Select(static e => e.Id)])
                 : null,
             nameof(SetMidiRecordingCommand) => new SetMidiRecordingCommand(r.Next(2) == 0),
+            // Phase 3 commands (docs/04-phase-3.md): placeholders until the model implements them (workstream B
+            // replaces these with generators that make commands that apply).
+            nameof(SetTempoEventsCommand) => new SetTempoEventsCommand([new(0, 100 + r.Next(60), TempoCurve.Step)]),
+            nameof(SetSignaturesCommand) => new SetSignaturesCommand([new(0, 3, 4)]),
+            nameof(SetKeysCommand) => new SetKeysCommand([new(0, r.Next(12), KeyMode.Minor)]),
+            nameof(AddMarkerCommand) => new AddMarkerCommand("Marker", r.Next(16) * 960L),
+            nameof(SetMarkerCommand) => new SetMarkerCommand("mrk_none", "Renamed"),
+            nameof(DeleteMarkersCommand) => new DeleteMarkersCommand(["mrk_none"]),
+            nameof(AddSectionCommand) => new AddSectionCommand("Verse", r.Next(8) * 3840L, 3840),
+            nameof(SetSectionCommand) => new SetSectionCommand("sec_none", "Chorus"),
+            nameof(DeleteSectionsCommand) => new DeleteSectionsCommand(["sec_none"]),
+            nameof(MoveSectionCommand) => new MoveSectionCommand("sec_none", 0),
+            nameof(SetCompCommand) => new SetCompCommand("tkf_none", []),
+            nameof(SelectTakeCommand) => new SelectTakeCommand("tkf_none", "tak_none"),
+            nameof(SetTakeFolderCommand) => new SetTakeFolderCommand("tkf_none", "Takes"),
+            nameof(DeleteTakeCommand) => new DeleteTakeCommand("tkf_none", "tak_none"),
+            nameof(FlattenTakeFolderCommand) => new FlattenTakeFolderCommand("tkf_none"),
+            nameof(PackTakeFolderCommand) => new PackTakeFolderCommand(["rgn_none"]),
+            nameof(SetRecordingCommand) => new SetRecordingCommand(Replace: r.Next(2) == 0),
+            nameof(CreateStackCommand) => Track() is { } t ? new CreateStackCommand([t]) : null,
+            nameof(RemoveStackCommand) => new RemoveStackCommand("trk_none"),
+            nameof(SetTrackParentCommand) => Track() is { } t ? new SetTrackParentCommand(t, null) : null,
+            nameof(SetProjectNotesCommand) => new SetProjectNotesCommand($"Notes {r.Next(100)}"),
+            nameof(JoinRegionsCommand) => new JoinRegionsCommand(["rgn_none"]),
+            nameof(CopyRegionsCommand) => new CopyRegionsCommand(["rgn_none"], 3840),
             _ => throw new InvalidOperationException($"No generator for {type.Name}.")
         };
         string? Track() => tracks.Count == 0 ? null : Pick(r, tracks).Id;

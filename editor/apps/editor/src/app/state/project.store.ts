@@ -37,7 +37,11 @@ export const DefaultSettings: ProjectSettings = {
   cycle: { enabled: false, startTick: 0, endTick: 4 * 4 * Ppq },
   metronome: { enabled: false, countIn: false, levelDb: -6 },
   endTick: 32 * 4 * Ppq,
-  mergeMidiRecording: false
+  mergeMidiRecording: false,
+  tempoEvents: [{ tick: 0, bpm: 120, curve: 'step' }],
+  signatures: [{ tick: 0, numerator: 4, denominator: 4 }],
+  keys: [{ tick: 0, tonic: 0, mode: 'major' }],
+  recording: { cycleMode: 'takeFolder', replace: false, autopunch: false, punchInTick: 0, punchOutTick: 4 * 4 * Ppq }
 };
 
 const SilentStrip: ChannelStrip = { volumeDb: 0, pan: 0, mute: false, solo: false };
@@ -373,6 +377,15 @@ export class ProjectStore {
         break;
       case 'midiRegionRemoved':
         maps.midiRegions.delete(op.id);
+        break;
+      case 'takeFolderUpserted':
+      case 'takeFolderRemoved':
+      case 'markerUpserted':
+      case 'markerRemoved':
+      case 'sectionUpserted':
+      case 'sectionRemoved':
+      case 'notesChanged':
+        // Take folders, markers, arrangement and notes: Phase 3, the editor features workstream (docs/04-phase-3.md).
         break;
     }
   }

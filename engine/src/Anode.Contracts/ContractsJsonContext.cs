@@ -26,4 +26,13 @@ namespace Anode.Contracts;
 [JsonSerializable(typeof(MidiDevices))]
 [JsonSerializable(typeof(LiveMidiRequest))]
 [JsonSerializable(typeof(MidiThruRequest))]
+[JsonSerializable(typeof(IReadOnlyList<ProjectAlternative>))]
+[JsonSerializable(typeof(CreateAlternativeRequest))]
+[JsonSerializable(typeof(IReadOnlyList<ProjectBackup>))]
+[JsonSerializable(typeof(IReadOnlyList<Screenset>))]
+[JsonSerializable(typeof(Screenset))]
+[JsonSerializable(typeof(KeyCommandSet))]
+[JsonSerializable(typeof(Bookmarks))]
+[JsonSerializable(typeof(DirectoryListing))]
+[JsonSerializable(typeof(PreviewRequest))]
 public sealed partial class ContractsJsonContext : JsonSerializerContext;

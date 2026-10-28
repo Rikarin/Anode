@@ -60,7 +60,10 @@ describe('MIDI region edits in the Tracks area', () => {
       strip: { volumeDb: 0, pan: 0, mute: false, solo: false },
       instrument: null,
       midiInput: { device: null, channel: 0 },
-      midiOutput: null
+      midiOutput: null,
+      parentId: null,
+      collapsed: false,
+      notes: ''
     };
     const midi: MidiRegion = {
       id: 'mid_1',
@@ -70,7 +73,8 @@ describe('MIDI region edits in the Tracks area', () => {
       lengthTicks: 3840,
       playback: { ...NeutralPlayback, transpose: 12 },
       notes: [{ id: 1, pitch: 60, velocity: 90, channel: 1, startTick: 0, lengthTicks: 480 }],
-      controls: []
+      controls: [],
+      muted: false
     };
     const { scene, regionIds } = buildScene({
       tracks: [track],

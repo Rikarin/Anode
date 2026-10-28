@@ -42,6 +42,27 @@ export type PluginInfo = Schemas['PluginInfo'];
 export type ParameterInfo = Schemas['ParameterInfo'];
 export type TrackKind = Schemas['TrackKind'];
 
+export type TempoEvent = Schemas['TempoEvent'];
+export type TempoCurve = Schemas['TempoCurve'];
+export type SignatureEvent = Schemas['SignatureEvent'];
+export type KeyEvent = Schemas['KeyEvent'];
+export type KeyMode = Schemas['KeyMode'];
+export type Marker = Schemas['Marker'];
+export type ArrangementMarker = Schemas['ArrangementMarker'];
+export type RecordingSettings = Schemas['RecordingSettings'];
+export type CycleRecordMode = Schemas['CycleRecordMode'];
+export type TakeFolder = Schemas['TakeFolder'];
+export type Take = Schemas['Take'];
+export type CompSegment = Schemas['CompSegment'];
+export type Screenset = Schemas['Screenset'];
+export type ProjectAlternative = Schemas['ProjectAlternative'];
+export type ProjectBackup = Schemas['ProjectBackup'];
+export type KeyCommandSet = Schemas['KeyCommandSet'];
+export type Bookmarks = Schemas['Bookmarks'];
+export type FileEntry = Schemas['FileEntry'];
+export type FileKind = Schemas['FileKind'];
+export type DirectoryListing = Schemas['DirectoryListing'];
+
 export type TransportState = Schemas['TransportState'];
 export type TransportStatus = Schemas['TransportStatus'];
 export type TransportRequest = Schemas['TransportRequest'];

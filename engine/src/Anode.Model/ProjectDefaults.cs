@@ -38,7 +38,11 @@ public static class ProjectDefaults {
                 new(false, 0, 4L * BarTicks(signature)),
                 new(false, false, -6),
                 EndBars * BarTicks(signature),
-                false
+                false,
+                [new(0, Tempo, TempoCurve.Step)],
+                [new(0, signature.Numerator, signature.Denominator)],
+                [new(0, 0, KeyMode.Major)],
+                new(CycleRecordMode.TakeFolder, false, false, 0, 4L * BarTicks(signature))
             ),
             Strip,
             [],

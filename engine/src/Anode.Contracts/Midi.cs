@@ -15,7 +15,8 @@ public sealed record MidiRegion(
     long LengthTicks,
     RegionPlayback Playback,
     IReadOnlyList<Note> Notes,
-    IReadOnlyList<ControlEvent> Controls
+    IReadOnlyList<ControlEvent> Controls,
+    bool Muted
 );
 
 /// <summary>

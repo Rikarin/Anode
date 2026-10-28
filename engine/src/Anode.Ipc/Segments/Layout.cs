@@ -50,7 +50,10 @@ public struct PlaybackEvent {
 /// <summary>
 ///     One audio region of a track's playlist: play <see cref="Length" /> frames of file <see cref="FileId" /> from
 ///     frame <see cref="FileOffset" />, starting at project sample <see cref="Start" />, at linear <see cref="Gain" />,
-///     with linear fades of <see cref="FadeIn" /> and <see cref="FadeOut" /> frames. 40 bytes.
+///     with fades of <see cref="FadeIn" /> and <see cref="FadeOut" /> frames shaped by <see cref="FadeInCurve" /> and
+///     <see cref="FadeOutCurve" /> (−1…1, 0 linear; as <c>AudioRegion</c> defines them). Entries are sorted by start;
+///     two may overlap only as a crossfade (the earlier fading out over the overlap, the later fading in), so at most
+///     two play at once. 48 bytes.
 /// </summary>
 [StructLayout(LayoutKind.Sequential)]
 public struct AudioPlaylistEntry {
@@ -61,6 +64,8 @@ public struct AudioPlaylistEntry {
     public float Gain;
     public int FadeIn;
     public int FadeOut;
+    public float FadeInCurve;
+    public float FadeOutCurve;
 }
 
 /// <summary>Where one track's slices of the event and playlist arrays are, in elements. 40 bytes.</summary>
@@ -86,7 +91,7 @@ public struct TrackEntry {
 [StructLayout(LayoutKind.Sequential)]
 public struct SegmentHeader {
     public const uint MagicValue = 0x4D504E41; // "ANPM", Anode playback model
-    public const ushort CurrentFormat = 1;
+    public const ushort CurrentFormat = 2; // 2: playlist entries carry fade curves and may overlap as crossfades
     public const int FlagChecksum = 1;
 
     public uint Magic;

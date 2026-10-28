@@ -372,7 +372,21 @@ public sealed class ProjectSession(
         var file = Describe(o, take.Path, info);
         var start = state.TempoMap.TickAtSample(Math.Max(0, take.StartSample), state.SampleRate);
         return (file,
-            new(ids.Next(IdPrefix.Region), track.Id, file.Id, track.Name, Math.Max(0, start), 0, info.Frames, 0, 0, 0));
+            new(
+                ids.Next(IdPrefix.Region),
+                track.Id,
+                file.Id,
+                track.Name,
+                Math.Max(0, start),
+                0,
+                info.Frames,
+                0,
+                0,
+                0,
+                0,
+                0,
+                false
+            ));
     }
 
     /// <summary>
@@ -413,7 +427,8 @@ public sealed class ProjectSession(
                 Math.Max(bar, roundedEnd - start),
                 ProjectDefaults.Playback,
                 [],
-                []
+                [],
+                false
             );
         } else if (roundedEnd > target.StartTick + target.LengthTicks) {
             target = target with { LengthTicks = roundedEnd - target.StartTick };

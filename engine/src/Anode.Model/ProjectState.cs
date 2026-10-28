@@ -86,7 +86,11 @@ public sealed record ProjectState(
             [..Tracks],
             [..Regions.Values],
             [..Files.Values],
-            [..MidiRegions.Values]
+            [..MidiRegions.Values],
+            [], // Take folders, markers, arrangement and notes: Phase 3, workstream B (docs/04-phase-3.md).
+            [],
+            [],
+            string.Empty
         );
 
     /// <summary>Applies one delta operation (an edit's primitive step, also what clients apply).</summary>

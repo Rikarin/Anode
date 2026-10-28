@@ -13,6 +13,7 @@ import type { Track } from '@anode/api-client';
 import { faderDb, faderPosition, formatDb } from '@anode/audio-ui';
 import { provideIcons } from '@ng-icons/core';
 import {
+  matFolderRound,
   matGraphicEqRound,
   matMoreHorizRound,
   matPianoRound,
@@ -50,7 +51,15 @@ import { setTrack, setTrackLabel, type TrackChange } from '../state/track-comman
     XuiSliderImports,
     XuiTooltipImports
   ],
-  providers: [provideIcons({ matGraphicEqRound, matMoreHorizRound, matPianoRound, matSettingsInputComponentRound })],
+  providers: [
+    provideIcons({
+      matFolderRound,
+      matGraphicEqRound,
+      matMoreHorizRound,
+      matPianoRound,
+      matSettingsInputComponentRound
+    })
+  ],
   host: {
     class: 'border-border flex items-stretch gap-2 border-b pe-2',
     role: 'group',
@@ -246,9 +255,12 @@ export class TrackHeader {
   protected readonly active = computed(() => this.live.active().has(this.track().id));
   protected readonly kindIcon = computed(
     () =>
-      ({ audio: 'matGraphicEqRound', instrument: 'matPianoRound', midi: 'matSettingsInputComponentRound' })[
-        this.track().kind
-      ]
+      ({
+        audio: 'matGraphicEqRound',
+        instrument: 'matPianoRound',
+        midi: 'matSettingsInputComponentRound',
+        stack: 'matFolderRound'
+      })[this.track().kind]
   );
   protected readonly kindTitle = computed(() => {
     const track = this.track();

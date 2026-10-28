@@ -17,7 +17,10 @@ function track(id: string, name = id): Track {
     strip: { volumeDb: 0, pan: 0, mute: false, solo: false },
     instrument: null,
     midiInput: { device: null, channel: 0 },
-    midiOutput: null
+    midiOutput: null,
+    parentId: null,
+    collapsed: false,
+    notes: ''
   };
 }
 
@@ -32,7 +35,10 @@ function region(id: string, trackId: string, startTick = 0): AudioRegion {
     length: 48_000,
     gainDb: 0,
     fadeIn: 0,
-    fadeOut: 0
+    fadeOut: 0,
+    fadeInCurve: 0,
+    fadeOutCurve: 0,
+    muted: false
   };
 }
 
@@ -50,7 +56,11 @@ function snapshot(revision = 3): Project {
       cycle: { enabled: false, startTick: 0, endTick: 15_360 },
       metronome: { enabled: false, countIn: false, levelDb: -6 },
       endTick: 122_880,
-      mergeMidiRecording: false
+      mergeMidiRecording: false,
+      tempoEvents: [{ tick: 0, bpm: 120, curve: 'step' }],
+      signatures: [{ tick: 0, numerator: 4, denominator: 4 }],
+      keys: [{ tick: 0, tonic: 0, mode: 'major' }],
+      recording: { cycleMode: 'takeFolder', replace: false, autopunch: false, punchInTick: 0, punchOutTick: 15_360 }
     },
     master: { volumeDb: 0, pan: 0, mute: false, solo: false },
     tracks: [track('trk_1'), track('trk_2')],
@@ -66,7 +76,11 @@ function snapshot(revision = 3): Project {
         frames: 96_000
       }
     ],
-    midiRegions: []
+    midiRegions: [],
+    takeFolders: [],
+    markers: [],
+    arrangement: [],
+    notes: ''
   };
 }
 

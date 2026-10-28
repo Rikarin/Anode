@@ -31,6 +31,9 @@ namespace Anode.Ipc;
 [JsonDerivedType(typeof(MidiActivityMessage), "midiActivity")]
 [JsonDerivedType(typeof(RequestInstrumentStatesMessage), "requestInstrumentStates")]
 [JsonDerivedType(typeof(InstrumentStatesMessage), "instrumentStates")]
+[JsonDerivedType(typeof(SetPunchMessage), "setPunch")]
+[JsonDerivedType(typeof(FlashbackCaptureMessage), "flashbackCapture")]
+[JsonDerivedType(typeof(PreviewFileMessage), "previewFile")]
 public abstract record IpcMessage;
 
 /// <summary>
@@ -174,10 +177,14 @@ public sealed record RecordedMidiTake(
     long EndSample,
     IReadOnlyList<RecordedMidiEvent> Events);
 
-/// <summary>Host → server: recording stopped; the audio takes are complete files.</summary>
+/// <summary>
+///     Host → server: recording stopped (or, with <paramref name="Flashback" />, a Flashback Capture finished); the
+///     audio takes are complete files.
+/// </summary>
 public sealed record RecordingFinishedMessage(
     IReadOnlyList<RecordedTake> Takes,
-    IReadOnlyList<RecordedMidiTake>? MidiTakes = null
+    IReadOnlyList<RecordedMidiTake>? MidiTakes = null,
+    bool Flashback = false
 ) : IpcMessage;
 
 /// <summary>A plugin parameter as the engine numbers it.</summary>
@@ -251,3 +258,20 @@ public sealed record InstrumentStatesMessage(IReadOnlyList<InstrumentState> Stat
 )]
 [JsonSerializable(typeof(IpcMessage))]
 internal sealed partial class IpcJsonContext : JsonSerializerContext;
+
+/// <summary>
+///     Server → host: autopunch. While recording, armed tracks record (and monitor their input) only between
+///     <paramref name="InSample" /> and <paramref name="OutSample" />; elsewhere they play back.
+/// </summary>
+public sealed record SetPunchMessage(bool Enabled, long InSample, long OutSample) : IpcMessage;
+
+/// <summary>
+///     Server → host: Flashback Capture. While playing (not recording), the host keeps the last minutes of every
+///     record-armed track's input and of live MIDI on armed or thru tracks; this writes what it kept since playback last
+///     started (or up to now) as takes at the positions they were played, and answers with a
+///     <see cref="RecordingFinishedMessage" /> whose <c>Flashback</c> is set.
+/// </summary>
+public sealed record FlashbackCaptureMessage : IpcMessage;
+
+/// <summary>Server → host: play a file through the preview channel at <paramref name="Gain" /> (null path: stop).</summary>
+public sealed record PreviewFileMessage(string? Path, float Gain) : IpcMessage;

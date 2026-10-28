@@ -22,11 +22,17 @@ public sealed record Project(
     IReadOnlyList<Track> Tracks,
     IReadOnlyList<AudioRegion> Regions,
     IReadOnlyList<AudioFile> AudioFiles,
-    IReadOnlyList<MidiRegion> MidiRegions
+    IReadOnlyList<MidiRegion> MidiRegions,
+    IReadOnlyList<TakeFolder> TakeFolders,
+    IReadOnlyList<Marker> Markers,
+    IReadOnlyList<ArrangementMarker> Arrangement,
+    string Notes
 );
 
 /// <summary>
-///     Global settings. <c>endTick</c> is the project end marker. <c>mergeMidiRecording</c>: a MIDI recording over an
+///     Global settings. <c>tempo</c> and <c>signature</c> are the values at the project start (the first of
+///     <c>tempoEvents</c> and <c>signatures</c>, which are the global tempo and signature tracks).
+///     <c>endTick</c> is the project end marker. <c>mergeMidiRecording</c>: a MIDI recording over an
 ///     existing MIDI region adds its notes to that region instead of making a new one.
 /// </summary>
 public sealed record ProjectSettings(
@@ -35,7 +41,11 @@ public sealed record ProjectSettings(
     CycleRange Cycle,
     MetronomeSettings Metronome,
     long EndTick,
-    bool MergeMidiRecording
+    bool MergeMidiRecording,
+    IReadOnlyList<TempoEvent> TempoEvents,
+    IReadOnlyList<SignatureEvent> Signatures,
+    IReadOnlyList<KeyEvent> Keys,
+    RecordingSettings Recording
 );
 
 public sealed record TimeSignature(int Numerator, int Denominator);
@@ -56,7 +66,14 @@ public enum TrackKind {
 
     /// <summary>External MIDI: MIDI regions sent to <c>midiOutput</c>.</summary>
     [JsonStringEnumMemberName("midi")]
-    Midi
+    Midi,
+
+    /// <summary>
+    ///     A folder track stack: the tracks whose <c>parentId</c> is this track. Its strip's volume offsets theirs, its
+    ///     mute and solo apply to all of them; it plays nothing itself.
+    /// </summary>
+    [JsonStringEnumMemberName("stack")]
+    Stack
 }
 
 /// <summary>
@@ -75,7 +92,10 @@ public sealed record Track(
     ChannelStrip Strip,
     InstrumentSlot? Instrument,
     MidiInputSettings MidiInput,
-    MidiOutputSettings? MidiOutput
+    MidiOutputSettings? MidiOutput,
+    string? ParentId,
+    bool Collapsed,
+    string Notes
 );
 
 /// <summary>The device input: 1-based first channel (0: none); a stereo input takes that channel and the next.</summary>
@@ -86,7 +106,10 @@ public sealed record ChannelStrip(double VolumeDb, double Pan, bool Mute, bool S
 
 /// <summary>
 ///     A region of an audio file on a track: it starts at <c>startTick</c> and plays <c>length</c> frames of the file
-///     from <c>fileOffset</c>, at <c>gainDb</c>, with linear fades of <c>fadeIn</c> and <c>fadeOut</c> frames.
+///     from <c>fileOffset</c>, at <c>gainDb</c>, with fades of <c>fadeIn</c> and <c>fadeOut</c> frames whose curves run
+///     from −1 (fast start, logarithmic-looking) through 0 (linear) to 1 (slow start, exponential-looking). A muted region
+///     does not play. Two regions on a track may overlap only as a crossfade: where the earlier fades out and the later
+///     fades in.
 /// </summary>
 public sealed record AudioRegion(
     string Id,
@@ -98,7 +121,10 @@ public sealed record AudioRegion(
     long Length,
     double GainDb,
     long FadeIn,
-    long FadeOut
+    long FadeOut,
+    double FadeInCurve,
+    double FadeOutCurve,
+    bool Muted
 );
 
 /// <summary>An audio file of the project; <c>path</c> is relative to the project folder.</summary>

@@ -19,6 +19,13 @@ public sealed record ProjectDelta(long Revision, IReadOnlyList<DeltaOp> Ops);
 [JsonDerivedType(typeof(ProjectRenamed), "projectRenamed")]
 [JsonDerivedType(typeof(MidiRegionUpserted), "midiRegionUpserted")]
 [JsonDerivedType(typeof(MidiRegionRemoved), "midiRegionRemoved")]
+[JsonDerivedType(typeof(TakeFolderUpserted), "takeFolderUpserted")]
+[JsonDerivedType(typeof(TakeFolderRemoved), "takeFolderRemoved")]
+[JsonDerivedType(typeof(MarkerUpserted), "markerUpserted")]
+[JsonDerivedType(typeof(MarkerRemoved), "markerRemoved")]
+[JsonDerivedType(typeof(SectionUpserted), "sectionUpserted")]
+[JsonDerivedType(typeof(SectionRemoved), "sectionRemoved")]
+[JsonDerivedType(typeof(NotesChanged), "notesChanged")]
 public abstract record DeltaOp;
 
 /// <summary>A track was added or changed; <c>index</c> is its position in the track list.</summary>
@@ -42,3 +49,18 @@ public sealed record ProjectRenamed(string Name) : DeltaOp;
 public sealed record MidiRegionUpserted(MidiRegion Region) : DeltaOp;
 
 public sealed record MidiRegionRemoved(string Id) : DeltaOp;
+
+public sealed record TakeFolderUpserted(TakeFolder Folder) : DeltaOp;
+
+public sealed record TakeFolderRemoved(string Id) : DeltaOp;
+
+public sealed record MarkerUpserted(Marker Marker) : DeltaOp;
+
+public sealed record MarkerRemoved(string Id) : DeltaOp;
+
+public sealed record SectionUpserted(ArrangementMarker Section) : DeltaOp;
+
+public sealed record SectionRemoved(string Id) : DeltaOp;
+
+/// <summary>The project notes changed.</summary>
+public sealed record NotesChanged(string Text) : DeltaOp;

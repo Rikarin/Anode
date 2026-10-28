@@ -30,6 +30,9 @@ function region(change: Partial<AudioRegion> = {}): AudioRegion {
     gainDb: 0,
     fadeIn: 0,
     fadeOut: 0,
+    fadeInCurve: 0,
+    fadeOutCurve: 0,
+    muted: false,
     ...change
   };
 }
@@ -123,7 +126,10 @@ describe('buildScene', () => {
     strip: { volumeDb: 0, pan: 0, mute, solo: false },
     instrument: null,
     midiInput: { device: null, channel: 0 },
-    midiOutput: null
+    midiOutput: null,
+    parentId: null,
+    collapsed: false,
+    notes: ''
   });
 
   it('lays regions on their tracks’ lanes in their colours, with selection, mute and file mapping', () => {

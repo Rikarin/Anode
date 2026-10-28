@@ -23,5 +23,15 @@ static class TransportApi {
             )
             .WithName("ControlTransport")
             .WithSummary("Play, stop, record or locate. Recording needs an open project and a record-armed track.");
+        transport.MapPost(
+                "/capture",
+                static Results<Accepted, NotFound, ProblemHttpResult>() =>
+                    throw Pending.Phase3("FlashbackCapture")
+            )
+            .WithName("FlashbackCapture")
+            .WithSummary(
+                "Flashback Capture: what the armed tracks heard during the last playback becomes a recording (an undoable "
+                + "step, announced as projectChanged)."
+            );
     }
 }

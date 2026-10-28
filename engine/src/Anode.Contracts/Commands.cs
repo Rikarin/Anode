@@ -37,6 +37,29 @@ namespace Anode.Contracts;
 [JsonDerivedType(typeof(AddControlsCommand), "addControls")]
 [JsonDerivedType(typeof(DeleteControlsCommand), "deleteControls")]
 [JsonDerivedType(typeof(SetMidiRecordingCommand), "setMidiRecording")]
+[JsonDerivedType(typeof(SetTempoEventsCommand), "setTempoEvents")]
+[JsonDerivedType(typeof(SetSignaturesCommand), "setSignatures")]
+[JsonDerivedType(typeof(SetKeysCommand), "setKeys")]
+[JsonDerivedType(typeof(AddMarkerCommand), "addMarker")]
+[JsonDerivedType(typeof(SetMarkerCommand), "setMarker")]
+[JsonDerivedType(typeof(DeleteMarkersCommand), "deleteMarkers")]
+[JsonDerivedType(typeof(AddSectionCommand), "addSection")]
+[JsonDerivedType(typeof(SetSectionCommand), "setSection")]
+[JsonDerivedType(typeof(DeleteSectionsCommand), "deleteSections")]
+[JsonDerivedType(typeof(MoveSectionCommand), "moveSection")]
+[JsonDerivedType(typeof(SetCompCommand), "setComp")]
+[JsonDerivedType(typeof(SelectTakeCommand), "selectTake")]
+[JsonDerivedType(typeof(SetTakeFolderCommand), "setTakeFolder")]
+[JsonDerivedType(typeof(DeleteTakeCommand), "deleteTake")]
+[JsonDerivedType(typeof(FlattenTakeFolderCommand), "flattenTakeFolder")]
+[JsonDerivedType(typeof(PackTakeFolderCommand), "packTakeFolder")]
+[JsonDerivedType(typeof(SetRecordingCommand), "setRecording")]
+[JsonDerivedType(typeof(CreateStackCommand), "createStack")]
+[JsonDerivedType(typeof(RemoveStackCommand), "removeStack")]
+[JsonDerivedType(typeof(SetTrackParentCommand), "setTrackParent")]
+[JsonDerivedType(typeof(SetProjectNotesCommand), "setProjectNotes")]
+[JsonDerivedType(typeof(JoinRegionsCommand), "joinRegions")]
+[JsonDerivedType(typeof(CopyRegionsCommand), "copyRegions")]
 public abstract record EditCommand;
 
 /// <summary>
@@ -61,7 +84,9 @@ public sealed record SetTrackCommand(
     string? Color = null,
     TrackInput? Input = null,
     bool? RecordArmed = null,
-    bool? InputMonitoring = null
+    bool? InputMonitoring = null,
+    bool? Collapsed = null,
+    string? Notes = null
 ) : EditCommand;
 
 /// <summary>Changes a track's channel strip, or the master's when <c>trackId</c> is left out.</summary>
@@ -83,8 +108,8 @@ public sealed record AddRegionCommand(
 ) : EditCommand;
 
 /// <summary>
-///     Moves a region (audio or MIDI) in time, and to another track of a kind that can hold it when <c>trackId</c> is
-///     given. <c>splitRegion</c> and <c>deleteRegions</c> also take either kind.
+///     Moves a region (audio, MIDI, or a take folder) in time, and to another track of a kind that can hold it when
+///     <c>trackId</c> is given. <c>deleteRegions</c> also takes every kind; <c>splitRegion</c> takes audio and MIDI.
 /// </summary>
 public sealed record MoveRegionCommand(string RegionId, long StartTick, string? TrackId = null) : EditCommand;
 
@@ -100,13 +125,18 @@ public sealed record SetRegionCommand(
     string? Name = null,
     double? GainDb = null,
     long? FadeIn = null,
-    long? FadeOut = null
+    long? FadeOut = null,
+    double? FadeInCurve = null,
+    double? FadeOutCurve = null,
+    bool? Muted = null
 ) : EditCommand;
 
 public sealed record DeleteRegionsCommand(IReadOnlyList<string> RegionIds) : EditCommand;
 
+/// <summary>Sets the tempo at the project start (the first tempo event), keeping the rest of the tempo track.</summary>
 public sealed record SetTempoCommand(double Bpm) : EditCommand;
 
+/// <summary>Sets the signature at the project start (the first signature event), keeping later changes.</summary>
 public sealed record SetSignatureCommand(int Numerator, int Denominator) : EditCommand;
 
 public sealed record SetCycleCommand(bool? Enabled = null, long? StartTick = null, long? EndTick = null)
@@ -152,7 +182,8 @@ public sealed record SetMidiRegionCommand(
     int? Velocity = null,
     int? QuantizeTicks = null,
     double? QuantizeStrength = null,
-    double? Swing = null
+    double? Swing = null,
+    bool? Muted = null
 ) : EditCommand;
 
 public sealed record AddNotesCommand(string RegionId, IReadOnlyList<NewNote> Notes) : EditCommand;
@@ -189,3 +220,107 @@ public sealed record HistoryEntry(string Label, long Revision);
 
 /// <summary>The undo stack (most recent first) and the redo stack (next first).</summary>
 public sealed record UndoHistory(IReadOnlyList<HistoryEntry> Undo, IReadOnlyList<HistoryEntry> Redo);
+
+/// <summary>Replaces the tempo track; the first event must be at tick 0. Audio regions keep their musical positions.</summary>
+public sealed record SetTempoEventsCommand(IReadOnlyList<TempoEvent> Events) : EditCommand;
+
+/// <summary>Replaces the signature track; the first event at tick 0, each later one on a bar line.</summary>
+public sealed record SetSignaturesCommand(IReadOnlyList<SignatureEvent> Events) : EditCommand;
+
+/// <summary>Replaces the key track; the first event at tick 0.</summary>
+public sealed record SetKeysCommand(IReadOnlyList<KeyEvent> Events) : EditCommand;
+
+public sealed record AddMarkerCommand(string Name, long Tick, long LengthTicks = 0, string? Color = null) : EditCommand;
+
+public sealed record SetMarkerCommand(
+    string MarkerId,
+    string? Name = null,
+    long? Tick = null,
+    long? LengthTicks = null,
+    string? Color = null,
+    string? Text = null
+) : EditCommand;
+
+public sealed record DeleteMarkersCommand(IReadOnlyList<string> MarkerIds) : EditCommand;
+
+/// <summary>Adds an arrangement section; it must not overlap another.</summary>
+public sealed record AddSectionCommand(string Name, long StartTick, long LengthTicks, string? Color = null)
+    : EditCommand;
+
+/// <summary>Renames, recolours or resizes a section (from its end); it must not come to overlap another.</summary>
+public sealed record SetSectionCommand(
+    string SectionId,
+    string? Name = null,
+    long? LengthTicks = null,
+    string? Color = null
+) : EditCommand;
+
+/// <summary>
+///     Deletes sections. With <c>removeContent</c>, also everything that starts in them, and later material closes the
+///     gap (Logic's "delete the section and its content").
+/// </summary>
+public sealed record DeleteSectionsCommand(IReadOnlyList<string> SectionIds, bool RemoveContent = false)
+    : EditCommand;
+
+/// <summary>
+///     Moves (or with <c>copy</c>, copies) a section and everything that starts in it to <c>toTick</c>, which must be a
+///     section boundary or the end of the last section: the section is inserted there and the material after it moves
+///     later by its length; a move then closes the gap it left. Regions, take folders and markers move with it.
+/// </summary>
+public sealed record MoveSectionCommand(string SectionId, long ToTick, bool Copy = false) : EditCommand;
+
+/// <summary>Replaces a take folder's comp (Quick Swipe Comping sends the whole comp after each swipe).</summary>
+public sealed record SetCompCommand(string FolderId, IReadOnlyList<CompSegment> Segments) : EditCommand;
+
+/// <summary>Makes one take the whole comp.</summary>
+public sealed record SelectTakeCommand(string FolderId, string TakeId) : EditCommand;
+
+public sealed record SetTakeFolderCommand(
+    string FolderId,
+    string? Name = null,
+    long? Crossfade = null,
+    bool? Muted = null,
+    string? TakeId = null,
+    string? TakeName = null
+) : EditCommand;
+
+/// <summary>Removes a take (and its comp segments) from a folder; the folder's last take cannot be removed.</summary>
+public sealed record DeleteTakeCommand(string FolderId, string TakeId) : EditCommand;
+
+/// <summary>Replaces a take folder with regions playing its comp, crossfaded at the boundaries.</summary>
+public sealed record FlattenTakeFolderCommand(string FolderId) : EditCommand;
+
+/// <summary>Packs overlapping or adjacent audio regions of one track into a new take folder, one take each.</summary>
+public sealed record PackTakeFolderCommand(IReadOnlyList<string> RegionIds, string? Name = null) : EditCommand;
+
+public sealed record SetRecordingCommand(
+    CycleRecordMode? CycleMode = null,
+    bool? Replace = null,
+    bool? Autopunch = null,
+    long? PunchInTick = null,
+    long? PunchOutTick = null
+) : EditCommand;
+
+/// <summary>Puts tracks into a new folder stack, inserted where the first of them was.</summary>
+public sealed record CreateStackCommand(IReadOnlyList<string> TrackIds, string? Name = null) : EditCommand;
+
+/// <summary>Removes a folder stack; its tracks stay, outside any stack.</summary>
+public sealed record RemoveStackCommand(string StackId) : EditCommand;
+
+/// <summary>Moves a track into a stack (<c>parentId</c>) or out of one (null). Stacks do not nest.</summary>
+public sealed record SetTrackParentCommand(string TrackId, string? ParentId) : EditCommand;
+
+public sealed record SetProjectNotesCommand(string Text) : EditCommand;
+
+/// <summary>
+///     Glues regions of one track into one: MIDI regions merge their notes; audio regions only when they play one
+///     contiguous stretch of the same file (others need a bounce, Phase 4), else 422.
+/// </summary>
+public sealed record JoinRegionsCommand(IReadOnlyList<string> RegionIds) : EditCommand;
+
+/// <summary>
+///     Copies regions (of any kind) <c>offsetTicks</c> later (or earlier), onto <c>trackId</c> when given (⌥-drag,
+///     repeat).
+/// </summary>
+public sealed record CopyRegionsCommand(IReadOnlyList<string> RegionIds, long OffsetTicks, string? TrackId = null)
+    : EditCommand;

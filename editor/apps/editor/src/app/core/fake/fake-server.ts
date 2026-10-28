@@ -159,13 +159,27 @@ export class FakeAnodeServer implements AnodeApi {
           cycle: { enabled: false, startTick: 0, endTick: 4 * 4 * Ppq },
           metronome: { enabled: false, countIn: false, levelDb: -6 },
           endTick: DefaultEndTick,
-          mergeMidiRecording: false
+          mergeMidiRecording: false,
+          tempoEvents: [{ tick: 0, bpm: 120, curve: 'step' }],
+          signatures: [{ tick: 0, numerator: 4, denominator: 4 }],
+          keys: [{ tick: 0, tonic: 0, mode: 'major' }],
+          recording: {
+            cycleMode: 'takeFolder',
+            replace: false,
+            autopunch: false,
+            punchInTick: 0,
+            punchOutTick: 4 * 4 * Ppq
+          }
         },
         master: strip(),
         tracks: [],
         regions: [],
         audioFiles: [],
-        midiRegions: []
+        midiRegions: [],
+        takeFolders: [],
+        markers: [],
+        arrangement: [],
+        notes: ''
       };
       this.disk.set(path, structuredClone(project));
       this.open(project);
@@ -737,6 +751,9 @@ export class FakeAnodeServer implements AnodeApi {
             ? { pluginId: instrument.id, name: instrument.name, parameters: defaultParameters(instrument), file: null }
             : null,
           midiInput: { device: null, channel: 0 },
+          parentId: null,
+          collapsed: false,
+          notes: '',
           // An external MIDI track sends nowhere until setMidiIo picks a port (as the Server does).
           midiOutput: null
         };
@@ -802,7 +819,10 @@ export class FakeAnodeServer implements AnodeApi {
           length,
           gainDb: 0,
           fadeIn: 0,
-          fadeOut: 0
+          fadeOut: 0,
+          fadeInCurve: 0,
+          fadeOutCurve: 0,
+          muted: false
         };
         return { ...project, regions: [...project.regions, added] };
       }
@@ -993,7 +1013,8 @@ export class FakeAnodeServer implements AnodeApi {
           lengthTicks: Math.round(command.lengthTicks),
           playback: { ...NeutralPlayback },
           notes: [],
-          controls: []
+          controls: [],
+          muted: false
         };
         return { ...project, midiRegions: [...project.midiRegions, added] };
       }
@@ -1104,6 +1125,31 @@ export class FakeAnodeServer implements AnodeApi {
       }
       case 'setMidiRecording':
         return { ...project, settings: { ...project.settings, mergeMidiRecording: command.merge } };
+      case 'setTempoEvents':
+      case 'setSignatures':
+      case 'setKeys':
+      case 'addMarker':
+      case 'setMarker':
+      case 'deleteMarkers':
+      case 'addSection':
+      case 'setSection':
+      case 'deleteSections':
+      case 'moveSection':
+      case 'setComp':
+      case 'selectTake':
+      case 'setTakeFolder':
+      case 'deleteTake':
+      case 'flattenTakeFolder':
+      case 'packTakeFolder':
+      case 'setRecording':
+      case 'createStack':
+      case 'removeStack':
+      case 'setTrackParent':
+      case 'setProjectNotes':
+      case 'joinRegions':
+      case 'copyRegions':
+        // Arranging and editing depth: Phase 3, the editor features workstream (docs/04-phase-3.md).
+        throw new ApiError(422, `${command.type}: not in the fake Server yet.`);
     }
   }
 
@@ -1266,13 +1312,27 @@ export class FakeAnodeServer implements AnodeApi {
         cycle: { enabled: false, startTick: 4 * 4 * Ppq, endTick: 8 * 4 * Ppq },
         metronome: { enabled: false, countIn: true, levelDb: -6 },
         endTick: DefaultEndTick,
-        mergeMidiRecording: false
+        mergeMidiRecording: false,
+        tempoEvents: [{ tick: 0, bpm: 112, curve: 'step' }],
+        signatures: [{ tick: 0, numerator: 4, denominator: 4 }],
+        keys: [{ tick: 0, tonic: 0, mode: 'major' }],
+        recording: {
+          cycleMode: 'takeFolder',
+          replace: false,
+          autopunch: false,
+          punchInTick: 0,
+          punchOutTick: 4 * 4 * Ppq
+        }
       },
       master: strip(),
       tracks: [],
       regions: [],
       audioFiles: [],
-      midiRegions: []
+      midiRegions: [],
+      takeFolders: [],
+      markers: [],
+      arrangement: [],
+      notes: ''
     };
     let project = base;
     for (const name of ['Drums', 'Bass', 'Guitar', 'Vocals']) {
@@ -1438,7 +1498,7 @@ function coalesceKey(commands: readonly EditCommand[]): string | undefined {
   return `${only.trackId ?? 'master'}:${fields.join(',')}`;
 }
 
-const KindNames: Record<Track['kind'], string> = { audio: 'Audio', instrument: 'Inst', midi: 'MIDI' };
+const KindNames: Record<Track['kind'], string> = { audio: 'Audio', instrument: 'Inst', midi: 'MIDI', stack: 'Stack' };
 
 /** MIDI region ids are `mid_…` (docs/03-phase-2.md). */
 function isMidiRegionId(id: string): boolean {

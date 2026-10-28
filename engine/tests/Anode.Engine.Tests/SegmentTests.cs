@@ -6,7 +6,7 @@ public sealed unsafe class SegmentTests {
     [Fact]
     public void Struct_sizes_match_the_documented_layout() {
         Assert.Equal(24, sizeof(PlaybackEvent));
-        Assert.Equal(40, sizeof(AudioPlaylistEntry));
+        Assert.Equal(48, sizeof(AudioPlaylistEntry));
         Assert.Equal(40, sizeof(TrackEntry));
     }
 

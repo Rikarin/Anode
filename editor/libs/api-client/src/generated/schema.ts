@@ -255,6 +255,23 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/api/v1/transport/capture': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Flashback Capture: what the armed tracks heard during the last playback becomes a recording (an undoable step, announced as projectChanged). */
+    post: operations['FlashbackCapture'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/api/v1/plugins': {
     parameters: {
       query?: never;
@@ -340,10 +357,224 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/api/v1/project/alternatives': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: operations['ListAlternatives'];
+    put?: never;
+    /** Saves the open project as a new alternative and makes it current. */
+    post: operations['CreateAlternative'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/project/alternatives/{id}/open': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Switches to another alternative (unsaved edits are kept in a backup first). */
+    post: operations['OpenAlternative'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/project/alternatives/{id}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    /** Deletes an alternative other than the current one. */
+    delete: operations['DeleteAlternative'];
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/project/backups': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: operations['ListBackups'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/project/backups/{id}/revert': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Replaces the open project with a backup of it (an undoable step is not kept: like reopening). */
+    post: operations['RevertToBackup'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/project/screensets': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: operations['ListScreensets'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/project/screensets/{number}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    /** Saves screenset 1…9 in the project (not an undo step; it marks the project unsaved). */
+    put: operations['SaveScreenset'];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/project/files/import-midi': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Imports a Standard MIDI File from the server's disk as new instrument tracks with its tempo and signature events, as one undoable step. */
+    post: operations['ImportMidiFile'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/settings/key-commands': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** The user's key bindings; empty bindings mean the editor's defaults. */
+    get: operations['GetKeyCommands'];
+    put: operations['SaveKeyCommands'];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/settings/bookmarks': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: operations['GetBookmarks'];
+    put: operations['SaveBookmarks'];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/files': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** A folder on the server's disk (the user's home when path is left out). */
+    get: operations['ListFiles'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/files/preview': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Plays an audio file through the engine's preview channel; a null path stops it. */
+    post: operations['PreviewFile'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
 }
 export type webhooks = Record<string, never>;
 export interface components {
   schemas: {
+    /**
+     * @description A section of the song on the arrangement track (Intro, Verse, Chorus). Sections do not overlap; moving or copying
+     *     one with `moveSection` moves or copies everything in its time range.
+     */
+    ArrangementMarker: {
+      id: string;
+      name: string;
+      /** Format: int64 */
+      startTick: number;
+      /** Format: int64 */
+      lengthTicks: number;
+      color: string;
+    };
     /** @description An audio file of the project; `path` is relative to the project folder. */
     AudioFile: {
       id: string;
@@ -360,7 +591,10 @@ export interface components {
     };
     /**
      * @description A region of an audio file on a track: it starts at `startTick` and plays `length` frames of the file
-     *     from `fileOffset`, at `gainDb`, with linear fades of `fadeIn` and `fadeOut` frames.
+     *     from `fileOffset`, at `gainDb`, with fades of `fadeIn` and `fadeOut` frames whose curves run
+     *     from −1 (fast start, logarithmic-looking) through 0 (linear) to 1 (slow start, exponential-looking). A muted region
+     *     does not play. Two regions on a track may overlap only as a crossfade: where the earlier fades out and the later
+     *     fades in.
      */
     AudioRegion: {
       id: string;
@@ -379,6 +613,15 @@ export interface components {
       fadeIn: number;
       /** Format: int64 */
       fadeOut: number;
+      /** Format: double */
+      fadeInCurve: number;
+      /** Format: double */
+      fadeOutCurve: number;
+      muted: boolean;
+    };
+    /** @description Folders pinned in the All Files browser. */
+    Bookmarks: {
+      paths: string[];
     };
     /** @description Volume in dB (−∞ as −144), pan −1 (left) … 1 (right), mute and solo. */
     ChannelStrip: {
@@ -400,6 +643,14 @@ export interface components {
       revision: number;
       delta: components['schemas']['ProjectDelta'];
     };
+    /** @description Part of a comp: take `takeId` plays from `startTick` to `endTick`. */
+    CompSegment: {
+      /** Format: int64 */
+      startTick: number;
+      /** Format: int64 */
+      endTick: number;
+      takeId: string;
+    };
     /** @description A controller event of a MIDI region; `tick` is relative to the region's start. */
     ControlEvent: {
       /** Format: int64 */
@@ -416,6 +667,9 @@ export interface components {
     };
     /** @enum {unknown} */
     ControlKind: 'controlChange' | 'pitchBend' | 'channelPressure' | 'programChange';
+    CreateAlternativeRequest: {
+      name: string;
+    };
     CreateProjectRequest: {
       name: string;
       directory?: null | string;
@@ -429,6 +683,8 @@ export interface components {
       /** Format: int64 */
       endTick: number;
     };
+    /** @enum {unknown} */
+    CycleRecordMode: 'takeFolder' | 'regions';
     DeltaOp:
       | components['schemas']['DeltaOpTrackUpserted']
       | components['schemas']['DeltaOpTrackRemoved']
@@ -439,11 +695,28 @@ export interface components {
       | components['schemas']['DeltaOpMasterChanged']
       | components['schemas']['DeltaOpProjectRenamed']
       | components['schemas']['DeltaOpMidiRegionUpserted']
-      | components['schemas']['DeltaOpMidiRegionRemoved'];
+      | components['schemas']['DeltaOpMidiRegionRemoved']
+      | components['schemas']['DeltaOpTakeFolderUpserted']
+      | components['schemas']['DeltaOpTakeFolderRemoved']
+      | components['schemas']['DeltaOpMarkerUpserted']
+      | components['schemas']['DeltaOpMarkerRemoved']
+      | components['schemas']['DeltaOpSectionUpserted']
+      | components['schemas']['DeltaOpSectionRemoved']
+      | components['schemas']['DeltaOpNotesChanged'];
     DeltaOpAudioFileUpserted: {
       /** @enum {string} */
       op: 'audioFileUpserted';
       file: components['schemas']['AudioFile'];
+    };
+    DeltaOpMarkerRemoved: {
+      /** @enum {string} */
+      op: 'markerRemoved';
+      id: string;
+    };
+    DeltaOpMarkerUpserted: {
+      /** @enum {string} */
+      op: 'markerUpserted';
+      marker: components['schemas']['Marker'];
     };
     DeltaOpMasterChanged: {
       /** @enum {string} */
@@ -461,6 +734,12 @@ export interface components {
       op: 'midiRegionUpserted';
       region: components['schemas']['MidiRegion'];
     };
+    /** @description The project notes changed. */
+    DeltaOpNotesChanged: {
+      /** @enum {string} */
+      op: 'notesChanged';
+      text: string;
+    };
     DeltaOpProjectRenamed: {
       /** @enum {string} */
       op: 'projectRenamed';
@@ -476,10 +755,30 @@ export interface components {
       op: 'regionUpserted';
       region: components['schemas']['AudioRegion'];
     };
+    DeltaOpSectionRemoved: {
+      /** @enum {string} */
+      op: 'sectionRemoved';
+      id: string;
+    };
+    DeltaOpSectionUpserted: {
+      /** @enum {string} */
+      op: 'sectionUpserted';
+      section: components['schemas']['ArrangementMarker'];
+    };
     DeltaOpSettingsChanged: {
       /** @enum {string} */
       op: 'settingsChanged';
       settings: components['schemas']['ProjectSettings'];
+    };
+    DeltaOpTakeFolderRemoved: {
+      /** @enum {string} */
+      op: 'takeFolderRemoved';
+      id: string;
+    };
+    DeltaOpTakeFolderUpserted: {
+      /** @enum {string} */
+      op: 'takeFolderUpserted';
+      folder: components['schemas']['TakeFolder'];
     };
     DeltaOpTrackRemoved: {
       /** @enum {string} */
@@ -493,6 +792,12 @@ export interface components {
       track: components['schemas']['Track'];
       /** Format: int32 */
       index: number;
+    };
+    /** @description A folder's entries, folders first; `parent` is null at a root. */
+    DirectoryListing: {
+      path: string;
+      parent?: null | string;
+      entries: components['schemas']['FileEntry'][];
     };
     /**
      * @description An edit of the open project (docs/adr/0004-state-ownership.md). A batch of them is applied atomically as one
@@ -528,12 +833,48 @@ export interface components {
       | components['schemas']['EditCommandQuantizeNotesCommand']
       | components['schemas']['EditCommandAddControlsCommand']
       | components['schemas']['EditCommandDeleteControlsCommand']
-      | components['schemas']['EditCommandSetMidiRecordingCommand'];
+      | components['schemas']['EditCommandSetMidiRecordingCommand']
+      | components['schemas']['EditCommandSetTempoEventsCommand']
+      | components['schemas']['EditCommandSetSignaturesCommand']
+      | components['schemas']['EditCommandSetKeysCommand']
+      | components['schemas']['EditCommandAddMarkerCommand']
+      | components['schemas']['EditCommandSetMarkerCommand']
+      | components['schemas']['EditCommandDeleteMarkersCommand']
+      | components['schemas']['EditCommandAddSectionCommand']
+      | components['schemas']['EditCommandSetSectionCommand']
+      | components['schemas']['EditCommandDeleteSectionsCommand']
+      | components['schemas']['EditCommandMoveSectionCommand']
+      | components['schemas']['EditCommandSetCompCommand']
+      | components['schemas']['EditCommandSelectTakeCommand']
+      | components['schemas']['EditCommandSetTakeFolderCommand']
+      | components['schemas']['EditCommandDeleteTakeCommand']
+      | components['schemas']['EditCommandFlattenTakeFolderCommand']
+      | components['schemas']['EditCommandPackTakeFolderCommand']
+      | components['schemas']['EditCommandSetRecordingCommand']
+      | components['schemas']['EditCommandCreateStackCommand']
+      | components['schemas']['EditCommandRemoveStackCommand']
+      | components['schemas']['EditCommandSetTrackParentCommand']
+      | components['schemas']['EditCommandSetProjectNotesCommand']
+      | components['schemas']['EditCommandJoinRegionsCommand']
+      | components['schemas']['EditCommandCopyRegionsCommand'];
     EditCommandAddControlsCommand: {
       /** @enum {string} */
       type: 'addControls';
       regionId: string;
       events: components['schemas']['NewControlEvent'][];
+    };
+    EditCommandAddMarkerCommand: {
+      /** @enum {string} */
+      type: 'addMarker';
+      name: string;
+      /** Format: int64 */
+      tick: number;
+      /**
+       * Format: int64
+       * @default 0
+       */
+      lengthTicks: number;
+      color?: null | string;
     };
     /** @description Adds an empty MIDI region to an instrument or external MIDI track. */
     EditCommandAddMidiRegionCommand: {
@@ -565,6 +906,17 @@ export interface components {
       /** Format: int64 */
       length?: null | number;
     };
+    /** @description Adds an arrangement section; it must not overlap another. */
+    EditCommandAddSectionCommand: {
+      /** @enum {string} */
+      type: 'addSection';
+      name: string;
+      /** Format: int64 */
+      startTick: number;
+      /** Format: int64 */
+      lengthTicks: number;
+      color?: null | string;
+    };
     /**
      * @description Adds a track at `index` (the end when left out): audio by default; an instrument track gets
      *     `pluginId` (the default synth when left out).
@@ -580,11 +932,35 @@ export interface components {
       kind?: null | components['schemas']['TrackKind'];
       pluginId?: null | string;
     };
+    /**
+     * @description Copies regions (of any kind) `offsetTicks` later (or earlier), onto `trackId` when given (⌥-drag,
+     *     repeat).
+     */
+    EditCommandCopyRegionsCommand: {
+      /** @enum {string} */
+      type: 'copyRegions';
+      regionIds: string[];
+      /** Format: int64 */
+      offsetTicks: number;
+      trackId?: null | string;
+    };
+    /** @description Puts tracks into a new folder stack, inserted where the first of them was. */
+    EditCommandCreateStackCommand: {
+      /** @enum {string} */
+      type: 'createStack';
+      trackIds: string[];
+      name?: null | string;
+    };
     EditCommandDeleteControlsCommand: {
       /** @enum {string} */
       type: 'deleteControls';
       regionId: string;
       eventIds: number[];
+    };
+    EditCommandDeleteMarkersCommand: {
+      /** @enum {string} */
+      type: 'deleteMarkers';
+      markerIds: string[];
     };
     EditCommandDeleteNotesCommand: {
       /** @enum {string} */
@@ -597,11 +973,44 @@ export interface components {
       type: 'deleteRegions';
       regionIds: string[];
     };
+    /**
+     * @description Deletes sections. With `removeContent`, also everything that starts in them, and later material closes the
+     *     gap (Logic's "delete the section and its content").
+     */
+    EditCommandDeleteSectionsCommand: {
+      /** @enum {string} */
+      type: 'deleteSections';
+      sectionIds: string[];
+      /** @default false */
+      removeContent: boolean;
+    };
+    /** @description Removes a take (and its comp segments) from a folder; the folder's last take cannot be removed. */
+    EditCommandDeleteTakeCommand: {
+      /** @enum {string} */
+      type: 'deleteTake';
+      folderId: string;
+      takeId: string;
+    };
     EditCommandEditNotesCommand: {
       /** @enum {string} */
       type: 'editNotes';
       regionId: string;
       changes: components['schemas']['NoteChange'][];
+    };
+    /** @description Replaces a take folder with regions playing its comp, crossfaded at the boundaries. */
+    EditCommandFlattenTakeFolderCommand: {
+      /** @enum {string} */
+      type: 'flattenTakeFolder';
+      folderId: string;
+    };
+    /**
+     * @description Glues regions of one track into one: MIDI regions merge their notes; audio regions only when they play one
+     *     contiguous stretch of the same file (others need a bounce, Phase 4), else 422.
+     */
+    EditCommandJoinRegionsCommand: {
+      /** @enum {string} */
+      type: 'joinRegions';
+      regionIds: string[];
     };
     /** @description Loads a file (a sampler instrument, a sample) into a track's instrument; a path on the server's disk. */
     EditCommandLoadInstrumentFileCommand: {
@@ -611,8 +1020,8 @@ export interface components {
       path: string;
     };
     /**
-     * @description Moves a region (audio or MIDI) in time, and to another track of a kind that can hold it when `trackId` is
-     *     given. `splitRegion` and `deleteRegions` also take either kind.
+     * @description Moves a region (audio, MIDI, or a take folder) in time, and to another track of a kind that can hold it when
+     *     `trackId` is given. `deleteRegions` also takes every kind; `splitRegion` takes audio and MIDI.
      */
     EditCommandMoveRegionCommand: {
       /** @enum {string} */
@@ -622,12 +1031,33 @@ export interface components {
       startTick: number;
       trackId?: null | string;
     };
+    /**
+     * @description Moves (or with `copy`, copies) a section and everything that starts in it to `toTick`, which must be a
+     *     section boundary or the end of the last section: the section is inserted there and the material after it moves
+     *     later by its length; a move then closes the gap it left. Regions, take folders and markers move with it.
+     */
+    EditCommandMoveSectionCommand: {
+      /** @enum {string} */
+      type: 'moveSection';
+      sectionId: string;
+      /** Format: int64 */
+      toTick: number;
+      /** @default false */
+      copy: boolean;
+    };
     EditCommandMoveTrackCommand: {
       /** @enum {string} */
       type: 'moveTrack';
       trackId: string;
       /** Format: int32 */
       index: number;
+    };
+    /** @description Packs overlapping or adjacent audio regions of one track into a new take folder, one take each. */
+    EditCommandPackTakeFolderCommand: {
+      /** @enum {string} */
+      type: 'packTakeFolder';
+      regionIds: string[];
+      name?: null | string;
     };
     /**
      * @description Moves note starts towards the grid (destructive; `noteIds` left out: every note of the region), with the
@@ -650,6 +1080,12 @@ export interface components {
        */
       swing: number;
       noteIds?: null | number[];
+    };
+    /** @description Removes a folder stack; its tracks stay, outside any stack. */
+    EditCommandRemoveStackCommand: {
+      /** @enum {string} */
+      type: 'removeStack';
+      stackId: string;
     };
     EditCommandRemoveTrackCommand: {
       /** @enum {string} */
@@ -686,6 +1122,20 @@ export interface components {
       /** Format: int64 */
       length: number;
     };
+    /** @description Makes one take the whole comp. */
+    EditCommandSelectTakeCommand: {
+      /** @enum {string} */
+      type: 'selectTake';
+      folderId: string;
+      takeId: string;
+    };
+    /** @description Replaces a take folder's comp (Quick Swipe Comping sends the whole comp after each swipe). */
+    EditCommandSetCompCommand: {
+      /** @enum {string} */
+      type: 'setComp';
+      folderId: string;
+      segments: components['schemas']['CompSegment'][];
+    };
     EditCommandSetCycleCommand: {
       /** @enum {string} */
       type: 'setCycle';
@@ -701,6 +1151,24 @@ export interface components {
       type: 'setInstrument';
       trackId: string;
       pluginId: string;
+    };
+    /** @description Replaces the key track; the first event at tick 0. */
+    EditCommandSetKeysCommand: {
+      /** @enum {string} */
+      type: 'setKeys';
+      events: components['schemas']['KeyEvent'][];
+    };
+    EditCommandSetMarkerCommand: {
+      /** @enum {string} */
+      type: 'setMarker';
+      markerId: string;
+      name?: null | string;
+      /** Format: int64 */
+      tick?: null | number;
+      /** Format: int64 */
+      lengthTicks?: null | number;
+      color?: null | string;
+      text?: null | string;
     };
     EditCommandSetMetronomeCommand: {
       /** @enum {string} */
@@ -737,6 +1205,7 @@ export interface components {
       quantizeStrength?: null | number;
       /** Format: double */
       swing?: null | number;
+      muted?: null | boolean;
     };
     /**
      * @description Sets one parameter of a track's instrument. Consecutive batches on the same parameter within 1 s coalesce into
@@ -750,6 +1219,22 @@ export interface components {
       /** Format: double */
       value: number;
     };
+    EditCommandSetProjectNotesCommand: {
+      /** @enum {string} */
+      type: 'setProjectNotes';
+      text: string;
+    };
+    EditCommandSetRecordingCommand: {
+      /** @enum {string} */
+      type: 'setRecording';
+      cycleMode?: null | components['schemas']['CycleRecordMode'];
+      replace?: null | boolean;
+      autopunch?: null | boolean;
+      /** Format: int64 */
+      punchInTick?: null | number;
+      /** Format: int64 */
+      punchOutTick?: null | number;
+    };
     EditCommandSetRegionCommand: {
       /** @enum {string} */
       type: 'setRegion';
@@ -761,7 +1246,23 @@ export interface components {
       fadeIn?: null | number;
       /** Format: int64 */
       fadeOut?: null | number;
+      /** Format: double */
+      fadeInCurve?: null | number;
+      /** Format: double */
+      fadeOutCurve?: null | number;
+      muted?: null | boolean;
     };
+    /** @description Renames, recolours or resizes a section (from its end); it must not come to overlap another. */
+    EditCommandSetSectionCommand: {
+      /** @enum {string} */
+      type: 'setSection';
+      sectionId: string;
+      name?: null | string;
+      /** Format: int64 */
+      lengthTicks?: null | number;
+      color?: null | string;
+    };
+    /** @description Sets the signature at the project start (the first signature event), keeping later changes. */
     EditCommandSetSignatureCommand: {
       /** @enum {string} */
       type: 'setSignature';
@@ -769,6 +1270,12 @@ export interface components {
       numerator: number;
       /** Format: int32 */
       denominator: number;
+    };
+    /** @description Replaces the signature track; the first event at tick 0, each later one on a bar line. */
+    EditCommandSetSignaturesCommand: {
+      /** @enum {string} */
+      type: 'setSignatures';
+      events: components['schemas']['SignatureEvent'][];
     };
     /** @description Changes a track's channel strip, or the master's when `trackId` is left out. */
     EditCommandSetStripCommand: {
@@ -782,11 +1289,29 @@ export interface components {
       mute?: null | boolean;
       solo?: null | boolean;
     };
+    EditCommandSetTakeFolderCommand: {
+      /** @enum {string} */
+      type: 'setTakeFolder';
+      folderId: string;
+      name?: null | string;
+      /** Format: int64 */
+      crossfade?: null | number;
+      muted?: null | boolean;
+      takeId?: null | string;
+      takeName?: null | string;
+    };
+    /** @description Sets the tempo at the project start (the first tempo event), keeping the rest of the tempo track. */
     EditCommandSetTempoCommand: {
       /** @enum {string} */
       type: 'setTempo';
       /** Format: double */
       bpm: number;
+    };
+    /** @description Replaces the tempo track; the first event must be at tick 0. Audio regions keep their musical positions. */
+    EditCommandSetTempoEventsCommand: {
+      /** @enum {string} */
+      type: 'setTempoEvents';
+      events: components['schemas']['TempoEvent'][];
     };
     EditCommandSetTrackCommand: {
       /** @enum {string} */
@@ -797,6 +1322,15 @@ export interface components {
       input: null | components['schemas']['TrackInput'];
       recordArmed?: null | boolean;
       inputMonitoring?: null | boolean;
+      collapsed?: null | boolean;
+      notes?: null | string;
+    };
+    /** @description Moves a track into a stack (`parentId`) or out of one (null). Stacks do not nest. */
+    EditCommandSetTrackParentCommand: {
+      /** @enum {string} */
+      type: 'setTrackParent';
+      trackId: string;
+      parentId?: null | string;
     };
     /** @description Splits a region in two at `atTick`, which must fall inside it. */
     EditCommandSplitRegionCommand: {
@@ -819,6 +1353,27 @@ export interface components {
       backend?: null | string;
       message?: null | string;
     };
+    /**
+     * @description An entry of a folder on the server's disk. Audio files carry their format when it could be read
+     *     (`sampleRate`, `channels`, `frames`).
+     */
+    FileEntry: {
+      name: string;
+      path: string;
+      kind: components['schemas']['FileKind'];
+      /** Format: int64 */
+      size: number;
+      /** Format: date-time */
+      modified: string;
+      /** Format: int32 */
+      sampleRate?: null | number;
+      /** Format: int32 */
+      channels?: null | number;
+      /** Format: int64 */
+      frames?: null | number;
+    };
+    /** @enum {unknown} */
+    FileKind: 'folder' | 'audio' | 'midi' | 'project' | 'instrument' | 'other';
     HistoryEntry: {
       label: string;
       /** Format: int64 */
@@ -843,6 +1398,22 @@ export interface components {
       };
       file?: null | string;
     };
+    /** @description Key bindings by command id (`transport.play`); each binding like `Space` or `Meta+Shift+Z`. */
+    KeyCommandSet: {
+      bindings: {
+        [key: string]: string[];
+      };
+    };
+    /** @description A key change; `tonic` is a pitch class 0 (C) … 11 (B). The first is at tick 0. */
+    KeyEvent: {
+      /** Format: int64 */
+      tick: number;
+      /** Format: int32 */
+      tonic: number;
+      mode: components['schemas']['KeyMode'];
+    };
+    /** @enum {unknown} */
+    KeyMode: 'major' | 'minor';
     /** @description One raw MIDI message (status 0x80…0xEF, data bytes 0…127). */
     LiveMidiEvent: {
       /** Format: int32 */
@@ -856,6 +1427,17 @@ export interface components {
     LiveMidiRequest: {
       trackId: string;
       events: components['schemas']['LiveMidiEvent'][];
+    };
+    /** @description A marker: a named position, with an optional length, colour and text (Logic's Marker List). */
+    Marker: {
+      id: string;
+      name: string;
+      /** Format: int64 */
+      tick: number;
+      /** Format: int64 */
+      lengthTicks: number;
+      color?: null | string;
+      text: string;
     };
     /** @description The click: on or off, a one-bar count-in before recording, and its level in dB. */
     MetronomeSettings: {
@@ -901,6 +1483,7 @@ export interface components {
       playback: components['schemas']['RegionPlayback'];
       notes: components['schemas']['Note'][];
       controls: components['schemas']['ControlEvent'][];
+      muted: boolean;
     };
     /**
      * @description Which track hears live MIDI when no instrument track is record-armed (Logic sends input to the selected
@@ -1001,6 +1584,10 @@ export interface components {
       fileTypes: string[];
       parameters: components['schemas']['ParameterInfo'][];
     };
+    /** @description Plays a file through the engine's preview channel (null stops it). */
+    PreviewRequest: {
+      path?: null | string;
+    };
     ProblemDetails: {
       type?: null | string;
       title?: null | string;
@@ -1029,6 +1616,24 @@ export interface components {
       regions: components['schemas']['AudioRegion'][];
       audioFiles: components['schemas']['AudioFile'][];
       midiRegions: components['schemas']['MidiRegion'][];
+      takeFolders: components['schemas']['TakeFolder'][];
+      markers: components['schemas']['Marker'][];
+      arrangement: components['schemas']['ArrangementMarker'][];
+      notes: string;
+    };
+    /** @description A saved alternative of the open project (Logic's project alternatives); one is current. */
+    ProjectAlternative: {
+      id: string;
+      name: string;
+      /** Format: date-time */
+      modified: string;
+      current: boolean;
+    };
+    /** @description An automatic backup, made at each save of the current alternative (the newest ten are kept). */
+    ProjectBackup: {
+      id: string;
+      /** Format: date-time */
+      saved: string;
     };
     /**
      * @description What changed between two revisions of the open project (docs/adr/0004-state-ownership.md). Clients apply the
@@ -1040,7 +1645,9 @@ export interface components {
       ops: components['schemas']['DeltaOp'][];
     };
     /**
-     * @description Global settings. `endTick` is the project end marker. `mergeMidiRecording`: a MIDI recording over an
+     * @description Global settings. `tempo` and `signature` are the values at the project start (the first of
+     *     `tempoEvents` and `signatures`, which are the global tempo and signature tracks).
+     *     `endTick` is the project end marker. `mergeMidiRecording`: a MIDI recording over an
      *     existing MIDI region adds its notes to that region instead of making a new one.
      */
     ProjectSettings: {
@@ -1052,6 +1659,10 @@ export interface components {
       /** Format: int64 */
       endTick: number;
       mergeMidiRecording: boolean;
+      tempoEvents: components['schemas']['TempoEvent'][];
+      signatures: components['schemas']['SignatureEvent'][];
+      keys: components['schemas']['KeyEvent'][];
+      recording: components['schemas']['RecordingSettings'];
     };
     /** @description A project in the recent list. */
     ProjectSummary: {
@@ -1060,6 +1671,20 @@ export interface components {
       path: string;
       /** Format: date-time */
       modified: string;
+    };
+    /**
+     * @description How recording works: cycle recording mode; replace mode (a recording removes what it covers on its track); and
+     *     autopunch, which records only between `punchInTick` and `punchOutTick` while playback continues around
+     *     them.
+     */
+    RecordingSettings: {
+      cycleMode: components['schemas']['CycleRecordMode'];
+      replace: boolean;
+      autopunch: boolean;
+      /** Format: int64 */
+      punchInTick: number;
+      /** Format: int64 */
+      punchOutTick: number;
     };
     /**
      * @description How a MIDI region plays, without changing its notes (Logic's Region inspector): transpose in semitones,
@@ -1078,10 +1703,71 @@ export interface components {
       /** Format: double */
       swing: number;
     };
+    /**
+     * @description A saved layout of the editor's windows (Logic's screensets), recalled with keys 1–9. `layout` is the
+     *     editor's own serialised layout, opaque to the server.
+     */
+    Screenset: {
+      /** Format: int32 */
+      number: number;
+      name: string;
+      locked: boolean;
+      layout: string;
+    };
+    /** @description A time signature change, on a bar line of the signature before it. The first is at tick 0. */
+    SignatureEvent: {
+      /** Format: int64 */
+      tick: number;
+      /** Format: int32 */
+      numerator: number;
+      /** Format: int32 */
+      denominator: number;
+    };
     /** @description What `GET /api/v1/system` answers: the server's version and its link to the engine host. */
     SystemInfo: {
       version: string;
       engine: components['schemas']['EngineStatus'];
+    };
+    /** @description A take: `length` frames of a file from `fileOffset`, starting at `startTick`. */
+    Take: {
+      id: string;
+      name: string;
+      fileId: string;
+      /** Format: int64 */
+      startTick: number;
+      /** Format: int64 */
+      fileOffset: number;
+      /** Format: int64 */
+      length: number;
+    };
+    /**
+     * @description A take folder: the takes of a cycle recording (or regions packed together) at one place on an audio track. Only
+     *     the comp plays: each segment plays its take from `startTick` to `endTick`, with `crossfade`
+     *     frames of crossfade at every boundary between segments. An empty comp plays nothing.
+     */
+    TakeFolder: {
+      id: string;
+      trackId: string;
+      name: string;
+      /** Format: int64 */
+      startTick: number;
+      /** Format: int64 */
+      lengthTicks: number;
+      takes: components['schemas']['Take'][];
+      comp: components['schemas']['CompSegment'][];
+      /** Format: int64 */
+      crossfade: number;
+      muted: boolean;
+    };
+    /** @enum {unknown} */
+    TempoCurve: 'step' | 'ramp';
+    /** @description A point of the tempo track. The first is at tick 0. */
+    TempoEvent: {
+      /** Format: int64 */
+      tick: number;
+      /** Format: double */
+      bpm: number;
+      curve: components['schemas']['TempoCurve'];
     };
     TimeSignature: {
       /** Format: int32 */
@@ -1106,6 +1792,9 @@ export interface components {
       instrument: null | components['schemas']['InstrumentSlot'];
       midiInput: components['schemas']['MidiInputSettings'];
       midiOutput: null | components['schemas']['MidiOutputSettings'];
+      parentId?: null | string;
+      collapsed: boolean;
+      notes: string;
     };
     /** @description The device input: 1-based first channel (0: none); a stereo input takes that channel and the next. */
     TrackInput: {
@@ -1114,7 +1803,7 @@ export interface components {
       stereo: boolean;
     };
     /** @enum {unknown} */
-    TrackKind: 'audio' | 'instrument' | 'midi';
+    TrackKind: 'audio' | 'instrument' | 'midi' | 'stack';
     /** @enum {unknown} */
     TransportCommand: 'play' | 'stop' | 'record' | 'locate';
     /** @description Play, stop or record (from `tick` when given), or locate the playhead to `tick`. */
@@ -1711,6 +2400,40 @@ export interface operations {
       };
     };
   };
+  FlashbackCapture: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Accepted */
+      202: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
   ListPlugins: {
     parameters: {
       query?: never;
@@ -1844,6 +2567,548 @@ export interface operations {
     requestBody: {
       content: {
         'application/json': components['schemas']['MidiThruRequest'];
+      };
+    };
+    responses: {
+      /** @description No Content */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  ListAlternatives: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ProjectAlternative'][];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  CreateAlternative: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['CreateAlternativeRequest'];
+      };
+    };
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ProjectAlternative'];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  OpenAlternative: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Project'];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  DeleteAlternative: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description No Content */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  ListBackups: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ProjectBackup'][];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  RevertToBackup: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Project'];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  ListScreensets: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Screenset'][];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  SaveScreenset: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        number: number;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['Screenset'];
+      };
+    };
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Screenset'];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  ImportMidiFile: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['ImportFileRequest'];
+      };
+    };
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['CommandResult'];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  GetKeyCommands: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['KeyCommandSet'];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  SaveKeyCommands: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['KeyCommandSet'];
+      };
+    };
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['KeyCommandSet'];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  GetBookmarks: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Bookmarks'];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  SaveBookmarks: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['Bookmarks'];
+      };
+    };
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Bookmarks'];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  ListFiles: {
+    parameters: {
+      query?: {
+        path?: string;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['DirectoryListing'];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  PreviewFile: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['PreviewRequest'];
       };
     };
     responses: {

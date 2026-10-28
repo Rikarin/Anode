@@ -177,7 +177,10 @@ public static partial class Edits {
             ProjectDefaults.Strip,
             instrument,
             ProjectDefaults.MidiInput,
-            null
+            null,
+            null,
+            false,
+            string.Empty
         );
         return [new TrackUpserted(track, index)];
     }
@@ -285,7 +288,10 @@ public static partial class Edits {
             length,
             0,
             0,
-            0
+            0,
+            0,
+            0,
+            false
         );
         return [new RegionUpserted(region)];
     }
