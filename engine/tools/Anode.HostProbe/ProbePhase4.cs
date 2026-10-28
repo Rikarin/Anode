@@ -69,6 +69,7 @@ static class Phase4 {
             )
         );
         await link.Send(new SetInsertParameterMessage(1, "g", "gain", -6));
+        await Hosted(link, region, track);
         await link.Send(new SetSendLevelMessage(1, "s", 0.25f, 0f));
         await link.Send(new SetStripMessage(1, track with { Gain = 0.6f }));
         await Task.Delay(300, link.Token);
@@ -131,6 +132,34 @@ static class Phase4 {
             Smoke.Check(meters[0] is { TrackId: 1, PeakLeft: > 0.01f }, "the frozen track plays its file");
             await link.Send(new TransportMessage(TransportAction.Stop));
         }
+    }
+
+    /// <summary>
+    ///     The test VST3 (AnodeTest Gain, on VST3_PATH from engine/artifacts/native/vst3) as a sandboxed insert after
+    ///     the built-ins, when the host's catalogue has it.
+    /// </summary>
+    static async Task Hosted(ProbeLink link, SharedSegment region, EngineStrip track) {
+        const string gain = "vst3:414E4F44455447310000000100000001";
+        var catalog = await link.Request(new ScanPluginsMessage(), true) as PluginCatalogMessage;
+        if (catalog?.Plugins.Any(static p => p.Id == gain) != true) {
+            Console.WriteLine("  (no AnodeTest.vst3 in the catalogue: set VST3_PATH to engine/artifacts/native/vst3)");
+            return;
+        }
+
+        var problems = link.Pushed.OfType<PluginProblemMessage>().Count();
+        await link.Send(
+            new SetChannelMessage(
+                1,
+                track with { Inserts = [..track.Inserts!, new("vst", gain, false, new Dictionary<string, double>())] }
+            )
+        );
+        await Task.Delay(500, link.Token);
+        var playing = Smoke.Read(region, out var meters);
+        Smoke.Report("vst3", playing, meters);
+        Smoke.Check(
+            meters[0].PeakLeft > 0.01f && link.Pushed.OfType<PluginProblemMessage>().Count() == problems,
+            "a sandboxed VST3 insert plays"
+        );
     }
 
     static async Task<RenderFinishedMessage?> Render(ProbeLink link, RenderMessage message) {

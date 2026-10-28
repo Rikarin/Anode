@@ -14,4 +14,12 @@
     <ProjectReference Include="../Anode.PluginSandbox/Anode.PluginSandbox.csproj" ReferenceOutputAssembly="false"
                       Private="false"/>
   </ItemGroup>
+  <!-- The sandbox's build beside anode-host's, where PluginHost looks for it (a published app ships the NativeAOT
+       anode-plugin beside the NativeAOT anode-host instead). -->
+  <Target Name="CopyPluginSandbox" AfterTargets="Build">
+    <ItemGroup>
+      <PluginSandboxFiles Include="$(MSBuildThisFileDirectory)../Anode.PluginSandbox/bin/$(Configuration)/$(TargetFramework)/anode-plugin*"/>
+    </ItemGroup>
+    <Copy SourceFiles="@(PluginSandboxFiles)" DestinationFolder="$(OutDir)" SkipUnchangedFiles="true"/>
+  </Target>
 </Project>
