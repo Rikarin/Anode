@@ -1,35 +1,35 @@
 using Anode.Engine.Streaming;
+using Anode.Ipc;
 
 namespace Anode.Engine.Recording;
 
 /// <summary>
-///     One armed track's take in a recording pass: the audio thread pushes the track's input into a lock-free ring,
-///     the writer thread drains it into a 24-bit WAV file (docs/02-phase-1.md, "Recording").
+///     One armed track's take in a recording: the audio thread pushes the track's input into a lock-free ring, the
+///     writer thread drains it into a 24-bit WAV file (docs/02-phase-1.md, "Recording"). One file holds the whole
+///     recording; each run of frames the audio thread pushes says where it was played, so a cycle recording (or a
+///     punch inside a cycle) is one file of several passes (<see cref="RecordedTake.Passes" />).
 /// </summary>
 /// <remarks>
-///     The take is shifted by the device's round-trip latency (<see cref="LatencyFrames" />), so what was played along
-///     to lines up with what was heard: input that arrives at timeline position P was played at P − latency. When that
-///     would start before the project's zero, the leading frames are dropped.
+///     The audio thread pushes positions already shifted by the device's round-trip latency (input that arrives at
+///     timeline position P was played at P − latency), and only the frames it keeps: inside the punch range when
+///     autopunch is on, and never before the project's zero.
 /// </remarks>
 public sealed unsafe class RecordTake : IDisposable {
+    /// <summary>Passes a take can describe; a recording that wraps more often merges the rest into its last pass.</summary>
+    public const int MaxPasses = 4096;
+
     readonly WavWriter writer;
-    long startPosition = -1;
+    readonly long[] passPositions = new long[MaxPasses];
+    readonly long[] passOffsets = new long[MaxPasses];
+    int passes; // audio thread; published by `pushed`
+    long nextPosition = long.MinValue;
     long pushed;
     long dropped;
-    long skip = -1; // writer: leading frames still to drop (−1: not known yet)
 
-    public RecordTake(
-        int trackId,
-        string path,
-        int channels,
-        int sampleRate,
-        int latencyFrames,
-        double ringSeconds = 4
-    ) {
+    public RecordTake(int trackId, string path, int channels, int sampleRate, double ringSeconds = 4) {
         TrackId = trackId;
         Channels = channels;
         SampleRate = sampleRate;
-        LatencyFrames = Math.Max(0, latencyFrames);
         Ring = new(checked((int)(sampleRate * ringSeconds) * channels));
         writer = new(path, channels, sampleRate);
     }
@@ -40,14 +40,12 @@ public sealed unsafe class RecordTake : IDisposable {
 
     public int SampleRate { get; }
 
-    public int LatencyFrames { get; }
-
     public string Path => writer.Path;
 
     public SpscRing Ring { get; }
 
-    /// <summary>The timeline position of the first frame pushed (−1 until then).</summary>
-    public long StartPosition => Volatile.Read(ref startPosition);
+    /// <summary>The timeline position of the first frame kept (−1 until then).</summary>
+    public long StartPosition => Volatile.Read(ref pushed) > 0 ? passPositions[0] : -1;
 
     /// <summary>Frames the audio thread pushed.</summary>
     public long Pushed => Volatile.Read(ref pushed);
@@ -59,17 +57,25 @@ public sealed unsafe class RecordTake : IDisposable {
     public long Frames => writer.Frames;
 
     /// <summary>
-    ///     Audio thread: appends <paramref name="frames" /> frames of input (null channels record silence), recorded at
-    ///     timeline <paramref name="position" />.
+    ///     Audio thread: appends <paramref name="frames" /> frames of input (null channels record silence) played at
+    ///     timeline positions [<paramref name="position" />, + <paramref name="frames" />). A position that does not
+    ///     continue the last push starts a new pass.
     /// </summary>
     public void Push(float* left, float* right, int frames, long position) {
-        if (startPosition < 0) {
-            Volatile.Write(ref startPosition, position);
+        if (frames <= 0) {
+            return;
         }
 
+        if (position != nextPosition && passes < MaxPasses) {
+            passPositions[passes] = position;
+            passOffsets[passes] = pushed;
+            passes++;
+        }
+
+        nextPosition = position + frames;
         var samples = frames * Channels;
         if (Ring.Free < samples) {
-            Volatile.Write(ref dropped, dropped + frames);
+            Volatile.Write(ref dropped, dropped + frames); // the rest of the pass plays early by as much
             return;
         }
 
@@ -93,15 +99,6 @@ public sealed unsafe class RecordTake : IDisposable {
 
     /// <summary>Writer thread: moves what the ring holds into the file. Returns the frames written.</summary>
     public int Drain(Span<float> scratch) {
-        var start = StartPosition;
-        if (start < 0) {
-            return 0;
-        }
-
-        if (skip < 0) {
-            skip = Math.Max(0, LatencyFrames - start);
-        }
-
         var total = 0;
         while (true) {
             var available = Ring.Available;
@@ -112,11 +109,8 @@ public sealed unsafe class RecordTake : IDisposable {
             var samples = Math.Min(available, scratch.Length - scratch.Length % Channels);
             var chunk = scratch[..samples];
             Ring.Read(chunk);
-            var frames = samples / Channels;
-            var drop = (int)Math.Min(skip, frames);
-            skip -= drop;
-            writer.Write(chunk[(drop * Channels)..]);
-            total += frames - drop;
+            writer.Write(chunk);
+            total += samples / Channels;
         }
     }
 
@@ -124,11 +118,37 @@ public sealed unsafe class RecordTake : IDisposable {
     ///     Control thread, once nothing pushes or drains any more: writes what is left, completes the file and describes
     ///     it.
     /// </summary>
-    public Ipc.RecordedTake Complete(Span<float> scratch) {
+    public RecordedTake Complete(Span<float> scratch) {
         Drain(scratch);
         writer.Complete();
-        var start = StartPosition < 0 ? 0 : Math.Max(0, StartPosition - LatencyFrames);
-        return new(TrackId, Path, start, writer.Frames, Channels, SampleRate);
+        return Describe(TrackId, Path, Channels, SampleRate, writer.Frames, passPositions, passOffsets, passes);
+    }
+
+    /// <summary>
+    ///     A take of <paramref name="frames" /> frames whose passes start at file frames <paramref name="offsets" />,
+    ///     played from <paramref name="positions" />: one linear pass has no <see cref="RecordedTake.Passes" />.
+    /// </summary>
+    public static RecordedTake Describe(
+        int trackId,
+        string path,
+        int channels,
+        int sampleRate,
+        long frames,
+        ReadOnlySpan<long> positions,
+        ReadOnlySpan<long> offsets,
+        int count
+    ) {
+        if (count <= 1 || frames == 0) {
+            return new(trackId, path, count == 0 ? 0 : positions[0], frames, channels, sampleRate);
+        }
+
+        var list = new RecordedPass[count];
+        for (var i = 0; i < count; i++) {
+            var end = i + 1 < count ? offsets[i + 1] : frames;
+            list[i] = new(positions[i], offsets[i], end - offsets[i]);
+        }
+
+        return new(trackId, path, positions[0], frames, channels, sampleRate, list);
     }
 
     public void Dispose() {

@@ -158,14 +158,25 @@ public sealed record SetCycleMessage(bool Enabled, long StartSample, long EndSam
 /// </summary>
 public sealed record SetMetronomeMessage(bool Enabled, float Gain, bool CountIn = false) : IpcMessage;
 
-/// <summary>One recorded take: a WAV file the host finished writing.</summary>
+/// <summary>
+///     One recorded take: a WAV file the host finished writing. A take that wrapped (cycle recording, or a Flashback
+///     Capture that looped) lists its <paramref name="Passes" /> in order; null when it is one linear pass from
+///     <paramref name="StartSample" />.
+/// </summary>
 public sealed record RecordedTake(
     int TrackId,
     string Path,
     long StartSample,
     long Frames,
     int Channels,
-    int SampleRate);
+    int SampleRate,
+    IReadOnlyList<RecordedPass>? Passes = null);
+
+/// <summary>
+///     One pass of a take: file frames [<paramref name="FileOffset" />, + <paramref name="Frames" />) were played at
+///     project samples [<paramref name="StartSample" />, + <paramref name="Frames" />).
+/// </summary>
+public sealed record RecordedPass(long StartSample, long FileOffset, long Frames);
 
 /// <summary>One live MIDI message at an absolute project sample (status 0x80…0xEF).</summary>
 public sealed record RecordedMidiEvent(long Sample, int Status, int Data1, int Data2);

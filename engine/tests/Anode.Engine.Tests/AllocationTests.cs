@@ -60,7 +60,7 @@ public sealed unsafe class AllocationTests : IDisposable {
         controller.LoadModel(TestAudio.Load(segment, 1, true, tracks, files, dir));
         controller.Engine.SetMetronome(true, 0.5f);
         using var driver = new OfflineDriver(controller, 64);
-        using var take = new RecordTake(2, Path.Combine(dir, "2-take.wav"), 1, Rate, 0);
+        using var take = new RecordTake(2, Path.Combine(dir, "2-take.wav"), 1, Rate);
         controller.Engine.Root.Tracks[2].Take = take;
         var region = NativeMemory.AlignedAlloc((nuint)TelemetryLayout.Size, 64);
         using var telemetry = new TelemetryWriter(controller.Engine, (byte*)region, static () => 0);

@@ -27,6 +27,8 @@ public sealed unsafe partial class AudioEngine : IAudioProcessor {
     readonly float[] busLeft = GC.AllocateArray<float>(MaxFrames, true);
     readonly float[] busRight = GC.AllocateArray<float>(MaxFrames, true);
     readonly float[] clicks = GC.AllocateArray<float>(MaxFrames, true);
+    readonly float[] laneLeft = GC.AllocateArray<float>(MaxFrames, true);
+    readonly float[] laneRight = GC.AllocateArray<float>(MaxFrames, true);
 
     ModelRoot root = ModelRoot.Empty;
     long started;
@@ -127,6 +129,7 @@ public sealed unsafe partial class AudioEngine : IAudioProcessor {
                 case EngineCommandKind.Play:
                     if (transport.State == TransportState.Stopped && countInRemaining == 0) {
                         transport.Play();
+                        flashbackRestart = true;
                     }
 
                     break;
@@ -149,6 +152,9 @@ public sealed unsafe partial class AudioEngine : IAudioProcessor {
                     break;
                 case EngineCommandKind.SetCycle:
                     transport.SetCycle(new(command.Flag, command.A, command.B));
+                    break;
+                case EngineCommandKind.SetPunch:
+                    punch = new(command.Flag, command.A, command.B);
                     break;
             }
 
@@ -186,10 +192,12 @@ public sealed unsafe partial class AudioEngine : IAudioProcessor {
     ) {
         var countIn = countInRemaining > 0;
         var position = transport.Position;
+        var clock = transport.Clock;
         var bus = busLeft.AsSpan(0, frames);
         var busR = busRight.AsSpan(0, frames);
         bus.Clear();
         busR.Clear();
+        BeginBlock(clock, position, frames, countIn);
 
         var tracks = model.Tracks;
         var anySolo = false;
@@ -201,18 +209,19 @@ public sealed unsafe partial class AudioEngine : IAudioProcessor {
             var track = tracks[i];
             var left = trackLeft.AsSpan(0, frames);
             var right = trackRight.AsSpan(0, frames);
-            ReadTrack(track, model.Generations[i], left, right);
+            ReadTrack(track, model.Generations[i], model.Lanes[i], left, right);
             var stereo = track.Stereo;
             if (track.IsMidi) {
-                RenderMidi(track, model.Views[i], model.Generations[i], offset, position, countIn, left, right);
+                RenderMidi(track, model.Views[i], model.Generations[i], offset, position, clock, countIn, left, right);
                 stereo = true; // instruments are stereo; an external MIDI track is silent
             } else {
-                InputTrack(track, inputs, inputChannels, offset, left, right, position);
+                InputTrack(track, inputs, inputChannels, offset, left, right, position, clock, countIn);
             }
 
             track.Strip.MixInto(left, stereo ? right : left, stereo, !anySolo || track.Strip.Solo, bus, busR);
         }
 
+        Volatile.Read(ref preview)?.MixInto(bus, busR);
         Master.Process(bus, busR);
         var click = clicks.AsSpan(0, frames);
         RenderClicks(model, countIn, position, click);
@@ -229,19 +238,59 @@ public sealed unsafe partial class AudioEngine : IAudioProcessor {
         }
     }
 
-    /// <summary>The track's next frames from its stream while rolling (counting an underrun when short).</summary>
-    void ReadTrack(TrackState track, int generation, Span<float> left, Span<float> right) {
+    /// <summary>
+    ///     The track's next frames from its streams while rolling (counting an underrun when short): its main stream,
+    ///     plus its crossfade stream when its playlist has lanes, summed sample by sample.
+    /// </summary>
+    void ReadTrack(TrackState track, int generation, byte[]? lanes, Span<float> left, Span<float> right) {
         left.Clear();
         right.Clear();
         var identity = TrackFeed.Identity(transport.Anchor.Id, generation);
+        var second = track.Crossfade;
         if (!transport.Rolling) {
             track.Stream.Align(transport.Clock, identity, hardFloor);
-        } else if (track.Stream.Read(transport.Clock, left.Length, identity, hardFloor, left, right) < left.Length) {
+            second?.Align(transport.Clock, identity, hardFloor);
+            return;
+        }
+
+        if (track.Stream.Read(transport.Clock, left.Length, identity, hardFloor, left, right) < left.Length) {
             underruns++;
+        }
+
+        if (second is null) {
+            return;
+        }
+
+        if (lanes is null) {
+            second.Align(transport.Clock, identity, hardFloor); // drops what an earlier compile left in it
+            return;
+        }
+
+        var l2 = laneLeft.AsSpan(0, left.Length);
+        var r2 = laneRight.AsSpan(0, left.Length);
+        l2.Clear();
+        r2.Clear();
+        if (second.Read(transport.Clock, left.Length, identity, hardFloor, l2, r2) < left.Length
+            && second.Started(identity, transport.Clock)) {
+            underruns++;
+        }
+
+        for (var f = 0; f < left.Length; f++) {
+            left[f] += l2[f];
+        }
+
+        if (track.Stereo) {
+            for (var f = 0; f < right.Length; f++) {
+                right[f] += r2[f];
+            }
         }
     }
 
-    /// <summary>Adds the track's input when it monitors, and feeds its take while recording.</summary>
+    /// <summary>
+    ///     Adds the track's input when it monitors, feeds its take while recording and its Flashback memory while
+    ///     playing. While recording with autopunch, an armed track plays back outside the punch range and hears its
+    ///     input instead inside it (automatic input monitoring), switching on the exact frames.
+    /// </summary>
     void InputTrack(
         TrackState track,
         float** inputs,
@@ -249,28 +298,33 @@ public sealed unsafe partial class AudioEngine : IAudioProcessor {
         int offset,
         Span<float> left,
         Span<float> right,
-        long position
+        long position,
+        long clock,
+        bool countIn
     ) {
         var input = track.InputChannel;
-        if ((uint)input >= (uint)inputChannels) {
-            if (transport.State == TransportState.Recording && track.Take is { } silent) {
-                silent.Push(null, null, left.Length, position);
-            }
-
-            return;
+        float* in0 = null, in1 = null;
+        if ((uint)input < (uint)inputChannels) {
+            in0 = inputs[input] + offset;
+            in1 = track.Stereo && input + 1 < inputChannels ? inputs[input + 1] + offset : in0;
         }
 
-        var in0 = inputs[input] + offset;
-        var in1 = track.Stereo && input + 1 < inputChannels ? inputs[input + 1] + offset : in0;
-        if (track.Monitoring) {
+        var recording = transport.State == TransportState.Recording && !countIn;
+        if (recording && punch.Active && track.Armed) {
+            ApplyPunch(left, right, track.Stereo, in0, in1, position);
+        } else if (track.Monitoring && in0 is not null) {
             Add(left, in0);
             if (track.Stereo) {
                 Add(right, in1);
             }
         }
 
-        if (transport.State == TransportState.Recording && track.Take is { } take) {
-            take.Push(in0, track.Stereo ? in1 : null, left.Length, position);
+        if (recording && track.Take is { } take) {
+            Record(take, in0, track.Stereo ? in1 : null, left.Length, clock);
+        }
+
+        if (flashbackActive && track.Armed && track.Flashback is { } memory) {
+            memory.Write(in0, track.Stereo ? in1 : null, left.Length, clock, flashbackStart == clock);
         }
     }
 
@@ -300,6 +354,10 @@ public sealed unsafe partial class AudioEngine : IAudioProcessor {
     }
 
     static void Add(Span<float> destination, float* source) {
+        if (source is null) {
+            return;
+        }
+
         for (var i = 0; i < destination.Length; i++) {
             destination[i] += source[i];
         }

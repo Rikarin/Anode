@@ -22,13 +22,18 @@ namespace Anode.Engine;
 ///     Segments up to this size get the checksum and sort-order check on load (ADR-0006: on for per-track segments,
 ///     off for whole models over a few MB). Layout validation and the prefault always run.
 /// </param>
+/// <param name="FlashbackSeconds">
+///     How much of each armed audio track's input, and of live MIDI, Flashback Capture keeps (docs/04-phase-3.md: 10
+///     minutes).
+/// </param>
 public sealed record EngineOptions(
     int SampleRate,
     int BufferFrames,
     int RoundTripLatency = 0,
     int OutputLatency = 0,
     double StreamSeconds = 2,
-    long VerifyBytes = 4 << 20
+    long VerifyBytes = 4 << 20,
+    double FlashbackSeconds = 600
 );
 
 /// <summary>The takes a recording pass produced: audio files, and the live MIDI armed MIDI tracks received.</summary>
@@ -41,7 +46,7 @@ public sealed record RecordingResult(IReadOnlyList<RecordedTake> Takes, IReadOnl
 ///     the transport through the audio thread's command queue and runs recording passes. Every method is serialised by
 ///     one lock; the audio thread never waits for it.
 /// </summary>
-public sealed class EngineController : IDisposable {
+public sealed partial class EngineController : IDisposable {
     /// <summary>Whole-model segments kept mapped for the server to reuse (its pool of two slots, ADR-0006).</summary>
     const int PooledSegments = 2;
 
@@ -55,6 +60,7 @@ public sealed class EngineController : IDisposable {
     readonly Dictionary<int, StreamFile?> files = [];
     readonly float[] scratch = new float[64 * 1024];
     readonly int streamFrames;
+    readonly long flashbackFrames;
     long segmentIds;
     int generations;
     bool countIn;
@@ -67,13 +73,16 @@ public sealed class EngineController : IDisposable {
     public EngineController(EngineOptions options, PluginRegistry? plugins = null, IMidiBackend? midi = null) {
         Options = options;
         Engine = new(options.SampleRate) {
-            OutputLatency = options.OutputLatency, MidiRecordShift = options.BufferFrames + options.OutputLatency
+            OutputLatency = options.OutputLatency,
+            MidiRecordShift = options.BufferFrames + options.OutputLatency,
+            RecordLatency = Math.Max(0, options.RoundTripLatency)
         };
+        flashbackFrames = Math.Max(1, (long)(options.FlashbackSeconds * options.SampleRate));
         streamFrames = (int)(options.StreamSeconds * options.SampleRate);
         Streamer = new(Engine, Math.Max(4 * options.BufferFrames, options.SampleRate * 15 / 100));
         Writer = new();
         Plugins = plugins ?? new();
-        Midi = new(Engine, midi) { Log = message => Log?.Invoke(message) };
+        Midi = new(Engine, midi) { Log = message => Log?.Invoke(message), HistoryFrames = flashbackFrames };
     }
 
     public EngineOptions Options { get; }
@@ -153,6 +162,7 @@ public sealed class EngineController : IDisposable {
 
             draft.Apply(settings);
             var replaced = draft.ApplyInstruments(settings);
+            draft.PrepareStreams();
             Engine.Master.Set(message.Master);
             RecordDirectory = message.RecordDirectory;
             long length;
@@ -167,6 +177,8 @@ public sealed class EngineController : IDisposable {
                 slot.Dispose(); // the swap's grace period covered the instruments set before it
             }
 
+            SyncFlashback();
+
             return message.Segment.Version;
         }
     }
@@ -178,6 +190,7 @@ public sealed class EngineController : IDisposable {
         readonly List<TrackView> views = [];
         readonly List<int> generations = [];
         readonly List<MappedSegment?> owners = [];
+        readonly List<byte[]?> lanes = [];
         TrackView metronome;
         MappedSegment? metronomeOwner;
 
@@ -191,6 +204,7 @@ public sealed class EngineController : IDisposable {
             views.AddRange(from.Views);
             generations.AddRange(from.Generations);
             owners.AddRange(from.Owners);
+            lanes.AddRange(from.Lanes);
             metronome = from.Metronome;
             metronomeOwner = from.MetronomeOwner;
         }
@@ -210,16 +224,19 @@ public sealed class EngineController : IDisposable {
             var state = existing is not null && existing.Stereo == stereo
                 ? existing
                 : owner.NewTrack(id, stereo, existing);
+            var view = segment.Track(k);
             if (index < 0) {
                 tracks.Add(state);
-                views.Add(segment.Track(k));
+                views.Add(view);
                 generations.Add(++owner.generations);
                 owners.Add(segment);
+                lanes.Add(PlaylistLanes.Of(view));
             } else {
                 tracks[index] = state;
-                views[index] = segment.Track(k);
+                views[index] = view;
                 generations[index] = ++owner.generations;
                 owners[index] = segment;
+                lanes[index] = PlaylistLanes.Of(view);
             }
         }
 
@@ -266,6 +283,15 @@ public sealed class EngineController : IDisposable {
             return replaced;
         }
 
+        /// <summary>Gives every track whose playlist has crossfades its second stream, before the model is published.</summary>
+        public void PrepareStreams() {
+            for (var i = 0; i < tracks.Count; i++) {
+                if (lanes[i] is not null) {
+                    tracks[i].EnsureCrossfade();
+                }
+            }
+        }
+
         public ModelRoot Build(long version, long length, StreamFile?[] files) =>
             new(
                 version,
@@ -276,7 +302,8 @@ public sealed class EngineController : IDisposable {
                 [..owners],
                 metronome,
                 metronomeOwner,
-                files
+                files,
+                [..lanes]
             );
     }
 
@@ -319,12 +346,14 @@ public sealed class EngineController : IDisposable {
                         current.Owners,
                         current.Metronome,
                         current.MetronomeOwner,
-                        current.Files
+                        current.Files,
+                        current.Lanes
                     )
                 );
             }
 
             track.SetIo(inputChannel, armed, monitoring);
+            SyncFlashback();
             return true;
         }
     }
@@ -343,6 +372,8 @@ public sealed class EngineController : IDisposable {
                 WaitGrace();
                 old.Dispose();
             }
+
+            SyncFlashback();
         }
     }
 
@@ -358,7 +389,7 @@ public sealed class EngineController : IDisposable {
         lock (gate) {
             var track = Find(Engine.Root, trackId);
             track?.MidiIo = midi;
-
+            SyncFlashback();
             return track is not null;
         }
     }
@@ -570,12 +601,17 @@ public sealed class EngineController : IDisposable {
                     }
                 }
 
-                finished.Add(take.Complete(scratch));
+                var result = take.Complete(scratch);
                 if (take.Dropped > 0) {
                     Log?.Invoke($"take {take.Path}: {take.Dropped} frames dropped (the writer fell behind)");
                 }
 
                 take.Dispose();
+                if (result.Frames > 0) {
+                    finished.Add(result);
+                } else {
+                    TryDelete(result.Path); // nothing was kept (a punch range the pass never reached)
+                }
             }
 
             takes = [];
@@ -587,36 +623,65 @@ public sealed class EngineController : IDisposable {
     }
 
     /// <summary>
-    ///     The live MIDI each armed MIDI track received during the pass, in project samples from where it started rolling
-    ///     to where it stopped; notes still held at the stop end there. Tracks that received nothing have no take.
+    ///     The live MIDI each armed MIDI track received during the pass, in project samples over what the pass covered
+    ///     (through the cycle, the passes merged; inside the punch range with autopunch); notes still held at the stop
+    ///     end there. Tracks that received nothing have no take.
     /// </summary>
     List<RecordedMidiTake> MidiTakes() {
         var captured = Midi.EndCapture();
-        var start = Engine.RecordStart;
-        var end = Math.Max(start, Engine.RecordEnd);
-        var result = new List<RecordedMidiTake>();
-        if (start < 0) {
-            return result;
+        var (low, high) = Engine.RecordRange;
+        if (Engine.RecordStart < 0 || low > high) {
+            return [];
         }
 
+        var punch = Engine.Punch;
+        var start = punch.Active ? Math.Max(low, punch.In) : low;
+        var end = Math.Max(start, punch.Active ? Math.Min(high, punch.Out) : high);
+        return BuildMidiTakes(captured, start, end, Math.Clamp(Engine.RecordEnd, start, end));
+    }
+
+    /// <summary>
+    ///     MIDI takes over [<paramref name="start" />, <paramref name="end" />] from each track's events in the order
+    ///     they were played. A note whose end was played after a cycle wrap (so lies before its start) ends at
+    ///     <paramref name="end" />; notes still held end at <paramref name="close" />.
+    /// </summary>
+    static List<RecordedMidiTake> BuildMidiTakes(
+        Dictionary<int, List<RecordedMidiEvent>> captured,
+        long start,
+        long end,
+        long close
+    ) {
+        var result = new List<RecordedMidiTake>();
         Span<(byte Status, byte Note)> open = stackalloc (byte, byte)[128];
         foreach (var (trackId, events) in captured.OrderBy(static c => c.Key)) {
             var held = new NoteSet();
+            var onsets = new Dictionary<int, long>();
             var list = new List<RecordedMidiEvent>(events.Count);
-            foreach (var e in events.OrderBy(static e => e.Sample)) {
+            foreach (var played in events) {
+                var e = played with { Sample = Math.Clamp(played.Sample, start, end) };
+                var key = ((e.Status & 0x0F) << 7) | (e.Data1 & 0x7F);
+                var kind = e.Status & 0xF0;
+                if (kind == 0x90 && e.Data2 > 0) {
+                    onsets[key] = e.Sample;
+                } else if ((kind == 0x80 || kind == 0x90) && onsets.Remove(key, out var onset) && e.Sample < onset) {
+                    e = e with { Sample = end }; // ended after a wrap
+                }
+
                 held.Track((byte)e.Status, (byte)e.Data1, (byte)e.Data2);
-                list.Add(e with { Sample = Math.Clamp(e.Sample, start, end) });
+                list.Add(e);
             }
 
             int count;
             while ((count = held.Release(open)) > 0) {
                 for (var i = 0; i < count; i++) {
-                    list.Add(new(end, open[i].Status, open[i].Note, 0));
+                    var key = ((open[i].Status & 0x0F) << 7) | open[i].Note;
+                    var at = onsets.TryGetValue(key, out var onset) && close < onset ? end : close;
+                    list.Add(new(at, open[i].Status, open[i].Note, 0));
                 }
             }
 
             if (list.Count > 0) {
-                result.Add(new(trackId, start, end, list));
+                result.Add(new(trackId, start, end, [..list.OrderBy(static e => e.Sample)]));
             }
         }
 
@@ -700,13 +765,7 @@ public sealed class EngineController : IDisposable {
                 path = Path.Combine(RecordDirectory, $"{track.Id}-{stamp}-{n}.wav");
             }
 
-            var take = new RecordTake(
-                track.Id,
-                path,
-                track.Stereo ? 2 : 1,
-                Options.SampleRate,
-                Options.RoundTripLatency
-            );
+            var take = new RecordTake(track.Id, path, track.Stereo ? 2 : 1, Options.SampleRate);
             started.Add(take);
             track.Take = take;
         }
@@ -746,6 +805,7 @@ public sealed class EngineController : IDisposable {
             }
         }
 
+        var memories = new List<FlashbackBuffer>();
         foreach (var track in previous.Tracks) {
             if (Array.IndexOf(next.Tracks, track) >= 0) {
                 continue;
@@ -755,8 +815,15 @@ public sealed class EngineController : IDisposable {
                 slot.Dispose(); // the track went away
             }
 
+            if (track.Flashback is { } memory) {
+                track.Flashback = null;
+                memories.Add(memory);
+            }
+
             track.Dispose();
         }
+
+        ReleaseFlashback(memories);
 
         foreach (var file in previous.Files) {
             if (file is not null && Array.IndexOf(next.Files, file) < 0) {
@@ -916,6 +983,9 @@ public sealed class EngineController : IDisposable {
             state.SetIo(previous.InputChannel, previous.Armed, previous.Monitoring);
             state.Instrument = previous.Instrument;
             state.MidiIo = previous.MidiIo;
+            if (previous.Crossfade is not null) {
+                state.EnsureCrossfade();
+            }
         }
 
         return state;
@@ -942,6 +1012,7 @@ public sealed class EngineController : IDisposable {
         Midi.Dispose();
         Writer.Dispose();
         Streamer.Dispose();
+        Engine.SetPreview(null)?.Dispose(); // no thread reads it any more
         var root = Engine.Root;
         Engine.Publish(ModelRoot.Empty);
         WaitGrace();

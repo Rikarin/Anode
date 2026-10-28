@@ -35,7 +35,7 @@ public readonly record struct Cycle(bool Enabled, long Start, long End) {
 /// <summary>
 ///     Where play order starts: at <see cref="Clock" /> (frames the transport has rolled since the engine started) the
 ///     playhead is at <see cref="Position" />, and from there it follows <see cref="Cycle" />. The audio thread makes a
-///     new anchor whenever play order changes (a locate, a cycle change, recording starting or stopping); the disk
+///     new anchor whenever play order changes (a locate, a cycle change); the disk
 ///     thread maps clocks to positions with the latest one, so both agree on every frame. A <see cref="Hard" /> anchor
 ///     (a locate) means audio queued under older anchors must not play at all.
 /// </summary>
@@ -47,7 +47,7 @@ public readonly record struct Anchor(long Id, long Clock, long Position, Cycle C
 /// <summary>
 ///     The playhead, in samples, owned by the audio thread: commands arrive from the control thread through the
 ///     engine's command queue, never by calling these methods from another thread. It moves only while rolling, by whole
-///     buffers, following the cycle except while recording (a recording pass is linear: one take per armed track).
+///     buffers, following the cycle (also while recording: a cycle recording's passes wrap with it).
 /// </summary>
 public sealed class Transport {
     long anchorIds;
@@ -66,8 +66,11 @@ public sealed class Transport {
     /// <summary>A recording is about to start (a count-in runs): play order is already the recording's.</summary>
     public bool RecordPending { get; private set; }
 
-    /// <summary>The play order in effect: the cycle, except while recording (or about to).</summary>
-    public Cycle PlayOrder => State == TransportState.Recording || RecordPending ? Cycle.Off : Cycle;
+    /// <summary>
+    ///     The play order in effect: the cycle, while recording too (cycle recording: one file per armed track across
+    ///     the wraps, docs/04-phase-3.md).
+    /// </summary>
+    public Cycle PlayOrder => Cycle;
 
     public bool Rolling => State != TransportState.Stopped;
 

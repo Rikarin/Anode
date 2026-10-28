@@ -19,6 +19,8 @@ public sealed class TrackState : IDisposable {
     bool armed;
     bool monitoring;
     RecordTake? take;
+    FlashbackBuffer? flashback;
+    TrackFeed? crossfade;
     InstrumentSlot? instrument;
     EngineMidiIo? midiIo;
 
@@ -32,7 +34,14 @@ public sealed class TrackState : IDisposable {
 
     public bool Stereo => Stream.Channels == 2;
 
+    /// <summary>The track's stream: every playlist entry, or those in lane 0 when it has crossfades.</summary>
     public TrackFeed Stream { get; }
+
+    /// <summary>
+    ///     The track's second stream, for the entries in lane 1 (<see cref="PlaylistLanes" />): made by the control
+    ///     thread the first time a compile of the track has crossfades, and kept.
+    /// </summary>
+    public TrackFeed? Crossfade => Volatile.Read(ref crossfade);
 
     public Strip Strip { get; } = new();
 
@@ -47,6 +56,19 @@ public sealed class TrackState : IDisposable {
     public RecordTake? Take {
         get => Volatile.Read(ref take);
         set => Volatile.Write(ref take, value);
+    }
+
+    /// <summary>Flashback Capture's memory of the track's input (an armed audio track), swapped by the control thread.</summary>
+    public FlashbackBuffer? Flashback {
+        get => Volatile.Read(ref flashback);
+        set => Volatile.Write(ref flashback, value);
+    }
+
+    /// <summary>Control thread: makes the second stream (before publishing a model whose playlist needs it).</summary>
+    public void EnsureCrossfade() {
+        if (Crossfade is null) {
+            Volatile.Write(ref crossfade, new TrackFeed(Stream.Channels, Stream.TargetFrames));
+        }
     }
 
     /// <summary>The track's instrument (an instrument track), swapped whole by the control thread.</summary>
@@ -81,7 +103,12 @@ public sealed class TrackState : IDisposable {
         MidiIo = settings.Midi;
     }
 
-    public void Dispose() => Stream.Dispose();
+    public void Dispose() {
+        Stream.Dispose();
+        crossfade?.Dispose();
+        flashback?.Dispose();
+        flashback = null;
+    }
 }
 
 /// <summary>
@@ -150,9 +177,11 @@ public sealed class ModelRoot {
         MappedSegment?[] owners,
         TrackView metronome,
         MappedSegment? metronomeOwner,
-        StreamFile?[] files
+        StreamFile?[] files,
+        byte[]?[]? lanes = null
     ) {
         Version = version;
+        Lanes = lanes ?? new byte[]?[tracks.Length];
         LengthSamples = lengthSamples;
         Tracks = tracks;
         Views = views;
@@ -183,6 +212,12 @@ public sealed class ModelRoot {
     public TrackView Metronome { get; }
 
     public MappedSegment? MetronomeOwner { get; }
+
+    /// <summary>
+    ///     Each track's playlist lanes (<see cref="PlaylistLanes.Of" />): null when nothing overlaps and the track
+    ///     plays through one stream, else the lane of each entry, and the track plays its second stream too.
+    /// </summary>
+    public byte[]?[] Lanes { get; }
 
     /// <summary>The files the playlists name, indexed by engine file id.</summary>
     public StreamFile?[] Files { get; }
