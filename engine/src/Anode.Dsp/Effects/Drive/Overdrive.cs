@@ -220,12 +220,13 @@ public sealed class Bitcrusher : AudioEffect {
     ) {
         for (var i = 0; i < left.Length; i++) {
             var g = drive.Next();
-            phase += hold;
             if (phase >= 1) {
                 phase -= 1;
                 heldLeft = Quantize(left[i] * g);
                 heldRight = Quantize(right[i] * g);
             }
+
+            phase += hold;
 
             var gain = level.Next();
             var wet = mix.Next();

@@ -14,16 +14,17 @@ public sealed class EqTests {
         return Fx.Run(eq, Fx.Impulse(32_768)).Left;
     }
 
-    public static TheoryData<int, double, double, double> Bands => new() {
-        { 0, 80, 6, 0.71 }, // low shelf
-        { 0, 300, -9, 1 },
-        { 1, 250, 6, 1 }, // peaks
-        { 2, 1_000, -12, 4 },
-        { 3, 3_000, 9, 0.5 },
-        { 4, 10_000, -6, 2 },
-        { 5, 8_000, 4, 0.71 }, // high shelf
-        { 5, 2_000, -10, 1 }
-    };
+    public static TheoryData<int, double, double, double> Bands =>
+        new() {
+            { 0, 80, 6, 0.71 }, // low shelf
+            { 0, 300, -9, 1 },
+            { 1, 250, 6, 1 }, // peaks
+            { 2, 1_000, -12, 4 },
+            { 3, 3_000, 9, 0.5 },
+            { 4, 10_000, -6, 2 },
+            { 5, 8_000, 4, 0.71 }, // high shelf
+            { 5, 2_000, -10, 1 }
+        };
 
     [Theory]
     [MemberData(nameof(Bands))]
@@ -113,7 +114,7 @@ public sealed class EqTests {
     [Fact]
     public void Sweeping_a_band_does_not_click() {
         using var eq = Fx.Create(ChannelEq.Id, (ChannelEq.Peak2Gain, 12), (ChannelEq.Peak2Q, 2));
-        var sine = TestWav.Sine(440, (int)Fx.Rate, 1, 0.5f);
+        var sine = TestWav.Sine(440, (int)Fx.Rate, 1);
         var output = new float[sine.Length];
         for (var at = 0; at < sine.Length; at += 64) {
             eq.SetParameter(ChannelEq.Peak2Frequency, 200 + 4_000 * (at / 48_000f));
@@ -133,7 +134,7 @@ public sealed class EqTests {
     [Fact]
     public void The_analyzer_reads_a_tone_in_its_band_and_the_reading_is_the_output_peak() {
         using var eq = (ChannelEq)Fx.Create(ChannelEq.Id);
-        var sine = TestWav.Sine(1_000, (int)Fx.Rate, 0.5, 0.5f);
+        var sine = TestWav.Sine(1_000, (int)Fx.Rate, 0.5);
         Fx.Run(eq, sine);
         Assert.Equal(-6.02, eq.Reading, 0.05);
         var bands = new float[30];

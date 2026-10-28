@@ -14,7 +14,8 @@ public enum BiquadType {
 }
 
 /// <summary>
-///     Normalised biquad coefficients (ported from Cathode.Dsp) (a0 = 1). Double precision keeps low-frequency, high-Q sections stable.
+///     Normalised biquad coefficients (ported from Cathode.Dsp) (a0 = 1). Double precision keeps low-frequency, high-Q
+///     sections stable.
 /// </summary>
 public readonly record struct BiquadCoefficients(double B0, double B1, double B2, double A1, double A2) {
     /// <summary>Shelves above this Q develop a large resonant bump at the corner, so their Q is limited.</summary>

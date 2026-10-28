@@ -228,7 +228,10 @@ public sealed class LookaheadLimiter {
 
     static readonly double KneeGain = Math.Pow(10, -KneeDb / 20);
 
-    /// <summary>The peak of the interval between the samples <see cref="TruePeak.Delay" /> − 1 and <see cref="TruePeak.Delay" /> ago, ends included.</summary>
+    /// <summary>
+    ///     The peak of the interval between the samples <see cref="TruePeak.Delay" /> − 1 and
+    ///     <see cref="TruePeak.Delay" /> ago, ends included.
+    /// </summary>
     double IntervalPeak(float[] samples) {
         // historyAt is the oldest sample: tap j reads the sample at c + j − (Delay − 1) for the interval (c, c + 1).
         var start = historyAt;

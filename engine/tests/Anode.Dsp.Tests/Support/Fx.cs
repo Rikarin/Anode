@@ -116,7 +116,9 @@ public static class Fx {
                 var t = j - (half - 1) - f;
                 var sinc = Math.Sin(Math.PI * t) / (Math.PI * t);
                 var x = (t + half) / (2.0 * half);
-                var w = 0.35875 - 0.48829 * Math.Cos(2 * Math.PI * x) + 0.14128 * Math.Cos(4 * Math.PI * x)
+                var w = 0.35875
+                    - 0.48829 * Math.Cos(2 * Math.PI * x)
+                    + 0.14128 * Math.Cos(4 * Math.PI * x)
                     - 0.01168 * Math.Cos(6 * Math.PI * x);
                 k[j] = sinc * w;
             }

@@ -27,9 +27,11 @@ internal struct StereoLfo {
 
     static float Shape(double p, bool triangle) {
         p -= Math.Floor(p);
-        return triangle
-            ? (float)(p < 0.25 ? 4 * p : p < 0.75 ? 2 - 4 * p : 4 * p - 4)
-            : (float)Math.Sin(2 * Math.PI * p);
+        if (!triangle) {
+            return (float)Math.Sin(2 * Math.PI * p);
+        }
+
+        return (float)(p < 0.25 ? 4 * p : p < 0.75 ? 2 - 4 * p : 4 * p - 4);
     }
 }
 
@@ -91,8 +93,9 @@ public sealed class Chorus : AudioEffect {
         for (var i = 0; i < left.Length; i++) {
             var d = delay.Next();
             var s = swing.Next();
-            var l = lineLeft.ReadCubic(d + s * lfo.NextLeft());
-            var r = lineRight.ReadCubic(d + s * lfo.NextRight());
+            // Read before the write: a delay of D samples is D − 1 writes back.
+            var l = lineLeft.ReadCubic(d + s * lfo.NextLeft() - 1);
+            var r = lineRight.ReadCubic(d + s * lfo.NextRight() - 1);
             lineLeft.Write(left[i] + feedback * l);
             lineRight.Write(right[i] + feedback * r);
             var wet = mix.Next();
@@ -159,8 +162,8 @@ public sealed class Flanger : AudioEffect {
         for (var i = 0; i < left.Length; i++) {
             var d = delay.Next();
             var k = depth.Next();
-            var l = lineLeft.ReadCubic(d * (1 + k * lfo.NextLeft()));
-            var r = lineRight.ReadCubic(d * (1 + k * lfo.NextRight()));
+            var l = lineLeft.ReadCubic(d * (1 + k * lfo.NextLeft()) - 1);
+            var r = lineRight.ReadCubic(d * (1 + k * lfo.NextRight()) - 1);
             lineLeft.Write(left[i] + feedback * l);
             lineRight.Write(right[i] + feedback * r);
             var wet = mix.Next();

@@ -158,7 +158,7 @@ public sealed class Reverb : AudioEffect {
         var ratio = 1 - 0.85 * Value(Damping) * 0.01;
         modulationDepth = (float)(ModulationMs[type] * 0.001 * SampleRate);
         for (var i = 0; i < Lines; i++) {
-            var length = LineMs[type][i] * scale * 0.001 * SampleRate;
+            var length = Math.Round(LineMs[type][i] * scale * 0.001 * SampleRate);
             lengths[i] = (float)length;
             // Jot's absorption filter: gain g for the length at DC, a pole for the ratio of decays at Nyquist.
             var g = Math.Pow(10, -3 * length / (decay * SampleRate));
@@ -223,7 +223,7 @@ public sealed class Reverb : AudioEffect {
 
             for (var n = 0; n < Lines; n++) {
                 modulation[n] += modulationStep[n];
-                var read = lines[n].ReadLinear(lengths[n] + modulation[n] - 1);
+                var read = lines[n].ReadCubic(lengths[n] + modulation[n] - 1);
                 // The absorption filter: y = g (1 − p) x + p y.
                 state[n] = lineGain[n] * (1 - pole[n]) * read + pole[n] * state[n];
                 damped[n] = state[n];
@@ -236,8 +236,8 @@ public sealed class Reverb : AudioEffect {
                 lines[n].Write((float)(mixed[n] + ((n & 2) == 0 ? input : -input)));
             }
 
-            double wetLeft = (damped[0] + damped[2] + damped[4] + damped[6]) * 0.5 + earlyL * 0.5f;
-            double wetRight = (damped[1] + damped[3] + damped[5] + damped[7]) * 0.5 + earlyR * 0.5f;
+            var wetLeft = (damped[0] + damped[2] + damped[4] + damped[6]) * 0.5 + earlyL * 0.5;
+            var wetRight = (damped[1] + damped[3] + damped[5] + damped[7]) * 0.5 + earlyR * 0.5;
             if (lowCutOn) {
                 wetLeft = lowLeft.Tick(lowCut, wetLeft);
                 wetRight = lowRight.Tick(lowCut, wetRight);

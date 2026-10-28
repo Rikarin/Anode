@@ -52,9 +52,9 @@ public sealed class StereoDelay : AudioEffect {
 
     /// <summary>The delay of channel <paramref name="right" /> at the current settings, in samples.</summary>
     public double DelaySamples(bool right) {
-        var seconds = Switch(Sync)
-            ? NoteValues.Seconds(Choice(right ? RightNote : LeftNote), Value(Tempo))
-            : Value(right ? RightTime : LeftTime) * 0.001;
+        var note = right ? RightNote : LeftNote;
+        var time = right ? RightTime : LeftTime;
+        var seconds = Switch(Sync) ? NoteValues.Seconds(Choice(note), Value(Tempo)) : Value(time) * 0.001;
         return Math.Clamp(seconds, 0.001, MaxSeconds) * SampleRate;
     }
 

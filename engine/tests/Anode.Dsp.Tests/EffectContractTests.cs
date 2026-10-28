@@ -7,7 +7,7 @@ namespace Anode.Dsp.Tests;
 
 /// <summary>What the <see cref="IAudioEffect" /> contract asks of every built-in effect.</summary>
 public sealed class EffectContractTests {
-    public static TheoryData<string> Ids => [.. BuiltinEffects.All.Select(static d => d.Id)];
+    public static TheoryData<string> Ids => [..BuiltinEffects.All.Select(static d => d.Id)];
 
     static readonly string[] Categories = [
         EffectCategories.Eq, EffectCategories.Dynamics, EffectCategories.Delay, EffectCategories.Reverb,
@@ -122,7 +122,7 @@ public sealed class EffectContractTests {
                 effect.SetParameter(i, extreme == 0 ? p.Min : p.Max);
             }
 
-            var (l, r) = Fx.Run(effect, music.Select(static s => s * 4).ToArray(), musicRight, sidechainLeft: music);
+            var (l, r) = Fx.Run(effect, [..music.Select(static s => s * 4)], musicRight, sidechainLeft: music);
             Assert.All(l, static s => Assert.True(float.IsFinite(s)));
             Assert.All(r, static s => Assert.True(float.IsFinite(s)));
             Assert.True(float.IsNaN(effect.Reading) || float.IsFinite(effect.Reading));
@@ -151,7 +151,8 @@ public sealed class EffectContractTests {
         using var effect = Fx.Create(id);
         var (left, right) = Fx.Music(12_000);
         var first = Fx.Run(effect, left, right);
-        Fx.Run(effect, right, left);
+        var other = TestWav.Pluck(220, 48_000, 0.25, 7);
+        Fx.Run(effect, other, other, sidechainLeft: other);
         effect.Reset();
         var again = Fx.Run(effect, left, right);
         Assert.Equal(-300, NullResidualDb(first.Left, again.Left));
@@ -232,8 +233,11 @@ public sealed class EffectContractTests {
         var input = Fx.Impulse(4_096, 1_000, 0.25f);
         var (l, r) = Fx.Run(effect, input, input);
         var latency = effect.LatencySamples;
-        if (effect.Descriptor.Category is EffectCategories.Distortion or EffectCategories.Filter
-            or EffectCategories.Modulation or EffectCategories.Reverb or EffectCategories.Delay) {
+        if (effect.Descriptor.Category is EffectCategories.Distortion
+            or EffectCategories.Filter
+            or EffectCategories.Modulation
+            or EffectCategories.Reverb
+            or EffectCategories.Delay) {
             // Mix 0 or depth: the dry signal, untouched.
             Assert.Equal(0, latency);
             Assert.Equal(-300, NullResidualDb(input, l));

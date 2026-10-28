@@ -1,4 +1,3 @@
-using Anode.Dsp.Dynamics;
 using Anode.Dsp.Filters;
 
 namespace Anode.Dsp.Effects.Dynamics;
@@ -54,8 +53,7 @@ public sealed class NoiseGate : AudioEffect {
 
     public NoiseGate() : base(Info) { }
 
-    protected override void OnPrepare(float sampleRate) =>
-        detectorFall = Math.Exp(-1 / (DetectorSeconds * sampleRate));
+    protected override void OnPrepare(float sampleRate) => detectorFall = Math.Exp(-1 / (DetectorSeconds * sampleRate));
 
     protected override void OnReset() {
         lowLeft.Reset();

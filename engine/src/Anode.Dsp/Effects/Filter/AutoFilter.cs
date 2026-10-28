@@ -71,8 +71,9 @@ public sealed class AutoFilter : AudioEffect {
     protected override void Update() {
         var hz = Switch(Sync) ? 1 / NoteValues.Seconds(Choice(Note), Value(Tempo)) : Value(LfoRate);
         var modulation = lfo.Next((LfoShape)Choice(LfoShape), hz * ControlInterval / SampleRate);
-        var octaves = Octaves * (Value(LfoDepth) * 0.01 * modulation
-            + Value(EnvelopeAmount) * 0.01 * Math.Min(1, envelope));
+        var octaves = Octaves
+            * (Value(LfoDepth) * 0.01 * modulation
+                + Value(EnvelopeAmount) * 0.01 * Math.Min(1, envelope));
         CurrentCutoff = Math.Clamp(Value(Cutoff) * Math.Pow(2, octaves), 20, 20_000);
         var mode = (FilterMode)Choice(Mode);
         coefficients = MultimodeCoefficients.Design(

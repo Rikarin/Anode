@@ -1,11 +1,11 @@
 using Anode.Dsp.Effects.Delay;
 using Anode.Dsp.Effects.Drive;
-using Anode.Dsp.Effects.Space;
 using Anode.Dsp.Effects.Dynamics;
 using Anode.Dsp.Effects.Eq;
 using Anode.Dsp.Effects.Filter;
 using Anode.Dsp.Effects.Metering;
 using Anode.Dsp.Effects.Modulation;
+using Anode.Dsp.Effects.Space;
 using Anode.Dsp.Effects.Utility;
 
 namespace Anode.Dsp.Effects;

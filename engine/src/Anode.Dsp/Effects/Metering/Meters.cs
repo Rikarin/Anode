@@ -138,13 +138,15 @@ public sealed class LoudnessMeterEffect : AudioEffect {
         Span<float> right,
         ReadOnlySpan<float> sidechainLeft,
         ReadOnlySpan<float> sidechainRight
-    ) => meter.Process(left, right);
+    ) =>
+        meter.Process(left, right);
 
     protected override void Finish() {
         Volatile.Write(ref momentary, meter.Momentary);
         Volatile.Write(ref shortTerm, meter.ShortTerm);
         Volatile.Write(ref integrated, meter.Integrated);
-        Publish(Choice(Shows) switch {
+        Publish(
+            Choice(Shows) switch {
                 0 => meter.Momentary,
                 1 => meter.ShortTerm,
                 _ => meter.Integrated

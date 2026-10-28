@@ -1,7 +1,8 @@
 namespace Anode.Dsp.Resampling;
 
 /// <summary>
-///     Polyphase IIR half-band filter design (ported from Cathode.Dsp) after Laurent de Soras' HIIR (http://ldesoras.free.fr/prod.html): two
+///     Polyphase IIR half-band filter design (ported from Cathode.Dsp) after Laurent de Soras' HIIR
+///     (http://ldesoras.free.fr/prod.html): two
 ///     parallel chains of first-order allpass sections whose average is an elliptic half-band low-pass. Near-zero
 ///     latency (non-linear phase), and cheap: each coefficient costs one multiply per sample at the low rate.
 /// </summary>

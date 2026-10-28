@@ -30,9 +30,16 @@ public sealed class Limiter : AudioEffect {
     public Limiter() : base(Info) { }
 
     public override int LatencySamples =>
-        Prepared ? LookaheadSamples(GetParameter(Lookahead)) + (GetParameter(TruePeakDetection) >= 0.5f ? TruePeak.Delay : 0) : 0;
+        Prepared ? Latency(SampleRate, GetParameter(Lookahead), GetParameter(TruePeakDetection) >= 0.5f) : 0;
 
-    int LookaheadSamples(float milliseconds) => (int)Math.Round(milliseconds * 0.001 * SampleRate);
+    /// <summary>The delay of a lookahead of <paramref name="milliseconds" />, with true-peak detection or not.</summary>
+    internal static int Latency(float sampleRate, float milliseconds, bool truePeak) {
+        var samples = LookaheadSamples(sampleRate, milliseconds);
+        return truePeak ? samples + TruePeak.Delay : samples;
+    }
+
+    static int LookaheadSamples(float sampleRate, float milliseconds) =>
+        (int)Math.Round(milliseconds * 0.001 * sampleRate);
 
     protected override void OnPrepare(float sampleRate) =>
         limiter.Allocate((int)Math.Ceiling(MaxLookaheadMs * 0.001 * sampleRate));
@@ -44,7 +51,7 @@ public sealed class Limiter : AudioEffect {
     }
 
     protected override void Update() {
-        limiter.Configure(LookaheadSamples(Value(Lookahead)), Switch(TruePeakDetection));
+        limiter.Configure(LookaheadSamples(SampleRate, Value(Lookahead)), Switch(TruePeakDetection));
         limiter.SetRelease(Value(Release) * 0.001, SampleRate);
         gain.Set(Decibels.ToGain(Value(InputGain)), Snapping);
         ceiling = Decibels.ToGain((double)Value(Ceiling));
@@ -102,7 +109,7 @@ public sealed class AdaptiveLimiter : AudioEffect {
     public AdaptiveLimiter() : base(Info) { }
 
     public override int LatencySamples =>
-        Prepared ? (int)Math.Round(GetParameter(Lookahead) * 0.001 * SampleRate) + (GetParameter(Mode) >= 0.5f ? TruePeak.Delay : 0) : 0;
+        Prepared ? Limiter.Latency(SampleRate, GetParameter(Lookahead), GetParameter(Mode) >= 0.5f) : 0;
 
     protected override void OnPrepare(float sampleRate) =>
         limiter.Allocate((int)Math.Ceiling(Limiter.MaxLookaheadMs * 0.001 * sampleRate));

@@ -169,12 +169,10 @@ public sealed class DynamicsTests {
         Assert.True(Recovery(Compressor.Opto) < Recovery(Compressor.Vca) - 3);
     }
 
-    public static TheoryData<string, bool> Limiters => new() {
-        { Limiter.Id, true },
-        { Limiter.Id, false },
-        { AdaptiveLimiter.Id, true },
-        { AdaptiveLimiter.Id, false }
-    };
+    public static TheoryData<string, bool> Limiters =>
+        new() {
+            { Limiter.Id, true }, { Limiter.Id, false }, { AdaptiveLimiter.Id, true }, { AdaptiveLimiter.Id, false }
+        };
 
     [Theory]
     [MemberData(nameof(Limiters))]
@@ -197,10 +195,11 @@ public sealed class DynamicsTests {
         );
         var (music, right) = Fx.Run(band, Fx.Music().Left, Fx.Music().Right);
         // Then the classic inter-sample over: a quarter-rate sine at 45°, whose samples are 3 dB under its peak.
-        var hard = Enumerable.Range(0, 12_000).Select(static i => (float)(0.7 * Math.Sin(Math.PI / 2 * (i % 4) + Math.PI / 4)))
+        var hard = Enumerable.Range(0, 12_000)
+            .Select(static i => (float)(0.7 * Math.Sin(Math.PI / 2 * (i % 4) + Math.PI / 4)))
             .ToArray();
         var input = music.Concat(hard).ToArray();
-        var (l, r) = Fx.Run(limiter, input, right.Concat(hard).ToArray());
+        var (l, r) = Fx.Run(limiter, input, [..right.Concat(hard)]);
         var limit = Math.Pow(10, ceiling / 20.0);
         Assert.True(Peak(l) <= limit * 1.000001 && Peak(r) <= limit * 1.000001);
         if (truePeak) {
@@ -298,7 +297,7 @@ public sealed class DynamicsTests {
             (NoiseGate.Reduction, -60),
             (NoiseGate.Sidechain, 1)
         );
-        var tone = TestWav.Sine(200, (int)Fx.Rate, 0.5, 0.5f);
+        var tone = TestWav.Sine(200, (int)Fx.Rate, 0.5);
         var key = new float[tone.Length];
         Array.Fill(key, 0.5f, 12_000, 6_000);
         var (output, _) = Fx.Run(gate, tone, sidechainLeft: key);
@@ -314,7 +313,7 @@ public sealed class DynamicsTests {
             (DeEsser.Threshold, -30),
             (DeEsser.Range, 12)
         );
-        var low = TestWav.Sine(200, (int)Fx.Rate, 0.5, 0.5f);
+        var low = TestWav.Sine(200, (int)Fx.Rate, 0.5);
         var ess = TestWav.Sine(8_000, (int)Fx.Rate, 0.5, 0.3f);
         var (lowOut, _) = Fx.Run(deesser, low);
         Assert.Equal(0, ToDb(Rms(lowOut.AsSpan(12_000)) / Rms(low.AsSpan(12_000))), 0.05);
