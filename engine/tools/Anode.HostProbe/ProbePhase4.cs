@@ -14,7 +14,13 @@ namespace Anode.HostProbe;
 static class Phase4 {
     public static async Task RunAsync(ProbeLink link, SharedSegment region, int rate, string dir, string tone) {
         Console.WriteLine("phase 4: inserts, sends, aux, master limiter, renders, freeze");
-        EngineInsert Insert(string id, string plugin, Dictionary<string, double>? parameters = null, bool bypassed = false) =>
+
+        static EngineInsert Insert(
+            string id,
+            string plugin,
+            Dictionary<string, double>? parameters = null,
+            bool bypassed = false
+        ) =>
             new(id, plugin, bypassed, parameters ?? []);
 
         EngineStrip track = new(
@@ -56,7 +62,12 @@ static class Phase4 {
         Smoke.Report("mix", playing, meters);
         Smoke.Check(meters[1] is { TrackId: 10, PeakLeft: > 0.01f }, "the aux reverb sounds from the send");
         Smoke.Check(meters[2] is { TrackId: -1, PeakLeft: > 0.01f }, "the master sounds through its limiter");
-        await link.Send(new SetChannelMessage(1, track with { Inserts = [Insert("eq", "anode.channel-eq", bypassed: true), ..track.Inserts!.Skip(1)] }));
+        await link.Send(
+            new SetChannelMessage(
+                1,
+                track with { Inserts = [Insert("eq", "anode.channel-eq", bypassed: true), ..track.Inserts!.Skip(1)] }
+            )
+        );
         await link.Send(new SetInsertParameterMessage(1, "g", "gain", -6));
         await link.Send(new SetSendLevelMessage(1, "s", 0.25f, 0f));
         await link.Send(new SetStripMessage(1, track with { Gain = 0.6f }));
@@ -66,7 +77,10 @@ static class Phase4 {
 
         var bounces = Path.Combine(dir, "Bounces");
         var mix = await Render(link, new(1, 0, 2L * rate, Path.Combine(bounces, "mix.wav")));
-        Smoke.Check(mix is { Error: null, Files: [var file] } && new FileInfo(file).Length == 58 + 2L * rate * 8, $"the mix renders offline: {mix}");
+        Smoke.Check(
+            mix is { Error: null, Files: [var file] } && new FileInfo(file).Length == 58 + 2L * rate * 8,
+            $"the mix renders offline: {mix}"
+        );
         var stems = await Render(link, new(2, 0, rate, Path.Combine(bounces, "stems"), [1, 10]));
         Smoke.Check(stems is { Error: null, Files.Count: 2 }, $"stems render: {stems}");
         var freeze = await Render(link, new(3, 0, 3L * rate, Path.Combine(dir, "Freeze"), [1], true));
@@ -78,18 +92,38 @@ static class Phase4 {
         await Task.Delay(200, link.Token);
         await link.Write(new CancelRenderMessage(5));
         var cancelled = await Finished(link, 5);
-        Smoke.Check(cancelled is { Error: "cancelled" } && !File.Exists(Path.Combine(bounces, "long.wav")), $"a render cancels: {cancelled}");
+        Smoke.Check(
+            cancelled is { Error: "cancelled" } && !File.Exists(Path.Combine(bounces, "long.wav")),
+            $"a render cancels: {cancelled}"
+        );
         Console.WriteLine(
             $"  renders: progress messages {link.Pushed.OfType<RenderProgressMessage>().Count()}, mix {(mix is { Files: [var m] } ? m : "none")}"
         );
 
         // The frozen track plays its file.
         if (freeze?.Files is [var frozen]) {
-            using var segment = SegmentWriter.Write([new(1, [], [])], 5, 20L * rate, $"an-probe{Environment.ProcessId % 10000}", 5, true);
-            var loaded = await link.Request(
-                new LoadModelMessage(new(segment.Name, segment.Length, 5), false, [new(1, -1, false, false, false, track, FreezeFile: frozen)], [], master, Path.Combine(dir, "Audio Files"))
+            using var segment = SegmentWriter.Write(
+                [new(1, [], [])],
+                5,
+                20L * rate,
+                $"an-probe{Environment.ProcessId % 10000}",
+                5,
+                true
             );
-            Smoke.Check(loaded is ModelLoadedMessage { Version: 5 }, $"loadModel with a frozen track answered {loaded}");
+            var loaded = await link.Request(
+                new LoadModelMessage(
+                    new(segment.Name, segment.Length, 5),
+                    false,
+                    [new(1, -1, false, false, false, track, FreezeFile: frozen)],
+                    [],
+                    master,
+                    Path.Combine(dir, "Audio Files")
+                )
+            );
+            Smoke.Check(
+                loaded is ModelLoadedMessage { Version: 5 },
+                $"loadModel with a frozen track answered {loaded}"
+            );
             await link.Send(new TransportMessage(TransportAction.Play, 0));
             await Task.Delay(700, link.Token);
             var frozenPlaying = Smoke.Read(region, out meters);
@@ -126,8 +160,17 @@ static class Phase4 {
 ///     automation on every fourth track; on the null clock or a device (muted).
 /// </summary>
 static class MixBench {
-    public static async Task<int> RunAsync(bool useNull, string? device, int tracks, int seconds, int buffer) {
-        IAudioDevice audio = useNull ? new NullAudioDevice(48_000, buffer) : NativeAudioSession.Open(device, 48_000, buffer, 0);
+    public static async Task<int> RunAsync(
+        bool useNull,
+        string? device,
+        int tracks,
+        int seconds,
+        int buffer,
+        CancellationToken cancellationToken = default
+    ) {
+        IAudioDevice audio = useNull
+            ? new NullAudioDevice(48_000, buffer)
+            : NativeAudioSession.Open(device, 48_000, buffer, 0);
         if (audio is NativeAudioSession session) {
             session.OutputGain = 0f; // measured, not heard
         }
@@ -152,26 +195,55 @@ static class MixBench {
                 var index = targets.Count;
                 targets.Add(new(index, t, "volume"));
                 events = [
-                    ..Enumerable.Range(0, 60).Select(p => new PlaybackEvent {
-                            SamplePos = p * (long)rate,
-                            Track = t,
-                            Kind = PlaybackEventKind.Automation,
-                            Value = p % 2 == 0 ? 0.3f : 0.8f,
-                            Target = index
-                        }
-                    )
+                    ..Enumerable.Range(0, 60)
+                        .Select(p => new PlaybackEvent {
+                                SamplePos = p * (long)rate,
+                                Track = t,
+                                Kind = PlaybackEventKind.Automation,
+                                Value = p % 2 == 0 ? 0.3f : 0.8f,
+                                Target = index
+                            }
+                        )
                 ];
             }
 
-            models.Add(new(t, events, [new() { Start = 0, Length = 60L * rate, FileOffset = t * 997L, FileId = 0, Gain = 0.5f }]));
+            models.Add(
+                new(
+                    t,
+                    events,
+                    [
+                        new() {
+                            Start = 0,
+                            Length = 60L * rate,
+                            FileOffset = t * 997L,
+                            FileId = 0,
+                            Gain = 0.5f
+                        }
+                    ]
+                )
+            );
         }
 
         for (var b = 1; b <= 4; b++) {
             list.Add(
-                new(1000 + b, -1, true, false, false, new(0.7f, 0f, false, false, [
-                    new("verb", "anode.reverb", false, new Dictionary<string, double>()),
-                    new("eq", "anode.channel-eq", false, new Dictionary<string, double>())
-                ]), InputBus: b)
+                new(
+                    1000 + b,
+                    -1,
+                    true,
+                    false,
+                    false,
+                    new(
+                        0.7f,
+                        0f,
+                        false,
+                        false,
+                        [
+                            new("verb", "anode.reverb", false, new Dictionary<string, double>()),
+                            new("eq", "anode.channel-eq", false, new Dictionary<string, double>())
+                        ]
+                    ),
+                    InputBus: b
+                )
             );
             models.Add(new(1000 + b, [], []));
         }
@@ -184,10 +256,16 @@ static class MixBench {
                     true,
                     list,
                     [new(0, file, 1, rate, 120L * rate)],
-                    new(0.8f, 0f, false, false, [
-                        new("eq", "anode.channel-eq", false, new Dictionary<string, double>()),
-                        new("lim", "anode.limiter", false, new Dictionary<string, double>())
-                    ]),
+                    new(
+                        0.8f,
+                        0f,
+                        false,
+                        false,
+                        [
+                            new("eq", "anode.channel-eq", false, new Dictionary<string, double>()),
+                            new("lim", "anode.limiter", false, new Dictionary<string, double>())
+                        ]
+                    ),
                     dir,
                     targets
                 )
@@ -197,13 +275,13 @@ static class MixBench {
         controller.Start();
         var timed = new Bench.TimedProcessor(controller.Engine, audio.BufferFrames, rate);
         audio.Start(timed);
-        await controller.PlayAsync(rate);
+        await controller.PlayAsync(rate, cancellationToken);
         Thread.Sleep(2000); // tiered compilation settles
         timed.Reset();
         (audio as NativeAudioSession)?.ResetTiming();
         var gcs = GC.CollectionCount(0);
         var overloads = audio.Overloads;
-        await Task.Delay(seconds * 1000);
+        await Task.Delay(seconds * 1000, cancellationToken);
         var (p50, p99, max, count, allocated) = timed.Summary();
         var period = 1e6 * audio.BufferFrames / rate;
         Console.WriteLine(
@@ -222,7 +300,9 @@ static class MixBench {
         }
 
         var snapshot = controller.Engine.Snapshot;
-        Console.WriteLine($"overloads {audio.Overloads - overloads}, underruns {snapshot.Underruns}, gen0 GCs {GC.CollectionCount(0) - gcs}");
+        Console.WriteLine(
+            $"overloads {audio.Overloads - overloads}, underruns {snapshot.Underruns}, gen0 GCs {GC.CollectionCount(0) - gcs}"
+        );
         audio.Stop();
         audio.Dispose();
         return 0;

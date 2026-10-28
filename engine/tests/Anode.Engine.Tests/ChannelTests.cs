@@ -184,7 +184,7 @@ public sealed class ChannelTests : IDisposable {
             0f,
             false,
             false,
-            [TestEffects.Insert("g", TestEffects.Gain)],
+            [TestEffects.Insert("g", TestEffects.Gain), TestEffects.Insert("m", "anode.level-meter")],
             [new("s", 1, 0.5f, 0f, false)]
         );
         Assert.Null(await host.HandleAsync(new SetChannelMessage(1, strip), Token));
@@ -210,6 +210,13 @@ public sealed class ChannelTests : IDisposable {
         Assert.Null(finished.Error);
         Assert.Equal([path], finished.Files);
         Assert.True(new FileInfo(path).Length > Rate * 8);
+        lock (pushed) {
+            Assert.Contains(
+                pushed.OfType<InsertReadingsMessage>().SelectMany(static m => m.Readings),
+                static r => r is { TrackId: 1, InsertId: "m" }
+            ); // the meter's reading, pushed while it has one
+        }
+
         var states = Assert.IsType<InstrumentStatesMessage>(
             await host.HandleAsync(new RequestInstrumentStatesMessage(), Token)
         );

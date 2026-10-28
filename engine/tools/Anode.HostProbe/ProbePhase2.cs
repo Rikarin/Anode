@@ -22,6 +22,7 @@ sealed class ProbeLink(Stream stream, CancellationToken cancellationToken) {
                     or RenderFinishedMessage
                     or PluginProblemMessage
                     or ParameterChangedMessage
+                    or InsertReadingsMessage
                 || (reply is PluginCatalogMessage && !catalogIsReply)) {
                 Pushed.Add(reply);
                 continue;

@@ -39,7 +39,7 @@ static class TestEffects {
 
 /// <summary>The common parts: parameters by index, no state, no reading.</summary>
 abstract class TestEffect(EffectDescriptor descriptor) : IAudioEffect {
-    protected readonly float[] Values = [..descriptor.Parameters.Select(static p => p.Default)];
+    readonly float[] values = [..descriptor.Parameters.Select(static p => p.Default)];
 
     public EffectDescriptor Descriptor { get; } = descriptor;
 
@@ -53,9 +53,9 @@ abstract class TestEffect(EffectDescriptor descriptor) : IAudioEffect {
 
     public virtual void Prepare(float sampleRate, int maxFrames) { }
 
-    public void SetParameter(int index, float value) => Values[index] = value;
+    public void SetParameter(int index, float value) => values[index] = value;
 
-    public float GetParameter(int index) => Values[index];
+    public float GetParameter(int index) => values[index];
 
     public abstract void Process(
         Span<float> left,
@@ -94,21 +94,21 @@ sealed class GainEffect() : TestEffect(Info) {
         ReadOnlySpan<float> sidechainLeft,
         ReadOnlySpan<float> sidechainRight
     ) {
-        var g = Values[0];
+        var g = GetParameter(0);
         for (var i = 0; i < left.Length; i++) {
             left[i] *= g;
             right[i] *= g;
         }
     }
 
-    public override byte[]? SaveState() => BitConverter.GetBytes(Values[0]);
+    public override byte[]? SaveState() => BitConverter.GetBytes(GetParameter(0));
 
     public override bool LoadState(ReadOnlySpan<byte> state) {
         if (state.Length != 4) {
             return false;
         }
 
-        Values[0] = BitConverter.ToSingle(state);
+        SetParameter(0, BitConverter.ToSingle(state));
         return true;
     }
 }
@@ -131,7 +131,7 @@ sealed class DelayEffect : TestEffect {
 
     public DelayEffect() : base(Info) { }
 
-    public override int LatencySamples => (int)Values[0];
+    public override int LatencySamples => (int)GetParameter(0);
 
     public override void Process(
         Span<float> l,
@@ -202,7 +202,7 @@ sealed class BiquadEffect() : TestEffect(Info) {
     float b0 = 1.02f, b1 = -1.9f, b2 = 0.9f, a1 = -1.9f, a2 = 0.92f;
 
     public override void Prepare(float sampleRate, int maxFrames) {
-        var w = 2 * Math.PI * Values[0] / sampleRate;
+        var w = 2 * Math.PI * GetParameter(0) / sampleRate;
         var alpha = Math.Sin(w) / 2;
         var gain = Math.Pow(10, 3 / 40.0);
         var a0 = 1 + alpha / gain;
@@ -316,7 +316,7 @@ sealed class TestFactory : IPluginFactory, IAudioCycleObserver {
             ReadOnlySpan<float> sidechainLeft,
             ReadOnlySpan<float> sidechainRight
         ) {
-            var g = Values[0];
+            var g = GetParameter(0);
             for (var i = 0; i < left.Length; i++) {
                 left[i] *= g;
                 right[i] *= g;

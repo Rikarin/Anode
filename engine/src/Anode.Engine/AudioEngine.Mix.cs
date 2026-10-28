@@ -237,11 +237,32 @@ public sealed unsafe partial class AudioEngine {
         }
 
         if (track.IsMidi) {
-            RenderMidi(track, node, model.Views[i], model.Generations[i], blockOffset, blockPosition, blockClock, blockCountIn, left, right);
+            RenderMidi(
+                track,
+                node,
+                model.Views[i],
+                model.Generations[i],
+                blockOffset,
+                blockPosition,
+                blockClock,
+                blockCountIn,
+                left,
+                right
+            );
             return true; // instruments are stereo; an external MIDI track is silent
         }
 
-        InputTrack(track, blockInputs, blockInputChannels, blockOffset, left, right, blockPosition, blockClock, blockCountIn);
+        InputTrack(
+            track,
+            blockInputs,
+            blockInputChannels,
+            blockOffset,
+            left,
+            right,
+            blockPosition,
+            blockClock,
+            blockCountIn
+        );
         return track.Stereo;
     }
 
@@ -446,7 +467,14 @@ public sealed unsafe partial class AudioEngine {
     ///     <paramref name="left" />): inserts, delay compensation, output and sends. The master's output goes to
     ///     <paramref name="outLeft" /> and <paramref name="outRight" />.
     /// </summary>
-    void Channel(MixNode node, Span<float> left, Span<float> right, bool stereo, Span<float> outLeft, Span<float> outRight) {
+    void Channel(
+        MixNode node,
+        Span<float> left,
+        Span<float> right,
+        bool stereo,
+        Span<float> outLeft,
+        Span<float> outRight
+    ) {
         var ch = node.Channel;
         stereo = Inserts(node, left, right, stereo);
         var source = stereo ? right : left;
@@ -476,7 +504,12 @@ public sealed unsafe partial class AudioEngine {
             if (destination >= 0) {
                 Tap(line, Delay(destination, ch.Latency), left, source, ref tapped, out var srcL, out var srcR);
                 SendGains(node, sends[s], node.SendTargets[s], stereo);
-                Accumulate(srcL, srcR, destLeft[destination].AsSpan(0, blockFrames), destRight[destination].AsSpan(0, blockFrames));
+                Accumulate(
+                    srcL,
+                    srcR,
+                    destLeft[destination].AsSpan(0, blockFrames),
+                    destRight[destination].AsSpan(0, blockFrames)
+                );
             }
         }
     }
@@ -525,7 +558,12 @@ public sealed unsafe partial class AudioEngine {
         }
 
         if (stem is null && destination >= 0) {
-            var (l, r) = AccumulateMetered(srcL, srcR, destLeft[destination].AsSpan(0, frames), destRight[destination].AsSpan(0, frames));
+            var (l, r) = AccumulateMetered(
+                srcL,
+                srcR,
+                destLeft[destination].AsSpan(0, frames),
+                destRight[destination].AsSpan(0, frames)
+            );
             ch.Strip.Meter(l, r);
             return;
         }
@@ -813,7 +851,13 @@ public sealed unsafe partial class AudioEngine {
     ///     Sets each automated parameter of <paramref name="effect" /> or <paramref name="instrument" /> to its lane's
     ///     value at frame <paramref name="at" />, when it changed.
     /// </summary>
-    void SetAutomated(ParameterBinding[] bindings, float[] last, int at, IAudioEffect? effect, IInstrument? instrument) {
+    void SetAutomated(
+        ParameterBinding[] bindings,
+        float[] last,
+        int at,
+        IAudioEffect? effect,
+        IInstrument? instrument
+    ) {
         var automation = blockModel.Automation;
         for (var b = 0; b < bindings.Length; b++) {
             if (LaneFor(automation, bindings[b].Target) is not { } lane) {

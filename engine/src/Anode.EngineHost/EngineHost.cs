@@ -21,6 +21,7 @@ public sealed class EngineHost : IDisposable {
     readonly SharedSegment? sharedTelemetry;
     readonly unsafe byte* localTelemetry;
     readonly TelemetryWriter telemetry;
+    Timer? readings;
     readonly IReadOnlyList<string>? clapFolders;
     readonly Lock scanGate = new();
     readonly Lock pushGate = new();
@@ -116,8 +117,24 @@ public sealed class EngineHost : IDisposable {
         Controller.Start();
         Device.Start(Controller.Engine);
         telemetry.Start();
+        readings = new(_ => PushReadings(), null, ReadingsInterval, ReadingsInterval);
         started = true;
         _ = ScanAsync(true);
+    }
+
+    /// <summary>How often the inserts' readings are pushed (at most 15 times a second).</summary>
+    static readonly TimeSpan ReadingsInterval = TimeSpan.FromSeconds(1.0 / 15);
+
+    /// <summary>Pushes the inserts' readings when any insert has one.</summary>
+    void PushReadings() {
+        if (Push is not { } push) {
+            return;
+        }
+
+        var list = Controller.InsertReadings();
+        if (list.Count > 0) {
+            push(new InsertReadingsMessage(list));
+        }
     }
 
     /// <summary>
@@ -239,46 +256,10 @@ public sealed class EngineHost : IDisposable {
                 case PreviewFileMessage preview:
                     Controller.Preview(preview.Path, preview.Gain);
                     return null;
-                case SetChannelMessage channel:
-                    return Controller.SetChannel(channel.TrackId, channel.Strip)
-                        ? null
-                        : new ErrorMessage($"No track {channel.TrackId}.", "setChannel");
-                case SetInsertParameterMessage parameter:
-                    return Controller.SetInsertParameter(
-                        parameter.TrackId,
-                        parameter.InsertId,
-                        parameter.ParameterId,
-                        parameter.Value
-                    )
-                        ? null
-                        : new ErrorMessage(
-                            $"Track {parameter.TrackId} has no insert '{parameter.InsertId}' with a parameter "
-                            + $"'{parameter.ParameterId}'.",
-                            "setInsertParameter"
-                        );
-                case SetSendLevelMessage send:
-                    return Controller.SetSendLevel(send.TrackId, send.SendId, send.Gain, send.Pan)
-                        ? null
-                        : new ErrorMessage($"Track {send.TrackId} has no send '{send.SendId}'.", "setSendLevel");
-                case SetMixerMessage mixer:
-                    Controller.SetMixer(mixer.Pdc, mixer.LowLatency, mixer.LowLatencyLimitMs);
-                    return null;
-                case RenderMessage render:
-                    Render(render);
-                    return null;
-                case CancelRenderMessage cancel:
-                    CancelRender(cancel.JobId);
-                    return null;
-                case OpenPluginEditorMessage editor:
-                    return Controller.OpenPluginEditor(editor.TrackId, editor.InsertId, editor.Open)
-                        ? null
-                        : new ErrorMessage(
-                            $"Track {editor.TrackId} has no plugin editor"
-                            + (editor.InsertId is null ? "." : $" for insert '{editor.InsertId}'."),
-                            "openPluginEditor"
-                        );
                 default:
-                    return new ErrorMessage($"The host does not take '{Name(message)}' messages.", Name(message));
+                    return Mixer(message, out var reply)
+                        ? reply
+                        : new ErrorMessage($"The host does not take '{Name(message)}' messages.", Name(message));
             }
         } catch (Exception e) when (e is IOException
                                         or InvalidDataException
@@ -288,6 +269,57 @@ public sealed class EngineHost : IDisposable {
             return new ErrorMessage(e.Message, Name(message));
         }
     }
+
+    /// <summary>
+    ///     The Phase 4 messages: channel structure, insert parameters, send levels, mixer settings, renders and plugin
+    ///     editors. False when <paramref name="message" /> is none of them.
+    /// </summary>
+    bool Mixer(IpcMessage message, out IpcMessage? reply) {
+        reply = null;
+        switch (message) {
+            case SetChannelMessage channel:
+                reply = Refused(
+                    Controller.SetChannel(channel.TrackId, channel.Strip),
+                    $"No track {channel.TrackId}.",
+                    "setChannel"
+                );
+                return true;
+            case SetInsertParameterMessage p:
+                reply = Refused(
+                    Controller.SetInsertParameter(p.TrackId, p.InsertId, p.ParameterId, p.Value),
+                    $"Track {p.TrackId} has no insert '{p.InsertId}' with a parameter '{p.ParameterId}'.",
+                    "setInsertParameter"
+                );
+                return true;
+            case SetSendLevelMessage send:
+                reply = Refused(
+                    Controller.SetSendLevel(send.TrackId, send.SendId, send.Gain, send.Pan),
+                    $"Track {send.TrackId} has no send '{send.SendId}'.",
+                    "setSendLevel"
+                );
+                return true;
+            case SetMixerMessage mixer:
+                Controller.SetMixer(mixer.Pdc, mixer.LowLatency, mixer.LowLatencyLimitMs);
+                return true;
+            case RenderMessage render:
+                Render(render);
+                return true;
+            case CancelRenderMessage cancel:
+                CancelRender(cancel.JobId);
+                return true;
+            case OpenPluginEditorMessage editor:
+                reply = Refused(
+                    Controller.OpenPluginEditor(editor.TrackId, editor.InsertId, editor.Open),
+                    $"Track {editor.TrackId} has no plugin editor for {editor.InsertId ?? "its instrument"}.",
+                    "openPluginEditor"
+                );
+                return true;
+            default:
+                return false;
+        }
+    }
+
+    static ErrorMessage? Refused(bool done, string error, string request) => done ? null : new(error, request);
 
     /// <summary>
     ///     Starts render job <paramref name="message" /> in the background: <see cref="RenderProgressMessage" />s, then
@@ -404,6 +436,7 @@ public sealed class EngineHost : IDisposable {
             OpenPluginEditorMessage => "openPluginEditor",
             ParameterChangedMessage => "parameterChanged",
             PluginProblemMessage => "pluginProblem",
+            InsertReadingsMessage => "insertReadings",
             _ => message.GetType().Name
         };
 
@@ -414,6 +447,7 @@ public sealed class EngineHost : IDisposable {
             }
         }
 
+        readings?.Dispose();
         telemetry.Dispose();
         if (started) {
             Device.Stop();

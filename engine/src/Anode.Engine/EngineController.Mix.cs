@@ -132,6 +132,26 @@ public sealed partial class EngineController {
         return states;
     }
 
+    /// <summary>
+    ///     Every insert's reading that is a number (track −1: the master), read without the gate: the published model
+    ///     and each channel's configuration are swapped whole, and a reading is a single float the audio thread writes.
+    /// </summary>
+    public List<InsertReadingEntry> InsertReadings() {
+        var readings = new List<InsertReadingEntry>();
+        foreach (var (trackId, channel) in Channels(Engine.Root)) {
+            foreach (var insert in channel.Config.Inserts) {
+                if (insert.Slot.Effect is { } effect
+                    && !insert.Slot.Failed
+                    && effect.Reading is var value
+                    && !float.IsNaN(value)) {
+                    readings.Add(new(trackId, insert.Slot.Id, value));
+                }
+            }
+        }
+
+        return readings;
+    }
+
     IEnumerable<(int TrackId, ChannelState Channel)> Channels(ModelRoot root) {
         foreach (var track in root.Tracks) {
             yield return (track.Id, track.Channel);
@@ -183,18 +203,7 @@ public sealed partial class EngineController {
         var claimed = new HashSet<InsertSlot>();
         var inserts = new List<ChannelInsert>();
         foreach (var spec in strip.Inserts ?? []) {
-            var slot = old.Inserts.Select(static i => i.Slot)
-                .FirstOrDefault(s => s.Id == spec.Id && s.PluginId == spec.PluginId && !claimed.Contains(s));
-            if (slot is not null) {
-                foreach (var (id, value) in spec.Parameters) {
-                    if (!slot.Values.TryGetValue(id, out var known) || Math.Abs(known - value) > 1e-9) {
-                        slot.Set(id, value);
-                    }
-                }
-            } else {
-                slot = BuildInsert(trackId, spec);
-            }
-
+            var slot = KeepInsert(old, spec, claimed) ?? BuildInsert(trackId, spec);
             claimed.Add(slot);
             inserts.Add(new(slot, spec.Bypassed, spec.SidechainTrack, spec.SidechainBus));
         }
@@ -211,11 +220,24 @@ public sealed partial class EngineController {
         }
 
         channel.Config = new([..inserts], [..sends], strip.Output);
-        foreach (var insert in old.Inserts) {
-            if (!claimed.Contains(insert.Slot)) {
-                replaced.Add(insert.Slot);
+        replaced.AddRange(old.Inserts.Select(static i => i.Slot).Where(s => !claimed.Contains(s)));
+    }
+
+    /// <summary>The instance of <paramref name="spec" />'s id and plugin, its parameters brought up to date, or null.</summary>
+    static InsertSlot? KeepInsert(ChannelConfig old, EngineInsert spec, HashSet<InsertSlot> claimed) {
+        var slot = old.Inserts.Select(static i => i.Slot)
+            .FirstOrDefault(s => s.Id == spec.Id && s.PluginId == spec.PluginId && !claimed.Contains(s));
+        if (slot is null) {
+            return null;
+        }
+
+        foreach (var (id, value) in spec.Parameters) {
+            if (!slot.Values.TryGetValue(id, out var known) || Math.Abs(known - value) > 1e-9) {
+                slot.Set(id, value);
             }
         }
+
+        return slot;
     }
 
     /// <summary>

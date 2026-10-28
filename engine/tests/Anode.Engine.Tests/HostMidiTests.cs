@@ -127,7 +127,10 @@ public sealed class HostMidiTests : IAsyncLifetime {
             catalog.Plugins.Where(static p => p.IsInstrument).Select(static p => (p.Id, p.Format))
         );
         // The built-in effects follow the built-in instruments (Phase 4).
-        Assert.Contains(catalog.Plugins, static p => p is { Id: "anode.channel-eq", IsInstrument: false, Category: "EQ" });
+        Assert.Contains(
+            catalog.Plugins,
+            static p => p is { Id: "anode.channel-eq", IsInstrument: false, Category: "EQ" }
+        );
         var test = catalog.Plugins.Single(static p => p.Id == TestInstrument.Id);
         Assert.Equal([".txt"], test.FileTypes);
         Assert.Equal(["sine", "square", "saw"], test.Parameters[1].ValueNames);

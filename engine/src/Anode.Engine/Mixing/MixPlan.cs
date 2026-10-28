@@ -115,121 +115,119 @@ public sealed class MixPlan {
         };
 
     /// <summary>The plan for <paramref name="tracks" /> (in model order) and <paramref name="master" />.</summary>
-    public static MixPlan Build(TrackState[] tracks, ChannelState master, AutomationSet automation) {
-        var n = tracks.Length;
-        var configs = new ChannelConfig[n];
-        for (var i = 0; i < n; i++) {
-            configs[i] = tracks[i].Frozen ? Frozen(tracks[i].Channel.Config) : tracks[i].Channel.Config;
-        }
+    public static MixPlan Build(TrackState[] tracks, ChannelState master, AutomationSet automation) =>
+        new Builder(tracks, master, automation).Build();
 
-        // Levels: an aux sits one above everything feeding its input bus (a loop the server failed to refuse is cut).
-        var levels = new int[n];
-        for (var pass = 0; pass <= n; pass++) {
-            var changed = false;
-            for (var i = 0; i < n; i++) {
-                if (tracks[i].InputBus <= 0) {
-                    continue;
-                }
+    /// <summary>Works a plan out on the control thread.</summary>
+    sealed class Builder {
+        readonly TrackState[] tracks;
+        readonly ChannelState master;
+        readonly AutomationSet automation;
+        readonly ChannelConfig[] configs;
+        readonly int[] position;
+        readonly int[] sequence;
+        readonly HashSet<int> sidechainSources = [];
+        readonly SortedSet<int> snapshots = [];
+        readonly SortedSet<int> used = [0];
 
-                var level = 0;
-                for (var j = 0; j < n; j++) {
-                    if (j != i && Feeds(configs[j], tracks[i].InputBus)) {
-                        level = Math.Max(level, levels[j] + 1);
+        public Builder(TrackState[] tracks, ChannelState master, AutomationSet automation) {
+            this.tracks = tracks;
+            this.master = master;
+            this.automation = automation;
+            configs = [..tracks.Select(static t => t.Frozen ? Frozen(t.Channel.Config) : t.Channel.Config)];
+            var levels = Levels();
+            sequence = [..Enumerable.Range(0, tracks.Length).OrderBy(i => levels[i]).ThenBy(static i => i)];
+            position = new int[tracks.Length];
+            for (var k = 0; k < sequence.Length; k++) {
+                position[sequence[k]] = k;
+            }
+
+            foreach (var config in configs.Append(master.Config)) {
+                foreach (var insert in config.Inserts) {
+                    if (TrackIndex(insert.SidechainTrack) is var j and >= 0) {
+                        sidechainSources.Add(j);
+                        tracks[j].Channel.EnsurePost();
                     }
                 }
+            }
+        }
 
-                level = Math.Min(level, n);
-                if (level != levels[i]) {
+        public MixPlan Build() {
+            var order = new MixNode[tracks.Length];
+            for (var k = 0; k < order.Length; k++) {
+                var i = sequence[k];
+                order[k] = Node(i, k, tracks[i], configs[i]);
+            }
+
+            var masterNode = Node(-1, order.Length, null, master.Config);
+            return new(order, masterNode, [..used], [..snapshots]);
+        }
+
+        /// <summary>Each aux sits one level above everything feeding its input bus (a loop the server missed is cut).</summary>
+        int[] Levels() {
+            var n = tracks.Length;
+            var levels = new int[n];
+            var changed = true;
+            for (var pass = 0; pass <= n && changed; pass++) {
+                changed = false;
+                for (var i = 0; i < n; i++) {
+                    var level = tracks[i].InputBus > 0 ? Math.Min(n, Above(i, tracks[i].InputBus, levels)) : 0;
+                    changed |= level != levels[i];
                     levels[i] = level;
-                    changed = true;
                 }
             }
 
-            if (!changed) {
-                break;
+            return levels;
+        }
+
+        int Above(int aux, int bus, int[] levels) {
+            var level = 0;
+            for (var j = 0; j < tracks.Length; j++) {
+                if (j != aux && Feeds(configs[j], bus)) {
+                    level = Math.Max(level, levels[j] + 1);
+                }
             }
+
+            return level;
         }
 
-        var sequence = Enumerable.Range(0, n).OrderBy(i => levels[i]).ThenBy(static i => i).ToArray();
-        var position = new int[n];
-        for (var k = 0; k < n; k++) {
-            position[sequence[k]] = k;
-        }
-
-        var sidechainSources = new HashSet<int>();
-        var snapshots = new SortedSet<int>();
-        var used = new SortedSet<int> { 0 };
-        var order = new MixNode[n];
-        for (var k = 0; k < n; k++) {
-            var i = sequence[k];
-            order[k] = Node(i, k, tracks[i], configs[i]);
-        }
-
-        var masterNode = Node(-1, n, null, master.Config);
-        foreach (var index in sidechainSources) {
-            tracks[index].Channel.EnsurePost();
-        }
-
-        for (var k = 0; k < n; k++) {
-            if (sidechainSources.Contains(sequence[k])) {
-                order[k] = Copy(order[k], true);
+        int TrackIndex(int trackId) {
+            if (trackId < 0) {
+                return -1;
             }
-        }
 
-        return new(order, masterNode, [..used], [..snapshots]);
+            for (var j = 0; j < tracks.Length; j++) {
+                if (tracks[j].Id == trackId) {
+                    return j;
+                }
+            }
+
+            return -1;
+        }
 
         MixNode Node(int index, int at, TrackState? track, ChannelConfig config) {
             var trackId = track?.Id ?? -1;
-            var sidechains = new SidechainSource[config.Inserts.Length];
-            var bindings = new ParameterBinding[config.Inserts.Length][];
-            for (var s = 0; s < config.Inserts.Length; s++) {
-                var insert = config.Inserts[s];
-                sidechains[s] = Sidechain(insert, at);
-                var list = new List<ParameterBinding>();
-                for (var t = 0; t < automation.Targets.Length; t++) {
-                    if (automation.Targets[t] is { } target
-                        && target.TrackId == trackId
-                        && AutomationLane.KindOf(target.Kind) == AutomationKind.Insert
-                        && target.Id == insert.Slot.Id
-                        && automation.Lane(t) is not null
-                        && target.ParameterId is { } parameter
-                        && insert.Slot.IndexOf(parameter) is var p and >= 0) {
-                        list.Add(new(p, t));
-                    }
-                }
-
-                bindings[s] = [..list];
+            var inserts = config.Inserts;
+            var bindings = new ParameterBinding[inserts.Length][];
+            for (var s = 0; s < inserts.Length; s++) {
+                var slot = inserts[s].Slot;
+                bindings[s] = Bindings(trackId, AutomationKind.Insert, slot.Id, slot.IndexOf);
             }
 
-            var instrument = new List<ParameterBinding>();
-            if (track?.Instrument is { } slot) {
-                for (var t = 0; t < automation.Targets.Length; t++) {
-                    if (automation.Targets[t] is { } target
-                        && target.TrackId == trackId
-                        && AutomationLane.KindOf(target.Kind) == AutomationKind.Instrument
-                        && automation.Lane(t) is not null
-                        && target.ParameterId is { } parameter
-                        && slot.IndexOf(parameter) is var p and >= 0) {
-                        instrument.Add(new(p, t));
-                    }
-                }
-            }
-
+            var instrument = track?.Instrument is { } instrumentSlot
+                ? Bindings(trackId, AutomationKind.Instrument, null, instrumentSlot.IndexOf)
+                : [];
             var output = track is null ? -1 : Destination(config.Output);
             if (output >= 0) {
                 used.Add(output);
             }
 
             var sends = new int[track is null ? 0 : config.Sends.Length]; // the master has no sends
-            var sendTargets = new int[sends.Length];
             for (var s = 0; s < sends.Length; s++) {
-                var bus = config.Sends[s].Bus;
-                sends[s] = bus is >= 1 and <= Buses ? bus : -1;
+                sends[s] = config.Sends[s].Bus is >= 1 and <= Buses ? config.Sends[s].Bus : -1;
                 if (sends[s] >= 0) {
                     used.Add(sends[s]);
                 }
-
-                sendTargets[s] = Lane(AutomationKind.Send, config.Sends[s].Slot.Id);
             }
 
             return new() {
@@ -242,34 +240,50 @@ public sealed class MixPlan {
                 Frozen = track?.Frozen ?? false,
                 OutputDestination = output,
                 SendDestinations = sends,
-                Sidechains = sidechains,
+                Sidechains = [..inserts.Select(i => Sidechain(i, at))],
                 InsertBindings = bindings,
                 InsertLast = [..bindings.Select(static b => Enumerable.Repeat(float.NaN, b.Length).ToArray())],
-                TempoParameters = [..config.Inserts.Select(static i => i.Slot.IndexOf("tempo"))],
-                InstrumentBindings = [..instrument],
-                InstrumentLast = [..Enumerable.Repeat(float.NaN, instrument.Count)],
-                VolumeTarget = Lane(AutomationKind.Volume),
-                PanTarget = Lane(AutomationKind.Pan),
-                MuteTarget = Lane(AutomationKind.Mute),
-                SendTargets = sendTargets
+                TempoParameters = [..inserts.Select(static i => i.Slot.IndexOf("tempo"))],
+                InstrumentBindings = instrument,
+                InstrumentLast = [..Enumerable.Repeat(float.NaN, instrument.Length)],
+                VolumeTarget = Lane(trackId, AutomationKind.Volume),
+                PanTarget = Lane(trackId, AutomationKind.Pan),
+                MuteTarget = Lane(trackId, AutomationKind.Mute),
+                SendTargets =
+                    [..config.Sends.Take(sends.Length).Select(s => Lane(trackId, AutomationKind.Send, s.Slot.Id))],
+                WritePost = index >= 0 && sidechainSources.Contains(index)
             };
+        }
 
-            int Lane(AutomationKind kind, string? id = null) {
-                var target = automation.Find(trackId, kind, id);
-                return target >= 0 && automation.Lane(target) is not null ? target : -1;
+        /// <summary>The target of <paramref name="kind" /> on the track, when it has a lane (−1: none).</summary>
+        int Lane(int trackId, AutomationKind kind, string? id = null) {
+            var target = automation.Find(trackId, kind, id);
+            return target >= 0 && automation.Lane(target) is not null ? target : -1;
+        }
+
+        /// <summary>The automated parameters (with lanes) of an insert (<paramref name="id" />) or the instrument.</summary>
+        ParameterBinding[] Bindings(int trackId, AutomationKind kind, string? id, Func<string, int> indexOf) {
+            var list = new List<ParameterBinding>();
+            for (var t = 0; t < automation.Targets.Length; t++) {
+                if (automation.Targets[t] is not { ParameterId: { } parameter } target
+                    || target.TrackId != trackId
+                    || AutomationLane.KindOf(target.Kind) != kind
+                    || (id is not null && target.Id != id)
+                    || automation.Lane(t) is null) {
+                    continue;
+                }
+
+                if (indexOf(parameter) is var p and >= 0) {
+                    list.Add(new(p, t));
+                }
             }
+
+            return [..list];
         }
 
         SidechainSource Sidechain(ChannelInsert insert, int at) {
             if (insert.SidechainTrack >= 0) {
-                for (var j = 0; j < n; j++) {
-                    if (tracks[j].Id == insert.SidechainTrack) {
-                        sidechainSources.Add(j);
-                        return new(tracks[j].Channel, 0, false);
-                    }
-                }
-
-                return default;
+                return TrackIndex(insert.SidechainTrack) is var j and >= 0 ? new(tracks[j].Channel, 0, false) : default;
             }
 
             if (insert.SidechainBus is < 1 or > Buses) {
@@ -277,7 +291,7 @@ public sealed class MixPlan {
             }
 
             var late = false;
-            for (var j = 0; j < n; j++) {
+            for (var j = 0; j < tracks.Length; j++) {
                 late |= position[j] >= at && Feeds(configs[j], insert.SidechainBus);
             }
 
@@ -288,30 +302,6 @@ public sealed class MixPlan {
             return new(null, insert.SidechainBus, late);
         }
     }
-
-    static MixNode Copy(MixNode node, bool writePost) =>
-        new() {
-            Channel = node.Channel,
-            Config = node.Config,
-            TrackIndex = node.TrackIndex,
-            Track = node.Track,
-            TrackId = node.TrackId,
-            InputBus = node.InputBus,
-            Frozen = node.Frozen,
-            OutputDestination = node.OutputDestination,
-            SendDestinations = node.SendDestinations,
-            Sidechains = node.Sidechains,
-            InsertBindings = node.InsertBindings,
-            InsertLast = node.InsertLast,
-            TempoParameters = node.TempoParameters,
-            InstrumentBindings = node.InstrumentBindings,
-            InstrumentLast = node.InstrumentLast,
-            VolumeTarget = node.VolumeTarget,
-            PanTarget = node.PanTarget,
-            MuteTarget = node.MuteTarget,
-            SendTargets = node.SendTargets,
-            WritePost = writePost
-        };
 
     /// <summary>A frozen track keeps its sends and output but none of its inserts.</summary>
     static ChannelConfig Frozen(ChannelConfig config) => config with { Inserts = [] };

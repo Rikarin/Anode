@@ -61,26 +61,34 @@ public sealed partial class EngineController {
                     .ConfigureAwait(false);
             }
 
-            foreach (var (target, writer) in writers) {
-                writer.Complete();
-                if (target.Dropped > 0) {
-                    throw new IOException($"{target.Path}: {target.Dropped} frames dropped (the writer fell behind).");
-                }
-            }
-
+            Complete(writers);
             finished = true;
             progress?.Invoke(1);
             return [..writers.Select(static w => w.Writer.Path)];
         } finally {
-            foreach (var (target, writer) in writers) {
-                writer.Dispose();
-                target.Dispose();
-                if (!finished) {
-                    TryDelete(writer.Path);
-                }
-            }
-
+            Release(writers, !finished);
             Volatile.Write(ref rendering, 0);
+        }
+    }
+
+    /// <summary>Completes the files; throws when a real-time render dropped frames.</summary>
+    static void Complete(List<(RenderTarget Target, FloatWavWriter Writer)> writers) {
+        foreach (var (target, writer) in writers) {
+            writer.Complete();
+            if (target.Dropped > 0) {
+                throw new IOException($"{target.Path}: {target.Dropped} frames dropped (the writer fell behind).");
+            }
+        }
+    }
+
+    /// <summary>Closes the files and frees the rings; <paramref name="delete" /> removes the files (a failed render).</summary>
+    void Release(List<(RenderTarget Target, FloatWavWriter Writer)> writers, bool delete) {
+        foreach (var (target, writer) in writers) {
+            writer.Dispose();
+            target.Dispose();
+            if (delete) {
+                TryDelete(writer.Path);
+            }
         }
     }
 
@@ -101,29 +109,29 @@ public sealed partial class EngineController {
 
             var frames = message.EndSample - message.StartSample;
             var ring = message.Realtime ? 4 * Options.SampleRate : 2 * AudioEngine.MaxFrames;
-            RenderTarget? master = null;
-            var tracks = new Dictionary<int, RenderTarget>();
             if (kind == RenderKind.Master) {
-                master = new(-1, Path.GetFullPath(message.Path), frames, ring);
+                var master = new RenderTarget(-1, Path.GetFullPath(message.Path), frames, ring);
                 Open(master);
-            } else {
-                foreach (var id in message.Tracks!.Distinct()) {
-                    if (root.IndexOf(id) < 0) {
-                        throw new InvalidOperationException($"No track {id}.");
-                    }
-
-                    var target = new RenderTarget(
-                        id,
-                        Path.Combine(Path.GetFullPath(message.Path), $"{id}.wav"),
-                        frames,
-                        ring
-                    );
-                    tracks[id] = target;
-                    Open(target);
-                }
+                return new(kind, master, []);
             }
 
-            return new(kind, master, tracks);
+            var tracks = new Dictionary<int, RenderTarget>();
+            foreach (var id in message.Tracks!.Distinct()) {
+                if (root.IndexOf(id) < 0) {
+                    throw new InvalidOperationException($"No track {id}.");
+                }
+
+                var target = new RenderTarget(
+                    id,
+                    Path.Combine(Path.GetFullPath(message.Path), $"{id}.wav"),
+                    frames,
+                    ring
+                );
+                tracks[id] = target;
+                Open(target);
+            }
+
+            return new(kind, null, tracks);
         }
 
         void Open(RenderTarget target) {
@@ -201,8 +209,8 @@ public sealed partial class EngineController {
         try {
             SetCycle(false, saved.Start, saved.End);
             await PlayAsync(message.StartSample, cancellationToken).ConfigureAwait(false);
-            var started = DateTime.UtcNow;
-            while (Engine.Snapshot.State == TransportState.Stopped && DateTime.UtcNow - started < CommandTimeout) {
+            var started = Stopwatch.StartNew();
+            while (Engine.Snapshot.State == TransportState.Stopped && started.Elapsed < CommandTimeout) {
                 await Task.Delay(5, cancellationToken).ConfigureAwait(false);
             }
 
