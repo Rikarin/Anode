@@ -90,7 +90,12 @@ public sealed unsafe class RecorderTests : IDisposable {
         readonly SharedSegmentHolder segment;
         long frame;
 
-        public Rig(string dir, int latency = 0, Ipc.Segments.AudioPlaylistEntry[]? playback = null, string? file = null) {
+        public Rig(
+            string dir,
+            int latency = 0,
+            Ipc.Segments.AudioPlaylistEntry[]? playback = null,
+            string? file = null
+        ) {
             this.dir = dir;
             Controller = new(new(Rate, Block, latency));
             segment = new(TestAudio.Segment([new(7, [], playback ?? [])], 1));
@@ -158,7 +163,8 @@ public sealed unsafe class RecorderTests : IDisposable {
     static void AssertInput(int[] samples, long from, long input, long count) {
         for (long f = 0; f < count; f++) {
             var expected = TestAudio.Pattern(input + f, Seed);
-            if (samples[2 * (from + f)] != expected || samples[2 * (from + f) + 1] != TestAudio.Pattern(input + f, Seed + 1)) {
+            if (samples[2 * (from + f)] != expected
+                || samples[2 * (from + f) + 1] != TestAudio.Pattern(input + f, Seed + 1)) {
                 Assert.Fail($"file frame {from + f}: expected input frame {input + f}");
             }
         }
@@ -244,6 +250,7 @@ public sealed unsafe class RecorderTests : IDisposable {
         var result = rig.Finish();
         Assert.Equal(punchIn, result.StartSample);
         var length = punchOut - punchIn;
+
         // Input frame k (from the record start) was played at position 9,000 + k − latency (through the cycle).
         long InputAt(long position, int pass) => recordedFrom + (position - 9_000) + pass * 3_000L + latency;
         var samples = TestAudio.Read24(result.Path, out _);
@@ -287,7 +294,8 @@ public sealed unsafe class RecorderTests : IDisposable {
         for (var f = 0; f < output.Length; f++) {
             var inside = position is >= punchIn and < punchOut;
             var source = inside ? TestAudio.Sample(recordedFrom + f, Seed) : TestAudio.Sample(position, 5);
-            if (output[f] != source * pan * master) {
+            var expected = source * pan * master;
+            if (output[f] != expected) {
                 Assert.Fail($"frame {f} at {position}: expected {(inside ? "input" : "playback")}");
             }
 

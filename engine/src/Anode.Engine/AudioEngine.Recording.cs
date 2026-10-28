@@ -35,7 +35,8 @@ public sealed unsafe partial class AudioEngine {
     ///     The clocks of the last run of playback (not recording) Flashback Capture covers: from where it last started
     ///     (−1: none since the last recording) to where it is now or stopped.
     /// </summary>
-    public (long Start, long End) FlashbackWindow => (Volatile.Read(ref flashbackStart), Volatile.Read(ref flashbackEnd));
+    public (long Start, long End) FlashbackWindow =>
+        (Volatile.Read(ref flashbackStart), Volatile.Read(ref flashbackEnd));
 
     /// <summary>The lowest and highest positions the last recording pass covered (linear; for its MIDI takes).</summary>
     public (long Low, long High) RecordRange => (Volatile.Read(ref recordLow), Volatile.Read(ref recordHigh));
@@ -102,19 +103,23 @@ public sealed unsafe partial class AudioEngine {
             if (from < to) {
                 var at = done + (int)(from - position);
                 var count = (int)(to - from);
-                for (var f = at; f < at + count; f++) {
-                    left[f] = in0 is null ? 0f : in0[f];
-                }
-
+                Replace(left.Slice(at, count), in0, at);
                 if (stereo) {
-                    for (var f = at; f < at + count; f++) {
-                        right[f] = in1 is null ? 0f : in1[f];
-                    }
+                    Replace(right.Slice(at, count), in1, at);
                 }
             }
 
             done += run;
             position = order.Advance(position, run);
+        }
+    }
+
+    /// <summary>Overwrites <paramref name="destination" /> with the input from frame <paramref name="at" /> (null: silence).</summary>
+    static void Replace(Span<float> destination, float* input, int at) {
+        if (input is null) {
+            destination.Clear();
+        } else {
+            new ReadOnlySpan<float>(input + at, destination.Length).CopyTo(destination);
         }
     }
 

@@ -200,6 +200,7 @@ static class Smoke {
         Check(error is ErrorMessage { Request: "setStrip" }, $"unknown track: {error}");
 
         await Phase2.RunAsync(link, region, rate, dir, unity);
+        await Phase3.RunAsync(link, region, rate, dir, unity, tone, high);
         var end = Read(region, out _);
         Console.WriteLine(
             $"callbacks {end.Callbacks}, overloads {end.Overloads}, underruns {end.Underruns}, model {end.ModelVersion}"
@@ -239,6 +240,7 @@ static class Bench {
         int instruments = 0,
         string instrument = ProbeSine.Id,
         string? clapPath = null,
+        int crossfading = 0,
         CancellationToken cancellationToken = default
     ) {
         IAudioDevice audio = useNull
@@ -255,19 +257,21 @@ static class Bench {
             .Select(t => new TrackModel(
                     t,
                     [],
-                    [
-                        ..Enumerable.Range(0, 30)
-                            .Select(r => new AudioPlaylistEntry {
-                                    Start = r * 2L * rate,
-                                    Length = 2L * rate - 100,
-                                    FileOffset = (t * 7919L + r * 31L * rate) % (100L * rate),
-                                    FileId = 0,
-                                    Gain = 0.5f,
-                                    FadeIn = 64,
-                                    FadeOut = 64
-                                }
-                            )
-                    ]
+                    t < crossfading
+                        ? Crossfading(t, rate)
+                        : [
+                            ..Enumerable.Range(0, 30)
+                                .Select(r => new AudioPlaylistEntry {
+                                        Start = r * 2L * rate,
+                                        Length = 2L * rate - 100,
+                                        FileOffset = (t * 7919L + r * 31L * rate) % (100L * rate),
+                                        FileId = 0,
+                                        Gain = 0.5f,
+                                        FadeIn = 64,
+                                        FadeOut = 64
+                                    }
+                                )
+                        ]
                 )
             )
             .Concat(Enumerable.Range(0, instruments).Select(i => new TrackModel(1000 + i, Chords(rate, i, 60), [])))
@@ -338,7 +342,8 @@ static class Bench {
         var (p50, p99, max, count, allocated) = timed.Summary();
         var period = 1e6 * audio.BufferFrames / rate;
         Console.WriteLine(
-            $"{audio.Backend}, {rate} Hz, {audio.BufferFrames} frames ({period:0} µs), {tracks} mono tracks + "
+            $"{audio.Backend}, {rate} Hz, {audio.BufferFrames} frames ({period:0} µs), {tracks} mono tracks "
+            + $"({crossfading} always crossfading) + "
             + $"{instruments} × {(instruments > 0 ? instrument : "no instrument")} (4-note chords) + click, {seconds} s, "
             + "cycle 10-18 s from 5 s"
         );
@@ -362,6 +367,26 @@ static class Bench {
         audio.Dispose();
         return 0;
     }
+
+    /// <summary>
+    ///     Regions of two seconds starting every second, each fading in over its first second and out over its last with
+    ///     curves: two of them sound at every moment, through the track's two streams.
+    /// </summary>
+    static AudioPlaylistEntry[] Crossfading(int track, int rate) => [
+        ..Enumerable.Range(0, 59)
+            .Select(r => new AudioPlaylistEntry {
+                    Start = r * (long)rate,
+                    Length = 2L * rate,
+                    FileOffset = (track * 7919L + r * 13L * rate) % (100L * rate),
+                    FileId = 0,
+                    Gain = 0.5f,
+                    FadeIn = rate,
+                    FadeOut = rate,
+                    FadeInCurve = (r % 5 - 2) * 0.4f,
+                    FadeOutCurve = (2 - r % 5) * 0.3f
+                }
+            )
+    ];
 
     /// <summary>
     ///     Four-note chords every half second, each held for 0.4 s, on instrument track <paramref name="index" />

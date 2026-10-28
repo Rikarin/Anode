@@ -80,21 +80,24 @@ public sealed unsafe class RecordTake : IDisposable {
         }
 
         Ring.WriteRegions(samples, out var first, out var second);
-        for (var f = 0; f < frames; f++) {
-            for (var c = 0; c < Channels; c++) {
-                var source = c == 0 ? left : right;
-                var value = source is null ? 0f : source[f];
-                var at = f * Channels + c;
-                if (at < first.Length) {
-                    first[at] = value;
-                } else {
-                    second[at - first.Length] = value;
-                }
-            }
-        }
-
+        Interleave(left, right, 0, first);
+        Interleave(left, right, first.Length / Channels, second);
         Ring.CommitWrite(samples);
         Volatile.Write(ref pushed, pushed + frames);
+    }
+
+    /// <summary>
+    ///     Interleaves frames from <paramref name="frame" /> on into <paramref name="destination" /> (whole frames: the
+    ///     ring's capacity is a multiple of the channel count).
+    /// </summary>
+    void Interleave(float* left, float* right, int frame, Span<float> destination) {
+        var frames = destination.Length / Channels;
+        for (var f = 0; f < frames; f++) {
+            destination[f * Channels] = left is null ? 0f : left[frame + f];
+            if (Channels == 2) {
+                destination[f * Channels + 1] = right is null ? 0f : right[frame + f];
+            }
+        }
     }
 
     /// <summary>Writer thread: moves what the ring holds into the file. Returns the frames written.</summary>

@@ -67,7 +67,7 @@ public sealed class TrackState : IDisposable {
     /// <summary>Control thread: makes the second stream (before publishing a model whose playlist needs it).</summary>
     public void EnsureCrossfade() {
         if (Crossfade is null) {
-            Volatile.Write(ref crossfade, new TrackFeed(Stream.Channels, Stream.TargetFrames));
+            Volatile.Write(ref crossfade, new(Stream.Channels, Stream.TargetFrames));
         }
     }
 

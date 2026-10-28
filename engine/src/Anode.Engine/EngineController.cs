@@ -652,40 +652,46 @@ public sealed partial class EngineController : IDisposable {
         long close
     ) {
         var result = new List<RecordedMidiTake>();
-        Span<(byte Status, byte Note)> open = stackalloc (byte, byte)[128];
         foreach (var (trackId, events) in captured.OrderBy(static c => c.Key)) {
-            var held = new NoteSet();
-            var onsets = new Dictionary<int, long>();
-            var list = new List<RecordedMidiEvent>(events.Count);
-            foreach (var played in events) {
-                var e = played with { Sample = Math.Clamp(played.Sample, start, end) };
-                var key = ((e.Status & 0x0F) << 7) | (e.Data1 & 0x7F);
-                var kind = e.Status & 0xF0;
-                if (kind == 0x90 && e.Data2 > 0) {
-                    onsets[key] = e.Sample;
-                } else if ((kind == 0x80 || kind == 0x90) && onsets.Remove(key, out var onset) && e.Sample < onset) {
-                    e = e with { Sample = end }; // ended after a wrap
-                }
-
-                held.Track((byte)e.Status, (byte)e.Data1, (byte)e.Data2);
-                list.Add(e);
-            }
-
-            int count;
-            while ((count = held.Release(open)) > 0) {
-                for (var i = 0; i < count; i++) {
-                    var key = ((open[i].Status & 0x0F) << 7) | open[i].Note;
-                    var at = onsets.TryGetValue(key, out var onset) && close < onset ? end : close;
-                    list.Add(new(at, open[i].Status, open[i].Note, 0));
-                }
-            }
-
+            var list = MidiTake(events, start, end, close);
             if (list.Count > 0) {
-                result.Add(new(trackId, start, end, [..list.OrderBy(static e => e.Sample)]));
+                result.Add(new(trackId, start, end, list));
             }
         }
 
         return result;
+    }
+
+    /// <summary>One track's events for <see cref="BuildMidiTakes" />, sorted by sample.</summary>
+    static List<RecordedMidiEvent> MidiTake(List<RecordedMidiEvent> events, long start, long end, long close) {
+        var held = new NoteSet();
+        var onsets = new Dictionary<int, long>();
+        var list = new List<RecordedMidiEvent>(events.Count);
+        foreach (var played in events) {
+            var e = played with { Sample = Math.Clamp(played.Sample, start, end) };
+            var key = ((e.Status & 0x0F) << 7) | (e.Data1 & 0x7F);
+            var kind = e.Status & 0xF0;
+            if (kind == 0x90 && e.Data2 > 0) {
+                onsets[key] = e.Sample;
+            } else if (kind is 0x80 or 0x90 && onsets.Remove(key, out var onset) && e.Sample < onset) {
+                e = e with { Sample = end }; // ended after a wrap
+            }
+
+            held.Track((byte)e.Status, (byte)e.Data1, (byte)e.Data2);
+            list.Add(e);
+        }
+
+        Span<(byte Status, byte Note)> open = stackalloc (byte, byte)[128];
+        int count;
+        while ((count = held.Release(open)) > 0) {
+            for (var i = 0; i < count; i++) {
+                var key = ((open[i].Status & 0x0F) << 7) | open[i].Note;
+                var at = onsets.TryGetValue(key, out var onset) && close < onset ? end : close;
+                list.Add(new(at, open[i].Status, open[i].Note, 0));
+            }
+        }
+
+        return [..list.OrderBy(static e => e.Sample)];
     }
 
     /// <summary>Waits until the audio thread has applied the command numbered <paramref name="sequence" />.</summary>
@@ -807,20 +813,9 @@ public sealed partial class EngineController : IDisposable {
 
         var memories = new List<FlashbackBuffer>();
         foreach (var track in previous.Tracks) {
-            if (Array.IndexOf(next.Tracks, track) >= 0) {
-                continue;
+            if (Array.IndexOf(next.Tracks, track) < 0) {
+                RetireTrack(track, next, memories);
             }
-
-            if (track.Instrument is { } slot && !next.Tracks.Any(t => t.Instrument == slot)) {
-                slot.Dispose(); // the track went away
-            }
-
-            if (track.Flashback is { } memory) {
-                track.Flashback = null;
-                memories.Add(memory);
-            }
-
-            track.Dispose();
         }
 
         ReleaseFlashback(memories);
@@ -832,6 +827,20 @@ public sealed partial class EngineController : IDisposable {
         }
 
         TrimPool();
+    }
+
+    /// <summary>Releases a track the model no longer has; its Flashback buffer goes to <paramref name="memories" />.</summary>
+    static void RetireTrack(TrackState track, ModelRoot next, List<FlashbackBuffer> memories) {
+        if (track.Instrument is { } slot && !next.Tracks.Any(t => t.Instrument == slot)) {
+            slot.Dispose(); // the track went away
+        }
+
+        if (track.Flashback is { } memory) {
+            track.Flashback = null;
+            memories.Add(memory);
+        }
+
+        track.Dispose();
     }
 
     static void AddOwners(ModelRoot root, HashSet<MappedSegment> set) {

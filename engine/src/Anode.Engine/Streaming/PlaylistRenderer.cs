@@ -109,45 +109,47 @@ public sealed unsafe class PlaylistRenderer : IDisposable {
                 continue;
             }
 
-            ref readonly var entry = ref playlist[i];
-            var from = Math.Max(position, entry.Start);
-            var to = Math.Min(end, entry.Start + entry.Length);
-            if (to <= from) {
-                continue;
-            }
-
-            var file = (uint)entry.FileId < (uint)files.Length ? files[entry.FileId] : null;
-            if (file is null) {
-                continue;
-            }
-
-            // Region frames [r0, r1) are file frames [FileOffset + r0, ...), clipped to the file.
-            var r0 = from - entry.Start;
-            var fileFrame = entry.FileOffset + r0;
-            var skip = fileFrame < 0 ? -fileFrame : 0;
-            var take = Math.Min(to - from, file.Frames - fileFrame) - skip;
-            if (take <= 0) {
-                continue;
-            }
-
-            var n = (int)take;
-            BytesRead += file.Read(
-                fileFrame + skip,
-                n,
-                new(scratch, scratchBytes),
-                decoded.AsSpan(0, n * file.Channels)
-            );
-            Reads++;
-            Mix(
-                entry,
-                r0 + skip,
-                file.Channels,
-                decoded.AsSpan(0, n * file.Channels),
-                destination[((int)(from - position + skip) * channels)..],
-                n,
-                channels
-            );
+            RenderEntry(playlist[i], files, position, end, channels, destination);
         }
+    }
+
+    /// <summary>Adds one entry's part of positions [<paramref name="position" />, <paramref name="end" />).</summary>
+    void RenderEntry(
+        in AudioPlaylistEntry entry,
+        StreamFile?[] files,
+        long position,
+        long end,
+        int channels,
+        Span<float> destination
+    ) {
+        var from = Math.Max(position, entry.Start);
+        var to = Math.Min(end, entry.Start + entry.Length);
+        var file = (uint)entry.FileId < (uint)files.Length ? files[entry.FileId] : null;
+        if (to <= from || file is null) {
+            return;
+        }
+
+        // Region frames [r0, r1) are file frames [FileOffset + r0, ...), clipped to the file.
+        var r0 = from - entry.Start;
+        var fileFrame = entry.FileOffset + r0;
+        var skip = fileFrame < 0 ? -fileFrame : 0;
+        var take = Math.Min(to - from, file.Frames - fileFrame) - skip;
+        if (take <= 0) {
+            return;
+        }
+
+        var n = (int)take;
+        BytesRead += file.Read(fileFrame + skip, n, new(scratch, scratchBytes), decoded.AsSpan(0, n * file.Channels));
+        Reads++;
+        Mix(
+            entry,
+            r0 + skip,
+            file.Channels,
+            decoded.AsSpan(0, n * file.Channels),
+            destination[((int)(from - position + skip) * channels)..],
+            n,
+            channels
+        );
     }
 
     static void Mix(

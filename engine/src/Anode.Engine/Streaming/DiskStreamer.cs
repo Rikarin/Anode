@@ -68,42 +68,48 @@ public sealed class DiskStreamer : IDisposable {
             var snapshot = engine.Snapshot;
             var anchor = snapshot.Anchor;
             var rolling = snapshot.State != TransportState.Stopped && !snapshot.CountIn;
-            var tracks = model.Tracks;
-            var best = -1;
-            var bestLane = 0;
-            var bestAhead = long.MaxValue;
-            var bestFrames = 0;
-            for (var i = 0; i < tracks.Length; i++) {
-                var lanes = model.Lanes[i];
-                var main = tracks[i].Stream;
-                var second = lanes is null ? null : tracks[i].Crossfade;
-                var identity = TrackFeed.Identity(anchor.Id, model.Generations[i]);
-                Sync(main, second, identity, snapshot, rolling);
-                for (var lane = 0; lane < (second is null ? 1 : 2); lane++) {
-                    var (ahead, frames) = Plan(lane == 0 ? main : second!, identity, snapshot, rolling);
-                    if (frames > 0 && ahead < bestAhead) {
-                        best = i;
-                        bestLane = lane;
-                        bestAhead = ahead;
-                        bestFrames = frames;
-                    }
-                }
+            var best = MostUrgent(model, snapshot, rolling);
+            if (engine.Preview is { } preview && preview.Ahead < best.Ahead) {
+                return preview.Fill() || best.Track >= 0;
             }
 
-            if (engine.Preview is { } preview && preview.Ahead < bestAhead) {
-                return preview.Fill() || best >= 0;
-            }
-
-            if (best < 0) {
+            if (best.Track < 0) {
                 return false;
             }
 
-            var stream = bestLane == 0 ? tracks[best].Stream : tracks[best].Crossfade!;
-            Fill(stream, model, best, bestLane, anchor, bestFrames);
+            var track = model.Tracks[best.Track];
+            Fill(best.Lane == 0 ? track.Stream : track.Crossfade!, model, best.Track, best.Lane, anchor, best.Frames);
             return true;
         } finally {
             Interlocked.Increment(ref completed);
         }
+    }
+
+    /// <summary>
+    ///     Brings every track's streams in line with the play order and its compile, and picks the stream with the least
+    ///     audio ahead that needs a read (track −1: none).
+    /// </summary>
+    (int Track, int Lane, long Ahead, int Frames) MostUrgent(
+        ModelRoot model,
+        in EngineSnapshot snapshot,
+        bool rolling
+    ) {
+        var tracks = model.Tracks;
+        (int Track, int Lane, long Ahead, int Frames) best = (-1, 0, long.MaxValue, 0);
+        for (var i = 0; i < tracks.Length; i++) {
+            var main = tracks[i].Stream;
+            var second = model.Lanes[i] is null ? null : tracks[i].Crossfade;
+            var identity = TrackFeed.Identity(snapshot.Anchor.Id, model.Generations[i]);
+            Sync(main, second, identity, snapshot, rolling);
+            for (var lane = 0; lane < (second is null ? 1 : 2); lane++) {
+                var (ahead, frames) = Plan(lane == 0 ? main : second!, identity, snapshot, rolling);
+                if (frames > 0 && ahead < best.Ahead) {
+                    best = (i, lane, ahead, frames);
+                }
+            }
+        }
+
+        return best;
     }
 
     /// <summary>

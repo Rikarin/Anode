@@ -9,8 +9,8 @@ namespace Anode.Engine;
 // autopunch, Flashback Capture (its buffers' lifetime, and writing what they kept as takes) and preview files.
 public sealed partial class EngineController {
     /// <summary>
-    ///     How far ahead of the oldest frame a Flashback Capture starts, so the audio thread, which keeps writing while
-    ///     the capture copies, cannot overwrite what is being copied.
+    ///     How far ahead of the oldest frame a Flashback Capture starts (at most a quarter of the buffer), so the audio
+    ///     thread, which keeps writing while the capture copies, cannot overwrite what is being copied.
     /// </summary>
     const double FlashbackMarginSeconds = 5;
 
@@ -46,7 +46,8 @@ public sealed partial class EngineController {
             var stamp = DateTime.UtcNow.ToString("yyyyMMdd'T'HHmmssfff'Z'", CultureInfo.InvariantCulture);
             var takes = new List<RecordedTake>();
             foreach (var track in Engine.Root.Tracks) {
-                if (track.Flashback is { } memory && Capture(track.Id, memory, start, end, history, stamp) is { } take) {
+                if (track.Flashback is { } memory
+                    && Capture(track.Id, memory, start, end, history, stamp) is { } take) {
                     takes.Add(take);
                 }
             }
@@ -73,8 +74,8 @@ public sealed partial class EngineController {
         var latency = Engine.RecordLatency;
         var runStart = memory.RunStart;
         var to = Math.Min(memory.End, end);
-        var from = Math.Max(Math.Max(start, runStart), memory.End - memory.Capacity
-            + (long)(FlashbackMarginSeconds * Options.SampleRate));
+        var margin = Math.Min((long)(FlashbackMarginSeconds * Options.SampleRate), memory.Capacity / 4);
+        var from = Math.Max(Math.Max(start, runStart), memory.End - memory.Capacity + margin);
         if (runStart < 0 || to <= from) {
             return null;
         }
@@ -130,7 +131,10 @@ public sealed partial class EngineController {
         );
     }
 
-    /// <summary>The lowest and highest positions the history visited at clocks [<paramref name="start" />, <paramref name="end" />).</summary>
+    /// <summary>
+    ///     The lowest and highest positions the history visited at clocks [<paramref name="start" />,
+    ///     <paramref name="end" />).
+    /// </summary>
     static (long Low, long High) Range(List<PositionHistory.Breakpoint> history, long start, long end) {
         long low = long.MaxValue, high = long.MinValue;
         for (var i = 0; i < history.Count; i++) {

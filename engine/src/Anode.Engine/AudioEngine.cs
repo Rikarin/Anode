@@ -312,19 +312,22 @@ public sealed unsafe partial class AudioEngine : IAudioProcessor {
         var recording = transport.State == TransportState.Recording && !countIn;
         if (recording && punch.Active && track.Armed) {
             ApplyPunch(left, right, track.Stereo, in0, in1, position);
-        } else if (track.Monitoring && in0 is not null) {
+        } else if (track.Monitoring) {
             Add(left, in0);
-            if (track.Stereo) {
-                Add(right, in1);
-            }
+            Add(right, track.Stereo ? in1 : null);
         }
 
+        Capture(track, in0, track.Stereo ? in1 : null, left.Length, clock, recording);
+    }
+
+    /// <summary>Feeds the track's input to its take while recording, and to its Flashback memory while playing.</summary>
+    void Capture(TrackState track, float* in0, float* in1, int frames, long clock, bool recording) {
         if (recording && track.Take is { } take) {
-            Record(take, in0, track.Stereo ? in1 : null, left.Length, clock);
+            Record(take, in0, in1, frames, clock);
         }
 
         if (flashbackActive && track.Armed && track.Flashback is { } memory) {
-            memory.Write(in0, track.Stereo ? in1 : null, left.Length, clock, flashbackStart == clock);
+            memory.Write(in0, in1, frames, clock, flashbackStart == clock);
         }
     }
 
