@@ -3,7 +3,8 @@ import { expect, userEvent, within } from 'storybook/test';
 import { AnFader } from './fader';
 
 /**
- * A channel fader with a dB taper: 0 dB sits at three quarters of the travel. Drag (⇧ for fine), use the arrow and
+ * A channel fader as in Logic: a metal cap in a sunken groove, a dB scale and a readout. 0 dB sits at three quarters
+ * of the travel. Drag (⇧ for fine), use the arrow and
  * Page keys, Home for −∞ and End for +6 dB; double-click or ⌥-click for 0 dB.
  */
 const meta: Meta<AnFader> = {

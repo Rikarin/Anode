@@ -14,7 +14,7 @@ import { SelectionStore } from '../state/selection.store';
   selector: 'an-mixer-pane',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [AnChannelStrip],
-  host: { class: 'flex h-full min-h-0 gap-2 overflow-x-auto p-2', role: 'region', 'aria-label': 'Mixer' },
+  host: { class: 'bg-surface-sunken flex h-full min-h-0 overflow-auto', role: 'region', 'aria-label': 'Mixer' },
   template: `
     @for (track of project.trackList(); track track.id) {
       <an-channel-strip
@@ -34,7 +34,7 @@ import { SelectionStore } from '../state/selection.store';
         (click)="selection.track.set(track.id)"
       />
     }
-    <div class="ms-auto"></div>
+    <div class="border-hairline ms-auto border-e"></div>
     <an-channel-strip
       name="Stereo Out"
       master

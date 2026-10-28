@@ -10,13 +10,13 @@ import { SystemStore } from '../state/system.store';
   imports: [XuiTooltipImports],
   template: `
     <span
-      class="flex items-center gap-1.5 text-xs"
+      class="flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-medium"
       tabindex="0"
       data-testid="engine-status"
       [attr.data-state]="state()"
       [xuiTooltip]="detail()"
     >
-      <span class="size-2 rounded-full" [class]="dot()" aria-hidden="true"></span>
+      <span class="size-2 rounded-full shadow-[0_0_0_1px_var(--hairline)]" [class]="dot()" aria-hidden="true"></span>
       <span class="text-foreground-muted">{{ label() }}</span>
     </span>
   `

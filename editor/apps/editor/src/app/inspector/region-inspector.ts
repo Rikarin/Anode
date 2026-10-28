@@ -32,7 +32,10 @@ const Labels: Record<PlaybackField, string> = {
   imports: [AnKnob, XuiNumericInputImports, XuiSelectImports],
   host: { class: 'flex flex-col gap-2', role: 'group', '[attr.aria-label]': '"Region: " + region().name' },
   template: `
-    <h3 class="text-foreground truncate text-xs font-semibold" [attr.title]="region().name">
+    <h3
+      class="text-foreground border-hairline bg-surface-raised -mx-3 truncate border-y px-3 py-1 text-[11px] font-bold shadow-[inset_0_1px_0_var(--highlight)]"
+      [attr.title]="region().name"
+    >
       Region: {{ region().name }}
     </h3>
     <div class="grid grid-cols-[5.5rem_1fr] items-center gap-x-2 gap-y-1.5 text-xs">

@@ -24,21 +24,40 @@ const Marks = [6, 0, -6, -12, -20, -30, -45, -60];
   selector: 'an-fader',
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: {
-    class: 'inline-flex h-48 flex-col items-center gap-1 select-none'
+    class: 'inline-flex h-52 flex-col items-center gap-1 select-none'
   },
   template: `
-    <div class="relative flex min-h-0 flex-1 gap-1">
-      <svg class="fill-foreground-muted h-full w-5 overflow-visible text-[9px]" aria-hidden="true">
+    <span
+      class="readout text-foreground bg-surface-inset border-hairline min-w-10 rounded-[4px] border px-1 py-px text-center text-[10px] font-medium shadow-[inset_0_1px_1px_rgb(0_0_0/0.2)]"
+      aria-hidden="true"
+      >{{ shortDisplay() }}</span
+    >
+    <div class="relative flex min-h-0 flex-1 gap-0.5 py-2">
+      <svg class="fill-foreground-subtle h-full w-6 overflow-visible text-[9px] font-medium" aria-hidden="true">
         @for (mark of marks; track mark) {
-          <text x="100%" text-anchor="end" dominant-baseline="middle" [attr.y]="(1 - position(mark)) * 100 + '%'">
+          <text
+            x="15"
+            text-anchor="end"
+            dominant-baseline="middle"
+            [class.fill-foreground]="mark === 0"
+            [attr.y]="(1 - position(mark)) * 100 + '%'"
+          >
             {{ mark > 0 ? '+' + mark : mark }}
           </text>
+          <line
+            x1="18"
+            x2="23"
+            class="stroke-foreground-subtle"
+            stroke-width="1"
+            [attr.y1]="(1 - position(mark)) * 100 + '%'"
+            [attr.y2]="(1 - position(mark)) * 100 + '%'"
+          />
         }
       </svg>
       <div
         #track
         role="slider"
-        class="focus-visible:outline-focus relative w-6 cursor-ns-resize touch-none rounded-sm outline-offset-2 focus-visible:outline-2"
+        class="focus-visible:outline-focus relative w-7 cursor-ns-resize touch-none rounded-sm outline-offset-2 focus-visible:outline-2"
         [class.opacity-50]="disabled()"
         aria-orientation="vertical"
         [attr.tabindex]="disabled() ? -1 : 0"
@@ -56,22 +75,10 @@ const Marks = [6, 0, -6, -12, -20, -30, -45, -60];
         (dblclick)="reset()"
         (keydown)="key($event)"
       >
-        <div
-          class="bg-surface-inset border-border absolute inset-y-0 left-1/2 w-1.5 -translate-x-1/2 rounded-full border"
-        ></div>
-        <div
-          class="bg-primary/60 absolute bottom-0 left-1/2 w-1.5 -translate-x-1/2 rounded-full"
-          [style.height.%]="travel() * 100"
-        ></div>
-        <div
-          class="border-border-strong bg-surface-raised absolute left-0 h-4 w-6 -translate-y-1/2 rounded-sm border shadow-sm"
-          [style.top.%]="(1 - travel()) * 100"
-        >
-          <div class="bg-foreground absolute inset-x-1 top-1/2 h-px -translate-y-1/2"></div>
-        </div>
+        <div class="well absolute -inset-y-1 left-1/2 w-1 -translate-x-1/2 rounded-full"></div>
+        <div class="fader-cap absolute left-0 h-4.5 w-7 -translate-y-1/2" [style.top.%]="(1 - travel()) * 100"></div>
       </div>
     </div>
-    <span class="text-foreground text-[10px] tabular-nums" aria-hidden="true">{{ shortDisplay() }}</span>
   `
 })
 export class AnFader {

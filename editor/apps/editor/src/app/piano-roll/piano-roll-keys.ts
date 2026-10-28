@@ -16,7 +16,7 @@ const Pitches = Array.from({ length: 128 }, (_, i) => 127 - i);
   selector: 'an-piano-roll-keys',
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: {
-    class: 'border-border bg-surface relative block overflow-hidden border-e select-none',
+    class: 'border-hairline bg-surface relative block overflow-hidden border-e select-none',
     'aria-hidden': 'true',
     '(pointerdown)': 'down($event)',
     '(pointerup)': 'up()',
@@ -25,17 +25,18 @@ const Pitches = Array.from({ length: 128 }, (_, i) => 127 - i);
     '(wheel)': 'wheel($event)'
   },
   template: `
-    <div class="bg-surface border-border absolute inset-x-0 top-0 z-10 border-b" [style.height.px]="ruler"></div>
+    <div class="glass-bar absolute inset-x-0 top-0 z-10" [style.height.px]="ruler"></div>
     <div class="absolute inset-x-0" [style.top.px]="ruler" [style.transform]="'translateY(' + offset() + 'px)'">
       @for (pitch of pitches; track pitch) {
         <div
-          class="border-border-muted flex items-center justify-end border-b pe-1 text-[9px] leading-none"
-          [class.bg-surface-inset]="black(pitch) && !lit().has(pitch)"
-          [class.text-foreground-muted]="!lit().has(pitch)"
-          [class.bg-primary]="lit().has(pitch)"
-          [class.text-primary-foreground]="lit().has(pitch)"
+          class="relative flex items-center justify-end pe-1 text-[9px] leading-none font-medium"
+          [class.roll-key-white]="!lit().has(pitch)"
+          [class.key-lit]="lit().has(pitch)"
           [style.height.px]="store.laneHeight()"
         >
+          @if (black(pitch) && !lit().has(pitch)) {
+            <span class="roll-key-black absolute inset-y-0 left-0 w-[62%] rounded-e-[2px]"></span>
+          }
           @if (pitch % 12 === 0 && store.laneHeight() >= 8) {
             {{ name(pitch) }}
           }

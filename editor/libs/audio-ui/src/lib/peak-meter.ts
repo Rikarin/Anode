@@ -61,8 +61,8 @@ export class MeterBallistics {
 /**
  * A stereo peak meter for a channel strip. It draws from `source` in its own animation frames, setting transforms on
  * its bars directly, so the ~30 Hz telemetry of a mixer full of strips costs no change detection (docs/01-implementation
- * -plan.md §6.2). The bars fill from green through amber to red at 0 dBFS; a line holds the peak; the clip light stays
- * on until clicked. For assistive technology it is a meter whose value is updated a few times a second.
+ * -plan.md §6.2). Logic's LED look: segmented bars, green to −12 dB, yellow towards −6, red near 0 dBFS, unlit
+ * segments behind; a lit segment holds the peak; the clip light stays on until clicked. For assistive technology it is a meter whose value is updated a few times a second.
  */
 @Component({
   selector: 'an-peak-meter',
@@ -71,26 +71,30 @@ export class MeterBallistics {
   template: `
     <button
       type="button"
-      class="h-1.5 w-full shrink-0 rounded-[1px]"
-      [class]="clipped() ? 'bg-error' : 'bg-surface-inset'"
+      class="well h-1.5 w-full shrink-0 rounded-[2px] p-px"
       [attr.aria-label]="label() + ': reset clip indicator'"
       [attr.aria-pressed]="clipped()"
       (click)="resetClip()"
-    ></button>
+    >
+      <span
+        class="block size-full rounded-[1px] transition-colors duration-100"
+        [class]="clipped() ? 'bg-meter-high shadow-[0_0_4px_var(--meter-high)]' : 'bg-meter-unlit'"
+      ></span>
+    </button>
     <div
       #meter
       role="meter"
-      class="flex min-h-0 flex-1 gap-px"
+      class="well flex min-h-0 flex-1 gap-px rounded-[2px] p-px"
       [attr.aria-label]="label()"
       [attr.aria-valuemin]="floor"
       aria-valuemax="0"
       [attr.aria-valuenow]="floor"
     >
       @for (channel of channels(); track $index) {
-        <div class="bg-surface-inset relative flex-1 overflow-hidden rounded-[1px]">
-          <div class="from-success via-warning to-error absolute inset-0 bg-linear-to-t from-60% via-85%"></div>
-          <div #cover class="bg-surface-inset absolute inset-0 origin-top" style="transform: scaleY(1)"></div>
-          <div #hold class="bg-foreground absolute inset-x-0 top-0 h-px opacity-0"></div>
+        <div class="meter-segments relative flex-1 overflow-hidden">
+          <div class="meter-gradient absolute inset-0"></div>
+          <div #cover class="bg-meter-unlit absolute inset-0 origin-top" style="transform: scaleY(1)"></div>
+          <div #hold class="bg-meter-peak absolute inset-x-0 top-0 h-0.5 opacity-0"></div>
         </div>
       }
     </div>

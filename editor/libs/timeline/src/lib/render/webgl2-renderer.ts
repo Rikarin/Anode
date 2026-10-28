@@ -1,8 +1,20 @@
-import { GLYPH_ADVANCE, type RectBatch } from '../frame-builder';
+import {
+  CornerRadius,
+  GLYPH_ADVANCE,
+  NAME_BAR_HEIGHT,
+  NAME_BAR_MIN_HEIGHT,
+  RECT_SHAPE_MASK,
+  type RectBatch,
+  RectStyle,
+  RegionShade
+} from '../frame-builder';
 import { RendererUnavailableError, type RenderTarget, type TimelineRenderer } from './renderer';
 
-/** The font both renderers draw text in; its advance is {@link GLYPH_ADVANCE}. */
-export const TEXT_FONT = '10px ui-monospace, Menlo, Consolas, monospace';
+/**
+ * The font both renderers draw text in (bar numbers, region names): the system's monospace (SF Mono on a Mac) in a
+ * semibold weight, which keeps names legible on the dark name bars; its advance is {@link GLYPH_ADVANCE}.
+ */
+export const TEXT_FONT = '600 10px ui-monospace, "SF Mono", Menlo, Consolas, monospace';
 
 /** Glyphs in the atlas (ASCII 32–126). */
 const GLYPH_COUNT = 95;
@@ -26,8 +38,9 @@ void main() {
   v_style = int(a_style);
 }`;
 
-// Notes and regions get a 1 px darker border; regions also a lighter name bar. Shading in the fragment shader keeps it
-// one instance per item.
+// The shapes of RectStyle, shaded in the fragment shader so each stays one instance: rounded notes, regions and cycle
+// area (an antialiased signed-distance edge), their gradients, edges and selection ring, the playhead's triangle and
+// the ruler's gradient. The numbers are frame-builder's RegionShade and CornerRadius; Canvas2D mirrors them.
 const RECT_FRAGMENT = `#version 300 es
 precision highp float;
 in vec4 v_color;
@@ -35,17 +48,71 @@ in vec2 v_local;
 in vec2 v_extent;
 flat in int v_style;
 out vec4 o_color;
+
+float roundedBox(vec2 p, vec2 size, float r) {
+  vec2 q = abs(p - 0.5 * size) - 0.5 * size + r;
+  return length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - r;
+}
+
 void main() {
   vec4 c = v_color;
-  if (v_style > 0) {
-    vec2 edge = min(v_local, v_extent - v_local);
-    if (min(edge.x, edge.y) < 1.0) {
-      c.rgb *= 0.55;
-    } else if (v_style == 2 && v_local.y < 12.0) {
-      c.rgb = mix(c.rgb, vec3(1.0), 0.3);
+  int shape = v_style & ${RECT_SHAPE_MASK};
+  bool selected = (v_style & ${RectStyle.Selected}) != 0;
+  vec2 p = v_local;
+  vec2 s = v_extent;
+  float t = clamp(p.y / max(s.y, 1.0), 0.0, 1.0);
+  if (shape == 0) {
+    o_color = c;
+    return;
+  }
+  if (shape == ${RectStyle.Ruler}) {
+    o_color = vec4(c.rgb * mix(1.12, 0.9, t), c.a);
+    return;
+  }
+  if (shape == ${RectStyle.PlayheadHead}) {
+    float half_ = 0.5 * s.x;
+    float edge = half_ * (1.0 - t) - abs(p.x - half_);
+    o_color = vec4(c.rgb, c.a * clamp(edge + 0.5, 0.0, 1.0));
+    return;
+  }
+  float radius = shape == ${RectStyle.Note} ? ${CornerRadius.Note}.0 : shape == ${RectStyle.Cycle} ? ${CornerRadius.Cycle}.0 : ${CornerRadius.Region}.0;
+  radius = min(radius, 0.5 * min(s.x, s.y));
+  float d = roundedBox(p, s, radius);
+  float inside = -d;
+  vec3 rgb;
+  if (shape == ${RectStyle.Region}) {
+    bool named = s.y >= ${NAME_BAR_MIN_HEIGHT}.0;
+    float bar = ${NAME_BAR_HEIGHT}.0;
+    if (named && p.y < bar) {
+      rgb = c.rgb * mix(${RegionShade.nameTop}, ${RegionShade.nameBottom}, p.y / bar);
+    } else {
+      float body = named ? (p.y - bar) / max(s.y - bar, 1.0) : t;
+      rgb = c.rgb * mix(${RegionShade.bodyTop}, ${RegionShade.bodyBottom}, body);
+    }
+    if (p.y >= 1.0 && p.y < 2.0) {
+      rgb = mix(rgb, vec3(1.0), ${RegionShade.gloss});
+    }
+    if (inside < 1.0) {
+      rgb = c.rgb * ${RegionShade.edge};
+    }
+    if (selected && inside < 1.75) {
+      rgb = vec3(1.0);
+    }
+  } else if (shape == ${RectStyle.Note}) {
+    rgb = c.rgb * mix(1.06, 0.84, t);
+    if (inside < 1.0) {
+      rgb = c.rgb * 0.5;
+    }
+    if (selected && inside < 1.25) {
+      rgb = vec3(1.0);
+    }
+  } else {
+    rgb = c.rgb * mix(1.08, 0.86, t);
+    if (inside < 1.0) {
+      rgb = c.rgb * 0.62;
     }
   }
-  o_color = c;
+  o_color = vec4(rgb, c.a * clamp(0.5 - d, 0.0, 1.0));
 }`;
 
 const GLYPH_VERTEX = `#version 300 es
@@ -186,7 +253,8 @@ export class WebGL2Renderer implements TimelineRenderer {
     gl.bufferData(gl.ARRAY_BUFFER, new Uint8Array(batch.colors.buffer, 0, 4 * batch.count), gl.STREAM_DRAW);
     gl.bindBuffer(gl.ARRAY_BUFFER, this.styleBuffer);
     gl.bufferData(gl.ARRAY_BUFFER, batch.styles, gl.STREAM_DRAW, 0, batch.count);
-    gl.disable(gl.BLEND);
+    // Blended: rounded corners and the playhead's triangle are antialiased through alpha, the marquee is translucent.
+    gl.enable(gl.BLEND);
     gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, batch.count);
 
     const glyphCount = this.layoutGlyphs(batch);
