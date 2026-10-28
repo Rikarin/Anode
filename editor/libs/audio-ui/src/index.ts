@@ -14,3 +14,4 @@ export * from './lib/piano-keyboard';
 export * from './lib/reading-meter';
 export * from './lib/send-knob';
 export * from './lib/taper';
+export * from './lib/varispeed-display';
