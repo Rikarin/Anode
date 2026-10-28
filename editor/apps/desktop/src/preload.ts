@@ -18,6 +18,7 @@ contextBridge.exposeInMainWorld('anode', {
     importMidi: () => ipcRenderer.invoke('anode:dialog:importMidi'),
     instrumentFile: (fileTypes: unknown) => ipcRenderer.invoke('anode:dialog:instrumentFile', fileTypes)
   },
+  reveal: (path: unknown) => ipcRenderer.invoke('anode:reveal', path),
   onCommand: (listener: (command: unknown) => void) => {
     ipcRenderer.on('anode:command', (_event, command: unknown) => listener(command));
   },

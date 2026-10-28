@@ -22,7 +22,11 @@ describe('FakeAnodeServer: MIDI and instruments', () => {
   it('serves a catalogue with a synth, a sampler and a CLAP instrument, and MIDI devices', async () => {
     const server = new FakeAnodeServer();
     const plugins = await server.plugins();
-    expect(plugins.map(p => p.id)).toEqual(['anode.synth', 'anode.sampler', 'org.anode.test-sine']);
+    expect(plugins.filter(p => p.isInstrument).map(p => p.id)).toEqual([
+      'anode.synth',
+      'anode.sampler',
+      'org.anode.test-sine'
+    ]);
     expect(plugins[1]?.fileTypes).toEqual(['.sfz', '.wav']);
     expect(plugins[0]?.parameters.length).toBeGreaterThan(20);
     const devices = await server.midiDevices();

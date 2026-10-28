@@ -1,5 +1,5 @@
 import { Injectable, inject } from '@angular/core';
-import type { TrackMeter } from '@anode/api-client';
+import type { InsertReading, TrackMeter } from '@anode/api-client';
 import { EventStream } from '../core/events';
 
 /** The key the master strip's level is kept under. */
@@ -19,6 +19,7 @@ export interface StereoLevel {
 @Injectable({ providedIn: 'root' })
 export class MeterBus {
   private readonly levels = new Map<string, StereoLevel>();
+  private readonly readings = new Map<string, number>();
   /** When the last frame arrived (performance.now()), so a meter can tell a stalled stream. */
   lastFrame = 0;
 
@@ -26,6 +27,7 @@ export class MeterBus {
     inject(EventStream).events$.subscribe(message => {
       if (message.type === 'meters') {
         this.apply(message.tracks, message.master);
+        this.applyReadings(message.readings ?? []);
       }
     });
   }
@@ -36,6 +38,19 @@ export class MeterBus {
     }
     this.set(MasterMeter, master);
     this.lastFrame = now;
+  }
+
+  /** Insert readings (gain reduction, loudness) of the latest frame; the ones it lacks are gone. */
+  applyReadings(readings: readonly InsertReading[]): void {
+    this.readings.clear();
+    for (const reading of readings) {
+      this.readings.set(readingKey(reading.trackId, reading.insertId), reading.value);
+    }
+  }
+
+  /** An insert's latest reading (a compressor's gain reduction in dB, a meter's LUFS), or null when it sent none. */
+  reading(trackId: string | null, insertId: string): number | null {
+    return this.readings.get(readingKey(trackId, insertId)) ?? null;
   }
 
   /** The latest level of a track (or {@link MasterMeter}); silence when none arrived. */
@@ -52,6 +67,10 @@ export class MeterBus {
       this.levels.set(key, { left: meter.peakLeft, right: meter.peakRight });
     }
   }
+}
+
+function readingKey(trackId: string | null, insertId: string): string {
+  return `${trackId ?? MasterMeter}/${insertId}`;
 }
 
 const Silence: StereoLevel = Object.freeze({ left: 0, right: 0 });

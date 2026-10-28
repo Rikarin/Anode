@@ -4,12 +4,14 @@ import {
   type ArrangementMarker,
   type AudioFile,
   type AudioRegion,
+  type AutomationLane,
   type ChannelStrip,
   type CommandResult,
   type DeltaOp,
   type EditCommand,
   type Marker,
   type MidiRegion,
+  type MixerGroup,
   type Project,
   type ProjectDelta,
   type ProjectSettings,
@@ -110,6 +112,10 @@ export class ProjectStore {
   readonly sections = signal<readonly ArrangementMarker[]>([]);
   /** The project Note Pad. */
   readonly notes = signal('');
+  /** Mixer groups 1…32 by number. */
+  readonly groups = signal<ReadonlyMap<number, MixerGroup>>(new Map());
+  /** Track automation lanes by id (a lane's `trackId` null is the master's). */
+  readonly automation = signal<ReadonlyMap<string, AutomationLane>>(new Map());
   /** A project is being opened, created or refetched. */
   readonly loading = signal(false);
 
@@ -124,6 +130,9 @@ export class ProjectStore {
   readonly midiRegionList = computed(() => [...this.midiRegions().values()]);
   readonly framesPerTick = computed(() => framesPerTick(this.info()?.sampleRate ?? 48_000, this.settings().tempo));
   readonly takeFolderList = computed(() => [...this.takeFolders().values()]);
+  /** Mixer groups in number order. */
+  readonly groupList = computed(() => [...this.groups().values()].sort((a, b) => a.number - b.number));
+  readonly automationList = computed(() => [...this.automation().values()]);
   /** The tempo track as time (steps and ramps). */
   readonly tempoMap = computed(() => new TempoMap(this.settings().tempoEvents, this.settings().tempo));
   /** The signature track as bars and beats. */
@@ -185,6 +194,8 @@ export class ProjectStore {
     this.markers.set(byTick(project.markers));
     this.sections.set(byStart(project.arrangement));
     this.notes.set(project.notes);
+    this.groups.set(new Map(project.groups.map(g => [g.number, g])));
+    this.automation.set(new Map(project.automation.map(l => [l.id, l])));
   }
 
   /** No project open. */
@@ -205,6 +216,8 @@ export class ProjectStore {
     this.markers.set([]);
     this.sections.set([]);
     this.notes.set('');
+    this.groups.set(new Map());
+    this.automation.set(new Map());
   }
 
   /** Fetches the open project (or learns that none is), replacing what the store has. Concurrent calls share one. */
@@ -338,6 +351,16 @@ export class ProjectStore {
     return this.midiRegions().get(id);
   }
 
+  /** A track's (or, for null, the master's) automation lane of `target`, if it has one. */
+  automationLane(trackId: string | null, target: string): AutomationLane | undefined {
+    for (const lane of this.automation().values()) {
+      if ((lane.trackId ?? null) === trackId && lane.target === target) {
+        return lane;
+      }
+    }
+    return undefined;
+  }
+
   private serial(send: () => Promise<CommandResult>, failure: string): Promise<CommandResult | null> {
     const run = this.queue.then(async () => {
       try {
@@ -366,12 +389,14 @@ export class ProjectStore {
     const takeFolders = new Map(this.takeFolders());
     const markers = new Map(this.markers().map(m => [m.id, m]));
     const sections = new Map(this.sections().map(s => [s.id, s]));
+    const groups = new Map(this.groups());
+    const automation = new Map(this.automation());
     let trackIds = [...this.trackIds()];
     let missingFile = false;
     for (const op of delta.ops) {
       this.applyOp(
         op,
-        { tracks, regions, midiRegions, files, takeFolders, markers, sections },
+        { tracks, regions, midiRegions, files, takeFolders, markers, sections, groups, automation },
         ids => (trackIds = ids(trackIds))
       );
       if (op.op === 'regionUpserted' && !files.has(op.region.fileId)) {
@@ -396,6 +421,12 @@ export class ProjectStore {
     if (delta.ops.some(op => op.op.startsWith('section'))) {
       this.sections.set(byStart([...sections.values()]));
     }
+    if (delta.ops.some(op => op.op.startsWith('group'))) {
+      this.groups.set(groups);
+    }
+    if (delta.ops.some(op => op.op.startsWith('automationLane') || op.op === 'trackRemoved')) {
+      this.automation.set(automation);
+    }
     this.trackIds.set(trackIds);
     this.revision.set(delta.revision);
     this.dirty.set(true);
@@ -415,6 +446,8 @@ export class ProjectStore {
       takeFolders: Map<string, TakeFolder>;
       markers: Map<string, Marker>;
       sections: Map<string, ArrangementMarker>;
+      groups: Map<number, MixerGroup>;
+      automation: Map<string, AutomationLane>;
     },
     order: (update: (ids: string[]) => string[]) => void
   ): void {
@@ -443,6 +476,11 @@ export class ProjectStore {
         for (const [id, folder] of maps.takeFolders) {
           if (folder.trackId === op.id) {
             maps.takeFolders.delete(id);
+          }
+        }
+        for (const [id, lane] of maps.automation) {
+          if (lane.trackId === op.id) {
+            maps.automation.delete(id);
           }
         }
         break;
@@ -492,10 +530,16 @@ export class ProjectStore {
         this.notes.set(op.text);
         break;
       case 'automationLaneUpserted':
+        maps.automation.set(op.lane.id, op.lane);
+        break;
       case 'automationLaneRemoved':
+        maps.automation.delete(op.id);
+        break;
       case 'groupUpserted':
+        maps.groups.set(op.group.number, op.group);
+        break;
       case 'groupRemoved':
-        // Automation lanes and mixer groups: Phase 4, the editor workstream (docs/05-phase-4.md).
+        maps.groups.delete(op.number);
         break;
     }
   }
