@@ -3,17 +3,23 @@ import {
   ApiError,
   type AudioFile,
   type Bookmarks,
+  type BounceRequest,
   type CommandBatch,
   type CommandResult,
   type DirectoryListing,
+  type IoLabels,
+  type Job,
   type KeyCommandSet,
   type LiveMidiEvent,
   type MidiDevices,
+  type PatchInfo,
+  type PluginEditorRequest,
   type PluginInfo,
   type Project,
   type ProjectAlternative,
   type ProjectBackup,
   type ProjectSummary,
+  type SavePatchRequest,
   type Screenset,
   type SystemInfo,
   type TransportRequest,
@@ -96,6 +102,25 @@ export interface AnodeApi {
   listFiles(path?: string | null): Promise<DirectoryListing>;
   /** Plays an audio file through the engine's preview channel; null stops it. */
   previewFile(path: string | null): Promise<void>;
+  /** Starts a bounce (export) job; its progress follows as `job` events. */
+  bounce(request: BounceRequest): Promise<Job>;
+  /** Starts freezing a track; when the job is done, a delta sets its `frozenFileId` (one undo step). */
+  freezeTrack(trackId: string): Promise<Job>;
+  job(id: string): Promise<Job>;
+  cancelJob(id: string): Promise<Job>;
+  /** The user's saved channel-strip patches. */
+  patches(): Promise<PatchInfo[]>;
+  /** Saves a track's instrument, inserts and sends as a patch. */
+  savePatch(request: SavePatchRequest): Promise<PatchInfo>;
+  deletePatch(id: string): Promise<void>;
+  /** The user's names for inputs, output pairs and buses (Logic's I/O Labels). */
+  ioLabels(): Promise<IoLabels>;
+  saveIoLabels(labels: IoLabels): Promise<IoLabels>;
+  /**
+   * Opens or closes a plugin's own editor window on the machine the engine runs on (the desktop app); refused (409)
+   * when the plugin has none or the engine runs headless.
+   */
+  openPluginEditor(request: PluginEditorRequest): Promise<void>;
 }
 
 export const ANODE_API = new InjectionToken<AnodeApi>('AnodeApi', {
@@ -299,5 +324,45 @@ export class HttpAnodeApi implements AnodeApi {
 
   async previewFile(path: string | null): Promise<void> {
     await this.client.POST('/api/v1/files/preview', { body: { path } });
+  }
+
+  async bounce(request: BounceRequest): Promise<Job> {
+    return unwrap(await this.client.POST('/api/v1/project/bounce', { body: request }));
+  }
+
+  async freezeTrack(trackId: string): Promise<Job> {
+    return unwrap(await this.client.POST('/api/v1/project/tracks/{trackId}/freeze', { params: { path: { trackId } } }));
+  }
+
+  async job(id: string): Promise<Job> {
+    return unwrap(await this.client.GET('/api/v1/jobs/{id}', { params: { path: { id } } }));
+  }
+
+  async cancelJob(id: string): Promise<Job> {
+    return unwrap(await this.client.POST('/api/v1/jobs/{id}/cancel', { params: { path: { id } } }));
+  }
+
+  async patches(): Promise<PatchInfo[]> {
+    return unwrap(await this.client.GET('/api/v1/library/patches'));
+  }
+
+  async savePatch(request: SavePatchRequest): Promise<PatchInfo> {
+    return unwrap(await this.client.POST('/api/v1/library/patches', { body: request }));
+  }
+
+  async deletePatch(id: string): Promise<void> {
+    unwrap(await this.client.DELETE('/api/v1/library/patches/{id}', { params: { path: { id } } }));
+  }
+
+  async ioLabels(): Promise<IoLabels> {
+    return unwrap(await this.client.GET('/api/v1/settings/io-labels'));
+  }
+
+  async saveIoLabels(labels: IoLabels): Promise<IoLabels> {
+    return unwrap(await this.client.PUT('/api/v1/settings/io-labels', { body: labels }));
+  }
+
+  async openPluginEditor(request: PluginEditorRequest): Promise<void> {
+    unwrap(await this.client.POST('/api/v1/plugins/editor', { body: request }));
   }
 }

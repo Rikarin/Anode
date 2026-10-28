@@ -9,10 +9,19 @@ import {
   viewChild,
   type ElementRef
 } from '@angular/core';
-import type { Track } from '@anode/api-client';
-import { faderDb, faderPosition, formatDb } from '@anode/audio-ui';
+import type { AutomationMode, Track } from '@anode/api-client';
+import {
+  AnAutomationMode,
+  automationModeLabel,
+  AutomationModes,
+  faderDb,
+  faderPosition,
+  formatDb
+} from '@anode/audio-ui';
 import { provideIcons } from '@ng-icons/core';
 import {
+  matAcUnitRound,
+  matAddRound,
   matCallSplitRound,
   matChevronRightRound,
   matExpandMoreRound,
@@ -30,6 +39,8 @@ import { XuiMenuImports } from '@xui/menu';
 import { XuiPopoverImports } from '@xui/popover';
 import { XuiSliderImports } from '@xui/slider';
 import { XuiTooltipImports } from '@xui/tooltip';
+import { AutomationStore } from '../automation/automation.store';
+import { isActive, JobsStore } from '../state/jobs.store';
 import { LiveMidiStore } from '../state/live-midi.store';
 import { MixerStore } from '../state/mixer.store';
 import { ProjectStore } from '../state/project.store';
@@ -41,12 +52,15 @@ import { setTrack, setTrackLabel, type TrackChange } from '../state/track-comman
  * A track's header in the Tracks area (Logic's track header): its colour, number, kind and name (double-click to
  * rename), mute, solo, record enable and (audio) input monitoring, and a volume slider on the fader's dB taper. An
  * instrument or MIDI track has an activity dot that lights while the engine plays or receives MIDI on it. Its menu
- * moves and deletes the track. Every change is one command batch with a label for the undo history.
+ * moves and deletes the track. Every change is one command batch with a label for the undo history. Audio and instrument
+ * tracks have Freeze (with the job's progress while it renders); while automation shows (A), the volume slider makes
+ * way for the track's automation mode and a button that adds an automation lane.
  */
 @Component({
   selector: 'an-track-header',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
+    AnAutomationMode,
     XuiButtonImports,
     XuiIconImports,
     XuiInputImports,
@@ -57,6 +71,8 @@ import { setTrack, setTrackLabel, type TrackChange } from '../state/track-comman
   ],
   providers: [
     provideIcons({
+      matAcUnitRound,
+      matAddRound,
       matCallSplitRound,
       matChevronRightRound,
       matExpandMoreRound,
@@ -77,6 +93,7 @@ import { setTrack, setTrackLabel, type TrackChange } from '../state/track-comman
     '[class.bg-surface]': '!selected()',
     '[style.margin-inline-start.px]': 'depth() * 14',
     '[attr.data-stack]': 'track().kind === "stack" || null',
+    '[attr.data-frozen]': 'frozen() || null',
     '(click)': 'select($event)'
   },
   template: `
@@ -158,6 +175,34 @@ import { setTrack, setTrackLabel, type TrackChange } from '../state/track-comman
             [attr.aria-label]="active() ? 'MIDI activity' : 'No MIDI activity'"
           ></span>
         }
+        @if (freezable()) {
+          @if (freezing(); as job) {
+            <span
+              class="text-lit readout w-7 shrink-0 text-end text-[10px] font-semibold"
+              role="progressbar"
+              aria-valuemin="0"
+              aria-valuemax="100"
+              [attr.aria-valuenow]="percent(job.progress)"
+              [attr.aria-label]="'Freezing ' + track().name"
+              data-testid="freeze-progress"
+              >{{ percent(job.progress) }}%</span
+            >
+          } @else {
+            <button
+              type="button"
+              class="hover:text-foreground focus-visible:outline-focus grid size-5 shrink-0 place-items-center rounded-[4px] focus-visible:outline-2"
+              data-testid="freeze-track"
+              [class.text-lit]="frozen()"
+              [class.text-foreground-muted]="!frozen()"
+              [attr.aria-pressed]="frozen()"
+              [attr.aria-label]="'Freeze ' + track().name"
+              [xuiTooltip]="frozen() ? 'Frozen: click to play it live again' : 'Freeze: render it to play from a file'"
+              (click)="$event.stopPropagation(); toggleFreeze()"
+            >
+              <ng-icon xui name="matAcUnitRound" size="15px" />
+            </button>
+          }
+        }
         <button
           xuiButton
           type="button"
@@ -235,19 +280,64 @@ import { setTrack, setTrackLabel, type TrackChange } from '../state/track-comman
         >
           I
         </button>
-        <label class="an-track-volume flex min-w-0 flex-1 items-center ps-1" [attr.title]="'Volume ' + volumeText()">
-          <span class="sr-only">Volume of {{ track().name }}</span>
-          <xui-slider
-            class="min-w-0 flex-1"
-            color="none"
-            [min]="0"
-            [max]="1"
-            [stepSize]="0.001"
-            [labelRenderer]="false"
-            [value]="volumePosition()"
-            (valueChange)="setVolume($event)"
-          />
-        </label>
+        @if (automation.shown()) {
+          <div class="flex min-w-0 flex-1 items-center gap-1 ps-1">
+            <button
+              anAutomationMode
+              type="button"
+              class="min-w-0"
+              [attr.aria-label]="'Automation mode of ' + track().name + ': ' + modeLabel(track().automationMode)"
+              data-testid="automation-mode"
+              [mode]="track().automationMode"
+              [channel]="track().name"
+              [xuiMenuTriggerFor]="modes"
+              (click)="$event.stopPropagation()"
+            ></button>
+            <ng-template #modes>
+              <xui-menu aria-label="Automation mode">
+                @for (mode of modeList; track mode.value) {
+                  <button
+                    xuiMenuItem
+                    type="button"
+                    role="menuitemradio"
+                    [attr.aria-checked]="track().automationMode === mode.value"
+                    [selected]="track().automationMode === mode.value"
+                    (click)="setMode(mode.value)"
+                  >
+                    {{ mode.label }}
+                  </button>
+                }
+              </xui-menu>
+            </ng-template>
+            <button
+              xuiButton
+              type="button"
+              variant="ghost"
+              size="sm"
+              class="ms-auto h-5 w-5 shrink-0 px-0"
+              data-testid="add-automation-lane"
+              [attr.aria-label]="'Add an automation lane to ' + track().name"
+              xuiTooltip="Show another parameter's automation"
+              (click)="$event.stopPropagation(); automation.addLane(track().id)"
+            >
+              <ng-icon xui name="matAddRound" size="sm" />
+            </button>
+          </div>
+        } @else {
+          <label class="an-track-volume flex min-w-0 flex-1 items-center ps-1" [attr.title]="'Volume ' + volumeText()">
+            <span class="sr-only">Volume of {{ track().name }}</span>
+            <xui-slider
+              class="min-w-0 flex-1"
+              color="none"
+              [min]="0"
+              [max]="1"
+              [stepSize]="0.001"
+              [labelRenderer]="false"
+              [value]="volumePosition()"
+              (valueChange)="setVolume($event)"
+            />
+          </label>
+        }
       </div>
     </div>
   `
@@ -275,6 +365,17 @@ export class TrackHeader {
   protected readonly volumePosition = computed(() => faderPosition(this.volume()));
   protected readonly volumeText = computed(() => formatDb(this.volume()));
   private readonly live = inject(LiveMidiStore);
+  protected readonly automation = inject(AutomationStore);
+  private readonly jobs = inject(JobsStore);
+  protected readonly modeList = AutomationModes;
+  protected readonly modeLabel = automationModeLabel;
+  protected readonly freezable = computed(() => this.track().kind === 'audio' || this.track().kind === 'instrument');
+  protected readonly frozen = computed(() => !!this.track().frozenFileId);
+  /** The freeze job while it runs. */
+  protected readonly freezing = computed(() => {
+    const job = this.jobs.freezeOf(this.track().id);
+    return isActive(job) ? (job ?? null) : null;
+  });
   protected readonly active = computed(() => this.live.active().has(this.track().id));
   protected readonly kindIcon = computed(
     () =>
@@ -367,6 +468,23 @@ export class TrackHeader {
     if (index >= 0 && index < this.count()) {
       void this.project.execute([{ type: 'moveTrack', trackId: this.track().id, index }], 'Move Track');
     }
+  }
+
+  protected percent(progress: number): number {
+    return Math.round(Math.min(1, Math.max(0, progress)) * 100);
+  }
+
+  /** Freezes the track, or plays a frozen one live again. */
+  protected toggleFreeze(): void {
+    if (this.frozen()) {
+      void this.jobs.unfreeze(this.track().id);
+    } else {
+      void this.jobs.freeze(this.track().id);
+    }
+  }
+
+  protected setMode(mode: AutomationMode): void {
+    void this.automation.setMode(this.track().id, mode);
   }
 
   protected remove(): void {

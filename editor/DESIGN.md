@@ -204,3 +204,41 @@ theme's `punch`/`punchOff` colours (both themes).
 **Browsers, Marker List, Note Pad.** Right-hand panes, tucked away by default (F, D, ⌥⌘P bring them forward). Rows are
 28 px (`h-7`) with a 16 px kind icon (folders `text-primary`), the name, and muted `readout` details; bookmarks are
 small `bezel` chips. Tabs inside a pane are xUI tabs.
+
+## Phase 4 patterns
+
+New tokens, in both theme blocks of `anode-theme.css`:
+
+| Group       | Variables / utilities                                                                                         |
+| ----------- | ------------------------------------------------------------------------------------------------------------- |
+| Slots       | `--slot-top/bottom`, `--slot-hover-top/bottom`, `--slot-empty` (the `strip-slot` utility)                     |
+| Signal flow | `--strip-flow` (outline), `--strip-flow-top/bottom` (the `strip-flow` utility)                                |
+| Automation  | `--automation-off/read/touch/latch/write` (`bg-automation-read`…): Logic's grey, green, amber, purple and red |
+
+| Utility      | What it draws                                                                                                                                                                                                                                           |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `strip-slot` | An 18 px strip row (insert, send, output, group): flat graded face, hairline edge, lighter on hover, a focus ring around the row while a control in it has keyboard focus; `[data-empty]` makes it a sunken well, `[data-problem]` gives it a red edge. |
+| `strip-flow` | A channel strip on the selected strip's signal flow: a lit body with a 1 px `--strip-flow` outline.                                                                                                                                                     |
+
+**Mixer slots.** A strip projects its rows above the pan knob (`<an-channel-strip>`'s content), top to bottom as in
+Logic: inserts, sends, output, group, automation. `an-insert-slot` is one Audio FX slot: a power key (`text-lit` when
+on, muted when bypassed, `aria-pressed` = bypassed), the plugin's name in 10 px semibold (opens its editor; greyed when
+bypassed, struck through with a red edge when the host bypassed it after a crash) and a chevron for its menu; an empty
+slot is a sunken well whose "Audio FX" shows on hover or focus. Filled slots are draggable (`data-index`); ⌥↑ and ⌥↓
+move one from the keyboard. `an-send-knob` is a send row: the bus name (opens the bus menu), a `pre` key (`text-lit`
+when pre-fader) and a 16 px knob on the fader's taper. Output and group rows are plain `strip-slot` buttons with a
+centred `text-foreground` label.
+
+**VCA and flow.** `<an-channel-strip vca>` drops the pan knob and the meter. `flow` marks the strips the selected
+strip's signal passes through (`strip-flow`, which follows `strip-selected` so it wins).
+
+**Automation.** `button[anAutomationMode]` is the mode popup of track headers and strips: a 6 px LED in the mode's
+`--automation-*` colour, the mode's name in `text-foreground` (coloured small text fails contrast, so the LED carries
+the colour) and a caret; its owner attaches the menu. `an-automation-lane` draws a lane: the curve 1.5 px in the lane
+colour (the track's, or `--color-primary`; `--color-foreground-muted` when the mode is Off), a 14 % fill under it,
+points as 9 px handles (outlined on `--color-surface`, filled when selected; each an ARIA slider whose text is the
+value) and a selected range as a `primary/15` band with a `primary` edge. The owner computes the geometry.
+
+**Plugin readings.** `an-reading-meter` shows a reading in a plugin editor: an uppercase 10 px label, a `well` bar
+(gain reduction in `bg-meter-mid`, growing from 0 dB at the right edge; levels in `bg-meter-low` from the left) and a
+`readout` value.

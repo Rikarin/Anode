@@ -6,15 +6,22 @@ import { XuiNonIdealStateImports } from '@xui/non-ideal-state';
 import { XuiSpinnerImports } from '@xui/spinner';
 import type { AppCommand } from './core/desktop';
 import { Startup } from './core/startup';
+import { BounceDialog } from './export/bounce-dialog';
 import { KeyCommandsEditor } from './keys/key-commands-editor';
+import { GroupSettings } from './mixer/group-settings';
+import { IoLabelsDialog } from './mixer/io-labels-dialog';
+import { PluginWindowsHost } from './mixer/plugin-window';
+import { PluginWindows } from './mixer/plugin-windows';
 import { ControlBar } from './shell/control-bar';
 import { SaveAlternativeDialog } from './shell/save-alternative';
 import { HistoryStore } from './state/history.store';
 import { KeyCommandsStore } from './state/key-commands.store';
 import { LiveMidiStore } from './state/live-midi.store';
+import { MixerStore } from './state/mixer.store';
 import { ProjectSession } from './state/project-session';
 import { ProjectStore } from './state/project.store';
 import { ScreensetStore } from './state/screenset.store';
+import { SelectionStore } from './state/selection.store';
 import { ThemeStore } from './state/theme.store';
 import { TransportStore } from './state/transport.store';
 import { UiStore } from './state/ui.store';
@@ -24,8 +31,12 @@ import { AudioImport } from './tracks/audio-import';
   selector: 'an-root',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
+    BounceDialog,
     ControlBar,
+    GroupSettings,
+    IoLabelsDialog,
     KeyCommandsEditor,
+    PluginWindowsHost,
     RouterOutlet,
     SaveAlternativeDialog,
     XuiButtonImports,
@@ -87,6 +98,12 @@ import { AudioImport } from './tracks/audio-import';
         </main>
         <an-key-commands-editor />
         <an-save-alternative />
+        @if (project.isOpen()) {
+          <an-bounce-dialog />
+          <an-io-labels-dialog />
+          <an-group-settings />
+          <an-plugin-windows />
+        }
       }
     }
   `
@@ -94,15 +111,17 @@ import { AudioImport } from './tracks/audio-import';
 export class App {
   protected readonly startup = inject(Startup);
   private readonly transport = inject(TransportStore);
-  private readonly project = inject(ProjectStore);
+  protected readonly project = inject(ProjectStore);
   private readonly history = inject(HistoryStore);
   private readonly session = inject(ProjectSession);
   private readonly keys = inject(KeyCommandsStore);
   private readonly screensets = inject(ScreensetStore);
+  private readonly selection = inject(SelectionStore);
   private readonly theme = inject(ThemeStore);
   private readonly ui = inject(UiStore);
   protected readonly live = inject(LiveMidiStore);
   private readonly audioImport = inject(AudioImport);
+  private readonly mixer = inject(MixerStore);
 
   /**
    * In the macOS desktop app the control bar is the title bar: it drags the window and leaves room for the traffic
@@ -123,6 +142,8 @@ export class App {
     // The desktop app asks before it quits: the open project lives in its own Server and goes with it.
     window.anode?.onQuit?.(() => this.session.mayDiscard('quit'));
     window.anode?.onCommand?.(command => void this.command(command));
+    // Created at start, so plugin problems are reported wherever the person is.
+    inject(PluginWindows);
     this.registerKeys();
     void this.startup.start();
   }
@@ -148,7 +169,12 @@ export class App {
       'view.editors': () => this.screensets.showPane('editors'),
       'view.browsers': () => this.screensets.showPane('browsers'),
       'view.lists': () => this.screensets.showPane('lists'),
-      'view.notes': () => this.screensets.showPane('notes')
+      'view.notes': () => this.screensets.showPane('notes'),
+      'project.bounce': () => this.ui.bounceOpen.set(true),
+      'mixer.ioLabels': () => this.ui.ioLabelsOpen.set(true),
+      'mixer.groupSettings': () => this.openGroupSettings(),
+      'track.newAux': () => void this.mixer.addAux(),
+      'track.newVca': () => void this.mixer.addVca()
     };
     for (let n = 1; n <= 9; n++) {
       actions[`screenset.recall${n}`] = () => void this.screensets.recall(n);
@@ -195,6 +221,24 @@ export class App {
       case 'saveAlternative':
         this.ui.saveAlternativeOpen.set(true);
         break;
+      case 'bounce':
+        if (this.project.isOpen()) {
+          this.ui.bounceOpen.set(true);
+        }
+        break;
+      case 'ioLabels':
+        this.ui.ioLabelsOpen.set(true);
+        break;
+    }
+  }
+
+  /** Group Settings for the selected track's group (or the first group). */
+  private openGroupSettings(): void {
+    const selected = this.selection.track();
+    const number =
+      (selected ? this.project.track(selected)?.strip.groups[0] : undefined) ?? this.project.groupList()[0]?.number;
+    if (number !== undefined) {
+      this.ui.groupSettings.set(number);
     }
   }
 

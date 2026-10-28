@@ -276,6 +276,16 @@ function handleIpc(): void {
       })
     )
   );
+  // Shows a bounced file in Finder: only an existing audio file at an absolute path (what the local engine wrote), and
+  // only for the editor's own window. Answers whether it could.
+  ipcMain.handle('anode:reveal', (event, path: unknown) => {
+    const file = revealablePath(path);
+    if (event.sender !== window?.webContents || !file) {
+      return false;
+    }
+    shell.showItemInFolder(file);
+    return true;
+  });
   ipcMain.handle('anode:target', () => settings.target);
   ipcMain.handle('anode:setTarget', async (_event, target: unknown) => {
     settings = { ...settings, target: validTarget(target) };
@@ -342,6 +352,22 @@ function validFileTypes(value: unknown): string[] {
     }
     return match[1].toLowerCase();
   });
+}
+
+/** A path the renderer may reveal: an absolute path to an existing WAV or AIFF file; null for anything else. */
+function revealablePath(value: unknown): string | null {
+  if (typeof value !== 'string' || value.length > 4096 || value.includes('\0') || !isAbsolute(value)) {
+    return null;
+  }
+  const path = normalize(value);
+  if (!['.wav', '.wave', '.aif', '.aiff'].includes(extname(path).toLowerCase())) {
+    return null;
+  }
+  try {
+    return statSync(path).isFile() ? path : null;
+  } catch {
+    return null;
+  }
 }
 
 /** What the renderer sent for a `T`: an object whose fields are all still to be checked. */
@@ -431,6 +457,9 @@ function buildMenu(): void {
     { type: 'separator' },
     command('Import Audio…', 'importAudio', 'CmdOrCtrl+Shift+I'),
     command('Import MIDI File…', 'importMidi'),
+    { type: 'separator' },
+    command('Bounce Project or Section…', 'bounce', 'CmdOrCtrl+B'),
+    command('I/O Labels…', 'ioLabels'),
     { type: 'separator' },
     command('Save as Alternative…', 'saveAlternative'),
     command('Key Commands…', 'keyCommands')

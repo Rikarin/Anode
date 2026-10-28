@@ -1,3 +1,4 @@
+export * from './lib/automation';
 export * from './lib/frame-builder';
 export * from './lib/frame-stats';
 export * from './lib/grid';

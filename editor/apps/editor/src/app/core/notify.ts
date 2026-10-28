@@ -27,6 +27,16 @@ export class Notify {
     this.toaster?.show({ message, color: 'primary' });
   }
 
+  /** Something finished (a bounce), with an optional action on the toast ("Show in Finder"). */
+  success(message: string, action?: { text: string; run: () => void }): void {
+    this.last.set(message);
+    this.toaster?.show({
+      message,
+      color: 'success',
+      ...(action ? { actionText: action.text, onAction: action.run, timeout: 10_000 } : {})
+    });
+  }
+
   /** Reports a failure, prefixed with what was being done ("Could not save"). */
   failure(error: unknown, doing?: string): void {
     const reason = describeError(error);

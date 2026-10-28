@@ -1321,7 +1321,8 @@ export class Timeline {
 
   // ---- wheel, double-click, drop
 
-  protected wheel(event: WheelEvent): void {
+  /** Scrolls or zooms (⌘: time, ⌥: lane height, ⇧: sideways); the automation lanes over the lanes pass theirs here. */
+  wheel(event: WheelEvent): void {
     event.preventDefault();
     const { x } = this.local(event);
     if (event.metaKey || event.ctrlKey) {
