@@ -54,6 +54,12 @@ public sealed class MixNode {
     /// </summary>
     public int[] TempoParameters { get; init; } = [];
 
+    /// <summary>Automated parameters of each MIDI FX slot (Phase 6), set at the start of every block.</summary>
+    public ParameterBinding[][] MidiEffectBindings { get; init; } = [];
+
+    /// <summary>Audio thread: the value each MIDI FX slot's automated parameters were last set to.</summary>
+    public float[][] MidiEffectLast { get; init; } = [];
+
     public ParameterBinding[] InstrumentBindings { get; init; } = [];
 
     public float[] InstrumentLast { get; init; } = [];
@@ -220,6 +226,13 @@ public sealed class MixPlan {
                 bindings[s] = Bindings(trackId, AutomationKind.Insert, slot.Id, slot.IndexOf);
             }
 
+            var midiEffects = config.MidiEffects;
+            var midiBindings = new ParameterBinding[midiEffects.Length][];
+            for (var s = 0; s < midiEffects.Length; s++) {
+                var slot = midiEffects[s].Slot;
+                midiBindings[s] = Bindings(trackId, AutomationKind.MidiEffect, slot.Id, slot.IndexOf);
+            }
+
             var instrument = track?.Instrument is { } instrumentSlot
                 ? Bindings(trackId, AutomationKind.Instrument, null, instrumentSlot.IndexOf)
                 : [];
@@ -250,6 +263,9 @@ public sealed class MixPlan {
                 InsertBindings = bindings,
                 InsertLast = [..bindings.Select(static b => Enumerable.Repeat(float.NaN, b.Length).ToArray())],
                 TempoParameters = [..inserts.Select(static i => i.Slot.IndexOf("tempo"))],
+                MidiEffectBindings = midiBindings,
+                MidiEffectLast =
+                    [..midiBindings.Select(static b => Enumerable.Repeat(float.NaN, b.Length).ToArray())],
                 InstrumentBindings = instrument,
                 InstrumentLast = [..Enumerable.Repeat(float.NaN, instrument.Length)],
                 VolumeTarget = Lane(trackId, AutomationKind.Volume),

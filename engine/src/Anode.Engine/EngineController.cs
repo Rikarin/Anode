@@ -1,4 +1,5 @@
 using Anode.Audio.Midi;
+using Anode.Engine.LiveLoops;
 using Anode.Engine.Midi;
 using Anode.Engine.Mixing;
 using Anode.Engine.Plugins;
@@ -133,6 +134,7 @@ public sealed partial class EngineController : IDisposable {
         Streamer.Start();
         Midi.Start();
         StartMaintenance();
+        StartCellPump();
     }
 
     /// <summary>Where diagnostics go (missing files and the like).</summary>
@@ -166,7 +168,7 @@ public sealed partial class EngineController : IDisposable {
             draft.AddListed(message.Tracks, current);
             draft.Apply(settings);
             var replaced = draft.ApplyInstruments(settings);
-            var inserts = new List<InsertSlot>();
+            var inserts = new List<IDisposable>();
             draft.ApplyChannels(settings, inserts);
             SetFader(-1, Engine.Master, message.Master);
             ApplyChannel(Engine.MasterChannel, -1, message.Master, inserts);
@@ -179,7 +181,13 @@ public sealed partial class EngineController : IDisposable {
                     : Math.Max(current.LengthSamples, segment.Header->LengthSamples);
             }
 
-            Swap(draft.Build(message.Segment.Version, length, FileTable(), message.AutomationTargets));
+            var fileTable = FileTable();
+            var (tempo, tempoOwner) = TempoFor(segment, message.Replace, current);
+            var cells = CellsFor(segment, message.Replace, current, draft.Tracks, fileTable);
+            Swap(
+                draft.Build(message.Segment.Version, length, fileTable, message.AutomationTargets)
+                    .With(tempo: tempo, tempoOwner: tempoOwner, cells: cells)
+            );
             foreach (var slot in replaced) {
                 slot.Dispose(); // the swap's grace period covered the instruments set before it
             }
@@ -207,6 +215,9 @@ public sealed partial class EngineController : IDisposable {
         MappedSegment? metronomeOwner;
         TrackView masterView;
         MappedSegment? masterOwner;
+
+        /// <summary>The tracks so far (the next model's, once <see cref="Apply" /> has run).</summary>
+        public IReadOnlyList<TrackState> Tracks => tracks;
 
         public ModelDraft(EngineController owner, ModelRoot? from) {
             this.owner = owner;
@@ -311,7 +322,7 @@ public sealed partial class EngineController : IDisposable {
         }
 
         /// <summary>Applies the listed tracks' channel structures; instances they drop go to <paramref name="replaced" />.</summary>
-        public void ApplyChannels(Dictionary<int, EngineTrack> settings, List<InsertSlot> replaced) {
+        public void ApplyChannels(Dictionary<int, EngineTrack> settings, List<IDisposable> replaced) {
             foreach (var track in tracks) {
                 if (settings.TryGetValue(track.Id, out var s)) {
                     owner.ApplyChannel(track.Channel, track.Id, s.Strip, replaced);
@@ -967,6 +978,10 @@ public sealed partial class EngineController : IDisposable {
                 insert.Slot.Dispose();
             }
 
+            foreach (var midi in track.Channel.Config.MidiEffects) {
+                midi.Slot.Dispose();
+            }
+
             track.Channel.Config = ChannelConfig.Empty;
         }
 
@@ -991,6 +1006,14 @@ public sealed partial class EngineController : IDisposable {
 
         if (root.MasterOwner is not null) {
             set.Add(root.MasterOwner);
+        }
+
+        if (root.TempoOwner is not null) {
+            set.Add(root.TempoOwner);
+        }
+
+        foreach (var cell in root.Cells.All) {
+            set.Add(cell.Owner);
         }
     }
 
@@ -1125,8 +1148,12 @@ public sealed partial class EngineController : IDisposable {
     }
 
     TrackState NewTrack(int id, bool stereo, TrackState? previous) {
-        var state = new TrackState(id, stereo, streamFrames, previous?.Midi, previous?.Channel);
+        var state = new TrackState(id, stereo, streamFrames, previous?.Midi, previous?.Channel) {
+            Player = previous?.Player ?? new CellPlayer()
+        };
         if (previous is not null) {
+            state.NoteRoutes = previous.NoteRoutes;
+            state.LiveLoopsActive = previous.LiveLoopsActive;
             state.InputBus = previous.InputBus;
             state.FreezeFile = previous.FreezeFile;
             state.SourceStereo = previous.SourceStereo;
@@ -1200,6 +1227,7 @@ public sealed partial class EngineController : IDisposable {
 
     public void Dispose() {
         maintenance?.Dispose();
+        StopCellPump();
         lock (gate) {
             if (takes.Length > 0) {
                 Writer.Retire();
@@ -1226,6 +1254,10 @@ public sealed partial class EngineController : IDisposable {
                 insert.Slot.Dispose();
             }
 
+            foreach (var midi in track.Channel.Config.MidiEffects) {
+                midi.Slot.Dispose();
+            }
+
             track.Channel.Config = ChannelConfig.Empty;
             track.Dispose();
         }
@@ -1248,5 +1280,7 @@ public sealed partial class EngineController : IDisposable {
         foreach (var file in files.Values) {
             file?.Dispose();
         }
+
+        cellRenderer?.Dispose();
     }
 }

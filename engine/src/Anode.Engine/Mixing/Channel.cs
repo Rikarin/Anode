@@ -1,4 +1,5 @@
 using Anode.Dsp.Effects;
+using Anode.Dsp.MidiEffects;
 using Anode.Engine.Midi;
 
 namespace Anode.Engine.Mixing;
@@ -86,6 +87,90 @@ public sealed class InsertSlot : IDisposable {
     public void Dispose() => Effect?.Dispose();
 }
 
+/// <summary>
+///     A MIDI FX slot's instance (Phase 6, docs/07-phase-6.md), kept across structure changes by slot id while its
+///     plugin stays the same, as an insert's is: the prepared effect (null when it failed to load: the slot passes MIDI
+///     through), the parameter values the control thread last set and the queue that carries changes to the audio
+///     thread.
+/// </summary>
+public sealed class MidiEffectSlot : IDisposable {
+    readonly Dictionary<string, int> indexById = new(StringComparer.Ordinal);
+
+    public MidiEffectSlot(string id, string pluginId, IMidiEffect? effect) {
+        Id = id;
+        PluginId = pluginId;
+        Effect = effect;
+        if (effect is not null) {
+            foreach (var p in effect.Descriptor.Parameters) {
+                indexById[p.Id] = p.Index;
+                Values[p.Id] = p.Default;
+            }
+        }
+
+        Parameters = new(Math.Max(256, 2 * indexById.Count));
+    }
+
+    public string Id { get; }
+
+    public string PluginId { get; }
+
+    /// <summary>The instance; null when the plugin could not be loaded.</summary>
+    public IMidiEffect? Effect { get; }
+
+    /// <summary>Control thread: each parameter's value as last set, by id.</summary>
+    public Dictionary<string, double> Values { get; } = new(StringComparer.Ordinal);
+
+    /// <summary>Parameter changes on their way to the audio thread.</summary>
+    public SpscChannel<ParameterChange> Parameters { get; }
+
+    /// <summary>Audio thread: the engine's stop/locate count the effect was last reset for.</summary>
+    internal long Panic;
+
+    /// <summary>The parameter's index, or −1.</summary>
+    public int IndexOf(string parameterId) => indexById.GetValueOrDefault(parameterId, -1);
+
+    /// <summary>Control thread, before the slot is published: sets the parameter directly. False for an unknown id.</summary>
+    public bool Initialise(string parameterId, double value) {
+        var index = IndexOf(parameterId);
+        if (index < 0 || !double.IsFinite(value) || Effect is null) {
+            return false;
+        }
+
+        Values[parameterId] = value;
+        Effect.SetParameter(index, (float)value);
+        return true;
+    }
+
+    /// <summary>Control thread, once published: queues the change. False for an unknown id.</summary>
+    public bool Set(string parameterId, double value) {
+        var index = IndexOf(parameterId);
+        if (index < 0 || !double.IsFinite(value)) {
+            return false;
+        }
+
+        Values[parameterId] = value;
+        return Parameters.TryEnqueue(new(index, (float)value));
+    }
+
+    /// <summary>Audio thread: applies the queued changes.</summary>
+    public void ApplyParameters() {
+        if (Effect is null) {
+            while (Parameters.TryDequeue(out _)) { }
+
+            return;
+        }
+
+        while (Parameters.TryDequeue(out var change)) {
+            Effect.SetParameter(change.Index, change.Value);
+        }
+    }
+
+    public void Dispose() => Effect?.Dispose();
+}
+
+/// <summary>A MIDI FX slot as a channel's configuration places it: the instance and whether it is bypassed.</summary>
+public sealed record ChannelMidiEffect(MidiEffectSlot Slot, bool Bypassed);
+
 /// <summary>An insert as a channel's configuration places it: the instance, bypass and sidechain.</summary>
 public sealed record ChannelInsert(InsertSlot Slot, bool Bypassed, int SidechainTrack, int SidechainBus);
 
@@ -115,10 +200,14 @@ public sealed record ChannelSend(SendSlot Slot, int Bus, bool PreFader);
 
 /// <summary>
 ///     A channel's structure (<c>setChannel</c>): inserts in order, sends and output (0: the master, 1…64: a bus, −N:
-///     the device's output pair N). Immutable once published; a change makes a new one that keeps the instances.
+///     the device's output pair N), and its MIDI FX slots in order (Phase 6). Immutable once published; a change makes
+///     a new one that keeps the instances.
 /// </summary>
 public sealed record ChannelConfig(ChannelInsert[] Inserts, ChannelSend[] Sends, int Output) {
     public static readonly ChannelConfig Empty = new([], [], 0);
+
+    /// <summary>The MIDI FX slots, run in order on the track's MIDI before its instrument.</summary>
+    public ChannelMidiEffect[] MidiEffects { get; init; } = [];
 }
 
 /// <summary>The left and right gains an edge (an output or a send) last applied, so a change ramps over a block.</summary>

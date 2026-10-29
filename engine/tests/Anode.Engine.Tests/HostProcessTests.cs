@@ -274,6 +274,89 @@ public sealed partial class HostProcessTests : IDisposable {
         }
     }
 
+    /// <summary>
+    ///     Phase 6 through the real host: a format-4 segment with tempo points and a Live Loops audio cell loads; while
+    ///     the null device plays, a launch lands on the next bar and a stop on the next quarter note, the host pushing
+    ///     each state change with its sample; the preview sync message is taken.
+    /// </summary>
+    [Fact]
+    public async Task Launches_and_stops_a_cell_on_its_boundaries_and_pushes_its_states() {
+        await StartAsync();
+        using var socket = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
+        await socket.ConnectAsync(new UnixDomainSocketEndPoint(socketPath), Token);
+        await using var stream = new NetworkStream(socket);
+        var cellStates = new List<CellStateMessage>();
+
+        // The next message that is not one the host pushes unasked (cell states are kept).
+        async Task<IpcMessage?> Next() {
+            while (true) {
+                var message = await IpcFraming.ReadAsync(stream, Token);
+                if (message is CellStateMessage state) {
+                    cellStates.Add(state);
+                    continue;
+                }
+
+                if (message is not (PluginCatalogMessage or MidiPortsMessage or MidiActivityMessage)) {
+                    return message;
+                }
+            }
+        }
+
+        async Task WaitForState(EngineCellState state) {
+            for (var pings = 0; !cellStates.Exists(s => s.State == state); pings++) {
+                Assert.True(pings < 300, $"no {state} state");
+                await Task.Delay(20, Token);
+                await IpcFraming.WriteAsync(stream, new PingMessage(pings), Token);
+                Assert.IsType<PongMessage>(await Next());
+            }
+        }
+
+        await IpcFraming.WriteAsync(stream, new HelloMessage("test"), Token);
+        Assert.IsType<HelloMessage>(await Next());
+        var file = TestAudio.Write24(dir, "loop.wav", 1, Rate, 4);
+        using (var segment = TestAudio.Segment(
+                   [new(1, [], [])],
+                   5,
+                   tempo: [TestAudio.Tempo(0, 0, 120)],
+                   cells: [new(0, 1, CellMode.Loop, Rate, [], [TestAudio.Region(0, Rate, 0)])]
+               )) {
+            await IpcFraming.WriteAsync(
+                stream,
+                TestAudio.Load(
+                    segment,
+                    5,
+                    true,
+                    [TestAudio.Track(1) with { LiveLoopsActive = true }],
+                    [new(0, file, 1, Rate, Rate)],
+                    dir
+                ),
+                Token
+            );
+            Assert.Equal(new ModelLoadedMessage(5), await Next());
+        }
+
+        await IpcFraming.WriteAsync(stream, new SetPreviewSyncMessage(1.1, 2, true), Token);
+        await IpcFraming.WriteAsync(stream, new TransportMessage(TransportAction.Play, 0), Token);
+        await IpcFraming.WriteAsync(stream, new LaunchCellsMessage([new(0, EngineQuantize.Bar)]), Token);
+        await WaitForState(EngineCellState.Playing);
+        var queued = cellStates.Single(static s => s.State == EngineCellState.Queued);
+        var playing = cellStates.Single(static s => s.State == EngineCellState.Playing);
+        Assert.Equal(0, playing.Cell);
+        Assert.Equal(queued.Sample, playing.Sample);
+        Assert.Equal(0, playing.Sample % (2 * Rate)); // a bar line at 120 bpm
+
+        await IpcFraming.WriteAsync(stream, new StopCellsMessage([new(1, EngineQuantize.Quarter)]), Token);
+        await WaitForState(EngineCellState.Stopped);
+        var stopping = cellStates.Single(static s => s.State == EngineCellState.Stopping);
+        var stopped = cellStates.Single(static s => s.State == EngineCellState.Stopped);
+        Assert.Equal(stopping.Sample, stopped.Sample);
+        Assert.Equal(0, stopped.Sample % (Rate / 2));
+        Assert.True(stopped.Sample > playing.Sample);
+        lock (output) {
+            Assert.DoesNotContain("misbehaving", output.ToString(), StringComparison.Ordinal);
+        }
+    }
+
     [Fact]
     public async Task Exits_with_code_3_when_the_device_is_lost() {
         await StartAsync("--lose-device-after", "300");
