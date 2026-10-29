@@ -23,6 +23,9 @@ export class StepInputStore {
   private readonly transport = inject(TransportStore);
 
   readonly state = signal<StepInputState>(DefaultStepInput);
+  /** The changes not answered yet, and the last thing sent (each waits for the one before). */
+  private pending = 0;
+  private queue: Promise<unknown> = Promise.resolve();
   readonly on = computed(() => this.state().on);
   /** The step's length in ticks (dotted and triplet applied). */
   readonly stepTicks = computed(() => stepLength(this.state()));
@@ -31,7 +34,10 @@ export class StepInputStore {
     const events = inject(EventStream);
     events.events$.subscribe(message => {
       if (message.type === 'stepInput') {
-        this.state.set(message.state);
+        // While changes are on their way, their answers (in order) say what the state is.
+        if (this.pending === 0) {
+          this.state.set(message.state);
+        }
       } else if (message.type === 'projectOpened') {
         void this.refresh();
       } else if (message.type === 'projectClosed') {
@@ -50,13 +56,19 @@ export class StepInputStore {
     }
   }
 
-  /** Changes the state; left-out properties stay. */
-  async set(request: StepInputRequest): Promise<void> {
-    try {
-      this.state.set(await this.api.setStepInput(request));
-    } catch (error) {
-      this.notify.failure(error, 'Could not change step input');
-    }
+  /**
+   * Changes the state; left-out properties stay. Changes, steps and rests go to the Server one at a time, in order, and
+   * a change shows at once, so quick presses build on each other (Chord on and off again ends off; a key pressed right
+   * after Chord stacks).
+   */
+  set(request: StepInputRequest): Promise<void> {
+    const previous = this.state();
+    this.state.update(state => withRequest(state, request));
+    return this.answered(
+      () => this.api.setStepInput(request),
+      () => previous,
+      'Could not change step input'
+    );
   }
 
   /** Turns step input on or off: on, into `regionId` (or a new region on `trackId`) from `positionTick`. */
@@ -109,23 +121,75 @@ export class StepInputStore {
 
   /** A step of notes (a chord when several), at the step position. */
   step(pitches: number[], velocity?: number): Promise<CommandResult | null> {
-    return this.project.execute(
-      [{ type: 'stepNotes', pitches, ...(velocity === undefined ? {} : { velocity }) }],
-      'Step Input'
+    return this.inTurn(() =>
+      this.project.execute(
+        [{ type: 'stepNotes', pitches, ...(velocity === undefined ? {} : { velocity }) }],
+        'Step Input'
+      )
     );
   }
 
   /** A tie: lengthens the last step by one step. */
   tie(): Promise<CommandResult | null> {
-    return this.project.execute([{ type: 'stepTie' }], 'Step Input Tie');
+    return this.inTurn(() => this.project.execute([{ type: 'stepTie' }], 'Step Input Tie'));
   }
 
   /** A rest: advances by one step (not an edit). */
-  async rest(): Promise<void> {
-    try {
-      this.state.set(await this.api.stepRest());
-    } catch (error) {
-      this.notify.failure(error, 'Could not enter a rest');
-    }
+  rest(): Promise<void> {
+    return this.answered(
+      () => this.api.stepRest(),
+      () => this.state(),
+      'Could not enter a rest'
+    );
   }
+
+  /** Runs `send` after everything sent before it. */
+  private inTurn<T>(send: () => Promise<T>): Promise<T> {
+    const sent = this.queue.then(send);
+    this.queue = sent.then(
+      () => undefined,
+      () => undefined
+    );
+    return sent;
+  }
+
+  /**
+   * Sends a change in turn; the last answer sets the state (events in the meantime describe states it overtakes). On
+   * failure the state goes back to `fallback`'s.
+   */
+  private answered(
+    send: () => Promise<StepInputState>,
+    fallback: () => StepInputState,
+    failure: string
+  ): Promise<void> {
+    const before = fallback();
+    this.pending++;
+    return this.inTurn(async () => {
+      try {
+        const answer = await send();
+        if (this.pending === 1) {
+          this.state.set(answer);
+        }
+      } catch (error) {
+        if (this.pending === 1) {
+          this.state.set(before);
+        }
+        this.notify.failure(error, failure);
+      } finally {
+        this.pending--;
+      }
+    });
+  }
+}
+
+/** The state as a request will leave it (its left-out properties stay; an empty region or track id is none). */
+export function withRequest(state: StepInputState, request: StepInputRequest): StepInputState {
+  const next: StepInputState = { ...state };
+  for (const [key, value] of Object.entries(request) as [keyof StepInputRequest, unknown][]) {
+    if (value === undefined || value === null) {
+      continue;
+    }
+    (next as Record<string, unknown>)[key] = (key === 'regionId' || key === 'trackId') && value === '' ? null : value;
+  }
+  return next;
 }
