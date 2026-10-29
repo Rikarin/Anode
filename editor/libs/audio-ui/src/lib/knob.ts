@@ -103,6 +103,8 @@ export class AnKnob {
   readonly unit = input('');
   readonly label = input('');
   readonly disabled = input(false, { transform: booleanAttribute });
+  /** Shows the value another way (a Smart Control in its mapped parameter's unit); `unit` and `steps` otherwise. */
+  readonly format = input<((value: number) => string) | null>(null);
   readonly committed = output<number>();
 
   private readonly range = computed(() => {
@@ -121,7 +123,9 @@ export class AnKnob {
   });
   protected readonly pointer = computed(() => point(this.normal(), 5.25));
   protected readonly pointerFrom = computed(() => point(this.normal(), 2));
-  protected readonly display = computed(() => formatParameter(this.value(), this.unit(), this.steps()));
+  protected readonly display = computed(
+    () => this.format()?.(this.value()) ?? formatParameter(this.value(), this.unit(), this.steps())
+  );
   protected readonly rounded = computed(() => Math.round(this.value() * 1000) / 1000);
 
   protected grab(event: PointerEvent): void {

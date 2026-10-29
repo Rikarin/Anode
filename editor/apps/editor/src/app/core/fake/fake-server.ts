@@ -3864,6 +3864,10 @@ function coalesceKey(commands: readonly EditCommand[]): string | undefined {
   if (only?.type === 'setInsertParameter') {
     return `${only.trackId ?? 'master'}#${only.insertId}.${only.parameterId}`;
   }
+  // A Smart Control's drag is one undo step, as a parameter's (docs/07-phase-6.md).
+  if (only?.type === 'setSmartControl' && only.value !== null && only.value !== undefined) {
+    return `${only.trackId}~${only.controlId}`;
+  }
   if (only?.type === 'setSend') {
     const fields = (['levelDb', 'pan', 'preFader', 'bus'] as const).filter(
       f => only[f] !== undefined && only[f] !== null

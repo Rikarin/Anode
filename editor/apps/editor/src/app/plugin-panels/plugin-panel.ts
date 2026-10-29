@@ -1,5 +1,10 @@
 import type { Type } from '@angular/core';
 import type { PluginInfo } from '@anode/api-client';
+import { DelayTapsPanel } from './delay-taps-panel';
+import { DrawbarsPanel } from './drawbars-panel';
+import { FmAlgorithmPanel } from './fm-algorithm-panel';
+import { MultipressorPanel } from './multipressor-panel';
+import { type PanelKind, matchPanel } from './panel-patterns';
 
 /**
  * What a custom plugin panel works through: the plugin, a parameter's value to show, and setting one (coalesced, as
@@ -11,6 +16,14 @@ export interface PluginPanelHost {
   set(parameterId: string, value: number): void;
 }
 
+/** The panel component of each kind. */
+const Panels: Readonly<Record<PanelKind, Type<unknown>>> = {
+  drawbars: DrawbarsPanel,
+  fmAlgorithm: FmAlgorithmPanel,
+  delayTaps: DelayTapsPanel,
+  multipressorBands: MultipressorPanel
+};
+
 /**
  * The custom panel for a plugin, where a generic editor is unusable (docs/07-phase-6.md: the drawbars, the FM
  * algorithm picker, the Delay Designer taps, the Multipressor bands), or null: then only the generic editor shows. A
@@ -18,5 +31,6 @@ export interface PluginPanelHost {
  * ids (plugin-panels/panel-patterns.ts), so a plugin whose ids do not match falls back to the generic editor.
  */
 export function pluginPanel(plugin: PluginInfo | null | undefined): Type<unknown> | null {
-  return plugin ? null : null;
+  const match = matchPanel(plugin);
+  return match ? Panels[match.kind] : null;
 }

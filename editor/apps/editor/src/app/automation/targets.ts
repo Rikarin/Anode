@@ -165,7 +165,31 @@ export function targetsOf(
       );
     }
   }
+  // Smart Controls (Phase 6): a set-up track's controls, 0…1 each, named as the pane names them.
+  const smart = 'smartControls' in track ? (track as Pick<Track, 'smartControls'>).smartControls : null;
+  for (const control of smart?.controls ?? []) {
+    list.push(smartControlTarget(control.id, control.name, control.value));
+  }
   return list;
+}
+
+/** A Smart Control's lane, `smartControl:{controlId}`: 0…1 shown as a percentage (a switch as off and on). */
+function smartControlTarget(controlId: string, name: string, current: number): AutomationTarget {
+  const isSwitch = controlId.startsWith('switch');
+  return {
+    target: `smartControl:${controlId}`,
+    name,
+    group: 'Smart Controls',
+    min: 0,
+    max: 1,
+    default: current,
+    unit: '',
+    steps: isSwitch ? 1 : 0,
+    stepped: isSwitch,
+    toNormal: value => Math.min(1, Math.max(0, value)),
+    fromNormal: normal => Math.round(Math.min(1, Math.max(0, normal)) * 1000) / 1000,
+    format: value => (isSwitch ? (value >= 0.5 ? 'On' : 'Off') : `${Math.round(value * 100)} %`)
+  };
 }
 
 /**
