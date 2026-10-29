@@ -59,7 +59,7 @@ public sealed record SavedState(string PluginId, byte[] Bytes);
 ///     publishes exactly one <see cref="ProjectChangedEvent" /> and raises <see cref="Changed" />, which the engine
 ///     link answers by syncing the host.
 /// </summary>
-public sealed class ProjectSession(
+public sealed partial class ProjectSession(
     IOptions<ServerOptions> options,
     EventHub hub,
     RecentProjects recent,
@@ -474,7 +474,12 @@ public sealed class ProjectSession(
 
             KeepStates(o, o.State, state, batch.Commands);
             result = Commit(o, state, forward);
-            o.History.Push(UndoLabels.For(batch), o.Revision, new(forward, inverse), key);
+            // Compare (Smart Controls) swaps values without an undo step (docs/07-phase-6.md).
+            if (!batch.Commands.All(static c => c is CompareSmartControlsCommand)) {
+                o.History.Push(UndoLabels.For(batch), o.Revision, new(forward, inverse), key);
+            }
+
+            Moved(batch.Commands, state);
         }
 
         return result;
@@ -978,6 +983,10 @@ public sealed class ProjectSession(
                 }
             }
 
+            if (!flashback) {
+                state = IntoCell(state, forward, inverse);
+            }
+
             if (forward.Count > 0) {
                 inverse.Reverse();
                 result = Commit(o, state, forward);
@@ -1094,7 +1103,7 @@ public sealed class ProjectSession(
     /// </summary>
     List<DeltaOp>? MidiTake(Open o, ProjectState state, RecordedMidiTake take, bool flashback) {
         var trackId = o.Ids.TrackOf(take.TrackId);
-        if (trackId is null || state.FindTrack(trackId) is not { } track || !Edits.IsMidiKind(track.Kind)) {
+        if (trackId is null || state.FindTrack(trackId) is not { } track || !Edits.HoldsMidi(track)) {
             ProjectLog.MidiTakeSkipped(logger, take.TrackId, "its track is gone or takes no MIDI");
             return null;
         }

@@ -1,4 +1,6 @@
 using Anode.Contracts;
+using Anode.Server.Engine;
+using Anode.Server.Library;
 using Anode.Server.Projects;
 using Microsoft.AspNetCore.Http.HttpResults;
 using System.Text.Json;
@@ -24,18 +26,20 @@ static class LoopsApi {
                     string? scale,
                     bool? favouritesOnly,
                     int? offset,
-                    int? limit
-                ) => throw Pending.Phase6(
-                    "QueryLoops "
-                    + new LoopQuery(
-                        text,
-                        tags,
-                        Parse(kind, ContractsJsonContext.Default.LoopKind),
-                        key,
-                        Parse(scale, ContractsJsonContext.Default.LoopScale),
-                        favouritesOnly,
-                        offset,
-                        limit
+                    int? limit,
+                    LoopLibrary loops
+                ) => TypedResults.Ok(
+                    loops.Query(
+                        new(
+                            text,
+                            tags,
+                            Parse(kind, ContractsJsonContext.Default.LoopKind),
+                            key,
+                            Parse(scale, ContractsJsonContext.Default.LoopScale),
+                            favouritesOnly,
+                            offset,
+                            limit
+                        )
                     )
                 )
             )
@@ -47,8 +51,10 @@ static class LoopsApi {
             );
         library.MapPost(
                 "/loops/{id}/preview",
-                static Results<NoContent, NotFound, ProblemHttpResult>(string id) =>
-                    throw Pending.Phase6("PreviewLoop")
+                static Results<NoContent, NotFound, ProblemHttpResult>(string id, LoopActions actions) => {
+                    actions.Preview(id);
+                    return TypedResults.NoContent();
+                }
             )
             .WithName("PreviewLoop")
             .WithSummary(
@@ -57,15 +63,19 @@ static class LoopsApi {
             );
         library.MapPut(
                 "/loops/{id}/favourite",
-                static Results<Ok<LoopInfo>, NotFound>(string id, LoopFavouriteRequest request) =>
-                    throw Pending.Phase6("SetLoopFavourite")
+                static Results<Ok<LoopInfo>, NotFound>(string id, LoopFavouriteRequest request, LoopLibrary loops) =>
+                    loops.Find(id) is null
+                        ? TypedResults.NotFound()
+                        : TypedResults.Ok(loops.SetFavourite(id, request.Favourite))
             )
             .WithName("SetLoopFavourite")
             .WithSummary("Marks a loop a favourite, or not.");
         library.MapPost(
                 "/loops",
-                static Results<Ok<LoopInfo>, NotFound, ProblemHttpResult>(AddToLoopLibraryRequest request) =>
-                    throw Pending.Phase6("AddToLoopLibrary")
+                static Results<Ok<LoopInfo>, NotFound, ProblemHttpResult>(
+                    AddToLoopLibraryRequest request,
+                    LoopActions actions
+                ) => TypedResults.Ok(actions.AddToLibrary(request))
             )
             .WithName("AddToLoopLibrary")
             .WithSummary(
@@ -73,20 +83,21 @@ static class LoopsApi {
             );
         library.MapGet(
                 "/packs",
-                static Ok<IReadOnlyList<Pack>>() => throw Pending.Phase6("ListPacks")
+                static Ok<IReadOnlyList<Pack>>(LoopLibrary loops) => TypedResults.Ok(loops.Packs())
             )
             .WithName("ListPacks")
             .WithSummary("The installed content packs.");
         library.MapPost(
                 "/packs",
-                static Results<Ok<Pack>, NotFound, ProblemHttpResult>(InstallPackRequest request) =>
-                    throw Pending.Phase6("InstallPack")
+                static Results<Ok<Pack>, NotFound, ProblemHttpResult>(InstallPackRequest request, LoopLibrary loops) =>
+                    TypedResults.Ok(loops.Install(request.Path))
             )
             .WithName("InstallPack")
             .WithSummary("Installs a .anodepack from the server's disk and adds its loops to the index.");
         library.MapDelete(
                 "/packs/{id}",
-                static Results<NoContent, NotFound>(string id) => throw Pending.Phase6("RemovePack")
+                static Results<NoContent, NotFound>(string id, LoopLibrary loops) =>
+                    loops.Remove(id) ? TypedResults.NoContent() : TypedResults.NotFound()
             )
             .WithName("RemovePack")
             .WithSummary(
@@ -96,8 +107,15 @@ static class LoopsApi {
         var project = api.MapGroup("/project").WithTags("Project").AddEndpointFilter<ProblemFilter>();
         project.MapPost(
                 "/loops",
-                static Results<Ok<CommandResult>, NotFound, ProblemHttpResult>(AddLoopRequest request) =>
-                    throw Pending.Phase6("AddLoop")
+                static Results<Ok<CommandResult>, NotFound, ProblemHttpResult>(
+                    AddLoopRequest request,
+                    LoopActions actions,
+                    HttpContext http
+                ) => {
+                    var result = actions.Add(request);
+                    Revisions.SetETag(http, result.Revision);
+                    return TypedResults.Ok(result);
+                }
             )
             .WithName("AddLoop")
             .WithSummary(
@@ -106,8 +124,10 @@ static class LoopsApi {
             );
         project.MapPost(
                 "/live-loops/launch",
-                static Results<NoContent, NotFound, ProblemHttpResult>(LaunchRequest request) =>
-                    throw Pending.Phase6("LaunchCells")
+                static Results<NoContent, NotFound, ProblemHttpResult>(LaunchRequest request, EngineConnection engine) => {
+                    engine.LaunchCells(request);
+                    return TypedResults.NoContent();
+                }
             )
             .WithName("LaunchCells")
             .WithSummary(
@@ -116,15 +136,22 @@ static class LoopsApi {
             );
         project.MapPost(
                 "/live-loops/stop",
-                static Results<NoContent, NotFound, ProblemHttpResult>(StopRequest request) =>
-                    throw Pending.Phase6("StopCells")
+                static Results<NoContent, NotFound, ProblemHttpResult>(StopRequest request, EngineConnection engine) => {
+                    engine.StopCells(request);
+                    return TypedResults.NoContent();
+                }
             )
             .WithName("StopCells")
             .WithSummary("Stops the cells playing on some tracks (or every track) at the grid's quantise boundary.");
         project.MapPost(
                 "/live-loops/record",
-                static Results<NoContent, NotFound, ProblemHttpResult>(LiveRecordRequest request) =>
-                    throw Pending.Phase6("RecordLiveLoops")
+                static Results<NoContent, NotFound, ProblemHttpResult>(
+                    LiveRecordRequest request,
+                    LiveLoopsPlayer player
+                ) => {
+                    player.Record(request);
+                    return TypedResults.NoContent();
+                }
             )
             .WithName("RecordLiveLoops")
             .WithSummary(

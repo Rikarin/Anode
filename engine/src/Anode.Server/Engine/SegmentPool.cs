@@ -72,8 +72,21 @@ public sealed class SegmentPool : IDisposable {
     }
 
     /// <summary>A new per-track segment holding <paramref name="tracks" />; the caller disposes it.</summary>
-    public SharedSegment WriteTracks(IReadOnlyList<TrackModel> tracks, long version, long lengthSamples) =>
-        SegmentWriter.Write(tracks, version, lengthSamples, Prefix, Interlocked.Increment(ref nextId), true);
+    public SharedSegment WriteTracks(
+        IReadOnlyList<TrackModel> tracks,
+        long version,
+        long lengthSamples,
+        IReadOnlyList<CellModel>? cells = null
+    ) =>
+        SegmentWriter.Write(
+            tracks,
+            version,
+            lengthSamples,
+            Prefix,
+            Interlocked.Increment(ref nextId),
+            true,
+            cells: cells
+        );
 
     public void Dispose() {
         lock (gate) {

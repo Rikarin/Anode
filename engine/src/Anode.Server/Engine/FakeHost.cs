@@ -344,7 +344,7 @@ public sealed partial class FakeHost : IAsyncDisposable {
 
         await stopping.CancelAsync().ConfigureAwait(false);
         listener?.Dispose();
-        foreach (var task in new[] { acceptLoop, telemetryLoop }) {
+        foreach (var task in new[] { acceptLoop, telemetryLoop, cellLoop }) {
             if (task is not null) {
                 try {
                     await task.ConfigureAwait(false);
@@ -486,7 +486,7 @@ public sealed partial class FakeHost : IAsyncDisposable {
 
                 break;
             default:
-                if (!HandleMixer(message)) {
+                if (!HandleMixer(message) && !HandleLiveLoops(message)) {
                     yield return new ErrorMessage($"Unsupported message {message.GetType().Name}.", Name(message));
                 }
 
@@ -511,6 +511,17 @@ public sealed partial class FakeHost : IAsyncDisposable {
                         strip => strip with {
                             Inserts = [
                                 ..(strip.Inserts ?? []).Select(i => i.Id != parameter.InsertId
+                                        ? i
+                                        : i with {
+                                            Parameters = new Dictionary<string, double>(i.Parameters) {
+                                                [parameter.ParameterId] = parameter.Value
+                                            }
+                                        }
+                                )
+                            ],
+                            // A MIDI FX slot's parameter (Phase 6) goes by its slot id as an insert's does.
+                            MidiEffects = [
+                                ..(strip.MidiEffects ?? []).Select(i => i.Id != parameter.InsertId
                                         ? i
                                         : i with {
                                             Parameters = new Dictionary<string, double>(i.Parameters) {
@@ -587,6 +598,8 @@ public sealed partial class FakeHost : IAsyncDisposable {
                 loadedEvents[mapped.TrackId(i)] = EventsOf(mapped, i);
                 loadedWarps[mapped.TrackId(i)] = WarpsOf(mapped, i);
             }
+
+            LoadPhase6(mapped, load.Replace, loaded.Keys);
         } catch (Exception e) when (e is IOException or InvalidDataException or UnauthorizedAccessException) {
             return new ErrorMessage(e.Message, "loadModel");
         }

@@ -51,7 +51,10 @@ builder.Services.AddSingleton<ProjectSession>();
 builder.Services.AddSingleton<Jobs>();
 builder.Services.AddSingleton<AudioImport>();
 builder.Services.AddSingleton<UserSettings>();
+builder.Services.AddSingleton<LoopLibrary>();
+builder.Services.AddSingleton<LiveLoopsPlayer>();
 builder.Services.AddSingleton<EngineConnection>();
+builder.Services.AddSingleton<LoopActions>();
 builder.Services.AddHostedService(static s => s.GetRequiredService<EngineConnection>());
 
 var app = builder.Build();

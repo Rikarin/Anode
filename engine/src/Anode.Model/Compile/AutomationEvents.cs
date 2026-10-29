@@ -1,6 +1,7 @@
 using Anode.Contracts;
 using Anode.Ipc;
 using Anode.Ipc.Segments;
+using Anode.Model.Editing;
 using Anode.Model.Time;
 
 namespace Anode.Model.Compile;
@@ -20,6 +21,11 @@ namespace Anode.Model.Compile;
 ///         mutes combine), as their strips fold into its own (<see cref="Stacks" />). A track in <c>off</c> mode sends
 ///         no events (nor do a stack's or VCA's lanes in <c>off</c>); a frozen track keeps only volume, pan, mute and
 ///         sends. The master's lanes always read; its events live under engine track −1.
+///     </para>
+///     <para>
+///         Phase 6: a Smart Control's lane (<c>smartControl:{id}</c>) is no engine target; it compiles to automation of
+///         every parameter the control maps (<see cref="SmartMath" />) that has no lane of its own, sampled as curves
+///         are; a MIDI FX slot's parameter is target kind <c>midiEffect</c>.
 ///     </para>
 /// </summary>
 public static class AutomationEvents {
@@ -41,8 +47,19 @@ public static class AutomationEvents {
 
         var targets = new SortedSet<string>(StringComparer.Ordinal);
         foreach (var lane in state.LanesOf(track.Id)) {
+            if (lane.Target.StartsWith(SmartControlPrefix, StringComparison.Ordinal)) {
+                continue;
+            }
+
             if (track.FrozenFileId is null || !IsPluginTarget(lane.Target)) {
                 targets.Add(lane.Target);
+            }
+        }
+
+        // A Smart Control's lane drives the parameters it maps (Phase 6).
+        foreach (var (target, _) in SmartDriven(state, track)) {
+            if (track.FrozenFileId is null || !IsPluginTarget(target)) {
+                targets.Add(target);
             }
         }
 
@@ -59,7 +76,39 @@ public static class AutomationEvents {
 
     static bool IsPluginTarget(string target) =>
         target.StartsWith("insert:", StringComparison.Ordinal)
-        || target.StartsWith("instrument:", StringComparison.Ordinal);
+        || target.StartsWith("instrument:", StringComparison.Ordinal)
+        || target.StartsWith("midiEffect:", StringComparison.Ordinal);
+
+    const string SmartControlPrefix = "smartControl:";
+
+    /// <summary>
+    ///     The parameters a track's Smart Control lanes drive, with the lane and mapping that drive each: a mapped
+    ///     target that exists and has no lane of its own (that one wins), the first control's mapping when two map it.
+    /// </summary>
+    static Dictionary<string, (AutomationLane Lane, SmartMapping Mapping)> SmartDriven(ProjectState state, Track track) {
+        var driven = new Dictionary<string, (AutomationLane, SmartMapping)>(StringComparer.Ordinal);
+        if (track.SmartControls is not { } smart) {
+            return driven;
+        }
+
+        foreach (var control in smart.Controls) {
+            if (control.Mappings.Count == 0
+                || state.LaneOf(track.Id, SmartControlPrefix + control.Id) is not { Points.Count: > 0 } lane) {
+                continue;
+            }
+
+            foreach (var mapping in control.Mappings) {
+                if (!driven.ContainsKey(mapping.Target)
+                    && mapping.Target != "mute"
+                    && state.LaneOf(track.Id, mapping.Target) is null
+                    && Editing.Edits.TargetExists(state, track.Id, mapping.Target)) {
+                    driven[mapping.Target] = (lane, mapping);
+                }
+            }
+        }
+
+        return driven;
+    }
 
     /// <summary>A track's stack and VCA, when their lanes play (not off).</summary>
     static IEnumerable<Track> Outers(ProjectState state, Track track) {
@@ -83,6 +132,7 @@ public static class AutomationEvents {
             ["send", var id] => new(index, engineTrack, "send", id),
             ["insert", var id, var parameter] => new(index, engineTrack, "insert", id, parameter),
             ["instrument", var parameter] => new(index, engineTrack, "instrument", null, parameter),
+            ["midiEffect", var id, var parameter] => new(index, engineTrack, "midiEffect", id, parameter),
             _ => new(index, engineTrack, target)
         };
     }
@@ -124,6 +174,10 @@ public static class AutomationEvents {
         var own = state.LaneOf(track?.Id, target);
         var strip = track?.Strip ?? state.Master;
         var curves = new List<Curve> { own is null ? Curve.Constant(Value(strip, target)) : new(own.Points) };
+        if (own is null && track is not null && SmartDriven(state, track).TryGetValue(target, out var driver)) {
+            var mapping = driver.Mapping;
+            curves[0] = new(driver.Lane.Points, v => SmartMath.Map(mapping, v));
+        }
         if (track is not null && target is "volume" or "mute") {
             foreach (var outer in OuterTracks(state, track)) {
                 var lane = outer.AutomationMode == AutomationMode.Off ? null : state.LaneOf(outer.Id, target);
@@ -323,15 +377,20 @@ public static class AutomationEvents {
             Target = index
         };
 
-    /// <summary>A lane's value over time (or a constant one).</summary>
-    sealed class Curve(IReadOnlyList<AutomationPoint> points) {
+    /// <summary>
+    ///     A lane's value over time (or a constant one); through <paramref name="map" /> when given (a Smart Control
+    ///     lane's value as the parameter it maps takes it).
+    /// </summary>
+    sealed class Curve(IReadOnlyList<AutomationPoint> points, Func<double, double>? map = null) {
         public IReadOnlyList<AutomationPoint> Points { get; } = points;
 
-        public double Magnitude => Points.Count == 0 ? 0 : Points.Max(static p => Math.Abs(p.Value));
+        public double Magnitude => Points.Count == 0 ? 0 : Points.Max(p => Math.Abs(Mapped(p.Value)));
 
         double constant;
 
         public static Curve Constant(double value) => new([]) { constant = value };
+
+        double Mapped(double value) => map is null ? value : map(value);
 
         /// <summary>The value just after <paramref name="tick" /> (the second of two points on it).</summary>
         public double Right(long tick, bool step) {
@@ -341,14 +400,14 @@ public static class AutomationEvents {
 
             var i = LastAtOrBefore(tick);
             if (i < 0) {
-                return Points[0].Value;
+                return Mapped(Points[0].Value);
             }
 
             if (step || i == Points.Count - 1 || Points[i + 1].Tick == Points[i].Tick) {
-                return Points[i].Value;
+                return Mapped(Points[i].Value);
             }
 
-            return Shape(Points[i], Points[i + 1], tick);
+            return Mapped(Shape(Points[i], Points[i + 1], tick));
         }
 
         /// <summary>The value just before <paramref name="tick" /> (the first of two points on it).</summary>
@@ -359,7 +418,7 @@ public static class AutomationEvents {
 
             var i = FirstAtOrAfter(tick);
             if (i < Points.Count && Points[i].Tick == tick) {
-                return Points[i].Value;
+                return Mapped(Points[i].Value);
             }
 
             return Right(tick, false);

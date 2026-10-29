@@ -6,7 +6,8 @@ namespace Anode.Model.Compile;
 /// <summary>
 ///     The stable <c>int</c> ids the engine knows tracks, files and automation targets by (docs/02-phase-1.md, "Ids";
 ///     docs/05-phase-4.md, "Automation"): assigned in order of first sight from 0 and never reused while the project is
-///     open (a folder stack and a VCA have none: the engine has no track for them), so the host's state and meters stay
+///     open (a folder stack and a VCA have none: the engine has no track for them; a Drum Machine Designer has one, for
+///     its live MIDI's note routes), and Live Loops cells' indices (Phase 6), so the host's state and meters stay
 ///     attached to the right track across edits, undo and reconnects. Immutable: <see cref="With" /> returns an
 ///     extended map.
 /// </summary>
@@ -15,6 +16,7 @@ public sealed class EngineIds {
     readonly ImmutableDictionary<int, string> trackIds;
     readonly ImmutableDictionary<string, int> files;
     readonly ImmutableDictionary<string, int> targets;
+    readonly ImmutableDictionary<string, int> cells;
     readonly int nextTrack;
     readonly int nextFile;
 
@@ -23,6 +25,7 @@ public sealed class EngineIds {
         ImmutableDictionary<int, string> trackIds,
         ImmutableDictionary<string, int> files,
         ImmutableDictionary<string, int> targets,
+        ImmutableDictionary<string, int> cells,
         int nextTrack,
         int nextFile
     ) {
@@ -30,6 +33,7 @@ public sealed class EngineIds {
         this.trackIds = trackIds;
         this.files = files;
         this.targets = targets;
+        this.cells = cells;
         this.nextTrack = nextTrack;
         this.nextFile = nextFile;
     }
@@ -37,6 +41,7 @@ public sealed class EngineIds {
     public static EngineIds Empty { get; } = new(
         ImmutableDictionary.Create<string, int>(StringComparer.Ordinal),
         ImmutableDictionary<int, string>.Empty,
+        ImmutableDictionary.Create<string, int>(StringComparer.Ordinal),
         ImmutableDictionary.Create<string, int>(StringComparer.Ordinal),
         ImmutableDictionary.Create<string, int>(StringComparer.Ordinal),
         0,
@@ -52,6 +57,7 @@ public sealed class EngineIds {
         var ti = trackIds;
         var f = files;
         var a = targets;
+        var c = cells;
         var nt = nextTrack;
         var nf = nextFile;
         foreach (var track in state.Tracks) {
@@ -75,7 +81,15 @@ public sealed class EngineIds {
             }
         }
 
-        return nt == nextTrack && nf == nextFile && a.Count == targets.Count ? this : new(t, ti, f, a, nt, nf);
+        foreach (var cell in state.LiveLoops.Cells) {
+            if (!c.ContainsKey(cell.Id)) {
+                c = c.Add(cell.Id, c.Count);
+            }
+        }
+
+        return nt == nextTrack && nf == nextFile && a.Count == targets.Count && c.Count == cells.Count
+            ? this
+            : new(t, ti, f, a, c, nt, nf);
     }
 
     /// <summary>Every automated target of the project: (track id, null for the master; lane target).</summary>
@@ -120,6 +134,13 @@ public sealed class EngineIds {
         targets.TryGetValue(TargetKey(trackId, target), out var index)
             ? index
             : throw new KeyNotFoundException($"No automation target '{target}' of '{trackId ?? "master"}'.");
+
+    /// <summary>The index of Live Loops cell <paramref name="id" /> in the segment's cell table (stable while open).</summary>
+    public int Cell(string id) =>
+        cells.TryGetValue(id, out var index) ? index : throw new KeyNotFoundException($"No cell index for '{id}'.");
+
+    /// <summary>The cell of index <paramref name="index" />, or null.</summary>
+    public string? CellOf(int index) => cells.FirstOrDefault(p => p.Value == index).Key;
 
     static string TargetKey(string? trackId, string target) => (trackId ?? "master") + "|" + target;
 
