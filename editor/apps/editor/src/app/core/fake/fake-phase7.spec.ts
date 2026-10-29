@@ -328,7 +328,8 @@ function HandleMIDI(event) { event.send(); }`;
         unit: '',
         steps: 24,
         valueNames: null,
-        macro: null
+        macro: null,
+        kind: 'slider'
       }
     ]);
     expect(slot?.parameters).toEqual({ Interval: 12 });
