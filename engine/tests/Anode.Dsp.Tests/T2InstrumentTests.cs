@@ -142,6 +142,47 @@ public sealed class T2InstrumentTests : IDisposable {
         Assert.True(Math.Abs(cents) < 2, $"{id} note {note}: {cents:0.000} cents");
     }
 
+    /// <summary>
+    ///     The pitch error of every pitched instrument across the keyboard, written to
+    ///     <c>engine/artifacts/dsp-demo/t2-pitch.md</c> (with <c>ANODE_DSP_DEMO=1</c>, as the demos).
+    /// </summary>
+    [Fact]
+    public void Measure_pitch() {
+        Assert.SkipUnless(
+            Environment.GetEnvironmentVariable("ANODE_DSP_DEMO") == "1",
+            "Set ANODE_DSP_DEMO=1 to measure."
+        );
+        int[] notes = [24, 36, 48, 60, 69, 84, 96];
+        var report = new System.Text.StringBuilder();
+        report.AppendLine(
+            System.Globalization.CultureInfo.InvariantCulture,
+            $"| Instrument | {string.Join(" | ", notes.Select(static n => $"note {n}"))} |"
+        );
+        report.AppendLine(
+            System.Globalization.CultureInfo.InvariantCulture,
+            $"|---|{string.Concat(notes.Select(static _ => "---:|"))}"
+        );
+        foreach (var id in new[] {
+                     FmSynth.Id, DrawbarOrgan.Id, ElectricPiano.Id, WavetableSynth.Id, QuickSampler.Id
+                 }) {
+            var cells = notes.Select(note => {
+                    using var instrument = PureTone(id);
+                    var (left, _) = Play.Render(instrument, 60_000, [TimedEvent.On(0, note)]);
+                    var cents = Cents(PeakFrequency(left, Rate, 12_000), NoteFrequency(note));
+                    return cents.ToString("0.000", System.Globalization.CultureInfo.InvariantCulture);
+                }
+            );
+            report.AppendLine(
+                System.Globalization.CultureInfo.InvariantCulture,
+                $"| {id} | {string.Join(" | ", cells)} |"
+            );
+        }
+
+        var path = Path.Combine(Play.EngineRoot(), "artifacts", "dsp-demo");
+        Directory.CreateDirectory(path);
+        File.WriteAllText(Path.Combine(path, "t2-pitch.md"), report.ToString());
+    }
+
     [Theory]
     [InlineData(0)]
     [InlineData(1)]
