@@ -98,7 +98,13 @@ public sealed class FlexEditTests {
         Apply(new SetRegionFlexCommand(Region.Id, FlexFollow.On));
         Apply(
             new SetGrooveCommand(
-                new("grv_late", "Late", 3840, 240, [..Enumerable.Range(0, 16).Select(static i => new GroovePoint(i * 240 + 40, 1))])
+                new(
+                    "grv_late",
+                    "Late",
+                    3840,
+                    240,
+                    [..Enumerable.Range(0, 16).Select(static i => new GroovePoint(i * 240 + 40, 1))]
+                )
             )
         );
         Apply(new QuantizeAudioCommand([Region.Id], 0, GrooveId: "grv_late"));

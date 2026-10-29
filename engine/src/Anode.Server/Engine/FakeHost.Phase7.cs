@@ -168,16 +168,16 @@ public sealed partial class FakeHost {
                     Text(body, "unit") ?? string.Empty,
                     steps,
                     names.Count > 0 ? names : null,
-                    Kind: type switch {
-                        "menu" or "checkbox" or "momentary" or "text" => type,
-                        _ => "slider"
-                    }
+                    Kind: KindOf(type)
                 )
             );
         }
 
         return parameters;
     }
+
+    /// <summary>A <c>PluginParameters</c> type as the control it shows as (<c>lin</c> and <c>log</c> are sliders).</summary>
+    static string KindOf(string type) => type is "menu" or "checkbox" or "momentary" or "text" ? type : "slider";
 
     static string? Text(string body, string key) =>
         Regex.Match(body, $@"\b{key}\s*:\s*[""']([^""']*)[""']") is { Success: true } m ? m.Groups[1].Value : null;

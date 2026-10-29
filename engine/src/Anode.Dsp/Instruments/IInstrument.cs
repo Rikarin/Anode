@@ -30,8 +30,7 @@ public sealed record InstrumentParameter(
     ///     The control that shows it: its <see cref="Kind" />, else a menu when its values are named, a checkbox when it
     ///     is a 0…1 switch of two values, and a slider otherwise.
     /// </summary>
-    public InstrumentParameterKind ShownAs =>
-        Kind ?? InstrumentParameterKinds.Of(Steps, Min, Max, ValueNames);
+    public InstrumentParameterKind ShownAs => Kind ?? InstrumentParameterKinds.Of(Steps, Min, Max, ValueNames);
 }
 
 /// <summary>The control a parameter shows as (a Scripter <c>PluginParameters</c> type, or a built-in's shape).</summary>

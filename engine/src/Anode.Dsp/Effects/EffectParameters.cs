@@ -27,14 +27,18 @@ internal sealed class EffectParameters {
         return list.Count - 1;
     }
 
-    public int Choice(string id, string name, IReadOnlyList<string> values, int value) =>
-        Choice(id, name, values, value, InstrumentParameterKind.Menu);
-
     /// <summary>An Off/On switch: a checkbox.</summary>
     public int Toggle(string id, string name, bool value) =>
         Choice(id, name, OffOn, value ? 1 : 0, InstrumentParameterKind.Checkbox);
 
-    int Choice(string id, string name, IReadOnlyList<string> values, int value, InstrumentParameterKind kind) {
+    /// <summary>A choice between named values: a menu (unless <paramref name="kind" /> says otherwise).</summary>
+    public int Choice(
+        string id,
+        string name,
+        IReadOnlyList<string> values,
+        int value,
+        InstrumentParameterKind kind = InstrumentParameterKind.Menu
+    ) {
         list.Add(
             new(list.Count, id, name, 0, values.Count - 1, value, string.Empty, values.Count - 1, values, Kind: kind)
         );
