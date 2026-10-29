@@ -220,9 +220,16 @@ test('mixes, automates, freezes and bounces a session: inserts, sends, routing, 
     // Touch mode, then move the fader while playing.
     await window.getByTestId('automation-mode').first().click();
     await window.getByRole('menuitemradio', { name: 'Touch' }).click();
+    await expect(window.getByRole('menuitemradio', { name: 'Touch' })).toHaveCount(0);
     await window.getByTestId('play').click();
+    // A pass records from when the Server reads the engine moving (its telemetry, about 30 times a second): a move
+    // before that is not recorded, and the later ones, each a gesture of its own that steps from the lane's flat start,
+    // repeat its value, which records nothing new. Let the transport start first.
+    await window.waitForTimeout(300);
+    // The closing menu hands focus back to its button: move the fader once it has the focus.
     const fader = audio.getByRole('slider', { name: 'Audio 1 volume' });
     await fader.focus();
+    await expect(fader).toBeFocused();
     for (let i = 0; i < 6; i++) {
       await window.keyboard.press('ArrowUp');
       await window.waitForTimeout(150);
