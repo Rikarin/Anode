@@ -2,7 +2,6 @@ using Anode.Contracts;
 using Anode.Ipc.Segments;
 using Anode.Model.Compile;
 using Anode.Model.Editing;
-using Anode.Testing;
 using System.Text.Json;
 
 namespace Anode.Model.Tests;
@@ -430,7 +429,7 @@ public sealed class Phase7Tests {
         Assert.True(Edits.TargetExists(state, track, $"midiEffect:{scripter}:Interval"));
         Assert.False(Edits.TargetExists(state, track, $"midiEffect:{scripter}:Nope"));
 
-        // A recompile: Interval keeps its value, Gate comes at its default, and Delay's value stays for later.
+        // A recompile: Interval keeps its value, Gate comes at its default, and Delay and Mode keep theirs for later.
         state = state.Apply(
             Edits.WithRuntimeParameters(
                 state,
@@ -445,7 +444,7 @@ public sealed class Phase7Tests {
         Assert.Equal(
             [
                 KeyValuePair.Create("Delay", 100.0), KeyValuePair.Create("Gate", 0.5),
-                KeyValuePair.Create("Interval", 7.0)
+                KeyValuePair.Create("Interval", 7.0), KeyValuePair.Create("Mode", 0.0)
             ],
             state.Tracks[0].Strip.MidiEffects[0].Parameters.OrderBy(static p => p.Key, StringComparer.Ordinal)
         );
@@ -476,9 +475,6 @@ public sealed class Phase7Tests {
         }
     }
 
-    [Fact]
-    public void The_fallback_algorithms_are_installed_for_the_tests() =>
-        Assert.Same(FallbackMidiAlgorithms.Instance, MidiAlgorithms.Current);
 
     static ArticulationSet Strings() =>
         new(

@@ -1,4 +1,5 @@
 using Anode.Contracts;
+using Anode.Model.Groove;
 using Anode.Model.Time;
 
 namespace Anode.Model.Editing;
@@ -189,7 +190,7 @@ public static partial class Edits {
         var groove = GrooveFor(state, track.Id, c.GrooveId, analysis);
         return groove is null
             ? at => Quantize.Tick(at, c.GridTicks, c.Strength, c.Swing)
-            : at => MidiAlgorithms.Current.GrooveTarget(groove, at, c.Strength).Tick;
+            : at => Grooves.Target(groove, at, c.Strength).Tick;
     }
 
     /// <summary>Markers on a region's transients, quantised (each strictly inside it and after the one before).</summary>

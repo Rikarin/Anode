@@ -443,25 +443,7 @@ public sealed partial class ProjectSession {
     ///     reach any more: not the project, not its undo or redo history, not a saved alternative or backup. On save.
     /// </summary>
     static void PruneVersions(Open o) {
-        var reachable = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var file in o.State.Files.Values) {
-            reachable.Add(Full(o.Folder, file.Path));
-        }
-
-        foreach (var step in o.History.Steps()) {
-            foreach (var op in step.Forward.Concat(step.Inverse)) {
-                if (op is AudioFileUpserted(var f)) {
-                    reachable.Add(Full(o.Folder, f.Path));
-                }
-            }
-        }
-
-        foreach (var document in SavedDocuments(o.Folder)) {
-            foreach (var path in DocumentPaths(document)) {
-                reachable.Add(Full(o.Folder, path));
-            }
-        }
-
+        var reachable = Reachable(o);
         foreach (var file in o.State.Files.Values) {
             var (directory, stem) = VersionStem(o.Folder, file);
             if (!Directory.Exists(directory)) {
@@ -469,23 +451,35 @@ public sealed partial class ProjectSession {
             }
 
             foreach (var path in Directory.EnumerateFiles(directory, stem + ".v*.wav")) {
-                if (VersionOf(stem, Path.GetFileName(path)) is not { } n
-                    || reachable.Contains(Path.GetFullPath(path))) {
-                    continue;
-                }
-
-                try {
-                    File.Delete(path);
-                    foreach (var level in PeakFormat.Levels) {
-                        File.Delete(
-                            Peaks.PathOf(Path.Combine(o.Folder, ProjectPackage.PeaksFolder), $"{file.Id}-v{n}", level)
-                        );
-                    }
-                } catch (Exception e) when (e is IOException or UnauthorizedAccessException) {
-                    // Kept until a later save.
-                    _ = e;
+                if (VersionOf(stem, Path.GetFileName(path)) is { } n && !reachable.Contains(Path.GetFullPath(path))) {
+                    Prune(o.Folder, file, path, n);
                 }
             }
+        }
+    }
+
+    /// <summary>Every audio file path the project, its undo and redo history, and its saved documents reach.</summary>
+    static HashSet<string> Reachable(Open o) {
+        var paths = o.State.Files.Values.Select(static f => f.Path)
+            .Concat(
+                o.History.Steps()
+                    .SelectMany(static s => s.Forward.Concat(s.Inverse))
+                    .OfType<AudioFileUpserted>()
+                    .Select(static op => op.File.Path)
+            )
+            .Concat(SavedDocuments(o.Folder).SelectMany(DocumentPaths));
+        return paths.Select(p => Full(o.Folder, p)).ToHashSet(StringComparer.Ordinal);
+    }
+
+    /// <summary>Removes version <paramref name="n" /> of a file and its peaks (kept until a later save when it cannot).</summary>
+    static void Prune(string folder, AudioFile file, string path, int n) {
+        try {
+            File.Delete(path);
+            foreach (var level in PeakFormat.Levels) {
+                File.Delete(Peaks.PathOf(Path.Combine(folder, ProjectPackage.PeaksFolder), $"{file.Id}-v{n}", level));
+            }
+        } catch (Exception e) when (e is IOException or UnauthorizedAccessException) {
+            _ = e;
         }
     }
 

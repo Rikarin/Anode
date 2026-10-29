@@ -2,6 +2,7 @@ using Anode.Contracts;
 using Anode.Model;
 using Anode.Model.Editing;
 using Anode.Model.Storage;
+using Anode.Model.Transform;
 using Anode.Server.Projects;
 using Microsoft.Extensions.Options;
 using System.Text.Json;
@@ -155,8 +156,7 @@ public sealed class MidiEditLibraries(IOptions<ServerOptions> options) {
         );
 
     /// <summary>The factory presets (ids <c>factory.…</c>, in menu order), then the user's sets by name.</summary>
-    public IReadOnlyList<TransformSet> TransformSets() =>
-        [..MidiAlgorithms.Current.TransformPresets(), ..UserTransformSets.List()];
+    public IReadOnlyList<TransformSet> TransformSets() => [..TransformEngine.Presets(), ..UserTransformSets.List()];
 
     /// <summary>Saves a user Transform set: a factory preset's id is refused (save a copy under a new id).</summary>
     public TransformSet SaveTransformSet(TransformSet? set) {

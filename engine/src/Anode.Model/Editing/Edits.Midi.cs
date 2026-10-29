@@ -1,4 +1,5 @@
 using Anode.Contracts;
+using Anode.Model.Groove;
 
 namespace Anode.Model.Editing;
 
@@ -335,7 +336,7 @@ public static partial class Edits {
     /// <summary>A region with its chosen notes (null: all) quantised to a groove (Phase 7).</summary>
     static MidiRegion Grooved(MidiRegion region, HashSet<long>? chosen, GrooveTemplate groove, QuantizeNotesCommand c) {
         var picked = region.Notes.Where(n => chosen is null || chosen.Contains(n.Id)).ToArray();
-        var moved = MidiAlgorithms.Current.GrooveQuantize(
+        var moved = Grooves.Quantize(
                 picked,
                 region.StartTick,
                 groove,

@@ -10,122 +10,106 @@ namespace Anode.Model.Tests;
 /// <summary>
 ///     The <c>transform</c> and groove-quantise commands against workstream E's shared vectors
 ///     (<c>TransformVectors.json</c>, <c>GrooveVectors.json</c>; docs/08-phase-7.md): each case runs through the command
-///     on a region at the project start, so the command's path (project ticks, regions, ids) gives E's exact events.
-///     Skipped until E's vectors are there. A case is
-///     <c>
-///         { name, set | groove, notes, controls?, strength?, velocity?,
-///         expected: { notes, controls? } }
-///     </c>
-///     , the events in the contract's JSON.
+///     on a MIDI region (at the project start for Transform, whose vectors are in project ticks; at the case's
+///     <c>regionStartTick</c> for quantise), so the command's path (project ticks, regions, ids, checks) gives E's
+///     events exactly. The algorithms themselves are E's tests.
 /// </summary>
 public sealed class Phase7VectorTests {
+    const string Region = "mid_vectors";
+
     static readonly JsonSerializerOptions Json = new(ContractsJsonContext.Default.Options) {
         TypeInfoResolver = JsonTypeInfoResolver.Combine(ContractsJsonContext.Default, new DefaultJsonTypeInfoResolver())
     };
 
     [Fact]
     public void The_transform_command_gives_the_Transform_vectors_events() {
-        var cases = Cases("TransformVectors.json");
-        foreach (var c in cases) {
-            var (state, region) = Project(c);
+        var root = Vectors("TransformVectors.json");
+        var notes = root["notes"].Deserialize<Note[]>(Json)!;
+        var controls = root["controls"].Deserialize<ControlEvent[]>(Json)!;
+        var run = 0;
+        foreach (var c in root["cases"]!.AsArray().OfType<JsonNode>()) {
             var set = c["set"].Deserialize<TransformSet>(Json)!;
             if (set.Mode == TransformMode.SelectOnly) {
-                continue; // the editor's own
+                continue; // the editor's own; the command refuses it
             }
 
-            var after = Edits.Apply(state, new TransformCommand([region], set), new SequentialIds()).State;
-            Expect(c, after.MidiRegions[region]);
+            var state = Project(0, notes, controls);
+            if (c["signatures"]?.Deserialize<SignatureEvent[]>(Json) is { Length: > 0 } signatures) {
+                state = state with { Settings = state.Settings with { Signatures = signatures } };
+            }
+
+            var after = Edits.Apply(state, new TransformCommand([Region], set), new SequentialIds()).State;
+            var expected = c["expected"]!;
+            Same(Edits.Sorted(expected["notes"].Deserialize<Note[]>(Json)!), after.MidiRegions[Region].Notes, c);
+            Same(
+                Edits.Sorted(expected["controls"].Deserialize<ControlEvent[]>(Json)!),
+                after.MidiRegions[Region].Controls,
+                c
+            );
+            run++;
         }
+
+        Assert.True(run > 10, $"Only {run} Transform vectors ran.");
     }
 
     [Fact]
     public void Groove_quantise_gives_the_groove_vectors_notes() {
-        var cases = Cases("GrooveVectors.json");
+        var root = Vectors("GrooveVectors.json");
+        var cases = root["quantize"]!.AsArray().OfType<JsonNode>().ToArray();
+        Assert.NotEmpty(cases);
         foreach (var c in cases) {
-            if (c["groove"] is null || c["expected"] is null) {
-                continue; // an extraction case
-            }
-
-            var (state, region) = Project(c);
             var groove = c["groove"].Deserialize<GrooveTemplate>(Json)!;
-            state = state.Apply(new GrooveUpserted(groove));
+            var state = Project(c["regionStartTick"]!.GetValue<long>(), c["notes"].Deserialize<Note[]>(Json)!, [])
+                .Apply(new GrooveUpserted(groove));
             var after = Edits.Apply(
                     state,
                     new QuantizeNotesCommand(
-                        region,
-                        groove.StepTicks > int.MaxValue ? 0 : (int)groove.StepTicks,
-                        c["strength"]?.GetValue<double>() ?? 1,
+                        Region,
+                        0,
+                        c["strength"]!.GetValue<double>(),
                         GrooveId: groove.Id,
-                        GrooveVelocity: c["velocity"]?.GetValue<bool>() ?? false
+                        GrooveVelocity: c["velocity"]!.GetValue<bool>()
                     ),
                     new SequentialIds()
                 )
                 .State;
-            Expect(c, after.MidiRegions[region]);
+            Same(Edits.Sorted(c["expected"].Deserialize<Note[]>(Json)!), after.MidiRegions[Region].Notes, c);
         }
     }
 
-    static List<JsonNode> Cases(string name, [CallerFilePath] string source = "") {
-        var path = Path.Combine(Path.GetDirectoryName(source)!, name);
-        Assert.SkipUnless(File.Exists(path), $"{name} is workstream E's: not there yet.");
-        var root = JsonNode.Parse(File.ReadAllText(path));
-        var cases = (root as JsonArray ?? root?["cases"] as JsonArray ?? [])
-            .OfType<JsonNode>()
-            .Where(static c => c["notes"] is not null)
-            .ToList();
-        Assert.NotEmpty(cases);
-        return cases;
-    }
+    static JsonNode Vectors(string name, [CallerFilePath] string source = "") =>
+        JsonNode.Parse(File.ReadAllText(Path.Combine(Path.GetDirectoryName(source)!, name)))!;
 
-    /// <summary>A project with one MIDI region at the start holding the case's notes and controls, as given.</summary>
-    static (ProjectState State, string Region) Project(JsonNode c) {
-        var notes = c["notes"].Deserialize<Note[]>(Json) ?? [];
-        var controls = c["controls"]?.Deserialize<ControlEvent[]>(Json) ?? [];
-        var end = notes.Select(static n => n.StartTick + n.LengthTicks)
-            .Concat(controls.Select(static e => e.Tick + 1))
-            .DefaultIfEmpty(3840)
-            .Max();
-        var region = new MidiRegion(
-            "mid_vectors",
-            "trk_vectors",
-            "Vectors",
-            0,
-            Math.Max(3840, end + 3840),
-            ProjectDefaults.Playback,
-            notes,
-            controls,
-            false
-        );
-        var state = ProjectDefaults.NewProject("prj_v", "Vectors", 48_000)
-            .Apply(
-                new TrackUpserted(
-                    Edits.Apply(
-                        ProjectDefaults.NewProject("prj_v", "Vectors", 48_000),
-                        new AddTrackCommand("Vectors", Kind: TrackKind.Midi),
-                        new SequentialIds()
-                    )
-                    .State.Tracks[0] with {
-                        Id = "trk_vectors"
-                    },
-                    0
+    /// <summary>A project with one external MIDI track and a region from <paramref name="start" /> holding the events.</summary>
+    static ProjectState Project(long start, IReadOnlyList<Note> notes, IReadOnlyList<ControlEvent> controls) {
+        var state = Edits.Apply(
+                ProjectDefaults.NewProject("prj_v", "Vectors", 48_000),
+                new AddTrackCommand("Vectors", Kind: TrackKind.Midi),
+                new SequentialIds()
+            )
+            .State;
+        return state.Apply(
+            new MidiRegionUpserted(
+                new(
+                    Region,
+                    state.Tracks[0].Id,
+                    "Vectors",
+                    start,
+                    3840 * 16,
+                    ProjectDefaults.Playback,
+                    Edits.Sorted(notes),
+                    Edits.Sorted(controls),
+                    false
                 )
             )
-            .Apply(new MidiRegionUpserted(region));
-        return (state, region.Id);
+        );
     }
 
-    static void Expect(JsonNode c, MidiRegion region) {
-        var expected = c["expected"]!;
-        var notes = expected["notes"].Deserialize<Note[]>(Json) ?? [];
-        Assert.Equal(
-            Edits.Sorted(notes).Select(static n => JsonSerializer.Serialize(n, Json)),
-            region.Notes.Select(static n => JsonSerializer.Serialize(n, Json))
+    /// <summary>The events expected (in the region's canonical order) are the region's.</summary>
+    static void Same<T>(IEnumerable<T> expected, IReadOnlyList<T> actual, JsonNode c) =>
+        Assert.True(
+            expected.Select(static x => JsonSerializer.Serialize(x, Json))
+                .SequenceEqual(actual.Select(static x => JsonSerializer.Serialize(x, Json))),
+            $"Vector '{c["name"]}' differs."
         );
-        if (expected["controls"]?.Deserialize<ControlEvent[]>(Json) is { } controls) {
-            Assert.Equal(
-                Edits.Sorted(controls).Select(static e => JsonSerializer.Serialize(e, Json)),
-                region.Controls.Select(static e => JsonSerializer.Serialize(e, Json))
-            );
-        }
-    }
 }

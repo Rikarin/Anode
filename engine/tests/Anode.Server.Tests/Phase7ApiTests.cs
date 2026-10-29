@@ -13,7 +13,8 @@ namespace Anode.Server.Tests;
 ///     Phase 7 through the API (docs/08-phase-7.md): the user library of grooves, Transform sets and articulation sets;
 ///     step input from the keyboard window and the MIDI keyboard; the Audio File Editor's jobs, versions, undo,
 ///     region shifts, samples, loop search and preview; Scripter's scripts, run-time parameters and logs; grooves
-///     from audio; and input switches while recording. Audio edits come from <see cref="TestEditor" />.
+///     from audio; and input switches while recording. Audio edits come from <see cref="TestEditor" /> (workstream E's,
+///     with made-up onsets).
 /// </summary>
 public sealed class Phase7ApiTests {
     static CancellationToken Token => TestContext.Current.CancellationToken;
@@ -489,9 +490,9 @@ public sealed class Phase7ApiTests {
     }
 
     /// <summary>
-    ///     The Audio File Editor's algorithms for tests: <c>Anode.Dsp.Editing</c>'s where workstream E implemented them,
-    ///     else plain ones by the documented rules (loop search: a range's halves; onsets: every 12 000 frames, every
-    ///     second one 3000 late, the first of each pair the strongest).
+    ///     The Audio File Editor's algorithms for tests: <c>Anode.Dsp.Editing</c>'s, except onsets, which are made up
+    ///     (every 12 000 frames, every second one 3000 late, the first of each pair the strongest) so a groove from a
+    ///     test file is known exactly.
     /// </summary>
     sealed class TestEditor : IAudioEditor {
         readonly DspAudioEditor real = new();
@@ -500,50 +501,8 @@ public sealed class Phase7ApiTests {
             float[][] channels,
             int sampleRate,
             AudioEditOperation operation
-        ) {
-            try {
-                return real.Apply(channels, sampleRate, operation);
-            } catch (NotImplementedException) {
-                var (start, end) = ((int)operation.StartFrame, (int)operation.EndFrame);
-                switch (operation.Kind) {
-                    case AudioEditKind.Trim:
-                        return ([..channels.Select(c => c[start..end])], sampleRate);
-                    case AudioEditKind.Silence:
-                        foreach (var c in channels) {
-                            Array.Clear(c, start, end - start);
-                        }
-
-                        break;
-                    case AudioEditKind.Gain:
-                        var gain = (float)Math.Pow(10, (operation.Value ?? 0) / 20);
-                        foreach (var c in channels) {
-                            for (var i = start; i < end; i++) {
-                                c[i] *= gain;
-                            }
-                        }
-
-                        break;
-                    case AudioEditKind.Invert:
-                        foreach (var c in channels) {
-                            for (var i = start; i < end; i++) {
-                                c[i] = -c[i];
-                            }
-                        }
-
-                        break;
-                    case AudioEditKind.Reverse:
-                        foreach (var c in channels) {
-                            Array.Reverse(c, start, end - start);
-                        }
-
-                        break;
-                    default:
-                        throw new ArgumentException($"The test editor does not {operation.Kind}.");
-                }
-
-                return (channels, sampleRate);
-            }
-        }
+        ) =>
+            real.Apply(channels, sampleRate, operation);
 
         public IReadOnlyList<LoopCandidate> Loops(
             float[] mono,
@@ -552,28 +511,13 @@ public sealed class Phase7ApiTests {
             long end,
             int count,
             long minFrames
-        ) {
-            try {
-                return real.Loops(mono, sampleRate, start, end, count, minFrames);
-            } catch (NotImplementedException) {
-                return [
-                    ..new[] {
-                        new LoopCandidate(start, end, 0.9), new LoopCandidate(start, start + (end - start) / 2, 0.5)
-                    }.Take(count)
-                ];
-            }
-        }
+        ) =>
+            real.Loops(mono, sampleRate, start, end, count, minFrames);
 
-        public IReadOnlyList<GrooveOnset> Onsets(float[] mono, int sampleRate) {
-            try {
-                return real.Onsets(mono, sampleRate);
-            } catch (NotImplementedException) {
-                return [
-                    ..Enumerable.Range(0, mono.Length / 12_000)
-                        .Select(static i => new GrooveOnset(i * 12_000L + i % 2 * 3000, i % 2 == 0 ? 1 : 0.5))
-                ];
-            }
-        }
+        public IReadOnlyList<GrooveOnset> Onsets(float[] mono, int sampleRate) => [
+            ..Enumerable.Range(0, mono.Length / 12_000)
+                .Select(static i => new GrooveOnset(i * 12_000L + i % 2 * 3000, i % 2 == 0 ? 1 : 0.5))
+        ];
     }
 
     static async Task EditFileAsync(

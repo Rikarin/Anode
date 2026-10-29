@@ -1,13 +1,15 @@
 using Anode.Contracts;
 using Anode.Model.Groove;
 using Anode.Model.Time;
+using Anode.Model.Transform;
 
 namespace Anode.Model.Editing;
 
 /// <summary>
 ///     Phase 7 (docs/08-phase-7.md): the Event List's controller edits, MIDI Transform, groove templates and the groove
 ///     track, articulation sets, Step Editor lane sets, step input, the Audio File Editor's file versions and Scripter's
-///     scripts. The Transform engine and groove templates come through <see cref="MidiAlgorithms.Current" />.
+///     scripts. The Transform engine and groove templates are workstream E's <see cref="TransformEngine" /> and
+///     <see cref="Grooves" />.
 /// </summary>
 public static partial class Edits {
     public const int MaxGrooveSteps = 1024;
@@ -105,7 +107,7 @@ public static partial class Edits {
 
         var regions = c.RegionIds.Distinct(StringComparer.Ordinal).Select(id => MidiRegionOf(state, id)).ToArray();
         var (notes, controls, owner) = Gathered(regions, c);
-        var result = MidiAlgorithms.Current.Transform(notes, controls, set, state.SignatureMap);
+        var result = Algorithm(() => TransformEngine.Apply(notes, controls, set, state.SignatureMap));
         var changedNotes = Placed(
             result.Notes,
             owner,
@@ -266,11 +268,11 @@ public static partial class Edits {
         if (state.MidiRegions.TryGetValue(c.RegionId ?? string.Empty, out var midi)) {
             var length = GrooveLength(state, midi.StartTick, bars, step);
             var name = c.Name is null ? midi.Name : Name(c.Name, "groove name");
-            groove = MidiAlgorithms.Current.GrooveFromNotes(id, name, midi.Notes, midi.StartTick, length, step);
+            groove = Algorithm(() => Grooves.FromNotes(id, name, midi.Notes, midi.StartTick, length, step));
         } else if (state.Regions.TryGetValue(c.RegionId ?? string.Empty, out var audio)) {
             var length = GrooveLength(state, audio.StartTick, bars, step);
             var name = c.Name is null ? audio.Name : Name(c.Name, "groove name");
-            groove = MidiAlgorithms.Current.GrooveFromOnsets(
+            groove = Grooves.FromOnsets(
                 id,
                 name,
                 OnsetTicks(state, audio, analysis),
@@ -283,6 +285,15 @@ public static partial class Edits {
         }
 
         return [new GrooveUpserted(CheckGroove(groove))];
+    }
+
+    /// <summary>Runs one of workstream E's algorithms: what it refuses (an <see cref="ArgumentException" />) does not apply.</summary>
+    static T Algorithm<T>(Func<T> run) {
+        try {
+            return run();
+        } catch (ArgumentException e) {
+            throw new EditException(e.Message, e);
+        }
     }
 
     /// <summary>A template's length: <paramref name="bars" /> bars of the signature at <paramref name="startTick" />.</summary>
@@ -460,7 +471,7 @@ public static partial class Edits {
         var bars = (int)Math.Clamp((span + bar - 1) / bar, 1, MaxGrooveBars);
         var length = GrooveLength(state, start, bars, DefaultGrooveStepTicks);
         var groove = midi is not null && start == midi.StartTick
-            ? MidiAlgorithms.Current.GrooveFromNotes(
+            ? Grooves.FromNotes(
                 LiveGrooveId,
                 "Groove Track",
                 midi.Notes,
@@ -468,7 +479,7 @@ public static partial class Edits {
                 length,
                 DefaultGrooveStepTicks
             )
-            : MidiAlgorithms.Current.GrooveFromOnsets(
+            : Grooves.FromOnsets(
                 LiveGrooveId,
                 "Groove Track",
                 OnsetTicks(state, audio!, analysis),

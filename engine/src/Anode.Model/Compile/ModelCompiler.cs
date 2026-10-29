@@ -1,5 +1,6 @@
 using Anode.Contracts;
 using Anode.Ipc.Segments;
+using Anode.Model.Groove;
 using Anode.Model.Time;
 using System.Runtime.InteropServices;
 
@@ -650,7 +651,7 @@ public sealed class ModelCompiler {
 
         return playback.QuantizeStrength <= 0
             ? tick
-            : MidiAlgorithms.Current.GrooveTarget(groove, tick, playback.QuantizeStrength).Tick;
+            : Grooves.Target(groove, tick, playback.QuantizeStrength).Tick;
     }
 
     /// <summary>The outputs of a track's articulation set by articulation id, in list order; null without a set.</summary>
