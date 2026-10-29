@@ -1,6 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import { setUpFakeServer, settle } from '../core/fake/testing';
 import { ProjectStore } from '../state/project.store';
+import { TransportStore } from '../state/transport.store';
 import { LiveLoopsStore } from './live-loops.store';
 
 /** A project with an audio and an instrument track, two scenes and the test pack, at a clock the test moves. */
@@ -156,5 +157,27 @@ describe('LiveLoopsStore', () => {
     expect(live.recordingCell()).toBe(`${synth}/${s1}`);
     await live.recordCell(synth, s1, false);
     expect(live.recordingCell()).toBeNull();
+  });
+
+  it('records into a cell as Logic does: arms the track and records; stopping makes the recording the cell', async () => {
+    const { server, project, live, clock, synth, s1 } = await grid();
+    const transport = TestBed.inject(TransportStore);
+    await live.recordCell(synth, s1, true);
+    await settle();
+    expect(project.track(synth)?.recordArmed).toBe(true);
+    expect(transport.recording()).toBe(true);
+    expect(server.liveRecording).toBe('cell');
+    clock.time = 100;
+    await server.sendLiveMidi(synth, [{ status: 0x90, data1: 60, data2: 100 }]);
+    clock.time = 400;
+    await server.sendLiveMidi(synth, [{ status: 0x80, data1: 60, data2: 0 }]);
+    clock.time = 2_500;
+    await live.recordCell(synth, s1, false);
+    await settle();
+    expect(transport.recording()).toBe(false);
+    expect(live.recordingCell()).toBeNull();
+    const cell = project.liveLoops().cells.find(c => c.trackId === synth && c.sceneId === s1);
+    expect(cell?.content.midi?.notes.map(n => n.pitch)).toEqual([60]);
+    expect([...project.midiRegions().values()].filter(r => r.trackId === synth)).toEqual([]);
   });
 });

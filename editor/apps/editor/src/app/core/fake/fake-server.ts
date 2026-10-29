@@ -212,14 +212,8 @@ export class FakeAnodeServer implements AnodeApi {
     plays: { cellId: string; from: number; to: number | null }[];
     remix: { tick: number; insertId: string; parameterId: string; value: number }[];
   } | null = null;
-  /** Recording into a cell: its slot, from where, and the notes held and played. */
-  private cellRecording: {
-    trackId: string;
-    sceneId: string;
-    from: number;
-    held: Map<number, { start: number; velocity: number }>;
-    notes: { pitch: number; velocity: number; startTick: number; lengthTicks: number }[];
-  } | null = null;
+  /** Recording into a cell (the Server's rule): the slot whose track's next recording becomes the cell's content. */
+  private cellRecording: { trackId: string; sceneId: string } | null = null;
   private readonly jobList = new Map<string, FakeJob>();
   /** File analyses (the package's `Analysis/<fileId>.json`), by file id. */
   private readonly analyses = new Map<string, FileAnalysis>();
@@ -558,10 +552,6 @@ export class FakeAnodeServer implements AnodeApi {
       }
 
       this.liveMidi.push({ trackId, events: structuredClone(events) });
-      if (this.cellRecording?.trackId === trackId && this.transportState !== 'stopped') {
-        this.advance();
-        this.captureCell(events);
-      }
       if (this.transportState === 'recording' && track.recordArmed) {
         this.advance();
         this.capture(trackId, events);
@@ -1169,28 +1159,14 @@ export class FakeAnodeServer implements AnodeApi {
       this.advance();
       if (request.trackId || request.sceneId) {
         if (!request.on) {
-          this.finishCellRecording();
+          this.cellRecording = null;
           return;
         }
         const track = project.tracks.find(t => t.id === request.trackId) ?? this.refuse(`No track ${request.trackId}.`);
         if (!project.liveLoops.scenes.some(s => s.id === request.sceneId)) {
           throw new ApiError(422, `No scene ${request.sceneId}.`);
         }
-        if (track.kind === 'audio') {
-          throw new ApiError(422, 'The fake engine records MIDI into cells only.');
-        }
-        if (this.transportState === 'stopped') {
-          this.start('playing');
-        }
-        const meter = meterOf(project);
-        const bar = meter.barStart(Math.ceil(meter.barAt(this.positionTick) - 1e-9));
-        this.cellRecording = {
-          trackId: track.id,
-          sceneId: request.sceneId ?? '',
-          from: bar,
-          held: new Map(),
-          notes: []
-        };
+        this.cellRecording = { trackId: track.id, sceneId: request.sceneId ?? '' };
         return;
       }
       if (request.on) {
@@ -1355,68 +1331,32 @@ export class FakeAnodeServer implements AnodeApi {
     return project;
   }
 
-  /** Live MIDI played into the cell being recorded. */
-  private captureCell(events: readonly LiveMidiEvent[]): void {
+  /**
+   * A recording with a cell being recorded into (the Server's `IntoCell`): the last MIDI region it made on that track
+   * becomes the cell's content (at tick 0, a whole number of bars) and leaves the Tracks area.
+   */
+  private intoCell(before: Project, after: Project): Project {
     const recording = this.cellRecording;
-    if (!recording) {
-      return;
+    const known = new Set(before.midiRegions.map(r => r.id));
+    const made = after.midiRegions.filter(r => r.trackId === recording?.trackId && !known.has(r.id)).at(-1);
+    if (!recording || !made) {
+      return after;
     }
-    const tick = Math.round(this.positionTick);
-    for (const event of events) {
-      if (isNoteOn(event.status, event.data2)) {
-        recording.held.set(event.data1, { start: tick, velocity: event.data2 });
-      } else if (isNoteOff(event.status, event.data2)) {
-        const held = recording.held.get(event.data1);
-        recording.held.delete(event.data1);
-        if (held && held.start >= recording.from) {
-          recording.notes.push({
-            pitch: event.data1,
-            velocity: held.velocity,
-            startTick: held.start - recording.from,
-            lengthTicks: Math.max(1, tick - held.start)
-          });
-        }
-      }
-    }
-  }
-
-  /** The end of recording into a cell: its notes become the cell's MIDI, a whole number of bars (one undo step). */
-  private finishCellRecording(): void {
-    const recording = this.cellRecording;
-    const project = this.project;
     this.cellRecording = null;
-    if (!recording || !project) {
-      return;
-    }
-    const meter = meterOf(project);
-    const bar = meter.barTicksAt(recording.from);
-    const played = Math.max(
-      Math.round(this.positionTick) - recording.from,
-      ...recording.notes.map(n => n.startTick + n.lengthTicks)
-    );
-    const lengthTicks = Math.max(bar, Math.ceil(played / bar) * bar);
-    const content: MidiRegion = {
-      id: 'new',
-      trackId: recording.trackId,
-      name: project.tracks.find(t => t.id === recording.trackId)?.name ?? 'Recording',
-      startTick: 0,
-      lengthTicks,
-      playback: { ...NeutralPlayback },
-      notes: recording.notes.map(n => ({ ...n, id: 0, channel: 1 })),
-      controls: [],
-      muted: false
-    };
-    const after = setCell(
-      project,
+    const bar = barTicks(after);
+    const lengthTicks = Math.max(1, Math.ceil(made.lengthTicks / bar)) * bar;
+    const without = { ...after, midiRegions: after.midiRegions.filter(r => r.id !== made.id) };
+    return setCell(
+      without,
       {
         type: 'setCell',
         trackId: recording.trackId,
         sceneId: recording.sceneId,
-        content: { audio: null, midi: content, pattern: null }
+        content: { audio: null, midi: { ...made, startTick: 0 }, pattern: null },
+        lengthTicks
       },
       this.phase6Context()
     );
-    this.commit(project, after, 'Record Cell');
   }
 
   /** A loop added to a project (`addLoop`): a region on a track (a new one when none is named) or a cell's content. */
@@ -1943,6 +1883,7 @@ export class FakeAnodeServer implements AnodeApi {
         after = this.addMidiTake(after, track, this.takeNotes(track.id));
       }
     }
+    after = this.intoCell(before, after);
 
     this.held.clear();
     this.captured.clear();

@@ -453,21 +453,42 @@ describe('FakeAnodeServer, Phase 6', () => {
       expect((await server.history()).undo[0]?.label).toBe('Record Performance');
     });
 
-    it('records live MIDI into a cell', async () => {
+    it('records into a cell as the Server does: the next recording of the track becomes the cell', async () => {
       let time = 0;
       const { server, synth } = await project(() => time);
-      await run(server, { type: 'addScene' });
+      await run(server, { type: 'addScene' }, { type: 'setTrack', trackId: synth, input: null, recordArmed: true });
       const scene = project$(server).liveLoops.scenes[0]?.id ?? '';
       await server.recordLiveLoops({ on: true, trackId: synth, sceneId: scene });
-      time += 2_100;
-      server.advance();
+      expect(server.liveRecording).toBe('cell');
+      await server.controlTransport({ command: 'record', tick: 0 });
+      time += 100;
       await server.sendLiveMidi(synth, [{ status: 0x90, data1: 64, data2: 100 }]);
       time += 250;
       await server.sendLiveMidi(synth, [{ status: 0x80, data1: 64, data2: 0 }]);
-      await server.recordLiveLoops({ on: false, trackId: synth, sceneId: scene });
+      time += 2_400;
+      await server.controlTransport({ command: 'stop' });
       const cell = project$(server).liveLoops.cells[0];
-      expect(cell).toMatchObject({ kind: 'midi', lengthTicks: 7680 });
+      expect(cell).toMatchObject({ kind: 'midi', trackId: synth, sceneId: scene, lengthTicks: 7680 });
       expect(cell?.content.midi?.notes.map(n => n.pitch)).toEqual([64]);
+      expect(project$(server).midiRegions.filter(r => r.trackId === synth)).toEqual([]);
+      expect(server.liveRecording).toBeNull();
+    });
+
+    it('stops recording into a cell before anything records: the next recording stays in the Tracks area', async () => {
+      let time = 0;
+      const { server, synth } = await project(() => time);
+      await run(server, { type: 'addScene' }, { type: 'setTrack', trackId: synth, input: null, recordArmed: true });
+      const scene = project$(server).liveLoops.scenes[0]?.id ?? '';
+      await server.recordLiveLoops({ on: true, trackId: synth, sceneId: scene });
+      await server.recordLiveLoops({ on: false, trackId: synth, sceneId: scene });
+      await server.controlTransport({ command: 'record', tick: 0 });
+      await server.sendLiveMidi(synth, [{ status: 0x90, data1: 64, data2: 100 }]);
+      time += 250;
+      await server.sendLiveMidi(synth, [{ status: 0x80, data1: 64, data2: 0 }]);
+      time += 500;
+      await server.controlTransport({ command: 'stop' });
+      expect(project$(server).liveLoops.cells).toEqual([]);
+      expect(project$(server).midiRegions.filter(r => r.trackId === synth)).toHaveLength(1);
     });
   });
 

@@ -4,6 +4,8 @@ import { ANODE_API } from '../core/api';
 import { EventStream } from '../core/events';
 import { Notify } from '../core/notify';
 import { ProjectStore } from '../state/project.store';
+import { setTrack } from '../state/track-commands';
+import { TransportStore } from '../state/transport.store';
 import { barTicks, midiContent, patternContent } from './grid-model';
 
 /** A cell's launcher state as the last `cell` event reported it, at a project sample. */
@@ -29,6 +31,7 @@ export class LiveLoopsStore {
   private readonly api = inject(ANODE_API);
   private readonly project = inject(ProjectStore);
   private readonly notify = inject(Notify);
+  private readonly transport = inject(TransportStore);
 
   /** Cells that are not stopped, by id. */
   readonly states = signal<ReadonlyMap<string, CellStatus>>(new Map());
@@ -141,14 +144,33 @@ export class LiveLoopsStore {
     }
   }
 
-  /** Starts or stops recording into the cell of a track and a scene. */
+  /**
+   * Starts or stops recording into the cell of a track and a scene, as Logic's Record into Cell: the Server makes the
+   * track's next recording the cell's content, so starting also record-enables the track and starts recording, and
+   * stopping stops that recording (which the Server turns into the cell). Stopping before anything records cancels.
+   */
   async recordCell(trackId: string, sceneId: string, on: boolean): Promise<void> {
+    if (!on && this.transport.recording()) {
+      this.transport.stop();
+      this.recordingCell.set(null);
+      return;
+    }
     const done = await this.notify.run(
       () => this.api.recordLiveLoops({ on, trackId, sceneId }),
       on ? 'Could not record into the cell' : 'Could not stop recording'
     );
-    if (done !== null) {
-      this.recordingCell.set(on ? `${trackId}/${sceneId}` : null);
+    if (done === null) {
+      return;
+    }
+    this.recordingCell.set(on ? `${trackId}/${sceneId}` : null);
+    if (on) {
+      if (this.project.track(trackId)?.recordArmed === false) {
+        const armed = await this.project.execute([setTrack(trackId, { recordArmed: true })], 'Record Enable');
+        if (!armed) {
+          return;
+        }
+      }
+      this.transport.record();
     }
   }
 
