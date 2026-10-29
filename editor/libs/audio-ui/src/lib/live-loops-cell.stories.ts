@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/angular-vite';
-import { expect, fn, userEvent, within } from 'storybook/test';
+import { expect, fireEvent, fn, userEvent, within } from 'storybook/test';
 import { AnLiveLoopsCell } from './live-loops-cell';
 
 /**
@@ -129,9 +129,7 @@ export const Keyboard: Story = {
     await expect(args.activate).toHaveBeenCalledWith({ extend: false });
     await userEvent.keyboard('{Shift>}{F10}{/Shift}');
     await expect(args.menu).toHaveBeenCalled();
-    await userEvent.keyboard('{Shift>}');
-    await userEvent.click(button);
-    await userEvent.keyboard('{/Shift}');
+    await fireEvent.click(button, { shiftKey: true });
     await expect(args.activate).toHaveBeenLastCalledWith({ extend: true });
   }
 };

@@ -311,11 +311,16 @@ const CellWidth = 76;
         Remix FX
       </button>
     </div>
-    @if (live.current()) {
-      <an-cell-editor class="shrink-0" />
-    }
-    @if (live.remixShown()) {
-      <an-remix-fx class="shrink-0" />
+    @if (live.current() || live.remixShown()) {
+      <!-- The cell editor and Remix FX share the grid's foot, never more than most of its height. -->
+      <div class="max-h-[65%] shrink-0 overflow-y-auto">
+        @if (live.current()) {
+          <an-cell-editor />
+        }
+        @if (live.remixShown()) {
+          <an-remix-fx />
+        }
+      </div>
     }
     @if (live.recordingPerformance()) {
       <div class="border-transport-record pointer-events-none absolute inset-0 z-20 border-2" aria-hidden="true"></div>

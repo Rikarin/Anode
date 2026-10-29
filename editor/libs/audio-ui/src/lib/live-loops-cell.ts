@@ -21,7 +21,7 @@ export interface LiveLoopsCellMenuPoint {
 /**
  * One cell of the Live Loops grid (Logic's): a filled cell shows its kind and name on a raised face with a bar of its
  * track's colour; queued it has a dashed ring in that colour (a static ring rather than Logic's blink, per DESIGN.md's
- * motion rules), playing its face is lit in the colour with a progress ring, stopping it dims. An empty slot is a
+ * motion rules), playing its face is lit in the colour with a progress ring, stopping its tint dims. An empty slot is a
  * sunken well. Recording into it gives a red ring. The host is the ARIA gridcell; its button (named by `label`)
  * launches; the context-menu key or ⇧F10 opens the menu.
  */
@@ -40,12 +40,11 @@ export interface LiveLoopsCellMenuPoint {
   template: `
     <button
       type="button"
-      class="focus-visible:outline-focus relative flex size-full min-h-0 flex-col items-start gap-0.5 overflow-hidden rounded-[4px] px-1 pt-1.5 pb-1 text-start outline-offset-1 transition-opacity duration-100 focus-visible:outline-2"
+      class="focus-visible:outline-focus relative flex size-full min-h-0 flex-col items-start gap-0.5 overflow-hidden rounded-[4px] px-1 pt-1.5 pb-1 text-start outline-offset-1 transition-colors duration-100 focus-visible:outline-2"
       [class.well]="empty()"
       [class.bg-surface-raised]="!empty() && !lit()"
       [class.border]="!empty()"
       [class.border-hairline-strong]="!empty()"
-      [class.opacity-60]="state() === 'stopping'"
       [class.ring-2]="ringed()"
       [class.ring-inset]="ringed()"
       [class.ring-transport-record]="recording()"
@@ -142,8 +141,13 @@ export class AnLiveLoopsCell {
   protected readonly empty = computed(() => this.state() === 'empty');
   protected readonly lit = computed(() => this.state() === 'playing' || this.state() === 'stopping');
   protected readonly ringed = computed(() => this.recording() || this.dropTarget() || this.selected());
-  /** The face lit in the track's colour, mixed into the raised surface so the name keeps its contrast. */
-  protected readonly tint = computed(() => `color-mix(in oklab, ${this.color()} 38%, var(--color-surface-raised))`);
+  /**
+   * The face lit in the track's colour, mixed into the raised surface so the name keeps its contrast; a stopping cell
+   * dims to a fainter tint (the name stays at full contrast, so the cell dims rather than fades).
+   */
+  protected readonly tint = computed(
+    () => `color-mix(in oklab, ${this.color()} ${this.state() === 'stopping' ? 16 : 38}%, var(--color-surface-raised))`
+  );
   protected readonly dashOffset = computed(
     () => this.circumference * (1 - Math.min(1, Math.max(0, this.progress() ?? 0)))
   );
