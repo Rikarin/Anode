@@ -13,8 +13,10 @@ public static class ElectricPianoParameters {
     public static readonly int Bark = List.Add("bark", "Bark", 0, 100, 35, "%", 2);
     public static readonly int Decay = List.Add("decay", "Decay", 0, 100, 50, "%", 5);
     public static readonly int Release = List.Add("release", "Damper Release", 10, 2_000, 120, "ms", 6);
+
     public static readonly int VelocitySensitivity =
         List.Add("velocitySensitivity", "Velocity Sensitivity", 0, 100, 75, "%");
+
     public static readonly int TremoloRate = List.Add("tremoloRate", "Tremolo Rate", 0.5f, 10, 4.5f, "Hz", 4);
     public static readonly int TremoloDepth = List.Add("tremoloDepth", "Tremolo Depth", 0, 100, 0, "%", 3);
     public static readonly int Tune = List.Add("tune", "Tune", -50, 50, 0, "ct");
@@ -30,12 +32,16 @@ public static class ElectricPianoParameters {
 /// </summary>
 /// <remarks>
 ///     <list type="bullet">
-///         <item>Tines: the tine's fundamental, its tonebar's octave (−30 dB) and its bell partial (at 7.13× the
+///         <item>
+///             Tines: the tine's fundamental, its tonebar's octave (−30 dB) and its bell partial (at 7.13× the
 ///             fundamental, decaying in 0.25 … 0.6 s, its level set by Bell and the velocity), struck by a 2 ms
 ///             felt-hammer thump. The magnetic pickup is an asymmetric curve, <c>p + b·p²</c> (Bark scaled by the
-///             velocity), whose offset a 10 Hz high-pass removes.</item>
-///         <item>Reeds: a reed's first three harmonics (1, −30 dB, −36 dB) through the electrostatic pickup,
-///             <c>p / (1 − b·p)</c> — a capacitor whose gap the reed changes — which barks as the velocity rises.</item>
+///             velocity), whose offset a 10 Hz high-pass removes.
+///         </item>
+///         <item>
+///             Reeds: a reed's first three harmonics (1, −30 dB, −36 dB) through the electrostatic pickup,
+///             <c>p / (1 − b·p)</c> — a capacitor whose gap the reed changes — which barks as the velocity rises.
+///         </item>
 ///     </list>
 ///     A note rings with a 60 dB decay time falling with pitch (tines 9 s at C1 to 1.4 s at C7, reeds two-fifths of
 ///     that), scaled by Decay (×0.25 … ×4 around 50 %); the key up damps it in Damper Release. The tremolo pans
@@ -297,7 +303,8 @@ internal sealed class ElectricPianoVoice(ElectricPianoControl control, int index
             untilTick--;
             float p;
             if (reeds) {
-                p = amplitude * (SineTable.Sin(phase) + 0.03f * SineTable.Sin(2 * phase) + 0.015f * SineTable.Sin(3 * phase));
+                p = amplitude
+                    * (SineTable.Sin(phase) + 0.03f * SineTable.Sin(2 * phase) + 0.015f * SineTable.Sin(3 * phase));
                 p /= 1 - bark * p; // the pickup (its offset goes in the high-pass)
             } else {
                 p = amplitude * (SineTable.Sin(phase) + 0.03f * SineTable.Sin(2 * phase))

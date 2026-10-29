@@ -197,7 +197,9 @@ public sealed class InstrumentContractTests : IDisposable {
         );
         var (plain, plainRight) = Play.Render(early, 8_092, [TimedEvent.On(0, 60), TimedEvent.Off(2_900, 60)], 512);
         Assert.Equal(0, Peak(shifted.AsSpan(0, 100)));
-        Assert.True(Peak(shifted.AsSpan(100, 4)) > 0 || (id == DrawbarOrgan.Id && Peak(shifted.AsSpan(100, 200)) > 0)); // the rotary delays by 2 ms
+        Assert.True(
+            Peak(shifted.AsSpan(100, 4)) > 0 || (id == DrawbarOrgan.Id && Peak(shifted.AsSpan(100, 200)) > 0)
+        ); // the rotary delays by 2 ms
         Assert.Equal(-300, NullResidualDb(shifted.AsSpan(100), plain));
         Assert.Equal(-300, NullResidualDb(shiftedRight.AsSpan(100), plainRight));
     }

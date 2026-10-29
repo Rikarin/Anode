@@ -84,13 +84,13 @@ internal abstract class MidiEffect : IMidiEffect {
 /// <summary>Note lengths for tempo-synced rates, with their lengths in quarter notes.</summary>
 internal static class NoteDivisions {
     /// <summary>The names, as a rate parameter's values (".": dotted, "T": triplet).</summary>
-    public static readonly string[] Names = [
+    public static string[] Names { get; } = [
         "1/1", "1/2", "1/2.", "1/2T", "1/4", "1/4.", "1/4T", "1/8", "1/8.", "1/8T", "1/16", "1/16.", "1/16T", "1/32",
         "1/32T"
     ];
 
     /// <summary>Each name's length in quarter notes.</summary>
-    public static readonly double[] Quarters = [
+    public static double[] Quarters { get; } = [
         4, 2, 3, 4 / 3.0, 1, 1.5, 2 / 3.0, 0.5, 0.75, 1 / 3.0, 0.25, 0.375, 1 / 6.0, 0.125, 1 / 12.0
     ];
 
@@ -103,12 +103,12 @@ internal static class NoteDivisions {
 
 /// <summary>Musical scales for the scale-aware MIDI effects.</summary>
 internal static class Scales {
-    public static readonly string[] Names = [
+    public static string[] Names { get; } = [
         "Chromatic", "Major", "Natural Minor", "Harmonic Minor", "Melodic Minor", "Dorian", "Phrygian", "Lydian",
         "Mixolydian", "Locrian", "Major Pentatonic", "Minor Pentatonic", "Blues"
     ];
 
-    public static readonly string[] Keys = ["C", "C♯", "D", "E♭", "E", "F", "F♯", "G", "A♭", "A", "B♭", "B"];
+    public static string[] Keys { get; } = ["C", "C♯", "D", "E♭", "E", "F", "F♯", "G", "A♭", "A", "B♭", "B"];
 
     /// <summary>Each scale's steps from its tonic.</summary>
     static readonly int[][] Steps = [

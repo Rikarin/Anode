@@ -15,10 +15,13 @@ public static class FmParameters {
     public static readonly int Algorithm = List.Choice("algorithm", "Algorithm", FmAlgorithms.Names, 4, 1);
     public static readonly int Feedback = List.Add("feedback", "Feedback", 0, 100, 0, "%", 4);
 
-    static readonly int[] Ratios = Each(n => List.Add($"op{n}Ratio", $"Op {n} Ratio", 0.5f, 16, n == 4 ? 14 : 1, "×"));
-    static readonly int[] Fines = Each(n => List.Add($"op{n}Fine", $"Op {n} Fine", -100, 100, n == 3 ? 3 : 0, "ct"));
+    static readonly int[] Ratios =
+        Each(static n => List.Add($"op{n}Ratio", $"Op {n} Ratio", 0.5f, 16, n == 4 ? 14 : 1, "×"));
 
-    static readonly int[] Levels = Each(n =>
+    static readonly int[] Fines =
+        Each(static n => List.Add($"op{n}Fine", $"Op {n} Fine", -100, 100, n == 3 ? 3 : 0, "ct"));
+
+    static readonly int[] Levels = Each(static n =>
         List.Add(
             $"op{n}Level",
             $"Op {n} Level",
@@ -35,13 +38,19 @@ public static class FmParameters {
         )
     );
 
-    static readonly int[] Attacks = Each(n => List.Add($"op{n}Attack", $"Op {n} Attack", 0, 10_000, 1, "ms"));
-    static readonly int[] Decays = Each(n =>
+    static readonly int[] Attacks = Each(static n => List.Add($"op{n}Attack", $"Op {n} Attack", 0, 10_000, 1, "ms"));
+
+    static readonly int[] Decays = Each(static n =>
         List.Add($"op{n}Decay", $"Op {n} Decay", 1, 20_000, n == 4 ? 300 : 2_500, "ms")
     );
-    static readonly int[] Sustains = Each(n => List.Add($"op{n}Sustain", $"Op {n} Sustain", 0, 100, n == 4 ? 0 : 30, "%"));
-    static readonly int[] Releases = Each(n => List.Add($"op{n}Release", $"Op {n} Release", 1, 10_000, 400, "ms"));
-    static readonly int[] Velocities = Each(n =>
+
+    static readonly int[] Sustains =
+        Each(static n => List.Add($"op{n}Sustain", $"Op {n} Sustain", 0, 100, n == 4 ? 0 : 30, "%"));
+
+    static readonly int[] Releases =
+        Each(static n => List.Add($"op{n}Release", $"Op {n} Release", 1, 10_000, 400, "ms"));
+
+    static readonly int[] Velocities = Each(static n =>
         List.Add($"op{n}Velocity", $"Op {n} Velocity Sensitivity", 0, 100, n == 1 ? 60 : 80, "%")
     );
 
@@ -88,13 +97,13 @@ public static class FmAlgorithms {
     ///     Per algorithm, per operator (1 … 4 at 0 … 3), a bit mask of the operators modulating it (bit <c>k</c>:
     ///     operator <c>k + 1</c>).
     /// </summary>
-    internal static readonly int[][] Modulators = [
+    internal static int[][] Modulators { get; } = [
         [0b0010, 0b0100, 0b1000, 0], [0b0010, 0b1100, 0, 0], [0b1010, 0b0100, 0, 0], [0b0110, 0, 0b1000, 0],
         [0b0010, 0, 0b1000, 0], [0b1000, 0b1000, 0b1000, 0], [0, 0, 0b1000, 0], [0, 0, 0, 0]
     ];
 
     /// <summary>Per algorithm, a bit mask of the carriers (the operators heard).</summary>
-    internal static readonly int[] Carriers = [0b0001, 0b0001, 0b0001, 0b0001, 0b0101, 0b0111, 0b0111, 0b1111];
+    internal static int[] Carriers { get; } = [0b0001, 0b0001, 0b0001, 0b0001, 0b0101, 0b0111, 0b0111, 0b1111];
 
     /// <summary>
     ///     Algorithm <paramref name="algorithm" />'s (0 … 7) routing: for each operator (1 … 4 at 0 … 3) the operators
@@ -109,7 +118,8 @@ public static class FmAlgorithms {
         return (modulators, Bits(Carriers[algorithm]));
     }
 
-    static int[] Bits(int mask) => [.. Enumerable.Range(0, 4).Where(k => (mask & (1 << k)) != 0).Select(k => k + 1)];
+    static int[] Bits(int mask) =>
+        [..Enumerable.Range(0, 4).Where(k => (mask & (1 << k)) != 0).Select(static k => k + 1)];
 }
 
 /// <summary>
@@ -268,11 +278,11 @@ public sealed class FmSynth : IInstrument, IPolyphonic {
 
 /// <summary>The control-rate values every <see cref="FmVoice" /> reads.</summary>
 internal sealed class FmControl {
-    public readonly double[] Ratio = new double[FmParameters.Operators];
-    public readonly float[] Level = new float[FmParameters.Operators];
-    public readonly float[] Velocity = new float[FmParameters.Operators];
-    public readonly AdsrSettings[] Envelope = new AdsrSettings[FmParameters.Operators];
-    public readonly int[] Modulators = new int[FmParameters.Operators];
+    public double[] Ratio { get; } = new double[FmParameters.Operators];
+    public float[] Level { get; } = new float[FmParameters.Operators];
+    public float[] Velocity { get; } = new float[FmParameters.Operators];
+    public AdsrSettings[] Envelope { get; } = new AdsrSettings[FmParameters.Operators];
+    public int[] Modulators { get; } = new int[FmParameters.Operators];
     public int Carriers = 1;
     public float CarrierGain = 1;
     public float Feedback;

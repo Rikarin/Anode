@@ -29,8 +29,10 @@ internal sealed class Arpeggiator : MidiEffect {
     static readonly ParameterList List = new();
 
     public static readonly int Rate = List.Choice("rate", "Rate", NoteDivisions.Names, NoteDivisions.Sixteenth, 1);
+
     public static readonly int Mode =
         List.Choice("mode", "Mode", ["Up", "Down", "Up-Down", "Random", "As Played"], 0, 2);
+
     public static readonly int Octaves = List.Stepped("octaves", "Octaves", 1, 4, 1, string.Empty, 3, 3);
     public static readonly int Gate = List.Add("gate", "Gate", 5, 100, 80, "%", 4);
     public static readonly int Swing = List.Add("swing", "Swing", 0, 100, 0, "%", 5);
@@ -203,11 +205,11 @@ internal sealed class Arpeggiator : MidiEffect {
                 index = span - 1 - (int)(c % span);
                 break;
             case 2: {
-                    var period = Math.Max(1, 2 * span - 2);
-                    var j = (int)(c % period);
-                    index = span == 1 ? 0 : j < span ? j : period - j;
-                    break;
-                }
+                var period = Math.Max(1, 2 * span - 2);
+                var j = (int)(c % period);
+                index = span == 1 ? 0 : j < span ? j : period - j;
+                break;
+            }
             case 3:
                 _ = PolyBlep.White(ref random);
                 index = (int)(random % (uint)span);

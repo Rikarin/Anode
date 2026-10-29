@@ -23,7 +23,9 @@ internal sealed class Transposer : MidiEffect {
 
     readonly int[] mapped = new int[16 * 128];
 
-    public Transposer() : base(Info) => Reset();
+    public Transposer() : base(Info) {
+        Reset();
+    }
 
     public override void Reset() => Array.Fill(mapped, -1);
 
@@ -137,7 +139,9 @@ internal sealed class Randomizer : MidiEffect {
     uint state;
     float seeded = float.NaN;
 
-    public Randomizer() : base(Info) => Reset();
+    public Randomizer() : base(Info) {
+        Reset();
+    }
 
     public override void Reset() {
         Array.Fill(mapped, -1);
@@ -173,7 +177,7 @@ internal sealed class Randomizer : MidiEffect {
                     continue;
                 }
 
-                var note = (int)e.Data1;
+                int note = e.Data1;
                 var range = (int)Parameters[Pitch];
                 if (range > 0 && Next() * 100 < Parameters[PitchChance]) {
                     note += (int)Math.Floor(Next() * (2 * range + 1)) - range;
@@ -379,10 +383,12 @@ internal sealed class Modulator : MidiEffect {
     static readonly ParameterList List = new();
 
     public static readonly int Target = List.Stepped("target", "Target", 0, 129, 1, string.Empty, 129);
+
     public static readonly int Shape =
         List.Choice("shape", "LFO Shape", ["Sine", "Triangle", "Saw", "Square", "Sample & Hold"], 0, 3);
+
     public static readonly int Rate = List.Add("rate", "LFO Rate", 0.05f, 20, 2, "Hz", 1);
-    public static readonly int Sync = List.Choice("sync", "LFO Sync", ["Off", .. NoteDivisions.Names], 0);
+    public static readonly int Sync = List.Choice("sync", "LFO Sync", ["Off", ..NoteDivisions.Names], 0);
     public static readonly int Depth = List.Add("depth", "LFO Depth", 0, 100, 50, "%", 2);
     public static readonly int Offset = List.Stepped("offset", "Offset", 0, 127, 64, string.Empty, 127, 4);
     public static readonly int Attack = List.Add("attack", "Env Attack", 0, 10_000, 100, "ms");
@@ -400,7 +406,9 @@ internal sealed class Modulator : MidiEffect {
     int last = -1;
     uint random;
 
-    public Modulator() : base(Info) => Reset();
+    public Modulator() : base(Info) {
+        Reset();
+    }
 
     public override void Reset() {
         Array.Clear(down);

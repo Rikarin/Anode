@@ -31,8 +31,10 @@ internal sealed class ChordTrigger : MidiEffect {
 
     static readonly ParameterList List = new();
 
-    static readonly string[] ChordNames =
-        ["Major", "Minor", "Dominant 7", "Major 7", "Minor 7", "Sus 2", "Sus 4", "Diminished", "Augmented", "Power", "Octaves", "Learned"];
+    static readonly string[] ChordNames = [
+        "Major", "Minor", "Dominant 7", "Major 7", "Minor 7", "Sus 2", "Sus 4", "Diminished", "Augmented", "Power",
+        "Octaves", "Learned"
+    ];
 
     static readonly int[][] Chords = [
         [0, 4, 7], [0, 3, 7], [0, 4, 7, 10], [0, 4, 7, 11], [0, 3, 7, 10], [0, 2, 7], [0, 5, 7], [0, 3, 6], [0, 4, 8],
@@ -91,7 +93,9 @@ internal sealed class ChordTrigger : MidiEffect {
 
     /// <summary>The chord of key <paramref name="trigger" />, or with −1 the single chord's intervals.</summary>
     public int[] GetChord(int trigger) =>
-        trigger < 0 ? single[..singleCount] : multi.AsSpan((trigger & 0x7F) * MaxChord, multiCount[trigger & 0x7F]).ToArray();
+        trigger < 0
+            ? single[..singleCount]
+            : multi.AsSpan((trigger & 0x7F) * MaxChord, multiCount[trigger & 0x7F]).ToArray();
 
     public override void Reset() {
         Array.Clear(playingCount);
@@ -299,7 +303,6 @@ internal sealed class ChordTrigger : MidiEffect {
 
                 newMultiCount[key] = count;
             }
-
         }
 
         InstrumentState.Apply(values, Parameters);

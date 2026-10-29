@@ -48,14 +48,19 @@ public static class QuickSamplerParameters {
     public static readonly int Decay = List.Add("decay", "Decay", 1, 20_000, 1_000, "ms");
     public static readonly int Sustain = List.Add("sustain", "Sustain", 0, 100, 100, "%");
     public static readonly int Release = List.Add("release", "Release", 1, 10_000, 100, "ms", 5);
+
     public static readonly int SliceMode =
         List.Choice("sliceMode", "Slice Mode", ["Transients", "4 Equal", "8 Equal", "16 Equal", "32 Equal"], 0);
+
     public static readonly int SliceStartNote =
         List.Stepped("sliceStartNote", "Slice Start Note", 0, 127, 36, string.Empty, 127);
+
     public static readonly int RecordArm = List.Toggle("recordArm", "Record Arm", false);
     public static readonly int RecordThreshold = List.Add("recordThreshold", "Record Threshold", -80, 0, -40, "dB");
+
     public static readonly int VelocitySensitivity =
         List.Add("velocitySensitivity", "Velocity Sensitivity", 0, 100, 70, "%");
+
     public static readonly int BendRange = List.Stepped("bendRange", "Pitch Bend Range", 0, 12, 2, "st", 12);
     public static readonly int Volume = List.Add("volume", "Volume", -60, 12, 0, "dB", 6);
 
@@ -84,7 +89,7 @@ internal sealed class QuickSample {
         var left = Pad(channels[0]);
         var right = channels.Length > 1 ? Pad(channels[1]) : left;
         var mono = channels.Length > 1 ? Downmix.ToMono(channels) : channels[0];
-        long[] transients = frames > 0 ? Anode.Dsp.Analysis.Transients.Detect(mono, sampleRate) : [];
+        var transients = frames > 0 ? Anode.Dsp.Analysis.Transients.Detect(mono, sampleRate) : [];
         return new(left, right, frames, sampleRate, transients);
     }
 

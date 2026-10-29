@@ -154,38 +154,39 @@ internal static class Wavetables {
                     _ => t < 0.25 ? 1.0 : -1.0
                 };
             case 1: {
-                    var top = 1 << frame;
-                    double sum = 0;
-                    for (var n = 1; n <= top; n++) {
-                        var odd = n % 2 == 1 ? 1.0 : 1 - frame / 10.0;
-                        sum += odd * Math.Sin(2 * Math.PI * n * t) / Math.Pow(n, 0.8);
-                    }
-
-                    return sum;
+                var top = 1 << frame;
+                double sum = 0;
+                for (var n = 1; n <= top; n++) {
+                    var odd = (n & 1) == 1 ? 1.0 : 1 - frame / 10.0;
+                    sum += odd * Math.Sin(2 * Math.PI * n * t) / Math.Pow(n, 0.8);
                 }
+
+                return sum;
+            }
             case 2: {
-                    // Formants (F1, F2) of a, e, i, o, u, a 100 Hz voice, morphed across the frames.
-                    double[] f1 = [800, 400, 300, 450, 325];
-                    double[] f2 = [1_150, 1_900, 2_300, 800, 700];
-                    var at = frame * 4.0 / (Frames - 1);
-                    var v = Math.Min((int)at, 3);
-                    var blend = at - v;
-                    var a = f1[v] + (f1[v + 1] - f1[v]) * blend;
-                    var b = f2[v] + (f2[v + 1] - f2[v]) * blend;
-                    double sum = 0;
-                    for (var n = 1; n <= 60; n++) {
-                        var f = n * 100.0;
-                        var gain = Math.Exp(-Math.Pow((f - a) / 120, 2)) + 0.6 * Math.Exp(-Math.Pow((f - b) / 160, 2))
-                            + 0.02 / n;
-                        sum += gain * Math.Sin(2 * Math.PI * n * t);
-                    }
+                // Formants (F1, F2) of a, e, i, o, u, a 100 Hz voice, morphed across the frames.
+                double[] f1 = [800, 400, 300, 450, 325];
+                double[] f2 = [1_150, 1_900, 2_300, 800, 700];
+                var at = frame * 4.0 / (Frames - 1);
+                var v = Math.Min((int)at, 3);
+                var blend = at - v;
+                var a = f1[v] + (f1[v + 1] - f1[v]) * blend;
+                var b = f2[v] + (f2[v + 1] - f2[v]) * blend;
+                double sum = 0;
+                for (var n = 1; n <= 60; n++) {
+                    var f = n * 100.0;
+                    var gain = Math.Exp(-Math.Pow((f - a) / 120, 2))
+                        + 0.6 * Math.Exp(-Math.Pow((f - b) / 160, 2))
+                        + 0.02 / n;
+                    sum += gain * Math.Sin(2 * Math.PI * n * t);
+                }
 
-                    return sum;
-                }
+                return sum;
+            }
             case 3: {
-                    var ratio = 1 + frame;
-                    return 2 * (ratio * t % 1) - 1;
-                }
+                var ratio = 1 + frame;
+                return 2 * (ratio * t % 1) - 1;
+            }
             default:
                 return Math.Sin(2 * Math.PI * t + frame * 0.7 * Math.Sin(4 * Math.PI * t));
         }

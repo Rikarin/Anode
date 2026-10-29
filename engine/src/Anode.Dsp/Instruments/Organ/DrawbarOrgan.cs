@@ -20,12 +20,18 @@ public static class OrganParameters {
     static readonly int[] DrawbarIndices = Each();
 
     public static readonly int Percussion = List.Toggle("percussion", "Percussion", true, 12);
+
     public static readonly int PercussionHarmonic =
         List.Choice("percussionHarmonic", "Percussion Harmonic", ["Second", "Third"], 1);
-    public static readonly int PercussionDecay = List.Choice("percussionDecay", "Percussion Decay", ["Fast", "Slow"], 0);
+
+    public static readonly int PercussionDecay =
+        List.Choice("percussionDecay", "Percussion Decay", ["Fast", "Slow"], 0);
+
     public static readonly int PercussionVolume =
         List.Choice("percussionVolume", "Percussion Volume", ["Soft", "Normal"], 1);
+
     public static readonly int KeyClick = List.Add("keyClick", "Key Click", 0, 100, 30, "%", 13);
+
     public static readonly int VibratoChorus = List.Choice(
         "vibratoChorus",
         "Vibrato/Chorus",
@@ -33,8 +39,12 @@ public static class OrganParameters {
         6,
         11
     );
+
     public static readonly int Rotary = List.Toggle("rotary", "Rotary", true);
-    public static readonly int RotarySpeed = List.Choice("rotarySpeed", "Rotary Speed", ["Stop", "Slow", "Fast"], 1, 10);
+
+    public static readonly int RotarySpeed =
+        List.Choice("rotarySpeed", "Rotary Speed", ["Stop", "Slow", "Fast"], 1, 10);
+
     public static readonly int RotaryDrive = List.Add("rotaryDrive", "Rotary Drive", 0, 100, 20, "%", 14);
     public static readonly int RotaryBalance = List.Add("rotaryBalance", "Horn/Drum Balance", -100, 100, 0, "%");
     public static readonly int BendRange = List.Stepped("bendRange", "Pitch Bend Range", 0, 12, 2, "st", 12);
@@ -70,18 +80,26 @@ public static class OrganParameters {
 /// </summary>
 /// <remarks>
 ///     <list type="bullet">
-///         <item>Each key sums nine sines at the drawbars' harmonics (½, 1½, 1, 2, 3, 4, 5, 6, 8), each at 3 dB a
+///         <item>
+///             Each key sums nine sines at the drawbars' harmonics (½, 1½, 1, 2, 3, 4, 5, 6, 8), each at 3 dB a
 ///             drawbar step (0 is off); a wheel above 5.9 kHz folds back an octave, as a tonewheel generator's top
-///             octave does. The key contacts take 2 ms on and 10 ms off.</item>
-///         <item>Percussion is single-triggered: only a key pressed with no other key down gets it; a decaying second or
-///             third harmonic (fast: 0.4 s, slow: 1.4 s to −60 dB), and with it on, the 1' drawbar is silent.</item>
+///             octave does. The key contacts take 2 ms on and 10 ms off.
+///         </item>
+///         <item>
+///             Percussion is single-triggered: only a key pressed with no other key down gets it; a decaying second or
+///             third harmonic (fast: 0.4 s, slow: 1.4 s to −60 dB), and with it on, the 1' drawbar is silent.
+///         </item>
 ///         <item>Key click: a 5 ms burst of band-passed noise at key down (and a softer one at key up).</item>
-///         <item>The scanner: a delay of 1 ms swept at 6.9 Hz by ±0.2, ±0.45 or ±0.8 ms (V1–V3); chorus (C1–C3) mixes
-///             it equally with the dry signal.</item>
-///         <item>The rotary: drive, an 800 Hz crossover, a horn (0.83 / 6.7 Hz) and a drum (0.67 / 5.7 Hz) rotor
+///         <item>
+///             The scanner: a delay of 1 ms swept at 6.9 Hz by ±0.2, ±0.45 or ±0.8 ms (V1–V3); chorus (C1–C3) mixes
+///             it equally with the dry signal.
+///         </item>
+///         <item>
+///             The rotary: drive, an 800 Hz crossover, a horn (0.83 / 6.7 Hz) and a drum (0.67 / 5.7 Hz) rotor
 ///             accelerating toward their speeds (time constants 0.7 s and 3 s), each with Doppler (a delay swept
 ///             ±0.44 / ±0.2 ms) and amplitude modulation, heard by two microphones 90° apart. The mod wheel past half
-///             way switches to fast.</item>
+///             way switches to fast.
+///         </item>
 ///     </list>
 ///     The vibrato and rotary run while the organ sounds and for 50 ms after; once quiet they rest and start again from
 ///     the same point, so a note sounds the same wherever it starts.
@@ -162,7 +180,13 @@ public sealed class DrawbarOrgan : IInstrument, IPolyphonic {
 
         public Engine() : this(new()) { }
 
-        Engine(OrganControl control) : base(Info, DrawbarOrgan.Polyphony, 8, i => new(control, i), OrganParameters.Volume) {
+        Engine(OrganControl control) : base(
+            Info,
+            DrawbarOrgan.Polyphony,
+            8,
+            i => new(control, i),
+            OrganParameters.Volume
+        ) {
             this.control = control;
         }
 
@@ -283,11 +307,12 @@ public sealed class DrawbarOrgan : IInstrument, IPolyphonic {
 
             var mode = (int)s[OrganParameters.VibratoChorus];
             scannerDepth = (float)(mode switch {
-                1 or 4 => 0.0002,
-                2 or 5 => 0.00045,
-                3 or 6 => 0.0008,
-                _ => 0
-            } * c.SampleRate);
+                    1 or 4 => 0.0002,
+                    2 or 5 => 0.00045,
+                    3 or 6 => 0.0008,
+                    _ => 0
+                }
+                * c.SampleRate);
             chorusMix = mode >= 4 ? 0.5f : 0;
 
             rotary = s[OrganParameters.Rotary] >= 0.5f;
@@ -394,7 +419,7 @@ public sealed class DrawbarOrgan : IInstrument, IPolyphonic {
 
 /// <summary>The control-rate values every <see cref="OrganVoice" /> reads.</summary>
 internal sealed class OrganControl {
-    public readonly float[] Drawbar = new float[OrganParameters.Drawbars];
+    public float[] Drawbar { get; } = new float[OrganParameters.Drawbars];
     public AdsrSettings Keys;
     public double SampleRate;
     public double PitchModulation;
@@ -430,7 +455,7 @@ internal sealed class OrganVoice(OrganControl control, int index) : Voice {
         Begin(note);
         for (var k = 0; k < phase.Length; k++) {
             // Tonewheels turn all the time: a key connects them where they are, not at phase 0.
-            phase[k] = (note * 0.618033988749895 * (k + 1)) % 1;
+            phase[k] = note * 0.618033988749895 * (k + 1) % 1;
         }
 
         percussionPhase = 0;

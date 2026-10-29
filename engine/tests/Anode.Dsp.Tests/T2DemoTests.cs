@@ -90,7 +90,7 @@ public sealed class T2DemoTests {
             (DrumModel.Percussion, [5, 9], [(D.Tone, 90), (D.Volume, -16)])
         ];
         foreach (var (model, steps, settings) in pads) {
-            using var pad = Play.Create(DrumSynth.Id, [(D.Model, (int)model), .. settings]);
+            using var pad = Play.Create(DrumSynth.Id, [(D.Model, (int)model), ..settings]);
             var events = new List<TimedEvent>();
             for (var bar = 0; bar < bars; bar++) {
                 foreach (var step in steps) {
@@ -118,7 +118,10 @@ public sealed class T2DemoTests {
                    (F.Sustain(2), 0)
                )) {
             var line = new[] { 72, 79, 76, 84, 83, 79, 76, 74 };
-            var events = line.SelectMany((n, i) => new[] { TimedEvent.On(i * Beat, n, 100), TimedEvent.Off(i * Beat + Beat / 2, n) })
+            var events = line.SelectMany(static (n, i) => new[] {
+                        TimedEvent.On(i * Beat, n), TimedEvent.Off(i * Beat + Beat / 2, n)
+                    }
+                )
                 .ToList();
             Save(folder, "t2-fm-bells", Play.Render(bell, 12 * Beat, events));
         }
@@ -149,8 +152,13 @@ public sealed class T2DemoTests {
         }
 
         // An arpeggio: Arpeggiator (1/16, up-down, 2 octaves) into the synth, at 120 bpm.
-        using (var synth = Play.Create(AnodeSynth.Id, (SynthParameters.AmpRelease, 120), (SynthParameters.Cutoff, 2_500))) {
-            using var arp = MidiRun.Create(BuiltinMidiEffects.ArpeggiatorId, (Arpeggiator.Mode, 2), (Arpeggiator.Octaves, 2));
+        using (var synth = Play.Create(
+                   AnodeSynth.Id,
+                   (SynthParameters.AmpRelease, 120),
+                   (SynthParameters.Cutoff, 2_500)
+               )) {
+            using var arp =
+                MidiRun.Create(BuiltinMidiEffects.ArpeggiatorId, (Arpeggiator.Mode, 2), (Arpeggiator.Octaves, 2));
             var held = Chords(Progression, 4);
             var contexts = MidiRun.Contexts(17 * Beat, static _ => 120);
             var notes = MidiRun.Run([arp], contexts, held)
@@ -161,7 +169,12 @@ public sealed class T2DemoTests {
 
         // The Quick Sampler slicing the drum kit's first bar, played back in a new order.
         var loop = Path.Combine(folder, "t2-drum-synth-kit.wav");
-        using (var slicer = Play.Create(QuickSampler.Id, (Q.Mode, (int)QuickSamplerMode.Slice), (Q.SliceMode, 3), (Q.End, 25))) {
+        using (var slicer = Play.Create(
+                   QuickSampler.Id,
+                   (Q.Mode, (int)QuickSamplerMode.Slice),
+                   (Q.SliceMode, 3),
+                   (Q.End, 25)
+               )) {
             Assert.True(slicer.LoadFile(loop));
             int[] order = [0, 1, 2, 3, 4, 5, 6, 7, 0, 0, 2, 3, 12, 13, 14, 15];
             var events = new List<TimedEvent>();
@@ -195,20 +208,22 @@ public sealed class T2DemoTests {
         var tone = TestWav.Pluck(220, 48_000, 4, 3);
         TestWav.Write(sample, 48_000, [tone, tone]);
         (string Name, Func<IInstrument> Create, int Voices)[] cases = [
-            ("Drum Synth (cymbal)", () => Play.Create(DrumSynth.Id, (D.Model, (int)DrumModel.Cymbal), (D.Decay, 100)), 8),
-            ("Drum Synth (kick)", () => Play.Create(DrumSynth.Id, (D.Decay, 100)), 8),
-            ("FM synth", () => Play.Create(FmSynth.Id, (F.Sustain(1), 100), (F.Sustain(3), 100)), 16),
-            ("FM synth", () => Play.Create(FmSynth.Id), 1),
-            ("Drawbar organ (C3, rotary)", () => Play.Create(DrawbarOrgan.Id), 32),
-            ("Drawbar organ (C3, rotary)", () => Play.Create(DrawbarOrgan.Id), 1),
-            ("Electric piano", () => Play.Create(ElectricPiano.Id, (E.Decay, 100), (E.TremoloDepth, 50)), 32),
-            ("Wavetable synth", () => Play.Create(WavetableSynth.Id, (W.SubLevel, 50)), 16),
-            ("Wavetable synth", () => Play.Create(WavetableSynth.Id), 1),
+            ("Drum Synth (cymbal)",
+                static () => Play.Create(DrumSynth.Id, (D.Model, (int)DrumModel.Cymbal), (D.Decay, 100)),
+                8),
+            ("Drum Synth (kick)", static () => Play.Create(DrumSynth.Id, (D.Decay, 100)), 8),
+            ("FM synth", static () => Play.Create(FmSynth.Id, (F.Sustain(1), 100), (F.Sustain(3), 100)), 16),
+            ("FM synth", static () => Play.Create(FmSynth.Id), 1),
+            ("Drawbar organ (C3, rotary)", static () => Play.Create(DrawbarOrgan.Id), 32),
+            ("Drawbar organ (C3, rotary)", static () => Play.Create(DrawbarOrgan.Id), 1),
+            ("Electric piano", static () => Play.Create(ElectricPiano.Id, (E.Decay, 100), (E.TremoloDepth, 50)), 32),
+            ("Wavetable synth", static () => Play.Create(WavetableSynth.Id, (W.SubLevel, 50)), 16),
+            ("Wavetable synth", static () => Play.Create(WavetableSynth.Id), 1),
             ("Quick Sampler (classic)", () => {
-                    var q = Play.Create(QuickSampler.Id);
-                    Assert.True(q.LoadFile(sample));
-                    return q;
-                }, 16)
+                var q = Play.Create(QuickSampler.Id);
+                Assert.True(q.LoadFile(sample));
+                return q;
+            }, 16)
         ];
         foreach (var (name, create, voices) in cases) {
             using var instrument = create();
@@ -262,13 +277,15 @@ public sealed class T2DemoTests {
             times[i] = Stopwatch.GetElapsedTime(start).TotalMicroseconds;
         }
 
-        var measured = times.Where((_, i) => i % 500 != 0).Order().ToArray();
+        var measured = times.Where(static (_, i) => i % 500 != 0).Order().ToArray();
         return (measured[measured.Length / 2], measured[(int)(measured.Length * 0.99)]);
     }
 
     static (double Median, double P99) TimeMidi(IMidiEffect effect) {
         var output = new MidiEventBuffer();
-        var chord = Enumerable.Range(0, 8).Select(static n => new MidiEvent(0, 0x90, (byte)(48 + n * 3), 100)).ToArray();
+        var chord = Enumerable.Range(0, 8)
+            .Select(static n => new MidiEvent(0, 0x90, (byte)(48 + n * 3), 100))
+            .ToArray();
         var cc = new MidiEvent[] { new(10, 0xB0, 1, 64) };
         var times = new double[20_000];
         var quarter = 0.0;

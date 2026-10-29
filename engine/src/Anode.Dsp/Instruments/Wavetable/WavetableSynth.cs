@@ -51,7 +51,8 @@ public static class WavetableParameters {
     static readonly string[] Shapes = ["Sine", "Triangle", "Saw", "Square", "Sample & Hold"];
 
     /// <summary>The LFO sync values: off (the rate in Hz), else a note length.</summary>
-    static readonly string[] Syncs = ["Off", "1/1", "1/2", "1/4", "1/8", "1/16", "1/4T", "1/8T", "1/16T", "1/4.", "1/8."];
+    static readonly string[] Syncs =
+        ["Off", "1/1", "1/2", "1/4", "1/8", "1/16", "1/4T", "1/8T", "1/16T", "1/4.", "1/8."];
 
     static readonly string[] Sources =
         ["Off", "Env 2", "Env 3", "LFO 1", "LFO 2", "Velocity", "Mod Wheel", "Key", "Pitch Bend"];
@@ -64,7 +65,7 @@ public static class WavetableParameters {
     static readonly string[] Modes = ["Low-pass 24 dB", "Low-pass 12 dB", "High-pass 12 dB", "Band-pass 12 dB"];
 
     /// <summary>Each sync value's length in quarter notes (0: off).</summary>
-    internal static readonly double[] SyncQuarters = [0, 4, 2, 1, 0.5, 0.25, 2 / 3.0, 1 / 3.0, 1 / 6.0, 1.5, 0.75];
+    internal static double[] SyncQuarters { get; } = [0, 4, 2, 1, 0.5, 0.25, 2 / 3.0, 1 / 3.0, 1 / 6.0, 1.5, 0.75];
 
     public static readonly int Osc1Table = List.Choice("osc1Table", "Osc 1 Wavetable", TableNames, 0);
     public static readonly int Osc1Position = List.Add("osc1Position", "Osc 1 Position", 0, 100, 20, "%", 1);
@@ -85,6 +86,7 @@ public static class WavetableParameters {
     public static readonly int Cutoff = List.Add("cutoff", "Cutoff", 20, 20_000, 3_000, "Hz", 3);
     public static readonly int Resonance = List.Add("resonance", "Resonance", 0, 100, 20, "%", 4);
     public static readonly int KeyTracking = List.Add("keyTracking", "Key Tracking", 0, 100, 50, "%");
+
     public static readonly int FilterEnvAmount =
         List.Add("filterEnvAmount", "Filter Env Amount", -100, 100, 30, "%", 5);
 
@@ -100,8 +102,10 @@ public static class WavetableParameters {
     static readonly int[] SlotIndices = Matrix();
 
     public static readonly int BendRange = List.Stepped("bendRange", "Pitch Bend Range", 0, 24, 2, "st", 24);
+
     public static readonly int VelocitySensitivity =
         List.Add("velocitySensitivity", "Velocity Sensitivity", 0, 100, 70, "%");
+
     public static readonly int Volume = List.Add("volume", "Volume", -60, 6, -6, "dB");
 
     public static IReadOnlyList<InstrumentParameter> All => List.All;
@@ -115,7 +119,15 @@ public static class WavetableParameters {
     static int[] Envelopes() {
         var indices = new int[3];
         for (var n = 1; n <= 3; n++) {
-            indices[n - 1] = List.Add($"env{n}Attack", $"Env {n} Attack", 0, 10_000, n == 1 ? 5 : 2, "ms", n == 1 ? 6 : null);
+            indices[n - 1] = List.Add(
+                $"env{n}Attack",
+                $"Env {n} Attack",
+                0,
+                10_000,
+                n == 1 ? 5 : 2,
+                "ms",
+                n == 1 ? 6 : null
+            );
             List.Add($"env{n}Decay", $"Env {n} Decay", 1, 10_000, n == 3 ? 1_500 : 600, "ms");
             List.Add($"env{n}Sustain", $"Env {n} Sustain", 0, 100, n == 1 ? 80 : n == 2 ? 30 : 0, "%");
             List.Add($"env{n}Release", $"Env {n} Release", 1, 10_000, 400, "ms");
@@ -210,7 +222,13 @@ public sealed class WavetableSynth : IInstrument, IPolyphonic {
 
         public Engine() : this(new()) { }
 
-        Engine(WavetableControl control) : base(Info, WavetableSynth.Polyphony, 4, i => new(control, i), WavetableParameters.Volume) {
+        Engine(WavetableControl control) : base(
+            Info,
+            WavetableSynth.Polyphony,
+            4,
+            i => new(control, i),
+            WavetableParameters.Volume
+        ) {
             this.control = control;
         }
 
@@ -298,9 +316,11 @@ public sealed class WavetableSynth : IInstrument, IPolyphonic {
             c.Table2 = (int)s[WavetableParameters.Osc2Table];
             c.Position1 = s[WavetableParameters.Osc1Position] / 100;
             c.Position2 = s[WavetableParameters.Osc2Position] / 100;
-            c.Tune1 = s[WavetableParameters.Osc1Octave] * 12 + s[WavetableParameters.Osc1Semitone]
+            c.Tune1 = s[WavetableParameters.Osc1Octave] * 12
+                + s[WavetableParameters.Osc1Semitone]
                 + s[WavetableParameters.Osc1Fine] / 100;
-            c.Tune2 = s[WavetableParameters.Osc2Octave] * 12 + s[WavetableParameters.Osc2Semitone]
+            c.Tune2 = s[WavetableParameters.Osc2Octave] * 12
+                + s[WavetableParameters.Osc2Semitone]
                 + s[WavetableParameters.Osc2Fine] / 100;
             c.Level1 = s[WavetableParameters.Osc1Level] / 100;
             c.Level2 = s[WavetableParameters.Osc2Level] / 100;
@@ -354,14 +374,14 @@ public sealed class WavetableSynth : IInstrument, IPolyphonic {
 
 /// <summary>The control-rate values every <see cref="WavetableVoice" /> reads.</summary>
 internal sealed class WavetableControl {
-    public readonly AdsrSettings[] Envelopes = new AdsrSettings[3];
-    public readonly int[] LfoShape = new int[2];
-    public readonly double[] LfoIncrement = new double[2];
-    public readonly double[] LfoPhase = new double[2];
-    public readonly bool[] LfoSynced = new bool[2];
-    public readonly WavetableSource[] Source = new WavetableSource[WavetableParameters.Slots];
-    public readonly WavetableDestination[] Destination = new WavetableDestination[WavetableParameters.Slots];
-    public readonly double[] Amount = new double[WavetableParameters.Slots];
+    public AdsrSettings[] Envelopes { get; } = new AdsrSettings[3];
+    public int[] LfoShape { get; } = new int[2];
+    public double[] LfoIncrement { get; } = new double[2];
+    public double[] LfoPhase { get; } = new double[2];
+    public bool[] LfoSynced { get; } = new bool[2];
+    public WavetableSource[] Source { get; } = new WavetableSource[WavetableParameters.Slots];
+    public WavetableDestination[] Destination { get; } = new WavetableDestination[WavetableParameters.Slots];
+    public double[] Amount { get; } = new double[WavetableParameters.Slots];
     public double SampleRate;
     public int Table1;
     public int Table2;
@@ -508,7 +528,7 @@ internal sealed class WavetableVoice(WavetableControl control, int index) : Voic
                 continue;
             }
 
-            double source = c.Source[n] switch {
+            var source = c.Source[n] switch {
                 WavetableSource.Envelope2 => env2,
                 WavetableSource.Envelope3 => env3,
                 WavetableSource.Lfo1 => lfo1,
@@ -521,6 +541,7 @@ internal sealed class WavetableVoice(WavetableControl control, int index) : Voic
             };
             var x = source * c.Amount[n];
             switch (destination) {
+                case WavetableDestination.Off: break;
                 case WavetableDestination.Osc1Position: pos1 += x; break;
                 case WavetableDestination.Osc2Position: pos2 += x; break;
                 case WavetableDestination.Osc1Pitch: pitch1 += 12 * x; break;
@@ -593,7 +614,8 @@ internal sealed class WavetableVoice(WavetableControl control, int index) : Voic
                 }
 
                 if (gainSub != 0) {
-                    x += gainSub * (c.SubSquare ? PolyBlep.Pulse(phaseSub, incrementSub, 0.5) : SineTable.Sin(phaseSub));
+                    x += gainSub
+                        * (c.SubSquare ? PolyBlep.Pulse(phaseSub, incrementSub, 0.5) : SineTable.Sin(phaseSub));
                 }
 
                 if (c.NoiseLevel != 0) {

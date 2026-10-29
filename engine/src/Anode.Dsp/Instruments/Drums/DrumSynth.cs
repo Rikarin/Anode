@@ -31,8 +31,10 @@ public static class DrumSynthParameters {
     public static readonly int Snap = List.Add("snap", "Snap", 0, 100, 50, "%", 4);
     public static readonly int Sweep = List.Add("sweep", "Pitch Sweep", 0, 100, 50, "%", 5);
     public static readonly int Drive = List.Add("drive", "Drive", 0, 100, 0, "%", 6);
+
     public static readonly int VelocitySensitivity =
         List.Add("velocitySensitivity", "Velocity Sensitivity", 0, 100, 70, "%");
+
     public static readonly int Pan = List.Add("pan", "Pan", -100, 100, 0, "%");
     public static readonly int Volume = List.Add("volume", "Volume", -60, 6, -6, "dB", 7);
 
@@ -46,16 +48,24 @@ public static class DrumSynthParameters {
 /// </summary>
 /// <remarks>
 ///     <list type="bullet">
-///         <item>Kick: a sine whose pitch falls exponentially from up to 7× the base (50 Hz) by Sweep, its fall time
-///             shortened by Tone; a noise click by Snap.</item>
-///         <item>Snare: two detuned sines (180 Hz and ×1.84) with a short pitch drop, and band-passed noise (Tone sets
-///             its centre, Snap its level) that rings twice as long.</item>
+///         <item>
+///             Kick: a sine whose pitch falls exponentially from up to 7× the base (50 Hz) by Sweep, its fall time
+///             shortened by Tone; a noise click by Snap.
+///         </item>
+///         <item>
+///             Snare: two detuned sines (180 Hz and ×1.84) with a short pitch drop, and band-passed noise (Tone sets
+///             its centre, Snap its level) that rings twice as long.
+///         </item>
 ///         <item>Clap: band-passed noise in four bursts 10 ms apart, then a tail.</item>
-///         <item>Hat and Cymbal: six band-limited square waves at the 808's metallic ratios, and noise by Snap, through
-///             a band-pass (Tone) and a high-pass; Decay goes from closed to open.</item>
+///         <item>
+///             Hat and Cymbal: six band-limited square waves at the 808's metallic ratios, and noise by Snap, through
+///             a band-pass (Tone) and a high-pass; Decay goes from closed to open.
+///         </item>
 ///         <item>Tom: a sine (120 Hz) with a gentle pitch drop and a second partial by Tone.</item>
-///         <item>Percussion: Tone morphs from a bongo (a sine with a pitch blip) to a cowbell (two squares at 540 and
-///             800 Hz through a band-pass).</item>
+///         <item>
+///             Percussion: Tone morphs from a bongo (a sine with a pitch blip) to a cowbell (two squares at 540 and
+///             800 Hz through a band-pass).
+///         </item>
 ///     </list>
 ///     Decay maps 0 … 100 % exponentially onto each model's range of 60 dB decay times. Drive saturates (tanh). The
 ///     parameters are read when a note starts. Velocity scales the level: <c>1 − s + s·(v/127)²</c>.
@@ -218,19 +228,19 @@ internal sealed class DrumVoice(int index) : Voice {
                 clickLevel = 0.6f * snap;
                 break;
             case DrumModel.Snare: {
-                    baseIncrement = 180 * tune / rate;
-                    secondRatio = 1.84;
-                    sweepDepth = 0.6 * sweep;
-                    sweepCoefficient = Coefficient(0.02, rate);
-                    var time = Map(decay, 0.06, 1.2);
-                    bodyCoefficient = Coefficient(time * 0.6, rate);
-                    noiseCoefficient = Coefficient(time, rate);
-                    noiseLevel = 1;
-                    noiseGain = 0.3f + 1.2f * snap;
-                    band = SvfCoefficients.Design(rate, 1_500 * Math.Pow(5, tone) * tune, 0.8);
-                    high = SvfCoefficients.Design(rate, 400, 0.7);
-                    break;
-                }
+                baseIncrement = 180 * tune / rate;
+                secondRatio = 1.84;
+                sweepDepth = 0.6 * sweep;
+                sweepCoefficient = Coefficient(0.02, rate);
+                var time = Map(decay, 0.06, 1.2);
+                bodyCoefficient = Coefficient(time * 0.6, rate);
+                noiseCoefficient = Coefficient(time, rate);
+                noiseLevel = 1;
+                noiseGain = 0.3f + 1.2f * snap;
+                band = SvfCoefficients.Design(rate, 1_500 * Math.Pow(5, tone) * tune, 0.8);
+                high = SvfCoefficients.Design(rate, 400, 0.7);
+                break;
+            }
             case DrumModel.Clap:
                 body = 0;
                 noiseCoefficient = Coefficient(Map(decay, 0.1, 2), rate);
@@ -242,25 +252,25 @@ internal sealed class DrumVoice(int index) : Voice {
                 break;
             case DrumModel.Hat:
             case DrumModel.Cymbal: {
-                    var cymbal = model == DrumModel.Cymbal;
-                    for (var k = 0; k < 6; k++) {
-                        metalPhase[k] = k * 0.137;
-                        metalIncrement[k] = Math.Min(Metal[k] * tune * (cymbal ? 1 : 1.6) / rate, 0.45);
-                    }
-
-                    var time = cymbal ? Map(decay, 0.4, 6) : Map(decay, 0.03, 1.5);
-                    bodyCoefficient = Coefficient(time, rate);
-                    noiseCoefficient = Coefficient(time * 0.7, rate);
-                    noiseLevel = 1;
-                    noiseGain = 0.8f * snap;
-                    band = SvfCoefficients.Design(
-                        rate,
-                        (cymbal ? 4_000 : 7_000) * Math.Pow(2, 2 * tone - 1) * Math.Sqrt(tune),
-                        cymbal ? 0.9 : 1.4
-                    );
-                    high = SvfCoefficients.Design(rate, cymbal ? 3_000 : 6_000, 0.7);
-                    break;
+                var cymbal = model == DrumModel.Cymbal;
+                for (var k = 0; k < 6; k++) {
+                    metalPhase[k] = k * 0.137;
+                    metalIncrement[k] = Math.Min(Metal[k] * tune * (cymbal ? 1 : 1.6) / rate, 0.45);
                 }
+
+                var time = cymbal ? Map(decay, 0.4, 6) : Map(decay, 0.03, 1.5);
+                bodyCoefficient = Coefficient(time, rate);
+                noiseCoefficient = Coefficient(time * 0.7, rate);
+                noiseLevel = 1;
+                noiseGain = 0.8f * snap;
+                band = SvfCoefficients.Design(
+                    rate,
+                    (cymbal ? 4_000 : 7_000) * Math.Pow(2, 2 * tone - 1) * Math.Sqrt(tune),
+                    cymbal ? 0.9 : 1.4
+                );
+                high = SvfCoefficients.Design(rate, cymbal ? 3_000 : 6_000, 0.7);
+                break;
+            }
             case DrumModel.Tom:
                 baseIncrement = 120 * tune / rate;
                 secondRatio = 1.5;
@@ -270,19 +280,19 @@ internal sealed class DrumVoice(int index) : Voice {
                 clickLevel = 0.3f * snap;
                 break;
             default: {
-                    // Percussion: the bongo's sine and the cowbell's squares.
-                    baseIncrement = 300 * tune / rate;
-                    sweepDepth = 0.5 * sweep;
-                    sweepCoefficient = Coefficient(0.01, rate);
-                    metalIncrement[0] = Math.Min(540 * tune / rate, 0.45);
-                    metalIncrement[1] = Math.Min(800 * tune / rate, 0.45);
-                    metalPhase[0] = 0;
-                    metalPhase[1] = 0;
-                    bodyCoefficient = Coefficient(Map(decay, 0.03, 1.5), rate);
-                    band = SvfCoefficients.Design(rate, 2_600 * tune, 1.2);
-                    clickLevel = 0.3f * snap;
-                    break;
-                }
+                // Percussion: the bongo's sine and the cowbell's squares.
+                baseIncrement = 300 * tune / rate;
+                sweepDepth = 0.5 * sweep;
+                sweepCoefficient = Coefficient(0.01, rate);
+                metalIncrement[0] = Math.Min(540 * tune / rate, 0.45);
+                metalIncrement[1] = Math.Min(800 * tune / rate, 0.45);
+                metalPhase[0] = 0;
+                metalPhase[1] = 0;
+                bodyCoefficient = Coefficient(Map(decay, 0.03, 1.5), rate);
+                band = SvfCoefficients.Design(rate, 2_600 * tune, 1.2);
+                clickLevel = 0.3f * snap;
+                break;
+            }
         }
     }
 
@@ -322,85 +332,85 @@ internal sealed class DrumVoice(int index) : Voice {
     float Next() {
         switch (model) {
             case DrumModel.Kick: {
-                    var increment = baseIncrement * (1 + sweepDepth * sweepLevel);
-                    sweepLevel *= sweepCoefficient;
-                    var y = SineTable.Sin(phase) * body;
-                    phase += increment;
-                    body *= bodyCoefficient;
-                    return y + Click();
-                }
+                var increment = baseIncrement * (1 + sweepDepth * sweepLevel);
+                sweepLevel *= sweepCoefficient;
+                var y = SineTable.Sin(phase) * body;
+                phase += increment;
+                body *= bodyCoefficient;
+                return y + Click();
+            }
             case DrumModel.Snare: {
-                    var bend = 1 + sweepDepth * sweepLevel;
-                    sweepLevel *= sweepCoefficient;
-                    var y = (SineTable.Sin(phase) + 0.6f * SineTable.Sin(phase2)) * 0.6f * body;
-                    phase += baseIncrement * bend;
-                    phase2 += baseIncrement * secondRatio * bend;
-                    body *= bodyCoefficient;
-                    var n = White();
-                    var filtered = bandState.Tick(band, n, SvfOutput.BandPass);
-                    var shaped = highState.Tick(high, filtered, SvfOutput.HighPass);
-                    y += (float)shaped * noiseGain * noiseLevel;
-                    noiseLevel *= noiseCoefficient;
-                    return y;
-                }
+                var bend = 1 + sweepDepth * sweepLevel;
+                sweepLevel *= sweepCoefficient;
+                var y = (SineTable.Sin(phase) + 0.6f * SineTable.Sin(phase2)) * 0.6f * body;
+                phase += baseIncrement * bend;
+                phase2 += baseIncrement * secondRatio * bend;
+                body *= bodyCoefficient;
+                var n = White();
+                var filtered = bandState.Tick(band, n, SvfOutput.BandPass);
+                var shaped = highState.Tick(high, filtered, SvfOutput.HighPass);
+                y += (float)shaped * noiseGain * noiseLevel;
+                noiseLevel *= noiseCoefficient;
+                return y;
+            }
             case DrumModel.Clap: {
-                    // Four bursts 10 ms apart restart a fast envelope; the tail rings under them.
-                    var burst = (long)(0.01 * sampleRate);
-                    if (age < 4 * burst && age % burst == 0) {
-                        clickLevel = burstLevel;
-                    }
-
-                    var n = (float)bandState.Tick(band, White(), SvfOutput.BandPass);
-                    var y = n * noiseGain * (0.4f * clickLevel + 0.6f * noiseLevel * (age >= 3 * burst ? 1 : 0.3f));
-                    clickLevel *= clickCoefficient;
-                    noiseLevel *= noiseCoefficient;
-                    return y;
+                // Four bursts 10 ms apart restart a fast envelope; the tail rings under them.
+                var burst = (long)(0.01 * sampleRate);
+                if (age < 4 * burst && age % burst == 0) {
+                    clickLevel = burstLevel;
                 }
+
+                var n = (float)bandState.Tick(band, White(), SvfOutput.BandPass);
+                var y = n * noiseGain * (0.4f * clickLevel + 0.6f * noiseLevel * (age >= 3 * burst ? 1 : 0.3f));
+                clickLevel *= clickCoefficient;
+                noiseLevel *= noiseCoefficient;
+                return y;
+            }
             case DrumModel.Hat:
             case DrumModel.Cymbal: {
-                    double metal = 0;
-                    for (var k = 0; k < 6; k++) {
-                        metal += PolyBlep.Pulse(metalPhase[k], metalIncrement[k], 0.5);
-                        metalPhase[k] += metalIncrement[k];
-                        if (metalPhase[k] >= 1) {
-                            metalPhase[k] -= 1;
-                        }
+                double metal = 0;
+                for (var k = 0; k < 6; k++) {
+                    metal += PolyBlep.Pulse(metalPhase[k], metalIncrement[k], 0.5);
+                    metalPhase[k] += metalIncrement[k];
+                    if (metalPhase[k] >= 1) {
+                        metalPhase[k] -= 1;
                     }
-
-                    var x = metal / 6 * body + White() * noiseGain * noiseLevel;
-                    body *= bodyCoefficient;
-                    noiseLevel *= noiseCoefficient;
-                    var filtered = bandState.Tick(band, x, SvfOutput.BandPass);
-                    return (float)highState.Tick(high, filtered, SvfOutput.HighPass) * 2.5f;
                 }
+
+                var x = metal / 6 * body + White() * noiseGain * noiseLevel;
+                body *= bodyCoefficient;
+                noiseLevel *= noiseCoefficient;
+                var filtered = bandState.Tick(band, x, SvfOutput.BandPass);
+                return (float)highState.Tick(high, filtered, SvfOutput.HighPass) * 2.5f;
+            }
             case DrumModel.Tom: {
-                    var bend = 1 + sweepDepth * sweepLevel;
-                    sweepLevel *= sweepCoefficient;
-                    var y = (SineTable.Sin(phase) + 0.5f * tone * SineTable.Sin(phase2)) * body;
-                    phase += baseIncrement * bend;
-                    phase2 += baseIncrement * secondRatio * bend;
-                    body *= bodyCoefficient;
-                    return y + Click();
-                }
+                var bend = 1 + sweepDepth * sweepLevel;
+                sweepLevel *= sweepCoefficient;
+                var y = (SineTable.Sin(phase) + 0.5f * tone * SineTable.Sin(phase2)) * body;
+                phase += baseIncrement * bend;
+                phase2 += baseIncrement * secondRatio * bend;
+                body *= bodyCoefficient;
+                return y + Click();
+            }
             default: {
-                    var bend = 1 + sweepDepth * sweepLevel;
-                    sweepLevel *= sweepCoefficient;
-                    var bongo = SineTable.Sin(phase);
-                    phase += baseIncrement * bend;
-                    var bell = 0.0;
-                    for (var k = 0; k < 2; k++) {
-                        bell += PolyBlep.Pulse(metalPhase[k], metalIncrement[k], 0.5);
-                        metalPhase[k] += metalIncrement[k];
-                        if (metalPhase[k] >= 1) {
-                            metalPhase[k] -= 1;
-                        }
+                var bend = 1 + sweepDepth * sweepLevel;
+                sweepLevel *= sweepCoefficient;
+                var bongo = SineTable.Sin(phase);
+                phase += baseIncrement * bend;
+                var bell = 0.0;
+                for (var k = 0; k < 2; k++) {
+                    bell += PolyBlep.Pulse(metalPhase[k], metalIncrement[k], 0.5);
+                    metalPhase[k] += metalIncrement[k];
+                    if (metalPhase[k] >= 1) {
+                        metalPhase[k] -= 1;
                     }
-
-                    var cowbell = bandState.Tick(band, bell * 0.5, SvfOutput.BandPass) * 2;
-                    var y = (float)((1 - tone) * bongo + tone * cowbell) * body;
-                    body *= bodyCoefficient;
-                    return y + Click();
                 }
+
+                var cowbell = bandState.Tick(band, bell * 0.5, SvfOutput.BandPass) * 2;
+                var y = (float)((1 - tone) * bongo + tone * cowbell) * body;
+                body *= bodyCoefficient;
+                return y + Click();
+            }
         }
     }
 

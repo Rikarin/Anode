@@ -9,11 +9,11 @@ namespace Anode.Dsp.Tests.MidiEffects;
 public sealed class MidiEffectTests {
     const double Rate = MidiRun.Rate;
 
-    public static TheoryData<string> Ids => [.. BuiltinMidiEffects.All.Select(static d => d.Id)];
+    public static TheoryData<string> Ids => [..BuiltinMidiEffects.All.Select(static d => d.Id)];
 
-    static List<OutputEvent> Ons(IEnumerable<OutputEvent> events) => [.. events.Where(static e => e.IsNoteOn)];
+    static List<OutputEvent> Ons(IEnumerable<OutputEvent> events) => [..events.Where(static e => e.IsNoteOn)];
 
-    static List<OutputEvent> Offs(IEnumerable<OutputEvent> events) => [.. events.Where(static e => e.IsNoteOff)];
+    static List<OutputEvent> Offs(IEnumerable<OutputEvent> events) => [..events.Where(static e => e.IsNoteOff)];
 
     /// <summary>The first sample at or after quarter note <paramref name="quarter" /> at a constant tempo.</summary>
     static long SampleOf(double quarter, double bpm) => (long)Math.Ceiling(quarter * 60 * Rate / bpm - 1e-6);
@@ -30,7 +30,10 @@ public sealed class MidiEffectTests {
             Assert.NotNull(effect);
             Assert.Same(descriptor, effect.Descriptor);
             Assert.Contains(descriptor.Parameters, static p => p.Macro is not null);
-            Assert.Equal(descriptor.Parameters.Count, descriptor.Parameters.Select(static p => p.Id).Distinct().Count());
+            Assert.Equal(
+                descriptor.Parameters.Count,
+                descriptor.Parameters.Select(static p => p.Id).Distinct().Count()
+            );
             for (var i = 0; i < descriptor.Parameters.Count; i++) {
                 var p = descriptor.Parameters[i];
                 Assert.Equal(i, p.Index);
@@ -47,13 +50,15 @@ public sealed class MidiEffectTests {
     [MemberData(nameof(Ids))]
     public void Processing_allocates_nothing(string id) {
         using var effect = MidiRun.Create(id);
-        var contexts = MidiRun.Contexts(64 * 200, b => 100 + b * 0.3);
+        var contexts = MidiRun.Contexts(64 * 200, static b => 100 + b * 0.3);
         var output = new MidiEventBuffer();
         var chord = new MidiEvent[] {
             new(0, 0x90, 60, 100), new(3, 0x90, 64, 90), new(10, 0xB0, 1, 100), new(20, 0xE0, 0, 80),
             new(30, 0x91, 67, 80), new(63, 0x90, 72, 127)
         };
-        var offs = new MidiEvent[] { new(0, 0x80, 64, 0), new(5, 0x81, 67, 0), new(9, 0x90, 60, 0), new(60, 0x80, 72, 0) };
+        var offs = new MidiEvent[] {
+            new(0, 0x80, 64, 0), new(5, 0x81, 67, 0), new(9, 0x90, 60, 0), new(60, 0x80, 72, 0)
+        };
         var allocated = AllocationProbe.Measure(() => {
                 for (var b = 0; b < contexts.Count; b++) {
                     output.Clear();
@@ -102,7 +107,10 @@ public sealed class MidiEffectTests {
     public void Output_stays_inside_the_block_and_other_events_pass(string id) {
         using var effect = MidiRun.Create(id);
         var events = new List<TimedEvent> {
-            TimedEvent.On(10, 60), TimedEvent.Cc(500, 7, 90), TimedEvent.Off(9_000, 60), TimedEvent.On(9_100, 62),
+            TimedEvent.On(10, 60),
+            TimedEvent.Cc(500, 7, 90),
+            TimedEvent.Off(9_000, 60),
+            TimedEvent.On(9_100, 62),
             TimedEvent.Off(20_000, 62)
         };
         var output = MidiRun.Run(effect, 48_000, events); // Run asserts every frame is inside its block
@@ -138,7 +146,10 @@ public sealed class MidiEffectTests {
         // Each step lasts 80 % of a 16th.
         var gate = 0.8 * 0.25 * 60 * Rate / bpm;
         var offs = Offs(output);
-        Assert.Equal(ons.Take(offs.Count).Select(e => (long)Math.Floor(e.Frame + gate)), offs.Select(static e => e.Frame));
+        Assert.Equal(
+            ons.Take(offs.Count).Select(e => (long)Math.Floor(e.Frame + gate)),
+            offs.Select(static e => e.Frame)
+        );
     }
 
     [Fact]
@@ -158,7 +169,9 @@ public sealed class MidiEffectTests {
                 break;
             }
 
-            expected.Add(context.Sample + (long)Math.Ceiling((quarter - context.Quarter) / context.QuartersPerSample - 1e-6));
+            expected.Add(
+                context.Sample + (long)Math.Ceiling((quarter - context.Quarter) / context.QuartersPerSample - 1e-6)
+            );
         }
 
         Assert.True(expected.Count > 10);
@@ -188,9 +201,13 @@ public sealed class MidiEffectTests {
 
     [Fact]
     public void Arpeggiator_random_mode_is_repeatable_and_stays_in_the_chord() {
-        int[] Run() {
-            using var arp = MidiRun.Create(BuiltinMidiEffects.ArpeggiatorId, (Arpeggiator.Mode, 3), (Arpeggiator.Octaves, 3));
-            return [.. Ons(MidiRun.Run(arp, 64 * 6_000, [TimedEvent.On(0, 60), TimedEvent.On(0, 63)])).Select(static e => (int)e.Data1)];
+        static int[] Run() {
+            using var arp =
+                MidiRun.Create(BuiltinMidiEffects.ArpeggiatorId, (Arpeggiator.Mode, 3), (Arpeggiator.Octaves, 3));
+            return [
+                ..Ons(MidiRun.Run(arp, 64 * 6_000, [TimedEvent.On(0, 60), TimedEvent.On(0, 63)]))
+                    .Select(static e => (int)e.Data1)
+            ];
         }
 
         var a = Run();
@@ -243,7 +260,10 @@ public sealed class MidiEffectTests {
         var contexts = MidiRun.Contexts(48_000, static _ => 110);
         var output = MidiRun.Run([arp, chords], contexts, [TimedEvent.On(0, 60)]);
         var steps = Ons(output).GroupBy(static e => e.Frame).ToList();
-        Assert.Equal(Enumerable.Range(0, steps.Count).Select(k => SampleOf(k * 0.25, 110)), steps.Select(static g => g.Key));
+        Assert.Equal(
+            Enumerable.Range(0, steps.Count).Select(static k => SampleOf(k * 0.25, 110)),
+            steps.Select(static g => g.Key)
+        );
         Assert.All(steps, static g => Assert.Equal(3, g.Count()));
         Assert.Equal([60, 64, 67], steps[0].Select(static e => (int)e.Data1));
         Assert.Equal([72, 76, 79], steps[1].Select(static e => (int)e.Data1));
@@ -286,8 +306,12 @@ public sealed class MidiEffectTests {
     public void Chord_trigger_learns_a_chord_per_key_and_a_single_chord() {
         using var trigger = MidiRun.Create(ChordTrigger.Id, (ChordTrigger.Mode, 1), (ChordTrigger.Learn, 1));
         var learn = new List<TimedEvent> {
-            TimedEvent.On(0, 48), TimedEvent.On(5, 55), TimedEvent.On(6, 63), TimedEvent.Off(50, 55),
-            TimedEvent.Off(60, 48), TimedEvent.Off(70, 63)
+            TimedEvent.On(0, 48),
+            TimedEvent.On(5, 55),
+            TimedEvent.On(6, 63),
+            TimedEvent.Off(50, 55),
+            TimedEvent.Off(60, 48),
+            TimedEvent.Off(70, 63)
         };
         var heard = MidiRun.Run(trigger, 128, learn);
         Assert.Equal([48, 55, 63], Ons(heard).Select(static e => (int)e.Data1)); // learning passes the notes through
@@ -300,7 +324,14 @@ public sealed class MidiEffectTests {
 
         // Single mode learns intervals from the trigger, which the Learned chord plays on any key.
         using var single = MidiRun.Create(ChordTrigger.Id, (ChordTrigger.Learn, 1));
-        MidiRun.Run(single, 128, [TimedEvent.On(0, 50), TimedEvent.On(1, 53), TimedEvent.On(2, 57), TimedEvent.On(3, 62), TimedEvent.Off(9, 50), TimedEvent.Off(9, 53), TimedEvent.Off(9, 57), TimedEvent.Off(9, 62)]);
+        MidiRun.Run(
+            single,
+            128,
+            [
+                TimedEvent.On(0, 50), TimedEvent.On(1, 53), TimedEvent.On(2, 57), TimedEvent.On(3, 62),
+                TimedEvent.Off(9, 50), TimedEvent.Off(9, 53), TimedEvent.Off(9, 57), TimedEvent.Off(9, 62)
+            ]
+        );
         single.SetParameter(ChordTrigger.Learn, 0);
         single.SetParameter(ChordTrigger.Chord, ChordTrigger.Learned);
         var learned = MidiRun.Run(single, 128, [TimedEvent.On(0, 60)]);
@@ -320,7 +351,8 @@ public sealed class MidiEffectTests {
     public void Transposer_moves_notes_onto_a_scale() {
         using var transposer = MidiRun.Create(Transposer.Id, (Transposer.Scale, 1)); // C major
         var chromatic = Enumerable.Range(60, 13).ToArray();
-        var events = chromatic.SelectMany(n => new[] { TimedEvent.On(n * 10, n), TimedEvent.Off(n * 10 + 5, n) }).ToList();
+        var events = chromatic.SelectMany(static n => new[] { TimedEvent.On(n * 10, n), TimedEvent.Off(n * 10 + 5, n) })
+            .ToList();
         var output = MidiRun.Run(transposer, 2_048, events);
         int[] major = [60, 60, 62, 62, 64, 65, 65, 67, 67, 69, 69, 71, 72];
         Assert.Equal(major, Ons(output).Select(static e => (int)e.Data1));
@@ -343,7 +375,11 @@ public sealed class MidiEffectTests {
     [Fact]
     public void Transposer_shifts_by_semitones_and_drops_notes_off_the_keyboard() {
         using var transposer = MidiRun.Create(Transposer.Id, (Transposer.Semitones, 12));
-        var output = MidiRun.Run(transposer, 1_024, [TimedEvent.On(0, 60), TimedEvent.On(1, 120), TimedEvent.Off(9, 60), TimedEvent.Off(9, 120)]);
+        var output = MidiRun.Run(
+            transposer,
+            1_024,
+            [TimedEvent.On(0, 60), TimedEvent.On(1, 120), TimedEvent.Off(9, 60), TimedEvent.Off(9, 120)]
+        );
         Assert.Equal([72], Ons(output).Select(static e => (int)e.Data1));
         Assert.Equal([72], Offs(output).Select(static e => (int)e.Data1));
     }
@@ -356,7 +392,7 @@ public sealed class MidiEffectTests {
     [InlineData(4, 90, 32_000)] // 1/4 at 90 bpm
     public void Note_repeater_repeats_at_its_rate(int rate, double bpm, int spacing) {
         using var repeater = MidiRun.Create(NoteRepeater.Id, (NoteRepeater.Rate, rate), (NoteRepeater.Repeats, 3));
-        var output = MidiRun.Run(repeater, 4 * 48_000, [TimedEvent.On(100, 60, 100), TimedEvent.Off(200, 60)], bpm);
+        var output = MidiRun.Run(repeater, 4 * 48_000, [TimedEvent.On(100, 60), TimedEvent.Off(200, 60)], bpm);
         var ons = Ons(output);
         Assert.Equal([100, 100 + spacing, 100 + 2 * spacing, 100 + 3 * spacing], ons.Select(static e => e.Frame));
         Assert.Equal([100, 80, 60, 40], ons.Select(static e => (int)e.Data2)); // −20 % a repeat
@@ -366,7 +402,8 @@ public sealed class MidiEffectTests {
 
     [Fact]
     public void Note_repeater_transposes_each_repeat() {
-        using var repeater = MidiRun.Create(NoteRepeater.Id, (NoteRepeater.Transpose, 5), (NoteRepeater.VelocityRamp, 0));
+        using var repeater =
+            MidiRun.Create(NoteRepeater.Id, (NoteRepeater.Transpose, 5), (NoteRepeater.VelocityRamp, 0));
         var ons = Ons(MidiRun.Run(repeater, 48_000, [TimedEvent.On(0, 60)]));
         Assert.Equal([60, 65, 70, 75], ons.Select(static e => (int)e.Data1));
     }
@@ -397,10 +434,10 @@ public sealed class MidiEffectTests {
 
     [Fact]
     public void Randomizer_is_repeatable_and_stays_in_range() {
-        List<OutputEvent> Run(params (int, float)[] parameters) {
+        static List<OutputEvent> Run(params (int, float)[] parameters) {
             using var randomizer = MidiRun.Create(Randomizer.Id, parameters);
             var events = Enumerable.Range(0, 200)
-                .SelectMany(n => new[] { TimedEvent.On(n * 100, 60, 64), TimedEvent.Off(n * 100 + 50, 60) })
+                .SelectMany(static n => new[] { TimedEvent.On(n * 100, 60, 64), TimedEvent.Off(n * 100 + 50, 60) })
                 .ToList();
             return MidiRun.Run(randomizer, 20_480, events);
         }
@@ -423,7 +460,11 @@ public sealed class MidiEffectTests {
     [Fact]
     public void Modifier_remaps_a_controller() {
         using var modifier = MidiRun.Create(Modifier.Id, (Modifier.Scale, 50), (Modifier.Add, 10));
-        var output = MidiRun.Run(modifier, 1_024, [TimedEvent.Cc(5, 1, 100), TimedEvent.Cc(6, 7, 100), TimedEvent.On(7, 60)]);
+        var output = MidiRun.Run(
+            modifier,
+            1_024,
+            [TimedEvent.Cc(5, 1, 100), TimedEvent.Cc(6, 7, 100), TimedEvent.On(7, 60)]
+        );
         Assert.Equal(
             [new OutputEvent(5, 0xB0, 11, 60), new OutputEvent(6, 0xB0, 7, 100), new OutputEvent(7, 0x90, 60, 100)],
             output
@@ -441,7 +482,10 @@ public sealed class MidiEffectTests {
     public void Modulator_sends_its_lfo_as_a_controller_on_a_grid() {
         using var modulator = MidiRun.Create(Modulator.Id, (Modulator.Rate, 2), (Modulator.Depth, 100));
         var output = MidiRun.Run(modulator, 48_000, [], block: 100);
-        Assert.All(output, static e => Assert.Equal((0L, 0xB0, 1), (e.Frame % Modulator.Interval, (int)e.Status, (int)e.Data1)));
+        Assert.All(
+            output,
+            static e => Assert.Equal((0L, 0xB0, 1), (e.Frame % Modulator.Interval, (int)e.Status, (int)e.Data1))
+        );
         Assert.InRange(output.Count, 200, 1_500);
         Assert.Equal(64, output[0].Data2);
         // A 2 Hz sine: the top a quarter cycle in, at 6000 samples.

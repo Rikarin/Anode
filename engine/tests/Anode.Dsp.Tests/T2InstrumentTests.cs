@@ -7,13 +7,13 @@ using Anode.Dsp.Instruments.Quick;
 using Anode.Dsp.Instruments.Wavetable;
 using Anode.Dsp.Tests.Support;
 using Anode.Dsp.Transport;
-using static Anode.Dsp.Tests.Support.Analysis;
 using D = Anode.Dsp.Instruments.Drums.DrumSynthParameters;
 using E = Anode.Dsp.Instruments.Piano.ElectricPianoParameters;
 using F = Anode.Dsp.Instruments.Fm.FmParameters;
 using O = Anode.Dsp.Instruments.Organ.OrganParameters;
 using Q = Anode.Dsp.Instruments.Quick.QuickSamplerParameters;
 using W = Anode.Dsp.Instruments.Wavetable.WavetableParameters;
+using static Anode.Dsp.Tests.Support.Analysis;
 
 namespace Anode.Dsp.Tests;
 
@@ -48,7 +48,7 @@ public sealed class T2InstrumentTests : IDisposable {
     /// <summary>A WAV in the test folder: <paramref name="channels" /> at 48 kHz, root <paramref name="root" />.</summary>
     string Wav(string name, float[][] channels, int root = -1) {
         var path = Path.Combine(folder, name);
-        TestWav.Write(path, (int)Rate, channels, asFloat: true, rootNote: root);
+        TestWav.Write(path, (int)Rate, channels, true, root);
         return path;
     }
 
@@ -66,7 +66,14 @@ public sealed class T2InstrumentTests : IDisposable {
     /// <summary>A patch for each instrument that sounds a single sine at the note's pitch.</summary>
     IInstrument PureTone(string id) =>
         id switch {
-            FmSynth.Id => Create(id, (F.Algorithm, 7), (F.Level(2), 0), (F.Level(3), 0), (F.Level(4), 0), (F.Sustain(1), 100)),
+            FmSynth.Id => Create(
+                id,
+                (F.Algorithm, 7),
+                (F.Level(2), 0),
+                (F.Level(3), 0),
+                (F.Level(4), 0),
+                (F.Sustain(1), 100)
+            ),
             DrawbarOrgan.Id => Create(
                 id,
                 (O.Drawbar(1), 0),
@@ -114,7 +121,9 @@ public sealed class T2InstrumentTests : IDisposable {
     public static TheoryData<string, int> PitchedNotes {
         get {
             var data = new TheoryData<string, int>();
-            foreach (var id in new[] { FmSynth.Id, DrawbarOrgan.Id, ElectricPiano.Id, WavetableSynth.Id, QuickSampler.Id }) {
+            foreach (var id in new[] {
+                         FmSynth.Id, DrawbarOrgan.Id, ElectricPiano.Id, WavetableSynth.Id, QuickSampler.Id
+                     }) {
                 foreach (var note in new[] { 36, 48, 60, 69, 84 }) {
                     data.Add(id, note);
                 }
@@ -151,7 +160,7 @@ public sealed class T2InstrumentTests : IDisposable {
         using var instrument = Sustaining(id);
         var voices = (IPolyphonic)instrument;
         var max = voices.MaxVoices;
-        var events = Enumerable.Range(0, max + 3).Select(i => TimedEvent.On(i * 10, 30 + i)).ToList();
+        var events = Enumerable.Range(0, max + 3).Select(static i => TimedEvent.On(i * 10, 30 + i)).ToList();
         Play.Render(instrument, 20 * (max + 3), events);
         for (var i = 0; i < 3; i++) {
             Assert.False(voices.IsSounding(30 + i), $"note {30 + i} should be stolen");
@@ -251,8 +260,23 @@ public sealed class T2InstrumentTests : IDisposable {
         Assert.True(levels.Max() - levels.Min() < 0.5, string.Join(", ", levels));
 
         // Algorithm 1 with operator 2 alone modulating operator 1 at the same ratio: harmonics appear.
-        using var modulated = Create(FmSynth.Id, (F.Algorithm, 0), (F.Level(2), 80), (F.Level(3), 0), (F.Level(4), 0), (F.Sustain(1), 100), (F.Sustain(2), 100));
-        using var plain = Create(FmSynth.Id, (F.Algorithm, 0), (F.Level(2), 0), (F.Level(3), 0), (F.Level(4), 0), (F.Sustain(1), 100));
+        using var modulated = Create(
+            FmSynth.Id,
+            (F.Algorithm, 0),
+            (F.Level(2), 80),
+            (F.Level(3), 0),
+            (F.Level(4), 0),
+            (F.Sustain(1), 100),
+            (F.Sustain(2), 100)
+        );
+        using var plain = Create(
+            FmSynth.Id,
+            (F.Algorithm, 0),
+            (F.Level(2), 0),
+            (F.Level(3), 0),
+            (F.Level(4), 0),
+            (F.Sustain(1), 100)
+        );
         var (m, _) = Play.Render(modulated, 30_000, [TimedEvent.On(0, 57, 127)]);
         var (p, _) = Play.Render(plain, 30_000, [TimedEvent.On(0, 57, 127)]);
         var second = LevelDb(m, 8_000, 440) - LevelDb(m, 8_000, 220);
@@ -293,7 +317,7 @@ public sealed class T2InstrumentTests : IDisposable {
         foreach (var (drawbar, semitones) in cases) {
             var parameters = Enumerable.Range(1, 9).Select(n => (O.Drawbar(n), n == drawbar ? 8f : 0f)).ToList();
             parameters.AddRange([(O.Percussion, 0), (O.KeyClick, 0), (O.VibratoChorus, 0), (O.Rotary, 0)]);
-            using var organ = Create(DrawbarOrgan.Id, [.. parameters]);
+            using var organ = Create(DrawbarOrgan.Id, [..parameters]);
             var (left, _) = Play.Render(organ, 60_000, [TimedEvent.On(0, 60)]);
             var cents = Cents(PeakFrequency(left, Rate, 12_000), NoteFrequency(60 + semitones));
             Assert.True(Math.Abs(cents) < 2, $"drawbar {drawbar}: {cents:0.00} cents");
@@ -336,9 +360,10 @@ public sealed class T2InstrumentTests : IDisposable {
 
     [Fact]
     public void Organ_vibrato_moves_the_pitch() {
-        (int, float)[] plain = [(O.Drawbar(1), 0), (O.Drawbar(2), 0), (O.Rotary, 0), (O.Percussion, 0), (O.KeyClick, 0)];
-        using var still = Create(DrawbarOrgan.Id, [.. plain, (O.VibratoChorus, 0)]);
-        using var vibrato = Create(DrawbarOrgan.Id, [.. plain, (O.VibratoChorus, 3)]);
+        (int, float)[] plain =
+            [(O.Drawbar(1), 0), (O.Drawbar(2), 0), (O.Rotary, 0), (O.Percussion, 0), (O.KeyClick, 0)];
+        using var still = Create(DrawbarOrgan.Id, [..plain, (O.VibratoChorus, 0)]);
+        using var vibrato = Create(DrawbarOrgan.Id, [..plain, (O.VibratoChorus, 3)]);
         var (a, _) = Play.Render(still, 48_000, [TimedEvent.On(0, 69)]);
         var (b, _) = Play.Render(vibrato, 48_000, [TimedEvent.On(0, 69)]);
         // Over 20 ms windows, the plain organ holds its frequency and the vibrato swings it.
@@ -365,8 +390,14 @@ public sealed class T2InstrumentTests : IDisposable {
             return LevelDb(left, 4_000, 440) - LevelDb(left, 4_000, 220);
         }
 
-        Assert.True(Brightness(0, 127) > Brightness(0, 30) + 6, $"tines {Brightness(0, 127):0.0} vs {Brightness(0, 30):0.0}");
-        Assert.True(Brightness(1, 127) > Brightness(1, 30) + 6, $"reeds {Brightness(1, 127):0.0} vs {Brightness(1, 30):0.0}");
+        Assert.True(
+            Brightness(0, 127) > Brightness(0, 30) + 6,
+            $"tines {Brightness(0, 127):0.0} vs {Brightness(0, 30):0.0}"
+        );
+        Assert.True(
+            Brightness(1, 127) > Brightness(1, 30) + 6,
+            $"reeds {Brightness(1, 127):0.0} vs {Brightness(1, 30):0.0}"
+        );
         using var tines = Create(ElectricPiano.Id);
         using var reeds = Create(ElectricPiano.Id, (E.Model, 1));
         Assert.True(
@@ -490,7 +521,17 @@ public sealed class T2InstrumentTests : IDisposable {
         var allocated = AllocationProbe.Measure(() => {
                 var quarter = 0.0;
                 for (var block = 0; block < 300; block++) {
-                    var context = new TransportContext(block < 200, block * 64L, quarter, 100 + block, 3, 4, 0, Rate, 64);
+                    var context = new TransportContext(
+                        block < 200,
+                        block * 64L,
+                        quarter,
+                        100 + block,
+                        3,
+                        4,
+                        0,
+                        Rate,
+                        64
+                    );
                     instrument.SetTransport(context);
                     instrument.Process(block % 60 == 0 ? events : [], left, right);
                     quarter += 64 * context.QuartersPerSample;
@@ -535,8 +576,12 @@ public sealed class T2InstrumentTests : IDisposable {
     [Fact]
     public void Quick_sampler_slices_map_to_notes() {
         // Four equal parts at levels 0.1 … 0.4.
-        var steps = Enumerable.Range(0, 48_000).Select(i => 0.1f * (1 + i / 12_000)).ToArray();
-        using var sampler = (QuickSampler)Play.Create(QuickSampler.Id, (Q.Mode, (int)QuickSamplerMode.Slice), (Q.SliceMode, 1));
+        var steps = Enumerable.Range(0, 48_000).Select(static i => 0.1f * (1 + i / 12_000)).ToArray();
+        using var sampler = (QuickSampler)Play.Create(
+            QuickSampler.Id,
+            (Q.Mode, (int)QuickSamplerMode.Slice),
+            (Q.SliceMode, 1)
+        );
         Assert.True(sampler.LoadFile(Wav("steps.wav", [steps])));
         Assert.Equal([0, 12_000, 24_000, 36_000], sampler.Slices);
         for (var k = 0; k < 4; k++) {
@@ -574,7 +619,9 @@ public sealed class T2InstrumentTests : IDisposable {
         sampler.PrepareRecorder();
         Assert.Equal(0, sampler.Frames);
         var silence = new float[64];
-        var take = Enumerable.Range(0, 6_400).Select(i => 0.5f * MathF.Cos(2 * MathF.PI * 330 * i / Rate)).ToArray();
+        var take = Enumerable.Range(0, 6_400)
+            .Select(static i => 0.5f * MathF.Cos(2 * MathF.PI * 330 * i / Rate))
+            .ToArray();
         sampler.Feed(silence, silence);
         Assert.False(sampler.Recording);
         for (var at = 0; at < take.Length; at += 64) {
@@ -615,7 +662,9 @@ public sealed class T2InstrumentTests : IDisposable {
     [Fact]
     public void Every_instrument_has_macro_hints_in_order() {
         foreach (var descriptor in BuiltinInstruments.All) {
-            var macros = descriptor.Parameters.Where(static p => p.Macro is not null).Select(static p => p.Macro!.Value).ToList();
+            var macros = descriptor.Parameters.Where(static p => p.Macro is not null)
+                .Select(static p => p.Macro!.Value)
+                .ToList();
             Assert.True(macros.Count >= 4, descriptor.Id);
             Assert.Equal(macros.Count, macros.Distinct().Count());
         }
