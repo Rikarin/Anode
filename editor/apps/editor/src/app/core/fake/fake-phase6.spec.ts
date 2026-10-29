@@ -542,14 +542,13 @@ describe('FakeAnodeServer, Phase 6', () => {
 });
 
 describe('FakeAnodeServer, T2 plugins', () => {
-  it('loads an impulse response into the convolution reverb (loadInsertFile, as the editor assumes it)', async () => {
+  it('loads an impulse response into the convolution reverb (loadInsertFile)', async () => {
     const { server } = await project();
     await run(server, { type: 'addInsert', pluginId: 'anode.space' });
     const insert = project$(server).master.inserts[0];
-    const load = (path: string) =>
-      ({ type: 'loadInsertFile', insertId: insert?.id ?? '', path }) as unknown as EditCommand;
+    const load = (path: string): EditCommand => ({ type: 'loadInsertFile', insertId: insert?.id ?? '', path });
     await run(server, load('/IRs/Hall.wav'));
-    expect((project$(server).master.inserts[0] as { file?: string }).file).toBe('/IRs/Hall.wav');
+    expect(project$(server).master.inserts[0]?.file).toBe('/IRs/Hall.wav');
     expect(await status(server, load('/IRs/notes.txt'))).toBe(422);
   });
 

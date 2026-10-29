@@ -95,7 +95,6 @@ import {
   deletePatternRegions,
   type FakeKit,
   FakeKits,
-  type InsertFileCommand,
   isPatternRegionId,
   isPhase6Command,
   keepSavedValues,
@@ -3266,13 +3265,10 @@ export class FakeAnodeServer implements AnodeApi {
           return applyMidiEffectCommand(project, command, this.phase6Context());
         }
         return applyMixCommand(project, command, this.mixContext()) ?? project;
+      case 'loadInsertFile':
+        // The convolution reverb's impulse response.
+        return loadInsertFile(project, command, id => this.catalogue.find(p => p.id === id));
       default:
-        if ((command.type as string) === 'loadInsertFile') {
-          // Workstream B's coming command (the convolution reverb's impulse response), as the editor assumes it.
-          return loadInsertFile(project, command as unknown as InsertFileCommand, id =>
-            this.catalogue.find(p => p.id === id)
-          );
-        }
         if (isPhase6Command(command)) {
           // Patterns, the Drum Machine Designer, Smart Controls and Live Loops (Phase 6).
           return applyPhase6Command(project, command, this.phase6Context()) ?? project;

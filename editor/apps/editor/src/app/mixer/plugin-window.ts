@@ -252,9 +252,9 @@ export class PluginWindowView {
     return !!plugin && !plugin.isInstrument && plugin.fileTypes.length > 0;
   });
 
-  /** The file an insert plays (`file`, set by `loadInsertFile`; not in the committed contract yet). */
+  /** The file an insert plays (`file`, set by `loadInsertFile`). */
   protected fileOf(insert: Insert): string | null {
-    return (insert as Insert & { file?: string | null }).file ?? null;
+    return insert.file ?? null;
   }
 
   protected async chooseFile(insert: Insert): Promise<void> {
@@ -264,18 +264,20 @@ export class PluginWindowView {
     }
   }
 
-  /**
-   * Loads a file into an insert ("Import IR…"). The command is workstream B's, still to come: assumed shaped like
-   * `loadInstrumentFile`, for an insert (`loadInsertFile(trackId?, insertId, path)`).
-   */
+  /** Loads a file into an insert ("Import IR…"). */
   protected loadFile(insert: Insert, path: string): void {
     const trimmed = path.trim();
     if (!trimmed) {
       return;
     }
     const trackId = this.window().trackId;
-    const command = { type: 'loadInsertFile', insertId: insert.id, path: trimmed, ...(trackId ? { trackId } : {}) };
-    void this.project.execute([command as unknown as EditCommand], 'Import Impulse Response');
+    const command: EditCommand = {
+      type: 'loadInsertFile',
+      insertId: insert.id,
+      path: trimmed,
+      trackId: trackId ?? null
+    };
+    void this.project.execute([command], 'Import Impulse Response');
   }
 
   protected close(): void {
