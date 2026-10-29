@@ -1,0 +1,2565 @@
+{
+  "about": "Groove template vectors (docs/08-phase-7.md, \"Grooves\"): Anode.Model's Grooves computes these; the server and the editor must reproduce them exactly (velocity scales to 1e-12). Ticks: 960 per quarter note. EXTRACTION (`extract`: onsets in project ticks with strengths 0…1, from startTick, lengthTicks, stepTicks; lengthTicks a positive multiple of stepTicks, N = lengthTicks / stepTicks points): step n's grid tick is g = startTick + n * stepTicks and it holds the onsets with g - step/2 <= tick < g + step/2 (exactly: n = floor((2 * (tick - startTick) + step) / (2 * step)), onsets with n outside 0…N-1 are ignored). Its winner is the strongest; ties go to the nearer the grid, then the earlier. Point n is (winner.tick - startTick, winner.strength / S), S the greatest winner strength; a step without onsets, or every step when S = 0, is (n * stepTicks, 1). From notes (`fromNotes`: notes relative to the region's start startTick): each note is an onset at startTick + note.startTick with strength velocity / 127. From audio the server turns GrooveFromAudio onsets (frames, strengths) into project ticks with the tempo map first. TARGET (`targets`: tick, strength): t <= 0 is step k = 0, else k = floor((2t + step - 1) / (2 * step)) (the nearest multiple of stepTicks; a tie goes to the earlier); n = k mod N, cycle c = floor(k / N); the landing is L = c * lengthTicks + points[n].tick (the template repeats from the project start); the result is max(0, t + round((L - t) * strength)) (rounded half away from zero; never before the project start) and points[n].velocityScale. QUANTIZE (`quantize`: notes relative to regionStartTick): each note's project tick is regionStartTick + startTick; its new startTick is target.tick - regionStartTick (not clamped to the region); with velocity, its velocity v becomes round(v * (1 + strength * (scale - 1))) half away from zero, clamped to 1…127; other fields and the order stay.",
+  "grooves": [
+    {
+      "id": "grv_swing16",
+      "name": "16th swing",
+      "lengthTicks": 3840,
+      "stepTicks": 240,
+      "points": [
+        {
+          "tick": 0,
+          "velocityScale": 1
+        },
+        {
+          "tick": 320,
+          "velocityScale": 0.5
+        },
+        {
+          "tick": 480,
+          "velocityScale": 0.75
+        },
+        {
+          "tick": 800,
+          "velocityScale": 0.5
+        },
+        {
+          "tick": 960,
+          "velocityScale": 1
+        },
+        {
+          "tick": 1280,
+          "velocityScale": 0.5
+        },
+        {
+          "tick": 1440,
+          "velocityScale": 0.75
+        },
+        {
+          "tick": 1760,
+          "velocityScale": 0.5
+        },
+        {
+          "tick": 1920,
+          "velocityScale": 1
+        },
+        {
+          "tick": 2240,
+          "velocityScale": 0.5
+        },
+        {
+          "tick": 2400,
+          "velocityScale": 0.75
+        },
+        {
+          "tick": 2720,
+          "velocityScale": 0.5
+        },
+        {
+          "tick": 2880,
+          "velocityScale": 1
+        },
+        {
+          "tick": 3200,
+          "velocityScale": 0.5
+        },
+        {
+          "tick": 3360,
+          "velocityScale": 0.75
+        },
+        {
+          "tick": 3680,
+          "velocityScale": 0.5
+        }
+      ]
+    },
+    {
+      "id": "grv_drunk8",
+      "name": "Drunk 8ths",
+      "lengthTicks": 7680,
+      "stepTicks": 480,
+      "points": [
+        {
+          "tick": -30,
+          "velocityScale": 0.4
+        },
+        {
+          "tick": 487,
+          "velocityScale": 0.75
+        },
+        {
+          "tick": 943,
+          "velocityScale": 0.45
+        },
+        {
+          "tick": 1460,
+          "velocityScale": 0.8
+        },
+        {
+          "tick": 1916,
+          "velocityScale": 0.5
+        },
+        {
+          "tick": 2372,
+          "velocityScale": 0.8500000000000001
+        },
+        {
+          "tick": 2889,
+          "velocityScale": 0.55
+        },
+        {
+          "tick": 3345,
+          "velocityScale": 0.9
+        },
+        {
+          "tick": 3862,
+          "velocityScale": 0.6000000000000001
+        },
+        {
+          "tick": 4318,
+          "velocityScale": 0.9500000000000001
+        },
+        {
+          "tick": 4774,
+          "velocityScale": 0.65
+        },
+        {
+          "tick": 5291,
+          "velocityScale": 1
+        },
+        {
+          "tick": 5747,
+          "velocityScale": 0.7
+        },
+        {
+          "tick": 6264,
+          "velocityScale": 0.4
+        },
+        {
+          "tick": 6720,
+          "velocityScale": 0.75
+        },
+        {
+          "tick": 7176,
+          "velocityScale": 0.45
+        }
+      ]
+    }
+  ],
+  "extract": [
+    {
+      "name": "swung eighths from bar 3, two onsets in one step, one step empty, one after the end",
+      "onsets": [
+        {
+          "tick": 7680,
+          "strength": 1
+        },
+        {
+          "tick": 8240,
+          "strength": 0.5
+        },
+        {
+          "tick": 8640,
+          "strength": 0.8
+        },
+        {
+          "tick": 9220,
+          "strength": 0.25
+        },
+        {
+          "tick": 9180,
+          "strength": 0.4
+        },
+        {
+          "tick": 9600,
+          "strength": 0.8
+        },
+        {
+          "tick": 10563,
+          "strength": 1
+        },
+        {
+          "tick": 11120,
+          "strength": 0.5
+        },
+        {
+          "tick": 11530,
+          "strength": 1
+        }
+      ],
+      "startTick": 7680,
+      "lengthTicks": 3840,
+      "stepTicks": 480,
+      "expected": {
+        "id": "grv_test",
+        "name": "swung eighths from bar 3, two onsets in one step, one step empty, one after the end",
+        "lengthTicks": 3840,
+        "stepTicks": 480,
+        "points": [
+          {
+            "tick": 0,
+            "velocityScale": 1
+          },
+          {
+            "tick": 560,
+            "velocityScale": 0.5
+          },
+          {
+            "tick": 960,
+            "velocityScale": 0.8
+          },
+          {
+            "tick": 1500,
+            "velocityScale": 0.4
+          },
+          {
+            "tick": 1920,
+            "velocityScale": 0.8
+          },
+          {
+            "tick": 2400,
+            "velocityScale": 1
+          },
+          {
+            "tick": 2883,
+            "velocityScale": 1
+          },
+          {
+            "tick": 3440,
+            "velocityScale": 0.5
+          }
+        ]
+      }
+    },
+    {
+      "name": "window edges: -step/2 belongs to step 0, +step/2 to step 1",
+      "onsets": [
+        {
+          "tick": -120,
+          "strength": 0.5
+        },
+        {
+          "tick": 119,
+          "strength": 0.25
+        },
+        {
+          "tick": 120,
+          "strength": 1
+        },
+        {
+          "tick": 359,
+          "strength": 0.75
+        },
+        {
+          "tick": 360,
+          "strength": 0.9
+        }
+      ],
+      "startTick": 0,
+      "lengthTicks": 480,
+      "stepTicks": 240,
+      "expected": {
+        "id": "grv_test",
+        "name": "window edges: -step/2 belongs to step 0, +step/2 to step 1",
+        "lengthTicks": 480,
+        "stepTicks": 240,
+        "points": [
+          {
+            "tick": -120,
+            "velocityScale": 0.5
+          },
+          {
+            "tick": 120,
+            "velocityScale": 1
+          }
+        ]
+      }
+    },
+    {
+      "name": "ties: equal strengths go to the nearer, then the earlier",
+      "onsets": [
+        {
+          "tick": 30,
+          "strength": 1
+        },
+        {
+          "tick": -20,
+          "strength": 1
+        },
+        {
+          "tick": 260,
+          "strength": 1
+        },
+        {
+          "tick": 220,
+          "strength": 1
+        },
+        {
+          "tick": 500,
+          "strength": 0.5
+        },
+        {
+          "tick": 460,
+          "strength": 0.5
+        }
+      ],
+      "startTick": 0,
+      "lengthTicks": 720,
+      "stepTicks": 240,
+      "expected": {
+        "id": "grv_test",
+        "name": "ties: equal strengths go to the nearer, then the earlier",
+        "lengthTicks": 720,
+        "stepTicks": 240,
+        "points": [
+          {
+            "tick": -20,
+            "velocityScale": 1
+          },
+          {
+            "tick": 220,
+            "velocityScale": 1
+          },
+          {
+            "tick": 460,
+            "velocityScale": 0.5
+          }
+        ]
+      }
+    },
+    {
+      "name": "silence: every strength 0",
+      "onsets": [
+        {
+          "tick": 10,
+          "strength": 0
+        },
+        {
+          "tick": 250,
+          "strength": 0
+        }
+      ],
+      "startTick": 0,
+      "lengthTicks": 480,
+      "stepTicks": 240,
+      "expected": {
+        "id": "grv_test",
+        "name": "silence: every strength 0",
+        "lengthTicks": 480,
+        "stepTicks": 240,
+        "points": [
+          {
+            "tick": 0,
+            "velocityScale": 1
+          },
+          {
+            "tick": 240,
+            "velocityScale": 1
+          }
+        ]
+      }
+    },
+    {
+      "name": "no onsets",
+      "onsets": [],
+      "startTick": 960,
+      "lengthTicks": 960,
+      "stepTicks": 240,
+      "expected": {
+        "id": "grv_test",
+        "name": "no onsets",
+        "lengthTicks": 960,
+        "stepTicks": 240,
+        "points": [
+          {
+            "tick": 0,
+            "velocityScale": 1
+          },
+          {
+            "tick": 240,
+            "velocityScale": 1
+          },
+          {
+            "tick": 480,
+            "velocityScale": 1
+          },
+          {
+            "tick": 720,
+            "velocityScale": 1
+          }
+        ]
+      }
+    },
+    {
+      "name": "two bars of triplet eighths (320) with humanised hits",
+      "onsets": [
+        {
+          "tick": 980,
+          "strength": 0.3
+        },
+        {
+          "tick": 1312,
+          "strength": 0.6
+        },
+        {
+          "tick": 1644,
+          "strength": 0.8999999999999999
+        },
+        {
+          "tick": 1976,
+          "strength": 0.3
+        },
+        {
+          "tick": 2267,
+          "strength": 0.6
+        },
+        {
+          "tick": 2599,
+          "strength": 0.8999999999999999
+        },
+        {
+          "tick": 2931,
+          "strength": 0.3
+        },
+        {
+          "tick": 3222,
+          "strength": 0.6
+        },
+        {
+          "tick": 3554,
+          "strength": 0.8999999999999999
+        },
+        {
+          "tick": 3886,
+          "strength": 0.3
+        },
+        {
+          "tick": 4218,
+          "strength": 0.6
+        },
+        {
+          "tick": 4509,
+          "strength": 0.8999999999999999
+        },
+        {
+          "tick": 4841,
+          "strength": 0.3
+        },
+        {
+          "tick": 5173,
+          "strength": 0.6
+        },
+        {
+          "tick": 5464,
+          "strength": 0.8999999999999999
+        },
+        {
+          "tick": 5796,
+          "strength": 0.3
+        },
+        {
+          "tick": 6128,
+          "strength": 0.6
+        },
+        {
+          "tick": 6460,
+          "strength": 0.8999999999999999
+        },
+        {
+          "tick": 6751,
+          "strength": 0.3
+        },
+        {
+          "tick": 7083,
+          "strength": 0.6
+        },
+        {
+          "tick": 7415,
+          "strength": 0.8999999999999999
+        },
+        {
+          "tick": 7706,
+          "strength": 0.3
+        },
+        {
+          "tick": 8038,
+          "strength": 0.6
+        },
+        {
+          "tick": 8370,
+          "strength": 0.8999999999999999
+        }
+      ],
+      "startTick": 1000,
+      "lengthTicks": 7680,
+      "stepTicks": 320,
+      "expected": {
+        "id": "grv_test",
+        "name": "two bars of triplet eighths (320) with humanised hits",
+        "lengthTicks": 7680,
+        "stepTicks": 320,
+        "points": [
+          {
+            "tick": -20,
+            "velocityScale": 0.33333333333333337
+          },
+          {
+            "tick": 312,
+            "velocityScale": 0.6666666666666667
+          },
+          {
+            "tick": 644,
+            "velocityScale": 1
+          },
+          {
+            "tick": 976,
+            "velocityScale": 0.33333333333333337
+          },
+          {
+            "tick": 1267,
+            "velocityScale": 0.6666666666666667
+          },
+          {
+            "tick": 1599,
+            "velocityScale": 1
+          },
+          {
+            "tick": 1931,
+            "velocityScale": 0.33333333333333337
+          },
+          {
+            "tick": 2222,
+            "velocityScale": 0.6666666666666667
+          },
+          {
+            "tick": 2554,
+            "velocityScale": 1
+          },
+          {
+            "tick": 2886,
+            "velocityScale": 0.33333333333333337
+          },
+          {
+            "tick": 3218,
+            "velocityScale": 0.6666666666666667
+          },
+          {
+            "tick": 3509,
+            "velocityScale": 1
+          },
+          {
+            "tick": 3841,
+            "velocityScale": 0.33333333333333337
+          },
+          {
+            "tick": 4173,
+            "velocityScale": 0.6666666666666667
+          },
+          {
+            "tick": 4464,
+            "velocityScale": 1
+          },
+          {
+            "tick": 4796,
+            "velocityScale": 0.33333333333333337
+          },
+          {
+            "tick": 5128,
+            "velocityScale": 0.6666666666666667
+          },
+          {
+            "tick": 5460,
+            "velocityScale": 1
+          },
+          {
+            "tick": 5751,
+            "velocityScale": 0.33333333333333337
+          },
+          {
+            "tick": 6083,
+            "velocityScale": 0.6666666666666667
+          },
+          {
+            "tick": 6415,
+            "velocityScale": 1
+          },
+          {
+            "tick": 6706,
+            "velocityScale": 0.33333333333333337
+          },
+          {
+            "tick": 7038,
+            "velocityScale": 0.6666666666666667
+          },
+          {
+            "tick": 7370,
+            "velocityScale": 1
+          }
+        ]
+      }
+    }
+  ],
+  "fromNotes": [
+    {
+      "name": "a swung MIDI hi-hat bar at bar 5",
+      "notes": [
+        {
+          "id": 1,
+          "pitch": 60,
+          "velocity": 110,
+          "channel": 1,
+          "startTick": -3,
+          "lengthTicks": 120,
+          "articulationId": 0
+        },
+        {
+          "id": 2,
+          "pitch": 60,
+          "velocity": 70,
+          "channel": 1,
+          "startTick": 580,
+          "lengthTicks": 120,
+          "articulationId": 0
+        },
+        {
+          "id": 3,
+          "pitch": 60,
+          "velocity": 110,
+          "channel": 1,
+          "startTick": 957,
+          "lengthTicks": 120,
+          "articulationId": 0
+        },
+        {
+          "id": 4,
+          "pitch": 60,
+          "velocity": 70,
+          "channel": 1,
+          "startTick": 1540,
+          "lengthTicks": 120,
+          "articulationId": 0
+        },
+        {
+          "id": 5,
+          "pitch": 60,
+          "velocity": 110,
+          "channel": 1,
+          "startTick": 1917,
+          "lengthTicks": 120,
+          "articulationId": 0
+        },
+        {
+          "id": 6,
+          "pitch": 60,
+          "velocity": 70,
+          "channel": 1,
+          "startTick": 2500,
+          "lengthTicks": 120,
+          "articulationId": 0
+        },
+        {
+          "id": 7,
+          "pitch": 60,
+          "velocity": 110,
+          "channel": 1,
+          "startTick": 2877,
+          "lengthTicks": 120,
+          "articulationId": 0
+        },
+        {
+          "id": 8,
+          "pitch": 60,
+          "velocity": 70,
+          "channel": 1,
+          "startTick": 3460,
+          "lengthTicks": 120,
+          "articulationId": 0
+        }
+      ],
+      "startTick": 15360,
+      "lengthTicks": 3840,
+      "stepTicks": 480,
+      "expected": {
+        "id": "grv_test",
+        "name": "a swung MIDI hi-hat bar at bar 5",
+        "lengthTicks": 3840,
+        "stepTicks": 480,
+        "points": [
+          {
+            "tick": -3,
+            "velocityScale": 1
+          },
+          {
+            "tick": 580,
+            "velocityScale": 0.6363636363636364
+          },
+          {
+            "tick": 957,
+            "velocityScale": 1
+          },
+          {
+            "tick": 1540,
+            "velocityScale": 0.6363636363636364
+          },
+          {
+            "tick": 1917,
+            "velocityScale": 1
+          },
+          {
+            "tick": 2500,
+            "velocityScale": 0.6363636363636364
+          },
+          {
+            "tick": 2877,
+            "velocityScale": 1
+          },
+          {
+            "tick": 3460,
+            "velocityScale": 0.6363636363636364
+          }
+        ]
+      }
+    },
+    {
+      "name": "velocity 127 is scale 1; chords keep the loudest",
+      "notes": [
+        {
+          "id": 1,
+          "pitch": 36,
+          "velocity": 127,
+          "channel": 1,
+          "startTick": 0,
+          "lengthTicks": 120,
+          "articulationId": 0
+        },
+        {
+          "id": 2,
+          "pitch": 42,
+          "velocity": 40,
+          "channel": 1,
+          "startTick": 2,
+          "lengthTicks": 120,
+          "articulationId": 0
+        },
+        {
+          "id": 3,
+          "pitch": 38,
+          "velocity": 90,
+          "channel": 1,
+          "startTick": 245,
+          "lengthTicks": 120,
+          "articulationId": 0
+        },
+        {
+          "id": 4,
+          "pitch": 42,
+          "velocity": 91,
+          "channel": 1,
+          "startTick": 250,
+          "lengthTicks": 120,
+          "articulationId": 0
+        },
+        {
+          "id": 5,
+          "pitch": 36,
+          "velocity": 64,
+          "channel": 1,
+          "startTick": 500,
+          "lengthTicks": 120,
+          "articulationId": 0
+        }
+      ],
+      "startTick": 0,
+      "lengthTicks": 960,
+      "stepTicks": 240,
+      "expected": {
+        "id": "grv_test",
+        "name": "velocity 127 is scale 1; chords keep the loudest",
+        "lengthTicks": 960,
+        "stepTicks": 240,
+        "points": [
+          {
+            "tick": 0,
+            "velocityScale": 1
+          },
+          {
+            "tick": 250,
+            "velocityScale": 0.7165354330708661
+          },
+          {
+            "tick": 500,
+            "velocityScale": 0.5039370078740157
+          },
+          {
+            "tick": 720,
+            "velocityScale": 1
+          }
+        ]
+      }
+    }
+  ],
+  "targets": [
+    {
+      "name": "16th swing, tick 0, strength 1",
+      "grooveId": "grv_swing16",
+      "tick": 0,
+      "strength": 1,
+      "expectedTick": 0,
+      "expectedVelocityScale": 1
+    },
+    {
+      "name": "16th swing, tick 1, strength 1",
+      "grooveId": "grv_swing16",
+      "tick": 1,
+      "strength": 1,
+      "expectedTick": 0,
+      "expectedVelocityScale": 1
+    },
+    {
+      "name": "16th swing, tick 119, strength 1",
+      "grooveId": "grv_swing16",
+      "tick": 119,
+      "strength": 1,
+      "expectedTick": 0,
+      "expectedVelocityScale": 1
+    },
+    {
+      "name": "16th swing, tick 120, strength 1",
+      "grooveId": "grv_swing16",
+      "tick": 120,
+      "strength": 1,
+      "expectedTick": 0,
+      "expectedVelocityScale": 1
+    },
+    {
+      "name": "16th swing, tick 121, strength 1",
+      "grooveId": "grv_swing16",
+      "tick": 121,
+      "strength": 1,
+      "expectedTick": 320,
+      "expectedVelocityScale": 0.5
+    },
+    {
+      "name": "16th swing, tick 240, strength 1",
+      "grooveId": "grv_swing16",
+      "tick": 240,
+      "strength": 1,
+      "expectedTick": 320,
+      "expectedVelocityScale": 0.5
+    },
+    {
+      "name": "16th swing, tick 3839, strength 1",
+      "grooveId": "grv_swing16",
+      "tick": 3839,
+      "strength": 1,
+      "expectedTick": 3840,
+      "expectedVelocityScale": 1
+    },
+    {
+      "name": "16th swing, tick 3840, strength 1",
+      "grooveId": "grv_swing16",
+      "tick": 3840,
+      "strength": 1,
+      "expectedTick": 3840,
+      "expectedVelocityScale": 1
+    },
+    {
+      "name": "16th swing, tick 3950, strength 1",
+      "grooveId": "grv_swing16",
+      "tick": 3950,
+      "strength": 1,
+      "expectedTick": 3840,
+      "expectedVelocityScale": 1
+    },
+    {
+      "name": "16th swing, tick 7800, strength 1",
+      "grooveId": "grv_swing16",
+      "tick": 7800,
+      "strength": 1,
+      "expectedTick": 7680,
+      "expectedVelocityScale": 1
+    },
+    {
+      "name": "16th swing, tick 123456, strength 1",
+      "grooveId": "grv_swing16",
+      "tick": 123456,
+      "strength": 1,
+      "expectedTick": 123360,
+      "expectedVelocityScale": 0.75
+    },
+    {
+      "name": "16th swing, tick 250, strength 0",
+      "grooveId": "grv_swing16",
+      "tick": 250,
+      "strength": 0,
+      "expectedTick": 250,
+      "expectedVelocityScale": 0.5
+    },
+    {
+      "name": "drunk 8ths, tick 5000, strength 0",
+      "grooveId": "grv_drunk8",
+      "tick": 5000,
+      "strength": 0,
+      "expectedTick": 5000,
+      "expectedVelocityScale": 0.65
+    },
+    {
+      "name": "16th swing, tick 250, strength 0.25",
+      "grooveId": "grv_swing16",
+      "tick": 250,
+      "strength": 0.25,
+      "expectedTick": 268,
+      "expectedVelocityScale": 0.5
+    },
+    {
+      "name": "drunk 8ths, tick 5000, strength 0.25",
+      "grooveId": "grv_drunk8",
+      "tick": 5000,
+      "strength": 0.25,
+      "expectedTick": 4943,
+      "expectedVelocityScale": 0.65
+    },
+    {
+      "name": "16th swing, tick 250, strength 0.5",
+      "grooveId": "grv_swing16",
+      "tick": 250,
+      "strength": 0.5,
+      "expectedTick": 285,
+      "expectedVelocityScale": 0.5
+    },
+    {
+      "name": "drunk 8ths, tick 5000, strength 0.5",
+      "grooveId": "grv_drunk8",
+      "tick": 5000,
+      "strength": 0.5,
+      "expectedTick": 4887,
+      "expectedVelocityScale": 0.65
+    },
+    {
+      "name": "16th swing, tick 250, strength 0.75",
+      "grooveId": "grv_swing16",
+      "tick": 250,
+      "strength": 0.75,
+      "expectedTick": 303,
+      "expectedVelocityScale": 0.5
+    },
+    {
+      "name": "drunk 8ths, tick 5000, strength 0.75",
+      "grooveId": "grv_drunk8",
+      "tick": 5000,
+      "strength": 0.75,
+      "expectedTick": 4830,
+      "expectedVelocityScale": 0.65
+    },
+    {
+      "name": "16th swing, tick 250, strength 1",
+      "grooveId": "grv_swing16",
+      "tick": 250,
+      "strength": 1,
+      "expectedTick": 320,
+      "expectedVelocityScale": 0.5
+    },
+    {
+      "name": "drunk 8ths, tick 5000, strength 1",
+      "grooveId": "grv_drunk8",
+      "tick": 5000,
+      "strength": 1,
+      "expectedTick": 4774,
+      "expectedVelocityScale": 0.65
+    },
+    {
+      "name": "drunk 8ths, tick 0 (step 0's point is 30 early: clamped to the project start)",
+      "grooveId": "grv_drunk8",
+      "tick": 0,
+      "strength": 1,
+      "expectedTick": 0,
+      "expectedVelocityScale": 0.4
+    },
+    {
+      "name": "drunk 8ths, the second cycle",
+      "grooveId": "grv_drunk8",
+      "tick": 18750,
+      "strength": 1,
+      "expectedTick": 18705,
+      "expectedVelocityScale": 0.9
+    },
+    {
+      "name": "negative tick is step 0",
+      "grooveId": "grv_swing16",
+      "tick": -50,
+      "strength": 1,
+      "expectedTick": 0,
+      "expectedVelocityScale": 1
+    },
+    {
+      "name": "241 half way to 320: 39.5 rounds away from zero to 40",
+      "grooveId": "grv_swing16",
+      "tick": 241,
+      "strength": 0.5,
+      "expectedTick": 281,
+      "expectedVelocityScale": 0.5
+    }
+  ],
+  "quantize": [
+    {
+      "name": "straight 16ths to 16th swing, full strength, no velocity",
+      "groove": {
+        "id": "grv_swing16",
+        "name": "16th swing",
+        "lengthTicks": 3840,
+        "stepTicks": 240,
+        "points": [
+          {
+            "tick": 0,
+            "velocityScale": 1
+          },
+          {
+            "tick": 320,
+            "velocityScale": 0.5
+          },
+          {
+            "tick": 480,
+            "velocityScale": 0.75
+          },
+          {
+            "tick": 800,
+            "velocityScale": 0.5
+          },
+          {
+            "tick": 960,
+            "velocityScale": 1
+          },
+          {
+            "tick": 1280,
+            "velocityScale": 0.5
+          },
+          {
+            "tick": 1440,
+            "velocityScale": 0.75
+          },
+          {
+            "tick": 1760,
+            "velocityScale": 0.5
+          },
+          {
+            "tick": 1920,
+            "velocityScale": 1
+          },
+          {
+            "tick": 2240,
+            "velocityScale": 0.5
+          },
+          {
+            "tick": 2400,
+            "velocityScale": 0.75
+          },
+          {
+            "tick": 2720,
+            "velocityScale": 0.5
+          },
+          {
+            "tick": 2880,
+            "velocityScale": 1
+          },
+          {
+            "tick": 3200,
+            "velocityScale": 0.5
+          },
+          {
+            "tick": 3360,
+            "velocityScale": 0.75
+          },
+          {
+            "tick": 3680,
+            "velocityScale": 0.5
+          }
+        ]
+      },
+      "regionStartTick": 0,
+      "strength": 1,
+      "velocity": false,
+      "notes": [
+        {
+          "id": 1,
+          "pitch": 60,
+          "velocity": 100,
+          "channel": 1,
+          "startTick": 0,
+          "lengthTicks": 120,
+          "articulationId": 0
+        },
+        {
+          "id": 2,
+          "pitch": 61,
+          "velocity": 100,
+          "channel": 1,
+          "startTick": 246,
+          "lengthTicks": 120,
+          "articulationId": 0
+        },
+        {
+          "id": 3,
+          "pitch": 62,
+          "velocity": 100,
+          "channel": 1,
+          "startTick": 480,
+          "lengthTicks": 120,
+          "articulationId": 0
+        },
+        {
+          "id": 4,
+          "pitch": 63,
+          "velocity": 100,
+          "channel": 1,
+          "startTick": 714,
+          "lengthTicks": 120,
+          "articulationId": 0
+        },
+        {
+          "id": 5,
+          "pitch": 64,
+          "velocity": 100,
+          "channel": 1,
+          "startTick": 971,
+          "lengthTicks": 120,
+          "articulationId": 0
+        },
+        {
+          "id": 6,
+          "pitch": 65,
+          "velocity": 100,
+          "channel": 1,
+          "startTick": 1205,
+          "lengthTicks": 120,
+          "articulationId": 0
+        },
+        {
+          "id": 7,
+          "pitch": 66,
+          "velocity": 100,
+          "channel": 1,
+          "startTick": 1439,
+          "lengthTicks": 120,
+          "articulationId": 0
+        },
+        {
+          "id": 8,
+          "pitch": 67,
+          "velocity": 100,
+          "channel": 1,
+          "startTick": 1673,
+          "lengthTicks": 120,
+          "articulationId": 0
+        },
+        {
+          "id": 9,
+          "pitch": 68,
+          "velocity": 100,
+          "channel": 1,
+          "startTick": 1930,
+          "lengthTicks": 120,
+          "articulationId": 0
+        },
+        {
+          "id": 10,
+          "pitch": 69,
+          "velocity": 100,
+          "channel": 1,
+          "startTick": 2164,
+          "lengthTicks": 120,
+          "articulationId": 0
+        },
+        {
+          "id": 11,
+          "pitch": 70,
+          "velocity": 100,
+          "channel": 1,
+          "startTick": 2398,
+          "lengthTicks": 120,
+          "articulationId": 0
+        },
+        {
+          "id": 12,
+          "pitch": 71,
+          "velocity": 100,
+          "channel": 1,
+          "startTick": 2632,
+          "lengthTicks": 120,
+          "articulationId": 0
+        },
+        {
+          "id": 13,
+          "pitch": 72,
+          "velocity": 100,
+          "channel": 1,
+          "startTick": 2889,
+          "lengthTicks": 120,
+          "articulationId": 0
+        },
+        {
+          "id": 14,
+          "pitch": 73,
+          "velocity": 100,
+          "channel": 1,
+          "startTick": 3123,
+          "lengthTicks": 120,
+          "articulationId": 0
+        },
+        {
+          "id": 15,
+          "pitch": 74,
+          "velocity": 100,
+          "channel": 1,
+          "startTick": 3357,
+          "lengthTicks": 120,
+          "articulationId": 0
+        },
+        {
+          "id": 16,
+          "pitch": 75,
+          "velocity": 100,
+          "channel": 1,
+          "startTick": 3591,
+          "lengthTicks": 120,
+          "articulationId": 0
+        }
+      ],
+      "expected": [
+        {
+          "id": 1,
+          "pitch": 60,
+          "velocity": 100,
+          "channel": 1,
+          "startTick": 0,
+          "lengthTicks": 120,
+          "articulationId": 0
+        },
+        {
+          "id": 2,
+          "pitch": 61,
+          "velocity": 100,
+          "channel": 1,
+          "startTick": 320,
+          "lengthTicks": 120,
+          "articulationId": 0
+        },
+        {
+          "id": 3,
+          "pitch": 62,
+          "velocity": 100,
+          "channel": 1,
+          "startTick": 480,
+          "lengthTicks": 120,
+          "articulationId": 0
+        },
+        {
+          "id": 4,
+          "pitch": 63,
+          "velocity": 100,
+          "channel": 1,
+          "startTick": 800,
+          "lengthTicks": 120,
+          "articulationId": 0
+        },
+        {
+          "id": 5,
+          "pitch": 64,
+          "velocity": 100,
+          "channel": 1,
+          "startTick": 960,
+          "lengthTicks": 120,
+          "articulationId": 0
+        },
+        {
+          "id": 6,
+          "pitch": 65,
+          "velocity": 100,
+          "channel": 1,
+          "startTick": 1280,
+          "lengthTicks": 120,
+          "articulationId": 0
+        },
+        {
+          "id": 7,
+          "pitch": 66,
+          "velocity": 100,
+          "channel": 1,
+          "startTick": 1440,
+          "lengthTicks": 120,
+          "articulationId": 0
+        },
+        {
+          "id": 8,
+          "pitch": 67,
+          "velocity": 100,
+          "channel": 1,
+          "startTick": 1760,
+          "lengthTicks": 120,
+          "articulationId": 0
+        },
+        {
+          "id": 9,
+          "pitch": 68,
+          "velocity": 100,
+          "channel": 1,
+          "startTick": 1920,
+          "lengthTicks": 120,
+          "articulationId": 0
+        },
+        {
+          "id": 10,
+          "pitch": 69,
+          "velocity": 100,
+          "channel": 1,
+          "startTick": 2240,
+          "lengthTicks": 120,
+          "articulationId": 0
+        },
+        {
+          "id": 11,
+          "pitch": 70,
+          "velocity": 100,
+          "channel": 1,
+          "startTick": 2400,
+          "lengthTicks": 120,
+          "articulationId": 0
+        },
+        {
+          "id": 12,
+          "pitch": 71,
+          "velocity": 100,
+          "channel": 1,
+          "startTick": 2720,
+          "lengthTicks": 120,
+          "articulationId": 0
+        },
+        {
+          "id": 13,
+          "pitch": 72,
+          "velocity": 100,
+          "channel": 1,
+          "startTick": 2880,
+          "lengthTicks": 120,
+          "articulationId": 0
+        },
+        {
+          "id": 14,
+          "pitch": 73,
+          "velocity": 100,
+          "channel": 1,
+          "startTick": 3200,
+          "lengthTicks": 120,
+          "articulationId": 0
+        },
+        {
+          "id": 15,
+          "pitch": 74,
+          "velocity": 100,
+          "channel": 1,
+          "startTick": 3360,
+          "lengthTicks": 120,
+          "articulationId": 0
+        },
+        {
+          "id": 16,
+          "pitch": 75,
+          "velocity": 100,
+          "channel": 1,
+          "startTick": 3680,
+          "lengthTicks": 120,
+          "articulationId": 0
+        }
+      ]
+    },
+    {
+      "name": "straight 16ths to 16th swing, strength 0.6 with velocity",
+      "groove": {
+        "id": "grv_swing16",
+        "name": "16th swing",
+        "lengthTicks": 3840,
+        "stepTicks": 240,
+        "points": [
+          {
+            "tick": 0,
+            "velocityScale": 1
+          },
+          {
+            "tick": 320,
+            "velocityScale": 0.5
+          },
+          {
+            "tick": 480,
+            "velocityScale": 0.75
+          },
+          {
+            "tick": 800,
+            "velocityScale": 0.5
+          },
+          {
+            "tick": 960,
+            "velocityScale": 1
+          },
+          {
+            "tick": 1280,
+            "velocityScale": 0.5
+          },
+          {
+            "tick": 1440,
+            "velocityScale": 0.75
+          },
+          {
+            "tick": 1760,
+            "velocityScale": 0.5
+          },
+          {
+            "tick": 1920,
+            "velocityScale": 1
+          },
+          {
+            "tick": 2240,
+            "velocityScale": 0.5
+          },
+          {
+            "tick": 2400,
+            "velocityScale": 0.75
+          },
+          {
+            "tick": 2720,
+            "velocityScale": 0.5
+          },
+          {
+            "tick": 2880,
+            "velocityScale": 1
+          },
+          {
+            "tick": 3200,
+            "velocityScale": 0.5
+          },
+          {
+            "tick": 3360,
+            "velocityScale": 0.75
+          },
+          {
+            "tick": 3680,
+            "velocityScale": 0.5
+          }
+        ]
+      },
+      "regionStartTick": 0,
+      "strength": 0.6,
+      "velocity": true,
+      "notes": [
+        {
+          "id": 1,
+          "pitch": 60,
+          "velocity": 100,
+          "channel": 1,
+          "startTick": 0,
+          "lengthTicks": 120,
+          "articulationId": 0
+        },
+        {
+          "id": 2,
+          "pitch": 61,
+          "velocity": 100,
+          "channel": 1,
+          "startTick": 246,
+          "lengthTicks": 120,
+          "articulationId": 0
+        },
+        {
+          "id": 3,
+          "pitch": 62,
+          "velocity": 100,
+          "channel": 1,
+          "startTick": 480,
+          "lengthTicks": 120,
+          "articulationId": 0
+        },
+        {
+          "id": 4,
+          "pitch": 63,
+          "velocity": 100,
+          "channel": 1,
+          "startTick": 714,
+          "lengthTicks": 120,
+          "articulationId": 0
+        },
+        {
+          "id": 5,
+          "pitch": 64,
+          "velocity": 100,
+          "channel": 1,
+          "startTick": 971,
+          "lengthTicks": 120,
+          "articulationId": 0
+        },
+        {
+          "id": 6,
+          "pitch": 65,
+          "velocity": 100,
+          "channel": 1,
+          "startTick": 1205,
+          "lengthTicks": 120,
+          "articulationId": 0
+        },
+        {
+          "id": 7,
+          "pitch": 66,
+          "velocity": 100,
+          "channel": 1,
+          "startTick": 1439,
+          "lengthTicks": 120,
+          "articulationId": 0
+        },
+        {
+          "id": 8,
+          "pitch": 67,
+          "velocity": 100,
+          "channel": 1,
+          "startTick": 1673,
+          "lengthTicks": 120,
+          "articulationId": 0
+        },
+        {
+          "id": 9,
+          "pitch": 68,
+          "velocity": 100,
+          "channel": 1,
+          "startTick": 1930,
+          "lengthTicks": 120,
+          "articulationId": 0
+        },
+        {
+          "id": 10,
+          "pitch": 69,
+          "velocity": 100,
+          "channel": 1,
+          "startTick": 2164,
+          "lengthTicks": 120,
+          "articulationId": 0
+        },
+        {
+          "id": 11,
+          "pitch": 70,
+          "velocity": 100,
+          "channel": 1,
+          "startTick": 2398,
+          "lengthTicks": 120,
+          "articulationId": 0
+        },
+        {
+          "id": 12,
+          "pitch": 71,
+          "velocity": 100,
+          "channel": 1,
+          "startTick": 2632,
+          "lengthTicks": 120,
+          "articulationId": 0
+        },
+        {
+          "id": 13,
+          "pitch": 72,
+          "velocity": 100,
+          "channel": 1,
+          "startTick": 2889,
+          "lengthTicks": 120,
+          "articulationId": 0
+        },
+        {
+          "id": 14,
+          "pitch": 73,
+          "velocity": 100,
+          "channel": 1,
+          "startTick": 3123,
+          "lengthTicks": 120,
+          "articulationId": 0
+        },
+        {
+          "id": 15,
+          "pitch": 74,
+          "velocity": 100,
+          "channel": 1,
+          "startTick": 3357,
+          "lengthTicks": 120,
+          "articulationId": 0
+        },
+        {
+          "id": 16,
+          "pitch": 75,
+          "velocity": 100,
+          "channel": 1,
+          "startTick": 3591,
+          "lengthTicks": 120,
+          "articulationId": 0
+        }
+      ],
+      "expected": [
+        {
+          "id": 1,
+          "pitch": 60,
+          "velocity": 100,
+          "channel": 1,
+          "startTick": 0,
+          "lengthTicks": 120,
+          "articulationId": 0
+        },
+        {
+          "id": 2,
+          "pitch": 61,
+          "velocity": 70,
+          "channel": 1,
+          "startTick": 290,
+          "lengthTicks": 120,
+          "articulationId": 0
+        },
+        {
+          "id": 3,
+          "pitch": 62,
+          "velocity": 85,
+          "channel": 1,
+          "startTick": 480,
+          "lengthTicks": 120,
+          "articulationId": 0
+        },
+        {
+          "id": 4,
+          "pitch": 63,
+          "velocity": 70,
+          "channel": 1,
+          "startTick": 766,
+          "lengthTicks": 120,
+          "articulationId": 0
+        },
+        {
+          "id": 5,
+          "pitch": 64,
+          "velocity": 100,
+          "channel": 1,
+          "startTick": 964,
+          "lengthTicks": 120,
+          "articulationId": 0
+        },
+        {
+          "id": 6,
+          "pitch": 65,
+          "velocity": 70,
+          "channel": 1,
+          "startTick": 1250,
+          "lengthTicks": 120,
+          "articulationId": 0
+        },
+        {
+          "id": 7,
+          "pitch": 66,
+          "velocity": 85,
+          "channel": 1,
+          "startTick": 1440,
+          "lengthTicks": 120,
+          "articulationId": 0
+        },
+        {
+          "id": 8,
+          "pitch": 67,
+          "velocity": 70,
+          "channel": 1,
+          "startTick": 1725,
+          "lengthTicks": 120,
+          "articulationId": 0
+        },
+        {
+          "id": 9,
+          "pitch": 68,
+          "velocity": 100,
+          "channel": 1,
+          "startTick": 1924,
+          "lengthTicks": 120,
+          "articulationId": 0
+        },
+        {
+          "id": 10,
+          "pitch": 69,
+          "velocity": 70,
+          "channel": 1,
+          "startTick": 2210,
+          "lengthTicks": 120,
+          "articulationId": 0
+        },
+        {
+          "id": 11,
+          "pitch": 70,
+          "velocity": 85,
+          "channel": 1,
+          "startTick": 2399,
+          "lengthTicks": 120,
+          "articulationId": 0
+        },
+        {
+          "id": 12,
+          "pitch": 71,
+          "velocity": 70,
+          "channel": 1,
+          "startTick": 2685,
+          "lengthTicks": 120,
+          "articulationId": 0
+        },
+        {
+          "id": 13,
+          "pitch": 72,
+          "velocity": 100,
+          "channel": 1,
+          "startTick": 2884,
+          "lengthTicks": 120,
+          "articulationId": 0
+        },
+        {
+          "id": 14,
+          "pitch": 73,
+          "velocity": 70,
+          "channel": 1,
+          "startTick": 3169,
+          "lengthTicks": 120,
+          "articulationId": 0
+        },
+        {
+          "id": 15,
+          "pitch": 74,
+          "velocity": 85,
+          "channel": 1,
+          "startTick": 3359,
+          "lengthTicks": 120,
+          "articulationId": 0
+        },
+        {
+          "id": 16,
+          "pitch": 75,
+          "velocity": 70,
+          "channel": 1,
+          "startTick": 3644,
+          "lengthTicks": 120,
+          "articulationId": 0
+        }
+      ]
+    },
+    {
+      "name": "a region at bar 2 to drunk 8ths, full strength with velocity",
+      "groove": {
+        "id": "grv_drunk8",
+        "name": "Drunk 8ths",
+        "lengthTicks": 7680,
+        "stepTicks": 480,
+        "points": [
+          {
+            "tick": -30,
+            "velocityScale": 0.4
+          },
+          {
+            "tick": 487,
+            "velocityScale": 0.75
+          },
+          {
+            "tick": 943,
+            "velocityScale": 0.45
+          },
+          {
+            "tick": 1460,
+            "velocityScale": 0.8
+          },
+          {
+            "tick": 1916,
+            "velocityScale": 0.5
+          },
+          {
+            "tick": 2372,
+            "velocityScale": 0.8500000000000001
+          },
+          {
+            "tick": 2889,
+            "velocityScale": 0.55
+          },
+          {
+            "tick": 3345,
+            "velocityScale": 0.9
+          },
+          {
+            "tick": 3862,
+            "velocityScale": 0.6000000000000001
+          },
+          {
+            "tick": 4318,
+            "velocityScale": 0.9500000000000001
+          },
+          {
+            "tick": 4774,
+            "velocityScale": 0.65
+          },
+          {
+            "tick": 5291,
+            "velocityScale": 1
+          },
+          {
+            "tick": 5747,
+            "velocityScale": 0.7
+          },
+          {
+            "tick": 6264,
+            "velocityScale": 0.4
+          },
+          {
+            "tick": 6720,
+            "velocityScale": 0.75
+          },
+          {
+            "tick": 7176,
+            "velocityScale": 0.45
+          }
+        ]
+      },
+      "regionStartTick": 3840,
+      "strength": 1,
+      "velocity": true,
+      "notes": [
+        {
+          "id": 1,
+          "pitch": 60,
+          "velocity": 100,
+          "channel": 1,
+          "startTick": 0,
+          "lengthTicks": 120,
+          "articulationId": 0
+        },
+        {
+          "id": 2,
+          "pitch": 61,
+          "velocity": 100,
+          "channel": 1,
+          "startTick": 246,
+          "lengthTicks": 120,
+          "articulationId": 0
+        },
+        {
+          "id": 3,
+          "pitch": 62,
+          "velocity": 100,
+          "channel": 1,
+          "startTick": 480,
+          "lengthTicks": 120,
+          "articulationId": 0
+        },
+        {
+          "id": 4,
+          "pitch": 63,
+          "velocity": 100,
+          "channel": 1,
+          "startTick": 714,
+          "lengthTicks": 120,
+          "articulationId": 0
+        },
+        {
+          "id": 5,
+          "pitch": 64,
+          "velocity": 100,
+          "channel": 1,
+          "startTick": 971,
+          "lengthTicks": 120,
+          "articulationId": 0
+        },
+        {
+          "id": 6,
+          "pitch": 65,
+          "velocity": 100,
+          "channel": 1,
+          "startTick": 1205,
+          "lengthTicks": 120,
+          "articulationId": 0
+        },
+        {
+          "id": 7,
+          "pitch": 66,
+          "velocity": 100,
+          "channel": 1,
+          "startTick": 1439,
+          "lengthTicks": 120,
+          "articulationId": 0
+        },
+        {
+          "id": 8,
+          "pitch": 67,
+          "velocity": 100,
+          "channel": 1,
+          "startTick": 1673,
+          "lengthTicks": 120,
+          "articulationId": 0
+        },
+        {
+          "id": 9,
+          "pitch": 68,
+          "velocity": 100,
+          "channel": 1,
+          "startTick": 1930,
+          "lengthTicks": 120,
+          "articulationId": 0
+        },
+        {
+          "id": 10,
+          "pitch": 69,
+          "velocity": 100,
+          "channel": 1,
+          "startTick": 2164,
+          "lengthTicks": 120,
+          "articulationId": 0
+        },
+        {
+          "id": 11,
+          "pitch": 70,
+          "velocity": 100,
+          "channel": 1,
+          "startTick": 2398,
+          "lengthTicks": 120,
+          "articulationId": 0
+        },
+        {
+          "id": 12,
+          "pitch": 71,
+          "velocity": 100,
+          "channel": 1,
+          "startTick": 2632,
+          "lengthTicks": 120,
+          "articulationId": 0
+        },
+        {
+          "id": 13,
+          "pitch": 72,
+          "velocity": 100,
+          "channel": 1,
+          "startTick": 2889,
+          "lengthTicks": 120,
+          "articulationId": 0
+        },
+        {
+          "id": 14,
+          "pitch": 73,
+          "velocity": 100,
+          "channel": 1,
+          "startTick": 3123,
+          "lengthTicks": 120,
+          "articulationId": 0
+        },
+        {
+          "id": 15,
+          "pitch": 74,
+          "velocity": 100,
+          "channel": 1,
+          "startTick": 3357,
+          "lengthTicks": 120,
+          "articulationId": 0
+        },
+        {
+          "id": 16,
+          "pitch": 75,
+          "velocity": 100,
+          "channel": 1,
+          "startTick": 3591,
+          "lengthTicks": 120,
+          "articulationId": 0
+        }
+      ],
+      "expected": [
+        {
+          "id": 1,
+          "pitch": 60,
+          "velocity": 60,
+          "channel": 1,
+          "startTick": 22,
+          "lengthTicks": 120,
+          "articulationId": 0
+        },
+        {
+          "id": 2,
+          "pitch": 61,
+          "velocity": 95,
+          "channel": 1,
+          "startTick": 478,
+          "lengthTicks": 120,
+          "articulationId": 0
+        },
+        {
+          "id": 3,
+          "pitch": 62,
+          "velocity": 95,
+          "channel": 1,
+          "startTick": 478,
+          "lengthTicks": 120,
+          "articulationId": 0
+        },
+        {
+          "id": 4,
+          "pitch": 63,
+          "velocity": 95,
+          "channel": 1,
+          "startTick": 478,
+          "lengthTicks": 120,
+          "articulationId": 0
+        },
+        {
+          "id": 5,
+          "pitch": 64,
+          "velocity": 65,
+          "channel": 1,
+          "startTick": 934,
+          "lengthTicks": 120,
+          "articulationId": 0
+        },
+        {
+          "id": 6,
+          "pitch": 65,
+          "velocity": 100,
+          "channel": 1,
+          "startTick": 1451,
+          "lengthTicks": 120,
+          "articulationId": 0
+        },
+        {
+          "id": 7,
+          "pitch": 66,
+          "velocity": 100,
+          "channel": 1,
+          "startTick": 1451,
+          "lengthTicks": 120,
+          "articulationId": 0
+        },
+        {
+          "id": 8,
+          "pitch": 67,
+          "velocity": 100,
+          "channel": 1,
+          "startTick": 1451,
+          "lengthTicks": 120,
+          "articulationId": 0
+        },
+        {
+          "id": 9,
+          "pitch": 68,
+          "velocity": 70,
+          "channel": 1,
+          "startTick": 1907,
+          "lengthTicks": 120,
+          "articulationId": 0
+        },
+        {
+          "id": 10,
+          "pitch": 69,
+          "velocity": 40,
+          "channel": 1,
+          "startTick": 2424,
+          "lengthTicks": 120,
+          "articulationId": 0
+        },
+        {
+          "id": 11,
+          "pitch": 70,
+          "velocity": 40,
+          "channel": 1,
+          "startTick": 2424,
+          "lengthTicks": 120,
+          "articulationId": 0
+        },
+        {
+          "id": 12,
+          "pitch": 71,
+          "velocity": 40,
+          "channel": 1,
+          "startTick": 2424,
+          "lengthTicks": 120,
+          "articulationId": 0
+        },
+        {
+          "id": 13,
+          "pitch": 72,
+          "velocity": 75,
+          "channel": 1,
+          "startTick": 2880,
+          "lengthTicks": 120,
+          "articulationId": 0
+        },
+        {
+          "id": 14,
+          "pitch": 73,
+          "velocity": 45,
+          "channel": 1,
+          "startTick": 3336,
+          "lengthTicks": 120,
+          "articulationId": 0
+        },
+        {
+          "id": 15,
+          "pitch": 74,
+          "velocity": 45,
+          "channel": 1,
+          "startTick": 3336,
+          "lengthTicks": 120,
+          "articulationId": 0
+        },
+        {
+          "id": 16,
+          "pitch": 75,
+          "velocity": 45,
+          "channel": 1,
+          "startTick": 3336,
+          "lengthTicks": 120,
+          "articulationId": 0
+        }
+      ]
+    },
+    {
+      "name": "a region at tick 100 (not on the grid) to drunk 8ths, strength 0.3",
+      "groove": {
+        "id": "grv_drunk8",
+        "name": "Drunk 8ths",
+        "lengthTicks": 7680,
+        "stepTicks": 480,
+        "points": [
+          {
+            "tick": -30,
+            "velocityScale": 0.4
+          },
+          {
+            "tick": 487,
+            "velocityScale": 0.75
+          },
+          {
+            "tick": 943,
+            "velocityScale": 0.45
+          },
+          {
+            "tick": 1460,
+            "velocityScale": 0.8
+          },
+          {
+            "tick": 1916,
+            "velocityScale": 0.5
+          },
+          {
+            "tick": 2372,
+            "velocityScale": 0.8500000000000001
+          },
+          {
+            "tick": 2889,
+            "velocityScale": 0.55
+          },
+          {
+            "tick": 3345,
+            "velocityScale": 0.9
+          },
+          {
+            "tick": 3862,
+            "velocityScale": 0.6000000000000001
+          },
+          {
+            "tick": 4318,
+            "velocityScale": 0.9500000000000001
+          },
+          {
+            "tick": 4774,
+            "velocityScale": 0.65
+          },
+          {
+            "tick": 5291,
+            "velocityScale": 1
+          },
+          {
+            "tick": 5747,
+            "velocityScale": 0.7
+          },
+          {
+            "tick": 6264,
+            "velocityScale": 0.4
+          },
+          {
+            "tick": 6720,
+            "velocityScale": 0.75
+          },
+          {
+            "tick": 7176,
+            "velocityScale": 0.45
+          }
+        ]
+      },
+      "regionStartTick": 100,
+      "strength": 0.3,
+      "velocity": true,
+      "notes": [
+        {
+          "id": 1,
+          "pitch": 60,
+          "velocity": 100,
+          "channel": 1,
+          "startTick": 0,
+          "lengthTicks": 120,
+          "articulationId": 0
+        },
+        {
+          "id": 2,
+          "pitch": 61,
+          "velocity": 100,
+          "channel": 1,
+          "startTick": 246,
+          "lengthTicks": 120,
+          "articulationId": 0
+        },
+        {
+          "id": 3,
+          "pitch": 62,
+          "velocity": 100,
+          "channel": 1,
+          "startTick": 480,
+          "lengthTicks": 120,
+          "articulationId": 0
+        },
+        {
+          "id": 4,
+          "pitch": 63,
+          "velocity": 100,
+          "channel": 1,
+          "startTick": 714,
+          "lengthTicks": 120,
+          "articulationId": 0
+        },
+        {
+          "id": 5,
+          "pitch": 64,
+          "velocity": 100,
+          "channel": 1,
+          "startTick": 971,
+          "lengthTicks": 120,
+          "articulationId": 0
+        },
+        {
+          "id": 6,
+          "pitch": 65,
+          "velocity": 100,
+          "channel": 1,
+          "startTick": 1205,
+          "lengthTicks": 120,
+          "articulationId": 0
+        },
+        {
+          "id": 7,
+          "pitch": 66,
+          "velocity": 100,
+          "channel": 1,
+          "startTick": 1439,
+          "lengthTicks": 120,
+          "articulationId": 0
+        },
+        {
+          "id": 8,
+          "pitch": 67,
+          "velocity": 100,
+          "channel": 1,
+          "startTick": 1673,
+          "lengthTicks": 120,
+          "articulationId": 0
+        },
+        {
+          "id": 9,
+          "pitch": 68,
+          "velocity": 100,
+          "channel": 1,
+          "startTick": 1930,
+          "lengthTicks": 120,
+          "articulationId": 0
+        },
+        {
+          "id": 10,
+          "pitch": 69,
+          "velocity": 100,
+          "channel": 1,
+          "startTick": 2164,
+          "lengthTicks": 120,
+          "articulationId": 0
+        },
+        {
+          "id": 11,
+          "pitch": 70,
+          "velocity": 100,
+          "channel": 1,
+          "startTick": 2398,
+          "lengthTicks": 120,
+          "articulationId": 0
+        },
+        {
+          "id": 12,
+          "pitch": 71,
+          "velocity": 100,
+          "channel": 1,
+          "startTick": 2632,
+          "lengthTicks": 120,
+          "articulationId": 0
+        },
+        {
+          "id": 13,
+          "pitch": 72,
+          "velocity": 100,
+          "channel": 1,
+          "startTick": 2889,
+          "lengthTicks": 120,
+          "articulationId": 0
+        },
+        {
+          "id": 14,
+          "pitch": 73,
+          "velocity": 100,
+          "channel": 1,
+          "startTick": 3123,
+          "lengthTicks": 120,
+          "articulationId": 0
+        },
+        {
+          "id": 15,
+          "pitch": 74,
+          "velocity": 100,
+          "channel": 1,
+          "startTick": 3357,
+          "lengthTicks": 120,
+          "articulationId": 0
+        },
+        {
+          "id": 16,
+          "pitch": 75,
+          "velocity": 100,
+          "channel": 1,
+          "startTick": 3591,
+          "lengthTicks": 120,
+          "articulationId": 0
+        }
+      ],
+      "expected": [
+        {
+          "id": 1,
+          "pitch": 60,
+          "velocity": 82,
+          "channel": 1,
+          "startTick": -39,
+          "lengthTicks": 120,
+          "articulationId": 0
+        },
+        {
+          "id": 2,
+          "pitch": 61,
+          "velocity": 93,
+          "channel": 1,
+          "startTick": 288,
+          "lengthTicks": 120,
+          "articulationId": 0
+        },
+        {
+          "id": 3,
+          "pitch": 62,
+          "velocity": 93,
+          "channel": 1,
+          "startTick": 452,
+          "lengthTicks": 120,
+          "articulationId": 0
+        },
+        {
+          "id": 4,
+          "pitch": 63,
+          "velocity": 84,
+          "channel": 1,
+          "startTick": 753,
+          "lengthTicks": 120,
+          "articulationId": 0
+        },
+        {
+          "id": 5,
+          "pitch": 64,
+          "velocity": 84,
+          "channel": 1,
+          "startTick": 933,
+          "lengthTicks": 120,
+          "articulationId": 0
+        },
+        {
+          "id": 6,
+          "pitch": 65,
+          "velocity": 94,
+          "channel": 1,
+          "startTick": 1252,
+          "lengthTicks": 120,
+          "articulationId": 0
+        },
+        {
+          "id": 7,
+          "pitch": 66,
+          "velocity": 94,
+          "channel": 1,
+          "startTick": 1415,
+          "lengthTicks": 120,
+          "articulationId": 0
+        },
+        {
+          "id": 8,
+          "pitch": 67,
+          "velocity": 85,
+          "channel": 1,
+          "startTick": 1716,
+          "lengthTicks": 120,
+          "articulationId": 0
+        },
+        {
+          "id": 9,
+          "pitch": 68,
+          "velocity": 85,
+          "channel": 1,
+          "startTick": 1896,
+          "lengthTicks": 120,
+          "articulationId": 0
+        },
+        {
+          "id": 10,
+          "pitch": 69,
+          "velocity": 96,
+          "channel": 1,
+          "startTick": 2196,
+          "lengthTicks": 120,
+          "articulationId": 0
+        },
+        {
+          "id": 11,
+          "pitch": 70,
+          "velocity": 96,
+          "channel": 1,
+          "startTick": 2360,
+          "lengthTicks": 120,
+          "articulationId": 0
+        },
+        {
+          "id": 12,
+          "pitch": 71,
+          "velocity": 87,
+          "channel": 1,
+          "startTick": 2679,
+          "lengthTicks": 120,
+          "articulationId": 0
+        },
+        {
+          "id": 13,
+          "pitch": 72,
+          "velocity": 87,
+          "channel": 1,
+          "startTick": 2859,
+          "lengthTicks": 120,
+          "articulationId": 0
+        },
+        {
+          "id": 14,
+          "pitch": 73,
+          "velocity": 97,
+          "channel": 1,
+          "startTick": 3160,
+          "lengthTicks": 120,
+          "articulationId": 0
+        },
+        {
+          "id": 15,
+          "pitch": 74,
+          "velocity": 97,
+          "channel": 1,
+          "startTick": 3323,
+          "lengthTicks": 120,
+          "articulationId": 0
+        },
+        {
+          "id": 16,
+          "pitch": 75,
+          "velocity": 88,
+          "channel": 1,
+          "startTick": 3642,
+          "lengthTicks": 120,
+          "articulationId": 0
+        }
+      ]
+    },
+    {
+      "name": "velocity clamps to 1…127 and the order stays",
+      "groove": {
+        "id": "grv_x",
+        "name": "x",
+        "lengthTicks": 1920,
+        "stepTicks": 960,
+        "points": [
+          {
+            "tick": 0,
+            "velocityScale": 1.5
+          },
+          {
+            "tick": 970,
+            "velocityScale": 0.001
+          }
+        ]
+      },
+      "regionStartTick": 0,
+      "strength": 1,
+      "velocity": true,
+      "notes": [
+        {
+          "id": 5,
+          "pitch": 60,
+          "velocity": 127,
+          "channel": 1,
+          "startTick": 3840,
+          "lengthTicks": 120,
+          "articulationId": 0
+        },
+        {
+          "id": 1,
+          "pitch": 60,
+          "velocity": 1,
+          "channel": 1,
+          "startTick": 960,
+          "lengthTicks": 120,
+          "articulationId": 0
+        },
+        {
+          "id": 9,
+          "pitch": 60,
+          "velocity": 127,
+          "channel": 1,
+          "startTick": 0,
+          "lengthTicks": 120,
+          "articulationId": 0
+        }
+      ],
+      "expected": [
+        {
+          "id": 5,
+          "pitch": 60,
+          "velocity": 127,
+          "channel": 1,
+          "startTick": 3840,
+          "lengthTicks": 120,
+          "articulationId": 0
+        },
+        {
+          "id": 1,
+          "pitch": 60,
+          "velocity": 1,
+          "channel": 1,
+          "startTick": 970,
+          "lengthTicks": 120,
+          "articulationId": 0
+        },
+        {
+          "id": 9,
+          "pitch": 60,
+          "velocity": 127,
+          "channel": 1,
+          "startTick": 0,
+          "lengthTicks": 120,
+          "articulationId": 0
+        }
+      ]
+    }
+  ]
+}
