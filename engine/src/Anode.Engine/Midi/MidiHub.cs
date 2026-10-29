@@ -90,14 +90,12 @@ public sealed class MidiHub : IDisposable {
 
         var track = root.Tracks[index];
         var now = Now();
-        lock (track.Midi.Live.ProducerGate) {
-            foreach (var e in events) {
-                if (e.Status is < 0x80 or >= 0xF0) {
-                    continue;
-                }
-
-                track.Midi.Live.TryEnqueue(new(now, (byte)e.Status, (byte)(e.Data1 & 0x7F), (byte)(e.Data2 & 0x7F)));
+        foreach (var e in events) {
+            if (e.Status is < 0x80 or >= 0xF0) {
+                continue;
             }
+
+            Push(root, track, new(now, (byte)e.Status, (byte)(e.Data1 & 0x7F), (byte)(e.Data2 & 0x7F)));
         }
 
         lock (activityGate) {
@@ -239,15 +237,17 @@ public sealed class MidiHub : IDisposable {
         var live = new LiveMidi(m.TimeNs, m.Status, m.Data1, m.Data2);
         var routed = false;
         foreach (var track in root.Tracks) {
-            if (track.Armed && track.IsMidi && Matches(track.MidiIo, device, m.Status)) {
-                Push(track, live);
+            if (track.Armed
+                && (track.IsMidi || track.NoteRoutes is not null)
+                && Matches(track.MidiIo, device, m.Status)) {
+                Push(root, track, live);
                 Note(track.Id, device, m);
                 routed = true;
             }
         }
 
         if (!routed && ThruTrack is var thruId and >= 0 && root.IndexOf(thruId) is var index and >= 0) {
-            Push(root.Tracks[index], live);
+            Push(root, root.Tracks[index], live);
             Note(thruId, device, m);
             routed = true;
         }
@@ -262,7 +262,40 @@ public sealed class MidiHub : IDisposable {
         || ((io.InputDevice is null || io.InputDevice == device)
             && (io.InputChannel == 0 || io.InputChannel == (status & 0x0F) + 1));
 
-    static void Push(TrackState track, in LiveMidi e) {
+    /// <summary>
+    ///     Queues live MIDI for <paramref name="track" />; a Drum Machine Designer track (Phase 6) routes it to its
+    ///     pads instead: a note message (on, off, poly pressure) to the pad track its note routes to, unchanged (dropped
+    ///     when no route has its note); other channel messages to every pad. Routed messages carry the DMD track as
+    ///     their origin, so recording it captures them as its own.
+    /// </summary>
+    static void Push(ModelRoot root, TrackState track, in LiveMidi e) {
+        if (track.NoteRoutes is not { } routes) {
+            Enqueue(track, e);
+            return;
+        }
+
+        var routed = e with { Origin = track.Id };
+        if ((e.Status & 0xF0) is 0x80 or 0x90 or 0xA0) {
+            if (routes[e.Data1 & 0x7F] is var target and >= 0 && root.IndexOf(target) is var i and >= 0) {
+                Enqueue(root.Tracks[i], routed);
+            }
+
+            return;
+        }
+
+        for (var note = 0; note < routes.Length; note++) {
+            var target = routes[note];
+            if (target < 0 || Array.IndexOf(routes, target) != note) {
+                continue; // each pad once
+            }
+
+            if (root.IndexOf(target) is var i and >= 0) {
+                Enqueue(root.Tracks[i], routed);
+            }
+        }
+    }
+
+    static void Enqueue(TrackState track, in LiveMidi e) {
         lock (track.Midi.Live.ProducerGate) {
             track.Midi.Live.TryEnqueue(e);
         }

@@ -121,8 +121,8 @@ public sealed class HostMidiTests : IAsyncLifetime {
         // Instruments: built-ins first (Anode's, then the test's), then CLAP.
         Assert.Equal(
             [
-                ("anode.synth", "builtin"), ("anode.sampler", "builtin"), (TestInstrument.Id, "builtin"),
-                (MidiFixtures.ClapId, "clap")
+                ..Anode.Dsp.Instruments.BuiltinInstruments.All.Select(static d => (d.Id, "builtin")),
+                (TestInstrument.Id, "builtin"), (MidiFixtures.ClapId, "clap")
             ],
             catalog.Plugins.Where(static p => p.IsInstrument).Select(static p => (p.Id, p.Format))
         );

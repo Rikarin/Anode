@@ -344,4 +344,109 @@ public sealed unsafe class AllocationTests : IDisposable {
             ((Plugins.Clap.ClapInstrument)controller.Engine.Root.Tracks[5].Instrument!.Instrument).AudioThreadLogs
         );
     }
+
+    /// <summary>
+    ///     Phase 6's paths: a ramped tempo map (every block's transport context), instrument tracks with MIDI FX chains
+    ///     (one automated), Live Loops cells (MIDI and audio, from memory) launched scene after scene with every
+    ///     quantise, one-shots ending, stops, a drum machine's live notes routed to its pads, and a stretched preview
+    ///     waiting for its bar, across cycle jumps. Neither the callback nor the disk thread's passes allocate.
+    /// </summary>
+    [Fact]
+    public void Tempo_midi_fx_live_loops_and_synced_preview_allocate_nothing() {
+        var mono = TestAudio.Write24(dir, "mono.wav", 1, 4 * Rate, 1);
+        var preview = TestAudio.Write24(dir, "preview.wav", 2, 2 * Rate, 2);
+        EngineFile[] files = [new(0, mono, 1, Rate, 4 * Rate)];
+        TempoMapPoint[] tempo = [
+            TestAudio.Tempo(0, 0, 120), TestAudio.Tempo(48_000, 2, 120, 4),
+            TestAudio.Tempo(144_000, 2 + 30 * (Math.Exp(4 * 2.0 / 60) - 1), 120 * Math.Exp(4 * 2.0 / 60))
+        ];
+        var models = new List<TrackModel>();
+        var tracks = new List<EngineTrack>();
+        var cells = new List<CellModel>();
+        var lane = new PlaybackEvent {
+            SamplePos = 0,
+            Track = 0,
+            Kind = PlaybackEventKind.Automation,
+            Value = 3,
+            Target = 0
+        };
+        for (var t = 0; t < 8; t++) {
+            var notes = Enumerable.Range(0, 60)
+                .SelectMany(n => MidiFixtures.Notes((n * 3_000L, 1_500, 48 + (n + t) % 24)))
+                .OrderBy(static e => e.SamplePos)
+                .ToArray();
+            models.Add(new(t, t == 0 ? [lane, ..notes] : notes, []));
+            tracks.Add(
+                MidiFixtures.InstrumentTrack(t) with {
+                    LiveLoopsActive = t >= 4,
+                    Strip = TestAudio.Unity with {
+                        MidiEffects = [
+                            TestMidiEffects.Slot(
+                                "t",
+                                TestMidiEffects.Transposer,
+                                new Dictionary<string, double> { ["semitones"] = 2 }
+                            ),
+                            TestMidiEffects.Slot("d", TestMidiEffects.Doubler, bypassed: t == 3),
+                            TestMidiEffects.Slot("p", TestMidiEffects.Probe)
+                        ]
+                    }
+                }
+            );
+            cells.Add(
+                new(2 * t, t, CellMode.Loop, 30_000, MidiFixtures.Notes((0, 2_000, 60), (10_000, 25_000, 64)), [])
+            );
+            cells.Add(new(2 * t + 1, t, CellMode.OneShot, 7_000, MidiFixtures.Notes((0, 9_000, 67)), []));
+        }
+
+        for (var t = 8; t < 10; t++) {
+            models.Add(new(t, [], []));
+            tracks.Add(TestAudio.Track(t) with { LiveLoopsActive = true });
+            cells.Add(new(2 * t, t, CellMode.Loop, 20_000, [], [TestAudio.Region(0, 20_000, 0, t * 1_000L)]));
+            cells.Add(new(2 * t + 1, t, CellMode.Retrigger, 5_000, [], [TestAudio.Region(0, 5_000, 0)]));
+        }
+
+        models.Add(new(20, [], []));
+        tracks.Add(new(20, -1, false, false, false, TestAudio.Unity, NoteRoutes: [new(36, 0), new(38, 1)]));
+        using var segment = TestAudio.Segment(models, 1, tempo: tempo, cells: cells);
+        using var controller = new EngineController(new(Rate, 64), TestMidiEffects.Registry());
+        controller.LoadModel(
+            TestAudio.Load(segment, 1, true, tracks, files, dir) with {
+                AutomationTargets = [new(0, 0, "midiEffect", "t", "semitones")]
+            }
+        );
+        controller.SetPreviewSync(1.5, 3, true);
+        using var driver = new OfflineDriver(controller, 64);
+
+        void Callbacks() {
+            for (var i = 0; i < 100; i++) {
+                driver.Process(false);
+            }
+        }
+
+        driver.Send(new(EngineCommandKind.SetCycle, 30_000, 170_000, true));
+        driver.PlayFrom(20_000);
+        controller.Preview(preview, 0.5f);
+        var callbackBytes = Least(Callbacks);
+        var pumps = 0L;
+        var quantizes = Enum.GetValues<EngineQuantize>();
+        for (var round = 0u; round < 40; round++) {
+            // A scene: every track's loop or one-shot cell, at a quantise, with a stop now and then.
+            var scene = Enumerable.Range(0, 10)
+                .Select(t => new CellLaunch(2 * t + (int)((round + t) % 2), quantizes[(round + t) % quantizes.Length]))
+                .ToArray();
+            CellStop[] stops = round % 5 == 4 ? [new(9, EngineQuantize.Quarter)] : [];
+            controller.LaunchCells(round % 7 == 6 ? [] : scene, stops);
+            controller.LiveMidi(20, [new(0x90, 36, 100), new(0x90, 38, 100), new(0xB0, 1, 3)]);
+            pumps = Math.Max(pumps, Least(driver.Pump));
+            callbackBytes = Math.Max(callbackBytes, Least(Callbacks));
+            controller.LiveMidi(20, [new(0x80, 36, 0), new(0x80, 38, 0)]);
+            callbackBytes = Math.Max(callbackBytes, Least(Callbacks));
+            controller.PumpCellStates();
+        }
+
+        Assert.Equal(0, callbackBytes);
+        Assert.Equal(0, pumps);
+        Assert.Equal(0, controller.Engine.Snapshot.Underruns);
+        Assert.True(controller.Engine.Preview!.Started);
+    }
 }

@@ -40,9 +40,27 @@ internal sealed class EffectParameters {
     /// </summary>
     public void Macro(int index, int order) => list[index] = list[index] with { Macro = order };
 
-    /// <summary>The descriptor of an effect with these parameters.</summary>
-    public EffectDescriptor Describe(string id, string name, string category, bool sidechain = false) =>
-        new(id, name, Vendor, Version, category, list.ToArray(), sidechain);
+    /// <summary>
+    ///     The descriptor of an effect with these parameters; <paramref name="macros" /> get macro hints 0, 1, 2 … in
+    ///     that order (the parameters Smart Controls map first).
+    /// </summary>
+    public EffectDescriptor Describe(string id, string name, string category, params ReadOnlySpan<int> macros) =>
+        Describe(id, name, category, false, macros);
+
+    /// <summary>As the other overload, for an effect that takes a sidechain when <paramref name="sidechain" />.</summary>
+    public EffectDescriptor Describe(
+        string id,
+        string name,
+        string category,
+        bool sidechain,
+        params ReadOnlySpan<int> macros
+    ) {
+        for (var i = 0; i < macros.Length; i++) {
+            Macro(macros[i], i);
+        }
+
+        return new(id, name, Vendor, Version, category, list.ToArray(), sidechain);
+    }
 }
 
 /// <summary>The categories of <see cref="EffectDescriptor.Category" />.</summary>
@@ -56,6 +74,15 @@ public static class EffectCategories {
     public const string Filter = "Filter";
     public const string Utility = "Utility";
     public const string Metering = "Metering";
+
+    /// <summary>Pitch Shifter, Pitch Correction (Phase 6).</summary>
+    public const string Pitch = "Pitch";
+
+    /// <summary>Exciter, SubBass, Enveloper (Phase 6; Logic's "Specialized").</summary>
+    public const string Specialized = "Specialized";
+
+    /// <summary>Phat FX, Step FX, Beat Breaker, Remix FX (Phase 6; Logic's "Multi Effects").</summary>
+    public const string MultiEffects = "Multi Effects";
 
     /// <summary>A MIDI effect's category in the plugin catalogue (Phase 6; its descriptor has none of its own).</summary>
     public const string MidiEffect = "MIDI Effect";

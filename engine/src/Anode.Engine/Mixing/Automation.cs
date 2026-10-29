@@ -11,7 +11,10 @@ public enum AutomationKind : byte {
     Mute,
     Send,
     Insert,
-    Instrument
+    Instrument,
+
+    /// <summary>A MIDI FX slot's parameter (Phase 6): the target's id is the slot's.</summary>
+    MidiEffect
 }
 
 /// <summary>
@@ -140,6 +143,7 @@ public sealed class AutomationLane {
             "send" => AutomationKind.Send,
             "insert" => AutomationKind.Insert,
             "instrument" => AutomationKind.Instrument,
+            "midiEffect" => AutomationKind.MidiEffect,
             _ => AutomationKind.Unknown
         };
 }

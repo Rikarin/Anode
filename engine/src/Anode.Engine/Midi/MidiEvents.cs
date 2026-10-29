@@ -2,9 +2,10 @@ namespace Anode.Engine.Midi;
 
 /// <summary>
 ///     Live MIDI for one track (from a device or the server), stamped with when it arrived on the monotonic clock in
-///     nanoseconds (0: as soon as possible).
+///     nanoseconds (0: as soon as possible). <paramref name="Origin" /> is the Drum Machine Designer track it was
+///     played on when it was routed to this pad track (−1: played on this track).
 /// </summary>
-public readonly record struct LiveMidi(long TimeNs, byte Status, byte Data1, byte Data2);
+public readonly record struct LiveMidi(long TimeNs, byte Status, byte Data1, byte Data2, int Origin = -1);
 
 /// <summary>A message the audio thread sends to an external MIDI track's port, due at <see cref="TimeNs" />.</summary>
 public readonly record struct OutgoingMidi(int TrackId, long TimeNs, byte Status, byte Data1, byte Data2);

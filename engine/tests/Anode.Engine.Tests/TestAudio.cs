@@ -100,15 +100,45 @@ static class TestAudio {
     static long segmentIds;
 
     /// <summary>Writes <paramref name="tracks" /> into a fresh segment (the server's side of a model load).</summary>
-    public static SharedSegment Segment(IReadOnlyList<TrackModel> tracks, long version, long length = 48_000 * 60) =>
+    public static SharedSegment Segment(
+        IReadOnlyList<TrackModel> tracks,
+        long version,
+        long length = 48_000 * 60,
+        IReadOnlyList<TempoMapPoint>? tempo = null,
+        IReadOnlyList<CellModel>? cells = null
+    ) =>
         SegmentWriter.Write(
             tracks,
             version,
             length,
             $"an-t{Environment.ProcessId % 100_000}",
             Interlocked.Increment(ref segmentIds),
-            true
+            true,
+            tempo: tempo,
+            cells: cells
         );
+
+    /// <summary>
+    ///     A tempo point: from <paramref name="sample" /> at quarter <paramref name="quarter" />, <paramref name="bpm" />.
+    /// </summary>
+    public static TempoMapPoint Tempo(
+        long sample,
+        double quarter,
+        double bpm,
+        double slope = 0,
+        double barQuarter = 0,
+        short numerator = 4,
+        short denominator = 4
+    ) =>
+        new() {
+            Sample = sample,
+            Quarter = quarter,
+            Bpm = bpm,
+            Slope = slope,
+            BarQuarter = barQuarter,
+            Numerator = numerator,
+            Denominator = denominator
+        };
 
     public static LoadModelMessage Load(
         SharedSegment segment,

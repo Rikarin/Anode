@@ -1,9 +1,11 @@
 using Anode.Dsp.Flex;
 using Anode.Dsp.Instruments;
+using Anode.Engine.LiveLoops;
 using Anode.Engine.Midi;
 using Anode.Engine.Mixing;
 using Anode.Engine.Recording;
 using Anode.Engine.Streaming;
+using Anode.Engine.Timing;
 using Anode.Ipc;
 using Anode.Ipc.Segments;
 
@@ -25,6 +27,8 @@ public sealed class TrackState : IDisposable {
     TrackFeed? crossfade;
     InstrumentSlot? instrument;
     EngineMidiIo? midiIo;
+    int[]? noteRoutes;
+    bool liveLoopsActive;
 
     public TrackState(
         int id,
@@ -144,11 +148,32 @@ public sealed class TrackState : IDisposable {
         set => Volatile.Write(ref midiIo, value);
     }
 
-    /// <summary>An instrument or external MIDI track: it plays MIDI, and records MIDI rather than audio.</summary>
-    public bool IsMidi => Instrument is not null || MidiIo is not null;
+    /// <summary>
+    ///     An instrument, external MIDI or Drum Machine Designer track: it plays (or routes) MIDI, and records MIDI
+    ///     rather than audio.
+    /// </summary>
+    public bool IsMidi => Instrument is not null || MidiIo is not null || NoteRoutes is not null;
 
     /// <summary>The audio thread's MIDI state, and the queue live MIDI reaches it through.</summary>
     public MidiTrackState Midi { get; }
+
+    /// <summary>The Live Loops launcher's state for this track (audio thread), kept when the track's stream is replaced.</summary>
+    public CellPlayer Player { get; init; } = new();
+
+    /// <summary>
+    ///     A Drum Machine Designer track's note routes (Phase 6): the engine track each live note goes to (−1: none,
+    ///     the note is dropped), 128 entries; null for other tracks. Swapped whole by the control thread.
+    /// </summary>
+    public int[]? NoteRoutes {
+        get => Volatile.Read(ref noteRoutes);
+        set => Volatile.Write(ref noteRoutes, value);
+    }
+
+    /// <summary>The track plays its Live Loops cell, not its Tracks-area regions (Phase 6).</summary>
+    public bool LiveLoopsActive {
+        get => Volatile.Read(ref liveLoopsActive);
+        set => Volatile.Write(ref liveLoopsActive, value);
+    }
 
     /// <summary>Control thread.</summary>
     public void SetIo(int input, bool recordArmed, bool inputMonitoring) {
@@ -165,6 +190,25 @@ public sealed class TrackState : IDisposable {
         InputBus = settings.InputBus;
         FreezeFile = settings.FreezeFile;
         SourceStereo = settings.Stereo;
+        LiveLoopsActive = settings.LiveLoopsActive;
+        NoteRoutes = Routes(settings.NoteRoutes);
+    }
+
+    /// <summary>A DMD track's routes by note (null: none).</summary>
+    static int[]? Routes(IReadOnlyList<EngineNoteRoute>? routes) {
+        if (routes is not { Count: > 0 }) {
+            return null;
+        }
+
+        var byNote = new int[128];
+        byNote.AsSpan().Fill(-1);
+        foreach (var r in routes) {
+            if ((uint)r.Note < 128u) {
+                byNote[r.Note] = r.TrackId;
+            }
+        }
+
+        return byNote;
     }
 
     public void Dispose() {
@@ -200,6 +244,12 @@ public sealed class MidiTrackState {
 
     /// <summary>The engine's stop/locate count the track has acted on.</summary>
     public long Panic { get; set; }
+
+    /// <summary>Whether the held notes came from the track's Live Loops cells (else from its regions).</summary>
+    public bool CellsActive { get; set; }
+
+    /// <summary>The last block ended at a cycle jump: the notes its regions held end on the next block's first frame.</summary>
+    public bool WrapPending { get; set; }
 
     /// <summary>Audio thread: appends an event (dropped when the block is full).</summary>
     public void Add(int frame, byte status, byte data1, byte data2) {
@@ -257,15 +307,33 @@ public sealed class ModelRoot {
     /// <summary>The automation targets and their lanes.</summary>
     public AutomationSet Automation { get; init; } = AutomationSet.Empty;
 
+    /// <summary>
+    ///     The compiled tempo map (format 4; empty: 120 bpm in 4/4), from the last whole model: every block's transport
+    ///     context and the launcher's boundaries come from it.
+    /// </summary>
+    public TempoMap Tempo { get; init; } = new(48_000);
+
+    /// <summary>The segment <see cref="Tempo" /> points into.</summary>
+    public MappedSegment? TempoOwner { get; init; }
+
+    /// <summary>The Live Loops cells (format 4), by cell index.</summary>
+    public CellTable Cells { get; init; } = CellTable.Empty;
+
     /// <summary>The files track <paramref name="index" />'s playlist refers to (a frozen track: its freeze file).</summary>
     public StreamFile?[] FilesFor(int index) =>
         (uint)index < (uint)Freeze.Length && Freeze[index] is { } freeze ? freeze.Table : Files;
 
-    /// <summary>A copy with other tracks (and their views, generations and lanes) or another plan.</summary>
+    /// <summary>
+    ///     A copy with other tracks (and their views, generations and lanes), another plan, or another tempo map and
+    ///     cells.
+    /// </summary>
     public ModelRoot With(
         TrackState[]? tracks = null,
         int[]? generations = null,
-        MixPlan? mix = null
+        MixPlan? mix = null,
+        TempoMap? tempo = null,
+        MappedSegment? tempoOwner = null,
+        CellTable? cells = null
     ) =>
         new(
             Version,
@@ -284,7 +352,10 @@ public sealed class ModelRoot {
             MasterOwner = MasterOwner,
             Freeze = Freeze,
             SourceViews = SourceViews,
-            Automation = Automation
+            Automation = Automation,
+            Tempo = tempo ?? Tempo,
+            TempoOwner = tempo is null ? TempoOwner : tempoOwner,
+            Cells = cells ?? Cells
         };
 
     public ModelRoot(

@@ -51,7 +51,19 @@ public sealed class Compressor : AudioEffect {
     public static readonly int Mix = P.Add("mix", "Mix", 0, 100, 100, "%");
 
     public static EffectDescriptor Info { get; } =
-        P.Describe(Id, "Compressor", EffectCategories.Dynamics, true);
+        P.Describe(
+            Id,
+            "Compressor",
+            EffectCategories.Dynamics,
+            true,
+            Threshold,
+            Ratio,
+            Attack,
+            Release,
+            Makeup,
+            Knee,
+            Mix
+        );
 
     /// <summary>The FET's cubic colour at 20 dB of reduction or more.</summary>
     const float FetColour = 0.1f;

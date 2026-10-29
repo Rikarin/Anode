@@ -1,22 +1,40 @@
 using Anode.Dsp.Instruments;
+using Anode.Dsp.Instruments.Drums;
+using Anode.Dsp.Instruments.Fm;
+using Anode.Dsp.Instruments.Organ;
+using Anode.Dsp.Instruments.Piano;
+using Anode.Dsp.Instruments.Quick;
 using Anode.Dsp.Instruments.Sampler;
 using Anode.Dsp.Instruments.Synth;
+using Anode.Dsp.Instruments.Wavetable;
 using Anode.Dsp.Tests.Support;
 using static Anode.Dsp.Tests.Support.Analysis;
 
 namespace Anode.Dsp.Tests;
 
-/// <summary>What the <see cref="IInstrument" /> contract asks of both built-in instruments.</summary>
+/// <summary>What the <see cref="IInstrument" /> contract asks of every built-in instrument (T1 and T2).</summary>
 public sealed class InstrumentContractTests : IDisposable {
     readonly string folder = Play.TempFolder();
 
     public void Dispose() => Directory.Delete(folder, true);
 
-    public static TheoryData<string> Ids => [AnodeSynth.Id, AnodeSampler.Id];
+    public static TheoryData<string> Ids => [
+        AnodeSynth.Id, AnodeSampler.Id, DrumSynth.Id, FmSynth.Id, DrawbarOrgan.Id, ElectricPiano.Id, WavetableSynth.Id,
+        QuickSampler.Id
+    ];
 
-    /// <summary>A prepared instrument; the sampler with a two-layer SFZ of plucks loaded.</summary>
+    /// <summary>
+    ///     A prepared instrument; the sampler with a two-layer SFZ of plucks loaded, the Quick Sampler with a stereo
+    ///     pluck.
+    /// </summary>
     IInstrument Create(string id) {
         var instrument = Play.Create(id);
+        if (id == QuickSampler.Id) {
+            var wav = Path.Combine(folder, "pluck.wav");
+            TestWav.Write(wav, 44_100, [TestWav.Pluck(261.63, 44_100, 2, 4), TestWav.Pluck(261.63, 44_100, 2, 5)]);
+            Assert.True(instrument.LoadFile(wav));
+        }
+
         if (id == AnodeSampler.Id) {
             TestWav.Write(Path.Combine(folder, "low.wav"), 44_100, [TestWav.Pluck(130.81, 44_100, 1, 1)], rootNote: 48);
             TestWav.Write(
@@ -179,7 +197,9 @@ public sealed class InstrumentContractTests : IDisposable {
         );
         var (plain, plainRight) = Play.Render(early, 8_092, [TimedEvent.On(0, 60), TimedEvent.Off(2_900, 60)], 512);
         Assert.Equal(0, Peak(shifted.AsSpan(0, 100)));
-        Assert.True(Peak(shifted.AsSpan(100, 4)) > 0);
+        Assert.True(
+            Peak(shifted.AsSpan(100, 4)) > 0 || (id == DrawbarOrgan.Id && Peak(shifted.AsSpan(100, 200)) > 0)
+        ); // the rotary delays by 2 ms
         Assert.Equal(-300, NullResidualDb(shifted.AsSpan(100), plain));
         Assert.Equal(-300, NullResidualDb(shiftedRight.AsSpan(100), plainRight));
     }

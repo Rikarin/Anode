@@ -62,7 +62,19 @@ public sealed class Reverb : AudioEffect {
     public static readonly int HighCut = P.Add("highCut", "High Cut", 1_000, 20_000, 20_000, "Hz");
     public static readonly int Mix = P.Add("mix", "Mix", 0, 100, 25, "%");
 
-    public static EffectDescriptor Info { get; } = P.Describe(Id, "Reverb", EffectCategories.Reverb);
+    public static EffectDescriptor Info { get; } = P.Describe(
+        Id,
+        "Reverb",
+        EffectCategories.Reverb,
+        Mix,
+        Decay,
+        Size,
+        Predelay,
+        Damping,
+        Width,
+        HighCut,
+        LowCut
+    );
 
     readonly DelayLine[] lines = new DelayLine[Lines];
     readonly DelayLine[] diffusersLeft = new DelayLine[Diffusers];

@@ -1,4 +1,5 @@
 using Anode.Dsp.Instruments;
+using Anode.Dsp.MidiEffects;
 using Anode.Engine.Midi;
 using Anode.Ipc.Segments;
 
@@ -12,6 +13,9 @@ namespace Anode.Engine;
 // input is captured in project samples. Everything here is audio-thread code: no allocation, no locks.
 public sealed unsafe partial class AudioEngine {
     readonly (byte Status, byte Note)[] releases = new (byte, byte)[16 * 128];
+    readonly MidiEventBuffer midiOutput = new();
+    readonly MidiEvent[] midiStageA = new MidiEvent[MidiEventBuffer.Capacity];
+    readonly MidiEvent[] midiStageB = new MidiEvent[MidiEventBuffer.Capacity];
     long panics;
     long callbackNs;
     long previousCallbackNs;
@@ -82,13 +86,30 @@ public sealed unsafe partial class AudioEngine {
             Release(midi, 0);
         }
 
+        if (midi.WrapPending) {
+            midi.WrapPending = false;
+            Release(midi, 0); // the previous block ended at a cycle jump
+        }
+
+        var cells = track.LiveLoopsActive;
+        if (midi.CellsActive != cells) {
+            midi.CellsActive = cells; // switched between its regions and its cells: what the other held ends
+            Release(midi, 0);
+        }
+
         LiveInput(track, midi, blockOffset, frames, clock, countIn);
-        if (transport.Rolling && !countIn) {
+        if (cells) {
+            CellMidi(midi, track, blockModel.Cells, frames);
+        } else if (transport.Rolling && !countIn) {
             Playback(midi, view, position, frames);
         }
 
         midi.Sort();
         var events = new ReadOnlySpan<MidiEvent>(midi.Events, 0, midi.Count);
+        if (node.Config.MidiEffects.Length > 0) {
+            events = RunMidiEffects(node, midi, frames);
+        }
+
         if (slot is not null) {
             slot.ApplyParameters();
             RenderInstrument(node, slot, events, left, right);
@@ -99,6 +120,78 @@ public sealed unsafe partial class AudioEngine {
 
         if (external) {
             Send(track.Id, io!.OutputChannel, events, blockOffset);
+        }
+    }
+
+    /// <summary>
+    ///     Runs the track's MIDI FX slots in order on the block's events (<paramref name="midi" />, sorted): each slot's
+    ///     queued and automated parameters are set first (automation at the block's start), a bypassed or empty slot
+    ///     passes the events through, and each effect's output is sorted (stably) and kept inside the block before the
+    ///     next. The result replaces the block's events (what the instrument plays, an external track sends). Effects are
+    ///     reset on stop and locate, as instruments are.
+    /// </summary>
+    ReadOnlySpan<MidiEvent> RunMidiEffects(Mixing.MixNode node, MidiTrackState midi, int frames) {
+        var chain = node.Config.MidiEffects;
+        ReadOnlySpan<MidiEvent> input = new(midi.Events, 0, midi.Count);
+        var transportContext = blockTransport;
+        var into = midiStageA;
+        var processed = false;
+        for (var k = 0; k < chain.Length; k++) {
+            var slot = chain[k].Slot;
+            slot.ApplyParameters();
+            if (slot.Effect is not { } effect) {
+                continue;
+            }
+
+            if (slot.Panic != panics) {
+                slot.Panic = panics;
+                effect.Reset();
+            }
+
+            SetAutomatedMidi(node.MidiEffectBindings[k], node.MidiEffectLast[k], effect);
+            if (chain[k].Bypassed) {
+                continue;
+            }
+
+            midiOutput.Clear();
+            effect.Process(transportContext, input, midiOutput);
+            midiOutput.Sort();
+            var produced = midiOutput.Events;
+            for (var i = 0; i < produced.Length; i++) {
+                var e = produced[i];
+                into[i] = e with { Frame = Math.Clamp(e.Frame, 0, frames - 1) };
+            }
+
+            input = new(into, 0, produced.Length);
+            into = ReferenceEquals(into, midiStageA) ? midiStageB : midiStageA;
+            processed = true;
+        }
+
+        if (processed) {
+            input.CopyTo(midi.Events); // the last effect's output becomes the block's events
+            midi.Count = input.Length;
+        }
+
+        return new(midi.Events, 0, midi.Count);
+    }
+
+    /// <summary>Sets a MIDI FX slot's automated parameters to their lanes' values at the block's start, when they changed.</summary>
+    void SetAutomatedMidi(Mixing.ParameterBinding[] bindings, float[] last, IMidiEffect effect) {
+        if (bindings.Length == 0) {
+            return;
+        }
+
+        var automation = blockModel.Automation;
+        for (var b = 0; b < bindings.Length; b++) {
+            if (LaneFor(automation, bindings[b].Target) is not { } lane) {
+                continue;
+            }
+
+            var value = lane.ValueAt(positions[0]);
+            if (value != last[b]) {
+                effect.SetParameter(bindings[b].Parameter, value);
+                last[b] = value;
+            }
         }
     }
 
@@ -120,17 +213,33 @@ public sealed unsafe partial class AudioEngine {
             midi.Live.TryDequeue(out _);
             var frame = Math.Clamp(at - blockOffset, 0, frames - 1);
             midi.Add(frame, e.Status, e.Data1, e.Data2);
-            if (!recording && !flashback) {
-                continue;
+            var (owner, armed) = e.Origin >= 0 ? Origin(e.Origin, countIn) : (track.Id, recording);
+            if (armed || flashback) {
+                Capture(e, owner, armed, flashback, clock + frame - MidiRecordShift);
             }
+        }
+    }
 
-            var played = clock + frame - MidiRecordShift;
-            var sample = PlayedPosition(played);
-            if (recording && (!punch.Active || (sample >= punch.In && sample < punch.Out))) {
-                CapturedMidi.TryEnqueue(new(track.Id, sample, e.Status, e.Data1, e.Data2));
-            } else if (flashback) {
-                CapturedMidi.TryEnqueue(new(track.Id, sample, e.Status, e.Data1, e.Data2, played, true));
-            }
+    /// <summary>
+    ///     A routed message's owner (Phase 6): the Drum Machine Designer track it was played on, whose arm decides
+    ///     whether it is recorded.
+    /// </summary>
+    (int Owner, bool Armed) Origin(int trackId, bool countIn) {
+        var index = blockModel.IndexOf(trackId);
+        return (trackId,
+            transport.State == TransportState.Recording && !countIn && index >= 0 && blockModel.Tracks[index].Armed);
+    }
+
+    /// <summary>
+    ///     Captures live MIDI played at clock <paramref name="played" /> for <paramref name="owner" />: into the take while
+    ///     it records (inside the punch range, with autopunch), else into Flashback Capture's history.
+    /// </summary>
+    void Capture(in LiveMidi e, int owner, bool armed, bool flashback, long played) {
+        var sample = PlayedPosition(played);
+        if (armed && (!punch.Active || (sample >= punch.In && sample < punch.Out))) {
+            CapturedMidi.TryEnqueue(new(owner, sample, e.Status, e.Data1, e.Data2));
+        } else if (flashback) {
+            CapturedMidi.TryEnqueue(new(owner, sample, e.Status, e.Data1, e.Data2, played, true));
         }
     }
 
@@ -157,7 +266,12 @@ public sealed unsafe partial class AudioEngine {
             done += count;
             var next = order.Advance(position, count);
             if (next != position + count) {
-                Release(midi, Math.Min(done, frames - 1)); // the cycle wrapped
+                // The cycle wrapped. A block ends at a jump, so the notes end on the next block's first frame.
+                if (done < frames) {
+                    Release(midi, done);
+                } else {
+                    midi.WrapPending = true;
+                }
             }
 
             position = next;

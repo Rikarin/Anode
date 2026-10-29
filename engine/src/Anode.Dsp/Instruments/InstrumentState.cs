@@ -46,7 +46,21 @@ internal static class InstrumentState {
         string instrumentId,
         out string? file,
         out List<(string Id, float Value)> values
+    ) =>
+        TryRead(state, instrumentId, out file, out values, out _);
+
+    /// <summary>
+    ///     As the overload without <paramref name="end" />, and
+    ///     where the parameters end: an instrument with more state appends it after them.
+    /// </summary>
+    public static bool TryRead(
+        ReadOnlySpan<byte> state,
+        string instrumentId,
+        out string? file,
+        out List<(string Id, float Value)> values,
+        out int end
     ) {
+        end = 0;
         file = null;
         values = [];
         if (state.Length < Magic.Length + 1
@@ -78,10 +92,11 @@ internal static class InstrumentState {
             at += 4;
         }
 
+        end = at;
         return true;
     }
 
-    /// <summary>Applies the values of a state read by <see cref="TryRead" /> to <paramref name="parameters" />.</summary>
+    /// <summary>Applies the values of a state read by <c>TryRead</c> to <paramref name="parameters" />.</summary>
     public static void Apply(List<(string Id, float Value)> values, ParameterBank parameters) {
         foreach (var (id, value) in values) {
             var index = parameters.IndexOf(id);
