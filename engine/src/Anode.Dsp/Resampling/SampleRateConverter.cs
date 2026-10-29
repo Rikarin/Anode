@@ -1,4 +1,4 @@
-namespace Anode.Model.Audio;
+namespace Anode.Dsp.Resampling;
 
 /// <summary>
 ///     A band-limited resampler for whole files: a Kaiser-windowed sinc evaluated at the exact rational position of

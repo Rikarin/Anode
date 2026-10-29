@@ -73,6 +73,9 @@ public sealed class EngineHost : IDisposable {
         Controller.ParameterChanged = changed => Push?.Invoke(changed);
         Controller.PluginProblem = problem => Push?.Invoke(problem);
         Controller.CellState = state => Push?.Invoke(state);
+        Controller.SlotParameters = parameters => Push?.Invoke(parameters);
+        Controller.ScriptLog = log => Push?.Invoke(log);
+        Controller.Midi.StepInput = step => Push?.Invoke(step);
         string? telemetryName = null;
         byte* region;
         if (sharedTelemetry) {
@@ -202,7 +205,8 @@ public sealed class EngineHost : IDisposable {
     ///     Carries out one message from the server; returns the reply, or null when the message has none
     ///     (<c>setStrip</c>, <c>setTrackIo</c>, <c>setCycle</c>, <c>setMetronome</c>, <c>setInstrument</c>,
     ///     <c>setParameter</c>, <c>setMidiIo</c>, <c>setMidiThru</c>, <c>liveMidi</c>, <c>setPunch</c>,
-    ///     <c>previewFile</c>, <c>setPreviewSync</c>, <c>launchCells</c>, <c>stopCells</c> (the launcher's state
+    ///     <c>previewFile</c>, <c>previewRange</c>, <c>setPreviewSync</c>, <c>setScript</c>, <c>setStepInputForward</c>,
+    ///     <c>launchCells</c>, <c>stopCells</c> (the launcher's state
     ///     changes are pushed as <see cref="CellStateMessage" />s), and <c>transport</c> unless a stop ends a recording
     ///     pass, which answers
     ///     <see cref="RecordingFinishedMessage" />). <c>flashbackCapture</c> answers a
@@ -295,7 +299,7 @@ public sealed class EngineHost : IDisposable {
 
     /// <summary>
     ///     The Phase 4 messages: channel structure, insert parameters, send levels, mixer settings, renders and plugin
-    ///     editors. False when <paramref name="message" /> is none of them.
+    ///     editors; then Phase 7's. False when <paramref name="message" /> is none of them.
     /// </summary>
     bool Mixer(IpcMessage message, out IpcMessage? reply) {
         reply = null;
@@ -336,6 +340,31 @@ public sealed class EngineHost : IDisposable {
                     $"Track {editor.TrackId} has no plugin editor for {editor.InsertId ?? "its instrument"}.",
                     "openPluginEditor"
                 );
+                return true;
+            default:
+                return Phase7(message, out reply);
+        }
+    }
+
+    /// <summary>
+    ///     The Phase 7 messages: a script slot's source, MIDI step input forwarding and a file range's preview. False
+    ///     when <paramref name="message" /> is none of them.
+    /// </summary>
+    bool Phase7(IpcMessage message, out IpcMessage? reply) {
+        reply = null;
+        switch (message) {
+            case SetScriptMessage script:
+                reply = Refused(
+                    Controller.SetScript(script.TrackId, script.SlotId, script.Source),
+                    $"Track {script.TrackId} has no script slot '{script.SlotId}'.",
+                    "setScript"
+                );
+                return true;
+            case SetStepInputForwardMessage forward:
+                Controller.SetStepInputForward(forward.On);
+                return true;
+            case PreviewRangeMessage range:
+                Controller.PreviewRange(range.Path, range.StartFrame, range.EndFrame, range.Loop, range.Gain);
                 return true;
             default:
                 return false;
@@ -464,6 +493,12 @@ public sealed class EngineHost : IDisposable {
             StopCellsMessage => "stopCells",
             CellStateMessage => "cellState",
             SetPreviewSyncMessage => "setPreviewSync",
+            SlotParametersMessage => "slotParameters",
+            ScriptLogMessage => "scriptLog",
+            SetScriptMessage => "setScript",
+            SetStepInputForwardMessage => "setStepInputForward",
+            StepInputMidiMessage => "stepInputMidi",
+            PreviewRangeMessage => "previewRange",
             _ => message.GetType().Name
         };
 

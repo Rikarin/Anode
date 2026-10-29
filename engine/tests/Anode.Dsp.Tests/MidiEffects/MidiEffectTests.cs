@@ -1,5 +1,6 @@
 using Anode.Dsp.Instruments;
 using Anode.Dsp.MidiEffects;
+using Anode.Dsp.MidiEffects.Scripter;
 using Anode.Dsp.Tests.Support;
 using Anode.Dsp.Transport;
 
@@ -20,16 +21,19 @@ public sealed class MidiEffectTests {
 
     [Fact]
     public void Descriptors_are_consistent_and_creatable() {
-        Assert.Equal(8, BuiltinMidiEffects.All.Count);
+        Assert.Equal(9, BuiltinMidiEffects.All.Count);
         Assert.Contains(BuiltinMidiEffects.All, static d => d.Id == BuiltinMidiEffects.ArpeggiatorId);
         Assert.Null(BuiltinMidiEffects.Create("nope"));
-        Assert.Equal(8, BuiltinMidiEffects.All.Select(static d => d.Id).Distinct().Count());
+        Assert.Equal(9, BuiltinMidiEffects.All.Select(static d => d.Id).Distinct().Count());
         foreach (var descriptor in BuiltinMidiEffects.All) {
             Assert.StartsWith("anode.", descriptor.Id, StringComparison.Ordinal);
             using var effect = BuiltinMidiEffects.Create(descriptor.Id);
             Assert.NotNull(effect);
             Assert.Same(descriptor, effect.Descriptor);
-            Assert.Contains(descriptor.Parameters, static p => p.Macro is not null);
+            if (descriptor.Id != ScripterEffect.Id) { // its script defines its parameters
+                Assert.Contains(descriptor.Parameters, static p => p.Macro is not null);
+            }
+
             Assert.Equal(
                 descriptor.Parameters.Count,
                 descriptor.Parameters.Select(static p => p.Id).Distinct().Count()

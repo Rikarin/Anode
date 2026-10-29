@@ -17,14 +17,19 @@ static class TestMidiEffects {
     public const string Filter = "test.note-filter";
     public const string Doubler = "test.doubler";
     public const string Probe = "test.midi-probe";
+    public const string Script = "test.script";
 
-    /// <summary>A registry with the test instrument, the test effects, these MIDI effects and the probes.</summary>
-    public static PluginRegistry Registry(List<IMidiEffect>? created = null) {
+    /// <summary>
+    ///     A registry with the test instrument, the test effects, these MIDI effects (the script effect's compiles wait
+    ///     for <paramref name="compileGate" /> when one is given) and the probes.
+    /// </summary>
+    public static PluginRegistry Registry(List<IMidiEffect>? created = null, ScriptGate? compileGate = null) {
         var registry = TestEffects.Registry();
         registry.AddBuiltinMidiEffect(TransposerEffect.Info, () => Track(created, new TransposerEffect()));
         registry.AddBuiltinMidiEffect(FilterEffect.Info, () => Track(created, new FilterEffect()));
         registry.AddBuiltinMidiEffect(DoublerEffect.Info, () => Track(created, new DoublerEffect()));
         registry.AddBuiltinMidiEffect(ProbeMidiEffect.Info, () => Track(created, new ProbeMidiEffect()));
+        registry.AddBuiltinMidiEffect(ScriptEffect.Info, () => Track(created, new ScriptEffect(compileGate)));
         registry.AddBuiltinEffect(ProbeAudioEffect.Info, static () => new ProbeAudioEffect());
         registry.AddBuiltin(ProbeInstrument.Info, static () => new ProbeInstrument());
         return registry;

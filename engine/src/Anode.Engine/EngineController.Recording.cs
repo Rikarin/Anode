@@ -11,6 +11,7 @@ public sealed partial class EngineController {
     string? previewPath;
     float previewGain;
     PreviewSync previewSync = PreviewSync.None;
+    PreviewRange? previewRange;
 
     /// <summary>
     ///     How far ahead of the oldest frame a Flashback Capture starts (at most a quarter of the buffer), so the audio
@@ -168,8 +169,8 @@ public sealed partial class EngineController {
 
         lock (gate) {
             previewSync = new(tempoRatio, Math.Clamp(transposeSemitones, -48, 48), startOnBar);
-            if (previewPath is not null && Engine.Preview is { Ended: false }) {
-                Preview(previewPath, previewGain);
+            if (previewPath is not null && previewRange is null && Engine.Preview is { Ended: false }) {
+                Preview(previewPath, previewGain); // a range preview plays as it is
             }
         }
     }
@@ -179,10 +180,30 @@ public sealed partial class EngineController {
     ///     plays there; null stops it. Throws <see cref="IOException" /> or <see cref="InvalidDataException" /> for a
     ///     file it cannot stream (and leaves the current preview playing).
     /// </summary>
-    public void Preview(string? path, float gain) {
+    public void Preview(string? path, float gain) => StartPreview(path, gain, null);
+
+    /// <summary>
+    ///     Phase 7's range preview (<c>previewRange</c>, the Audio File Editor): plays file frames
+    ///     <paramref name="startFrame" />…<paramref name="endFrame" /> (exclusive, clipped to the file) of
+    ///     <paramref name="path" /> through the preview channel at linear <paramref name="gain" />, as they are (no sync),
+    ///     looping the range sample-exactly when <paramref name="loop" />, until another preview replaces it or
+    ///     <see cref="Preview" /> stops it. Throws <see cref="ArgumentException" /> for an empty or negative range, and as
+    ///     <see cref="Preview" /> for a file it cannot stream.
+    /// </summary>
+    public void PreviewRange(string path, long startFrame, long endFrame, bool loop, float gain) {
+        ArgumentNullException.ThrowIfNull(path);
+        if (startFrame < 0 || endFrame <= startFrame) {
+            throw new ArgumentException($"Frames {startFrame}…{endFrame} are not a range.", nameof(endFrame));
+        }
+
+        StartPreview(path, gain, new(startFrame, endFrame, loop));
+    }
+
+    void StartPreview(string? path, float gain, PreviewRange? range) {
         lock (gate) {
             previewPath = path;
             previewGain = gain;
+            previewRange = range;
             PreviewSource? next = null;
             if (path is not null) {
                 var file = new StreamFile(-1, path);
@@ -196,7 +217,7 @@ public sealed partial class EngineController {
                 }
 
                 try {
-                    next = new(file, gain, Options.SampleRate, previewSync);
+                    next = new(file, gain, Options.SampleRate, range is null ? previewSync : PreviewSync.None, range);
                 } catch (InvalidOperationException) {
                     file.Dispose(); // the Stretch renderer could not be made
                     throw;
