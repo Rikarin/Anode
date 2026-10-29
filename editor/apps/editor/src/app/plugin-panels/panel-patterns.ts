@@ -46,12 +46,14 @@ function holdsValues(parameter: ParameterInfo | undefined, count: number): boole
  * - **FM algorithm** (FM synth): `algorithm` (`algo`, `fm.algorithm`) with at least 8 values; operators
  *   `op1.ratio`, `op1.level` … (also `operator1.ratio`, `op_1_coarse`, `op1.output`), at least 2 operators from 1
  *   with both a ratio and a level; optional `feedback`.
- * - **Delay Designer taps**: `tap1.time` … (`tap_1_delay`), `tap1.level` (`gain`, `volume`), at least 1 tap with both;
+ * - **Delay Designer taps**: workstream D's `tapATime`, `tapALevel`, `tapAPan`, `tapAHighCut` (taps lettered A…Z, A
+ *   = 1), or `tap1.time` … (`tap_1_delay`), `tap1.level` (`gain`, `volume`), at least 1 tap with both;
  *   optional per tap `tapN.pan`, `tapN.cutoff` (`filter`, `lowpass`); optional tap count `taps` (`tapCount`,
  *   `numTaps`).
  * - **Multipressor bands**: `band1.threshold` (`thresh`), `band1.ratio`, `band1.gain` (`makeup`, `output`) for at
  *   least 2 bands from 1; `crossover1` … (`xover1`, `split1`, `crossover.1`) one fewer than the bands; optional
- *   `bandN.bypass` (`bandN.off`, `bandN.mute`).
+ *   `bandN.bypass` (`bandN.off`, `bandN.mute`), or its inverse `bandNOn` (workstream D: `band1Threshold`, `band1On`,
+ *   `cross1`…`cross3`).
  */
 export const PanelPatterns: readonly PanelPattern[] = [
   {
@@ -85,10 +87,10 @@ export const PanelPatterns: readonly PanelPattern[] = [
     kind: 'delayTaps',
     roles: { count: new RegExp(`^(taps|tap${S}count|num${S}taps)$`, 'i') },
     series: {
-      time: new RegExp(`^tap${S}(\\d+)${S}(?:time|delay)$`, 'i'),
-      level: new RegExp(`^tap${S}(\\d+)${S}(?:level|gain|volume)$`, 'i'),
-      pan: new RegExp(`^tap${S}(\\d+)${S}pan$`, 'i'),
-      cutoff: new RegExp(`^tap${S}(\\d+)${S}(?:cutoff|filter|lowpass)$`, 'i')
+      time: new RegExp(`^tap${S}(\\d+|[a-z])${S}(?:time|delay)$`, 'i'),
+      level: new RegExp(`^tap${S}(\\d+|[a-z])${S}(?:level|gain|volume)$`, 'i'),
+      pan: new RegExp(`^tap${S}(\\d+|[a-z])${S}pan$`, 'i'),
+      cutoff: new RegExp(`^tap${S}(\\d+|[a-z])${S}(?:cutoff|filter|lowpass|high${S}cut)$`, 'i')
     },
     accepts: b => Math.min(b.series['time']?.length ?? 0, b.series['level']?.length ?? 0) >= 1
   },
@@ -100,7 +102,8 @@ export const PanelPatterns: readonly PanelPattern[] = [
       ratio: new RegExp(`^band${S}(\\d)${S}ratio$`, 'i'),
       gain: new RegExp(`^band${S}(\\d)${S}(?:gain|makeup|output)$`, 'i'),
       bypass: new RegExp(`^band${S}(\\d)${S}(?:bypass|off|mute)$`, 'i'),
-      crossover: new RegExp(`^(?:crossover|xover|split)${S}(\\d)$`, 'i')
+      enabled: new RegExp(`^band${S}(\\d)${S}(?:on|enabled|active)$`, 'i'),
+      crossover: new RegExp(`^(?:crossover|cross|xover|split)${S}(\\d)$`, 'i')
     },
     accepts: b => {
       const bands = bandCount(b);
@@ -118,6 +121,14 @@ export function bandCount(binding: PanelBinding): number {
   );
 }
 
+/** A series number: "3" → 3, or a tap letter "A" → 1 (Delay Designer's taps are lettered). */
+function seriesNumber(raw: string | undefined): number {
+  if (raw === undefined) {
+    return NaN;
+  }
+  return /^[a-z]$/i.test(raw) ? raw.toUpperCase().charCodeAt(0) - 64 : Number(raw);
+}
+
 /** Binds a plugin's parameters to a pattern's roles (complete or not: see {@link PanelPattern.accepts}). */
 export function bindPattern(pattern: PanelPattern, parameters: readonly ParameterInfo[]): PanelBinding {
   const roles: Record<string, ParameterInfo | undefined> = {};
@@ -128,7 +139,7 @@ export function bindPattern(pattern: PanelPattern, parameters: readonly Paramete
   for (const [role, regex] of Object.entries(pattern.series)) {
     const numbered = new Map<number, ParameterInfo>();
     for (const parameter of parameters) {
-      const n = Number(regex.exec(parameter.id)?.[1]);
+      const n = seriesNumber(regex.exec(parameter.id)?.[1]);
       if (n >= 1 && !numbered.has(n)) {
         numbered.set(n, parameter);
       }

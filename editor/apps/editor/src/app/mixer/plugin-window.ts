@@ -1,11 +1,12 @@
 import { NgComponentOutlet } from '@angular/common';
 import { ChangeDetectionStrategy, Component, DestroyRef, computed, inject, input, signal } from '@angular/core';
-import type { Insert, ParameterInfo, PluginInfo } from '@anode/api-client';
+import type { EditCommand, Insert, ParameterInfo, PluginInfo } from '@anode/api-client';
 import { AnChoice, AnKnob, AnReadingMeter } from '@anode/audio-ui';
 import { provideIcons } from '@ng-icons/core';
 import { matCloseRound, matPowerSettingsNewRound } from '@ng-icons/material-icons/round';
 import { XuiButtonImports } from '@xui/button';
 import { XuiIconImports } from '@xui/icon';
+import { ConnectionService } from '../core/connection';
 import { isChoice, parameterGroups } from '../inspector/parameter-editor';
 import { type PluginPanelHost, pluginPanel } from '../plugin-panels/plugin-panel';
 import { MeterBus } from '../state/meters';
@@ -103,6 +104,30 @@ export function readingKind(plugin: PluginInfo | undefined): {
             [value]="reading()"
           />
         }
+        @if (loadsFile()) {
+          <form
+            class="flex items-center gap-1.5"
+            aria-label="Impulse response"
+            (submit)="$event.preventDefault(); loadFile(i, filePath.value)"
+          >
+            <span class="text-foreground min-w-0 flex-1 truncate text-[11px]" data-testid="plugin-file">
+              {{ fileOf(i) ?? 'No file loaded' }}
+            </span>
+            @if (desktopDialog) {
+              <button xuiButton type="button" size="sm" data-testid="plugin-import-file" (click)="chooseFile(i)">
+                Import IR…
+              </button>
+            }
+            <input
+              #filePath
+              class="bg-surface-inset border-hairline text-foreground h-6 w-32 rounded border px-1.5 text-[11px]"
+              aria-label="File path"
+              data-testid="plugin-file-path"
+              placeholder="/path/to/ir.wav"
+            />
+            <button xuiButton type="submit" size="sm" variant="outline">Load</button>
+          </form>
+        }
         @if (panel(); as p) {
           <ng-container *ngComponentOutlet="p; inputs: { host: host() }" />
         }
@@ -154,6 +179,8 @@ export function readingKind(plugin: PluginInfo | undefined): {
 export class PluginWindowView {
   protected readonly mixer = inject(MixerStore);
   private readonly project = inject(ProjectStore);
+  private readonly dialogs = inject(ConnectionService).desktop?.dialogs;
+  protected readonly desktopDialog = typeof this.dialogs?.instrumentFile === 'function';
   private readonly plugins = inject(PluginsStore);
   private readonly ui = inject(UiStore);
   private readonly meters = inject(MeterBus);
@@ -217,6 +244,38 @@ export class PluginWindowView {
     if (value !== this.value(insert, parameter)) {
       void this.mixer.setParameter(this.window().trackId, insert.id, parameter.id, value);
     }
+  }
+
+  /** An effect that loads a file (the convolution reverb's impulse response). */
+  protected readonly loadsFile = computed(() => {
+    const plugin = this.plugin();
+    return !!plugin && !plugin.isInstrument && plugin.fileTypes.length > 0;
+  });
+
+  /** The file an insert plays (`file`, set by `loadInsertFile`; not in the committed contract yet). */
+  protected fileOf(insert: Insert): string | null {
+    return (insert as Insert & { file?: string | null }).file ?? null;
+  }
+
+  protected async chooseFile(insert: Insert): Promise<void> {
+    const path = await this.dialogs?.instrumentFile?.(this.plugin()?.fileTypes ?? ['.wav']);
+    if (path) {
+      this.loadFile(insert, path);
+    }
+  }
+
+  /**
+   * Loads a file into an insert ("Import IR…"). The command is workstream B's, still to come: assumed shaped like
+   * `loadInstrumentFile`, for an insert (`loadInsertFile(trackId?, insertId, path)`).
+   */
+  protected loadFile(insert: Insert, path: string): void {
+    const trimmed = path.trim();
+    if (!trimmed) {
+      return;
+    }
+    const trackId = this.window().trackId;
+    const command = { type: 'loadInsertFile', insertId: insert.id, path: trimmed, ...(trackId ? { trackId } : {}) };
+    void this.project.execute([command as unknown as EditCommand], 'Import Impulse Response');
   }
 
   protected close(): void {

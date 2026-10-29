@@ -27,10 +27,10 @@ describe('FakeAnodeServer: MIDI and instruments', () => {
       'anode.sampler',
       'anode.drum-synth',
       'anode.quick-sampler',
-      'anode.fm-synth',
-      'anode.drawbar-organ',
+      'anode.fm',
+      'anode.organ',
       'anode.electric-piano',
-      'anode.wavetable-synth',
+      'anode.wavetable',
       'org.anode.test-sine'
     ]);
     expect(plugins[1]?.fileTypes).toEqual(['.sfz', '.wav']);

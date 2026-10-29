@@ -1240,3 +1240,35 @@ export { controlKind };
 
 /** Writes points into a lane (for performance recording: Remix FX moves). */
 export { setLane };
+
+/** `loadInsertFile` as the editor assumes workstream B will shape it: `loadInstrumentFile` for an insert. */
+export interface InsertFileCommand {
+  type: 'loadInsertFile';
+  trackId?: string | null;
+  insertId: string;
+  path: string;
+}
+
+/** Loads a file into an insert whose plugin takes files (the convolution reverb's IR); 422 otherwise. */
+export function loadInsertFile(
+  project: Project,
+  command: InsertFileCommand,
+  plugin: (id: string) => PluginInfo | undefined
+): Project {
+  const strip = command.trackId ? findTrack(project, command.trackId).strip : project.master;
+  const insert = strip.inserts.find(i => i.id === command.insertId) ?? refuse(`No insert ${command.insertId}.`);
+  const types = plugin(insert.pluginId)?.fileTypes ?? [];
+  const path = command.path.trim();
+  if (!types.some(t => path.toLowerCase().endsWith(t.toLowerCase()))) {
+    refuse(
+      types.length ? `${insert.name} loads ${types.join(', ')} files, not ${path}.` : `${insert.name} loads no files.`
+    );
+  }
+  const next: ChannelStrip = {
+    ...strip,
+    inserts: strip.inserts.map(i => (i.id === insert.id ? ({ ...i, file: path } as Insert) : i))
+  };
+  return command.trackId
+    ? withTrack(project, { ...findTrack(project, command.trackId), strip: next })
+    : { ...project, master: next };
+}

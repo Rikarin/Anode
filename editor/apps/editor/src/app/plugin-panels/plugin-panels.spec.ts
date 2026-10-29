@@ -45,34 +45,34 @@ const plugin = (id: string, parameters: ParameterInfo[]): PluginInfo => ({
 
 describe('Custom plugin panels: parameter-id patterns', () => {
   it('matches the fake catalogue’s four plugins, and nothing else', () => {
-    expect(matchPanel(fake('anode.drawbar-organ'))?.kind).toBe('drawbars');
-    expect(matchPanel(fake('anode.fm-synth'))?.kind).toBe('fmAlgorithm');
+    expect(matchPanel(fake('anode.organ'))?.kind).toBe('drawbars');
+    expect(matchPanel(fake('anode.fm'))?.kind).toBe('fmAlgorithm');
     expect(matchPanel(fake('anode.delay-designer'))?.kind).toBe('delayTaps');
     expect(matchPanel(fake('anode.multipressor'))?.kind).toBe('multipressorBands');
-    const panelled = ['anode.drawbar-organ', 'anode.fm-synth', 'anode.delay-designer', 'anode.multipressor'];
+    const panelled = ['anode.organ', 'anode.fm', 'anode.delay-designer', 'anode.multipressor'];
     for (const other of [...FakeT2Instruments, ...FakeT2Effects, ...FakeMidiEffects]) {
       if (!panelled.includes(other.id)) {
         expect(pluginPanel(other)).toBeNull();
       }
     }
     expect(pluginPanel(null)).toBeNull();
-    expect(pluginPanel(fake('anode.drawbar-organ'))).toBe(DrawbarsPanel);
+    expect(pluginPanel(fake('anode.organ'))).toBe(DrawbarsPanel);
   });
 
   it('binds the roles: nine drawbars and the extras; four operators; four taps and a count; four bands, three crossovers', () => {
-    const organ = matchPanel(fake('anode.drawbar-organ'))?.binding;
+    const organ = matchPanel(fake('anode.organ'))?.binding;
     expect(organ?.series['drawbar']?.map(p => p.id)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9].map(n => `drawbar${n}`));
-    expect(organ?.roles['rotarySpeed']?.id).toBe('rotary.speed');
-    expect(organ?.roles['scanner']?.id).toBe('scanner');
-    const fm = matchPanel(fake('anode.fm-synth'))?.binding;
+    expect(organ?.roles['rotarySpeed']?.id).toBe('rotarySpeed');
+    expect(organ?.roles['scanner']?.id).toBe('vibratoChorus');
+    const fm = matchPanel(fake('anode.fm'))?.binding;
     expect(fm?.roles['algorithm']?.id).toBe('algorithm');
-    expect(fm?.series['ratio']?.map(p => p.id)).toEqual(['op1.ratio', 'op2.ratio', 'op3.ratio', 'op4.ratio']);
+    expect(fm?.series['ratio']?.map(p => p.id)).toEqual(['op1Ratio', 'op2Ratio', 'op3Ratio', 'op4Ratio']);
     const delay = matchPanel(fake('anode.delay-designer'))?.binding;
     expect(delay?.roles['count']?.id).toBe('taps');
     expect(delay?.series['pan']).toHaveLength(4);
     const bands = matchPanel(fake('anode.multipressor'))?.binding;
-    expect(bands?.series['crossover']?.map(p => p.id)).toEqual(['crossover1', 'crossover2', 'crossover3']);
-    expect(bands?.series['bypass']).toHaveLength(4);
+    expect(bands?.series['crossover']?.map(p => p.id)).toEqual(['cross1', 'cross2', 'cross3']);
+    expect(bands?.series['enabled']).toHaveLength(4);
   });
 
   it('accepts reasonable alternative ids', () => {
@@ -155,28 +155,28 @@ describe('Custom plugin panels: value plumbing', () => {
   });
 
   it('drawbars: nine sliders by footage, set through the host', async () => {
-    const { element, sets, press } = await render(DrawbarsPanel, fake('anode.drawbar-organ'));
+    const { element, sets, press } = await render(DrawbarsPanel, fake('anode.organ'));
     const bars = element.querySelectorAll('an-drawbar [role="slider"]');
     expect(bars).toHaveLength(9);
     expect(element.querySelector(`#${bars[1]?.getAttribute('aria-labelledby') ?? ''}`)?.textContent).toBe('5⅓′');
     await press(bars[3], 'ArrowUp');
     expect(sets).toEqual([['drawbar4', 1]]);
     expect(bars[3]?.getAttribute('aria-valuenow')).toBe('1');
-    expect(element.querySelector('[data-parameter="rotary.speed"]')).not.toBeNull();
+    expect(element.querySelector('[data-parameter="rotarySpeed"]')).not.toBeNull();
   });
 
   it('FM: picks an algorithm from the radio group, and shows a row per operator', async () => {
-    const { element, sets, press } = await render(FmAlgorithmPanel, fake('anode.fm-synth'));
+    const { element, sets, press } = await render(FmAlgorithmPanel, fake('anode.fm'));
     const radios = element.querySelectorAll<HTMLButtonElement>('[role="radio"]');
     expect(radios).toHaveLength(8);
     expect(radios[0]?.getAttribute('aria-checked')).toBe('true');
     radios[4]?.click();
-    expect(sets).toEqual([['algorithm', 5]]);
+    expect(sets).toEqual([['algorithm', 4]]);
     await press(radios[4], 'ArrowRight');
-    expect(sets.at(-1)).toEqual(['algorithm', 6]);
+    expect(sets.at(-1)).toEqual(['algorithm', 5]);
     expect(element.querySelector('[aria-label="Algorithm 6"]')?.getAttribute('aria-checked')).toBe('true');
     expect(element.querySelectorAll('[role="listitem"]')).toHaveLength(4);
-    expect(element.querySelector('[data-parameter="op3.level"]')).not.toBeNull();
+    expect(element.querySelector('[data-parameter="op3Level"]')).not.toBeNull();
   });
 
   it('Delay Designer: taps as sliders (level ↑, time →), add and remove taps by the count', async () => {
@@ -188,9 +188,9 @@ describe('Custom plugin panels: value plumbing', () => {
     const taps = () => element.querySelectorAll('[data-testid="delay-tap"]');
     expect(taps()).toHaveLength(4);
     await press(taps()[0], 'ArrowUp');
-    expect(sets.at(-1)?.[0]).toBe('tap1.level');
+    expect(sets.at(-1)?.[0]).toBe('tapALevel');
     await press(taps()[1], 'ArrowRight');
-    expect(sets.at(-1)).toEqual(['tap2.time', 0.26]);
+    expect(sets.at(-1)).toEqual(['tapBTime', 0.26]);
     element.querySelector<HTMLButtonElement>('[data-testid="delay-remove-tap"]')?.click();
     expect(values()['taps']).toBe(3);
     await press(null, '');
@@ -209,18 +209,18 @@ describe('Custom plugin panels: value plumbing', () => {
     expect(element.querySelectorAll('[data-testid="multipressor-band"]')).toHaveLength(4);
     const bypass = element.querySelector<HTMLButtonElement>('[aria-label="Bypass band 2"]');
     bypass?.click();
-    expect(sets).toEqual([['band2.bypass', 1]]);
+    expect(sets).toEqual([['band2On', 0]]);
     await press(null, '');
     expect(bypass?.getAttribute('aria-pressed')).toBe('true');
     const crossovers = element.querySelectorAll('[data-testid="crossover"]');
     expect(crossovers).toHaveLength(3);
     await press(crossovers[0], 'ArrowRight');
-    expect(sets.at(-1)?.[0]).toBe('crossover1');
-    expect(values()['crossover1']).toBeGreaterThan(150);
+    expect(sets.at(-1)?.[0]).toBe('cross1');
+    expect(values()['cross1']).toBeGreaterThan(150);
     // Page up many times: it stops below the next crossover.
     for (let i = 0; i < 20; i++) {
       await press(crossovers[0], 'PageUp');
     }
-    expect(values()['crossover1']).toBeLessThan(values()['crossover2'] ?? 0);
+    expect(values()['cross1']).toBeLessThan(values()['cross2'] ?? 0);
   });
 });

@@ -47,11 +47,18 @@ describe('Remix FX', () => {
     // y of pad 1 did not move, so only its x went out; the release follows the hold (coalesced per parameter, in
     // order); every send is on the master (no track).
     const params = sent.flatMap(c => (c.type === 'setInsertParameter' ? [`${c.parameterId}=${c.value}`] : []));
-    expect([...params].sort()).toEqual(['xy1.on=0', 'xy1.on=1', 'xy1.x=0.2', 'xy2.mode=3', 'xy2.x=0.9', 'xy2.y=0.1']);
-    expect(params.indexOf('xy1.on=1')).toBeLessThan(params.indexOf('xy1.on=0'));
+    expect([...params].sort()).toEqual([
+      'xy1Active=0',
+      'xy1Active=1',
+      'xy1X=0.2',
+      'xy2Effect=3',
+      'xy2X=0.9',
+      'xy2Y=0.1'
+    ]);
+    expect(params.indexOf('xy1Active=1')).toBeLessThan(params.indexOf('xy1Active=0'));
     expect(sent.every(c => c.type !== 'setInsertParameter' || !c.trackId)).toBe(true);
     const stored = project.master().inserts.find(i => i.id === fx.id)?.parameters;
-    expect(stored).toMatchObject({ 'xy1.x': 0.2, 'xy1.on': 0, 'xy2.x': 0.9, 'xy2.y': 0.1, 'xy2.mode': 3 });
+    expect(stored).toMatchObject({ xy1X: 0.2, xy1Active: 0, xy2X: 0.9, xy2Y: 0.1, xy2Effect: 3 });
     fixture.detectChanges();
     expect(element.querySelector('[aria-label="Pad 2 effect"]')?.textContent).toContain('Gater');
   });

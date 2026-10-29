@@ -17,12 +17,12 @@ import { ProjectStore } from '../state/project.store';
 export const RemixFxParams = {
   pluginId: 'anode.remix-fx',
   pads: [
-    { x: 'xy1.x', y: 'xy1.y', mode: 'xy1.mode', on: 'xy1.on', effects: ['Filter', 'Wobble', 'Orbit'] },
+    { x: 'xy1X', y: 'xy1Y', mode: 'xy1Effect', on: 'xy1Active', effects: ['Filter', 'Wobble', 'Orbit'] },
     {
-      x: 'xy2.x',
-      y: 'xy2.y',
-      mode: 'xy2.mode',
-      on: 'xy2.on',
+      x: 'xy2X',
+      y: 'xy2Y',
+      mode: 'xy2Effect',
+      on: 'xy2Active',
       effects: ['Repeater', 'Reverse', 'Scratch', 'Gater', 'Downsampler', 'Tape Stop']
     }
   ]

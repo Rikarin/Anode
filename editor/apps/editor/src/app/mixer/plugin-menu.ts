@@ -9,6 +9,9 @@ export const EffectCategories = [
   'Reverb',
   'Modulation',
   'Distortion',
+  'Pitch',
+  'Multi Effects',
+  'Specialized',
   'Utility',
   'Metering'
 ] as const;

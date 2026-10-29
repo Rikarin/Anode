@@ -439,7 +439,7 @@ describe('FakeAnodeServer, Phase 6', () => {
       await server.launchCells({ sceneId: scene });
       time += 4_000;
       server.advance();
-      await run(server, { type: 'setInsertParameter', insertId: remix, parameterId: 'xy1.x', value: 0.2 });
+      await run(server, { type: 'setInsertParameter', insertId: remix, parameterId: 'xy1X', value: 0.2 });
       time += 2_000;
       server.advance();
       await server.recordLiveLoops({ on: false });
@@ -447,7 +447,7 @@ describe('FakeAnodeServer, Phase 6', () => {
       expect(regions).toHaveLength(1);
       expect(regions[0]?.startTick).toBeLessThan(10);
       expect(regions[0]?.lengthTicks).toBeGreaterThan(5_000);
-      const lane = project$(server).automation.find(l => l.target === `insert:${remix}:xy1.x`);
+      const lane = project$(server).automation.find(l => l.target === `insert:${remix}:xy1X`);
       expect(lane?.trackId).toBeNull();
       expect(lane?.points[0]?.value).toBe(0.2);
       expect((await server.history()).undo[0]?.label).toBe('Record Performance');
@@ -538,5 +538,32 @@ describe('FakeAnodeServer, Phase 6', () => {
       expect(loop).toMatchObject({ kind: 'pattern', packId: null, tempo: 120, beats: 4, tags: ['Drums'] });
       expect((await server.queryLoops({ text: 'my beat' })).total).toBe(1);
     });
+  });
+});
+
+describe('FakeAnodeServer, T2 plugins', () => {
+  it('loads an impulse response into the convolution reverb (loadInsertFile, as the editor assumes it)', async () => {
+    const { server } = await project();
+    await run(server, { type: 'addInsert', pluginId: 'anode.space' });
+    const insert = project$(server).master.inserts[0];
+    const load = (path: string) =>
+      ({ type: 'loadInsertFile', insertId: insert?.id ?? '', path }) as unknown as EditCommand;
+    await run(server, load('/IRs/Hall.wav'));
+    expect((project$(server).master.inserts[0] as { file?: string }).file).toBe('/IRs/Hall.wav');
+    expect(await status(server, load('/IRs/notes.txt'))).toBe(422);
+  });
+
+  it('lists workstream D and E plugin ids', async () => {
+    const ids = (await new FakeAnodeServer().plugins()).map(p => p.id);
+    for (const id of [
+      'anode.organ',
+      'anode.fm',
+      'anode.wavetable',
+      'anode.space',
+      'anode.linear-eq',
+      'anode.remix-fx'
+    ]) {
+      expect(ids).toContain(id);
+    }
   });
 });

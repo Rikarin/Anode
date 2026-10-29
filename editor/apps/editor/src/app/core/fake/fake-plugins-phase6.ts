@@ -1,4 +1,5 @@
 import type { ParameterInfo, PluginInfo } from '@anode/api-client';
+import { FakeEffects } from './fake-plugins';
 
 /**
  * The fake engine's Phase 6 plugins (docs/07-phase-6.md): the eight MIDI FX (category `MIDI Effect`), the T2
@@ -121,22 +122,45 @@ const DrumModels = ['Kick', 'Snare', 'Clap', 'Hat', 'Tom', 'Cymbal', 'Percussion
 const QuickModes = ['One Shot', 'Classic', 'Slice', 'Recorder'];
 const Waves = ['Sine', 'Saw', 'Square', 'Triangle'];
 
+/** FM operators as workstream E names them: `op{n}{Ratio,Fine,Level,Attack,Decay,Sustain,Release,Velocity}`. */
 const operators = (count: number) =>
   Array.from({ length: count }, (_, i) => {
     const op = i + 1;
     return [
-      p(`op${op}.ratio`, `Op ${op} Ratio`, 0.5, 16, op === 1 ? 1 : op, ''),
-      p(`op${op}.level`, `Op ${op} Level`, 0, 1, op === 1 ? 1 : 0.5, '', op === 2 ? 3 : null),
-      p(`op${op}.attack`, `Op ${op} Attack`, 0.001, 5, 0.005, 's'),
-      p(`op${op}.decay`, `Op ${op} Decay`, 0.001, 5, 0.4, 's'),
-      p(`op${op}.sustain`, `Op ${op} Sustain`, 0, 1, 0.6),
-      p(`op${op}.release`, `Op ${op} Release`, 0.001, 5, 0.3, 's')
+      p(`op${op}Ratio`, `Op ${op} Ratio`, 0.5, 16, op === 1 ? 1 : op, ''),
+      p(`op${op}Fine`, `Op ${op} Fine`, -100, 100, 0, 'ct'),
+      p(`op${op}Level`, `Op ${op} Level`, 0, 1, op === 1 ? 1 : 0.5, '', op === 2 ? 3 : null),
+      p(`op${op}Attack`, `Op ${op} Attack`, 0.001, 5, 0.005, 's'),
+      p(`op${op}Decay`, `Op ${op} Decay`, 0.001, 5, 0.4, 's'),
+      p(`op${op}Sustain`, `Op ${op} Sustain`, 0, 1, 0.6),
+      p(`op${op}Release`, `Op ${op} Release`, 0.001, 5, 0.3, 's'),
+      p(`op${op}Velocity`, `Op ${op} Velocity`, 0, 1, 0.5)
     ];
   }).flat();
 
+/** The FM algorithms as workstream E's value names show them (carrier 1). */
+const Algorithms = [
+  '1: 4→3→2→1',
+  '2: (4+3)→2→1',
+  '3: (4→3)+2→1',
+  '4: 4→(3+2)→1',
+  '5: (4→3)+(2→1)',
+  '6: 4→(3,2,1)',
+  '7: (4→3)+2+1',
+  '8: 4+3+2+1'
+];
+
+/** Organ drawbars `drawbar1`…`drawbar9`, 16′ … 1′, 0…8 in 8 steps (workstream E's OrganParameters). */
 const drawbars = ['16′', '5⅓′', '8′', '4′', '2⅔′', '2′', '1⅗′', '1⅓′', '1′'].map((foot, i) =>
   n(`drawbar${i + 1}`, `Drawbar ${foot}`, 0, 8, i < 3 ? 8 : 0, '', i < 4 ? i + 1 : null)
 );
+
+const envelopes = [1, 2, 3].flatMap(e => [
+  p(`env${e}Attack`, `Env ${e} Attack`, 0.001, 10, 0.005, 's', e === 1 ? 5 : null),
+  p(`env${e}Decay`, `Env ${e} Decay`, 0.001, 10, 0.3, 's'),
+  p(`env${e}Sustain`, `Env ${e} Sustain`, 0, 1, 0.7),
+  p(`env${e}Release`, `Env ${e} Release`, 0.001, 10, 0.4, 's', e === 1 ? 6 : null)
+]);
 
 export const FakeT2Instruments: readonly PluginInfo[] = [
   plugin('anode.drum-synth', 'Drum Synth', 'Instrument', [
@@ -165,22 +189,22 @@ export const FakeT2Instruments: readonly PluginInfo[] = [
     ],
     { fileTypes: ['.wav'] }
   ),
-  plugin('anode.fm-synth', 'FM Synth', 'Instrument', [
-    n('algorithm', 'Algorithm', 1, 8, 1, '', 1),
+  plugin('anode.fm', 'FM Synth', 'Instrument', [
+    c('algorithm', 'Algorithm', Algorithms, 0, 1),
     p('feedback', 'Feedback', 0, 1, 0, '', 2),
     ...operators(4),
-    p('brightness', 'Brightness', 0, 1, 0.5, '', 4),
     p('volume', 'Volume', -60, 6, -6, 'dB')
   ]),
-  plugin('anode.drawbar-organ', 'Drawbar Organ', 'Instrument', [
+  plugin('anode.organ', 'Drawbar Organ', 'Instrument', [
     ...drawbars,
-    c('percussion', 'Percussion', ['Off', '2nd', '3rd']),
-    p('click', 'Key Click', 0, 1, 0.3),
-    c('scanner', 'Chorus/Vibrato', ['Off', 'V1', 'V2', 'V3', 'C1', 'C2', 'C3']),
-    c('rotary.speed', 'Rotary Speed', ['Brake', 'Slow', 'Fast'], 1, 5),
-    p('rotary.mix', 'Rotary Mix', 0, 1, 0.8),
-    p('drive', 'Drive', 0, 1, 0.2, '', 6),
-    p('volume', 'Volume', -60, 6, -6, 'dB')
+    c('percussion', 'Percussion', ['Off', 'On']),
+    c('percussionHarmonic', 'Percussion Harmonic', ['2nd', '3rd']),
+    p('keyClick', 'Key Click', 0, 1, 0.3),
+    c('vibratoChorus', 'Vibrato/Chorus', ['Off', 'V1', 'V2', 'V3', 'C1', 'C2', 'C3']),
+    c('rotary', 'Rotary', ['Off', 'On'], 1),
+    c('rotarySpeed', 'Rotary Speed', ['Slow', 'Fast'], 0, 5),
+    p('rotaryDrive', 'Rotary Drive', 0, 1, 0.2, '', 6),
+    p('rotaryBalance', 'Rotary Balance', 0, 1, 0.5)
   ]),
   plugin('anode.electric-piano', 'Electric Piano', 'Instrument', [
     c('model', 'Model', ['Tines', 'Reeds']),
@@ -191,49 +215,68 @@ export const FakeT2Instruments: readonly PluginInfo[] = [
     p('tremolo.depth', 'Tremolo Depth', 0, 1, 0, '', 4),
     p('volume', 'Volume', -60, 6, -6, 'dB')
   ]),
-  plugin('anode.wavetable-synth', 'Wavetable Synth', 'Instrument', [
-    c('osc1.table', 'Osc 1 Table', ['Basic', 'Vocal', 'Digital', 'Harmonic']),
-    p('osc1.position', 'Osc 1 Position', 0, 1, 0, '', 1),
-    c('osc2.table', 'Osc 2 Table', ['Basic', 'Vocal', 'Digital', 'Harmonic'], 1),
-    p('osc2.position', 'Osc 2 Position', 0, 1, 0.5, '', 2),
-    c('sub.wave', 'Sub Wave', Waves),
-    p('sub.level', 'Sub Level', 0, 1, 0),
-    p('filter.cutoff', 'Cutoff', 20, 20_000, 3_000, 'Hz', 3),
-    p('filter.resonance', 'Resonance', 0, 1, 0.2, '', 4),
-    p('env1.attack', 'Env 1 Attack', 0.001, 10, 0.005, 's', 5),
-    p('env1.release', 'Env 1 Release', 0.001, 10, 0.4, 's', 6),
-    p('lfo1.rate', 'LFO 1 Rate', 0.05, 20, 2, 'Hz', 7),
-    p('lfo1.depth', 'LFO 1 Depth', 0, 1, 0, '', 8),
-    p('volume', 'Volume', -60, 6, -6, 'dB')
+  plugin('anode.wavetable', 'Wavetable Synth', 'Instrument', [
+    ...[1, 2].flatMap(o => [
+      c(`osc${o}Table`, `Osc ${o} Table`, ['Basic', 'Vocal', 'Digital', 'Harmonic'], o - 1),
+      p(`osc${o}Position`, `Osc ${o} Position`, 0, 1, 0, '', o),
+      n(`osc${o}Octave`, `Osc ${o} Octave`, -3, 3, 0, 'oct'),
+      n(`osc${o}Semitone`, `Osc ${o} Semitone`, -12, 12, 0, 'st'),
+      p(`osc${o}Fine`, `Osc ${o} Fine`, -100, 100, 0, 'ct'),
+      p(`osc${o}Level`, `Osc ${o} Level`, 0, 1, 0.8)
+    ]),
+    ...envelopes,
+    ...[1, 2].flatMap(l => [
+      c(`lfo${l}Shape`, `LFO ${l} Shape`, Waves),
+      p(`lfo${l}Rate`, `LFO ${l} Rate`, 0.05, 20, 2, 'Hz', l === 1 ? 7 : null),
+      c(`lfo${l}Sync`, `LFO ${l} Sync`, ['Off', 'On'])
+    ]),
+    ...[1, 2, 3, 4, 5, 6].flatMap(m => [
+      c(`mod${m}Source`, `Mod ${m} Source`, ['Off', 'Env 2', 'Env 3', 'LFO 1', 'LFO 2', 'Velocity', 'Mod Wheel']),
+      c(`mod${m}Destination`, `Mod ${m} Destination`, [
+        'Off',
+        'Osc 1 Position',
+        'Osc 2 Position',
+        'Cutoff',
+        'Pitch',
+        'Level'
+      ]),
+      p(`mod${m}Amount`, `Mod ${m} Amount`, -1, 1, 0)
+    ])
   ])
 ];
 
+/** Multipressor bands as workstream D names them: `band{1-4}{On,Threshold,Ratio,…,Gain}`, low to high. */
 const multipressorBands = Array.from({ length: 4 }, (_, i) => {
   const b = i + 1;
   return [
-    p(`band${b}.threshold`, `Band ${b} Threshold`, -60, 0, -20, 'dB'),
-    p(`band${b}.ratio`, `Band ${b} Ratio`, 1, 20, 2, ':1'),
-    p(`band${b}.gain`, `Band ${b} Gain`, -24, 24, 0, 'dB'),
-    c(`band${b}.bypass`, `Band ${b} Bypass`, ['Off', 'On'])
+    c(`band${b}On`, `Band ${b} On`, ['Off', 'On'], 1),
+    p(`band${b}Threshold`, `Band ${b} Threshold`, -60, 0, -20, 'dB'),
+    p(`band${b}Ratio`, `Band ${b} Ratio`, 1, 20, 2, ':1'),
+    p(`band${b}ExpThreshold`, `Band ${b} Expander Threshold`, -100, 0, -60, 'dB'),
+    p(`band${b}ExpRatio`, `Band ${b} Expander Ratio`, 1, 10, 1, ':1'),
+    p(`band${b}Reduction`, `Band ${b} Reduction`, -100, 0, -20, 'dB'),
+    p(`band${b}Attack`, `Band ${b} Attack`, 0.0001, 0.2, 0.01, 's'),
+    p(`band${b}Release`, `Band ${b} Release`, 0.005, 5, 0.15, 's'),
+    p(`band${b}Gain`, `Band ${b} Gain`, -24, 24, 0, 'dB')
   ];
 }).flat();
 
-const delayTaps = Array.from({ length: 4 }, (_, i) => {
-  const t = i + 1;
-  return [
-    p(`tap${t}.time`, `Tap ${t} Time`, 0, 10, 0.125 * t, 's'),
-    p(`tap${t}.level`, `Tap ${t} Level`, -60, 0, -6 * t, 'dB'),
-    p(`tap${t}.pan`, `Tap ${t} Pan`, -1, 1, t % 2 ? -0.5 : 0.5),
-    p(`tap${t}.cutoff`, `Tap ${t} Cutoff`, 20, 20_000, 8_000, 'Hz')
-  ];
-}).flat();
+/** Delay Designer taps as workstream D names them: `tap{A-Z}{Time,Level,Pan,LowCut,HighCut,Mute}`. */
+const delayTaps = ['A', 'B', 'C', 'D'].flatMap((t, i) => [
+  p(`tap${t}Time`, `Tap ${t} Time`, 0, 10, 0.125 * (i + 1), 's'),
+  p(`tap${t}Level`, `Tap ${t} Level`, -60, 0, -6 * (i + 1), 'dB'),
+  p(`tap${t}Pan`, `Tap ${t} Pan`, -1, 1, i % 2 ? 0.5 : -0.5),
+  p(`tap${t}LowCut`, `Tap ${t} Low Cut`, 20, 20_000, 20, 'Hz'),
+  p(`tap${t}HighCut`, `Tap ${t} High Cut`, 20, 20_000, 8_000, 'Hz'),
+  c(`tap${t}Mute`, `Tap ${t} Mute`, ['Off', 'On'])
+]);
 
 export const RemixFxId = 'anode.remix-fx';
 
 export const FakeT2Effects: readonly PluginInfo[] = [
   plugin(
-    'anode.convolution-reverb',
-    'Convolution Reverb',
+    'anode.space',
+    'Space Designer',
     'Reverb',
     [
       p('predelay', 'Pre-Delay', 0, 0.5, 0.01, 's', 1),
@@ -244,17 +287,17 @@ export const FakeT2Effects: readonly PluginInfo[] = [
     ],
     { fileTypes: ['.wav'] }
   ),
-  plugin('anode.linear-phase-eq', 'Linear Phase EQ', 'EQ', [
-    p('low.gain', 'Low Gain', -24, 24, 0, 'dB', 1),
-    p('mid.gain', 'Mid Gain', -24, 24, 0, 'dB', 2),
-    p('high.gain', 'High Gain', -24, 24, 0, 'dB', 3)
+  // Workstream D: the Linear Phase EQ takes the Channel EQ's parameter ids.
+  plugin('anode.linear-eq', 'Linear Phase EQ', 'EQ', [
+    ...(FakeEffects.find(e => e.id === 'anode.channel-eq')?.parameters ?? [])
   ]),
   plugin('anode.multipressor', 'Multipressor', 'Dynamics', [
-    p('crossover1', 'Crossover 1', 20, 20_000, 150, 'Hz'),
-    p('crossover2', 'Crossover 2', 20, 20_000, 1_500, 'Hz'),
-    p('crossover3', 'Crossover 3', 20, 20_000, 6_000, 'Hz'),
+    p('cross1', 'Crossover 1', 20, 20_000, 150, 'Hz'),
+    p('cross2', 'Crossover 2', 20, 20_000, 1_500, 'Hz'),
+    p('cross3', 'Crossover 3', 20, 20_000, 6_000, 'Hz'),
     ...multipressorBands,
-    p('output', 'Output', -24, 24, 0, 'dB', 1)
+    p('output', 'Output', -24, 24, 0, 'dB', 1),
+    p('mix', 'Mix', 0, 1, 1, '', 2)
   ]),
   plugin('anode.enveloper', 'Enveloper', 'Dynamics', [
     p('attack', 'Attack Gain', -100, 100, 0, '%', 1),
@@ -271,6 +314,9 @@ export const FakeT2Effects: readonly PluginInfo[] = [
   plugin('anode.delay-designer', 'Delay Designer', 'Delay', [
     n('taps', 'Taps', 1, 26, 4),
     c('sync', 'Sync', ['Off', 'On'], 1),
+    c('grid', 'Grid', ['1/4', '1/8', '1/16', '1/32'], 2),
+    p('tempo', 'Tempo', 20, 300, 120, 'bpm'),
+    n('feedbackTap', 'Feedback Tap', 1, 26, 1),
     ...delayTaps,
     p('feedback', 'Feedback', 0, 1, 0.2, '', 1),
     p('mix', 'Mix', 0, 1, 0.3, '', 2)
@@ -301,24 +347,30 @@ export const FakeT2Effects: readonly PluginInfo[] = [
     p('cutoff', 'Cutoff', 20, 20_000, 8_000, 'Hz', 2),
     p('mix', 'Mix', 0, 1, 1, '', 3)
   ]),
-  plugin('anode.step-fx', 'Step FX', 'Filter', [
-    c('rate', 'Rate', ['1/8', '1/16', '1/32'], 1, 1),
-    p('depth', 'Depth', 0, 1, 0.5, '', 2),
-    p('mix', 'Mix', 0, 1, 1)
+  plugin('anode.step-fx', 'Step FX', 'Multi Effects', [
+    ...Array.from({ length: 16 }, (_, i) => [
+      p(`cutoff${i + 1}`, `Cutoff ${i + 1}`, 20, 20_000, 8_000, 'Hz', i === 0 ? 1 : null),
+      p(`volume${i + 1}`, `Volume ${i + 1}`, 0, 1, 1),
+      p(`pan${i + 1}`, `Pan ${i + 1}`, -1, 1, 0)
+    ]).flat()
   ]),
-  plugin('anode.beat-breaker', 'Beat Breaker', 'Delay', [
-    n('pattern', 'Pattern', 1, 16, 1, '', 1),
-    p('mix', 'Mix', 0, 1, 1, '', 2)
+  plugin('anode.beat-breaker', 'Beat Breaker', 'Multi Effects', [
+    ...Array.from({ length: 16 }, (_, i) => [
+      n(`slice${i + 1}Source`, `Slice ${i + 1} Source`, 1, 16, i + 1),
+      c(`slice${i + 1}Reverse`, `Slice ${i + 1} Reverse`, ['Off', 'On']),
+      c(`slice${i + 1}Mute`, `Slice ${i + 1} Mute`, ['Off', 'On'])
+    ]).flat()
   ]),
-  plugin(RemixFxId, 'Remix FX', 'Filter', [
-    p('xy1.x', 'Pad 1 X', 0, 1, 0.5, '', 1),
-    p('xy1.y', 'Pad 1 Y', 0, 1, 0.5, '', 2),
-    c('xy1.mode', 'Pad 1 Effect', ['Filter', 'Wobble', 'Orbit']),
-    c('xy1.on', 'Pad 1 On', ['Off', 'On']),
-    p('xy2.x', 'Pad 2 X', 0, 1, 0.5, '', 3),
-    p('xy2.y', 'Pad 2 Y', 0, 1, 0.5, '', 4),
-    c('xy2.mode', 'Pad 2 Effect', ['Repeater', 'Reverse', 'Scratch', 'Gater', 'Downsampler', 'Tape Stop']),
-    c('xy2.on', 'Pad 2 On', ['Off', 'On'])
+  // Workstream D's ids: `xy{1,2}{Active,Effect,X,Y}`; pressing a pad sets its Active.
+  plugin(RemixFxId, 'Remix FX', 'Multi Effects', [
+    c('xy1Active', 'Pad 1 Active', ['Off', 'On']),
+    c('xy1Effect', 'Pad 1 Effect', ['Filter', 'Wobble', 'Orbit']),
+    p('xy1X', 'Pad 1 X', 0, 1, 0.5, '', 1),
+    p('xy1Y', 'Pad 1 Y', 0, 1, 0.5, '', 2),
+    c('xy2Active', 'Pad 2 Active', ['Off', 'On']),
+    c('xy2Effect', 'Pad 2 Effect', ['Repeater', 'Reverse', 'Scratch', 'Gater', 'Downsampler', 'Tape Stop']),
+    p('xy2X', 'Pad 2 X', 0, 1, 0.5, '', 3),
+    p('xy2Y', 'Pad 2 Y', 0, 1, 0.5, '', 4)
   ])
 ];
 

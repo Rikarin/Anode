@@ -123,7 +123,7 @@ export class MultipressorPanel {
       threshold: s['threshold']?.[i] as ParameterInfo,
       ratio: s['ratio']?.[i] as ParameterInfo,
       gain: s['gain']?.[i] as ParameterInfo,
-      bypass: s['bypass']?.[i]
+      bypass: s['bypass']?.[i] ?? s['enabled']?.[i]
     }));
   });
   protected readonly crossovers = computed(() =>
@@ -157,11 +157,14 @@ export class MultipressorPanel {
   }
 
   protected isBypassed(parameter: ParameterInfo): boolean {
-    return bypassed(parameter, this.value(parameter));
+    const on = bypassed(parameter, this.value(parameter));
+    // A band's "On" parameter is the inverse of a bypass.
+    return this.binding()?.series['enabled']?.includes(parameter) ? !on : on;
   }
 
   protected toggleBypass(parameter: ParameterInfo): void {
-    this.host().set(parameter.id, this.isBypassed(parameter) ? parameter.min : parameter.max);
+    const high = this.value(parameter) >= (parameter.min + parameter.max) / 2;
+    this.host().set(parameter.id, high ? parameter.min : parameter.max);
   }
 
   protected grab(event: PointerEvent): void {
