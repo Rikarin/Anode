@@ -101,8 +101,9 @@ await build({
         NSMicrophoneUsageDescription: 'Anode records audio from your audio interface.'
       }
     },
-    win: { target: ['nsis'] },
+    // macOS takes icon.png as drawn (the rounded square on Apple's icon grid); Windows and Linux draw their own frames.
+    win: { target: ['nsis'], icon: join(workspace, 'apps/desktop/assets/icon-square.png') },
     nsis: { oneClick: false, allowToChangeInstallationDirectory: true },
-    linux: { target: ['AppImage'], category: 'Audio' }
+    linux: { target: ['AppImage'], category: 'Audio', icon: join(workspace, 'apps/desktop/assets/icon-square.png') }
   }
 });
