@@ -34,21 +34,27 @@ public static class StandardMidiFileWriter {
 
         foreach (var control in controls ?? []) {
             var channel = (byte)(Math.Clamp(control.Channel, 1, 16) - 1);
-            events.Add((control.Tick, 1, control.Kind switch {
-                ControlKind.ControlChange => [(byte)(0xB0 | channel), (byte)control.Number, (byte)control.Value],
-                ControlKind.PitchBend => [
-                    (byte)(0xE0 | channel), (byte)((control.Value + 8192) & 0x7F), (byte)(((control.Value + 8192) >> 7) & 0x7F)
-                ],
-                ControlKind.ChannelPressure => [(byte)(0xD0 | channel), (byte)control.Value],
-                _ => [(byte)(0xC0 | channel), (byte)control.Value]
-            }));
+            events.Add(
+                (control.Tick, 1, control.Kind switch {
+                    ControlKind.ControlChange => [(byte)(0xB0 | channel), (byte)control.Number, (byte)control.Value],
+                    ControlKind.PitchBend => [
+                        (byte)(0xE0 | channel), (byte)((control.Value + 8192) & 0x7F),
+                        (byte)(((control.Value + 8192) >> 7) & 0x7F)
+                    ],
+                    ControlKind.ChannelPressure => [(byte)(0xD0 | channel), (byte)control.Value],
+                    _ => [(byte)(0xC0 | channel), (byte)control.Value]
+                })
+            );
         }
 
         var last = Math.Max(endTick, events.Count == 0 ? 0 : events.Max(static e => e.Tick));
         events.Add((last, 3, [0xFF, 0x2F, 0x00]));
         var track = new List<byte>();
         long tick = 0;
-        foreach (var e in events.Select(static (e, i) => (e, i)).OrderBy(static x => x.e.Tick).ThenBy(static x => x.e.Rank).ThenBy(static x => x.i)) {
+        foreach (var e in events.Select(static (e, i) => (e, i))
+                     .OrderBy(static x => x.e.Tick)
+                     .ThenBy(static x => x.e.Rank)
+                     .ThenBy(static x => x.i)) {
             track.AddRange(VarInt((int)(e.e.Tick - tick)));
             track.AddRange(e.e.Bytes);
             tick = e.e.Tick;
@@ -58,7 +64,9 @@ public static class StandardMidiFileWriter {
         bytes.AddRange("MThd"u8.ToArray());
         bytes.AddRange([0, 0, 0, 6, 0, 0, 0, 1, TempoMap.Ppq >> 8, TempoMap.Ppq & 0xFF]);
         bytes.AddRange("MTrk"u8.ToArray());
-        bytes.AddRange([(byte)(track.Count >> 24), (byte)(track.Count >> 16), (byte)(track.Count >> 8), (byte)track.Count]);
+        bytes.AddRange(
+            [(byte)(track.Count >> 24), (byte)(track.Count >> 16), (byte)(track.Count >> 8), (byte)track.Count]
+        );
         bytes.AddRange(track);
         return [..bytes];
     }

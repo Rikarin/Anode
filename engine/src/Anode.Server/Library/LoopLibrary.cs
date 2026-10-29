@@ -83,7 +83,7 @@ public sealed class LoopLibrary(IOptions<ServerOptions> options) {
         return new([..matching.Skip(offset).Take(limit)], matching.Count);
     }
 
-    public LoopInfo? Find(string id) => Loops().FirstOrDefault(l => l.Id == id);
+    public LoopInfo? Find(string id) => Loops().Find(l => l.Id == id);
 
     public LoopInfo SetFavourite(string id, bool favourite) {
         lock (gate) {
@@ -104,7 +104,10 @@ public sealed class LoopLibrary(IOptions<ServerOptions> options) {
             Directory.CreateDirectory(LoopsFolder);
             AtomicRename.Write(
                 FavouritesPath,
-                JsonSerializer.Serialize(favourites.Order(StringComparer.Ordinal).ToArray(), LoopJsonContext.Default.StringArray)
+                JsonSerializer.Serialize(
+                    [..favourites.Order(StringComparer.Ordinal)],
+                    LoopJsonContext.Default.StringArray
+                )
             );
             SaveIndex(loops);
             return loops[i];
@@ -280,9 +283,10 @@ public sealed class LoopLibrary(IOptions<ServerOptions> options) {
             loops.AddRange(Scan(UserFolder, null, favourites));
         }
 
-        loops.Sort(static (a, b) => string.Compare(a.Name, b.Name, StringComparison.OrdinalIgnoreCase) is var c && c != 0
-            ? c
-            : string.CompareOrdinal(a.Id, b.Id)
+        loops.Sort(static (a, b) => string.Compare(a.Name, b.Name, StringComparison.OrdinalIgnoreCase) is var c
+            && c != 0
+                ? c
+                : string.CompareOrdinal(a.Id, b.Id)
         );
         SaveIndex(loops);
         return index = loops;
@@ -291,7 +295,10 @@ public sealed class LoopLibrary(IOptions<ServerOptions> options) {
     void SaveIndex(List<LoopInfo> loops) {
         try {
             Directory.CreateDirectory(LoopsFolder);
-            AtomicRename.Write(IndexPath, JsonSerializer.Serialize(new(1, loops), LoopJsonContext.Default.LoopIndexFile));
+            AtomicRename.Write(
+                IndexPath,
+                JsonSerializer.Serialize(new(1, loops), LoopJsonContext.Default.LoopIndexFile)
+            );
         } catch (Exception e) when (e is IOException or UnauthorizedAccessException) {
             // the index in memory serves; the next rebuild tries again
         }
@@ -302,7 +309,10 @@ public sealed class LoopLibrary(IOptions<ServerOptions> options) {
     HashSet<string> Favourites() {
         try {
             return File.Exists(FavouritesPath)
-                ? [..JsonSerializer.Deserialize(File.ReadAllText(FavouritesPath), LoopJsonContext.Default.StringArray) ?? []]
+                ? [
+                    ..JsonSerializer.Deserialize(File.ReadAllText(FavouritesPath), LoopJsonContext.Default.StringArray)
+                    ?? []
+                ]
                 : [];
         } catch (Exception e) when (e is JsonException or IOException or UnauthorizedAccessException) {
             return [];
@@ -311,19 +321,9 @@ public sealed class LoopLibrary(IOptions<ServerOptions> options) {
 
     /// <summary>Every loop under <paramref name="folder" />: media files, and pattern loops (sidecars alone).</summary>
     static IEnumerable<LoopInfo> Scan(string folder, string? packId, HashSet<string> favourites) {
-        foreach (var path in Directory.EnumerateFiles(folder, "*", SearchOption.AllDirectories).Order(StringComparer.Ordinal)) {
-            LoopSidecar? loop;
-            if (LoopFiles.IsMedia(path)) {
-                loop = LoopFiles.Read(path);
-            } else if (path.EndsWith(LoopFiles.SidecarSuffix, StringComparison.OrdinalIgnoreCase)
-                       && !File.Exists(path[..^LoopFiles.SidecarSuffix.Length])
-                       && LoopFiles.Sidecar(path) is { Kind: LoopKind.Pattern, Pattern: not null } pattern) {
-                loop = pattern;
-            } else {
-                continue;
-            }
-
-            if (loop is null) {
+        foreach (var path in Directory.EnumerateFiles(folder, "*", SearchOption.AllDirectories)
+                     .Order(StringComparer.Ordinal)) {
+            if (LoopAt(path) is not { } loop) {
                 continue;
             }
 
@@ -348,6 +348,19 @@ public sealed class LoopLibrary(IOptions<ServerOptions> options) {
         }
     }
 
+    /// <summary>The loop a file is: a media file's, or a pattern loop's sidecar alone; null for anything else.</summary>
+    static LoopSidecar? LoopAt(string path) {
+        if (LoopFiles.IsMedia(path)) {
+            return LoopFiles.Read(path);
+        }
+
+        return path.EndsWith(LoopFiles.SidecarSuffix, StringComparison.OrdinalIgnoreCase)
+            && !File.Exists(path[..^LoopFiles.SidecarSuffix.Length])
+            && LoopFiles.Sidecar(path) is { Kind: LoopKind.Pattern, Pattern: not null } pattern
+                ? pattern
+                : null;
+    }
+
     static string NameOf(string path) {
         var name = Path.GetFileName(path);
         if (name.EndsWith(LoopFiles.SidecarSuffix, StringComparison.OrdinalIgnoreCase)) {
@@ -359,7 +372,8 @@ public sealed class LoopLibrary(IOptions<ServerOptions> options) {
 
     /// <summary>A loop's id: where it is (its pack, or the user's folder, and its path there), hashed.</summary>
     public static string IdOf(string? packId, string relative) =>
-        "lp_" + Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes($"{packId ?? "~user"}/{relative}")))[..16];
+        "lp_"
+        + Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes($"{packId ?? "~user"}/{relative}")))[..16];
 
     IEnumerable<(PackManifest Manifest, string Folder)> InstalledManifests() {
         if (!Directory.Exists(PacksFolder)) {
@@ -393,7 +407,8 @@ public sealed class LoopLibrary(IOptions<ServerOptions> options) {
             manifest.Author,
             loops.Count(l => l.PackId == manifest.Id),
             Directory.Exists(folder)
-                ? Directory.EnumerateFiles(folder, "*", SearchOption.AllDirectories).Sum(static f => new FileInfo(f).Length)
+                ? Directory.EnumerateFiles(folder, "*", SearchOption.AllDirectories)
+                    .Sum(static f => new FileInfo(f).Length)
                 : 0,
             true
         );
@@ -411,11 +426,11 @@ public sealed class LoopLibrary(IOptions<ServerOptions> options) {
     static PackManifest? Checked(string json) {
         try {
             return JsonSerializer.Deserialize(json, LoopJsonContext.Default.PackManifest) is {
-                Id: not null, Name: not null
-            } m
-            && ProjectPackage.IsSafeId(m.Id)
-                ? m with { Version = m.Version ?? "1.0", Author = m.Author ?? string.Empty }
-                : null;
+                    Id: not null, Name: not null
+                } m
+                && ProjectPackage.IsSafeId(m.Id)
+                    ? m with { Version = m.Version ?? "1.0", Author = m.Author ?? string.Empty }
+                    : null;
         } catch (JsonException) {
             return null;
         }

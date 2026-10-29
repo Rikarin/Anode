@@ -53,6 +53,31 @@ public sealed class LiveLoopsPlayer {
         var view = session.View ?? throw ProjectException.NoProject();
         var state = view.State;
         var grid = state.LiveLoops;
+        var (cells, stops) = Resolve(view, request);
+        // The host plays a track's cells only while its activation is on, which reaches it with the model: the
+        // launched tracks are activated first (that sync goes to the host before the launch does).
+        var inactive = cells.Select(static c => c.TrackId)
+            .Distinct(StringComparer.Ordinal)
+            .Where(id => state.FindTrack(id) is { LiveLoopsActive: false })
+            .ToArray();
+        if (inactive.Length > 0) {
+            session.Apply(new([new SetTrackActivationCommand(inactive, true)], "Activate Live Loops"), null);
+            view = session.View ?? throw ProjectException.NoProject();
+        }
+
+        var launches = new List<CellLaunch>();
+        foreach (var cell in cells) {
+            if (Engine(view, cell.TrackId) is not null) {
+                launches.Add(new(view.Ids.Cell(cell.Id), Quantize(cell.Quantize ?? grid.Quantize)));
+            }
+        }
+
+        return new(launches, stops.Count == 0 ? null : stops);
+    }
+
+    /// <summary>The cells a launch names (a scene's, or by id) and the stops it implies (a scene's other tracks).</summary>
+    static (Cell[] Cells, List<CellStop> Stops) Resolve(OpenProjectView view, LaunchRequest request) {
+        var grid = view.State.LiveLoops;
         IEnumerable<Cell> cells;
         var stops = new List<CellStop>();
         if (request.SceneId is { } sceneId) {
@@ -78,14 +103,7 @@ public sealed class LiveLoopsPlayer {
             throw ProjectException.Unprocessable("Name the cells or the scene to launch.");
         }
 
-        var launches = new List<CellLaunch>();
-        foreach (var cell in cells) {
-            if (Engine(view, cell.TrackId) is not null) {
-                launches.Add(new(view.Ids.Cell(cell.Id), Quantize(cell.Quantize ?? grid.Quantize)));
-            }
-        }
-
-        return new(launches, stops.Count == 0 ? null : stops);
+        return ([..cells], stops);
     }
 
     /// <summary>The message that stops the cells of <paramref name="request" />'s tracks (every track with cells).</summary>
@@ -96,9 +114,13 @@ public sealed class LiveLoopsPlayer {
             ? named.Distinct(StringComparer.Ordinal)
                 .Select(id => view.State.FindTrack(id)?.Id ?? throw ProjectException.NotFound($"No track '{id}'."))
             : grid.Cells.Select(static c => c.TrackId).Distinct(StringComparer.Ordinal);
-        return new([
-            ..trackIds.Select(id => Engine(view, id)).OfType<int>().Select(id => new CellStop(id, Quantize(grid.Quantize)))
-        ]);
+        return new(
+            [
+                ..trackIds.Select(id => Engine(view, id))
+                    .OfType<int>()
+                    .Select(id => new CellStop(id, Quantize(grid.Quantize)))
+            ]
+        );
     }
 
     static int? Engine(OpenProjectView view, string trackId) =>
@@ -113,7 +135,7 @@ public sealed class LiveLoopsPlayer {
             return;
         }
 
-        var state = (Contracts.CellState)(int)message.State;
+        var state = (CellState)(int)message.State;
         lock (gate) {
             states[cellId] = (state, message.Sample);
             recording?.Cell(cellId, state, message.Sample);
@@ -161,8 +183,7 @@ public sealed class LiveLoopsPlayer {
     }
 
     /// <summary>The playhead in samples (the transport clock's tick through the playback map).</summary>
-    long Now(ProjectState state) =>
-        clock.Playing is var (_, _, tick) ? Performance.SampleAt(state, tick) : 0;
+    long Now(ProjectState state) => clock.Playing is var (_, _, tick) ? Performance.SampleAt(state, tick) : 0;
 
     void OnControlMoved(string? trackId, string target, double value) {
         if (clock.Playing is not var (_, _, tick)) {
@@ -197,6 +218,8 @@ public sealed class LiveLoopsPlayer {
                 case CellState.Stopped when playing.Remove(cellId, out var start):
                     spans.Add(new(cellId, start, sample));
                     break;
+                default:
+                    break; // queued and stopping change nothing that played
             }
         }
 

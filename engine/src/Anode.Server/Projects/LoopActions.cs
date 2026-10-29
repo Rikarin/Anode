@@ -3,7 +3,6 @@ using Anode.Model;
 using Anode.Model.Audio;
 using Anode.Model.Editing;
 using Anode.Model.Midi;
-using Anode.Model.Storage;
 using Anode.Model.Time;
 using Anode.Server.Engine;
 using Anode.Server.Library;
@@ -54,9 +53,10 @@ public sealed class LoopActions(
             var kind = loop.Kind == LoopKind.Audio ? TrackKind.Audio : TrackKind.Instrument;
             steps.Add((_, _) => new AddTrackCommand(loop.Name, Kind: kind));
             steps.Add((now, _) => {
-                trackId = now.Tracks[^1].Id;
-                return null;
-            });
+                    trackId = now.Tracks[^1].Id;
+                    return null;
+                }
+            );
         }
 
         switch (loop.Kind) {
@@ -64,51 +64,106 @@ public sealed class LoopActions(
                 AddAudio(loop, request, interval, steps, () => trackId!);
                 break;
             case LoopKind.Midi:
-                var (notes, controls, length) = Midi(loop);
-                var transposed = notes.Select(n => n with { Pitch = Math.Clamp(n.Pitch + interval, 0, 127) }).ToArray();
-                if (request.CellSceneId is { } scene) {
-                    steps.Add((_, _) => new SetCellCommand(
-                            trackId!,
-                            scene,
-                            new(Midi: new("x", trackId!, loop.Name, 0, length, ProjectDefaults.Playback, transposed, controls, false)),
-                            loop.Name
-                        )
-                    );
-                } else {
-                    steps.Add((_, _) => new AddMidiRegionCommand(trackId!, request.Tick, length, loop.Name));
-                    steps.Add((now, before) => NewMidi(now, before) is { } id && transposed.Length > 0
-                        ? new AddNotesCommand(
-                            id,
-                            [..transposed.Select(static n => new NewNote(n.Pitch, n.Velocity, n.Channel, n.StartTick, n.LengthTicks))]
-                        )
-                        : null
-                    );
-                    steps.Add((now, _) => controls.Length > 0 && LastMidi(now, trackId!, request.Tick) is { } id
-                        ? new AddControlsCommand(
-                            id,
-                            [..controls.Select(static e => new NewControlEvent(e.Kind, e.Channel, e.Number, e.Value, e.Tick))]
-                        )
-                        : null
-                    );
-                }
-
+                AddMidi(loop, request, interval, steps, () => trackId!);
                 break;
             default:
-                var pattern = Transposed(sidecar.Pattern ?? throw ProjectException.Unprocessable("The pattern loop has no pattern."), interval);
-                var patternLength = (long)Math.Round((loop.Beats ?? 4) * TempoMap.Ppq);
-                steps.Add((_, _) => request.CellSceneId is { } scene
-                    ? new SetCellCommand(
-                        trackId!,
-                        scene,
-                        new(Pattern: new("x", trackId!, loop.Name, 0, patternLength, false, pattern)),
-                        loop.Name
-                    )
-                    : new AddPatternRegionCommand(trackId!, request.Tick, patternLength, pattern, loop.Name)
-                );
+                AddPattern(loop, sidecar, request, interval, steps, () => trackId!);
                 break;
         }
 
         return session.ApplyChain("Add Loop", steps);
+    }
+
+    /// <summary>A MIDI loop's steps: its notes transposed, as a region (with its controllers) or a cell.</summary>
+    static void AddMidi(
+        LoopInfo loop,
+        AddLoopRequest request,
+        int interval,
+        List<Func<ProjectState, ProjectState, EditCommand?>> steps,
+        Func<string> trackId
+    ) {
+        var (notes, controls, length) = Midi(loop);
+        var transposed = notes.Select(n => n with { Pitch = Math.Clamp(n.Pitch + interval, 0, 127) }).ToArray();
+        if (request.CellSceneId is { } scene) {
+            steps.Add((_, _) => new SetCellCommand(
+                    trackId(),
+                    scene,
+                    new(
+                        Midi: new(
+                            "x",
+                            trackId(),
+                            loop.Name,
+                            0,
+                            length,
+                            ProjectDefaults.Playback,
+                            transposed,
+                            controls,
+                            false
+                        )
+                    ),
+                    loop.Name
+                )
+            );
+        } else {
+            steps.Add((_, _) => new AddMidiRegionCommand(trackId(), request.Tick, length, loop.Name));
+            steps.Add((now, before) => NewMidi(now, before) is { } id && transposed.Length > 0
+                    ? new AddNotesCommand(
+                        id,
+                        [
+                            ..transposed.Select(static n => new NewNote(
+                                    n.Pitch,
+                                    n.Velocity,
+                                    n.Channel,
+                                    n.StartTick,
+                                    n.LengthTicks
+                                )
+                            )
+                        ]
+                    )
+                    : null
+            );
+            steps.Add((now, _) => controls.Length > 0 && LastMidi(now, trackId(), request.Tick) is { } id
+                    ? new AddControlsCommand(
+                        id,
+                        [
+                            ..controls.Select(static e => new NewControlEvent(
+                                    e.Kind,
+                                    e.Channel,
+                                    e.Number,
+                                    e.Value,
+                                    e.Tick
+                                )
+                            )
+                        ]
+                    )
+                    : null
+            );
+        }
+    }
+
+    /// <summary>A pattern loop's step: its note rows transposed, as a pattern region or a cell.</summary>
+    static void AddPattern(
+        LoopInfo loop,
+        LoopSidecar sidecar,
+        AddLoopRequest request,
+        int interval,
+        List<Func<ProjectState, ProjectState, EditCommand?>> steps,
+        Func<string> trackId
+    ) {
+        var pattern = Transposed(
+            sidecar.Pattern ?? throw ProjectException.Unprocessable("The pattern loop has no pattern."),
+            interval
+        );
+        var patternLength = (long)Math.Round((loop.Beats ?? 4) * TempoMap.Ppq);
+        steps.Add((_, _) => request.CellSceneId is { } scene
+                ? new SetCellCommand(
+                    trackId(),
+                    scene,
+                    new(Pattern: new("x", trackId(), loop.Name, 0, patternLength, false, pattern)),
+                    loop.Name
+                )
+                : new AddPatternRegionCommand(trackId(), request.Tick, patternLength, pattern, loop.Name)
+        );
     }
 
     void AddAudio(
@@ -124,7 +179,8 @@ public sealed class LoopActions(
             // The sidecar's tempo, not analysis: beats every 60/tempo seconds from the file's start.
             var step = 60.0 * file.SampleRate / loop.Tempo!.Value;
             var count = (int)Math.Min(100_000, file.Frames / step + 1);
-            long[] beats = [..Enumerable.Range(0, count).Select(i => (long)Math.Round(i * step)).Where(f => f < file.Frames)];
+            long[] beats =
+                [..Enumerable.Range(0, count).Select(i => (long)Math.Round(i * step)).Where(f => f < file.Frames)];
             steps.Add((_, _) => new SetFileTempoCommand(
                     file.Id,
                     new(loop.Tempo.Value, false, beats, [..beats.Where(static (_, i) => i % 4 == 0)])
@@ -134,35 +190,37 @@ public sealed class LoopActions(
 
         if (request.CellSceneId is { } scene) {
             steps.Add((now, _) => {
-                var region = new AudioRegion(
-                    "x",
-                    trackId(),
-                    file.Id,
-                    loop.Name,
-                    0,
-                    0,
-                    file.Frames,
-                    0,
-                    0,
-                    0,
-                    0,
-                    0,
-                    false,
-                    follows ? FlexFollow.On : FlexFollow.Off,
-                    [],
-                    follows ? interval : 0,
-                    0,
-                    []
-                );
-                return new SetCellCommand(trackId(), scene, new(Audio: region), loop.Name);
-            });
+                    var region = new AudioRegion(
+                        "x",
+                        trackId(),
+                        file.Id,
+                        loop.Name,
+                        0,
+                        0,
+                        file.Frames,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        false,
+                        follows ? FlexFollow.On : FlexFollow.Off,
+                        [],
+                        follows ? interval : 0,
+                        0,
+                        []
+                    );
+                    return new SetCellCommand(trackId(), scene, new(region), loop.Name);
+                }
+            );
             return;
         }
 
         steps.Add((_, _) => new AddRegionCommand(trackId(), file.Id, request.Tick));
+        var (follow, transpose) = follows ? (FlexFollow.On, interval) : (FlexFollow.Off, 0);
         steps.Add((now, before) => NewRegion(now, before) is { } id
-            ? new SetRegionFlexCommand(id, follows ? FlexFollow.On : FlexFollow.Off, follows ? interval : 0)
-            : null
+                ? new SetRegionFlexCommand(id, follow, transpose)
+                : null
         );
     }
 
@@ -200,8 +258,8 @@ public sealed class LoopActions(
             : pattern with {
                 Rows = [
                     ..pattern.Rows.Select(r => r.Kind == PatternRowKind.Note
-                        ? r with { Note = Math.Clamp(r.Note + interval, 0, 127) }
-                        : r
+                            ? r with { Note = Math.Clamp(r.Note + interval, 0, 127) }
+                            : r
                     )
                 ]
             };
@@ -222,8 +280,11 @@ public sealed class LoopActions(
             throw ProjectException.Unprocessable($"A loop's key is a tonic 0…11, not {key}.");
         }
 
-        var tags = (request.Tags ?? []).Where(static t => !string.IsNullOrWhiteSpace(t)).Select(static t => t.Trim()).ToArray();
+        var tags = (request.Tags ?? []).Where(static t => !string.IsNullOrWhiteSpace(t))
+            .Select(static t => t.Trim())
+            .ToArray();
         var scale = request.Scale ?? LoopScale.Neither;
+
         LoopSidecar Sidecar(LoopKind kind, long startTick, long lengthTicks, Pattern? pattern = null) {
             var tempo = request.OneShot ? (double?)null : Math.Round(state.TempoMap.BpmAt(startTick), 3);
             return new(
@@ -247,7 +308,12 @@ public sealed class LoopActions(
                 var file = state.Files[audio.FileId];
                 WriteFrames(Path.Combine(view.Folder, file.Path), audio.FileOffset, audio.Length, temporary);
                 var length = Math.Max(1, Edits.EndTick(state, audio) - audio.StartTick);
-                return library.AddUserLoop(request.Name.Trim(), temporary, ".wav", Sidecar(LoopKind.Audio, audio.StartTick, length));
+                return library.AddUserLoop(
+                    request.Name.Trim(),
+                    temporary,
+                    ".wav",
+                    Sidecar(LoopKind.Audio, audio.StartTick, length)
+                );
             }
 
             if (state.MidiRegions.TryGetValue(request.RegionId, out var midi)) {
@@ -302,7 +368,7 @@ public sealed class LoopActions(
                 break;
             }
 
-            var frames = (long)read;
+            long frames = read;
             var from = (int)Math.Min(skip, frames);
             skip -= from;
             var take = (int)Math.Min(frames - from, left);
@@ -321,7 +387,9 @@ public sealed class LoopActions(
         var loop = LoopOf(id);
         var view = session.View;
         if (loop.Kind != LoopKind.Audio) {
-            throw ProjectException.Unprocessable($"Loop '{loop.Name}' is a {loop.Kind.ToString().ToLowerInvariant()} loop: only audio loops preview.");
+            throw ProjectException.Unprocessable(
+                $"Loop '{loop.Name}' is a {loop.Kind.ToString().ToLowerInvariant()} loop: only audio loops preview."
+            );
         }
 
         var tick = clock.Playing is var (_, _, at) ? at : 0;
@@ -329,7 +397,8 @@ public sealed class LoopActions(
             ? (1.0, 0)
             : (view.State.PlaybackMap.BpmAt(tick) * view.State.PlaybackSpeed / loop.Tempo!.Value,
                 Interval(loop.Key, Edits.KeyAt(view.State, tick).Tonic));
-        engine.PreviewSync(new(ratio, transpose, true));
+        // The host takes a positive ratio and clamps the transpose to ±48 semitones.
+        engine.PreviewSync(new(ratio is > 0 and < 64 ? ratio : 1, Math.Clamp(transpose, -48, 48), true));
         engine.Preview(loop.Path);
     }
 }

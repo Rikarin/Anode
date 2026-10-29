@@ -130,11 +130,12 @@ public sealed partial class ProjectSession {
             switch (op) {
                 case RegionUpserted(var region) when region.TrackId == trackId && state.Regions.ContainsKey(region.Id):
                     var r = state.Regions[region.Id];
-                    content = new(Audio: r with { StartTick = 0 });
+                    content = new(r with { StartTick = 0 });
                     removal = new RegionRemoved(r.Id);
                     length = Math.Max(1, Edits.EndTick(state, r) - r.StartTick);
                     break;
-                case MidiRegionUpserted(var midi) when midi.TrackId == trackId && state.MidiRegions.ContainsKey(midi.Id):
+                case MidiRegionUpserted(var midi) when midi.TrackId == trackId
+                    && state.MidiRegions.ContainsKey(midi.Id):
                     var m = state.MidiRegions[midi.Id];
                     content = new(Midi: m with { StartTick = 0 });
                     removal = new MidiRegionRemoved(m.Id);

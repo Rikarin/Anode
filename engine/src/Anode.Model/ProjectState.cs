@@ -241,7 +241,9 @@ public sealed record ProjectState(
             AutomationLaneRemoved(var id) => this with { Automation = Automation.Remove(id) },
             GroupUpserted(var group) => this with { Groups = Groups.SetItem(group.Number, group) },
             GroupRemoved(var number) => this with { Groups = Groups.Remove(number) },
-            PatternRegionUpserted(var region) => this with { PatternRegions = PatternRegions.SetItem(region.Id, region) },
+            PatternRegionUpserted(var region) => this with {
+                PatternRegions = PatternRegions.SetItem(region.Id, region)
+            },
             PatternRegionRemoved(var id) => this with { PatternRegions = PatternRegions.Remove(id) },
             LiveLoopsChanged(var grid) => this with {
                 LiveLoops = grid, LastEventId = Math.Max(LastEventId, MaxEventId(grid))
@@ -277,14 +279,20 @@ public sealed record ProjectState(
             MarkerUpserted or MarkerRemoved or SectionUpserted or SectionRemoved => InverseArrangement(op),
             NotesChanged => new NotesChanged(Notes),
             AutomationLaneUpserted or AutomationLaneRemoved or GroupUpserted or GroupRemoved => InverseMixer(op),
+            PatternRegionUpserted or PatternRegionRemoved => InversePattern(op),
+            LiveLoopsChanged => new LiveLoopsChanged(LiveLoops),
+            _ => throw new ArgumentException($"Unknown delta operation {op.GetType().Name}.", nameof(op))
+        };
+
+    DeltaOp? InversePattern(DeltaOp op) =>
+        op switch {
             PatternRegionUpserted(var region) => PatternRegions.TryGetValue(region.Id, out var old)
                 ? new PatternRegionUpserted(old)
                 : new PatternRegionRemoved(region.Id),
             PatternRegionRemoved(var id) => PatternRegions.TryGetValue(id, out var old)
                 ? new PatternRegionUpserted(old)
                 : null,
-            LiveLoopsChanged => new LiveLoopsChanged(LiveLoops),
-            _ => throw new ArgumentException($"Unknown delta operation {op.GetType().Name}.", nameof(op))
+            _ => null
         };
 
     DeltaOp? InverseMidi(DeltaOp op) =>

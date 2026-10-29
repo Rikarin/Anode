@@ -103,7 +103,8 @@ public static partial class Edits {
     static List<Cell> WithCell(IReadOnlyList<Cell> cells, Cell cell) {
         var list = cells.Where(x => x.Id != cell.Id && !(x.TrackId == cell.TrackId && x.SceneId == cell.SceneId))
             .ToList();
-        var at = cells.ToList().FindIndex(x => x.Id == cell.Id || (x.TrackId == cell.TrackId && x.SceneId == cell.SceneId));
+        var at = cells.ToList()
+            .FindIndex(x => x.Id == cell.Id || (x.TrackId == cell.TrackId && x.SceneId == cell.SceneId));
         list.Insert(at < 0 ? list.Count : Math.Min(at, list.Count), cell);
         return list;
     }
@@ -125,31 +126,7 @@ public static partial class Edits {
         }
 
         if (content.Audio is { } audio) {
-            if (track.Kind != TrackKind.Audio) {
-                throw new EditException($"Track '{track.Name}' is not an audio track: it holds no audio cells.");
-            }
-
-            var file = FileOf(state, audio.FileId ?? string.Empty);
-            CheckSpan(file, audio.FileOffset, audio.Length);
-            if (!(audio.GainDb is >= MinRegionGainDb and <= MaxRegionGainDb)) {
-                throw new EditException($"Region gain {audio.GainDb} dB is outside {MinRegionGainDb}…{MaxRegionGainDb} dB.");
-            }
-
-            return (CellKind.Audio, new(
-                Audio: audio with {
-                    Id = cellId,
-                    TrackId = track.Id,
-                    StartTick = 0,
-                    Name = Name(audio.Name ?? file.Name, "region name"),
-                    FadeIn = Math.Clamp(audio.FadeIn, 0, audio.Length),
-                    FadeOut = Math.Clamp(audio.FadeOut, 0, audio.Length - Math.Clamp(audio.FadeIn, 0, audio.Length)),
-                    FadeInCurve = Math.Clamp(audio.FadeInCurve, -1, 1),
-                    FadeOutCurve = Math.Clamp(audio.FadeOutCurve, -1, 1),
-                    Follow = Enum.IsDefined(audio.Follow) ? audio.Follow : FlexFollow.Off,
-                    FlexMarkers = [..audio.FlexMarkers ?? []],
-                    PitchNotes = [..audio.PitchNotes ?? []]
-                }
-            ));
+            return (CellKind.Audio, new(AudioContent(state, track, cellId, audio)));
         }
 
         if (!HoldsMidi(track)) {
@@ -169,40 +146,81 @@ public static partial class Edits {
             ));
         }
 
-        var midi = content.Midi!;
+        return (CellKind.Midi, new(Midi: MidiContent(state, track, cellId, content.Midi!, existing)));
+    }
+
+    static AudioRegion AudioContent(ProjectState state, Track track, string cellId, AudioRegion audio) {
+        if (track.Kind != TrackKind.Audio) {
+            throw new EditException($"Track '{track.Name}' is not an audio track: it holds no audio cells.");
+        }
+
+        var file = FileOf(state, audio.FileId ?? string.Empty);
+        CheckSpan(file, audio.FileOffset, audio.Length);
+        if (!(audio.GainDb is >= MinRegionGainDb and <= MaxRegionGainDb)) {
+            throw new EditException(
+                $"Region gain {audio.GainDb} dB is outside {MinRegionGainDb}…{MaxRegionGainDb} dB."
+            );
+        }
+
+        var fadeIn = Math.Clamp(audio.FadeIn, 0, audio.Length);
+        return audio with {
+            Id = cellId,
+            TrackId = track.Id,
+            StartTick = 0,
+            Name = Name(audio.Name ?? file.Name, "region name"),
+            FadeIn = fadeIn,
+            FadeOut = Math.Clamp(audio.FadeOut, 0, audio.Length - fadeIn),
+            FadeInCurve = Math.Clamp(audio.FadeInCurve, -1, 1),
+            FadeOutCurve = Math.Clamp(audio.FadeOutCurve, -1, 1),
+            Follow = Enum.IsDefined(audio.Follow) ? audio.Follow : FlexFollow.Off,
+            FlexMarkers = [..audio.FlexMarkers ?? []],
+            PitchNotes = [..audio.PitchNotes ?? []]
+        };
+    }
+
+    /// <summary>A MIDI cell's region: notes and controllers checked, their ids renumbered where they clash.</summary>
+    static MidiRegion MidiContent(ProjectState state, Track track, string cellId, MidiRegion midi, Cell? existing) {
         CheckLength(midi.LengthTicks);
         var used = UsedEventIds(state, existing?.Id);
         var next = state.LastEventId;
         var notes = new List<Note>();
         foreach (var note in midi.Notes ?? []) {
-            if (note is null || note.Pitch is < 0 or > 127 || note.Velocity is < 1 or > 127 || note.Channel is < 1 or > 16
-                || note.StartTick < 0 || note.LengthTicks < 1) {
-                throw new EditException("A note has pitch 0…127, velocity 1…127, channel 1…16 and a positive length.");
-            }
-
+            CheckCellNote(note);
             notes.Add(note.Id <= 0 || !used.Add(note.Id) ? note with { Id = ++next } : note);
         }
 
         var controls = new List<ControlEvent>();
         foreach (var control in midi.Controls ?? []) {
-            if (control is null || control.Tick < 0 || control.Channel is < 1 or > 16 || !Enum.IsDefined(control.Kind)) {
+            if (control is null
+                || control.Tick < 0
+                || control.Channel is < 1 or > 16
+                || !Enum.IsDefined(control.Kind)) {
                 throw new EditException("A controller event has a known kind, a channel 1…16 and a tick of 0 or more.");
             }
 
             controls.Add(control.Id <= 0 || !used.Add(control.Id) ? control with { Id = ++next } : control);
         }
 
-        return (CellKind.Midi, new(
-            Midi: midi with {
-                Id = cellId,
-                TrackId = track.Id,
-                StartTick = 0,
-                Name = Name(midi.Name ?? "MIDI", "region name"),
-                Playback = midi.Playback ?? ProjectDefaults.Playback,
-                Notes = Sorted([..notes]),
-                Controls = Sorted([..controls])
-            }
-        ));
+        return midi with {
+            Id = cellId,
+            TrackId = track.Id,
+            StartTick = 0,
+            Name = Name(midi.Name ?? "MIDI", "region name"),
+            Playback = midi.Playback ?? ProjectDefaults.Playback,
+            Notes = Sorted([..notes]),
+            Controls = Sorted([..controls])
+        };
+    }
+
+    static void CheckCellNote(Note? note) {
+        if (note is null
+            || note.Pitch is < 0 or > 127
+            || note.Velocity is < 1 or > 127
+            || note.Channel is < 1 or > 16
+            || note.StartTick < 0
+            || note.LengthTicks < 1) {
+            throw new EditException("A note has pitch 0…127, velocity 1…127, channel 1…16 and a positive length.");
+        }
     }
 
     /// <summary>The note and controller ids the project uses (except in cell <paramref name="except" />).</summary>
@@ -276,7 +294,7 @@ public static partial class Edits {
         if (c.Shown == true
             && !grid.Shown
             && plugins.Find(RemixFxId) is { } remix
-            && state.Master.Inserts.All(i => i.PluginId != RemixFxId)
+            && state.Master.Inserts.All(static i => i.PluginId != RemixFxId)
             && state.Master.Inserts.Count < MaxInserts) {
             var insert = new Insert(
                 ids.Next(IdPrefix.Insert),

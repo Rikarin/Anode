@@ -152,7 +152,9 @@ public static partial class Edits {
             }
 
             // The saved side of Compare keeps the value the project had before the first change.
-            changed = changed with { Value = value, SavedValue = smart.Comparing ? control.SavedValue : control.SavedValue ?? control.Value };
+            changed = changed with {
+                Value = value, SavedValue = smart.Comparing ? control.SavedValue : control.SavedValue ?? control.Value
+            };
         }
 
         var withControl = track with { SmartControls = smart with { Controls = Replace(smart.Controls, changed) } };
@@ -182,9 +184,12 @@ public static partial class Edits {
             }
 
             var range = RangeOf(state, track, mapping.Target, plugins);
-            if (!double.IsFinite(mapping.Min) || !double.IsFinite(mapping.Max)
-                || mapping.Min < range.Min || mapping.Max > range.Max
-                || mapping.Min > range.Max || mapping.Max < range.Min) {
+            if (!double.IsFinite(mapping.Min)
+                || !double.IsFinite(mapping.Max)
+                || mapping.Min < range.Min
+                || mapping.Max > range.Max
+                || mapping.Min > range.Max
+                || mapping.Max < range.Min) {
                 throw new EditException(
                     $"A mapping of '{mapping.Target}' ranges within {range.Min}…{range.Max}, not {mapping.Min}…{mapping.Max}."
                 );
@@ -228,7 +233,11 @@ public static partial class Edits {
             : throw new EditException("A graph starts at x 0 and ends at x 1.");
     }
 
-    static List<DeltaOp> AutoMapSmartControls(ProjectState state, AutoMapSmartControlsCommand c, PluginCatalog plugins) {
+    static List<DeltaOp> AutoMapSmartControls(
+        ProjectState state,
+        AutoMapSmartControlsCommand c,
+        PluginCatalog plugins
+    ) {
         var track = SmartTrackOf(state, c.TrackId);
         var smart = SmartControlsOf(track);
         var hints = MacroHints(track, plugins).ToList();
@@ -271,23 +280,22 @@ public static partial class Edits {
         PluginCatalog plugins
     ) {
         if (track.Instrument is { } slot && plugins.Find(slot.PluginId) is { } instrument) {
-            foreach (var p in instrument.Parameters.Where(static p => p.Macro is not null).OrderBy(static p => p.Macro)) {
-                yield return ($"instrument:{p.Id}", p, slot.Parameters.TryGetValue(p.Id, out var v) ? v : p.Default);
+            foreach (var p in Hinted(instrument)) {
+                yield return ($"instrument:{p.Id}", p, slot.Parameters.GetValueOrDefault(p.Id, p.Default));
             }
         }
 
         foreach (var insert in track.Strip.Inserts) {
-            if (plugins.Find(insert.PluginId) is not { } plugin) {
-                continue;
-            }
-
-            foreach (var p in plugin.Parameters.Where(static p => p.Macro is not null && p.Id != HostTempoParameter)
-                         .OrderBy(static p => p.Macro)) {
-                yield return ($"insert:{insert.Id}:{p.Id}", p,
-                    insert.Parameters.TryGetValue(p.Id, out var v) ? v : p.Default);
+            foreach (var p in plugins.Find(insert.PluginId) is { } plugin ? Hinted(plugin) : []) {
+                yield return ($"insert:{insert.Id}:{p.Id}", p, insert.Parameters.GetValueOrDefault(p.Id, p.Default));
             }
         }
     }
+
+    /// <summary>A plugin's macro-hinted parameters by ascending hint (never the host's tempo).</summary>
+    static IEnumerable<ParameterInfo> Hinted(PluginInfo plugin) =>
+        plugin.Parameters.Where(static p => p.Macro is not null && p.Id != HostTempoParameter)
+            .OrderBy(static p => p.Macro);
 
     static List<DeltaOp> CompareSmartControls(
         ProjectState state,
@@ -363,10 +371,14 @@ public static partial class Edits {
                     }
                 };
             case ["insert", var id, var parameter] when strip.Inserts.Any(i => i.Id == id):
-                return track with { Strip = strip with { Inserts = WithSlotParameter(strip.Inserts, id, parameter, value, plugins) } };
+                return track with {
+                    Strip = strip with { Inserts = WithSlotParameter(strip.Inserts, id, parameter, value, plugins) }
+                };
             case ["midiEffect", var id, var parameter] when strip.MidiEffects.Any(i => i.Id == id):
                 return track with {
-                    Strip = strip with { MidiEffects = WithSlotParameter(strip.MidiEffects, id, parameter, value, plugins) }
+                    Strip = strip with {
+                        MidiEffects = WithSlotParameter(strip.MidiEffects, id, parameter, value, plugins)
+                    }
                 };
             default:
                 return track;
@@ -382,11 +394,11 @@ public static partial class Edits {
     ) =>
         [
             ..slots.Select(i => i.Id == id
-                ? i with {
-                    Parameters = PluginCatalog.Sorted(i.Parameters)
-                        .SetItem(parameter, Snapped(plugins, i.PluginId, parameter, value))
-                }
-                : i
+                    ? i with {
+                        Parameters = PluginCatalog.Sorted(i.Parameters)
+                            .SetItem(parameter, Snapped(plugins, i.PluginId, parameter, value))
+                    }
+                    : i
             )
         ];
 

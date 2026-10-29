@@ -21,6 +21,13 @@ public static class Performance {
         IReadOnlyList<ControlMove> moves,
         IIdSource ids
     ) {
+        var ops = Regions(state, spans, ids);
+        ops.AddRange(Lanes(state, moves, ids));
+        return ops;
+    }
+
+    /// <summary>Each span as regions of its cell's content where it played.</summary>
+    static List<DeltaOp> Regions(ProjectState state, IReadOnlyList<CellSpan> spans, IIdSource ids) {
         var ops = new List<DeltaOp>();
         var map = state.PlaybackMap;
         var next = state.LastEventId;
@@ -46,6 +53,12 @@ public static class Performance {
             }
         }
 
+        return ops;
+    }
+
+    /// <summary>The moves as automation points, replacing what the lanes had between the first move and the last.</summary>
+    static List<DeltaOp> Lanes(ProjectState state, IReadOnlyList<ControlMove> moves, IIdSource ids) {
+        var ops = new List<DeltaOp>();
         foreach (var lane in moves.GroupBy(static m => (m.TrackId, m.Target))) {
             var (trackId, target) = lane.Key;
             if (!Edits.TargetExists(state, trackId, target)) {
@@ -56,7 +69,8 @@ public static class Performance {
             var (from, to) = (points[0].Tick, points[^1].Tick);
             var existing = state.LaneOf(trackId, target);
             var kept = (existing?.Points ?? []).Where(p => p.Tick < from || p.Tick > to);
-            var written = points.GroupBy(static m => m.Tick).Select(static g => new AutomationPoint(g.Key, g.Last().Value, 0));
+            var written = points.GroupBy(static m => m.Tick)
+                .Select(static g => new AutomationPoint(g.Key, g.Last().Value, 0));
             ops.Add(
                 new AutomationLaneUpserted(
                     new(
@@ -133,7 +147,8 @@ public static class Performance {
     }
 
     /// <summary>The tick a project sample plays at (Varispeed folded in).</summary>
-    public static long TickAt(ProjectState state, long sample) => state.PlaybackMap.TickAtSample(sample, state.SampleRate);
+    public static long TickAt(ProjectState state, long sample) =>
+        state.PlaybackMap.TickAtSample(sample, state.SampleRate);
 
     /// <summary>The project sample a tick plays at (Varispeed folded in).</summary>
     public static long SampleAt(ProjectState state, long tick) => state.PlaybackMap.SampleAt(tick, state.SampleRate);

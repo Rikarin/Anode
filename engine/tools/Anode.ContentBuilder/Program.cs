@@ -1,5 +1,4 @@
 using Anode.ContentBuilder;
-using Anode.Contracts;
 using Anode.Dsp.Instruments;
 
 // anode-content-builder [--test] [--out <file.anodepack>] [--t1]
@@ -8,9 +7,10 @@ using Anode.Dsp.Instruments;
 var test = args.Contains("--test");
 var t1 = args.Contains("--t1") || BuiltinInstruments.Create(Content.DrumSynthId) is null;
 var outIndex = Array.IndexOf(args, "--out");
+var fileName = test ? "TestPack.anodepack" : "AnodeEssentials.anodepack";
 var output = outIndex >= 0 && outIndex + 1 < args.Length
     ? args[outIndex + 1]
-    : Path.Combine("artifacts", "content", test ? "TestPack.anodepack" : "AnodeEssentials.anodepack");
+    : Path.Combine("artifacts", "content", fileName);
 var staging = Path.Combine(Path.GetTempPath(), $"anode-content-{Guid.NewGuid():n}");
 try {
     var content = new Content(t1);

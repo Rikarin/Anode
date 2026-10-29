@@ -448,7 +448,10 @@ public static class ProjectPackage {
         }
 
         foreach (var region in file.PatternRegions ?? []) {
-            if (region?.Id is not null && region.TrackId == track.Id && region.Name is not null && Valid(region.Pattern)) {
+            if (region?.Id is not null
+                && region.TrackId == track.Id
+                && region.Name is not null
+                && Valid(region.Pattern)) {
                 patterns[region.Id] = region with { Pattern = region.Pattern with { Rows = [..region.Pattern.Rows] } };
             }
         }
@@ -492,16 +495,15 @@ public static class ProjectPackage {
                 && Fits(c, track, files)
             )
             .Select(static c => c.Content.Midi is { } m ? c with { Content = new(Midi: Normalise(m)) } : c)
-            .Select(static c => c.Content.Audio is { } a ? c with { Content = new(Audio: Normalise(a)) } : c)
+            .Select(static c => c.Content.Audio is { } a ? c with { Content = new(Normalise(a)) } : c)
             .DistinctBy(static c => c.Id)
             .DistinctBy(static c => (c.TrackId, c.SceneId))
             .ToArray();
-        return new(
-            scenes,
-            cells,
-            Enum.IsDefined(grid.Quantize) ? grid.Quantize : ProjectDefaults.LiveLoops.Quantize,
-            grid.Shown
-        );
+        return grid with {
+            Scenes = scenes,
+            Cells = cells,
+            Quantize = Enum.IsDefined(grid.Quantize) ? grid.Quantize : ProjectDefaults.LiveLoops.Quantize
+        };
     }
 
     /// <summary>Whether a cell's content is one snapshot of its kind, on a track that holds it.</summary>
@@ -636,6 +638,9 @@ public static class ProjectPackage {
             SmartControls = Normalise(track.SmartControls, track)
         };
 
+    /// <summary>A value 0…1 as read (0 when it is not a number).</summary>
+    static double Unit(double value) => double.IsFinite(value) ? Math.Clamp(value, 0, 1) : 0;
+
     /// <summary>A track's Smart Controls as read: every control of its layout, mappings well formed (null: none yet).</summary>
     static SmartControls? Normalise(SmartControls? smart, Track track) {
         if (smart is null || !Edits.HasAudioStrip(track.Kind)) {
@@ -643,22 +648,24 @@ public static class ProjectPackage {
         }
 
         var layout = Enum.IsDefined(smart.Layout) ? smart.Layout : SmartControlsLayout.Knobs8;
-        var defaults = Edits.SmartControlsOf(track with { SmartControls = null, Strip = Normalise(track.Strip, track) });
+        var defaults = Edits.SmartControlsOf(
+            track with { SmartControls = null, Strip = Normalise(track.Strip, track) }
+        );
         var saved = (smart.Controls ?? []).Where(static c => c?.Id is not null)
             .DistinctBy(static c => c.Id)
             .ToDictionary(static c => c.Id, StringComparer.Ordinal);
         var controls = Edits.ControlIds(layout)
             .Select(id => saved.TryGetValue(id, out var c)
-                ? c with {
-                    Name = c.Name ?? string.Empty,
-                    Kind = Edits.SmartControlKindOf(id),
-                    Value = double.IsFinite(c.Value) ? Math.Clamp(c.Value, 0, 1) : 0,
-                    Mappings = [
-                        ..(c.Mappings ?? []).Where(static m => m?.Target is not null)
-                            .Select(static m => m with { Graph = m.Graph ?? SmartMath.Line })
-                    ]
-                }
-                : new SmartControl(id, string.Empty, Edits.SmartControlKindOf(id), 0, null, [])
+                    ? c with {
+                        Name = c.Name ?? string.Empty,
+                        Kind = Edits.SmartControlKindOf(id),
+                        Value = Unit(c.Value),
+                        Mappings = [
+                            ..(c.Mappings ?? []).Where(static m => m?.Target is not null)
+                                .Select(static m => m with { Graph = m.Graph ?? SmartMath.Line })
+                        ]
+                    }
+                    : new SmartControl(id, string.Empty, Edits.SmartControlKindOf(id), 0, null, [])
             )
             .ToArray();
         return new(layout, controls, defaults.Arpeggiator, smart.Comparing);
@@ -822,7 +829,8 @@ public static class PackageMigrations {
     const string VersionField = "schemaVersion";
 
     /// <summary><c>Steps[n]</c> takes schema <c>n + 1</c> to <c>n + 2</c>; it gets the kind of file and its JSON.</summary>
-    static readonly Func<string, JsonObject, JsonObject>[] Steps = [ToSchema2, ToSchema3, ToSchema4, ToSchema5, ToSchema6];
+    static readonly Func<string, JsonObject, JsonObject>[] Steps =
+        [ToSchema2, ToSchema3, ToSchema4, ToSchema5, ToSchema6];
 
     public static JsonObject Upgrade(JsonObject json, string kind) {
         var version = json[VersionField] is JsonValue v && v.TryGetValue<int>(out var n) ? n : 1;

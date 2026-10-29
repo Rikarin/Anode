@@ -27,8 +27,12 @@ public readonly record struct PatternNote(long Tick, int Pitch, int Velocity, lo
 ///         <item>
 ///             Its start is <c>k·stepTicks</c>, plus <c>swing·120</c> ticks when that start is an even 16th (240 mod
 ///             480), plus <c>offset·stepTicks</c>, rounded, at least 0; its gate is <c>gate·stepTicks</c> ticks, split
-///             into <c>repeats</c> equal notes (each from <c>round(start + i·gate/n)</c> to <c>round(start + (i +
-///             1)·gate/n)</c>, at least a tick); a note starting at or after the region's end is dropped, one running
+///             into <c>repeats</c> equal notes (each from <c>round(start + i·gate/n)</c> to
+///             <c>
+///                 round(start + (i +
+///                 1)·gate/n)
+///             </c>
+///             , at least a tick); a note starting at or after the region's end is dropped, one running
 ///             past it is cut there.
 ///         </item>
 ///         <item>
@@ -51,49 +55,17 @@ public static class PatternUnroller {
         var seed = pattern.Seed.ToString(CultureInfo.InvariantCulture);
         for (var r = 0; r < pattern.Rows.Count; r++) {
             var row = pattern.Rows[r];
-            if (row.Muted || row.Length < 1 || row.Steps.Count < row.Length) {
-                continue;
-            }
-
             var stepTicks = row.StepTicks ?? pattern.StepTicks;
-            if (stepTicks <= 0) {
+            if (row.Muted || row.Length < 1 || row.Steps.Count < row.Length || stepTicks <= 0) {
                 continue;
             }
 
-            var length = row.Length;
             for (long k = 0; k * stepTicks < region.LengthTicks; k++) {
-                var step = row.Steps[StepAt(row.PlayMode, length, k, seed, region.Id, row.Id)];
-                if (!step.On) {
-                    continue;
-                }
-
-                if (step.Chance < 1
-                    && Draw(seed, region.Id, row.Id, (k % length).ToString(CultureInfo.InvariantCulture), k / length)
-                    >= step.Chance) {
-                    continue;
-                }
-
-                var at = (double)(k * stepTicks);
-                if ((k * stepTicks) % 480 == 240) {
-                    at += pattern.Swing * 120;
-                }
-
-                at += step.Offset * stepTicks;
-                at = Math.Max(0, at);
-                var gate = step.Gate * stepTicks;
-                var repeats = Math.Max(1, step.Repeats);
-                var pitches = Pitches(row, keyAt?.Invoke(region.StartTick + (long)Math.Round(at)));
-                for (var i = 0; i < repeats; i++) {
-                    var on = (long)Math.Round(at + i * gate / repeats);
-                    var off = Math.Max(on + 1, (long)Math.Round(at + (i + 1) * gate / repeats));
-                    if (on >= region.LengthTicks) {
-                        break;
-                    }
-
-                    off = Math.Min(off, region.LengthTicks);
-                    foreach (var pitch in pitches) {
-                        notes.Add((new(on, pitch, Math.Clamp(step.Velocity, 1, 127), Math.Max(1, off - on)), r));
-                    }
+                var step = row.Steps[StepAt(row.PlayMode, row.Length, k, seed, region.Id, row.Id)];
+                if (Plays(step, seed, region.Id, row, k)) {
+                    var at = Start(k, stepTicks, pattern.Swing, step.Offset);
+                    var pitches = Pitches(row, keyAt?.Invoke(region.StartTick + (long)Math.Round(at)));
+                    Repeats(notes, r, region.LengthTicks, step, at, step.Gate * stepTicks, pitches);
                 }
             }
         }
@@ -106,6 +78,48 @@ public static class PatternUnroller {
                 .ThenBy(static x => x.i)
                 .Select(static x => x.Note)
         ];
+    }
+
+    /// <summary>Whether an on step plays at position <paramref name="k" />: chance draws per position and pass.</summary>
+    static bool Plays(PatternStep step, string seed, string regionId, PatternRow row, long k) =>
+        step.On
+        && (step.Chance >= 1
+            || Draw(seed, regionId, row.Id, (k % row.Length).ToString(CultureInfo.InvariantCulture), k / row.Length)
+            < step.Chance);
+
+    /// <summary>Where position <paramref name="k" /> starts: its tick, swung on an even 16th, offset, at least 0.</summary>
+    static double Start(long k, int stepTicks, double swing, double offset) {
+        var tick = (ulong)(k * stepTicks);
+        double at = tick;
+        if (tick % 480 == 240) {
+            at += swing * 120;
+        }
+
+        return Math.Max(0, at + offset * stepTicks);
+    }
+
+    /// <summary>A step's notes: its gate split into its repeats, dropped from the region's end, cut there.</summary>
+    static void Repeats(
+        List<(PatternNote Note, int Row)> notes,
+        int row,
+        long regionLength,
+        PatternStep step,
+        double at,
+        double gate,
+        int[] pitches
+    ) {
+        var repeats = Math.Max(1, step.Repeats);
+        for (var i = 0; i < repeats; i++) {
+            var on = (long)Math.Round(at + i * gate / repeats);
+            if (on >= regionLength) {
+                break;
+            }
+
+            var off = Math.Min(Math.Max(on + 1, (long)Math.Round(at + (i + 1) * gate / repeats)), regionLength);
+            foreach (var pitch in pitches) {
+                notes.Add((new(on, pitch, Math.Clamp(step.Velocity, 1, 127), Math.Max(1, off - on)), row));
+            }
+        }
     }
 
     /// <summary>The step a row plays at position <paramref name="k" />.</summary>
@@ -134,8 +148,8 @@ public static class PatternUnroller {
         var degree = Math.Clamp(row.Note, 1, 7) - 1;
         var root = 60 + (tonic + scale[degree]) % 12;
         var rootRaw = tonic + scale[degree];
-        int Pitch(int j) => root + (tonic + scale[j % 7] + 12 * (j / 7)) - rootRaw;
         return [Pitch(degree), Pitch(degree + 2), Pitch(degree + 4)];
+        int Pitch(int j) => root + (tonic + scale[j % 7] + 12 * (j / 7)) - rootRaw;
     }
 
     /// <summary>
@@ -144,7 +158,17 @@ public static class PatternUnroller {
     ///     32-bit finaliser, over 2³². JavaScript computes the same with <c>Math.imul</c> and <c>&gt;&gt;&gt;</c>.
     /// </summary>
     public static double Draw(string seed, string regionId, string rowId, string step, long pass) {
-        var key = string.Concat(seed, ":", regionId, ":", rowId, ":", step, ":", pass.ToString(CultureInfo.InvariantCulture));
+        var key = string.Concat(
+            seed,
+            ":",
+            regionId,
+            ":",
+            rowId,
+            ":",
+            step,
+            ":",
+            pass.ToString(CultureInfo.InvariantCulture)
+        );
         var h = 2166136261u;
         foreach (var unit in key) {
             h ^= unit;

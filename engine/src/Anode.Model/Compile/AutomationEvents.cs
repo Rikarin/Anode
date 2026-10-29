@@ -45,23 +45,15 @@ public static class AutomationEvents {
             return [];
         }
 
-        var targets = new SortedSet<string>(StringComparer.Ordinal);
-        foreach (var lane in state.LanesOf(track.Id)) {
-            if (lane.Target.StartsWith(SmartControlPrefix, StringComparison.Ordinal)) {
-                continue;
-            }
-
-            if (track.FrozenFileId is null || !IsPluginTarget(lane.Target)) {
-                targets.Add(lane.Target);
-            }
-        }
-
-        // A Smart Control's lane drives the parameters it maps (Phase 6).
-        foreach (var (target, _) in SmartDriven(state, track)) {
-            if (track.FrozenFileId is null || !IsPluginTarget(target)) {
-                targets.Add(target);
-            }
-        }
+        // A Smart Control's lane is no target: it drives the parameters it maps (Phase 6).
+        var targets = new SortedSet<string>(
+            state.LanesOf(track.Id)
+                .Select(static l => l.Target)
+                .Where(static t => !t.StartsWith(SmartControlPrefix, StringComparison.Ordinal))
+                .Concat(SmartDriven(state, track).Keys)
+                .Where(t => track.FrozenFileId is null || !IsPluginTarget(t)),
+            StringComparer.Ordinal
+        );
 
         foreach (var outer in Outers(state, track)) {
             foreach (var lane in state.LanesOf(outer.Id)) {
@@ -85,7 +77,10 @@ public static class AutomationEvents {
     ///     The parameters a track's Smart Control lanes drive, with the lane and mapping that drive each: a mapped
     ///     target that exists and has no lane of its own (that one wins), the first control's mapping when two map it.
     /// </summary>
-    static Dictionary<string, (AutomationLane Lane, SmartMapping Mapping)> SmartDriven(ProjectState state, Track track) {
+    static Dictionary<string, (AutomationLane Lane, SmartMapping Mapping)> SmartDriven(
+        ProjectState state,
+        Track track
+    ) {
         var driven = new Dictionary<string, (AutomationLane, SmartMapping)>(StringComparer.Ordinal);
         if (track.SmartControls is not { } smart) {
             return driven;
@@ -101,7 +96,7 @@ public static class AutomationEvents {
                 if (!driven.ContainsKey(mapping.Target)
                     && mapping.Target != "mute"
                     && state.LaneOf(track.Id, mapping.Target) is null
-                    && Editing.Edits.TargetExists(state, track.Id, mapping.Target)) {
+                    && Edits.TargetExists(state, track.Id, mapping.Target)) {
                     driven[mapping.Target] = (lane, mapping);
                 }
             }
@@ -178,6 +173,7 @@ public static class AutomationEvents {
             var mapping = driver.Mapping;
             curves[0] = new(driver.Lane.Points, v => SmartMath.Map(mapping, v));
         }
+
         if (track is not null && target is "volume" or "mute") {
             foreach (var outer in OuterTracks(state, track)) {
                 var lane = outer.AutomationMode == AutomationMode.Off ? null : state.LaneOf(outer.Id, target);

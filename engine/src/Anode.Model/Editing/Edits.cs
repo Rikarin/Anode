@@ -327,6 +327,7 @@ public static partial class Edits {
         if (PadOwner(state, trackId) is { } owner) {
             step.Add(WithoutPad(state, owner, trackId));
         }
+
         foreach (var other in state.Tracks) {
             if (other.Id == trackId) {
                 continue;
@@ -408,7 +409,8 @@ public static partial class Edits {
             throw new EditException($"Input channel {input.Channel} is outside 0…{MaxInputChannel}.");
         }
 
-        if (track is { Kind: TrackKind.Stack, DrumMachine: null } && (c.RecordArmed == true || c.InputMonitoring == true)) {
+        if (track is { Kind: TrackKind.Stack, DrumMachine: null }
+            && (c.RecordArmed == true || c.InputMonitoring == true)) {
             throw new EditException("A stack records and monitors nothing itself: arm its members.");
         }
 
@@ -776,7 +778,9 @@ public static partial class Edits {
         var track = TrackOf(state, id);
         return HoldsMidi(track)
             ? track
-            : throw new EditException($"Track '{id}' is not an instrument, MIDI or drum machine track: it holds no MIDI.");
+            : throw new EditException(
+                $"Track '{id}' is not an instrument, MIDI or drum machine track: it holds no MIDI."
+            );
     }
 
     /// <summary>Whether a track of <paramref name="kind" /> holds MIDI regions and takes live MIDI.</summary>

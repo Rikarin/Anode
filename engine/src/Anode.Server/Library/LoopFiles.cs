@@ -92,8 +92,17 @@ public static class LoopFiles {
             OneShot = oneShot,
             Key = (flags & AcidRootSet) != 0 ? root % 12 : loop.Key,
             Beats = oneShot || beats == 0 ? loop.Beats : beats,
-            Tempo = oneShot || !(tempo is > 5 and < 1000) ? oneShot ? null : loop.Tempo : Math.Round(tempo, 3)
+            Tempo = AcidTempo(loop, oneShot, tempo)
         };
+    }
+
+    /// <summary>An ACID loop's tempo: none for a one-shot, the chunk's when it is one, else what the loop had.</summary>
+    static double? AcidTempo(LoopSidecar loop, bool oneShot, float tempo) {
+        if (oneShot) {
+            return null;
+        }
+
+        return tempo is > 5 and < 1000 ? Math.Round(tempo, 3) : loop.Tempo;
     }
 
     /// <summary>The <c>iXML</c> chunk read onto <paramref name="loop" />: its tempo, key and beats where it names them.</summary>

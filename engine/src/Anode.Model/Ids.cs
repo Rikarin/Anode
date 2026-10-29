@@ -5,7 +5,8 @@ namespace Anode.Model;
 /// <summary>
 ///     Makes domain ids: a kind prefix (<c>trk</c>, <c>rgn</c>, <c>mid</c>, <c>aud</c>, <c>prj</c>, <c>tkf</c>,
 ///     <c>tak</c>,
-///     <c>mrk</c>, <c>sec</c>, <c>alt</c>, and Phase 4's <c>ins</c>, <c>snd</c>, <c>aut</c>, <c>pat</c>, <c>job</c>, and Phase 6's <c>ptn</c>, <c>row</c>, <c>scn</c>,
+///     <c>mrk</c>, <c>sec</c>, <c>alt</c>, and Phase 4's <c>ins</c>, <c>snd</c>, <c>aut</c>, <c>pat</c>, <c>job</c>, and
+///     Phase 6's <c>ptn</c>, <c>row</c>, <c>scn</c>,
 ///     <c>cel</c>), an
 ///     underscore, a
 ///     suffix.

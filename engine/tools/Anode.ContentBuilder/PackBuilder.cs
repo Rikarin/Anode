@@ -81,7 +81,10 @@ public sealed class PackBuilder(PackSpec spec, string staging) {
         IReadOnlyList<string> tags
     ) {
         var path = File(folder, name + ".anodeloop.json");
-        Sidecar(path, new(1, LoopKind.Pattern, name, tempo, beats, null, LoopScale.Neither, tags, false, null, pattern));
+        Sidecar(
+            path,
+            new(1, LoopKind.Pattern, name, tempo, beats, null, LoopScale.Neither, tags, false, null, pattern)
+        );
     }
 
     /// <summary>A drum kit: a patch of kind stack with its pads (the server's patch file, under <c>patches/</c>).</summary>
@@ -95,14 +98,20 @@ public sealed class PackBuilder(PackSpec spec, string staging) {
             ["kind"] = "stack",
             ["inserts"] = new JsonArray(),
             ["sends"] = new JsonArray(),
-            ["pads"] = new JsonArray([
-                ..pads.Select(p => (JsonNode)new JsonObject {
-                    ["note"] = p.Note,
-                    ["name"] = p.Name,
-                    ["instrument"] = JsonSerializer.SerializeToNode(p.Instrument, ContractsJsonContext.Default.InstrumentSlot),
-                    ["inserts"] = new JsonArray()
-                })
-            ])
+            ["pads"] = new JsonArray(
+                [
+                    ..pads.Select(static p => (JsonNode)new JsonObject {
+                            ["note"] = p.Note,
+                            ["name"] = p.Name,
+                            ["instrument"] = JsonSerializer.SerializeToNode(
+                                p.Instrument,
+                                ContractsJsonContext.Default.InstrumentSlot
+                            ),
+                            ["inserts"] = new JsonArray()
+                        }
+                    )
+                ]
+            )
         };
         System.IO.File.WriteAllText(path, json.ToJsonString(new() { WriteIndented = true }));
     }

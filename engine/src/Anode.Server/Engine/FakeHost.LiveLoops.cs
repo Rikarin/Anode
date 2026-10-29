@@ -9,8 +9,9 @@ namespace Anode.Server.Engine;
 ///     sync and MIDI FX slots (as pass-through: kept, never run), and plays cells: a launch or stop waits for its
 ///     quantise boundary (computed from the tempo points, as the host does: a request within 1 ms of a boundary takes the
 ///     next), a launch replaces the track's playing cell there, a one-shot stops at its end, a retrigger launched while
-///     playing restarts; every change is pushed as <see cref="CellStateMessage" /> with its sample. While the transport
-///     stands, launches and stops take effect at once.
+///     playing restarts; every change is pushed as <see cref="CellStateMessage" /> with its sample. A message's stops
+///     apply before its launches; an unknown cell is answered <c>stopped</c>; a launch sent while the transport stands
+///     waits for play and starts on its boundary then; stopping the transport stops every cell.
 /// </summary>
 public sealed partial class FakeHost {
     static readonly TimeSpan CellInterval = TimeSpan.FromMilliseconds(4);
@@ -22,10 +23,19 @@ public sealed partial class FakeHost {
     Task? cellLoop;
 
     /// <summary>A cell of the loaded segment: its track, length in samples and play mode.</summary>
-    public sealed record CellInfo(int Index, int TrackId, long Length, CellMode Mode, long EventCount, long PlaylistCount);
+    public sealed record CellInfo(
+        int Index,
+        int TrackId,
+        long Length,
+        CellMode Mode,
+        long EventCount,
+        long PlaylistCount);
 
     /// <summary>A cell in the launcher: its state, the sample it changed (or will change) at, what comes next.</summary>
-    sealed record Launched(int Cell, EngineCellState State, long Sample, long? StopAt);
+    sealed record Launched(int Cell, EngineCellState State, long Sample, long? StopAt) {
+        /// <summary>A launch sent while the transport stands waits for play, then for this boundary.</summary>
+        public EngineQuantize? Waiting { get; init; }
+    }
 
     /// <summary>The tempo points of the model loaded last.</summary>
     public IReadOnlyList<TempoMapPoint> TempoPoints {
@@ -125,15 +135,23 @@ public sealed partial class FakeHost {
     }
 
     List<CellStateMessage> Launch(LaunchCellsMessage message) {
-        var changes = new List<CellStateMessage>();
+        // One message is one decision: its stops apply before its launches.
+        var changes = Stop(message.Stops ?? []);
         var now = Position();
         var moving = state != TelemetryTransportState.Stopped;
         foreach (var launch in message.Cells ?? []) {
             if (!cells.TryGetValue(launch.Cell, out var cell)) {
+                changes.Add(new(launch.Cell, EngineCellState.Stopped, now)); // an unknown cell
                 continue;
             }
 
-            var at = moving ? Boundary(now, launch.Quantize) : now;
+            if (!moving) {
+                // Before play: it waits for play and starts on its boundary then.
+                changes.Add(Set(new(cell.Index, EngineCellState.Queued, now, null) { Waiting = launch.Quantize }));
+                continue;
+            }
+
+            var at = Boundary(now, launch.Quantize);
             if (launcher.TryGetValue(cell.Index, out var current)
                 && current.State == EngineCellState.Playing
                 && cell.Mode == CellMode.Loop) {
@@ -142,17 +160,44 @@ public sealed partial class FakeHost {
 
             // The track's other cells give way at the boundary.
             foreach (var other in launcher.Values.Where(l => l.Cell != cell.Index
-                         && cells.TryGetValue(l.Cell, out var o)
-                         && o.TrackId == cell.TrackId
-                         && l.State is EngineCellState.Playing or EngineCellState.Queued).ToArray()) {
+                             && cells.TryGetValue(l.Cell, out var o)
+                             && o.TrackId == cell.TrackId
+                             && l.State is EngineCellState.Playing or EngineCellState.Queued
+                         )
+                         .ToArray()) {
                 changes.Add(Set(other with { State = EngineCellState.Stopping, Sample = at, StopAt = at }));
             }
 
             changes.Add(Set(new(cell.Index, at <= now ? EngineCellState.Playing : EngineCellState.Queued, at, null)));
         }
 
-        changes.AddRange(Stop(message.Stops ?? []));
         return changes;
+    }
+
+    /// <summary>
+    ///     The transport started at <paramref name="start" />: launches waiting for play go to their boundaries (a
+    ///     boundary at the start itself counts).
+    /// </summary>
+    void StartWaiting(long start) {
+        var changes = new List<CellStateMessage>();
+        foreach (var l in launcher.Values.Where(static l => l.Waiting is not null).ToArray()) {
+            var at = l.Waiting == EngineQuantize.Off
+                ? start
+                : Boundary(start - SampleRate / 1000 - 1, l.Waiting!.Value);
+            changes.Add(Set(new(l.Cell, at <= start ? EngineCellState.Playing : EngineCellState.Queued, at, null)));
+        }
+
+        Push(changes);
+    }
+
+    /// <summary>The transport stopped at <paramref name="at" />: every cell stops.</summary>
+    void StopAll(long at) {
+        var changes = new List<CellStateMessage>();
+        foreach (var l in launcher.Values.Where(static l => l.State != EngineCellState.Stopped).ToArray()) {
+            changes.Add(Set(new(l.Cell, EngineCellState.Stopped, at, null)));
+        }
+
+        Push(changes);
     }
 
     List<CellStateMessage> Stop(IReadOnlyList<CellStop> stops) {
@@ -163,7 +208,8 @@ public sealed partial class FakeHost {
             var at = moving ? Boundary(now, stop.Quantize) : now;
             foreach (var playing in launcher.Values.Where(l => cells.TryGetValue(l.Cell, out var c)
                              && c.TrackId == stop.TrackId
-                             && l.State is EngineCellState.Playing or EngineCellState.Queued)
+                             && l.State is EngineCellState.Playing or EngineCellState.Queued
+                         )
                          .ToArray()) {
                 changes.Add(
                     Set(
@@ -204,7 +250,7 @@ public sealed partial class FakeHost {
         var changes = new List<CellStateMessage>();
         foreach (var l in launcher.Values.ToArray()) {
             switch (l.State) {
-                case EngineCellState.Queued when now >= l.Sample:
+                case EngineCellState.Queued when l.Waiting is null && now >= l.Sample:
                     changes.Add(Set(l with { State = EngineCellState.Playing }));
                     break;
                 case EngineCellState.Stopping when l.StopAt is { } at && now >= at:
@@ -215,6 +261,8 @@ public sealed partial class FakeHost {
                     && now >= l.Sample + cell.Length:
                     changes.Add(Set(l with { State = EngineCellState.Stopped, Sample = l.Sample + cell.Length }));
                     break;
+                default:
+                    break; // nothing due yet, or stopped
             }
         }
 
@@ -231,7 +279,9 @@ public sealed partial class FakeHost {
                 foreach (var change in changes) {
                     try {
                         await SendAsync(change).ConfigureAwait(false);
-                    } catch (Exception e) when (e is IOException or InvalidOperationException or ObjectDisposedException) {
+                    } catch (Exception e) when (e is IOException
+                                                    or InvalidOperationException
+                                                    or ObjectDisposedException) {
                         return; // the server went away
                     }
                 }

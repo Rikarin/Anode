@@ -32,7 +32,7 @@ public static partial class Edits {
     }
 
     static TrackUpserted WithMidiEffects(ProjectState state, Track track, IReadOnlyList<Insert> slots) =>
-        new TrackUpserted(
+        new(
             SyncArpeggiator(track with { Strip = track.Strip with { MidiEffects = slots } }),
             state.IndexOfTrack(track.Id)
         );
@@ -57,7 +57,14 @@ public static partial class Edits {
             throw new EditException($"MIDI FX slot {index} is outside 0…{slots.Count}.");
         }
 
-        var slot = new Insert(ids.Next(IdPrefix.Insert), plugin.Id, plugin.Name, false, PluginCatalog.Defaults(plugin), null);
+        var slot = new Insert(
+            ids.Next(IdPrefix.Insert),
+            plugin.Id,
+            plugin.Name,
+            false,
+            PluginCatalog.Defaults(plugin),
+            null
+        );
         return [WithMidiEffects(state, track, slots.ToImmutableList().Insert(index, slot))];
     }
 
@@ -66,7 +73,8 @@ public static partial class Edits {
         var slot = MidiEffectOf(track, c.InsertId);
         var ops = new List<DeltaOp>();
         ops.AddRange(
-            LanesFor(state, track.Id, $"{MidiEffectPrefix}{slot.Id}:").Select(static l => new AutomationLaneRemoved(l.Id))
+            LanesFor(state, track.Id, $"{MidiEffectPrefix}{slot.Id}:")
+                .Select(static l => new AutomationLaneRemoved(l.Id))
         );
         ops.Add(WithMidiEffects(state, track, [..track.Strip.MidiEffects.Where(i => i.Id != slot.Id)]));
         return ops;
@@ -80,7 +88,9 @@ public static partial class Edits {
             throw new EditException($"MIDI FX slot {c.Index} is outside 0…{slots.Count - 1}.");
         }
 
-        return [WithMidiEffects(state, track, slots.Where(i => i.Id != slot.Id).ToImmutableList().Insert(c.Index, slot))];
+        return [
+            WithMidiEffects(state, track, slots.Where(i => i.Id != slot.Id).ToImmutableList().Insert(c.Index, slot))
+        ];
     }
 
     static List<DeltaOp> SetMidiEffect(ProjectState state, SetInsertCommand c) {

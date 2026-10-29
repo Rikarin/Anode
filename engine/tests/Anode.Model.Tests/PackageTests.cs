@@ -120,7 +120,11 @@ public sealed class PackageTests : IDisposable {
         Assert.Equal(RandomProjects.Json(state), RandomProjects.Json(loaded));
         Assert.Empty(loaded.Master.MidiEffects);
         Assert.Empty(loaded.PatternRegions);
-        Assert.Equal((0, 0, LaunchQuantize.Bar, false), (loaded.LiveLoops.Scenes.Count, loaded.LiveLoops.Cells.Count, loaded.LiveLoops.Quantize, loaded.LiveLoops.Shown));
+        Assert.Equal(
+            (0, 0, LaunchQuantize.Bar, false),
+            (loaded.LiveLoops.Scenes.Count, loaded.LiveLoops.Cells.Count, loaded.LiveLoops.Quantize,
+                loaded.LiveLoops.Shown)
+        );
         Assert.All(
             loaded.Tracks,
             static t => Assert.Equal(

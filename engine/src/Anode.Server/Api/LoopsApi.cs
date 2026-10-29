@@ -124,7 +124,10 @@ static class LoopsApi {
             );
         project.MapPost(
                 "/live-loops/launch",
-                static Results<NoContent, NotFound, ProblemHttpResult>(LaunchRequest request, EngineConnection engine) => {
+                static Results<NoContent, NotFound, ProblemHttpResult>(
+                    LaunchRequest request,
+                    EngineConnection engine
+                ) => {
                     engine.LaunchCells(request);
                     return TypedResults.NoContent();
                 }
@@ -136,7 +139,10 @@ static class LoopsApi {
             );
         project.MapPost(
                 "/live-loops/stop",
-                static Results<NoContent, NotFound, ProblemHttpResult>(StopRequest request, EngineConnection engine) => {
+                static Results<NoContent, NotFound, ProblemHttpResult>(
+                    StopRequest request,
+                    EngineConnection engine
+                ) => {
                     engine.StopCells(request);
                     return TypedResults.NoContent();
                 }

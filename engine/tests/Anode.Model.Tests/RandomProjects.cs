@@ -213,7 +213,12 @@ static class RandomProjects {
             ),
             new ChannelPatch("pat_kit", "Test Kit", "Drums", TrackKind.Stack, null, [], []) {
                 Pads = [
-                    new(36, "Kick", new("anode.synth", "Synth", new Dictionary<string, double> { ["cutoff"] = 200 }, null), []),
+                    new(
+                        36,
+                        "Kick",
+                        new("anode.synth", "Synth", new Dictionary<string, double> { ["cutoff"] = 200 }, null),
+                        []
+                    ),
                     new(38, "Snare", new("anode.sampler", "Sampler", new Dictionary<string, double>(), null), []),
                     new(
                         42,
@@ -322,7 +327,10 @@ static class RandomProjects {
                 typeof(AddSceneCommand),
                 typeof(SetCellCommand),
                 typeof(SetCellCommand),
-                typeof(SetCellCommand)
+                typeof(SetCellCommand),
+                // Pitch notes, so FlexPitchToMidi finds regions to convert often enough.
+                typeof(SetPitchNotesCommand),
+                typeof(SetPitchNotesCommand)
             ];
             foreach (var type in phase6) {
                 var command = type == typeof(AddInsertCommand) && MidiTracks(state).FirstOrDefault() is { } t
@@ -831,10 +839,10 @@ static class RandomProjects {
                 ? new RemoveDrumPadCommand(m.Id, Pick(r, m.DrumMachine!.Pads).Note)
                 : null,
             nameof(SetSmartControlsCommand) => (r.Next(2) == 0 && midiTracks.Length > 0
-                    ? Pick(r, midiTracks).Id
-                    : mixed.Length > 0
-                        ? Pick(r, mixed).Id
-                        : null) is { } t
+                ? Pick(r, midiTracks).Id
+                : mixed.Length > 0
+                    ? Pick(r, mixed).Id
+                    : null) is { } t
                 ? new SetSmartControlsCommand(
                     t,
                     r.Next(2) == 0 ? null : Pick(r, Enum.GetValues<SmartControlsLayout>()),
@@ -933,6 +941,7 @@ static class RandomProjects {
             machines.Where(static m => m.DrumMachine!.Pads.Count > 0).ToArray() is { Length: > 0 } some
                 ? Pick(r, some)
                 : null;
+
         MidiRegion? MidiRegion() => midiRegions.Length == 0 ? null : Pick(r, midiRegions);
 
         MidiRegion? WithNotes() =>
@@ -1117,7 +1126,9 @@ static class RandomProjects {
     static SmartMapping RandomMapping(ProjectState s, Track track, Random r) {
         var targets = new List<string> { "volume", "pan" };
         targets.AddRange(track.Strip.Sends.Select(static x => $"send:{x.Id}"));
-        targets.AddRange(track.Strip.Inserts.SelectMany(static i => i.Parameters.Keys.Select(p => $"insert:{i.Id}:{p}")));
+        targets.AddRange(
+            track.Strip.Inserts.SelectMany(static i => i.Parameters.Keys.Select(p => $"insert:{i.Id}:{p}"))
+        );
         targets.AddRange(
             track.Strip.MidiEffects.SelectMany(static i => i.Parameters.Keys.Select(p => $"midiEffect:{i.Id}:{p}"))
         );
@@ -1155,7 +1166,7 @@ static class RandomProjects {
                 var file = Pick(r, [..s.Files.Values]);
                 var length = r.NextInt64(1, file.Frames + 1);
                 content = new(
-                    Audio: new(
+                    new(
                         "x",
                         track.Id,
                         file.Id,

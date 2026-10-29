@@ -42,22 +42,65 @@ public sealed class Content(bool t1) {
         );
         foreach (var tempo in (int[])[90, 100, 120]) {
             DrumLoop(pack, "Drums", $"Basic Beat {tempo}", tempo, Beat.Basic, null, ["Drums", "Acoustic"]);
-            DrumLoop(pack, "Drums", $"Four on the Floor {tempo}", tempo, Beat.FourOnTheFloor, null, ["Drums", "Electronic"]);
+            DrumLoop(
+                pack,
+                "Drums",
+                $"Four on the Floor {tempo}",
+                tempo,
+                Beat.FourOnTheFloor,
+                null,
+                ["Drums", "Electronic"]
+            );
             DrumLoop(pack, "Drums", $"Broken Beat {tempo}", tempo, Beat.Broken, null, ["Drums", "Electronic"]);
         }
 
         foreach (var (name, note) in (ReadOnlySpan<(string, int)>)[("Kick", Kick), ("Snare", Snare), ("Hat", Hat)]) {
             var (l, r) = Renderer.Render(DrumSound(note), [new(0, 2_400, note, 110)], PackBuilder.SampleRate / 2);
-            pack.AudioLoop("One-shots", $"{name} One-shot", l, r, null, null, null, LoopScale.Neither, ["Drums", "One-shot"]);
+            pack.AudioLoop(
+                "One-shots",
+                $"{name} One-shot",
+                l,
+                r,
+                null,
+                null,
+                null,
+                LoopScale.Neither,
+                ["Drums", "One-shot"]
+            );
         }
 
         pack.MidiLoop("Bass", "Root Bass C", BassLine(0, [0, 0, 7, 5]), 110, 8, 0, LoopScale.Minor, ["Bass"]);
         pack.MidiLoop("Bass", "Walking Bass A", BassLine(9, [0, 3, 5, 7]), 110, 8, 9, LoopScale.Minor, ["Bass"]);
         pack.MidiLoop("Bass", "Octave Bass F", BassLine(5, [0, 12, 0, 12]), 120, 8, 5, LoopScale.Major, ["Bass"]);
-        pack.MidiLoop("Keys", "Pop Chords C", Chords(0, [[0, 4, 7], [7, 11, 14], [9, 12, 16], [5, 9, 12]]), 100, 16, 0, LoopScale.Major, ["Keys", "Synth"]);
-        pack.MidiLoop("Keys", "Minor Chords A", Chords(9, [[0, 3, 7], [5, 8, 12], [3, 7, 10], [7, 10, 14]]), 90, 16, 9, LoopScale.Minor, ["Keys", "Synth"]);
+        pack.MidiLoop(
+            "Keys",
+            "Pop Chords C",
+            Chords(0, [[0, 4, 7], [7, 11, 14], [9, 12, 16], [5, 9, 12]]),
+            100,
+            16,
+            0,
+            LoopScale.Major,
+            ["Keys", "Synth"]
+        );
+        pack.MidiLoop(
+            "Keys",
+            "Minor Chords A",
+            Chords(9, [[0, 3, 7], [5, 8, 12], [3, 7, 10], [7, 10, 14]]),
+            90,
+            16,
+            9,
+            LoopScale.Minor,
+            ["Keys", "Synth"]
+        );
         SynthLoop(pack, "Synth", "Pluck Arp C 120", 120, 0);
-        pack.PatternLoop("Patterns", "Four on the Floor", DrumPattern(Beat.FourOnTheFloor), 120, 4, ["Drums", "Electronic"]);
+        pack.PatternLoop(
+            "Patterns",
+            "Four on the Floor",
+            DrumPattern(Beat.FourOnTheFloor),
+            120,
+            4,
+            ["Drums", "Electronic"]
+        );
         pack.PatternLoop("Patterns", "Basic Beat", DrumPattern(Beat.Basic), 100, 4, ["Drums", "Acoustic"]);
         pack.Kit("kit_essentials", "Essentials Kit", KitPads());
         return pack;
@@ -78,10 +121,17 @@ public sealed class Content(bool t1) {
 
         switch (beat) {
             case Beat.FourOnTheFloor:
-                hits.AddRange([(0, Kick, 120), (4, Kick, 120), (8, Kick, 120), (12, Kick, 120), (4, Snare, 100), (12, Snare, 100)]);
+                hits.AddRange(
+                    [(0, Kick, 120), (4, Kick, 120), (8, Kick, 120), (12, Kick, 120), (4, Snare, 100), (12, Snare, 100)]
+                );
                 break;
             case Beat.Broken:
-                hits.AddRange([(0, Kick, 120), (6, Kick, 100), (10, Kick, 110), (4, Snare, 105), (12, Snare, 105), (15, Snare, 60)]);
+                hits.AddRange(
+                    [
+                        (0, Kick, 120), (6, Kick, 100), (10, Kick, 110), (4, Snare, 105), (12, Snare, 105),
+                        (15, Snare, 60)
+                    ]
+                );
                 break;
             default:
                 hits.AddRange([(0, Kick, 120), (8, Kick, 120), (10, Kick, 90), (4, Snare, 105), (12, Snare, 105)]);
@@ -122,12 +172,25 @@ public sealed class Content(bool t1) {
         var frames = (long)Math.Round(sixteenth * 32);
         int[] steps = [0, 4, 7, 12, 7, 4];
         var notes = Enumerable.Range(0, 32)
-            .Select(i => new RenderNote((long)Math.Round(i * sixteenth), (long)(sixteenth * 0.7), 60 + tonic + steps[i % steps.Length], 96))
+            .Select(i => new RenderNote(
+                    (long)Math.Round(i * sixteenth),
+                    (long)(sixteenth * 0.7),
+                    60 + tonic + steps[i % steps.Length],
+                    96
+                )
+            )
             .ToArray();
         var (left, right) = Renderer.Render(
-            new(SynthId, new Dictionary<string, float> {
-                ["osc1Wave"] = 1, ["cutoff"] = 2_500, ["ampDecay"] = 220, ["ampSustain"] = 20, ["ampRelease"] = 120
-            }),
+            new(
+                SynthId,
+                new Dictionary<string, float> {
+                    ["osc1Wave"] = 1,
+                    ["cutoff"] = 2_500,
+                    ["ampDecay"] = 220,
+                    ["ampSustain"] = 20,
+                    ["ampRelease"] = 120
+                }
+            ),
             notes,
             frames,
             0.5f
@@ -162,6 +225,8 @@ public sealed class Content(bool t1) {
     /// <summary>A one-bar Step Sequencer pattern of a beat: kick, snare and hat pad rows of 16 steps.</summary>
     static Pattern DrumPattern(Beat beat) {
         var hits = Hits(beat);
+        return new([Row("row_kick", Kick, "Kick"), Row("row_snare", Snare, "Snare"), Row("row_hat", Hat, "Hat")], 0, 1);
+
         PatternRow Row(string id, int note, string name) =>
             new(
                 id,
@@ -174,14 +239,12 @@ public sealed class Content(bool t1) {
                 false,
                 [
                     ..Enumerable.Range(0, 16)
-                        .Select(s => hits.FirstOrDefault(h => h.Note == note && h.Step == s) is var (_, _, v) && v > 0
-                            ? new PatternStep(true, v, 1, 1, 1, 0)
-                            : new PatternStep(false, 100, 1, 1, 1, 0)
+                        .Select(s => hits.Find(h => h.Note == note && h.Step == s) is var (_, _, v) && v > 0
+                                ? new PatternStep(true, v, 1, 1, 1, 0)
+                                : new PatternStep(false, 100, 1, 1, 1, 0)
                         )
                 ]
             );
-
-        return new([Row("row_kick", Kick, "Kick"), Row("row_snare", Snare, "Snare"), Row("row_hat", Hat, "Hat")], 0, 1);
     }
 
     /// <summary>A kit's pads: kick, snare and hat (the Drum Synth's models, or the T1 synth's drum sounds).</summary>
@@ -205,40 +268,74 @@ public sealed class Content(bool t1) {
     /// </summary>
     Sound DrumSound(int note) {
         if (!t1 && BuiltinInstruments.Create(DrumSynthId) is { } drum) {
-            using (drum) {
-                var name = note switch {
-                    Kick => "Kick",
-                    Snare => "Snare",
-                    _ => "Hat"
-                };
-                var parameters = new Dictionary<string, float>();
-                foreach (var p in drum.Descriptor.Parameters) {
-                    if (p.ValueNames?.ToList().FindIndex(v => v.Contains(name, StringComparison.OrdinalIgnoreCase)) is >= 0 and var i) {
-                        parameters[p.Id] = p.Min + i;
-                    }
-                }
-
-                return new(DrumSynthId, parameters);
-            }
+            drum.Dispose();
+            // The Drum Synth's model: 0 Kick, 1 Snare, 3 Hat (a closed hat: a short decay).
+            return note switch {
+                Kick => new(DrumSynthId, new Dictionary<string, float> { ["model"] = 0 }),
+                Snare => new(DrumSynthId, new Dictionary<string, float> { ["model"] = 1 }),
+                _ => new(DrumSynthId, new Dictionary<string, float> { ["model"] = 3, ["decay"] = 15 })
+            };
         }
 
         return note switch {
-            Kick => new(SynthId, new Dictionary<string, float> {
-                ["osc1Wave"] = 3, ["osc2Wave"] = 3, ["oscMix"] = 0, ["osc1Octave"] = -1, ["filterMode"] = 0,
-                ["cutoff"] = 300, ["resonance"] = 0, ["keyTracking"] = 0, ["filterEnvAmount"] = 60, ["filterAttack"] = 0,
-                ["filterDecay"] = 60, ["filterSustain"] = 0, ["ampAttack"] = 0, ["ampDecay"] = 220, ["ampSustain"] = 0,
-                ["ampRelease"] = 40, ["lfoPitch"] = 0
-            }),
-            Snare => new(SynthId, new Dictionary<string, float> {
-                ["osc1Wave"] = 4, ["osc2Wave"] = 2, ["oscMix"] = 25, ["filterMode"] = 3, ["cutoff"] = 1_800,
-                ["resonance"] = 10, ["keyTracking"] = 0, ["filterEnvAmount"] = 0, ["ampAttack"] = 0, ["ampDecay"] = 160,
-                ["ampSustain"] = 0, ["ampRelease"] = 60, ["lfoPitch"] = 0
-            }),
-            _ => new(SynthId, new Dictionary<string, float> {
-                ["osc1Wave"] = 4, ["osc2Wave"] = 4, ["oscMix"] = 0, ["filterMode"] = 2, ["cutoff"] = 9_000,
-                ["resonance"] = 0, ["keyTracking"] = 0, ["filterEnvAmount"] = 0, ["ampAttack"] = 0, ["ampDecay"] = 45,
-                ["ampSustain"] = 0, ["ampRelease"] = 20, ["lfoPitch"] = 0
-            })
+            Kick => new(
+                SynthId,
+                new Dictionary<string, float> {
+                    ["osc1Wave"] = 3,
+                    ["osc2Wave"] = 3,
+                    ["oscMix"] = 0,
+                    ["osc1Octave"] = -1,
+                    ["filterMode"] = 0,
+                    ["cutoff"] = 300,
+                    ["resonance"] = 0,
+                    ["keyTracking"] = 0,
+                    ["filterEnvAmount"] = 60,
+                    ["filterAttack"] = 0,
+                    ["filterDecay"] = 60,
+                    ["filterSustain"] = 0,
+                    ["ampAttack"] = 0,
+                    ["ampDecay"] = 220,
+                    ["ampSustain"] = 0,
+                    ["ampRelease"] = 40,
+                    ["lfoPitch"] = 0
+                }
+            ),
+            Snare => new(
+                SynthId,
+                new Dictionary<string, float> {
+                    ["osc1Wave"] = 4,
+                    ["osc2Wave"] = 2,
+                    ["oscMix"] = 25,
+                    ["filterMode"] = 3,
+                    ["cutoff"] = 1_800,
+                    ["resonance"] = 10,
+                    ["keyTracking"] = 0,
+                    ["filterEnvAmount"] = 0,
+                    ["ampAttack"] = 0,
+                    ["ampDecay"] = 160,
+                    ["ampSustain"] = 0,
+                    ["ampRelease"] = 60,
+                    ["lfoPitch"] = 0
+                }
+            ),
+            _ => new(
+                SynthId,
+                new Dictionary<string, float> {
+                    ["osc1Wave"] = 4,
+                    ["osc2Wave"] = 4,
+                    ["oscMix"] = 0,
+                    ["filterMode"] = 2,
+                    ["cutoff"] = 9_000,
+                    ["resonance"] = 0,
+                    ["keyTracking"] = 0,
+                    ["filterEnvAmount"] = 0,
+                    ["ampAttack"] = 0,
+                    ["ampDecay"] = 45,
+                    ["ampSustain"] = 0,
+                    ["ampRelease"] = 20,
+                    ["lfoPitch"] = 0
+                }
+            )
         };
     }
 }

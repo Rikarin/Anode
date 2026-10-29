@@ -10,7 +10,10 @@ namespace Anode.Model.Compile;
 ///     (<see cref="TrackEntry.MetronomeTrack" />); its length in samples; and the engine ids this compilation had to
 ///     recompile (the rest are the very instances of the previous one).
 /// </summary>
-public sealed record CompiledModel(IReadOnlyList<TrackModel> Tracks, long LengthSamples, IReadOnlyList<int> Recompiled) {
+public sealed record CompiledModel(
+    IReadOnlyList<TrackModel> Tracks,
+    long LengthSamples,
+    IReadOnlyList<int> Recompiled) {
     /// <summary>The compiled tempo map (format 4, <see cref="TempoPoints" />).</summary>
     public IReadOnlyList<TempoMapPoint> Tempo { get; init; } = [];
 
@@ -63,9 +66,7 @@ public sealed class ModelCompiler {
             state.Regions.Values.ToLookup(static r => r.TrackId, StringComparer.Ordinal),
             state.MidiRegions.Values.ToLookup(static r => r.TrackId, StringComparer.Ordinal),
             state.TakeFolders.Values.ToLookup(static f => f.TrackId, StringComparer.Ordinal)
-        ) {
-            Patterns = state.PatternRegions.Values.ToLookup(static r => r.TrackId, StringComparer.Ordinal)
-        };
+        ) { Patterns = state.PatternRegions.Values.ToLookup(static r => r.TrackId, StringComparer.Ordinal) };
         var models = new List<TrackModel>(state.Tracks.Count + 2);
         var seen = new HashSet<int>();
         long end = 0;
@@ -236,12 +237,17 @@ public sealed class ModelCompiler {
         );
     }
 
-    /// <summary>A DMD's notes on a pad's note, played at the pad's base note on the pad's engine track.</summary>
+    /// <summary>
+    ///     A DMD's notes on a pad's note, on the pad's engine track with their note number unchanged (as the host routes
+    ///     live MIDI; the pad's instrument plays its own sound whatever the note).
+    /// </summary>
     static PlaybackEvent[] RoutedEvents(ProjectState state, TempoMap map, int engineId, Route route) {
-        var all = Merge(MidiEvents(state, map, engineId, route.Midi), PatternEvents(state, map, engineId, route.Patterns));
+        var all = Merge(
+            MidiEvents(state, map, engineId, route.Midi),
+            PatternEvents(state, map, engineId, route.Patterns)
+        );
         return [
             ..all.Where(e => e.Kind is PlaybackEventKind.NoteOn or PlaybackEventKind.NoteOff && e.Data1 == route.Note)
-                .Select(static e => e with { Data1 = Editing.Edits.PadBaseNote })
         ];
     }
 

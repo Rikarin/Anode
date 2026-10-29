@@ -506,30 +506,12 @@ public sealed partial class FakeHost : IAsyncDisposable {
                 break;
             case SetInsertParameterMessage parameter:
                 lock (gate) {
+                    // A MIDI FX slot's parameter (Phase 6) goes by its slot id as an insert's does.
                     SetStripOf(
                         parameter.TrackId,
                         strip => strip with {
-                            Inserts = [
-                                ..(strip.Inserts ?? []).Select(i => i.Id != parameter.InsertId
-                                        ? i
-                                        : i with {
-                                            Parameters = new Dictionary<string, double>(i.Parameters) {
-                                                [parameter.ParameterId] = parameter.Value
-                                            }
-                                        }
-                                )
-                            ],
-                            // A MIDI FX slot's parameter (Phase 6) goes by its slot id as an insert's does.
-                            MidiEffects = [
-                                ..(strip.MidiEffects ?? []).Select(i => i.Id != parameter.InsertId
-                                        ? i
-                                        : i with {
-                                            Parameters = new Dictionary<string, double>(i.Parameters) {
-                                                [parameter.ParameterId] = parameter.Value
-                                            }
-                                        }
-                                )
-                            ]
+                            Inserts = WithParameter(strip.Inserts, parameter),
+                            MidiEffects = WithParameter(strip.MidiEffects, parameter)
                         }
                     );
                 }
@@ -659,6 +641,18 @@ public sealed partial class FakeHost : IAsyncDisposable {
             }
         }
     }
+
+    /// <summary>Slots with a parameter of the one the message names set.</summary>
+    static EngineInsert[] WithParameter(IReadOnlyList<EngineInsert>? slots, SetInsertParameterMessage parameter) => [
+        ..(slots ?? []).Select(i => i.Id != parameter.InsertId
+                ? i
+                : i with {
+                    Parameters = new Dictionary<string, double>(i.Parameters) {
+                        [parameter.ParameterId] = parameter.Value
+                    }
+                }
+        )
+    ];
 
     void SetStripOf(int trackId, Func<EngineStrip, EngineStrip> change) {
         if (trackId == -1) {
@@ -914,12 +908,14 @@ public sealed partial class FakeHost : IAsyncDisposable {
                         heard.Clear();
                     }
 
+                    StartWaiting(anchorPosition);
                     break;
                 case TransportAction.Stop:
                     takes = Finish(midiTakes);
                     EndPlayback();
                     anchorPosition = now;
                     state = TelemetryTransportState.Stopped;
+                    StopAll(now);
                     break;
                 case TransportAction.Locate:
                     anchorPosition = Math.Max(0, message.PositionSamples);

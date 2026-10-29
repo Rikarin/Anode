@@ -11,12 +11,6 @@ public static partial class Edits {
     /// <summary>The instrument a new pad plays unless told otherwise (workstream E's Drum Synth).</summary>
     public const string DrumSynthId = "anode.drum-synth";
 
-    /// <summary>
-    ///     The note a pad's instrument is played at, whatever note triggered it: a pad always plays its own sound (the
-    ///     Drum Synth ignores pitch; the Quick Sampler plays at its root, C3).
-    /// </summary>
-    public const int PadBaseNote = 60;
-
     static List<DeltaOp> CreateDrumMachine(
         ProjectState state,
         CreateDrumMachineCommand c,
@@ -34,16 +28,36 @@ public static partial class Edits {
         if (c.TrackId is null) {
             CheckTrackCount(state);
             dmd = NewTrack(
-                    state,
-                    ids,
-                    TrackKind.Stack,
-                    c.Name is null ? NextDrumMachineName(state) : Name(c.Name, "track name")
-                ) with {
-                    DrumMachine = new([])
-                };
+                state,
+                ids,
+                TrackKind.Stack,
+                c.Name is null ? NextDrumMachineName(state) : Name(c.Name, "track name")
+            ) with {
+                DrumMachine = new([])
+            };
             ops.Add(new TrackUpserted(dmd, state.Tracks.Count));
         } else {
-            var track = TrackOf(state, c.TrackId);
+            dmd = Converted(state, c, ops);
+        }
+
+        state = state.Apply(ops);
+        foreach (var pad in kit?.Pads ?? []) {
+            if (pad.Note is < 0 or > 127 || state.FindTrack(dmd.Id)!.DrumMachine!.Pads.Any(p => p.Note == pad.Note)) {
+                continue;
+            }
+
+            var step = NewPad(state, state.FindTrack(dmd.Id)!, pad.Note, pad.Name, ids, plugins, pad);
+            ops.AddRange(step);
+            state = state.Apply(step);
+        }
+
+        return ops;
+    }
+
+    /// <summary>An instrument track turned into a Drum Machine Designer in place (its operations appended).</summary>
+    static Track Converted(ProjectState state, CreateDrumMachineCommand c, List<DeltaOp> ops) {
+        {
+            var track = TrackOf(state, c.TrackId!);
             if (track.Kind != TrackKind.Instrument) {
                 throw new EditException("Only an instrument track turns into a Drum Machine Designer.");
             }
@@ -59,7 +73,7 @@ public static partial class Edits {
             }
 
             var strip = track.Strip;
-            dmd = track with {
+            var dmd = track with {
                 Kind = TrackKind.Stack,
                 Name = c.Name is null ? track.Name : Name(c.Name, "track name"),
                 Instrument = null,
@@ -86,20 +100,8 @@ public static partial class Edits {
             }
 
             ops.Add(new TrackUpserted(dmd, state.IndexOfTrack(track.Id)));
+            return dmd;
         }
-
-        state = state.Apply(ops);
-        foreach (var pad in kit?.Pads ?? []) {
-            if (pad.Note is < 0 or > 127 || state.FindTrack(dmd.Id)!.DrumMachine!.Pads.Any(p => p.Note == pad.Note)) {
-                continue;
-            }
-
-            var step = NewPad(state, state.FindTrack(dmd.Id)!, pad.Note, pad.Name, ids, plugins, pad);
-            ops.AddRange(step);
-            state = state.Apply(step);
-        }
-
-        return ops;
     }
 
     static string NextDrumMachineName(ProjectState state) {

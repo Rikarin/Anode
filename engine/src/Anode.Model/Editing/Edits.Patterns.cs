@@ -109,37 +109,42 @@ public static partial class Edits {
         CheckStepTicks(pattern.StepTicks);
         var seen = new HashSet<string>(StringComparer.Ordinal);
         foreach (var row in rows) {
-            if (row is null || string.IsNullOrEmpty(row.Id) || row.Id.Length > 64 || !seen.Add(row.Id)) {
-                throw new EditException("Every row has an id of its own (1…64 characters).");
-            }
-
-            if (!Enum.IsDefined(row.Kind) || !Enum.IsDefined(row.PlayMode)) {
-                throw new EditException($"Row '{row.Id}' has an unknown kind or play mode.");
-            }
-
-            var notes = row.Kind == PatternRowKind.ChordDegree ? (1, 7) : (0, 127);
-            if (row.Note < notes.Item1 || row.Note > notes.Item2) {
-                throw new EditException($"Row '{row.Id}' plays {notes.Item1}…{notes.Item2}, not {row.Note}.");
-            }
-
-            if (row.Name is null || row.Name.Length > MaxNameLength) {
-                throw new EditException($"A row's name has at most {MaxNameLength} characters.");
-            }
-
-            if (row.Length is < 1 or > MaxRowLength || row.Steps is null || row.Steps.Count != row.Length) {
-                throw new EditException($"Row '{row.Id}' has 1…{MaxRowLength} steps, as many as its length.");
-            }
-
-            if (row.StepTicks is { } stepTicks) {
-                CheckStepTicks(stepTicks);
-            }
-
-            foreach (var step in row.Steps) {
-                CheckStep(step);
-            }
+            CheckRow(row, seen);
         }
 
         return pattern with { Rows = [..rows] };
+    }
+
+    /// <summary>A row of a pattern: an id of its own, a known kind and play mode, a note, steps as its length.</summary>
+    static void CheckRow(PatternRow? row, HashSet<string> seen) {
+        if (row is null || string.IsNullOrEmpty(row.Id) || row.Id.Length > 64 || !seen.Add(row.Id)) {
+            throw new EditException("Every row has an id of its own (1…64 characters).");
+        }
+
+        if (!Enum.IsDefined(row.Kind) || !Enum.IsDefined(row.PlayMode)) {
+            throw new EditException($"Row '{row.Id}' has an unknown kind or play mode.");
+        }
+
+        var (low, high) = row.Kind == PatternRowKind.ChordDegree ? (1, 7) : (0, 127);
+        if (row.Note < low || row.Note > high) {
+            throw new EditException($"Row '{row.Id}' plays {low}…{high}, not {row.Note}.");
+        }
+
+        if (row.Name is null || row.Name.Length > MaxNameLength) {
+            throw new EditException($"A row's name has at most {MaxNameLength} characters.");
+        }
+
+        if (row.Length is < 1 or > MaxRowLength || row.Steps is null || row.Steps.Count != row.Length) {
+            throw new EditException($"Row '{row.Id}' has 1…{MaxRowLength} steps, as many as its length.");
+        }
+
+        if (row.StepTicks is { } stepTicks) {
+            CheckStepTicks(stepTicks);
+        }
+
+        foreach (var step in row.Steps) {
+            CheckStep(step);
+        }
     }
 
     static void CheckStepTicks(int stepTicks) {

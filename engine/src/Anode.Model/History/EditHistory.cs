@@ -254,7 +254,7 @@ public static class UndoLabels {
             SetLiveLoopsCommand => "Change Live Loops",
             SetTrackActivationCommand => "Change Track Activation",
             _ => "Edit"
-                };
+        };
 
     /// <summary>
     ///     The control a batch of only <c>setStrip</c> commands moves (the strip and the fields it sets), or of only

@@ -54,7 +54,9 @@ public sealed class PatternTests {
 
     [Fact]
     public void Reverse_plays_the_steps_backwards() {
-        var notes = PatternUnroller.Unroll(Region(240 * 6, 0, 1, Row("r", 60, [On(10), On(20), On(30)], PatternPlayMode.Reverse)));
+        var notes = PatternUnroller.Unroll(
+            Region(240 * 6, 0, 1, Row("r", 60, [On(10), On(20), On(30)], PatternPlayMode.Reverse))
+        );
         Assert.Equal([30, 20, 10, 30, 20, 10], notes.Select(static n => n.Velocity));
     }
 
@@ -94,7 +96,7 @@ public sealed class PatternTests {
     public void A_chord_degree_row_plays_a_triad_of_the_key() {
         var notes = PatternUnroller.Unroll(
             Region(240, 0, 1, Row("d", 2, [On()], kind: PatternRowKind.ChordDegree)),
-            _ => new(0, 2, KeyMode.Minor)
+            static _ => new(0, 2, KeyMode.Minor)
         );
         // D minor, degree 2: E G Bb from E3 (64).
         Assert.Equal([64, 67, 70], notes.Select(static n => n.Pitch));
@@ -124,13 +126,26 @@ public sealed class PatternTests {
 
     /// <summary>A random pattern made valid: every row as many steps as its length.</summary>
     static Pattern Valid(Pattern pattern) =>
-        pattern with { Rows = [..pattern.Rows.Select(static r => r with { Steps = [..r.Steps.Take(r.Length)], Length = Math.Min(r.Length, r.Steps.Count) })] };
+        pattern with {
+            Rows = [
+                ..pattern.Rows.Select(static r => r with {
+                        Steps = [..r.Steps.Take(r.Length)], Length = Math.Min(r.Length, r.Steps.Count)
+                    }
+                )
+            ]
+        };
 
     [Fact]
     public void The_generator_is_FNV_and_Murmur_finalised() {
         // Pinned values: the editor computes the same (PatternVectors.json's draws).
-        Assert.Equal(PatternUnroller.Draw("1", "ptn_a", "row_1", "0", 0), PatternUnroller.Draw("1", "ptn_a", "row_1", "0", 0));
-        Assert.NotEqual(PatternUnroller.Draw("1", "ptn_a", "row_1", "0", 0), PatternUnroller.Draw("1", "ptn_a", "row_1", "0", 1));
+        Assert.Equal(
+            PatternUnroller.Draw("1", "ptn_a", "row_1", "0", 0),
+            PatternUnroller.Draw("1", "ptn_a", "row_1", "0", 0)
+        );
+        Assert.NotEqual(
+            PatternUnroller.Draw("1", "ptn_a", "row_1", "0", 0),
+            PatternUnroller.Draw("1", "ptn_a", "row_1", "0", 1)
+        );
         Assert.InRange(PatternUnroller.Draw("12345", "ptn_x", "row_kick", "3", 2), 0, 1);
     }
 
@@ -144,20 +159,32 @@ public sealed class PatternTests {
                 new JsonObject {
                     ["name"] = name,
                     ["region"] = JsonSerializer.SerializeToNode(region, ContractsJsonContext.Default.PatternRegion),
-                    ["keys"] = new JsonArray([
-                        ..keys.Select(static k => JsonSerializer.SerializeToNode(k, ContractsJsonContext.Default.KeyEvent))
-                    ]),
-                    ["notes"] = new JsonArray([
-                        ..notes.Select(static n => (JsonNode)new JsonObject {
-                            ["tick"] = n.Tick, ["pitch"] = n.Pitch, ["velocity"] = n.Velocity, ["length"] = n.Length
-                        })
-                    ])
+                    ["keys"] = new JsonArray(
+                        [
+                            ..keys.Select(static k => JsonSerializer.SerializeToNode(
+                                    k,
+                                    ContractsJsonContext.Default.KeyEvent
+                                )
+                            )
+                        ]
+                    ),
+                    ["notes"] = new JsonArray(
+                        [
+                            ..notes.Select(static n => (JsonNode)new JsonObject {
+                                    ["tick"] = n.Tick,
+                                    ["pitch"] = n.Pitch,
+                                    ["velocity"] = n.Velocity,
+                                    ["length"] = n.Length
+                                }
+                            )
+                        ]
+                    )
                 }
             );
         }
 
         var draws = new JsonArray();
-        foreach (var (seed, region, row, step, pass) in (ReadOnlySpan<(string, string, string, string, long)>)[
+        foreach (var (seed, region, row, step, pass) in (ReadOnlySpan<(string, string, string, string, long)>) [
                      ("0", "ptn_a", "row_1", "0", 0), ("1", "ptn_a", "row_1", "0", 0), ("1", "ptn_a", "row_1", "0", 1),
                      ("7", "ptn_test", "c", "3", 2), ("123456789", "cel_x", "row_kick", "r", 17),
                      ("-5", "ptn_ü", "row_é", "15", 1000)
@@ -175,11 +202,11 @@ public sealed class PatternTests {
         }
 
         var document = new JsonObject {
-            ["about"] = "Pattern unrolling vectors (docs/07-phase-6.md, \"Pattern regions\"): Anode.Model's "
+            ["about"] = """Pattern unrolling vectors (docs/07-phase-6.md, "Pattern regions"): Anode.Model's """
                 + "PatternUnroller computes these; the editor's must match them exactly. Ticks are relative to the region's "
                 + "start (960 per quarter note). A row walks positions k = 0, 1, … every stepTicks (its own, else the "
                 + "pattern's) while k*stepTicks < lengthTicks; its step: forward k mod L, reverse L-1-(k mod L), ping-pong "
-                + "c = k mod (2L-2), c < L ? c : 2L-2-c (L = 1: step 0), random floor(draw(seed, region, row, \"r\", k) * L). "
+                + """c = k mod (2L-2), c < L ? c : 2L-2-c (L = 1: step 0), random floor(draw(seed, region, row, "r", k) * L). """
                 + "An on step plays unless chance < 1 and draw(seed, region, row, k mod L, k div L) >= chance. Its start: "
                 + "k*stepTicks, + swing*120 when that is 240 mod 480, + offset*stepTicks, at least 0 (unrounded). Its gate "
                 + "gate*stepTicks splits into repeats notes from round(start + i*gate/n) to round(start + (i+1)*gate/n), "
@@ -214,20 +241,58 @@ public sealed class PatternTests {
 
     static IEnumerable<(string Name, PatternRegion Region, KeyEvent[] Keys)> VectorCases() {
         KeyEvent[] c = [new(0, 0, KeyMode.Major)];
-        yield return ("forward 16ths", Region(3840, 0, 1, Row("kick", 36, [On(), Off, Off, Off, On(90), Off, Off, Off])), c);
-        yield return ("independent lengths", Region(3840, 0, 1, Row("a", 36, [On(), Off, Off, Off]), Row("b", 42, [On(), Off, On(60), Off, Off, Off, Off])), c);
-        yield return ("ping-pong", Region(3840, 0, 1, Row("p", 60, [On(10), On(20), On(30), On(40)], PatternPlayMode.PingPong)), c);
+        yield return ("forward 16ths",
+            Region(3840, 0, 1, Row("kick", 36, [On(), Off, Off, Off, On(90), Off, Off, Off])), c);
+        yield return ("independent lengths",
+            Region(
+                3840,
+                0,
+                1,
+                Row("a", 36, [On(), Off, Off, Off]),
+                Row("b", 42, [On(), Off, On(60), Off, Off, Off, Off])
+            ), c);
+        yield return ("ping-pong",
+            Region(3840, 0, 1, Row("p", 60, [On(10), On(20), On(30), On(40)], PatternPlayMode.PingPong)), c);
         yield return ("reverse", Region(1920, 0, 1, Row("r", 60, [On(10), Off, On(30)], PatternPlayMode.Reverse)), c);
-        yield return ("random", Region(3840, 0, 42, Row("x", 60, [On(10), On(20), On(30), On(40), On(50)], PatternPlayMode.Random)), c);
+        yield return ("random",
+            Region(3840, 0, 42, Row("x", 60, [On(10), On(20), On(30), On(40), On(50)], PatternPlayMode.Random)), c);
         yield return ("swing", Region(1920, 0.6, 1, Row("s", 42, [On(), On(), On(), On()])), c);
-        yield return ("offset", Region(1920, 0, 1, Row("o", 38, [On(offset: -0.5), On(offset: 0.25), On(offset: 0.5), Off])), c);
-        yield return ("repeats", Region(960, 0, 1, Row("x", 42, [On(gate: 1, repeats: 3), On(gate: 0.5, repeats: 2), On(gate: 2, repeats: 4), Off])), c);
+        yield return ("offset",
+            Region(1920, 0, 1, Row("o", 38, [On(offset: -0.5), On(offset: 0.25), On(offset: 0.5), Off])), c);
+        yield return ("repeats",
+            Region(
+                960,
+                0,
+                1,
+                Row("x", 42, [On(gate: 1, repeats: 3), On(gate: 0.5, repeats: 2), On(gate: 2, repeats: 4), Off])
+            ), c);
         yield return ("gate ties", Region(960, 0, 1, Row("g", 60, [On(gate: 2.5), Off, Off, On(gate: 4)])), c);
         yield return ("chance", Region(7680, 0, 99, Row("c", 60, [..Enumerable.Repeat(On(chance: 0.5), 8)])), c);
-        yield return ("row rate (triplets)", Region(1920, 0.5, 1, Row("t", 60, [On(), On(70), On(50)], stepTicks: 160), Row("q", 36, [On()], stepTicks: 960)), c);
+        yield return ("row rate (triplets)",
+            Region(
+                1920,
+                0.5,
+                1,
+                Row("t", 60, [On(), On(70), On(50)], stepTicks: 160),
+                Row("q", 36, [On()], stepTicks: 960)
+            ), c);
         yield return ("one-step ping-pong", Region(960, 0, 1, Row("o", 60, [On()], PatternPlayMode.PingPong)), c);
-        yield return ("chord degrees", Region(3840, 0, 1, Row("d", 1, [On(), Off, Off, Off], kind: PatternRowKind.ChordDegree), Row("e", 5, [Off, Off, On(), Off], kind: PatternRowKind.ChordDegree)), [new(0, 2, KeyMode.Minor), new(1920, 7, KeyMode.Major)]);
-        yield return ("pad rows", Region(960, 0.25, 3, Row("k", 36, [On(127), Off, Off, On(80, chance: 0.5)], kind: PatternRowKind.Pad), Row("h", 42, [On(60, repeats: 2, offset: 0.1)], kind: PatternRowKind.Pad)), c);
+        yield return ("chord degrees",
+            Region(
+                3840,
+                0,
+                1,
+                Row("d", 1, [On(), Off, Off, Off], kind: PatternRowKind.ChordDegree),
+                Row("e", 5, [Off, Off, On(), Off], kind: PatternRowKind.ChordDegree)
+            ), [new(0, 2, KeyMode.Minor), new(1920, 7, KeyMode.Major)]);
+        yield return ("pad rows",
+            Region(
+                960,
+                0.25,
+                3,
+                Row("k", 36, [On(127), Off, Off, On(80, chance: 0.5)], kind: PatternRowKind.Pad),
+                Row("h", 42, [On(60, repeats: 2, offset: 0.1)], kind: PatternRowKind.Pad)
+            ), c);
     }
 
     static string VectorsPath([CallerFilePath] string source = "") =>
