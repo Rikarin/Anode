@@ -597,11 +597,12 @@ export function scriptParameters(source: string): ParameterInfo[] {
         : type === 'checkbox' || type === 'momentary'
           ? 1
           : number('maxValue', 1);
+    // `steps` + 1 values (ParameterInfo): a menu's names, a checkbox's off and on.
     const steps =
       type === 'menu'
-        ? (names?.length ?? 1)
+        ? Math.max(1, (names?.length ?? 1) - 1)
         : type === 'checkbox' || type === 'momentary'
-          ? 2
+          ? 1
           : number('numberOfSteps', 0);
     return [
       {
@@ -626,7 +627,13 @@ export function scriptTraces(source: string): string[] {
 
 /** Whether a script would run away (the fake's stand-in for the budget interrupt). */
 export function runsAway(source: string): boolean {
-  return /while\s*\(\s*true\s*\)\s*\{\s*\}/.test(source) || /for\s*\(\s*;\s*;\s*\)\s*\{\s*\}/.test(source);
+  return runawayLine(source) !== null;
+}
+
+/** The 1-based line of a script's endless loop (the line the host's interrupt reports); null: none. */
+export function runawayLine(source: string): number | null {
+  const match = /while\s*\(\s*true\s*\)\s*\{\s*\}|for\s*\(\s*;\s*;\s*\)\s*\{\s*\}/.exec(source);
+  return match ? source.slice(0, match.index).split('\n').length : null;
 }
 
 /** Scripter, for the fake catalogue (workstream D adds the real one): parameters come from the script. */
