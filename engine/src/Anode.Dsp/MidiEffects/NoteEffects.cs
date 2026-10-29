@@ -135,12 +135,19 @@ internal sealed class Randomizer : MidiEffect {
 
     readonly int[] mapped = new int[16 * 128];
     uint state;
+    float seeded = float.NaN;
 
     public Randomizer() : base(Info) => Reset();
 
     public override void Reset() {
         Array.Fill(mapped, -1);
-        state = 0x9E3779B9u ^ ((uint)Parameters[Seed] * 0x85EBCA6Bu);
+        Reseed();
+    }
+
+    /// <summary>Restarts the generator from the Seed parameter.</summary>
+    void Reseed() {
+        seeded = Parameters[Seed];
+        state = 0x9E3779B9u ^ ((uint)seeded * 0x85EBCA6Bu);
         if (state == 0) {
             state = 1;
         }
@@ -150,6 +157,10 @@ internal sealed class Randomizer : MidiEffect {
     double Next() => (PolyBlep.White(ref state) + 1) * 0.5;
 
     public override void Process(in TransportContext transport, ReadOnlySpan<MidiEvent> input, MidiEventBuffer output) {
+        if (Parameters[Seed] != seeded) {
+            Reseed(); // a new seed starts its sequence
+        }
+
         foreach (var e in input) {
             if (IsNoteOn(e)) {
                 var key = Slot(e.Status, e.Data1);

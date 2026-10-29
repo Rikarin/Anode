@@ -30,11 +30,11 @@ public static class ElectricPianoParameters {
 /// </summary>
 /// <remarks>
 ///     <list type="bullet">
-///         <item>Tines: the tine's fundamental, its tonebar's octave (−24 dB) and its bell partial (at 7.13× the
+///         <item>Tines: the tine's fundamental, its tonebar's octave (−30 dB) and its bell partial (at 7.13× the
 ///             fundamental, decaying in 0.25 … 0.6 s, its level set by Bell and the velocity), struck by a 2 ms
 ///             felt-hammer thump. The magnetic pickup is an asymmetric curve, <c>p + b·p²</c> (Bark scaled by the
 ///             velocity), whose offset a 10 Hz high-pass removes.</item>
-///         <item>Reeds: a reed's first three harmonics (1, −10 dB, −18 dB) through the electrostatic pickup,
+///         <item>Reeds: a reed's first three harmonics (1, −30 dB, −36 dB) through the electrostatic pickup,
 ///             <c>p / (1 − b·p)</c> — a capacitor whose gap the reed changes — which barks as the velocity rises.</item>
 ///     </list>
 ///     A note rings with a 60 dB decay time falling with pitch (tines 9 s at C1 to 1.4 s at C7, reeds two-fifths of
@@ -269,7 +269,7 @@ internal sealed class ElectricPianoVoice(ElectricPianoControl control, int index
         bellCoefficient = AdsrSettings.T60Coefficient(0.25 + 0.35 * (1 - v), c.SampleRate);
         thump = 0.15f * v;
         thumpCoefficient = AdsrSettings.T60Coefficient(0.002, c.SampleRate);
-        bark = c.Bark * (0.2f + 0.8f * v * v) * (reeds ? 0.6f : 1.2f);
+        bark = reeds ? Math.Min(c.Bark * (0.2f + 0.8f * v * v) * 2, 1.25f) : c.Bark * (0.2f + 0.8f * v * v) * 3;
         damped = false;
         fade = 1;
         untilTick = 0;
@@ -297,10 +297,10 @@ internal sealed class ElectricPianoVoice(ElectricPianoControl control, int index
             untilTick--;
             float p;
             if (reeds) {
-                p = amplitude * (SineTable.Sin(phase) + 0.32f * SineTable.Sin(2 * phase) + 0.13f * SineTable.Sin(3 * phase));
-                p = p / (1 - bark * p) - bark * p * p; // the pickup, less its offset's first term
+                p = amplitude * (SineTable.Sin(phase) + 0.03f * SineTable.Sin(2 * phase) + 0.015f * SineTable.Sin(3 * phase));
+                p /= 1 - bark * p; // the pickup (its offset goes in the high-pass)
             } else {
-                p = amplitude * (SineTable.Sin(phase) + 0.063f * SineTable.Sin(2 * phase))
+                p = amplitude * (SineTable.Sin(phase) + 0.03f * SineTable.Sin(2 * phase))
                     + bell * SineTable.Sin(bellPhase);
                 p += bark * p * p;
                 bell *= bellCoefficient;
