@@ -53,6 +53,7 @@ import { SelectionStore } from '../state/selection.store';
 import { type GlobalLane, GlobalLanes as GlobalLaneOrder, Tools, TracksViewStore } from '../state/tracks-view.store';
 import { TransportStore } from '../state/transport.store';
 import { UiStore } from '../state/ui.store';
+import { StepSequencerStore, takesPatterns } from '../step-sequencer/step-sequencer.store';
 import { AudioImport } from './audio-import';
 import { canPack } from './comp';
 import { DragModes } from './drag-modes';
@@ -467,6 +468,11 @@ import { TrackHeader } from './track-header';
               Split at Playhead ({{ keyOf('region.split') }})
             </button>
             <button xuiMenuItem type="button" (click)="repeat()">Repeat Once ({{ keyOf('region.repeat') }})</button>
+            @if (menuPatterns().length > 0) {
+              <button xuiMenuItem type="button" data-testid="convert-to-midi-region" (click)="convertPatterns()">
+                Convert to MIDI Region
+              </button>
+            }
             <xui-menu-divider />
             <button xuiMenuItem type="button" (click)="ui.stripSilenceOpen.set(true)">
               Strip Silence… ({{ keyOf('region.stripSilence') }})
@@ -496,6 +502,17 @@ import { TrackHeader } from './track-header';
                 <kbd class="text-foreground-muted ms-4 font-sans text-[11px]">{{ tool.key }}</kbd>
               </button>
             }
+            @if (menuPatternTrack(); as track) {
+              <xui-menu-divider />
+              <button
+                xuiMenuItem
+                type="button"
+                data-testid="create-pattern-region"
+                (click)="createPatternRegion(track.id)"
+              >
+                Create Pattern Region
+              </button>
+            }
           </xui-menu>
         }
       }
@@ -515,6 +532,7 @@ export class TracksArea {
   private readonly jobs = inject(JobsStore);
   protected readonly ui = inject(UiStore);
   protected readonly flex = inject(FlexStore);
+  private readonly stepSequencer = inject(StepSequencerStore);
   protected readonly timeline = viewChild.required(Timeline);
   private readonly menuTrigger = viewChild(CdkContextMenuTrigger);
   private readonly globalLanes = viewChild<GlobalTracks>('global');
@@ -543,6 +561,17 @@ export class TracksArea {
 
   protected readonly snapLabel = computed(() => SnapModes.find(m => m.value === this.view.snapMode())?.label ?? '');
   protected readonly dragLabel = computed(() => DragModes.find(m => m.value === this.view.dragMode())?.label ?? '');
+  /** The selected pattern regions the region menu converts to MIDI. */
+  protected readonly menuPatterns = computed(() => {
+    const target = this.timeline().menuTarget();
+    return target.kind === 'regions' ? target.ids.filter(id => this.project.patternRegions().has(id)) : [];
+  });
+  /** The instrument or DMD track a lane's tool menu makes a pattern region on. */
+  protected readonly menuPatternTrack = computed(() => {
+    const target = this.timeline().menuTarget();
+    const track = target.kind === 'tools' && target.trackId ? this.project.track(target.trackId) : undefined;
+    return takesPatterns(track) ? track : null;
+  });
   protected readonly menuFolder = computed(() => {
     const target = this.timeline().menuTarget();
     return target.kind === 'folder' ? (this.project.takeFolder(target.folderId) ?? null) : null;
@@ -747,11 +776,24 @@ export class TracksArea {
     }
   }
 
+  /** A one-bar pattern region on the lane's track, at the bar the tool menu was opened on. */
+  protected createPatternRegion(trackId: string): void {
+    const target = this.timeline().menuTarget();
+    void this.stepSequencer.newRegion(trackId, target.kind === 'tools' ? target.tick : undefined);
+  }
+
+  /** Converts the selected pattern regions to MIDI regions of the notes they play. */
+  protected convertPatterns(): void {
+    const commands: EditCommand[] = this.menuPatterns().map(regionId => ({ type: 'convertPatternToMidi', regionId }));
+    void this.project.execute(commands, 'Convert to MIDI Region');
+  }
+
   protected mute(): void {
     const commands = muteCommands(this.selected(), {
       regions: this.project.regions(),
       midiRegions: this.project.midiRegions(),
       takeFolders: this.project.takeFolders(),
+      patternRegions: this.project.patternRegions(),
       endOf: r => this.project.regionEnd(r),
       frames: () => 0,
       fileFrames: () => 0
@@ -793,7 +835,8 @@ export class TracksArea {
     this.selection.select([
       ...this.project.regions().keys(),
       ...this.project.midiRegions().keys(),
-      ...this.project.takeFolders().keys()
+      ...this.project.takeFolders().keys(),
+      ...this.project.patternRegions().keys()
     ]);
   }
 

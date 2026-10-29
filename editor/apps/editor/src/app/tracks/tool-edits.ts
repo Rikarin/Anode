@@ -1,4 +1,4 @@
-import type { AudioRegion, EditCommand, MidiRegion, TakeFolder } from '@anode/api-client';
+import type { AudioRegion, EditCommand, MidiRegion, PatternRegion, TakeFolder } from '@anode/api-client';
 import type { DragAdjustment } from './drag-modes';
 import { crossfadeAt } from './drag-modes';
 
@@ -7,6 +7,8 @@ export interface RegionLookup {
   regions: ReadonlyMap<string, AudioRegion>;
   midiRegions: ReadonlyMap<string, MidiRegion>;
   takeFolders: ReadonlyMap<string, TakeFolder>;
+  /** Step Sequencer pattern regions (Phase 6). */
+  patternRegions?: ReadonlyMap<string, PatternRegion>;
   /** Where an audio region ends, in ticks. */
   endOf: (region: Pick<AudioRegion, 'startTick' | 'length'>) => number;
   /** Frames between two ticks. */
@@ -18,7 +20,11 @@ export interface RegionLookup {
 /** The Mute tool (and ⌃M): mutes the regions, or unmutes them when the first is muted. */
 export function muteCommands(ids: readonly string[], lookup: RegionLookup): EditCommand[] {
   const muted = (id: string) =>
-    lookup.regions.get(id)?.muted ?? lookup.midiRegions.get(id)?.muted ?? lookup.takeFolders.get(id)?.muted ?? false;
+    lookup.regions.get(id)?.muted ??
+    lookup.midiRegions.get(id)?.muted ??
+    lookup.takeFolders.get(id)?.muted ??
+    lookup.patternRegions?.get(id)?.muted ??
+    false;
   const first = ids[0];
   if (first === undefined) {
     return [];
@@ -34,6 +40,9 @@ export function muteCommands(ids: readonly string[], lookup: RegionLookup): Edit
     if (lookup.takeFolders.has(id)) {
       return [{ type: 'setTakeFolder', folderId: id, muted: to }];
     }
+    if (lookup.patternRegions?.has(id)) {
+      return [{ type: 'setPatternRegion', regionId: id, muted: to }];
+    }
     return [];
   });
 }
@@ -48,6 +57,9 @@ export function renameCommand(id: string, name: string, lookup: RegionLookup): E
   }
   if (lookup.takeFolders.has(id)) {
     return { type: 'setTakeFolder', folderId: id, name };
+  }
+  if (lookup.patternRegions?.has(id)) {
+    return { type: 'setPatternRegion', regionId: id, name };
   }
   return null;
 }
@@ -100,12 +112,18 @@ export function adjustmentCommands(
       case 'trimEnd': {
         const audio = lookup.regions.get(a.id);
         const midi = lookup.midiRegions.get(a.id);
+        const pattern = lookup.patternRegions?.get(a.id);
         const moved = commands.find(c => c.type === 'moveRegion' && c.regionId === a.id);
-        const start = moved?.type === 'moveRegion' ? moved.startTick : (audio?.startTick ?? midi?.startTick ?? 0);
+        const start =
+          moved?.type === 'moveRegion'
+            ? moved.startTick
+            : (audio?.startTick ?? midi?.startTick ?? pattern?.startTick ?? 0);
         if (audio) {
           commands.push(trimAudioEnd({ ...audio, startTick: start }, a.endTick, lookup));
         } else if (midi) {
           commands.push({ type: 'resizeMidiRegion', regionId: a.id, startTick: start, lengthTicks: a.endTick - start });
+        } else if (pattern) {
+          commands.push({ type: 'setPatternRegion', regionId: a.id, lengthTicks: a.endTick - start });
         }
         break;
       }

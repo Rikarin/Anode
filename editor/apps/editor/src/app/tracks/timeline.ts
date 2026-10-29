@@ -107,12 +107,13 @@ interface RegionSpan {
   trackId: string;
   startTick: number;
   endTick: number;
-  kind: 'audio' | 'midi' | 'folder';
+  kind: 'audio' | 'midi' | 'folder' | 'pattern';
 }
 
 /** What a right-click (or the T key) opens the menu on. */
 export type MenuTarget =
-  | { kind: 'tools' }
+  /** On a lane: the track and tick under the pointer, for "Create Pattern Region". */
+  | { kind: 'tools'; trackId?: string; tick?: number }
   | { kind: 'folder'; folderId: string; takeId: string | null }
   | { kind: 'regions'; ids: readonly string[] };
 
@@ -245,7 +246,11 @@ export class Timeline {
   readonly menuTarget = signal<MenuTarget>({ kind: 'tools' });
 
   protected readonly summary = computed(() => {
-    const regions = this.project.regions().size + this.project.midiRegions().size + this.project.takeFolders().size;
+    const regions =
+      this.project.regions().size +
+      this.project.midiRegions().size +
+      this.project.takeFolders().size +
+      this.project.patternRegions().size;
     const tracks = this.project.trackIds().length;
     return `Tracks area: ${regions} ${regions === 1 ? 'region' : 'regions'} on ${tracks} ${tracks === 1 ? 'track' : 'tracks'}`;
   });
@@ -258,6 +263,8 @@ export class Timeline {
       rows: this.lanes.rows(),
       regions: this.project.regionList(),
       midiRegions: this.project.midiRegionList(),
+      patternRegions: this.project.patternRegionList(),
+      keys: settings.keys,
       takeFolders: this.project.takeFolderList(),
       framesPerTick: this.project.framesPerTick(),
       rate: span => this.project.regionRate(span),
@@ -492,6 +499,7 @@ export class Timeline {
       regions: this.project.regions(),
       midiRegions: this.project.midiRegions(),
       takeFolders: this.project.takeFolders(),
+      patternRegions: this.project.patternRegions(),
       endOf: r => this.project.regionEnd(r),
       frames: (from, to) => Math.round(tempo.framesBetween(from, to - from, rate)),
       fileFrames: fileId => this.project.files().get(fileId)?.frames ?? Infinity
@@ -569,7 +577,7 @@ export class Timeline {
 
     switch (tool) {
       case 'scissors':
-        if (region && region.kind !== 'folder') {
+        if (region && region.kind !== 'folder' && region.kind !== 'pattern') {
           const at = splitSpan(region.startTick, region.endTick, snapIn(this.context(), tick), 0);
           if (at !== null) {
             void this.project.execute([{ type: 'splitRegion', regionId: region.id, atTick: at }], 'Split Region');
@@ -596,7 +604,7 @@ export class Timeline {
         }
         return;
       case 'glue':
-        if (region && region.kind !== 'folder') {
+        if (region && region.kind !== 'folder' && region.kind !== 'pattern') {
           const ids = [...new Set([...this.selection.regions(), region.id])].filter(
             id => this.span(id)?.trackId === region.trackId && this.span(id)?.kind === region.kind
           );
@@ -924,7 +932,7 @@ export class Timeline {
       });
     }
 
-    const midi = this.project.midiRegions().get(gesture.regionId);
+    const midi = this.project.midiRegions().get(gesture.regionId) ?? this.project.patternRegion(gesture.regionId);
     if (midi) {
       const context = this.context();
       const snapped = snapIn(context, tick);
@@ -989,6 +997,24 @@ export class Timeline {
       }
       const ticks = 2 * Math.abs(tick - gesture.tick);
       return { commands: crossfadeCommands(earlier, later, ticks, this.lookup()), label: 'Crossfade' };
+    }
+
+    const pattern = gesture.regionId ? this.project.patternRegion(gesture.regionId) : undefined;
+    if (pattern) {
+      if (gesture.kind !== 'trim-start' && gesture.kind !== 'trim-end') {
+        return { commands: [], label: '' };
+      }
+      const context = this.context();
+      const snapped = snapIn(context, tick);
+      const t =
+        gesture.kind === 'trim-start'
+          ? trimMidiStart(pattern, snapped, context.snap)
+          : trimMidiEnd(pattern, snapped, context.snap);
+      const same = t.startTick === pattern.startTick && t.lengthTicks === pattern.lengthTicks;
+      return {
+        commands: same ? [] : [{ type: 'setPatternRegion', regionId: pattern.id, ...t }],
+        label: 'Resize Region'
+      };
     }
 
     const midi = gesture.regionId ? this.project.midiRegions().get(gesture.regionId) : undefined;
@@ -1070,11 +1096,17 @@ export class Timeline {
     const spans = new Map<string, { startTick: number; trackId: string }>([
       ...this.project.regions(),
       ...this.project.midiRegions(),
-      ...this.project.takeFolders()
+      ...this.project.takeFolders(),
+      ...this.project.patternRegions()
     ]);
     const tracks = this.project.tracks();
+    const patterns = this.project.patternRegions();
     const fits = (id: string, trackId: string) => {
-      const kind = tracks.get(trackId)?.kind;
+      const track = tracks.get(trackId);
+      const kind = track?.kind;
+      if (patterns.has(id)) {
+        return kind === 'instrument' || !!track?.drumMachine;
+      }
       return id.startsWith('mid_') ? kind === 'instrument' || kind === 'midi' : kind === 'audio';
     };
     const commands = moveCommands(moved, spans, l => this.lanes.trackAt(l), fits);
@@ -1164,6 +1196,16 @@ export class Timeline {
 
   /** A region of any kind by id. */
   private span(id: string): RegionSpan | undefined {
+    const pattern = this.project.patternRegion(id);
+    if (pattern) {
+      return {
+        id,
+        trackId: pattern.trackId,
+        startTick: pattern.startTick,
+        endTick: pattern.startTick + pattern.lengthTicks,
+        kind: 'pattern'
+      };
+    }
     const midi = this.project.midiRegions().get(id);
     if (midi) {
       return {
@@ -1201,7 +1243,8 @@ export class Timeline {
     return [
       ...[...this.project.regions().keys()],
       ...[...this.project.midiRegions().keys()],
-      ...[...this.project.takeFolders().keys()]
+      ...[...this.project.takeFolders().keys()],
+      ...[...this.project.patternRegions().keys()]
     ]
       .map(id => this.span(id))
       .filter((s): s is RegionSpan => s !== undefined);
@@ -1221,7 +1264,10 @@ export class Timeline {
     }
     const hit = this.hitAt(x, y, view);
     if (!hit) {
-      return { kind: 'tools' };
+      const row = this.lanes.rows()[Math.floor(laneAtY(view, y))];
+      return row?.kind === 'track'
+        ? { kind: 'tools', trackId: row.track.id, tick: tickAtX(view, x) }
+        : { kind: 'tools' };
     }
     if (hit.id.includes('/')) {
       const [folderId = '', takeId = null] = hit.id.split('/');
