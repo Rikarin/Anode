@@ -130,8 +130,8 @@ public sealed class EngineConnection(
             return false;
         }
 
-        if (!Model.Editing.Edits.IsMidiKind(track.Kind)) {
-            throw ProjectException.Unprocessable($"Track '{track.Id}' is an audio track: it plays no MIDI.");
+        if (!Model.Editing.Edits.HoldsMidi(track)) {
+            throw ProjectException.Unprocessable($"Track '{track.Id}' plays no MIDI.");
         }
 
         if (request.Events is not { Count: > 0 and <= MaxLiveEvents }) {
