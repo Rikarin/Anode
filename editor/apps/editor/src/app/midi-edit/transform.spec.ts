@@ -5,8 +5,8 @@ import {
   applyTransform,
   fitPresetToSelection,
   identityMap,
-  roundEven,
-  transformDraw,
+  roundAway,
+  SplitMix64,
   TransformPresets
 } from './transform';
 
@@ -94,7 +94,7 @@ describe('MIDI Transform (hand-worked from docs/08-phase-7.md)', () => {
     expect(velocity('scale', 0.5, 10)).toBe(42);
     expect(velocity('range', 70, 90)).toBe(70);
     expect(velocity('quantize', 10)).toBe(60);
-    expect(velocity('exponent', 2)).toBe(32);
+    expect(velocity('exponent', 2)).toBe(33);
     expect(
       velocity(
         'useMap',
@@ -177,8 +177,8 @@ describe('MIDI Transform (hand-worked from docs/08-phase-7.md)', () => {
     const a = applyTransform(notes, [], humanize);
     expect(applyTransform(notes, [], humanize)).toEqual(a);
     expect(applyTransform(notes, [], { ...humanize, seed: 43 }).notes).not.toEqual(a.notes);
-    expect(transformDraw(42, 1, 'velocity')).toBe(transformDraw(42, 1, 'velocity'));
-    expect(transformDraw(42, 1, 'velocity')).not.toBe(transformDraw(42, 2, 'velocity'));
+    expect(new SplitMix64(42, 1).next()).toBe(new SplitMix64(42, 1).next());
+    expect(new SplitMix64(42, 1).next()).not.toBe(new SplitMix64(42, 2).next());
   });
 
   it('lists the ten factory presets, and fits the reverse ones to the selection', () => {
@@ -192,7 +192,9 @@ describe('MIDI Transform (hand-worked from docs/08-phase-7.md)', () => {
       'factory.halfSpeed',
       'factory.reversePosition',
       'factory.reversePitch',
-      'factory.lengthLimits'
+      'factory.lengthLimits',
+      'factory.randomVelocity',
+      'factory.velocityCompress'
     ]);
     const reverse = fitPresetToSelection(
       TransformPresets.find(p => p.id === 'factory.reversePosition') as TransformSet,
@@ -207,60 +209,55 @@ describe('MIDI Transform (hand-worked from docs/08-phase-7.md)', () => {
     expect(applyTransform(notes, [], pitch).notes.map(n => n.pitch)).toEqual([72, 60, 58, 48]);
   });
 
-  it('rounds half to even, as .NET does', () => {
-    expect([0.5, 1.5, 2.5, -0.5, -1.5, 2.4, 2.6].map(roundEven)).toEqual([0, 2, 2, 0, -2, 2, 3]);
+  it('rounds half away from zero, as the Model does', () => {
+    expect([0.5, 1.5, 2.5, -0.5, -1.5, 2.4, 2.6].map(roundAway)).toEqual([1, 2, 3, -1, -2, 2, 3]);
   });
 });
 
 /**
- * Parity with the Model's TransformEngine (workstream E): the shared vectors in
- * engine/tests/Anode.Model.Tests/TransformVectors.json, when the file is there. Each case is a set, the notes and
- * controller events (positions in project ticks) and the signature track, and the expected events and selection.
+ * Parity with the Model's TransformEngine (workstream E): engine/tests/Anode.Model.Tests/TransformVectors.json, when
+ * the file is there. Each case applies its set to the file's notes and controls (under its signatures, else 4/4) and
+ * expects every event back in order and the matching ids in input order; `draws` pins SplitMix64 outputs.
  */
-interface TransformVector {
-  name: string;
-  set: TransformSet;
-  notes?: Note[];
-  controls?: ControlEvent[];
-  signatures?: SignatureEvent[];
-  expected: {
-    notes?: (Omit<Note, 'articulationId'> & { articulationId?: number })[];
-    controls?: ControlEvent[];
-    selectedNoteIds?: number[];
-    selectedControlIds?: number[];
-  };
+interface TransformVectors {
+  notes: Note[];
+  controls: ControlEvent[];
+  draws: { seed: number; id: number; values: string[] }[];
+  cases: {
+    name: string;
+    set: TransformSet;
+    signatures?: SignatureEvent[];
+    expected: { notes: Note[]; controls: ControlEvent[]; selectedNoteIds: number[]; selectedControlIds: number[] };
+  }[];
 }
 
 describe('MIDI Transform parity with the Model', async () => {
-  const loaded = await loadVectors('TransformVectors.json');
-  const cases: TransformVector[] = Array.isArray(loaded)
-    ? (loaded as TransformVector[])
-    : ((loaded as { cases?: TransformVector[] } | null)?.cases ?? []);
+  const vectors = (await loadVectors('TransformVectors.json')) as TransformVectors | null;
 
-  it.skipIf(loaded === null)('matches every shared vector', () => {
-    for (const v of cases) {
-      const meter = new MeterMap(v.signatures?.length ? v.signatures : [{ tick: 0, numerator: 4, denominator: 4 }]);
-      const result = applyTransform(v.notes ?? [], v.controls ?? [], v.set, meter);
-      if (v.expected.notes) {
-        expect(result.notes, v.name).toEqual(
-          v.expected.notes.map(n => ({ ...n, articulationId: n.articulationId ?? 0 }))
-        );
-      }
-      if (v.expected.controls) {
-        expect(result.controls, v.name).toEqual(v.expected.controls);
-      }
-      if (v.expected.selectedNoteIds) {
-        expect(
-          [...result.selectedNoteIds].sort((a, b) => a - b),
-          v.name
-        ).toEqual([...v.expected.selectedNoteIds].sort((a, b) => a - b));
-      }
-      if (v.expected.selectedControlIds) {
-        expect(
-          [...result.selectedControlIds].sort((a, b) => a - b),
-          v.name
-        ).toEqual([...v.expected.selectedControlIds].sort((a, b) => a - b));
-      }
+  it.skipIf(vectors === null)('draws as the Model’s SplitMix64 does', () => {
+    for (const d of vectors?.draws ?? []) {
+      const random = new SplitMix64(d.seed, d.id);
+      expect(
+        d.values.map(() => random.next().toString()),
+        `${d.seed}/${d.id}`
+      ).toEqual(d.values);
     }
+  });
+
+  it.skipIf(vectors === null)('matches every shared vector', () => {
+    for (const v of vectors?.cases ?? []) {
+      const meter = new MeterMap(v.signatures?.length ? v.signatures : [{ tick: 0, numerator: 4, denominator: 4 }]);
+      const result = applyTransform(vectors?.notes ?? [], vectors?.controls ?? [], { map: null, ...v.set }, meter);
+      expect(result, v.name).toEqual(v.expected);
+    }
+  });
+
+  it.skipIf(vectors === null)('has the Model’s factory presets', () => {
+    const presets = (vectors?.cases ?? []).filter(
+      c => c.name.startsWith('preset ') && c.set.id.startsWith('factory.') && c.set.seed === 0
+    );
+    expect(TransformPresets.map(p => ({ ...p, map: undefined }))).toEqual(
+      presets.map(c => ({ ...c.set, map: undefined }))
+    );
   });
 });

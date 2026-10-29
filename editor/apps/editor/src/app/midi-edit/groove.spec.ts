@@ -1,6 +1,6 @@
 import type { GrooveTemplate, Note } from '@anode/api-client';
-import { grooveFromNotes, grooveFromOnsets, grooveTarget, quantizeToGroove } from './groove';
-import { loadVectors, vectorCases } from './shared-vectors';
+import { type GrooveOnset, grooveFromNotes, grooveFromOnsets, grooveTarget, quantizeToGroove } from './groove';
+import { loadVectors } from './shared-vectors';
 
 function note(id: number, startTick: number, velocity = 100): Note {
   return { id, pitch: 36, velocity, channel: 1, startTick, lengthTicks: 120, articulationId: 0 };
@@ -61,61 +61,90 @@ describe('groove templates (hand-worked from docs/08-phase-7.md)', () => {
 });
 
 /**
- * Parity with the Model's Grooves (workstream E): the shared vectors in engine/tests/Anode.Model.Tests/GrooveVectors.json,
- * when the file is there. A case is one of: extraction from onsets (`onsets`, `startTick`, `lengthTicks`, `stepTicks`
- * → `expected` template), extraction from notes (`notes` …), or a quantise (`groove`, `notes`, `regionStartTick`,
- * `strength`, `velocity` → `expected` notes).
+ * Parity with the Model's Grooves (workstream E): engine/tests/Anode.Model.Tests/GrooveVectors.json, when the file is
+ * there: extraction from onsets and from notes, targets, and quantise (velocity scales to 1e-12).
  */
-interface GrooveVector {
-  name: string;
-  kind?: string;
-  onsets?: { tick: number; strength: number }[];
-  notes?: Note[];
-  startTick?: number;
-  lengthTicks?: number;
-  stepTicks?: number;
-  groove?: GrooveTemplate;
-  regionStartTick?: number;
-  strength?: number;
-  velocity?: boolean;
-  expected: GrooveTemplate | Note[] | { notes: Note[] } | { groove: GrooveTemplate };
+interface GrooveVectors {
+  grooves: GrooveTemplate[];
+  extract: {
+    name: string;
+    onsets: GrooveOnset[];
+    startTick: number;
+    lengthTicks: number;
+    stepTicks: number;
+    expected: GrooveTemplate;
+  }[];
+  fromNotes: {
+    name: string;
+    notes: Note[];
+    startTick: number;
+    lengthTicks: number;
+    stepTicks: number;
+    expected: GrooveTemplate;
+  }[];
+  targets: {
+    name: string;
+    grooveId: string;
+    tick: number;
+    strength: number;
+    expectedTick: number;
+    expectedVelocityScale: number;
+  }[];
+  quantize: {
+    name: string;
+    groove: GrooveTemplate;
+    regionStartTick: number;
+    strength: number;
+    velocity: boolean;
+    notes: Note[];
+    expected: Note[];
+  }[];
+}
+
+function expectGroove(actual: GrooveTemplate, expected: GrooveTemplate, name: string): void {
+  expect({ ...actual, points: actual.points.map(p => p.tick) }, name).toEqual({
+    ...expected,
+    points: expected.points.map(p => p.tick)
+  });
+  actual.points.forEach((p, i) => {
+    expect(Math.abs(p.velocityScale - (expected.points[i]?.velocityScale ?? NaN)), name).toBeLessThan(1e-12);
+  });
 }
 
 describe('Groove parity with the Model', async () => {
-  const loaded = await loadVectors('GrooveVectors.json');
-  const cases = vectorCases<GrooveVector>(loaded);
+  const vectors = (await loadVectors('GrooveVectors.json')) as GrooveVectors | null;
 
-  it.skipIf(loaded === null)('matches every shared vector', () => {
-    for (const v of cases) {
-      if (v.groove) {
-        const expected = Array.isArray(v.expected) ? v.expected : (v.expected as { notes: Note[] }).notes;
-        const actual = quantizeToGroove(
-          v.notes ?? [],
-          v.regionStartTick ?? 0,
-          v.groove,
-          v.strength ?? 1,
-          v.velocity ?? false
-        );
-        expect(
-          actual.map(n => [n.id, n.startTick, n.velocity]),
-          v.name
-        ).toEqual(expected.map(n => [n.id, n.startTick, n.velocity]));
-        continue;
+  it.skipIf(vectors === null)('extracts as the Model does', () => {
+    for (const v of vectors?.extract ?? []) {
+      const actual = grooveFromOnsets(
+        v.expected.id,
+        v.expected.name,
+        v.onsets,
+        v.startTick,
+        v.lengthTicks,
+        v.stepTicks
+      );
+      expectGroove(actual, v.expected, v.name);
+    }
+    for (const v of vectors?.fromNotes ?? []) {
+      const actual = grooveFromNotes(v.expected.id, v.expected.name, v.notes, v.startTick, v.lengthTicks, v.stepTicks);
+      expectGroove(actual, v.expected, v.name);
+    }
+  });
+
+  it.skipIf(vectors === null)('targets and quantises as the Model does', () => {
+    for (const v of vectors?.targets ?? []) {
+      const groove = vectors?.grooves.find(g => g.id === v.grooveId);
+      expect(groove, v.name).toBeDefined();
+      if (groove) {
+        const target = grooveTarget(groove, v.tick, v.strength);
+        expect(target.tick, v.name).toBe(v.expectedTick);
+        expect(Math.abs(target.velocityScale - v.expectedVelocityScale), v.name).toBeLessThan(1e-12);
       }
-      const expected = 'groove' in v.expected ? v.expected.groove : (v.expected as GrooveTemplate);
-      const id = expected.id;
-      const name = expected.name;
-      const actual = v.onsets
-        ? grooveFromOnsets(id, name, v.onsets, v.startTick ?? 0, v.lengthTicks ?? 3840, v.stepTicks ?? 240)
-        : grooveFromNotes(id, name, v.notes ?? [], v.startTick ?? 0, v.lengthTicks ?? 3840, v.stepTicks ?? 240);
-      expect(actual.lengthTicks, v.name).toBe(expected.lengthTicks);
-      expect(actual.stepTicks, v.name).toBe(expected.stepTicks);
-      expect(
-        actual.points.map(p => p.tick),
-        v.name
-      ).toEqual(expected.points.map(p => p.tick));
-      actual.points.forEach((p, i) =>
-        expect(p.velocityScale, v.name).toBeCloseTo(expected.points[i]?.velocityScale ?? 0, 6)
+    }
+    for (const v of vectors?.quantize ?? []) {
+      expect(quantizeToGroove(v.notes, v.regionStartTick, v.groove, v.strength, v.velocity), v.name).toEqual(
+        v.expected
       );
     }
   });

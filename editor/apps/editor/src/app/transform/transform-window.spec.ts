@@ -92,7 +92,7 @@ describe('TransformWindow', () => {
       });
     }
     expect(window.set().seed).not.toBe(1234);
-    expect(byTestId('transform-status')?.textContent).toContain('Transformed 5 events.');
+    expect(byTestId('transform-status')?.textContent).toContain('Transformed 4 events.');
     await project.undo();
     expect(notes()).toEqual(before);
   });
@@ -163,16 +163,16 @@ describe('TransformWindow', () => {
     expect(selection.controls().size).toBe(1);
   });
 
-  it('operates on the selected events only, and fits Reverse Pitch to them', async () => {
+  it('operates on the selected events only: Reverse Pitch flips them around C3', async () => {
     const { window, update, notes, selection } = await render();
     const [first, , , last] = notes();
     selection.selectNotes([first?.id ?? 0, last?.id ?? 0]);
     window.load(factory('factory.reversePitch'));
-    expect(window.set().operations[0]).toMatchObject({ op: 'flip', a: (60 + 79) / 2 });
+    expect(window.set().operations[0]).toMatchObject({ op: 'flip', a: 60 });
     window.setMode('operateOnly');
     await window.apply();
     await update();
-    expect(notes().map(n => n.pitch)).toEqual([79, 72, 73, 60]);
+    expect(notes().map(n => n.pitch)).toEqual([60, 72, 73, 41]);
     expect(selection.notes().size).toBe(2);
   });
 

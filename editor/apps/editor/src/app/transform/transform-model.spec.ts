@@ -77,7 +77,7 @@ describe('Transform window model', () => {
   it('shows a set as the grid’s rows: every column a condition, the event fields an operation', () => {
     const humanize = TransformPresets[0] as TransformSet;
     const [conditions, operations] = gridRows(humanize, meter);
-    expect(conditions?.cells.map(c => c?.op)).toEqual(['all', 'all', 'all', 'all', 'all', 'all', 'all']);
+    expect(conditions?.cells.map(c => c?.op)).toEqual(['equal', 'all', 'all', 'all', 'all', 'all', 'all']);
     expect(conditions?.cells[0]?.choices?.map(c => c.label)).toContain('Note');
     expect(operations?.cells.map(c => c?.op ?? null)).toEqual([
       null,

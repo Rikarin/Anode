@@ -5,26 +5,24 @@ import type {
   TransformCondition,
   TransformField,
   TransformOperation,
-  TransformOperationKind,
   TransformSet
 } from '@anode/api-client';
 import { MeterMap } from '@anode/timeline';
-import { hash32 } from '../music/pattern';
 
 /**
- * The MIDI Transform engine, a TypeScript port of the Model's `TransformEngine` (docs/08-phase-7.md, "Rules the
- * contracts imply"; checked against the shared engine/tests/Anode.Model.Tests/TransformVectors.json). The editor runs
- * "select only" itself and the fake Server runs the `transform` command with it.
+ * The MIDI Transform engine, a TypeScript port of the Model's `TransformEngine` (docs/08-phase-7.md; the rules are
+ * the `about` of engine/tests/Anode.Model.Tests/TransformVectors.json, which this port reproduces exactly). The
+ * editor runs "select only" itself and the fake Server runs the `transform` command with it.
  *
- * - Conditions are ANDed; a field without one (or with `all`) matches everything.
- * - Operations apply to each matching event in field order (position, length, channel, pitch, velocity), whatever
- *   their order in the list; each result is rounded half to even (as .NET's `Math.Round`) and clamped to the field's
- *   range: a note's position ≥ 0, length ≥ 1, channel 1…16, pitch 0…127, velocity 1…127; a controller's value its
- *   kind's range (pitch bend −8192…8191, else 0…127). A controller has no length, and only control changes and poly
- *   pressure have a `pitch` (their first data byte); operations on what an event lacks leave it.
- * - Ramps (`crescendo`, `relativeCrescendo`) run over the matching events' positions as they were before the
- *   operations, from the earliest to the latest.
- * - Random operations draw {@link transformDraw}(seed, event id, field), so a set always does the same to an event.
+ * - Conditions are ANDed; `all` matches everything.
+ * - P0 and P1 are the least and greatest original positions of the matching events. Position multiply, divide and
+ *   scale act relative to P0; flip on position is P0 + P1 + 2a − x; ramps run by original position over P0…P1.
+ * - Operations apply in field order (position, length, channel, pitch, velocity), at most one per field; each result
+ *   is rounded half away from zero, then clamped: position ≥ 0, a note's length ≥ 1, channel 1…16, pitch 0…127, a
+ *   note's velocity 1…127, a pitch bend's −8192…8191, other controllers' 0…127. A controller has no length, and only
+ *   control changes and poly pressure have a pitch: an operation on a field an event lacks leaves it.
+ * - Randomness: each matching event has its own SplitMix64 (state = seed XOR id × 0xD1B54A32D192ED03); every random
+ *   and ±random operation draws once, in field order, even on a field the event lacks.
  */
 export interface TransformResult {
   notes: Note[];
@@ -46,22 +44,36 @@ export const StatusOf: Record<ControlKind | 'note', number> = {
   pitchBend: 224
 };
 
-/**
- * A random operation's draw for an event, uniform in [0, 1): FNV-1a 32 over the UTF-16 units of
- * `"seed:id:field"`, finalised as MurmurHash3's fmix32, over 2^32 (the pattern generator's scheme).
- */
-export function transformDraw(seed: number, eventId: number, field: TransformField): number {
-  return hash32(`${seed}:${eventId}:${field}`) / 4_294_967_296;
+/** Rounds half away from zero (the Model's `MidpointRounding.AwayFromZero`). */
+export function roundAway(value: number): number {
+  // + 0 turns −0 into 0.
+  return Math.sign(value) * Math.round(Math.abs(value)) + 0;
 }
 
-/** Rounds half to even, as .NET's `Math.Round(double)`. */
-export function roundEven(value: number): number {
-  const floor = Math.floor(value);
-  const fraction = value - floor;
-  if (Math.abs(fraction - 0.5) < 1e-9) {
-    return floor % 2 === 0 ? floor : floor + 1;
+const Mask64 = (1n << 64n) - 1n;
+
+/** SplitMix64, the Transform engine's generator (64-bit maths in BigInt). */
+export class SplitMix64 {
+  private state: bigint;
+
+  constructor(seed: number | bigint, id: number | bigint) {
+    const s = BigInt.asUintN(64, BigInt(seed));
+    const mixed = (BigInt.asUintN(64, BigInt(id)) * 0xd1b54a32d192ed03n) & Mask64;
+    this.state = s ^ mixed;
   }
-  return Math.round(value);
+
+  next(): bigint {
+    this.state = (this.state + 0x9e3779b97f4a7c15n) & Mask64;
+    let z = this.state;
+    z = ((z ^ (z >> 30n)) * 0xbf58476d1ce4e5b9n) & Mask64;
+    z = ((z ^ (z >> 27n)) * 0x94d049bb133111ebn) & Mask64;
+    return z ^ (z >> 31n);
+  }
+
+  /** An integer in lo…hi: lo + next() mod (hi − lo + 1). */
+  between(lo: number, hi: number): number {
+    return lo + Number(this.next() % BigInt(hi - lo + 1));
+  }
 }
 
 /** One event as the engine sees it. */
@@ -74,6 +86,8 @@ interface Item {
   pitch: number;
   velocity: number;
 }
+
+type OperatedField = 'position' | 'length' | 'channel' | 'pitch' | 'velocity';
 
 function noteItem(n: Note): Item {
   return {
@@ -103,7 +117,7 @@ function hasNumber(kind: ControlKind | 'note'): boolean {
   return kind === 'note' || kind === 'controlChange' || kind === 'polyPressure';
 }
 
-/** A field's range for an event kind, or null when the event has no such field. */
+/** A field's clamp range for an event kind, or null when the event has no such field. */
 export function fieldRange(field: TransformField, kind: ControlKind | 'note'): [number, number] | null {
   switch (field) {
     case 'position':
@@ -125,17 +139,6 @@ export function fieldRange(field: TransformField, kind: ControlKind | 'note'): [
   }
 }
 
-/** The span `exponent` normalises over: a note's velocity and pitch 0…127, else the field's range. */
-function curveRange(field: TransformField, kind: ControlKind | 'note'): [number, number] | null {
-  if (field === 'velocity' || field === 'pitch') {
-    return kind === 'pitchBend' && field === 'velocity' ? [-8192, 8191] : [0, 127];
-  }
-  if (field === 'channel') {
-    return [1, 16];
-  }
-  return null;
-}
-
 function valueOf(item: Item, field: TransformField, meter: MeterMap): number {
   switch (field) {
     case 'position':
@@ -152,12 +155,12 @@ function valueOf(item: Item, field: TransformField, meter: MeterMap): number {
       return StatusOf[item.kind];
     case 'subposition': {
       const position = Math.max(0, item.position);
-      return position - meter.barStart(Math.floor(meter.barAt(position)));
+      return item.position - meter.barStart(Math.floor(meter.barAt(position) + 1e-9));
     }
   }
 }
 
-/** Whether an event meets a condition. */
+/** Whether a value meets a condition. */
 export function meets(value: number, condition: TransformCondition): boolean {
   const { a, b } = condition;
   switch (condition.op) {
@@ -178,15 +181,22 @@ export function meets(value: number, condition: TransformCondition): boolean {
   }
 }
 
-/** What an operation makes of `x` (before rounding and clamping). */
-export function operate(
-  op: TransformOperationKind,
-  x: number,
-  a: number,
-  b: number,
-  context: { draw: () => number; ramp: () => number; range: [number, number] | null; map: readonly number[] | null }
-): number {
-  switch (op) {
+/** What the operations need beyond the event: the selection's extent, the generator, the map. */
+interface Context {
+  p0: number;
+  p1: number;
+  l0: number;
+  l1: number;
+  random: SplitMix64;
+  map: readonly number[] | null;
+}
+
+/** An operation's result for `x` (before rounding and clamping); null when the event lacks the field. */
+function operate(operation: TransformOperation, item: Item, x: number, original: number, ctx: Context): number {
+  const { a, b } = operation;
+  const position = operation.field === 'position';
+  const t = ctx.p1 > ctx.p0 ? (original - ctx.p0) / (ctx.p1 - ctx.p0) : 0;
+  switch (operation.op) {
     case 'thru':
       return x;
     case 'fix':
@@ -200,45 +210,64 @@ export function operate(
     case 'max':
       return Math.min(x, a);
     case 'flip':
-      return 2 * a - x;
+      return position ? ctx.p0 + ctx.p1 + 2 * a - x : 2 * a - x;
     case 'multiply':
-      return x * a;
+      return position ? ctx.p0 + (x - ctx.p0) * a : x * a;
     case 'divide':
-      return a === 0 ? x : x / a;
+      if (a === 0) {
+        return x;
+      }
+      return position ? ctx.p0 + (x - ctx.p0) / a : x / a;
     case 'scale':
-      return x * a + b;
+      return position ? ctx.p0 + (x - ctx.p0) * a + b : x * a + b;
     case 'range':
       return Math.min(Math.max(x, Math.min(a, b)), Math.max(a, b));
     case 'random':
-      return a + context.draw() * (b - a);
-    case 'plusMinusRandom':
-      return x + (context.draw() * 2 - 1) * a;
+      return ctx.random.between(roundAway(Math.min(a, b)), roundAway(Math.max(a, b)));
+    case 'plusMinusRandom': {
+      const r = roundAway(Math.abs(a));
+      return x + ctx.random.between(-r, r);
+    }
     case 'quantize':
-      return a > 0 ? roundEven(x / a) * a : x;
+      return a > 0 ? roundAway(x / a) * a : x;
     case 'exponent': {
-      const range = context.range;
-      if (!range || !(a > 0)) {
+      const range = exponentRange(operation.field, item.kind, ctx);
+      if (!range || !(a > 0) || range[1] <= range[0]) {
         return x;
       }
       const [lo, hi] = range;
-      const unit = Math.min(1, Math.max(0, (x - lo) / (hi - lo)));
-      return lo + Math.pow(unit, a) * (hi - lo);
+      const ratio = Math.min(1, Math.max(0, (x - lo) / (hi - lo)));
+      return lo + Math.pow(ratio, a) * (hi - lo);
     }
     case 'crescendo':
-      return context.ramp();
+      return a + (b - a) * t;
     case 'relativeCrescendo':
-      return x + context.ramp();
+      return x + a + (b - a) * t;
     case 'useMap': {
-      const index = Math.min(127, Math.max(0, roundEven(x)));
-      return context.map ? (context.map[index] ?? index) : index;
+      const r = roundAway(x);
+      if (r < 0 || r > 127) {
+        return x;
+      }
+      return ctx.map ? (ctx.map[r] ?? r) : r;
     }
+  }
+}
+
+function exponentRange(field: TransformField, kind: ControlKind | 'note', ctx: Context): [number, number] | null {
+  switch (field) {
+    case 'position':
+      return [ctx.p0, ctx.p1];
+    case 'length':
+      return [ctx.l0, ctx.l1];
+    default:
+      return fieldRange(field, kind);
   }
 }
 
 /**
  * Applies a set to notes and controller events whose positions are project ticks (the caller adds each region's
  * start before and subtracts it after). Every event comes back, in the order given; the matching ones are changed
- * unless the mode is `selectOnly`. `signatures` places bar lines for `subposition`.
+ * unless the mode is `selectOnly`. `meter` places bar lines for `subposition`.
  */
 export function applyTransform(
   notes: readonly Note[],
@@ -250,19 +279,18 @@ export function applyTransform(
   const matches = (item: Item) => conditions.every(c => meets(valueOf(item, c.field, meter), c));
   const noteItems = notes.map(noteItem);
   const controlItems = controls.map(controlItem);
-  const selectedNotes = new Set(noteItems.filter(matches).map(i => i.id));
-  const selectedControls = new Set(controlItems.filter(matches).map(i => i.id));
+  const selectedNotes = noteItems.filter(matches);
+  const selectedControls = controlItems.filter(matches);
   const result: TransformResult = {
     notes: notes.map(n => ({ ...n })),
     controls: controls.map(c => ({ ...c })),
-    selectedNoteIds: [...selectedNotes],
-    selectedControlIds: [...selectedControls]
+    selectedNoteIds: selectedNotes.map(i => i.id),
+    selectedControlIds: selectedControls.map(i => i.id)
   };
   if (set.mode === 'selectOnly') {
     return result;
   }
 
-  // The last operation given for a field wins; status and subposition are conditions only.
   const byField = new Map<TransformField, TransformOperation>();
   for (const operation of set.operations) {
     if (TransformFieldOrder.includes(operation.field)) {
@@ -270,45 +298,41 @@ export function applyTransform(
     }
   }
   const operations = TransformFieldOrder.map(f => byField.get(f)).filter(
-    (o): o is TransformOperation => o !== undefined && o.op !== 'thru'
+    (o): o is TransformOperation => o !== undefined
   );
 
-  const selected = [
-    ...noteItems.filter(i => selectedNotes.has(i.id)),
-    ...controlItems.filter(i => selectedControls.has(i.id))
-  ];
-  const positions = selected.map(i => i.position);
-  const first = positions.length ? Math.min(...positions) : 0;
-  const last = positions.length ? Math.max(...positions) : 0;
+  const positions = [...selectedNotes, ...selectedControls].map(i => i.position);
+  const lengths = selectedNotes.map(i => i.length);
+  const extent = {
+    p0: positions.length ? Math.min(...positions) : 0,
+    p1: positions.length ? Math.max(...positions) : 0,
+    l0: lengths.length ? Math.min(...lengths) : 0,
+    l1: lengths.length ? Math.max(...lengths) : 0
+  };
 
   const transform = (item: Item): Item => {
-    const original = item.position;
+    const ctx: Context = { ...extent, random: new SplitMix64(set.seed, item.id), map: set.map ?? null };
     const next = { ...item };
     for (const operation of operations) {
       const range = fieldRange(operation.field, item.kind);
       if (!range) {
+        // The event lacks the field; a random operation still draws.
+        if (operation.op === 'random' || operation.op === 'plusMinusRandom') {
+          ctx.random.next();
+        }
         continue;
       }
-      const x = next[operation.field as 'position' | 'length' | 'channel' | 'pitch' | 'velocity'];
-      const value = operate(operation.op, x, operation.a, operation.b, {
-        draw: () => transformDraw(set.seed, item.id, operation.field),
-        ramp: () =>
-          last > first
-            ? operation.a + ((operation.b - operation.a) * (original - first)) / (last - first)
-            : operation.a,
-        range: curveRange(operation.field, item.kind),
-        map: set.map ?? null
-      });
-      next[operation.field as 'position' | 'length' | 'channel' | 'pitch' | 'velocity'] = Math.min(
-        range[1],
-        Math.max(range[0], roundEven(value))
-      );
+      const field = operation.field as OperatedField;
+      const value = operate(operation, item, next[field], item.position, ctx);
+      next[field] = Math.min(range[1], Math.max(range[0], roundAway(value)));
     }
     return next;
   };
 
+  const noteIds = new Set(result.selectedNoteIds);
+  const controlIds = new Set(result.selectedControlIds);
   result.notes = notes.map(n => {
-    if (!selectedNotes.has(n.id)) {
+    if (!noteIds.has(n.id)) {
       return { ...n };
     }
     const t = transform(noteItem(n));
@@ -322,7 +346,7 @@ export function applyTransform(
     };
   });
   result.controls = controls.map(c => {
-    if (!selectedControls.has(c.id)) {
+    if (!controlIds.has(c.id)) {
       return { ...c };
     }
     const t = transform(controlItem(c));
@@ -337,22 +361,15 @@ export function applyTransform(
   return result;
 }
 
-const Sixteenth = 240;
+const Notes: TransformCondition[] = [{ field: 'status', op: 'equal', a: 144, b: 0 }];
 
-function preset(
-  key: string,
-  name: string,
-  operations: TransformOperation[],
-  conditions: TransformCondition[] = [],
-  map: number[] | null = null
-): TransformSet {
-  return { id: `factory.${key}`, name, conditions, operations, map, mode: 'selectAndOperate', seed: 0 };
+function preset(key: string, name: string, operations: TransformOperation[]): TransformSet {
+  return { id: `factory.${key}`, name, conditions: Notes, operations, map: null, mode: 'selectAndOperate', seed: 0 };
 }
 
 /**
- * The factory presets in menu order (ids `factory.…`, `TransformPresetIds`), as the fake Server lists them first in
- * `GET /library/transform-sets`. Reverse Position and Reverse Pitch flip around `a`, which the Transform window sets
- * to the middle of the selection when it loads them (see {@link fitPresetToSelection}).
+ * The factory presets in menu order, as the Model's `TransformEngine.Presets` (ids `factory.…`; every one on notes,
+ * select and operate, seed 0); the fake Server lists them first in `GET /library/transform-sets`.
  */
 export const TransformPresets: readonly TransformSet[] = [
   preset('humanize', 'Humanize', [
@@ -360,30 +377,10 @@ export const TransformPresets: readonly TransformSet[] = [
     { field: 'length', op: 'plusMinusRandom', a: 10, b: 0 },
     { field: 'velocity', op: 'plusMinusRandom', a: 10, b: 0 }
   ]),
-  preset(
-    'quantize',
-    'Quantize Notes',
-    [{ field: 'position', op: 'quantize', a: Sixteenth, b: 0 }],
-    [{ field: 'status', op: 'equal', a: 144, b: 0 }]
-  ),
-  preset(
-    'crescendo',
-    'Crescendo',
-    [{ field: 'velocity', op: 'crescendo', a: 40, b: 120 }],
-    [{ field: 'status', op: 'equal', a: 144, b: 0 }]
-  ),
-  preset(
-    'fixedVelocity',
-    'Fixed Velocity',
-    [{ field: 'velocity', op: 'fix', a: 100, b: 0 }],
-    [{ field: 'status', op: 'equal', a: 144, b: 0 }]
-  ),
-  preset(
-    'transpose',
-    'Transpose',
-    [{ field: 'pitch', op: 'add', a: 12, b: 0 }],
-    [{ field: 'status', op: 'equal', a: 144, b: 0 }]
-  ),
+  preset('quantize', 'Quantize Notes (1/16)', [{ field: 'position', op: 'quantize', a: 240, b: 0 }]),
+  preset('crescendo', 'Crescendo', [{ field: 'velocity', op: 'crescendo', a: 40, b: 120 }]),
+  preset('fixedVelocity', 'Fixed Velocity', [{ field: 'velocity', op: 'fix', a: 100, b: 0 }]),
+  preset('transpose', 'Transpose (+12)', [{ field: 'pitch', op: 'add', a: 12, b: 0 }]),
   preset('doubleSpeed', 'Double Speed', [
     { field: 'position', op: 'divide', a: 2, b: 0 },
     { field: 'length', op: 'divide', a: 2, b: 0 }
@@ -393,18 +390,10 @@ export const TransformPresets: readonly TransformSet[] = [
     { field: 'length', op: 'multiply', a: 2, b: 0 }
   ]),
   preset('reversePosition', 'Reverse Position', [{ field: 'position', op: 'flip', a: 0, b: 0 }]),
-  preset(
-    'reversePitch',
-    'Reverse Pitch',
-    [{ field: 'pitch', op: 'flip', a: 60, b: 0 }],
-    [{ field: 'status', op: 'equal', a: 144, b: 0 }]
-  ),
-  preset(
-    'lengthLimits',
-    'Length Limits',
-    [{ field: 'length', op: 'range', a: 120, b: 1920 }],
-    [{ field: 'status', op: 'equal', a: 144, b: 0 }]
-  )
+  preset('reversePitch', 'Reverse Pitch (around C3)', [{ field: 'pitch', op: 'flip', a: 60, b: 0 }]),
+  preset('lengthLimits', 'Length Limits', [{ field: 'length', op: 'range', a: 120, b: 3840 }]),
+  preset('randomVelocity', 'Random Velocity', [{ field: 'velocity', op: 'random', a: 60, b: 120 }]),
+  preset('velocityCompress', 'Velocity Compress', [{ field: 'velocity', op: 'scale', a: 0.5, b: 48 }])
 ];
 
 /** Whether a set is a factory preset (never saved over or deleted). */
@@ -413,25 +402,10 @@ export function isFactorySet(id: string): boolean {
 }
 
 /**
- * A preset fitted to the events it will apply to: Reverse Position flips around the middle of their positions and
- * Reverse Pitch around the middle of their pitches (Logic's "reverse"); other sets come back as they are.
+ * A preset as it applies to a selection. The engine's position flip already mirrors around the selection's extent
+ * (P0 + P1 + 2a − x) and Reverse Pitch flips around C3, so every preset comes back as it is; kept for the window.
  */
-export function fitPresetToSelection(
-  set: TransformSet,
-  events: {
-    notes: readonly Pick<Note, 'startTick' | 'pitch' | 'lengthTicks'>[];
-    controls: readonly Pick<ControlEvent, 'tick'>[];
-  }
-): TransformSet {
-  const middle = (values: number[]) => (values.length ? (Math.min(...values) + Math.max(...values)) / 2 : 0);
-  if (set.id === 'factory.reversePosition') {
-    const a = middle([...events.notes.map(n => n.startTick), ...events.controls.map(c => c.tick)]);
-    return { ...set, operations: set.operations.map(o => (o.field === 'position' ? { ...o, a } : o)) };
-  }
-  if (set.id === 'factory.reversePitch' && events.notes.length) {
-    const a = middle(events.notes.map(n => n.pitch));
-    return { ...set, operations: set.operations.map(o => (o.field === 'pitch' ? { ...o, a } : o)) };
-  }
+export function fitPresetToSelection(set: TransformSet, _events?: unknown): TransformSet {
   return set;
 }
 
