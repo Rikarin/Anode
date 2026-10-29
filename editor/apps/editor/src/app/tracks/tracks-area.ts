@@ -398,7 +398,11 @@ import { TrackHeader } from './track-header';
         </div>
       </div>
       @if (project.liveLoops().shown) {
-        <an-live-loops-grid class="border-hairline w-96 shrink-0 border-e" data-testid="live-loops-grid" />
+        <an-live-loops-grid
+          class="border-hairline w-96 shrink-0 border-e"
+          data-testid="live-loops-grid"
+          [globalHeight]="globalHeight()"
+        />
       }
       <div class="relative flex min-w-0 flex-1" [xuiContextMenuTriggerFor]="timelineMenu">
         <an-timeline class="flex-1" [globalHeight]="globalHeight()" />

@@ -8,6 +8,7 @@ export * from './lib/flex-marker';
 export * from './lib/insert-slot';
 export * from './lib/knob';
 export * from './lib/level-meter';
+export * from './lib/live-loops-cell';
 export * from './lib/pan-knob';
 export * from './lib/parameter-values';
 export * from './lib/peak-meter';
