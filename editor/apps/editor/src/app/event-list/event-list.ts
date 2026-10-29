@@ -89,7 +89,7 @@ import {
         aria-label="Insert event"
         data-testid="event-insert"
         xuiTooltip="Insert an event at the selected event or the playhead"
-        [disabled]="regions().length === 0"
+        [attr.disabled]="regions().length === 0 ? '' : null"
         [xuiMenuTriggerFor]="insertMenu"
       >
         <ng-icon xui name="matAddRound" size="15px" />
@@ -115,7 +115,7 @@ import {
         aria-label="Delete selected events"
         data-testid="event-delete"
         xuiTooltip="Delete the selected events (Delete)"
-        [disabled]="selectedRows().length === 0"
+        [attr.disabled]="selectedRows().length === 0 ? '' : null"
         (click)="deleteSelected()"
       >
         <ng-icon xui name="matDeleteOutlineRound" size="15px" />

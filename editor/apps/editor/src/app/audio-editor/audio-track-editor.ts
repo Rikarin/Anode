@@ -97,7 +97,7 @@ interface ScaleChoice {
         [active]="pitchOn()"
         [class.text-lit]="pitchOn()"
         [attr.aria-pressed]="pitchOn()"
-        [disabled]="!region() || analysing()"
+        [attr.disabled]="!region() || analysing() ? '' : null"
         xuiTooltip="Flex Pitch: edit the region's notes"
         (click)="enablePitch()"
       >
@@ -132,7 +132,7 @@ interface ScaleChoice {
         size="sm"
         variant="outline"
         data-testid="perfect-pitch-apply"
-        [disabled]="notes().length === 0"
+        [attr.disabled]="notes().length === 0 ? '' : null"
         [xuiTooltip]="'Set ' + (selected().size ? 'the selected notes' : 'every note') + ' to perfect pitch'"
         (click)="applyPerfectPitch(percent())"
       >
@@ -154,7 +154,7 @@ interface ScaleChoice {
         size="sm"
         variant="outline"
         data-testid="scale-quantize-apply"
-        [disabled]="notes().length === 0"
+        [attr.disabled]="notes().length === 0 ? '' : null"
         xuiTooltip="Quantise the pitches to the scale"
         (click)="applyPerfectPitch(100)"
       >
@@ -167,7 +167,7 @@ interface ScaleChoice {
         size="sm"
         variant="ghost"
         data-testid="pitch-split"
-        [disabled]="selected().size === 0"
+        [attr.disabled]="selected().size === 0 ? '' : null"
         xuiTooltip="Split the selected note at the playhead (or in half)"
         (click)="splitSelected()"
       >
@@ -179,7 +179,7 @@ interface ScaleChoice {
         size="sm"
         variant="ghost"
         data-testid="pitch-join"
-        [disabled]="!canJoin()"
+        [attr.disabled]="!canJoin() ? '' : null"
         xuiTooltip="Join the selected note with the next (J)"
         (click)="join()"
       >
@@ -191,7 +191,7 @@ interface ScaleChoice {
         size="sm"
         variant="outline"
         data-testid="flex-pitch-to-midi"
-        [disabled]="notes().length === 0"
+        [attr.disabled]="notes().length === 0 ? '' : null"
         xuiTooltip="Make a MIDI region of the notes, on a new instrument track"
         (click)="toMidi()"
       >

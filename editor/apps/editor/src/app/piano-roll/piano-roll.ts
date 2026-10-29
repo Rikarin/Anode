@@ -99,7 +99,7 @@ import { VelocityLane } from './velocity-lane';
         size="sm"
         variant="outline"
         data-testid="quantize"
-        [disabled]="regions().length === 0"
+        [attr.disabled]="regions().length === 0 ? '' : null"
         [xuiTooltip]="
           'Quantise ' + (selectedCount() ? 'the selected notes' : 'every note') + ' to ' + quantizeName() + ' (Q)'
         "
@@ -153,7 +153,7 @@ import { VelocityLane } from './velocity-lane';
         xuiTooltip="MIDI In: step-enter notes from a MIDI keyboard"
         [attr.aria-pressed]="midiStepInput()"
         [class.text-lit]="midiStepInput()"
-        [disabled]="!store.track()"
+        [attr.disabled]="!store.track() ? '' : null"
         (click)="toggleMidiStepInput()"
       >
         <ng-icon xui name="matPianoRound" size="15px" />

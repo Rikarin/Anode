@@ -69,7 +69,7 @@ const Channels = Array.from({ length: 17 }, (_, i) => i);
           variant="ghost"
           aria-label="Rescan plugins"
           xuiTooltip="Rescan the CLAP folders"
-          [disabled]="plugins.scanning()"
+          [attr.disabled]="plugins.scanning() ? '' : null"
           (click)="plugins.rescan()"
         >
           @if (plugins.scanning()) {

@@ -214,7 +214,7 @@ import { Lcd } from './lcd';
               class="grid w-8 place-items-center disabled:opacity-35"
               aria-label="Save"
               xuiTooltip="Save (⌘S)"
-              [disabled]="!project.dirty()"
+              [attr.disabled]="!project.dirty() ? '' : null"
               (click)="session.save()"
             >
               <ng-icon xui name="matSaveRound" size="sm" />
@@ -224,7 +224,7 @@ import { Lcd } from './lcd';
               class="grid w-8 place-items-center disabled:opacity-35"
               aria-label="Undo"
               [xuiTooltip]="undoTip()"
-              [disabled]="!history.canUndo()"
+              [attr.disabled]="!history.canUndo() ? '' : null"
               (click)="history.undo()"
             >
               <ng-icon xui name="matUndoRound" size="sm" />
@@ -234,7 +234,7 @@ import { Lcd } from './lcd';
               class="grid w-8 place-items-center disabled:opacity-35"
               aria-label="Redo"
               [xuiTooltip]="redoTip()"
-              [disabled]="!history.canRedo()"
+              [attr.disabled]="!history.canRedo() ? '' : null"
               (click)="history.redo()"
             >
               <ng-icon xui name="matRedoRound" size="sm" />
@@ -249,7 +249,7 @@ import { Lcd } from './lcd';
           type="button"
           class="grid w-10 place-items-center disabled:opacity-35"
           aria-label="Go to start"
-          [disabled]="!project.isOpen()"
+          [attr.disabled]="!project.isOpen() ? '' : null"
           [xuiTooltip]="'Go to start (Return)'"
           (click)="transport.goToStart()"
         >
@@ -259,7 +259,7 @@ import { Lcd } from './lcd';
           type="button"
           class="grid w-10 place-items-center disabled:opacity-35"
           aria-label="Stop"
-          [disabled]="!project.isOpen()"
+          [attr.disabled]="!project.isOpen() ? '' : null"
           [xuiTooltip]="'Stop (Space); again: go to start'"
           (click)="transport.stop()"
         >
@@ -269,7 +269,7 @@ import { Lcd } from './lcd';
           type="button"
           class="grid w-10 place-items-center disabled:opacity-35"
           aria-label="Play"
-          [disabled]="!project.isOpen()"
+          [attr.disabled]="!project.isOpen() ? '' : null"
           data-testid="play"
           [attr.aria-pressed]="transport.state() === 'playing' ? 'true' : 'false'"
           [class.text-transport-play]="transport.playing()"
@@ -282,7 +282,7 @@ import { Lcd } from './lcd';
           type="button"
           class="text-transport-record grid w-10 place-items-center disabled:opacity-35"
           aria-label="Record"
-          [disabled]="!project.isOpen()"
+          [attr.disabled]="!project.isOpen() ? '' : null"
           data-testid="record"
           [attr.aria-pressed]="transport.recording() ? 'true' : 'false'"
           [xuiTooltip]="'Record (R)'"
@@ -294,7 +294,7 @@ import { Lcd } from './lcd';
           type="button"
           class="grid w-10 place-items-center disabled:opacity-35"
           aria-label="Cycle"
-          [disabled]="!project.isOpen()"
+          [attr.disabled]="!project.isOpen() ? '' : null"
           [attr.aria-pressed]="transport.cycle() ? 'true' : 'false'"
           [class.text-transport-cycle]="transport.cycle()"
           [xuiTooltip]="'Cycle (C)'"

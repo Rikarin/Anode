@@ -66,7 +66,7 @@ const NudgeSeconds = 0.01;
         data-testid="smart-tempo-double"
         aria-label="Double tempo"
         xuiTooltip="Double the tempo: a beat between every two"
-        [disabled]="!shown()"
+        [attr.disabled]="!shown() ? '' : null"
         (click)="double()"
       >
         ×2
@@ -79,7 +79,7 @@ const NudgeSeconds = 0.01;
         data-testid="smart-tempo-halve"
         aria-label="Halve tempo"
         xuiTooltip="Halve the tempo: every other beat"
-        [disabled]="!shown()"
+        [attr.disabled]="!shown() ? '' : null"
         (click)="halve()"
       >
         ÷2
@@ -103,7 +103,7 @@ const NudgeSeconds = 0.01;
           variant="outline"
           data-testid="smart-tempo-keep"
           xuiTooltip="Keep the project tempo: store these beats as the file's tempo"
-          [disabled]="!shown()"
+          [attr.disabled]="!shown() ? '' : null"
           (click)="keep()"
         >
           Keep
@@ -114,7 +114,7 @@ const NudgeSeconds = 0.01;
           size="sm"
           data-testid="smart-tempo-apply"
           xuiTooltip="Store these beats and adapt the project tempo to the region"
-          [disabled]="!shown()"
+          [attr.disabled]="!shown() ? '' : null"
           (click)="apply()"
         >
           Apply
