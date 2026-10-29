@@ -1,4 +1,5 @@
 using Anode.Dsp.Effects;
+using Anode.Dsp.Instruments;
 using Anode.Dsp.MidiEffects;
 using Anode.Engine.Midi;
 
@@ -95,19 +96,27 @@ public sealed class InsertSlot : IDisposable {
 ///     plugin stays the same, as an insert's is: the prepared effect (null when it failed to load: the slot passes MIDI
 ///     through), the parameter values the control thread last set and the queue that carries changes to the audio
 ///     thread.
+///     <para>
+///         Phase 7: an effect with a run-time parameter list (<see cref="IRuntimeParameters" />) is addressed by the
+///         ids of that list, re-read by <see cref="RefreshParameters" />; a script (<see cref="IScriptHost" />) keeps
+///         its <see cref="Source" />, a failed flag that bypasses it, the notes it left sounding (released when a new
+///         instance replaces it or it fails) and its log's rate limit.
+///     </para>
 /// </summary>
 public sealed class MidiEffectSlot : IDisposable {
     readonly Dictionary<string, int> indexById = new(StringComparer.Ordinal);
+    MidiEffectSlot? predecessor;
+    int failed;
 
     public MidiEffectSlot(string id, string pluginId, IMidiEffect? effect) {
         Id = id;
         PluginId = pluginId;
         Effect = effect;
-        if (effect is not null) {
-            foreach (var p in effect.Descriptor.Parameters) {
-                indexById[p.Id] = p.Index;
-                Values[p.Id] = p.Default;
-            }
+        Runtime = effect as IRuntimeParameters;
+        Script = effect as IScriptHost;
+        foreach (var p in ParameterList) {
+            indexById[p.Id] = p.Index;
+            Values[p.Id] = p.Default;
         }
 
         Parameters = new(Math.Max(256, 2 * indexById.Count));
@@ -120,17 +129,67 @@ public sealed class MidiEffectSlot : IDisposable {
     /// <summary>The instance; null when the plugin could not be loaded.</summary>
     public IMidiEffect? Effect { get; }
 
+    /// <summary>The instance when its parameter list is defined at run time (Phase 7), else null.</summary>
+    public IRuntimeParameters? Runtime { get; }
+
+    /// <summary>The instance when it runs a script (Phase 7), else null.</summary>
+    public IScriptHost? Script { get; }
+
+    /// <summary>The script the instance compiled (null: none was given).</summary>
+    public string? Source { get; init; }
+
+    /// <summary>Control thread: the parameters as the slot addresses them now: the run-time list, or the descriptor's.</summary>
+    public IReadOnlyList<InstrumentParameter> ParameterList =>
+        Runtime?.RuntimeParameters ?? Effect?.Descriptor.Parameters ?? [];
+
     /// <summary>Control thread: each parameter's value as last set, by id.</summary>
     public Dictionary<string, double> Values { get; } = new(StringComparer.Ordinal);
 
     /// <summary>Parameter changes on their way to the audio thread.</summary>
     public SpscChannel<ParameterChange> Parameters { get; }
 
+    /// <summary>The script failed (to compile, or while running): the slot passes MIDI through from now on.</summary>
+    public bool Failed => Volatile.Read(ref failed) != 0;
+
+    /// <summary>Control thread: the script's log on its way to the server, kept across the slot's instances.</summary>
+    public ScriptLog Log { get; init; } = new();
+
     /// <summary>Audio thread: the engine's stop/locate count the effect was last reset for.</summary>
     internal long Panic;
 
+    /// <summary>Audio thread: the notes the effect's output left sounding (released on a swap or a fault).</summary>
+    internal NoteSet Held { get; } = new();
+
+    /// <summary>Audio thread: the slot was bypassed for its failure (its notes released).</summary>
+    internal bool Bypassing;
+
+    /// <summary>
+    ///     The instance this one replaced (a new script): set by the control thread before the slot is published; the
+    ///     audio thread releases the notes it left sounding on this slot's first block, then forgets it.
+    /// </summary>
+    internal MidiEffectSlot? Predecessor {
+        get => Volatile.Read(ref predecessor);
+        set => Volatile.Write(ref predecessor, value);
+    }
+
+    public void MarkFailed() => Volatile.Write(ref failed, 1);
+
     /// <summary>The parameter's index, or −1.</summary>
     public int IndexOf(string parameterId) => indexById.GetValueOrDefault(parameterId, -1);
+
+    /// <summary>
+    ///     Control thread: re-reads a run-time parameter list. Parameters that stay (by id) keep their values, new ones
+    ///     start at their defaults, and those gone are forgotten.
+    /// </summary>
+    public void RefreshParameters() {
+        var kept = new Dictionary<string, double>(Values, StringComparer.Ordinal);
+        indexById.Clear();
+        Values.Clear();
+        foreach (var p in ParameterList) {
+            indexById[p.Id] = p.Index;
+            Values[p.Id] = kept.TryGetValue(p.Id, out var value) ? value : p.Default;
+        }
+    }
 
     /// <summary>Control thread, before the slot is published: sets the parameter directly. False for an unknown id.</summary>
     public bool Initialise(string parameterId, double value) {
@@ -169,6 +228,57 @@ public sealed class MidiEffectSlot : IDisposable {
     }
 
     public void Dispose() => Effect?.Dispose();
+}
+
+/// <summary>
+///     A script slot's log on its way to the server (Phase 7, <c>scriptLog</c>): at most <see cref="MaxPerSecond" />
+///     lines go in any one second (a sliding window over the send times of the last ones); the rest are counted as
+///     dropped and reported with the next message. Control thread.
+/// </summary>
+public sealed class ScriptLog {
+    /// <summary>The most lines a slot sends in any one second.</summary>
+    public const int MaxPerSecond = 50;
+
+    readonly long[] sent = new long[MaxPerSecond];
+    readonly bool[] used = new bool[MaxPerSecond];
+    int next;
+
+    /// <summary>Lines left out since the last message.</summary>
+    public int Dropped { get; private set; }
+
+    /// <summary>Lines the engine itself adds (errors), sent before the next trace lines.</summary>
+    public List<string> Pending { get; } = [];
+
+    /// <summary>
+    ///     Takes <paramref name="lines" />, and <paramref name="dropped" /> lines the trace ring already left out, at
+    ///     <paramref name="timestamp" /> (<see cref="System.Diagnostics.Stopwatch" /> ticks): returns those to send now,
+    ///     and counts the rest as dropped.
+    /// </summary>
+    public List<string> Admit(IEnumerable<string> lines, int dropped, long timestamp) {
+        Dropped += Math.Max(0, dropped);
+        var admitted = new List<string>();
+        foreach (var line in lines) {
+            // A line goes when the oldest of the last 50 sent went at least a second ago.
+            if (used[next] && timestamp - sent[next] < System.Diagnostics.Stopwatch.Frequency) {
+                Dropped++;
+                continue;
+            }
+
+            sent[next] = timestamp;
+            used[next] = true;
+            next = (next + 1) % MaxPerSecond;
+            admitted.Add(line);
+        }
+
+        return admitted;
+    }
+
+    /// <summary>Takes the dropped count for a message.</summary>
+    public int TakeDropped() {
+        var dropped = Dropped;
+        Dropped = 0;
+        return dropped;
+    }
 }
 
 /// <summary>A MIDI FX slot as a channel's configuration places it: the instance and whether it is bypassed.</summary>

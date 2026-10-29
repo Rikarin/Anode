@@ -17,6 +17,12 @@ public readonly record struct PreviewSync(double TempoRatio, int TransposeSemito
 }
 
 /// <summary>
+///     Part of a file for the preview channel (Phase 7, <c>previewRange</c>): frames
+///     <see cref="StartFrame" />…<see cref="EndFrame" /> (exclusive), looped when <see cref="Loop" />.
+/// </summary>
+public readonly record struct PreviewRange(long StartFrame, long EndFrame, bool Loop);
+
+/// <summary>
 ///     A file playing through the preview channel (docs/04-phase-3.md, "Files and MIDI import"): the disk thread reads
 ///     it from the start into a stereo ring, and the audio thread adds the ring at <see cref="Gain" /> to the master bus,
 ///     whatever the transport does, bypassing the tracks. The control thread swaps sources whole (start, replace,
@@ -43,7 +49,21 @@ public sealed unsafe class PreviewSource : IDisposable {
     long nextFrame; // disk thread
     int finished;
 
-    public PreviewSource(StreamFile file, float gain, int sampleRate, PreviewSync sync = default) {
+    /// <param name="file">The file, which the source owns from now on.</param>
+    /// <param name="gain">Linear gain.</param>
+    /// <param name="sampleRate">The engine's rate (the ring holds a second).</param>
+    /// <param name="sync">How it plays in sync with the project (Phase 6; not with a range).</param>
+    /// <param name="range">
+    ///     Phase 7's range preview (<c>previewRange</c>): only these frames of the file (clipped to it), as they are,
+    ///     looping back to the range's start, sample-exact, when <see cref="PreviewRange.Loop" />.
+    /// </param>
+    public PreviewSource(
+        StreamFile file,
+        float gain,
+        int sampleRate,
+        PreviewSync sync = default,
+        PreviewRange? range = null
+    ) {
         File = file;
         Gain = float.IsFinite(gain) ? Math.Max(0, gain) : 0;
         Sync = sync.TempoRatio > 0 && double.IsFinite(sync.TempoRatio) ? sync : sync with { TempoRatio = 1 };
@@ -53,6 +73,16 @@ public sealed unsafe class PreviewSource : IDisposable {
         decoded = GC.AllocateArray<float>(ReadFrames * file.Channels, true);
         source = new(this);
         TotalFrames = file.Frames;
+        if (range is { } r) {
+            Sync = PreviewSync.None;
+            RangeStart = Math.Clamp(r.StartFrame, 0, file.Frames);
+            RangeFrames = Math.Clamp(r.EndFrame, RangeStart, file.Frames) - RangeStart;
+            Loop = r.Loop && RangeFrames > 0;
+            TotalFrames = Loop ? long.MaxValue : RangeFrames;
+            return;
+        }
+
+        RangeFrames = file.Frames;
         if (!Sync.Stretched || file.Frames <= 0) {
             return;
         }
@@ -72,8 +102,17 @@ public sealed unsafe class PreviewSource : IDisposable {
 
     public PreviewSync Sync { get; }
 
-    /// <summary>Frames it plays: the file's, or its stretched length.</summary>
+    /// <summary>Frames it plays: the file's, its stretched length, or its range's (<c>long.MaxValue</c>: a loop).</summary>
     public long TotalFrames { get; }
+
+    /// <summary>The first file frame it plays (a range's start; 0 otherwise).</summary>
+    public long RangeStart { get; }
+
+    /// <summary>The file frames it plays from <see cref="RangeStart" /> (its range's, or the whole file's).</summary>
+    public long RangeFrames { get; }
+
+    /// <summary>It plays its range over and over.</summary>
+    public bool Loop { get; }
 
     public SpscRing Ring { get; }
 
@@ -100,7 +139,10 @@ public sealed unsafe class PreviewSource : IDisposable {
             return false;
         }
 
-        var frames = (int)Math.Min(Math.Min(ReadFrames, Ring.Free / 2), TotalFrames - nextFrame);
+        // A loop reads up to its end at most, and the next read starts again from the range's start.
+        var offset = Loop ? nextFrame % RangeFrames : nextFrame;
+        var left = Loop ? RangeFrames - offset : TotalFrames - nextFrame;
+        var frames = (int)Math.Min(Math.Min(ReadFrames, Ring.Free / 2), left);
         if (frames <= 0) {
             if (nextFrame >= TotalFrames) {
                 Volatile.Write(ref finished, 1);
@@ -109,11 +151,11 @@ public sealed unsafe class PreviewSource : IDisposable {
             return false;
         }
 
-        if (renderer is not null) {
+        if (renderer is null) {
+            Read(RangeStart + offset, frames, stereo);
+        } else {
             var region = new FlexRegion(FlexKind.Polyphonic, warp, pitch, TotalFrames);
             renderer.Render(region, nextFrame, stereo.AsSpan(0, frames * 2), 2, source);
-        } else {
-            Read(nextFrame, frames, stereo);
         }
 
         Ring.Write(stereo.AsSpan(0, frames * 2));

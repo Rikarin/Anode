@@ -357,6 +357,77 @@ public sealed partial class HostProcessTests : IDisposable {
         }
     }
 
+    /// <summary>
+    ///     Phase 7 through the real host: MIDI step input forwarding (live MIDI made into a chord step, pushed as
+    ///     <c>stepInputMidi</c>, and nothing once it is off), a looping range preview, and <c>setScript</c> refused for a
+    ///     slot that does not run scripts. (Scripter itself is workstream D's; its round trip runs at integration.)
+    /// </summary>
+    [Fact]
+    public async Task Forwards_step_input_previews_a_range_and_refuses_a_script_without_a_slot() {
+        await StartAsync();
+        using var socket = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
+        await socket.ConnectAsync(new UnixDomainSocketEndPoint(socketPath), Token);
+        await using var stream = new NetworkStream(socket);
+        var steps = new List<StepInputMidiMessage>();
+
+        // The next message that is not one the host pushes unasked (steps are kept).
+        async Task<IpcMessage?> Next() {
+            while (true) {
+                var message = await IpcFraming.ReadAsync(stream, Token);
+                if (message is StepInputMidiMessage step) {
+                    steps.Add(step);
+                    continue;
+                }
+
+                if (message is not (PluginCatalogMessage or MidiPortsMessage or MidiActivityMessage)) {
+                    return message;
+                }
+            }
+        }
+
+        async Task<IpcMessage?> Ping() {
+            await IpcFraming.WriteAsync(stream, new PingMessage(7), Token);
+            return await Next();
+        }
+
+        await IpcFraming.WriteAsync(stream, new HelloMessage("test"), Token);
+        Assert.IsType<HelloMessage>(await Next());
+        using (var segment = TestAudio.Segment([new(1, [], [])], 2)) {
+            await IpcFraming.WriteAsync(
+                stream,
+                TestAudio.Load(segment, 2, true, [new(1, -1, true, false, false, TestAudio.Unity)], [], dir),
+                Token
+            );
+            Assert.Equal(new ModelLoadedMessage(2), await Next());
+        }
+
+        await IpcFraming.WriteAsync(stream, new SetStepInputForwardMessage(true), Token);
+        await IpcFraming.WriteAsync(
+            stream,
+            new LiveMidiMessage(1, [new(0x90, 60, 90), new(0x90, 67, 100), new(0x80, 67, 0), new(0x80, 60, 0)]),
+            Token
+        );
+        Assert.IsType<PongMessage>(await Ping());
+        var step = Assert.Single(steps);
+        Assert.Equal([60, 67], step.Pitches);
+        Assert.Equal(100, step.Velocity);
+        await IpcFraming.WriteAsync(stream, new SetStepInputForwardMessage(false), Token);
+        await IpcFraming.WriteAsync(stream, new LiveMidiMessage(1, [new(0x90, 62, 90), new(0x80, 62, 0)]), Token);
+        Assert.IsType<PongMessage>(await Ping());
+        Assert.Single(steps);
+
+        var file = TestAudio.Write24(dir, "range.wav", 1, Rate, 3);
+        await IpcFraming.WriteAsync(stream, new PreviewRangeMessage(file, 100, 600, true, 0.5f), Token);
+        Assert.IsType<PongMessage>(await Ping()); // taken without a reply
+        await IpcFraming.WriteAsync(stream, new PreviewRangeMessage(file, 600, 100, true, 0.5f), Token);
+        Assert.Equal("previewRange", Assert.IsType<ErrorMessage>(await Next()).Request);
+        await IpcFraming.WriteAsync(stream, new SetScriptMessage(1, "none", "Trace('hi')"), Token);
+        Assert.Equal("setScript", Assert.IsType<ErrorMessage>(await Next()).Request);
+        lock (output) {
+            Assert.DoesNotContain("misbehaving", output.ToString(), StringComparison.Ordinal);
+        }
+    }
+
     [Fact]
     public async Task Exits_with_code_3_when_the_device_is_lost() {
         await StartAsync("--lose-device-after", "300");
