@@ -199,6 +199,29 @@ describe('note edits', () => {
     expect(quantizeCommands(regions, new Set(), 480).map(c => c.type)).toEqual(['quantizeNotes', 'quantizeNotes']);
   });
 
+  it('quantises to a groove with a strength and, when asked, its velocities (Phase 7)', () => {
+    expect(
+      quantizeCommands(regions, new Set([3]), 240, { strength: 0.5, grooveId: 'grv_1', grooveVelocity: true })
+    ).toEqual([
+      {
+        type: 'quantizeNotes',
+        regionId: 'mid_b',
+        gridTicks: 240,
+        strength: 0.5,
+        swing: 0,
+        noteIds: [3],
+        grooveId: 'grv_1',
+        grooveVelocity: true
+      }
+    ]);
+    expect(quantizeCommands(regions, new Set(), 0, { grooveId: 'grv_1' })[0]).toMatchObject({
+      grooveId: 'grv_1',
+      grooveVelocity: false,
+      strength: 1
+    });
+    expect(quantizeCommands(regions, new Set(), 0)).toEqual([]);
+  });
+
   it('edits velocities from the lane', () => {
     expect(velocityAtY(0, 100)).toBe(127);
     expect(velocityAtY(100, 100)).toBe(1);

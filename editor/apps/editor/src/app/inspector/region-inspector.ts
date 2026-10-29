@@ -3,28 +3,24 @@ import type { MidiRegion } from '@anode/api-client';
 import { AnKnob } from '@anode/audio-ui';
 import { XuiNumericInputImports } from '@xui/numeric-input';
 import { XuiSelectImports } from '@xui/select';
+import { type QuantizeChoice, quantizeChoices, regionQuantizeCommand } from '../grooves/groove-menu';
 import { gridLabel, QuantizeGrids } from '../midi/midi-math';
 import { ProjectStore } from '../state/project.store';
+import { UiStore } from '../state/ui.store';
 
-interface GridChoice {
-  ticks: number;
-  label: string;
-}
-
-type PlaybackField = 'transpose' | 'velocity' | 'quantizeTicks' | 'quantizeStrength' | 'swing';
+type PlaybackField = 'transpose' | 'velocity' | 'quantizeStrength' | 'swing';
 
 const Labels: Record<PlaybackField, string> = {
   transpose: 'Region Transpose',
   velocity: 'Region Velocity',
-  quantizeTicks: 'Region Quantize',
   quantizeStrength: 'Quantize Strength',
   swing: 'Region Swing'
 };
 
 /**
  * The Region inspector for a MIDI region (Logic's): how it plays without changing its notes. Transpose in semitones,
- * a velocity offset, a quantise grid (Off or a note value) with its strength and swing. Each change is one
- * `setMidiRegion` batch.
+ * a velocity offset, a quantise grid (Off, a note value, or Phase 7's groove templates of the project) with its strength
+ * and swing, and Make Groove Template. Each change is one `setMidiRegion` batch.
  */
 @Component({
   selector: 'an-region-inspector',
@@ -66,12 +62,21 @@ const Labels: Record<PlaybackField, string> = {
       <xui-select
         aria-label="Quantize"
         data-testid="region-quantize"
-        [items]="grids"
+        [items]="grids()"
         [itemText]="gridText"
         [filterable]="false"
         [value]="grid()"
-        (valueChange)="set('quantizeTicks', $event?.ticks ?? null)"
+        (valueChange)="$event && quantize($event)"
       />
+      <span class="text-foreground-muted">Groove</span>
+      <button
+        type="button"
+        class="bezel text-foreground h-6 justify-self-start px-2 text-[11px] font-semibold"
+        data-testid="region-make-groove"
+        (click)="ui.grooves.set({ regionId: region().id })"
+      >
+        Make Groove Template…
+      </button>
     </div>
     <div class="flex justify-around">
       <an-knob
@@ -80,7 +85,7 @@ const Labels: Record<PlaybackField, string> = {
         [min]="0"
         [max]="100"
         [defaultValue]="100"
-        [disabled]="playback().quantizeTicks === 0"
+        [disabled]="quantizeOff()"
         [value]="playback().quantizeStrength * 100"
         (committed)="set('quantizeStrength', $event / 100)"
       />
@@ -90,7 +95,7 @@ const Labels: Record<PlaybackField, string> = {
         [min]="0"
         [max]="100"
         [defaultValue]="0"
-        [disabled]="playback().quantizeTicks === 0"
+        [disabled]="playback().quantizeTicks === 0 || !!playback().grooveId"
         [value]="playback().swing * 100"
         (committed)="set('swing', $event / 100)"
       />
@@ -99,19 +104,37 @@ const Labels: Record<PlaybackField, string> = {
 })
 export class RegionInspector {
   private readonly project = inject(ProjectStore);
+  protected readonly ui = inject(UiStore);
   readonly region = input.required<MidiRegion>();
 
   protected readonly playback = computed(() => this.region().playback);
-  /** Grids as objects: the select shows nothing for a falsy value, and Off is 0. */
-  protected readonly grids: readonly GridChoice[] = [{ ticks: 0, label: 'Off' }, ...QuantizeGrids];
-  protected readonly gridText = (grid: GridChoice) => grid.label;
-  protected readonly grid = computed(
-    () =>
-      this.grids.find(g => g.ticks === this.playback().quantizeTicks) ?? {
+  /** Grids as objects (the select shows nothing for a falsy value, and Off is 0), then the project's grooves. */
+  protected readonly grids = computed(() =>
+    quantizeChoices([{ ticks: 0, label: 'Off' }, ...QuantizeGrids], this.project.grooveList())
+  );
+  protected readonly gridText = (grid: QuantizeChoice) => grid.label;
+  protected readonly grid = computed(() => {
+    const groove = this.playback().grooveId;
+    const choices = this.grids();
+    if (groove) {
+      return choices.find(g => g.grooveId === groove) ?? null;
+    }
+    return (
+      choices.find(g => !g.grooveId && g.ticks === this.playback().quantizeTicks) ?? {
         ticks: this.playback().quantizeTicks,
         label: gridLabel(this.playback().quantizeTicks)
       }
-  );
+    );
+  });
+  protected readonly quantizeOff = computed(() => this.playback().quantizeTicks === 0 && !this.playback().grooveId);
+
+  /** A grid value or a groove (Phase 7: `grooveId`; a grid value returns a grooved region to the grid). */
+  protected quantize(choice: QuantizeChoice): void {
+    const command = regionQuantizeCommand(this.region(), choice);
+    if (command) {
+      void this.project.execute([command], choice.grooveId ? 'Region Groove' : 'Region Quantize');
+    }
+  }
 
   protected set(field: PlaybackField, value: number | null): void {
     if (value === null || !Number.isFinite(value) || this.region().playback[field] === value) {

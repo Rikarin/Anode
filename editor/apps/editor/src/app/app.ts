@@ -11,6 +11,7 @@ import { BounceDialog } from './export/bounce-dialog';
 import { BounceInPlaceDialog } from './functions/bounce-in-place-dialog';
 import { ProcessingDialog } from './functions/processing-dialog';
 import { StripSilenceDialog } from './functions/strip-silence-dialog';
+import { GrooveWindow } from './grooves/groove-window';
 import { KeyCommandsEditor } from './keys/key-commands-editor';
 import { SoundLibraryDialog } from './loops/sound-library-dialog';
 import { GroupSettings } from './mixer/group-settings';
@@ -56,6 +57,7 @@ import { TransformWindow } from './transform/transform-window';
     StepInputKeyboard,
     StripSilenceDialog,
     TransformWindow,
+    GrooveWindow,
     XuiButtonImports,
     XuiInputImports,
     XuiNonIdealStateImports,
@@ -127,6 +129,11 @@ import { TransformWindow } from './transform/transform-window';
           @if (ui.transformOpen()) {
             @defer (on immediate) {
               <an-transform-window />
+            }
+          }
+          @if (ui.grooves() !== null) {
+            @defer (on immediate) {
+              <an-groove-window />
             }
           }
           @if (ui.stepInputKeyboardOpen()) {

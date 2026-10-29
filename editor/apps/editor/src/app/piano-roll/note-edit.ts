@@ -219,24 +219,35 @@ export function deleteCommands(notes: readonly Pick<PlacedNote, 'id' | 'regionId
   return [...byRegion].map(([regionId, noteIds]) => ({ type: 'deleteNotes', regionId, noteIds }));
 }
 
+/** How the Piano Roll quantises: the strength (0…1) and, in Phase 7, a groove of the project with its velocities. */
+export interface QuantizeOptions {
+  strength?: number;
+  grooveId?: string | null;
+  grooveVelocity?: boolean;
+}
+
 /**
- * Commands quantising notes to `grid` (destructive, `quantizeNotes`): the selected notes of each region, or every note
- * of the regions shown when none is selected.
+ * Commands quantising notes to `grid` (destructive, `quantizeNotes`), or to the groove `options.grooveId`: the
+ * selected notes of each region, or every note of the regions shown when none is selected.
  */
 export function quantizeCommands(
   regions: readonly Pick<MidiRegion, 'id' | 'notes'>[],
   selected: ReadonlySet<number>,
-  grid: number
+  grid: number,
+  options: QuantizeOptions = {}
 ): EditCommand[] {
-  if (!(grid > 0)) {
+  const grooveId = options.grooveId ?? null;
+  if (!(grid > 0) && !grooveId) {
     return [];
   }
 
+  const strength = Math.min(1, Math.max(0, options.strength ?? 1));
+  const groove = grooveId ? { grooveId, grooveVelocity: options.grooveVelocity ?? false } : {};
   const commands: EditCommand[] = [];
   for (const region of regions) {
     if (selected.size === 0) {
       if (region.notes.length > 0) {
-        commands.push({ type: 'quantizeNotes', regionId: region.id, gridTicks: grid, strength: 1, swing: 0 });
+        commands.push({ type: 'quantizeNotes', regionId: region.id, gridTicks: grid, strength, swing: 0, ...groove });
       }
       continue;
     }
@@ -246,9 +257,10 @@ export function quantizeCommands(
         type: 'quantizeNotes',
         regionId: region.id,
         gridTicks: grid,
-        strength: 1,
+        strength,
         swing: 0,
-        noteIds: ids
+        noteIds: ids,
+        ...groove
       });
     }
   }

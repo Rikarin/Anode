@@ -48,6 +48,8 @@ export class FlexStore {
   readonly quantizeGrid = signal(0);
   readonly quantizeStrength = signal(1);
   readonly quantizeSwing = signal(0);
+  /** Phase 7: a groove template of the project to quantise to instead of the grid (null: the grid). */
+  readonly quantizeGroove = signal<string | null>(null);
   /** Analyses by file id. */
   readonly analyses = signal<ReadonlyMap<string, FileAnalysis>>(new Map());
   /** Files whose analysis is being fetched. */
@@ -168,14 +170,36 @@ export class FlexStore {
     return this.project.execute([{ type: 'setFlexMarkers', regionId, markers: [...markers] }], label);
   }
 
-  quantize(regionIds: readonly string[], gridTicks: number, strength = 1, swing = 0): Promise<unknown> {
+  /** Quantises audio regions to the grid, or to the groove `grooveId` (Phase 7; the grid is then unused). */
+  quantize(
+    regionIds: readonly string[],
+    gridTicks: number,
+    strength = 1,
+    swing = 0,
+    grooveId: string | null = null
+  ): Promise<unknown> {
     if (regionIds.length === 0) {
       return Promise.resolve(null);
     }
     return this.project.execute(
-      [{ type: 'quantizeAudio', regionIds: [...regionIds], gridTicks, strength, swing }],
+      [
+        {
+          type: 'quantizeAudio',
+          regionIds: [...regionIds],
+          gridTicks,
+          strength,
+          swing,
+          ...(grooveId ? { grooveId } : {})
+        }
+      ],
       'Quantize Audio'
     );
+  }
+
+  /** The audio quantise's groove, while it is still in the project. */
+  quantizeGrooveId(): string | null {
+    const id = this.quantizeGroove();
+    return id && this.project.grooves().has(id) ? id : null;
   }
 
   setPitchNotes(regionId: string, notes: readonly PitchNote[], label = 'Edit Pitch'): Promise<unknown> {

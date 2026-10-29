@@ -6,6 +6,7 @@ import { QuantizeGrids } from '../midi/midi-math';
 import { canPitch } from '../music/region-timing';
 import { FlexStore, FollowModes } from '../state/flex.store';
 import { ProjectStore } from '../state/project.store';
+import { UiStore } from '../state/ui.store';
 
 /** A native select in the Inspector's dense grid, on the field surface. */
 const Field =
@@ -16,7 +17,7 @@ const Band =
 
 /**
  * The Region inspector for an audio region (Logic's): mute; Quantize (audio: flex markers on its transients moved to the
- * grid, with strength and swing; Q); Flex & Follow, transpose and fine tune (which need Flex or Follow, as in Logic);
+ * grid, or to a groove template of the project, with strength and swing; Q); Make Groove Template; Flex & Follow, transpose and fine tune (which need Flex or Follow, as in Logic);
  * gain, and the fades: their lengths in milliseconds and their curves. Each change is one undo step.
  */
 @Component({
@@ -45,12 +46,21 @@ const Band =
           [class]="field + ' flex-1'"
           aria-label="Quantize audio"
           data-testid="quantize-audio-grid"
-          [value]="flex.quantizeGrid()"
+          [value]="gridValue()"
           (change)="setGrid($event)"
         >
           <option value="0">Off</option>
           @for (grid of grids; track grid.ticks) {
             <option [value]="grid.ticks">{{ grid.label }}</option>
+          }
+          @if (project.grooveList().length > 0) {
+            <optgroup label="Grooves">
+              @for (groove of project.grooveList(); track groove.id) {
+                <option [value]="'groove:' + groove.id" [selected]="gridValue() === 'groove:' + groove.id">
+                  {{ groove.name }}
+                </option>
+              }
+            </optgroup>
           }
         </select>
         <button
@@ -59,12 +69,21 @@ const Band =
           data-testid="quantize-audio"
           aria-label="Quantize audio now"
           title="Quantize the selected audio regions (Q)"
-          [disabled]="flex.quantizeGrid() === 0"
+          [disabled]="gridValue() === '0'"
           (click)="quantize()"
         >
           Q
         </button>
       </div>
+      <span class="text-foreground-muted">Groove</span>
+      <button
+        type="button"
+        class="bezel text-foreground h-6 justify-self-start px-2 text-[11px] font-semibold"
+        data-testid="region-make-groove"
+        (click)="ui.grooves.set({ regionId: region().id })"
+      >
+        Make Groove Template…
+      </button>
       <span class="text-foreground-muted">Q-Strength</span>
       <xui-numeric-input
         size="sm"
@@ -187,9 +206,15 @@ const Band =
   `
 })
 export class AudioRegionInspector {
-  private readonly project = inject(ProjectStore);
+  protected readonly project = inject(ProjectStore);
   protected readonly flex = inject(FlexStore);
+  protected readonly ui = inject(UiStore);
   readonly region = input.required<AudioRegion>();
+  /** The quantise menu's value: a grid in ticks, or `groove:` and a groove's id (Phase 7). */
+  protected readonly gridValue = computed(() => {
+    const groove = this.flex.quantizeGroove();
+    return groove && this.project.grooves().has(groove) ? `groove:${groove}` : String(this.flex.quantizeGrid());
+  });
   protected readonly band = Band;
   protected readonly field = Field;
   protected readonly grids = QuantizeGrids;
@@ -205,7 +230,14 @@ export class AudioRegionInspector {
 
   /** Quantize's grid: quantises now; Off takes the flex markers away. */
   protected setGrid(event: Event): void {
-    const ticks = Number((event.target as HTMLSelectElement).value);
+    const value = (event.target as HTMLSelectElement).value;
+    if (value.startsWith('groove:')) {
+      this.flex.quantizeGroove.set(value.slice('groove:'.length));
+      this.quantize();
+      return;
+    }
+    const ticks = Number(value);
+    this.flex.quantizeGroove.set(null);
     this.flex.quantizeGrid.set(ticks);
     if (ticks > 0) {
       this.quantize();
@@ -227,8 +259,15 @@ export class AudioRegionInspector {
   /** Quantises this region at the grid (when one is chosen). */
   protected quantize(): void {
     const grid = this.flex.quantizeGrid();
-    if (grid > 0) {
-      void this.flex.quantize([this.region().id], grid, this.flex.quantizeStrength(), this.flex.quantizeSwing());
+    const groove = this.flex.quantizeGrooveId();
+    if (grid > 0 || groove) {
+      void this.flex.quantize(
+        [this.region().id],
+        grid,
+        this.flex.quantizeStrength(),
+        this.flex.quantizeSwing(),
+        groove
+      );
     }
   }
 
