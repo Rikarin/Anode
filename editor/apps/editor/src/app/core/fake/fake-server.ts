@@ -2,6 +2,8 @@ import {
   type AddLoopRequest,
   type AddToLoopLibraryRequest,
   ApiError,
+  type ArticulationSet,
+  type AudioEditOperation,
   type AudioFile,
   type AudioRegion,
   type Bookmarks,
@@ -14,6 +16,7 @@ import {
   type DirectoryListing,
   type EditCommand,
   type FileAnalysis,
+  type GrooveTemplate,
   type Insert,
   type InsertReading,
   type IoLabel,
@@ -25,6 +28,8 @@ import {
   type LiveRecordRequest,
   type LoopInfo,
   type LoopPage,
+  type LoopSearchRequest,
+  type LoopSearchResult,
   type MidiDevices,
   type MidiRegion,
   type Note,
@@ -33,27 +38,36 @@ import {
   type PatternRegion,
   type PluginEditorRequest,
   type PluginInfo,
+  type PreviewRangeRequest,
   type ProcessRequest,
   type Project,
   type ProjectAlternative,
   type ProjectBackup,
   type ProjectDelta,
   type ProjectSummary,
+  type SampleRange,
   type SavePatchRequest,
   type Screenset,
   type ServerMessage,
+  type StepInputRequest,
+  type StepInputState,
   type StopRequest,
   type SystemInfo,
   type TakeFolder,
   type Track,
   type TrackMeter,
+  type TransformSet,
   type TransportRequest,
   type TransportStatus,
   type UndoHistory
 } from '@anode/api-client';
 import { MeterMap } from '@anode/timeline';
+import { searchLoops } from '../../audio-file-editor/audio-edit-math';
 import { clampParameter, defaultParameters } from '../../instruments/parameters';
 import { type CellChange, Launcher } from '../../live-loops/launcher';
+import { grooveTarget } from '../../midi-edit/groove';
+import { StepChordCollector, stepLength as stepLengthOf } from '../../midi-edit/step-input';
+import { isFactorySet, TransformPresets } from '../../midi-edit/transform';
 import { isNoteOff, isNoteOn, NeutralPlayback, quantizeNotes } from '../../midi/midi-math';
 import { TrackColors } from '../../state/track-colors';
 import type { AnodeApi, CreateProject, LoopSearch } from '../api';
@@ -104,6 +118,27 @@ import {
   saveSmartControls,
   setCell
 } from './fake-phase6';
+import {
+  applyPhase7Command,
+  checkArticulationId,
+  checkArticulationSet,
+  checkGroove,
+  DefaultStepInput,
+  editedChannels,
+  fakeSamples,
+  isPhase7Command,
+  nextStepInput,
+  peaksOf,
+  type Phase7Context,
+  quantizeGroove,
+  quantizeRegionToGroove,
+  runawayLine,
+  sampleRange,
+  scriptParameters,
+  scriptTraces,
+  shiftRegions,
+  versionPath
+} from './fake-phase7';
 import { CrashyPluginId, FakeCatalogue, FakeEffects, FakeMidiDevices } from './fake-plugins';
 import { FakeMidiEffects, FakeT2Effects, FakeT2Instruments, RemixFxId, withMacros } from './fake-plugins-phase6';
 
@@ -250,6 +285,18 @@ export class FakeAnodeServer implements AnodeApi {
   private bookmarkSet: Bookmarks = { paths: [`${FakeHome}/Music/Loops`, `${FakeHome}/Music/MIDI`] };
   /** The file the preview channel plays (tests). */
   previewing: string | null = null;
+  /** Phase 7: the range of a file the preview channel plays (tests). */
+  previewRange: { fileId: string; request: PreviewRangeRequest } | null = null;
+  /** Phase 7: the user library's grooves, Transform sets and articulation sets. */
+  private readonly libraryGrooveSet = new Map<string, GrooveTemplate>();
+  private readonly transformSetLibrary = new Map<string, TransformSet>();
+  private readonly articulationSetLibrary = new Map<string, ArticulationSet>();
+  /** Phase 7: step input (not part of the project), the last step's notes (a tie lengthens them), MIDI step input. */
+  private stepState: StepInputState = { ...DefaultStepInput };
+  private lastStep: { regionId: string; noteIds: number[] } | null = null;
+  private readonly stepChords = new StepChordCollector();
+  /** Phase 7: the samples of each file version the Audio File Editor wrote, by file id and version. */
+  private readonly fileVersions = new Map<string, Map<number, Float32Array[]>>();
 
   constructor(options: FakeServerOptions = {}) {
     this.now = options.now ?? (() => Date.now());
@@ -485,7 +532,10 @@ export class FakeAnodeServer implements AnodeApi {
         throw new ApiError(404, `No file ${fileId}.`);
       }
 
-      return fakePeaks(hash(file.id + file.name), file.frames, file.channels, framesPerPeak);
+      const edited = this.fileVersions.get(file.id)?.get(file.version);
+      return edited
+        ? peaksOf(edited, framesPerPeak)
+        : fakePeaks(hash(file.id + file.name), file.frames, file.channels, framesPerPeak);
     });
   }
 
@@ -555,6 +605,10 @@ export class FakeAnodeServer implements AnodeApi {
       }
 
       this.liveMidi.push({ trackId, events: structuredClone(events) });
+      if (this.stepState.on && this.stepState.midiInput) {
+        // MIDI step input: the host forwards the keys down since the previous step when the first is released.
+        this.stepFromMidi(events);
+      }
       if (this.transportState === 'recording' && track.recordArmed) {
         this.advance();
         this.capture(trackId, events);
@@ -1190,6 +1244,192 @@ export class FakeAnodeServer implements AnodeApi {
   }
 
   /** The kits of the installed packs (every fake pack carries the same kits). */
+  // ---- Phase 7: libraries, the Audio File Editor, step input
+
+  libraryGrooves(): Promise<GrooveTemplate[]> {
+    return this.answer('ListGrooves', () =>
+      [...this.libraryGrooveSet.values()].sort((a, b) => a.name.localeCompare(b.name)).map(g => structuredClone(g))
+    );
+  }
+
+  saveLibraryGroove(groove: GrooveTemplate): Promise<GrooveTemplate> {
+    return this.answer('SaveGroove', () => {
+      checkGroove(groove);
+      this.libraryGrooveSet.set(groove.id, structuredClone(groove));
+      return structuredClone(groove);
+    });
+  }
+
+  deleteLibraryGroove(id: string): Promise<void> {
+    return this.answer('DeleteGroove', () => {
+      if (!this.libraryGrooveSet.delete(id)) {
+        throw new ApiError(404, `No groove ${id} in the library.`);
+      }
+    });
+  }
+
+  transformSets(): Promise<TransformSet[]> {
+    return this.answer('ListTransformSets', () => [
+      ...TransformPresets.map(s => structuredClone(s)),
+      ...[...this.transformSetLibrary.values()]
+        .sort((a, b) => a.name.localeCompare(b.name))
+        .map(s => structuredClone(s))
+    ]);
+  }
+
+  saveTransformSet(set: TransformSet): Promise<TransformSet> {
+    return this.answer('SaveTransformSet', () => {
+      if (isFactorySet(set.id)) {
+        throw new ApiError(422, 'A factory preset cannot be saved over: save a copy under a new id.');
+      }
+      if (!set.name.trim()) {
+        throw new ApiError(422, 'A Transform set needs a name.');
+      }
+      if (set.map && (set.map.length !== 128 || set.map.some(v => !Number.isInteger(v) || v < 0 || v > 127))) {
+        throw new ApiError(422, 'A Transform map holds 128 values 0…127.');
+      }
+      this.transformSetLibrary.set(set.id, structuredClone(set));
+      return structuredClone(set);
+    });
+  }
+
+  deleteTransformSet(id: string): Promise<void> {
+    return this.answer('DeleteTransformSet', () => {
+      if (isFactorySet(id)) {
+        throw new ApiError(422, 'Factory presets cannot be deleted.');
+      }
+      if (!this.transformSetLibrary.delete(id)) {
+        throw new ApiError(404, `No Transform set ${id}.`);
+      }
+    });
+  }
+
+  libraryArticulationSets(): Promise<ArticulationSet[]> {
+    return this.answer('ListArticulationSets', () =>
+      [...this.articulationSetLibrary.values()]
+        .sort((a, b) => a.name.localeCompare(b.name))
+        .map(s => structuredClone(s))
+    );
+  }
+
+  saveLibraryArticulationSet(set: ArticulationSet): Promise<ArticulationSet> {
+    return this.answer('SaveArticulationSet', () => {
+      checkArticulationSet(set);
+      this.articulationSetLibrary.set(set.id, structuredClone(set));
+      return structuredClone(set);
+    });
+  }
+
+  deleteLibraryArticulationSet(id: string): Promise<void> {
+    return this.answer('DeleteArticulationSet', () => {
+      if (!this.articulationSetLibrary.delete(id)) {
+        throw new ApiError(404, `No articulation set ${id} in the library.`);
+      }
+    });
+  }
+
+  editFile(fileId: string, operation: AudioEditOperation): Promise<Job> {
+    return this.answer('EditFile', () => {
+      const file = this.require().audioFiles.find(f => f.id === fileId);
+      if (!file) {
+        throw new ApiError(404, `No file ${fileId}.`);
+      }
+      const whole = operation.kind === 'convertRate';
+      if (
+        !whole &&
+        (operation.startFrame < 0 || operation.endFrame > file.frames || operation.endFrame <= operation.startFrame)
+      ) {
+        throw new ApiError(422, 'The selection lies inside the file and ends after it starts.');
+      }
+      const copy = structuredClone(operation);
+      return this.startJob('audioEdit', { finish: () => this.finishAudioEdit(fileId, copy) }, 1);
+    });
+  }
+
+  searchLoops(fileId: string, request: LoopSearchRequest): Promise<LoopSearchResult[]> {
+    return this.answer('SearchLoops', () => {
+      const project = this.require();
+      const file = project.audioFiles.find(f => f.id === fileId);
+      if (!file) {
+        throw new ApiError(404, `No file ${fileId}.`);
+      }
+      if (request.endFrame <= request.startFrame || request.startFrame < 0 || request.endFrame > file.frames) {
+        throw new ApiError(422, 'Loop search needs a range inside the file.');
+      }
+      const channel = this.samplesOf(file)[0] ?? new Float32Array(0);
+      return searchLoops(
+        channel,
+        request.startFrame,
+        request.endFrame,
+        request.count ?? 5,
+        request.minFrames ?? Math.round(file.sampleRate / 100)
+      );
+    });
+  }
+
+  fileSamples(fileId: string, start: number, frames: number, bucket = 1): Promise<SampleRange> {
+    return this.answer('GetFileSamples', () => {
+      const file = this.require().audioFiles.find(f => f.id === fileId);
+      if (!file) {
+        throw new ApiError(404, `No file ${fileId}.`);
+      }
+      return sampleRange(this.samplesOf(file), start, frames, bucket);
+    });
+  }
+
+  previewFileRange(fileId: string, request: PreviewRangeRequest): Promise<void> {
+    return this.answer('PreviewFileRange', () => {
+      const file = this.require().audioFiles.find(f => f.id === fileId);
+      if (!file) {
+        throw new ApiError(404, `No file ${fileId}.`);
+      }
+      if (request.endFrame <= request.startFrame) {
+        throw new ApiError(422, 'The range must end after it starts.');
+      }
+      this.previewing = file.path;
+      this.previewRange = { fileId, request: structuredClone(request) };
+    });
+  }
+
+  stepInput(): Promise<StepInputState> {
+    return this.answer('GetStepInput', () => {
+      this.require();
+      return structuredClone(this.stepState);
+    });
+  }
+
+  setStepInput(request: StepInputRequest): Promise<StepInputState> {
+    return this.answer('SetStepInput', () => {
+      const project = this.require();
+      const next = nextStepInput(this.stepState, request);
+      if (next.regionId && !project.midiRegions.some(r => r.id === next.regionId)) {
+        throw new ApiError(422, `No MIDI region ${next.regionId}.`);
+      }
+      if (this.stepState.chord && !next.chord && this.lastStep && this.stepState.positionTick === next.positionTick) {
+        // Chord mode off: advance past the stacked notes.
+        next.positionTick += stepLengthOf(this.stepState);
+      }
+      if (!next.on || !next.midiInput) {
+        this.stepChords.reset();
+      }
+      if (!next.on) {
+        this.lastStep = null;
+      }
+      this.changeStepInput(next);
+      return structuredClone(next);
+    });
+  }
+
+  stepRest(): Promise<StepInputState> {
+    return this.answer('StepRest', () => {
+      this.require();
+      const next = { ...this.stepState, positionTick: this.stepState.positionTick + stepLengthOf(this.stepState) };
+      this.lastStep = null;
+      this.changeStepInput(next);
+      return structuredClone(next);
+    });
+  }
+
   private installedKits(): FakeKit[] {
     return this.loopLibrary.packs().length ? [...this.kits.values()] : [];
   }
@@ -2393,12 +2633,6 @@ export class FakeAnodeServer implements AnodeApi {
       }
     };
 
-    if (usesPhase7Fields(command)) {
-      // Grooves on the quantise commands and setMidiRegion, articulations on notes: Phase 7, the editor workstream
-      // (docs/08-phase-7.md).
-      throw new ApiError(422, `${command.type} with grooves or articulations: not in the fake Server yet.`);
-    }
-
     switch (command.type) {
       case 'addTrack': {
         const count = project.tracks.length;
@@ -2835,8 +3069,17 @@ export class FakeAnodeServer implements AnodeApi {
           velocity: command.velocity ?? p.velocity,
           quantizeTicks: command.quantizeTicks ?? p.quantizeTicks,
           quantizeStrength: command.quantizeStrength ?? p.quantizeStrength,
-          swing: command.swing ?? p.swing
+          swing: command.swing ?? p.swing,
+          // Phase 7: a groove of the project instead of the grid; an empty string returns the region to the grid.
+          ...(command.grooveId == null
+            ? p.grooveId === undefined
+              ? {}
+              : { grooveId: p.grooveId }
+            : { grooveId: command.grooveId || null })
         };
+        if (playback.grooveId && !project.grooves.some(g => g.id === playback.grooveId)) {
+          throw new ApiError(422, `No groove ${playback.grooveId}.`);
+        }
         if (Math.abs(playback.transpose) > 96 || Math.abs(playback.velocity) > 127) {
           throw new ApiError(422, 'Transpose is −96…96 semitones and velocity −127…127.');
         }
@@ -2849,6 +3092,7 @@ export class FakeAnodeServer implements AnodeApi {
         const r = midiRegion(command.regionId);
         const added: Note[] = command.notes.map(n => {
           checkNote(n);
+          checkArticulationId(n.articulationId);
           return {
             id: this.nextId++,
             ...n,
@@ -2879,9 +3123,10 @@ export class FakeAnodeServer implements AnodeApi {
             channel: c.channel ?? n.channel,
             startTick: Math.round(c.startTick ?? n.startTick),
             lengthTicks: Math.round(c.lengthTicks ?? n.lengthTicks),
-            articulationId: n.articulationId
+            articulationId: c.articulationId ?? n.articulationId
           };
           checkNote(next, true);
+          checkArticulationId(next.articulationId);
           return next;
         });
         return withMidiRegion({ ...r, notes: sortNotes(notes) });
@@ -2893,6 +3138,17 @@ export class FakeAnodeServer implements AnodeApi {
       }
       case 'quantizeNotes': {
         const r = midiRegion(command.regionId);
+        // Phase 7: to a groove (`grooveId`, or the groove track's when the track matches it).
+        const groove = quantizeGroove(project, r.trackId, command.grooveId, f => this.analysisOf(f).transients);
+        if (groove) {
+          if (!inUnit(command.strength)) {
+            throw new ApiError(422, 'Quantise needs a strength of 0…1.');
+          }
+          const noteIds = command.noteIds ? new Set(command.noteIds) : undefined;
+          return withMidiRegion(
+            quantizeRegionToGroove(r, groove, command.strength, command.grooveVelocity ?? false, noteIds)
+          );
+        }
         if (!(command.gridTicks > 0) || !inUnit(command.strength) || !inUnit(command.swing)) {
           throw new ApiError(422, 'Quantise needs a grid of more than 0 ticks, and strength and swing of 0…1.');
         }
@@ -3234,26 +3490,12 @@ export class FakeAnodeServer implements AnodeApi {
       case 'loadInsertFile':
         // The convolution reverb's impulse response.
         return loadInsertFile(project, command, id => this.catalogue.find(p => p.id === id));
-      case 'setControls':
-      case 'transform':
-      case 'makeGroove':
-      case 'setGroove':
-      case 'deleteGroove':
-      case 'setGrooveTrack':
-      case 'setMatchGroove':
-      case 'setArticulationSet':
-      case 'deleteArticulationSet':
-      case 'assignArticulationSet':
-      case 'setLaneSet':
-      case 'deleteLaneSet':
-      case 'stepNotes':
-      case 'stepTie':
-      case 'setFileVersion':
-      case 'setScript':
-        // The Event List, MIDI Transform, grooves, articulations, lane sets, step input, the Audio File Editor and
-        // Scripter: Phase 7, the editor workstream (docs/08-phase-7.md).
-        throw new ApiError(422, `${command.type}: not in the fake Server yet.`);
       default:
+        if (isPhase7Command(command)) {
+          // The Event List, MIDI Transform, grooves, articulations, lane sets, step input, the Audio File Editor and
+          // Scripter (Phase 7).
+          return applyPhase7Command(project, command, this.phase7Context());
+        }
         if (isPhase6Command(command)) {
           // Patterns, the Drum Machine Designer, Smart Controls and Live Loops (Phase 6).
           return applyPhase6Command(project, command, this.phase6Context()) ?? project;
@@ -3280,8 +3522,132 @@ export class FakeAnodeServer implements AnodeApi {
     return {
       id: prefix => `${prefix}_${this.nextId++}`,
       apply: (project, command) => this.applyCommand(project, command),
-      analysis: file => this.analysisOf(file)
+      analysis: file => this.analysisOf(file),
+      grooveTarget: (trackId, grooveId) => {
+        const project = this.project;
+        const groove = project ? quantizeGroove(project, trackId, grooveId, f => this.analysisOf(f).transients) : null;
+        return groove ? (tick, strength) => grooveTarget(groove, tick, strength).tick : null;
+      }
     };
+  }
+
+  /** What the Phase 7 commands need: ids, step input, transients, and Scripter's compile (the host's, faked). */
+  private phase7Context(): Phase7Context {
+    const stepInput = () => this.stepState;
+    const lastStep = () => this.lastStep;
+    return {
+      id: prefix => `${prefix}_${this.nextId++}`,
+      noteId: () => this.nextId++,
+      transients: file => this.analysisOf(file).transients,
+      get stepInput() {
+        return stepInput();
+      },
+      setStepInput: state => {
+        this.changeStepInput(state);
+      },
+      get lastStep() {
+        return lastStep();
+      },
+      setLastStep: step => {
+        this.lastStep = step;
+      },
+      compiled: (trackId, slotId, source) => this.compileScript(trackId, slotId, source)
+    };
+  }
+
+  /**
+   * Scripter's compile as the host reports it, after the edit's answer: the script's parameters (`parameters`), its
+   * `Trace` lines (`scriptLog`), and a runaway script bypassed with a problem (`pluginProblem`).
+   */
+  private compileScript(trackId: string, slotId: string, source: string) {
+    const parameters = scriptParameters(source);
+    const traces = scriptTraces(source);
+    setTimeout(() => {
+      this.emit({ type: 'parameters', trackId, slotId, parameters });
+      const runaway = runawayLine(source);
+      if (runaway !== null) {
+        this.emit({
+          type: 'pluginProblem',
+          trackId,
+          insertId: slotId,
+          pluginId: 'anode.scripter',
+          message: `The script ran past its time budget (line ${runaway}); it is bypassed until it is edited.`
+        });
+      } else if (traces.length > 0) {
+        this.emit({ type: 'scriptLog', trackId, slotId, lines: traces, dropped: 0 });
+      }
+    }, 0);
+    return parameters;
+  }
+
+  /** Sets the step input state, telling every client when it changed (`stepInput`). */
+  private changeStepInput(state: StepInputState): void {
+    const changed = JSON.stringify(state) !== JSON.stringify(this.stepState);
+    this.stepState = state;
+    if (changed) {
+      const copy = structuredClone(state);
+      setTimeout(() => this.emit({ type: 'stepInput', state: copy }), 0);
+    }
+  }
+
+  /** MIDI step input: a step for each chord of keys, applied as the `stepNotes` command (one undo step each). */
+  private stepFromMidi(events: readonly LiveMidiEvent[]): void {
+    for (const event of events) {
+      let chord = null;
+      if (isNoteOn(event.status, event.data2)) {
+        this.stepChords.noteOn(event.data1, event.data2);
+      } else if (isNoteOff(event.status, event.data2)) {
+        chord = this.stepChords.noteOff(event.data1);
+      }
+      if (chord) {
+        const before = this.require();
+        const after = this.applyCommand(before, {
+          type: 'stepNotes',
+          pitches: chord.pitches,
+          velocity: chord.velocity
+        });
+        this.commit(before, after, 'Step Input');
+      }
+    }
+  }
+
+  /** The channels of a file's current version: the Audio File Editor's, else its fake first version. */
+  private samplesOf(file: AudioFile): Float32Array[] {
+    const versions = this.fileVersions.get(file.id);
+    const kept = versions?.get(file.version);
+    if (kept) {
+      return kept;
+    }
+    const first = fakeSamples(file);
+    this.fileVersions.set(file.id, (versions ?? new Map<number, Float32Array[]>()).set(file.version, first));
+    return first;
+  }
+
+  /** Finishes an `audioEdit` job: the new version's samples, then `setFileVersion` with region shifts (one step). */
+  private finishAudioEdit(fileId: string, op: AudioEditOperation): string[] {
+    const before = this.require();
+    const file = before.audioFiles.find(f => f.id === fileId);
+    if (!file) {
+      throw new Error('The file was removed during the edit.');
+    }
+    const channels = editedChannels(this.samplesOf(file), file, op);
+    const frames = channels[0]?.length ?? 0;
+    const version = Math.max(file.version, ...(this.fileVersions.get(file.id)?.keys() ?? [])) + 1;
+    const path = versionPath(file, version);
+    const regions = shiftRegions(before, file, op, frames);
+    let after = this.applyCommand(before, {
+      type: 'setFileVersion',
+      fileId,
+      version,
+      path,
+      frames,
+      sampleRate: op.kind === 'convertRate' ? (op.targetRate ?? file.sampleRate) : file.sampleRate
+    });
+    after = { ...after, regions };
+    this.fileVersions.get(file.id)?.set(version, channels);
+    this.analyses.delete(file.id);
+    this.commit(before, after, 'Audio File Edit');
+    return [`${projectFolder(after)}/${path}`];
   }
 
   /**
@@ -3828,23 +4194,6 @@ function readBytes(blob: Blob): Promise<ArrayBuffer> {
   });
 }
 
-/** Whether an existing command uses a Phase 7 field (docs/08-phase-7.md), which the fake Server does not apply yet. */
-function usesPhase7Fields(command: EditCommand): boolean {
-  switch (command.type) {
-    case 'quantizeNotes':
-      return command.grooveId != null || command.grooveVelocity != null;
-    case 'quantizeAudio':
-    case 'setMidiRegion':
-      return command.grooveId != null;
-    case 'addNotes':
-      return command.notes.some(n => n.articulationId != null && n.articulationId !== 0);
-    case 'editNotes':
-      return command.changes.some(c => c.articulationId != null);
-    default:
-      return false;
-  }
-}
-
 function strip(): ChannelStrip {
   return {
     volumeDb: 0,
@@ -4050,6 +4399,27 @@ export function diff(before: Project, after: Project): DeltaOp[] {
   if (!same(before.liveLoops, after.liveLoops)) {
     ops.push({ op: 'liveLoopsChanged', liveLoops: after.liveLoops });
   }
+  diffList(
+    before.grooves,
+    after.grooves,
+    same,
+    id => ops.push({ op: 'grooveRemoved', id }),
+    groove => ops.push({ op: 'grooveUpserted', groove })
+  );
+  diffList(
+    before.articulationSets,
+    after.articulationSets,
+    same,
+    id => ops.push({ op: 'articulationSetRemoved', id }),
+    set => ops.push({ op: 'articulationSetUpserted', set })
+  );
+  diffList(
+    before.laneSets,
+    after.laneSets,
+    same,
+    id => ops.push({ op: 'laneSetRemoved', id }),
+    set => ops.push({ op: 'laneSetUpserted', set })
+  );
   const groupsAfter = new Map(after.groups.map(g => [g.number, g]));
   const groupsBefore = new Map(before.groups.map(g => [g.number, g]));
   for (const group of before.groups) {

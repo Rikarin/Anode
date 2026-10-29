@@ -3,6 +3,8 @@ import {
   type AddLoopRequest,
   type AddToLoopLibraryRequest,
   ApiError,
+  type ArticulationSet,
+  type AudioEditOperation,
   type AudioFile,
   type Bookmarks,
   type BounceInPlaceRequest,
@@ -11,6 +13,7 @@ import {
   type CommandResult,
   type DirectoryListing,
   type FileAnalysis,
+  type GrooveTemplate,
   type IoLabels,
   type Job,
   type KeyCommandSet,
@@ -21,20 +24,27 @@ import {
   type LoopKind,
   type LoopPage,
   type LoopScale,
+  type LoopSearchRequest,
+  type LoopSearchResult,
   type MidiDevices,
   type Pack,
   type PatchInfo,
   type PluginEditorRequest,
   type PluginInfo,
+  type PreviewRangeRequest,
   type ProcessRequest,
   type Project,
   type ProjectAlternative,
   type ProjectBackup,
   type ProjectSummary,
+  type SampleRange,
   type SavePatchRequest,
   type Screenset,
+  type StepInputRequest,
+  type StepInputState,
   type StopRequest,
   type SystemInfo,
+  type TransformSet,
   type TransportRequest,
   type TransportStatus,
   type UndoHistory,
@@ -181,6 +191,35 @@ export interface AnodeApi {
   stopCells(request: StopRequest): Promise<void>;
   /** Starts or stops recording into a cell, or a performance recording into the Tracks area. */
   recordLiveLoops(request: LiveRecordRequest): Promise<void>;
+  // ---- Phase 7 (docs/08-phase-7.md)
+  /** The groove templates saved in the user library. */
+  libraryGrooves(): Promise<GrooveTemplate[]>;
+  /** Saves a groove template in the user library (replacing the one with its id). */
+  saveLibraryGroove(groove: GrooveTemplate): Promise<GrooveTemplate>;
+  deleteLibraryGroove(id: string): Promise<void>;
+  /** The MIDI Transform factory presets (`factory.…`) followed by the user's saved sets, by name. */
+  transformSets(): Promise<TransformSet[]>;
+  /** Saves a Transform set in the user library (a factory preset's id is refused: save a copy under a new id). */
+  saveTransformSet(set: TransformSet): Promise<TransformSet>;
+  deleteTransformSet(id: string): Promise<void>;
+  /** The articulation sets saved in the user library. */
+  libraryArticulationSets(): Promise<ArticulationSet[]>;
+  saveLibraryArticulationSet(set: ArticulationSet): Promise<ArticulationSet>;
+  deleteLibraryArticulationSet(id: string): Promise<void>;
+  /** Runs an Audio File Editor operation as an `audioEdit` job; the file's new version follows as one undo step. */
+  editFile(fileId: string, operation: AudioEditOperation): Promise<Job>;
+  /** Loop search over a range of a file: the best loops, best first. */
+  searchLoops(fileId: string, request: LoopSearchRequest): Promise<LoopSearchResult[]>;
+  /** Samples of a file's current version: raw at bucket 1, else min and max per bucket. */
+  fileSamples(fileId: string, start: number, frames: number, bucket?: number): Promise<SampleRange>;
+  /** Plays a range of a file through the preview channel (`previewFile(null)` stops it). */
+  previewFileRange(fileId: string, request: PreviewRangeRequest): Promise<void>;
+  /** The step input state (not saved, not undoable). */
+  stepInput(): Promise<StepInputState>;
+  /** Changes the step input state (left-out properties stay); a `stepInput` event follows. */
+  setStepInput(request: StepInputRequest): Promise<StepInputState>;
+  /** A rest: advances the step position by one step. */
+  stepRest(): Promise<StepInputState>;
 }
 
 export const ANODE_API = new InjectionToken<AnodeApi>('AnodeApi', {
@@ -492,5 +531,82 @@ export class HttpAnodeApi implements AnodeApi {
 
   async recordLiveLoops(request: LiveRecordRequest): Promise<void> {
     unwrap(await this.client.POST('/api/v1/project/live-loops/record', { body: request }));
+  }
+
+  async libraryGrooves(): Promise<GrooveTemplate[]> {
+    return unwrap(await this.client.GET('/api/v1/library/grooves'));
+  }
+
+  async saveLibraryGroove(groove: GrooveTemplate): Promise<GrooveTemplate> {
+    return unwrap(await this.client.POST('/api/v1/library/grooves', { body: groove }));
+  }
+
+  async deleteLibraryGroove(id: string): Promise<void> {
+    unwrap(await this.client.DELETE('/api/v1/library/grooves/{id}', { params: { path: { id } } }));
+  }
+
+  async transformSets(): Promise<TransformSet[]> {
+    return unwrap(await this.client.GET('/api/v1/library/transform-sets'));
+  }
+
+  async saveTransformSet(set: TransformSet): Promise<TransformSet> {
+    return unwrap(await this.client.POST('/api/v1/library/transform-sets', { body: set }));
+  }
+
+  async deleteTransformSet(id: string): Promise<void> {
+    unwrap(await this.client.DELETE('/api/v1/library/transform-sets/{id}', { params: { path: { id } } }));
+  }
+
+  async libraryArticulationSets(): Promise<ArticulationSet[]> {
+    return unwrap(await this.client.GET('/api/v1/library/articulation-sets'));
+  }
+
+  async saveLibraryArticulationSet(set: ArticulationSet): Promise<ArticulationSet> {
+    return unwrap(await this.client.POST('/api/v1/library/articulation-sets', { body: set }));
+  }
+
+  async deleteLibraryArticulationSet(id: string): Promise<void> {
+    unwrap(await this.client.DELETE('/api/v1/library/articulation-sets/{id}', { params: { path: { id } } }));
+  }
+
+  async editFile(fileId: string, operation: AudioEditOperation): Promise<Job> {
+    return unwrap(
+      await this.client.POST('/api/v1/project/files/{fileId}/edit', { params: { path: { fileId } }, body: operation })
+    );
+  }
+
+  async searchLoops(fileId: string, request: LoopSearchRequest): Promise<LoopSearchResult[]> {
+    return unwrap(
+      await this.client.POST('/api/v1/project/files/{fileId}/loop-search', {
+        params: { path: { fileId } },
+        body: request
+      })
+    );
+  }
+
+  async fileSamples(fileId: string, start: number, frames: number, bucket = 1): Promise<SampleRange> {
+    return unwrap(
+      await this.client.GET('/api/v1/project/files/{fileId}/samples', {
+        params: { path: { fileId }, query: { start, frames, bucket } }
+      })
+    );
+  }
+
+  async previewFileRange(fileId: string, request: PreviewRangeRequest): Promise<void> {
+    unwrap(
+      await this.client.POST('/api/v1/project/files/{fileId}/preview', { params: { path: { fileId } }, body: request })
+    );
+  }
+
+  async stepInput(): Promise<StepInputState> {
+    return unwrap(await this.client.GET('/api/v1/project/step-input'));
+  }
+
+  async setStepInput(request: StepInputRequest): Promise<StepInputState> {
+    return unwrap(await this.client.PUT('/api/v1/project/step-input', { body: request }));
+  }
+
+  async stepRest(): Promise<StepInputState> {
+    return unwrap(await this.client.POST('/api/v1/project/step-input/rest'));
   }
 }

@@ -53,6 +53,11 @@ export class PluginWindows {
    */
   async open(trackId: string | null, insert: Insert): Promise<void> {
     const strip = trackId === null ? this.project.master() : this.project.track(trackId)?.strip;
+    if (insert.pluginId === 'anode.scripter' && trackId !== null) {
+      // Scripter (Phase 7): its Script Editor, with the script's parameters as controls.
+      this.ui.scriptEditor.set({ trackId, slotId: insert.id });
+      return;
+    }
     if (strip?.midiEffects.some(i => i.id === insert.id)) {
       this.ui.openPluginWindow({ trackId, insertId: insert.id, chain: 'midiEffects' });
       return;

@@ -8,8 +8,15 @@ export interface PluginWindow {
   chain?: 'inserts' | 'midiEffects';
 }
 
-/** The editors of the Editors pane. */
-export type EditorView = 'pianoRoll' | 'audio' | 'smartTempo' | 'stepSequencer' | 'drumMachine';
+/** The editors of the Editors pane (Phase 7: the Event List, the Step Editor and the Audio File Editor). */
+export type EditorView =
+  'pianoRoll' | 'audio' | 'smartTempo' | 'stepSequencer' | 'drumMachine' | 'eventList' | 'stepEditor' | 'audioFile';
+
+/** A Scripter slot whose Script Editor is open. */
+export interface ScriptSlot {
+  trackId: string;
+  slotId: string;
+}
 
 function same(a: PluginWindow, b: PluginWindow): boolean {
   return a.trackId === b.trackId && a.insertId === b.insertId && (a.chain ?? 'inserts') === (b.chain ?? 'inserts');
@@ -35,6 +42,21 @@ export class UiStore {
   readonly soundLibraryOpen = signal(false);
   /** Which editor the Editors pane shows: the Piano Roll, the Audio Track Editor or the Smart Tempo Editor. */
   readonly editorView = signal<EditorView>('pianoRoll');
+  /** Phase 7: the MIDI Transform window. */
+  readonly transformOpen = signal(false);
+  /**
+   * Phase 7: the Grooves window (Make Groove Template, the project's grooves and the library's), with the region a
+   * template is made from (null: none); null: closed.
+   */
+  readonly grooves = signal<{ regionId: string | null } | null>(null);
+  /** Phase 7: the Step Input Keyboard window. */
+  readonly stepInputKeyboardOpen = signal(false);
+  /** Phase 7: the articulation set the Articulation Set editor shows (`ars_…`), `new` for a new one; null: closed. */
+  readonly articulationSetEditor = signal<string | null>(null);
+  /** Phase 7: the Scripter slot whose Script Editor is open; null: closed. */
+  readonly scriptEditor = signal<ScriptSlot | null>(null);
+  /** Phase 7: the file the Audio File Editor shows (`aud_…`); null: the selected audio region's. */
+  readonly audioFileId = signal<string | null>(null);
   /** The generic plugin editor windows, in the order they opened (the last is in front). */
   readonly pluginWindows = signal<readonly PluginWindow[]>([]);
 

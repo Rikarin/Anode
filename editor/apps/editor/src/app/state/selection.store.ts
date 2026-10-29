@@ -3,8 +3,8 @@ import { ProjectStore } from './project.store';
 
 /**
  * What is selected: regions in the Tracks area (audio, MIDI and pattern regions, by id), the track whose header was
- * clicked last, and notes in the Piano Roll (by note id, unique in the project). Ids that disappear from the project
- * (deleted, undone) leave the selection.
+ * clicked last, notes in the Piano Roll (by note id, unique in the project), and controller events in the Event List
+ * and Step Editor (Phase 7, by event id). Ids that disappear from the project (deleted, undone) leave the selection.
  */
 @Injectable({ providedIn: 'root' })
 export class SelectionStore {
@@ -14,6 +14,8 @@ export class SelectionStore {
   /** Tracks selected in the Tracks area (⇧- or ⌘-click adds), for track stacks; the last clicked is {@link track}. */
   readonly tracks = signal<ReadonlySet<string>>(new Set());
   readonly notes = signal<ReadonlySet<number>>(new Set());
+  /** Controller events (CC, pitch bend, pressure, program) selected in the Event List or by MIDI Transform. */
+  readonly controls = signal<ReadonlySet<number>>(new Set());
   readonly hasRegions = computed(() => this.regions().size > 0);
 
   constructor() {
@@ -50,6 +52,20 @@ export class SelectionStore {
           const keptNotes = [...notes].filter(id => all.has(id));
           if (keptNotes.length !== notes.size) {
             this.notes.set(new Set(keptNotes));
+          }
+        }
+
+        const controls = this.controls();
+        if (controls.size > 0) {
+          const all = new Set<number>();
+          for (const region of midi.values()) {
+            for (const control of region.controls) {
+              all.add(control.id);
+            }
+          }
+          const keptControls = [...controls].filter(id => all.has(id));
+          if (keptControls.length !== controls.size) {
+            this.controls.set(new Set(keptControls));
           }
         }
       });
@@ -127,6 +143,27 @@ export class SelectionStore {
   clearNotes(): void {
     if (this.notes().size > 0) {
       this.notes.set(new Set());
+    }
+  }
+
+  /** Selects exactly these controller events. */
+  selectControls(ids: Iterable<number>): void {
+    this.controls.set(new Set(ids));
+  }
+
+  toggleControl(id: number): void {
+    this.controls.update(selected => {
+      const next = new Set(selected);
+      if (!next.delete(id)) {
+        next.add(id);
+      }
+      return next;
+    });
+  }
+
+  clearControls(): void {
+    if (this.controls().size > 0) {
+      this.controls.set(new Set());
     }
   }
 }

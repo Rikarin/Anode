@@ -115,7 +115,9 @@ export const FakeMidiEffects: readonly PluginInfo[] = [
     n('offset', 'Offset', -127, 127, 0),
     n('min', 'Minimum', 1, 127, 1),
     n('max', 'Maximum', 1, 127, 127)
-  ])
+  ]),
+  // Phase 7, workstream D: Scripter's parameters come from its script (Insert.runtimeParameters).
+  plugin('anode.scripter', 'Scripter', MidiEffectCategory, [])
 ];
 
 const DrumModels = ['Kick', 'Snare', 'Clap', 'Hat', 'Tom', 'Cymbal', 'Percussion'];

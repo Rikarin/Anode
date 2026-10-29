@@ -267,3 +267,68 @@ from the top, and a tab in the footage's `--drawbar-*` colour with the setting (
 **Custom plugin panels** (`apps/editor/src/app/plugin-panels/`) sit above a plugin's generic controls and reuse its
 parts: knobs and choices, `well` timelines and axes with `bg-primary` handles, `bezel` radios (`text-lit` when checked)
 for the FM algorithms drawn in `currentColor`, and `bg-surface-raised` band columns.
+
+## Phase 7 patterns: MIDI and audio editing
+
+New tokens, in both theme blocks of `anode-theme.css`:
+
+| Group | Variables                                                                                                     |
+| ----- | ------------------------------------------------------------------------------------------------------------- |
+| Code  | `--code-keyword/string/number/comment/function` (Xcode's syntax colours), `--code-error`, `--code-error-line` |
+
+**Floating windows.** MIDI Transform, the Step Input Keyboard, the Articulation Set editor, the Script Editor and
+Grooves sit in `an-floating-window` (`shell/floating-window.ts`): the generic plugin window's `panel` with a `glass-bar`
+title bar it is dragged by, a close button and Escape. They and the Event List, Step Editor and Audio File Editor are
+lazy-loaded (`@defer`); audio-ui parts used only by them come from `@anode/audio-ui/lazy`, so they stay out of the
+initial bundle.
+
+**Event List.** A `glass-bar` toolbar: the kind filters as a `bezel-group` of toggles (`aria-pressed`, `text-lit`; none
+pressed shows everything), "+" as a `bezel` menu button, delete as a `bezel` icon button, and Follow as a `bezel`
+toggle. The table is a `role="grid"` on `bg-surface` with a sticky `bg-surface-raised` header of 10 px uppercase muted
+`columnheader`s. Rows (`an-event-row`) are 24 px on one CSS grid template with 12 px `readout` cells; a selected row is
+`bg-primary/25`, the row at the playhead `bg-surface-raised`. An edited cell becomes a `bg-surface-inset` input with a
+`border-primary` edge; a refused value shows in a `role="status"` band under the toolbar.
+
+**Step Editor.** A `glass-bar` toolbar: the lane set popup (a `bezel`, "Lanes" muted, then the set's name), the
+Pencil/Line `bezel-group` radiogroup, the lane number field and "+ Lane", zoom. A 20 px `bg-surface-raised` ruler. Lanes
+(`an-step-lane`) are 64 px: a 128 px `bg-surface` header (12 px semibold name, a `bezel` resolution pill, a remove key)
+and a `bg-surface-inset` body with grid lines in `stroke-border` at 45 % and bar lines in `stroke-border`. Values are
+`bg-primary` bars from the bottom (beams to the next event for controllers, 3 px bars for velocities; selected
+`bg-lit`); the line tool previews as a 1.5 px `stroke-primary` polyline.
+
+**MIDI Transform.** A `glass-bar` toolbar with the preset xui-select (`an-compact-select`), New, the set's name, Save…
+and Delete. `an-transform-grid` is a table with uppercase 10 px muted column heads and 11 px semibold row heads; its
+cells are native selects and `readout` fields on `bg-surface-inset` (h-6), a value that does not parse with a
+`border-transport-record` edge (`aria-invalid`). The 128-step map is a `well` of `fill-primary/45` bars (the focused
+step `fill-primary`) over a `stroke-knob-track` identity diagonal: one ARIA slider for the focused step. Then the mode
+as a segmented control, the seed, and a hairline footer with a `role="status"` line and the primary Apply.
+
+**Grooves.** The Grooves window uses Inspector bands (Make Groove Template, Project Grooves, Library) with 28 px rows.
+Grooves follow the grid values in quantise menus as "Groove: <name>". In the Piano Roll a groove adds a `bezel` "Vel"
+toggle. The track header's groove-track key is a 13 px star, `text-lit` on the groove track, else muted and shown on
+hover or focus; tracks that can match show an `accent-primary` 12 px "Match groove track" checkbox.
+
+**Articulations and step input.** The Articulation Set window: a name field, then xUI tabs (Articulations, Input
+Switches, Outputs) as dense tables of fields with uppercase 10 px heads; keys in Logic's names (C3 = 60); problems as a
+`role="alert"` list. In the Piano Roll: the MIDI In `bezel` toggle; the step position as a 2 px `bg-primary` line with a
+soft glow; under the velocity lane a 24 px `bg-surface-sunken` articulation lane of `bezel` chips per note start (the
+symbol, else the name; `text-lit` when selected); the note inspector a 32 px `bg-surface` row of `readout` fields. The
+Step Input Keyboard (`an-step-keyboard`): `bezel-group` rows of note-value radios (`text-lit` when checked), dotted and
+triplet glyph toggles, ppp…fff velocity radios plus a field, Rest / Tie / Chord, and `an-piano-keyboard` in a `well`
+between octave `bezel`s; the position in a small `lcd-glass` readout.
+
+**Audio File Editor.** A `glass-bar` toolbar: Undo, Functions (an outline menu button), Loop Search, Make Groove
+Template, a preview `bezel-group` (Play `text-transport-play`, Loop `text-transport-cycle`, Stop), Snap to Zero
+Crossings and Samples `bezel` toggles, Select All, the file name and zoom. A `bg-surface` selection row of start/end
+fields in samples (`readout`). An operation's settings open as a `bg-surface-raised` row; job progress is the
+Processing dialog's bar. The waveform canvas is on `--surface-sunken` with a 20 px ruler on `--surface-raised`, a lane
+per channel split by `--border`, the audio in `--primary` (min/max columns, from 6 px per sample a line with points);
+the selection a `bg-primary/20` band with `border-primary` edges; loop markers dashed `border-foreground-muted` bands
+(the chosen one `border-transport-cycle`) numbered in `bg-surface-raised` tags.
+
+**Script Editor.** A `glass-bar` toolbar with the presets `bezel` popup, the slot's owner and name, Revert and Run (a
+`text-transport-play` play icon). The code editor (`an-code-editor`, CodeMirror 6) is an `h-72` field on
+`--surface-inset` in `font-mono` 12 px with gutters on `--surface`, the active line in `--hairline` and the line an
+error names in `--code-error-line` with a 2 px `--code-error` edge. Parameters follow the parameter-group pattern. The
+console is an `h-32` `bg-surface-inset` `role="log"` in `font-mono` 11 px: traces in `text-foreground`, dropped counts
+muted, problems `text-error`.

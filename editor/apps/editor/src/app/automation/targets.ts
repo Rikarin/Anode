@@ -155,7 +155,7 @@ export function targetsOf(
   }
   // MIDI FX slots' parameters (Phase 6), under the slot's plugin name: `midiEffect:{slotId}:{parameterId}`.
   for (const slot of track.strip.midiEffects) {
-    for (const parameter of plugin(slot.pluginId)?.parameters ?? []) {
+    for (const parameter of slot.runtimeParameters ?? plugin(slot.pluginId)?.parameters ?? []) {
       list.push(
         parameterTarget(`midiEffect:${slot.id}:${parameter.id}`, slot.name, parameter, slot.parameters[parameter.id])
       );

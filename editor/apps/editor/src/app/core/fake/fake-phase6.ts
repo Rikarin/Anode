@@ -428,8 +428,9 @@ export function applyMidiEffectCommand(project: Project, command: EditCommand, c
     case 'setInsertParameter': {
       const { track, strip } = midiEffectStrip(project, command.trackId);
       const slot = findSlot(strip, command.insertId);
+      // A run-time list (Scripter's, Phase 7) replaces the plugin's.
       const parameter =
-        ctx.plugin(slot.pluginId)?.parameters.find(p => p.id === command.parameterId) ??
+        (slot.runtimeParameters ?? ctx.plugin(slot.pluginId)?.parameters)?.find(p => p.id === command.parameterId) ??
         refuse(`${slot.name} has no parameter ${command.parameterId}.`);
       if (!Number.isFinite(command.value)) {
         refuse('A parameter value must be a number.');

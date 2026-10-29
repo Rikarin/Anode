@@ -29,6 +29,12 @@ export class PianoRollStore {
   readonly snap = signal(true);
   /** The grid the Piano Roll snaps to and Q quantises to, in ticks. */
   readonly grid = signal(Ppq / 4);
+  /** Q's strength, 0…1. */
+  readonly quantizeStrength = signal(1);
+  /** Phase 7: a groove template of the project Q quantises to instead of the grid (null: the grid). */
+  readonly quantizeGroove = signal<string | null>(null);
+  /** Phase 7: Q with a groove also scales velocities by the groove's. */
+  readonly grooveVelocity = signal(false);
   readonly velocity = signal(100);
   /** The length the pencil gives a note: the last one drawn or resized. */
   readonly noteLength = signal(Ppq / 4);

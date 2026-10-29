@@ -4,18 +4,21 @@ import { XuiButtonImports } from '@xui/button';
 import { XuiInputImports } from '@xui/input';
 import { XuiNonIdealStateImports } from '@xui/non-ideal-state';
 import { XuiSpinnerImports } from '@xui/spinner';
+import { ArticulationSetEditor } from './articulations/articulation-set-editor';
 import type { AppCommand } from './core/desktop';
 import { Startup } from './core/startup';
 import { BounceDialog } from './export/bounce-dialog';
 import { BounceInPlaceDialog } from './functions/bounce-in-place-dialog';
 import { ProcessingDialog } from './functions/processing-dialog';
 import { StripSilenceDialog } from './functions/strip-silence-dialog';
+import { GrooveWindow } from './grooves/groove-window';
 import { KeyCommandsEditor } from './keys/key-commands-editor';
 import { SoundLibraryDialog } from './loops/sound-library-dialog';
 import { GroupSettings } from './mixer/group-settings';
 import { IoLabelsDialog } from './mixer/io-labels-dialog';
 import { PluginWindowsHost } from './mixer/plugin-window';
 import { PluginWindows } from './mixer/plugin-windows';
+import { ScriptEditor } from './scripter/script-editor';
 import { ControlBar } from './shell/control-bar';
 import { SaveAlternativeDialog } from './shell/save-alternative';
 import { HistoryStore } from './state/history.store';
@@ -26,15 +29,19 @@ import { ProjectSession } from './state/project-session';
 import { ProjectStore } from './state/project.store';
 import { ScreensetStore } from './state/screenset.store';
 import { SelectionStore } from './state/selection.store';
+import { StepInputStore } from './state/step-input.store';
 import { ThemeStore } from './state/theme.store';
 import { TransportStore } from './state/transport.store';
-import { UiStore } from './state/ui.store';
+import { type EditorView, UiStore } from './state/ui.store';
+import { StepInputKeyboard } from './step-input/step-input-keyboard';
 import { AudioImport } from './tracks/audio-import';
+import { TransformWindow } from './transform/transform-window';
 
 @Component({
   selector: 'an-root',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
+    ArticulationSetEditor,
     BounceDialog,
     BounceInPlaceDialog,
     ControlBar,
@@ -45,8 +52,12 @@ import { AudioImport } from './tracks/audio-import';
     ProcessingDialog,
     RouterOutlet,
     SaveAlternativeDialog,
+    ScriptEditor,
     SoundLibraryDialog,
+    StepInputKeyboard,
     StripSilenceDialog,
+    TransformWindow,
+    GrooveWindow,
     XuiButtonImports,
     XuiInputImports,
     XuiNonIdealStateImports,
@@ -114,6 +125,32 @@ import { AudioImport } from './tracks/audio-import';
           <an-io-labels-dialog />
           <an-group-settings />
           <an-plugin-windows />
+          <!-- Phase 7's windows load when first opened (docs/08-phase-7.md; the initial bundle stays small). -->
+          @if (ui.transformOpen()) {
+            @defer (on immediate) {
+              <an-transform-window />
+            }
+          }
+          @if (ui.grooves() !== null) {
+            @defer (on immediate) {
+              <an-groove-window />
+            }
+          }
+          @if (ui.stepInputKeyboardOpen()) {
+            @defer (on immediate) {
+              <an-step-input-keyboard />
+            }
+          }
+          @if (ui.articulationSetEditor() !== null) {
+            @defer (on immediate) {
+              <an-articulation-set-editor />
+            }
+          }
+          @if (ui.scriptEditor() !== null) {
+            @defer (on immediate) {
+              <an-script-editor />
+            }
+          }
         }
         <an-sound-library-dialog />
       }
@@ -130,7 +167,8 @@ export class App {
   private readonly screensets = inject(ScreensetStore);
   private readonly selection = inject(SelectionStore);
   private readonly theme = inject(ThemeStore);
-  private readonly ui = inject(UiStore);
+  protected readonly ui = inject(UiStore);
+  private readonly stepInput = inject(StepInputStore);
   protected readonly live = inject(LiveMidiStore);
   private readonly audioImport = inject(AudioImport);
   private readonly mixer = inject(MixerStore);
@@ -189,6 +227,12 @@ export class App {
         this.screensets.showPane('editors');
       },
       'view.soundLibrary': () => this.ui.soundLibraryOpen.set(true),
+      'view.eventList': () => this.showEditor('eventList'),
+      'view.stepEditor': () => this.showEditor('stepEditor'),
+      'view.audioFileEditor': () => this.showEditor('audioFile'),
+      'view.stepInputKeyboard': () => this.ui.stepInputKeyboardOpen.update(open => !open),
+      'midi.transform': () => this.ui.transformOpen.set(true),
+      'midi.stepInput': () => void this.stepInput.toggleMidi(this.ui.stepInputKeyboardOpen()),
       'view.liveLoops': () =>
         void this.project.execute(
           [{ type: 'setLiveLoops', shown: !this.project.liveLoops().shown }],
@@ -258,6 +302,12 @@ export class App {
         this.ui.ioLabelsOpen.set(true);
         break;
     }
+  }
+
+  /** Shows an editor of the Editors pane (Phase 7: the Event List, the Step Editor, the Audio File Editor). */
+  private showEditor(view: EditorView): void {
+    this.ui.editorView.set(view);
+    this.screensets.showPane('editors');
   }
 
   /** Group Settings for the selected track's group (or the first group). */

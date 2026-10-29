@@ -514,6 +514,21 @@ import { TrackHeader } from './track-header';
             <button xuiMenuItem type="button" (click)="ui.processingOpen.set(true)">
               Selection-Based Processing… ({{ keyOf('region.process') }})
             </button>
+            @if (menuMidi()) {
+              <button xuiMenuItem type="button" data-testid="open-transform" (click)="ui.transformOpen.set(true)">
+                MIDI Transform… ({{ keyOf('midi.transform') }})
+              </button>
+            }
+            @if (menuGrooveSource(); as regionId) {
+              <button
+                xuiMenuItem
+                type="button"
+                data-testid="make-groove-template"
+                (click)="ui.grooves.set({ regionId })"
+              >
+                Make Groove Template…
+              </button>
+            }
             <xui-menu-divider />
             <button xuiMenuItem type="button" color="error" (click)="deleteSelected()">Delete</button>
           </xui-menu>
@@ -598,6 +613,18 @@ export class TracksArea {
     const target = this.timeline().menuTarget();
     return target.kind === 'regions' ? target.ids.filter(id => this.project.patternRegions().has(id)) : [];
   });
+  /** The region menu is on MIDI regions (MIDI Transform applies). */
+  protected readonly menuMidi = computed(() => {
+    const target = this.timeline().menuTarget();
+    return target.kind === 'regions' && target.ids.some(id => this.project.midiRegions().has(id));
+  });
+  /** The MIDI or audio region a groove template is made from: the first of the menu's. */
+  protected readonly menuGrooveSource = computed(() => {
+    const target = this.timeline().menuTarget();
+    return target.kind === 'regions'
+      ? (target.ids.find(id => this.project.midiRegions().has(id) || this.project.regions().has(id)) ?? null)
+      : null;
+  });
   /** The instrument or DMD track a lane's tool menu makes a pattern region on. */
   protected readonly menuPatternTrack = computed(() => {
     const target = this.timeline().menuTarget();
@@ -666,8 +693,9 @@ export class TracksArea {
   private quantizeAudio(): void {
     const ids = [...this.selection.regions()].filter(id => this.project.regions().has(id));
     const grid = this.flex.quantizeGrid();
-    if (ids.length > 0 && grid > 0) {
-      void this.flex.quantize(ids, grid, this.flex.quantizeStrength(), this.flex.quantizeSwing());
+    const groove = this.flex.quantizeGrooveId();
+    if (ids.length > 0 && (grid > 0 || groove)) {
+      void this.flex.quantize(ids, grid, this.flex.quantizeStrength(), this.flex.quantizeSwing(), groove);
     }
   }
 
