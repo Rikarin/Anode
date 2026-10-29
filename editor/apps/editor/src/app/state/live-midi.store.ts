@@ -12,6 +12,8 @@ export const ActivityHoldMs = 180;
 /** The lowest and highest octave musical typing reaches (its C: C-2 … C7, as Logic numbers them). */
 const MinOctave = 0;
 const MaxOctave = 9;
+/** The most events one live MIDI request carries (the Server takes up to 1024). */
+const MaxLiveBatch = 256;
 
 /**
  * Live MIDI from the editor and what the engine heard (docs/03-phase-2.md, "Live input"). The on-screen keyboard and
@@ -53,6 +55,9 @@ export class LiveMidiStore {
   /** Tracks with MIDI activity in the last {@link ActivityHoldMs}. */
   readonly active = signal<ReadonlySet<string>>(new Set());
   private readonly timers = new Map<string, ReturnType<typeof setTimeout>>();
+  /** Live MIDI waiting for the request before it (see `send`). */
+  private readonly outbox: { trackId: string; events: LiveMidiEvent[] }[] = [];
+  private sending = false;
   /** The thru track the Server was last told about (undefined: not yet told). */
   private thru: string | null | undefined = undefined;
 
@@ -185,8 +190,35 @@ export class LiveMidiStore {
     return this.active().has(trackId);
   }
 
+  /**
+   * Plays events in the order they happened: one request at a time, events that come meanwhile going in the next (as
+   * separate requests a note's end could overtake its start, or a chord's keys their order, at the Server).
+   */
   private send(trackId: string, events: LiveMidiEvent[]): void {
-    this.api.sendLiveMidi(trackId, events).catch((error: unknown) => this.notify.failure(error, 'Could not play'));
+    const last = this.outbox.at(-1);
+    if (last?.trackId === trackId && last.events.length + events.length <= MaxLiveBatch) {
+      last.events.push(...events);
+    } else {
+      this.outbox.push({ trackId, events: [...events] });
+    }
+    if (!this.sending) {
+      void this.flush();
+    }
+  }
+
+  private async flush(): Promise<void> {
+    this.sending = true;
+    try {
+      for (let next = this.outbox.shift(); next; next = this.outbox.shift()) {
+        try {
+          await this.api.sendLiveMidi(next.trackId, next.events);
+        } catch (error) {
+          this.notify.failure(error, 'Could not play');
+        }
+      }
+    } finally {
+      this.sending = false;
+    }
   }
 
   private syncThru(trackId: string | null): void {
