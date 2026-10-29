@@ -153,6 +153,15 @@ function matchErrorMs(actual: readonly number[], expected: readonly number[]): n
   return 1000 * Math.max(...actual.map(t => nearest(t, expected)), ...expected.map(t => nearest(t, actual)));
 }
 
+/** What the spec reads of a saved track file (`<project>.anode/tracks/<id>.json`). */
+interface SavedTrack {
+  track: {
+    name: string;
+    smartControls: { controls: { id: string; mappings: { invert: boolean; graph: unknown[] }[] }[] } | null;
+  };
+  automation: { target: string; points: unknown[] }[];
+}
+
 /** Records what the exit criterion measured as a test annotation, and returns it. */
 function measured(what: string, value: number, unit: string): number {
   test.info().annotations.push({ type: 'measured', description: `${what}: ${value.toFixed(3)} ${unit}` });
@@ -626,16 +635,14 @@ test('builds and performs a beat from Anode content: packs, loops, DMD, Step Seq
     await expect(window.getByTestId('unsaved')).toHaveCount(0);
     // The lane is the knob's own (the saved package says so): two points on `smartControl:knob1`.
     const synthFile = readdirSync(join(scratch, 'Beats.anode', 'tracks'))
-      .map(file => JSON.parse(readFileSync(join(scratch, 'Beats.anode', 'tracks', file), 'utf8')))
-      .find(file => file.track?.name === synth);
-    expect(
-      (synthFile?.automation ?? []).find((l: { target: string }) => l.target === 'smartControl:knob1')?.points
-    ).toHaveLength(2);
+      .map(file => JSON.parse(readFileSync(join(scratch, 'Beats.anode', 'tracks', file), 'utf8')) as SavedTrack)
+      .find(file => file.track.name === synth);
+    expect(synthFile?.automation.find(l => l.target === 'smartControl:knob1')?.points).toHaveLength(2);
     // Knob 1 drives two parameters, one inverted through a three-point graph.
-    const knob1Saved = synthFile?.track?.smartControls?.controls?.find((c: { id: string }) => c.id === 'knob1');
+    const knob1Saved = synthFile?.track.smartControls?.controls.find(c => c.id === 'knob1');
     expect(knob1Saved?.mappings).toHaveLength(2);
-    expect(knob1Saved?.mappings?.[1]).toMatchObject({ invert: true });
-    expect(knob1Saved?.mappings?.[1]?.graph).toHaveLength(3);
+    expect(knob1Saved?.mappings[1]).toMatchObject({ invert: true });
+    expect(knob1Saved?.mappings[1]?.graph).toHaveLength(3);
     const knobSlider = knob1.getByRole('slider');
     const saved = await knobSlider.getAttribute('aria-valuetext');
     await knobSlider.focus();

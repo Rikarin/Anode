@@ -195,7 +195,7 @@ describe('FakeAnodeServer, Phase 3 commands', () => {
       [p.tracks[3]?.name, true],
       ['Synth', false]
     ]);
-    p = await run(server, { type: 'removeTrack', trackId: p.tracks[4]?.id ?? '' });
+    await run(server, { type: 'removeTrack', trackId: p.tracks[4]?.id ?? '' });
     p = await run(server, { type: 'removeStack', stackId: stack?.id ?? '' });
     expect(p.tracks.every(t => t.parentId === null && t.kind === 'audio')).toBe(true);
   });
