@@ -26,6 +26,7 @@
     "paths": {
       "@anode/api-client": ["libs/api-client/src/index.ts"],
       "@anode/audio-ui": ["libs/audio-ui/src/index.ts"],
+      "@anode/audio-ui/lazy": ["libs/audio-ui/src/lazy.ts"],
       "@anode/timeline": ["libs/timeline/src/index.ts"]
     }
   },
