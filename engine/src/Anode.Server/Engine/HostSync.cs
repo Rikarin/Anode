@@ -546,7 +546,20 @@ public sealed class HostSync(HostLink link, SegmentPool pool, ILogger logger) {
 
     /// <summary>The master's engine strip; its inserts' saved states when <paramref name="withState" />.</summary>
     public static EngineStrip Master(OpenProjectView view, bool withState) =>
-        Strips.Engine(view.State, null, view.Ids, withState ? i => Base64(view.StateOf(null, i)) : null);
+        Files(Strips.Engine(view.State, null, view.Ids, withState ? i => Base64(view.StateOf(null, i)) : null), view);
+
+    /// <summary>A strip with its inserts' files as absolute paths (the model keeps the project's relative).</summary>
+    static EngineStrip Files(EngineStrip strip, OpenProjectView view) =>
+        strip.Inserts is { } inserts && inserts.Any(static i => i.File is not null)
+            ? strip with {
+                Inserts = [
+                    ..inserts.Select(i => i.File is { } file
+                            ? i with { File = Path.GetFullPath(Path.Combine(view.Folder, file)) }
+                            : i
+                    )
+                ]
+            }
+            : strip;
 
     /// <summary>
     ///     A track's runtime settings; its instrument and inserts with their saved states when
@@ -561,7 +574,10 @@ public sealed class HostSync(HostLink link, SegmentPool pool, ILogger logger) {
             track.Input.Stereo,
             track.RecordArmed,
             track.InputMonitoring,
-            Strips.Engine(view.State, track, view.Ids, withState ? i => Base64(view.StateOf(track.Id, i)) : null),
+            Files(
+                Strips.Engine(view.State, track, view.Ids, withState ? i => Base64(view.StateOf(track.Id, i)) : null),
+                view
+            ),
             track.Instrument is { } slot ? Engine(slot, view, state) : null,
             Midi(track),
             track.Kind == TrackKind.Aux ? track.InputBus : 0,

@@ -41,6 +41,7 @@ public static partial class Edits {
             MoveCellCommand c => MoveCell(state, c, ids),
             SetLiveLoopsCommand c => SetLiveLoops(state, c, ids, plugins),
             SetTrackActivationCommand c => SetTrackActivation(state, c),
+            LoadInsertFileCommand c => LoadInsertFile(state, c, plugins),
             _ => null
         };
 

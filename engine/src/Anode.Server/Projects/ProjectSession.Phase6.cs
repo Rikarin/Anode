@@ -63,7 +63,7 @@ public sealed partial class ProjectSession {
 
     /// <summary>
     ///     Applies a performance recording (<see cref="Performance" />): the cells' spans as regions and the control moves
-    ///     as automation, one undo step ("Live Loops Performance"); null when it recorded nothing.
+    ///     as automation, one undo step ("Record Performance"); null when it recorded nothing.
     /// </summary>
     public CommandResult? ApplyPerformance(IReadOnlyList<CellSpan> spans, IReadOnlyList<ControlMove> moves) {
         CommandResult? result = null;
@@ -79,7 +79,7 @@ public sealed partial class ProjectSession {
                 var state = Edits.Step(o.State, ops, forward, inverse);
                 inverse.Reverse();
                 result = Commit(o, state, forward);
-                o.History.Push("Live Loops Performance", o.Revision, new(forward, inverse), null);
+                o.History.Push("Record Performance", o.Revision, new(forward, inverse), null);
             }
         }
 
@@ -132,14 +132,14 @@ public sealed partial class ProjectSession {
                     var r = state.Regions[region.Id];
                     content = new(r with { StartTick = 0 });
                     removal = new RegionRemoved(r.Id);
-                    length = Math.Max(1, Edits.EndTick(state, r) - r.StartTick);
+                    length = Bars(state, Math.Max(1, Edits.EndTick(state, r) - r.StartTick));
                     break;
                 case MidiRegionUpserted(var midi) when midi.TrackId == trackId
                     && state.MidiRegions.ContainsKey(midi.Id):
                     var m = state.MidiRegions[midi.Id];
                     content = new(Midi: m with { StartTick = 0 });
                     removal = new MidiRegionRemoved(m.Id);
-                    length = m.LengthTicks;
+                    length = Bars(state, m.LengthTicks);
                     break;
             }
         }
@@ -164,6 +164,37 @@ public sealed partial class ProjectSession {
             ProjectLog.CellRecordingFailed(logger, e.Message);
             return state;
         }
+    }
+
+    /// <summary>A recorded cell's length: a whole number of bars (of the signature at the start), at least one.</summary>
+    static long Bars(ProjectState state, long ticks) {
+        var bar = Model.Time.SignatureMap.BarTicks(state.SignatureMap.At(0));
+        return Math.Max(1, (ticks + bar - 1) / bar) * bar;
+    }
+
+    /// <summary>
+    ///     Saving makes the current values the saved ones: every Smart Control's <c>savedValue</c> is cleared (not while
+    ///     comparing), published as a delta without an undo step, so Compare compares against the save.
+    /// </summary>
+    bool ClearSavedValues(Open o) {
+        var ops = new List<DeltaOp>();
+        for (var i = 0; i < o.State.Tracks.Count; i++) {
+            var track = o.State.Tracks[i];
+            if (track.SmartControls is { Comparing: false } smart
+                && smart.Controls.Any(static c => c.SavedValue is not null)) {
+                var cleared = smart with {
+                    Controls = [..smart.Controls.Select(static c => c with { SavedValue = null })]
+                };
+                ops.Add(new TrackUpserted(track with { SmartControls = cleared }, i));
+            }
+        }
+
+        if (ops.Count == 0) {
+            return false;
+        }
+
+        Commit(o, o.State.Apply(ops), ops);
+        return true;
     }
 
     /// <summary>Tells performance recording about control moves in a batch (Remix FX on the master, mostly).</summary>

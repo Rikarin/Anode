@@ -60,7 +60,7 @@ public static class Strips {
             var s when state.FindTrack(s) is { } t && Stacks.IsPlayable(t) => (ids.Track(t.Id), 0),
             _ => (-1, 0)
         };
-        return new(insert.Id, insert.PluginId, insert.Bypassed, insert.Parameters, saved, track, bus);
+        return new(insert.Id, insert.PluginId, insert.Bypassed, insert.Parameters, saved, track, bus, insert.File);
     }
 
     /// <summary>Whether two engine strips differ in structure (inserts, sends, output), not just levels.</summary>
@@ -74,6 +74,7 @@ public static class Strips {
                 && x.Bypassed == y.Bypassed
                 && x.SidechainTrack == y.SidechainTrack
                 && x.SidechainBus == y.SidechainBus
+                && x.File == y.File
         )
         || !Same(a.Sends, b.Sends, static (x, y) => x.Id == y.Id && x.Bus == y.Bus && x.PreFader == y.PreFader)
         || !Same(

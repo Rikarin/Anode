@@ -52,6 +52,28 @@ public sealed class PackBuilder(PackSpec spec, string staging) {
         );
     }
 
+    /// <summary>
+    ///     A sample a kit's pad loads (a stereo WAV under <c>patches/samples</c>, which the loop index skips); its path
+    ///     relative to the pack, as the kit names it (the server makes it absolute where the pack is installed).
+    /// </summary>
+    public string Sample(string name, float[] left, float[] right) {
+        var path = File(Path.Combine("patches", "samples"), name + ".wav");
+        Wav(path, left, right, SampleRate);
+        return Path.GetRelativePath(staging, path).Replace('\\', '/');
+    }
+
+    /// <summary>Writes a stereo 24-bit WAV.</summary>
+    public static void Wav(string path, float[] left, float[] right, int rate) {
+        using var writer = new WavWriter(path, 2, rate, WavEncoding.Pcm24);
+        var interleaved = new float[left.Length * 2];
+        for (var i = 0; i < left.Length; i++) {
+            interleaved[2 * i] = left[i];
+            interleaved[2 * i + 1] = right[i];
+        }
+
+        writer.Write(interleaved);
+    }
+
     /// <summary>A MIDI loop (format 0) and its sidecar.</summary>
     public void MidiLoop(
         string folder,

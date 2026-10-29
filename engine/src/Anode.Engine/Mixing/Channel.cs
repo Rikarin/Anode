@@ -31,6 +31,9 @@ public sealed class InsertSlot : IDisposable {
 
     public string PluginId { get; }
 
+    /// <summary>The file the effect loaded (an impulse response; <c>IFileEffect</c>), or null.</summary>
+    public string? File { get; init; }
+
     /// <summary>The instance; null when the plugin could not be loaded.</summary>
     public IAudioEffect? Effect { get; }
 

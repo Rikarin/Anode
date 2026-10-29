@@ -6,7 +6,8 @@ namespace Anode.Contracts;
 ///     An insert effect on a channel strip: the plugin, whether it is bypassed, its parameter values by parameter id
 ///     (all of them), and its sidechain source (a track id or <c>bus:N</c>; null: none). A plugin's opaque state lives in
 ///     the project's <c>Plugin States</c> folder. A MIDI FX slot (<c>ChannelStrip.midiEffects</c>) has the same shape,
-///     never a sidechain.
+///     never a sidechain. Phase 6: <c>file</c> is the file the effect loads (an impulse response for
+///     <c>anode.space</c>; <c>loadInsertFile</c>), relative to the project when it is inside it (null: none).
 /// </summary>
 public sealed record Insert(
     string Id,
@@ -14,7 +15,8 @@ public sealed record Insert(
     string Name,
     bool Bypassed,
     IReadOnlyDictionary<string, double> Parameters,
-    string? Sidechain
+    string? Sidechain,
+    string? File = null
 );
 
 /// <summary>A send from a channel strip to bus 1…64, at <c>levelDb</c>, before or after the fader.</summary>

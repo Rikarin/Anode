@@ -127,6 +127,17 @@ public sealed class LoopsApiTests : IDisposable {
                 )
             )
         );
+        // A kit with a Quick Sampler pad on a sample of the pack (patches/ is no loop).
+        Directory.CreateDirectory(Path.Combine(staging, "patches", "samples"));
+        TestWav.Write(Path.Combine(staging, "patches", "samples"), "Clap.wav", frames: 4_800);
+        File.WriteAllText(
+            Path.Combine(staging, "patches", "kit_pack.json"),
+            """
+            {"schemaVersion":1,"id":"kit_pack","name":"Pack Kit","category":"Drum Kits","kind":"stack","inserts":[],"sends":[],
+             "pads":[{"note":39,"name":"Clap","instrument":{"pluginId":"anode.quick-sampler","name":"Quick Sampler",
+               "parameters":{"mode":0,"keyFollow":0},"file":"patches/samples/Clap.wav"},"inserts":[]}]}
+            """
+        );
         var pack = Path.Combine(folder, $"{id}-{Guid.NewGuid():n}.anodepack");
         ZipFile.CreateFromDirectory(staging, pack);
         return pack;
@@ -188,6 +199,17 @@ public sealed class LoopsApiTests : IDisposable {
         Assert.True((await marked.Content.ReadFromJsonAsync(ContractsJsonContext.Default.LoopInfo, Token))!.Favourite);
         await InstallAsync(client, Pack());
         Assert.Equal([bass.Id], (await QueryAsync(client, "?favouritesOnly=true")).Items.Select(static l => l.Id));
+
+        // The pack's kit makes a Drum Machine Designer whose sample pad loads the installed sample.
+        await client.CreateProjectAsync();
+        await client.EditAsync(new CreateDrumMachineCommand(null, "kit_pack"));
+        var pad = (await client.ProjectAsync()).Tracks.Single(static t => t.Name == "Clap").Instrument!;
+        Assert.True(Path.IsPathRooted(pad.File) && File.Exists(pad.File), pad.File);
+        Assert.EndsWith(
+            Path.Combine("test-pack", "patches", "samples", "Clap.wav"),
+            pad.File,
+            StringComparison.Ordinal
+        );
 
         var packs = await client.GetFromJsonAsync(
             "/api/v1/library/packs",

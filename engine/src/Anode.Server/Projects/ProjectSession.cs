@@ -162,8 +162,15 @@ public sealed partial class ProjectSession(
     /// </summary>
     public ProjectSummary Save(IReadOnlyDictionary<string, byte[]?>? hostStates = null) {
         ProjectSummary summary;
+        bool cleared;
         lock (gate) {
-            summary = SaveLocked(Required(), hostStates);
+            var o = Required();
+            cleared = ClearSavedValues(o);
+            summary = SaveLocked(o, hostStates);
+        }
+
+        if (cleared) {
+            Changed?.Invoke();
         }
 
         return summary;
@@ -1179,16 +1186,53 @@ public sealed partial class ProjectSession(
     ///     project's): the file must exist, and inside the project it is kept relative to it.
     /// </summary>
     static IReadOnlyList<EditCommand> Resolve(Open o, IReadOnlyList<EditCommand> commands) {
-        if (!commands.Any(static c => c is LoadInstrumentFileCommand)) {
+        if (!commands.Any(static c => c is LoadInstrumentFileCommand or LoadInsertFileCommand)) {
             return commands;
         }
 
         return [
-            ..commands.Select(EditCommand(c) => c is LoadInstrumentFileCommand { Path: { Length: > 0 } path } load
-                    ? load with { Path = InstrumentPath(o.Folder, path) }
-                    : c
+            ..commands.Select(EditCommand(c) => c switch {
+                    LoadInstrumentFileCommand { Path: { Length: > 0 } path } load => load with {
+                        Path = InstrumentPath(o.Folder, path)
+                    },
+                    LoadInsertFileCommand { Path: { Length: > 0 } path } load => load with {
+                        Path = InsertPath(o.Folder, path)
+                    },
+                    _ => c
+                }
             )
         ];
+    }
+
+    /// <summary>The folder of a project that loaded insert files (impulse responses) are copied into.</summary>
+    public const string ImpulseResponsesFolder = "Impulse Responses";
+
+    /// <summary>
+    ///     An insert's file (an impulse response) as the project keeps it: one outside the project is copied into its
+    ///     <see cref="ImpulseResponsesFolder" /> (a file of that name and size there is reused), so the project stays whole
+    ///     when it moves; the path is the project's relative one.
+    /// </summary>
+    static string InsertPath(string folder, string path) {
+        var full = Path.GetFullPath(InstrumentPath(folder, path), folder);
+        if (IsInside(folder, full)) {
+            return Path.GetRelativePath(folder, full).Replace(Path.DirectorySeparatorChar, '/');
+        }
+
+        try {
+            var target = Directory.CreateDirectory(Path.Combine(folder, ImpulseResponsesFolder)).FullName;
+            var copy = Path.Combine(target, Path.GetFileName(full));
+            for (var n = 2; File.Exists(copy) && new FileInfo(copy).Length != new FileInfo(full).Length; n++) {
+                copy = Path.Combine(target, $"{Path.GetFileNameWithoutExtension(full)} {n}{Path.GetExtension(full)}");
+            }
+
+            if (!File.Exists(copy)) {
+                File.Copy(full, copy);
+            }
+
+            return Path.GetRelativePath(folder, copy).Replace(Path.DirectorySeparatorChar, '/');
+        } catch (Exception e) when (e is IOException or UnauthorizedAccessException) {
+            throw ProjectException.Unprocessable($"Could not copy '{full}' into the project: {e.Message}");
+        }
     }
 
     static string InstrumentPath(string folder, string path) {

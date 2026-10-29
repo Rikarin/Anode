@@ -253,6 +253,7 @@ public static class UndoLabels {
             MoveCellCommand => "Move Cell",
             SetLiveLoopsCommand => "Change Live Loops",
             SetTrackActivationCommand => "Change Track Activation",
+            LoadInsertFileCommand => "Load Impulse Response",
             _ => "Edit"
         };
 

@@ -323,7 +323,9 @@ public sealed class LoopLibrary(IOptions<ServerOptions> options) {
     static IEnumerable<LoopInfo> Scan(string folder, string? packId, HashSet<string> favourites) {
         foreach (var path in Directory.EnumerateFiles(folder, "*", SearchOption.AllDirectories)
                      .Order(StringComparer.Ordinal)) {
-            if (LoopAt(path) is not { } loop) {
+            // A pack's patches and the samples its kits load are no loops.
+            if (path.StartsWith(Path.Combine(folder, "patches") + Path.DirectorySeparatorChar, StringComparison.Ordinal)
+                || LoopAt(path) is not { } loop) {
                 continue;
             }
 

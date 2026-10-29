@@ -86,7 +86,12 @@ public sealed class LiveLoopsHostLinkTests {
         Assert.True(
             host.Tracks.Values.Single(static t => t.Instrument is not null && t.LiveLoopsActive).LiveLoopsActive
         );
-        await client.TransportAsync(TransportCommand.Play);
+        // The launch started the transport (as Logic does).
+        await ServerFixture.Eventually(async () =>
+            (await client.GetFromJsonAsync("/api/v1/transport", ContractsJsonContext.Default.TransportStatus, Token))!
+            .State
+            == TransportState.Playing
+        );
         var started = await events.WaitAsync<CellEvent>(e => e.CellId == cell.Id && e.State == CellState.Playing);
         Assert.Equal(0, started.Sample % 24_000);
 
@@ -171,7 +176,7 @@ public sealed class LiveLoopsHostLinkTests {
             ContractsJsonContext.Default.UndoHistory,
             Token
         );
-        Assert.Equal("Live Loops Performance", history!.Undo[0].Label);
+        Assert.Equal("Record Performance", history!.Undo[0].Label);
         await client.PostResultAsync("/api/v1/project/undo");
         var undone = await client.ProjectAsync();
         Assert.Empty(undone.MidiRegions);
@@ -198,14 +203,26 @@ public sealed class LiveLoopsHostLinkTests {
             history!.Undo.Take(2).Select(static e => e.Label)
         );
         Assert.Equal(-6, (await client.ProjectAsync()).Tracks[0].Strip.VolumeDb, 6);
+        // Saving makes the current values the saved ones: Compare then has nothing to swap.
+        var before = (await client.ProjectAsync()).Revision;
+        (await client.PostAsync("/api/v1/project/save", null, Token)).EnsureSuccessStatusCode();
+        var saved = await client.ProjectAsync();
+        Assert.True(saved.Revision > before);
+        Assert.All(saved.Tracks[0].SmartControls!.Controls, static c => Assert.Null(c.SavedValue));
+        await client.EditAsync(new SetSmartControlCommand(lead, "knob1", 0.5));
+        history = await client.GetFromJsonAsync(
+            "/api/v1/project/history",
+            ContractsJsonContext.Default.UndoHistory,
+            Token
+        );
         await client.EditAsync(new CompareSmartControlsCommand(lead, true));
         var compared = await client.ProjectAsync();
-        Assert.Equal((-30.0, true), (compared.Tracks[0].Strip.VolumeDb, compared.Tracks[0].SmartControls!.Comparing));
+        Assert.Equal((-6.0, true), (compared.Tracks[0].Strip.VolumeDb, compared.Tracks[0].SmartControls!.Comparing));
         var unchanged = await client.GetFromJsonAsync(
             "/api/v1/project/history",
             ContractsJsonContext.Default.UndoHistory,
             Token
         );
-        Assert.Equal(history.Undo.Count, unchanged!.Undo.Count);
+        Assert.Equal(history!.Undo.Count, unchanged!.Undo.Count);
     }
 }

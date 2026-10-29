@@ -57,6 +57,12 @@ public static class BuiltinEffects {
         RemixFx.Info
     ];
 
+    /// <summary>
+    ///     The files effect <paramref name="id" /> loads (<see cref="IFileEffect.FileTypes" />: an impulse response for
+    ///     the convolution reverb), empty when it loads none: what the catalogue lists, as for instruments.
+    /// </summary>
+    public static IReadOnlyList<string> FileTypes(string id) => id == ConvolutionReverb.Id ? [".wav"] : [];
+
     /// <summary>A new, unprepared instance of effect <paramref name="id" />, or null when there is none.</summary>
     public static IAudioEffect? Create(string id) =>
         id switch {

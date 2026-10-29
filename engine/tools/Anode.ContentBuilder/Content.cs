@@ -10,6 +10,8 @@ namespace Anode.ContentBuilder;
 /// </summary>
 public sealed class Content(bool t1) {
     public const string DrumSynthId = "anode.drum-synth";
+    const string QuickSamplerId = "anode.quick-sampler";
+    const int Clap = 39;
     const string SynthId = "anode.synth";
     const int Kick = 36;
     const int Snare = 38;
@@ -24,7 +26,7 @@ public sealed class Content(bool t1) {
         DrumLoop(pack, "Drums", "Test Drums 100", 100, Beat.Basic, 0, ["Drums"]);
         pack.MidiLoop("Bass", "Test Bass C", BassLine(0, [0, 0, 7, 5]), 100, 8, 0, LoopScale.Minor, ["Bass"]);
         pack.PatternLoop("Patterns", "Test Beat", DrumPattern(Beat.Basic), 100, 4, ["Drums"]);
-        pack.Kit("kit_test", "Test Kit", KitPads());
+        pack.Kit("kit_test", "Test Kit", KitPads(pack));
         return pack;
     }
 
@@ -102,7 +104,7 @@ public sealed class Content(bool t1) {
             ["Drums", "Electronic"]
         );
         pack.PatternLoop("Patterns", "Basic Beat", DrumPattern(Beat.Basic), 100, 4, ["Drums", "Acoustic"]);
-        pack.Kit("kit_essentials", "Essentials Kit", KitPads());
+        pack.Kit("kit_essentials", "Essentials Kit", KitPads(pack));
         return pack;
     }
 
@@ -248,11 +250,55 @@ public sealed class Content(bool t1) {
     }
 
     /// <summary>A kit's pads: kick, snare and hat (the Drum Synth's models, or the T1 synth's drum sounds).</summary>
-    IReadOnlyList<(int Note, string Name, InstrumentSlot Instrument)> KitPads() => [
-        (Kick, "Kick", Slot(DrumSound(Kick))),
-        (Snare, "Snare", Slot(DrumSound(Snare))),
-        (Hat, "Hat", Slot(DrumSound(Hat)))
-    ];
+    List<(int Note, string Name, InstrumentSlot Instrument)> KitPads(PackBuilder pack) {
+        List<(int Note, string Name, InstrumentSlot Instrument)> pads = [
+            (Kick, "Kick", Slot(DrumSound(Kick))),
+            (Snare, "Snare", Slot(DrumSound(Snare))),
+            (Hat, "Hat", Slot(DrumSound(Hat)))
+        ];
+        // A Quick Sampler pad on a sample of the pack (one shot, at its root whatever the note).
+        if (BuiltinInstruments.Create(QuickSamplerId) is { } quick) {
+            quick.Dispose();
+            var (left, right) = Renderer.Render(
+                DrumSound(Snare),
+                [new(0, 2_400, Snare, 120)],
+                PackBuilder.SampleRate / 2
+            );
+            var sample = pack.Sample("Clap", left, right);
+            pads.Add(
+                (Clap, "Clap", new(
+                    QuickSamplerId,
+                    "Quick Sampler",
+                    new Dictionary<string, double> { ["mode"] = 0, ["keyFollow"] = 0 },
+                    sample
+                ))
+            );
+        }
+
+        return pads;
+    }
+
+    /// <summary>
+    ///     A synthetic impulse response: about 1.5 s of stereo noise decaying exponentially (a different seed per
+    ///     channel), for the convolution reverb's tests.
+    /// </summary>
+    public static (float[] Left, float[] Right) ImpulseResponse(
+        int rate = PackBuilder.SampleRate,
+        double seconds = 1.5
+    ) {
+        var frames = (int)(rate * seconds);
+        var left = new float[frames];
+        var right = new float[frames];
+        var (l, r) = (new Random(1), new Random(2));
+        for (var i = 0; i < frames; i++) {
+            var envelope = (float)Math.Exp(-6.9 * i / frames); // −60 dB at the end
+            left[i] = envelope * (float)(l.NextDouble() * 2 - 1) * 0.5f;
+            right[i] = envelope * (float)(r.NextDouble() * 2 - 1) * 0.5f;
+        }
+
+        left[0] = right[0] = 0.9f;
+        return (left, right);
+    }
 
     static InstrumentSlot Slot(Sound sound) =>
         new(

@@ -2659,8 +2659,9 @@ export class FakeAnodeServer implements AnodeApi {
       case 'moveCell':
       case 'setLiveLoops':
       case 'setTrackActivation':
-        // Patterns, Drum Machine Designer, Smart Controls and Live Loops: Phase 6, the editor workstream
-        // (docs/07-phase-6.md).
+      case 'loadInsertFile':
+        // Patterns, Drum Machine Designer, Smart Controls, Live Loops and insert files: Phase 6, the editor
+        // workstream (docs/07-phase-6.md).
         throw new ApiError(422, `${command.type}: not in the fake Server yet.`);
       default:
         // Flex, Smart Tempo, Varispeed and track alternatives (Phase 5).

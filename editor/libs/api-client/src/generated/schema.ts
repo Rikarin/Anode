@@ -1409,9 +1409,9 @@ export interface components {
     /**
      * @description A Drum Machine Designer (docs/07-phase-6.md): the track is a stack whose members are its pads, each an instrument
      *     track with its own channel strip; `pads` (at most one per note, sorted by note) map a note to a pad. The
-     *     DMD track's region and pattern notes are routed to the pad tracks by note (live MIDI too, by the host), each
-     *     played at the pad's base note: a pad always plays its own sound (Drum Synth ignores pitch; Quick Sampler plays
-     *     at its root).
+     *     DMD track's region and pattern notes are routed to the pad tracks by note (live MIDI too, by the host), their
+     *     note numbers unchanged: a pad plays its own sound whatever the note (the Drum Synth ignores pitch; a Quick
+     *     Sampler pad has key follow off and plays at its root).
      */
     DrumMachine: {
       pads: components['schemas']['DrumPad'][];
@@ -1538,7 +1538,8 @@ export interface components {
       | components['schemas']['EditCommandDeleteCellsCommand']
       | components['schemas']['EditCommandMoveCellCommand']
       | components['schemas']['EditCommandSetLiveLoopsCommand']
-      | components['schemas']['EditCommandSetTrackActivationCommand'];
+      | components['schemas']['EditCommandSetTrackActivationCommand']
+      | components['schemas']['EditCommandLoadInsertFileCommand'];
     /**
      * @description Sets the project's tempo events from an audio region's file tempo (analysed now if need be) over the region's
      *     range, and makes the region play unwarped there.
@@ -1859,6 +1860,18 @@ export interface components {
       /** @enum {string} */
       type: 'joinRegions';
       regionIds: string[];
+    };
+    /**
+     * @description Loads a file into an insert (the master's when `trackId` is left out): an impulse response into the
+     *     convolution reverb (`anode.space`), a path on the server's disk of one of the plugin's `fileTypes`. A
+     *     file outside the project is copied into its `Impulse Responses` folder; the insert keeps it relative.
+     */
+    EditCommandLoadInsertFileCommand: {
+      /** @enum {string} */
+      type: 'loadInsertFile';
+      insertId: string;
+      path: string;
+      trackId?: null | string;
     };
     /** @description Loads a file (a sampler instrument, a sample) into a track's instrument; a path on the server's disk. */
     EditCommandLoadInstrumentFileCommand: {
@@ -2730,7 +2743,8 @@ export interface components {
      * @description An insert effect on a channel strip: the plugin, whether it is bypassed, its parameter values by parameter id
      *     (all of them), and its sidechain source (a track id or `bus:N`; null: none). A plugin's opaque state lives in
      *     the project's `Plugin States` folder. A MIDI FX slot (`ChannelStrip.midiEffects`) has the same shape,
-     *     never a sidechain.
+     *     never a sidechain. Phase 6: `file` is the file the effect loads (an impulse response for
+     *     `anode.space`; `loadInsertFile`), relative to the project when it is inside it (null: none).
      */
     Insert: {
       id: string;
@@ -2741,6 +2755,7 @@ export interface components {
         [key: string]: number;
       };
       sidechain?: null | string;
+      file?: null | string;
     };
     /** @enum {unknown} */
     InsertChain: 'inserts' | 'midiEffects' | null;

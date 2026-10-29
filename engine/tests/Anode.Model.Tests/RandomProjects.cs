@@ -121,6 +121,19 @@ static class RandomProjects {
                 true
             ),
             new(
+                "anode.test-space",
+                "Test Space",
+                "Anode",
+                "1.0",
+                PluginFormat.Builtin,
+                false,
+                [".wav"],
+                [new("mix", "Mix", 0, 1, 0.3, string.Empty, 0, null, 1)],
+                "Reverb",
+                false,
+                false
+            ),
+            new(
                 "anode.arpeggiator",
                 "Arpeggiator",
                 "Anode",
@@ -893,6 +906,13 @@ static class RandomProjects {
                 r.Next(2) == 0 ? null : Pick(r, Enum.GetValues<LaunchQuantize>()),
                 Maybe(r.Next(2) == 0)
             ),
+            nameof(LoadInsertFileCommand) => WithFileInsert() is var (t, insert) && insert is not null
+                ? new LoadInsertFileCommand(
+                    insert.Id,
+                    $"/irs/Hall {r.Next(10)}{Pick(r, [".wav", ".wav", ".wav", ".aif"])}",
+                    t
+                )
+                : null,
             nameof(SetTrackActivationCommand) => Track() is { } t
                 ? new SetTrackActivationCommand([t, ..r.Next(2) == 0 ? [] : new[] { Track()! }], r.Next(2) == 0)
                 : null,
@@ -921,6 +941,15 @@ static class RandomProjects {
             }
 
             return with.Length == 0 ? (null, null) : Pick(r, with) is var t ? (t.Id, t.Strip) : default;
+        }
+
+        // An insert of a plugin that loads files (sometimes another), on a track or the master.
+        (string? TrackId, Insert? Insert) WithFileInsert() {
+            var all = mixed.SelectMany(static t => t.Strip.Inserts.Select(i => ((string?)t.Id, i)))
+                .Concat(s.Master.Inserts.Select(static i => ((string?)null, i)))
+                .ToArray();
+            var files = all.Where(static x => x.i.PluginId == "anode.test-space").ToArray();
+            return files.Length > 0 && r.Next(8) > 0 ? Pick(r, files) : all.Length > 0 ? Pick(r, all) : (null, null);
         }
 
         Track? WithSends() =>

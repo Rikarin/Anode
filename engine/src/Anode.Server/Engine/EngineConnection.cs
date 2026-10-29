@@ -215,8 +215,15 @@ public sealed class EngineConnection(
     /// <summary>Launches Live Loops cells (or a scene) at their quantise boundaries (<see cref="LiveLoopsPlayer" />).</summary>
     public void LaunchCells(LaunchRequest request) {
         var message = liveLoops.Launch(request);
-        if (message.Cells.Count + (message.Stops?.Count ?? 0) > 0) {
-            Send(message);
+        if (message.Cells.Count + (message.Stops?.Count ?? 0) == 0) {
+            return;
+        }
+
+        Send(message);
+        // Launching while the transport stands starts it, as Logic does: the host holds a launch sent before play
+        // and starts it on its boundary.
+        if (message.Cells.Count > 0 && Transport().State == TransportState.Stopped) {
+            Control(new(TransportCommand.Play));
         }
     }
 

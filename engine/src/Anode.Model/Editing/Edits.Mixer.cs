@@ -110,6 +110,36 @@ public static partial class Edits {
         ];
     }
 
+    /// <summary>Loads a file into an insert (an impulse response): one of its plugin's file types.</summary>
+    static List<DeltaOp> LoadInsertFile(ProjectState state, LoadInsertFileCommand c, PluginCatalog plugins) {
+        var (track, strip) = InsertStripOf(state, c.TrackId);
+        var insert = InsertOf(strip, c.InsertId);
+        var path = c.Path?.Trim() ?? string.Empty;
+        if (path.Length is 0 or > MaxPathLength) {
+            throw new EditException($"A file path has 1…{MaxPathLength} characters.");
+        }
+
+        if (plugins.Find(insert.PluginId) is { } plugin) {
+            var extension = Path.GetExtension(path);
+            if (!plugin.FileTypes.Any(t => string.Equals(t, extension, StringComparison.OrdinalIgnoreCase))) {
+                throw new EditException(
+                    plugin.FileTypes.Count == 0
+                        ? $"Plugin '{plugin.Id}' loads no files."
+                        : $"Plugin '{plugin.Id}' loads {string.Join(", ", plugin.FileTypes)} files, not '{extension}'."
+                );
+            }
+        }
+
+        var changed = insert with { File = path };
+        return [
+            Upsert(
+                state,
+                track,
+                strip with { Inserts = [..strip.Inserts.Select(i => i.Id == insert.Id ? changed : i)] }
+            )
+        ];
+    }
+
     static List<DeltaOp> SetInsertParameter(ProjectState state, SetInsertParameterCommand c, PluginCatalog plugins) {
         var (track, strip) = InsertStripOf(state, c.TrackId);
         var insert = InsertOf(strip, c.InsertId);

@@ -1,7 +1,7 @@
 using Anode.ContentBuilder;
 using Anode.Dsp.Instruments;
 
-// anode-content-builder [--test] [--out <file.anodepack>] [--t1]
+// anode-content-builder [--test] [--out <file.anodepack>] [--ir <file.wav>] [--t1]
 // Renders Anode Essentials (or, with --test, the small e2e test pack) from Anode's own instruments. Drums use the Drum
 // Synth (anode.drum-synth) when this build has it, else (or with --t1) the T1 synth (docs/07-phase-6.md).
 var test = args.Contains("--test");
@@ -11,6 +11,15 @@ var fileName = test ? "TestPack.anodepack" : "AnodeEssentials.anodepack";
 var output = outIndex >= 0 && outIndex + 1 < args.Length
     ? args[outIndex + 1]
     : Path.Combine("artifacts", "content", fileName);
+var irIndex = Array.IndexOf(args, "--ir");
+if (irIndex >= 0 && irIndex + 1 < args.Length) {
+    // A short synthetic impulse response, for the convolution reverb in the e2e.
+    var (left, right) = Content.ImpulseResponse();
+    Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(args[irIndex + 1]))!);
+    PackBuilder.Wav(args[irIndex + 1], left, right, PackBuilder.SampleRate);
+    Console.WriteLine($"Wrote {Path.GetFullPath(args[irIndex + 1])}.");
+}
+
 var staging = Path.Combine(Path.GetTempPath(), $"anode-content-{Guid.NewGuid():n}");
 try {
     var content = new Content(t1);

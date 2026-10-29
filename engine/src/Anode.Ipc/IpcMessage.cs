@@ -109,7 +109,8 @@ public sealed record EngineInsert(
     IReadOnlyDictionary<string, double> Parameters,
     string? State = null,
     int SidechainTrack = -1,
-    int SidechainBus = 0
+    int SidechainBus = 0,
+    string? File = null
 );
 
 /// <summary>A send to bus 1…64 at linear gain, with its pan, taken before or after the fader.</summary>
