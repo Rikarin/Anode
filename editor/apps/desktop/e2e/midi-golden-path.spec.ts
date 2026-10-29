@@ -132,7 +132,8 @@ test('makes a song with MIDI and audio: synth, sampler, CLAP, external MIDI, Pia
     // A new external MIDI track sends nowhere until a port is picked.
     await expect(window.getByTestId('midi-output')).toContainText('No output');
     await window.getByTestId('midi-output').click();
-    await window.getByRole('option').first().click();
+    // The port list's first option (the inspector's articulation set menu has options of its own).
+    await window.getByRole('listbox').getByRole('option').first().click();
     await expect(window.getByTestId('midi-output')).not.toContainText('No output');
     await window.locator('an-timeline').dblclick({ position: { x: 30, y: laneY(4) } });
     await expectRegions(window, 3, 5);
