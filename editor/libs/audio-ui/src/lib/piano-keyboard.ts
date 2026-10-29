@@ -81,7 +81,7 @@ function whiteIndex(degree: number): number {
       [style.width.px]="whiteCount() * keyWidth()"
       (pointerup)="release($event)"
       (pointercancel)="release($event)"
-      (lostpointercapture)="releaseAll()"
+      (lostpointercapture)="lost($event)"
     >
       @for (key of keys(); track key.pitch) {
         <button
@@ -132,7 +132,8 @@ export class AnPianoKeyboard {
   protected readonly whiteCount = computed(() => this.keys().filter(k => !k.black).length);
   private readonly held = signal<ReadonlySet<number>>(new Set());
   protected readonly focusPitch = signal(60);
-  private pointerPitch: number | null = null;
+  /** The key each pointer holds: two fingers (or two pointers) hold a chord. */
+  private readonly pointers = new Map<number, number>();
 
   protected lit(pitch: number): boolean {
     return this.sounding().has(pitch) || this.held().has(pitch);
@@ -153,32 +154,51 @@ export class AnPianoKeyboard {
 
     event.preventDefault();
     const target = event.currentTarget as HTMLElement;
-    target.parentElement?.setPointerCapture(event.pointerId);
+    try {
+      target.parentElement?.setPointerCapture(event.pointerId);
+    } catch {
+      // A pointer the browser no longer tracks: the key still plays, without capture.
+    }
     this.focusPitch.set(pitch);
+    this.lift(event.pointerId);
     this.start(pitch, velocityAt(event, target));
-    this.pointerPitch = pitch;
+    this.pointers.set(event.pointerId, pitch);
   }
 
   /** A glissando: moving onto another key while pressed plays it instead. */
   protected slide(event: PointerEvent, pitch: number): void {
-    if (this.pointerPitch === null || this.pointerPitch === pitch || event.buttons === 0) {
+    const held = this.pointers.get(event.pointerId);
+    if (held === undefined || held === pitch || event.buttons === 0) {
       return;
     }
 
-    this.stop(this.pointerPitch);
+    this.lift(event.pointerId);
     this.start(pitch, velocityAt(event, event.currentTarget as HTMLElement));
-    this.pointerPitch = pitch;
+    this.pointers.set(event.pointerId, pitch);
   }
 
   protected release(event: PointerEvent): void {
-    (event.currentTarget as HTMLElement).releasePointerCapture(event.pointerId);
-    this.releaseAll();
+    try {
+      (event.currentTarget as HTMLElement).releasePointerCapture(event.pointerId);
+    } catch {
+      // Not captured (see press).
+    }
+    this.lift(event.pointerId);
   }
 
-  protected releaseAll(): void {
-    if (this.pointerPitch !== null) {
-      this.stop(this.pointerPitch);
-      this.pointerPitch = null;
+  protected lost(event: PointerEvent): void {
+    this.lift(event.pointerId);
+  }
+
+  /** Ends the key a pointer holds, unless another pointer holds it too. */
+  private lift(pointerId: number): void {
+    const pitch = this.pointers.get(pointerId);
+    if (pitch === undefined) {
+      return;
+    }
+    this.pointers.delete(pointerId);
+    if (![...this.pointers.values()].includes(pitch)) {
+      this.stop(pitch);
     }
   }
 
