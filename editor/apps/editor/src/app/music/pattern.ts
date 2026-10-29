@@ -70,7 +70,7 @@ export function cycleLength(row: Pick<PatternRow, 'length' | 'playMode'>): numbe
 // ---- the deterministic generator
 
 /** FNV-1a over a string's UTF-16 code units, then MurmurHash3's 32-bit finaliser. */
-function hash32(text: string): number {
+export function hash32(text: string): number {
   let h = 0x811c9dc5;
   for (let i = 0; i < text.length; i++) {
     h ^= text.charCodeAt(i);

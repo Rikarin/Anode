@@ -27,6 +27,14 @@ export interface FlexContext {
   apply(project: Project, command: EditCommand): Project;
   /** The file's analysis (transients and beats analysed now if need be). */
   analysis(file: AudioFile): FileAnalysis;
+  /**
+   * Phase 7: where a quantise on a track moves a project tick under a groove (`grooveId`, or the groove track's when
+   * the track matches it), or null when it quantises to the grid.
+   */
+  grooveTarget?(
+    trackId: string,
+    grooveId: string | null | undefined
+  ): ((tick: number, strength: number) => number) | null;
 }
 
 /** The analysis hop: about 5 ms. */
@@ -248,7 +256,7 @@ export function applyFlexCommand(project: Project, command: EditCommand, ctx: Fl
       return withRegion(project, { ...r, flexMarkers: markers });
     }
     case 'quantizeAudio': {
-      if (!(command.gridTicks > 0)) {
+      if (!(command.gridTicks > 0) && !command.grooveId) {
         throw new ApiError(422, 'Quantise audio needs a grid.');
       }
       let next = project;
@@ -259,12 +267,15 @@ export function applyFlexCommand(project: Project, command: EditCommand, ctx: Fl
           next = withTrack(next, { ...t, flexOn: true });
         }
         const timing = timingOf(next, r);
+        const groove = ctx.grooveTarget?.(r.trackId, command.grooveId) ?? null;
         const transients = ctx
           .analysis(fileOf(r))
           .transients.filter(f => f > r.fileOffset && f < r.fileOffset + r.length);
         const markers: FlexMarker[] = [];
         for (const frame of transients) {
-          const target = quantizeTick(timing.tickAt(frame), command.gridTicks, command.strength, command.swing);
+          const target = groove
+            ? groove(timing.tickAt(frame), command.strength)
+            : quantizeTick(timing.tickAt(frame), command.gridTicks, command.strength, command.swing);
           const tick = Math.round(target - r.startTick);
           const previous = markers[markers.length - 1];
           if (tick > (previous?.tick ?? 0) && tick < timing.lengthTicks) {

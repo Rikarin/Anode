@@ -142,6 +142,7 @@ export type StopRequest = Schemas['StopRequest'];
 export type LiveRecordRequest = Schemas['LiveRecordRequest'];
 
 export type ControlEventChange = Schemas['ControlEventChange'];
+export type NewControlEvent = Schemas['NewControlEvent'];
 export type TransformField = Schemas['TransformField'];
 export type TransformConditionOp = Schemas['TransformConditionOp'];
 export type TransformCondition = Schemas['TransformCondition'];

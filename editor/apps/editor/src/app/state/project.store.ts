@@ -2,6 +2,7 @@ import { DestroyRef, Injectable, computed, inject, signal } from '@angular/core'
 import {
   ApiError,
   type ArrangementMarker,
+  type ArticulationSet,
   type AudioFile,
   type AudioRegion,
   type AutomationLane,
@@ -9,6 +10,8 @@ import {
   type CommandResult,
   type DeltaOp,
   type EditCommand,
+  type GrooveTemplate,
+  type LaneSet,
   type LiveLoopsGrid,
   type Marker,
   type MidiRegion,
@@ -129,6 +132,12 @@ export class ProjectStore {
   readonly patternRegions = signal<ReadonlyMap<string, PatternRegion>>(new Map());
   /** The Live Loops grid: scenes, cells, launch quantise, and whether it shows beside the Tracks area (Phase 6). */
   readonly liveLoops = signal<LiveLoopsGrid>(EmptyLiveLoops);
+  /** Groove templates of the project (`grv_…`) by id (Phase 7). */
+  readonly grooves = signal<ReadonlyMap<string, GrooveTemplate>>(new Map());
+  /** Articulation sets of the project (`ars_…`) by id (Phase 7). */
+  readonly articulationSets = signal<ReadonlyMap<string, ArticulationSet>>(new Map());
+  /** Step Editor lane sets of the project (`lns_…`) by id (Phase 7); none: the editor's default set. */
+  readonly laneSets = signal<ReadonlyMap<string, LaneSet>>(new Map());
   /** A project is being opened, created or refetched. */
   readonly loading = signal(false);
 
@@ -147,6 +156,10 @@ export class ProjectStore {
   /** Mixer groups in number order. */
   readonly groupList = computed(() => [...this.groups().values()].sort((a, b) => a.number - b.number));
   readonly automationList = computed(() => [...this.automation().values()]);
+  /** Grooves, articulation sets and lane sets by name. */
+  readonly grooveList = computed(() => byName([...this.grooves().values()]));
+  readonly articulationSetList = computed(() => byName([...this.articulationSets().values()]));
+  readonly laneSetList = computed(() => byName([...this.laneSets().values()]));
   /** The tempo track as time (steps and ramps). */
   readonly tempoMap = computed(() => new TempoMap(this.settings().tempoEvents, this.settings().tempo));
   /** The signature track as bars and beats. */
@@ -212,6 +225,9 @@ export class ProjectStore {
     this.automation.set(new Map(project.automation.map(l => [l.id, l])));
     this.patternRegions.set(new Map(project.patternRegions.map(r => [r.id, r])));
     this.liveLoops.set(project.liveLoops);
+    this.grooves.set(new Map(project.grooves.map(g => [g.id, g])));
+    this.articulationSets.set(new Map(project.articulationSets.map(a => [a.id, a])));
+    this.laneSets.set(new Map(project.laneSets.map(l => [l.id, l])));
   }
 
   /** No project open. */
@@ -236,6 +252,9 @@ export class ProjectStore {
     this.automation.set(new Map());
     this.patternRegions.set(new Map());
     this.liveLoops.set(EmptyLiveLoops);
+    this.grooves.set(new Map());
+    this.articulationSets.set(new Map());
+    this.laneSets.set(new Map());
   }
 
   /** Fetches the open project (or learns that none is), replacing what the store has. Concurrent calls share one. */
@@ -598,14 +617,36 @@ export class ProjectStore {
       case 'liveLoopsChanged':
         this.liveLoops.set(op.liveLoops);
         break;
-      case 'grooveUpserted':
-      case 'grooveRemoved':
-      case 'articulationSetUpserted':
-      case 'articulationSetRemoved':
-      case 'laneSetUpserted':
-      case 'laneSetRemoved':
-        // Grooves, articulation sets and lane sets: Phase 7, the editor workstream (docs/08-phase-7.md).
+      case 'grooveUpserted': {
+        const groove = op.groove;
+        this.grooves.update(map => new Map(map).set(groove.id, groove));
         break;
+      }
+      case 'grooveRemoved': {
+        const id = op.id;
+        this.grooves.update(map => without(map, id));
+        break;
+      }
+      case 'articulationSetUpserted': {
+        const set = op.set;
+        this.articulationSets.update(map => new Map(map).set(set.id, set));
+        break;
+      }
+      case 'articulationSetRemoved': {
+        const id = op.id;
+        this.articulationSets.update(map => without(map, id));
+        break;
+      }
+      case 'laneSetUpserted': {
+        const set = op.set;
+        this.laneSets.update(map => new Map(map).set(set.id, set));
+        break;
+      }
+      case 'laneSetRemoved': {
+        const id = op.id;
+        this.laneSets.update(map => without(map, id));
+        break;
+      }
     }
   }
 
@@ -628,4 +669,16 @@ function byTick(markers: readonly Marker[]): Marker[] {
 
 function byStart(sections: readonly ArrangementMarker[]): ArrangementMarker[] {
   return [...sections].sort((a, b) => a.startTick - b.startTick);
+}
+
+/** A list sorted by name. */
+function byName<T extends { name: string }>(items: T[]): T[] {
+  return items.sort((a, b) => a.name.localeCompare(b.name));
+}
+
+/** A map without one key. */
+function without<K, V>(map: ReadonlyMap<K, V>, key: K): Map<K, V> {
+  const next = new Map(map);
+  next.delete(key);
+  return next;
 }
