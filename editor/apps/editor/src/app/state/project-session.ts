@@ -3,6 +3,7 @@ import type { ProjectAlternative, ProjectBackup, ProjectSummary } from '@anode/a
 import { ANODE_API, type CreateProject } from '../core/api';
 import { Notify } from '../core/notify';
 import { ProjectStore } from './project.store';
+import { ScreensetStore } from './screenset.store';
 
 /**
  * Creating, opening, saving and closing projects, and the recent list: the project chooser's and the File menu's
@@ -13,6 +14,7 @@ import { ProjectStore } from './project.store';
 export class ProjectSession {
   private readonly api = inject(ANODE_API);
   private readonly project = inject(ProjectStore);
+  private readonly screensets = inject(ScreensetStore);
   private readonly notify = inject(Notify);
 
   readonly recent = signal<ProjectSummary[]>([]);
@@ -63,6 +65,8 @@ export class ProjectSession {
       return false;
     }
 
+    // A layout change still on its way would mark the saved project unsaved again: it goes first.
+    await this.screensets.flush();
     const revision = this.project.revision();
     const saved = await this.notify.run(() => this.api.saveProject(), 'Could not save');
     if (saved) {

@@ -30,6 +30,8 @@ export class ScreensetStore {
   readonly locked = computed(() => this.currentSet()?.locked ?? false);
 
   private saveTimer: ReturnType<typeof setTimeout> | null = null;
+  /** The save on its way to the Server, if any. */
+  private saving: Promise<void> | null = null;
   /** False once the Server answered that it keeps no screensets (not implemented): they then live in this window. */
   private remote = true;
   /** The layout as last applied or saved, so a recall does not count as a change. */
@@ -117,6 +119,18 @@ export class ScreensetStore {
     this.layout.set(layout);
   }
 
+  /**
+   * Keeps a layout change that is still resting now, and waits for any save on its way: a project save after it then
+   * includes the layout, rather than the layout marking the just-saved project unsaved again.
+   */
+  async flush(): Promise<void> {
+    if (this.saveTimer) {
+      this.cancelSave();
+      void this.save(this.current());
+    }
+    await this.saving;
+  }
+
   private layoutChanged(layout: XuiDockManagerLayout): void {
     const text = JSON.stringify(layout);
     if (text === this.settled || this.locked() || !this.project.isOpen()) {
@@ -129,7 +143,17 @@ export class ScreensetStore {
     }, SaveDelayMs);
   }
 
-  private async save(number: number, change: Partial<Screenset> = {}): Promise<void> {
+  private save(number: number, change: Partial<Screenset> = {}): Promise<void> {
+    const saving = this.send(number, change).finally(() => {
+      if (this.saving === saving) {
+        this.saving = null;
+      }
+    });
+    this.saving = saving;
+    return saving;
+  }
+
+  private async send(number: number, change: Partial<Screenset>): Promise<void> {
     const existing = this.screensets().get(number);
     const screenset: Screenset = {
       number,

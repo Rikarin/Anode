@@ -4,6 +4,7 @@ import { setUpFakeServer, settle } from '../core/fake/testing';
 import { defaultLayout, parseLayout, showPane } from '../pages/layout';
 import { KeyCommandsStore } from './key-commands.store';
 import { laneRows } from './lanes';
+import { ProjectSession } from './project-session';
 import { ProjectStore } from './project.store';
 import { ScreensetStore } from './screenset.store';
 
@@ -191,6 +192,28 @@ describe('ScreensetStore', () => {
       expect(screensets.name()).toBe('Mixing');
       expect(screensets.locked()).toBe(true);
       expect(JSON.stringify(screensets.layout())).toEqual(JSON.stringify(defaultLayout()));
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
+describe('ProjectSession and screensets', () => {
+  it('saves a resting layout change before the project, so the saved project stays saved', async () => {
+    vi.useFakeTimers();
+    try {
+      const { server, store } = await openProject();
+      const screensets = TestBed.inject(ScreensetStore);
+      TestBed.tick();
+      await vi.runOnlyPendingTimersAsync();
+      screensets.showPane('browsers');
+      TestBed.tick();
+      // Saved before the layout's delay is up: the layout goes first, then the project.
+      expect(await TestBed.inject(ProjectSession).save()).toBe(true);
+      expect((await server.screensets()).map(s => s.number)).toEqual([1]);
+      await vi.advanceTimersByTimeAsync(1_000);
+      expect(store.dirty()).toBe(false);
+      expect((await server.getProject())?.dirty).toBe(false);
     } finally {
       vi.useRealTimers();
     }
