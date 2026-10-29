@@ -222,6 +222,12 @@ public static partial class Edits {
             throw new EditException($"Track index {index} is outside 0…{count}.");
         }
 
+        // A stack's members follow it: a new track asked for among them (after the stack, or after one of its pads)
+        // goes after the last of them, outside the stack.
+        if (index < count && state.Tracks[index].ParentId is { } parent) {
+            index = AfterStack(state, parent);
+        }
+
         var kind = c.Kind ?? TrackKind.Audio;
         if (!Enum.IsDefined(kind)) {
             throw new EditException($"Unknown track kind {kind}.");

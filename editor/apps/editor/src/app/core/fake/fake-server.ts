@@ -2477,7 +2477,12 @@ export class FakeAnodeServer implements AnodeApi {
           // An external MIDI track sends nowhere until setMidiIo picks a port (as the Server does).
           midiOutput: null
         };
-        const index = Math.min(count, Math.max(0, command.index ?? count));
+        let index = Math.min(count, Math.max(0, command.index ?? count));
+        // A stack's members follow it (as the Model keeps them): among them, the new track goes after the last.
+        const parent = project.tracks[index]?.parentId;
+        if (parent) {
+          index = Math.max(...project.tracks.map((t, i) => (t.id === parent || t.parentId === parent ? i : -1))) + 1;
+        }
         const tracks = [...project.tracks];
         tracks.splice(index, 0, added);
         return { ...project, tracks };

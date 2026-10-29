@@ -186,6 +186,16 @@ describe('FakeAnodeServer, Phase 3 commands', () => {
     await expect(
       server.applyCommands({ commands: [{ type: 'createStack', trackIds: [stack?.id ?? ''] }] })
     ).rejects.toThrow('nest');
+    // A new track asked for among the members (below the selected stack) goes after them, outside the stack.
+    p = await run(server, { type: 'addTrack', kind: 'instrument', stereo: true, index: 1, name: 'Synth' });
+    expect(p.tracks.map(t => [t.name, t.parentId !== null])).toEqual([
+      ['Drums', false],
+      [p.tracks[1]?.name, true],
+      [p.tracks[2]?.name, true],
+      [p.tracks[3]?.name, true],
+      ['Synth', false]
+    ]);
+    p = await run(server, { type: 'removeTrack', trackId: p.tracks[4]?.id ?? '' });
     p = await run(server, { type: 'removeStack', stackId: stack?.id ?? '' });
     expect(p.tracks.every(t => t.parentId === null && t.kind === 'audio')).toBe(true);
   });

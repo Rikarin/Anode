@@ -183,6 +183,23 @@ public sealed class ArrangementEditTests {
     }
 
     [Fact]
+    public void A_new_track_asked_for_among_a_stacks_members_goes_after_them() {
+        Apply(new AddTrackCommand("A"), new AddTrackCommand("B"), new AddTrackCommand("C"));
+        Apply(new CreateStackCommand([Track("A"), Track("B")], "Stack"));
+        // Right after the stack (a new track below a selected Drum Machine Designer), and between two members.
+        Apply(new AddTrackCommand("After stack", 1));
+        Apply(new AddTrackCommand("Between", 2));
+        Assert.Equal(["Stack", "A", "B", "Between", "After stack", "C"], state.Tracks.Select(static t => t.Name));
+        Assert.Null(state.FindTrack(Track("Between"))!.ParentId);
+        // After the last member (outside the stack already) and at the end stay where they were asked for.
+        Apply(new AddTrackCommand("Next", 3), new AddTrackCommand("End"));
+        Assert.Equal(
+            ["Stack", "A", "B", "Next", "Between", "After stack", "C", "End"],
+            state.Tracks.Select(static t => t.Name)
+        );
+    }
+
+    [Fact]
     public void A_stacks_strip_offsets_its_members_volume_and_its_mute_and_solo_apply_to_them() {
         Apply(new AddTrackCommand("A"), new AddTrackCommand("B"));
         Apply(new CreateStackCommand([Track("A")], "Stack"));
