@@ -87,3 +87,26 @@ export const List: Story = {
     ).toBeInTheDocument();
   }
 };
+
+/** MIDI FX slots, as an instrument strip shows them above the instrument: the empty one reads "MIDI FX". */
+export const MidiFx: Story = {
+  render: () => ({
+    template: `
+      <div class="strip-body flex w-21 flex-col gap-0.5 p-1" role="group" aria-label="MIDI FX of Synth">
+        <an-insert-slot channel="Synth" name="Arpeggiator" [index]="0" slotName="MIDI FX" emptyLabel="MIDI FX" />
+        <an-insert-slot channel="Synth" [name]="null" [index]="1" slotName="MIDI FX" emptyLabel="MIDI FX" />
+      </div>
+    `
+  }),
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByRole('button', { name: 'MIDI FX 1 on Synth: Arpeggiator' })).toBeVisible();
+    const empty = canvas.getByRole('button', { name: 'MIDI FX 2 on Synth: empty, choose a plugin' });
+    await userEvent.tab();
+    await userEvent.tab();
+    await userEvent.tab();
+    await userEvent.tab();
+    await expect(empty).toHaveFocus();
+    await expect(empty).toHaveTextContent('MIDI FX');
+  }
+};

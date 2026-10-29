@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, effect, inject, untracked } from '@angular/core';
 import { AudioTrackEditor } from '../audio-editor/audio-track-editor';
 import { SmartTempoEditor } from '../audio-editor/smart-tempo-editor';
+import { drumMachineOf } from '../drum-machine/drum-machine';
 import { DrumMachineEditor } from '../drum-machine/drum-machine-editor';
 import { PianoRoll } from '../piano-roll/piano-roll';
 import { ProjectStore } from '../state/project.store';
@@ -92,6 +93,17 @@ export class EditorsPane {
           this.ui.editorView.set('audio');
         } else if (midi && !audio && view !== 'pianoRoll') {
           this.ui.editorView.set('pianoRoll');
+        }
+      });
+    });
+    // Selecting a Drum Machine Designer track (or one of its pads) brings its editor, unless regions were selected
+    // with it: they choose the editor above.
+    effect(() => {
+      const id = this.selection.track();
+      untracked(() => {
+        const track = id ? this.project.track(id) : null;
+        if (this.selection.regions().size === 0 && drumMachineOf(track, this.project.tracks())) {
+          this.ui.editorView.set('drumMachine');
         }
       });
     });

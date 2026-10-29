@@ -31,6 +31,7 @@ import {
   yAtLane
 } from '@anode/timeline';
 import { XuiInputImports } from '@xui/input';
+import { LoopDragType, LoopsStore } from '../loops/loops.store';
 import { ProjectFileType, ServerFileType } from '../state/browser.store';
 import { LanesStore } from '../state/lanes.store';
 import { PeaksCache } from '../state/peaks';
@@ -211,6 +212,7 @@ export class Timeline {
   private readonly peaks = inject(PeaksCache);
   private readonly theme = inject(ThemeStore);
   private readonly audioImport = inject(AudioImport);
+  private readonly loops = inject(LoopsStore);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   private readonly canvas = viewChild.required<ElementRef<HTMLCanvasElement>>('canvas');
   private readonly renameInput = viewChild<ElementRef<HTMLInputElement>>('rename');
@@ -1363,7 +1365,12 @@ export class Timeline {
 
   protected dragOver(event: DragEvent): void {
     const types = event.dataTransfer?.types ?? [];
-    if (!types.includes('Files') && !types.includes(ServerFileType) && !types.includes(ProjectFileType)) {
+    if (
+      !types.includes('Files') &&
+      !types.includes(ServerFileType) &&
+      !types.includes(ProjectFileType) &&
+      !types.includes(LoopDragType)
+    ) {
       return;
     }
 
@@ -1387,6 +1394,17 @@ export class Timeline {
     const lane = Math.floor(laneAtY(view, Math.max(this.lanesTop(), y)));
     const trackId = this.lanes.trackAt(lane) ?? null;
     const tick = snapIn(this.context(), tickAtX(view, x));
+    const loopId = event.dataTransfer?.getData(LoopDragType);
+    if (loopId) {
+      // A loop from the Loop Browser: on the lane's track (below the last lane, a new track) at the bar under the
+      // pointer, as Logic places loops.
+      event.preventDefault();
+      const meter = this.project.meter();
+      const bar = meter.barStart(Math.floor(meter.barAt(Math.max(0, tickAtX(view, x))) + 1e-9));
+      const name = event.dataTransfer?.getData('text/plain') ?? '';
+      void this.loops.addAt(loopId, name, lane < this.lanes.count() ? trackId : null, bar);
+      return;
+    }
     const server = event.dataTransfer?.getData(ServerFileType);
     if (server) {
       event.preventDefault();
