@@ -402,3 +402,53 @@ Five, in parallel, each on its own branch; they meet only at the contracts above
 2. Run the two-process tests: Scripter through the real host, step-input forwarding, articulations in a bounce.
 3. Run the Playwright golden path for the exit criterion.
 4. Fix the seams.
+
+## Status (2026-10-29)
+
+**Exit criterion met on macOS.** The Playwright golden path `midi-editing-golden-path.spec.ts` passes on the real
+desktop app with the null device, with all nine steps. All eight e2e specs pass, twice in a row.
+
+| Criterion | Measured | Limit |
+|---|---|---|
+| Event List: edited notes off their time in the bounce | 2.8, 1.5, 1.2 ms | 5 ms |
+| Step Editor velocity ramp | 1, 48, 64 at 1 1 1 1, 1 2 3 1, 1 3 1 1 | as drawn |
+| Step Editor CC 74 line over a bar | 0 8 16 … 111 119 (16 steps) | as drawn |
+| Humanize (seed 1234) | at most 4 ticks and 9 velocity; repeatable, undoable | — |
+| Select and Operate (above C4 → velocity 100, 1/16) | C3 unchanged; D4 and G4 at 100, length 0 0 1 0 | exact |
+| Quantise to the audio groove | 0.000 ms for all 8 notes; the following track within 2 ms | 2 ms |
+| Articulations: third harmonic, sine vs square note | 0.024× vs 0.344× | — |
+| Audio File Editor | normalise −1.000 dBFS; fade-in frame 1 = 0; reverse exact; silence peak 0; undo back to version 3 | exact |
+| Loop search on a periodic tone | 100 frames from the truth (one period) | ≤ 1 period |
+| Scripter octave echo | 99.958 ms after the note, pitch ratio 1.989× | 1 ms |
+| Runaway script | bypassed: "interrupted: the script ran past its time budget"; playback continued | — |
+
+| Check | Result |
+|---|---|
+| Engine tests (`dotnet test --solution engine/Anode.slnx --max-parallel-test-modules 2`) | 1932 pass, 17 skipped (opt-in); one load-sensitive host timing test failed once and passed 3 of 3 on rerun |
+| Scripter ([ADR-0009](adr/0009-scripter.md)) | QuickJS-ng v0.17.0 in the host; about 2.3 µs per event; no system allocation on the audio thread |
+| Editor (`nx run-many -t typecheck lint test build`) | 5 projects pass (editor 617 tests); Storybook + axe 137 tests |
+| e2e (`nx e2e desktop`) | MIDI editing, loops and performance, advanced audio, mixing, arranging, MIDI and Phase 1 golden paths, smoke; twice in a row |
+| Skala, Prettier, generated client | clean |
+
+**Contract changes and decisions at integration:**
+- Step input through MIDI goes the live-MIDI path (`/midi/live` → host → step chord), forwarded while step input and
+  MIDI input are both on.
+- Pitch names follow Logic: C3 is 60.
+- `GET /api/v1/library/scripts` serves the factory Scripter presets from the engine; the editor keeps no copy.
+- `ParameterInfo.kind` and `EngineParameter.Kind` (`slider | menu | checkbox | momentary | text`); a Scripter parameter
+  takes its `PluginParameters` type, and the server infers a kind when a host sends none.
+- A track following the groove track quantises at the quantise's grid, not always at 1/16.
+- An Option-drag copy in the Piano Roll keeps each note's articulation.
+- `xuiTooltip` has its own `disabled` input, so 25 buttons in 7 components had not been disabled; they bind
+  `[attr.disabled]` now.
+- The on-screen keyboard holds chords with several pointers; live MIDI goes to the server in order; step-input changes
+  apply at once and in order; saving stores a pending layout change first.
+
+**Open:**
+- Loop search lands exactly at its limit on the golden path's tone (100 frames, one period); deterministic, but no
+  margin.
+- Window-level view state (Show Flex and others) carries over when a project is closed and reopened.
+- Host timing tests (`HostLinkTests.A_restarted_host_gets_everything_again`, `FlexPlaybackTests` disk-thread cost) fail
+  occasionally under load.
+- Open items from Phases 5 and 6 (GitHub issues #1–#19) are unchanged.
+- Linux and Windows.

@@ -340,7 +340,7 @@ Ship in tiers so that every phase has usable sound.
 | T2 (Phase 6–7) | Wavetable/granular synth (≈Alchemy-lite, with granular sync), FM synth (≈EFM1/ES-E), drawbar organ + rotary (≈Vintage B3), electric piano model (≈Vintage EP), clav, **Drum Synth**, Studio-instrument style multisample players (content-dependent) | Convolution reverb (≈Space Designer; IR import), Linear Phase EQ, Match EQ, Multipressor, Enveloper, Exciter, SubBass, Spectral Gate, Ringshifter, Delay Designer (multi-tap), Pitch Shifter, **Pitch Correction**, Vocal Transformer, Amp/Bass Amp sim + Pedalboard (reuse Cathode's amp/cab/NAM chain), Rotor Cabinet, Ensemble, Phat FX, **Step FX / Remix FX / Beat Breaker** (slice effects with randomise), vocoder (≈EVOC 20) |
 | T3 (Phase 11) | Physical modelling (≈Sculpture), Mellotron-style, sample-based "Sample Alchemy" | **Mastering Assistant** (analysis → EQ/dynamics/loudness target per character), saturation (≈ChromaGlow), surround-aware variants of T1 effects, Binaural post-processing, Down Mixer |
 
-**MIDI FX** (Phase 6): Arpeggiator (the Smart Controls arp too), Chord Trigger, Modifier, Modulator, Note Repeater, Randomizer, Transposer (scale-aware), Velocity Processor, and **Scripter**. Scripter runs JavaScript via embedded QuickJS in `an_plug`, on a MIDI-only, non-allocating-after-warmup path, with a strict time budget and a sandbox.
+**MIDI FX** (Phase 6): Arpeggiator (the Smart Controls arp too), Chord Trigger, Modifier, Modulator, Note Repeater, Randomizer, Transposer (scale-aware), Velocity Processor, and **Scripter**. Scripter runs JavaScript via embedded QuickJS-ng in the host (`an_script`, [ADR-0009](adr/0009-scripter.md)), on a MIDI-only path with a fixed arena, a strict time budget and a sandbox.
 
 **Cathode reuse:** Cathode's DSP blocks (amp sims, cabinet IRs, NAM via `cth_nam`, modulation and delay blocks) are the basis for the guitar and effects tier. Extract the shared `Rikarin.Audio.Dsp` package (§10).
 
@@ -685,4 +685,5 @@ shared package exists.
    [docs/04-phase-3.md](04-phase-3.md#status-2026-10-28). Phase 4 (beta) done on macOS: see
    [docs/05-phase-4.md](05-phase-4.md#status-2026-10-28). Phase 5 (advanced audio) done on macOS: see
    [docs/06-phase-5.md](06-phase-5.md#status-2026-10-28). Phase 6 (loops, patterns and performance) done on macOS:
-   see [docs/07-phase-6.md](07-phase-6.md#status-2026-10-29).
+   see [docs/07-phase-6.md](07-phase-6.md#status-2026-10-29). Phase 7 (advanced MIDI editing) done on macOS: see
+   [docs/08-phase-7.md](08-phase-7.md#status-2026-10-29).
