@@ -225,7 +225,7 @@ export class App {
       'view.audioFileEditor': () => this.showEditor('audioFile'),
       'view.stepInputKeyboard': () => this.ui.stepInputKeyboardOpen.update(open => !open),
       'midi.transform': () => this.ui.transformOpen.set(true),
-      'midi.stepInput': () => void this.stepInput.toggle(!this.stepInput.on()),
+      'midi.stepInput': () => void this.stepInput.toggleMidi(this.ui.stepInputKeyboardOpen()),
       'view.liveLoops': () =>
         void this.project.execute(
           [{ type: 'setLiveLoops', shown: !this.project.liveLoops().shown }],

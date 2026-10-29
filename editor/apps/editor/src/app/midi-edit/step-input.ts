@@ -1,4 +1,4 @@
-import type { StepInputState } from '@anode/api-client';
+import type { MidiRegion, StepInputState, Track } from '@anode/api-client';
 
 /** Step input when nothing has set it: off, a 1/16 at velocity 100, at the project start (StepInputState). */
 export const DefaultStepInput: StepInputState = {
@@ -73,4 +73,31 @@ export class StepChordCollector {
     this.down.clear();
     this.stale.clear();
   }
+}
+
+/** Where step input enters steps: a MIDI region, or a new region on a track (`regionId` null). */
+export interface StepTarget {
+  regionId: string | null;
+  trackId: string;
+}
+
+/**
+ * Where step input goes when it is turned on: the first selected MIDI region (by start), else the selected
+ * instrument or MIDI track (the first step makes a region); null when neither is selected.
+ */
+export function stepTarget(
+  midiRegions: ReadonlyMap<string, MidiRegion>,
+  tracks: ReadonlyMap<string, Track>,
+  selectedRegions: Iterable<string>,
+  selectedTrack: string | null
+): StepTarget | null {
+  const region = [...selectedRegions]
+    .map(id => midiRegions.get(id))
+    .filter(r => r !== undefined)
+    .sort((a, b) => a.startTick - b.startTick)[0];
+  if (region) {
+    return { regionId: region.id, trackId: region.trackId };
+  }
+  const track = selectedTrack ? tracks.get(selectedTrack) : undefined;
+  return track && (track.kind === 'instrument' || track.kind === 'midi') ? { regionId: null, trackId: track.id } : null;
 }
