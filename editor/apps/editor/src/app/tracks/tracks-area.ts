@@ -24,6 +24,7 @@ import {
   matShowChartRound,
   matTextFieldsRound,
   matTrendingUpRound,
+  matViewModuleRound,
   matVolumeOffRound,
   matZoomInRound,
   matZoomOutRound
@@ -42,6 +43,7 @@ import { GlobalHeaders } from '../global/global-headers';
 import { GlobalTracks } from '../global/global-lanes';
 import { GlobalLaneHeights } from '../global/global-math';
 import { formatBinding } from '../keys/key-commands';
+import { LiveLoopsGrid } from '../live-loops/live-loops-grid';
 import { FlexStore } from '../state/flex.store';
 import { JobsStore } from '../state/jobs.store';
 import { KeyCommandsStore } from '../state/key-commands.store';
@@ -77,6 +79,7 @@ import { TrackHeader } from './track-header';
     AutomationLanes,
     GlobalHeaders,
     GlobalTracks,
+    LiveLoopsGrid,
     TakeHeader,
     Timeline,
     TrackHeader,
@@ -109,6 +112,7 @@ import { TrackHeader } from './track-header';
       matSettingsInputComponentRound,
       matTextFieldsRound,
       matTrendingUpRound,
+      matViewModuleRound,
       matVolumeOffRound,
       matZoomInRound,
       matZoomOutRound
@@ -332,6 +336,18 @@ import { TrackHeader } from './track-header';
       >
         <ng-icon xui name="matHourglassEmptyRound" size="15px" class="rotate-90" />
       </button>
+      <button
+        type="button"
+        class="bezel text-foreground grid h-6.5 w-8 place-items-center"
+        aria-label="Live Loops"
+        data-testid="live-loops-toggle"
+        [xuiTooltip]="(project.liveLoops().shown ? 'Hide' : 'Show') + ' the Live Loops grid'"
+        [attr.aria-pressed]="project.liveLoops().shown ? 'true' : 'false'"
+        [class.text-lit]="project.liveLoops().shown"
+        (click)="toggleLiveLoops()"
+      >
+        <ng-icon xui name="matViewModuleRound" size="15px" />
+      </button>
       <div class="ms-auto flex items-center gap-1">
         @if (audioImport.importing() > 0) {
           <xui-spinner size="sm" aria-label="Importing audio" />
@@ -381,6 +397,9 @@ import { TrackHeader } from './track-header';
           }
         </div>
       </div>
+      @if (project.liveLoops().shown) {
+        <an-live-loops-grid class="border-hairline w-96 shrink-0 border-e" data-testid="live-loops-grid" />
+      }
       <div class="relative flex min-w-0 flex-1" [xuiContextMenuTriggerFor]="timelineMenu">
         <an-timeline class="flex-1" [globalHeight]="globalHeight()" />
         @if (automation.shown()) {
@@ -516,6 +535,12 @@ export class TracksArea {
   protected readonly secondaryLabel = computed(
     () => Tools.find(t => t.value === this.view.secondaryTool())?.label ?? ''
   );
+  /** Shows or hides the Live Loops grid beside the Tracks area (Logic's). */
+  protected toggleLiveLoops(): void {
+    const shown = this.project.liveLoops().shown;
+    void this.project.execute([{ type: 'setLiveLoops', shown: !shown }], shown ? 'Hide Live Loops' : 'Show Live Loops');
+  }
+
   protected readonly snapLabel = computed(() => SnapModes.find(m => m.value === this.view.snapMode())?.label ?? '');
   protected readonly dragLabel = computed(() => DragModes.find(m => m.value === this.view.dragMode())?.label ?? '');
   protected readonly menuFolder = computed(() => {

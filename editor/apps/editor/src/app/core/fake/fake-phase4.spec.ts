@@ -467,7 +467,14 @@ describe('FakeAnodeServer, patches, I/O labels, plugin editors and problems', ()
     expect(p.tracks.find(t => t.kind === 'vca')).toBeTruthy();
     expect(p.groups[0]?.name).toBe('Rhythm');
     expect(p.automation[0]?.points.some(pt => pt.curve !== 0)).toBe(true);
-    expect((await server.patches()).map(x => x.name).sort()).toEqual(['Vocal Chain', 'Warm Keys']);
+    // Channel-strip patches; the installed pack adds its drum kits (patches of kind stack).
+    const patches = await server.patches();
+    expect(
+      patches
+        .filter(x => x.kind !== 'stack')
+        .map(x => x.name)
+        .sort()
+    ).toEqual(['Vocal Chain', 'Warm Keys']);
     expect((await server.ioLabels()).buses[0]?.name).toBe('Reverb');
   });
 });

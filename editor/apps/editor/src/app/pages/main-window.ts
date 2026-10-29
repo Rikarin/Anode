@@ -7,8 +7,10 @@ import { Inspector } from '../inspector/inspector';
 import { LibraryPane } from '../library/library-pane';
 import { MarkerList } from '../lists/marker-list';
 import { KeyboardPane } from '../live/keyboard-pane';
+import { LoopBrowser } from '../loops/loop-browser';
 import { MixerPane } from '../mixer/mixer-pane';
 import { NotePad } from '../notes/note-pad';
+import { SmartControlsPane } from '../smart-controls/smart-controls-pane';
 import { ProjectStore } from '../state/project.store';
 import { ScreensetStore } from '../state/screenset.store';
 import { TracksArea } from '../tracks/tracks-area';
@@ -17,9 +19,10 @@ import { ProjectChooser } from './project-chooser';
 export { defaultLayout } from './layout';
 
 /**
- * The main window's areas, as in Logic: Library and Inspector on the left, the Tracks area in the middle, the editors
- * (the Piano Roll, the Audio Track Editor, the Smart Tempo Editor), the Mixer and the Keyboard below, the Browsers, the List Editors (the Marker List) and the Note Pad
- * on the right. The layout is the current screenset's (ScreensetStore): a serialisable tree the screensets keep in the
+ * The main window's areas, as in Logic: Library and Inspector on the left, the Tracks area (with the Live Loops grid
+ * beside it when shown) in the middle, the editors (the Piano Roll, the Audio Track Editor, the Smart Tempo Editor, the
+ * Step Sequencer, the Drum Machine Designer), the Mixer, Smart Controls and the Keyboard below, the Browsers, the Loop
+ * Browser, the List Editors (the Marker List) and the Note Pad on the right. The layout is the current screenset's (ScreensetStore): a serialisable tree the screensets keep in the
  * project, recalled with 1–9. With no project open, the window shows the project chooser.
  */
 @Component({
@@ -31,10 +34,12 @@ export { defaultLayout } from './layout';
     Inspector,
     KeyboardPane,
     LibraryPane,
+    LoopBrowser,
     MarkerList,
     MixerPane,
     NotePad,
     ProjectChooser,
+    SmartControlsPane,
     TracksArea,
     XuiDockManagerImports,
     XuiSpinnerImports
@@ -60,6 +65,12 @@ export { defaultLayout } from './layout';
         </ng-template>
         <ng-template xuiDockContent="editors">
           <an-editors-pane />
+        </ng-template>
+        <ng-template xuiDockContent="smartControls">
+          <an-smart-controls-pane />
+        </ng-template>
+        <ng-template xuiDockContent="loops">
+          <an-loop-browser />
         </ng-template>
         <ng-template xuiDockContent="keyboard">
           <an-keyboard-pane />

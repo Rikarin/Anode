@@ -1,3 +1,4 @@
+import { NgComponentOutlet } from '@angular/common';
 import { ChangeDetectionStrategy, Component, DestroyRef, computed, inject, input, signal } from '@angular/core';
 import type { Insert, ParameterInfo, PluginInfo } from '@anode/api-client';
 import { AnChoice, AnKnob, AnReadingMeter } from '@anode/audio-ui';
@@ -6,6 +7,7 @@ import { matCloseRound, matPowerSettingsNewRound } from '@ng-icons/material-icon
 import { XuiButtonImports } from '@xui/button';
 import { XuiIconImports } from '@xui/icon';
 import { isChoice, parameterGroups } from '../inspector/parameter-editor';
+import { type PluginPanelHost, pluginPanel } from '../plugin-panels/plugin-panel';
 import { MeterBus } from '../state/meters';
 import { MixerStore } from '../state/mixer.store';
 import { PluginsStore } from '../state/plugins.store';
@@ -41,7 +43,7 @@ export function readingKind(plugin: PluginInfo | undefined): {
 @Component({
   selector: 'an-plugin-window',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [AnChoice, AnKnob, AnReadingMeter, XuiButtonImports, XuiIconImports],
+  imports: [AnChoice, AnKnob, AnReadingMeter, NgComponentOutlet, XuiButtonImports, XuiIconImports],
   providers: [provideIcons({ matCloseRound, matPowerSettingsNewRound })],
   host: {
     class: 'panel fixed z-40 flex max-h-[70vh] w-[26rem] flex-col overflow-hidden rounded-lg',
@@ -100,6 +102,9 @@ export function readingKind(plugin: PluginInfo | undefined): {
             [unit]="readingInfo().unit"
             [value]="reading()"
           />
+        }
+        @if (panel(); as p) {
+          <ng-container *ngComponentOutlet="p; inputs: { host: host() }" />
         }
         @for (group of groups(); track group.name) {
           <section class="flex flex-col gap-1" [attr.aria-label]="group.name">
@@ -163,11 +168,25 @@ export class PluginWindowView {
   protected readonly choice = isChoice;
 
   protected readonly insert = computed<Insert | undefined>(() => {
-    const { trackId, insertId } = this.window();
+    const { trackId, insertId, chain } = this.window();
     const strip = trackId === null ? this.project.master() : this.project.track(trackId)?.strip;
-    return strip?.inserts.find(i => i.id === insertId);
+    return (chain === 'midiEffects' ? strip?.midiEffects : strip?.inserts)?.find(i => i.id === insertId);
   });
   protected readonly plugin = computed(() => this.plugins.plugin(this.insert()?.pluginId));
+  /** A custom panel for the plugin (drawbars, Delay Designer taps…) when its parameters match one; else none. */
+  protected readonly panel = computed(() => pluginPanel(this.plugin()));
+  protected readonly host = computed<PluginPanelHost | null>(() => {
+    const plugin = this.plugin();
+    const insert = this.insert();
+    if (!plugin || !insert) {
+      return null;
+    }
+    return {
+      plugin,
+      value: id => this.mixer.parameterValue(this.window().trackId, insert, id),
+      set: (id, value) => void this.mixer.setParameter(this.window().trackId, insert.id, id, value)
+    };
+  });
   protected readonly groups = computed(() => parameterGroups(this.plugin()?.parameters ?? []));
   protected readonly title = computed(() => {
     const trackId = this.window().trackId;

@@ -11,6 +11,7 @@ import { BounceInPlaceDialog } from './functions/bounce-in-place-dialog';
 import { ProcessingDialog } from './functions/processing-dialog';
 import { StripSilenceDialog } from './functions/strip-silence-dialog';
 import { KeyCommandsEditor } from './keys/key-commands-editor';
+import { SoundLibraryDialog } from './loops/sound-library-dialog';
 import { GroupSettings } from './mixer/group-settings';
 import { IoLabelsDialog } from './mixer/io-labels-dialog';
 import { PluginWindowsHost } from './mixer/plugin-window';
@@ -44,6 +45,7 @@ import { AudioImport } from './tracks/audio-import';
     ProcessingDialog,
     RouterOutlet,
     SaveAlternativeDialog,
+    SoundLibraryDialog,
     StripSilenceDialog,
     XuiButtonImports,
     XuiInputImports,
@@ -113,6 +115,7 @@ import { AudioImport } from './tracks/audio-import';
           <an-group-settings />
           <an-plugin-windows />
         }
+        <an-sound-library-dialog />
       }
     }
   `
@@ -179,6 +182,18 @@ export class App {
       'view.browsers': () => this.screensets.showPane('browsers'),
       'view.lists': () => this.screensets.showPane('lists'),
       'view.notes': () => this.screensets.showPane('notes'),
+      'view.loopBrowser': () => this.screensets.showPane('loops'),
+      'view.smartControls': () => this.screensets.showPane('smartControls'),
+      'view.stepSequencer': () => {
+        this.ui.editorView.set('stepSequencer');
+        this.screensets.showPane('editors');
+      },
+      'view.soundLibrary': () => this.ui.soundLibraryOpen.set(true),
+      'view.liveLoops': () =>
+        void this.project.execute(
+          [{ type: 'setLiveLoops', shown: !this.project.liveLoops().shown }],
+          this.project.liveLoops().shown ? 'Hide Live Loops' : 'Show Live Loops'
+        ),
       'project.bounce': () => this.ui.bounceOpen.set(true),
       'region.stripSilence': () => this.ui.stripSilenceOpen.set(true),
       'region.bounceInPlace': () => this.ui.bounceInPlaceOpen.set(true),

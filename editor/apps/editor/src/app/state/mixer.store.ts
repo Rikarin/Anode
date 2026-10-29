@@ -5,6 +5,7 @@ import type {
   EditCommand,
   GroupProperties,
   Insert,
+  InsertChain,
   MixerGroup,
   MixerSettings,
   Send,
@@ -69,7 +70,16 @@ export class MixerStore {
     const [owner = '', insertId = '', parameterId = ''] = key.split('|');
     const trackId = owner || null;
     return this.project.execute(
-      [{ type: 'setInsertParameter', insertId, parameterId, value, ...(trackId ? { trackId } : {}) }],
+      [
+        {
+          type: 'setInsertParameter',
+          insertId,
+          parameterId,
+          value,
+          ...(trackId ? { trackId } : {}),
+          ...this.chain(trackId, insertId)
+        }
+      ],
       this.parameterName(trackId, insertId, parameterId)
     );
   });
@@ -124,40 +134,77 @@ export class MixerStore {
 
   // ---- inserts
 
-  /** Adds an insert at `index` (the end when left out). */
-  addInsert(trackId: string | null, pluginId: string, index?: number): Promise<unknown> {
+  /**
+   * Adds an insert at `index` (the end when left out); with `chain` `midiEffects`, a MIDI FX slot (Phase 6: the insert
+   * commands take a chain).
+   */
+  addInsert(trackId: string | null, pluginId: string, index?: number, chain?: InsertChain): Promise<unknown> {
     const name = this.plugins.plugin(pluginId)?.name ?? pluginId;
     return this.project.execute(
-      [{ type: 'addInsert', pluginId, ...owner(trackId), ...(index === undefined ? {} : { index }) }],
+      [
+        {
+          type: 'addInsert',
+          pluginId,
+          ...owner(trackId),
+          ...(index === undefined ? {} : { index }),
+          ...(chain === 'midiEffects' ? { chain } : {})
+        }
+      ],
       `Insert ${name}`
     );
   }
 
-  /** Replaces the insert at `index` with another plugin (remove, then add in its place: one undo step). */
+  /** Replaces the insert (or MIDI FX slot) at `index` with another plugin (remove, then add in its place: one undo step). */
   replaceInsert(trackId: string | null, insert: Insert, pluginId: string, index: number): Promise<unknown> {
     const name = this.plugins.plugin(pluginId)?.name ?? pluginId;
+    const chain = this.chain(trackId, insert.id);
     return this.project.execute(
       [
-        { type: 'removeInsert', insertId: insert.id, ...owner(trackId) },
-        { type: 'addInsert', pluginId, index, ...owner(trackId) }
+        { type: 'removeInsert', insertId: insert.id, ...owner(trackId), ...chain },
+        { type: 'addInsert', pluginId, index, ...owner(trackId), ...chain }
       ],
       `Insert ${name}`
     );
   }
 
   removeInsert(trackId: string | null, insert: Insert): Promise<unknown> {
-    return this.project.execute([{ type: 'removeInsert', insertId: insert.id, ...owner(trackId) }], 'Remove Insert');
+    return this.project.execute(
+      [{ type: 'removeInsert', insertId: insert.id, ...owner(trackId), ...this.chain(trackId, insert.id) }],
+      'Remove Insert'
+    );
   }
 
   moveInsert(trackId: string | null, insertId: string, index: number): Promise<unknown> {
-    return this.project.execute([{ type: 'moveInsert', insertId, index, ...owner(trackId) }], 'Move Insert');
+    return this.project.execute(
+      [{ type: 'moveInsert', insertId, index, ...owner(trackId), ...this.chain(trackId, insertId) }],
+      'Move Insert'
+    );
   }
 
   toggleBypass(trackId: string | null, insert: Insert): Promise<unknown> {
     return this.project.execute(
-      [{ type: 'setInsert', insertId: insert.id, bypassed: !insert.bypassed, ...owner(trackId) }],
+      [
+        {
+          type: 'setInsert',
+          insertId: insert.id,
+          bypassed: !insert.bypassed,
+          ...owner(trackId),
+          ...this.chain(trackId, insert.id)
+        }
+      ],
       insert.bypassed ? 'Enable Insert' : 'Bypass Insert'
     );
+  }
+
+  /** The `chain` a slot's commands need: `midiEffects` for a MIDI FX slot of the strip, nothing for an insert. */
+  chain(trackId: string | null, insertId: string): { chain?: InsertChain } {
+    return this.strip(trackId)?.midiEffects.some(i => i.id === insertId) ? { chain: 'midiEffects' } : {};
+  }
+
+  /** A slot of a strip by id: an insert or a MIDI FX slot. */
+  slot(trackId: string | null, insertId: string): Insert | undefined {
+    const strip = this.strip(trackId);
+    return strip?.inserts.find(i => i.id === insertId) ?? strip?.midiEffects.find(i => i.id === insertId);
   }
 
   /** Sets an insert's sidechain: a track id, `bus:N`, or null for none. */
@@ -182,7 +229,8 @@ export class MixerStore {
     if (this.held().has(k)) {
       return stored;
     }
-    return this.automation.playbackValue(trackId, `insert:${insert.id}:${parameterId}`) ?? stored;
+    const prefix = this.chain(trackId, insert.id).chain === 'midiEffects' ? 'midiEffect' : 'insert';
+    return this.automation.playbackValue(trackId, `${prefix}:${insert.id}:${parameterId}`) ?? stored;
   }
 
   /** Sets an insert parameter during a drag (coalesced; recorded into automation while playing in touch…write). */
@@ -346,8 +394,7 @@ export class MixerStore {
   }
 
   private parameterName(trackId: string | null, insertId: string, parameterId: string): string {
-    const strip = this.strip(trackId);
-    const insert = strip?.inserts.find(i => i.id === insertId);
+    const insert = this.slot(trackId, insertId);
     return this.plugins.plugin(insert?.pluginId)?.parameters.find(p => p.id === parameterId)?.name ?? 'Parameter';
   }
 
