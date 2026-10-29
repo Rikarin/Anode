@@ -21,7 +21,8 @@ namespace Anode.Dsp.Effects.Multi;
 ///         </item>
 ///         <item>
 ///             <b>Pad 2.</b> Repeater: on touch, the grid division just begun (X picks 1/2 … 1/32) is captured and
-///             repeated (each pass crossfades from the last over 2 ms); Y the repeat's level against the input. Reverse: the input, played backwards a chunk at a time
+///             repeated (each pass crossfades from the last over 2 ms); Y the repeat's level against the input. Reverse:
+///             the input, played backwards a chunk at a time
 ///             (X picks 1/1 … 1/8); Y the level. Scratch: the read position swings back and forth on the grid (X picks
 ///             1/2 … 1/16), Y the depth. Gater: the level chops on the grid (X picks 1/4 … 1/32), Y the depth.
 ///             Downsampler: X the rate reduction (1 … 64×), Y the bit reduction (24 … 2 bits). Tape Stop: on touch the
@@ -167,8 +168,10 @@ public sealed class RemixFx : AudioEffect {
         active2 = Switch(Pad2Active);
         effect1 = Choice(Pad1Effect);
         effect2 = Choice(Pad2Effect);
-        level1 = Snapping ? active1 ? 1 : 0 : level1 + ((active1 ? 1 : 0) - level1) * fadeStep;
-        level2 = Snapping ? active2 ? 1 : 0 : level2 + ((active2 ? 1 : 0) - level2) * fadeStep;
+        double on1 = active1 ? 1 : 0;
+        double on2 = active2 ? 1 : 0;
+        level1 = Snapping ? on1 : level1 + (on1 - level1) * fadeStep;
+        level2 = Snapping ? on2 : level2 + (on2 - level2) * fadeStep;
         if (level1 < 1e-4 && !active1) {
             level1 = 0;
         }
@@ -232,7 +235,12 @@ public sealed class RemixFx : AudioEffect {
                 var high = x1 > 0.5;
                 var hz = high ? 20 * Math.Pow(400, (x1 - 0.5) * 2) : 80 * Math.Pow(250, x1 * 2);
                 var mode = high ? FilterMode.HighPass12 : FilterMode.LowPass12;
-                filter = MultimodeCoefficients.Design(mode, SampleRate, hz, MultimodeCoefficients.Quality(mode, 0.9 * y1));
+                filter = MultimodeCoefficients.Design(
+                    mode,
+                    SampleRate,
+                    hz,
+                    MultimodeCoefficients.Quality(mode, 0.9 * y1)
+                );
                 break;
             }
             case Wobble: {

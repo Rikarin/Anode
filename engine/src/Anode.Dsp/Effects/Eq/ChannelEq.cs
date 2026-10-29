@@ -61,7 +61,19 @@ public sealed class ChannelEq : AudioEffect {
     public static readonly int LowPassSlope = P.Choice("lpfSlope", "High Cut Slope", Slopes, 1);
     public static readonly int Output = P.Add("output", "Output Gain", -24, 24, 0, "dB");
 
-    public static EffectDescriptor Info { get; } = P.Describe(Id, "Channel EQ", EffectCategories.Eq, LowShelfGain, Peak1Gain, Peak2Gain, Peak3Gain, Peak4Gain, HighShelfGain, HighPassFrequency, LowPassFrequency);
+    public static EffectDescriptor Info { get; } = P.Describe(
+        Id,
+        "Channel EQ",
+        EffectCategories.Eq,
+        LowShelfGain,
+        Peak1Gain,
+        Peak2Gain,
+        Peak3Gain,
+        Peak4Gain,
+        HighShelfGain,
+        HighPassFrequency,
+        LowPassFrequency
+    );
 
     /// <summary>The cut filters' sections (up to four each), then the shelves and bells.</summary>
     const int Sections = 4 + 4 + 6;

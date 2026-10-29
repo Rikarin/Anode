@@ -48,8 +48,7 @@ public sealed class Ensemble : AudioEffect {
 
     public Ensemble() : base(Info) { }
 
-    protected override void OnPrepare(float sampleRate) =>
-        line.Allocate((int)Math.Ceiling(0.06 * sampleRate) + 8);
+    protected override void OnPrepare(float sampleRate) => line.Allocate((int)Math.Ceiling(0.06 * sampleRate) + 8);
 
     protected override void OnReset() {
         line.Reset();

@@ -41,7 +41,19 @@ public sealed class AutoFilter : AudioEffect {
     public static readonly int Drive = P.Add("drive", "Drive", 0, 24, 0, "dB");
     public static readonly int Mix = P.Add("mix", "Mix", 0, 100, 100, "%");
 
-    public static EffectDescriptor Info { get; } = P.Describe(Id, "AutoFilter", EffectCategories.Filter, Cutoff, Resonance, LfoDepth, LfoRate, EnvelopeAmount, Drive, Mix, Note);
+    public static EffectDescriptor Info { get; } = P.Describe(
+        Id,
+        "AutoFilter",
+        EffectCategories.Filter,
+        Cutoff,
+        Resonance,
+        LfoDepth,
+        LfoRate,
+        EnvelopeAmount,
+        Drive,
+        Mix,
+        Note
+    );
 
     MultimodeCoefficients coefficients;
     MultimodeFilter left;

@@ -49,16 +49,30 @@ public sealed class StepFx : AudioEffect {
     public static readonly int Mix = P.Add("mix", "Mix", 0, 100, 100, "%");
 
     /// <summary>Step n's cutoff (0 … 100 %), n = 0 … 15.</summary>
-    public static readonly IReadOnlyList<int> CutoffSteps =
-        [..Enumerable.Range(0, MaxSteps).Select(static i => P.Add($"cutoff{i + 1}", $"Cutoff {i + 1}", 0, 100, (i * 37 + 20) % 100, "%"))];
+    public static readonly IReadOnlyList<int> CutoffSteps = [
+        ..Enumerable.Range(0, MaxSteps)
+            .Select(static i => P.Add($"cutoff{i + 1}", $"Cutoff {i + 1}", 0, 100, (i * 37 + 20) % 100, "%"))
+    ];
 
     /// <summary>Step n's volume (0 … 100 %).</summary>
-    public static readonly IReadOnlyList<int> VolumeSteps =
-        [..Enumerable.Range(0, MaxSteps).Select(static i => P.Add($"volume{i + 1}", $"Volume {i + 1}", 0, 100, i % 4 == 0 ? 100 : i % 2 == 0 ? 70 : 40, "%"))];
+    public static readonly IReadOnlyList<int> VolumeSteps = [
+        ..Enumerable.Range(0, MaxSteps)
+            .Select(static i => P.Add(
+                    $"volume{i + 1}",
+                    $"Volume {i + 1}",
+                    0,
+                    100,
+                    i % 4 == 0 ? 100 : i % 2 == 0 ? 70 : 40,
+                    "%"
+                )
+            )
+    ];
 
     /// <summary>Step n's pan (−100 … 100).</summary>
-    public static readonly IReadOnlyList<int> PanSteps =
-        [..Enumerable.Range(0, MaxSteps).Select(static i => P.Add($"pan{i + 1}", $"Pan {i + 1}", -100, 100, i % 2 == 0 ? -40 : 40, string.Empty))];
+    public static readonly IReadOnlyList<int> PanSteps = [
+        ..Enumerable.Range(0, MaxSteps)
+            .Select(static i => P.Add($"pan{i + 1}", $"Pan {i + 1}", -100, 100, i % 2 == 0 ? -40 : 40, string.Empty))
+    ];
 
     public static EffectDescriptor Info { get; } = P.Describe(
         Id,
@@ -162,8 +176,8 @@ public sealed class StepFx : AudioEffect {
     ) {
         for (var i = 0; i < left.Length; i++) {
             var at = Position(QuarterAt(i));
-            var l = (double)left[i];
-            var r = (double)right[i];
+            double l = left[i];
+            double r = right[i];
             if (filterOn) {
                 l = filterLeft.Tick(filter, l);
                 r = filterRight.Tick(filter, r);

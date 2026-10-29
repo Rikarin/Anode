@@ -52,7 +52,8 @@ public sealed class Chorus : AudioEffect {
     public static readonly int Spread = P.Add("spread", "Stereo Spread", 0, 180, 90, "°");
     public static readonly int Mix = P.Add("mix", "Mix", 0, 100, 50, "%");
 
-    public static EffectDescriptor Info { get; } = P.Describe(Id, "Chorus", EffectCategories.Modulation, Rate, Depth, Mix, Delay, Feedback, Spread);
+    public static EffectDescriptor Info { get; } =
+        P.Describe(Id, "Chorus", EffectCategories.Modulation, Rate, Depth, Mix, Delay, Feedback, Spread);
 
     readonly DelayLine lineLeft = new();
     readonly DelayLine lineRight = new();
@@ -121,7 +122,8 @@ public sealed class Flanger : AudioEffect {
     public static readonly int Spread = P.Add("spread", "Stereo Spread", 0, 180, 90, "°");
     public static readonly int Mix = P.Add("mix", "Mix", 0, 100, 50, "%");
 
-    public static EffectDescriptor Info { get; } = P.Describe(Id, "Flanger", EffectCategories.Modulation, Rate, Depth, Feedback, Mix, Delay, Spread);
+    public static EffectDescriptor Info { get; } =
+        P.Describe(Id, "Flanger", EffectCategories.Modulation, Rate, Depth, Feedback, Mix, Delay, Spread);
 
     readonly DelayLine lineLeft = new();
     readonly DelayLine lineRight = new();

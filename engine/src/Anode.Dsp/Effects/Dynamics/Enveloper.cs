@@ -7,14 +7,14 @@ namespace Anode.Dsp.Effects.Dynamics;
 ///     its tails independently of its level.
 ///     <list type="bullet">
 ///         <item>
-///             Two pairs of envelope followers on the stereo-linked level (a 10 ms mean square), in dB. The attack pair: a fast follower
-///             (0.5 ms up) against one rising at the Attack time; where the fast one leads, the gap is the transient.
-///             The release pair: a follower falling at the Release time against one falling in 20 ms; where the slow one
-///             lingers, the gap is the tail.
+///             Two pairs of envelope followers on the stereo-linked level (a 10 ms mean square), compared in dB. The
+///             attack pair: a fast follower (0.5 ms up) against one rising at the Attack time; where the fast one leads,
+///             the gap is the transient. The release pair: a follower falling at the Release time against one falling
+///             in 20 ms; where the slow one lingers, the gap is the tail.
 ///         </item>
 ///         <item>
 ///             The gain is Attack Gain × the transient gap plus Release Gain × the tail gap (±100 %: the gap itself, at
-///             most ±24 dB), applied only above the Threshold.
+///             most ±12 dB), applied only above the Threshold.
 ///         </item>
 ///         <item>
 ///             Lookahead delays the audio, not the detector, so a boost lands on the very start of an attack; it is the
@@ -25,7 +25,7 @@ namespace Anode.Dsp.Effects.Dynamics;
 /// </summary>
 public sealed class Enveloper : AudioEffect {
     public const string Id = "anode.enveloper";
-    const double MaxDb = 24;
+    const double MaxDb = 12;
 
     static readonly EffectParameters P = new();
     public static readonly int Threshold = P.Add("threshold", "Threshold", -80, 0, -50, "dB");
@@ -72,8 +72,7 @@ public sealed class Enveloper : AudioEffect {
 
     public Enveloper() : base(Info) { }
 
-    public override int LatencySamples =>
-        Prepared ? (int)Math.Round(GetParameter(Lookahead) * 0.001 * SampleRate) : 0;
+    public override int LatencySamples => Prepared ? (int)Math.Round(GetParameter(Lookahead) * 0.001 * SampleRate) : 0;
 
     protected override void OnPrepare(float sampleRate) {
         meanStep = 1 - Math.Exp(-1 / (0.01 * sampleRate));
@@ -85,7 +84,7 @@ public sealed class Enveloper : AudioEffect {
     protected override void OnReset() {
         lineLeft.Reset();
         lineRight.Reset();
-        fast = attackFollower = releaseFollower = shortFollower = -120;
+        fast = attackFollower = releaseFollower = shortFollower = 0;
         meanSquare = 0;
         gainDb = 0;
         Publish(0);
@@ -104,6 +103,8 @@ public sealed class Enveloper : AudioEffect {
         mix.Set(Value(Mix) * 0.01f, Snapping);
     }
 
+    static double Db(double level) => level > 1e-6 ? 20 * Math.Log10(level) : -120;
+
     double Coefficient(double ms) => Math.Exp(-1 / (ms * 0.001 * SampleRate));
 
     protected override void Render(
@@ -116,7 +117,7 @@ public sealed class Enveloper : AudioEffect {
             // The level: a 10 ms mean square, so the followers see the envelope rather than the waveform.
             var square = Math.Max(left[i] * left[i], right[i] * right[i]);
             meanSquare += (square - meanSquare) * meanStep;
-            var level = meanSquare > 1e-12 ? 10 * Math.Log10(meanSquare) + 3 : -120;
+            var level = Math.Sqrt(2 * meanSquare);
             // Attack pair: both fall quickly, rise at their own speeds.
             fast = level > fast ? level + (fast - level) * fastUp : level + (fast - level) * shortDown;
             attackFollower = level > attackFollower
@@ -125,11 +126,11 @@ public sealed class Enveloper : AudioEffect {
             // Release pair: both rise at once, fall at their own speeds.
             releaseFollower = level > releaseFollower ? level : level + (releaseFollower - level) * releaseDown;
             shortFollower = level > shortFollower ? level : level + (shortFollower - level) * shortDown;
-            var transient = Math.Max(0, fast - attackFollower);
-            var tail = Math.Max(0, releaseFollower - shortFollower);
+            var transient = Math.Max(0, Db(fast) - Db(attackFollower));
+            var tail = Math.Max(0, Db(releaseFollower) - Db(shortFollower));
             var target = Math.Clamp(attackAmount * transient + releaseAmount * tail, -MaxDb, MaxDb);
             // Above the threshold only, faded in over 6 dB.
-            target *= Math.Clamp((releaseFollower - threshold) / 6, 0, 1);
+            target *= Math.Clamp((Db(releaseFollower) - threshold) / 6, 0, 1);
             gainDb = target;
             var gain = (float)Math.Pow(10, gainDb * 0.05) * output.Next();
             lineLeft.Write(left[i]);
@@ -146,6 +147,7 @@ public sealed class Enveloper : AudioEffect {
         Publish((float)gainDb);
         if (meanSquare < 1e-30) {
             meanSquare = 0;
+            fast = attackFollower = releaseFollower = shortFollower = 0;
         }
     }
 }

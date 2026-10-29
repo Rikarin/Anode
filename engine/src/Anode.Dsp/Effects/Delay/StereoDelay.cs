@@ -28,7 +28,19 @@ public sealed class StereoDelay : AudioEffect {
     public static readonly int HighCut = P.Add("highCut", "High Cut", 1_000, 20_000, 20_000, "Hz");
     public static readonly int Mix = P.Add("mix", "Mix", 0, 100, 30, "%");
 
-    public static EffectDescriptor Info { get; } = P.Describe(Id, "Stereo Delay", EffectCategories.Delay, Mix, LeftFeedback, RightFeedback, Crossfeed, HighCut, LowCut, LeftNote, RightNote);
+    public static EffectDescriptor Info { get; } = P.Describe(
+        Id,
+        "Stereo Delay",
+        EffectCategories.Delay,
+        Mix,
+        LeftFeedback,
+        RightFeedback,
+        Crossfeed,
+        HighCut,
+        LowCut,
+        LeftNote,
+        RightNote
+    );
 
     readonly DelayLine lineLeft = new();
     readonly DelayLine lineRight = new();

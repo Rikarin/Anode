@@ -56,7 +56,10 @@ public sealed class PartitionedConvolver {
     /// <summary>The longest filter <see cref="SetFilter" /> takes.</summary>
     public int MaxTaps => maxPartitions * block;
 
-    /// <summary>Control thread: room for filters of up to <paramref name="maxTaps" /> taps in partitions of <paramref name="blockSize" />.</summary>
+    /// <summary>
+    ///     Control thread: room for filters of up to <paramref name="maxTaps" /> taps in partitions of
+    ///     <paramref name="blockSize" />.
+    /// </summary>
     public void Allocate(int blockSize, int maxTaps) {
         if (blockSize < 4 || (blockSize & (blockSize - 1)) != 0) {
             throw new ArgumentOutOfRangeException(nameof(blockSize), blockSize, "A power of two of at least 4.");

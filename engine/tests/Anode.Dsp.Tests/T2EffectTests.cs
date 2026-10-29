@@ -123,6 +123,39 @@ public sealed class T2EffectTests {
         Assert.Equal(0, allocated);
     }
 
+    /// <summary>
+    ///     <c>SetTransport</c> is a default interface member: called through <see cref="IAudioEffect" />, as the engine
+    ///     does, it must reach the effect's own (a class re-implementing it without listing the interface would get the
+    ///     empty default). Every synced built-in sounds different at 90 bpm than at its own 120.
+    /// </summary>
+    [Theory]
+    [InlineData("anode.step-fx")]
+    [InlineData("anode.beat-breaker")]
+    [InlineData("anode.remix-fx")]
+    [InlineData("anode.phat-fx")]
+    [InlineData("anode.delay-designer")]
+    [InlineData("anode.stereo-delay")]
+    [InlineData("anode.tape-delay")]
+    [InlineData("anode.tremolo")]
+    [InlineData("anode.auto-filter")]
+    public void Synced_effects_hear_the_transport_through_the_interface(string id) {
+        var presets = EffectPresets.For(id).ToList();
+        foreach (var p in BuiltinEffects.All.Single(d => d.Id == id).Parameters) {
+            if (p.Id == "sync") {
+                presets.Add((p.Index, 1));
+            }
+        }
+
+        var plain = Fx.Create(id, [..presets]);
+        var synced = Fx.Create(id, [..presets]);
+        var (left, right) = Fx.Music(48_000);
+        var a = Fx.Run(plain, left, right);
+        var b = new TransportRun(synced, left, right, static _ => 90, 0, AudioEffect.ControlInterval);
+        Assert.True(NullResidualDb(a.Left, b.Left) > -60, id);
+        plain.Dispose();
+        synced.Dispose();
+    }
+
     [Theory]
     [InlineData("anode.space")]
     [InlineData("anode.linear-eq")]
@@ -266,7 +299,7 @@ public sealed class T2EffectTests {
         );
         var latency = eq.LatencySamples;
         Assert.Equal(2_048, latency);
-        var (l, _) = Fx.Run(eq, Fx.Impulse(3 * latency, 0));
+        var (l, _) = Fx.Run(eq, Fx.Impulse(3 * latency));
         var peak = PeakIndex(l, 0, l.Length);
         Assert.Equal(latency, peak);
         var scale = Math.Abs(l[peak]);
@@ -383,11 +416,11 @@ public sealed class T2EffectTests {
     [Fact]
     public void Exciter_adds_harmonics_above_its_frequency_only() {
         using var effect = Fx.Create(Exciter.Id, (Exciter.Mix, 100), (Exciter.Frequency, 3_000), (Exciter.Drive, 24));
-        var low = TestWav.Sine(200, Rate, 1, 0.5f);
+        var low = TestWav.Sine(200, Rate, 1);
         var (l, _) = Fx.Run(effect, low);
         Assert.True(NullResidualDb(low.AsSpan(Rate / 2), l.AsSpan(Rate / 2)) < -50);
         effect.Reset();
-        var high = TestWav.Sine(4_000, Rate, 1, 0.5f);
+        var high = TestWav.Sine(4_000, Rate, 1);
         var (h, _) = Fx.Run(effect, high);
         var spectrum = Spectrum(h, Rate / 2, 16_384);
         var bin = 12_000 * 16_384 / Rate; // the third harmonic
@@ -398,7 +431,8 @@ public sealed class T2EffectTests {
     [InlineData(0, 55.0)]
     [InlineData(1, 27.5)]
     public void SubBass_adds_a_tone_octaves_below(int octave, double expected) {
-        using var effect = Fx.Create(SubBass.Id, (SubBass.Mix, 100), (SubBass.Frequency, 110), (SubBass.Octave, octave));
+        using var effect =
+            Fx.Create(SubBass.Id, (SubBass.Mix, 100), (SubBass.Frequency, 110), (SubBass.Octave, octave));
         var tone = TestWav.Sine(110, Rate, 3, 0.4f);
         var (l, _) = Fx.Run(effect, tone);
         var sub = new float[l.Length];
@@ -430,7 +464,7 @@ public sealed class T2EffectTests {
             (taps[2].Pan, 100),
             (taps[3].Time, 50) // beyond the tap count: silent
         );
-        var (l, r) = Fx.Run(effect, Fx.Impulse(30_000, 0));
+        var (l, r) = Fx.Run(effect, Fx.Impulse(30_000));
         Assert.Equal(1, l[4_800], 5);
         Assert.Equal(0, r[4_800], 5);
         Assert.Equal(Decibels.ToGain(-6.0) * Math.Sqrt(0.5), l[12_000], 4);
@@ -457,7 +491,7 @@ public sealed class T2EffectTests {
             (taps[1].Pan, 100),
             (taps[1].Level, 0)
         );
-        var (l, r) = Fx.Run(effect, Fx.Impulse(60_000, 0));
+        var (l, r) = Fx.Run(effect, Fx.Impulse(60_000));
         Assert.Equal(1, r[14_400], 5);
         Assert.Equal(0.5, l[14_400 + 4_800], 5); // tap A hears the fed-back repeat
         Assert.Equal(0.5, r[2 * 14_400], 5);
@@ -502,7 +536,7 @@ public sealed class T2EffectTests {
             (PitchShifter.Cents, cents),
             (PitchShifter.Mix, 100)
         );
-        var tone = TestWav.Sine(input, Rate, 3, 0.5f);
+        var tone = TestWav.Sine(input, Rate, 3);
         var (l, _) = Fx.Run(effect, tone);
         var expected = input * Math.Pow(2, (semitones + cents / 100.0) / 12);
         // The heads' crossfades put sidebands at the window rate around the tone, so its spectrum peaks beside it; the
@@ -555,7 +589,7 @@ public sealed class T2EffectTests {
         );
         var input = Voice(note * Math.Pow(2, detuneCents / 1_200), 2);
         var (l, _) = Fx.Run(effect, input);
-        var measured = PeakFrequency(l, Rate, Rate, 32_768);
+        var measured = PeakFrequency(l, Rate, Rate);
         Assert.InRange(Cents(measured, expected), -10, 10);
         Assert.True(Rms(l.AsSpan(Rate)) > 0.5 * Rms(input.AsSpan(Rate)));
     }
@@ -564,7 +598,7 @@ public sealed class T2EffectTests {
     public void Pitch_correction_detune_offsets_the_target() {
         using var effect = Fx.Create(PitchCorrection.Id, (PitchCorrection.Response, 0), (PitchCorrection.Detune, 30));
         var (l, _) = Fx.Run(effect, Voice(440 * Math.Pow(2, -20 / 1_200.0), 2));
-        Assert.InRange(Cents(PeakFrequency(l, Rate, Rate, 32_768), 440), 20, 40);
+        Assert.InRange(Cents(PeakFrequency(l, Rate, Rate), 440), 20, 40);
     }
 
     [Fact]
@@ -580,7 +614,7 @@ public sealed class T2EffectTests {
         effect.Reset();
         var a = Voice(440, 2);
         var (y, _) = Fx.Run(effect, a);
-        Assert.InRange(Cents(PeakFrequency(y, Rate, Rate, 32_768), 440), -2, 2);
+        Assert.InRange(Cents(PeakFrequency(y, Rate, Rate), 440), -2, 2);
         Assert.Equal(0, ToDb(Rms(y.AsSpan(Rate, Rate / 2)) / Rms(a.AsSpan(Rate, Rate / 2))), 1);
     }
 
@@ -589,7 +623,7 @@ public sealed class T2EffectTests {
     [Fact]
     public void Ensemble_spreads_an_impulse_around_its_delay() {
         using var effect = Fx.Create(Ensemble.Id, (Ensemble.Mix, 100), (Ensemble.Delay, 15), (Ensemble.Voices, 8));
-        var (l, r) = Fx.Run(effect, Fx.Impulse(4_000, 0));
+        var (l, r) = Fx.Run(effect, Fx.Impulse(4_000));
         // The voices land within Delay ± (4 + 3) ms, and not all in the same place on both sides.
         Assert.Equal(0, Peak(l.AsSpan(0, (int)(0.007 * Rate))));
         Assert.True(Peak(l.AsSpan((int)(0.007 * Rate), (int)(0.016 * Rate))) > 0.05);
@@ -617,7 +651,7 @@ public sealed class T2EffectTests {
         }
 
         var mean = envelope.Skip(100).Average();
-        var wobble = envelope.Skip(100).Select(e => e - (float)mean).ToArray();
+        var wobble = envelope.Skip(100).Select(e => e - mean).ToArray();
         Assert.True(Rms(wobble) > 0.02 * mean);
         Assert.Equal(6.8, ZeroCrossingFrequency(wobble, 0, wobble.Length, Rate / 240.0), 0.4);
     }
@@ -644,7 +678,12 @@ public sealed class T2EffectTests {
         for (var at = 0; at < 150_000; at += AudioEffect.ControlInterval) {
             var bpm = map(at);
             effect.SetTransport(new(true, at, quarter, bpm, 4, 4, 0, Fx.Rate, AudioEffect.ControlInterval));
-            effect.Process(new float[AudioEffect.ControlInterval], new float[AudioEffect.ControlInterval], default, default);
+            effect.Process(
+                new float[AudioEffect.ControlInterval],
+                new float[AudioEffect.ControlInterval],
+                default,
+                default
+            );
             cutoffs.Add((quarter, effect.CurrentCutoff));
             quarter += AudioEffect.ControlInterval * bpm / (60 * Fx.Rate);
         }
@@ -715,7 +754,7 @@ public sealed class T2EffectTests {
         for (var k = 3; k * 0.25 < run.EndQuarter - 0.25; k++) {
             var s = run.SampleOf(k * 0.25);
             // Slice k of the 4-beat pattern: odd ones are muted; the open ones fade over 24 samples beside them.
-            var muted = k % 2 == 1;
+            var muted = k % 2 != 0;
             var start = (int)Math.Ceiling(s - 1e-6);
             Assert.Equal(muted ? 0 : 0.5f, run.Left[start + 30], 4);
             Assert.Equal(muted ? 0.5f : 0, run.Left[start - 30], 4);
@@ -738,7 +777,7 @@ public sealed class T2EffectTests {
         );
         var ramp = Enumerable.Range(0, 200_000).Select(static i => i * 1e-6f).ToArray();
         // 120 bpm: a 4-beat pattern is 96,000 samples, a slice 6,000.
-        var run = new TransportRun(effect, ramp, null, _ => 120);
+        var run = new TransportRun(effect, ramp, null, static _ => 120);
         Assert.Equal(ramp[96_000 + 12_500 - 12_000], run.Left[96_000 + 12_500], 6);
         Assert.Equal(ramp[96_000 + 24_500 - 96_000 + 24_000], run.Left[96_000 + 24_500], 6);
         // Reversed: 500 samples into slice 7 plays 500 samples before its end, of the previous pass (this pass's end is
@@ -794,7 +833,7 @@ public sealed class T2EffectTests {
                 }
             }
         );
-        Assert.Equal(loop, ((RemixFx)effect).RepeatLength);
+        Assert.Equal(loop, effect.RepeatLength);
         // The eighth that began before the touch.
         var start = (int)(Math.Floor(touch / (double)loop) * loop);
         for (var t = start + loop; t < start + 4 * loop; t += 97) {
@@ -842,7 +881,7 @@ public sealed class T2EffectTests {
     [InlineData(RemixFx.TapeStop)]
     public void Remix_pad_two_effects_change_the_sound(int pad) {
         using var effect = Remix((RemixFx.Pad2Active, 1), (RemixFx.Pad2Effect, pad), (RemixFx.Pad2X, 0.7f));
-        var (left, right) = Fx.Music(72_000);
+        var (left, right) = Fx.Music();
         var (l, _) = Fx.Run(effect, left, right);
         Assert.True(NullResidualDb(left.AsSpan(24_000), l.AsSpan(24_000)) > -20);
         Assert.All(l, static s => Assert.True(float.IsFinite(s)));
@@ -857,7 +896,7 @@ public sealed class T2EffectTests {
             (RemixFx.Pad2Y, 1)
         );
         // X 0.3 picks 2 beats: one second at 120 bpm.
-        var tone = TestWav.Sine(1_000, Rate, 2, 0.5f);
+        var tone = TestWav.Sine(1_000, Rate, 2);
         var (l, _) = Fx.Run(effect, tone);
         Assert.Equal(0, Peak(l.AsSpan(Rate + 10)), 6);
         Assert.True(Peak(l.AsSpan(Rate / 4, 2_000)) > 0.3);
@@ -869,14 +908,20 @@ public sealed class T2EffectTests {
     public void T1_delays_take_the_tempo_from_the_transport() {
         using var delay = Fx.Create(StereoDelay.Id, (StereoDelay.Mix, 100), (StereoDelay.LeftFeedback, 0));
         // The tempo parameter says 120; the transport says 100: an eighth is 0.3 s.
-        var run = new TransportRun(delay, Fx.Impulse(30_000), null, _ => 100);
+        var run = new TransportRun(delay, Fx.Impulse(30_000), null, static _ => 100);
         Assert.Equal(14_400, PeakIndex(run.Left, 1, 30_000));
-        using var tape = Fx.Create(TapeDelay.Id, (TapeDelay.Mix, 100), (TapeDelay.Sync, 1), (TapeDelay.Wow, 0), (TapeDelay.Flutter, 0));
-        var tapeRun = new TransportRun(tape, Fx.Impulse(40_000), null, _ => 90);
+        using var tape = Fx.Create(
+            TapeDelay.Id,
+            (TapeDelay.Mix, 100),
+            (TapeDelay.Sync, 1),
+            (TapeDelay.Wow, 0),
+            (TapeDelay.Flutter, 0)
+        );
+        var tapeRun = new TransportRun(tape, Fx.Impulse(40_000), null, static _ => 90);
         Assert.InRange(PeakIndex(tapeRun.Left, 1, 40_000), 24_000 - 3, 24_000 + 3); // a dotted eighth
 
         using var tremolo = (Tremolo)Fx.Create(Tremolo.Id, (Tremolo.Sync, 1), (Tremolo.Note, NoteValues.Quarter));
-        _ = new TransportRun(tremolo, new float[256], null, _ => 90);
+        _ = new TransportRun(tremolo, new float[256], null, static _ => 90);
         Assert.Equal(1.5, tremolo.RateHz, 9);
         using var unsynced = (Tremolo)Fx.Create(Tremolo.Id, (Tremolo.Sync, 1), (Tremolo.Note, NoteValues.Quarter));
         Fx.Run(unsynced, new float[256]);

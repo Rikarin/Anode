@@ -31,7 +31,7 @@ public sealed class PitchCorrection : AudioEffect {
     public const string Id = "anode.pitch-correction";
     public const double MinHz = 80;
     public const double MaxHz = 1_000;
-    public const int Hop = 128;
+    public const int Hop = 256;
     const double Trough = 0.12;
     const double Voicing = 0.25;
     const double QuietPower = 1e-7;
@@ -98,6 +98,7 @@ public sealed class PitchCorrection : AudioEffect {
     double period;
     bool voiced;
     double cents;
+    double ratio = 1;
     double target;
     double smoothing;
     double detune;
@@ -161,6 +162,7 @@ public sealed class PitchCorrection : AudioEffect {
         period = unvoicedPeriod;
         voiced = false;
         cents = 0;
+        ratio = 1;
         target = 0;
         Publish(0);
     }
@@ -218,7 +220,6 @@ public sealed class PitchCorrection : AudioEffect {
         // period ÷ the ratio; a grain covers the output samples within a period of its mark and reads the input at the
         // matching (interpolated) place around the analysis mark. With a ratio of 1 the marks coincide: the input.
         var p = voiced ? period : unvoicedPeriod;
-        var ratio = Math.Pow(2, cents / 1_200);
         var read = now - latency;
         while (synth + p + 1 <= now) {
             while (mark + p <= synth) {
@@ -319,7 +320,7 @@ public sealed class PitchCorrection : AudioEffect {
             found = best;
         }
 
-        var refined = (double)found;
+        double refined = found;
         if (found > 1 && found < maxPeriod + 1) {
             var a = normalised[found - 1];
             var b = normalised[found];
@@ -334,10 +335,10 @@ public sealed class PitchCorrection : AudioEffect {
         period = refined;
         var note = 69 + 12 * Math.Log2(SampleRate / refined / 440);
         var rounded = (int)Math.Round(note);
-        var nearest = (double)rounded;
+        double nearest = rounded;
         var bestDistance = double.MaxValue;
         for (var m = rounded - 6; m <= rounded + 6; m++) {
-            if (inScale[((m % 12) + 12) % 12] && Math.Abs(m - note) < bestDistance) {
+            if (inScale[(m % 12 + 12) % 12] && Math.Abs(m - note) < bestDistance) {
                 bestDistance = Math.Abs(m - note);
                 nearest = m;
             }
@@ -345,11 +346,13 @@ public sealed class PitchCorrection : AudioEffect {
 
         target = (nearest - note) * 100 + detune;
         cents += (target - cents) * smoothing;
+        ratio = Math.Pow(2, cents / 1_200);
     }
 
     void Unvoiced() {
         voiced = false;
         target = 0;
         cents += (target - cents) * smoothing;
+        ratio = Math.Pow(2, cents / 1_200);
     }
 }

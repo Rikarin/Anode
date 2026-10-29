@@ -72,8 +72,7 @@ public sealed class RotorCabinet : AudioEffect {
     /// <summary>The rotors' current rates, in Hz.</summary>
     public (double Horn, double Drum) Rates => (hornRate, drumRate);
 
-    protected override void OnPrepare(float sampleRate) =>
-        hornLine.Allocate((int)Math.Ceiling(0.004 * sampleRate) + 8);
+    protected override void OnPrepare(float sampleRate) => hornLine.Allocate((int)Math.Ceiling(0.004 * sampleRate) + 8);
 
     protected override void OnReset() {
         hornLine.Reset();
@@ -86,8 +85,16 @@ public sealed class RotorCabinet : AudioEffect {
     protected override void Update() {
         crossover = SvfCoefficients.Design(SampleRate, Crossover, 0.70710678118654752);
         var speed = Choice(Speed);
-        var hornTarget = speed switch { 0 => 0, 1 => Value(HornSlow), _ => Value(HornFast) };
-        var drumTarget = speed switch { 0 => 0, 1 => Value(DrumSlow), _ => Value(DrumFast) };
+        var hornTarget = speed switch {
+            0 => 0,
+            1 => Value(HornSlow),
+            _ => Value(HornFast)
+        };
+        var drumTarget = speed switch {
+            0 => 0,
+            1 => Value(DrumSlow),
+            _ => Value(DrumFast)
+        };
         var seconds = Value(Acceleration);
         if (hornRate < 0) {
             hornRate = hornTarget;

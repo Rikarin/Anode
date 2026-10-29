@@ -1,7 +1,7 @@
 using Anode.Dsp.Delays;
 using Anode.Dsp.Filters;
-using Anode.Dsp.Instruments;
 using Anode.Dsp.IO;
+using Anode.Dsp.Instruments;
 using Anode.Dsp.Spectral;
 
 namespace Anode.Dsp.Effects.Space;

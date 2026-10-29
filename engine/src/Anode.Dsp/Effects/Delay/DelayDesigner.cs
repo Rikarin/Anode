@@ -31,7 +31,9 @@ public sealed class DelayDesigner : AudioEffect {
     public const int MaxTaps = 26;
     public const double MaxSeconds = 10;
 
-    static readonly string[] Letters = [..Enumerable.Range(0, MaxTaps).Select(static i => ((char)('A' + i)).ToString())];
+    static readonly string[] Letters =
+        [..Enumerable.Range(0, MaxTaps).Select(static i => ((char)('A' + i)).ToString())];
+
     static readonly EffectParameters P = new();
     public static readonly int TapCount = P.Stepped("taps", "Taps", 1, MaxTaps, 4, string.Empty, MaxTaps - 1);
     public static readonly int Sync = P.Toggle("sync", "Sync", false);
@@ -93,7 +95,7 @@ public sealed class DelayDesigner : AudioEffect {
 
     /// <summary>Tap <paramref name="tap" />'s delay at the current settings, in samples (at least one).</summary>
     public double DelaySamples(int tap) {
-        var ms = (double)Value(Taps[tap].Time);
+        double ms = Value(Taps[tap].Time);
         if (Switch(Sync)) {
             var grid = NoteValues.Seconds(Choice(Grid), HostTempo(Value(Tempo))) * 1_000;
             ms = Math.Round(ms / grid) * grid;

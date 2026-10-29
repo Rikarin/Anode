@@ -11,7 +11,8 @@ namespace Anode.Dsp.Effects.Specialized;
 ///             (even and odd, warmer), and scaled back by the drive: the high band, saturated into its harmonics.
 ///         </item>
 ///         <item>
-///             A second 12 dB/octave high-pass at the frequency removes the asymmetric curve's offset and what the shaper folded down, and Harmonics
+///             A second 12 dB/octave high-pass at the frequency removes the asymmetric curve's offset and what the shaper
+///             folded down, and Harmonics
 ///             (the <c>mix</c> parameter) adds the result to the untouched input: at 0 % the input passes exactly.
 ///         </item>
 ///     </list>

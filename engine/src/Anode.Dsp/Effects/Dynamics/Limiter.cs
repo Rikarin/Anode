@@ -20,7 +20,8 @@ public sealed class Limiter : AudioEffect {
     public static readonly int Release = P.Add("release", "Release", 1, 1_000, 50, "ms");
     public static readonly int TruePeakDetection = P.Toggle("truePeak", "True Peak Detection", true);
 
-    public static EffectDescriptor Info { get; } = P.Describe(Id, "Limiter", EffectCategories.Dynamics, InputGain, Ceiling, Release, Lookahead);
+    public static EffectDescriptor Info { get; } =
+        P.Describe(Id, "Limiter", EffectCategories.Dynamics, InputGain, Ceiling, Release, Lookahead);
 
     readonly LookaheadLimiter limiter = new();
     GainRamp gain;

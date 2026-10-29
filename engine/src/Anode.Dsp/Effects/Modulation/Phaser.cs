@@ -21,7 +21,8 @@ public sealed class Phaser : AudioEffect {
     public static readonly int Spread = P.Add("spread", "Stereo Spread", 0, 180, 90, "°");
     public static readonly int Mix = P.Add("mix", "Mix", 0, 100, 50, "%");
 
-    public static EffectDescriptor Info { get; } = P.Describe(Id, "Phaser", EffectCategories.Modulation, Rate, Depth, Center, Feedback, Mix, Spread);
+    public static EffectDescriptor Info { get; } =
+        P.Describe(Id, "Phaser", EffectCategories.Modulation, Rate, Depth, Center, Feedback, Mix, Spread);
 
     readonly OnePole[] left = new OnePole[MaxStages];
     readonly OnePole[] right = new OnePole[MaxStages];
@@ -112,7 +113,8 @@ public sealed class Tremolo : AudioEffect {
     public static readonly int Shape = P.Choice("shape", "Shape", ["Sine", "Triangle", "Square"], 0);
     public static readonly int Phase = P.Add("phase", "Stereo Phase", 0, 180, 0, "°");
 
-    public static EffectDescriptor Info { get; } = P.Describe(Id, "Tremolo", EffectCategories.Modulation, Rate, Depth, Note, Phase, Shape);
+    public static EffectDescriptor Info { get; } =
+        P.Describe(Id, "Tremolo", EffectCategories.Modulation, Rate, Depth, Note, Phase, Shape);
 
     double phase;
     double step;

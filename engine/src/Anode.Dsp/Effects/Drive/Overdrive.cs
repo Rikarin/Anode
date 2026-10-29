@@ -121,7 +121,8 @@ public sealed class Overdrive : DriveEffect {
     public static readonly int Level = P.Add("level", "Output", -36, 12, -6, "dB");
     public static readonly int Mix = P.Add("mix", "Mix", 0, 100, 100, "%");
 
-    public static EffectDescriptor Info { get; } = P.Describe(Id, "Overdrive", EffectCategories.Distortion, Drive, Tone, Level, Mix);
+    public static EffectDescriptor Info { get; } =
+        P.Describe(Id, "Overdrive", EffectCategories.Distortion, Drive, Tone, Level, Mix);
 
     public Overdrive() : base(Info) { }
 
@@ -148,7 +149,8 @@ public sealed class Distortion : DriveEffect {
     public static readonly int Level = P.Add("level", "Output", -36, 12, -12, "dB");
     public static readonly int Mix = P.Add("mix", "Mix", 0, 100, 100, "%");
 
-    public static EffectDescriptor Info { get; } = P.Describe(Id, "Distortion", EffectCategories.Distortion, Drive, Tone, Level, Mix, Type);
+    public static EffectDescriptor Info { get; } =
+        P.Describe(Id, "Distortion", EffectCategories.Distortion, Drive, Tone, Level, Mix, Type);
 
     int type;
 
@@ -183,7 +185,8 @@ public sealed class Bitcrusher : AudioEffect {
     public static readonly int Level = P.Add("level", "Output", -36, 12, 0, "dB");
     public static readonly int Mix = P.Add("mix", "Mix", 0, 100, 100, "%");
 
-    public static EffectDescriptor Info { get; } = P.Describe(Id, "Bitcrusher", EffectCategories.Distortion, Bits, Downsample, Drive, Mix, Level);
+    public static EffectDescriptor Info { get; } =
+        P.Describe(Id, "Bitcrusher", EffectCategories.Distortion, Bits, Downsample, Drive, Mix, Level);
 
     GainRamp drive;
     GainRamp level;

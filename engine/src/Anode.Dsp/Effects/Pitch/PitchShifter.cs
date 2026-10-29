@@ -14,7 +14,8 @@ namespace Anode.Dsp.Effects.Pitch;
 ///         <item>
 ///             When a head's travel ends it restarts about half a window from the other head, at the offset (within a
 ///             quarter window, at most 12.5 ms either way) where the waveform best matches the other head's: the
-///             normalised cross-correlation of the mono sum over a short segment. So the two heads are in phase while
+///             normalised cross-correlation of the mono sum over a short segment (searched coarse, every fourth lag,
+///             then fine around the best). So the two heads are in phase while
 ///             they crossfade, and a steady tone comes out at exactly the shifted pitch rather than warbling around it
 ///             (the synchronised overlap-add idea applied to the rotating-head shifter).
 ///         </item>
@@ -133,31 +134,43 @@ public sealed class PitchShifter : AudioEffect {
         var reach = (int)Math.Min(window / 4, 0.0125 * SampleRate);
         var segment = (int)Math.Min(256, window / 4);
         var anchor = (int)Math.Round(other);
-        var best = nominal;
+        // Coarse to fine: every fourth lag on every other sample of the segment, then each lag around the best.
+        var best = (int)nominal;
         var bestScore = double.MinValue;
-        for (var lag = (int)nominal - reach; lag <= (int)nominal + reach; lag++) {
+        for (var lag = (int)nominal - reach; lag <= (int)nominal + reach; lag += 4) {
+            Score(lag, 2, ref best, ref bestScore);
+        }
+
+        var coarse = best;
+        bestScore = double.MinValue;
+        for (var lag = coarse - 3; lag <= coarse + 3; lag++) {
+            Score(lag, 1, ref best, ref bestScore);
+        }
+
+        // The fractional part of the other head's delay carries over, so the match is exact between samples too.
+        start[h] = Math.Clamp(other + direction * best, 1, lineMono.Capacity - 4);
+        delay[h] = start[h];
+        return;
+
+        void Score(int lag, int stride, ref int bestLag, ref double score) {
             var candidate = anchor + direction * lag;
             if (candidate < 1 || candidate + segment > lineMono.Capacity) {
-                continue;
+                return;
             }
 
             double sum = 0, energy = 1e-12;
-            for (var k = 0; k < segment; k++) {
+            for (var k = 0; k < segment; k += stride) {
                 var a = lineMono.Read(anchor + k);
                 var b = lineMono.Read(candidate + k);
                 sum += a * b;
                 energy += b * b;
             }
 
-            var score = sum / Math.Sqrt(energy);
-            if (score > bestScore) {
-                bestScore = score;
-                best = lag;
+            var value = sum / Math.Sqrt(energy);
+            if (value > score) {
+                score = value;
+                bestLag = lag;
             }
         }
-
-        // The fractional part of the other head's delay carries over, so the match is exact between samples too.
-        start[h] = Math.Clamp(other + direction * best, 1, lineMono.Capacity - 4);
-        delay[h] = start[h];
     }
 }

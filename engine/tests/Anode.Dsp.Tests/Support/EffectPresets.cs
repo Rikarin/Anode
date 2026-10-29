@@ -55,7 +55,10 @@ public static class EffectPresets {
                 (Multipressor.Bands[3].Threshold, -35), (Multipressor.Bands[3].Ratio, 2),
                 (Multipressor.Bands[3].Gain, 4), (Multipressor.Bands[0].Gain, 3)
             ],
-            Enveloper.Id => [(Enveloper.AttackGain, 80), (Enveloper.ReleaseGain, -50), (Enveloper.Lookahead, 2)],
+            Enveloper.Id => [
+                (Enveloper.AttackGain, 40), (Enveloper.ReleaseGain, -50), (Enveloper.Lookahead, 2),
+                (Enveloper.Output, -6)
+            ],
             Exciter.Id => [(Exciter.Mix, 60), (Exciter.Frequency, 3_000)],
             SubBass.Id => [(SubBass.Mix, 80), (SubBass.Frequency, 110)],
             DelayDesigner.Id => [(DelayDesigner.TapCount, 6), (DelayDesigner.Feedback, 30), (DelayDesigner.Mix, 40)],

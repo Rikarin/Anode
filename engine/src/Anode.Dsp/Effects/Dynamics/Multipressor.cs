@@ -13,7 +13,8 @@ namespace Anode.Dsp.Effects.Dynamics;
 ///             with every band at 0 dB the bands sum to a flat all-pass.
 ///         </item>
 ///         <item>
-///             Per band, a stereo-linked peak detector (instant attack, 30 ms release) feeds the static curve: compression above the threshold
+///             Per band, a stereo-linked peak detector (instant attack, 30 ms release) feeds the static curve: compression
+///             above the threshold
 ///             (<see cref="GainComputer" />, a 6 dB knee), and downward expansion below the expander threshold by its
 ///             ratio, limited to the band's reduction range. The gain moves at the band's attack and release, then the
 ///             band's make-up gain is applied. A band that is off passes at 0 dB.

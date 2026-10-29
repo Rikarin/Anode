@@ -122,8 +122,8 @@ public sealed class PhatFx : AudioEffect {
         ReadOnlySpan<float> sidechainRight
     ) {
         for (var i = 0; i < left.Length; i++) {
-            var l = (double)left[i];
-            var r = (double)right[i];
+            double l = left[i];
+            double r = right[i];
             var peak = Math.Max(Math.Abs(l), Math.Abs(r));
             envelope = peak > envelope ? peak + (envelope - peak) * attack : peak + (envelope - peak) * release;
             l = Shape(shelfLeft.Tick(shelf, l));
