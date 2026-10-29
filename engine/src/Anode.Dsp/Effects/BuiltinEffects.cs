@@ -5,14 +5,17 @@ using Anode.Dsp.Effects.Eq;
 using Anode.Dsp.Effects.Filter;
 using Anode.Dsp.Effects.Metering;
 using Anode.Dsp.Effects.Modulation;
+using Anode.Dsp.Effects.Multi;
+using Anode.Dsp.Effects.Pitch;
 using Anode.Dsp.Effects.Space;
+using Anode.Dsp.Effects.Specialized;
 using Anode.Dsp.Effects.Utility;
 
 namespace Anode.Dsp.Effects;
 
 /// <summary>
-///     Anode's own effects (docs/05-phase-4.md, workstream D: the T1 suite of the plan's §7). The engine lists
-///     <see cref="All" /> in its plugin catalogue.
+///     Anode's own effects: the T1 suite of the plan's §7 (docs/05-phase-4.md, workstream D), then the T2 effects
+///     (docs/07-phase-6.md, workstream D). The engine lists <see cref="All" /> in its plugin catalogue.
 /// </summary>
 public static class BuiltinEffects {
     public static IReadOnlyList<EffectDescriptor> All { get; } = [
@@ -36,7 +39,22 @@ public static class BuiltinEffects {
         AutoFilter.Info,
         LevelMeter.Info,
         LoudnessMeterEffect.Info,
-        MultiMeter.Info
+        MultiMeter.Info,
+        ConvolutionReverb.Info,
+        LinearPhaseEq.Info,
+        Multipressor.Info,
+        Enveloper.Info,
+        Exciter.Info,
+        SubBass.Info,
+        DelayDesigner.Info,
+        PitchShifter.Info,
+        PitchCorrection.Info,
+        Ensemble.Info,
+        RotorCabinet.Info,
+        PhatFx.Info,
+        StepFx.Info,
+        BeatBreaker.Info,
+        RemixFx.Info
     ];
 
     /// <summary>A new, unprepared instance of effect <paramref name="id" />, or null when there is none.</summary>
@@ -63,6 +81,21 @@ public static class BuiltinEffects {
             LevelMeter.Id => new LevelMeter(),
             LoudnessMeterEffect.Id => new LoudnessMeterEffect(),
             MultiMeter.Id => new MultiMeter(),
+            ConvolutionReverb.Id => new ConvolutionReverb(),
+            LinearPhaseEq.Id => new LinearPhaseEq(),
+            Multipressor.Id => new Multipressor(),
+            Enveloper.Id => new Enveloper(),
+            Exciter.Id => new Exciter(),
+            SubBass.Id => new SubBass(),
+            DelayDesigner.Id => new DelayDesigner(),
+            PitchShifter.Id => new PitchShifter(),
+            PitchCorrection.Id => new PitchCorrection(),
+            Ensemble.Id => new Ensemble(),
+            RotorCabinet.Id => new RotorCabinet(),
+            PhatFx.Id => new PhatFx(),
+            StepFx.Id => new StepFx(),
+            BeatBreaker.Id => new BeatBreaker(),
+            RemixFx.Id => new RemixFx(),
             _ => null
         };
 }

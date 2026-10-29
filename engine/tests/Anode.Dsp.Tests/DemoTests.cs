@@ -222,6 +222,127 @@ public sealed class DemoTests {
     }
 
     /// <summary>
+    ///     The T2 effects in use (docs/07-phase-6.md): the synced ones under a 110 bpm transport, Remix FX performed (its
+    ///     pads automated as a performance would), Pitch Correction on a drifting melody, Space with its built-in hall
+    ///     and with an impulse response loaded from a WAV: <c>t2-&lt;name&gt;.wav</c>.
+    /// </summary>
+    [Fact]
+    public void Render_t2_demos() {
+        var folder = Output();
+        var (music, musicRight) = Fx.Music();
+        const int frames = 48_000 * 8;
+        var left = Enumerable.Range(0, frames).Select(i => music[i % music.Length]).ToArray();
+        var right = Enumerable.Range(0, frames).Select(i => musicRight[i % musicRight.Length]).ToArray();
+
+        (float[], float[]) Synced(string id, Action<long, IAudioEffect>? perform = null) {
+            using var effect = Fx.Create(id, EffectPresets.For(id));
+            var run = new TransportRun(effect, left, right, static _ => 110, 0, Play.Block, perform);
+            return (run.Left, run.Right);
+        }
+
+        Save(folder, "t2-step-fx", Synced(Effects.Multi.StepFx.Id));
+        Save(folder, "t2-beat-breaker", Synced(Effects.Multi.BeatBreaker.Id));
+        Save(folder, "t2-phat-fx", Synced(Effects.Multi.PhatFx.Id));
+        Save(
+            folder,
+            "t2-delay-designer-synced",
+            Synced(
+                Effects.Delay.DelayDesigner.Id,
+                static (at, e) => {
+                    if (at == 0) {
+                        e.SetParameter(Effects.Delay.DelayDesigner.Sync, 1);
+                    }
+                }
+            )
+        );
+
+        // Remix FX performed: each second a different touch, both pads moving.
+        Save(
+            folder,
+            "t2-remix-fx",
+            Synced(
+                Effects.Multi.RemixFx.Id,
+                static (at, e) => {
+                    var second = (int)(at / 48_000);
+                    var t = at % 48_000 / 48_000f;
+                    e.SetParameter(Effects.Multi.RemixFx.Pad1Active, second is 1 or 2 or 5 or 6 ? 1 : 0);
+                    e.SetParameter(
+                        Effects.Multi.RemixFx.Pad1Effect,
+                        second < 4 ? Effects.Multi.RemixFx.Filter : Effects.Multi.RemixFx.Wobble
+                    );
+                    e.SetParameter(Effects.Multi.RemixFx.Pad1X, second < 4 ? t : 0.6f);
+                    e.SetParameter(Effects.Multi.RemixFx.Pad1Y, 0.6f);
+                    e.SetParameter(Effects.Multi.RemixFx.Pad2Active, second is 3 or 4 or 7 ? 1 : 0);
+                    e.SetParameter(
+                        Effects.Multi.RemixFx.Pad2Effect,
+                        second switch {
+                            3 => Effects.Multi.RemixFx.Repeater,
+                            4 => Effects.Multi.RemixFx.Gater,
+                            _ => Effects.Multi.RemixFx.TapeStop
+                        }
+                    );
+                    e.SetParameter(Effects.Multi.RemixFx.Pad2X, second == 7 ? 0.3f : 0.6f);
+                    e.SetParameter(Effects.Multi.RemixFx.Pad2Y, 1);
+                }
+            )
+        );
+
+        // A melody sung out of tune (each note up to 40 cents off, drifting), corrected to C major.
+        var melody = new float[48_000 * 6];
+        int[] notes = [60, 62, 64, 65, 67, 69, 71, 72, 71, 69, 67, 65];
+        double phase = 0;
+        for (var i = 0; i < melody.Length; i++) {
+            var n = i / 24_000;
+            var off = 40 * Math.Sin(n * 2.1) + 10 * Math.Sin(i / 9_000.0);
+            var f = 440 * Math.Pow(2, (notes[n % notes.Length] - 69 + off / 100) / 12);
+            phase += f / 48_000;
+            var p = 2 * Math.PI * phase;
+            var envelope = Math.Min(1, i % 24_000 / 400.0) * Math.Min(1, (24_000 - i % 24_000) / 2_000.0);
+            melody[i] = (float)(0.3 * envelope * (Math.Sin(p) + 0.4 * Math.Sin(2 * p) + 0.2 * Math.Sin(3 * p)));
+        }
+
+        Save(folder, "t2-pitch-correction-dry", (melody, melody));
+        using (var correction = Fx.Create(
+                   Effects.Pitch.PitchCorrection.Id,
+                   (Effects.Pitch.PitchCorrection.Scale, 1),
+                   (Effects.Pitch.PitchCorrection.Response, 15)
+               )) {
+            Save(folder, "t2-pitch-correction", Fx.Run(correction, melody, melody));
+        }
+
+        using (var shifter = Fx.Create(Effects.Pitch.PitchShifter.Id, (Effects.Pitch.PitchShifter.Semitones, -12))) {
+            Save(folder, "t2-pitch-shifter-octave-down", Fx.Run(shifter, melody, melody));
+        }
+
+        // Space: the built-in hall, then a WAV impulse response (a short bright room, generated) loaded from a file.
+        using (var space = Fx.Create(Effects.Space.ConvolutionReverb.Id, (Effects.Space.ConvolutionReverb.Mix, 35))) {
+            Save(folder, "t2-space-hall", Fx.Run(space, left, right));
+        }
+
+        var room = new float[2][];
+        for (var c = 0; c < 2; c++) {
+            room[c] = new float[44_100 * 2 / 3];
+            var random = 0xACE1u + (uint)c;
+            for (var i = 0; i < room[c].Length; i++) {
+                random ^= random << 13;
+                random ^= random >> 17;
+                random ^= random << 5;
+                room[c][i] = (random * (2f / uint.MaxValue) - 1) * MathF.Exp(-i / 4_000f);
+            }
+        }
+
+        var irPath = Path.Combine(folder, "t2-room-ir.wav");
+        TestWav.Write(irPath, 44_100, room, true);
+        using (var space = (Effects.Space.ConvolutionReverb)Fx.Create(
+                   Effects.Space.ConvolutionReverb.Id,
+                   (Effects.Space.ConvolutionReverb.Mix, 35)
+               )) {
+            Assert.True(space.LoadFile(irPath));
+            Save(folder, "t2-space-room-ir", Fx.Run(space, left, right));
+        }
+    }
+
+    /// <summary>
     ///     The CPU of one instance of each effect at its <see cref="EffectPresets" /> setting, 48 kHz, 64-frame blocks of
     ///     program material: <c>effects-cpu.txt</c>.
     /// </summary>
@@ -238,8 +359,8 @@ public sealed class DemoTests {
             CultureInfo.InvariantCulture,
             $"{Environment.OSVersion}, {Environment.ProcessorCount} cores, .NET {Environment.Version}"
         );
-        report.AppendLine("| Effect | Id | Median µs | Median % | p99 µs | p99 % |");
-        report.AppendLine("|---|---|---:|---:|---:|---:|");
+        report.AppendLine("| Effect | Id | × real time | Median µs | Median % | p99 µs | p99 % |");
+        report.AppendLine("|---|---|---:|---:|---:|---:|---:|");
         var (music, musicRight) = Fx.Music();
         foreach (var descriptor in BuiltinEffects.All) {
             using var effect = Fx.Create(descriptor.Id, EffectPresets.For(descriptor.Id));
@@ -257,12 +378,15 @@ public sealed class DemoTests {
                 }
             }
 
+            // × real time: how many seconds of stereo audio one core processes per second (from the mean, which is
+            // what a long render costs; FFT effects do their work in bursts, which the p99 shows).
+            var realTime = period / times.Average();
             Array.Sort(times);
             var median = times[times.Length / 2];
             var p99 = times[(int)(times.Length * 0.99)];
             report.AppendLine(
                 CultureInfo.InvariantCulture,
-                $"| {descriptor.Name} | {descriptor.Id} | {median:0.0} | {100 * median / period:0.00} | {p99:0.0} | {100 * p99 / period:0.00} |"
+                $"| {descriptor.Name} | {descriptor.Id} | {realTime:0} | {median:0.0} | {100 * median / period:0.00} | {p99:0.0} | {100 * p99 / period:0.00} |"
             );
         }
 

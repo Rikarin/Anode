@@ -16,7 +16,7 @@ public sealed class LevelMeter : AudioEffect {
     public static readonly int Mode = P.Choice("mode", "Mode", ["Peak", "RMS"], 0);
     public static readonly int Fall = P.Add("fall", "Peak Fall", 3, 60, 20, "dB/s");
 
-    public static EffectDescriptor Info { get; } = P.Describe(Id, "Level Meter", EffectCategories.Metering);
+    public static EffectDescriptor Info { get; } = P.Describe(Id, "Level Meter", EffectCategories.Metering, Fall);
 
     double rms;
     double squareLeft;
@@ -109,7 +109,7 @@ public sealed class LoudnessMeterEffect : AudioEffect {
         P.Choice("reading", "Reading", ["Momentary", "Short-term", "Integrated"], 0);
 
     public static EffectDescriptor Info { get; } =
-        P.Describe(Id, "Loudness Meter", EffectCategories.Metering);
+        P.Describe(Id, "Loudness Meter", EffectCategories.Metering, Shows);
 
     LoudnessMeter meter = new(48_000);
     float momentary = LoudnessMeter.FloorLufs;
@@ -167,7 +167,7 @@ public sealed class MultiMeter : AudioEffect {
     static readonly EffectParameters P = new();
     public static readonly int Integration = P.Add("integration", "Integration", 50, 3_000, 300, "ms");
 
-    public static EffectDescriptor Info { get; } = P.Describe(Id, "MultiMeter", EffectCategories.Metering);
+    public static EffectDescriptor Info { get; } = P.Describe(Id, "MultiMeter", EffectCategories.Metering, Integration);
 
     double coefficient;
     double product;

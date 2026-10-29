@@ -33,7 +33,20 @@ public sealed class TapeDelay : AudioEffect {
     public static readonly int HighCut = P.Add("highCut", "High Cut", 1_000, 20_000, 5_000, "Hz");
     public static readonly int Mix = P.Add("mix", "Mix", 0, 100, 30, "%");
 
-    public static EffectDescriptor Info { get; } = P.Describe(Id, "Tape Delay", EffectCategories.Delay);
+    public static EffectDescriptor Info { get; } = P.Describe(
+        Id,
+        "Tape Delay",
+        EffectCategories.Delay,
+        Mix,
+        Feedback,
+        Time,
+        Note,
+        Wow,
+        Flutter,
+        Saturation,
+        HighCut,
+        LowCut
+    );
 
     readonly DelayLine lineLeft = new();
     readonly DelayLine lineRight = new();
@@ -86,7 +99,7 @@ public sealed class TapeDelay : AudioEffect {
     }
 
     protected override void Update() {
-        var seconds = Switch(Sync) ? NoteValues.Seconds(Choice(Note), Value(Tempo)) : Value(Time) * 0.001;
+        var seconds = Switch(Sync) ? NoteValues.Seconds(Choice(Note), HostTempo(Value(Tempo))) : Value(Time) * 0.001;
         time.Update(Math.Clamp(seconds, 0.001, StereoDelay.MaxSeconds) * SampleRate - 1, glide, Snapping);
         feedback = Value(Feedback) * 0.01f;
         wowDepth = (float)(Value(Wow) * 0.01 * WowSeconds * SampleRate);
