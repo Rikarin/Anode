@@ -415,3 +415,55 @@ Five, in parallel, each on its own branch; they meet only at the contracts above
 3. Run the two-process tests: launch accuracy, MIDI FX, DMD, preview sync.
 4. Run the Playwright golden path for the exit criterion.
 5. Fix the seams.
+
+## Status (2026-10-29)
+
+**Exit criterion met on macOS.** The Playwright golden path `loops-performance-golden-path.spec.ts` passes on the real
+desktop app with the null device and the test pack, with all nine steps. All seven e2e specs pass, twice in a row.
+
+| Criterion | Measured | Limit |
+|---|---|---|
+| Drum loop (100 → 110 bpm): worst onset off the 16th grid | 0.28 ms | 5 ms |
+| Bass loop transposed C → D: first note off D | 2.0 ¢ | — |
+| Pattern hits off where the pattern says (16 of 16 found) | 0.21 ms | 1 ms |
+| Converted MIDI against the pattern | 0.00 ms | 1 ms |
+| Arpeggiator: worst onset off the 16th grid | 0.24 ms | 2 ms |
+| Scene-2 cell launched on the bar, and its performed region | 0.03 ms off the bar | 1 ms |
+
+| Check | Result |
+|---|---|
+| Engine tests (`dotnet test --solution engine/Anode.slnx --max-parallel-test-modules 2`) | 1753 pass, 17 skipped (opt-in) |
+| Engine | Live Loops launches within 1 sample of every quantise boundary, through tempo ramps; 32 tracks with 3 MIDI FX each and 16 playing cells: 50 µs mean of the 1,333 µs callback; no allocations |
+| T2 effects ([docs/effects/T2.md](effects/T2.md)) | Pitch Correction within 0.07 ¢; convolution within 1.9e-6 of direct; Multipressor flat within ±0.05 dB; Step FX and Beat Breaker sample-exact through tempo changes; heaviest, the convolution reverb, 20× real time |
+| T2 instruments and MIDI FX ([docs/instruments/T2.md](instruments/T2.md)) | pitch within 0.03 ¢ (0.14 ¢ Quick Sampler at note 96); organ with rotary 4 % of a 64-frame block for 32 voices; Arpeggiator sample-exact at 90–174 bpm and across a ramp |
+| Content | Anode Essentials (22 files, 6 MB) and the test pack built from Anode's own instruments by `scripts/build-content.mjs` |
+| Editor (`nx run-many -t typecheck lint test build`) | 5 projects pass; Storybook + axe 119 tests |
+| e2e (`nx e2e desktop`) | loops and performance, advanced audio, mixing, arranging, MIDI and Phase 1 golden paths, smoke; twice in a row |
+| Skala, Prettier, generated client | clean |
+
+**Contract changes and decisions at integration:**
+- MIDI FX use the Phase 4 insert commands with `chain: midiEffects`; a Drum Machine Designer's stack takes none (its
+  notes are routed to the pads before any instrument), only its pads.
+- Pad instruments receive the DMD note unchanged: the Drum Synth ignores pitch, and a Quick Sampler pad has
+  `keyFollow` off.
+- `loadInsertFile` and `Insert.file` load an impulse response into the convolution reverb (`IFileEffect`); an IR from
+  outside the project is copied into its `Impulse Responses` folder.
+- Kits are library patches of kind stack, with pads; pack paths are made absolute inside the installed pack.
+- Launching a cell while stopped starts playback, as in Logic; the server activates the cell's track first.
+- `setSmartControl` drags coalesce into one undo step; saving clears the values Compare returns to.
+- Record into Cell record-enables the track and starts recording; the take becomes the cell, in whole bars.
+- A track added among a stack's members goes after them, so a DMD's pads stay together.
+- The Processing dialog's effect menu scrolls (the T2 effects made it taller than the window).
+
+**Open:**
+- Loop preview plays audio loops only; MIDI and pattern loops answer 422.
+- Track alternatives do not carry pattern regions.
+- Moving a track, or adding an aux, can still place it among a stack's members (adding a track no longer does).
+- Kits and loops that point into a removed pack keep their paths into it (loop files themselves are copied into the
+  project).
+- A `stopping` cell event carries only the stop boundary, so an editor that connects while a cell is stopping cannot
+  draw its progress.
+- The Multipressor's per-band gain readings are not sent to the editor.
+- The phase 1 golden path failed once on a `toHaveAttribute` assertion in a full run and did not reproduce in ten.
+- The editor's initial bundle is 1.13 MB against a 1.00 MB budget (a build warning).
+- Linux and Windows.

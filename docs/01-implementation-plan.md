@@ -684,4 +684,5 @@ shared package exists.
    on macOS: see [docs/03-phase-2.md](03-phase-2.md#status-2026-10-28). Phase 3 (alpha) done on macOS: see
    [docs/04-phase-3.md](04-phase-3.md#status-2026-10-28). Phase 4 (beta) done on macOS: see
    [docs/05-phase-4.md](05-phase-4.md#status-2026-10-28). Phase 5 (advanced audio) done on macOS: see
-   [docs/06-phase-5.md](06-phase-5.md#status-2026-10-28).
+   [docs/06-phase-5.md](06-phase-5.md#status-2026-10-28). Phase 6 (loops, patterns and performance) done on macOS:
+   see [docs/07-phase-6.md](07-phase-6.md#status-2026-10-29).
