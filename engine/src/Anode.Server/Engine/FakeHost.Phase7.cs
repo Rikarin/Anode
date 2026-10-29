@@ -59,17 +59,31 @@ public sealed partial class FakeHost {
         switch (message) {
             case SetScriptMessage set:
                 lock (gate) {
+                    // As the host: only a Scripter slot takes a script.
+                    if (!IsScripter(set.TrackId, set.SlotId)) {
+                        return [new ErrorMessage($"MIDI FX slot '{set.SlotId}' is not a Scripter.", "setScript")];
+                    }
+
                     scripts[(set.TrackId, set.SlotId)] = set.Source ?? string.Empty;
                 }
 
-                return [new SlotParametersMessage(set.TrackId, set.SlotId, ScriptParameters(set.Source ?? string.Empty))];
+                return [
+                    new SlotParametersMessage(set.TrackId, set.SlotId, ScriptParameters(set.Source ?? string.Empty))
+                ];
             case SetStepInputForwardMessage forward:
                 lock (gate) {
                     stepInputForward = forward.On;
                 }
 
                 return [];
+            case SetChannelMessage channel:
+                // A Scripter slot whose source is new compiles it (the mixer keeps the strip itself).
+                return [..Compiled(channel.TrackId, channel.Strip)];
             case PreviewRangeMessage range:
+                if (range.EndFrame <= range.StartFrame || range.StartFrame < 0 || !File.Exists(range.Path)) {
+                    return [new ErrorMessage("An empty range, or a file that cannot be read.", "previewRange")];
+                }
+
                 lock (gate) {
                     previewRange = range;
                     preview = range.Path;
@@ -81,9 +95,33 @@ public sealed partial class FakeHost {
         }
     }
 
+    bool IsScripter(int trackId, string slotId) =>
+        tracks.TryGetValue(trackId, out var t)
+        && (t.Strip.MidiEffects ?? []).Any(i => i.Id == slotId && i.PluginId == Anode.Model.Editing.Edits.ScripterId);
+
+    /// <summary>The parameters of each Scripter slot of a strip whose script is new to this host.</summary>
+    List<IpcMessage> Compiled(int trackId, EngineStrip strip) {
+        var replies = new List<IpcMessage>();
+        lock (gate) {
+            foreach (var slot in strip.MidiEffects ?? []) {
+                if (slot is { PluginId: Anode.Model.Editing.Edits.ScripterId, Source: { } source }
+                    && (!scripts.TryGetValue((trackId, slot.Id), out var old) || old != source)) {
+                    scripts[(trackId, slot.Id)] = source;
+                    replies.Add(new SlotParametersMessage(trackId, slot.Id, ScriptParameters(source)));
+                }
+            }
+        }
+
+        return replies;
+    }
+
     /// <summary>
-    ///     A script's parameters from a plain <c>var PluginParameters = [{ name: "…", type: "lin", minValue: …,
-    ///     maxValue: …, defaultValue: …, numberOfSteps: …, valueStrings: ["…"] }, …]</c> literal: enough for tests.
+    ///     A script's parameters from a plain
+    ///     <c>
+    ///         var PluginParameters = [{ name: "…", type: "lin", minValue: …,
+    ///         maxValue: …, defaultValue: …, numberOfSteps: …, valueStrings: ["…"] }, …]
+    ///     </c>
+    ///     literal: enough for tests.
     /// </summary>
     public static IReadOnlyList<EngineParameter> ScriptParameters(string source) {
         var start = source.IndexOf("PluginParameters", StringComparison.Ordinal);
@@ -117,7 +155,8 @@ public sealed partial class FakeHost {
             var (min, max, steps) = type switch {
                 "menu" => (0.0, Math.Max(0, names.Count - 1), Math.Max(1, names.Count - 1)),
                 "checkbox" or "momentary" => (0.0, 1.0, 1),
-                _ => (Number(body, "minValue") ?? 0, Number(body, "maxValue") ?? 1, (int)(Number(body, "numberOfSteps") ?? 0))
+                _ => (Number(body, "minValue") ?? 0, Number(body, "maxValue") ?? 1,
+                    (int)(Number(body, "numberOfSteps") ?? 0))
             };
             parameters.Add(
                 new(
@@ -147,7 +186,7 @@ public sealed partial class FakeHost {
 
     static List<string> ValueStrings(string body) =>
         Regex.Match(body, @"\bvalueStrings\s*:\s*\[([^\]]*)\]") is { Success: true } m
-            ? [..Regex.Matches(m.Groups[1].Value, @"[""']([^""']*)[""']").Select(static x => x.Groups[1].Value)]
+            ? [..Regex.Matches(m.Groups[1].Value, """["']([^"']*)["']""").Select(static x => x.Groups[1].Value)]
             : [];
 
     [GeneratedRegex(@"\{((?:[^{}\[\]]|\[[^\]]*\])*)\}")]

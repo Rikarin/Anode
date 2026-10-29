@@ -42,28 +42,37 @@ public sealed partial class Jobs {
         }
 
         if (operation.Kind == AudioEditKind.ConvertRate) {
-            return operation.TargetRate is { } rate && ProjectDefaults.SampleRates.Contains(rate)
-                ? rate == file.SampleRate
-                    ? throw ProjectException.Unprocessable($"'{file.Name}' is at {rate} Hz already.")
-                    : operation with { StartFrame = 0, EndFrame = file.Frames }
-                : throw ProjectException.Unprocessable(
-                    $"Convert to one of {string.Join(", ", ProjectDefaults.SampleRates)} Hz."
-                );
+            return Conversion(operation, file);
         }
 
-        if (operation.StartFrame < 0 || operation.EndFrame > file.Frames || operation.EndFrame <= operation.StartFrame) {
-            throw ProjectException.Unprocessable($"A selection is inside the file's 0…{file.Frames} frames, not empty.");
+        if (operation.StartFrame < 0
+            || operation.EndFrame > file.Frames
+            || operation.EndFrame <= operation.StartFrame) {
+            throw ProjectException.Unprocessable(
+                $"A selection is inside the file's 0…{file.Frames} frames, not empty."
+            );
         }
 
         if (operation.Value is { } value && !(double.IsFinite(value) && Math.Abs(value) <= 96)) {
             throw ProjectException.Unprocessable($"A level is −96…96 dB, not {value}.");
         }
 
-        if (operation.Curve is { } curve && !(curve is >= -1 and <= 1)) {
-            throw ProjectException.Unprocessable($"A fade's curve is −1…1, not {curve}.");
+        return operation.Curve is { } curve && !(curve is >= -1 and <= 1)
+            ? throw ProjectException.Unprocessable($"A fade's curve is −1…1, not {curve}.")
+            : operation;
+    }
+
+    /// <summary>A rate conversion checked: to another supported rate, over the whole file.</summary>
+    static AudioEditOperation Conversion(AudioEditOperation operation, AudioFile file) {
+        if (operation.TargetRate is not { } rate || !ProjectDefaults.SampleRates.Contains(rate)) {
+            throw ProjectException.Unprocessable(
+                $"Convert to one of {string.Join(", ", ProjectDefaults.SampleRates)} Hz."
+            );
         }
 
-        return operation;
+        return rate == file.SampleRate
+            ? throw ProjectException.Unprocessable($"'{file.Name}' is at {rate} Hz already.")
+            : operation with { StartFrame = 0, EndFrame = file.Frames };
     }
 
     IReadOnlyList<string> EditFileAsync(

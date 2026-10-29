@@ -151,14 +151,7 @@ public static partial class Edits {
             throw new EditException($"Quantise 1…{MaxBatch} regions.");
         }
 
-        if (c.GrooveId is null && c.GridTicks is < 1 or > MaxTick) {
-            throw new EditException($"A grid is 1…{MaxTick} ticks, not {c.GridTicks}.");
-        }
-
-        if (!(c.Strength is >= 0 and <= 1) || (c.GrooveId is null && !(c.Swing is >= 0 and <= 1))) {
-            throw new EditException("Strength and swing are 0…1.");
-        }
-
+        CheckQuantize(c);
         var ops = new List<DeltaOp>();
         var flexed = new HashSet<string>(StringComparer.Ordinal);
         foreach (var id in c.RegionIds.Distinct(StringComparer.Ordinal)) {
@@ -167,12 +160,7 @@ public static partial class Edits {
             var file = FileOf(state, region.FileId);
             var transients = analysis.Rhythm(file)?.Transients
                 ?? throw new EditException($"Quantising audio needs the transients of '{file.Name}': it has none.");
-            // A groove (named, or the groove track's when the track matches it) in place of the grid (Phase 7).
-            var groove = GrooveFor(state, track.Id, c.GrooveId, analysis);
-            Func<long, long> target = groove is null
-                ? at => Quantize.Tick(at, c.GridTicks, c.Strength, c.Swing)
-                : at => MidiAlgorithms.Current.GrooveTarget(groove, at, c.Strength).Tick;
-            var markers = QuantizedMarkers(state, region, file, transients, target);
+            var markers = QuantizedMarkers(state, region, file, transients, Target(state, track, c, analysis));
             if (!track.FlexOn && flexed.Add(track.Id)) {
                 ops.Add(new TrackUpserted(track with { FlexOn = true }, state.IndexOfTrack(track.Id)));
             }
@@ -181,6 +169,27 @@ public static partial class Edits {
         }
 
         return ops;
+    }
+
+    static void CheckQuantize(QuantizeAudioCommand c) {
+        if (c.GrooveId is null && c.GridTicks is < 1 or > MaxTick) {
+            throw new EditException($"A grid is 1…{MaxTick} ticks, not {c.GridTicks}.");
+        }
+
+        if (!(c.Strength is >= 0 and <= 1) || (c.GrooveId is null && !(c.Swing is >= 0 and <= 1))) {
+            throw new EditException("Strength and swing are 0…1.");
+        }
+    }
+
+    /// <summary>
+    ///     Where a quantise moves a tick on a track: towards a groove (named, or the groove track's when the track
+    ///     matches it; Phase 7), else the grid.
+    /// </summary>
+    static Func<long, long> Target(ProjectState state, Track track, QuantizeAudioCommand c, IAnalysisSource analysis) {
+        var groove = GrooveFor(state, track.Id, c.GrooveId, analysis);
+        return groove is null
+            ? at => Quantize.Tick(at, c.GridTicks, c.Strength, c.Swing)
+            : at => MidiAlgorithms.Current.GrooveTarget(groove, at, c.Strength).Tick;
     }
 
     /// <summary>Markers on a region's transients, quantised (each strictly inside it and after the one before).</summary>

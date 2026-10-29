@@ -104,7 +104,42 @@ public static partial class Edits {
         }
 
         var regions = c.RegionIds.Distinct(StringComparer.Ordinal).Select(id => MidiRegionOf(state, id)).ToArray();
-        var selection = c.NoteIds is null && c.ControlIds is null;
+        var (notes, controls, owner) = Gathered(regions, c);
+        var result = MidiAlgorithms.Current.Transform(notes, controls, set, state.SignatureMap);
+        var changedNotes = Placed(
+            result.Notes,
+            owner,
+            static n => n.Id,
+            static (n, r) => n with { StartTick = n.StartTick - r.StartTick },
+            static (r, n) => CheckNote(r, n, true)
+        );
+        var changedControls = Placed(
+            result.Controls,
+            owner,
+            static e => e.Id,
+            static (e, r) => e with { Tick = e.Tick - r.StartTick },
+            CheckControl
+        );
+        return [
+            ..regions.Select(r => new MidiRegionUpserted(
+                    r with {
+                        Notes = Sorted(r.Notes.Select(n => changedNotes.GetValueOrDefault(n.Id, n))),
+                        Controls = Sorted(r.Controls.Select(e => changedControls.GetValueOrDefault(e.Id, e)))
+                    }
+                )
+            )
+        ];
+    }
+
+    /// <summary>
+    ///     The events a transform works on (the selection named, else every event of the regions) in project ticks,
+    ///     and the region of each by id.
+    /// </summary>
+    static (List<Note> Notes, List<ControlEvent> Controls, Dictionary<long, MidiRegion> Owner) Gathered(
+        MidiRegion[] regions,
+        TransformCommand c
+    ) {
+        var all = c.NoteIds is null && c.ControlIds is null;
         var noteIds = Selected(regions.SelectMany(static r => r.Notes.Select(static n => n.Id)), c.NoteIds, "note");
         var controlIds = Selected(
             regions.SelectMany(static r => r.Controls.Select(static e => e.Id)),
@@ -115,45 +150,38 @@ public static partial class Edits {
         var notes = new List<Note>();
         var controls = new List<ControlEvent>();
         foreach (var region in regions) {
-            foreach (var note in region.Notes.Where(n => selection || noteIds.Contains(n.Id))) {
+            foreach (var note in region.Notes.Where(n => all || noteIds.Contains(n.Id))) {
                 owner[note.Id] = region;
                 notes.Add(note with { StartTick = region.StartTick + note.StartTick });
             }
 
-            foreach (var control in region.Controls.Where(e => selection || controlIds.Contains(e.Id))) {
+            foreach (var control in region.Controls.Where(e => all || controlIds.Contains(e.Id))) {
                 owner[control.Id] = region;
                 controls.Add(control with { Tick = region.StartTick + control.Tick });
             }
         }
 
-        var result = MidiAlgorithms.Current.Transform(notes, controls, set, state.SignatureMap);
-        var changedNotes = new Dictionary<long, Note>();
-        foreach (var note in result.Notes) {
-            if (note is not null && owner.TryGetValue(note.Id, out var region)) {
-                var relative = note with { StartTick = note.StartTick - region.StartTick };
-                CheckNote(region, relative, true);
-                changedNotes[note.Id] = relative;
+        return (notes, controls, owner);
+    }
+
+    /// <summary>Transformed events back in their regions' ticks, checked, by id.</summary>
+    static Dictionary<long, T> Placed<T>(
+        IReadOnlyList<T> events,
+        Dictionary<long, MidiRegion> owner,
+        Func<T, long> id,
+        Func<T, MidiRegion, T> relative,
+        Action<MidiRegion, T> check
+    ) where T : class {
+        var placed = new Dictionary<long, T>();
+        foreach (var e in events) {
+            if (e is not null && owner.TryGetValue(id(e), out var region)) {
+                var moved = relative(e, region);
+                check(region, moved);
+                placed[id(e)] = moved;
             }
         }
 
-        var changedControls = new Dictionary<long, ControlEvent>();
-        foreach (var control in result.Controls) {
-            if (control is not null && owner.TryGetValue(control.Id, out var region)) {
-                var relative = control with { Tick = control.Tick - region.StartTick };
-                CheckControl(region, relative);
-                changedControls[control.Id] = relative;
-            }
-        }
-
-        return [
-            ..regions.Select(r => new MidiRegionUpserted(
-                    r with {
-                        Notes = Sorted(r.Notes.Select(n => changedNotes.GetValueOrDefault(n.Id, n))),
-                        Controls = Sorted(r.Controls.Select(e => changedControls.GetValueOrDefault(e.Id, e)))
-                    }
-                )
-            )
-        ];
+        return placed;
     }
 
     /// <summary>The ids named (each one of <paramref name="existing" />), or none when none are named.</summary>
@@ -187,16 +215,25 @@ public static partial class Edits {
             throw new EditException($"A Transform set has 0…{MaxTransformRules} conditions and operations.");
         }
 
-        foreach (var condition in conditions) {
-            if (condition is null
-                || !Enum.IsDefined(condition.Field)
-                || !Enum.IsDefined(condition.Op)
-                || !double.IsFinite(condition.A)
-                || !double.IsFinite(condition.B)) {
-                throw new EditException("A Transform condition names a field, a comparison and finite values.");
-            }
+        if (conditions.Any(static c => c is null
+                || !Enum.IsDefined(c.Field)
+                || !Enum.IsDefined(c.Op)
+                || !double.IsFinite(c.A)
+                || !double.IsFinite(c.B)
+            )) {
+            throw new EditException("A Transform condition names a field, a comparison and finite values.");
         }
 
+        CheckOperations(operations);
+        if (set.Map is { } map && (map.Count != 128 || map.Any(static v => v is < 0 or > 127))) {
+            throw new EditException("A Transform map has 128 values, each 0…127.");
+        }
+
+        return set with { Name = set.Name ?? string.Empty, Id = set.Id ?? string.Empty };
+    }
+
+    /// <summary>Operations well formed, on the fields operations change, at most one per field.</summary>
+    static void CheckOperations(IReadOnlyList<TransformOperation> operations) {
         var fields = new HashSet<TransformField>();
         foreach (var operation in operations) {
             if (operation is null
@@ -215,12 +252,6 @@ public static partial class Edits {
                 throw new EditException($"A Transform set has one operation per field, not two on {operation.Field}.");
             }
         }
-
-        if (set.Map is { } map && (map.Count != 128 || map.Any(static v => v is < 0 or > 127))) {
-            throw new EditException("A Transform map has 128 values, each 0…127.");
-        }
-
-        return set with { Name = set.Name ?? string.Empty, Id = set.Id ?? string.Empty };
     }
 
     static DeltaOp[] MakeGroove(ProjectState state, MakeGrooveCommand c, IIdSource ids, IAnalysisSource analysis) {
@@ -275,7 +306,8 @@ public static partial class Edits {
         var end = region.FileOffset + region.Length;
         return [
             ..onsets.Where(o => o.Frame >= region.FileOffset && o.Frame < end)
-                .Select(o => new GrooveOnsetTick((long)Math.Round(timing.TickAt(o.Frame)), Math.Clamp(o.Strength, 0, 1)))
+                .Select(o => new GrooveOnsetTick((long)Math.Round(timing.TickAt(o.Frame)), Math.Clamp(o.Strength, 0, 1))
+                )
         ];
     }
 
@@ -464,6 +496,21 @@ public static partial class Edits {
             );
         }
 
+        var named = Articulations(articulations);
+        var ids = named.Select(static a => a.Id).ToHashSet();
+        foreach (var s in switches) {
+            CheckSwitch(s, ids);
+        }
+
+        foreach (var o in outputs) {
+            CheckOutput(o, ids);
+        }
+
+        return set with { Name = name, Articulations = named, Switches = [..switches], Outputs = [..outputs] };
+    }
+
+    /// <summary>A set's articulations checked: ids 1…254, unique, names, short symbols.</summary>
+    static List<Articulation> Articulations(IReadOnlyList<Articulation> articulations) {
         var ids = new HashSet<int>();
         var named = new List<Articulation>();
         foreach (var a in articulations) {
@@ -478,36 +525,36 @@ public static partial class Edits {
             named.Add(a with { Name = Name(a.Name ?? string.Empty, "articulation name") });
         }
 
-        foreach (var s in switches) {
-            if (s is null || !ids.Contains(s.ArticulationId) || !Enum.IsDefined(s.Kind)) {
-                throw new EditException("A switch selects an articulation of its set, by a note or a control change.");
-            }
+        return named;
+    }
 
-            if (s.Number is < 0 or > 127 || s.Value is < 0 or > 127) {
-                throw new EditException("A switch's key or controller, and its value, are 0…127.");
-            }
+    static void CheckSwitch(ArticulationSwitch? s, HashSet<int> ids) {
+        if (s is null || !ids.Contains(s.ArticulationId) || !Enum.IsDefined(s.Kind)) {
+            throw new EditException("A switch selects an articulation of its set, by a note or a control change.");
         }
 
-        foreach (var o in outputs) {
-            if (o is null || !ids.Contains(o.ArticulationId) || !Enum.IsDefined(o.Kind)) {
-                throw new EditException("An output belongs to an articulation of its set, and has a kind.");
-            }
+        if (s.Number is < 0 or > 127 || s.Value is < 0 or > 127) {
+            throw new EditException("A switch's key or controller, and its value, are 0…127.");
+        }
+    }
 
-            var ok = o.Kind switch {
-                ArticulationOutputKind.Note => o.Number is >= 0 and <= 127 && o.Value is >= 1 and <= 127,
-                ArticulationOutputKind.ControlChange => o.Number is >= 0 and <= 127 && o.Value is >= 0 and <= 127,
-                ArticulationOutputKind.Program => o.Number == 0 && o.Value is >= 0 and <= 127,
-                _ => o.Number == 0 && o.Value is >= 1 and <= 16
-            };
-            if (!ok) {
-                throw new EditException(
-                    $"A {o.Kind} output's number and value are out of range (a keyswitch: key 0…127 at velocity "
-                    + "1…127; a control change: 0…127 and 0…127; a program: number 0, 0…127; a channel: number 0, 1…16)."
-                );
-            }
+    static void CheckOutput(ArticulationOutput? o, HashSet<int> ids) {
+        if (o is null || !ids.Contains(o.ArticulationId) || !Enum.IsDefined(o.Kind)) {
+            throw new EditException("An output belongs to an articulation of its set, and has a kind.");
         }
 
-        return set with { Name = name, Articulations = named, Switches = [..switches], Outputs = [..outputs] };
+        var ok = o.Kind switch {
+            ArticulationOutputKind.Note => o.Number is >= 0 and <= 127 && o.Value is >= 1 and <= 127,
+            ArticulationOutputKind.ControlChange => o.Number is >= 0 and <= 127 && o.Value is >= 0 and <= 127,
+            ArticulationOutputKind.Program => o.Number == 0 && o.Value is >= 0 and <= 127,
+            _ => o.Number == 0 && o.Value is >= 1 and <= 16
+        };
+        if (!ok) {
+            throw new EditException(
+                $"A {o.Kind} output's number and value are out of range (a keyswitch: key 0…127 at velocity "
+                + "1…127; a control change: 0…127 and 0…127; a program: number 0, 0…127; a channel: number 0, 1…16)."
+            );
+        }
     }
 
     static List<DeltaOp> DeleteArticulationSet(ProjectState state, DeleteArticulationSetCommand c) {
@@ -548,31 +595,26 @@ public static partial class Edits {
 
         CheckSetId(set.Id, "lane set");
         var name = Name(set.Name ?? string.Empty, "lane set name");
-        if (set.Lanes is not { Count: <= MaxLanes } lanes) {
-            throw new EditException($"A lane set has 0…{MaxLanes} lanes.");
+        return set.Lanes is { Count: <= MaxLanes } lanes
+            ? set with { Name = name, Lanes = [..lanes.Select(CheckedLane)] }
+            : throw new EditException($"A lane set has 0…{MaxLanes} lanes.");
+    }
+
+    static Lane CheckedLane(Lane? lane) {
+        if (lane is null || !Enum.IsDefined(lane.Kind)) {
+            throw new EditException("A lane has a kind.");
         }
 
-        var checkedLanes = new List<Lane>();
-        foreach (var lane in lanes) {
-            if (lane is null || !Enum.IsDefined(lane.Kind)) {
-                throw new EditException("A lane has a kind.");
-            }
-
-            var numbered = lane.Kind is LaneKind.ControlChange or LaneKind.PolyPressure or LaneKind.Note;
-            if (numbered ? lane.Number is not (>= 0 and <= 127) : lane.Number is not null) {
-                throw new EditException(
-                    $"A {lane.Kind} lane {(numbered ? "names a controller or key 0…127" : "takes no number")}."
-                );
-            }
-
-            if (lane.ResolutionTicks is < 1 or > MaxQuantizeTicks) {
-                throw new EditException($"A lane's resolution is 1…{MaxQuantizeTicks} ticks.");
-            }
-
-            checkedLanes.Add(lane with { Name = Name(lane.Name ?? string.Empty, "lane name") });
+        var numbered = lane.Kind is LaneKind.ControlChange or LaneKind.PolyPressure or LaneKind.Note;
+        if (numbered ? lane.Number is not (>= 0 and <= 127) : lane.Number is not null) {
+            throw new EditException(
+                $"A {lane.Kind} lane {(numbered ? "names a controller or key 0…127" : "takes no number")}."
+            );
         }
 
-        return set with { Name = name, Lanes = checkedLanes };
+        return lane.ResolutionTicks is < 1 or > MaxQuantizeTicks
+            ? throw new EditException($"A lane's resolution is 1…{MaxQuantizeTicks} ticks.")
+            : lane with { Name = Name(lane.Name ?? string.Empty, "lane name") };
     }
 
     /// <summary>
@@ -581,7 +623,8 @@ public static partial class Edits {
     ///     at or before the position.
     /// </summary>
     static DeltaOp[] StepNotes(ProjectState state, StepNotesCommand c, IIdSource ids) {
-        if (c.Pitches is not { Count: > 0 and <= MaxStepPitches } pitches || pitches.Distinct().Count() != pitches.Count) {
+        if (c.Pitches is not { Count: > 0 and <= MaxStepPitches } pitches
+            || pitches.Distinct().Count() != pitches.Count) {
             throw new EditException($"A step has 1…{MaxStepPitches} different pitches.");
         }
 
@@ -594,53 +637,21 @@ public static partial class Edits {
         }
 
         CheckLength(length, "step");
-        var bars = state.SignatureMap;
-        var end = position + length;
-        MidiRegion region;
-        if (c.RegionId is not null) {
-            region = MidiRegionOf(state, c.RegionId);
-            if (position < region.StartTick) {
-                throw new EditException($"Tick {position} is before region '{region.Name}' starts.");
-            }
-
-            if (end > region.StartTick + region.LengthTicks) {
-                region = region with { LengthTicks = bars.BarLineAtOrAfter(end) - region.StartTick };
-            }
-        } else if (c.TrackId is not null) {
-            var track = TrackOf(state, c.TrackId);
-            if (!HoldsMidi(track) || track.FrozenFileId is not null) {
-                throw new EditException($"Track '{track.Name}' takes no step input.");
-            }
-
-            var start = bars.BarLineAtOrBefore(position);
-            region = new(
-                ids.Next(IdPrefix.MidiRegion),
-                track.Id,
-                track.Name,
-                start,
-                Math.Max(SignatureMap.BarTicks(bars.At(start)), bars.BarLineAtOrAfter(end) - start),
-                ProjectDefaults.Playback,
-                [],
-                [],
-                false
-            );
-        } else {
-            throw new EditException("A step goes into a region or onto a track.");
-        }
-
+        var region = StepRegion(state, c, position, position + length, ids);
         CheckCapacity(region, pitches.Count);
         var next = state.LastEventId;
-        var notes = pitches.Select(p => new Note(
-                ++next,
-                p,
-                c.Velocity ?? DefaultStepVelocity,
-                c.Channel ?? 1,
-                position - region.StartTick,
-                length,
-                0
+        Note[] added = [
+            ..pitches.Select(p => new Note(
+                    ++next,
+                    p,
+                    c.Velocity ?? DefaultStepVelocity,
+                    c.Channel ?? 1,
+                    position - region.StartTick,
+                    length,
+                    0
+                )
             )
-        );
-        var added = notes.ToArray();
+        ];
         foreach (var note in added) {
             CheckNote(region, note, true);
         }
@@ -648,10 +659,48 @@ public static partial class Edits {
         return [new MidiRegionUpserted(region with { Notes = Sorted([..region.Notes, ..added]) })];
     }
 
+    /// <summary>
+    ///     The region a step goes into: <c>regionId</c>, lengthened to the bar line after the step when it passes the
+    ///     end, or a new one on <c>trackId</c> from the bar line at or before the step.
+    /// </summary>
+    static MidiRegion StepRegion(ProjectState state, StepNotesCommand c, long position, long end, IIdSource ids) {
+        var bars = state.SignatureMap;
+        if (c.RegionId is not null) {
+            var region = MidiRegionOf(state, c.RegionId);
+            if (position < region.StartTick) {
+                throw new EditException($"Tick {position} is before region '{region.Name}' starts.");
+            }
+
+            return end > region.StartTick + region.LengthTicks
+                ? region with { LengthTicks = bars.BarLineAtOrAfter(end) - region.StartTick }
+                : region;
+        }
+
+        var track = TrackOf(state, c.TrackId ?? throw new EditException("A step goes into a region or onto a track."));
+        if (!HoldsMidi(track) || track.FrozenFileId is not null) {
+            throw new EditException($"Track '{track.Name}' takes no step input.");
+        }
+
+        var start = bars.BarLineAtOrBefore(position);
+        return new(
+            ids.Next(IdPrefix.MidiRegion),
+            track.Id,
+            track.Name,
+            start,
+            Math.Max(SignatureMap.BarTicks(bars.At(start)), bars.BarLineAtOrAfter(end) - start),
+            ProjectDefaults.Playback,
+            [],
+            [],
+            false
+        );
+    }
+
     /// <summary>A tie: the last step's notes (as the server resolved them) last one step longer.</summary>
     static DeltaOp[] StepTie(ProjectState state, StepTieCommand c) {
         if (c.RegionId is null || c.NoteIds is not { Count: > 0 } || c.LengthTicks is not { } length) {
-            throw new EditException("A tie needs its region, notes and length (the server fills them from step input).");
+            throw new EditException(
+                "A tie needs its region, notes and length (the server fills them from step input)."
+            );
         }
 
         var region = MidiRegionOf(state, c.RegionId);
@@ -696,7 +745,9 @@ public static partial class Edits {
         }
 
         if (!ProjectDefaults.SampleRates.Contains(rate)) {
-            throw new EditException($"Sample rate {rate} Hz is not one of {string.Join(", ", ProjectDefaults.SampleRates)}.");
+            throw new EditException(
+                $"Sample rate {rate} Hz is not one of {string.Join(", ", ProjectDefaults.SampleRates)}."
+            );
         }
 
         foreach (var region in state.Regions.Values.Where(r => r.FileId == file.Id)) {
@@ -706,9 +757,7 @@ public static partial class Edits {
         }
 
         return [
-            new AudioFileUpserted(
-                file with { Version = c.Version, Path = path, Frames = frames, SampleRate = rate }
-            )
+            new AudioFileUpserted(file with { Version = c.Version, Path = path, Frames = frames, SampleRate = rate })
         ];
     }
 
@@ -733,7 +782,7 @@ public static partial class Edits {
         }
 
         if (state.TakeFolders.Values.Any(f => f.Takes.Any(t => t.FileId == fileId))
-            || state.Tracks.Any(t => t.Alternatives.Any(a => a.Regions.Any(r => r.FileId == fileId)
+            || state.Tracks.Exists(t => t.Alternatives.Any(a => a.Regions.Any(r => r.FileId == fileId)
                     || a.TakeFolders.Any(f => f.Takes.Any(x => x.FileId == fileId))
                 )
             )
@@ -793,15 +842,18 @@ public static partial class Edits {
         }
 
         var ratio = (double)rate / file.SampleRate;
-        long Scale(long frame) => (long)Math.Round(frame * ratio);
         return region with {
             FileOffset = Scale(region.FileOffset),
             Length = Math.Max(1, Scale(region.FileOffset + region.Length) - Scale(region.FileOffset)),
             FlexMarkers = [..region.FlexMarkers.Select(m => m with { FileFrame = Scale(m.FileFrame) })],
             PitchNotes = [
-                ..region.PitchNotes.Select(n => n with { StartFrame = Scale(n.StartFrame), EndFrame = Scale(n.EndFrame) })
+                ..region.PitchNotes.Select(n => n with {
+                        StartFrame = Scale(n.StartFrame), EndFrame = Scale(n.EndFrame)
+                    }
+                )
             ]
         };
+        long Scale(long frame) => (long)Math.Round(frame * ratio);
     }
 
     static DeltaOp[] SetScript(ProjectState state, SetScriptCommand c) {
@@ -827,7 +879,8 @@ public static partial class Edits {
     /// <summary>
     ///     A MIDI FX slot's run-time parameter list as the host reported it (a script compiled): stored in
     ///     <c>runtimeParameters</c>, with the values kept by id (a parameter new to the slot starts at its default; one
-    ///     the script no longer defines goes). Null when the track or slot is gone, or nothing changes.
+    ///     the script no longer defines keeps its value, so a script that failed to compile, which reports none, gets
+    ///     them back when it is fixed). Null when the track or slot is gone, or nothing changes.
     /// </summary>
     public static TrackUpserted? WithRuntimeParameters(
         ProjectState state,
@@ -843,13 +896,15 @@ public static partial class Edits {
         var list = parameters.Where(static p => p?.Id is { Length: > 0 and <= MaxParameterIdLength })
             .DistinctBy(static p => p.Id)
             .ToArray();
-        var values = PluginCatalog.Sorted(
-            list.ToDictionary(
-                static p => p.Id,
-                p => slot.Parameters.TryGetValue(p.Id, out var kept) ? Math.Clamp(kept, p.Min, p.Max) : p.Default,
-                StringComparer.Ordinal
-            )
-        );
+        // Every value stays by id, so a script that failed to compile (an empty list) gets them back once fixed.
+        var values = PluginCatalog.Sorted(slot.Parameters);
+        foreach (var p in list) {
+            values = values.SetItem(
+                p.Id,
+                slot.Parameters.TryGetValue(p.Id, out var kept) ? Math.Clamp(kept, p.Min, p.Max) : p.Default
+            );
+        }
+
         var changed = slot with { RuntimeParameters = list, Parameters = values };
         if (slot.RuntimeParameters is { } old
             && old.SequenceEqual(list)

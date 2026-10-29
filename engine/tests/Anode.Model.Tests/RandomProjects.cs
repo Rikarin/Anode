@@ -164,7 +164,19 @@ static class RandomProjects {
                 false
             ),
             // Phase 7: Scripter, whose parameters a script defines at run time.
-            new(Edits.ScripterId, "Scripter", "Anode", "1.0", PluginFormat.Builtin, false, [], [], "MIDI Effect", false, false)
+            new(
+                Edits.ScripterId,
+                "Scripter",
+                "Anode",
+                "1.0",
+                PluginFormat.Builtin,
+                false,
+                [],
+                [],
+                "MIDI Effect",
+                false,
+                false
+            )
         ]
     );
 
@@ -444,7 +456,8 @@ static class RandomProjects {
         var grooves = s.Grooves.Values.ToArray();
         var articulationSets = s.ArticulationSets.Values.ToArray();
         var laneSets = s.LaneSets.Values.ToArray();
-        var scripted = tracks.SelectMany(static t => t.Strip.MidiEffects.Where(static i => i.PluginId == Edits.ScripterId)
+        var scripted = tracks.SelectMany(static t => t.Strip.MidiEffects
+                .Where(static i => i.PluginId == Edits.ScripterId)
                 .Select(i => (Track: t, Slot: i))
             )
             .ToArray();
@@ -527,7 +540,7 @@ static class RandomProjects {
                     Maybe(Math.Round(r.NextDouble(), 2)),
                     Maybe(Math.Round(r.NextDouble(), 2)),
                     Maybe(r.Next(2) == 0),
-                    r.Next(3) > 0 ? null : grooves.Length == 0 || r.Next(4) == 0 ? "" : Pick(r, grooves).Id
+                    r.Next(3) > 0 ? null : grooves.Length == 0 || r.Next(4) == 0 ? string.Empty : Pick(r, grooves).Id
                 )
                 : null,
             nameof(AddNotesCommand) => MidiRegion() is { } m
@@ -1001,7 +1014,9 @@ static class RandomProjects {
             nameof(SetMatchGrooveCommand) => Track() is { } t ? new SetMatchGrooveCommand(t, r.Next(3) > 0) : null,
             nameof(SetArticulationSetCommand) => new SetArticulationSetCommand(
                 RandomArticulationSet(
-                    articulationSets.Length > 0 && r.Next(2) == 0 ? Pick(r, articulationSets).Id : $"ars_r{r.Next(1000)}",
+                    articulationSets.Length > 0 && r.Next(2) == 0
+                        ? Pick(r, articulationSets).Id
+                        : $"ars_r{r.Next(1000)}",
                     r
                 )
             ),
@@ -1184,10 +1199,18 @@ static class RandomProjects {
                 "Random",
                 r.Next(2) == 0
                     ? []
-                    : [new(Pick(r, [TransformField.Pitch, TransformField.Velocity, TransformField.Status]), TransformConditionOp.GreaterEqual, r.Next(0, 128))],
+                    : [
+                        new(
+                            Pick(r, [TransformField.Pitch, TransformField.Velocity, TransformField.Status]),
+                            TransformConditionOp.GreaterEqual,
+                            r.Next(0, 128)
+                        )
+                    ],
                 operations,
                 null,
-                r.Next(12) == 0 ? TransformMode.SelectOnly : Pick(r, [TransformMode.OperateOnly, TransformMode.SelectAndOperate]),
+                r.Next(12) == 0
+                    ? TransformMode.SelectOnly
+                    : Pick(r, [TransformMode.OperateOnly, TransformMode.SelectAndOperate]),
                 r.Next()
             ),
             r.Next(3) == 0 && region.Notes.Count > 0 ? [..Some(region.Notes, r).Select(static n => n.Id)] : null
@@ -1206,7 +1229,7 @@ static class RandomProjects {
             [
                 ..Enumerable.Range(0, count)
                     .Select(n => new GroovePoint(
-                            n * step + (n % 2 == 1 ? r.Next(0, (int)step / 2) : 0),
+                            n * step + ((n & 1) == 1 ? r.Next(0, (int)step / 2) : 0),
                             Math.Round(r.NextDouble(), 2)
                         )
                     )
@@ -1251,13 +1274,15 @@ static class RandomProjects {
             [
                 ..Enumerable.Range(0, r.Next(0, 5))
                     .Select(_ => Pick(r, Enum.GetValues<LaneKind>()) is var kind
-                        ? new Lane(
-                            kind,
-                            kind is LaneKind.ControlChange or LaneKind.PolyPressure or LaneKind.Note ? r.Next(128) : null,
-                            kind.ToString(),
-                            Pick(r, [60L, 120, 240, 480])
-                        )
-                        : null!
+                            ? new Lane(
+                                kind,
+                                kind is LaneKind.ControlChange or LaneKind.PolyPressure or LaneKind.Note
+                                    ? r.Next(128)
+                                    : null,
+                                kind.ToString(),
+                                Pick(r, [60L, 120, 240, 480])
+                            )
+                            : null!
                     )
             ]
         );
@@ -1398,7 +1423,9 @@ static class RandomProjects {
             ];
 
         public IReadOnlyList<(long Frame, double Strength)>? Onsets(AudioFile file) =>
-            Rhythm(file) is { } rhythm ? [..rhythm.Transients.Select(static (f, i) => (f, i % 4 == 0 ? 1 : 0.6))] : null;
+            Rhythm(file) is { } rhythm
+                ? [..rhythm.Transients.Select(static (f, i) => (f, i % 4 == 0 ? 1 : 0.6))]
+                : null;
     }
 
     /// <summary>A pattern for a track (pad rows on a drum machine), mostly in range, sometimes not.</summary>

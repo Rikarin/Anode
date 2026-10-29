@@ -72,7 +72,10 @@ static class MidiEditApi {
             .WithSummary("The articulation sets saved in the user library.");
         library.MapPost(
                 "/articulation-sets",
-                static Results<Ok<ArticulationSet>, ProblemHttpResult>(ArticulationSet set, MidiEditLibraries libraries) =>
+                static Results<Ok<ArticulationSet>, ProblemHttpResult>(
+                    ArticulationSet set,
+                    MidiEditLibraries libraries
+                ) =>
                     TypedResults.Ok(libraries.ArticulationSets.Save(set))
             )
             .WithName("SaveArticulationSet")
@@ -140,7 +143,9 @@ static class MidiEditApi {
                         || request.StartFrame < 0
                         || request.EndFrame > file.Frames
                         || request.EndFrame <= request.StartFrame) {
-                        throw ProjectException.Unprocessable($"Preview a range inside the file's 0…{file.Frames} frames.");
+                        throw ProjectException.Unprocessable(
+                            $"Preview a range inside the file's 0…{file.Frames} frames."
+                        );
                     }
 
                     engine.PreviewRange(

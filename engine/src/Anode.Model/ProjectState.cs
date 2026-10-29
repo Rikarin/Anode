@@ -302,7 +302,11 @@ public sealed record ProjectState(
             AutomationLaneUpserted or AutomationLaneRemoved or GroupUpserted or GroupRemoved => InverseMixer(op),
             PatternRegionUpserted or PatternRegionRemoved => InversePattern(op),
             LiveLoopsChanged => new LiveLoopsChanged(LiveLoops),
-            GrooveUpserted or GrooveRemoved or ArticulationSetUpserted or ArticulationSetRemoved or LaneSetUpserted
+            GrooveUpserted
+                or GrooveRemoved
+                or ArticulationSetUpserted
+                or ArticulationSetRemoved
+                or LaneSetUpserted
                 or LaneSetRemoved => InverseSet(op),
             _ => throw new ArgumentException($"Unknown delta operation {op.GetType().Name}.", nameof(op))
         };

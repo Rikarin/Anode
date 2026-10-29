@@ -214,12 +214,7 @@ public static class ProjectPackage {
         var grooves = Checked(root.Grooves, Edits.CheckGroove, static g => g.Id);
         var articulationSets = Checked(root.ArticulationSets, Edits.CheckArticulationSet, static a => a.Id);
         var laneSets = Checked(root.LaneSets, Edits.CheckLaneSet, static l => l.Id);
-        for (var i = 0; i < tracks.Count; i++) {
-            if (tracks[i].ArticulationSetId is { } setId
-                && (!articulationSets.ContainsKey(setId) || !Edits.IsMidiKind(tracks[i].Kind))) {
-                tracks[i] = tracks[i] with { ArticulationSetId = null };
-            }
-        }
+        Unassigned(tracks, articulationSets);
 
         var master = Normalise(root.Master, null);
         var trackIds = tracks.Select(static t => t.Id).ToHashSet(StringComparer.Ordinal);
@@ -355,6 +350,19 @@ public static class ProjectPackage {
         }
     }
 
+    /// <summary>A track's articulation set is one of the project's, on a track that has one, or none.</summary>
+    static void Unassigned(
+        ImmutableList<Track>.Builder tracks,
+        ImmutableSortedDictionary<string, ArticulationSet> sets
+    ) {
+        for (var i = 0; i < tracks.Count; i++) {
+            if (tracks[i].ArticulationSetId is { } setId
+                && (!sets.ContainsKey(setId) || !Edits.IsMidiKind(tracks[i].Kind))) {
+                tracks[i] = tracks[i] with { ArticulationSetId = null };
+            }
+        }
+    }
+
     /// <summary>The items <paramref name="check" /> accepts, as it returns them, keyed by id (the first of each id).</summary>
     static ImmutableSortedDictionary<string, T> Checked<T>(
         IReadOnlyList<T>? items,
@@ -432,12 +440,13 @@ public static class ProjectPackage {
                 && Enum.IsDefined(varispeed.Mode)
                     ? varispeed
                     : ProjectDefaults.Varispeed,
-            GrooveTrackId = settings.GrooveTrackId is { } groove
-                && tracks.Any(t => t.Id == groove && (t.Kind == TrackKind.Audio || Edits.HoldsMidi(t)))
-                    ? groove
-                    : null
+            GrooveTrackId = GrooveTrack(settings.GrooveTrackId, tracks)
         };
     }
+
+    /// <summary>The groove track as read: a track of the project with regions to take a groove from, or none.</summary>
+    static string? GrooveTrack(string? id, ImmutableList<Track>.Builder tracks) =>
+        id is not null && tracks.Any(t => t.Id == id && (t.Kind == TrackKind.Audio || Edits.HoldsMidi(t))) ? id : null;
 
     /// <summary>
     ///     A track file's regions that belong to it: audio ones of known files on an audio track, MIDI ones on a MIDI
@@ -1068,29 +1077,9 @@ public static class PackageMigrations {
     /// </summary>
     static JsonObject ToSchema7(string kind, JsonObject json) {
         if (kind == "project") {
-            json["grooves"] ??= new JsonArray();
-            json["articulationSets"] ??= new JsonArray();
-            json["laneSets"] ??= new JsonArray();
-            foreach (var file in (json["audioFiles"] as JsonArray ?? []).OfType<JsonObject>()) {
-                file["version"] ??= 0;
-            }
-
-            foreach (var cell in (json["liveLoops"]?["cells"] as JsonArray ?? []).OfType<JsonObject>()) {
-                Schema7.Notes(cell["content"]?["midi"] as JsonObject);
-            }
+            Schema7.Project(json);
         } else if (kind == "track") {
-            if (json["track"] is JsonObject track) {
-                track["matchGroove"] ??= false;
-                foreach (var alternative in (track["alternatives"] as JsonArray ?? []).OfType<JsonObject>()) {
-                    foreach (var region in (alternative["midiRegions"] as JsonArray ?? []).OfType<JsonObject>()) {
-                        Schema7.Notes(region);
-                    }
-                }
-            }
-
-            foreach (var region in (json["midiRegions"] as JsonArray ?? []).OfType<JsonObject>()) {
-                Schema7.Notes(region);
-            }
+            Schema7.Track(json);
         }
 
         return json;
@@ -1099,6 +1088,34 @@ public static class PackageMigrations {
 
 /// <summary>The Phase 7 additions to a schema-6 file (docs/08-phase-7.md).</summary>
 static class Schema7 {
+    public static void Project(JsonObject json) {
+        json["grooves"] ??= new JsonArray();
+        json["articulationSets"] ??= new JsonArray();
+        json["laneSets"] ??= new JsonArray();
+        foreach (var file in (json["audioFiles"] as JsonArray ?? []).OfType<JsonObject>()) {
+            file["version"] ??= 0;
+        }
+
+        foreach (var cell in (json["liveLoops"]?["cells"] as JsonArray ?? []).OfType<JsonObject>()) {
+            Notes(cell["content"]?["midi"] as JsonObject);
+        }
+    }
+
+    public static void Track(JsonObject json) {
+        if (json["track"] is JsonObject track) {
+            track["matchGroove"] ??= false;
+            foreach (var alternative in (track["alternatives"] as JsonArray ?? []).OfType<JsonObject>()) {
+                foreach (var region in (alternative["midiRegions"] as JsonArray ?? []).OfType<JsonObject>()) {
+                    Notes(region);
+                }
+            }
+        }
+
+        foreach (var region in (json["midiRegions"] as JsonArray ?? []).OfType<JsonObject>()) {
+            Notes(region);
+        }
+    }
+
     /// <summary>The notes of a MIDI region without articulations.</summary>
     public static void Notes(JsonObject? region) {
         foreach (var note in (region?["notes"] as JsonArray ?? []).OfType<JsonObject>()) {

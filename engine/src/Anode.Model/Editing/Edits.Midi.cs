@@ -188,14 +188,14 @@ public static partial class Edits {
     static DeltaOp[] SetMidiRegion(ProjectState state, SetMidiRegionCommand c) {
         var region = MidiRegionOf(state, c.RegionId);
         var p = region.Playback;
-        var playback = p with {
-            Transpose = c.Transpose ?? p.Transpose,
-            Velocity = c.Velocity ?? p.Velocity,
-            QuantizeTicks = c.QuantizeTicks ?? p.QuantizeTicks,
-            QuantizeStrength = c.QuantizeStrength ?? p.QuantizeStrength,
-            Swing = c.Swing ?? p.Swing,
-            GrooveId = c.GrooveId is null ? p.GrooveId : c.GrooveId.Length == 0 ? null : c.GrooveId
-        };
+        var playback = new RegionPlayback(
+            c.Transpose ?? p.Transpose,
+            c.Velocity ?? p.Velocity,
+            c.QuantizeTicks ?? p.QuantizeTicks,
+            c.QuantizeStrength ?? p.QuantizeStrength,
+            c.Swing ?? p.Swing,
+            c.GrooveId is null ? p.GrooveId : NoneIfEmpty(c.GrooveId)
+        );
         if (playback.GrooveId is { } groove && !state.Grooves.ContainsKey(groove)) {
             throw new EditException($"No groove template '{groove}'.");
         }
@@ -295,15 +295,7 @@ public static partial class Edits {
         var region = MidiRegionOf(state, c.RegionId);
         var groove = GrooveFor(state, region.TrackId, c.GrooveId, analysis);
         if (groove is null) {
-            if (c.GridTicks is < 1 or > MaxQuantizeTicks) {
-                throw new EditException($"A quantise grid is 1…{MaxQuantizeTicks} ticks.");
-            }
-
-            if (c.GrooveVelocity == true) {
-                throw new EditException("Velocities follow a groove template only: name one.");
-            }
-
-            CheckUnit(c.Swing, "swing");
+            CheckGrid(c);
         }
 
         CheckUnit(c.Strength, "quantise strength");
@@ -311,26 +303,7 @@ public static partial class Edits {
             ? null
             : Known(region.Notes.Select(static n => n.Id), c.NoteIds, "note", region.Id);
         if (groove is not null) {
-            var picked = region.Notes.Where(n => chosen is null || chosen.Contains(n.Id)).ToArray();
-            var moved = MidiAlgorithms.Current.GrooveQuantize(
-                    picked,
-                    region.StartTick,
-                    groove,
-                    c.Strength,
-                    c.GrooveVelocity == true
-                )
-                .Where(static n => n is not null)
-                .ToDictionary(static n => n.Id);
-            var grooved = region.Notes.Select(n => moved.TryGetValue(n.Id, out var m)
-                    ? n with { StartTick = m.StartTick, Velocity = Math.Clamp(m.Velocity, 1, 127) }
-                    : n
-                )
-                .ToArray();
-            foreach (var note in grooved) {
-                CheckNote(region, note, true);
-            }
-
-            return [new MidiRegionUpserted(region with { Notes = Sorted(grooved) })];
+            return [new MidiRegionUpserted(Grooved(region, chosen, groove, c))];
         }
 
         var notes = region.Notes.Select(n => {
@@ -345,6 +318,46 @@ public static partial class Edits {
         );
         return [new MidiRegionUpserted(region with { Notes = Sorted(notes) })];
     }
+
+    /// <summary>A quantise to the grid: a grid, a swing, and no velocities to follow.</summary>
+    static void CheckGrid(QuantizeNotesCommand c) {
+        if (c.GridTicks is < 1 or > MaxQuantizeTicks) {
+            throw new EditException($"A quantise grid is 1…{MaxQuantizeTicks} ticks.");
+        }
+
+        if (c.GrooveVelocity == true) {
+            throw new EditException("Velocities follow a groove template only: name one.");
+        }
+
+        CheckUnit(c.Swing, "swing");
+    }
+
+    /// <summary>A region with its chosen notes (null: all) quantised to a groove (Phase 7).</summary>
+    static MidiRegion Grooved(MidiRegion region, HashSet<long>? chosen, GrooveTemplate groove, QuantizeNotesCommand c) {
+        var picked = region.Notes.Where(n => chosen is null || chosen.Contains(n.Id)).ToArray();
+        var moved = MidiAlgorithms.Current.GrooveQuantize(
+                picked,
+                region.StartTick,
+                groove,
+                c.Strength,
+                c.GrooveVelocity == true
+            )
+            .Where(static n => n is not null)
+            .ToDictionary(static n => n.Id);
+        var grooved = region.Notes.Select(n => moved.TryGetValue(n.Id, out var m)
+                    ? n with { StartTick = m.StartTick, Velocity = Math.Clamp(m.Velocity, 1, 127) }
+                    : n
+            )
+            .ToArray();
+        foreach (var note in grooved) {
+            CheckNote(region, note, true);
+        }
+
+        return region with { Notes = Sorted(grooved) };
+    }
+
+    /// <summary>A text, or null when it is empty (a command's way to clear a reference).</summary>
+    static string? NoneIfEmpty(string text) => text.Length == 0 ? null : text;
 
     static DeltaOp[] AddControls(ProjectState state, AddControlsCommand c) {
         var region = MidiRegionOf(state, c.RegionId);
@@ -421,7 +434,9 @@ public static partial class Edits {
         CheckChannel(note.Channel);
         CheckLength(note.LengthTicks, "note");
         if (note.ArticulationId is < 0 or > MaxArticulationId) {
-            throw new EditException($"A note's articulation is 1…{MaxArticulationId} (0: none), not {note.ArticulationId}.");
+            throw new EditException(
+                $"A note's articulation is 1…{MaxArticulationId} (0: none), not {note.ArticulationId}."
+            );
         }
 
         if (checkStart) {
@@ -444,7 +459,9 @@ public static partial class Edits {
             throw new EditException($"A {e.Kind} value is {min}…{max}, not {e.Value}.");
         }
 
-        if (e.Kind is ControlKind.ControlChange or ControlKind.PolyPressure ? e.Number is < 0 or > 127 : e.Number != 0) {
+        if (e.Kind is ControlKind.ControlChange or ControlKind.PolyPressure
+                ? e.Number is < 0 or > 127
+                : e.Number != 0) {
             throw new EditException("A controller number (a poly pressure's key) is 0…127, 0 for the other kinds.");
         }
     }

@@ -621,11 +621,7 @@ public sealed class ModelCompiler {
         var outputs = Articulations(state, region.TrackId);
         foreach (var note in region.Notes) {
             var tick = region.StartTick + note.StartTick;
-            var at = groove is not null
-                ? playback.QuantizeStrength <= 0
-                    ? tick
-                    : MidiAlgorithms.Current.GrooveTarget(groove, tick, playback.QuantizeStrength).Tick
-                : Editing.Quantize.Tick(tick, playback.QuantizeTicks, playback.QuantizeStrength, playback.Swing);
+            var at = PlayedAt(playback, groove, tick);
             if (WindowAt(windows, at) is not { } window) {
                 continue;
             }
@@ -635,13 +631,26 @@ public sealed class ModelCompiler {
             var pitch = (byte)Math.Clamp(note.Pitch + playback.Transpose, 0, 127);
             var velocity = (byte)Math.Clamp(note.Velocity + playback.Velocity, 1, 127);
             var channel = (byte)(note.Channel - 1);
-            if (note.ArticulationId != 0 && outputs is not null && outputs.TryGetValue(note.ArticulationId, out var sent)) {
+            if (note.ArticulationId != 0
+                && outputs is not null
+                && outputs.TryGetValue(note.ArticulationId, out var sent)) {
                 channel = AddArticulation(events, state, map, engineId, sent, at, on, channel);
             }
 
             events.Add((Midi(engineId, on, PlaybackEventKind.NoteOn, pitch, velocity, channel), 2));
             events.Add((Midi(engineId, off, PlaybackEventKind.NoteOff, pitch, 0, channel), 0));
         }
+    }
+
+    /// <summary>Where a note at <paramref name="tick" /> plays: quantised to the region's groove, else its grid.</summary>
+    static long PlayedAt(RegionPlayback playback, GrooveTemplate? groove, long tick) {
+        if (groove is null) {
+            return Editing.Quantize.Tick(tick, playback.QuantizeTicks, playback.QuantizeStrength, playback.Swing);
+        }
+
+        return playback.QuantizeStrength <= 0
+            ? tick
+            : MidiAlgorithms.Current.GrooveTarget(groove, tick, playback.QuantizeStrength).Tick;
     }
 
     /// <summary>The outputs of a track's articulation set by articulation id, in list order; null without a set.</summary>
@@ -678,7 +687,14 @@ public sealed class ModelCompiler {
                     var key = (byte)Math.Clamp(output.Number, 0, 127);
                     var off = Math.Max(map.SampleAt(tick + 1, state.SampleRate), on + 1);
                     events.Add(
-                        (Midi(engineId, on, PlaybackEventKind.NoteOn, key, (byte)Math.Clamp(output.Value, 1, 127), channel),
+                        (Midi(
+                            engineId,
+                            on,
+                            PlaybackEventKind.NoteOn,
+                            key,
+                            (byte)Math.Clamp(output.Value, 1, 127),
+                            channel
+                        ),
                             2)
                     );
                     events.Add((Midi(engineId, off, PlaybackEventKind.NoteOff, key, 0, channel), 0));
@@ -686,14 +702,17 @@ public sealed class ModelCompiler {
                 case ArticulationOutputKind.ControlChange:
                     events.Add(
                         (Midi(
-                                engineId,
-                                on,
-                                PlaybackEventKind.ControlChange,
-                                (byte)Math.Clamp(output.Number, 0, 127),
-                                (byte)Math.Clamp(output.Value, 0, 127),
-                                channel
-                            ), 1)
+                            engineId,
+                            on,
+                            PlaybackEventKind.ControlChange,
+                            (byte)Math.Clamp(output.Number, 0, 127),
+                            (byte)Math.Clamp(output.Value, 0, 127),
+                            channel
+                        ), 1)
                     );
+                    break;
+                case ArticulationOutputKind.Channel:
+                    // No message: the note's channel changed above.
                     break;
                 case ArticulationOutputKind.Program:
                     events.Add(

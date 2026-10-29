@@ -168,7 +168,9 @@ public sealed partial class FakeHost : IAsyncDisposable {
         ..BuiltinEffects.All.Select(EngineCatalog.From),
         // The MIDI effects (Phase 6), and a stand-in Scripter (Phase 7) while the built-in one is not there.
         ..BuiltinMidiEffects.All.Select(EngineCatalog.From),
-        ..BuiltinMidiEffects.All.Any(static d => d.Id == Anode.Model.Editing.Edits.ScripterId) ? [] : new[] { FakeScripter },
+        ..BuiltinMidiEffects.All.Any(static d => d.Id == Anode.Model.Editing.Edits.ScripterId)
+            ? []
+            : new[] { FakeScripter },
         new EnginePlugin(
             FakeVst3Id,
             "Fake Gain",
@@ -490,16 +492,24 @@ public sealed partial class FakeHost : IAsyncDisposable {
 
                 break;
             default:
-                if (HandlePhase7(message) is { } replies) {
-                    foreach (var reply in replies) {
-                        yield return reply;
-                    }
-                } else if (!HandleMixer(message) && !HandleLiveLoops(message)) {
-                    yield return new ErrorMessage($"Unsupported message {message.GetType().Name}.", Name(message));
+                foreach (var reply in HandleOther(message)) {
+                    yield return reply;
                 }
 
                 break;
         }
+    }
+
+    /// <summary>The messages of the later phases (an error for one this host does not know): what they answer.</summary>
+    IpcMessage[] HandleOther(IpcMessage message) {
+        var replies = HandlePhase7(message);
+        if (message is SetChannelMessage) {
+            HandleMixer(message);
+        } else if (replies is null && !HandleMixer(message) && !HandleLiveLoops(message)) {
+            return [new ErrorMessage($"Unsupported message {message.GetType().Name}.", Name(message))];
+        }
+
+        return replies ?? [];
     }
 
     /// <summary>The mixer's messages (Phase 4), none of which answers; false for any other message.</summary>

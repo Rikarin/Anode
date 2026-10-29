@@ -1130,10 +1130,7 @@ public sealed partial class ProjectSession(
         var rate = state.SampleRate;
         var passStart = map.TickAtSample(Math.Max(0, take.StartSample), rate);
         var passEnd = Math.Max(passStart + 1, map.TickAtSample(Math.Max(0, take.EndSample), rate));
-        var switches = track.ArticulationSetId is { } setId && state.ArticulationSets.TryGetValue(setId, out var set)
-            ? set.Switches
-            : null;
-        var (notes, controls) = MidiRecording.Events(take, map, rate, passEnd, switches);
+        var (notes, controls) = MidiRecording.Events(take, map, rate, passEnd, SwitchesOf(state, track));
         var recording = state.Settings.Recording;
         if (!flashback && recording.Autopunch) {
             var (from, to) = (recording.PunchInTick, recording.PunchOutTick);
@@ -1312,7 +1309,11 @@ public sealed partial class ProjectSession(
 
     /// <summary>Starts building the peaks of a file of the project in <paramref name="folder" /> (its version's).</summary>
     void StartPeaks(string folder, AudioFile file) =>
-        _ = peaks.Start(Path.Combine(folder, ProjectPackage.PeaksFolder), PeakKey(file), Path.Combine(folder, file.Path))
+        _ = peaks.Start(
+                Path.Combine(folder, ProjectPackage.PeaksFolder),
+                PeakKey(file),
+                Path.Combine(folder, file.Path)
+            )
             .ContinueWith(static _ => { }, TaskScheduler.Default);
 
     Project Replace(string folder, ProjectState state, ImmutableDictionary<string, SavedState>? states = null) {

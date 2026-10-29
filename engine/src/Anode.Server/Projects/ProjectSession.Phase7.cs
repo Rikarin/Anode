@@ -60,41 +60,7 @@ public sealed partial class ProjectSession {
             var o = Required();
             var s = stepInput;
             forwardBefore = s is { On: true, MidiInput: true };
-            var regionId = request.RegionId is null ? s.RegionId : request.RegionId.Length == 0 ? null : request.RegionId;
-            var trackId = request.TrackId is null ? s.TrackId : request.TrackId.Length == 0 ? null : request.TrackId;
-            if (regionId is not null && !o.State.MidiRegions.ContainsKey(regionId)) {
-                throw ProjectException.NotFound($"No MIDI region '{regionId}'.");
-            }
-
-            if (trackId is not null
-                && (o.State.FindTrack(trackId) is not { } track || !Edits.HoldsMidi(track))) {
-                throw ProjectException.Unprocessable($"Track '{trackId}' is not a track that takes MIDI steps.");
-            }
-
-            var next = s with {
-                On = request.On ?? s.On,
-                RegionId = regionId,
-                TrackId = trackId ?? (regionId is not null ? o.State.MidiRegions[regionId].TrackId : null),
-                PositionTick = request.PositionTick ?? s.PositionTick,
-                NoteValueTicks = request.NoteValueTicks ?? s.NoteValueTicks,
-                Dotted = request.Dotted ?? s.Dotted,
-                Triplet = request.Triplet ?? s.Triplet,
-                Velocity = request.Velocity ?? s.Velocity,
-                Chord = request.Chord ?? s.Chord,
-                MidiInput = request.MidiInput ?? s.MidiInput
-            };
-            if (next.PositionTick is < 0 or > Edits.MaxTick) {
-                throw ProjectException.Unprocessable($"Tick {next.PositionTick} is outside the project.");
-            }
-
-            if (next.NoteValueTicks is < 1 or > Edits.MaxQuantizeTicks) {
-                throw ProjectException.Unprocessable($"A note value is 1…{Edits.MaxQuantizeTicks} ticks.");
-            }
-
-            if (next.Velocity is < 1 or > 127) {
-                throw ProjectException.Unprocessable($"A step's velocity is 1…127, not {next.Velocity}.");
-            }
-
+            var next = Requested(o.State, s, request);
             // Turning chord mode off moves on past the stacked chord.
             if (s.Chord && !next.Chord && stacked) {
                 next = next with { PositionTick = next.PositionTick + StepTicks(s) };
@@ -119,6 +85,51 @@ public sealed partial class ProjectSession {
 
         return state;
     }
+
+    /// <summary>The step input state a request asks for, checked: 404 for an unknown region, 422 for values out of range.</summary>
+    static StepInputState Requested(ProjectState project, StepInputState s, StepInputRequest request) {
+        var regionId = request.RegionId is null ? s.RegionId : NoneIfEmpty(request.RegionId);
+        var trackId = request.TrackId is null ? s.TrackId : NoneIfEmpty(request.TrackId);
+        if (regionId is not null && !project.MidiRegions.ContainsKey(regionId)) {
+            throw ProjectException.NotFound($"No MIDI region '{regionId}'.");
+        }
+
+        if (trackId is not null && (project.FindTrack(trackId) is not { } track || !Edits.HoldsMidi(track))) {
+            throw ProjectException.Unprocessable($"Track '{trackId}' is not a track that takes MIDI steps.");
+        }
+
+        var next = new StepInputState(
+            request.On ?? s.On,
+            regionId,
+            trackId ?? (regionId is null ? null : project.MidiRegions[regionId].TrackId),
+            request.PositionTick ?? s.PositionTick,
+            request.NoteValueTicks ?? s.NoteValueTicks,
+            request.Dotted ?? s.Dotted,
+            request.Triplet ?? s.Triplet,
+            request.Velocity ?? s.Velocity,
+            request.Chord ?? s.Chord,
+            request.MidiInput ?? s.MidiInput
+        );
+        if (next.PositionTick is < 0 or > Edits.MaxTick) {
+            throw ProjectException.Unprocessable($"Tick {next.PositionTick} is outside the project.");
+        }
+
+        if (next.NoteValueTicks is < 1 or > Edits.MaxQuantizeTicks) {
+            throw ProjectException.Unprocessable($"A note value is 1…{Edits.MaxQuantizeTicks} ticks.");
+        }
+
+        return next.Velocity is < 1 or > 127
+            ? throw ProjectException.Unprocessable($"A step's velocity is 1…127, not {next.Velocity}.")
+            : next;
+    }
+
+    static string? NoneIfEmpty(string text) => text.Length == 0 ? null : text;
+
+    /// <summary>The input switches of a track's articulation set, or none.</summary>
+    static IReadOnlyList<ArticulationSwitch>? SwitchesOf(ProjectState state, Track track) =>
+        track.ArticulationSetId is { } setId && state.ArticulationSets.TryGetValue(setId, out var set)
+            ? set.Switches
+            : null;
 
     /// <summary>A rest: the step position moves on by one step (not an edit).</summary>
     public StepInputState StepRest() {
@@ -159,7 +170,7 @@ public sealed partial class ProjectSession {
 
     /// <summary>A step's length: the note value, × 1.5 dotted, × 2/3 triplet.</summary>
     static long StepTicks(StepInputState s) {
-        var ticks = (double)s.NoteValueTicks;
+        double ticks = s.NoteValueTicks;
         if (s.Dotted) {
             ticks *= 1.5;
         }
@@ -171,10 +182,14 @@ public sealed partial class ProjectSession {
         return Math.Max(1, (long)Math.Round(ticks));
     }
 
-    /// <summary>Forgets step input (a project opened or closed).</summary>
+    /// <summary>Forgets step input (a project opened or closed); the host stops forwarding MIDI if it did.</summary>
     void ResetStepInput() {
+        var forwarding = stepInput is { On: true, MidiInput: true };
         stepInput = DefaultStepInput;
         (lastStep, lastStepRegion, stacked) = ([], null, false);
+        if (forwarding) {
+            StepInputForwardChanged?.Invoke(false);
+        }
     }
 
     /// <summary>
@@ -182,7 +197,11 @@ public sealed partial class ProjectSession {
     ///     the steps before it left it (a new region the first one made, the position it advanced to). Returns the
     ///     edit and the state to keep.
     /// </summary>
-    (EditResult Edit, StepState Steps) ApplySteps(Open o, IReadOnlyList<EditCommand> commands, IAnalysisSource analysis) {
+    (EditResult Edit, StepState Steps) ApplySteps(
+        Open o,
+        IReadOnlyList<EditCommand> commands,
+        IAnalysisSource analysis
+    ) {
         var steps = new StepState(stepInput, lastStep, lastStepRegion, stacked);
         var forward = new List<DeltaOp>();
         var inverse = new List<DeltaOp>();
@@ -218,8 +237,15 @@ public sealed partial class ProjectSession {
     /// <summary>A step with every left-out property filled from the step input state.</summary>
     static StepNotesCommand Resolve(ProjectState state, StepState steps, StepNotesCommand c) {
         var s = steps.State;
+        var position = c.PositionTick ?? s.PositionTick;
+        // The state's region while it is there and starts at or before the step; else a new one on the track.
         var regionId = c.RegionId
-            ?? (c.TrackId is null && s.RegionId is { } r && state.MidiRegions.ContainsKey(r) ? r : null);
+            ?? (c.TrackId is null
+                && s.RegionId is { } r
+                && state.MidiRegions.TryGetValue(r, out var region)
+                && region.StartTick <= position
+                ? r
+                : null);
         var trackId = c.TrackId ?? s.TrackId;
         if (regionId is null && trackId is null) {
             throw new EditException("Step input has no region or track to enter notes into.");
@@ -229,7 +255,7 @@ public sealed partial class ProjectSession {
             Velocity = c.Velocity ?? s.Velocity,
             RegionId = regionId,
             TrackId = regionId is null ? trackId : null,
-            PositionTick = c.PositionTick ?? s.PositionTick,
+            PositionTick = position,
             LengthTicks = c.LengthTicks ?? StepTicks(s),
             Channel = c.Channel ?? 1
         };
@@ -259,7 +285,8 @@ public sealed partial class ProjectSession {
 
     /// <summary>Keeps the step input state a batch with steps left, and tells clients.</summary>
     void KeepSteps(StepState steps) {
-        (stepInput, lastStep, lastStepRegion, stacked) = (steps.State, steps.LastNotes, steps.LastRegion, steps.Stacked);
+        (stepInput, lastStep, lastStepRegion, stacked) = (steps.State, steps.LastNotes, steps.LastRegion,
+            steps.Stacked);
         hub.Publish(new StepInputEvent(steps.State));
     }
 
@@ -442,7 +469,8 @@ public sealed partial class ProjectSession {
             }
 
             foreach (var path in Directory.EnumerateFiles(directory, stem + ".v*.wav")) {
-                if (VersionOf(stem, Path.GetFileName(path)) is not { } n || reachable.Contains(Path.GetFullPath(path))) {
+                if (VersionOf(stem, Path.GetFileName(path)) is not { } n
+                    || reachable.Contains(Path.GetFullPath(path))) {
                     continue;
                 }
 
@@ -465,7 +493,7 @@ public sealed partial class ProjectSession {
 
     /// <summary>The <c>project.json</c> of each saved alternative and backup of a project.</summary>
     static IEnumerable<string> SavedDocuments(string folder) {
-        foreach (var sub in new[] { Model.Storage.ProjectHistory.AlternativesFolder, ProjectPackage.BackupsFolder }) {
+        foreach (var sub in new[] { ProjectHistory.AlternativesFolder, ProjectPackage.BackupsFolder }) {
             var root = Path.Combine(folder, sub);
             if (!Directory.Exists(root)) {
                 continue;
@@ -491,8 +519,8 @@ public sealed partial class ProjectSession {
 
         return [
             ..(root?["audioFiles"] as JsonArray ?? [])
-            .Select(static f => f?["path"] is JsonValue v && v.TryGetValue<string>(out var p) ? p : null)
-            .OfType<string>()
+                .Select(static f => f?["path"] is JsonValue v && v.TryGetValue<string>(out var p) ? p : null)
+                .OfType<string>()
         ];
     }
 
@@ -500,7 +528,9 @@ public sealed partial class ProjectSession {
     public SampleRange Samples(string fileId, long start, long frames, int bucket) {
         var (_, folder, file) = FileOf(fileId);
         if (start < 0 || frames < 1 || bucket < 1) {
-            throw ProjectException.Unprocessable("Ask for at least one frame from frame 0 on, in buckets of 1 or more.");
+            throw ProjectException.Unprocessable(
+                "Ask for at least one frame from frame 0 on, in buckets of 1 or more."
+            );
         }
 
         if ((frames + bucket - 1) / bucket > MaxSampleValues) {
@@ -531,28 +561,32 @@ public sealed partial class ProjectSession {
             );
         }
 
+        var extremes = channels.Select(c => Extremes(c, from, count, bucket)).ToArray();
+        return new(
+            from,
+            count,
+            channels.Length,
+            bucket,
+            null,
+            [..extremes.Select(static x => (IReadOnlyList<float>)x.Min)],
+            [..extremes.Select(static x => (IReadOnlyList<float>)x.Max)]
+        );
+    }
+
+    /// <summary>A channel's minimum and maximum per bucket of frames (the last bucket may be short).</summary>
+    static (float[] Min, float[] Max) Extremes(float[] channel, long from, long count, int bucket) {
         var buckets = (int)((count + bucket - 1) / bucket);
-        var min = new List<IReadOnlyList<float>>();
-        var max = new List<IReadOnlyList<float>>();
-        foreach (var channel in channels) {
-            var lows = new float[buckets];
-            var highs = new float[buckets];
-            for (var b = 0; b < buckets; b++) {
-                var span = channel.AsSpan((int)(from + (long)b * bucket), (int)Math.Min(bucket, count - (long)b * bucket));
-                var (lo, hi) = (float.MaxValue, float.MinValue);
-                foreach (var x in span) {
-                    lo = Math.Min(lo, x);
-                    hi = Math.Max(hi, x);
-                }
-
-                (lows[b], highs[b]) = (lo, hi);
+        var (lows, highs) = (new float[buckets], new float[buckets]);
+        for (var b = 0; b < buckets; b++) {
+            var span = channel.AsSpan((int)(from + (long)b * bucket), (int)Math.Min(bucket, count - (long)b * bucket));
+            (lows[b], highs[b]) = (float.MaxValue, float.MinValue);
+            foreach (var x in span) {
+                lows[b] = Math.Min(lows[b], x);
+                highs[b] = Math.Max(highs[b], x);
             }
-
-            min.Add(lows);
-            max.Add(highs);
         }
 
-        return new(from, count, channels.Length, bucket, null, min, max);
+        return (lows, highs);
     }
 
     /// <summary>The most values per channel <see cref="Samples" /> answers.</summary>

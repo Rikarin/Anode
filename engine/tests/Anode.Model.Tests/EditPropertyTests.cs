@@ -181,7 +181,10 @@ public sealed class EditPropertyTests {
         readonly Dictionary<int, MixerGroup> groups = project.Groups.ToDictionary(static g => g.Number);
         readonly Dictionary<string, PatternRegion> patterns = project.PatternRegions.ToDictionary(static r => r.Id);
         readonly Dictionary<string, GrooveTemplate> grooves = project.Grooves.ToDictionary(static g => g.Id);
-        readonly Dictionary<string, ArticulationSet> articulationSets = project.ArticulationSets.ToDictionary(static a => a.Id);
+
+        readonly Dictionary<string, ArticulationSet> articulationSets =
+            project.ArticulationSets.ToDictionary(static a => a.Id);
+
         readonly Dictionary<string, LaneSet> laneSets = project.LaneSets.ToDictionary(static l => l.Id);
         LiveLoopsGrid liveLoops = project.LiveLoops;
         string notes = project.Notes;

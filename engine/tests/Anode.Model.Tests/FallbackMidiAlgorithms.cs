@@ -159,7 +159,7 @@ static class FakeGrooves {
     public static (long Tick, double VelocityScale) Target(GrooveTemplate groove, long tick, double strength) {
         var k = (long)Math.Round((double)tick / groove.StepTicks, MidpointRounding.AwayFromZero);
         var count = groove.Points.Count;
-        var n = (int)(((k % count) + count) % count);
+        var n = (int)((k % count + count) % count);
         var period = (long)Math.Floor((double)k / count);
         var target = period * groove.LengthTicks + groove.Points[n].Tick;
         return (tick + (long)Math.Round((target - tick) * strength, MidpointRounding.AwayFromZero),
@@ -169,7 +169,11 @@ static class FakeGrooves {
 
 /// <summary>The Transform rules the tests use, by the documented semantics (no randomness, crescendos or maps).</summary>
 static class FakeTransform {
-    public static TransformResult Apply(IReadOnlyList<Note> notes, IReadOnlyList<ControlEvent> controls, TransformSet set) {
+    public static TransformResult Apply(
+        IReadOnlyList<Note> notes,
+        IReadOnlyList<ControlEvent> controls,
+        TransformSet set
+    ) {
         var operate = set.Mode != TransformMode.SelectOnly;
         var selectedNotes = new List<long>();
         var selectedControls = new List<long>();

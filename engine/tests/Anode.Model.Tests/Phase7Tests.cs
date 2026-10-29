@@ -18,15 +18,6 @@ public sealed class Phase7Tests {
 
     /// <summary>A project as a schema-6 package holds it: everything Phase 7 added at its default.</summary>
     public static ProjectState WithoutPhase7(ProjectState state) {
-        static MidiRegion Plain(MidiRegion m) =>
-            m with {
-                Playback = m.Playback with { GrooveId = null },
-                Notes = [..m.Notes.Select(static n => n with { ArticulationId = 0 })]
-            };
-
-        static IReadOnlyList<Insert> Slots(IReadOnlyList<Insert> slots) =>
-            [..slots.Select(static i => i with { RuntimeParameters = null, Source = null })];
-
         return state with {
             Settings = state.Settings with { GrooveTrackId = null },
             Tracks = state.Tracks.ConvertAll(static t => t with {
@@ -47,8 +38,8 @@ public sealed class Phase7Tests {
             LiveLoops = state.LiveLoops with {
                 Cells = [
                     ..state.LiveLoops.Cells.Select(static c => c.Content.Midi is { } m
-                        ? c with { Content = c.Content with { Midi = Plain(m) } }
-                        : c
+                            ? c with { Content = c.Content with { Midi = Plain(m) } }
+                            : c
                     )
                 ]
             },
@@ -56,6 +47,15 @@ public sealed class Phase7Tests {
             ArticulationSets = state.ArticulationSets.Clear(),
             LaneSets = state.LaneSets.Clear()
         };
+
+        static MidiRegion Plain(MidiRegion m) =>
+            m with {
+                Playback = m.Playback with { GrooveId = null },
+                Notes = [..m.Notes.Select(static n => n with { ArticulationId = 0 })]
+            };
+
+        static IReadOnlyList<Insert> Slots(IReadOnlyList<Insert> slots) =>
+            [..slots.Select(static i => i with { RuntimeParameters = null, Source = null })];
     }
 
     [Fact]
@@ -136,7 +136,12 @@ public sealed class Phase7Tests {
                 }
             )
         );
-        Refused(new TransformCommand([a], set with { Operations = [new(TransformField.Status, TransformOperationKind.Fix, 1)] }));
+        Refused(
+            new TransformCommand(
+                [a],
+                set with { Operations = [new(TransformField.Status, TransformOperationKind.Fix, 1)] }
+            )
+        );
         Refused(new TransformCommand([a], set with { Map = [1, 2, 3] }));
     }
 
@@ -172,16 +177,27 @@ public sealed class Phase7Tests {
         Apply(
             new AddNotesCommand(
                 swung,
-                [..Enumerable.Range(0, 8).Select(i => new NewNote(36, i % 2 == 0 ? 127 : 64, 1, i * 480 + i % 2 * 120, 100))]
+                [
+                    ..Enumerable.Range(0, 8)
+                        .Select(static i => new NewNote(36, i % 2 == 0 ? 127 : 64, 1, i * 480 + i % 2 * 120, 100))
+                ]
             )
         );
         Apply(new MakeGrooveCommand(swung, "Swing", 1, 480));
         var groove = Assert.Single(state.Grooves.Values);
-        Assert.Equal(("Swing", 3840L, 480L, 8), (groove.Name, groove.LengthTicks, groove.StepTicks, groove.Points.Count));
+        Assert.Equal(
+            ("Swing", 3840L, 480L, 8),
+            (groove.Name, groove.LengthTicks, groove.StepTicks, groove.Points.Count)
+        );
         Assert.Equal(600, groove.Points[1].Tick);
 
         var straight = Region(3840, 3840, keys);
-        Apply(new AddNotesCommand(straight, [new(60, 100, 1, 0, 100), new(60, 100, 1, 480, 100), new(60, 100, 1, 960, 100)]));
+        Apply(
+            new AddNotesCommand(
+                straight,
+                [new(60, 100, 1, 0, 100), new(60, 100, 1, 480, 100), new(60, 100, 1, 960, 100)]
+            )
+        );
         Apply(new QuantizeNotesCommand(straight, 0, 1, GrooveId: groove.Id, GrooveVelocity: true));
         Assert.Equal([0L, 600, 960], Notes(straight).Select(static n => n.StartTick));
         Assert.Equal([100, 50, 100], Notes(straight).Select(static n => n.Velocity));
@@ -214,7 +230,17 @@ public sealed class Phase7Tests {
     public void Region_playback_follows_a_groove_and_deleting_it_returns_the_region_to_the_grid() {
         var region = Region(0, 3840);
         Apply(new AddNotesCommand(region, [new(60, 100, 1, 480, 100)]));
-        Apply(new SetGrooveCommand(new("grv_late", "Late", 3840, 480, [..Enumerable.Range(0, 8).Select(static n => new GroovePoint(n * 480 + (n % 2) * 100, 1))])));
+        Apply(
+            new SetGrooveCommand(
+                new(
+                    "grv_late",
+                    "Late",
+                    3840,
+                    480,
+                    [..Enumerable.Range(0, 8).Select(static n => new GroovePoint(n * 480 + n % 2 * 100, 1))]
+                )
+            )
+        );
         Apply(new SetMidiRegionCommand(region, QuantizeStrength: 1, GrooveId: "grv_late"));
         Assert.Equal(580L * 25, NoteOns()[0].SamplePos);
         Apply(new DeleteGrooveCommand("grv_late"));
@@ -332,7 +358,10 @@ public sealed class Phase7Tests {
     public void A_file_version_points_the_file_elsewhere_and_regions_must_fit_it() {
         var (file, region) = AudioRegion(48_000, 10_000, 20_000);
         Apply(new SetFileVersionCommand(file, 1, "Audio Files/Take.v1.wav", 40_000));
-        Assert.Equal((1, "Audio Files/Take.v1.wav", 40_000L), (state.Files[file].Version, state.Files[file].Path, state.Files[file].Frames));
+        Assert.Equal(
+            (1, "Audio Files/Take.v1.wav", 40_000L),
+            (state.Files[file].Version, state.Files[file].Path, state.Files[file].Frames)
+        );
         Refused(new SetFileVersionCommand(file, 2, "Audio Files/Take.v2.wav", 25_000));
         Refused(new SetFileVersionCommand(file, 2, "../Take.v2.wav"));
         Refused(new SetFileVersionCommand(file, 2, "/tmp/Take.v2.wav"));
@@ -351,7 +380,15 @@ public sealed class Phase7Tests {
         Assert.Equal((0L, 15_000L, before.StartTick + 200), (trimmed.FileOffset, trimmed.Length, trimmed.StartTick));
 
         // Keeping only frames after it, the region would vanish.
-        Assert.Throws<EditException>(() => Edits.FileLengthChanged(state, file, AudioEditKind.Trim, 40_000, 50_000, 48_000));
+        Assert.Throws<EditException>(() => Edits.FileLengthChanged(
+                state,
+                file,
+                AudioEditKind.Trim,
+                40_000,
+                50_000,
+                48_000
+            )
+        );
         // A conversion scales its frames, at the project's rate only.
         Apply(new SetFileVersionCommand(file, 0, state.Files[file].Path, 96_000, 96_000));
         var converted = Assert.IsType<RegionUpserted>(
@@ -359,7 +396,15 @@ public sealed class Phase7Tests {
             )
             .Region;
         Assert.Equal((5_000L, 10_000L), (converted.FileOffset, converted.Length));
-        Assert.Throws<EditException>(() => Edits.FileLengthChanged(state, file, AudioEditKind.ConvertRate, 0, 96_000, 44_100));
+        Assert.Throws<EditException>(() => Edits.FileLengthChanged(
+                state,
+                file,
+                AudioEditKind.ConvertRate,
+                0,
+                96_000,
+                44_100
+            )
+        );
         Assert.Empty(Edits.FileLengthChanged(state, file, AudioEditKind.Gain, 0, 10, 48_000));
     }
 
@@ -385,20 +430,30 @@ public sealed class Phase7Tests {
         Assert.True(Edits.TargetExists(state, track, $"midiEffect:{scripter}:Interval"));
         Assert.False(Edits.TargetExists(state, track, $"midiEffect:{scripter}:Nope"));
 
-        // A recompile: Interval keeps its value, Delay goes, Gate comes at its default.
+        // A recompile: Interval keeps its value, Gate comes at its default, and Delay's value stays for later.
         state = state.Apply(
             Edits.WithRuntimeParameters(
                 state,
                 track,
                 scripter,
-                [new("Interval", "Interval", -24, 24, 12, string.Empty, 48, null), new("Gate", "Gate", 0, 1, 0.5, string.Empty, 0, null)]
+                [
+                    new("Interval", "Interval", -24, 24, 12, string.Empty, 48, null),
+                    new("Gate", "Gate", 0, 1, 0.5, string.Empty, 0, null)
+                ]
             )!
         );
         Assert.Equal(
-            [KeyValuePair.Create("Gate", 0.5), KeyValuePair.Create("Interval", 7.0)],
+            [
+                KeyValuePair.Create("Delay", 100.0), KeyValuePair.Create("Gate", 0.5),
+                KeyValuePair.Create("Interval", 7.0)
+            ],
             state.Tracks[0].Strip.MidiEffects[0].Parameters.OrderBy(static p => p.Key, StringComparer.Ordinal)
         );
         Assert.Null(Edits.WithRuntimeParameters(state, track, "ins_none", []));
+        // A failed compile reports no parameters; the values wait for the fixed script.
+        state = state.Apply(Edits.WithRuntimeParameters(state, track, scripter, [])!);
+        Assert.Empty(state.Tracks[0].Strip.MidiEffects[0].RuntimeParameters!);
+        Assert.Equal(7, state.Tracks[0].Strip.MidiEffects[0].Parameters["Interval"]);
         // The engine gets the script with its slot.
         var strip = Strips.Engine(state, state.Tracks[0], EngineIds.Empty.With(state));
         Assert.Equal("function HandleMIDI(e) { e.send(); }", strip.MidiEffects![0].Source);
@@ -467,7 +522,14 @@ public sealed class Phase7Tests {
     PlaybackEvent[] NoteOns() => [..Events().Where(static e => e.Kind == PlaybackEventKind.NoteOn)];
 
     void Apply(params EditCommand[] commands) =>
-        state = Edits.Apply(state, commands, ids, RandomProjects.Plugins, RandomProjects.Patches, RandomProjects.Analysis)
+        state = Edits.Apply(
+                state,
+                commands,
+                ids,
+                RandomProjects.Plugins,
+                RandomProjects.Patches,
+                RandomProjects.Analysis
+            )
             .State;
 
     void Refused(EditCommand command) =>
