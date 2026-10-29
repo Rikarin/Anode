@@ -9,9 +9,11 @@ import {
   type CommandResult,
   type DeltaOp,
   type EditCommand,
+  type LiveLoopsGrid,
   type Marker,
   type MidiRegion,
   type MixerGroup,
+  type PatternRegion,
   type Project,
   type ProjectDelta,
   type ProjectSettings,
@@ -68,6 +70,9 @@ const SilentStrip: ChannelStrip = {
   midiEffects: []
 };
 
+/** A new project's Live Loops grid: empty, launching on the bar, hidden. */
+export const EmptyLiveLoops: LiveLoopsGrid = { scenes: [], cells: [], quantize: 'bar', shown: false };
+
 /** Audio frames per tick at a tempo and sample rate (one tempo per project in Phase 1). */
 export function framesPerTick(sampleRate: number, tempo: number): number {
   return (sampleRate * 60) / (tempo * Ppq);
@@ -120,6 +125,10 @@ export class ProjectStore {
   readonly groups = signal<ReadonlyMap<number, MixerGroup>>(new Map());
   /** Track automation lanes by id (a lane's `trackId` null is the master's). */
   readonly automation = signal<ReadonlyMap<string, AutomationLane>>(new Map());
+  /** Step Sequencer pattern regions (`pat_…`) by id (Phase 6). */
+  readonly patternRegions = signal<ReadonlyMap<string, PatternRegion>>(new Map());
+  /** The Live Loops grid: scenes, cells, launch quantise, and whether it shows beside the Tracks area (Phase 6). */
+  readonly liveLoops = signal<LiveLoopsGrid>(EmptyLiveLoops);
   /** A project is being opened, created or refetched. */
   readonly loading = signal(false);
 
@@ -132,6 +141,7 @@ export class ProjectStore {
   });
   readonly regionList = computed(() => [...this.regions().values()]);
   readonly midiRegionList = computed(() => [...this.midiRegions().values()]);
+  readonly patternRegionList = computed(() => [...this.patternRegions().values()]);
   readonly framesPerTick = computed(() => framesPerTick(this.info()?.sampleRate ?? 48_000, this.settings().tempo));
   readonly takeFolderList = computed(() => [...this.takeFolders().values()]);
   /** Mixer groups in number order. */
@@ -200,6 +210,8 @@ export class ProjectStore {
     this.notes.set(project.notes);
     this.groups.set(new Map(project.groups.map(g => [g.number, g])));
     this.automation.set(new Map(project.automation.map(l => [l.id, l])));
+    this.patternRegions.set(new Map(project.patternRegions.map(r => [r.id, r])));
+    this.liveLoops.set(project.liveLoops);
   }
 
   /** No project open. */
@@ -222,6 +234,8 @@ export class ProjectStore {
     this.notes.set('');
     this.groups.set(new Map());
     this.automation.set(new Map());
+    this.patternRegions.set(new Map());
+    this.liveLoops.set(EmptyLiveLoops);
   }
 
   /** Fetches the open project (or learns that none is), replacing what the store has. Concurrent calls share one. */
@@ -371,6 +385,10 @@ export class ProjectStore {
     return this.midiRegions().get(id);
   }
 
+  patternRegion(id: string): PatternRegion | undefined {
+    return this.patternRegions().get(id);
+  }
+
   /** A track's (or, for null, the master's) automation lane of `target`, if it has one. */
   automationLane(trackId: string | null, target: string): AutomationLane | undefined {
     for (const lane of this.automation().values()) {
@@ -411,12 +429,13 @@ export class ProjectStore {
     const sections = new Map(this.sections().map(s => [s.id, s]));
     const groups = new Map(this.groups());
     const automation = new Map(this.automation());
+    const patternRegions = new Map(this.patternRegions());
     let trackIds = [...this.trackIds()];
     let missingFile = false;
     for (const op of delta.ops) {
       this.applyOp(
         op,
-        { tracks, regions, midiRegions, files, takeFolders, markers, sections, groups, automation },
+        { tracks, regions, midiRegions, files, takeFolders, markers, sections, groups, automation, patternRegions },
         ids => (trackIds = ids(trackIds))
       );
       if (op.op === 'regionUpserted' && !files.has(op.region.fileId)) {
@@ -447,6 +466,9 @@ export class ProjectStore {
     if (delta.ops.some(op => op.op.startsWith('automationLane') || op.op === 'trackRemoved')) {
       this.automation.set(automation);
     }
+    if (delta.ops.some(op => op.op.startsWith('patternRegion') || op.op === 'trackRemoved')) {
+      this.patternRegions.set(patternRegions);
+    }
     this.trackIds.set(trackIds);
     this.revision.set(delta.revision);
     this.dirty.set(true);
@@ -468,6 +490,7 @@ export class ProjectStore {
       sections: Map<string, ArrangementMarker>;
       groups: Map<number, MixerGroup>;
       automation: Map<string, AutomationLane>;
+      patternRegions: Map<string, PatternRegion>;
     },
     order: (update: (ids: string[]) => string[]) => void
   ): void {
@@ -501,6 +524,11 @@ export class ProjectStore {
         for (const [id, lane] of maps.automation) {
           if (lane.trackId === op.id) {
             maps.automation.delete(id);
+          }
+        }
+        for (const [id, region] of maps.patternRegions) {
+          if (region.trackId === op.id) {
+            maps.patternRegions.delete(id);
           }
         }
         break;
@@ -562,9 +590,13 @@ export class ProjectStore {
         maps.groups.delete(op.number);
         break;
       case 'patternRegionUpserted':
+        maps.patternRegions.set(op.region.id, op.region);
+        break;
       case 'patternRegionRemoved':
+        maps.patternRegions.delete(op.id);
+        break;
       case 'liveLoopsChanged':
-        // Pattern regions and Live Loops: Phase 6, the editor workstream (docs/07-phase-6.md).
+        this.liveLoops.set(op.liveLoops);
         break;
     }
   }

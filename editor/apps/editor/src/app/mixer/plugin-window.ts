@@ -1,11 +1,14 @@
+import { NgComponentOutlet } from '@angular/common';
 import { ChangeDetectionStrategy, Component, DestroyRef, computed, inject, input, signal } from '@angular/core';
-import type { Insert, ParameterInfo, PluginInfo } from '@anode/api-client';
+import type { EditCommand, Insert, ParameterInfo, PluginInfo } from '@anode/api-client';
 import { AnChoice, AnKnob, AnReadingMeter } from '@anode/audio-ui';
 import { provideIcons } from '@ng-icons/core';
 import { matCloseRound, matPowerSettingsNewRound } from '@ng-icons/material-icons/round';
 import { XuiButtonImports } from '@xui/button';
 import { XuiIconImports } from '@xui/icon';
+import { ConnectionService } from '../core/connection';
 import { isChoice, parameterGroups } from '../inspector/parameter-editor';
+import { type PluginPanelHost, pluginPanel } from '../plugin-panels/plugin-panel';
 import { MeterBus } from '../state/meters';
 import { MixerStore } from '../state/mixer.store';
 import { PluginsStore } from '../state/plugins.store';
@@ -41,7 +44,7 @@ export function readingKind(plugin: PluginInfo | undefined): {
 @Component({
   selector: 'an-plugin-window',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [AnChoice, AnKnob, AnReadingMeter, XuiButtonImports, XuiIconImports],
+  imports: [AnChoice, AnKnob, AnReadingMeter, NgComponentOutlet, XuiButtonImports, XuiIconImports],
   providers: [provideIcons({ matCloseRound, matPowerSettingsNewRound })],
   host: {
     class: 'panel fixed z-40 flex max-h-[70vh] w-[26rem] flex-col overflow-hidden rounded-lg',
@@ -101,6 +104,33 @@ export function readingKind(plugin: PluginInfo | undefined): {
             [value]="reading()"
           />
         }
+        @if (loadsFile()) {
+          <form
+            class="flex items-center gap-1.5"
+            aria-label="Impulse response"
+            (submit)="$event.preventDefault(); loadFile(i, filePath.value)"
+          >
+            <span class="text-foreground min-w-0 flex-1 truncate text-[11px]" data-testid="plugin-file">
+              {{ fileOf(i) ?? 'No file loaded' }}
+            </span>
+            @if (desktopDialog) {
+              <button xuiButton type="button" size="sm" data-testid="plugin-import-file" (click)="chooseFile(i)">
+                Import IR…
+              </button>
+            }
+            <input
+              #filePath
+              class="bg-surface-inset border-hairline text-foreground h-6 w-32 rounded border px-1.5 text-[11px]"
+              aria-label="File path"
+              data-testid="plugin-file-path"
+              placeholder="/path/to/ir.wav"
+            />
+            <button xuiButton type="submit" size="sm" variant="outline">Load</button>
+          </form>
+        }
+        @if (panel(); as p) {
+          <ng-container *ngComponentOutlet="p; inputs: { host: host() }" />
+        }
         @for (group of groups(); track group.name) {
           <section class="flex flex-col gap-1" [attr.aria-label]="group.name">
             <h4 class="text-foreground-muted text-[10px] font-semibold tracking-wide uppercase">{{ group.name }}</h4>
@@ -149,6 +179,8 @@ export function readingKind(plugin: PluginInfo | undefined): {
 export class PluginWindowView {
   protected readonly mixer = inject(MixerStore);
   private readonly project = inject(ProjectStore);
+  private readonly dialogs = inject(ConnectionService).desktop?.dialogs;
+  protected readonly desktopDialog = typeof this.dialogs?.instrumentFile === 'function';
   private readonly plugins = inject(PluginsStore);
   private readonly ui = inject(UiStore);
   private readonly meters = inject(MeterBus);
@@ -163,11 +195,25 @@ export class PluginWindowView {
   protected readonly choice = isChoice;
 
   protected readonly insert = computed<Insert | undefined>(() => {
-    const { trackId, insertId } = this.window();
+    const { trackId, insertId, chain } = this.window();
     const strip = trackId === null ? this.project.master() : this.project.track(trackId)?.strip;
-    return strip?.inserts.find(i => i.id === insertId);
+    return (chain === 'midiEffects' ? strip?.midiEffects : strip?.inserts)?.find(i => i.id === insertId);
   });
   protected readonly plugin = computed(() => this.plugins.plugin(this.insert()?.pluginId));
+  /** A custom panel for the plugin (drawbars, Delay Designer taps…) when its parameters match one; else none. */
+  protected readonly panel = computed(() => pluginPanel(this.plugin()));
+  protected readonly host = computed<PluginPanelHost | null>(() => {
+    const plugin = this.plugin();
+    const insert = this.insert();
+    if (!plugin || !insert) {
+      return null;
+    }
+    return {
+      plugin,
+      value: id => this.mixer.parameterValue(this.window().trackId, insert, id),
+      set: (id, value) => void this.mixer.setParameter(this.window().trackId, insert.id, id, value)
+    };
+  });
   protected readonly groups = computed(() => parameterGroups(this.plugin()?.parameters ?? []));
   protected readonly title = computed(() => {
     const trackId = this.window().trackId;
@@ -198,6 +244,38 @@ export class PluginWindowView {
     if (value !== this.value(insert, parameter)) {
       void this.mixer.setParameter(this.window().trackId, insert.id, parameter.id, value);
     }
+  }
+
+  /** An effect that loads a file (the convolution reverb's impulse response). */
+  protected readonly loadsFile = computed(() => {
+    const plugin = this.plugin();
+    return !!plugin && !plugin.isInstrument && plugin.fileTypes.length > 0;
+  });
+
+  /** The file an insert plays (`file`, set by `loadInsertFile`; not in the committed contract yet). */
+  protected fileOf(insert: Insert): string | null {
+    return (insert as Insert & { file?: string | null }).file ?? null;
+  }
+
+  protected async chooseFile(insert: Insert): Promise<void> {
+    const path = await this.dialogs?.instrumentFile?.(this.plugin()?.fileTypes ?? ['.wav']);
+    if (path) {
+      this.loadFile(insert, path);
+    }
+  }
+
+  /**
+   * Loads a file into an insert ("Import IR…"). The command is workstream B's, still to come: assumed shaped like
+   * `loadInstrumentFile`, for an insert (`loadInsertFile(trackId?, insertId, path)`).
+   */
+  protected loadFile(insert: Insert, path: string): void {
+    const trimmed = path.trim();
+    if (!trimmed) {
+      return;
+    }
+    const trackId = this.window().trackId;
+    const command = { type: 'loadInsertFile', insertId: insert.id, path: trimmed, ...(trackId ? { trackId } : {}) };
+    void this.project.execute([command as unknown as EditCommand], 'Import Impulse Response');
   }
 
   protected close(): void {

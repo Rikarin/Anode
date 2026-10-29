@@ -166,6 +166,20 @@ export function targetRange(
     const parameter = plugin(insert.pluginId)?.parameters.find(p => p.id === insertMatch[2]);
     return parameter ? { min: parameter.min, max: parameter.max, parameter } : refuse(`No parameter ${target}.`);
   }
+  const midiEffectMatch = /^midiEffect:([^:]+):(.+)$/.exec(target);
+  if (midiEffectMatch?.[1] && midiEffectMatch[2]) {
+    const slot =
+      strip.midiEffects.find(i => i.id === midiEffectMatch[1]) ?? refuse(`No MIDI FX slot ${midiEffectMatch[1]}.`);
+    const parameter = plugin(slot.pluginId)?.parameters.find(p => p.id === midiEffectMatch[2]);
+    return parameter ? { min: parameter.min, max: parameter.max, parameter } : refuse(`No parameter ${target}.`);
+  }
+  const controlMatch = /^smartControl:(.+)$/.exec(target);
+  if (controlMatch?.[1] && track) {
+    if (!/^(knob([1-9]|1[0-2])|switch[12]|pad[XY])$/.test(controlMatch[1])) {
+      refuse(`No Smart Control ${controlMatch[1]}.`);
+    }
+    return { min: 0, max: 1 };
+  }
   const instrumentMatch = /^instrument:(.+)$/.exec(target);
   if (instrumentMatch?.[1] && track?.instrument) {
     const parameter = plugin(track.instrument.pluginId)?.parameters.find(p => p.id === instrumentMatch[1]);
@@ -175,7 +189,7 @@ export function targetRange(
 }
 
 /** Replaces a lane's points (an empty list removes the lane). */
-function setLane(
+export function setLane(
   project: Project,
   trackId: string | null,
   target: string,
@@ -201,7 +215,7 @@ function setLane(
  * A control move recorded into its lane: on a track in touch, latch or write while the transport runs, a point at the
  * playhead replacing what lies between the pass's previous point of that lane and now.
  */
-function record(project: Project, trackId: string, target: string, value: number, ctx: MixContext): Project {
+export function record(project: Project, trackId: string, target: string, value: number, ctx: MixContext): Project {
   if (ctx.playhead === null) {
     return project;
   }
@@ -351,6 +365,9 @@ export function applyMixCommand(project: Project, command: EditCommand, ctx: Mix
       const plugin = ctx.plugin(command.pluginId);
       if (!plugin || plugin.isInstrument) {
         refuse(`No effect ${command.pluginId} in the plugin catalogue.`);
+      }
+      if (plugin.category === 'MIDI Effect') {
+        refuse(`${plugin.name} is a MIDI effect: it goes in a MIDI FX slot.`);
       }
       const strip = stripOf(project, command.trackId);
       if (command.trackId && findTrack(project, command.trackId).kind === 'vca') {

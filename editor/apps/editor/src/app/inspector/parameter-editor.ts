@@ -1,6 +1,8 @@
+import { NgComponentOutlet } from '@angular/common';
 import { ChangeDetectionStrategy, Component, computed, inject, input } from '@angular/core';
 import type { ParameterInfo, PluginInfo } from '@anode/api-client';
 import { AnChoice, AnKnob } from '@anode/audio-ui';
+import { type PluginPanelHost, pluginPanel } from '../plugin-panels/plugin-panel';
 import { InstrumentStore } from '../state/instrument.store';
 
 /**
@@ -62,9 +64,12 @@ export function isChoice(parameter: ParameterInfo): boolean {
 @Component({
   selector: 'an-parameter-editor',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [AnChoice, AnKnob],
+  imports: [AnChoice, AnKnob, NgComponentOutlet],
   host: { class: 'flex flex-col gap-3', role: 'group', '[attr.aria-label]': 'plugin().name + " parameters"' },
   template: `
+    @if (panel(); as p) {
+      <ng-container *ngComponentOutlet="p; inputs: { host: host() }" />
+    }
     @for (group of groups(); track group.name) {
       <section class="flex flex-col gap-1" [attr.aria-label]="group.name">
         <h4 class="text-foreground-muted text-[10px] font-semibold tracking-wide uppercase">{{ group.name }}</h4>
@@ -107,6 +112,13 @@ export class ParameterEditor {
 
   protected readonly groups = computed(() => parameterGroups(this.plugin().parameters));
   protected readonly choice = isChoice;
+  /** A custom panel for the instrument (drawbars, the FM algorithm…) when its parameters match one; else none. */
+  protected readonly panel = computed(() => pluginPanel(this.plugin()));
+  protected readonly host = computed<PluginPanelHost>(() => ({
+    plugin: this.plugin(),
+    value: id => this.instruments.value(this.trackId(), id),
+    set: (id, value) => void this.instruments.set(this.trackId(), id, value)
+  }));
 
   protected value(parameter: ParameterInfo): number {
     return this.instruments.value(this.trackId(), parameter.id);

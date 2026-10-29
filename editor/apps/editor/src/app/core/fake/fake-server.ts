@@ -1,4 +1,6 @@
 import {
+  type AddLoopRequest,
+  type AddToLoopLibraryRequest,
   ApiError,
   type AudioFile,
   type AudioRegion,
@@ -18,11 +20,17 @@ import {
   type IoLabels,
   type Job,
   type KeyCommandSet,
+  type LaunchRequest,
   type LiveMidiEvent,
+  type LiveRecordRequest,
+  type LoopInfo,
+  type LoopPage,
   type MidiDevices,
   type MidiRegion,
   type Note,
+  type Pack,
   type PatchInfo,
+  type PatternRegion,
   type PluginEditorRequest,
   type PluginInfo,
   type ProcessRequest,
@@ -34,6 +42,7 @@ import {
   type SavePatchRequest,
   type Screenset,
   type ServerMessage,
+  type StopRequest,
   type SystemInfo,
   type TakeFolder,
   type Track,
@@ -42,10 +51,12 @@ import {
   type TransportStatus,
   type UndoHistory
 } from '@anode/api-client';
+import { MeterMap } from '@anode/timeline';
 import { clampParameter, defaultParameters } from '../../instruments/parameters';
+import { type CellChange, Launcher } from '../../live-loops/launcher';
 import { isNoteOff, isNoteOn, NeutralPlayback, quantizeNotes } from '../../midi/midi-math';
 import { TrackColors } from '../../state/track-colors';
-import type { AnodeApi, CreateProject } from '../api';
+import type { AnodeApi, CreateProject, LoopSearch } from '../api';
 import {
   audioEnd,
   checkComp,
@@ -56,6 +67,7 @@ import {
   framesBetween,
   groupStacks,
   joinRegions,
+  meterOf,
   moveSection,
   packTakeFolder,
   replaceRange,
@@ -66,6 +78,7 @@ import {
 import { fakePeaks, hash, readWavHeader } from './fake-audio';
 import { fakeFileExists, FakeHome, fileKind, listFakeFolder } from './fake-files';
 import { adaptTempo, applyFlexCommand, fakeAnalysis, type FlexContext, timingOf } from './fake-flex';
+import { type FakeLoop, FakeLoopLibrary, keyInterval } from './fake-loops';
 import {
   applyMixCommand,
   applyStrip,
@@ -75,7 +88,25 @@ import {
   patchOf,
   type StoredPatch
 } from './fake-mix';
+import {
+  applyMidiEffectCommand,
+  applyPhase6Command,
+  copyPatternRegions,
+  deletePatternRegions,
+  type FakeKit,
+  FakeKits,
+  type InsertFileCommand,
+  isPatternRegionId,
+  isPhase6Command,
+  keepSavedValues,
+  loadInsertFile,
+  movePatternRegion,
+  type Phase6Context,
+  saveSmartControls,
+  setCell
+} from './fake-phase6';
 import { CrashyPluginId, FakeCatalogue, FakeEffects, FakeMidiDevices } from './fake-plugins';
+import { FakeMidiEffects, FakeT2Effects, FakeT2Instruments, RemixFxId, withMacros } from './fake-plugins-phase6';
 
 /** Ticks per quarter note (the contract's time base). */
 const Ppq = 960;
@@ -156,8 +187,40 @@ export class FakeAnodeServer implements AnodeApi {
 
   /** Built-in instruments and effects first, then third-party plugins, as the host lists them. */
   private readonly catalogue: PluginInfo[] = structuredClone(
-    [...FakeCatalogue, ...FakeEffects].sort((a, b) => Number(a.format !== 'builtin') - Number(b.format !== 'builtin'))
+    [...FakeCatalogue, ...FakeT2Instruments, ...FakeEffects, ...FakeT2Effects, ...FakeMidiEffects]
+      .map(withMacros)
+      .sort((a, b) => Number(a.format !== 'builtin') - Number(b.format !== 'builtin'))
   );
+  /** Drum Machine Designer kits (patches of kind `stack`), by id. */
+  private readonly kits = new Map<string, FakeKit>(FakeKits.map(k => [k.info.id, structuredClone(k)]));
+  /** The loop index: installed packs, user loops, favourites (Phase 6). */
+  readonly loopLibrary = new FakeLoopLibrary();
+  /** The loop the preview channel plays in sync, and how (tests). */
+  previewSync: { loopId: string; tempoRatio: number; transpose: number; startOnBar: boolean } | null = null;
+  /** Live Loops' launcher: cell states at quantise boundaries, reported as `cell` events. */
+  private readonly launcher = new Launcher(() => {
+    const project = this.project;
+    const tempo = project ? tempoOf(project) : null;
+    return {
+      meter: project ? meterOf(project) : new MeterMap([]),
+      quantize: project?.liveLoops.quantize ?? 'bar',
+      // 1 ms at the tempo there.
+      lateTicks: tick => (tempo ? (tempo.bpmAt(tick) * Ppq * 0.001) / 60 : 0)
+    };
+  });
+  /** A performance recording (cells and Remix FX into the Tracks area): where cells played, and Remix FX moves. */
+  private performance: {
+    plays: { cellId: string; from: number; to: number | null }[];
+    remix: { tick: number; insertId: string; parameterId: string; value: number }[];
+  } | null = null;
+  /** Recording into a cell: its slot, from where, and the notes held and played. */
+  private cellRecording: {
+    trackId: string;
+    sceneId: string;
+    from: number;
+    held: Map<number, { start: number; velocity: number }>;
+    notes: { pitch: number; velocity: number; startTick: number; lengthTicks: number }[];
+  } | null = null;
   private readonly jobList = new Map<string, FakeJob>();
   /** File analyses (the package's `Analysis/<fileId>.json`), by file id. */
   private readonly analyses = new Map<string, FileAnalysis>();
@@ -304,7 +367,13 @@ export class FakeAnodeServer implements AnodeApi {
 
   saveProject(): Promise<ProjectSummary> {
     return this.answer('SaveProject', () => {
-      const project = this.require();
+      let project = this.require();
+      const saved = saveSmartControls(project);
+      if (JSON.stringify(saved.tracks) !== JSON.stringify(project.tracks)) {
+        // The controls' saved values become the edited ones (not an undo step).
+        this.publish(project, saved);
+        project = this.require();
+      }
       // Every save first keeps the previous one as a backup (the newest ten).
       const previous = this.disk.get(project.path);
       if (previous) {
@@ -343,9 +412,14 @@ export class FakeAnodeServer implements AnodeApi {
 
       let after = before;
       for (const command of batch.commands) {
-        after = this.applyCommand(after, command);
+        after = this.applyCommand(keepSavedValues(after, command), command);
+        this.notePerformance(command);
       }
 
+      // Compare swaps saved and edited values without an undo step (its delta still reaches every client).
+      if (batch.commands.every(c => c.type === 'compareSmartControls')) {
+        return this.publish(before, after);
+      }
       return this.commit(before, after, batch.label || 'Edit', coalesceKey(batch.commands));
     });
   }
@@ -485,6 +559,10 @@ export class FakeAnodeServer implements AnodeApi {
       }
 
       this.liveMidi.push({ trackId, events: structuredClone(events) });
+      if (this.cellRecording?.trackId === trackId && this.transportState !== 'stopped') {
+        this.advance();
+        this.captureCell(events);
+      }
       if (this.transportState === 'recording' && track.recordArmed) {
         this.advance();
         this.capture(trackId, events);
@@ -685,6 +763,7 @@ export class FakeAnodeServer implements AnodeApi {
         throw new ApiError(422, `The preview plays WAV files; ${path} is not one.`);
       }
       this.previewing = path;
+      this.previewSync = null;
     });
   }
 
@@ -766,7 +845,7 @@ export class FakeAnodeServer implements AnodeApi {
 
   patches(): Promise<PatchInfo[]> {
     return this.answer('ListPatches', () =>
-      [...this.patchStore.values()]
+      [...this.patchStore.values(), ...this.installedKits()]
         .map(p => ({ ...p.info }))
         .sort((a, b) => a.category.localeCompare(b.category) || a.name.localeCompare(b.name))
     );
@@ -955,6 +1034,517 @@ export class FakeAnodeServer implements AnodeApi {
   }
 
   /** The ranges a bounce in place renders, by source track: whole tracks, or the regions grouped by track. */
+  // ---- Phase 6: loops, packs, Live Loops
+
+  queryLoops(search: LoopSearch): Promise<LoopPage> {
+    return this.answer('QueryLoops', () => this.loopLibrary.query(search));
+  }
+
+  previewLoop(id: string): Promise<void> {
+    return this.answer('PreviewLoop', () => {
+      const loop = this.loopLibrary.get(id).info;
+      const project = this.project;
+      const bpm = project ? tempoOf(project).bpmAt(this.positionTick) : 120;
+      const tonic = project ? keyTonicAt(project, this.positionTick) : 0;
+      this.previewing = loop.path;
+      // In sync: at the project's tempo and key, from the next bar while playing.
+      this.previewSync = {
+        loopId: id,
+        tempoRatio: loop.tempo ? bpm / loop.tempo : 1,
+        transpose: keyInterval(loop.key, tonic),
+        startOnBar: this.transportState !== 'stopped'
+      };
+    });
+  }
+
+  setLoopFavourite(id: string, favourite: boolean): Promise<LoopInfo> {
+    return this.answer('SetLoopFavourite', () => this.loopLibrary.setFavourite(id, favourite));
+  }
+
+  addToLoopLibrary(request: AddToLoopLibraryRequest): Promise<LoopInfo> {
+    return this.answer('AddToLoopLibrary', () => {
+      const project = this.require();
+      const name = request.name.trim();
+      if (!name) {
+        throw new ApiError(422, 'A loop needs a name.');
+      }
+      const audio = project.regions.find(r => r.id === request.regionId);
+      const midi = project.midiRegions.find(r => r.id === request.regionId);
+      const pattern = project.patternRegions.find(r => r.id === request.regionId);
+      if (!audio && !midi && !pattern) {
+        throw new ApiError(422, `No region ${request.regionId}.`);
+      }
+      const tempo = project.settings.tempo;
+      const ticks = midi?.lengthTicks ?? pattern?.lengthTicks ?? (audio ? this.regionTicks(project, audio) : 0);
+      const kind = audio ? 'audio' : midi ? 'midi' : 'pattern';
+      const file = `${name}${kind === 'audio' ? '.wav' : kind === 'midi' ? '.mid' : '.anodeloop.json'}`;
+      const loop: FakeLoop = {
+        info: {
+          id: `user:${this.nextId++}`,
+          name,
+          kind,
+          packId: null,
+          path: `/Users/anode/Library/Application Support/Anode/Library/Loops/User/${file}`,
+          tempo: request.oneShot ? null : tempo,
+          beats: request.oneShot ? null : Math.round((ticks / Ppq) * 100) / 100,
+          key: request.key ?? null,
+          scale: request.scale ?? 'neither',
+          tags: [...request.tags],
+          oneShot: request.oneShot,
+          favourite: false
+        },
+        ...(midi
+          ? {
+              notes: midi.notes.map(n => ({
+                pitch: n.pitch,
+                startTick: n.startTick,
+                lengthTicks: n.lengthTicks,
+                velocity: n.velocity
+              }))
+            }
+          : {}),
+        ...(pattern ? { pattern: structuredClone(pattern.pattern) } : {})
+      };
+      return this.loopLibrary.add(loop);
+    });
+  }
+
+  packs(): Promise<Pack[]> {
+    return this.answer('ListPacks', () => this.loopLibrary.packs());
+  }
+
+  installPack(path: string): Promise<Pack> {
+    return this.answer('InstallPack', () => this.loopLibrary.install(absolute(path)));
+  }
+
+  removePack(id: string): Promise<void> {
+    return this.answer('RemovePack', () => this.loopLibrary.remove(id));
+  }
+
+  addLoop(request: AddLoopRequest): Promise<CommandResult> {
+    return this.answer('AddLoop', () => {
+      const before = this.require();
+      return this.commit(before, this.withLoop(before, request), 'Add Loop');
+    });
+  }
+
+  launchCells(request: LaunchRequest): Promise<void> {
+    return this.answer('LaunchCells', () => {
+      const project = this.require();
+      const grid = project.liveLoops;
+      let cells: typeof grid.cells;
+      if (request.sceneId) {
+        if (!grid.scenes.some(s => s.id === request.sceneId)) {
+          throw new ApiError(422, `No scene ${request.sceneId}.`);
+        }
+        cells = grid.cells.filter(c => c.sceneId === request.sceneId);
+      } else {
+        cells = (request.cellIds ?? []).map(id => grid.cells.find(c => c.id === id) ?? this.refuse(`No cell ${id}.`));
+        if (cells.length === 0) {
+          throw new ApiError(422, 'Launch cells or a scene.');
+        }
+      }
+      this.advance();
+      if (this.transportState === 'stopped') {
+        // A launch starts playback, as in Logic.
+        this.start('playing');
+      }
+      const changes = request.sceneId
+        ? this.launcher.launchScene(cells, this.positionTick)
+        : this.launcher.launch(cells, this.positionTick);
+      this.emitCells(changes);
+    });
+  }
+
+  stopCells(request: StopRequest): Promise<void> {
+    return this.answer('StopCells', () => {
+      this.require();
+      this.advance();
+      this.emitCells(this.launcher.stop(request.trackIds ?? null, this.positionTick));
+    });
+  }
+
+  recordLiveLoops(request: LiveRecordRequest): Promise<void> {
+    return this.answer('RecordLiveLoops', () => {
+      const project = this.require();
+      this.advance();
+      if (request.trackId || request.sceneId) {
+        if (!request.on) {
+          this.finishCellRecording();
+          return;
+        }
+        const track = project.tracks.find(t => t.id === request.trackId) ?? this.refuse(`No track ${request.trackId}.`);
+        if (!project.liveLoops.scenes.some(s => s.id === request.sceneId)) {
+          throw new ApiError(422, `No scene ${request.sceneId}.`);
+        }
+        if (track.kind === 'audio') {
+          throw new ApiError(422, 'The fake engine records MIDI into cells only.');
+        }
+        if (this.transportState === 'stopped') {
+          this.start('playing');
+        }
+        const meter = meterOf(project);
+        const bar = meter.barStart(Math.ceil(meter.barAt(this.positionTick) - 1e-9));
+        this.cellRecording = {
+          trackId: track.id,
+          sceneId: request.sceneId ?? '',
+          from: bar,
+          held: new Map(),
+          notes: []
+        };
+        return;
+      }
+      if (request.on) {
+        if (this.transportState === 'stopped') {
+          this.start('playing');
+        }
+        const now = this.positionTick;
+        this.performance = {
+          plays: [...this.launcher.active()]
+            .filter(([, a]) => a.state === 'playing' || a.state === 'stopping')
+            .map(([cellId]) => ({ cellId, from: now, to: null })),
+          remix: []
+        };
+      } else if (this.performance) {
+        this.finishPerformance();
+      }
+    });
+  }
+
+  /** The kits of the installed packs (every fake pack carries the same kits). */
+  private installedKits(): FakeKit[] {
+    return this.loopLibrary.packs().length ? [...this.kits.values()] : [];
+  }
+
+  /** Whether a performance or a cell is being recorded (tests). */
+  get liveRecording(): 'performance' | 'cell' | null {
+    return this.performance ? 'performance' : this.cellRecording ? 'cell' : null;
+  }
+
+  /** A launcher cell state's change as a `cell` event at its project sample; performance recording notes it. */
+  private emitCells(changes: readonly CellChange[]): void {
+    const project = this.project;
+    if (!project) {
+      return;
+    }
+    const tempo = tempoOf(project);
+    for (const change of changes) {
+      if (this.performance) {
+        if (change.state === 'playing') {
+          this.performance.plays.push({ cellId: change.cellId, from: change.tick, to: null });
+        } else if (change.state === 'stopped') {
+          const open = [...this.performance.plays].reverse().find(p => p.cellId === change.cellId && p.to === null);
+          if (open) {
+            open.to = change.tick;
+          }
+        }
+      }
+      this.emit({
+        type: 'cell',
+        cellId: change.cellId,
+        state: change.state,
+        sample: Math.round(tempo.secondsAt(change.tick) * project.sampleRate)
+      });
+    }
+  }
+
+  /** Remix FX moves during a performance recording become automation at its end. */
+  private notePerformance(command: EditCommand): void {
+    if (!this.performance || command.type !== 'setInsertParameter' || command.trackId) {
+      return;
+    }
+    const insert = this.project?.master.inserts.find(i => i.id === command.insertId);
+    if (insert?.pluginId === RemixFxId) {
+      this.performance.remix.push({
+        tick: Math.round(this.positionTick),
+        insertId: insert.id,
+        parameterId: command.parameterId,
+        value: command.value
+      });
+    }
+  }
+
+  /**
+   * The end of a performance recording: where each cell played becomes a region on its track (its content, looped
+   * to the span) and Remix FX moves become master automation, as one undo step.
+   */
+  private finishPerformance(): void {
+    const performance = this.performance;
+    const project = this.project;
+    this.performance = null;
+    if (!performance || !project) {
+      return;
+    }
+    let next = project;
+    const end = Math.round(this.positionTick);
+    for (const play of performance.plays) {
+      const cell = project.liveLoops.cells.find(c => c.id === play.cellId);
+      const to = play.to ?? end;
+      const from = Math.round(play.from);
+      if (!cell || to <= from) {
+        continue;
+      }
+      next = this.withCellRegion(next, cell, from, Math.round(to) - from);
+    }
+    const byLane = new Map<string, { tick: number; value: number }[]>();
+    for (const move of performance.remix) {
+      const target = `insert:${move.insertId}:${move.parameterId}`;
+      byLane.set(target, [...(byLane.get(target) ?? []), { tick: move.tick, value: move.value }]);
+    }
+    for (const [target, points] of byLane) {
+      const existing = next.automation.find(l => (l.trackId ?? null) === null && l.target === target);
+      const kept = (existing?.points ?? []).filter(p => !points.some(q => q.tick === p.tick));
+      const lane = {
+        id: existing?.id ?? `aut_${this.nextId++}`,
+        trackId: null,
+        target,
+        points: [...kept, ...points.map(p => ({ ...p, curve: 0 }))].sort((a, b) => a.tick - b.tick)
+      };
+      next = {
+        ...next,
+        automation: existing ? next.automation.map(l => (l === existing ? lane : l)) : [...next.automation, lane]
+      };
+    }
+    if (next !== project) {
+      this.commit(project, next, 'Record Performance');
+    }
+  }
+
+  /** A cell's content as a region on its track, `length` ticks from `from` (MIDI notes looped over the span). */
+  private withCellRegion(project: Project, cell: Project['liveLoops']['cells'][number], from: number, length: number) {
+    const { audio, midi, pattern } = cell.content;
+    if (midi) {
+      const loop = Math.max(1, cell.lengthTicks);
+      const notes: Note[] = [];
+      for (let start = 0; start < length; start += loop) {
+        for (const note of midi.notes) {
+          if (start + note.startTick < length) {
+            notes.push({ ...note, id: this.nextId++, startTick: start + note.startTick });
+          }
+        }
+      }
+      const region: MidiRegion = {
+        ...structuredClone(midi),
+        id: `mid_${this.nextId++}`,
+        trackId: cell.trackId,
+        startTick: from,
+        lengthTicks: length,
+        notes: sortNotes(notes),
+        controls: []
+      };
+      return { ...project, midiRegions: [...project.midiRegions, region] };
+    }
+    if (pattern) {
+      const region = {
+        ...structuredClone(pattern),
+        id: `pat_${this.nextId++}`,
+        trackId: cell.trackId,
+        startTick: from,
+        lengthTicks: length
+      };
+      return { ...project, patternRegions: [...project.patternRegions, region] };
+    }
+    if (audio) {
+      const region: AudioRegion = {
+        ...structuredClone(audio),
+        id: `rgn_${this.nextId++}`,
+        trackId: cell.trackId,
+        startTick: from
+      };
+      return { ...project, regions: [...project.regions, region] };
+    }
+    return project;
+  }
+
+  /** Live MIDI played into the cell being recorded. */
+  private captureCell(events: readonly LiveMidiEvent[]): void {
+    const recording = this.cellRecording;
+    if (!recording) {
+      return;
+    }
+    const tick = Math.round(this.positionTick);
+    for (const event of events) {
+      if (isNoteOn(event.status, event.data2)) {
+        recording.held.set(event.data1, { start: tick, velocity: event.data2 });
+      } else if (isNoteOff(event.status, event.data2)) {
+        const held = recording.held.get(event.data1);
+        recording.held.delete(event.data1);
+        if (held && held.start >= recording.from) {
+          recording.notes.push({
+            pitch: event.data1,
+            velocity: held.velocity,
+            startTick: held.start - recording.from,
+            lengthTicks: Math.max(1, tick - held.start)
+          });
+        }
+      }
+    }
+  }
+
+  /** The end of recording into a cell: its notes become the cell's MIDI, a whole number of bars (one undo step). */
+  private finishCellRecording(): void {
+    const recording = this.cellRecording;
+    const project = this.project;
+    this.cellRecording = null;
+    if (!recording || !project) {
+      return;
+    }
+    const meter = meterOf(project);
+    const bar = meter.barTicksAt(recording.from);
+    const played = Math.max(
+      Math.round(this.positionTick) - recording.from,
+      ...recording.notes.map(n => n.startTick + n.lengthTicks)
+    );
+    const lengthTicks = Math.max(bar, Math.ceil(played / bar) * bar);
+    const content: MidiRegion = {
+      id: 'new',
+      trackId: recording.trackId,
+      name: project.tracks.find(t => t.id === recording.trackId)?.name ?? 'Recording',
+      startTick: 0,
+      lengthTicks,
+      playback: { ...NeutralPlayback },
+      notes: recording.notes.map(n => ({ ...n, id: 0, channel: 1 })),
+      controls: [],
+      muted: false
+    };
+    const after = setCell(
+      project,
+      {
+        type: 'setCell',
+        trackId: recording.trackId,
+        sceneId: recording.sceneId,
+        content: { audio: null, midi: content, pattern: null }
+      },
+      this.phase6Context()
+    );
+    this.commit(project, after, 'Record Cell');
+  }
+
+  /** A loop added to a project (`addLoop`): a region on a track (a new one when none is named) or a cell's content. */
+  private withLoop(project: Project, request: AddLoopRequest): Project {
+    const loop = this.loopLibrary.get(request.loopId);
+    const info = loop.info;
+    const tick = Math.max(0, Math.round(request.tick));
+    const transpose = keyInterval(info.key, keyTonicAt(project, tick));
+    let next = project;
+    let trackId = request.trackId ?? null;
+    if (!trackId) {
+      const kind = info.kind === 'audio' ? 'audio' : 'instrument';
+      next = this.applyCommand(next, { type: 'addTrack', kind, stereo: true, name: info.name });
+      trackId = next.tracks.at(-1)?.id ?? '';
+    }
+    const track = next.tracks.find(t => t.id === trackId) ?? this.refuse(`No track ${trackId}.`);
+    if ((info.kind === 'audio') !== (track.kind === 'audio')) {
+      this.refuse(`${track.name} cannot hold ${info.kind === 'audio' ? 'an audio' : 'a MIDI'} loop.`);
+    }
+    const lengthTicks = Math.round((info.beats ?? 4) * Ppq);
+    const name = info.name;
+    let audio: AudioRegion | null = null;
+    let midi: MidiRegion | null = null;
+    let pattern: PatternRegion | null = null;
+    if (info.kind === 'audio') {
+      const seconds = info.tempo && info.beats ? (info.beats * 60) / info.tempo : 1;
+      const frames = Math.round(seconds * project.sampleRate);
+      const beat = info.tempo ? (60 * project.sampleRate) / info.tempo : 0;
+      const beats = beat ? Array.from({ length: Math.round(info.beats ?? 0) }, (_, i) => Math.round(i * beat)) : [];
+      const file: AudioFile = {
+        id: `aud_${this.nextId++}`,
+        name: `${name}.wav`,
+        path: `Audio Files/${name}.wav`,
+        sampleRate: project.sampleRate,
+        channels: 2,
+        bitDepth: 24,
+        frames,
+        tempo: info.tempo
+          ? { bpm: info.tempo, variable: false, beats, downbeats: beats.filter((_, i) => i % 4 === 0) }
+          : null
+      };
+      next = { ...next, audioFiles: [...next.audioFiles, file] };
+      audio = {
+        id: `rgn_${this.nextId++}`,
+        trackId: track.id,
+        fileId: file.id,
+        name,
+        startTick: tick,
+        fileOffset: 0,
+        length: frames,
+        gainDb: 0,
+        fadeIn: 0,
+        fadeOut: 0,
+        fadeInCurve: 0,
+        fadeOutCurve: 0,
+        muted: false,
+        // Follows the tempo from the sidecar's (a one-shot is added unwarped); the key by transposing.
+        follow: info.tempo && !info.oneShot ? 'on' : 'off',
+        flexMarkers: [],
+        transpose: info.oneShot ? 0 : transpose,
+        fineTune: 0,
+        pitchNotes: []
+      };
+    } else if (info.kind === 'midi') {
+      midi = {
+        id: `mid_${this.nextId++}`,
+        trackId: track.id,
+        name,
+        startTick: tick,
+        lengthTicks,
+        playback: { ...NeutralPlayback },
+        notes: sortNotes(
+          (loop.notes ?? []).map(n => ({
+            id: this.nextId++,
+            pitch: Math.min(127, Math.max(0, n.pitch + transpose)),
+            velocity: n.velocity,
+            channel: 1,
+            startTick: n.startTick,
+            lengthTicks: n.lengthTicks
+          }))
+        ),
+        controls: [],
+        muted: false
+      };
+    } else {
+      if (track.kind === 'midi') {
+        this.refuse(`${track.name} cannot hold a pattern region.`);
+      }
+      pattern = {
+        id: `pat_${this.nextId++}`,
+        trackId: track.id,
+        name,
+        startTick: tick,
+        lengthTicks,
+        muted: false,
+        pattern: structuredClone(loop.pattern ?? { rows: [], swing: 0, seed: 1, stepTicks: 240 })
+      };
+    }
+    if (request.cellSceneId) {
+      return setCell(
+        next,
+        {
+          type: 'setCell',
+          trackId: track.id,
+          sceneId: request.cellSceneId,
+          content: { audio, midi, pattern }
+        },
+        this.phase6Context()
+      );
+    }
+    return {
+      ...next,
+      regions: audio ? [...next.regions, audio] : next.regions,
+      midiRegions: midi ? [...next.midiRegions, midi] : next.midiRegions,
+      patternRegions: pattern ? [...next.patternRegions, pattern] : next.patternRegions
+    };
+  }
+
+  /** A region's length in ticks under the project's tempo. */
+  private regionTicks(project: Project, region: AudioRegion): number {
+    return audioEnd(project, region) - region.startTick;
+  }
+
+  private refuse(message: string): never {
+    throw new ApiError(422, message);
+  }
+
   private bounceSources(
     project: Project,
     request: BounceInPlaceRequest
@@ -1285,6 +1875,7 @@ export class FakeAnodeServer implements AnodeApi {
 
     this.positionTick = tick;
     this.lastAdvance = now;
+    this.emitCells(this.launcher.advance(tick));
     this.emitTransport();
     this.emit({ type: 'meters', ...this.meters() });
   }
@@ -1317,6 +1908,10 @@ export class FakeAnodeServer implements AnodeApi {
     const wasRecording = this.transportState === 'recording';
     if (this.transportState === 'playing' && this.played) {
       this.played = { ...this.played, to: this.positionTick, wraps: this.wraps };
+    }
+    this.emitCells(this.launcher.reset(this.positionTick));
+    if (this.performance) {
+      this.finishPerformance();
     }
     if (this.transportState !== 'stopped') {
       this.transportState = 'stopped';
@@ -1888,11 +2483,29 @@ export class FakeAnodeServer implements AnodeApi {
         tracks.splice(index, 0, added);
         return { ...project, tracks };
       }
-      case 'removeTrack':
-        track(command.trackId);
+      case 'removeTrack': {
+        const removed = track(command.trackId);
+        if (removed.drumMachine) {
+          // A Drum Machine Designer goes with its pads.
+          let next = project;
+          for (const pad of removed.drumMachine.pads) {
+            if (next.tracks.some(t => t.id === pad.trackId)) {
+              next = this.applyCommand(next, { type: 'removeTrack', trackId: pad.trackId });
+            }
+          }
+          return this.applyCommand(
+            { ...next, tracks: next.tracks.map(t => (t.id === removed.id ? { ...t, drumMachine: null } : t)) },
+            command
+          );
+        }
         return forgetTrack(
           {
             ...project,
+            patternRegions: project.patternRegions.filter(r => r.trackId !== command.trackId),
+            liveLoops: {
+              ...project.liveLoops,
+              cells: project.liveLoops.cells.filter(c => c.trackId !== command.trackId)
+            },
             // A removed stack's members stay, outside any stack.
             tracks: project.tracks
               .filter(t => t.id !== command.trackId)
@@ -1903,6 +2516,7 @@ export class FakeAnodeServer implements AnodeApi {
           },
           command.trackId
         );
+      }
       case 'moveTrack': {
         const moved = track(command.trackId);
         const tracks = project.tracks.filter(t => t.id !== moved.id);
@@ -1978,6 +2592,9 @@ export class FakeAnodeServer implements AnodeApi {
         return { ...project, regions: [...project.regions, added] };
       }
       case 'moveRegion': {
+        if (isPatternRegionId(command.regionId)) {
+          return movePatternRegion(project, command);
+        }
         nonNegative(command.startTick, 'A region start');
         if (command.regionId.startsWith('tkf_')) {
           const f = folder(command.regionId);
@@ -2081,6 +2698,11 @@ export class FakeAnodeServer implements AnodeApi {
         });
       }
       case 'deleteRegions':
+        if (command.regionIds.some(isPatternRegionId)) {
+          const without = deletePatternRegions(project, command.regionIds.filter(isPatternRegionId));
+          const rest = command.regionIds.filter(r => !isPatternRegionId(r));
+          return rest.length ? this.applyCommand(without, { ...command, regionIds: rest }) : without;
+        }
         command.regionIds.forEach(regionId =>
           regionId.startsWith('tkf_')
             ? folder(regionId)
@@ -2610,8 +3232,15 @@ export class FakeAnodeServer implements AnodeApi {
         return { ...project, notes: command.text };
       case 'joinRegions':
         return joinRegions(project, command.regionIds);
-      case 'copyRegions':
-        return copyRegions(project, command.regionIds, Math.round(command.offsetTicks), command.trackId, id);
+      case 'copyRegions': {
+        const patterns = command.regionIds.filter(isPatternRegionId);
+        const rest = command.regionIds.filter(r => !isPatternRegionId(r));
+        const offset = Math.round(command.offsetTicks);
+        const copied = patterns.length
+          ? copyPatternRegions(project, patterns, offset, command.trackId, { id })
+          : project;
+        return rest.length ? copyRegions(copied, rest, offset, command.trackId, id) : copied;
+      }
       case 'addInsert':
       case 'removeInsert':
       case 'moveInsert':
@@ -2633,39 +3262,36 @@ export class FakeAnodeServer implements AnodeApi {
       case 'applyPatch':
       case 'unfreezeTrack':
         if ('chain' in command && command.chain === 'midiEffects') {
-          // MIDI FX slots: Phase 6, the editor workstream (docs/07-phase-6.md).
-          throw new ApiError(422, `${command.type} on MIDI FX slots: not in the fake Server yet.`);
+          // MIDI FX slots (Phase 6): the insert commands on a strip's `midiEffects`.
+          return applyMidiEffectCommand(project, command, this.phase6Context());
         }
         return applyMixCommand(project, command, this.mixContext()) ?? project;
-      case 'addPatternRegion':
-      case 'setPatternRegion':
-      case 'setPattern':
-      case 'convertPatternToMidi':
-      case 'reseedPattern':
-      case 'createDrumMachine':
-      case 'addDrumPad':
-      case 'setDrumPad':
-      case 'removeDrumPad':
-      case 'setSmartControls':
-      case 'setSmartControl':
-      case 'setSmartMappings':
-      case 'autoMapSmartControls':
-      case 'compareSmartControls':
-      case 'addScene':
-      case 'removeScene':
-      case 'setScene':
-      case 'setCell':
-      case 'deleteCells':
-      case 'moveCell':
-      case 'setLiveLoops':
-      case 'setTrackActivation':
-        // Patterns, Drum Machine Designer, Smart Controls and Live Loops: Phase 6, the editor workstream
-        // (docs/07-phase-6.md).
-        throw new ApiError(422, `${command.type}: not in the fake Server yet.`);
       default:
+        if ((command.type as string) === 'loadInsertFile') {
+          // Workstream B's coming command (the convolution reverb's impulse response), as the editor assumes it.
+          return loadInsertFile(project, command as unknown as InsertFileCommand, id =>
+            this.catalogue.find(p => p.id === id)
+          );
+        }
+        if (isPhase6Command(command)) {
+          // Patterns, the Drum Machine Designer, Smart Controls and Live Loops (Phase 6).
+          return applyPhase6Command(project, command, this.phase6Context()) ?? project;
+        }
         // Flex, Smart Tempo, Varispeed and track alternatives (Phase 5).
         return applyFlexCommand(project, command, this.flexContext()) ?? project;
     }
+  }
+
+  /** What the Phase 6 commands need: ids, note ids, the catalogue, the kits, mixing (automation recording). */
+  private phase6Context(): Phase6Context {
+    return {
+      id: prefix => `${prefix}_${this.nextId++}`,
+      noteId: () => this.nextId++,
+      plugin: id => this.catalogue.find(p => p.id === id),
+      kit: id => this.installedKits().find(k => k.info.id === id),
+      mix: this.mixContext(),
+      seed: () => (hash(`seed${this.nextId++}`) % 2_147_483_647) + 1
+    };
   }
 
   /** What the Phase 5 commands need: ids, composition, and file analysis. */
@@ -2802,6 +3428,8 @@ export class FakeAnodeServer implements AnodeApi {
     this.project = project;
     const delta: ProjectDelta = { revision, ops: diff(previous, project) };
     this.emit({ type: 'projectChanged', delta });
+    // Cells deleted while they play stop.
+    this.emitCells(this.launcher.forget(new Set(project.liveLoops.cells.map(c => c.id)), this.positionTick));
     return { revision, delta: structuredClone(delta) };
   }
 
@@ -2882,6 +3510,8 @@ export class FakeAnodeServer implements AnodeApi {
 
   /** A small project with three tracks of audio, for the fake dev mode and stories. */
   private openDemo(): void {
+    // Anode Essentials comes installed (the content builder's pack in the desktop app).
+    this.loopLibrary.install(`${FakeHome}/Music/Anode Essentials.anodepack`);
     const disk = '~/Music/Anode/Demo.anode';
     const base: Project = {
       id: 'prj_demo',
@@ -3184,6 +3814,17 @@ export class FakeAnodeServer implements AnodeApi {
 
 /** A blob's bytes (FileReader where `Blob.arrayBuffer` is missing, as in jsdom). */
 /** The last region of a project renamed (the one a command just added). */
+/** The key's tonic at a tick (C without key events). */
+function keyTonicAt(project: Project, tick: number): number {
+  let tonic = 0;
+  for (const key of [...project.settings.keys].sort((a, b) => a.tick - b.tick)) {
+    if (key.tick <= tick) {
+      tonic = key.tonic;
+    }
+  }
+  return tonic;
+}
+
 function renameLast(project: Project, name: string): Project {
   return { ...project, regions: project.regions.map((r, i, all) => (i === all.length - 1 ? { ...r, name } : r)) };
 }
@@ -3230,6 +3871,10 @@ function coalesceKey(commands: readonly EditCommand[]): string | undefined {
   }
   if (only?.type === 'setInsertParameter') {
     return `${only.trackId ?? 'master'}#${only.insertId}.${only.parameterId}`;
+  }
+  // A Smart Control's drag is one undo step, as a parameter's (docs/07-phase-6.md).
+  if (only?.type === 'setSmartControl' && only.value !== null && only.value !== undefined) {
+    return `${only.trackId}~${only.controlId}`;
   }
   if (only?.type === 'setSend') {
     const fields = (['levelDb', 'pan', 'preFader', 'bus'] as const).filter(
@@ -3392,6 +4037,16 @@ export function diff(before: Project, after: Project): DeltaOp[] {
     id => ops.push({ op: 'automationLaneRemoved', id }),
     lane => ops.push({ op: 'automationLaneUpserted', lane })
   );
+  diffList(
+    before.patternRegions,
+    after.patternRegions,
+    same,
+    id => ops.push({ op: 'patternRegionRemoved', id }),
+    region => ops.push({ op: 'patternRegionUpserted', region })
+  );
+  if (!same(before.liveLoops, after.liveLoops)) {
+    ops.push({ op: 'liveLoopsChanged', liveLoops: after.liveLoops });
+  }
   const groupsAfter = new Map(after.groups.map(g => [g.number, g]));
   const groupsBefore = new Map(before.groups.map(g => [g.number, g]));
   for (const group of before.groups) {

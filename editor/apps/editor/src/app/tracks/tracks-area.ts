@@ -5,6 +5,7 @@ import { RULER_HEIGHT } from '@anode/timeline';
 import { provideIcons } from '@ng-icons/core';
 import {
   matAddRound,
+  matAppsRound,
   matAutoFixNormalRound,
   matContentCutRound,
   matEditRound,
@@ -24,6 +25,7 @@ import {
   matShowChartRound,
   matTextFieldsRound,
   matTrendingUpRound,
+  matViewModuleRound,
   matVolumeOffRound,
   matZoomInRound,
   matZoomOutRound
@@ -38,10 +40,12 @@ import { AutomationHeader } from '../automation/automation-header';
 import { AutomationLanes } from '../automation/automation-lanes';
 import { AutomationStore } from '../automation/automation.store';
 import { ConnectionService } from '../core/connection';
+import { DrumMachineStore } from '../drum-machine/drum-machine.store';
 import { GlobalHeaders } from '../global/global-headers';
 import { GlobalTracks } from '../global/global-lanes';
 import { GlobalLaneHeights } from '../global/global-math';
 import { formatBinding } from '../keys/key-commands';
+import { LiveLoopsGrid } from '../live-loops/live-loops-grid';
 import { FlexStore } from '../state/flex.store';
 import { JobsStore } from '../state/jobs.store';
 import { KeyCommandsStore } from '../state/key-commands.store';
@@ -51,6 +55,7 @@ import { SelectionStore } from '../state/selection.store';
 import { type GlobalLane, GlobalLanes as GlobalLaneOrder, Tools, TracksViewStore } from '../state/tracks-view.store';
 import { TransportStore } from '../state/transport.store';
 import { UiStore } from '../state/ui.store';
+import { StepSequencerStore, takesPatterns } from '../step-sequencer/step-sequencer.store';
 import { AudioImport } from './audio-import';
 import { canPack } from './comp';
 import { DragModes } from './drag-modes';
@@ -77,6 +82,7 @@ import { TrackHeader } from './track-header';
     AutomationLanes,
     GlobalHeaders,
     GlobalTracks,
+    LiveLoopsGrid,
     TakeHeader,
     Timeline,
     TrackHeader,
@@ -90,6 +96,7 @@ import { TrackHeader } from './track-header';
   providers: [
     provideIcons({
       matAddRound,
+      matAppsRound,
       matAutoFixNormalRound,
       matContentCutRound,
       matEditRound,
@@ -109,6 +116,7 @@ import { TrackHeader } from './track-header';
       matSettingsInputComponentRound,
       matTextFieldsRound,
       matTrendingUpRound,
+      matViewModuleRound,
       matVolumeOffRound,
       matZoomInRound,
       matZoomOutRound
@@ -142,6 +150,21 @@ import { TrackHeader } from './track-header';
       >
         <ng-icon xui name="matExpandMoreRound" size="sm" />
       </button>
+      <ng-template #drumKits>
+        <xui-menu class="min-w-40" aria-label="Drum kits">
+          @for (kit of drumMachines.kits(); track kit.id) {
+            <button xuiMenuItem type="button" [attr.data-kit]="kit.id" (click)="drumMachines.create(kit)">
+              {{ kit.name }}
+            </button>
+          }
+          @if (drumMachines.kits().length > 0) {
+            <xui-menu-divider />
+          }
+          <button xuiMenuItem type="button" data-testid="empty-kit" (click)="drumMachines.create(null)">
+            Empty Kit
+          </button>
+        </xui-menu>
+      </ng-template>
       <ng-template #kinds>
         <xui-menu>
           <button xuiMenuItem type="button" icon="matGraphicEqRound" (click)="addTrack('audio')">Audio Track</button>
@@ -162,6 +185,15 @@ import { TrackHeader } from './track-header';
             (click)="addTrack('midi')"
           >
             External MIDI Track
+          </button>
+          <button
+            xuiMenuItem
+            type="button"
+            icon="matAppsRound"
+            data-testid="add-drum-machine"
+            [xuiMenuTriggerFor]="drumKits"
+          >
+            Drum Machine Designer
           </button>
           <xui-menu-divider />
           <button
@@ -332,6 +364,18 @@ import { TrackHeader } from './track-header';
       >
         <ng-icon xui name="matHourglassEmptyRound" size="15px" class="rotate-90" />
       </button>
+      <button
+        type="button"
+        class="bezel text-foreground grid h-6.5 w-8 place-items-center"
+        aria-label="Live Loops"
+        data-testid="live-loops-toggle"
+        [xuiTooltip]="(project.liveLoops().shown ? 'Hide' : 'Show') + ' the Live Loops grid'"
+        [attr.aria-pressed]="project.liveLoops().shown ? 'true' : 'false'"
+        [class.text-lit]="project.liveLoops().shown"
+        (click)="toggleLiveLoops()"
+      >
+        <ng-icon xui name="matViewModuleRound" size="15px" />
+      </button>
       <div class="ms-auto flex items-center gap-1">
         @if (audioImport.importing() > 0) {
           <xui-spinner size="sm" aria-label="Importing audio" />
@@ -381,6 +425,13 @@ import { TrackHeader } from './track-header';
           }
         </div>
       </div>
+      @if (project.liveLoops().shown) {
+        <an-live-loops-grid
+          class="border-hairline w-96 shrink-0 border-e"
+          data-testid="live-loops-grid"
+          [globalHeight]="globalHeight()"
+        />
+      }
       <div class="relative flex min-w-0 flex-1" [xuiContextMenuTriggerFor]="timelineMenu">
         <an-timeline class="flex-1" [globalHeight]="globalHeight()" />
         @if (automation.shown()) {
@@ -448,6 +499,11 @@ import { TrackHeader } from './track-header';
               Split at Playhead ({{ keyOf('region.split') }})
             </button>
             <button xuiMenuItem type="button" (click)="repeat()">Repeat Once ({{ keyOf('region.repeat') }})</button>
+            @if (menuPatterns().length > 0) {
+              <button xuiMenuItem type="button" data-testid="convert-to-midi-region" (click)="convertPatterns()">
+                Convert to MIDI Region
+              </button>
+            }
             <xui-menu-divider />
             <button xuiMenuItem type="button" (click)="ui.stripSilenceOpen.set(true)">
               Strip Silence… ({{ keyOf('region.stripSilence') }})
@@ -477,6 +533,17 @@ import { TrackHeader } from './track-header';
                 <kbd class="text-foreground-muted ms-4 font-sans text-[11px]">{{ tool.key }}</kbd>
               </button>
             }
+            @if (menuPatternTrack(); as track) {
+              <xui-menu-divider />
+              <button
+                xuiMenuItem
+                type="button"
+                data-testid="create-pattern-region"
+                (click)="createPatternRegion(track.id)"
+              >
+                Create Pattern Region
+              </button>
+            }
           </xui-menu>
         }
       }
@@ -496,6 +563,8 @@ export class TracksArea {
   private readonly jobs = inject(JobsStore);
   protected readonly ui = inject(UiStore);
   protected readonly flex = inject(FlexStore);
+  private readonly stepSequencer = inject(StepSequencerStore);
+  protected readonly drumMachines = inject(DrumMachineStore);
   protected readonly timeline = viewChild.required(Timeline);
   private readonly menuTrigger = viewChild(CdkContextMenuTrigger);
   private readonly globalLanes = viewChild<GlobalTracks>('global');
@@ -516,8 +585,25 @@ export class TracksArea {
   protected readonly secondaryLabel = computed(
     () => Tools.find(t => t.value === this.view.secondaryTool())?.label ?? ''
   );
+  /** Shows or hides the Live Loops grid beside the Tracks area (Logic's). */
+  protected toggleLiveLoops(): void {
+    const shown = this.project.liveLoops().shown;
+    void this.project.execute([{ type: 'setLiveLoops', shown: !shown }], shown ? 'Hide Live Loops' : 'Show Live Loops');
+  }
+
   protected readonly snapLabel = computed(() => SnapModes.find(m => m.value === this.view.snapMode())?.label ?? '');
   protected readonly dragLabel = computed(() => DragModes.find(m => m.value === this.view.dragMode())?.label ?? '');
+  /** The selected pattern regions the region menu converts to MIDI. */
+  protected readonly menuPatterns = computed(() => {
+    const target = this.timeline().menuTarget();
+    return target.kind === 'regions' ? target.ids.filter(id => this.project.patternRegions().has(id)) : [];
+  });
+  /** The instrument or DMD track a lane's tool menu makes a pattern region on. */
+  protected readonly menuPatternTrack = computed(() => {
+    const target = this.timeline().menuTarget();
+    const track = target.kind === 'tools' && target.trackId ? this.project.track(target.trackId) : undefined;
+    return takesPatterns(track) ? track : null;
+  });
   protected readonly menuFolder = computed(() => {
     const target = this.timeline().menuTarget();
     return target.kind === 'folder' ? (this.project.takeFolder(target.folderId) ?? null) : null;
@@ -722,11 +808,24 @@ export class TracksArea {
     }
   }
 
+  /** A one-bar pattern region on the lane's track, at the bar the tool menu was opened on. */
+  protected createPatternRegion(trackId: string): void {
+    const target = this.timeline().menuTarget();
+    void this.stepSequencer.newRegion(trackId, target.kind === 'tools' ? target.tick : undefined);
+  }
+
+  /** Converts the selected pattern regions to MIDI regions of the notes they play. */
+  protected convertPatterns(): void {
+    const commands: EditCommand[] = this.menuPatterns().map(regionId => ({ type: 'convertPatternToMidi', regionId }));
+    void this.project.execute(commands, 'Convert to MIDI Region');
+  }
+
   protected mute(): void {
     const commands = muteCommands(this.selected(), {
       regions: this.project.regions(),
       midiRegions: this.project.midiRegions(),
       takeFolders: this.project.takeFolders(),
+      patternRegions: this.project.patternRegions(),
       endOf: r => this.project.regionEnd(r),
       frames: () => 0,
       fileFrames: () => 0
@@ -768,7 +867,8 @@ export class TracksArea {
     this.selection.select([
       ...this.project.regions().keys(),
       ...this.project.midiRegions().keys(),
-      ...this.project.takeFolders().keys()
+      ...this.project.takeFolders().keys(),
+      ...this.project.patternRegions().keys()
     ]);
   }
 

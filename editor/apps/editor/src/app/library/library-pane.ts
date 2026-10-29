@@ -1,12 +1,14 @@
+import { NgTemplateOutlet } from '@angular/common';
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import type { PatchInfo } from '@anode/api-client';
 import { provideIcons } from '@ng-icons/core';
-import { matDeleteOutlineRound, matTuneRound } from '@ng-icons/material-icons/round';
+import { matAppsRound, matDeleteOutlineRound, matTuneRound } from '@ng-icons/material-icons/round';
 import { XuiButtonImports } from '@xui/button';
 import { XuiIconImports } from '@xui/icon';
 import { XuiInputImports } from '@xui/input';
 import { XuiSpinnerImports } from '@xui/spinner';
 import { XuiTooltipImports } from '@xui/tooltip';
+import { DrumMachineStore } from '../drum-machine/drum-machine.store';
 import { patchCategories, PatchesStore, patchFits } from '../state/patches.store';
 import { ProjectStore } from '../state/project.store';
 import { SelectionStore } from '../state/selection.store';
@@ -19,8 +21,8 @@ import { SelectionStore } from '../state/selection.store';
 @Component({
   selector: 'an-library-pane',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [XuiButtonImports, XuiIconImports, XuiInputImports, XuiSpinnerImports, XuiTooltipImports],
-  providers: [provideIcons({ matDeleteOutlineRound, matTuneRound })],
+  imports: [NgTemplateOutlet, XuiButtonImports, XuiIconImports, XuiInputImports, XuiSpinnerImports, XuiTooltipImports],
+  providers: [provideIcons({ matAppsRound, matDeleteOutlineRound, matTuneRound })],
   host: { class: 'flex h-full min-h-0 flex-col', role: 'region', 'aria-label': 'Library' },
   template: `
     @if (track(); as t) {
@@ -66,6 +68,7 @@ import { SelectionStore } from '../state/selection.store';
             }
           </p>
         }
+        <ng-container *ngTemplateOutlet="kitList" />
       </div>
       <form
         class="border-hairline flex shrink-0 flex-col gap-1.5 border-t p-2"
@@ -99,7 +102,42 @@ import { SelectionStore } from '../state/selection.store';
       </form>
     } @else {
       <p class="text-foreground-muted p-3 text-xs">Select a track to see the patches for it.</p>
+      @if (drumMachines.kits().length > 0) {
+        <div class="border-hairline flex min-h-0 flex-1 flex-col overflow-y-auto" role="list" aria-label="Drum kits">
+          <ng-container *ngTemplateOutlet="kitList" />
+        </div>
+      }
     }
+    <!-- Drum kits (patches of kind stack): on an instrument track a click turns it into a Drum Machine Designer
+         playing the kit; elsewhere it makes a new one. -->
+    <ng-template #kitList>
+      @if (drumMachines.kits().length > 0) {
+        <div
+          class="border-hairline bg-surface-raised text-foreground sticky top-0 border-y px-3 py-1 text-[11px] font-bold"
+          role="presentation"
+        >
+          Drum Kits
+        </div>
+        @for (kit of drumMachines.kits(); track kit.id) {
+          <div class="flex h-7 items-center gap-2 px-3 text-xs" role="listitem">
+            <ng-icon xui name="matAppsRound" size="sm" class="text-primary shrink-0" aria-hidden="true" />
+            <button
+              type="button"
+              class="text-foreground hover:text-lit min-w-0 flex-1 truncate text-start"
+              [attr.data-testid]="'kit-' + kit.id"
+              [attr.aria-label]="
+                convertible()
+                  ? 'Turn ' + convertible()?.name + ' into ' + kit.name
+                  : 'New Drum Machine Designer: ' + kit.name
+              "
+              (click)="useKit(kit)"
+            >
+              {{ kit.name }}
+            </button>
+          </div>
+        }
+      }
+    </ng-template>
   `
 })
 export class LibraryPane {
@@ -107,7 +145,13 @@ export class LibraryPane {
   private readonly project = inject(ProjectStore);
   private readonly selection = inject(SelectionStore);
 
+  protected readonly drumMachines = inject(DrumMachineStore);
   protected readonly saving = signal(false);
+  /** The selected instrument track a kit turns into a Drum Machine Designer in place (not a stack's member). */
+  protected readonly convertible = computed(() => {
+    const track = this.track();
+    return track?.kind === 'instrument' && !track.parentId ? track : null;
+  });
   protected readonly track = computed(() => {
     const id = this.selection.track();
     const track = id ? this.project.track(id) : undefined;
@@ -124,6 +168,10 @@ export class LibraryPane {
       ]
   );
   protected readonly suggestedCategory = computed(() => (this.track()?.kind === 'instrument' ? 'Keys' : 'Vocals'));
+
+  protected useKit(kit: PatchInfo): void {
+    void this.drumMachines.create(kit, this.convertible()?.id);
+  }
 
   protected async save(name: string, category: string): Promise<void> {
     const track = this.track();

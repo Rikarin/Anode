@@ -65,6 +65,8 @@ export interface DesktopDialogs {
   importMidi?(): Promise<string | null>;
   /** A file for an instrument to load, of one of its `fileTypes` (`.sfz`, `.wav`). */
   instrumentFile?(fileTypes: readonly string[]): Promise<string | null>;
+  /** A content pack (`.anodepack`) to install in the Sound Library. */
+  contentPack?(): Promise<string | null>;
 }
 
 /**

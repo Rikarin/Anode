@@ -9,9 +9,15 @@ export const EffectCategories = [
   'Reverb',
   'Modulation',
   'Distortion',
+  'Pitch',
+  'Multi Effects',
+  'Specialized',
   'Utility',
   'Metering'
 ] as const;
+
+/** The category of MIDI effects (a display string, as `Instrument` is): they go in MIDI FX slots, not Audio FX. */
+export const MidiEffectCategory = 'MIDI Effect';
 
 const FormatNames: Record<PluginInfo['format'], string> = { builtin: '', clap: 'CLAP', vst3: 'VST3', au: 'AU' };
 
@@ -22,13 +28,13 @@ export function pluginLabel(plugin: Pick<PluginInfo, 'name' | 'format'>): string
 }
 
 /**
- * The insert picker's menu: the effects (not instruments) by category in Logic's order, built-in ones first in each,
- * then third-party ones by name. Empty categories are left out.
+ * The insert picker's menu: the audio effects (not instruments, not MIDI effects) by category in Logic's order,
+ * built-in ones first in each, then third-party ones by name. Empty categories are left out.
  */
 export function effectMenu(plugins: readonly PluginInfo[]): { category: string; plugins: PluginInfo[] }[] {
   const byCategory = new Map<string, PluginInfo[]>();
   for (const plugin of plugins) {
-    if (plugin.isInstrument) {
+    if (plugin.isInstrument || isMidiEffect(plugin)) {
       continue;
     }
     const category = plugin.category.trim() || 'Other';
@@ -46,4 +52,15 @@ export function effectMenu(plugins: readonly PluginInfo[]): { category: string; 
         (a, b) => Number(a.format !== 'builtin') - Number(b.format !== 'builtin') || a.name.localeCompare(b.name)
       )
     }));
+}
+
+export function isMidiEffect(plugin: Pick<PluginInfo, 'category' | 'isInstrument'>): boolean {
+  return !plugin.isInstrument && plugin.category.trim() === MidiEffectCategory;
+}
+
+/** The MIDI FX slot's menu (Logic's): the MIDI effects in one list, built-in ones first, then by name. */
+export function midiEffectMenu(plugins: readonly PluginInfo[]): PluginInfo[] {
+  return plugins
+    .filter(isMidiEffect)
+    .sort((a, b) => Number(a.format !== 'builtin') - Number(b.format !== 'builtin') || a.name.localeCompare(b.name));
 }

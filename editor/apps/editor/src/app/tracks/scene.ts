@@ -1,4 +1,4 @@
-import type { AudioRegion, MidiRegion, TakeFolder, Track } from '@anode/api-client';
+import type { AudioRegion, KeyEvent, MidiRegion, PatternRegion, TakeFolder, Track } from '@anode/api-client';
 import {
   createItems,
   createNoteMiniatures,
@@ -9,6 +9,7 @@ import {
   parseHexColor,
   type TimelineScene
 } from '@anode/timeline';
+import { unrollPattern } from '../music/pattern';
 import type { RegionTiming } from '../music/region-timing';
 import type { LaneRow } from '../state/lanes';
 import { Ppq } from '../state/project.store';
@@ -21,8 +22,8 @@ const Fallback = parseHexColor('#0090ff');
 export interface TracksScene {
   readonly scene: TimelineScene;
   /**
-   * Region id per item index: audio regions, MIDI regions, take folders (`tkf_…`), and takes in open folders as
-   * `folderId/takeId`. A part drawn inside an item (a comp segment) maps to that item's id.
+   * Region id per item index: audio regions, MIDI regions, pattern regions, take folders (`tkf_…`), and takes in open
+   * folders as `folderId/takeId`. A part drawn inside an item (a comp segment) maps to that item's id.
    */
   readonly regionIds: readonly string[];
   /** Item index per region id (whole items only). */
@@ -35,6 +36,10 @@ export interface SceneInput {
   rows?: readonly LaneRow[];
   regions: readonly AudioRegion[];
   midiRegions?: readonly MidiRegion[];
+  /** Step Sequencer pattern regions, drawn as MIDI regions with their unrolled steps as notes. */
+  patternRegions?: readonly PatternRegion[];
+  /** The key track, for chord-degree rows' notes. */
+  keys?: readonly KeyEvent[];
   takeFolders?: readonly TakeFolder[];
   framesPerTick: number;
   /** Frames per tick over a span of audio, where the tempo changes (its average); `framesPerTick` when left out. */
@@ -85,9 +90,9 @@ interface Draft {
 
 /**
  * The Tracks area's scene: one item per region on its track's row, in its track's colour, with its selection. Audio
- * regions carry their file mapping, fades and curves, gain, name and waveform; MIDI regions their note miniatures; take
- * folders show their comp (each segment's take waveform, drawn inside the folder); an open folder's takes are rows of
- * their own, greyed but for what the comp plays from them. Muted regions, folders and tracks are drawn muted.
+ * regions carry their file mapping, fades and curves, gain, name and waveform; MIDI regions their note miniatures and
+ * pattern regions their unrolled steps as notes; take folders show their comp (each segment's take waveform, drawn
+ * inside the folder); an open folder's takes are rows of their own, greyed but for what the comp plays from them. Muted regions, folders and tracks are drawn muted.
  */
 export function buildScene(input: SceneInput): TracksScene {
   const rows: readonly LaneRow[] =
@@ -153,6 +158,29 @@ export function buildScene(input: SceneInput): TracksScene {
         start: note.startTick,
         length: note.lengthTicks,
         pitch: Math.min(127, Math.max(0, note.pitch + region.playback.transpose))
+      }))
+    });
+  }
+  for (const region of input.patternRegions ?? []) {
+    const lane = lanes.get(region.trackId);
+    if (lane === undefined) {
+      continue;
+    }
+    // Unrolled as if unmuted: a muted region still shows its notes, greyed.
+    const notes = unrollPattern({ ...region, muted: false }, { keys: input.keys ?? [] });
+    drafts.push({
+      id: region.id,
+      whole: true,
+      lane,
+      start: region.startTick,
+      length: region.lengthTicks,
+      color: colors.get(region.trackId) ?? Fallback,
+      flags: flagsOf(region.id, region.trackId, region.muted) | ItemFlag.Midi,
+      name: region.name,
+      notes: notes.map(note => ({
+        start: note.startTick - region.startTick,
+        length: note.lengthTicks,
+        pitch: note.pitch
       }))
     });
   }

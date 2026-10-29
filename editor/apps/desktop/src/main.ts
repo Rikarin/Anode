@@ -264,6 +264,16 @@ function handleIpc(): void {
       })
     )
   );
+  ipcMain.handle('anode:dialog:contentPack', async event =>
+    first(
+      await pick(event.sender, {
+        title: 'Install Content Pack',
+        buttonLabel: 'Install',
+        properties: ['openFile'],
+        filters: [{ name: 'Anode content packs', extensions: ['anodepack'] }]
+      })
+    )
+  );
   // A file for an instrument to load (a sampler's SFZ or WAV): the renderer names the plugin's file types, which are
   // checked to be plain extensions before they become the dialog's filter.
   ipcMain.handle('anode:dialog:instrumentFile', async (event, fileTypes: unknown) =>

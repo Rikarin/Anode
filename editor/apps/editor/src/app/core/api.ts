@@ -1,5 +1,7 @@
 import { Injectable, InjectionToken, inject } from '@angular/core';
 import {
+  type AddLoopRequest,
+  type AddToLoopLibraryRequest,
   ApiError,
   type AudioFile,
   type Bookmarks,
@@ -12,8 +14,15 @@ import {
   type IoLabels,
   type Job,
   type KeyCommandSet,
+  type LaunchRequest,
   type LiveMidiEvent,
+  type LiveRecordRequest,
+  type LoopInfo,
+  type LoopKind,
+  type LoopPage,
+  type LoopScale,
   type MidiDevices,
+  type Pack,
   type PatchInfo,
   type PluginEditorRequest,
   type PluginInfo,
@@ -24,6 +33,7 @@ import {
   type ProjectSummary,
   type SavePatchRequest,
   type Screenset,
+  type StopRequest,
   type SystemInfo,
   type TransportRequest,
   type TransportStatus,
@@ -37,6 +47,21 @@ export interface CreateProject {
   /** The folder to create the project folder in; the Server's default projects folder when left out. */
   directory?: string | null;
   sampleRate?: number | null;
+}
+
+/**
+ * A Loop Browser search (`GET /library/loops`, docs/07-phase-6.md): text in the name or tags, every one of `tags`, a
+ * kind, a key (tonic 0…11), a scale (major or minor also match `both`), favourites only, and a page.
+ */
+export interface LoopSearch {
+  text?: string | null;
+  tags?: readonly string[] | null;
+  kind?: LoopKind | null;
+  key?: number | null;
+  scale?: LoopScale | null;
+  favouritesOnly?: boolean | null;
+  offset?: number | null;
+  limit?: number | null;
 }
 
 /**
@@ -135,6 +160,27 @@ export interface AnodeApi {
   bounceInPlace(request: BounceInPlaceRequest): Promise<Job>;
   /** Selection-based processing: a chain of built-in effects over part of regions, as a job (one undo step). */
   processRegions(request: ProcessRequest): Promise<Job>;
+  /** Searches the loop index (Phase 6: the installed packs' loops and the user's), sorted by name. */
+  queryLoops(search: LoopSearch): Promise<LoopPage>;
+  /** Plays a loop through the preview channel in sync with the project (tempo and key); `previewFile(null)` stops. */
+  previewLoop(id: string): Promise<void>;
+  /** Marks a loop a favourite, or not. */
+  setLoopFavourite(id: string, favourite: boolean): Promise<LoopInfo>;
+  /** "Add to Loop Library": saves a region as a user loop. */
+  addToLoopLibrary(request: AddToLoopLibraryRequest): Promise<LoopInfo>;
+  /** The installed content packs. */
+  packs(): Promise<Pack[]>;
+  /** Installs a `.anodepack` from the Server's disk (replacing an installed version of the same pack). */
+  installPack(path: string): Promise<Pack>;
+  removePack(id: string): Promise<void>;
+  /** Adds a loop to the open project (a region, a new track's region, or a Live Loops cell): one undo step. */
+  addLoop(request: AddLoopRequest): Promise<CommandResult>;
+  /** Launches Live Loops cells or a scene, each at its quantise boundary; `cell` events follow. */
+  launchCells(request: LaunchRequest): Promise<void>;
+  /** Stops the cells playing on tracks (every track when left out) at the grid's quantise boundary. */
+  stopCells(request: StopRequest): Promise<void>;
+  /** Starts or stops recording into a cell, or a performance recording into the Tracks area. */
+  recordLiveLoops(request: LiveRecordRequest): Promise<void>;
 }
 
 export const ANODE_API = new InjectionToken<AnodeApi>('AnodeApi', {
@@ -394,5 +440,57 @@ export class HttpAnodeApi implements AnodeApi {
 
   async processRegions(request: ProcessRequest): Promise<Job> {
     return unwrap(await this.client.POST('/api/v1/project/process', { body: request }));
+  }
+
+  async queryLoops(search: LoopSearch): Promise<LoopPage> {
+    const query: Record<string, string | number | boolean | string[]> = {};
+    for (const [key, value] of Object.entries(search)) {
+      if (value !== null && value !== undefined && value !== '' && !(Array.isArray(value) && value.length === 0)) {
+        query[key] = Array.isArray(value) ? [...(value as string[])] : (value as string | number | boolean);
+      }
+    }
+    return unwrap(await this.client.GET('/api/v1/library/loops', { params: { query } }));
+  }
+
+  async previewLoop(id: string): Promise<void> {
+    unwrap(await this.client.POST('/api/v1/library/loops/{id}/preview', { params: { path: { id } } }));
+  }
+
+  async setLoopFavourite(id: string, favourite: boolean): Promise<LoopInfo> {
+    return unwrap(
+      await this.client.PUT('/api/v1/library/loops/{id}/favourite', { params: { path: { id } }, body: { favourite } })
+    );
+  }
+
+  async addToLoopLibrary(request: AddToLoopLibraryRequest): Promise<LoopInfo> {
+    return unwrap(await this.client.POST('/api/v1/library/loops', { body: request }));
+  }
+
+  async packs(): Promise<Pack[]> {
+    return unwrap(await this.client.GET('/api/v1/library/packs'));
+  }
+
+  async installPack(path: string): Promise<Pack> {
+    return unwrap(await this.client.POST('/api/v1/library/packs', { body: { path } }));
+  }
+
+  async removePack(id: string): Promise<void> {
+    unwrap(await this.client.DELETE('/api/v1/library/packs/{id}', { params: { path: { id } } }));
+  }
+
+  async addLoop(request: AddLoopRequest): Promise<CommandResult> {
+    return unwrap(await this.client.POST('/api/v1/project/loops', { body: request }));
+  }
+
+  async launchCells(request: LaunchRequest): Promise<void> {
+    unwrap(await this.client.POST('/api/v1/project/live-loops/launch', { body: request }));
+  }
+
+  async stopCells(request: StopRequest): Promise<void> {
+    unwrap(await this.client.POST('/api/v1/project/live-loops/stop', { body: request }));
+  }
+
+  async recordLiveLoops(request: LiveRecordRequest): Promise<void> {
+    unwrap(await this.client.POST('/api/v1/project/live-loops/record', { body: request }));
   }
 }

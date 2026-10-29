@@ -1,5 +1,5 @@
 import { ChangeDetectionStrategy, Component, computed, inject, input, signal } from '@angular/core';
-import type { AutomationMode, ChannelStrip, Insert, PluginInfo, Send, Track } from '@anode/api-client';
+import type { AutomationMode, ChannelStrip, Insert, InsertChain, PluginInfo, Send, Track } from '@anode/api-client';
 import {
   AnAutomationMode,
   AnChannelStrip,
@@ -14,6 +14,7 @@ import { XuiContextMenuImports } from '@xui/context-menu';
 import { XuiMenuImports } from '@xui/menu';
 import { XuiTooltipImports } from '@xui/tooltip';
 import { AutomationStore } from '../automation/automation.store';
+import { InstrumentStore } from '../state/instrument.store';
 import { IoLabelsStore } from '../state/io-labels.store';
 import { MasterMeter, MeterBus } from '../state/meters';
 import { MixerStore } from '../state/mixer.store';
@@ -21,7 +22,7 @@ import { PluginsStore } from '../state/plugins.store';
 import { ProjectStore } from '../state/project.store';
 import { SelectionStore } from '../state/selection.store';
 import { UiStore } from '../state/ui.store';
-import { effectMenu, pluginLabel } from './plugin-menu';
+import { effectMenu, midiEffectMenu, pluginLabel } from './plugin-menu';
 import { PluginWindows } from './plugin-windows';
 import {
   busChoices,
@@ -41,11 +42,24 @@ interface SlotContext {
   index: number;
 }
 
-/** The rows the Mixer gives each strip's sections: an input row (when an aux shows), insert slots and send rows. */
+/**
+ * The rows the Mixer gives each strip's sections: an input row (when an aux shows), MIDI FX slots and an instrument row
+ * (when an instrument or external MIDI strip shows), insert slots and send rows.
+ */
 export interface StripLayout {
   input: boolean;
+  /** MIDI FX slot rows (0 or left out: no section). */
+  midiEffects?: number;
+  /** Whether the instrument row shows. */
+  instrument?: boolean;
   inserts: number;
   sends: number;
+}
+
+/** A slot being dragged to reorder its chain. */
+interface SlotDrag {
+  chain: InsertChain;
+  id: string;
 }
 
 /** A slot row's height and the gap between rows, in CSS pixels. */
@@ -59,7 +73,8 @@ const BusPages = Array.from({ length: BusCount / 16 }, (_, page) => ({
 }));
 
 /**
- * One strip of the Mixer, top to bottom as in Logic: an aux's input bus; the Audio FX slots (a plugin menu by category,
+ * One strip of the Mixer, top to bottom as in Logic: an aux's input bus; an instrument or external MIDI track's MIDI FX
+ * slots (the MIDI effects only) and its instrument; the Audio FX slots (a plugin menu by category,
  * bypass, drag or ⌥↑/⌥↓ to reorder, the editor on a click); the sends (bus menu that refuses loops, level knob,
  * pre/post); the output (Stereo Out, a bus, or a device output pair, by I/O label); the group and VCA slots; the
  * automation mode; then pan, fader and meter, mute and solo, and the name. The master strip has its inserts only; a VCA
@@ -110,6 +125,65 @@ const BusPages = Array.from({ length: BusCount / 16 }, (_, page) => ({
           <div class="h-4.5" aria-hidden="true"></div>
         }
       }
+      @if (layout().midiEffects) {
+        @if (hasMidiEffects()) {
+          <div
+            class="flex flex-col gap-px"
+            role="group"
+            [attr.aria-label]="'MIDI FX of ' + name()"
+            [style.min-height.px]="rowsHeight(layout().midiEffects ?? 0)"
+          >
+            @for (slot of midiSlots(); track slot.key) {
+              <div
+                #midiWrap
+                [xuiContextMenuTriggerFor]="midiFxMenu"
+                [xuiContextMenuTriggerData]="{ $implicit: slot.context }"
+                [class.opacity-50]="dragging()?.id === slot.context.insert?.id"
+                [class.shadow-[inset_0_2px_0_var(--color-primary)]]="dropAt() === 'midiEffects:' + slot.context.index"
+                (dragstart)="dragStart(slot.context, $event, 'midiEffects')"
+                (dragend)="dragEnd()"
+                (dragover)="dragOver(slot.context.index, $event, 'midiEffects')"
+                (dragleave)="dropAt.set(null)"
+                (drop)="drop(slot.context.index, $event, 'midiEffects')"
+              >
+                <an-insert-slot
+                  slotName="MIDI FX"
+                  emptyLabel="MIDI FX"
+                  [name]="slot.context.insert?.name ?? null"
+                  [channel]="name()"
+                  [index]="slot.context.index"
+                  [bypassed]="slot.context.insert?.bypassed ?? false"
+                  [attr.data-testid]="slot.context.insert ? 'midi-fx-slot' : 'midi-fx-empty'"
+                  (open)="activate(slot.context, midiWrap)"
+                  (bypassToggle)="toggleBypass(slot.context)"
+                  (menu)="openMenu(midiWrap, $event)"
+                  (move)="moveBy(slot.context, $event, 'midiEffects')"
+                />
+              </div>
+            }
+          </div>
+        } @else {
+          <div aria-hidden="true" [style.height.px]="rowsHeight(layout().midiEffects ?? 0)"></div>
+        }
+      }
+      @if (layout().instrument) {
+        @if (kind() === 'instrument') {
+          <button
+            type="button"
+            class="strip-slot text-foreground justify-center font-semibold"
+            data-testid="instrument-slot"
+            [attr.aria-label]="'Instrument of ' + name() + ': ' + instrumentName()"
+            [attr.title]="'Instrument: ' + instrumentName()"
+            [xuiMenuTriggerFor]="instrumentMenu"
+          >
+            <span class="truncate">{{ instrumentName() }}</span>
+          </button>
+        } @else if (kind() === 'midi') {
+          <div class="strip-slot text-foreground justify-center" title="External MIDI instrument">External</div>
+        } @else {
+          <div class="h-4.5" aria-hidden="true"></div>
+        }
+      }
       @if (hasInserts()) {
         <div
           class="flex flex-col gap-px"
@@ -122,13 +196,13 @@ const BusPages = Array.from({ length: BusCount / 16 }, (_, page) => ({
               #wrap
               [xuiContextMenuTriggerFor]="insertMenu"
               [xuiContextMenuTriggerData]="{ $implicit: slot.context }"
-              [class.opacity-50]="dragging() === slot.context.insert?.id"
-              [class.shadow-[inset_0_2px_0_var(--color-primary)]]="dropAt() === slot.context.index"
-              (dragstart)="dragStart(slot.context, $event)"
+              [class.opacity-50]="dragging()?.id === slot.context.insert?.id"
+              [class.shadow-[inset_0_2px_0_var(--color-primary)]]="dropAt() === 'inserts:' + slot.context.index"
+              (dragstart)="dragStart(slot.context, $event, 'inserts')"
               (dragend)="dragEnd()"
-              (dragover)="dragOver(slot.context.index, $event)"
+              (dragover)="dragOver(slot.context.index, $event, 'inserts')"
               (dragleave)="dropAt.set(null)"
-              (drop)="drop(slot.context.index, $event)"
+              (drop)="drop(slot.context.index, $event, 'inserts')"
             >
               <an-insert-slot
                 [name]="slot.context.insert?.name ?? null"
@@ -140,7 +214,7 @@ const BusPages = Array.from({ length: BusCount / 16 }, (_, page) => ({
                 (open)="activate(slot.context, wrap)"
                 (bypassToggle)="toggleBypass(slot.context)"
                 (menu)="openMenu(wrap, $event)"
-                (move)="moveBy(slot.context, $event)"
+                (move)="moveBy(slot.context, $event, 'inserts')"
               />
             </div>
           }
@@ -298,6 +372,54 @@ const BusPages = Array.from({ length: BusCount / 16 }, (_, page) => ({
           >
             {{ label(plugin) }}
           </button>
+        }
+      </xui-menu>
+    </ng-template>
+    <ng-template #midiFxMenu let-slot>
+      <xui-menu class="max-h-96 min-w-44 overflow-y-auto" [attr.aria-label]="'MIDI FX menu of ' + name()">
+        @if (slot.insert; as insert) {
+          <button xuiMenuItem type="button" (click)="windows.open(trackId(), insert)">Open Editor</button>
+          <button xuiMenuItem type="button" (click)="toggleBypass(slot)">
+            {{ insert.bypassed ? 'Turn On' : 'Bypass' }}
+          </button>
+          <xui-menu-divider />
+        }
+        @for (plugin of midiEffects(); track plugin.id) {
+          <button
+            xuiMenuItem
+            type="button"
+            [attr.data-plugin]="plugin.id"
+            [selected]="slot.insert?.pluginId === plugin.id"
+            (click)="chooseMidiEffect(slot, plugin)"
+          >
+            {{ label(plugin) }}
+          </button>
+        } @empty {
+          <span class="text-foreground-muted px-3 py-1 text-xs">No MIDI effects in the plugin catalogue.</span>
+        }
+        @if (slot.insert; as insert) {
+          <xui-menu-divider />
+          <button xuiMenuItem type="button" color="error" (click)="mixer.removeInsert(trackId(), insert)">
+            Remove {{ insert.name }}
+          </button>
+        }
+      </xui-menu>
+    </ng-template>
+    <ng-template #instrumentMenu>
+      <xui-menu class="max-h-96 min-w-44 overflow-y-auto" [attr.aria-label]="'Instrument menu of ' + name()">
+        @for (plugin of plugins.instruments(); track plugin.id) {
+          <button
+            xuiMenuItem
+            type="button"
+            role="menuitemradio"
+            [attr.data-plugin]="plugin.id"
+            [attr.aria-checked]="track()?.instrument?.pluginId === plugin.id"
+            (click)="setInstrument(plugin)"
+          >
+            {{ label(plugin) }}
+          </button>
+        } @empty {
+          <span class="text-foreground-muted px-3 py-1 text-xs">No instruments in the plugin catalogue.</span>
         }
       </xui-menu>
     </ng-template>
@@ -504,7 +626,8 @@ export class MixerStrip {
   protected readonly automation = inject(AutomationStore);
   protected readonly windows = inject(PluginWindows);
   protected readonly ui = inject(UiStore);
-  private readonly plugins = inject(PluginsStore);
+  protected readonly plugins = inject(PluginsStore);
+  private readonly instruments = inject(InstrumentStore);
   private readonly labels = inject(IoLabelsStore);
   private readonly selection = inject(SelectionStore);
   private readonly meters = inject(MeterBus);
@@ -522,8 +645,9 @@ export class MixerStrip {
   protected readonly busPages = BusPages;
   protected readonly outputRoute = outputRoute;
   protected readonly label = pluginLabel;
-  protected readonly dragging = signal<string | null>(null);
-  protected readonly dropAt = signal<number | null>(null);
+  protected readonly dragging = signal<SlotDrag | null>(null);
+  /** Where a dragged slot would land: `<chain>:<index>`. */
+  protected readonly dropAt = signal<string | null>(null);
 
   protected readonly trackId = computed(() => this.track()?.id ?? null);
   protected readonly kind = computed(() => this.track()?.kind ?? 'master');
@@ -534,6 +658,13 @@ export class MixerStrip {
   protected readonly hasSends = computed(() => ['audio', 'instrument', 'aux'].includes(this.kind()));
   protected readonly hasOutput = computed(() => ['audio', 'instrument', 'aux'].includes(this.kind()));
   protected readonly effects = computed(() => effectMenu(this.plugins.plugins()));
+  protected readonly midiEffects = computed(() => midiEffectMenu(this.plugins.plugins()));
+  /** Instrument and external MIDI strips have MIDI FX slots (a DMD's pads are instrument tracks, so theirs too). */
+  protected readonly hasMidiEffects = computed(() => this.kind() === 'instrument' || this.kind() === 'midi');
+  protected readonly instrumentName = computed(() => {
+    const instrument = this.track()?.instrument;
+    return instrument ? (this.plugins.plugin(instrument.pluginId)?.name ?? instrument.name) : 'No Instrument';
+  });
   protected readonly freeBus = computed(() => lowestFreeBus(this.project.trackList()));
   protected readonly outputName = computed(() => routeName(this.strip().output, this.labels.labels()));
   protected readonly inputName = computed(() => busLabelOf(this.track()?.inputBus ?? 0, this.labels.labels()));
@@ -570,6 +701,14 @@ export class MixerStrip {
       problem: problems.has(`${trackId ?? 'master'}/${insert.id}`)
     }));
     return [...filled, { key: 'empty', context: { insert: null, index: inserts.length }, problem: false }];
+  });
+  /** The MIDI FX slots, then one empty slot. */
+  protected readonly midiSlots = computed(() => {
+    const slots = this.strip().midiEffects;
+    return [
+      ...slots.map((insert, index) => ({ key: insert.id, context: { insert, index } })),
+      { key: 'empty', context: { insert: null, index: slots.length } }
+    ];
   });
   private readonly meterSource: MeterSource = () => this.meters.level(this.trackId() ?? MasterMeter);
   protected readonly meter = computed(() => (this.kind() === 'vca' ? null : this.meterSource));
@@ -677,19 +816,23 @@ export class MixerStrip {
     }
   }
 
-  protected moveBy(slot: SlotContext, offset: -1 | 1): void {
+  protected moveBy(slot: SlotContext, offset: -1 | 1, chain: InsertChain): void {
     const index = slot.index + offset;
-    if (slot.insert && index >= 0 && index < this.strip().inserts.length) {
+    if (slot.insert && index >= 0 && index < this.slotsOf(chain).length) {
       void this.mixer.moveInsert(this.trackId(), slot.insert.id, index);
     }
   }
 
-  protected dragStart(slot: SlotContext, event: DragEvent): void {
+  private slotsOf(chain: InsertChain): readonly Insert[] {
+    return chain === 'midiEffects' ? this.strip().midiEffects : this.strip().inserts;
+  }
+
+  protected dragStart(slot: SlotContext, event: DragEvent, chain: InsertChain): void {
     if (!slot.insert) {
       event.preventDefault();
       return;
     }
-    this.dragging.set(slot.insert.id);
+    this.dragging.set({ chain, id: slot.insert.id });
     event.dataTransfer?.setData('application/x-anode-insert', slot.insert.id);
     if (event.dataTransfer) {
       event.dataTransfer.effectAllowed = 'move';
@@ -701,25 +844,47 @@ export class MixerStrip {
     this.dropAt.set(null);
   }
 
-  protected dragOver(index: number, event: DragEvent): void {
-    if (this.dragging() !== null) {
+  protected dragOver(index: number, event: DragEvent, chain: InsertChain): void {
+    if (this.dragging()?.chain === chain) {
       event.preventDefault();
-      this.dropAt.set(index);
+      this.dropAt.set(`${chain}:${index}`);
     }
   }
 
-  /** A slot dropped on another of the same strip moves there (Logic's drag in the Audio FX list). */
-  protected drop(index: number, event: DragEvent): void {
-    const id = this.dragging();
+  /** A slot dropped on another of the same strip and chain moves there (Logic's drag in the Audio FX list). */
+  protected drop(index: number, event: DragEvent, chain: InsertChain): void {
+    const drag = this.dragging();
     this.dragEnd();
-    if (!id) {
+    if (drag?.chain !== chain) {
       return;
     }
     event.preventDefault();
-    const from = this.strip().inserts.findIndex(i => i.id === id);
-    const to = Math.min(this.strip().inserts.length - 1, from < index ? index - 1 : index);
+    const slots = this.slotsOf(chain);
+    const from = slots.findIndex(i => i.id === drag.id);
+    const to = Math.min(slots.length - 1, from < index ? index - 1 : index);
     if (from >= 0 && to !== from) {
-      void this.mixer.moveInsert(this.trackId(), id, Math.max(0, to));
+      void this.mixer.moveInsert(this.trackId(), drag.id, Math.max(0, to));
+    }
+  }
+
+  // ---- MIDI FX and the instrument
+
+  protected chooseMidiEffect(slot: SlotContext, plugin: PluginInfo): void {
+    const trackId = this.trackId();
+    if (slot.insert) {
+      if (slot.insert.pluginId !== plugin.id) {
+        void this.mixer.replaceInsert(trackId, slot.insert, plugin.id, slot.index);
+      }
+    } else {
+      // Appended, as for Audio FX: the empty slot is always after the last.
+      void this.mixer.addInsert(trackId, plugin.id, undefined, 'midiEffects');
+    }
+  }
+
+  protected setInstrument(plugin: PluginInfo): void {
+    const track = this.track();
+    if (track && track.instrument?.pluginId !== plugin.id) {
+      this.instruments.setInstrument(track.id, plugin.id);
     }
   }
 

@@ -59,7 +59,7 @@ export interface SlotMenuPoint {
         [class.text-foreground]="!bypassed()"
         [class.text-foreground-muted]="bypassed()"
         [class.line-through]="problem()"
-        [attr.aria-label]="'Insert ' + (index() + 1) + ' on ' + channel() + ': ' + plugin"
+        [attr.aria-label]="slotName() + ' ' + (index() + 1) + ' on ' + channel() + ': ' + plugin"
         [attr.title]="title()"
         (click)="open.emit()"
         (keydown)="key($event)"
@@ -82,10 +82,10 @@ export interface SlotMenuPoint {
       <button
         type="button"
         class="text-foreground-muted h-full w-full truncate px-1 text-center opacity-0 outline-none group-hover:opacity-100 focus-visible:opacity-100"
-        [attr.aria-label]="'Insert ' + (index() + 1) + ' on ' + channel() + ': empty, choose a plugin'"
+        [attr.aria-label]="slotName() + ' ' + (index() + 1) + ' on ' + channel() + ': empty, choose a plugin'"
         (click)="open.emit()"
       >
-        Audio FX
+        {{ emptyLabel() }}
       </button>
     }
   `
@@ -100,6 +100,10 @@ export class AnInsertSlot {
   readonly bypassed = input(false, { transform: booleanAttribute });
   /** The host bypassed the plugin (it crashed or failed to load). */
   readonly problem = input(false, { transform: booleanAttribute });
+  /** What a slot is called in accessible names: "Insert" (Audio FX), or "MIDI FX". */
+  readonly slotName = input('Insert');
+  /** An empty slot's label, shown on hover or focus: "Audio FX", or "MIDI FX". */
+  readonly emptyLabel = input('Audio FX');
 
   /** The name was activated: open the plugin's editor, or, on an empty slot, choose a plugin. */
   readonly open = output();

@@ -1,16 +1,18 @@
 import { Injectable, signal } from '@angular/core';
 
-/** An insert whose editor window is open: a track's, or the master's (`trackId` null). */
+/** An insert whose editor window is open: a track's, or the master's (`trackId` null); a MIDI FX slot's with `chain`. */
 export interface PluginWindow {
   trackId: string | null;
   insertId: string;
+  /** The slot's chain: `midiEffects` for a MIDI FX slot (Phase 6); inserts when left out. */
+  chain?: 'inserts' | 'midiEffects';
 }
 
 /** The editors of the Editors pane. */
-export type EditorView = 'pianoRoll' | 'audio' | 'smartTempo';
+export type EditorView = 'pianoRoll' | 'audio' | 'smartTempo' | 'stepSequencer' | 'drumMachine';
 
 function same(a: PluginWindow, b: PluginWindow): boolean {
-  return a.trackId === b.trackId && a.insertId === b.insertId;
+  return a.trackId === b.trackId && a.insertId === b.insertId && (a.chain ?? 'inserts') === (b.chain ?? 'inserts');
 }
 
 /**
@@ -29,6 +31,8 @@ export class UiStore {
   readonly stripSilenceOpen = signal(false);
   readonly bounceInPlaceOpen = signal(false);
   readonly processingOpen = signal(false);
+  /** Phase 6: the Sound Library window (content packs). */
+  readonly soundLibraryOpen = signal(false);
   /** Which editor the Editors pane shows: the Piano Roll, the Audio Track Editor or the Smart Tempo Editor. */
   readonly editorView = signal<EditorView>('pianoRoll');
   /** The generic plugin editor windows, in the order they opened (the last is in front). */

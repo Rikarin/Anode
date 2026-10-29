@@ -2,9 +2,9 @@ import { Injectable, computed, effect, inject, signal, untracked } from '@angula
 import { ProjectStore } from './project.store';
 
 /**
- * What is selected: regions in the Tracks area (audio and MIDI, by id), the track whose header was clicked last, and
- * notes in the Piano Roll (by note id, unique in the project). Ids that disappear from the project (deleted, undone)
- * leave the selection.
+ * What is selected: regions in the Tracks area (audio, MIDI and pattern regions, by id), the track whose header was
+ * clicked last, and notes in the Piano Roll (by note id, unique in the project). Ids that disappear from the project
+ * (deleted, undone) leave the selection.
  */
 @Injectable({ providedIn: 'root' })
 export class SelectionStore {
@@ -21,10 +21,11 @@ export class SelectionStore {
       const regions = this.project.regions();
       const midi = this.project.midiRegions();
       const folders = this.project.takeFolders();
+      const patterns = this.project.patternRegions();
       const tracks = this.project.tracks();
       untracked(() => {
         const selected = this.regions();
-        const kept = [...selected].filter(id => regions.has(id) || midi.has(id) || folders.has(id));
+        const kept = [...selected].filter(id => regions.has(id) || midi.has(id) || folders.has(id) || patterns.has(id));
         if (kept.length !== selected.size) {
           this.regions.set(new Set(kept));
         }

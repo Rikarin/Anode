@@ -1,26 +1,32 @@
 import { ChangeDetectionStrategy, Component, effect, inject, untracked } from '@angular/core';
 import { AudioTrackEditor } from '../audio-editor/audio-track-editor';
 import { SmartTempoEditor } from '../audio-editor/smart-tempo-editor';
+import { drumMachineOf } from '../drum-machine/drum-machine';
+import { DrumMachineEditor } from '../drum-machine/drum-machine-editor';
 import { PianoRoll } from '../piano-roll/piano-roll';
 import { ProjectStore } from '../state/project.store';
 import { SelectionStore } from '../state/selection.store';
 import { type EditorView, UiStore } from '../state/ui.store';
+import { StepSequencer } from '../step-sequencer/step-sequencer';
 
 const Views: readonly { value: EditorView; label: string }[] = [
   { value: 'pianoRoll', label: 'Piano Roll' },
   { value: 'audio', label: 'Audio Track' },
-  { value: 'smartTempo', label: 'Smart Tempo' }
+  { value: 'smartTempo', label: 'Smart Tempo' },
+  { value: 'stepSequencer', label: 'Step Sequencer' },
+  { value: 'drumMachine', label: 'Drum Machine' }
 ];
 
 /**
- * The Editors pane (Logic's editor area): the Piano Roll, the Audio Track Editor or the Smart Tempo Editor, switched by
- * the tabs in its corner. It follows the selection as Logic does: an audio region brings the Audio Track Editor when
- * the Piano Roll showed, a MIDI region the Piano Roll.
+ * The Editors pane (Logic's editor area): the Piano Roll, the Audio Track Editor, the Smart Tempo Editor, the Step
+ * Sequencer or the Drum Machine Designer, switched by the tabs in its corner. It follows the selection as Logic does: an
+ * audio region brings the Audio Track Editor when the Piano Roll showed, a MIDI region the Piano Roll, a pattern
+ * region the Step Sequencer.
  */
 @Component({
   selector: 'an-editors-pane',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [AudioTrackEditor, PianoRoll, SmartTempoEditor],
+  imports: [AudioTrackEditor, DrumMachineEditor, PianoRoll, SmartTempoEditor, StepSequencer],
   host: { class: 'flex h-full min-h-0 flex-col' },
   template: `
     <div
@@ -54,6 +60,12 @@ const Views: readonly { value: EditorView; label: string }[] = [
         @case ('smartTempo') {
           <an-smart-tempo-editor />
         }
+        @case ('stepSequencer') {
+          <an-step-sequencer />
+        }
+        @case ('drumMachine') {
+          <an-drum-machine-editor />
+        }
         @default {
           <an-piano-roll />
         }
@@ -73,11 +85,25 @@ export class EditorsPane {
       untracked(() => {
         const audio = [...selected].some(id => this.project.regions().has(id));
         const midi = [...selected].some(id => this.project.midiRegions().has(id));
+        const pattern = [...selected].some(id => this.project.patternRegions().has(id));
         const view = this.ui.editorView();
-        if (audio && !midi && view === 'pianoRoll') {
+        if (pattern && !audio && !midi) {
+          this.ui.editorView.set('stepSequencer');
+        } else if (audio && !midi && view === 'pianoRoll') {
           this.ui.editorView.set('audio');
         } else if (midi && !audio && view !== 'pianoRoll') {
           this.ui.editorView.set('pianoRoll');
+        }
+      });
+    });
+    // Selecting a Drum Machine Designer track (or one of its pads) brings its editor, unless regions were selected
+    // with it: they choose the editor above.
+    effect(() => {
+      const id = this.selection.track();
+      untracked(() => {
+        const track = id ? this.project.track(id) : null;
+        if (this.selection.regions().size === 0 && drumMachineOf(track, this.project.tracks())) {
+          this.ui.editorView.set('drumMachine');
         }
       });
     });

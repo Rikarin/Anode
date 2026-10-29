@@ -242,3 +242,28 @@ value) and a selected range as a `primary/15` band with a `primary` edge. The ow
 **Plugin readings.** `an-reading-meter` shows a reading in a plugin editor: an uppercase 10 px label, a `well` bar
 (gain reduction in `bg-meter-mid`, growing from 0 dB at the right edge; levels in `bg-meter-low` from the left) and a
 `readout` value.
+
+## Phase 6 patterns: Smart Controls and plugin panels
+
+New tokens, in both theme blocks of `anode-theme.css` (the same physical colours in both themes):
+
+| Group    | Variables                                                                                                     |
+| -------- | ------------------------------------------------------------------------------------------------------------- |
+| Drawbars | `--drawbar-brown`, `--drawbar-white`, `--drawbar-black`, each with a `-foreground` for the setting on the tab |
+
+**Smart Controls pane.** A `glass-bar` toolbar: the inspector toggle (a `bezel` "i", `text-lit` when shown), the track's
+name in 12 px semibold, the layout popup (`bezel`, `menuitemradio`s), then on the right Auto Map, Compare and
+Arpeggiator as `bezel`s (`aria-pressed`, `text-lit` when on). The controls are a `role="grid"` of two rows of
+`an-knob`s, a switch column (`bezel` toggles) and the `an-xy-pad` with an X/Y `bezel-group` to pick the axis; the
+selected cell has `bg-muted` and `aria-selected`. The inspector (`w-72`, hairline edge) uses the Inspector bands; each
+mapping is a `bg-surface-raised` card with its target popup, invert key, range fields and the mapping graph.
+
+**Mapping graph** (`an-mapping-graph`, audio-ui): a `well` with quarter grid lines in `stroke-knob-track`, the curve in
+`stroke-knob-arc` over a `fill-primary/20` area, and points as 10 px `knob-body` handles (each an ARIA slider).
+
+**Drawbar** (`an-drawbar`, audio-ui): a narrow `well` slot, a `bg-surface-raised` rod with hairline sides pulled down
+from the top, and a tab in the footage's `--drawbar-*` colour with the setting (0–8) in its `-foreground`.
+
+**Custom plugin panels** (`apps/editor/src/app/plugin-panels/`) sit above a plugin's generic controls and reuse its
+parts: knobs and choices, `well` timelines and axes with `bg-primary` handles, `bezel` radios (`text-lit` when checked)
+for the FM algorithms drawn in `currentColor`, and `bg-surface-raised` band columns.

@@ -17,8 +17,8 @@ export type TargetGroup = string;
 
 /**
  * Something a track's automation can drive (docs/05-phase-4.md, `AutomationLane.target`): `volume` (dB), `pan`
- * (−1…1), `mute` (0/1), `send:{sendId}` (dB), `insert:{insertId}:{parameterId}` or `instrument:{parameterId}` (the
- * parameter's unit). Values are in the target's unit; `toNormal` and `fromNormal` map them to a lane's height (the
+ * (−1…1), `mute` (0/1), `send:{sendId}` (dB), `insert:{insertId}:{parameterId}`, `midiEffect:{slotId}:{parameterId}`
+ * or `instrument:{parameterId}` (the parameter's unit). Values are in the target's unit; `toNormal` and `fromNormal` map them to a lane's height (the
  * fader's taper for decibels, the knob's for parameters).
  */
 export interface AutomationTarget {
@@ -153,6 +153,14 @@ export function targetsOf(
       );
     }
   }
+  // MIDI FX slots' parameters (Phase 6), under the slot's plugin name: `midiEffect:{slotId}:{parameterId}`.
+  for (const slot of track.strip.midiEffects) {
+    for (const parameter of plugin(slot.pluginId)?.parameters ?? []) {
+      list.push(
+        parameterTarget(`midiEffect:${slot.id}:${parameter.id}`, slot.name, parameter, slot.parameters[parameter.id])
+      );
+    }
+  }
   if (track.kind === 'instrument' && track.instrument) {
     for (const parameter of plugin(track.instrument.pluginId)?.parameters ?? []) {
       list.push(
@@ -165,7 +173,31 @@ export function targetsOf(
       );
     }
   }
+  // Smart Controls (Phase 6): a set-up track's controls, 0…1 each, named as the pane names them.
+  const smart = 'smartControls' in track ? (track as Pick<Track, 'smartControls'>).smartControls : null;
+  for (const control of smart?.controls ?? []) {
+    list.push(smartControlTarget(control.id, control.name, control.value));
+  }
   return list;
+}
+
+/** A Smart Control's lane, `smartControl:{controlId}`: 0…1 shown as a percentage (a switch as off and on). */
+function smartControlTarget(controlId: string, name: string, current: number): AutomationTarget {
+  const isSwitch = controlId.startsWith('switch');
+  return {
+    target: `smartControl:${controlId}`,
+    name,
+    group: 'Smart Controls',
+    min: 0,
+    max: 1,
+    default: current,
+    unit: '',
+    steps: isSwitch ? 1 : 0,
+    stepped: isSwitch,
+    toNormal: value => Math.min(1, Math.max(0, value)),
+    fromNormal: normal => Math.round(Math.min(1, Math.max(0, normal)) * 1000) / 1000,
+    format: value => (isSwitch ? (value >= 0.5 ? 'On' : 'Off') : `${Math.round(value * 100)} %`)
+  };
 }
 
 /**

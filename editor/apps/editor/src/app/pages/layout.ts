@@ -2,12 +2,22 @@ import type { XuiDockManagerLayout, XuiDockPane } from '@xui/dock-manager';
 
 /** The panes of the main window, by content id. */
 export type PaneId =
-  'library' | 'inspector' | 'tracks' | 'mixer' | 'editors' | 'keyboard' | 'browsers' | 'lists' | 'notes';
+  | 'library'
+  | 'inspector'
+  | 'tracks'
+  | 'mixer'
+  | 'editors'
+  | 'keyboard'
+  | 'smartControls'
+  | 'browsers'
+  | 'loops'
+  | 'lists'
+  | 'notes';
 
 /**
  * The layout a new project (and a new screenset) opens with, as in Logic: Library and Inspector on the left, the
- * Tracks area in the middle over the Mixer, Editors and Keyboard, and the Browsers, List Editors and Note Pad tucked
- * away on the right edge until shown (F, D, ⌥⌘P).
+ * Tracks area in the middle over the Mixer, Editors, Smart Controls and Keyboard, and the Browsers, Loop Browser, List
+ * Editors and Note Pad tucked away on the right edge until shown (F, O, D, ⌥⌘P).
  */
 export function defaultLayout(): XuiDockManagerLayout {
   return {
@@ -36,6 +46,7 @@ export function defaultLayout(): XuiDockManagerLayout {
               panes: [
                 { type: 'contentPane', contentId: 'mixer', header: 'Mixer', allowClose: false },
                 { type: 'contentPane', contentId: 'editors', header: 'Editors', allowClose: false },
+                { type: 'contentPane', contentId: 'smartControls', header: 'Smart Controls', allowClose: false },
                 { type: 'contentPane', contentId: 'keyboard', header: 'Keyboard', allowClose: false }
               ]
             }
@@ -50,6 +61,14 @@ export function defaultLayout(): XuiDockManagerLayout {
               type: 'contentPane',
               contentId: 'browsers',
               header: 'Browsers',
+              size: 2,
+              isPinned: false,
+              allowClose: false
+            },
+            {
+              type: 'contentPane',
+              contentId: 'loops',
+              header: 'Loop Browser',
               size: 2,
               isPinned: false,
               allowClose: false
@@ -121,7 +140,9 @@ export function parseLayout(text: string): XuiDockManagerLayout | null {
     }
     // A layout saved before a pane existed gets the default's arrangement for the panes it lacks.
     const whole = layout as XuiDockManagerLayout;
-    return ['tracks', 'browsers', 'lists', 'notes'].every(id => hasPane(whole, id)) ? whole : null;
+    return ['tracks', 'browsers', 'loops', 'smartControls', 'lists', 'notes'].every(id => hasPane(whole, id))
+      ? whole
+      : null;
   } catch {
     return null;
   }

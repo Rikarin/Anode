@@ -47,8 +47,16 @@ export class PluginWindows {
     return this.problems().has(problemKey(trackId, insertId));
   }
 
-  /** Opens an insert's editor: native in the desktop app when the plugin has one, else the generic window. */
+  /**
+   * Opens an insert's (or a MIDI FX slot's) editor: native in the desktop app when the plugin has one, else the generic
+   * window.
+   */
   async open(trackId: string | null, insert: Insert): Promise<void> {
+    const strip = trackId === null ? this.project.master() : this.project.track(trackId)?.strip;
+    if (strip?.midiEffects.some(i => i.id === insert.id)) {
+      this.ui.openPluginWindow({ trackId, insertId: insert.id, chain: 'midiEffects' });
+      return;
+    }
     const plugin = this.plugins.plugin(insert.pluginId);
     if (plugin?.hasEditor && this.desktop) {
       try {
