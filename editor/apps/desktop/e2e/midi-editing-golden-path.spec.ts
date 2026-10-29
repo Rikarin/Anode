@@ -144,9 +144,10 @@ function readWav(path: string): { sampleRate: number; samples: Float32Array } {
 
 /**
  * Onsets in seconds: where the 1 ms energy jumps eightfold over the 20 ms before it (at most one per 60 ms), each at
- * the first sample within 10 dB of the hit's peak.
+ * the first sample within `withinDb` of the hit's peak (10 dB: a drum hit's; a pitched note's start needs more, as its
+ * first cycle reaches −10 dB later the lower it is).
  */
-function onsets(path: string): number[] {
+function onsets(path: string, withinDb = 10): number[] {
   const { sampleRate, samples } = readWav(path);
   const window = Math.round(sampleRate / 1000);
   const energy: number[] = [];
@@ -173,13 +174,25 @@ function onsets(path: string): number[] {
         peak = Math.max(peak, Math.abs(samples[n] ?? 0));
       }
       let at = from;
-      while (at < to && Math.abs(samples[at] ?? 0) < peak / Math.sqrt(10)) {
+      while (at < to && Math.abs(samples[at] ?? 0) < peak / 10 ** (withinDb / 20)) {
         at++;
       }
       found.push(at / sampleRate);
     }
   }
   return found;
+}
+
+/** Writes `a − b` (two bounces of the same length, mixed to mono) to `out` as a 16-bit WAV, and returns `out`. */
+function difference(a: string, b: string, out: string): string {
+  const x = readWav(a);
+  const y = readWav(b).samples;
+  writeWav(
+    out,
+    x.samples.map((v, i) => v - (y[i] ?? 0)),
+    x.sampleRate
+  );
+  return out;
 }
 
 /** The magnitude of frequency `hz` between two times (Goertzel over a Hann window). */
@@ -224,10 +237,29 @@ function pitchAt(path: string, from: number, to: number): number {
   return sampleRate / bestLag;
 }
 
+/**
+ * A key command for the window: pressed with nothing focused, as a text field, a floating window or a menu keeps its
+ * own keys (and Return on a focused button presses it).
+ */
+async function shortcut(window: Page, key: string): Promise<void> {
+  await window.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+  await window.keyboard.press(key);
+}
+
+/** ⌘Z for the project. */
+async function undo(window: Page): Promise<void> {
+  await shortcut(window, 'ControlOrMeta+z');
+}
+
 /** Records what the exit criterion measured as a test annotation, and returns it. */
 function measured(what: string, value: number, unit: string): number {
   test.info().annotations.push({ type: 'measured', description: `${what}: ${value.toFixed(3)} ${unit}` });
   return value;
+}
+
+/** Records a measured value that is not a number (a list of events, a readout). */
+function observed(what: string, value: string): void {
+  test.info().annotations.push({ type: 'measured', description: `${what}: ${value}` });
 }
 
 /** Every file under `folder` named `name` (the Audio File Editor writes `<name>.v<N>.wav` beside the original). */
@@ -235,7 +267,12 @@ function findFiles(folder: string, pattern: RegExp): string[] {
   const found: string[] = [];
   for (const entry of readdirSync(folder)) {
     const path = join(folder, entry);
-    if (statSync(path).isDirectory()) {
+    // The app writes files meanwhile (peaks go through a temporary file): one may be gone by the time it is looked at.
+    const stat = statSync(path, { throwIfNoEntry: false });
+    if (!stat) {
+      continue;
+    }
+    if (stat.isDirectory()) {
       found.push(...findFiles(path, pattern));
     } else if (pattern.test(entry)) {
       found.push(path);
@@ -249,35 +286,78 @@ function findFiles(folder: string, pattern: RegExp): string[] {
 // Lane geometry at the default view: the ruler is 24 px, lanes 72 px.
 const Ruler = 24;
 const Lane = 72;
-const laneY = (lane: number) => Ruler + lane * Lane + Lane / 2;
+
+/**
+ * A point on lane `lane` (0-based: track `lane + 1`), relative to the Tracks area, `dy` below the lane's top (its
+ * middle when left out). The Tracks area scrolls as a person does (the wheel over the lanes, which the headers follow)
+ * until the lane is in it: the Editors pane leaves room for about five lanes.
+ */
+async function lanePoint(window: Page, lane: number, x: number, dy?: number): Promise<{ x: number; y: number }> {
+  const area = window.locator('an-timeline');
+  const timeline = await area.boundingBox();
+  if (!timeline) {
+    throw new Error('The Tracks area is not on screen.');
+  }
+  const header = window.getByRole('group', { name: new RegExp(`^Track ${lane + 1}: `) });
+  await window.mouse.move(timeline.x + timeline.width / 2, timeline.y + timeline.height / 2);
+  for (let i = 0; i < 30; i++) {
+    const box = (await header.count()) > 0 ? await header.boundingBox() : null;
+    if (box && box.y >= timeline.y + Ruler && box.y + box.height <= timeline.y + timeline.height) {
+      return { x, y: box.y - timeline.y + (dy ?? box.height / 2) };
+    }
+    await window.mouse.wheel(0, box && box.y < timeline.y + Ruler ? -Lane : Lane);
+    await window.waitForTimeout(100);
+  }
+  throw new Error(`Could not scroll the Tracks area to lane ${lane}.`);
+}
 
 async function regionCount(window: Page): Promise<number> {
   const label = await window.getByRole('img', { name: /^Tracks area:/ }).getAttribute('aria-label');
   return Number(/(\d+) regions?/.exec(label ?? '')?.[1] ?? 0);
 }
 
+/** Selects the last track, so a new one goes after it (a new track goes below the selected one, as in Logic). */
+async function selectLastTrack(window: Page): Promise<void> {
+  const last = window.locator('an-track-header').last();
+  if ((await window.locator('an-track-header').count()) > 0) {
+    await last.click();
+    await expect(last).toHaveClass(/\bbg-muted\b/);
+  }
+}
+
 /** A new software instrument track (selected once added); `lane` is its 0-based lane. */
 async function addInstrumentTrack(window: Page): Promise<void> {
+  const headers = window.locator('an-track-header');
+  const before = await headers.count();
+  await selectLastTrack(window);
   await window.getByTestId('add-track-menu').click();
   await window.getByTestId('add-instrument-track').click();
+  await expect(headers).toHaveCount(before + 1);
 }
 
 /** A one-bar MIDI region at bar 1 of lane `lane` (a double-click on an instrument lane), selected. */
 async function addMidiRegion(window: Page, lane: number): Promise<void> {
   const before = await regionCount(window);
-  await window.locator('an-timeline').dblclick({ position: { x: 4, y: laneY(lane) } });
+  await window.locator('an-timeline').dblclick({ position: await lanePoint(window, lane, 4) });
   await expect.poll(() => regionCount(window)).toBe(before + 1);
-  await window.locator('an-timeline').click({ position: { x: 8, y: Ruler + lane * Lane + 6 } });
+  await window.locator('an-timeline').click({ position: await lanePoint(window, lane, 8, 6) });
 }
 
 /** Selects the region at the start of lane `lane`. */
 async function selectRegion(window: Page, lane: number): Promise<void> {
-  await window.locator('an-timeline').click({ position: { x: 8, y: Ruler + lane * Lane + 6 } });
+  await window.locator('an-timeline').click({ position: await lanePoint(window, lane, 8, 6) });
 }
 
 /** Imports a WAV onto a new audio track (the desktop app's open dialog answers with `path`). */
 async function importOnNewTrack(window: Page, app: ElectronApplication, path: string): Promise<void> {
+  const headers = window.locator('an-track-header');
+  const before = await headers.count();
+  await selectLastTrack(window);
   await window.getByTestId('add-track').click();
+  // Import goes onto the selected track: select the new audio track (it is the last).
+  await expect(headers).toHaveCount(before + 1);
+  await headers.last().click();
+  await expect(headers.last()).toHaveClass(/\bbg-muted\b/);
   await app.evaluate(({ dialog }, file) => {
     dialog.showOpenDialog = () => Promise.resolve({ canceled: false, filePaths: [file] });
   }, path);
@@ -309,7 +389,7 @@ async function soloOnly(window: Page, track: number): Promise<void> {
 
 /** Bounces bars 1…`endBar` to `folder/name.wav` and returns the path. */
 async function bounce(window: Page, folder: string, name: string, endBar: number): Promise<string> {
-  await window.keyboard.press('ControlOrMeta+b');
+  await shortcut(window, 'ControlOrMeta+b');
   await expect(window.getByTestId('bounce-dialog')).toBeVisible();
   await window.getByTestId('bounce-name').fill(name);
   await window.getByTestId('bounce-folder').fill(folder);
@@ -337,12 +417,38 @@ async function editCell(window: Page, row: Locator, column: string, text: string
   await expect(window.getByTestId(`event-edit-${column}`)).toBeHidden();
 }
 
+/** The Event List's row of the event with this key (`n<id>` a note, `c<id>` a controller event). */
+function rowOf(window: Page, key: string): Locator {
+  return window.getByTestId('event-list').locator(`an-event-row[data-row-key="${key}"]`);
+}
+
+/**
+ * Inserts an event with the Event List and returns its row key, once the new event is the selected row (the insert is
+ * a round trip to the Server; editing "the selected row" before it lands edits the previous one).
+ */
+async function insertEvent(window: Page, kind: string): Promise<string> {
+  const before = await window
+    .getByTestId('event-list')
+    .locator('an-event-row')
+    .evaluateAll(rows => rows.map(row => row.getAttribute('data-row-key')));
+  await window.getByTestId('event-insert').click();
+  await window.getByTestId(`event-insert-${kind}`).click();
+  let key = '';
+  await expect
+    .poll(async () => {
+      key = (await selectedRow(window).getAttribute('data-row-key')) ?? '';
+      return key !== '' && !before.includes(key);
+    })
+    .toBe(true);
+  return key;
+}
+
 /** Inserts a note with the Event List and places it: position (bar beat division tick) and pitch. */
 async function insertNote(window: Page, position: string, pitch: number): Promise<void> {
-  await window.getByTestId('event-insert').click();
-  await window.getByTestId('event-insert-note').click();
-  await editCell(window, selectedRow(window), 'position', position);
-  await editCell(window, selectedRow(window), 'num', String(pitch));
+  const key = await insertEvent(window, 'note');
+  await editCell(window, rowOf(window, key), 'position', position);
+  await editCell(window, rowOf(window, key), 'num', String(pitch));
+  await expect(rowOf(window, key).locator('[data-column="position"]')).toHaveText(position);
 }
 
 /** The Event List's rows as text, by column. */
@@ -369,6 +475,8 @@ function ticksOf(position: string): number {
 
 /** Drags across a Step Editor lane's body from one point to another (body-local pixels). */
 async function drawLine(window: Page, lane: Locator, from: [number, number], to: [number, number]): Promise<void> {
+  // A lane added last may be below the Step Editor's fold: the drag has to land on it.
+  await lane.scrollIntoViewIfNeeded();
   const box = await lane.boundingBox();
   if (!box) {
     throw new Error('The lane is not on screen.');
@@ -385,11 +493,28 @@ async function choose(window: Page, select: Locator, option: string | RegExp): P
   await window.getByRole('option', { name: option }).first().click();
 }
 
-/** Sets the Audio File Editor's selection to exact frames. */
+/**
+ * Quantises every note of the shown region in the Piano Roll: Escape first, as the last note the Event List inserted
+ * is still selected (Q quantises the selected notes when there are any).
+ */
+async function quantizeAll(window: Page, value: string): Promise<void> {
+  await showEditor(window, 'Piano Roll');
+  const roll = window.getByRole('region', { name: 'Piano Roll' });
+  await roll.focus();
+  await roll.press('Escape');
+  await choose(window, window.getByTestId('piano-roll-quantize-value'), value);
+  await window.getByTestId('quantize').click();
+}
+
+/**
+ * Sets the Audio File Editor's selection to exact frames. Each field sets one edge against the other (a start past the
+ * current end swaps them), so the start goes in again once the end is in place.
+ */
 async function selectFrames(window: Page, start: number, end: number): Promise<void> {
   for (const [id, value] of [
     ['afe-start', start],
-    ['afe-end', end]
+    ['afe-end', end],
+    ['afe-start', start]
   ] as const) {
     const field = window.getByTestId(id);
     await field.fill(String(value));
@@ -404,7 +529,9 @@ async function fileOperation(window: Page, op: string, value?: string): Promise<
   const version = Number((await waveform.getAttribute('data-version')) ?? 0);
   await window.getByTestId('afe-functions').click();
   await window.getByTestId(`afe-op-${op}`).click();
-  if (await window.getByTestId('afe-op-panel').isVisible()) {
+  // The operations with settings (a value, a curve, a rate) show them first; the rest run at once.
+  if (['normalize', 'gain', 'fadeIn', 'fadeOut', 'convertRate'].includes(op)) {
+    await expect(window.getByTestId('afe-op-panel')).toBeVisible();
     if (value !== undefined) {
       await window.getByTestId('afe-op-value').fill(value);
     }
@@ -418,14 +545,14 @@ async function fileOperation(window: Page, op: string, value?: string): Promise<
 // A (Scripter in the chain, step-input forwarding, range preview), B (the Server's commands, jobs and package), C (this
 // editor), D (Scripter) and E (the algorithms and SFZ keyswitches).
 //
-// Gap (reported to the integration): the host's virtual MIDI input never sends (VirtualMidiBackend.Read returns 0), so
-// step 6's "step-enter from the virtual MIDI input" plays the on-screen keyboard (`/midi/live`) instead; the Server must
-// forward live MIDI to step input while MIDI step input is on, or the host needs a way for tests to feed its input.
-test.fixme('edits MIDI and audio at the event and sample level: Event List, Step Editor, MIDI Transform, grooves, articulations, step input, Audio File Editor, Scripter, reopening', async ({
+// Step 6 step-enters through MIDI input by the live MIDI path the on-screen keyboard uses (`/midi/live` → the host's
+// held-key state → `stepInputMidi` → the Server's steps): tests cannot feed the host's virtual MIDI input.
+test('edits MIDI and audio at the event and sample level: Event List, Step Editor, MIDI Transform, grooves, articulations, step input, Audio File Editor, Scripter, reopening', async ({
   app,
   window
 }) => {
   const scratch = mkdtempSync(join(tmpdir(), 'anode-midi-editing-'));
+
   const bounces = join(scratch, 'Bounces');
   const sfz = writeKeyswitchSfz(scratch);
   const loop = swungLoop();
@@ -459,27 +586,36 @@ test.fixme('edits MIDI and audio at the event and sample level: Event List, Step
     await window.getByTestId('event-filter-notes').click();
     // A program change (program 5) and a CC 1 (64) at the first note.
     await window.getByTestId('event-row-0').locator('[data-column="status"]').click();
+    await expect(window.getByTestId('event-row-0')).toHaveAttribute('aria-selected', 'true');
     for (const [kind, value] of [
       ['programChange', '5'],
       ['controlChange', '64']
     ] as const) {
-      await window.getByTestId('event-insert').click();
-      await window.getByTestId(`event-insert-${kind}`).click();
-      await editCell(window, selectedRow(window), 'val', value);
+      const key = await insertEvent(window, kind);
+      await editCell(window, rowOf(window, key), 'val', value);
+      await expect(rowOf(window, key).locator('[data-column="val"]')).toHaveText(value);
+      // The next insert goes at the first note again.
+      await window.getByTestId('event-row-0').locator('[data-column="status"]').click();
     }
     // Delete the last note.
     const rowsBefore = await eventRows(window);
     const last = rowsBefore.findIndex(r => r['position'] === '1 4 1 1');
     await window.getByTestId(`event-row-${last}`).locator('[data-column="status"]').click();
+    await expect(window.getByTestId(`event-row-${last}`)).toHaveAttribute('aria-selected', 'true');
     await window.getByTestId('event-delete').click();
+    await expect.poll(async () => (await eventRows(window)).length).toBe(rowsBefore.length - 1);
+    await expect
+      .poll(async () =>
+        (await eventRows(window)).map(r => [r['position'], r['status'], r['num'], r['val'], r['length']])
+      )
+      .toEqual([
+        ['1 1 1 1', 'Program', '', '5', ''],
+        ['1 1 1 1', 'Control', '1', '64', ''],
+        ['1 1 1 1', 'Note', 'C3', '100', '0 0 1 0'],
+        ['1 2 3 1', 'Note', 'D4', '90', '0 0 2 0'],
+        ['1 3 1 1', 'Note', 'G4', '100', '0 0 1 0']
+      ]);
     const edited = await eventRows(window);
-    expect(edited.map(r => [r['position'], r['status'], r['num'], r['val'], r['length']])).toEqual([
-      ['1 1 1 1', 'Program', '', '5', ''],
-      ['1 1 1 1', 'Control', '1', '64', ''],
-      ['1 1 1 1', 'Note', 'C3', '100', '0 0 1 0'],
-      ['1 2 3 1', 'Note', 'D4', '90', '0 0 2 0'],
-      ['1 3 1 1', 'Note', 'G4', '100', '0 0 1 0']
-    ]);
     // The region plays the edits: three notes, the second an eighth late.
     await soloOnly(window, 1);
     const eventBounce = await bounce(window, bounces, 'Event List', 2);
@@ -502,21 +638,42 @@ test.fixme('edits MIDI and audio at the event and sample level: Event List, Step
     await drawLine(window, window.getByTestId('step-lane-velocity'), [0, 60], [384, 4]);
     await drawLine(window, window.getByTestId('step-lane-controlChange-74'), [0, 60], [384, 4]);
     await showEditor(window, 'Event List');
-    const ramped = await eventRows(window);
     // Velocity 1 + 126·tick/3840 at each note's start.
-    expect(ramped.filter(r => r['status'] === 'Note').map(r => [r['position'], r['val']])).toEqual([
-      ['1 1 1 1', '1'],
-      ['1 2 3 1', '48'],
-      ['1 3 1 1', '64']
-    ]);
-    const cutoff = ramped.filter(r => r['status'] === 'Control' && r['num'] === '74');
-    expect(cutoff.map(r => [ticksOf(r['position'] ?? ''), Number(r['val'])])).toEqual(
-      Array.from({ length: 16 }, (_, i) => [i * 240, Math.round((127 * i) / 16)])
+    await expect
+      .poll(async () =>
+        (await eventRows(window)).filter(r => r['status'] === 'Note').map(r => [r['position'], r['val']])
+      )
+      .toEqual([
+        ['1 1 1 1', '1'],
+        ['1 2 3 1', '48'],
+        ['1 3 1 1', '64']
+      ]);
+    await expect
+      .poll(async () =>
+        (await eventRows(window))
+          .filter(r => r['status'] === 'Control' && r['num'] === '74')
+          .map(r => [ticksOf(r['position'] ?? ''), Number(r['val'])])
+      )
+      .toEqual(Array.from({ length: 16 }, (_, i) => [i * 240, Math.round((127 * i) / 16)]));
+    const drawn = await eventRows(window);
+    observed(
+      'Step Editor: note velocities',
+      drawn
+        .filter(r => r['status'] === 'Note')
+        .map(r => `${r['position']}=${r['val']}`)
+        .join(', ')
+    );
+    observed(
+      'Step Editor: CC 74',
+      drawn
+        .filter(r => r['status'] === 'Control' && r['num'] === '74')
+        .map(r => r['val'])
+        .join(' ')
     );
 
     // 3. MIDI Transform: Humanize, seeded (the same seed twice gives the same events), then Select and Operate on the
     //    notes above C4 (Logic's C4 is 72): velocity 100 and a 1/16 length.
-    await window.keyboard.press('ControlOrMeta+9');
+    await shortcut(window, 'ControlOrMeta+9');
     const transform = window.getByTestId('transform-window');
     await expect(transform).toBeVisible();
     const notesOf = async () => (await eventRows(window)).filter(r => r['status'] === 'Note');
@@ -526,20 +683,40 @@ test.fixme('edits MIDI and audio at the event and sample level: Event List, Step
     await window.getByTestId('transform-seed').press('Enter');
     await window.getByTestId('transform-apply').click();
     await expect(window.getByTestId('transform-status')).toContainText('Transformed');
-    const humanized = await notesOf();
+    let humanized = beforeHumanize;
+    await expect
+      .poll(async () => {
+        humanized = await notesOf();
+        return JSON.stringify(humanized) !== JSON.stringify(beforeHumanize);
+      })
+      .toBe(true);
+    measured(
+      'Humanize: largest position change',
+      Math.max(
+        ...humanized.map((n, i) =>
+          Math.abs(ticksOf(n['position'] ?? '') - ticksOf(beforeHumanize[i]?.['position'] ?? ''))
+        )
+      ),
+      'ticks'
+    );
+    measured(
+      'Humanize: largest velocity change',
+      Math.max(...humanized.map((n, i) => Math.abs(Number(n['val']) - Number(beforeHumanize[i]?.['val'])))),
+      ''
+    );
     humanized.forEach((n, i) => {
       const was = beforeHumanize[i] ?? {};
       expect(Math.abs(ticksOf(n['position'] ?? '') - ticksOf(was['position'] ?? ''))).toBeLessThanOrEqual(10);
       expect(Math.abs(Number(n['val']) - Number(was['val']))).toBeLessThanOrEqual(10);
     });
-    await window.keyboard.press('ControlOrMeta+z');
+    await undo(window);
     await expect.poll(notesOf).toEqual(beforeHumanize);
     await choose(window, window.getByTestId('transform-preset'), 'Humanize');
     await window.getByTestId('transform-seed').fill('1234');
     await window.getByTestId('transform-seed').press('Enter');
     await window.getByTestId('transform-apply').click();
     await expect.poll(notesOf).toEqual(humanized);
-    await window.keyboard.press('ControlOrMeta+z');
+    await undo(window);
     await expect.poll(notesOf).toEqual(beforeHumanize);
 
     await window.getByTestId('transform-new').click();
@@ -563,6 +740,10 @@ test.fixme('edits MIDI and audio at the event and sample level: Event List, Step
         ['D4', '100', '0 0 1 0'],
         ['G4', '100', '0 0 1 0']
       ]);
+    observed(
+      'Transform: Select and Operate',
+      (await notesOf()).map(n => `${n['num']} ${n['val']} ${n['length']}`).join(', ')
+    );
     await window.getByTestId('transform-window-close').click();
 
     // 4. Grooves: a template from the swung drum loop's transients and one from a MIDI region; a straight region
@@ -570,15 +751,20 @@ test.fixme('edits MIDI and audio at the event and sample level: Event List, Step
     //    a track that matches it quantises to it.
     await importOnNewTrack(window, app, loopPath); // track 2, lane 1
     await selectRegion(window, 1);
-    await window.locator('an-timeline').click({ button: 'right', position: { x: 8, y: Ruler + Lane + 6 } });
+    await window.locator('an-timeline').click({ button: 'right', position: await lanePoint(window, 1, 8, 6) });
     await window.getByTestId('make-groove-template').click();
     await expect(window.getByTestId('groove-window')).toBeVisible();
+    await expect(window.getByTestId('groove-source')).toContainText('(transients)');
     await window.getByTestId('groove-name').fill('Swing Loop');
     await window.getByTestId('groove-bars').selectOption('1');
     await window.getByTestId('groove-grid').selectOption('480');
     await window.getByTestId('groove-make').click();
     await expect(window.getByTestId('project-groove')).toHaveCount(1);
+    // The window makes templates from the region it was opened for: open it for the MIDI region.
     await selectRegion(window, 0);
+    await window.locator('an-timeline').click({ button: 'right', position: await lanePoint(window, 0, 8, 6) });
+    await window.getByTestId('make-groove-template').click();
+    await expect(window.getByTestId('groove-source')).toContainText('(notes)');
     await window.getByTestId('groove-name').fill('From MIDI');
     await window.getByTestId('groove-make').click();
     await expect(window.getByTestId('project-groove')).toHaveCount(2);
@@ -594,12 +780,22 @@ test.fixme('edits MIDI and audio at the event and sample level: Event List, Step
         await insertNote(window, position, 60);
       }
     };
+    // The region's notes once a quantise has moved them off the straight eighths (the Event List lists them anew).
+    const quantized = async () => {
+      const straightTicks = straight.map(ticksOf);
+      let ticks: number[] = [];
+      await expect
+        .poll(async () => {
+          ticks = (await notesOf()).map(n => ticksOf(n['position'] ?? ''));
+          return ticks.length === straight.length && ticks.some((t, i) => t !== straightTicks[i]);
+        })
+        .toBe(true);
+      return ticks;
+    };
     await enterStraight(2);
-    await showEditor(window, 'Piano Roll');
-    await choose(window, window.getByTestId('piano-roll-quantize-value'), 'Groove: Swing Loop');
-    await window.getByTestId('quantize').click();
+    await quantizeAll(window, 'Groove: Swing Loop');
     await showEditor(window, 'Event List');
-    const swung = (await notesOf()).map(n => ticksOf(n['position'] ?? ''));
+    const swung = await quantized();
     expect(swung).toHaveLength(8);
     swung.forEach((tick, i) =>
       expect(
@@ -625,11 +821,10 @@ test.fixme('edits MIDI and audio at the event and sample level: Event List, Step
       .getByRole('group', { name: /^Track 4: / })
       .getByTestId('match-groove')
       .check();
-    await showEditor(window, 'Piano Roll');
-    await choose(window, window.getByTestId('piano-roll-quantize-value'), '1/8');
-    await window.getByTestId('quantize').click();
+    await quantizeAll(window, '1/8');
     await showEditor(window, 'Event List');
-    const matched = (await notesOf()).map(n => ticksOf(n['position'] ?? ''));
+    const matched = await quantized();
+    expect(matched).toHaveLength(8);
     matched.forEach((tick, i) =>
       expect(Math.abs(tick - (loop.hits[i] ?? 0)) * TickSeconds * 1000).toBeLessThanOrEqual(2)
     );
@@ -697,8 +892,11 @@ test.fixme('edits MIDI and audio at the event and sample level: Event List, Step
 
     // 6. Step input: with the Step Input Keyboard, a note, a chord and a rest (eighths); then MIDI step input.
     await addInstrumentTrack(window); // track 6, lane 5: steps make a new region on it
-    await window.keyboard.press('Enter'); // to the start
-    await window.keyboard.press('ControlOrMeta+Alt+k');
+    // Step input goes into the selected region (the Sampler's is still selected): click the new track's empty lane.
+    await window.locator('an-timeline').click({ position: await lanePoint(window, 5, 600) });
+    await expect(window.getByTestId('piano-roll-title')).not.toContainText('Inst 4');
+    await shortcut(window, 'Enter'); // to the start
+    await shortcut(window, 'ControlOrMeta+Alt+k');
     const keyboard = window.getByTestId('step-input-keyboard');
     await expect(keyboard).toBeVisible();
     await window.getByTestId('step-value-480').click();
@@ -723,7 +921,10 @@ test.fixme('edits MIDI and audio at the event and sample level: Event List, Step
     await live('A3').dispatchEvent('pointerdown', { button: 0, pointerId: 2 });
     await live('F3').dispatchEvent('pointerup', { button: 0, pointerId: 1 });
     await live('A3').dispatchEvent('pointerup', { button: 0, pointerId: 2 });
+    // MIDI In is the Piano Roll's (the Keyboard tab took the pane's place).
+    await showEditor(window, 'Piano Roll');
     await window.getByTestId('midi-step-input').click();
+    await expect(window.getByTestId('midi-step-input')).toHaveAttribute('aria-pressed', 'false');
     await selectRegion(window, 5);
     await showEditor(window, 'Event List');
     await expect
@@ -759,17 +960,28 @@ test.fixme('edits MIDI and audio at the event and sample level: Event List, Step
     await selectFrames(window, 0, 4_800);
     await fileOperation(window, 'fadeIn');
     const faded = version(2);
+    measured('Fade in: frame 1', Math.abs(faded[1] ?? 1), '');
     expect(Math.abs(faded[1] ?? 1)).toBeLessThan(0.01);
     expect(Math.abs(faded[4_825] ?? 0)).toBeCloseTo(Math.abs(normalised[4_825] ?? 0), 3);
     await selectFrames(window, 24_000, 48_000);
     await fileOperation(window, 'reverse');
     const reversed = version(3);
+    measured(
+      'Reverse: largest error at 24 000, 30 017, 47 999',
+      Math.max(...[24_000, 30_017, 47_999].map(i => Math.abs((reversed[i] ?? 0) - (faded[24_000 + 47_999 - i] ?? 0)))),
+      ''
+    );
     for (const i of [24_000, 30_017, 47_999]) {
       expect(reversed[i]).toBeCloseTo(faded[24_000 + 47_999 - i] ?? 0, 3);
     }
     await selectFrames(window, 48_000, 60_000);
     await fileOperation(window, 'silence');
     const silenced = version(4);
+    measured(
+      'Silence: peak of 48 000…60 000',
+      Math.max(...Array.from(silenced.subarray(48_000, 60_000), Math.abs)),
+      ''
+    );
     expect(Math.max(...Array.from(silenced.subarray(48_000, 60_000), Math.abs))).toBe(0);
     await window.getByTestId('afe-undo').click();
     await expect(window.getByTestId('afe-waveform')).toHaveAttribute('data-version', '3');
@@ -783,6 +995,7 @@ test.fixme('edits MIDI and audio at the event and sample level: Event List, Step
       measured('Loop search: end off the selection end', Math.abs(loopEnd - 96_000), 'frames')
     ).toBeLessThanOrEqual(TonePeriod);
     expect((loopEnd - loopStart) % TonePeriod).toBe(0);
+    observed('Loop search: best loop', `${loopStart}…${loopEnd} (${(loopEnd - loopStart) / TonePeriod} periods)`);
 
     // 8. Scripter on a synth track: a factory preset, then a script that sends each note and an octave above it 100 ms
     //    later (a PluginParameters slider for the interval); a runaway script is bypassed and playback goes on.
@@ -790,7 +1003,11 @@ test.fixme('edits MIDI and audio at the event and sample level: Event List, Step
     await addMidiRegion(window, 7);
     await showEditor(window, 'Event List');
     await insertNote(window, '1 1 1 1', 60);
-    await window.keyboard.press('x');
+    // The note alone: the echo is what the script adds to it (the synth's 1/16 note still sounds when the echo starts,
+    // so the echo is measured on the difference of the two bounces).
+    await soloOnly(window, 8);
+    const dry = await bounce(window, bounces, 'Scripter dry', 2);
+    await shortcut(window, 'x');
     const fx = window.getByRole('group', { name: /^MIDI FX of / }).last();
     await fx.getByTestId('midi-fx-empty').click();
     await window.getByRole('menuitem', { name: 'Scripter' }).click();
@@ -820,16 +1037,27 @@ test.fixme('edits MIDI and audio at the event and sample level: Event List, Step
       window.getByTestId('script-parameter-Interval').getByRole('slider', { name: 'Interval' })
     ).toBeVisible();
     await expect(window.getByTestId('script-editor-console')).toContainText('Octave echo ready');
-    await window.keyboard.press('x');
+    // The Script Editor floats over the track headers: close it for the bounce, and open it again from the slot.
+    await window.getByTestId('script-editor-close').click();
+    await expect(editor).toBeHidden();
+    await shortcut(window, 'x');
     await soloOnly(window, 8);
-    const echoed = await bounce(window, bounces, 'Scripter', 2);
-    const [note, echo] = onsets(echoed);
+    const echoed = difference(await bounce(window, bounces, 'Scripter', 2), dry, join(scratch, 'echo.wav'));
+    await shortcut(window, 'x');
+    await fx.getByRole('button', { name: /MIDI FX 1 on .*: Scripter/ }).click();
+    await expect(editor).toBeVisible();
+    await expect(window.getByTestId('script-editor-code')).toContainText('sendAfterMilliseconds(100)');
+    await shortcut(window, 'x');
+    // Two pitches an octave apart: their starts, within 40 dB of their peaks (at −10 dB the C3's first half cycle would
+    // put it 1.3 ms later than its octave).
+    const [note] = onsets(dry, 40);
+    const [echo] = onsets(echoed, 40);
     expect(measured('Scripter: echo after the note', ((echo ?? 0) - (note ?? 0)) * 1000, 'ms')).toBeGreaterThanOrEqual(
       99
     );
     expect(((echo ?? 0) - (note ?? 0)) * 1000).toBeLessThanOrEqual(101);
     const ratio =
-      pitchAt(echoed, (echo ?? 0) + 0.02, (echo ?? 0) + 0.08) / pitchAt(echoed, (note ?? 0) + 0.02, (note ?? 0) + 0.08);
+      pitchAt(echoed, (echo ?? 0) + 0.02, (echo ?? 0) + 0.08) / pitchAt(dry, (note ?? 0) + 0.02, (note ?? 0) + 0.08);
     expect(measured('Scripter: echo pitch ratio', ratio, '×')).toBeCloseTo(2, 1);
     // A runaway script: bypassed with its problem in the console, and playback continues.
     await window.getByTestId('script-editor-code').click();
@@ -841,16 +1069,22 @@ test.fixme('edits MIDI and audio at the event and sample level: Event List, Step
       timeout: 10_000
     });
     await expect(window.getByTestId('lcd-bars')).not.toHaveText('1 1 1   1', { timeout: 5_000 });
+    observed(
+      'Runaway script',
+      `${await window.getByTestId('script-editor-console').locator('[data-kind="problem"]').first().textContent()}; playing at ${await window.getByTestId('lcd-bars').textContent()}`
+    );
     await window.getByRole('button', { name: 'Stop' }).click();
     // Back to the echo for the reopening check.
     await window.getByTestId('script-editor-code').click();
     await window.keyboard.press('ControlOrMeta+a');
     await window.keyboard.insertText(script);
     await window.keyboard.press('ControlOrMeta+Enter');
+    // The host's answer (the script's parameters) is part of the project: wait for it before saving.
+    await expect(window.getByTestId('script-parameter-Interval')).toBeVisible();
     await window.getByTestId('script-editor-close').click();
 
     // 9. Save, close and reopen: everything is intact.
-    await window.keyboard.press('ControlOrMeta+s');
+    await shortcut(window, 'ControlOrMeta+s');
     await expect(window.getByTestId('unsaved')).toBeHidden();
     await window.getByRole('button', { name: 'Close project' }).click();
     await window.getByTestId('recent-Editing').click();
@@ -867,7 +1101,7 @@ test.fixme('edits MIDI and audio at the event and sample level: Event List, Step
       /Square|S/
     );
     await selectRegion(window, 1);
-    await window.locator('an-timeline').click({ button: 'right', position: { x: 8, y: Ruler + Lane + 6 } });
+    await window.locator('an-timeline').click({ button: 'right', position: await lanePoint(window, 1, 8, 6) });
     await window.getByTestId('make-groove-template').click();
     await expect(window.getByTestId('project-groove')).toHaveCount(2);
     await window.getByTestId('groove-window-close').click();
@@ -878,7 +1112,7 @@ test.fixme('edits MIDI and audio at the event and sample level: Event List, Step
     await selectRegion(window, 6);
     await showEditor(window, 'Audio File');
     await expect(window.getByTestId('afe-waveform')).toHaveAttribute('data-version', '3');
-    await window.keyboard.press('x');
+    await shortcut(window, 'x');
     await window
       .getByRole('group', { name: /^MIDI FX of / })
       .last()
@@ -887,6 +1121,7 @@ test.fixme('edits MIDI and audio at the event and sample level: Event List, Step
     await expect(window.getByTestId('script-editor-code')).toContainText('sendAfterMilliseconds(100)');
     await expect(window.getByTestId('script-parameter-Interval')).toBeVisible();
   } finally {
-    rmSync(scratch, { recursive: true, force: true });
+    // The reopened project may still be writing (peaks, backups): retry rather than hide the test's own failure.
+    rmSync(scratch, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
   }
 });
