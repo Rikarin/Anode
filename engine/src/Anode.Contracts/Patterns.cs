@@ -99,8 +99,8 @@ public sealed record DrumPad(int Note, string Name, string TrackId);
 /// <summary>
 ///     A Drum Machine Designer (docs/07-phase-6.md): the track is a stack whose members are its pads, each an instrument
 ///     track with its own channel strip; <c>pads</c> (at most one per note, sorted by note) map a note to a pad. The
-///     DMD track's region and pattern notes are routed to the pad tracks by note (live MIDI too, by the host), each
-///     played at the pad's base note: a pad always plays its own sound (Drum Synth ignores pitch; Quick Sampler plays
-///     at its root).
+///     DMD track's region and pattern notes are routed to the pad tracks by note (live MIDI too, by the host), their
+///     note numbers unchanged: a pad plays its own sound whatever the note (the Drum Synth ignores pitch; a Quick
+///     Sampler pad has key follow off and plays at its root).
 /// </summary>
 public sealed record DrumMachine(IReadOnlyList<DrumPad> Pads);

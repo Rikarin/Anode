@@ -3905,7 +3905,7 @@
             }
           }
         },
-        "description": "A Drum Machine Designer (docs/07-phase-6.md): the track is a stack whose members are its pads, each an instrument\ntrack with its own channel strip; \u0060pads\u0060 (at most one per note, sorted by note) map a note to a pad. The\nDMD track\u0027s region and pattern notes are routed to the pad tracks by note (live MIDI too, by the host), each\nplayed at the pad\u0027s base note: a pad always plays its own sound (Drum Synth ignores pitch; Quick Sampler plays\nat its root)."
+        "description": "A Drum Machine Designer (docs/07-phase-6.md): the track is a stack whose members are its pads, each an instrument\ntrack with its own channel strip; \u0060pads\u0060 (at most one per note, sorted by note) map a note to a pad. The\nDMD track\u0027s region and pattern notes are routed to the pad tracks by note (live MIDI too, by the host), their\nnote numbers unchanged: a pad plays its own sound whatever the note (the Drum Synth ignores pitch; a Quick\nSampler pad has key follow off and plays at its root)."
       },
       "DrumPad": {
         "required": [
@@ -4266,6 +4266,9 @@
           },
           {
             "$ref": "#/components/schemas/EditCommandSetTrackActivationCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandLoadInsertFileCommand"
           }
         ],
         "description": "An edit of the open project (docs/adr/0004-state-ownership.md). A batch of them is applied atomically as one\nundo step. Optional properties left out are left unchanged.",
@@ -4382,7 +4385,8 @@
             "deleteCells": "#/components/schemas/EditCommandDeleteCellsCommand",
             "moveCell": "#/components/schemas/EditCommandMoveCellCommand",
             "setLiveLoops": "#/components/schemas/EditCommandSetLiveLoopsCommand",
-            "setTrackActivation": "#/components/schemas/EditCommandSetTrackActivationCommand"
+            "setTrackActivation": "#/components/schemas/EditCommandSetTrackActivationCommand",
+            "loadInsertFile": "#/components/schemas/EditCommandLoadInsertFileCommand"
           }
         }
       },
@@ -5355,6 +5359,34 @@
           }
         },
         "description": "Glues regions of one track into one: MIDI regions merge their notes; audio regions only when they play one\ncontiguous stretch of the same file (others need a bounce, Phase 4), else 422."
+      },
+      "EditCommandLoadInsertFileCommand": {
+        "required": [
+          "insertId",
+          "path",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "loadInsertFile"
+            ],
+            "type": "string"
+          },
+          "insertId": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          },
+          "trackId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        },
+        "description": "Loads a file into an insert (the master\u0027s when \u0060trackId\u0060 is left out): an impulse response into the\nconvolution reverb (\u0060anode.space\u0060), a path on the server\u0027s disk of one of the plugin\u0027s \u0060fileTypes\u0060. A\nfile outside the project is copied into its \u0060Impulse Responses\u0060 folder; the insert keeps it relative."
       },
       "EditCommandLoadInstrumentFileCommand": {
         "required": [
@@ -8110,9 +8142,15 @@
               "null",
               "string"
             ]
+          },
+          "file": {
+            "type": [
+              "null",
+              "string"
+            ]
           }
         },
-        "description": "An insert effect on a channel strip: the plugin, whether it is bypassed, its parameter values by parameter id\n(all of them), and its sidechain source (a track id or \u0060bus:N\u0060; null: none). A plugin\u0027s opaque state lives in\nthe project\u0027s \u0060Plugin States\u0060 folder. A MIDI FX slot (\u0060ChannelStrip.midiEffects\u0060) has the same shape,\nnever a sidechain."
+        "description": "An insert effect on a channel strip: the plugin, whether it is bypassed, its parameter values by parameter id\n(all of them), and its sidechain source (a track id or \u0060bus:N\u0060; null: none). A plugin\u0027s opaque state lives in\nthe project\u0027s \u0060Plugin States\u0060 folder. A MIDI FX slot (\u0060ChannelStrip.midiEffects\u0060) has the same shape,\nnever a sidechain. Phase 6: \u0060file\u0060 is the file the effect loads (an impulse response for\n\u0060anode.space\u0060; \u0060loadInsertFile\u0060), relative to the project when it is inside it (null: none)."
       },
       "InsertChain": {
         "enum": [

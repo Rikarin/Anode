@@ -18,10 +18,6 @@ public sealed class EditPropertyTests {
     [Theory]
     [MemberData(nameof(Commands))]
     public void Applying_then_inverting_a_command_is_the_identity(string command) {
-        Assert.SkipWhen(
-            RandomProjects.PendingPhase6.Contains(command),
-            "Phase 6 command the model does not implement yet (docs/07-phase-6.md, workstream B)."
-        );
         var type = RandomProjects.CommandTypes.Single(t => t.Name == command);
         var applied = 0;
         Gen.Int.Sample(
@@ -183,6 +179,8 @@ public sealed class EditPropertyTests {
         readonly Dictionary<string, ArrangementMarker> sections = project.Arrangement.ToDictionary(static s => s.Id);
         readonly Dictionary<string, AutomationLane> lanes = project.Automation.ToDictionary(static l => l.Id);
         readonly Dictionary<int, MixerGroup> groups = project.Groups.ToDictionary(static g => g.Number);
+        readonly Dictionary<string, PatternRegion> patterns = project.PatternRegions.ToDictionary(static r => r.Id);
+        LiveLoopsGrid liveLoops = project.LiveLoops;
         string notes = project.Notes;
         string name = project.Name;
         ProjectSettings settings = project.Settings;
@@ -211,6 +209,10 @@ public sealed class EditPropertyTests {
 
                         foreach (var gone in lanes.Values.Where(l => l.TrackId == id).ToArray()) {
                             lanes.Remove(gone.Id);
+                        }
+
+                        foreach (var gone in patterns.Values.Where(p => p.TrackId == id).ToArray()) {
+                            patterns.Remove(gone.Id);
                         }
 
                         break;
@@ -271,6 +273,15 @@ public sealed class EditPropertyTests {
                     case GroupRemoved(var number):
                         groups.Remove(number);
                         break;
+                    case PatternRegionUpserted(var region):
+                        patterns[region.Id] = region;
+                        break;
+                    case PatternRegionRemoved(var id):
+                        patterns.Remove(id);
+                        break;
+                    case LiveLoopsChanged(var grid):
+                        liveLoops = grid;
+                        break;
                 }
             }
         }
@@ -293,7 +304,9 @@ public sealed class EditPropertyTests {
                     Arrangement = [..sections.Values.OrderBy(static s => s.Id, StringComparer.Ordinal)],
                     Notes = notes,
                     Groups = [..groups.Values.OrderBy(static g => g.Number)],
-                    Automation = [..lanes.Values.OrderBy(static l => l.Id, StringComparer.Ordinal)]
+                    Automation = [..lanes.Values.OrderBy(static l => l.Id, StringComparer.Ordinal)],
+                    PatternRegions = [..patterns.Values.OrderBy(static r => r.Id, StringComparer.Ordinal)],
+                    LiveLoops = liveLoops
                 },
                 ContractsJsonContext.Default.Project
             );

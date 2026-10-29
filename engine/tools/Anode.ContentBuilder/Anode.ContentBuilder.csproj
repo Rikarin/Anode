@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>anode-content-builder</AssemblyName>
+    <Description>Renders Anode's content packs (.anodepack) offline from Anode's own instruments: Anode Essentials and the e2e test pack.</Description>
+    <IsPackable>false</IsPackable>
+    <IsAotCompatible>false</IsAotCompatible>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../src/Anode.Dsp/Anode.Dsp.csproj"/>
+    <ProjectReference Include="../../src/Anode.Model/Anode.Model.csproj"/>
+  </ItemGroup>
+</Project>

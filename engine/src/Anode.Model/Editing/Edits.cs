@@ -174,13 +174,11 @@ public static partial class Edits {
             SetProjectNotesCommand c => SetProjectNotes(c),
             JoinRegionsCommand c => JoinRegions(state, c),
             CopyRegionsCommand c => CopyRegions(state, c, ids),
-            AddInsertCommand { Chain: InsertChain.MidiEffects }
-                or RemoveInsertCommand { Chain: InsertChain.MidiEffects }
-                or MoveInsertCommand { Chain: InsertChain.MidiEffects }
-                or SetInsertCommand { Chain: InsertChain.MidiEffects }
-                or SetInsertParameterCommand { Chain: InsertChain.MidiEffects } =>
-                // MIDI FX slots: Phase 6, workstream B (docs/07-phase-6.md).
-                throw new EditException("MIDI FX slots are not implemented yet (Phase 6)."),
+            AddInsertCommand { Chain: InsertChain.MidiEffects } c => AddMidiEffect(state, c, ids, plugins),
+            RemoveInsertCommand { Chain: InsertChain.MidiEffects } c => RemoveMidiEffect(state, c),
+            MoveInsertCommand { Chain: InsertChain.MidiEffects } c => MoveMidiEffect(state, c),
+            SetInsertCommand { Chain: InsertChain.MidiEffects } c => SetMidiEffect(state, c),
+            SetInsertParameterCommand { Chain: InsertChain.MidiEffects } c => SetMidiEffectParameter(state, c, plugins),
             AddInsertCommand c => AddInsert(state, c, ids, plugins),
             RemoveInsertCommand c => RemoveInsert(state, c),
             MoveInsertCommand c => MoveInsert(state, c),
@@ -202,6 +200,7 @@ public static partial class Edits {
             ApplyPatchCommand c => ApplyPatch(state, c, ids, patches ?? NoPatches.Instance),
             UnfreezeTrackCommand c => UnfreezeTrack(state, c),
             _ => FlexOps(state, command, ids, plugins, analysis ?? NoAnalysis.Instance)
+                ?? Phase6Ops(state, command, ids, plugins, patches ?? NoPatches.Instance)
                 ?? throw new EditException($"Unknown command {command.GetType().Name}.")
         };
 
@@ -315,7 +314,20 @@ public static partial class Edits {
         step.AddRange(state.RegionsOf(trackId).Select(static r => new RegionRemoved(r.Id)));
         step.AddRange(state.MidiRegionsOf(trackId).Select(static r => new MidiRegionRemoved(r.Id)));
         step.AddRange(state.TakeFoldersOf(trackId).Select(static f => new TakeFolderRemoved(f.Id)));
+        step.AddRange(state.PatternRegionsOf(trackId).Select(static r => new PatternRegionRemoved(r.Id)));
         step.AddRange(state.LanesOf(trackId).ToArray().Select(static l => new AutomationLaneRemoved(l.Id)));
+        if (state.CellsOf(trackId).Any()) {
+            step.Add(
+                new LiveLoopsChanged(
+                    state.LiveLoops with { Cells = [..state.LiveLoops.Cells.Where(c => c.TrackId != trackId)] }
+                )
+            );
+        }
+
+        if (PadOwner(state, trackId) is { } owner) {
+            step.Add(WithoutPad(state, owner, trackId));
+        }
+
         foreach (var other in state.Tracks) {
             if (other.Id == trackId) {
                 continue;
@@ -397,7 +409,8 @@ public static partial class Edits {
             throw new EditException($"Input channel {input.Channel} is outside 0…{MaxInputChannel}.");
         }
 
-        if (track.Kind == TrackKind.Stack && (c.RecordArmed == true || c.InputMonitoring == true)) {
+        if (track is { Kind: TrackKind.Stack, DrumMachine: null }
+            && (c.RecordArmed == true || c.InputMonitoring == true)) {
             throw new EditException("A stack records and monitors nothing itself: arm its members.");
         }
 
@@ -532,6 +545,11 @@ public static partial class Edits {
         if (state.MidiRegions.TryGetValue(c.RegionId, out var midi)) {
             var midiTrack = c.TrackId is null ? midi.TrackId : MidiTrackOf(state, c.TrackId).Id;
             return [new MidiRegionUpserted(midi with { StartTick = c.StartTick, TrackId = midiTrack })];
+        }
+
+        if (state.PatternRegions.TryGetValue(c.RegionId ?? string.Empty, out var pattern)) {
+            var patternTrack = c.TrackId is null ? pattern.TrackId : MidiTrackOf(state, c.TrackId).Id;
+            return [new PatternRegionUpserted(pattern with { StartTick = c.StartTick, TrackId = patternTrack })];
         }
 
         if (state.TakeFolders.TryGetValue(c.RegionId ?? string.Empty, out var folder)) {
@@ -758,13 +776,21 @@ public static partial class Edits {
 
     static Track MidiTrackOf(ProjectState state, string id) {
         var track = TrackOf(state, id);
-        return IsMidiKind(track.Kind)
+        return HoldsMidi(track)
             ? track
-            : throw new EditException($"Track '{id}' is an audio track: it holds no MIDI regions.");
+            : throw new EditException(
+                $"Track '{id}' is not an instrument, MIDI or drum machine track: it holds no MIDI."
+            );
     }
 
     /// <summary>Whether a track of <paramref name="kind" /> holds MIDI regions and takes live MIDI.</summary>
     public static bool IsMidiKind(TrackKind kind) => kind is TrackKind.Instrument or TrackKind.Midi;
+
+    /// <summary>
+    ///     Whether a track holds MIDI and pattern regions and takes live MIDI: an instrument or external MIDI track, or a
+    ///     Drum Machine Designer (a stack with a <c>drumMachine</c>; docs/07-phase-6.md).
+    /// </summary>
+    public static bool HoldsMidi(Track track) => IsMidiKind(track.Kind) || track.DrumMachine is not null;
 
     static AudioRegion RegionOf(ProjectState state, string id) =>
         state.Regions.TryGetValue(id, out var region) ? region : throw new EditException($"No region '{id}'.");

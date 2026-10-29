@@ -10,7 +10,22 @@ namespace Anode.Model.Compile;
 ///     (<see cref="TrackEntry.MetronomeTrack" />); its length in samples; and the engine ids this compilation had to
 ///     recompile (the rest are the very instances of the previous one).
 /// </summary>
-public sealed record CompiledModel(IReadOnlyList<TrackModel> Tracks, long LengthSamples, IReadOnlyList<int> Recompiled);
+public sealed record CompiledModel(
+    IReadOnlyList<TrackModel> Tracks,
+    long LengthSamples,
+    IReadOnlyList<int> Recompiled) {
+    /// <summary>The compiled tempo map (format 4, <see cref="TempoPoints" />).</summary>
+    public IReadOnlyList<TempoMapPoint> Tempo { get; init; } = [];
+
+    /// <summary>Every Live Loops cell's content (format 4, <see cref="CellCompiler" />), by cell index.</summary>
+    public IReadOnlyList<CellModel> Cells { get; init; } = [];
+
+    /// <summary>
+    ///     Each engine track's cells: the very array of the previous compilation while none of them changed, so a caller
+    ///     finds the tracks whose cells are dirty by reference.
+    /// </summary>
+    public IReadOnlyDictionary<int, CellModel[]> CellsByTrack { get; init; } = new Dictionary<int, CellModel[]>();
+}
 
 /// <summary>
 ///     Compiles a <see cref="ProjectState" /> into what the host plays (docs/adr/0006-bulk-ipc.md): each track's
@@ -28,6 +43,8 @@ public sealed class ModelCompiler {
     readonly Dictionary<int, (TrackModel Base, PlaybackEvent[] Automation, TrackModel Model)> automated = [];
     readonly Dictionary<int, TrackModel> previous = [];
     readonly TrackModel masterBase = new(AutomationEvents.MasterTrack, [], []);
+    readonly CellCompiler cellCompiler = new();
+    Dictionary<int, CellModel[]> cellsByTrack = [];
     bool masterAutomated;
     (ClickKey Key, TrackModel Model, Varispeed Varispeed)? metronome;
 
@@ -49,7 +66,7 @@ public sealed class ModelCompiler {
             state.Regions.Values.ToLookup(static r => r.TrackId, StringComparer.Ordinal),
             state.MidiRegions.Values.ToLookup(static r => r.TrackId, StringComparer.Ordinal),
             state.TakeFolders.Values.ToLookup(static f => f.TrackId, StringComparer.Ordinal)
-        );
+        ) { Patterns = state.PatternRegions.Values.ToLookup(static r => r.TrackId, StringComparer.Ordinal) };
         var models = new List<TrackModel>(state.Tracks.Count + 2);
         var seen = new HashSet<int>();
         long end = 0;
@@ -97,7 +114,25 @@ public sealed class ModelCompiler {
 
         models.Add(m.Model);
         end = Math.Max(end, varispeed.Sample(map.SampleAt(endTick, state.SampleRate)));
-        return new(models, end, recompiled);
+        var cells = cellCompiler.Compile(state, ids, varispeed);
+        return new(models, end, recompiled) {
+            Tempo = TempoPoints.Of(state), Cells = cells, CellsByTrack = CellsByTrack(cells)
+        };
+    }
+
+    /// <summary>The cells by engine track, reusing the previous array of a track whose cells are the same instances.</summary>
+    Dictionary<int, CellModel[]> CellsByTrack(IReadOnlyList<CellModel> cells) {
+        var now = new Dictionary<int, CellModel[]>();
+        foreach (var group in cells.GroupBy(static c => c.TrackId)) {
+            CellModel[] list = [..group.OrderBy(static c => c.Index)];
+            now[group.Key] = cellsByTrack.TryGetValue(group.Key, out var before)
+                && before.AsSpan().SequenceEqual(list, ReferenceEqualityComparer.Instance)
+                    ? before
+                    : list;
+        }
+
+        cellsByTrack = now;
+        return now;
     }
 
     /// <summary>What a compilation reads: the project, its ids and tempo map, and its regions by track.</summary>
@@ -109,7 +144,10 @@ public sealed class ModelCompiler {
         ILookup<string, AudioRegion> Regions,
         ILookup<string, MidiRegion> Midi,
         ILookup<string, TakeFolder> Folders
-    );
+    ) {
+        public ILookup<string, PatternRegion> Patterns { get; init; } =
+            Array.Empty<PatternRegion>().ToLookup(static r => r.TrackId);
+    }
 
     /// <summary>A track's model: its cached regions and events when they did not change, with its automation.</summary>
     TrackModel Track(Source source, Track track) {
@@ -127,6 +165,14 @@ public sealed class ModelCompiler {
             .OrderBy(static f => f.StartTick)
             .ThenBy(static f => f.Id, StringComparer.Ordinal)
             .ToArray();
+        // A Drum Machine Designer plays nothing itself: its notes go to its pads (docs/07-phase-6.md).
+        var dmd = track.DrumMachine is not null;
+        if (dmd) {
+            midi = [];
+        }
+
+        var patterns = dmd ? [] : Ordered(source.Patterns[track.Id]);
+        var routed = Routed(source, track);
         var key = new TrackKey(
             state.Settings.TempoEvents ?? [],
             state.Settings.Tempo,
@@ -142,16 +188,128 @@ public sealed class ModelCompiler {
             Analyses = [
                 ..regions.Where(static r => r.PitchNotes.Count > 0)
                     .Select(r => source.Analyses.GetValueOrDefault(r.FileId))
-            ]
+            ],
+            Sources = new(
+                patterns,
+                routed?.Midi ?? [],
+                routed?.Patterns ?? [],
+                routed?.Note ?? -1,
+                patterns.Length + (routed?.Patterns.Length ?? 0) > 0 ? state.Settings.Keys ?? [] : []
+            )
         };
         if (!cache.TryGetValue(engineId, out var cached) || !cached.Key.Equals(key)) {
             var (playlist, warp, pitch) = Playlist(state, map, ids, regions, folders, track, source.Analyses);
-            cached = (key, new(engineId, MidiEvents(state, map, engineId, midi), playlist, warp, pitch));
+            var events = Merge(
+                MidiEvents(state, map, engineId, midi),
+                PatternEvents(state, map, engineId, patterns),
+                routed is { } r ? RoutedEvents(state, map, engineId, r) : []
+            );
+            cached = (key, new(engineId, events, playlist, warp, pitch));
             cache[engineId] = cached;
         }
 
         return WithAutomation(cached.Model, AutomationEvents.Compile(state, map, ids, track, engineId));
     }
+
+    static PatternRegion[] Ordered(IEnumerable<PatternRegion> regions) => [
+        ..regions.OrderBy(static r => r.StartTick).ThenBy(static r => r.Id, StringComparer.Ordinal)
+    ];
+
+    /// <summary>What a pad of a Drum Machine Designer plays of its DMD's regions: their notes on its pad's note.</summary>
+    sealed record Route(MidiRegion[] Midi, PatternRegion[] Patterns, int Note);
+
+    /// <summary>The DMD notes routed to <paramref name="track" /> when it is a pad (none while its DMD plays its cells).</summary>
+    static Route? Routed(Source source, Track track) {
+        if (track.ParentId is null
+            || source.State.FindTrack(track.ParentId) is not { DrumMachine: { } machine, LiveLoopsActive: false } dmd
+            || machine.Pads.FirstOrDefault(p => p.TrackId == track.Id) is not { } pad) {
+            return null;
+        }
+
+        return new(
+            [
+                ..source.Midi[dmd.Id]
+                    .OrderBy(static r => r.StartTick)
+                    .ThenBy(static r => r.Id, StringComparer.Ordinal)
+            ],
+            Ordered(source.Patterns[dmd.Id]),
+            pad.Note
+        );
+    }
+
+    /// <summary>
+    ///     A DMD's notes on a pad's note, on the pad's engine track with their note number unchanged (as the host routes
+    ///     live MIDI; the pad's instrument plays its own sound whatever the note).
+    /// </summary>
+    static PlaybackEvent[] RoutedEvents(ProjectState state, TempoMap map, int engineId, Route route) {
+        var all = Merge(
+            MidiEvents(state, map, engineId, route.Midi),
+            PatternEvents(state, map, engineId, route.Patterns)
+        );
+        return [
+            ..all.Where(e => e.Kind is PlaybackEventKind.NoteOn or PlaybackEventKind.NoteOff && e.Data1 == route.Note)
+        ];
+    }
+
+    /// <summary>
+    ///     Pattern regions' notes as events (<see cref="PatternUnroller" />): unmuted regions only, notes cut at their
+    ///     region's end, channel 1, sorted with note-offs before note-ons at equal samples.
+    /// </summary>
+    public static PlaybackEvent[] PatternEvents(
+        ProjectState state,
+        TempoMap map,
+        int engineId,
+        IReadOnlyList<PatternRegion> regions
+    ) {
+        if (regions.Count == 0) {
+            return [];
+        }
+
+        var events = new List<PlaybackEvent>();
+        foreach (var region in regions) {
+            if (region.Muted) {
+                continue;
+            }
+
+            foreach (var note in PatternUnroller.Unroll(region, t => Editing.Edits.KeyAt(state, t))) {
+                var at = region.StartTick + note.Tick;
+                var on = map.SampleAt(at, state.SampleRate);
+                var off = Math.Max(map.SampleAt(at + note.Length, state.SampleRate), on + 1);
+                var pitch = (byte)note.Pitch;
+                events.Add(Midi(engineId, on, PlaybackEventKind.NoteOn, pitch, (byte)note.Velocity, 0));
+                events.Add(Midi(engineId, off, PlaybackEventKind.NoteOff, pitch, 0, 0));
+            }
+        }
+
+        return Merge([..events]);
+    }
+
+    /// <summary>
+    ///     Event lists merged into one, sorted by sample with note-offs, then other events, then note-ons at an equal
+    ///     sample, each list's order kept otherwise (a stable sort).
+    /// </summary>
+    public static PlaybackEvent[] Merge(params PlaybackEvent[][] lists) {
+        var nonEmpty = lists.Where(static l => l.Length > 0).ToArray();
+        if (nonEmpty.Length == 0) {
+            return [];
+        }
+
+        return [
+            ..nonEmpty.SelectMany(static l => l)
+                .Select(static (e, i) => (e, i))
+                .OrderBy(static x => x.e.SamplePos)
+                .ThenBy(static x => Rank(x.e.Kind))
+                .ThenBy(static x => x.i)
+                .Select(static x => x.e)
+        ];
+    }
+
+    static int Rank(PlaybackEventKind kind) =>
+        kind switch {
+            PlaybackEventKind.NoteOff => 0,
+            PlaybackEventKind.NoteOn => 2,
+            _ => 1
+        };
 
     /// <summary>Drops the cached models of engine tracks that are gone.</summary>
     void Forget(HashSet<int> seen) {
@@ -593,8 +751,12 @@ public sealed class ModelCompiler {
         /// <summary>The analyses of the files of regions with pitch notes (their pitch curves shape the notes).</summary>
         public FileAnalysis?[] Analyses { get; init; } = [];
 
+        /// <summary>Its pattern regions, and what it plays of its Drum Machine Designer's (Phase 6).</summary>
+        public MidiSources Sources { get; init; } = MidiSources.None;
+
         public bool Equals(TrackKey? other) =>
             other is not null
+            && Sources.Equals(other.Sources)
             && Flex == other.Flex
             && Signatures.SequenceEqual(other.Signatures)
             && Analyses.AsSpan().SequenceEqual(other.Analyses)
@@ -609,6 +771,30 @@ public sealed class ModelCompiler {
 
         public override int GetHashCode() =>
             HashCode.Combine(Tempo, SampleRate, Regions.Length, Midi.Length, Folders.Length);
+    }
+
+    /// <summary>
+    ///     A track's pattern regions, its DMD's regions and pad note (−1: not a pad), and the key track when a pattern
+    ///     reads it.
+    /// </summary>
+    sealed record MidiSources(
+        PatternRegion[] Patterns,
+        MidiRegion[] RoutedMidi,
+        PatternRegion[] RoutedPatterns,
+        int RoutedNote,
+        IReadOnlyList<KeyEvent> Keys
+    ) {
+        public static MidiSources None { get; } = new([], [], [], -1, []);
+
+        public bool Equals(MidiSources? other) =>
+            other is not null
+            && RoutedNote == other.RoutedNote
+            && Patterns.AsSpan().SequenceEqual(other.Patterns)
+            && RoutedMidi.AsSpan().SequenceEqual(other.RoutedMidi)
+            && RoutedPatterns.AsSpan().SequenceEqual(other.RoutedPatterns)
+            && Keys.SequenceEqual(other.Keys);
+
+        public override int GetHashCode() => HashCode.Combine(Patterns.Length, RoutedMidi.Length, RoutedNote);
     }
 
     sealed record ClickKey(

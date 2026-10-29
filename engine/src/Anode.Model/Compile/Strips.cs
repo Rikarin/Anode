@@ -8,7 +8,8 @@ namespace Anode.Model.Compile;
 ///     Channel strips in engine units (docs/05-phase-4.md, "Graph"; <see cref="EngineStrip" />): the effective strip's
 ///     linear gain, pan, mute and solo (a stack's and a VCA's folded in, <see cref="Stacks" />), the inserts in order
 ///     with their sidechains as engine track ids or buses, the sends at linear gain, and the output (0 the master, N bus
-///     N, −N device output pair N). A VCA's solo solos its members.
+///     N, −N device output pair N), and an instrument or external MIDI track's MIDI FX slots (Phase 6). A VCA's solo
+///     solos its members.
 /// </summary>
 public static class Strips {
     /// <summary>
@@ -41,7 +42,10 @@ public static class Strips {
                     )
                 ]
                 : [],
-            track is null ? 0 : Output(strip.Output)
+            track is null ? 0 : Output(strip.Output),
+            track is not null && Edits.IsMidiKind(track.Kind)
+                ? [..strip.MidiEffects.Select(static i => new EngineInsert(i.Id, i.PluginId, i.Bypassed, i.Parameters))]
+                : []
         );
     }
 
@@ -56,7 +60,7 @@ public static class Strips {
             var s when state.FindTrack(s) is { } t && Stacks.IsPlayable(t) => (ids.Track(t.Id), 0),
             _ => (-1, 0)
         };
-        return new(insert.Id, insert.PluginId, insert.Bypassed, insert.Parameters, saved, track, bus);
+        return new(insert.Id, insert.PluginId, insert.Bypassed, insert.Parameters, saved, track, bus, insert.File);
     }
 
     /// <summary>Whether two engine strips differ in structure (inserts, sends, output), not just levels.</summary>
@@ -70,8 +74,14 @@ public static class Strips {
                 && x.Bypassed == y.Bypassed
                 && x.SidechainTrack == y.SidechainTrack
                 && x.SidechainBus == y.SidechainBus
+                && x.File == y.File
         )
-        || !Same(a.Sends, b.Sends, static (x, y) => x.Id == y.Id && x.Bus == y.Bus && x.PreFader == y.PreFader);
+        || !Same(a.Sends, b.Sends, static (x, y) => x.Id == y.Id && x.Bus == y.Bus && x.PreFader == y.PreFader)
+        || !Same(
+            a.MidiEffects,
+            b.MidiEffects,
+            static (x, y) => x.Id == y.Id && x.PluginId == y.PluginId && x.Bypassed == y.Bypassed
+        );
 
     static bool Same<T>(IReadOnlyList<T>? a, IReadOnlyList<T>? b, Func<T, T, bool> equal) {
         a ??= [];

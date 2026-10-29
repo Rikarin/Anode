@@ -268,9 +268,13 @@ public sealed partial class EngineController {
     /// <summary>The instance of <paramref name="spec" />'s id and plugin, its parameters brought up to date, or null.</summary>
     static InsertSlot? KeepInsert(ChannelConfig old, EngineInsert spec, HashSet<InsertSlot> claimed) {
         var slot = old.Inserts.Select(static i => i.Slot)
-            .FirstOrDefault(s => s.Id == spec.Id && s.PluginId == spec.PluginId && !claimed.Contains(s));
+            .FirstOrDefault(s => s.Id == spec.Id
+                && s.PluginId == spec.PluginId
+                && s.File == spec.File
+                && !claimed.Contains(s)
+            );
         if (slot is null) {
-            return null;
+            return null; // another file is a new instance, as an instrument's is
         }
 
         foreach (var (id, value) in spec.Parameters) {
@@ -304,7 +308,11 @@ public sealed partial class EngineController {
                 Log?.Invoke($"{spec.PluginId}: the saved state did not load; it starts from its defaults");
             }
 
-            var slot = new InsertSlot(spec.Id, spec.PluginId, effect);
+            if (spec.File is not null && effect is IFileEffect files && !files.LoadFile(spec.File)) {
+                Log?.Invoke($"{spec.PluginId}: cannot load {spec.File}");
+            }
+
+            var slot = new InsertSlot(spec.Id, spec.PluginId, effect) { File = spec.File };
             foreach (var (id, value) in spec.Parameters) {
                 slot.Initialise(id, value);
             }

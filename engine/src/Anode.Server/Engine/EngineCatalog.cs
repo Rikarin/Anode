@@ -139,7 +139,7 @@ public sealed class EngineCatalog(EventHub hub) {
             ]
         );
 
-    /// <summary>A built-in effect as the engine lists it.</summary>
+    /// <summary>A built-in effect as the engine lists it (the files it loads, when it loads any).</summary>
     public static EnginePlugin From(EffectDescriptor d) =>
         new(
             d.Id,
@@ -148,7 +148,7 @@ public sealed class EngineCatalog(EventHub hub) {
             d.Version,
             "builtin",
             false,
-            [],
+            BuiltinEffects.FileTypes(d.Id),
             [
                 ..d.Parameters.Select(static p =>
                     new EngineParameter(

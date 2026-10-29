@@ -35,6 +35,7 @@ public sealed class EngineConnection(
     EngineCatalog catalog,
     EventHub hub,
     TransportClock clock,
+    LiveLoopsPlayer liveLoops,
     ILogger<EngineConnection> logger
 ) : BackgroundService {
     public const int MaxLiveEvents = 1024;
@@ -129,8 +130,8 @@ public sealed class EngineConnection(
             return false;
         }
 
-        if (!Model.Editing.Edits.IsMidiKind(track.Kind)) {
-            throw ProjectException.Unprocessable($"Track '{track.Id}' is an audio track: it plays no MIDI.");
+        if (!Model.Editing.Edits.HoldsMidi(track)) {
+            throw ProjectException.Unprocessable($"Track '{track.Id}' plays no MIDI.");
         }
 
         if (request.Events is not { Count: > 0 and <= MaxLiveEvents }) {
@@ -206,6 +207,32 @@ public sealed class EngineConnection(
         }
 
         Send(new PreviewFileMessage(full, PreviewGain));
+    }
+
+    /// <summary>How the preview channel plays the next preview: at a tempo ratio and transpose, on the next bar.</summary>
+    public void PreviewSync(SetPreviewSyncMessage message) => Send(message);
+
+    /// <summary>Launches Live Loops cells (or a scene) at their quantise boundaries (<see cref="LiveLoopsPlayer" />).</summary>
+    public void LaunchCells(LaunchRequest request) {
+        var message = liveLoops.Launch(request);
+        if (message.Cells.Count + (message.Stops?.Count ?? 0) == 0) {
+            return;
+        }
+
+        Send(message);
+        // Launching while the transport stands starts it, as Logic does: the host holds a launch sent before play
+        // and starts it on its boundary.
+        if (message.Cells.Count > 0 && Transport().State == TransportState.Stopped) {
+            Control(new(TransportCommand.Play));
+        }
+    }
+
+    /// <summary>Stops the cells playing on some tracks (or all) at the grid's quantise boundary.</summary>
+    public void StopCells(StopRequest request) {
+        var message = liveLoops.Stop(request);
+        if (message.Stops.Count > 0) {
+            Send(message);
+        }
     }
 
     /// <summary>Asks the host to rescan its plugin folders; the new catalogue follows as <c>pluginsChanged</c>.</summary>
@@ -495,6 +522,9 @@ public sealed class EngineConnection(
                     break;
                 case InsertReadingsMessage readings:
                     Keep(readings);
+                    break;
+                case CellStateMessage cell:
+                    liveLoops.OnCellState(cell);
                     break;
                 case ErrorMessage error:
                     EngineLog.HostError(logger, error.Message, error.Request);

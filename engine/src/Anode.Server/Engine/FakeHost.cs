@@ -344,7 +344,7 @@ public sealed partial class FakeHost : IAsyncDisposable {
 
         await stopping.CancelAsync().ConfigureAwait(false);
         listener?.Dispose();
-        foreach (var task in new[] { acceptLoop, telemetryLoop }) {
+        foreach (var task in new[] { acceptLoop, telemetryLoop, cellLoop }) {
             if (task is not null) {
                 try {
                     await task.ConfigureAwait(false);
@@ -486,7 +486,7 @@ public sealed partial class FakeHost : IAsyncDisposable {
 
                 break;
             default:
-                if (!HandleMixer(message)) {
+                if (!HandleMixer(message) && !HandleLiveLoops(message)) {
                     yield return new ErrorMessage($"Unsupported message {message.GetType().Name}.", Name(message));
                 }
 
@@ -506,19 +506,12 @@ public sealed partial class FakeHost : IAsyncDisposable {
                 break;
             case SetInsertParameterMessage parameter:
                 lock (gate) {
+                    // A MIDI FX slot's parameter (Phase 6) goes by its slot id as an insert's does.
                     SetStripOf(
                         parameter.TrackId,
                         strip => strip with {
-                            Inserts = [
-                                ..(strip.Inserts ?? []).Select(i => i.Id != parameter.InsertId
-                                        ? i
-                                        : i with {
-                                            Parameters = new Dictionary<string, double>(i.Parameters) {
-                                                [parameter.ParameterId] = parameter.Value
-                                            }
-                                        }
-                                )
-                            ]
+                            Inserts = WithParameter(strip.Inserts, parameter),
+                            MidiEffects = WithParameter(strip.MidiEffects, parameter)
                         }
                     );
                 }
@@ -587,6 +580,8 @@ public sealed partial class FakeHost : IAsyncDisposable {
                 loadedEvents[mapped.TrackId(i)] = EventsOf(mapped, i);
                 loadedWarps[mapped.TrackId(i)] = WarpsOf(mapped, i);
             }
+
+            LoadPhase6(mapped, load.Replace, loaded.Keys);
         } catch (Exception e) when (e is IOException or InvalidDataException or UnauthorizedAccessException) {
             return new ErrorMessage(e.Message, "loadModel");
         }
@@ -646,6 +641,18 @@ public sealed partial class FakeHost : IAsyncDisposable {
             }
         }
     }
+
+    /// <summary>Slots with a parameter of the one the message names set.</summary>
+    static EngineInsert[] WithParameter(IReadOnlyList<EngineInsert>? slots, SetInsertParameterMessage parameter) => [
+        ..(slots ?? []).Select(i => i.Id != parameter.InsertId
+                ? i
+                : i with {
+                    Parameters = new Dictionary<string, double>(i.Parameters) {
+                        [parameter.ParameterId] = parameter.Value
+                    }
+                }
+        )
+    ];
 
     void SetStripOf(int trackId, Func<EngineStrip, EngineStrip> change) {
         if (trackId == -1) {
@@ -901,12 +908,14 @@ public sealed partial class FakeHost : IAsyncDisposable {
                         heard.Clear();
                     }
 
+                    StartWaiting(anchorPosition);
                     break;
                 case TransportAction.Stop:
                     takes = Finish(midiTakes);
                     EndPlayback();
                     anchorPosition = now;
                     state = TelemetryTransportState.Stopped;
+                    StopAll(now);
                     break;
                 case TransportAction.Locate:
                     anchorPosition = Math.Max(0, message.PositionSamples);

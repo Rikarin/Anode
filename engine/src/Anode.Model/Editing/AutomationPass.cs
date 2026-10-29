@@ -32,6 +32,7 @@ public sealed class AutomationPass(long number, long startTick) {
             or SetSendCommand { Bus: null }
             or SetInsertParameterCommand
             or SetParameterCommand
+            or SetSmartControlCommand { Name: null, Value: not null }
         );
 
     /// <summary>Whether a track in <paramref name="mode" /> records control moves.</summary>
@@ -50,8 +51,9 @@ public sealed class AutomationPass(long number, long startTick) {
             }
 
             var was = Controls(old);
+            var driven = Driven(track, was);
             foreach (var (target, value) in Controls(track)) {
-                if (was.TryGetValue(target, out var previous) && previous.Equals(value)) {
+                if ((was.TryGetValue(target, out var previous) && previous.Equals(value)) || driven.Contains(target)) {
                     continue;
                 }
 
@@ -63,6 +65,21 @@ public sealed class AutomationPass(long number, long startTick) {
         }
 
         return ops;
+    }
+
+    /// <summary>
+    ///     The parameters of the Smart Controls that moved: a moved control records its own lane, not the parameters it
+    ///     drives.
+    /// </summary>
+    static HashSet<string> Driven(Track track, ImmutableSortedDictionary<string, double> was) {
+        var driven = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var control in track.SmartControls?.Controls ?? []) {
+            if (was.TryGetValue($"smartControl:{control.Id}", out var moved) && !moved.Equals(control.Value)) {
+                driven.UnionWith(control.Mappings.Select(static m => m.Target));
+            }
+        }
+
+        return driven;
     }
 
     /// <summary>
@@ -138,13 +155,23 @@ public sealed class AutomationPass(long number, long startTick) {
             controls[$"send:{send.Id}"] = send.LevelDb;
         }
 
-        foreach (var insert in strip.Inserts) {
-            foreach (var (parameter, value) in insert.Parameters) {
-                if (parameter == Edits.HostTempoParameter) {
-                    continue;
-                }
+        Plugins(controls, track);
+        if (Edits.HasAudioStrip(track.Kind)) {
+            foreach (var control in Edits.SmartControlsOf(track).Controls) {
+                controls[$"smartControl:{control.Id}"] = control.Value;
+            }
+        }
 
-                controls[$"insert:{insert.Id}:{parameter}"] = value;
+        return controls.ToImmutable();
+    }
+
+    /// <summary>A track's plugin parameters as controls: its inserts', instrument's and MIDI FX slots'.</summary>
+    static void Plugins(ImmutableSortedDictionary<string, double>.Builder controls, Track track) {
+        foreach (var insert in track.Strip.Inserts) {
+            foreach (var (parameter, value) in insert.Parameters) {
+                if (parameter != Edits.HostTempoParameter) {
+                    controls[$"insert:{insert.Id}:{parameter}"] = value;
+                }
             }
         }
 
@@ -154,6 +181,10 @@ public sealed class AutomationPass(long number, long startTick) {
             }
         }
 
-        return controls.ToImmutable();
+        foreach (var fx in track.Strip.MidiEffects) {
+            foreach (var (parameter, value) in fx.Parameters) {
+                controls[$"midiEffect:{fx.Id}:{parameter}"] = value;
+            }
+        }
     }
 }

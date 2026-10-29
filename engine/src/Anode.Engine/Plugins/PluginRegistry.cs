@@ -389,7 +389,7 @@ public sealed class PluginRegistry {
             d.Version,
             "builtin",
             false,
-            [],
+            BuiltinEffects.FileTypes(d.Id),
             [..d.Parameters.Select(Map)],
             d.Category,
             d.HasSidechain

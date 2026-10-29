@@ -45,6 +45,10 @@ public static class Stacks {
     public static double Add(double a, double b) =>
         a <= Units.SilenceDb || b <= Units.SilenceDb ? Units.SilenceDb : Math.Max(Units.SilenceDb, a + b);
 
-    /// <summary>Whether the engine has a track for <paramref name="track" /> (every kind but a stack and a VCA).</summary>
-    public static bool IsPlayable(Track track) => track.Kind is not (TrackKind.Stack or TrackKind.Vca);
+    /// <summary>
+    ///     Whether the engine has a track for <paramref name="track" />: every kind but a stack and a VCA, and a Drum
+    ///     Machine Designer (a stack that takes live MIDI and routes it to its pads by note; it plays nothing itself).
+    /// </summary>
+    public static bool IsPlayable(Track track) =>
+        track.Kind is not (TrackKind.Stack or TrackKind.Vca) || track.DrumMachine is not null;
 }

@@ -43,6 +43,10 @@ public static partial class Edits {
             throw new EditException($"Plugin '{plugin.Id}' is an instrument, not an effect.");
         }
 
+        if (IsMidiEffect(plugin)) {
+            throw new EditException($"Plugin '{plugin.Id}' is a MIDI effect: it goes in a MIDI FX slot.");
+        }
+
         if (strip.Inserts.Count >= MaxInserts) {
             throw new EditException($"A channel strip holds at most {MaxInserts} inserts.");
         }
@@ -97,6 +101,36 @@ public static partial class Edits {
         }
 
         var changed = insert with { Bypassed = c.Bypassed ?? insert.Bypassed, Sidechain = sidechain };
+        return [
+            Upsert(
+                state,
+                track,
+                strip with { Inserts = [..strip.Inserts.Select(i => i.Id == insert.Id ? changed : i)] }
+            )
+        ];
+    }
+
+    /// <summary>Loads a file into an insert (an impulse response): one of its plugin's file types.</summary>
+    static List<DeltaOp> LoadInsertFile(ProjectState state, LoadInsertFileCommand c, PluginCatalog plugins) {
+        var (track, strip) = InsertStripOf(state, c.TrackId);
+        var insert = InsertOf(strip, c.InsertId);
+        var path = c.Path?.Trim() ?? string.Empty;
+        if (path.Length is 0 or > MaxPathLength) {
+            throw new EditException($"A file path has 1…{MaxPathLength} characters.");
+        }
+
+        if (plugins.Find(insert.PluginId) is { } plugin) {
+            var extension = Path.GetExtension(path);
+            if (!plugin.FileTypes.Any(t => string.Equals(t, extension, StringComparison.OrdinalIgnoreCase))) {
+                throw new EditException(
+                    plugin.FileTypes.Count == 0
+                        ? $"Plugin '{plugin.Id}' loads no files."
+                        : $"Plugin '{plugin.Id}' loads {string.Join(", ", plugin.FileTypes)} files, not '{extension}'."
+                );
+            }
+        }
+
+        var changed = insert with { File = path };
         return [
             Upsert(
                 state,
@@ -484,6 +518,14 @@ public static partial class Edits {
                 return ParameterRange(plugins, insert.PluginId, insert.Parameters, parameter);
             case ["instrument", var parameter] when track?.Instrument is { } slot:
                 return ParameterRange(plugins, slot.PluginId, slot.Parameters, parameter);
+            case ["midiEffect", var id, var parameter] when track is not null:
+                var midiEffect = strip.MidiEffects.FirstOrDefault(i => i.Id == id)
+                    ?? throw new EditException($"No MIDI FX slot '{id}' on that strip.");
+                return ParameterRange(plugins, midiEffect.PluginId, midiEffect.Parameters, parameter);
+            case ["smartControl", var id] when track is not null
+                && HasAudioStrip(track.Kind)
+                && ControlIds(SmartControlsOf(track).Layout).Contains(id):
+                return new(0, 1, false);
             default:
                 throw new EditException($"'{target}' is not an automation target of that strip.");
         }
@@ -870,7 +912,10 @@ public sealed record ChannelPatch(
     InstrumentSlot? Instrument,
     IReadOnlyList<Insert> Inserts,
     IReadOnlyList<Send> Sends
-);
+) {
+    /// <summary>A drum kit's pads (Phase 6: a kit is a patch of kind stack that <c>createDrumMachine</c> takes).</summary>
+    public IReadOnlyList<KitPad>? Pads { get; init; }
+}
 
 /// <summary>Where <c>applyPatch</c> finds patches (the server's library).</summary>
 public interface IPatchSource {

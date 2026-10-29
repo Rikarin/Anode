@@ -59,7 +59,7 @@ public sealed record SavedState(string PluginId, byte[] Bytes);
 ///     publishes exactly one <see cref="ProjectChangedEvent" /> and raises <see cref="Changed" />, which the engine
 ///     link answers by syncing the host.
 /// </summary>
-public sealed class ProjectSession(
+public sealed partial class ProjectSession(
     IOptions<ServerOptions> options,
     EventHub hub,
     RecentProjects recent,
@@ -162,8 +162,15 @@ public sealed class ProjectSession(
     /// </summary>
     public ProjectSummary Save(IReadOnlyDictionary<string, byte[]?>? hostStates = null) {
         ProjectSummary summary;
+        bool cleared;
         lock (gate) {
-            summary = SaveLocked(Required(), hostStates);
+            var o = Required();
+            cleared = ClearSavedValues(o);
+            summary = SaveLocked(o, hostStates);
+        }
+
+        if (cleared) {
+            Changed?.Invoke();
         }
 
         return summary;
@@ -474,7 +481,12 @@ public sealed class ProjectSession(
 
             KeepStates(o, o.State, state, batch.Commands);
             result = Commit(o, state, forward);
-            o.History.Push(UndoLabels.For(batch), o.Revision, new(forward, inverse), key);
+            // Compare (Smart Controls) swaps values without an undo step (docs/07-phase-6.md).
+            if (!batch.Commands.All(static c => c is CompareSmartControlsCommand)) {
+                o.History.Push(UndoLabels.For(batch), o.Revision, new(forward, inverse), key);
+            }
+
+            Moved(batch.Commands, state);
         }
 
         return result;
@@ -978,6 +990,10 @@ public sealed class ProjectSession(
                 }
             }
 
+            if (!flashback) {
+                state = IntoCell(state, forward, inverse);
+            }
+
             if (forward.Count > 0) {
                 inverse.Reverse();
                 result = Commit(o, state, forward);
@@ -1094,7 +1110,7 @@ public sealed class ProjectSession(
     /// </summary>
     List<DeltaOp>? MidiTake(Open o, ProjectState state, RecordedMidiTake take, bool flashback) {
         var trackId = o.Ids.TrackOf(take.TrackId);
-        if (trackId is null || state.FindTrack(trackId) is not { } track || !Edits.IsMidiKind(track.Kind)) {
+        if (trackId is null || state.FindTrack(trackId) is not { } track || !Edits.HoldsMidi(track)) {
             ProjectLog.MidiTakeSkipped(logger, take.TrackId, "its track is gone or takes no MIDI");
             return null;
         }
@@ -1170,16 +1186,53 @@ public sealed class ProjectSession(
     ///     project's): the file must exist, and inside the project it is kept relative to it.
     /// </summary>
     static IReadOnlyList<EditCommand> Resolve(Open o, IReadOnlyList<EditCommand> commands) {
-        if (!commands.Any(static c => c is LoadInstrumentFileCommand)) {
+        if (!commands.Any(static c => c is LoadInstrumentFileCommand or LoadInsertFileCommand)) {
             return commands;
         }
 
         return [
-            ..commands.Select(EditCommand(c) => c is LoadInstrumentFileCommand { Path: { Length: > 0 } path } load
-                    ? load with { Path = InstrumentPath(o.Folder, path) }
-                    : c
+            ..commands.Select(EditCommand(c) => c switch {
+                    LoadInstrumentFileCommand { Path: { Length: > 0 } path } load => load with {
+                        Path = InstrumentPath(o.Folder, path)
+                    },
+                    LoadInsertFileCommand { Path: { Length: > 0 } path } load => load with {
+                        Path = InsertPath(o.Folder, path)
+                    },
+                    _ => c
+                }
             )
         ];
+    }
+
+    /// <summary>The folder of a project that loaded insert files (impulse responses) are copied into.</summary>
+    public const string ImpulseResponsesFolder = "Impulse Responses";
+
+    /// <summary>
+    ///     An insert's file (an impulse response) as the project keeps it: one outside the project is copied into its
+    ///     <see cref="ImpulseResponsesFolder" /> (a file of that name and size there is reused), so the project stays whole
+    ///     when it moves; the path is the project's relative one.
+    /// </summary>
+    static string InsertPath(string folder, string path) {
+        var full = Path.GetFullPath(InstrumentPath(folder, path), folder);
+        if (IsInside(folder, full)) {
+            return Path.GetRelativePath(folder, full).Replace(Path.DirectorySeparatorChar, '/');
+        }
+
+        try {
+            var target = Directory.CreateDirectory(Path.Combine(folder, ImpulseResponsesFolder)).FullName;
+            var copy = Path.Combine(target, Path.GetFileName(full));
+            for (var n = 2; File.Exists(copy) && new FileInfo(copy).Length != new FileInfo(full).Length; n++) {
+                copy = Path.Combine(target, $"{Path.GetFileNameWithoutExtension(full)} {n}{Path.GetExtension(full)}");
+            }
+
+            if (!File.Exists(copy)) {
+                File.Copy(full, copy);
+            }
+
+            return Path.GetRelativePath(folder, copy).Replace(Path.DirectorySeparatorChar, '/');
+        } catch (Exception e) when (e is IOException or UnauthorizedAccessException) {
+            throw ProjectException.Unprocessable($"Could not copy '{full}' into the project: {e.Message}");
+        }
     }
 
     static string InstrumentPath(string folder, string path) {

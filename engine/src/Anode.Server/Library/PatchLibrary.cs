@@ -23,7 +23,8 @@ public sealed record PatchFile(
     IReadOnlyList<Insert> Inserts,
     IReadOnlyList<Send> Sends,
     string? InstrumentState = null,
-    IReadOnlyDictionary<string, string>? InsertStates = null
+    IReadOnlyDictionary<string, string>? InsertStates = null,
+    IReadOnlyList<KitPad>? Pads = null
 );
 
 /// <summary>
@@ -38,15 +39,20 @@ public sealed class PatchLibrary(IOptions<ServerOptions> options) : IPatchSource
 
     public string Folder => Path.Combine(options.Value.DataDirectory, "Library", "Patches");
 
-    /// <summary>Every readable patch, by category then name.</summary>
+    /// <summary>Where installed content packs keep their patches and kits: <c>Packs/&lt;packId&gt;/patches</c>.</summary>
+    string PacksFolder => Path.Combine(options.Value.DataDirectory, "Library", "Packs");
+
+    /// <summary>Every readable patch (the user's, then the installed packs' patches and kits), by category then name.</summary>
     public IReadOnlyList<PatchInfo> List() {
-        if (!Directory.Exists(Folder)) {
+        var folders = PatchFolders().ToArray();
+        if (folders.Length == 0) {
             return [];
         }
 
         return [
-            ..Directory.EnumerateFiles(Folder, "*.json")
+            ..folders.SelectMany(static f => Directory.EnumerateFiles(f, "*.json"))
                 .Select(static p => Path.GetFileNameWithoutExtension(p))
+                .Distinct(StringComparer.Ordinal)
                 .Select(Read)
                 .OfType<PatchFile>()
                 .Select(static p => new PatchInfo(p.Id, p.Name, p.Category, p.Kind))
@@ -55,8 +61,60 @@ public sealed class PatchLibrary(IOptions<ServerOptions> options) : IPatchSource
         ];
     }
 
-    public ChannelPatch? Find(string id) =>
-        Read(id) is { } p ? new(p.Id, p.Name, p.Category, p.Kind, p.Instrument, p.Inserts, p.Sends) : null;
+    public ChannelPatch? Find(string id) {
+        if (Read(id) is not { } p) {
+            return null;
+        }
+
+        // A pack's patches and kits name their files (samples, impulse responses) inside the pack: made absolute
+        // there, as the instruments and effects that load them need.
+        var root = PatchFolders().FirstOrDefault(f => File.Exists(Path.Combine(f, id + ".json"))) is { } folder
+            && !string.Equals(Path.GetFullPath(folder), Path.GetFullPath(Folder), StringComparison.Ordinal)
+                ? Path.GetDirectoryName(Path.GetFullPath(folder))
+                : null;
+        return new(p.Id, p.Name, p.Category, p.Kind, Located(p.Instrument, root), Located(p.Inserts, root), p.Sends) {
+            Pads = p.Pads?.Where(static x => x?.Instrument?.PluginId is not null && x.Name is not null)
+                .Select(x => x with {
+                        Instrument = Located(x.Instrument, root)!, Inserts = Located(x.Inserts ?? [], root)
+                    }
+                )
+                .ToArray()
+        };
+    }
+
+    /// <summary>An instrument with its file's path made absolute in <paramref name="root" /> (a pack), when relative.</summary>
+    static InstrumentSlot? Located(InstrumentSlot? slot, string? root) =>
+        slot is { File: { } file } && root is not null && !Path.IsPathRooted(file)
+            ? slot with { File = Path.GetFullPath(Path.Combine(root, file)) }
+            : slot;
+
+    static IReadOnlyList<Insert> Located(IReadOnlyList<Insert> inserts, string? root) =>
+        root is null
+            ? inserts
+            : [
+                ..inserts.Select(i => i.File is { } file && !Path.IsPathRooted(file)
+                        ? i with { File = Path.GetFullPath(Path.Combine(root, file)) }
+                        : i
+                )
+            ];
+
+    /// <summary>The user's patch folder, then each installed pack's <c>patches</c> folder (those that exist).</summary>
+    IEnumerable<string> PatchFolders() {
+        if (Directory.Exists(Folder)) {
+            yield return Folder;
+        }
+
+        if (!Directory.Exists(PacksFolder)) {
+            yield break;
+        }
+
+        foreach (var pack in Directory.EnumerateDirectories(PacksFolder).Order(StringComparer.Ordinal)) {
+            var patches = Path.Combine(pack, "patches");
+            if (Directory.Exists(patches)) {
+                yield return patches;
+            }
+        }
+    }
 
     /// <summary>The saved patch file, or null when there is none (or it is unreadable).</summary>
     public PatchFile? Read(string id) {
@@ -66,7 +124,8 @@ public sealed class PatchLibrary(IOptions<ServerOptions> options) : IPatchSource
 
         lock (gate) {
             try {
-                var path = Path.Combine(Folder, id + ".json");
+                var path = PatchFolders().Select(f => Path.Combine(f, id + ".json")).FirstOrDefault(File.Exists)
+                    ?? Path.Combine(Folder, id + ".json");
                 return File.Exists(path)
                     && JsonSerializer.Deserialize(File.ReadAllText(path), PatchJsonContext.Default.PatchFile) is {
                         Id: not null, Name: not null, Category: not null, Inserts: not null, Sends: not null

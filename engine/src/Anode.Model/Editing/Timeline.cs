@@ -7,10 +7,14 @@ public enum TimelineKind {
     MidiRegion,
     TakeFolder,
     Marker,
-    Section
+    Section,
+    PatternRegion
 }
 
-/// <summary>Something placed on the timeline: a region of either kind, a take folder, a marker or a section.</summary>
+/// <summary>
+///     Something placed on the timeline: a region of any kind (audio, MIDI, pattern), a take folder, a marker or a
+///     section.
+/// </summary>
 public readonly record struct TimelineItem(TimelineKind Kind, string Id, long Start);
 
 /// <summary>
@@ -39,9 +43,16 @@ static class Timeline {
         foreach (var s in state.Sections.Values) {
             yield return new(TimelineKind.Section, s.Id, s.StartTick);
         }
+
+        foreach (var p in state.PatternRegions.Values) {
+            yield return new(TimelineKind.PatternRegion, p.Id, p.StartTick);
+        }
     }
 
-    /// <summary>The item <paramref name="id" /> that a region edit may name (audio, MIDI or a take folder), or null.</summary>
+    /// <summary>
+    ///     The item <paramref name="id" /> that a region edit may name (audio, MIDI, pattern or a take folder), or
+    ///     null.
+    /// </summary>
     public static TimelineItem? Region(ProjectState state, string? id) {
         if (id is null) {
             return null;
@@ -55,6 +66,10 @@ static class Timeline {
             return new(TimelineKind.MidiRegion, id, midi.StartTick);
         }
 
+        if (state.PatternRegions.TryGetValue(id, out var pattern)) {
+            return new(TimelineKind.PatternRegion, id, pattern.StartTick);
+        }
+
         return state.TakeFolders.TryGetValue(id, out var folder)
             ? new(TimelineKind.TakeFolder, id, folder.StartTick)
             : null;
@@ -66,6 +81,7 @@ static class Timeline {
             TimelineKind.AudioRegion => state.Regions[item.Id].TrackId,
             TimelineKind.MidiRegion => state.MidiRegions[item.Id].TrackId,
             TimelineKind.TakeFolder => state.TakeFolders[item.Id].TrackId,
+            TimelineKind.PatternRegion => state.PatternRegions[item.Id].TrackId,
             _ => null
         };
 
@@ -81,6 +97,11 @@ static class Timeline {
             case TimelineKind.TakeFolder:
                 var folder = Shifted(state.TakeFolders[item.Id], start - item.Start);
                 return new TakeFolderUpserted(folder with { TrackId = trackId ?? folder.TrackId });
+            case TimelineKind.PatternRegion:
+                var pattern = state.PatternRegions[item.Id];
+                return new PatternRegionUpserted(
+                    pattern with { StartTick = start, TrackId = trackId ?? pattern.TrackId }
+                );
             case TimelineKind.Marker:
                 return new MarkerUpserted(state.Markers[item.Id] with { Tick = start });
             default:
@@ -94,6 +115,7 @@ static class Timeline {
             TimelineKind.MidiRegion => new MidiRegionRemoved(item.Id),
             TimelineKind.TakeFolder => new TakeFolderRemoved(item.Id),
             TimelineKind.Marker => new MarkerRemoved(item.Id),
+            TimelineKind.PatternRegion => new PatternRegionRemoved(item.Id),
             _ => new SectionRemoved(item.Id)
         };
 
@@ -153,6 +175,16 @@ static class Timeline {
                         TrackId = trackId ?? f.TrackId,
                         Takes = [..f.Takes.Select(t => t with { Id = renamed[t.Id] })],
                         Comp = [..f.Comp.Select(s => s with { TakeId = renamed[s.TakeId] })]
+                    }
+                );
+            }
+            case TimelineKind.PatternRegion: {
+                var p = state.PatternRegions[item.Id];
+                return new PatternRegionUpserted(
+                    p with {
+                        Id = ids.Next(IdPrefix.PatternRegion),
+                        StartTick = p.StartTick + offset,
+                        TrackId = trackId ?? p.TrackId
                     }
                 );
             }

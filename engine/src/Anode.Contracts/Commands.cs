@@ -118,6 +118,7 @@ namespace Anode.Contracts;
 [JsonDerivedType(typeof(MoveCellCommand), "moveCell")]
 [JsonDerivedType(typeof(SetLiveLoopsCommand), "setLiveLoops")]
 [JsonDerivedType(typeof(SetTrackActivationCommand), "setTrackActivation")]
+[JsonDerivedType(typeof(LoadInsertFileCommand), "loadInsertFile")]
 public abstract record EditCommand;
 
 /// <summary>
@@ -749,6 +750,13 @@ public sealed record MoveCellCommand(string CellId, string TrackId, string Scene
 
 /// <summary>Sets the Live Loops grid's launch quantise, or shows or hides it.</summary>
 public sealed record SetLiveLoopsCommand(LaunchQuantize? Quantize = null, bool? Shown = null) : EditCommand;
+
+/// <summary>
+///     Loads a file into an insert (the master's when <c>trackId</c> is left out): an impulse response into the
+///     convolution reverb (<c>anode.space</c>), a path on the server's disk of one of the plugin's <c>fileTypes</c>. A
+///     file outside the project is copied into its <c>Impulse Responses</c> folder; the insert keeps it relative.
+/// </summary>
+public sealed record LoadInsertFileCommand(string InsertId, string Path, string? TrackId = null) : EditCommand;
 
 /// <summary>Track activation: the tracks play their Live Loops cells (on) or their Tracks-area regions (off).</summary>
 public sealed record SetTrackActivationCommand(IReadOnlyList<string> TrackIds, bool LiveLoopsActive) : EditCommand;

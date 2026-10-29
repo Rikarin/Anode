@@ -1,0 +1,2062 @@
+{
+  "about": "Pattern unrolling vectors (docs/07-phase-6.md, \u0022Pattern regions\u0022): Anode.Model\u0027s PatternUnroller computes these; the editor\u0027s must match them exactly. Ticks are relative to the region\u0027s start (960 per quarter note). A row walks positions k = 0, 1, \u2026 every stepTicks (its own, else the pattern\u0027s) while k*stepTicks \u003C lengthTicks; its step: forward k mod L, reverse L-1-(k mod L), ping-pong c = k mod (2L-2), c \u003C L ? c : 2L-2-c (L = 1: step 0), random floor(draw(seed, region, row, \u0022r\u0022, k) * L). An on step plays unless chance \u003C 1 and draw(seed, region, row, k mod L, k div L) \u003E= chance. Its start: k*stepTicks, \u002B swing*120 when that is 240 mod 480, \u002B offset*stepTicks, at least 0 (unrounded). Its gate gate*stepTicks splits into repeats notes from round(start \u002B i*gate/n) to round(start \u002B (i\u002B1)*gate/n), at least a tick; dropped at or after the region\u0027s end, cut there. Pitch: the row\u0027s note (pad rows too); a chord degree d plays the triad of degrees d, d\u002B2, d\u002B4 of the key at the step (major or natural minor), its root in 60\u202671. Sorted by tick, pitch, row order. draw(seed, region, row, step, pass): the string seed:region:row:step:pass (seed and pass in decimal), FNV-1a 32-bit over its UTF-16 code units (h = 2166136261; h ^= unit; h *= 16777619), then h ^= h \u003E\u003E\u003E 16; h *= 0x85EBCA6B; h ^= h \u003E\u003E\u003E 13; h *= 0xC2B2AE35; h ^= h \u003E\u003E\u003E 16 (32-bit unsigned throughout), divided by 2^32.",
+  "draws": [
+    {
+      "seed": "0",
+      "regionId": "ptn_a",
+      "rowId": "row_1",
+      "step": "0",
+      "pass": 0,
+      "value": 0.7054781960323453
+    },
+    {
+      "seed": "1",
+      "regionId": "ptn_a",
+      "rowId": "row_1",
+      "step": "0",
+      "pass": 0,
+      "value": 0.3150102694053203
+    },
+    {
+      "seed": "1",
+      "regionId": "ptn_a",
+      "rowId": "row_1",
+      "step": "0",
+      "pass": 1,
+      "value": 0.6203313777223229
+    },
+    {
+      "seed": "7",
+      "regionId": "ptn_test",
+      "rowId": "c",
+      "step": "3",
+      "pass": 2,
+      "value": 0.01755020278505981
+    },
+    {
+      "seed": "123456789",
+      "regionId": "cel_x",
+      "rowId": "row_kick",
+      "step": "r",
+      "pass": 17,
+      "value": 0.04547152714803815
+    },
+    {
+      "seed": "-5",
+      "regionId": "ptn_\u00FC",
+      "rowId": "row_\u00E9",
+      "step": "15",
+      "pass": 1000,
+      "value": 0.1270111904013902
+    }
+  ],
+  "cases": [
+    {
+      "name": "forward 16ths",
+      "region": {
+        "id": "ptn_test",
+        "trackId": "trk_1",
+        "name": "Pattern",
+        "startTick": 0,
+        "lengthTicks": 3840,
+        "muted": false,
+        "pattern": {
+          "rows": [
+            {
+              "id": "kick",
+              "kind": "note",
+              "note": 36,
+              "name": "kick",
+              "length": 8,
+              "playMode": "forward",
+              "muted": false,
+              "steps": [
+                {
+                  "on": true,
+                  "velocity": 100,
+                  "gate": 1,
+                  "repeats": 1,
+                  "chance": 1,
+                  "offset": 0
+                },
+                {
+                  "on": false,
+                  "velocity": 100,
+                  "gate": 1,
+                  "repeats": 1,
+                  "chance": 1,
+                  "offset": 0
+                },
+                {
+                  "on": false,
+                  "velocity": 100,
+                  "gate": 1,
+                  "repeats": 1,
+                  "chance": 1,
+                  "offset": 0
+                },
+                {
+                  "on": false,
+                  "velocity": 100,
+                  "gate": 1,
+                  "repeats": 1,
+                  "chance": 1,
+                  "offset": 0
+                },
+                {
+                  "on": true,
+                  "velocity": 90,
+                  "gate": 1,
+                  "repeats": 1,
+                  "chance": 1,
+                  "offset": 0
+                },
+                {
+                  "on": false,
+                  "velocity": 100,
+                  "gate": 1,
+                  "repeats": 1,
+                  "chance": 1,
+                  "offset": 0
+                },
+                {
+                  "on": false,
+                  "velocity": 100,
+                  "gate": 1,
+                  "repeats": 1,
+                  "chance": 1,
+                  "offset": 0
+                },
+                {
+                  "on": false,
+                  "velocity": 100,
+                  "gate": 1,
+                  "repeats": 1,
+                  "chance": 1,
+                  "offset": 0
+                }
+              ]
+            }
+          ],
+          "swing": 0,
+          "seed": 1,
+          "stepTicks": 240
+        }
+      },
+      "keys": [
+        {
+          "tick": 0,
+          "tonic": 0,
+          "mode": "major"
+        }
+      ],
+      "notes": [
+        {
+          "tick": 0,
+          "pitch": 36,
+          "velocity": 100,
+          "length": 240
+        },
+        {
+          "tick": 960,
+          "pitch": 36,
+          "velocity": 90,
+          "length": 240
+        },
+        {
+          "tick": 1920,
+          "pitch": 36,
+          "velocity": 100,
+          "length": 240
+        },
+        {
+          "tick": 2880,
+          "pitch": 36,
+          "velocity": 90,
+          "length": 240
+        }
+      ]
+    },
+    {
+      "name": "independent lengths",
+      "region": {
+        "id": "ptn_test",
+        "trackId": "trk_1",
+        "name": "Pattern",
+        "startTick": 0,
+        "lengthTicks": 3840,
+        "muted": false,
+        "pattern": {
+          "rows": [
+            {
+              "id": "a",
+              "kind": "note",
+              "note": 36,
+              "name": "a",
+              "length": 4,
+              "playMode": "forward",
+              "muted": false,
+              "steps": [
+                {
+                  "on": true,
+                  "velocity": 100,
+                  "gate": 1,
+                  "repeats": 1,
+                  "chance": 1,
+                  "offset": 0
+                },
+                {
+                  "on": false,
+                  "velocity": 100,
+                  "gate": 1,
+                  "repeats": 1,
+                  "chance": 1,
+                  "offset": 0
+                },
+                {
+                  "on": false,
+                  "velocity": 100,
+                  "gate": 1,
+                  "repeats": 1,
+                  "chance": 1,
+                  "offset": 0
+                },
+                {
+                  "on": false,
+                  "velocity": 100,
+                  "gate": 1,
+                  "repeats": 1,
+                  "chance": 1,
+                  "offset": 0
+                }
+              ]
+            },
+            {
+              "id": "b",
+              "kind": "note",
+              "note": 42,
+              "name": "b",
+              "length": 7,
+              "playMode": "forward",
+              "muted": false,
+              "steps": [
+                {
+                  "on": true,
+                  "velocity": 100,
+                  "gate": 1,
+                  "repeats": 1,
+                  "chance": 1,
+                  "offset": 0
+                },
+                {
+                  "on": false,
+                  "velocity": 100,
+                  "gate": 1,
+                  "repeats": 1,
+                  "chance": 1,
+                  "offset": 0
+                },
+                {
+                  "on": true,
+                  "velocity": 60,
+                  "gate": 1,
+                  "repeats": 1,
+                  "chance": 1,
+                  "offset": 0
+                },
+                {
+                  "on": false,
+                  "velocity": 100,
+                  "gate": 1,
+                  "repeats": 1,
+                  "chance": 1,
+                  "offset": 0
+                },
+                {
+                  "on": false,
+                  "velocity": 100,
+                  "gate": 1,
+                  "repeats": 1,
+                  "chance": 1,
+                  "offset": 0
+                },
+                {
+                  "on": false,
+                  "velocity": 100,
+                  "gate": 1,
+                  "repeats": 1,
+                  "chance": 1,
+                  "offset": 0
+                },
+                {
+                  "on": false,
+                  "velocity": 100,
+                  "gate": 1,
+                  "repeats": 1,
+                  "chance": 1,
+                  "offset": 0
+                }
+              ]
+            }
+          ],
+          "swing": 0,
+          "seed": 1,
+          "stepTicks": 240
+        }
+      },
+      "keys": [
+        {
+          "tick": 0,
+          "tonic": 0,
+          "mode": "major"
+        }
+      ],
+      "notes": [
+        {
+          "tick": 0,
+          "pitch": 36,
+          "velocity": 100,
+          "length": 240
+        },
+        {
+          "tick": 0,
+          "pitch": 42,
+          "velocity": 100,
+          "length": 240
+        },
+        {
+          "tick": 480,
+          "pitch": 42,
+          "velocity": 60,
+          "length": 240
+        },
+        {
+          "tick": 960,
+          "pitch": 36,
+          "velocity": 100,
+          "length": 240
+        },
+        {
+          "tick": 1680,
+          "pitch": 42,
+          "velocity": 100,
+          "length": 240
+        },
+        {
+          "tick": 1920,
+          "pitch": 36,
+          "velocity": 100,
+          "length": 240
+        },
+        {
+          "tick": 2160,
+          "pitch": 42,
+          "velocity": 60,
+          "length": 240
+        },
+        {
+          "tick": 2880,
+          "pitch": 36,
+          "velocity": 100,
+          "length": 240
+        },
+        {
+          "tick": 3360,
+          "pitch": 42,
+          "velocity": 100,
+          "length": 240
+        }
+      ]
+    },
+    {
+      "name": "ping-pong",
+      "region": {
+        "id": "ptn_test",
+        "trackId": "trk_1",
+        "name": "Pattern",
+        "startTick": 0,
+        "lengthTicks": 3840,
+        "muted": false,
+        "pattern": {
+          "rows": [
+            {
+              "id": "p",
+              "kind": "note",
+              "note": 60,
+              "name": "p",
+              "length": 4,
+              "playMode": "pingPong",
+              "muted": false,
+              "steps": [
+                {
+                  "on": true,
+                  "velocity": 10,
+                  "gate": 1,
+                  "repeats": 1,
+                  "chance": 1,
+                  "offset": 0
+                },
+                {
+                  "on": true,
+                  "velocity": 20,
+                  "gate": 1,
+                  "repeats": 1,
+                  "chance": 1,
+                  "offset": 0
+                },
+                {
+                  "on": true,
+                  "velocity": 30,
+                  "gate": 1,
+                  "repeats": 1,
+                  "chance": 1,
+                  "offset": 0
+                },
+                {
+                  "on": true,
+                  "velocity": 40,
+                  "gate": 1,
+                  "repeats": 1,
+                  "chance": 1,
+                  "offset": 0
+                }
+              ]
+            }
+          ],
+          "swing": 0,
+          "seed": 1,
+          "stepTicks": 240
+        }
+      },
+      "keys": [
+        {
+          "tick": 0,
+          "tonic": 0,
+          "mode": "major"
+        }
+      ],
+      "notes": [
+        {
+          "tick": 0,
+          "pitch": 60,
+          "velocity": 10,
+          "length": 240
+        },
+        {
+          "tick": 240,
+          "pitch": 60,
+          "velocity": 20,
+          "length": 240
+        },
+        {
+          "tick": 480,
+          "pitch": 60,
+          "velocity": 30,
+          "length": 240
+        },
+        {
+          "tick": 720,
+          "pitch": 60,
+          "velocity": 40,
+          "length": 240
+        },
+        {
+          "tick": 960,
+          "pitch": 60,
+          "velocity": 30,
+          "length": 240
+        },
+        {
+          "tick": 1200,
+          "pitch": 60,
+          "velocity": 20,
+          "length": 240
+        },
+        {
+          "tick": 1440,
+          "pitch": 60,
+          "velocity": 10,
+          "length": 240
+        },
+        {
+          "tick": 1680,
+          "pitch": 60,
+          "velocity": 20,
+          "length": 240
+        },
+        {
+          "tick": 1920,
+          "pitch": 60,
+          "velocity": 30,
+          "length": 240
+        },
+        {
+          "tick": 2160,
+          "pitch": 60,
+          "velocity": 40,
+          "length": 240
+        },
+        {
+          "tick": 2400,
+          "pitch": 60,
+          "velocity": 30,
+          "length": 240
+        },
+        {
+          "tick": 2640,
+          "pitch": 60,
+          "velocity": 20,
+          "length": 240
+        },
+        {
+          "tick": 2880,
+          "pitch": 60,
+          "velocity": 10,
+          "length": 240
+        },
+        {
+          "tick": 3120,
+          "pitch": 60,
+          "velocity": 20,
+          "length": 240
+        },
+        {
+          "tick": 3360,
+          "pitch": 60,
+          "velocity": 30,
+          "length": 240
+        },
+        {
+          "tick": 3600,
+          "pitch": 60,
+          "velocity": 40,
+          "length": 240
+        }
+      ]
+    },
+    {
+      "name": "reverse",
+      "region": {
+        "id": "ptn_test",
+        "trackId": "trk_1",
+        "name": "Pattern",
+        "startTick": 0,
+        "lengthTicks": 1920,
+        "muted": false,
+        "pattern": {
+          "rows": [
+            {
+              "id": "r",
+              "kind": "note",
+              "note": 60,
+              "name": "r",
+              "length": 3,
+              "playMode": "reverse",
+              "muted": false,
+              "steps": [
+                {
+                  "on": true,
+                  "velocity": 10,
+                  "gate": 1,
+                  "repeats": 1,
+                  "chance": 1,
+                  "offset": 0
+                },
+                {
+                  "on": false,
+                  "velocity": 100,
+                  "gate": 1,
+                  "repeats": 1,
+                  "chance": 1,
+                  "offset": 0
+                },
+                {
+                  "on": true,
+                  "velocity": 30,
+                  "gate": 1,
+                  "repeats": 1,
+                  "chance": 1,
+                  "offset": 0
+                }
+              ]
+            }
+          ],
+          "swing": 0,
+          "seed": 1,
+          "stepTicks": 240
+        }
+      },
+      "keys": [
+        {
+          "tick": 0,
+          "tonic": 0,
+          "mode": "major"
+        }
+      ],
+      "notes": [
+        {
+          "tick": 0,
+          "pitch": 60,
+          "velocity": 30,
+          "length": 240
+        },
+        {
+          "tick": 480,
+          "pitch": 60,
+          "velocity": 10,
+          "length": 240
+        },
+        {
+          "tick": 720,
+          "pitch": 60,
+          "velocity": 30,
+          "length": 240
+        },
+        {
+          "tick": 1200,
+          "pitch": 60,
+          "velocity": 10,
+          "length": 240
+        },
+        {
+          "tick": 1440,
+          "pitch": 60,
+          "velocity": 30,
+          "length": 240
+        }
+      ]
+    },
+    {
+      "name": "random",
+      "region": {
+        "id": "ptn_test",
+        "trackId": "trk_1",
+        "name": "Pattern",
+        "startTick": 0,
+        "lengthTicks": 3840,
+        "muted": false,
+        "pattern": {
+          "rows": [
+            {
+              "id": "x",
+              "kind": "note",
+              "note": 60,
+              "name": "x",
+              "length": 5,
+              "playMode": "random",
+              "muted": false,
+              "steps": [
+                {
+                  "on": true,
+                  "velocity": 10,
+                  "gate": 1,
+                  "repeats": 1,
+                  "chance": 1,
+                  "offset": 0
+                },
+                {
+                  "on": true,
+                  "velocity": 20,
+                  "gate": 1,
+                  "repeats": 1,
+                  "chance": 1,
+                  "offset": 0
+                },
+                {
+                  "on": true,
+                  "velocity": 30,
+                  "gate": 1,
+                  "repeats": 1,
+                  "chance": 1,
+                  "offset": 0
+                },
+                {
+                  "on": true,
+                  "velocity": 40,
+                  "gate": 1,
+                  "repeats": 1,
+                  "chance": 1,
+                  "offset": 0
+                },
+                {
+                  "on": true,
+                  "velocity": 50,
+                  "gate": 1,
+                  "repeats": 1,
+                  "chance": 1,
+                  "offset": 0
+                }
+              ]
+            }
+          ],
+          "swing": 0,
+          "seed": 42,
+          "stepTicks": 240
+        }
+      },
+      "keys": [
+        {
+          "tick": 0,
+          "tonic": 0,
+          "mode": "major"
+        }
+      ],
+      "notes": [
+        {
+          "tick": 0,
+          "pitch": 60,
+          "velocity": 20,
+          "length": 240
+        },
+        {
+          "tick": 240,
+          "pitch": 60,
+          "velocity": 30,
+          "length": 240
+        },
+        {
+          "tick": 480,
+          "pitch": 60,
+          "velocity": 20,
+          "length": 240
+        },
+        {
+          "tick": 720,
+          "pitch": 60,
+          "velocity": 50,
+          "length": 240
+        },
+        {
+          "tick": 960,
+          "pitch": 60,
+          "velocity": 20,
+          "length": 240
+        },
+        {
+          "tick": 1200,
+          "pitch": 60,
+          "velocity": 10,
+          "length": 240
+        },
+        {
+          "tick": 1440,
+          "pitch": 60,
+          "velocity": 10,
+          "length": 240
+        },
+        {
+          "tick": 1680,
+          "pitch": 60,
+          "velocity": 50,
+          "length": 240
+        },
+        {
+          "tick": 1920,
+          "pitch": 60,
+          "velocity": 10,
+          "length": 240
+        },
+        {
+          "tick": 2160,
+          "pitch": 60,
+          "velocity": 10,
+          "length": 240
+        },
+        {
+          "tick": 2400,
+          "pitch": 60,
+          "velocity": 20,
+          "length": 240
+        },
+        {
+          "tick": 2640,
+          "pitch": 60,
+          "velocity": 50,
+          "length": 240
+        },
+        {
+          "tick": 2880,
+          "pitch": 60,
+          "velocity": 30,
+          "length": 240
+        },
+        {
+          "tick": 3120,
+          "pitch": 60,
+          "velocity": 10,
+          "length": 240
+        },
+        {
+          "tick": 3360,
+          "pitch": 60,
+          "velocity": 40,
+          "length": 240
+        },
+        {
+          "tick": 3600,
+          "pitch": 60,
+          "velocity": 30,
+          "length": 240
+        }
+      ]
+    },
+    {
+      "name": "swing",
+      "region": {
+        "id": "ptn_test",
+        "trackId": "trk_1",
+        "name": "Pattern",
+        "startTick": 0,
+        "lengthTicks": 1920,
+        "muted": false,
+        "pattern": {
+          "rows": [
+            {
+              "id": "s",
+              "kind": "note",
+              "note": 42,
+              "name": "s",
+              "length": 4,
+              "playMode": "forward",
+              "muted": false,
+              "steps": [
+                {
+                  "on": true,
+                  "velocity": 100,
+                  "gate": 1,
+                  "repeats": 1,
+                  "chance": 1,
+                  "offset": 0
+                },
+                {
+                  "on": true,
+                  "velocity": 100,
+                  "gate": 1,
+                  "repeats": 1,
+                  "chance": 1,
+                  "offset": 0
+                },
+                {
+                  "on": true,
+                  "velocity": 100,
+                  "gate": 1,
+                  "repeats": 1,
+                  "chance": 1,
+                  "offset": 0
+                },
+                {
+                  "on": true,
+                  "velocity": 100,
+                  "gate": 1,
+                  "repeats": 1,
+                  "chance": 1,
+                  "offset": 0
+                }
+              ]
+            }
+          ],
+          "swing": 0.6,
+          "seed": 1,
+          "stepTicks": 240
+        }
+      },
+      "keys": [
+        {
+          "tick": 0,
+          "tonic": 0,
+          "mode": "major"
+        }
+      ],
+      "notes": [
+        {
+          "tick": 0,
+          "pitch": 42,
+          "velocity": 100,
+          "length": 240
+        },
+        {
+          "tick": 312,
+          "pitch": 42,
+          "velocity": 100,
+          "length": 240
+        },
+        {
+          "tick": 480,
+          "pitch": 42,
+          "velocity": 100,
+          "length": 240
+        },
+        {
+          "tick": 792,
+          "pitch": 42,
+          "velocity": 100,
+          "length": 240
+        },
+        {
+          "tick": 960,
+          "pitch": 42,
+          "velocity": 100,
+          "length": 240
+        },
+        {
+          "tick": 1272,
+          "pitch": 42,
+          "velocity": 100,
+          "length": 240
+        },
+        {
+          "tick": 1440,
+          "pitch": 42,
+          "velocity": 100,
+          "length": 240
+        },
+        {
+          "tick": 1752,
+          "pitch": 42,
+          "velocity": 100,
+          "length": 168
+        }
+      ]
+    },
+    {
+      "name": "offset",
+      "region": {
+        "id": "ptn_test",
+        "trackId": "trk_1",
+        "name": "Pattern",
+        "startTick": 0,
+        "lengthTicks": 1920,
+        "muted": false,
+        "pattern": {
+          "rows": [
+            {
+              "id": "o",
+              "kind": "note",
+              "note": 38,
+              "name": "o",
+              "length": 4,
+              "playMode": "forward",
+              "muted": false,
+              "steps": [
+                {
+                  "on": true,
+                  "velocity": 100,
+                  "gate": 1,
+                  "repeats": 1,
+                  "chance": 1,
+                  "offset": -0.5
+                },
+                {
+                  "on": true,
+                  "velocity": 100,
+                  "gate": 1,
+                  "repeats": 1,
+                  "chance": 1,
+                  "offset": 0.25
+                },
+                {
+                  "on": true,
+                  "velocity": 100,
+                  "gate": 1,
+                  "repeats": 1,
+                  "chance": 1,
+                  "offset": 0.5
+                },
+                {
+                  "on": false,
+                  "velocity": 100,
+                  "gate": 1,
+                  "repeats": 1,
+                  "chance": 1,
+                  "offset": 0
+                }
+              ]
+            }
+          ],
+          "swing": 0,
+          "seed": 1,
+          "stepTicks": 240
+        }
+      },
+      "keys": [
+        {
+          "tick": 0,
+          "tonic": 0,
+          "mode": "major"
+        }
+      ],
+      "notes": [
+        {
+          "tick": 0,
+          "pitch": 38,
+          "velocity": 100,
+          "length": 240
+        },
+        {
+          "tick": 300,
+          "pitch": 38,
+          "velocity": 100,
+          "length": 240
+        },
+        {
+          "tick": 600,
+          "pitch": 38,
+          "velocity": 100,
+          "length": 240
+        },
+        {
+          "tick": 840,
+          "pitch": 38,
+          "velocity": 100,
+          "length": 240
+        },
+        {
+          "tick": 1260,
+          "pitch": 38,
+          "velocity": 100,
+          "length": 240
+        },
+        {
+          "tick": 1560,
+          "pitch": 38,
+          "velocity": 100,
+          "length": 240
+        }
+      ]
+    },
+    {
+      "name": "repeats",
+      "region": {
+        "id": "ptn_test",
+        "trackId": "trk_1",
+        "name": "Pattern",
+        "startTick": 0,
+        "lengthTicks": 960,
+        "muted": false,
+        "pattern": {
+          "rows": [
+            {
+              "id": "x",
+              "kind": "note",
+              "note": 42,
+              "name": "x",
+              "length": 4,
+              "playMode": "forward",
+              "muted": false,
+              "steps": [
+                {
+                  "on": true,
+                  "velocity": 100,
+                  "gate": 1,
+                  "repeats": 3,
+                  "chance": 1,
+                  "offset": 0
+                },
+                {
+                  "on": true,
+                  "velocity": 100,
+                  "gate": 0.5,
+                  "repeats": 2,
+                  "chance": 1,
+                  "offset": 0
+                },
+                {
+                  "on": true,
+                  "velocity": 100,
+                  "gate": 2,
+                  "repeats": 4,
+                  "chance": 1,
+                  "offset": 0
+                },
+                {
+                  "on": false,
+                  "velocity": 100,
+                  "gate": 1,
+                  "repeats": 1,
+                  "chance": 1,
+                  "offset": 0
+                }
+              ]
+            }
+          ],
+          "swing": 0,
+          "seed": 1,
+          "stepTicks": 240
+        }
+      },
+      "keys": [
+        {
+          "tick": 0,
+          "tonic": 0,
+          "mode": "major"
+        }
+      ],
+      "notes": [
+        {
+          "tick": 0,
+          "pitch": 42,
+          "velocity": 100,
+          "length": 80
+        },
+        {
+          "tick": 80,
+          "pitch": 42,
+          "velocity": 100,
+          "length": 80
+        },
+        {
+          "tick": 160,
+          "pitch": 42,
+          "velocity": 100,
+          "length": 80
+        },
+        {
+          "tick": 240,
+          "pitch": 42,
+          "velocity": 100,
+          "length": 60
+        },
+        {
+          "tick": 300,
+          "pitch": 42,
+          "velocity": 100,
+          "length": 60
+        },
+        {
+          "tick": 480,
+          "pitch": 42,
+          "velocity": 100,
+          "length": 120
+        },
+        {
+          "tick": 600,
+          "pitch": 42,
+          "velocity": 100,
+          "length": 120
+        },
+        {
+          "tick": 720,
+          "pitch": 42,
+          "velocity": 100,
+          "length": 120
+        },
+        {
+          "tick": 840,
+          "pitch": 42,
+          "velocity": 100,
+          "length": 120
+        }
+      ]
+    },
+    {
+      "name": "gate ties",
+      "region": {
+        "id": "ptn_test",
+        "trackId": "trk_1",
+        "name": "Pattern",
+        "startTick": 0,
+        "lengthTicks": 960,
+        "muted": false,
+        "pattern": {
+          "rows": [
+            {
+              "id": "g",
+              "kind": "note",
+              "note": 60,
+              "name": "g",
+              "length": 4,
+              "playMode": "forward",
+              "muted": false,
+              "steps": [
+                {
+                  "on": true,
+                  "velocity": 100,
+                  "gate": 2.5,
+                  "repeats": 1,
+                  "chance": 1,
+                  "offset": 0
+                },
+                {
+                  "on": false,
+                  "velocity": 100,
+                  "gate": 1,
+                  "repeats": 1,
+                  "chance": 1,
+                  "offset": 0
+                },
+                {
+                  "on": false,
+                  "velocity": 100,
+                  "gate": 1,
+                  "repeats": 1,
+                  "chance": 1,
+                  "offset": 0
+                },
+                {
+                  "on": true,
+                  "velocity": 100,
+                  "gate": 4,
+                  "repeats": 1,
+                  "chance": 1,
+                  "offset": 0
+                }
+              ]
+            }
+          ],
+          "swing": 0,
+          "seed": 1,
+          "stepTicks": 240
+        }
+      },
+      "keys": [
+        {
+          "tick": 0,
+          "tonic": 0,
+          "mode": "major"
+        }
+      ],
+      "notes": [
+        {
+          "tick": 0,
+          "pitch": 60,
+          "velocity": 100,
+          "length": 600
+        },
+        {
+          "tick": 720,
+          "pitch": 60,
+          "velocity": 100,
+          "length": 240
+        }
+      ]
+    },
+    {
+      "name": "chance",
+      "region": {
+        "id": "ptn_test",
+        "trackId": "trk_1",
+        "name": "Pattern",
+        "startTick": 0,
+        "lengthTicks": 7680,
+        "muted": false,
+        "pattern": {
+          "rows": [
+            {
+              "id": "c",
+              "kind": "note",
+              "note": 60,
+              "name": "c",
+              "length": 8,
+              "playMode": "forward",
+              "muted": false,
+              "steps": [
+                {
+                  "on": true,
+                  "velocity": 100,
+                  "gate": 1,
+                  "repeats": 1,
+                  "chance": 0.5,
+                  "offset": 0
+                },
+                {
+                  "on": true,
+                  "velocity": 100,
+                  "gate": 1,
+                  "repeats": 1,
+                  "chance": 0.5,
+                  "offset": 0
+                },
+                {
+                  "on": true,
+                  "velocity": 100,
+                  "gate": 1,
+                  "repeats": 1,
+                  "chance": 0.5,
+                  "offset": 0
+                },
+                {
+                  "on": true,
+                  "velocity": 100,
+                  "gate": 1,
+                  "repeats": 1,
+                  "chance": 0.5,
+                  "offset": 0
+                },
+                {
+                  "on": true,
+                  "velocity": 100,
+                  "gate": 1,
+                  "repeats": 1,
+                  "chance": 0.5,
+                  "offset": 0
+                },
+                {
+                  "on": true,
+                  "velocity": 100,
+                  "gate": 1,
+                  "repeats": 1,
+                  "chance": 0.5,
+                  "offset": 0
+                },
+                {
+                  "on": true,
+                  "velocity": 100,
+                  "gate": 1,
+                  "repeats": 1,
+                  "chance": 0.5,
+                  "offset": 0
+                },
+                {
+                  "on": true,
+                  "velocity": 100,
+                  "gate": 1,
+                  "repeats": 1,
+                  "chance": 0.5,
+                  "offset": 0
+                }
+              ]
+            }
+          ],
+          "swing": 0,
+          "seed": 99,
+          "stepTicks": 240
+        }
+      },
+      "keys": [
+        {
+          "tick": 0,
+          "tonic": 0,
+          "mode": "major"
+        }
+      ],
+      "notes": [
+        {
+          "tick": 0,
+          "pitch": 60,
+          "velocity": 100,
+          "length": 240
+        },
+        {
+          "tick": 1200,
+          "pitch": 60,
+          "velocity": 100,
+          "length": 240
+        },
+        {
+          "tick": 1440,
+          "pitch": 60,
+          "velocity": 100,
+          "length": 240
+        },
+        {
+          "tick": 2160,
+          "pitch": 60,
+          "velocity": 100,
+          "length": 240
+        },
+        {
+          "tick": 3360,
+          "pitch": 60,
+          "velocity": 100,
+          "length": 240
+        },
+        {
+          "tick": 3840,
+          "pitch": 60,
+          "velocity": 100,
+          "length": 240
+        },
+        {
+          "tick": 4080,
+          "pitch": 60,
+          "velocity": 100,
+          "length": 240
+        },
+        {
+          "tick": 5040,
+          "pitch": 60,
+          "velocity": 100,
+          "length": 240
+        },
+        {
+          "tick": 5760,
+          "pitch": 60,
+          "velocity": 100,
+          "length": 240
+        },
+        {
+          "tick": 6000,
+          "pitch": 60,
+          "velocity": 100,
+          "length": 240
+        },
+        {
+          "tick": 6240,
+          "pitch": 60,
+          "velocity": 100,
+          "length": 240
+        },
+        {
+          "tick": 6720,
+          "pitch": 60,
+          "velocity": 100,
+          "length": 240
+        },
+        {
+          "tick": 6960,
+          "pitch": 60,
+          "velocity": 100,
+          "length": 240
+        },
+        {
+          "tick": 7200,
+          "pitch": 60,
+          "velocity": 100,
+          "length": 240
+        }
+      ]
+    },
+    {
+      "name": "row rate (triplets)",
+      "region": {
+        "id": "ptn_test",
+        "trackId": "trk_1",
+        "name": "Pattern",
+        "startTick": 0,
+        "lengthTicks": 1920,
+        "muted": false,
+        "pattern": {
+          "rows": [
+            {
+              "id": "t",
+              "kind": "note",
+              "note": 60,
+              "name": "t",
+              "length": 3,
+              "stepTicks": 160,
+              "playMode": "forward",
+              "muted": false,
+              "steps": [
+                {
+                  "on": true,
+                  "velocity": 100,
+                  "gate": 1,
+                  "repeats": 1,
+                  "chance": 1,
+                  "offset": 0
+                },
+                {
+                  "on": true,
+                  "velocity": 70,
+                  "gate": 1,
+                  "repeats": 1,
+                  "chance": 1,
+                  "offset": 0
+                },
+                {
+                  "on": true,
+                  "velocity": 50,
+                  "gate": 1,
+                  "repeats": 1,
+                  "chance": 1,
+                  "offset": 0
+                }
+              ]
+            },
+            {
+              "id": "q",
+              "kind": "note",
+              "note": 36,
+              "name": "q",
+              "length": 1,
+              "stepTicks": 960,
+              "playMode": "forward",
+              "muted": false,
+              "steps": [
+                {
+                  "on": true,
+                  "velocity": 100,
+                  "gate": 1,
+                  "repeats": 1,
+                  "chance": 1,
+                  "offset": 0
+                }
+              ]
+            }
+          ],
+          "swing": 0.5,
+          "seed": 1,
+          "stepTicks": 240
+        }
+      },
+      "keys": [
+        {
+          "tick": 0,
+          "tonic": 0,
+          "mode": "major"
+        }
+      ],
+      "notes": [
+        {
+          "tick": 0,
+          "pitch": 36,
+          "velocity": 100,
+          "length": 960
+        },
+        {
+          "tick": 0,
+          "pitch": 60,
+          "velocity": 100,
+          "length": 160
+        },
+        {
+          "tick": 160,
+          "pitch": 60,
+          "velocity": 70,
+          "length": 160
+        },
+        {
+          "tick": 320,
+          "pitch": 60,
+          "velocity": 50,
+          "length": 160
+        },
+        {
+          "tick": 480,
+          "pitch": 60,
+          "velocity": 100,
+          "length": 160
+        },
+        {
+          "tick": 640,
+          "pitch": 60,
+          "velocity": 70,
+          "length": 160
+        },
+        {
+          "tick": 800,
+          "pitch": 60,
+          "velocity": 50,
+          "length": 160
+        },
+        {
+          "tick": 960,
+          "pitch": 36,
+          "velocity": 100,
+          "length": 960
+        },
+        {
+          "tick": 960,
+          "pitch": 60,
+          "velocity": 100,
+          "length": 160
+        },
+        {
+          "tick": 1120,
+          "pitch": 60,
+          "velocity": 70,
+          "length": 160
+        },
+        {
+          "tick": 1280,
+          "pitch": 60,
+          "velocity": 50,
+          "length": 160
+        },
+        {
+          "tick": 1440,
+          "pitch": 60,
+          "velocity": 100,
+          "length": 160
+        },
+        {
+          "tick": 1600,
+          "pitch": 60,
+          "velocity": 70,
+          "length": 160
+        },
+        {
+          "tick": 1760,
+          "pitch": 60,
+          "velocity": 50,
+          "length": 160
+        }
+      ]
+    },
+    {
+      "name": "one-step ping-pong",
+      "region": {
+        "id": "ptn_test",
+        "trackId": "trk_1",
+        "name": "Pattern",
+        "startTick": 0,
+        "lengthTicks": 960,
+        "muted": false,
+        "pattern": {
+          "rows": [
+            {
+              "id": "o",
+              "kind": "note",
+              "note": 60,
+              "name": "o",
+              "length": 1,
+              "playMode": "pingPong",
+              "muted": false,
+              "steps": [
+                {
+                  "on": true,
+                  "velocity": 100,
+                  "gate": 1,
+                  "repeats": 1,
+                  "chance": 1,
+                  "offset": 0
+                }
+              ]
+            }
+          ],
+          "swing": 0,
+          "seed": 1,
+          "stepTicks": 240
+        }
+      },
+      "keys": [
+        {
+          "tick": 0,
+          "tonic": 0,
+          "mode": "major"
+        }
+      ],
+      "notes": [
+        {
+          "tick": 0,
+          "pitch": 60,
+          "velocity": 100,
+          "length": 240
+        },
+        {
+          "tick": 240,
+          "pitch": 60,
+          "velocity": 100,
+          "length": 240
+        },
+        {
+          "tick": 480,
+          "pitch": 60,
+          "velocity": 100,
+          "length": 240
+        },
+        {
+          "tick": 720,
+          "pitch": 60,
+          "velocity": 100,
+          "length": 240
+        }
+      ]
+    },
+    {
+      "name": "chord degrees",
+      "region": {
+        "id": "ptn_test",
+        "trackId": "trk_1",
+        "name": "Pattern",
+        "startTick": 0,
+        "lengthTicks": 3840,
+        "muted": false,
+        "pattern": {
+          "rows": [
+            {
+              "id": "d",
+              "kind": "chordDegree",
+              "note": 1,
+              "name": "d",
+              "length": 4,
+              "playMode": "forward",
+              "muted": false,
+              "steps": [
+                {
+                  "on": true,
+                  "velocity": 100,
+                  "gate": 1,
+                  "repeats": 1,
+                  "chance": 1,
+                  "offset": 0
+                },
+                {
+                  "on": false,
+                  "velocity": 100,
+                  "gate": 1,
+                  "repeats": 1,
+                  "chance": 1,
+                  "offset": 0
+                },
+                {
+                  "on": false,
+                  "velocity": 100,
+                  "gate": 1,
+                  "repeats": 1,
+                  "chance": 1,
+                  "offset": 0
+                },
+                {
+                  "on": false,
+                  "velocity": 100,
+                  "gate": 1,
+                  "repeats": 1,
+                  "chance": 1,
+                  "offset": 0
+                }
+              ]
+            },
+            {
+              "id": "e",
+              "kind": "chordDegree",
+              "note": 5,
+              "name": "e",
+              "length": 4,
+              "playMode": "forward",
+              "muted": false,
+              "steps": [
+                {
+                  "on": false,
+                  "velocity": 100,
+                  "gate": 1,
+                  "repeats": 1,
+                  "chance": 1,
+                  "offset": 0
+                },
+                {
+                  "on": false,
+                  "velocity": 100,
+                  "gate": 1,
+                  "repeats": 1,
+                  "chance": 1,
+                  "offset": 0
+                },
+                {
+                  "on": true,
+                  "velocity": 100,
+                  "gate": 1,
+                  "repeats": 1,
+                  "chance": 1,
+                  "offset": 0
+                },
+                {
+                  "on": false,
+                  "velocity": 100,
+                  "gate": 1,
+                  "repeats": 1,
+                  "chance": 1,
+                  "offset": 0
+                }
+              ]
+            }
+          ],
+          "swing": 0,
+          "seed": 1,
+          "stepTicks": 240
+        }
+      },
+      "keys": [
+        {
+          "tick": 0,
+          "tonic": 2,
+          "mode": "minor"
+        },
+        {
+          "tick": 1920,
+          "tonic": 7,
+          "mode": "major"
+        }
+      ],
+      "notes": [
+        {
+          "tick": 0,
+          "pitch": 62,
+          "velocity": 100,
+          "length": 240
+        },
+        {
+          "tick": 0,
+          "pitch": 65,
+          "velocity": 100,
+          "length": 240
+        },
+        {
+          "tick": 0,
+          "pitch": 69,
+          "velocity": 100,
+          "length": 240
+        },
+        {
+          "tick": 480,
+          "pitch": 69,
+          "velocity": 100,
+          "length": 240
+        },
+        {
+          "tick": 480,
+          "pitch": 72,
+          "velocity": 100,
+          "length": 240
+        },
+        {
+          "tick": 480,
+          "pitch": 76,
+          "velocity": 100,
+          "length": 240
+        },
+        {
+          "tick": 960,
+          "pitch": 62,
+          "velocity": 100,
+          "length": 240
+        },
+        {
+          "tick": 960,
+          "pitch": 65,
+          "velocity": 100,
+          "length": 240
+        },
+        {
+          "tick": 960,
+          "pitch": 69,
+          "velocity": 100,
+          "length": 240
+        },
+        {
+          "tick": 1440,
+          "pitch": 69,
+          "velocity": 100,
+          "length": 240
+        },
+        {
+          "tick": 1440,
+          "pitch": 72,
+          "velocity": 100,
+          "length": 240
+        },
+        {
+          "tick": 1440,
+          "pitch": 76,
+          "velocity": 100,
+          "length": 240
+        },
+        {
+          "tick": 1920,
+          "pitch": 67,
+          "velocity": 100,
+          "length": 240
+        },
+        {
+          "tick": 1920,
+          "pitch": 71,
+          "velocity": 100,
+          "length": 240
+        },
+        {
+          "tick": 1920,
+          "pitch": 74,
+          "velocity": 100,
+          "length": 240
+        },
+        {
+          "tick": 2400,
+          "pitch": 62,
+          "velocity": 100,
+          "length": 240
+        },
+        {
+          "tick": 2400,
+          "pitch": 66,
+          "velocity": 100,
+          "length": 240
+        },
+        {
+          "tick": 2400,
+          "pitch": 69,
+          "velocity": 100,
+          "length": 240
+        },
+        {
+          "tick": 2880,
+          "pitch": 67,
+          "velocity": 100,
+          "length": 240
+        },
+        {
+          "tick": 2880,
+          "pitch": 71,
+          "velocity": 100,
+          "length": 240
+        },
+        {
+          "tick": 2880,
+          "pitch": 74,
+          "velocity": 100,
+          "length": 240
+        },
+        {
+          "tick": 3360,
+          "pitch": 62,
+          "velocity": 100,
+          "length": 240
+        },
+        {
+          "tick": 3360,
+          "pitch": 66,
+          "velocity": 100,
+          "length": 240
+        },
+        {
+          "tick": 3360,
+          "pitch": 69,
+          "velocity": 100,
+          "length": 240
+        }
+      ]
+    },
+    {
+      "name": "pad rows",
+      "region": {
+        "id": "ptn_test",
+        "trackId": "trk_1",
+        "name": "Pattern",
+        "startTick": 0,
+        "lengthTicks": 960,
+        "muted": false,
+        "pattern": {
+          "rows": [
+            {
+              "id": "k",
+              "kind": "pad",
+              "note": 36,
+              "name": "k",
+              "length": 4,
+              "playMode": "forward",
+              "muted": false,
+              "steps": [
+                {
+                  "on": true,
+                  "velocity": 127,
+                  "gate": 1,
+                  "repeats": 1,
+                  "chance": 1,
+                  "offset": 0
+                },
+                {
+                  "on": false,
+                  "velocity": 100,
+                  "gate": 1,
+                  "repeats": 1,
+                  "chance": 1,
+                  "offset": 0
+                },
+                {
+                  "on": false,
+                  "velocity": 100,
+                  "gate": 1,
+                  "repeats": 1,
+                  "chance": 1,
+                  "offset": 0
+                },
+                {
+                  "on": true,
+                  "velocity": 80,
+                  "gate": 1,
+                  "repeats": 1,
+                  "chance": 0.5,
+                  "offset": 0
+                }
+              ]
+            },
+            {
+              "id": "h",
+              "kind": "pad",
+              "note": 42,
+              "name": "h",
+              "length": 1,
+              "playMode": "forward",
+              "muted": false,
+              "steps": [
+                {
+                  "on": true,
+                  "velocity": 60,
+                  "gate": 1,
+                  "repeats": 2,
+                  "chance": 1,
+                  "offset": 0.1
+                }
+              ]
+            }
+          ],
+          "swing": 0.25,
+          "seed": 3,
+          "stepTicks": 240
+        }
+      },
+      "keys": [
+        {
+          "tick": 0,
+          "tonic": 0,
+          "mode": "major"
+        }
+      ],
+      "notes": [
+        {
+          "tick": 0,
+          "pitch": 36,
+          "velocity": 127,
+          "length": 240
+        },
+        {
+          "tick": 24,
+          "pitch": 42,
+          "velocity": 60,
+          "length": 120
+        },
+        {
+          "tick": 144,
+          "pitch": 42,
+          "velocity": 60,
+          "length": 120
+        },
+        {
+          "tick": 294,
+          "pitch": 42,
+          "velocity": 60,
+          "length": 120
+        },
+        {
+          "tick": 414,
+          "pitch": 42,
+          "velocity": 60,
+          "length": 120
+        },
+        {
+          "tick": 504,
+          "pitch": 42,
+          "velocity": 60,
+          "length": 120
+        },
+        {
+          "tick": 624,
+          "pitch": 42,
+          "velocity": 60,
+          "length": 120
+        },
+        {
+          "tick": 774,
+          "pitch": 42,
+          "velocity": 60,
+          "length": 120
+        },
+        {
+          "tick": 894,
+          "pitch": 42,
+          "velocity": 60,
+          "length": 66
+        }
+      ]
+    }
+  ]
+}
