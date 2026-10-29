@@ -184,6 +184,54 @@ public sealed class TwoProcessTests : IAsyncDisposable {
     const long Bar = 960 * 4;
 
     [Fact]
+    public async Task Live_MIDI_step_enters_through_the_real_host_while_MIDI_step_input_is_on() {
+        // The on-screen keyboard's path (docs/08-phase-7.md, step 6): /midi/live → the host's liveMidi → its held-key
+        // state → stepInputMidi → the Server's steps.
+        StartHost();
+        await using var server = new ServerFixture(socketPath);
+        using var client = server.CreateClient();
+        await ServerFixture.Eventually(
+            async () => (await server.SystemAsync(client)).Engine.State == EngineState.Connected,
+            60
+        );
+        await client.CreateProjectAsync("Steps");
+        await client.EditAsync(new AddTrackCommand(Kind: TrackKind.Instrument));
+        var track = (await client.ProjectAsync()).Tracks[0].Id;
+        await PutStepInputAsync(client, new(true, TrackId: track, NoteValueTicks: 480, MidiInput: true));
+        // D3, then F3 + A3 held together: a note and a chord.
+        await LiveAsync(client, track, new LiveMidiEvent(0x90, 50, 90));
+        await LiveAsync(client, track, new LiveMidiEvent(0x80, 50, 0));
+        await LiveAsync(client, track, new LiveMidiEvent(0x90, 53, 80), new LiveMidiEvent(0x90, 57, 100));
+        await LiveAsync(client, track, new LiveMidiEvent(0x80, 53, 0));
+        await LiveAsync(client, track, new LiveMidiEvent(0x80, 57, 0));
+        await ServerFixture.Eventually(async () => (await client.ProjectAsync()).MidiRegions is [{ Notes.Count: 3 }]);
+        Assert.Equal(
+            [(50, 90, 0L), (53, 100, 480), (57, 100, 480)],
+            (await client.ProjectAsync()).MidiRegions[0].Notes.Select(static n => (n.Pitch, n.Velocity, n.StartTick))
+        );
+    }
+
+    static async Task PutStepInputAsync(HttpClient client, StepInputRequest request) {
+        var response = await client.PutAsJsonAsync(
+            "/api/v1/project/step-input",
+            request,
+            ContractsJsonContext.Default.StepInputRequest,
+            TestContext.Current.CancellationToken
+        );
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+    }
+
+    static async Task LiveAsync(HttpClient client, string track, params LiveMidiEvent[] events) {
+        var response = await client.PostAsJsonAsync(
+            "/api/v1/midi/live",
+            new(track, events),
+            ContractsJsonContext.Default.LiveMidiRequest,
+            TestContext.Current.CancellationToken
+        );
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+    }
+
+    [Fact]
     public async Task Warped_tracks_bounce_on_the_real_host() {
         var media = Directory.CreateTempSubdirectory("anode-two-process-").FullName;
         try {

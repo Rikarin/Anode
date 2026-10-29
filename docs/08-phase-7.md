@@ -27,7 +27,7 @@ shape a performance. The Playwright golden path covers it on the null device:
    A bounce plays each note with its articulation (checked by its harmonics).
 6. **Step input.**
    - With the Step Input Keyboard, enter notes, a chord and a rest.
-   - Then step-enter from the virtual MIDI input.
+   - Then step-enter through MIDI input (the live MIDI path the on-screen keyboard uses).
    The region holds exactly those notes.
 7. **Audio File Editor.** On an audio region's file:
    - normalise a selection to −1 dBFS;
@@ -134,6 +134,7 @@ report. A REST change means regenerating `engine/src/Anode.Server/openapi.json`
 
 ### Rules the contracts imply
 
+- **Pitch names** follow Logic in the UI: C3 is 60, so "above C4" means pitch > 72.
 - **Events:**
   - A note's `articulationId` (0: none) plays its articulation's outputs just before the note: at the note's tick, sorted
     before it, on the note's channel.
@@ -238,14 +239,18 @@ the plan left latitude:
   the IPC's `previewRange` serves.
 - **Scripter:** `Insert.parameters` already holds a slot's parameter values, so the run-time list is
   **`Insert.runtimeParameters`** (`ParameterInfo[]?`); `Insert.source` is the script. `setScript(trackId, slotId,
-  source)`: `trackId` is required, as MIDI FX slots exist only on tracks.
+  source)`: `trackId` is required, as MIDI FX slots exist only on tracks. Integration added an optional `kind` to
+  `ParameterInfo` and `EngineParameter` (`slider | menu | checkbox | momentary | text`; left out: slider): a Scripter
+  parameter's `PluginParameters` type (`lin` and `log` are sliders), a built-in choice's `menu` and an Off/On toggle's
+  `checkbox`, so editors show each parameter by its kind rather than its shape.
 - **Deltas and events:** `grooveUpserted`/`grooveRemoved`, `articulationSetUpserted`/`articulationSetRemoved`,
   `laneSetUpserted`/`laneSetRemoved`. `/ws` `scriptLog(trackId, slotId, lines, dropped)`, `parameters(trackId,
   slotId, parameters)` (carrying the list) and `stepInput(state)`.
 - **REST** (`MidiEditApi.cs`, `Pending.Phase7`): `ListGrooves`, `SaveGroove`, `DeleteGroove`, `ListTransformSets`,
-  `SaveTransformSet`, `DeleteTransformSet`, `ListArticulationSets`, `SaveArticulationSet`, `DeleteArticulationSet`
-  (save bodies are the objects themselves), `EditFile`, `SearchLoops`, `GetFileSamples`, `PreviewFileRange`,
-  `GetStepInput`, `SetStepInput`, `StepRest`.
+  `SaveTransformSet`, `DeleteTransformSet`, `ListArticulationSets`, `SaveArticulationSet`, `DeleteArticulationSet` (save
+  bodies are the objects themselves), `EditFile`, `SearchLoops`, `GetFileSamples`, `PreviewFileRange`, `GetStepInput`,
+  `SetStepInput`, `StepRest`. Integration added `ListScriptPresets` (`GET /library/scripts`): the Scripter's factory
+  scripts as `ScriptPreset(id, name, description, source)`, from `ScripterPresets.All`, so the editor keeps no copy.
 - **IPC:** `SlotParametersMessage(trackId, slotId, parameters: EngineParameter[])` and `ScriptLogMessage(trackId,
   slotId, lines, dropped)`, host → server; `SetScriptMessage(trackId, slotId, source)`, server → host;
   `SetStepInputForwardMessage(on)`, server → host, and `StepInputMidiMessage(pitches, velocity)`, host → server (one
