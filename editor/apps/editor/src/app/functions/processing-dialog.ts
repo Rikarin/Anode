@@ -123,7 +123,7 @@ import {
             Add Effect
           </button>
           <ng-template #effectsMenu>
-            <xui-menu aria-label="Built-in effects">
+            <xui-menu class="max-h-96 min-w-44 overflow-y-auto" aria-label="Built-in effects">
               @for (effect of effects(); track effect.id) {
                 <button xuiMenuItem type="button" (click)="add(effect)">{{ effect.name }}</button>
               }
