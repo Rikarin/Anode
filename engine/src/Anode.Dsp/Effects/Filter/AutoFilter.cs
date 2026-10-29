@@ -41,7 +41,7 @@ public sealed class AutoFilter : AudioEffect {
     public static readonly int Drive = P.Add("drive", "Drive", 0, 24, 0, "dB");
     public static readonly int Mix = P.Add("mix", "Mix", 0, 100, 100, "%");
 
-    public static EffectDescriptor Info { get; } = P.Describe(Id, "AutoFilter", EffectCategories.Filter);
+    public static EffectDescriptor Info { get; } = P.Describe(Id, "AutoFilter", EffectCategories.Filter, Cutoff, Resonance, LfoDepth, LfoRate, EnvelopeAmount, Drive, Mix, Note);
 
     MultimodeCoefficients coefficients;
     MultimodeFilter left;
@@ -69,7 +69,7 @@ public sealed class AutoFilter : AudioEffect {
     }
 
     protected override void Update() {
-        var hz = Switch(Sync) ? 1 / NoteValues.Seconds(Choice(Note), Value(Tempo)) : Value(LfoRate);
+        var hz = Switch(Sync) ? 1 / NoteValues.Seconds(Choice(Note), HostTempo(Value(Tempo))) : Value(LfoRate);
         var modulation = lfo.Next((LfoShape)Choice(LfoShape), hz * ControlInterval / SampleRate);
         var octaves = Octaves
             * (Value(LfoDepth) * 0.01 * modulation

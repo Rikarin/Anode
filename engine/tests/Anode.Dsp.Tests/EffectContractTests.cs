@@ -12,7 +12,7 @@ public sealed class EffectContractTests {
     static readonly string[] Categories = [
         EffectCategories.Eq, EffectCategories.Dynamics, EffectCategories.Delay, EffectCategories.Reverb,
         EffectCategories.Modulation, EffectCategories.Distortion, EffectCategories.Filter, EffectCategories.Utility,
-        EffectCategories.Metering
+        EffectCategories.Metering, EffectCategories.Pitch, EffectCategories.Specialized, EffectCategories.MultiEffects
     ];
 
     /// <summary>The T1 suite of docs/05-phase-4.md, by id.</summary>
@@ -20,7 +20,11 @@ public sealed class EffectContractTests {
         "anode.channel-eq", "anode.compressor", "anode.limiter", "anode.adaptive-limiter", "anode.noise-gate",
         "anode.deesser", "anode.gain", "anode.stereo-delay", "anode.tape-delay", "anode.reverb", "anode.chorus",
         "anode.flanger", "anode.phaser", "anode.tremolo", "anode.overdrive", "anode.distortion", "anode.bitcrusher",
-        "anode.auto-filter", "anode.level-meter", "anode.loudness-meter", "anode.multimeter"
+        "anode.auto-filter", "anode.level-meter", "anode.loudness-meter", "anode.multimeter",
+        // The T2 suite of docs/07-phase-6.md.
+        "anode.space", "anode.linear-eq", "anode.multipressor", "anode.enveloper", "anode.exciter", "anode.subbass",
+        "anode.delay-designer", "anode.pitch-shifter", "anode.pitch-correction", "anode.ensemble",
+        "anode.rotor-cabinet", "anode.phat-fx", "anode.step-fx", "anode.beat-breaker", "anode.remix-fx"
     ];
 
     [Fact]
@@ -237,7 +241,9 @@ public sealed class EffectContractTests {
             or EffectCategories.Filter
             or EffectCategories.Modulation
             or EffectCategories.Reverb
-            or EffectCategories.Delay) {
+            or EffectCategories.Delay
+            or EffectCategories.Specialized
+            or EffectCategories.MultiEffects) {
             // Mix 0 or depth: the dry signal, untouched.
             Assert.Equal(0, latency);
             Assert.Equal(-300, NullResidualDb(input, l));

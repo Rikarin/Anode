@@ -15,7 +15,7 @@ public sealed class Gain : AudioEffect {
     public static readonly int Swap = P.Toggle("swap", "Swap Left/Right", false);
     public static readonly int Mono = P.Toggle("mono", "Mono", false);
 
-    public static EffectDescriptor Info { get; } = P.Describe(Id, "Gain", EffectCategories.Utility);
+    public static EffectDescriptor Info { get; } = P.Describe(Id, "Gain", EffectCategories.Utility, Level, Balance);
 
     GainRamp left;
     GainRamp right;

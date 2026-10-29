@@ -1,4 +1,5 @@
 using Anode.Dsp.Instruments;
+using Anode.Dsp.Transport;
 
 namespace Anode.Dsp.Effects;
 
@@ -21,10 +22,24 @@ namespace Anode.Dsp.Effects;
 ///         is. Every <see cref="Render" /> call is at most <see cref="ControlInterval" /> frames long, so scratch
 ///         buffers need no more than that, whatever the host's buffer size.
 ///     </para>
+///     <para>
+///         The transport (Phase 6): <see cref="SetTransport" /> keeps the block's <see cref="TransportContext" />.
+///         Tempo-synced effects read the tempo from it (<see cref="HostTempo" />) and, while it plays, their position
+///         in quarter notes (<see cref="QuarterAt" />). Until an engine passes one, they keep their own <c>tempo</c>
+///         parameter and a free-running clock that advances at that tempo on the control grid, so the output still
+///         does not depend on the buffer size. A context the engine does not renew advances by itself with each
+///         <see cref="Process" /> call.
+///     </para>
 /// </remarks>
 public abstract class AudioEffect : IAudioEffect {
     /// <summary>The control-rate grid, in samples.</summary>
     public const int ControlInterval = 32;
+
+    /// <summary>
+    ///     How far ahead of a grid line (in quarter notes) a position counts as on it: a synced step whose boundary is an
+    ///     exact sample starts on that sample, however the position was rounded.
+    /// </summary>
+    public const double GridEpsilon = 1e-9;
 
     /// <summary>The time constant of the parameter smoothing.</summary>
     public const double SmoothingSeconds = 0.02;
@@ -39,6 +54,13 @@ public abstract class AudioEffect : IAudioEffect {
     int untilControl;
     bool snap = true;
     float reading = float.NaN;
+    TransportContext transport;
+    bool transported;
+    int renderStart;
+    double clock;
+    double clockFrom;
+    double clockStep;
+    long clockIntervals;
 
     protected AudioEffect(EffectDescriptor descriptor) {
         Descriptor = descriptor;
@@ -93,7 +115,9 @@ public abstract class AudioEffect : IAudioEffect {
         var frames = Math.Min(left.Length, right.Length);
         var side = Descriptor.HasSidechain && sidechainLeft.Length >= frames && sidechainRight.Length >= frames;
         for (var at = 0; at < frames;) {
+            renderStart = at;
             if (untilControl == 0) {
+                ControlOffset = 0;
                 Control();
                 untilControl = ControlInterval;
             }
@@ -111,12 +135,27 @@ public abstract class AudioEffect : IAudioEffect {
         }
 
         Finish();
+        if (transported) {
+            transport = transport with {
+                Sample = transport.Sample + frames, Quarter = transport.Quarter + frames * transport.QuartersPerSample
+            };
+        }
+    }
+
+    /// <summary>Keeps the block's transport (see the remarks).</summary>
+    public void SetTransport(in TransportContext transport) {
+        this.transport = transport;
+        transported = transport.SampleRate > 0 && transport.Bpm > 0;
     }
 
     public void Reset() {
         snap = true;
         untilControl = 0;
         ControlOffset = 0;
+        clock = 0;
+        clockFrom = 0;
+        clockStep = 0;
+        clockIntervals = 0;
         OnReset();
     }
 
@@ -139,6 +178,9 @@ public abstract class AudioEffect : IAudioEffect {
 
     protected virtual void Dispose(bool disposing) { }
 
+    /// <summary>The parameters as set (for an effect that writes its own state).</summary>
+    private protected ParameterBank Bank => parameters;
+
     /// <summary>The smoothed value of parameter <paramref name="index" /> (what <see cref="Update" /> should use).</summary>
     protected float Value(int index) => smoothed[index];
 
@@ -151,6 +193,37 @@ public abstract class AudioEffect : IAudioEffect {
     protected bool Snapping { get; private set; }
 
     protected void Publish(float value) => Volatile.Write(ref reading, value);
+
+    /// <summary>Whether an engine passes the transport (<see cref="SetTransport" /> has been called).</summary>
+    protected bool Transported => transported;
+
+    /// <summary>The block's transport; meaningful when <see cref="Transported" />.</summary>
+    protected ref readonly TransportContext Transport => ref transport;
+
+    /// <summary>Whether the transport plays (false until an engine passes one).</summary>
+    protected bool Playing => transported && transport.Playing;
+
+    /// <summary>The transport's tempo when an engine passes one, else <paramref name="fallback" /> (a parameter).</summary>
+    protected double HostTempo(double fallback) => transported ? transport.Bpm : fallback;
+
+    /// <summary>
+    ///     The tempo the free-running clock follows while the transport does not play: by default
+    ///     <see cref="HostTempo" /> of 120 bpm. An effect with a <c>tempo</c> parameter returns
+    ///     <c>HostTempo(Value(Tempo))</c>.
+    /// </summary>
+    protected virtual double ClockTempo => HostTempo(120);
+
+    /// <summary>
+    ///     The position, in quarter notes, of frame <paramref name="frame" /> of the current <see cref="Render" /> call:
+    ///     the transport's while it plays, else the free-running clock's (which counts from <see cref="Reset" />).
+    /// </summary>
+    protected double QuarterAt(int frame) =>
+        Playing
+            ? transport.Quarter + (renderStart + frame) * transport.QuartersPerSample
+            : clock + (ControlOffset + frame) * clockStep;
+
+    /// <summary>Quarter notes per sample now (the transport's or the clock's).</summary>
+    protected double QuartersPerSample => Playing ? transport.QuartersPerSample : clockStep;
 
     /// <summary>Control thread: allocates for <paramref name="sampleRate" />.</summary>
     protected abstract void OnPrepare(float sampleRate);
@@ -187,6 +260,21 @@ public abstract class AudioEffect : IAudioEffect {
             smoothed[i] = MathF.Abs(target - next) <= (p.Max - p.Min) * 1e-6f ? target : next;
         }
 
+        // The free clock: one control interval on at the previous step, then the step at the current tempo. It counts
+        // intervals from where the step last changed rather than summing them, so a steady tempo does not drift. While
+        // the transport plays it follows the transport, so stopping does not jump.
+        var step = Math.Max(ClockTempo, 1) / (60.0 * SampleRate);
+        if (Playing || snap || step != clockStep) {
+            clockFrom = Playing ? transport.Quarter + renderStart * transport.QuartersPerSample
+                : snap ? 0
+                : clock + ControlInterval * clockStep;
+            clockIntervals = 0;
+            clockStep = step;
+        } else {
+            clockIntervals++;
+        }
+
+        clock = clockFrom + clockIntervals * (ControlInterval * clockStep);
         snap = false;
         Update();
     }

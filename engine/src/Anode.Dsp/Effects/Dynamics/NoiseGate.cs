@@ -25,7 +25,7 @@ public sealed class NoiseGate : AudioEffect {
     public static readonly int LowCut = P.Add("lowCut", "Sidechain Low Cut", 20, 4_000, 20, "Hz");
 
     public static EffectDescriptor Info { get; } =
-        P.Describe(Id, "Noise Gate", EffectCategories.Dynamics, true);
+        P.Describe(Id, "Noise Gate", EffectCategories.Dynamics, true, Threshold, Reduction, Attack, Hold, Release, Hysteresis);
 
     /// <summary>How fast the detector's peak follower falls.</summary>
     const double DetectorSeconds = 0.005;
@@ -156,7 +156,7 @@ public sealed class DeEsser : AudioEffect {
     public static readonly int Mode = P.Choice("mode", "Mode", ["Split", "Wide"], 0);
     public static readonly int Listen = P.Toggle("listen", "Listen to Detector", false);
 
-    public static EffectDescriptor Info { get; } = P.Describe(Id, "DeEsser", EffectCategories.Dynamics);
+    public static EffectDescriptor Info { get; } = P.Describe(Id, "DeEsser", EffectCategories.Dynamics, Threshold, Frequency, Range, Release);
 
     const double AttackSeconds = 0.0005;
 
