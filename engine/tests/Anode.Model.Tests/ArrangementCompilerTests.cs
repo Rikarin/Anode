@@ -15,8 +15,8 @@ public sealed class ArrangementCompilerTests {
     readonly SequentialIds ids = new();
 
     ProjectState state = ProjectDefaults.NewProject("prj_1", "Song", 48_000)
-        .Apply(new AudioFileUpserted(new("aud_1", "A", "Audio Files/A.wav", 48_000, 1, 480_000, 24, null)))
-        .Apply(new AudioFileUpserted(new("aud_2", "B", "Audio Files/B.wav", 48_000, 1, 480_000, 24, null)));
+        .Apply(new AudioFileUpserted(new("aud_1", "A", "Audio Files/A.wav", 48_000, 1, 480_000, 24, null, 0)))
+        .Apply(new AudioFileUpserted(new("aud_2", "B", "Audio Files/B.wav", 48_000, 1, 480_000, 24, null, 0)));
 
     [Fact]
     public void Regions_and_clicks_follow_a_tempo_ramp() {

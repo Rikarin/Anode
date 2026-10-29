@@ -274,7 +274,8 @@ static class RandomProjects {
                         1 + i % 2,
                         random.Next(1_000, 400_000),
                         24,
-                        null
+                        null,
+                        0
                     )
                 )
             );
@@ -368,6 +369,30 @@ static class RandomProjects {
 
     static IEnumerable<Track> MidiTracks(ProjectState state) =>
         state.Tracks.Where(static t => Edits.IsMidiKind(t.Kind) && t.FrozenFileId is null);
+
+    /// <summary>
+    ///     Phase 7 commands (docs/08-phase-7.md) the model rejects until workstream B implements them; the identity
+    ///     property skips them. (The Phase 7 fields of existing commands, grooves on the quantise commands and
+    ///     <c>setMidiRegion</c> and articulations on notes, are rejected too, and the generators never set them yet.)
+    /// </summary>
+    public static readonly IReadOnlySet<string> PendingPhase7 = new HashSet<string>(StringComparer.Ordinal) {
+        nameof(SetControlsCommand),
+        nameof(TransformCommand),
+        nameof(MakeGrooveCommand),
+        nameof(SetGrooveCommand),
+        nameof(DeleteGrooveCommand),
+        nameof(SetGrooveTrackCommand),
+        nameof(SetMatchGrooveCommand),
+        nameof(SetArticulationSetCommand),
+        nameof(DeleteArticulationSetCommand),
+        nameof(AssignArticulationSetCommand),
+        nameof(SetLaneSetCommand),
+        nameof(DeleteLaneSetCommand),
+        nameof(StepNotesCommand),
+        nameof(StepTieCommand),
+        nameof(SetFileVersionCommand),
+        nameof(SetScriptCommand)
+    };
 
     /// <summary>A random command of <paramref name="type" /> for <paramref name="s" />, or null when none can be made.</summary>
     public static EditCommand? Command(Type type, ProjectState s, Random r) {
@@ -916,6 +941,65 @@ static class RandomProjects {
             nameof(SetTrackActivationCommand) => Track() is { } t
                 ? new SetTrackActivationCommand([t, ..r.Next(2) == 0 ? [] : new[] { Track()! }], r.Next(2) == 0)
                 : null,
+            // Phase 7 commands (docs/08-phase-7.md): placeholders until the model implements them (workstream B
+            // replaces these with generators that make commands that apply, and removes PendingPhase7).
+            nameof(SetControlsCommand) => WithControls() is { } m
+                ? new SetControlsCommand(m.Id, [new(m.Controls[0].Id, Value: r.Next(128))])
+                : null,
+            nameof(TransformCommand) => MidiRegion() is { } m
+                ? new TransformCommand(
+                    [m.Id],
+                    new(
+                        "trf_random",
+                        "Random",
+                        [new(TransformField.Pitch, TransformConditionOp.GreaterEqual, 60)],
+                        [new(TransformField.Velocity, TransformOperationKind.Fix, r.Next(1, 128))],
+                        null,
+                        TransformMode.OperateOnly,
+                        r.Next()
+                    )
+                )
+                : null,
+            nameof(MakeGrooveCommand) => MidiRegion() is { } m
+                ? new MakeGrooveCommand(m.Id, MaybeText("Groove"), r.Next(1, 5))
+                : null,
+            nameof(SetGrooveCommand) => new SetGrooveCommand(
+                new("grv_random", "Swing", 3840, 960, [new(0, 1), new(1040, 0.8), new(1920, 1), new(3000, 0.8)])
+            ),
+            nameof(DeleteGrooveCommand) => new DeleteGrooveCommand("grv_none"),
+            nameof(SetGrooveTrackCommand) => new SetGrooveTrackCommand(Track()),
+            nameof(SetMatchGrooveCommand) => Track() is { } t ? new SetMatchGrooveCommand(t, r.Next(2) == 0) : null,
+            nameof(SetArticulationSetCommand) => new SetArticulationSetCommand(
+                new(
+                    "ars_random",
+                    "Strings",
+                    [new(1, "Legato", null), new(2, "Staccato", "st")],
+                    [new(1, ArticulationSwitchKind.Note, 24, null)],
+                    [new(2, ArticulationOutputKind.Note, 25, 100)]
+                )
+            ),
+            nameof(DeleteArticulationSetCommand) => new DeleteArticulationSetCommand("ars_none"),
+            nameof(AssignArticulationSetCommand) => Instrument() is { } t
+                ? new AssignArticulationSetCommand(t.Id, r.Next(2) == 0 ? null : "ars_none")
+                : null,
+            nameof(SetLaneSetCommand) => new SetLaneSetCommand(
+                new("lns_random", "Lanes", [new(LaneKind.Velocity, null, "Velocity", 240)])
+            ),
+            nameof(DeleteLaneSetCommand) => new DeleteLaneSetCommand("lns_none"),
+            nameof(StepNotesCommand) => MidiRegion() is { } m
+                ? new StepNotesCommand([r.Next(36, 84)], RegionId: m.Id, PositionTick: m.StartTick, LengthTicks: 240)
+                : null,
+            nameof(StepTieCommand) => WithNotes() is { } m
+                ? new StepTieCommand(m.Id, [m.Notes[0].Id], 240)
+                : null,
+            nameof(SetFileVersionCommand) => files.Length == 0
+                ? null
+                : Pick(r, files) is var f
+                    ? new SetFileVersionCommand(f.Id, f.Version + 1, $"Audio Files/{f.Name}.v{f.Version + 1}.wav")
+                    : null,
+            nameof(SetScriptCommand) => Instrument() is { } t
+                ? new SetScriptCommand(t.Id, "ins_none", "function HandleMIDI(event) { event.send(); }")
+                : null,
             _ => throw new InvalidOperationException($"No generator for {type.Name}.")
         };
         string? Track() => tracks.Count == 0 ? null : Pick(r, tracks).Id;
@@ -1233,7 +1317,8 @@ static class RandomProjects {
                                         r.Next(1, 128),
                                         1,
                                         r.Next(0, 8) * 240L,
-                                        r.Next(1, 4) * 120L
+                                        r.Next(1, 4) * 120L,
+                                        0
                                     )
                                 )
                         ],

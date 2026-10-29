@@ -159,7 +159,8 @@ export function blankTrack(id: string, name: string, kind: Track['kind'], color:
     alternativeId: null,
     drumMachine: null,
     smartControls: null,
-    liveLoopsActive: false
+    liveLoopsActive: false,
+    matchGroove: false
   };
 }
 
@@ -249,7 +250,8 @@ function patternNotes(project: Project, region: PatternRegion, start: number, ct
     velocity: note.velocity,
     channel: 1,
     startTick: note.startTick - start,
-    lengthTicks: note.lengthTicks
+    lengthTicks: note.lengthTicks,
+    articulationId: 0
   }));
 }
 

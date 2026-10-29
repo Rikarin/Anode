@@ -48,6 +48,7 @@ function track(id: string, extra: Partial<Track> = {}, output = 'master', sends:
     drumMachine: null,
     smartControls: null,
     liveLoopsActive: false,
+    matchGroove: false,
     ...extra
   };
 }

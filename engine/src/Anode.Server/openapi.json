@@ -2463,6 +2463,674 @@
           }
         }
       }
+    },
+    "/api/v1/library/grooves": {
+      "get": {
+        "tags": [
+          "Library"
+        ],
+        "summary": "The groove templates saved in the user library.",
+        "operationId": "ListGrooves",
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/GrooveTemplate"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Library"
+        ],
+        "summary": "Saves a groove template in the user library (replacing the one with its id).",
+        "operationId": "SaveGroove",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GrooveTemplate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GrooveTemplate"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/library/grooves/{id}": {
+      "delete": {
+        "tags": [
+          "Library"
+        ],
+        "summary": "Deletes a groove template from the user library; projects keep their copies.",
+        "operationId": "DeleteGroove",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "No Content"
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/api/v1/library/transform-sets": {
+      "get": {
+        "tags": [
+          "Library"
+        ],
+        "summary": "The MIDI Transform factory presets (ids factory.\u2026) followed by the user\u0027s saved sets, by name.",
+        "operationId": "ListTransformSets",
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TransformSet"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Library"
+        ],
+        "summary": "Saves a MIDI Transform set in the user library (replacing the one with its id; a factory preset\u0027s id is refused: save a copy under a new id).",
+        "operationId": "SaveTransformSet",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TransformSet"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TransformSet"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/library/transform-sets/{id}": {
+      "delete": {
+        "tags": [
+          "Library"
+        ],
+        "summary": "Deletes a user MIDI Transform set (factory presets cannot be deleted).",
+        "operationId": "DeleteTransformSet",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "No Content"
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/api/v1/library/articulation-sets": {
+      "get": {
+        "tags": [
+          "Library"
+        ],
+        "summary": "The articulation sets saved in the user library.",
+        "operationId": "ListArticulationSets",
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ArticulationSet"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Library"
+        ],
+        "summary": "Saves an articulation set in the user library (replacing the one with its id).",
+        "operationId": "SaveArticulationSet",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ArticulationSet"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ArticulationSet"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/library/articulation-sets/{id}": {
+      "delete": {
+        "tags": [
+          "Library"
+        ],
+        "summary": "Deletes an articulation set from the user library; projects keep their copies.",
+        "operationId": "DeleteArticulationSet",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "No Content"
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/api/v1/project/files/{fileId}/edit": {
+      "post": {
+        "tags": [
+          "Project"
+        ],
+        "summary": "Runs an Audio File Editor operation on a file as an audioEdit job: it writes a new version of the file and, when it finishes, points the file at it in one undo step (undo points it back).",
+        "operationId": "EditFile",
+        "parameters": [
+          {
+            "name": "fileId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AudioEditOperation"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Job"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/api/v1/project/files/{fileId}/loop-search": {
+      "post": {
+        "tags": [
+          "Project"
+        ],
+        "summary": "Loop search over a range of a file: the best loops found, best first.",
+        "operationId": "SearchLoops",
+        "parameters": [
+          {
+            "name": "fileId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoopSearchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/LoopSearchResult"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/api/v1/project/files/{fileId}/samples": {
+      "get": {
+        "tags": [
+          "Project"
+        ],
+        "summary": "Samples of a file\u0027s current version for the Audio File Editor: frames from start, raw (bucket 1, the default) or as min and max per bucket of frames; at most 65536 values per channel.",
+        "operationId": "GetFileSamples",
+        "parameters": [
+          {
+            "name": "fileId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "start",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "frames",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "bucket",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SampleRange"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/api/v1/project/files/{fileId}/preview": {
+      "post": {
+        "tags": [
+          "Project"
+        ],
+        "summary": "Plays a range of a file through the preview channel, looping if asked; POST /files/preview with a null path stops it.",
+        "operationId": "PreviewFileRange",
+        "parameters": [
+          {
+            "name": "fileId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PreviewRangeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "No Content"
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/api/v1/project/step-input": {
+      "get": {
+        "tags": [
+          "Project"
+        ],
+        "summary": "The step input state (not part of the project: not saved, not undoable).",
+        "operationId": "GetStepInput",
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StepInputState"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Project"
+        ],
+        "summary": "Changes the step input state (left-out properties stay); a stepInput event on /ws reports it. Steps are the stepNotes and stepTie commands.",
+        "operationId": "SetStepInput",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StepInputRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StepInputState"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/api/v1/project/step-input/rest": {
+      "post": {
+        "tags": [
+          "Project"
+        ],
+        "summary": "A rest: advances the step position by one step (not an edit).",
+        "operationId": "StepRest",
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StepInputState"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -2572,6 +3240,196 @@
         },
         "description": "A section of the song on the arrangement track (Intro, Verse, Chorus). Sections do not overlap; moving or copying\none with \u0060moveSection\u0060 moves or copies everything in its time range."
       },
+      "Articulation": {
+        "required": [
+          "id",
+          "name"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "name": {
+            "type": "string"
+          },
+          "symbol": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        },
+        "description": "An articulation of a set: its id (1\u2026254, unique in the set), its name, and a short symbol (null: none)."
+      },
+      "ArticulationOutput": {
+        "required": [
+          "articulationId",
+          "kind",
+          "number",
+          "value"
+        ],
+        "type": "object",
+        "properties": {
+          "articulationId": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/ArticulationOutputKind"
+          },
+          "number": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "value": {
+            "type": "integer",
+            "format": "int32"
+          }
+        },
+        "description": "An output of articulation \u0060articulationId\u0060: sent at the note\u0027s tick, sorted before it, on the note\u0027s channel\n(an articulation may have several outputs; they play in list order)."
+      },
+      "ArticulationOutputKind": {
+        "enum": [
+          "note",
+          "controlChange",
+          "program",
+          "channel"
+        ],
+        "description": "What an articulation sends before each of its notes."
+      },
+      "ArticulationSet": {
+        "required": [
+          "id",
+          "name",
+          "articulations",
+          "switches",
+          "outputs"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "articulations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Articulation"
+            }
+          },
+          "switches": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ArticulationSwitch"
+            }
+          },
+          "outputs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ArticulationOutput"
+            }
+          }
+        },
+        "description": "An articulation set (Logic\u0027s Articulation Set): articulations, input switches and outputs. Ids start with\n\u0060ars_\u0060; sets live in the project (\u0060Project.articulationSets\u0060, a track naming one in\n\u0060articulationSetId\u0060) and in the user library (\u0060/library/articulation-sets\u0060)."
+      },
+      "ArticulationSwitch": {
+        "required": [
+          "articulationId",
+          "kind",
+          "number"
+        ],
+        "type": "object",
+        "properties": {
+          "articulationId": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/ArticulationSwitchKind"
+          },
+          "number": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "value": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int32"
+          }
+        },
+        "description": "An input switch: while recording (or playing live) a track with the set, this MIDI selects articulation\n\u0060articulationId\u0060 for the notes that follow; the switch itself is neither recorded nor played."
+      },
+      "ArticulationSwitchKind": {
+        "enum": [
+          "note",
+          "controlChange"
+        ],
+        "description": "The kind of MIDI an articulation switch listens for."
+      },
+      "AudioEditKind": {
+        "enum": [
+          "normalize",
+          "gain",
+          "fadeIn",
+          "fadeOut",
+          "reverse",
+          "invert",
+          "silence",
+          "removeDc",
+          "trim",
+          "convertRate"
+        ],
+        "description": "An Audio File Editor operation (docs/08-phase-7.md, \u0022Audio File Editor\u0022)."
+      },
+      "AudioEditOperation": {
+        "required": [
+          "kind",
+          "startFrame",
+          "endFrame"
+        ],
+        "type": "object",
+        "properties": {
+          "kind": {
+            "$ref": "#/components/schemas/AudioEditKind"
+          },
+          "startFrame": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "endFrame": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "value": {
+            "type": [
+              "null",
+              "number"
+            ],
+            "format": "double"
+          },
+          "curve": {
+            "type": [
+              "null",
+              "number"
+            ],
+            "format": "double"
+          },
+          "targetRate": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int32"
+          }
+        },
+        "description": "An operation on frames \u0060startFrame\u0060 (inclusive) \u2026 \u0060endFrame\u0060 (exclusive) of a file, every channel.\n\u0060value\u0060: normalize\u0027s peak (dBFS, default \u22121) or gain\u0027s change (dB); \u0060curve\u0060: a fade\u0027s curve (default\n0); \u0060targetRate\u0060: convertRate\u0027s rate. Posted to \u0060/project/files/{fileId}/edit\u0060, it runs as an\n\u0060audioEdit\u0060 job that reads the file\u0027s current version and writes \u0060\u0026lt;name\u0026gt;.v\u0026lt;N\u0026gt;.wav\u0060 beside\nit; when it finishes, the server applies SetFileVersionCommand (with the region shifts a trim or\nrate conversion needs) as one undo step and recomputes the peaks."
+      },
       "AudioFile": {
         "required": [
           "id",
@@ -2581,7 +3439,8 @@
           "channels",
           "frames",
           "bitDepth",
-          "tempo"
+          "tempo",
+          "version"
         ],
         "type": "object",
         "properties": {
@@ -2619,9 +3478,13 @@
                 "$ref": "#/components/schemas/FileTempo"
               }
             ]
+          },
+          "version": {
+            "type": "integer",
+            "format": "int32"
           }
         },
-        "description": "An audio file of the project; \u0060path\u0060 is relative to the project folder. \u0060tempo\u0060 is its File Tempo\n(Smart Tempo), null until analysed."
+        "description": "An audio file of the project; \u0060path\u0060 is relative to the project folder. \u0060tempo\u0060 is its File Tempo\n(Smart Tempo), null until analysed. \u0060version\u0060 (Phase 7) counts the Audio File Editor\u0027s operations on it: 0\nis the file as imported or recorded; operation N wrote \u0060path\u0060 as \u0060\u0026lt;name\u0026gt;.vN.wav\u0060 beside it, and\nundo points \u0060path\u0060 and \u0060version\u0060 back at the previous one."
       },
       "AudioFormat": {
         "enum": [
@@ -3259,14 +4122,56 @@
             "format": "int64"
           }
         },
-        "description": "A controller event of a MIDI region; \u0060tick\u0060 is relative to the region\u0027s start."
+        "description": "A controller event of a MIDI region; \u0060tick\u0060 is relative to the region\u0027s start. \u0060id\u0060 is unique in the\nproject. \u0060number\u0060 is the controller of a control change and the key of a poly pressure event, 0 for the\nother kinds. Together with the notes these are every event the Event List shows (Phase 7)."
+      },
+      "ControlEventChange": {
+        "required": [
+          "id"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "tick": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int64"
+          },
+          "channel": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int32"
+          },
+          "number": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int32"
+          },
+          "value": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int32"
+          }
+        },
+        "description": "Changes to one controller event (Phase 7, the Event List; \u0060setControls\u0060); left-out properties stay. Its kind\nstays: to change it, delete the event and add another. Values are checked against the kind\u0027s range."
       },
       "ControlKind": {
         "enum": [
           "controlChange",
           "pitchBend",
           "channelPressure",
-          "programChange"
+          "programChange",
+          "polyPressure"
         ]
       },
       "CreateAlternativeRequest": {
@@ -3408,6 +4313,24 @@
           },
           {
             "$ref": "#/components/schemas/DeltaOpLiveLoopsChanged"
+          },
+          {
+            "$ref": "#/components/schemas/DeltaOpGrooveUpserted"
+          },
+          {
+            "$ref": "#/components/schemas/DeltaOpGrooveRemoved"
+          },
+          {
+            "$ref": "#/components/schemas/DeltaOpArticulationSetUpserted"
+          },
+          {
+            "$ref": "#/components/schemas/DeltaOpArticulationSetRemoved"
+          },
+          {
+            "$ref": "#/components/schemas/DeltaOpLaneSetUpserted"
+          },
+          {
+            "$ref": "#/components/schemas/DeltaOpLaneSetRemoved"
           }
         ],
         "discriminator": {
@@ -3436,9 +4359,50 @@
             "groupRemoved": "#/components/schemas/DeltaOpGroupRemoved",
             "patternRegionUpserted": "#/components/schemas/DeltaOpPatternRegionUpserted",
             "patternRegionRemoved": "#/components/schemas/DeltaOpPatternRegionRemoved",
-            "liveLoopsChanged": "#/components/schemas/DeltaOpLiveLoopsChanged"
+            "liveLoopsChanged": "#/components/schemas/DeltaOpLiveLoopsChanged",
+            "grooveUpserted": "#/components/schemas/DeltaOpGrooveUpserted",
+            "grooveRemoved": "#/components/schemas/DeltaOpGrooveRemoved",
+            "articulationSetUpserted": "#/components/schemas/DeltaOpArticulationSetUpserted",
+            "articulationSetRemoved": "#/components/schemas/DeltaOpArticulationSetRemoved",
+            "laneSetUpserted": "#/components/schemas/DeltaOpLaneSetUpserted",
+            "laneSetRemoved": "#/components/schemas/DeltaOpLaneSetRemoved"
           }
         }
+      },
+      "DeltaOpArticulationSetRemoved": {
+        "required": [
+          "id",
+          "op"
+        ],
+        "properties": {
+          "op": {
+            "enum": [
+              "articulationSetRemoved"
+            ],
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          }
+        }
+      },
+      "DeltaOpArticulationSetUpserted": {
+        "required": [
+          "set",
+          "op"
+        ],
+        "properties": {
+          "op": {
+            "enum": [
+              "articulationSetUpserted"
+            ],
+            "type": "string"
+          },
+          "set": {
+            "$ref": "#/components/schemas/ArticulationSet"
+          }
+        },
+        "description": "Phase 7: an articulation set was added or changed."
       },
       "DeltaOpAudioFileUpserted": {
         "required": [
@@ -3491,6 +4455,41 @@
           }
         }
       },
+      "DeltaOpGrooveRemoved": {
+        "required": [
+          "id",
+          "op"
+        ],
+        "properties": {
+          "op": {
+            "enum": [
+              "grooveRemoved"
+            ],
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          }
+        }
+      },
+      "DeltaOpGrooveUpserted": {
+        "required": [
+          "groove",
+          "op"
+        ],
+        "properties": {
+          "op": {
+            "enum": [
+              "grooveUpserted"
+            ],
+            "type": "string"
+          },
+          "groove": {
+            "$ref": "#/components/schemas/GrooveTemplate"
+          }
+        },
+        "description": "Phase 7: a groove template was added or changed."
+      },
       "DeltaOpGroupRemoved": {
         "required": [
           "number",
@@ -3525,6 +4524,41 @@
             "$ref": "#/components/schemas/MixerGroup"
           }
         }
+      },
+      "DeltaOpLaneSetRemoved": {
+        "required": [
+          "id",
+          "op"
+        ],
+        "properties": {
+          "op": {
+            "enum": [
+              "laneSetRemoved"
+            ],
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          }
+        }
+      },
+      "DeltaOpLaneSetUpserted": {
+        "required": [
+          "set",
+          "op"
+        ],
+        "properties": {
+          "op": {
+            "enum": [
+              "laneSetUpserted"
+            ],
+            "type": "string"
+          },
+          "set": {
+            "$ref": "#/components/schemas/LaneSet"
+          }
+        },
+        "description": "Phase 7: a Step Editor lane set was added or changed."
       },
       "DeltaOpLiveLoopsChanged": {
         "required": [
@@ -4269,6 +5303,54 @@
           },
           {
             "$ref": "#/components/schemas/EditCommandLoadInsertFileCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandSetControlsCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandTransformCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandMakeGrooveCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandSetGrooveCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandDeleteGrooveCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandSetGrooveTrackCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandSetMatchGrooveCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandSetArticulationSetCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandDeleteArticulationSetCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandAssignArticulationSetCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandSetLaneSetCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandDeleteLaneSetCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandStepNotesCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandStepTieCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandSetFileVersionCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandSetScriptCommand"
           }
         ],
         "description": "An edit of the open project (docs/adr/0004-state-ownership.md). A batch of them is applied atomically as one\nundo step. Optional properties left out are left unchanged.",
@@ -4386,7 +5468,23 @@
             "moveCell": "#/components/schemas/EditCommandMoveCellCommand",
             "setLiveLoops": "#/components/schemas/EditCommandSetLiveLoopsCommand",
             "setTrackActivation": "#/components/schemas/EditCommandSetTrackActivationCommand",
-            "loadInsertFile": "#/components/schemas/EditCommandLoadInsertFileCommand"
+            "loadInsertFile": "#/components/schemas/EditCommandLoadInsertFileCommand",
+            "setControls": "#/components/schemas/EditCommandSetControlsCommand",
+            "transform": "#/components/schemas/EditCommandTransformCommand",
+            "makeGroove": "#/components/schemas/EditCommandMakeGrooveCommand",
+            "setGroove": "#/components/schemas/EditCommandSetGrooveCommand",
+            "deleteGroove": "#/components/schemas/EditCommandDeleteGrooveCommand",
+            "setGrooveTrack": "#/components/schemas/EditCommandSetGrooveTrackCommand",
+            "setMatchGroove": "#/components/schemas/EditCommandSetMatchGrooveCommand",
+            "setArticulationSet": "#/components/schemas/EditCommandSetArticulationSetCommand",
+            "deleteArticulationSet": "#/components/schemas/EditCommandDeleteArticulationSetCommand",
+            "assignArticulationSet": "#/components/schemas/EditCommandAssignArticulationSetCommand",
+            "setLaneSet": "#/components/schemas/EditCommandSetLaneSetCommand",
+            "deleteLaneSet": "#/components/schemas/EditCommandDeleteLaneSetCommand",
+            "stepNotes": "#/components/schemas/EditCommandStepNotesCommand",
+            "stepTie": "#/components/schemas/EditCommandStepTieCommand",
+            "setFileVersion": "#/components/schemas/EditCommandSetFileVersionCommand",
+            "setScript": "#/components/schemas/EditCommandSetScriptCommand"
           }
         }
       },
@@ -4457,7 +5555,8 @@
               "$ref": "#/components/schemas/NewControlEvent"
             }
           }
-        }
+        },
+        "description": "Adds controller events (Phase 7: of every ControlKind, poly pressure included)."
       },
       "EditCommandAddDrumPadCommand": {
         "required": [
@@ -4901,6 +6000,30 @@
         },
         "description": "Replaces a track\u0027s instrument, inserts and sends with a saved patch\u0027s."
       },
+      "EditCommandAssignArticulationSetCommand": {
+        "required": [
+          "trackId",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "assignArticulationSet"
+            ],
+            "type": "string"
+          },
+          "trackId": {
+            "type": "string"
+          },
+          "setId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        },
+        "description": "Phase 7: gives an instrument or external MIDI track an articulation set of the project (null: none)."
+      },
       "EditCommandAssignVcaCommand": {
         "required": [
           "trackId",
@@ -5074,6 +6197,24 @@
         },
         "description": "Puts tracks into a new folder stack, inserted where the first of them was."
       },
+      "EditCommandDeleteArticulationSetCommand": {
+        "required": [
+          "setId",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "deleteArticulationSet"
+            ],
+            "type": "string"
+          },
+          "setId": {
+            "type": "string"
+          }
+        },
+        "description": "Phase 7: removes an articulation set; tracks that used it have none (their notes keep their ids)."
+      },
       "EditCommandDeleteCellsCommand": {
         "required": [
           "cellIds",
@@ -5119,6 +6260,24 @@
           }
         }
       },
+      "EditCommandDeleteGrooveCommand": {
+        "required": [
+          "grooveId",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "deleteGroove"
+            ],
+            "type": "string"
+          },
+          "grooveId": {
+            "type": "string"
+          }
+        },
+        "description": "Phase 7: removes a groove template; regions whose playback quantise used it return to the grid."
+      },
       "EditCommandDeleteGroupCommand": {
         "required": [
           "number",
@@ -5137,6 +6296,23 @@
           }
         },
         "description": "Deletes a mixer group; its members leave it."
+      },
+      "EditCommandDeleteLaneSetCommand": {
+        "required": [
+          "setId",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "deleteLaneSet"
+            ],
+            "type": "string"
+          },
+          "setId": {
+            "type": "string"
+          }
+        }
       },
       "EditCommandDeleteMarkersCommand": {
         "required": [
@@ -5410,6 +6586,44 @@
         },
         "description": "Loads a file (a sampler instrument, a sample) into a track\u0027s instrument; a path on the server\u0027s disk."
       },
+      "EditCommandMakeGrooveCommand": {
+        "required": [
+          "regionId",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "makeGroove"
+            ],
+            "type": "string"
+          },
+          "regionId": {
+            "type": "string"
+          },
+          "name": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "lengthBars": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int32"
+          },
+          "stepTicks": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int64"
+          }
+        },
+        "description": "Phase 7: Make Groove Template: adds to the project\u0027s grooves a template made from a MIDI region (its notes) or an\naudio region (its file\u0027s transients), over its first \u0060lengthBars\u0060 bars (1\u20264; left out: 1), with grid\nsteps of \u0060stepTicks\u0060 (left out: a 1/16, 240), named \u0060name\u0060 (left out: the region\u0027s)."
+      },
       "EditCommandMapBeatsCommand": {
         "required": [
           "mappings",
@@ -5670,9 +6884,15 @@
             "type": "number",
             "format": "double",
             "default": 0
+          },
+          "grooveId": {
+            "type": [
+              "null",
+              "string"
+            ]
           }
         },
-        "description": "Quantises audio regions: flex markers on their transients (analysed now if need be) move toward the grid of\n\u0060gridTicks\u0060 by \u0060strength\u0060 (0\u20261), with \u0060swing\u0060 (0\u20261) delaying every second grid step. Turns flex\non for their tracks when it is off."
+        "description": "Quantises audio regions: flex markers on their transients (analysed now if need be) move toward the grid of\n\u0060gridTicks\u0060 by \u0060strength\u0060 (0\u20261), with \u0060swing\u0060 (0\u20261) delaying every second grid step. Turns flex\non for their tracks when it is off. Phase 7: \u0060grooveId\u0060 and a matching groove track as for\nQuantizeNotesCommand (audio has no velocities, so no \u0060grooveVelocity\u0060)."
       },
       "EditCommandQuantizeNotesCommand": {
         "required": [
@@ -5715,9 +6935,21 @@
               "type": "integer",
               "format": "int64"
             }
+          },
+          "grooveId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "grooveVelocity": {
+            "type": [
+              "null",
+              "boolean"
+            ]
           }
         },
-        "description": "Moves note starts towards the grid (destructive; \u0060noteIds\u0060 left out: every note of the region), with the\nsame strength and swing meaning as RegionPlayback."
+        "description": "Moves note starts towards the grid (destructive; \u0060noteIds\u0060 left out: every note of the region), with the\nsame strength and swing meaning as RegionPlayback. Phase 7: with \u0060grooveId\u0060 (a groove\ntemplate of the project), towards the template\u0027s positions instead (\u0060gridTicks\u0060 and \u0060swing\u0060 unused),\nand with \u0060grooveVelocity\u0060 true the velocities follow its scales by the same strength. On a track whose\n\u0060matchGroove\u0060 is on, a quantise without \u0060grooveId\u0060 uses the groove track\u0027s groove, extracted from its\nfirst region at the time of the quantise."
       },
       "EditCommandRemoveDrumPadCommand": {
         "required": [
@@ -5996,6 +7228,24 @@
         },
         "description": "Swaps a track\u0027s live regions, MIDI regions and take folders for those of alternative \u0060alternativeId\u0060."
       },
+      "EditCommandSetArticulationSetCommand": {
+        "required": [
+          "set",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "setArticulationSet"
+            ],
+            "type": "string"
+          },
+          "set": {
+            "$ref": "#/components/schemas/ArticulationSet"
+          }
+        },
+        "description": "Phase 7: adds an articulation set to the project (one from the library) or replaces the one with its id.\nArticulation ids 1\u2026254 and unique; switches and outputs name articulations of the set, with values in their\nranges (ArticulationOutputKind)."
+      },
       "EditCommandSetAutomationCommand": {
         "required": [
           "target",
@@ -6147,6 +7397,31 @@
         },
         "description": "Replaces a take folder\u0027s comp (Quick Swipe Comping sends the whole comp after each swipe)."
       },
+      "EditCommandSetControlsCommand": {
+        "required": [
+          "regionId",
+          "changes",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "setControls"
+            ],
+            "type": "string"
+          },
+          "regionId": {
+            "type": "string"
+          },
+          "changes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ControlEventChange"
+            }
+          }
+        },
+        "description": "Phase 7, the Event List: changes controller events of a region (tick, channel, number, value; checked as\n\u0060addControls\u0060 checks them)."
+      },
       "EditCommandSetCycleCommand": {
         "required": [
           "type"
@@ -6251,6 +7526,47 @@
         },
         "description": "Sets a file\u0027s tempo, beats and downbeats (the Smart Tempo Editor), or clears them (null)."
       },
+      "EditCommandSetFileVersionCommand": {
+        "required": [
+          "fileId",
+          "version",
+          "path",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "setFileVersion"
+            ],
+            "type": "string"
+          },
+          "fileId": {
+            "type": "string"
+          },
+          "version": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "path": {
+            "type": "string"
+          },
+          "frames": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int64"
+          },
+          "sampleRate": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int32"
+          }
+        },
+        "description": "Phase 7, the Audio File Editor: points a file at another version of itself: \u0060path\u0060 (relative to the\nproject, the \u0060\u0026lt;name\u0026gt;.vN.wav\u0060 an \u0060audioEdit\u0060 job wrote) as \u0060version\u0060, with its frame count\nand rate when an operation changed them. The job applies it when it finishes (with the region shifts a length\nchange needs, in the same undo step); undo applies it back. Clients do not send it."
+      },
       "EditCommandSetFlexMarkersCommand": {
         "required": [
           "regionId",
@@ -6275,6 +7591,44 @@
           }
         },
         "description": "Replaces an audio region\u0027s flex markers: file frames inside the region, their ticks increasing with them and\ninside the region. Needs the track\u0027s flex on."
+      },
+      "EditCommandSetGrooveCommand": {
+        "required": [
+          "groove",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "setGroove"
+            ],
+            "type": "string"
+          },
+          "groove": {
+            "$ref": "#/components/schemas/GrooveTemplate"
+          }
+        },
+        "description": "Phase 7: adds a groove template to the project (one from the library) or replaces the one with its id (a\nrename); \u0060points\u0060 must hold lengthTicks \u00F7 stepTicks points."
+      },
+      "EditCommandSetGrooveTrackCommand": {
+        "required": [
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "setGrooveTrack"
+            ],
+            "type": "string"
+          },
+          "trackId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        },
+        "description": "Phase 7: makes a track (with regions: MIDI or audio) the groove track, or none when null."
       },
       "EditCommandSetGroupCommand": {
         "required": [
@@ -6456,6 +7810,24 @@
         },
         "description": "Replaces the key track; the first event at tick 0."
       },
+      "EditCommandSetLaneSetCommand": {
+        "required": [
+          "set",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "setLaneSet"
+            ],
+            "type": "string"
+          },
+          "set": {
+            "$ref": "#/components/schemas/LaneSet"
+          }
+        },
+        "description": "Phase 7: adds a Step Editor lane set to the project or replaces the one with its id."
+      },
       "EditCommandSetLiveLoopsCommand": {
         "required": [
           "type"
@@ -6534,6 +7906,28 @@
             ]
           }
         }
+      },
+      "EditCommandSetMatchGrooveCommand": {
+        "required": [
+          "trackId",
+          "matchGroove",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "setMatchGroove"
+            ],
+            "type": "string"
+          },
+          "trackId": {
+            "type": "string"
+          },
+          "matchGroove": {
+            "type": "boolean"
+          }
+        },
+        "description": "Phase 7: a track\u0027s \u0022match groove track\u0022: its quantise follows the groove track."
       },
       "EditCommandSetMetronomeCommand": {
         "required": [
@@ -6684,8 +8078,15 @@
               "null",
               "boolean"
             ]
+          },
+          "grooveId": {
+            "type": [
+              "null",
+              "string"
+            ]
           }
-        }
+        },
+        "description": "Changes a MIDI region\u0027s name, mute or playback parameters. \u0060grooveId\u0060 (Phase 7) makes its playback quantise\nfollow a groove template of the project; an empty string returns it to the grid."
       },
       "EditCommandSetMixerSettingsCommand": {
         "required": [
@@ -7065,6 +8466,32 @@
           }
         },
         "description": "Renames a scene, or moves it to \u0060index\u0060."
+      },
+      "EditCommandSetScriptCommand": {
+        "required": [
+          "trackId",
+          "slotId",
+          "source",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "setScript"
+            ],
+            "type": "string"
+          },
+          "trackId": {
+            "type": "string"
+          },
+          "slotId": {
+            "type": "string"
+          },
+          "source": {
+            "type": "string"
+          }
+        },
+        "description": "Phase 7, Scripter: sets the script of MIDI FX slot \u0060slotId\u0060 (an \u0060anode.scripter\u0060 slot) of a track.\nThe host compiles it and reports its parameters (\u0060Insert.runtimeParameters\u0060); a script that fails to\ncompile is bypassed with a \u0060pluginProblem\u0060, and the slot keeps the source."
       },
       "EditCommandSetSectionCommand": {
         "required": [
@@ -7727,6 +9154,105 @@
         },
         "description": "Splits a region in two at \u0060atTick\u0060, which must fall inside it."
       },
+      "EditCommandStepNotesCommand": {
+        "required": [
+          "pitches",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "stepNotes"
+            ],
+            "type": "string"
+          },
+          "pitches": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          "velocity": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int32"
+          },
+          "regionId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "trackId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "positionTick": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int64"
+          },
+          "lengthTicks": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int64"
+          },
+          "channel": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int32"
+          }
+        },
+        "description": "Phase 7, step input: adds a step of notes (one per pitch, a chord when several) at the step position. Clients\n(and MIDI step input) send only \u0060pitches\u0060, and \u0060velocity\u0060 to override the state\u0027s; the server fills\nevery left-out property from the step input state (StepInputState) before it applies the command\n(a new region on \u0060trackId\u0060 when \u0060regionId\u0060 is left out there too), then advances the position unless\nchord mode is on. \u0060positionTick\u0060 is a project tick; \u0060lengthTicks\u0060 the step\u0027s length; \u0060channel\u0060\n1 unless given."
+      },
+      "EditCommandStepTieCommand": {
+        "required": [
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "stepTie"
+            ],
+            "type": "string"
+          },
+          "regionId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "noteIds": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          "lengthTicks": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int64"
+          }
+        },
+        "description": "Phase 7, step input: a tie lengthens the last step\u0027s notes (\u0060noteIds\u0060; the server fills them in) by one step\n(\u0060lengthTicks\u0060; filled in from the state), and advances the position. A rest is not an edit:\n\u0060POST /project/step-input/rest\u0060."
+      },
       "EditCommandStripSilenceCommand": {
         "required": [
           "regionIds",
@@ -7771,6 +9297,51 @@
           }
         },
         "description": "Strip Silence: splits each audio region into one region per stretch above \u0060thresholdDb\u0060 (RMS), each widened\nby \u0060preAttackMs\u0060 before and \u0060postReleaseMs\u0060 after; the silence between them is removed. As in Logic,\n\u0060minTimeMs\u0060 is the shortest silence that splits: stretches separated by less stay in one region."
+      },
+      "EditCommandTransformCommand": {
+        "required": [
+          "regionIds",
+          "set",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "transform"
+            ],
+            "type": "string"
+          },
+          "regionIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "set": {
+            "$ref": "#/components/schemas/TransformSet"
+          },
+          "noteIds": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          "controlIds": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        },
+        "description": "Phase 7, MIDI Transform: applies \u0060set\u0060 (mode \u0060operateOnly\u0060 or \u0060selectAndOperate\u0060;\n\u0060selectOnly\u0060 is the editor\u0027s own, and refused) to the events of MIDI regions \u0060regionIds\u0060: when\n\u0060noteIds\u0060 or \u0060controlIds\u0060 is given, to those events only (the editor\u0027s selection), else to every\nevent of the regions. Positions are project ticks while it runs, so position conditions and crescendos span\nthe regions. One undo step, through \u0060TransformEngine.Apply\u0060."
       },
       "EditCommandUnfreezeTrackCommand": {
         "required": [
@@ -8036,6 +9607,57 @@
         },
         "description": "A point of a mapping graph: input \u0060x\u0060 (0\u20261) gives output \u0060y\u0060 (0\u20261)."
       },
+      "GroovePoint": {
+        "required": [
+          "tick",
+          "velocityScale"
+        ],
+        "type": "object",
+        "properties": {
+          "tick": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "velocityScale": {
+            "type": "number",
+            "format": "double"
+          }
+        },
+        "description": "One grid step of a groove template: where its onset lands (\u0060tick\u0060, from the template\u0027s start) and how its\nvelocity scales (1: unchanged; the strongest onset of the template is 1)."
+      },
+      "GrooveTemplate": {
+        "required": [
+          "id",
+          "name",
+          "lengthTicks",
+          "stepTicks",
+          "points"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "lengthTicks": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "stepTicks": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "points": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GroovePoint"
+            }
+          }
+        },
+        "description": "A groove template (docs/08-phase-7.md, \u0022Grooves\u0022): one point per grid step of \u0060stepTicks\u0060 over\n\u0060lengthTicks\u0060 (1\u20134 bars), so \u0060points\u0060 holds lengthTicks \u00F7 stepTicks points in step order, point n\nbeing step n\u0027s onset (near n \u00D7 stepTicks). Made from a MIDI region\u0027s notes or an audio region\u0027s transients: the\nstrongest onset per grid step (a step without one keeps its grid position at scale 1). Quantising to it moves a\nnote to the template position of its grid step (the template repeating every \u0060lengthTicks\u0060 from the\nproject start), by the quantise\u0027s strength. Ids start with \u0060grv_\u0060; templates live in the project\n(\u0060Project.grooves\u0060) and in the user library (\u0060/library/grooves\u0060)."
+      },
       "GroupProperties": {
         "required": [
           "volume",
@@ -8148,9 +9770,24 @@
               "null",
               "string"
             ]
+          },
+          "runtimeParameters": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/ParameterInfo"
+            }
+          },
+          "source": {
+            "type": [
+              "null",
+              "string"
+            ]
           }
         },
-        "description": "An insert effect on a channel strip: the plugin, whether it is bypassed, its parameter values by parameter id\n(all of them), and its sidechain source (a track id or \u0060bus:N\u0060; null: none). A plugin\u0027s opaque state lives in\nthe project\u0027s \u0060Plugin States\u0060 folder. A MIDI FX slot (\u0060ChannelStrip.midiEffects\u0060) has the same shape,\nnever a sidechain. Phase 6: \u0060file\u0060 is the file the effect loads (an impulse response for\n\u0060anode.space\u0060; \u0060loadInsertFile\u0060), relative to the project when it is inside it (null: none)."
+        "description": "An insert effect on a channel strip: the plugin, whether it is bypassed, its parameter values by parameter id\n(all of them), and its sidechain source (a track id or \u0060bus:N\u0060; null: none). A plugin\u0027s opaque state lives in\nthe project\u0027s \u0060Plugin States\u0060 folder. A MIDI FX slot (\u0060ChannelStrip.midiEffects\u0060) has the same shape,\nnever a sidechain. Phase 6: \u0060file\u0060 is the file the effect loads (an impulse response for\n\u0060anode.space\u0060; \u0060loadInsertFile\u0060), relative to the project when it is inside it (null: none).\nPhase 7 (docs/08-phase-7.md): \u0060runtimeParameters\u0060 is the parameter list of a slot whose plugin defines its\nparameters at run time (Scripter\u0027s \u0060PluginParameters\u0060; the host reports it after each compile, and the\nserver stores it here): \u0060parameters\u0060 holds their values, and they automate\n(\u0060midiEffect:{slotId}:{parameterId}\u0060) and map to Smart Controls as any parameter (null: the plugin\u0027s\ncatalogue list applies). \u0060source\u0060 is a Scripter slot\u0027s script (\u0060setScript\u0060; null on every other\nslot)."
       },
       "InsertChain": {
         "enum": [
@@ -8290,7 +9927,8 @@
           "freeze",
           "analyze",
           "bounceInPlace",
-          "process"
+          "process",
+          "audioEdit"
         ]
       },
       "JobState": {
@@ -8347,6 +9985,69 @@
           "major",
           "minor"
         ]
+      },
+      "Lane": {
+        "required": [
+          "kind",
+          "name",
+          "resolutionTicks"
+        ],
+        "type": "object",
+        "properties": {
+          "kind": {
+            "$ref": "#/components/schemas/LaneKind"
+          },
+          "number": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int32"
+          },
+          "name": {
+            "type": "string"
+          },
+          "resolutionTicks": {
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "description": "A Step Editor lane: its kind, its controller or key (\u0060number\u0060: for \u0060controlChange\u0060,\n\u0060polyPressure\u0060 and \u0060note\u0060; null otherwise), its name, and the grid the pencil and line tools draw on\n(\u0060resolutionTicks\u0060 \u0026gt; 0)."
+      },
+      "LaneKind": {
+        "enum": [
+          "velocity",
+          "controlChange",
+          "pitchBend",
+          "channelPressure",
+          "polyPressure",
+          "program",
+          "note"
+        ],
+        "description": "What a Step Editor lane shows and draws."
+      },
+      "LaneSet": {
+        "required": [
+          "id",
+          "name",
+          "lanes"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "lanes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Lane"
+            }
+          }
+        },
+        "description": "A saved set of Step Editor lanes (Logic\u0027s lane sets), in the project (\u0060Project.laneSets\u0060; ids\n\u0060lns_\u0060). A project without any shows the default set: Velocity, Modulation (CC 1), Pitch Bend, Channel\nPressure and Program, each at a 1/16 (240 ticks); the first \u0060setLaneSet\u0060 stores the set it edits."
       },
       "LaunchQuantize": {
         "enum": [
@@ -8596,6 +10297,61 @@
           "both"
         ],
         "description": "The scale a loop suits, for the Loop Browser\u0027s scale filter."
+      },
+      "LoopSearchRequest": {
+        "required": [
+          "startFrame",
+          "endFrame"
+        ],
+        "type": "object",
+        "properties": {
+          "startFrame": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "endFrame": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "count": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int32"
+          },
+          "minFrames": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int64"
+          }
+        },
+        "description": "Loop search over frames \u0060startFrame\u0060\u2026\u0060endFrame\u0060 of a file\u0027s current version: the \u0060count\u0060 best\nloops (1\u202620; left out: 5) at least \u0060minFrames\u0060 long (left out: 10 ms)."
+      },
+      "LoopSearchResult": {
+        "required": [
+          "startFrame",
+          "endFrame",
+          "score"
+        ],
+        "type": "object",
+        "properties": {
+          "startFrame": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "endFrame": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "score": {
+            "type": "number",
+            "format": "double"
+          }
+        },
+        "description": "A loop found by loop search: frames \u0060startFrame\u0060\u2026\u0060endFrame\u0060 (exclusive), and how seamlessly it\nrepeats (\u0060score\u0060 0\u20261, 1 best). Results come best first."
       },
       "Marker": {
         "required": [
@@ -8902,9 +10658,16 @@
           "lengthTicks": {
             "type": "integer",
             "format": "int64"
+          },
+          "articulationId": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int32"
           }
         },
-        "description": "A note to add; positions relative to the region\u0027s start."
+        "description": "A note to add; positions relative to the region\u0027s start; \u0060articulationId\u0060 left out: 0 (none)."
       },
       "NormalizeMode": {
         "enum": [
@@ -8921,7 +10684,8 @@
           "velocity",
           "channel",
           "startTick",
-          "lengthTicks"
+          "lengthTicks",
+          "articulationId"
         ],
         "type": "object",
         "properties": {
@@ -8948,9 +10712,13 @@
           "lengthTicks": {
             "type": "integer",
             "format": "int64"
+          },
+          "articulationId": {
+            "type": "integer",
+            "format": "int32"
           }
         },
-        "description": "A note. \u0060id\u0060 is unique in the project; \u0060channel\u0060 is 1\u202616."
+        "description": "A note. \u0060id\u0060 is unique in the project; \u0060channel\u0060 is 1\u202616. \u0060articulationId\u0060 (Phase 7) is its\narticulation in its track\u0027s articulation set (1\u2026254; 0: none): the articulation\u0027s outputs play just before the\nnote, at its tick, on its channel (a channel output changes the note\u0027s channel instead)."
       },
       "NoteChange": {
         "required": [
@@ -8996,9 +10764,16 @@
               "integer"
             ],
             "format": "int64"
+          },
+          "articulationId": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int32"
           }
         },
-        "description": "Changes to one note; left-out properties stay."
+        "description": "Changes to one note; left-out properties stay. \u0060articulationId\u0060 0 clears its articulation."
       },
       "OpenProjectRequest": {
         "required": [
@@ -9477,6 +11252,30 @@
         },
         "description": "A plugin the engine can load: an instrument (\u0060category\u0060\u0060Instrument\u0060), a MIDI effect (\u0060MIDI\nEffect\u0060, Phase 6: it goes in a strip\u0027s MIDI FX slots), or an effect in \u0060category\u0060 (EQ, Dynamics, Delay,\nReverb, Modulation, Distortion, Filter, Utility, Metering). \u0060hasEditor\u0060: it has its own editor window (desktop app\nonly; everywhere else the generic editor). \u0060fileTypes\u0060 (extensions such as \u0060.sfz\u0060, \u0060.wav\u0060) lists\nwhat an\ninstrument loads with \u0060loadInstrumentFile\u0060, empty when it loads none."
       },
+      "PreviewRangeRequest": {
+        "required": [
+          "startFrame",
+          "endFrame"
+        ],
+        "type": "object",
+        "properties": {
+          "startFrame": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "endFrame": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "loop": {
+            "type": [
+              "null",
+              "boolean"
+            ]
+          }
+        },
+        "description": "Plays frames \u0060startFrame\u0060\u2026\u0060endFrame\u0060 of a file\u0027s current version through the preview channel\n(\u0060/project/files/{fileId}/preview\u0060), looping when \u0060loop\u0060; \u0060POST /files/preview\u0060 with a null path\nstops it."
+      },
       "PreviewRequest": {
         "type": "object",
         "properties": {
@@ -9609,7 +11408,10 @@
           "groups",
           "automation",
           "patternRegions",
-          "liveLoops"
+          "liveLoops",
+          "grooves",
+          "articulationSets",
+          "laneSets"
         ],
         "type": "object",
         "properties": {
@@ -9704,9 +11506,27 @@
           },
           "liveLoops": {
             "$ref": "#/components/schemas/LiveLoopsGrid"
+          },
+          "grooves": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GrooveTemplate"
+            }
+          },
+          "articulationSets": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ArticulationSet"
+            }
+          },
+          "laneSets": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LaneSet"
+            }
           }
         },
-        "description": "The open project (docs/01-implementation-plan.md \u00A75). Musical positions are ticks at 960 PPQ; audio offsets,\nlengths and fades are frames at the project\u0027s \u0060sampleRate\u0060. \u0060revision\u0060 grows with every edit and is\nthe ETag; \u0060dirty\u0060 says whether it has unsaved edits. Phase 6 (docs/07-phase-6.md): \u0060patternRegions\u0060\nare the Step Sequencer\u0027s regions; \u0060liveLoops\u0060 is the Live Loops grid."
+        "description": "The open project (docs/01-implementation-plan.md \u00A75). Musical positions are ticks at 960 PPQ; audio offsets,\nlengths and fades are frames at the project\u0027s \u0060sampleRate\u0060. \u0060revision\u0060 grows with every edit and is\nthe ETag; \u0060dirty\u0060 says whether it has unsaved edits. Phase 6 (docs/07-phase-6.md): \u0060patternRegions\u0060\nare the Step Sequencer\u0027s regions; \u0060liveLoops\u0060 is the Live Loops grid. Phase 7 (docs/08-phase-7.md):\n\u0060grooves\u0060 are the project\u0027s groove templates, \u0060articulationSets\u0060 its articulation sets and\n\u0060laneSets\u0060 its Step Editor lane sets."
       },
       "ProjectAlternative": {
         "required": [
@@ -9837,9 +11657,15 @@
           },
           "varispeed": {
             "$ref": "#/components/schemas/VarispeedSettings"
+          },
+          "grooveTrackId": {
+            "type": [
+              "null",
+              "string"
+            ]
           }
         },
-        "description": "Global settings. \u0060tempo\u0060 and \u0060signature\u0060 are the values at the project start (the first of\n\u0060tempoEvents\u0060 and \u0060signatures\u0060, which are the global tempo and signature tracks).\n\u0060endTick\u0060 is the project end marker. \u0060mergeMidiRecording\u0060: a MIDI recording over an\nexisting MIDI region adds its notes to that region instead of making a new one. \u0060smartTempo\u0060 and\n\u0060varispeed\u0060 (Phase 5): the project tempo mode and Varispeed."
+        "description": "Global settings. \u0060tempo\u0060 and \u0060signature\u0060 are the values at the project start (the first of\n\u0060tempoEvents\u0060 and \u0060signatures\u0060, which are the global tempo and signature tracks).\n\u0060endTick\u0060 is the project end marker. \u0060mergeMidiRecording\u0060: a MIDI recording over an\nexisting MIDI region adds its notes to that region instead of making a new one. \u0060smartTempo\u0060 and\n\u0060varispeed\u0060 (Phase 5): the project tempo mode and Varispeed. \u0060grooveTrackId\u0060 (Phase 7) is the groove\ntrack (null: none): tracks whose \u0060matchGroove\u0060 is on quantise to the groove of its first region."
       },
       "ProjectSummary": {
         "required": [
@@ -9933,9 +11759,82 @@
           "swing": {
             "type": "number",
             "format": "double"
+          },
+          "grooveId": {
+            "type": [
+              "null",
+              "string"
+            ]
           }
         },
-        "description": "How a MIDI region plays, without changing its notes (Logic\u0027s Region inspector): transpose in semitones,\nvelocity offset (\u2212127\u2026127), quantise grid in ticks (0: off) with strength (0\u20261, 1 = all the way) and swing\n(0\u20261, 0 = straight; delays every second grid step by up to half a step)."
+        "description": "How a MIDI region plays, without changing its notes (Logic\u0027s Region inspector): transpose in semitones,\nvelocity offset (\u2212127\u2026127), quantise grid in ticks (0: off) with strength (0\u20261, 1 = all the way) and swing\n(0\u20261, 0 = straight; delays every second grid step by up to half a step). \u0060grooveId\u0060 (Phase 7): it\nquantises to that groove template of the project instead of the grid (\u0060quantizeTicks\u0060 and \u0060swing\u0060\nthen unused; null: the grid)."
+      },
+      "SampleRange": {
+        "required": [
+          "startFrame",
+          "frames",
+          "channels",
+          "bucket"
+        ],
+        "type": "object",
+        "properties": {
+          "startFrame": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "frames": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "channels": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "bucket": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "samples": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "type": "array",
+              "items": {
+                "type": "number",
+                "format": "float"
+              }
+            }
+          },
+          "min": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "type": "array",
+              "items": {
+                "type": "number",
+                "format": "float"
+              }
+            }
+          },
+          "max": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "type": "array",
+              "items": {
+                "type": "number",
+                "format": "float"
+              }
+            }
+          }
+        },
+        "description": "Samples of a file\u0027s current version for the Audio File Editor (\u0060/project/files/{fileId}/samples\u0060):\n\u0060frames\u0060 frames from \u0060startFrame\u0060, in buckets of \u0060bucket\u0060 frames. With \u0060bucket\u0060 1,\n\u0060samples\u0060 holds each channel\u0027s samples and \u0060min\u0060 and \u0060max\u0060 are null; with a larger bucket,\n\u0060min\u0060 and \u0060max\u0060 hold each channel\u0027s extremes per bucket (the last bucket may be short) and\n\u0060samples\u0060 is null."
       },
       "SavePatchRequest": {
         "required": [
@@ -10185,6 +12084,130 @@
         },
         "description": "Smart Tempo: the project tempo mode, the \u0060follow\u0060 new audio regions get, and whether imports are analysed\n(transients and beats) as they arrive."
       },
+      "StepInputRequest": {
+        "type": "object",
+        "properties": {
+          "on": {
+            "type": [
+              "null",
+              "boolean"
+            ]
+          },
+          "regionId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "trackId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "positionTick": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int64"
+          },
+          "noteValueTicks": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int64"
+          },
+          "dotted": {
+            "type": [
+              "null",
+              "boolean"
+            ]
+          },
+          "triplet": {
+            "type": [
+              "null",
+              "boolean"
+            ]
+          },
+          "velocity": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int32"
+          },
+          "chord": {
+            "type": [
+              "null",
+              "boolean"
+            ]
+          },
+          "midiInput": {
+            "type": [
+              "null",
+              "boolean"
+            ]
+          }
+        },
+        "description": "Changes the step input state (\u0060PUT /project/step-input\u0060); left-out properties stay. \u0060regionId\u0060 empty\nclears it (steps then make a region on \u0060trackId\u0060)."
+      },
+      "StepInputState": {
+        "required": [
+          "on",
+          "positionTick",
+          "noteValueTicks",
+          "dotted",
+          "triplet",
+          "velocity",
+          "chord",
+          "midiInput"
+        ],
+        "type": "object",
+        "properties": {
+          "on": {
+            "type": "boolean"
+          },
+          "regionId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "trackId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "positionTick": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "noteValueTicks": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "dotted": {
+            "type": "boolean"
+          },
+          "triplet": {
+            "type": "boolean"
+          },
+          "velocity": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "chord": {
+            "type": "boolean"
+          },
+          "midiInput": {
+            "type": "boolean"
+          }
+        },
+        "description": "Step input (docs/08-phase-7.md, \u0022Step input\u0022), held by the server outside the project: it is not saved and not\nundoable. While \u0060on\u0060, steps go into MIDI region \u0060regionId\u0060, or, when it is null, into a new region\nthe first step makes on instrument or external MIDI track \u0060trackId\u0060 (from the step position, a bar long,\nlengthened as steps pass its end). \u0060positionTick\u0060 is the next step\u0027s project tick. A step lasts\n\u0060noteValueTicks\u0060 (a 1/16 is 240), \u00D7 1.5 when \u0060dotted\u0060, \u00D7 2/3 when \u0060triplet\u0060, at velocity\n\u0060velocity\u0060 (1\u2026127). With \u0060chord\u0060 on, steps stack at the position without advancing; turning it off\nadvances by one step when notes were stacked. \u0060midiInput\u0060: the host forwards the MIDI keyboard\u0027s notes as\nsteps (held keys make a chord). Changes reach every client as \u0060stepInput\u0060 events on \u0060/ws\u0060."
+      },
       "StopRequest": {
         "type": "object",
         "properties": {
@@ -10377,7 +12400,8 @@
           "alternatives",
           "drumMachine",
           "smartControls",
-          "liveLoopsActive"
+          "liveLoopsActive",
+          "matchGroove"
         ],
         "type": "object",
         "properties": {
@@ -10493,9 +12517,18 @@
           },
           "liveLoopsActive": {
             "type": "boolean"
+          },
+          "matchGroove": {
+            "type": "boolean"
+          },
+          "articulationSetId": {
+            "type": [
+              "null",
+              "string"
+            ]
           }
         },
-        "description": "A track and its channel strip. \u0060color\u0060 is a CSS colour; \u0060input\u0060 is where an audio track records from.\nAn instrument track has an \u0060instrument\u0060; instrument and external MIDI tracks take MIDI from\n\u0060midiInput\u0060, and an external MIDI track sends its regions to \u0060midiOutput\u0060. Phase 5: \u0060flexOn\u0060 and\n\u0060flexMode\u0060 are its flex algorithm; \u0060alternatives\u0060 are its inactive track alternatives, and\n\u0060alternativeId\u0060 names the active one (null until the track has alternatives). Phase 6: a Drum Machine\nDesigner stack has a \u0060drumMachine\u0060 (null on every other track); \u0060smartControls\u0060 are its Smart Controls\n(null until set up: the editor shows the 8-knob layout, unnamed, at 0 and unmapped, and the first Smart Controls\ncommand sets them up); \u0060liveLoopsActive\u0060: the track plays its Live Loops cells, not its Tracks-area\nregions."
+        "description": "A track and its channel strip. \u0060color\u0060 is a CSS colour; \u0060input\u0060 is where an audio track records from.\nAn instrument track has an \u0060instrument\u0060; instrument and external MIDI tracks take MIDI from\n\u0060midiInput\u0060, and an external MIDI track sends its regions to \u0060midiOutput\u0060. Phase 5: \u0060flexOn\u0060 and\n\u0060flexMode\u0060 are its flex algorithm; \u0060alternatives\u0060 are its inactive track alternatives, and\n\u0060alternativeId\u0060 names the active one (null until the track has alternatives). Phase 6: a Drum Machine\nDesigner stack has a \u0060drumMachine\u0060 (null on every other track); \u0060smartControls\u0060 are its Smart Controls\n(null until set up: the editor shows the 8-knob layout, unnamed, at 0 and unmapped, and the first Smart Controls\ncommand sets them up); \u0060liveLoopsActive\u0060: the track plays its Live Loops cells, not its Tracks-area\nregions. Phase 7: \u0060matchGroove\u0060: its quantise follows the groove track (\u0060settings.grooveTrackId\u0060);\n\u0060articulationSetId\u0060 is its articulation set (null: none)."
       },
       "TrackAlternative": {
         "required": [
@@ -10560,6 +12593,165 @@
           "aux",
           "vca"
         ]
+      },
+      "TransformCondition": {
+        "required": [
+          "field",
+          "op",
+          "a",
+          "b"
+        ],
+        "type": "object",
+        "properties": {
+          "field": {
+            "$ref": "#/components/schemas/TransformField"
+          },
+          "op": {
+            "$ref": "#/components/schemas/TransformConditionOp"
+          },
+          "a": {
+            "type": "number",
+            "format": "double"
+          },
+          "b": {
+            "type": "number",
+            "format": "double",
+            "default": 0
+          }
+        },
+        "description": "A condition on one field of an event. A set\u0027s conditions are ANDed; a field without a condition (or with\n\u0060all\u0060) matches everything. \u0060b\u0060 is used by \u0060inside\u0060 and \u0060outside\u0060 only."
+      },
+      "TransformConditionOp": {
+        "enum": [
+          "all",
+          "equal",
+          "unequal",
+          "lessEqual",
+          "greaterEqual",
+          "inside",
+          "outside"
+        ],
+        "description": "How a condition compares its field with \u0060a\u0060 (and \u0060b\u0060); \u0060all\u0060 matches every event."
+      },
+      "TransformField": {
+        "enum": [
+          "position",
+          "length",
+          "channel",
+          "pitch",
+          "velocity",
+          "status",
+          "subposition"
+        ],
+        "description": "What a Transform condition tests or an operation changes (Logic\u0027s MIDI Transform window; docs/08-phase-7.md).\nFor a note: its position (project ticks), length (ticks), channel (1\u202616), pitch (0\u2026127) and velocity (1\u2026127).\nFor a controller event, as in Logic: \u0060pitch\u0060 is its first data byte (a control change\u0027s controller, a poly\npressure\u0027s key; 0 otherwise) and \u0060velocity\u0060 its value (a pitch bend\u0027s \u22128192\u20268191); its length is 0.\n\u0060status\u0060 is the event\u0027s MIDI status (the status byte\u0027s high nibble as a number: 144 note, 160 poly\npressure, 176 control change, 192 program change, 208 channel pressure, 224 pitch bend) and\n\u0060subposition\u0060 its position within its bar (ticks from the bar line); both are conditions only."
+      },
+      "TransformMode": {
+        "enum": [
+          "selectOnly",
+          "operateOnly",
+          "selectAndOperate"
+        ],
+        "description": "What applying a set does: \u0060selectOnly\u0060 selects the matching events in the editor and changes nothing (the\neditor runs it itself; the \u0060transform\u0060 command refuses it); \u0060operateOnly\u0060 changes the matching events;\n\u0060selectAndOperate\u0060 changes them and leaves them selected."
+      },
+      "TransformOperation": {
+        "required": [
+          "field",
+          "op",
+          "a",
+          "b"
+        ],
+        "type": "object",
+        "properties": {
+          "field": {
+            "$ref": "#/components/schemas/TransformField"
+          },
+          "op": {
+            "$ref": "#/components/schemas/TransformOperationKind"
+          },
+          "a": {
+            "type": "number",
+            "format": "double",
+            "default": 0
+          },
+          "b": {
+            "type": "number",
+            "format": "double",
+            "default": 0
+          }
+        },
+        "description": "An operation on one field (\u0060position\u0060, \u0060length\u0060, \u0060channel\u0060, \u0060pitch\u0060 or \u0060velocity\u0060; not\n\u0060status\u0060 or \u0060subposition\u0060). A set\u0027s operations apply to each selected event in field order: position,\nlength, channel, pitch, velocity, whatever their order in the list; at most one per field."
+      },
+      "TransformOperationKind": {
+        "enum": [
+          "thru",
+          "fix",
+          "add",
+          "subtract",
+          "min",
+          "max",
+          "flip",
+          "multiply",
+          "divide",
+          "scale",
+          "range",
+          "random",
+          "plusMinusRandom",
+          "quantize",
+          "exponent",
+          "crescendo",
+          "relativeCrescendo",
+          "useMap"
+        ],
+        "description": "What an operation does to its field (value x, result clamped to the field\u0027s range and rounded to an integer).\n\u0060thru\u0060 leaves it; \u0060fix\u0060 sets a; \u0060add\u0060/\u0060subtract\u0060 x \u00B1 a; \u0060min\u0060 max(x, a) (raises to at\nleast a); \u0060max\u0060 min(x, a) (lowers to at most a); \u0060flip\u0060 mirrors x around a (2a \u2212 x); \u0060multiply\u0060/\n\u0060divide\u0060 x \u00D7 a, x \u00F7 a; \u0060scale\u0060 x \u00D7 a \u002B b; \u0060range\u0060 clamps to a\u2026b; \u0060random\u0060 a uniform value in\na\u2026b; \u0060plusMinusRandom\u0060 x plus a uniform value in \u2212a\u2026a; \u0060quantize\u0060 to the nearest multiple of a;\n\u0060exponent\u0060 curves x over its range by exponent a (the field\u0027s range normalised to 0\u20261, raised to a, scaled\nback); \u0060crescendo\u0060 runs linearly from a at the first selected event\u0027s position to b at the last\u0027s;\n\u0060relativeCrescendo\u0060 adds that ramp to x; \u0060useMap\u0060 looks x (0\u2026127) up in the set\u0027s \u0060map\u0060."
+      },
+      "TransformSet": {
+        "required": [
+          "id",
+          "name",
+          "conditions",
+          "operations",
+          "mode",
+          "seed"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "conditions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TransformCondition"
+            }
+          },
+          "operations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TransformOperation"
+            }
+          },
+          "map": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          "mode": {
+            "$ref": "#/components/schemas/TransformMode"
+          },
+          "seed": {
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "description": "A MIDI Transform set: conditions (ANDed), operations, the 128-step \u0060map\u0060 that \u0060useMap\u0060 reads (128\nvalues 0\u2026127; null: the identity), the mode, and the seed of its random operations: each event draws from a\ngenerator seeded by \u0060seed\u0060 and the event\u0027s id, so applying a set is deterministic. Factory presets are\nsets whose ids start with \u0060factory.\u0060 (\u0060factory.humanize\u0060, \u0060factory.quantize\u0060 \u2026;\n\u0060TransformEngine.Presets\u0060); the user\u0027s are saved in the library (\u0060/library/transform-sets\u0060)."
       },
       "TransportCommand": {
         "enum": [

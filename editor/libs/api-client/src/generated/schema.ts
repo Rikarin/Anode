@@ -914,6 +914,214 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/api/v1/library/grooves': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** The groove templates saved in the user library. */
+    get: operations['ListGrooves'];
+    put?: never;
+    /** Saves a groove template in the user library (replacing the one with its id). */
+    post: operations['SaveGroove'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/library/grooves/{id}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    /** Deletes a groove template from the user library; projects keep their copies. */
+    delete: operations['DeleteGroove'];
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/library/transform-sets': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** The MIDI Transform factory presets (ids factory.…) followed by the user's saved sets, by name. */
+    get: operations['ListTransformSets'];
+    put?: never;
+    /** Saves a MIDI Transform set in the user library (replacing the one with its id; a factory preset's id is refused: save a copy under a new id). */
+    post: operations['SaveTransformSet'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/library/transform-sets/{id}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    /** Deletes a user MIDI Transform set (factory presets cannot be deleted). */
+    delete: operations['DeleteTransformSet'];
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/library/articulation-sets': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** The articulation sets saved in the user library. */
+    get: operations['ListArticulationSets'];
+    put?: never;
+    /** Saves an articulation set in the user library (replacing the one with its id). */
+    post: operations['SaveArticulationSet'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/library/articulation-sets/{id}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    /** Deletes an articulation set from the user library; projects keep their copies. */
+    delete: operations['DeleteArticulationSet'];
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/project/files/{fileId}/edit': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Runs an Audio File Editor operation on a file as an audioEdit job: it writes a new version of the file and, when it finishes, points the file at it in one undo step (undo points it back). */
+    post: operations['EditFile'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/project/files/{fileId}/loop-search': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Loop search over a range of a file: the best loops found, best first. */
+    post: operations['SearchLoops'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/project/files/{fileId}/samples': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Samples of a file's current version for the Audio File Editor: frames from start, raw (bucket 1, the default) or as min and max per bucket of frames; at most 65536 values per channel. */
+    get: operations['GetFileSamples'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/project/files/{fileId}/preview': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Plays a range of a file through the preview channel, looping if asked; POST /files/preview with a null path stops it. */
+    post: operations['PreviewFileRange'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/project/step-input': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** The step input state (not part of the project: not saved, not undoable). */
+    get: operations['GetStepInput'];
+    /** Changes the step input state (left-out properties stay); a stepInput event on /ws reports it. Steps are the stepNotes and stepTie commands. */
+    put: operations['SetStepInput'];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/project/step-input/rest': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** A rest: advances the step position by one step (not an edit). */
+    post: operations['StepRest'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -960,9 +1168,102 @@ export interface components {
       lengthTicks: number;
       color: string;
     };
+    /** @description An articulation of a set: its id (1…254, unique in the set), its name, and a short symbol (null: none). */
+    Articulation: {
+      /** Format: int32 */
+      id: number;
+      name: string;
+      symbol?: null | string;
+    };
+    /**
+     * @description An output of articulation `articulationId`: sent at the note's tick, sorted before it, on the note's channel
+     *     (an articulation may have several outputs; they play in list order).
+     */
+    ArticulationOutput: {
+      /** Format: int32 */
+      articulationId: number;
+      kind: components['schemas']['ArticulationOutputKind'];
+      /** Format: int32 */
+      number: number;
+      /** Format: int32 */
+      value: number;
+    };
+    /**
+     * @description What an articulation sends before each of its notes.
+     * @enum {unknown}
+     */
+    ArticulationOutputKind: 'note' | 'controlChange' | 'program' | 'channel';
+    /**
+     * @description An articulation set (Logic's Articulation Set): articulations, input switches and outputs. Ids start with
+     *     `ars_`; sets live in the project (`Project.articulationSets`, a track naming one in
+     *     `articulationSetId`) and in the user library (`/library/articulation-sets`).
+     */
+    ArticulationSet: {
+      id: string;
+      name: string;
+      articulations: components['schemas']['Articulation'][];
+      switches: components['schemas']['ArticulationSwitch'][];
+      outputs: components['schemas']['ArticulationOutput'][];
+    };
+    /**
+     * @description An input switch: while recording (or playing live) a track with the set, this MIDI selects articulation
+     *     `articulationId` for the notes that follow; the switch itself is neither recorded nor played.
+     */
+    ArticulationSwitch: {
+      /** Format: int32 */
+      articulationId: number;
+      kind: components['schemas']['ArticulationSwitchKind'];
+      /** Format: int32 */
+      number: number;
+      /** Format: int32 */
+      value?: null | number;
+    };
+    /**
+     * @description The kind of MIDI an articulation switch listens for.
+     * @enum {unknown}
+     */
+    ArticulationSwitchKind: 'note' | 'controlChange';
+    /**
+     * @description An Audio File Editor operation (docs/08-phase-7.md, "Audio File Editor").
+     * @enum {unknown}
+     */
+    AudioEditKind:
+      | 'normalize'
+      | 'gain'
+      | 'fadeIn'
+      | 'fadeOut'
+      | 'reverse'
+      | 'invert'
+      | 'silence'
+      | 'removeDc'
+      | 'trim'
+      | 'convertRate';
+    /**
+     * @description An operation on frames `startFrame` (inclusive) … `endFrame` (exclusive) of a file, every channel.
+     *     `value`: normalize's peak (dBFS, default −1) or gain's change (dB); `curve`: a fade's curve (default
+     *     0); `targetRate`: convertRate's rate. Posted to `/project/files/{fileId}/edit`, it runs as an
+     *     `audioEdit` job that reads the file's current version and writes `&lt;name&gt;.v&lt;N&gt;.wav` beside
+     *     it; when it finishes, the server applies SetFileVersionCommand (with the region shifts a trim or
+     *     rate conversion needs) as one undo step and recomputes the peaks.
+     */
+    AudioEditOperation: {
+      kind: components['schemas']['AudioEditKind'];
+      /** Format: int64 */
+      startFrame: number;
+      /** Format: int64 */
+      endFrame: number;
+      /** Format: double */
+      value?: null | number;
+      /** Format: double */
+      curve?: null | number;
+      /** Format: int32 */
+      targetRate?: null | number;
+    };
     /**
      * @description An audio file of the project; `path` is relative to the project folder. `tempo` is its File Tempo
-     *     (Smart Tempo), null until analysed.
+     *     (Smart Tempo), null until analysed. `version` (Phase 7) counts the Audio File Editor's operations on it: 0
+     *     is the file as imported or recorded; operation N wrote `path` as `&lt;name&gt;.vN.wav` beside it, and
+     *     undo points `path` and `version` back at the previous one.
      */
     AudioFile: {
       id: string;
@@ -977,6 +1278,8 @@ export interface components {
       /** Format: int32 */
       bitDepth: number;
       tempo: null | components['schemas']['FileTempo'];
+      /** Format: int32 */
+      version: number;
     };
     /**
      * @default wav
@@ -1208,7 +1511,11 @@ export interface components {
       endTick: number;
       takeId: string;
     };
-    /** @description A controller event of a MIDI region; `tick` is relative to the region's start. */
+    /**
+     * @description A controller event of a MIDI region; `tick` is relative to the region's start. `id` is unique in the
+     *     project. `number` is the controller of a control change and the key of a poly pressure event, 0 for the
+     *     other kinds. Together with the notes these are every event the Event List shows (Phase 7).
+     */
     ControlEvent: {
       /** Format: int64 */
       id: number;
@@ -1222,8 +1529,24 @@ export interface components {
       /** Format: int64 */
       tick: number;
     };
+    /**
+     * @description Changes to one controller event (Phase 7, the Event List; `setControls`); left-out properties stay. Its kind
+     *     stays: to change it, delete the event and add another. Values are checked against the kind's range.
+     */
+    ControlEventChange: {
+      /** Format: int64 */
+      id: number;
+      /** Format: int64 */
+      tick?: null | number;
+      /** Format: int32 */
+      channel?: null | number;
+      /** Format: int32 */
+      number?: null | number;
+      /** Format: int32 */
+      value?: null | number;
+    };
     /** @enum {unknown} */
-    ControlKind: 'controlChange' | 'pitchBend' | 'channelPressure' | 'programChange';
+    ControlKind: 'controlChange' | 'pitchBend' | 'channelPressure' | 'programChange' | 'polyPressure';
     CreateAlternativeRequest: {
       name: string;
     };
@@ -1266,7 +1589,24 @@ export interface components {
       | components['schemas']['DeltaOpGroupRemoved']
       | components['schemas']['DeltaOpPatternRegionUpserted']
       | components['schemas']['DeltaOpPatternRegionRemoved']
-      | components['schemas']['DeltaOpLiveLoopsChanged'];
+      | components['schemas']['DeltaOpLiveLoopsChanged']
+      | components['schemas']['DeltaOpGrooveUpserted']
+      | components['schemas']['DeltaOpGrooveRemoved']
+      | components['schemas']['DeltaOpArticulationSetUpserted']
+      | components['schemas']['DeltaOpArticulationSetRemoved']
+      | components['schemas']['DeltaOpLaneSetUpserted']
+      | components['schemas']['DeltaOpLaneSetRemoved'];
+    DeltaOpArticulationSetRemoved: {
+      /** @enum {string} */
+      op: 'articulationSetRemoved';
+      id: string;
+    };
+    /** @description Phase 7: an articulation set was added or changed. */
+    DeltaOpArticulationSetUpserted: {
+      /** @enum {string} */
+      op: 'articulationSetUpserted';
+      set: components['schemas']['ArticulationSet'];
+    };
     DeltaOpAudioFileUpserted: {
       /** @enum {string} */
       op: 'audioFileUpserted';
@@ -1282,6 +1622,17 @@ export interface components {
       op: 'automationLaneUpserted';
       lane: components['schemas']['AutomationLane'];
     };
+    DeltaOpGrooveRemoved: {
+      /** @enum {string} */
+      op: 'grooveRemoved';
+      id: string;
+    };
+    /** @description Phase 7: a groove template was added or changed. */
+    DeltaOpGrooveUpserted: {
+      /** @enum {string} */
+      op: 'grooveUpserted';
+      groove: components['schemas']['GrooveTemplate'];
+    };
     DeltaOpGroupRemoved: {
       /** @enum {string} */
       op: 'groupRemoved';
@@ -1292,6 +1643,17 @@ export interface components {
       /** @enum {string} */
       op: 'groupUpserted';
       group: components['schemas']['MixerGroup'];
+    };
+    DeltaOpLaneSetRemoved: {
+      /** @enum {string} */
+      op: 'laneSetRemoved';
+      id: string;
+    };
+    /** @description Phase 7: a Step Editor lane set was added or changed. */
+    DeltaOpLaneSetUpserted: {
+      /** @enum {string} */
+      op: 'laneSetUpserted';
+      set: components['schemas']['LaneSet'];
     };
     /** @description The Live Loops grid changed: its scenes, cells, quantise or visibility (the whole grid). */
     DeltaOpLiveLoopsChanged: {
@@ -1539,7 +1901,23 @@ export interface components {
       | components['schemas']['EditCommandMoveCellCommand']
       | components['schemas']['EditCommandSetLiveLoopsCommand']
       | components['schemas']['EditCommandSetTrackActivationCommand']
-      | components['schemas']['EditCommandLoadInsertFileCommand'];
+      | components['schemas']['EditCommandLoadInsertFileCommand']
+      | components['schemas']['EditCommandSetControlsCommand']
+      | components['schemas']['EditCommandTransformCommand']
+      | components['schemas']['EditCommandMakeGrooveCommand']
+      | components['schemas']['EditCommandSetGrooveCommand']
+      | components['schemas']['EditCommandDeleteGrooveCommand']
+      | components['schemas']['EditCommandSetGrooveTrackCommand']
+      | components['schemas']['EditCommandSetMatchGrooveCommand']
+      | components['schemas']['EditCommandSetArticulationSetCommand']
+      | components['schemas']['EditCommandDeleteArticulationSetCommand']
+      | components['schemas']['EditCommandAssignArticulationSetCommand']
+      | components['schemas']['EditCommandSetLaneSetCommand']
+      | components['schemas']['EditCommandDeleteLaneSetCommand']
+      | components['schemas']['EditCommandStepNotesCommand']
+      | components['schemas']['EditCommandStepTieCommand']
+      | components['schemas']['EditCommandSetFileVersionCommand']
+      | components['schemas']['EditCommandSetScriptCommand'];
     /**
      * @description Sets the project's tempo events from an audio region's file tempo (analysed now if need be) over the region's
      *     range, and makes the region play unwarped there.
@@ -1557,6 +1935,7 @@ export interface components {
       bus?: null | number;
       name?: null | string;
     };
+    /** @description Adds controller events (Phase 7: of every ControlKind, poly pressure included). */
     EditCommandAddControlsCommand: {
       /** @enum {string} */
       type: 'addControls';
@@ -1705,6 +2084,13 @@ export interface components {
       trackId: string;
       patchId: string;
     };
+    /** @description Phase 7: gives an instrument or external MIDI track an articulation set of the project (null: none). */
+    EditCommandAssignArticulationSetCommand: {
+      /** @enum {string} */
+      type: 'assignArticulationSet';
+      trackId: string;
+      setId?: null | string;
+    };
     /** @description Assigns a track to a VCA track, or removes it from its VCA (null). */
     EditCommandAssignVcaCommand: {
       /** @enum {string} */
@@ -1771,6 +2157,12 @@ export interface components {
       trackIds: string[];
       name?: null | string;
     };
+    /** @description Phase 7: removes an articulation set; tracks that used it have none (their notes keep their ids). */
+    EditCommandDeleteArticulationSetCommand: {
+      /** @enum {string} */
+      type: 'deleteArticulationSet';
+      setId: string;
+    };
     EditCommandDeleteCellsCommand: {
       /** @enum {string} */
       type: 'deleteCells';
@@ -1782,12 +2174,23 @@ export interface components {
       regionId: string;
       eventIds: number[];
     };
+    /** @description Phase 7: removes a groove template; regions whose playback quantise used it return to the grid. */
+    EditCommandDeleteGrooveCommand: {
+      /** @enum {string} */
+      type: 'deleteGroove';
+      grooveId: string;
+    };
     /** @description Deletes a mixer group; its members leave it. */
     EditCommandDeleteGroupCommand: {
       /** @enum {string} */
       type: 'deleteGroup';
       /** Format: int32 */
       number: number;
+    };
+    EditCommandDeleteLaneSetCommand: {
+      /** @enum {string} */
+      type: 'deleteLaneSet';
+      setId: string;
     };
     EditCommandDeleteMarkersCommand: {
       /** @enum {string} */
@@ -1881,6 +2284,21 @@ export interface components {
       path: string;
     };
     /**
+     * @description Phase 7: Make Groove Template: adds to the project's grooves a template made from a MIDI region (its notes) or an
+     *     audio region (its file's transients), over its first `lengthBars` bars (1…4; left out: 1), with grid
+     *     steps of `stepTicks` (left out: a 1/16, 240), named `name` (left out: the region's).
+     */
+    EditCommandMakeGrooveCommand: {
+      /** @enum {string} */
+      type: 'makeGroove';
+      regionId: string;
+      name?: null | string;
+      /** Format: int32 */
+      lengthBars?: null | number;
+      /** Format: int64 */
+      stepTicks?: null | number;
+    };
+    /**
      * @description Beat mapping: for each mapping in order, sets tempo events so that its tick lands on its sample, keeping earlier
      *     mappings and the positions before them.
      */
@@ -1968,7 +2386,8 @@ export interface components {
     /**
      * @description Quantises audio regions: flex markers on their transients (analysed now if need be) move toward the grid of
      *     `gridTicks` by `strength` (0…1), with `swing` (0…1) delaying every second grid step. Turns flex
-     *     on for their tracks when it is off.
+     *     on for their tracks when it is off. Phase 7: `grooveId` and a matching groove track as for
+     *     QuantizeNotesCommand (audio has no velocities, so no `grooveVelocity`).
      */
     EditCommandQuantizeAudioCommand: {
       /** @enum {string} */
@@ -1986,10 +2405,15 @@ export interface components {
        * @default 0
        */
       swing: number;
+      grooveId?: null | string;
     };
     /**
      * @description Moves note starts towards the grid (destructive; `noteIds` left out: every note of the region), with the
-     *     same strength and swing meaning as RegionPlayback.
+     *     same strength and swing meaning as RegionPlayback. Phase 7: with `grooveId` (a groove
+     *     template of the project), towards the template's positions instead (`gridTicks` and `swing` unused),
+     *     and with `grooveVelocity` true the velocities follow its scales by the same strength. On a track whose
+     *     `matchGroove` is on, a quantise without `grooveId` uses the groove track's groove, extracted from its
+     *     first region at the time of the quantise.
      */
     EditCommandQuantizeNotesCommand: {
       /** @enum {string} */
@@ -2008,6 +2432,8 @@ export interface components {
        */
       swing: number;
       noteIds?: null | number[];
+      grooveId?: null | string;
+      grooveVelocity?: null | boolean;
     };
     /** @description Removes the pad on note `note` of a DMD track, with its track. */
     EditCommandRemoveDrumPadCommand: {
@@ -2099,6 +2525,16 @@ export interface components {
       trackId: string;
       alternativeId: string;
     };
+    /**
+     * @description Phase 7: adds an articulation set to the project (one from the library) or replaces the one with its id.
+     *     Articulation ids 1…254 and unique; switches and outputs name articulations of the set, with values in their
+     *     ranges (ArticulationOutputKind).
+     */
+    EditCommandSetArticulationSetCommand: {
+      /** @enum {string} */
+      type: 'setArticulationSet';
+      set: components['schemas']['ArticulationSet'];
+    };
     /** @description Replaces one automation lane's points (an empty list removes the lane); the master's when no track. */
     EditCommandSetAutomationCommand: {
       /** @enum {string} */
@@ -2140,6 +2576,16 @@ export interface components {
       folderId: string;
       segments: components['schemas']['CompSegment'][];
     };
+    /**
+     * @description Phase 7, the Event List: changes controller events of a region (tick, channel, number, value; checked as
+     *     `addControls` checks them).
+     */
+    EditCommandSetControlsCommand: {
+      /** @enum {string} */
+      type: 'setControls';
+      regionId: string;
+      changes: components['schemas']['ControlEventChange'][];
+    };
     EditCommandSetCycleCommand: {
       /** @enum {string} */
       type: 'setCycle';
@@ -2173,6 +2619,24 @@ export interface components {
       tempo: null | components['schemas']['FileTempo'];
     };
     /**
+     * @description Phase 7, the Audio File Editor: points a file at another version of itself: `path` (relative to the
+     *     project, the `&lt;name&gt;.vN.wav` an `audioEdit` job wrote) as `version`, with its frame count
+     *     and rate when an operation changed them. The job applies it when it finishes (with the region shifts a length
+     *     change needs, in the same undo step); undo applies it back. Clients do not send it.
+     */
+    EditCommandSetFileVersionCommand: {
+      /** @enum {string} */
+      type: 'setFileVersion';
+      fileId: string;
+      /** Format: int32 */
+      version: number;
+      path: string;
+      /** Format: int64 */
+      frames?: null | number;
+      /** Format: int32 */
+      sampleRate?: null | number;
+    };
+    /**
      * @description Replaces an audio region's flex markers: file frames inside the region, their ticks increasing with them and
      *     inside the region. Needs the track's flex on.
      */
@@ -2181,6 +2645,21 @@ export interface components {
       type: 'setFlexMarkers';
       regionId: string;
       markers: components['schemas']['FlexMarker'][];
+    };
+    /**
+     * @description Phase 7: adds a groove template to the project (one from the library) or replaces the one with its id (a
+     *     rename); `points` must hold lengthTicks ÷ stepTicks points.
+     */
+    EditCommandSetGrooveCommand: {
+      /** @enum {string} */
+      type: 'setGroove';
+      groove: components['schemas']['GrooveTemplate'];
+    };
+    /** @description Phase 7: makes a track (with regions: MIDI or audio) the groove track, or none when null. */
+    EditCommandSetGrooveTrackCommand: {
+      /** @enum {string} */
+      type: 'setGrooveTrack';
+      trackId?: null | string;
     };
     /** @description Creates or changes mixer group 1…32. */
     EditCommandSetGroupCommand: {
@@ -2230,6 +2709,12 @@ export interface components {
       type: 'setKeys';
       events: components['schemas']['KeyEvent'][];
     };
+    /** @description Phase 7: adds a Step Editor lane set to the project or replaces the one with its id. */
+    EditCommandSetLaneSetCommand: {
+      /** @enum {string} */
+      type: 'setLaneSet';
+      set: components['schemas']['LaneSet'];
+    };
     /** @description Sets the Live Loops grid's launch quantise, or shows or hides it. */
     EditCommandSetLiveLoopsCommand: {
       /** @enum {string} */
@@ -2248,6 +2733,13 @@ export interface components {
       lengthTicks?: null | number;
       color?: null | string;
       text?: null | string;
+    };
+    /** @description Phase 7: a track's "match groove track": its quantise follows the groove track. */
+    EditCommandSetMatchGrooveCommand: {
+      /** @enum {string} */
+      type: 'setMatchGroove';
+      trackId: string;
+      matchGroove: boolean;
     };
     EditCommandSetMetronomeCommand: {
       /** @enum {string} */
@@ -2269,6 +2761,10 @@ export interface components {
       type: 'setMidiRecording';
       merge: boolean;
     };
+    /**
+     * @description Changes a MIDI region's name, mute or playback parameters. `grooveId` (Phase 7) makes its playback quantise
+     *     follow a groove template of the project; an empty string returns it to the grid.
+     */
     EditCommandSetMidiRegionCommand: {
       /** @enum {string} */
       type: 'setMidiRegion';
@@ -2285,6 +2781,7 @@ export interface components {
       /** Format: double */
       swing?: null | number;
       muted?: null | boolean;
+      grooveId?: null | string;
     };
     EditCommandSetMixerSettingsCommand: {
       /** @enum {string} */
@@ -2403,6 +2900,18 @@ export interface components {
       name?: null | string;
       /** Format: int32 */
       index?: null | number;
+    };
+    /**
+     * @description Phase 7, Scripter: sets the script of MIDI FX slot `slotId` (an `anode.scripter` slot) of a track.
+     *     The host compiles it and reports its parameters (`Insert.runtimeParameters`); a script that fails to
+     *     compile is bypassed with a `pluginProblem`, and the slot keeps the source.
+     */
+    EditCommandSetScriptCommand: {
+      /** @enum {string} */
+      type: 'setScript';
+      trackId: string;
+      slotId: string;
+      source: string;
     };
     /** @description Renames, recolours or resizes a section (from its end); it must not come to overlap another. */
     EditCommandSetSectionCommand: {
@@ -2591,6 +3100,42 @@ export interface components {
       atTick: number;
     };
     /**
+     * @description Phase 7, step input: adds a step of notes (one per pitch, a chord when several) at the step position. Clients
+     *     (and MIDI step input) send only `pitches`, and `velocity` to override the state's; the server fills
+     *     every left-out property from the step input state (StepInputState) before it applies the command
+     *     (a new region on `trackId` when `regionId` is left out there too), then advances the position unless
+     *     chord mode is on. `positionTick` is a project tick; `lengthTicks` the step's length; `channel`
+     *     1 unless given.
+     */
+    EditCommandStepNotesCommand: {
+      /** @enum {string} */
+      type: 'stepNotes';
+      pitches: number[];
+      /** Format: int32 */
+      velocity?: null | number;
+      regionId?: null | string;
+      trackId?: null | string;
+      /** Format: int64 */
+      positionTick?: null | number;
+      /** Format: int64 */
+      lengthTicks?: null | number;
+      /** Format: int32 */
+      channel?: null | number;
+    };
+    /**
+     * @description Phase 7, step input: a tie lengthens the last step's notes (`noteIds`; the server fills them in) by one step
+     *     (`lengthTicks`; filled in from the state), and advances the position. A rest is not an edit:
+     *     `POST /project/step-input/rest`.
+     */
+    EditCommandStepTieCommand: {
+      /** @enum {string} */
+      type: 'stepTie';
+      regionId?: null | string;
+      noteIds?: null | number[];
+      /** Format: int64 */
+      lengthTicks?: null | number;
+    };
+    /**
      * @description Strip Silence: splits each audio region into one region per stretch above `thresholdDb` (RMS), each widened
      *     by `preAttackMs` before and `postReleaseMs` after; the silence between them is removed. As in Logic,
      *     `minTimeMs` is the shortest silence that splits: stretches separated by less stay in one region.
@@ -2619,6 +3164,21 @@ export interface components {
        * @default 50
        */
       postReleaseMs: number;
+    };
+    /**
+     * @description Phase 7, MIDI Transform: applies `set` (mode `operateOnly` or `selectAndOperate`;
+     *     `selectOnly` is the editor's own, and refused) to the events of MIDI regions `regionIds`: when
+     *     `noteIds` or `controlIds` is given, to those events only (the editor's selection), else to every
+     *     event of the regions. Positions are project ticks while it runs, so position conditions and crescendos span
+     *     the regions. One undo step, through `TransformEngine.Apply`.
+     */
+    EditCommandTransformCommand: {
+      /** @enum {string} */
+      type: 'transform';
+      regionIds: string[];
+      set: components['schemas']['TransformSet'];
+      noteIds?: null | number[];
+      controlIds?: null | number[];
     };
     /** @description Plays a frozen track live again (its freeze file stays in the project's audio). */
     EditCommandUnfreezeTrackCommand: {
@@ -2717,6 +3277,34 @@ export interface components {
       /** Format: double */
       y: number;
     };
+    /**
+     * @description One grid step of a groove template: where its onset lands (`tick`, from the template's start) and how its
+     *     velocity scales (1: unchanged; the strongest onset of the template is 1).
+     */
+    GroovePoint: {
+      /** Format: int64 */
+      tick: number;
+      /** Format: double */
+      velocityScale: number;
+    };
+    /**
+     * @description A groove template (docs/08-phase-7.md, "Grooves"): one point per grid step of `stepTicks` over
+     *     `lengthTicks` (1–4 bars), so `points` holds lengthTicks ÷ stepTicks points in step order, point n
+     *     being step n's onset (near n × stepTicks). Made from a MIDI region's notes or an audio region's transients: the
+     *     strongest onset per grid step (a step without one keeps its grid position at scale 1). Quantising to it moves a
+     *     note to the template position of its grid step (the template repeating every `lengthTicks` from the
+     *     project start), by the quantise's strength. Ids start with `grv_`; templates live in the project
+     *     (`Project.grooves`) and in the user library (`/library/grooves`).
+     */
+    GrooveTemplate: {
+      id: string;
+      name: string;
+      /** Format: int64 */
+      lengthTicks: number;
+      /** Format: int64 */
+      stepTicks: number;
+      points: components['schemas']['GroovePoint'][];
+    };
     /** @description What a mixer group links among its members (Logic's group settings). */
     GroupProperties: {
       volume: boolean;
@@ -2745,6 +3333,12 @@ export interface components {
      *     the project's `Plugin States` folder. A MIDI FX slot (`ChannelStrip.midiEffects`) has the same shape,
      *     never a sidechain. Phase 6: `file` is the file the effect loads (an impulse response for
      *     `anode.space`; `loadInsertFile`), relative to the project when it is inside it (null: none).
+     *     Phase 7 (docs/08-phase-7.md): `runtimeParameters` is the parameter list of a slot whose plugin defines its
+     *     parameters at run time (Scripter's `PluginParameters`; the host reports it after each compile, and the
+     *     server stores it here): `parameters` holds their values, and they automate
+     *     (`midiEffect:{slotId}:{parameterId}`) and map to Smart Controls as any parameter (null: the plugin's
+     *     catalogue list applies). `source` is a Scripter slot's script (`setScript`; null on every other
+     *     slot).
      */
     Insert: {
       id: string;
@@ -2756,6 +3350,8 @@ export interface components {
       };
       sidechain?: null | string;
       file?: null | string;
+      runtimeParameters?: null | components['schemas']['ParameterInfo'][];
+      source?: null | string;
     };
     /** @enum {unknown} */
     InsertChain: 'inserts' | 'midiEffects' | null;
@@ -2798,7 +3394,7 @@ export interface components {
       files: string[];
     };
     /** @enum {unknown} */
-    JobKind: 'bounce' | 'freeze' | 'analyze' | 'bounceInPlace' | 'process';
+    JobKind: 'bounce' | 'freeze' | 'analyze' | 'bounceInPlace' | 'process' | 'audioEdit';
     /** @enum {unknown} */
     JobState: 'queued' | 'running' | 'done' | 'failed' | 'cancelled';
     /** @description Key bindings by command id (`transport.play`); each binding like `Space` or `Meta+Shift+Z`. */
@@ -2817,6 +3413,34 @@ export interface components {
     };
     /** @enum {unknown} */
     KeyMode: 'major' | 'minor';
+    /**
+     * @description A Step Editor lane: its kind, its controller or key (`number`: for `controlChange`,
+     *     `polyPressure` and `note`; null otherwise), its name, and the grid the pencil and line tools draw on
+     *     (`resolutionTicks` &gt; 0).
+     */
+    Lane: {
+      kind: components['schemas']['LaneKind'];
+      /** Format: int32 */
+      number?: null | number;
+      name: string;
+      /** Format: int64 */
+      resolutionTicks: number;
+    };
+    /**
+     * @description What a Step Editor lane shows and draws.
+     * @enum {unknown}
+     */
+    LaneKind: 'velocity' | 'controlChange' | 'pitchBend' | 'channelPressure' | 'polyPressure' | 'program' | 'note';
+    /**
+     * @description A saved set of Step Editor lanes (Logic's lane sets), in the project (`Project.laneSets`; ids
+     *     `lns_`). A project without any shows the default set: Velocity, Modulation (CC 1), Pitch Bend, Channel
+     *     Pressure and Program, each at a 1/16 (240 ticks); the first `setLaneSet` stores the set it edits.
+     */
+    LaneSet: {
+      id: string;
+      name: string;
+      lanes: components['schemas']['Lane'][];
+    };
     /** @enum {unknown} */
     LaunchQuantize: 'off' | 'sixteenth' | 'eighth' | 'quarter' | 'half' | 'bar' | 'twoBars' | 'fourBars' | null;
     /** @description Launches Live Loops cells, or a scene (its cells; tracks with no cell in it stop), each at its quantise boundary. */
@@ -2902,6 +3526,32 @@ export interface components {
      * @enum {unknown}
      */
     LoopScale: 'major' | 'minor' | 'neither' | 'both';
+    /**
+     * @description Loop search over frames `startFrame`…`endFrame` of a file's current version: the `count` best
+     *     loops (1…20; left out: 5) at least `minFrames` long (left out: 10 ms).
+     */
+    LoopSearchRequest: {
+      /** Format: int64 */
+      startFrame: number;
+      /** Format: int64 */
+      endFrame: number;
+      /** Format: int32 */
+      count?: null | number;
+      /** Format: int64 */
+      minFrames?: null | number;
+    };
+    /**
+     * @description A loop found by loop search: frames `startFrame`…`endFrame` (exclusive), and how seamlessly it
+     *     repeats (`score` 0…1, 1 best). Results come best first.
+     */
+    LoopSearchResult: {
+      /** Format: int64 */
+      startFrame: number;
+      /** Format: int64 */
+      endFrame: number;
+      /** Format: double */
+      score: number;
+    };
     /** @description A marker: a named position, with an optional length, colour and text (Logic's Marker List). */
     Marker: {
       id: string;
@@ -2997,7 +3647,7 @@ export interface components {
       /** Format: int64 */
       tick: number;
     };
-    /** @description A note to add; positions relative to the region's start. */
+    /** @description A note to add; positions relative to the region's start; `articulationId` left out: 0 (none). */
     NewNote: {
       /** Format: int32 */
       pitch: number;
@@ -3009,13 +3659,19 @@ export interface components {
       startTick: number;
       /** Format: int64 */
       lengthTicks: number;
+      /** Format: int32 */
+      articulationId?: null | number;
     };
     /**
      * @default off
      * @enum {unknown}
      */
     NormalizeMode: 'off' | 'peak' | 'loudness';
-    /** @description A note. `id` is unique in the project; `channel` is 1…16. */
+    /**
+     * @description A note. `id` is unique in the project; `channel` is 1…16. `articulationId` (Phase 7) is its
+     *     articulation in its track's articulation set (1…254; 0: none): the articulation's outputs play just before the
+     *     note, at its tick, on its channel (a channel output changes the note's channel instead).
+     */
     Note: {
       /** Format: int64 */
       id: number;
@@ -3029,8 +3685,10 @@ export interface components {
       startTick: number;
       /** Format: int64 */
       lengthTicks: number;
+      /** Format: int32 */
+      articulationId: number;
     };
-    /** @description Changes to one note; left-out properties stay. */
+    /** @description Changes to one note; left-out properties stay. `articulationId` 0 clears its articulation. */
     NoteChange: {
       /** Format: int64 */
       id: number;
@@ -3044,6 +3702,8 @@ export interface components {
       startTick?: null | number;
       /** Format: int64 */
       lengthTicks?: null | number;
+      /** Format: int32 */
+      articulationId?: null | number;
     };
     OpenProjectRequest: {
       path: string;
@@ -3238,6 +3898,18 @@ export interface components {
       hasSidechain: boolean;
       hasEditor: boolean;
     };
+    /**
+     * @description Plays frames `startFrame`…`endFrame` of a file's current version through the preview channel
+     *     (`/project/files/{fileId}/preview`), looping when `loop`; `POST /files/preview` with a null path
+     *     stops it.
+     */
+    PreviewRangeRequest: {
+      /** Format: int64 */
+      startFrame: number;
+      /** Format: int64 */
+      endFrame: number;
+      loop?: null | boolean;
+    };
     /** @description Plays a file through the engine's preview channel (null stops it). */
     PreviewRequest: {
       path?: null | string;
@@ -3277,7 +3949,9 @@ export interface components {
      * @description The open project (docs/01-implementation-plan.md §5). Musical positions are ticks at 960 PPQ; audio offsets,
      *     lengths and fades are frames at the project's `sampleRate`. `revision` grows with every edit and is
      *     the ETag; `dirty` says whether it has unsaved edits. Phase 6 (docs/07-phase-6.md): `patternRegions`
-     *     are the Step Sequencer's regions; `liveLoops` is the Live Loops grid.
+     *     are the Step Sequencer's regions; `liveLoops` is the Live Loops grid. Phase 7 (docs/08-phase-7.md):
+     *     `grooves` are the project's groove templates, `articulationSets` its articulation sets and
+     *     `laneSets` its Step Editor lane sets.
      */
     Project: {
       id: string;
@@ -3302,6 +3976,9 @@ export interface components {
       automation: components['schemas']['AutomationLane'][];
       patternRegions: components['schemas']['PatternRegion'][];
       liveLoops: components['schemas']['LiveLoopsGrid'];
+      grooves: components['schemas']['GrooveTemplate'][];
+      articulationSets: components['schemas']['ArticulationSet'][];
+      laneSets: components['schemas']['LaneSet'][];
     };
     /** @description A saved alternative of the open project (Logic's project alternatives); one is current. */
     ProjectAlternative: {
@@ -3331,7 +4008,8 @@ export interface components {
      *     `tempoEvents` and `signatures`, which are the global tempo and signature tracks).
      *     `endTick` is the project end marker. `mergeMidiRecording`: a MIDI recording over an
      *     existing MIDI region adds its notes to that region instead of making a new one. `smartTempo` and
-     *     `varispeed` (Phase 5): the project tempo mode and Varispeed.
+     *     `varispeed` (Phase 5): the project tempo mode and Varispeed. `grooveTrackId` (Phase 7) is the groove
+     *     track (null: none): tracks whose `matchGroove` is on quantise to the groove of its first region.
      */
     ProjectSettings: {
       /** Format: double */
@@ -3349,6 +4027,7 @@ export interface components {
       mixer: components['schemas']['MixerSettings'];
       smartTempo: components['schemas']['SmartTempoSettings'];
       varispeed: components['schemas']['VarispeedSettings'];
+      grooveTrackId?: null | string;
     };
     /** @description A project in the recent list. */
     ProjectSummary: {
@@ -3380,7 +4059,9 @@ export interface components {
     /**
      * @description How a MIDI region plays, without changing its notes (Logic's Region inspector): transpose in semitones,
      *     velocity offset (−127…127), quantise grid in ticks (0: off) with strength (0…1, 1 = all the way) and swing
-     *     (0…1, 0 = straight; delays every second grid step by up to half a step).
+     *     (0…1, 0 = straight; delays every second grid step by up to half a step). `grooveId` (Phase 7): it
+     *     quantises to that groove template of the project instead of the grid (`quantizeTicks` and `swing`
+     *     then unused; null: the grid).
      */
     RegionPlayback: {
       /** Format: int32 */
@@ -3393,6 +4074,27 @@ export interface components {
       quantizeStrength: number;
       /** Format: double */
       swing: number;
+      grooveId?: null | string;
+    };
+    /**
+     * @description Samples of a file's current version for the Audio File Editor (`/project/files/{fileId}/samples`):
+     *     `frames` frames from `startFrame`, in buckets of `bucket` frames. With `bucket` 1,
+     *     `samples` holds each channel's samples and `min` and `max` are null; with a larger bucket,
+     *     `min` and `max` hold each channel's extremes per bucket (the last bucket may be short) and
+     *     `samples` is null.
+     */
+    SampleRange: {
+      /** Format: int64 */
+      startFrame: number;
+      /** Format: int64 */
+      frames: number;
+      /** Format: int32 */
+      channels: number;
+      /** Format: int32 */
+      bucket: number;
+      samples?: null | number[][];
+      min?: null | number[][];
+      max?: null | number[][];
     };
     SavePatchRequest: {
       trackId: string;
@@ -3493,6 +4195,50 @@ export interface components {
       defaultFollow: components['schemas']['FlexFollow'];
       analyzeImports: boolean;
     };
+    /**
+     * @description Changes the step input state (`PUT /project/step-input`); left-out properties stay. `regionId` empty
+     *     clears it (steps then make a region on `trackId`).
+     */
+    StepInputRequest: {
+      on?: null | boolean;
+      regionId?: null | string;
+      trackId?: null | string;
+      /** Format: int64 */
+      positionTick?: null | number;
+      /** Format: int64 */
+      noteValueTicks?: null | number;
+      dotted?: null | boolean;
+      triplet?: null | boolean;
+      /** Format: int32 */
+      velocity?: null | number;
+      chord?: null | boolean;
+      midiInput?: null | boolean;
+    };
+    /**
+     * @description Step input (docs/08-phase-7.md, "Step input"), held by the server outside the project: it is not saved and not
+     *     undoable. While `on`, steps go into MIDI region `regionId`, or, when it is null, into a new region
+     *     the first step makes on instrument or external MIDI track `trackId` (from the step position, a bar long,
+     *     lengthened as steps pass its end). `positionTick` is the next step's project tick. A step lasts
+     *     `noteValueTicks` (a 1/16 is 240), × 1.5 when `dotted`, × 2/3 when `triplet`, at velocity
+     *     `velocity` (1…127). With `chord` on, steps stack at the position without advancing; turning it off
+     *     advances by one step when notes were stacked. `midiInput`: the host forwards the MIDI keyboard's notes as
+     *     steps (held keys make a chord). Changes reach every client as `stepInput` events on `/ws`.
+     */
+    StepInputState: {
+      on: boolean;
+      regionId?: null | string;
+      trackId?: null | string;
+      /** Format: int64 */
+      positionTick: number;
+      /** Format: int64 */
+      noteValueTicks: number;
+      dotted: boolean;
+      triplet: boolean;
+      /** Format: int32 */
+      velocity: number;
+      chord: boolean;
+      midiInput: boolean;
+    };
     /** @description Stops the cells playing on `trackIds` (left out: every track) at the grid's quantise boundary. */
     StopRequest: {
       trackIds?: null | string[];
@@ -3566,7 +4312,8 @@ export interface components {
      *     Designer stack has a `drumMachine` (null on every other track); `smartControls` are its Smart Controls
      *     (null until set up: the editor shows the 8-knob layout, unnamed, at 0 and unmapped, and the first Smart Controls
      *     command sets them up); `liveLoopsActive`: the track plays its Live Loops cells, not its Tracks-area
-     *     regions.
+     *     regions. Phase 7: `matchGroove`: its quantise follows the groove track (`settings.grooveTrackId`);
+     *     `articulationSetId` is its articulation set (null: none).
      */
     Track: {
       id: string;
@@ -3594,6 +4341,8 @@ export interface components {
       drumMachine: null | components['schemas']['DrumMachine'];
       smartControls: null | components['schemas']['SmartControls'];
       liveLoopsActive: boolean;
+      matchGroove: boolean;
+      articulationSetId?: null | string;
     };
     /**
      * @description An inactive alternative of a track: a snapshot of its regions, MIDI regions and take folders. The track's live
@@ -3615,6 +4364,110 @@ export interface components {
     };
     /** @enum {unknown} */
     TrackKind: 'audio' | 'instrument' | 'midi' | 'stack' | 'aux' | 'vca';
+    /**
+     * @description A condition on one field of an event. A set's conditions are ANDed; a field without a condition (or with
+     *     `all`) matches everything. `b` is used by `inside` and `outside` only.
+     */
+    TransformCondition: {
+      field: components['schemas']['TransformField'];
+      op: components['schemas']['TransformConditionOp'];
+      /** Format: double */
+      a: number;
+      /**
+       * Format: double
+       * @default 0
+       */
+      b: number;
+    };
+    /**
+     * @description How a condition compares its field with `a` (and `b`); `all` matches every event.
+     * @enum {unknown}
+     */
+    TransformConditionOp: 'all' | 'equal' | 'unequal' | 'lessEqual' | 'greaterEqual' | 'inside' | 'outside';
+    /**
+     * @description What a Transform condition tests or an operation changes (Logic's MIDI Transform window; docs/08-phase-7.md).
+     *     For a note: its position (project ticks), length (ticks), channel (1…16), pitch (0…127) and velocity (1…127).
+     *     For a controller event, as in Logic: `pitch` is its first data byte (a control change's controller, a poly
+     *     pressure's key; 0 otherwise) and `velocity` its value (a pitch bend's −8192…8191); its length is 0.
+     *     `status` is the event's MIDI status (the status byte's high nibble as a number: 144 note, 160 poly
+     *     pressure, 176 control change, 192 program change, 208 channel pressure, 224 pitch bend) and
+     *     `subposition` its position within its bar (ticks from the bar line); both are conditions only.
+     * @enum {unknown}
+     */
+    TransformField: 'position' | 'length' | 'channel' | 'pitch' | 'velocity' | 'status' | 'subposition';
+    /**
+     * @description What applying a set does: `selectOnly` selects the matching events in the editor and changes nothing (the
+     *     editor runs it itself; the `transform` command refuses it); `operateOnly` changes the matching events;
+     *     `selectAndOperate` changes them and leaves them selected.
+     * @enum {unknown}
+     */
+    TransformMode: 'selectOnly' | 'operateOnly' | 'selectAndOperate';
+    /**
+     * @description An operation on one field (`position`, `length`, `channel`, `pitch` or `velocity`; not
+     *     `status` or `subposition`). A set's operations apply to each selected event in field order: position,
+     *     length, channel, pitch, velocity, whatever their order in the list; at most one per field.
+     */
+    TransformOperation: {
+      field: components['schemas']['TransformField'];
+      op: components['schemas']['TransformOperationKind'];
+      /**
+       * Format: double
+       * @default 0
+       */
+      a: number;
+      /**
+       * Format: double
+       * @default 0
+       */
+      b: number;
+    };
+    /**
+     * @description What an operation does to its field (value x, result clamped to the field's range and rounded to an integer).
+     *     `thru` leaves it; `fix` sets a; `add`/`subtract` x ± a; `min` max(x, a) (raises to at
+     *     least a); `max` min(x, a) (lowers to at most a); `flip` mirrors x around a (2a − x); `multiply`/
+     *     `divide` x × a, x ÷ a; `scale` x × a + b; `range` clamps to a…b; `random` a uniform value in
+     *     a…b; `plusMinusRandom` x plus a uniform value in −a…a; `quantize` to the nearest multiple of a;
+     *     `exponent` curves x over its range by exponent a (the field's range normalised to 0…1, raised to a, scaled
+     *     back); `crescendo` runs linearly from a at the first selected event's position to b at the last's;
+     *     `relativeCrescendo` adds that ramp to x; `useMap` looks x (0…127) up in the set's `map`.
+     * @enum {unknown}
+     */
+    TransformOperationKind:
+      | 'thru'
+      | 'fix'
+      | 'add'
+      | 'subtract'
+      | 'min'
+      | 'max'
+      | 'flip'
+      | 'multiply'
+      | 'divide'
+      | 'scale'
+      | 'range'
+      | 'random'
+      | 'plusMinusRandom'
+      | 'quantize'
+      | 'exponent'
+      | 'crescendo'
+      | 'relativeCrescendo'
+      | 'useMap';
+    /**
+     * @description A MIDI Transform set: conditions (ANDed), operations, the 128-step `map` that `useMap` reads (128
+     *     values 0…127; null: the identity), the mode, and the seed of its random operations: each event draws from a
+     *     generator seeded by `seed` and the event's id, so applying a set is deterministic. Factory presets are
+     *     sets whose ids start with `factory.` (`factory.humanize`, `factory.quantize` …;
+     *     `TransformEngine.Presets`); the user's are saved in the library (`/library/transform-sets`).
+     */
+    TransformSet: {
+      id: string;
+      name: string;
+      conditions: components['schemas']['TransformCondition'][];
+      operations: components['schemas']['TransformOperation'][];
+      map?: null | number[];
+      mode: components['schemas']['TransformMode'];
+      /** Format: int64 */
+      seed: number;
+    };
     /** @enum {unknown} */
     TransportCommand: 'play' | 'stop' | 'record' | 'locate';
     /** @description Play, stop or record (from `tick` when given), or locate the playhead to `tick`. */
@@ -5871,6 +6724,578 @@ export interface operations {
           [name: string]: unknown;
         };
         content?: never;
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  ListGrooves: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['GrooveTemplate'][];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  SaveGroove: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['GrooveTemplate'];
+      };
+    };
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['GrooveTemplate'];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  DeleteGroove: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description No Content */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  ListTransformSets: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['TransformSet'][];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  SaveTransformSet: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['TransformSet'];
+      };
+    };
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['TransformSet'];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  DeleteTransformSet: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description No Content */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  ListArticulationSets: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ArticulationSet'][];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  SaveArticulationSet: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['ArticulationSet'];
+      };
+    };
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ArticulationSet'];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  DeleteArticulationSet: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description No Content */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  EditFile: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        fileId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['AudioEditOperation'];
+      };
+    };
+    responses: {
+      /** @description Accepted */
+      202: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Job'];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  SearchLoops: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        fileId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['LoopSearchRequest'];
+      };
+    };
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['LoopSearchResult'][];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  GetFileSamples: {
+    parameters: {
+      query: {
+        start: number;
+        frames: number;
+        bucket?: number;
+      };
+      header?: never;
+      path: {
+        fileId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['SampleRange'];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  PreviewFileRange: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        fileId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['PreviewRangeRequest'];
+      };
+    };
+    responses: {
+      /** @description No Content */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  GetStepInput: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['StepInputState'];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  SetStepInput: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['StepInputRequest'];
+      };
+    };
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['StepInputState'];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  StepRest: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['StepInputState'];
+        };
       };
       /** @description Not Found */
       404: {

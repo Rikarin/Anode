@@ -45,11 +45,27 @@ public static partial class Edits {
             null,
             null,
             null,
-            false
+            false,
+            false,
+            null
         );
+        // Pads that leave their Drum Machine Designer are no longer pads (as setTrackParent has it).
+        var ops = new List<DeltaOp>();
+        var leaving = members.Select(static t => t.Id).ToHashSet(StringComparer.Ordinal);
+        foreach (var owner in members.Select(t => PadOwner(state, t.Id)).OfType<Track>().DistinctBy(static t => t.Id)) {
+            ops.Add(
+                new TrackUpserted(
+                    owner with {
+                        DrumMachine = new([..owner.DrumMachine!.Pads.Where(p => !leaving.Contains(p.TrackId))])
+                    },
+                    state.IndexOfTrack(owner.Id)
+                )
+            );
+        }
+
         // Upserts in final order from the first member's place: the stack, then its members right after it.
         var at = state.IndexOfTrack(members[0].Id);
-        var ops = new List<DeltaOp> { new TrackUpserted(stack, at) };
+        ops.Add(new TrackUpserted(stack, at));
         for (var i = 0; i < members.Length; i++) {
             ops.Add(new TrackUpserted(members[i] with { ParentId = stack.Id }, at + 1 + i));
         }

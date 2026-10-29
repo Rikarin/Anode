@@ -155,7 +155,8 @@ describe('buildScene', () => {
     alternativeId: null,
     drumMachine: null,
     smartControls: null,
-    liveLoopsActive: false
+    liveLoopsActive: false,
+    matchGroove: false
   });
 
   it('lays regions on their tracks’ lanes in their colours, with selection, mute and file mapping', () => {

@@ -293,7 +293,8 @@ public static partial class Edits {
                     (int)Math.Clamp(Math.Round(100 + 2 * n.GainDb), 1, 127),
                     1,
                     from,
-                    Math.Max(1, to - from)
+                    Math.Max(1, to - from),
+                    0
                 )
             );
         }

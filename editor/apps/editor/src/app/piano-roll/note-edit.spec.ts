@@ -38,7 +38,8 @@ function region(
       velocity: 100,
       channel: 1,
       startTick: start,
-      lengthTicks: length
+      lengthTicks: length,
+      articulationId: 0
     })),
     controls: [],
     muted: false
@@ -84,7 +85,10 @@ describe('quantise maths', () => {
 
   it('plays a note through its region playback, clamped', () => {
     const r = { startTick: 0, playback: { ...NeutralPlayback, transpose: 100, velocity: -127, quantizeTicks: 240 } };
-    const played = playedNote({ id: 1, pitch: 60, velocity: 100, channel: 1, startTick: 250, lengthTicks: 10 }, r);
+    const played = playedNote(
+      { id: 1, pitch: 60, velocity: 100, channel: 1, startTick: 250, lengthTicks: 10, articulationId: 0 },
+      r
+    );
     expect(played).toMatchObject({ pitch: 127, velocity: 1, startTick: 240 });
   });
 

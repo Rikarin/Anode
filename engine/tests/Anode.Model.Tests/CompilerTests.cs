@@ -10,8 +10,8 @@ public sealed class CompilerTests {
     readonly SequentialIds ids = new();
 
     ProjectState state = ProjectDefaults.NewProject("prj_1", "Song", 48_000)
-        .Apply(new AudioFileUpserted(new("aud_1", "Kick", "Audio Files/Kick.wav", 48_000, 1, 96_000, 24, null)))
-        .Apply(new AudioFileUpserted(new("aud_2", "Snare", "Audio Files/Snare.wav", 48_000, 2, 48_000, 24, null)));
+        .Apply(new AudioFileUpserted(new("aud_1", "Kick", "Audio Files/Kick.wav", 48_000, 1, 96_000, 24, null, 0)))
+        .Apply(new AudioFileUpserted(new("aud_2", "Snare", "Audio Files/Snare.wav", 48_000, 2, 48_000, 24, null, 0)));
 
     [Fact]
     public void Regions_are_placed_in_samples_through_the_tempo() {

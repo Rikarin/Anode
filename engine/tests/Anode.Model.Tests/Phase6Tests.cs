@@ -146,6 +146,23 @@ public sealed class Phase6Tests {
     }
 
     [Fact]
+    public void Pads_stacked_into_a_new_stack_leave_their_drum_machine() {
+        Apply(new CreateDrumMachineCommand(null, "pat_kit", "Beats"));
+        var before = state;
+        var result = Edits.Apply(
+            state,
+            new CreateStackCommand([T("Kick").Id, T("Hat").Id], "Kit"),
+            ids,
+            RandomProjects.Plugins,
+            RandomProjects.Patches
+        );
+        state = result.State;
+        Assert.Equal([38], T("Beats").DrumMachine!.Pads.Select(static p => p.Note));
+        Assert.Equal((T("Kit").Id, T("Kit").Id), (T("Kick").ParentId, T("Hat").ParentId));
+        Assert.Equal(RandomProjects.Json(before), RandomProjects.Json(state.Apply(result.Inverse)));
+    }
+
+    [Fact]
     public void MIDI_FX_slots_take_MIDI_effects_only_and_reach_the_engine_strip() {
         Apply(new AddTrackCommand("Keys", Kind: TrackKind.Instrument), new AddTrackCommand("Vox"));
         var keys = T("Keys").Id;
@@ -220,7 +237,7 @@ public sealed class Phase6Tests {
             0,
             1920,
             ProjectDefaults.Playback,
-            [new(0, 60, 100, 1, 0, 240), new(0, 64, 100, 1, 960, 240)],
+            [new(0, 60, 100, 1, 0, 240, 0), new(0, 64, 100, 1, 960, 240, 0)],
             [],
             false
         );
@@ -307,7 +324,7 @@ public sealed class Phase6Tests {
             0,
             3840,
             ProjectDefaults.Playback,
-            [new(0, 60, 100, 1, 0, 240)],
+            [new(0, 60, 100, 1, 0, 240, 0)],
             [],
             false
         );

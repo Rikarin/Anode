@@ -207,7 +207,7 @@ public static partial class Edits {
         var region = PatternRegionOf(state, c.RegionId);
         var next = state.LastEventId;
         var notes = PatternUnroller.Unroll(region, t => KeyAt(state, t))
-            .Select(n => new Note(++next, n.Pitch, n.Velocity, 1, n.Tick, n.Length))
+            .Select(n => new Note(++next, n.Pitch, n.Velocity, 1, n.Tick, n.Length, 0))
             .ToArray();
         var midi = new MidiRegion(
             ids.Next(IdPrefix.MidiRegion),

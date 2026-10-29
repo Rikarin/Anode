@@ -306,6 +306,9 @@ public sealed unsafe partial class AudioEngine {
                     status = (byte)(0xC0 | channel);
                     data2 = 0;
                     break;
+                case PlaybackEventKind.PolyPressure:
+                    status = (byte)(0xA0 | channel);
+                    break;
                 default:
                     continue;
             }

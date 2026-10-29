@@ -20,7 +20,7 @@ public sealed class FlexEditTests {
     readonly Analysis analysis = new();
 
     ProjectState state = ProjectDefaults.NewProject("prj_1", "Song", Rate)
-        .Apply(new AudioFileUpserted(new("aud_1", "Loop", "Audio Files/Loop.wav", Rate, 1, 16 * Beat, 24, null)));
+        .Apply(new AudioFileUpserted(new("aud_1", "Loop", "Audio Files/Loop.wav", Rate, 1, 16 * Beat, 24, null, 0)));
 
     string Track => state.Tracks[0].Id;
     AudioRegion Region => state.Regions.Values.Single();

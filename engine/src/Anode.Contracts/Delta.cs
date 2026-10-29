@@ -33,6 +33,12 @@ public sealed record ProjectDelta(long Revision, IReadOnlyList<DeltaOp> Ops);
 [JsonDerivedType(typeof(PatternRegionUpserted), "patternRegionUpserted")]
 [JsonDerivedType(typeof(PatternRegionRemoved), "patternRegionRemoved")]
 [JsonDerivedType(typeof(LiveLoopsChanged), "liveLoopsChanged")]
+[JsonDerivedType(typeof(GrooveUpserted), "grooveUpserted")]
+[JsonDerivedType(typeof(GrooveRemoved), "grooveRemoved")]
+[JsonDerivedType(typeof(ArticulationSetUpserted), "articulationSetUpserted")]
+[JsonDerivedType(typeof(ArticulationSetRemoved), "articulationSetRemoved")]
+[JsonDerivedType(typeof(LaneSetUpserted), "laneSetUpserted")]
+[JsonDerivedType(typeof(LaneSetRemoved), "laneSetRemoved")]
 public abstract record DeltaOp;
 
 /// <summary>A track was added or changed; <c>index</c> is its position in the track list.</summary>
@@ -87,3 +93,18 @@ public sealed record PatternRegionRemoved(string Id) : DeltaOp;
 
 /// <summary>The Live Loops grid changed: its scenes, cells, quantise or visibility (the whole grid).</summary>
 public sealed record LiveLoopsChanged(LiveLoopsGrid LiveLoops) : DeltaOp;
+
+/// <summary>Phase 7: a groove template was added or changed.</summary>
+public sealed record GrooveUpserted(GrooveTemplate Groove) : DeltaOp;
+
+public sealed record GrooveRemoved(string Id) : DeltaOp;
+
+/// <summary>Phase 7: an articulation set was added or changed.</summary>
+public sealed record ArticulationSetUpserted(ArticulationSet Set) : DeltaOp;
+
+public sealed record ArticulationSetRemoved(string Id) : DeltaOp;
+
+/// <summary>Phase 7: a Step Editor lane set was added or changed.</summary>
+public sealed record LaneSetUpserted(LaneSet Set) : DeltaOp;
+
+public sealed record LaneSetRemoved(string Id) : DeltaOp;

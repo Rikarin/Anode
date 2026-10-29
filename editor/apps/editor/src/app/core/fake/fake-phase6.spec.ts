@@ -338,7 +338,7 @@ describe('FakeAnodeServer, Phase 6', () => {
         startTick: 960,
         lengthTicks: 7680,
         playback: { transpose: 0, velocity: 0, quantizeTicks: 0, quantizeStrength: 1, swing: 0 },
-        notes: [{ id: 1, pitch: 60, velocity: 100, channel: 1, startTick: 0, lengthTicks: 480 }],
+        notes: [{ id: 1, pitch: 60, velocity: 100, channel: 1, startTick: 0, lengthTicks: 480, articulationId: 0 }],
         controls: [],
         muted: false
       };

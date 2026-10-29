@@ -84,7 +84,7 @@ public sealed class LoopsApiTests : IDisposable {
         File.WriteAllBytes(
             bass,
             StandardMidiFileWriter.Write(
-                [new(1, 36, 100, 1, 0, 480), new(2, 43, 90, 1, 960, 480)],
+                [new(1, 36, 100, 1, 0, 480, 0), new(2, 43, 90, 1, 960, 480, 0)],
                 null,
                 100,
                 "Bass C",

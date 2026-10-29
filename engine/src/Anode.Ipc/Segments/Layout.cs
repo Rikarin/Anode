@@ -35,7 +35,10 @@ public enum PlaybackEventKind : byte {
     ///     <see cref="PlaybackEvent.Value" />; the value ramps linearly to the target's next event (curves are sampled by
     ///     the server). Data1 = 1: a step, no ramp from the previous event.
     /// </summary>
-    Automation = 8
+    Automation = 8,
+
+    /// <summary>Phase 7: polyphonic aftertouch; Data1 = key, Data2 = pressure.</summary>
+    PolyPressure = 9
 }
 
 /// <summary>One compiled event of a track, at an absolute sample position. 24 bytes, no implicit padding.</summary>

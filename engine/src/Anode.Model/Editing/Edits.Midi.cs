@@ -188,13 +188,13 @@ public static partial class Edits {
     static DeltaOp[] SetMidiRegion(ProjectState state, SetMidiRegionCommand c) {
         var region = MidiRegionOf(state, c.RegionId);
         var p = region.Playback;
-        var playback = new RegionPlayback(
-            c.Transpose ?? p.Transpose,
-            c.Velocity ?? p.Velocity,
-            c.QuantizeTicks ?? p.QuantizeTicks,
-            c.QuantizeStrength ?? p.QuantizeStrength,
-            c.Swing ?? p.Swing
-        );
+        var playback = p with {
+            Transpose = c.Transpose ?? p.Transpose,
+            Velocity = c.Velocity ?? p.Velocity,
+            QuantizeTicks = c.QuantizeTicks ?? p.QuantizeTicks,
+            QuantizeStrength = c.QuantizeStrength ?? p.QuantizeStrength,
+            Swing = c.Swing ?? p.Swing
+        };
         if (playback.Transpose is < -MaxTranspose or > MaxTranspose) {
             throw new EditException($"Transpose {playback.Transpose} is outside ±{MaxTranspose} semitones.");
         }
@@ -235,7 +235,15 @@ public static partial class Edits {
                 throw new EditException("A note is null.");
             }
 
-            var note = new Note(++next, n.Pitch, n.Velocity, n.Channel, n.StartTick, n.LengthTicks);
+            var note = new Note(
+                ++next,
+                n.Pitch,
+                n.Velocity,
+                n.Channel,
+                n.StartTick,
+                n.LengthTicks,
+                n.ArticulationId ?? 0
+            );
             CheckNote(region, note, true);
             notes.Add(note);
         }

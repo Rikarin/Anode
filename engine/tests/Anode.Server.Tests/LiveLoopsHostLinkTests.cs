@@ -47,8 +47,8 @@ public sealed class LiveLoopsHostLinkTests {
             "Riff",
             0,
             3840,
-            new(0, 0, 0, 1, 0),
-            [new(0, 60, 100, 1, 0, 480)],
+            new(0, 0, 0, 1, 0, null),
+            [new(0, 60, 100, 1, 0, 480, 0)],
             [],
             false
         );

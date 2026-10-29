@@ -111,6 +111,7 @@ describe('lane rows', () => {
     drumMachine: null,
     smartControls: null,
     liveLoopsActive: false,
+    matchGroove: false,
     ...extra
   });
   const folder = {

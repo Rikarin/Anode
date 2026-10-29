@@ -50,6 +50,12 @@ namespace Anode.Ipc;
 [JsonDerivedType(typeof(StopCellsMessage), "stopCells")]
 [JsonDerivedType(typeof(CellStateMessage), "cellState")]
 [JsonDerivedType(typeof(SetPreviewSyncMessage), "setPreviewSync")]
+[JsonDerivedType(typeof(SlotParametersMessage), "slotParameters")]
+[JsonDerivedType(typeof(ScriptLogMessage), "scriptLog")]
+[JsonDerivedType(typeof(SetScriptMessage), "setScript")]
+[JsonDerivedType(typeof(SetStepInputForwardMessage), "setStepInputForward")]
+[JsonDerivedType(typeof(StepInputMidiMessage), "stepInputMidi")]
+[JsonDerivedType(typeof(PreviewRangeMessage), "previewRange")]
 public abstract record IpcMessage;
 
 /// <summary>
@@ -100,7 +106,9 @@ public sealed record EngineStrip(
 
 /// <summary>
 ///     An insert effect: the plugin, bypass, parameter values by id, saved opaque state (base64), and its sidechain
-///     (another engine track's post-fader signal, or a bus; −1 and 0 for none).
+///     (another engine track's post-fader signal, or a bus; −1 and 0 for none). <paramref name="Source" /> (Phase 7) is
+///     a Scripter MIDI FX slot's script (the contract's <c>Insert.source</c>): the host compiles it on the control
+///     thread when it creates the instance, and answers with a <see cref="SlotParametersMessage" />.
 /// </summary>
 public sealed record EngineInsert(
     string Id,
@@ -110,7 +118,8 @@ public sealed record EngineInsert(
     string? State = null,
     int SidechainTrack = -1,
     int SidechainBus = 0,
-    string? File = null
+    string? File = null,
+    string? Source = null
 );
 
 /// <summary>A send to bus 1…64 at linear gain, with its pan, taken before or after the fader.</summary>
@@ -541,3 +550,48 @@ public sealed record CellStateMessage(int Cell, EngineCellState State, long Samp
 ///     transpose play the file as it is (the default).
 /// </summary>
 public sealed record SetPreviewSyncMessage(double TempoRatio, int TransposeSemitones, bool StartOnBar) : IpcMessage;
+
+/// <summary>
+///     Host → server (Phase 7): MIDI FX slot <paramref name="SlotId" /> of engine track <paramref name="TrackId" /> has
+///     a new parameter list (a script compiled, or failed to and has none), defined at run time. Parameters are
+///     addressed by id; <see cref="SetInsertParameterMessage" /> and automation reach them as any parameter's. Sent
+///     from the control thread after each compile, before the swapped-in script runs.
+/// </summary>
+public sealed record SlotParametersMessage(int TrackId, string SlotId, IReadOnlyList<EngineParameter> Parameters)
+    : IpcMessage;
+
+/// <summary>
+///     Host → server (Phase 7): a Scripter slot's <c>Trace</c> lines (and error lines), from the script's trace ring,
+///     at most 50 lines a second per slot; <paramref name="Dropped" /> counts the lines left out since the previous
+///     message. Budget overruns and errors also go as <see cref="PluginProblemMessage" /> (with the line).
+/// </summary>
+public sealed record ScriptLogMessage(int TrackId, string SlotId, IReadOnlyList<string> Lines, int Dropped)
+    : IpcMessage;
+
+/// <summary>
+///     Server → host (Phase 7): a Scripter slot's new script. The host compiles it on the control thread and swaps it in
+///     between blocks without a gap (the old one runs until then; on a compile error the slot is bypassed and reports
+///     a <see cref="PluginProblemMessage" />), then answers with a <see cref="SlotParametersMessage" />.
+/// </summary>
+public sealed record SetScriptMessage(int TrackId, string SlotId, string Source) : IpcMessage;
+
+/// <summary>
+///     Server → host (Phase 7): while <paramref name="On" />, the host forwards live MIDI note input to the server as
+///     <see cref="StepInputMidiMessage" /> (MIDI step input), and still plays it on the thru track.
+/// </summary>
+public sealed record SetStepInputForwardMessage(bool On) : IpcMessage;
+
+/// <summary>
+///     Host → server (Phase 7): one step from the MIDI keyboard while forwarding is on: the keys that went down since
+///     the previous step, sent when the first of them is released (several keys down before any goes up make a chord),
+///     in the order they went down, with the highest of their velocities.
+/// </summary>
+public sealed record StepInputMidiMessage(IReadOnlyList<int> Pitches, int Velocity) : IpcMessage;
+
+/// <summary>
+///     Server → host (Phase 7): play frames <paramref name="StartFrame" />…<paramref name="EndFrame" /> (exclusive) of
+///     a file through the preview channel at <paramref name="Gain" />, looping the range when <paramref name="Loop" />,
+///     until a <see cref="PreviewFileMessage" /> (a null path stops it) or another preview replaces it.
+/// </summary>
+public sealed record PreviewRangeMessage(string Path, long StartFrame, long EndFrame, bool Loop, float Gain)
+    : IpcMessage;

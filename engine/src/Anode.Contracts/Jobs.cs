@@ -19,7 +19,11 @@ public enum JobKind {
 
     /// <summary>Selection-based processing.</summary>
     [JsonStringEnumMemberName("process")]
-    Process
+    Process,
+
+    /// <summary>Phase 7: an Audio File Editor operation (<c>AudioEditOperation</c>), writing a new version of a file.</summary>
+    [JsonStringEnumMemberName("audioEdit")]
+    AudioEdit
 }
 
 [JsonConverter(typeof(JsonStringEnumConverter<JobState>))]

@@ -41,7 +41,8 @@ function track(id: string, name = id): Track {
     alternativeId: null,
     drumMachine: null,
     smartControls: null,
-    liveLoopsActive: false
+    liveLoopsActive: false,
+    matchGroove: false
   };
 }
 
@@ -114,7 +115,8 @@ function snapshot(revision = 3): Project {
         channels: 1,
         bitDepth: 24,
         frames: 96_000,
-        tempo: null
+        tempo: null,
+        version: 0
       }
     ],
     midiRegions: [],
@@ -125,7 +127,10 @@ function snapshot(revision = 3): Project {
     groups: [],
     automation: [],
     patternRegions: [],
-    liveLoops: { scenes: [], cells: [], quantize: 'bar', shown: false }
+    liveLoops: { scenes: [], cells: [], quantize: 'bar', shown: false },
+    grooves: [],
+    articulationSets: [],
+    laneSets: []
   };
 }
 

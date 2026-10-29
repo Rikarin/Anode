@@ -46,7 +46,7 @@ public static class ProjectDefaults {
         new(CycleRecordMode.TakeFolder, false, false, 0, 4L * BarTicks(signature));
 
     /// <summary>A new region's playback: as recorded, no quantise.</summary>
-    public static RegionPlayback Playback { get; } = new(0, 0, 0, 1, 0);
+    public static RegionPlayback Playback { get; } = new(0, 0, 0, 1, 0, null);
 
     /// <summary>Live MIDI from every device, on every channel.</summary>
     public static MidiInputSettings MidiInput { get; } = new(null, 0);
@@ -70,7 +70,8 @@ public static class ProjectDefaults {
                 Recording(signature),
                 Mixer,
                 SmartTempo,
-                Varispeed
+                Varispeed,
+                null
             ),
             Strip,
             [],

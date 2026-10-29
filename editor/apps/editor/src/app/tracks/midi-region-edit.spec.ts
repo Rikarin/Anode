@@ -84,7 +84,8 @@ describe('MIDI region edits in the Tracks area', () => {
       alternativeId: null,
       drumMachine: null,
       smartControls: null,
-      liveLoopsActive: false
+      liveLoopsActive: false,
+      matchGroove: false
     };
     const midi: MidiRegion = {
       id: 'mid_1',
@@ -93,7 +94,7 @@ describe('MIDI region edits in the Tracks area', () => {
       startTick: 960,
       lengthTicks: 3840,
       playback: { ...NeutralPlayback, transpose: 12 },
-      notes: [{ id: 1, pitch: 60, velocity: 90, channel: 1, startTick: 0, lengthTicks: 480 }],
+      notes: [{ id: 1, pitch: 60, velocity: 90, channel: 1, startTick: 0, lengthTicks: 480, articulationId: 0 }],
       controls: [],
       muted: false
     };

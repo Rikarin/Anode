@@ -165,7 +165,9 @@ public static class StandardMidiFile {
                 case 0x80:
                 case 0x90:
                     if (held.TryGetValue((channel, data1), out var on) && on.TryDequeue(out var start)) {
-                        notes.Add(new(0, data1, start.Velocity, channel, start.Tick, Math.Max(1, tick - start.Tick)));
+                        notes.Add(
+                            new(0, data1, start.Velocity, channel, start.Tick, Math.Max(1, tick - start.Tick), 0)
+                        );
                     }
 
                     break;
@@ -188,7 +190,7 @@ public static class StandardMidiFile {
         public SmfTrack Finish(long end) {
             foreach (var ((channel, pitch), queue) in held) {
                 foreach (var (tick, velocity) in queue) {
-                    notes.Add(new(0, pitch, velocity, channel, tick, Math.Max(1, end - tick)));
+                    notes.Add(new(0, pitch, velocity, channel, tick, Math.Max(1, end - tick), 0));
                 }
             }
 

@@ -332,7 +332,9 @@ public static partial class Edits {
             null,
             null,
             null,
-            false
+            false,
+            false,
+            null
         );
 
     static List<DeltaOp> AssignVca(ProjectState state, AssignVcaCommand c) {

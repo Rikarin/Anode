@@ -8,6 +8,12 @@ namespace Anode.Contracts;
 ///     the project's <c>Plugin States</c> folder. A MIDI FX slot (<c>ChannelStrip.midiEffects</c>) has the same shape,
 ///     never a sidechain. Phase 6: <c>file</c> is the file the effect loads (an impulse response for
 ///     <c>anode.space</c>; <c>loadInsertFile</c>), relative to the project when it is inside it (null: none).
+///     Phase 7 (docs/08-phase-7.md): <c>runtimeParameters</c> is the parameter list of a slot whose plugin defines its
+///     parameters at run time (Scripter's <c>PluginParameters</c>; the host reports it after each compile, and the
+///     server stores it here): <c>parameters</c> holds their values, and they automate
+///     (<c>midiEffect:{slotId}:{parameterId}</c>) and map to Smart Controls as any parameter (null: the plugin's
+///     catalogue list applies). <c>source</c> is a Scripter slot's script (<c>setScript</c>; null on every other
+///     slot).
 /// </summary>
 public sealed record Insert(
     string Id,
@@ -16,7 +22,9 @@ public sealed record Insert(
     bool Bypassed,
     IReadOnlyDictionary<string, double> Parameters,
     string? Sidechain,
-    string? File = null
+    string? File = null,
+    IReadOnlyList<ParameterInfo>? RuntimeParameters = null,
+    string? Source = null
 );
 
 /// <summary>A send from a channel strip to bus 1…64, at <c>levelDb</c>, before or after the fader.</summary>

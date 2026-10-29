@@ -1285,7 +1285,8 @@ public sealed partial class ProjectSession(
             info.Channels,
             info.Frames,
             info.BitDepth,
-            null
+            null,
+            0
         );
     }
 

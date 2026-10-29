@@ -9,7 +9,9 @@ public sealed record ProjectSummary(string Id, string Name, string Path, DateTim
 ///     The open project (docs/01-implementation-plan.md §5). Musical positions are ticks at 960 PPQ; audio offsets,
 ///     lengths and fades are frames at the project's <c>sampleRate</c>. <c>revision</c> grows with every edit and is
 ///     the ETag; <c>dirty</c> says whether it has unsaved edits. Phase 6 (docs/07-phase-6.md): <c>patternRegions</c>
-///     are the Step Sequencer's regions; <c>liveLoops</c> is the Live Loops grid.
+///     are the Step Sequencer's regions; <c>liveLoops</c> is the Live Loops grid. Phase 7 (docs/08-phase-7.md):
+///     <c>grooves</c> are the project's groove templates, <c>articulationSets</c> its articulation sets and
+///     <c>laneSets</c> its Step Editor lane sets.
 /// </summary>
 public sealed record Project(
     string Id,
@@ -31,7 +33,10 @@ public sealed record Project(
     IReadOnlyList<MixerGroup> Groups,
     IReadOnlyList<AutomationLane> Automation,
     IReadOnlyList<PatternRegion> PatternRegions,
-    LiveLoopsGrid LiveLoops
+    LiveLoopsGrid LiveLoops,
+    IReadOnlyList<GrooveTemplate> Grooves,
+    IReadOnlyList<ArticulationSet> ArticulationSets,
+    IReadOnlyList<LaneSet> LaneSets
 );
 
 /// <summary>
@@ -39,7 +44,8 @@ public sealed record Project(
 ///     <c>tempoEvents</c> and <c>signatures</c>, which are the global tempo and signature tracks).
 ///     <c>endTick</c> is the project end marker. <c>mergeMidiRecording</c>: a MIDI recording over an
 ///     existing MIDI region adds its notes to that region instead of making a new one. <c>smartTempo</c> and
-///     <c>varispeed</c> (Phase 5): the project tempo mode and Varispeed.
+///     <c>varispeed</c> (Phase 5): the project tempo mode and Varispeed. <c>grooveTrackId</c> (Phase 7) is the groove
+///     track (null: none): tracks whose <c>matchGroove</c> is on quantise to the groove of its first region.
 /// </summary>
 public sealed record ProjectSettings(
     double Tempo,
@@ -54,7 +60,8 @@ public sealed record ProjectSettings(
     RecordingSettings Recording,
     MixerSettings Mixer,
     SmartTempoSettings SmartTempo,
-    VarispeedSettings Varispeed
+    VarispeedSettings Varispeed,
+    string? GrooveTrackId
 );
 
 public sealed record TimeSignature(int Numerator, int Denominator);
@@ -102,7 +109,8 @@ public enum TrackKind {
 ///     Designer stack has a <c>drumMachine</c> (null on every other track); <c>smartControls</c> are its Smart Controls
 ///     (null until set up: the editor shows the 8-knob layout, unnamed, at 0 and unmapped, and the first Smart Controls
 ///     command sets them up); <c>liveLoopsActive</c>: the track plays its Live Loops cells, not its Tracks-area
-///     regions.
+///     regions. Phase 7: <c>matchGroove</c>: its quantise follows the groove track (<c>settings.grooveTrackId</c>);
+///     <c>articulationSetId</c> is its articulation set (null: none).
 /// </summary>
 public sealed record Track(
     string Id,
@@ -128,7 +136,9 @@ public sealed record Track(
     string? AlternativeId,
     DrumMachine? DrumMachine,
     SmartControls? SmartControls,
-    bool LiveLoopsActive
+    bool LiveLoopsActive,
+    bool MatchGroove,
+    string? ArticulationSetId
 );
 
 /// <summary>The device input: 1-based first channel (0: none); a stereo input takes that channel and the next.</summary>
@@ -195,7 +205,9 @@ public sealed record AudioRegion(
 
 /// <summary>
 ///     An audio file of the project; <c>path</c> is relative to the project folder. <c>tempo</c> is its File Tempo
-///     (Smart Tempo), null until analysed.
+///     (Smart Tempo), null until analysed. <c>version</c> (Phase 7) counts the Audio File Editor's operations on it: 0
+///     is the file as imported or recorded; operation N wrote <c>path</c> as <c>&lt;name&gt;.vN.wav</c> beside it, and
+///     undo points <c>path</c> and <c>version</c> back at the previous one.
 /// </summary>
 public sealed record AudioFile(
     string Id,
@@ -205,7 +217,8 @@ public sealed record AudioFile(
     int Channels,
     long Frames,
     int BitDepth,
-    FileTempo? Tempo
+    FileTempo? Tempo,
+    int Version
 );
 
 public sealed record CreateProjectRequest(string Name, string? Directory, int? SampleRate);

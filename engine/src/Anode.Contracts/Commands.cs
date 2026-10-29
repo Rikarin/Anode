@@ -119,6 +119,22 @@ namespace Anode.Contracts;
 [JsonDerivedType(typeof(SetLiveLoopsCommand), "setLiveLoops")]
 [JsonDerivedType(typeof(SetTrackActivationCommand), "setTrackActivation")]
 [JsonDerivedType(typeof(LoadInsertFileCommand), "loadInsertFile")]
+[JsonDerivedType(typeof(SetControlsCommand), "setControls")]
+[JsonDerivedType(typeof(TransformCommand), "transform")]
+[JsonDerivedType(typeof(MakeGrooveCommand), "makeGroove")]
+[JsonDerivedType(typeof(SetGrooveCommand), "setGroove")]
+[JsonDerivedType(typeof(DeleteGrooveCommand), "deleteGroove")]
+[JsonDerivedType(typeof(SetGrooveTrackCommand), "setGrooveTrack")]
+[JsonDerivedType(typeof(SetMatchGrooveCommand), "setMatchGroove")]
+[JsonDerivedType(typeof(SetArticulationSetCommand), "setArticulationSet")]
+[JsonDerivedType(typeof(DeleteArticulationSetCommand), "deleteArticulationSet")]
+[JsonDerivedType(typeof(AssignArticulationSetCommand), "assignArticulationSet")]
+[JsonDerivedType(typeof(SetLaneSetCommand), "setLaneSet")]
+[JsonDerivedType(typeof(DeleteLaneSetCommand), "deleteLaneSet")]
+[JsonDerivedType(typeof(StepNotesCommand), "stepNotes")]
+[JsonDerivedType(typeof(StepTieCommand), "stepTie")]
+[JsonDerivedType(typeof(SetFileVersionCommand), "setFileVersion")]
+[JsonDerivedType(typeof(SetScriptCommand), "setScript")]
 public abstract record EditCommand;
 
 /// <summary>
@@ -240,6 +256,10 @@ public sealed record AddMidiRegionCommand(string TrackId, long StartTick, long L
 /// </summary>
 public sealed record ResizeMidiRegionCommand(string RegionId, long StartTick, long LengthTicks) : EditCommand;
 
+/// <summary>
+///     Changes a MIDI region's name, mute or playback parameters. <c>grooveId</c> (Phase 7) makes its playback quantise
+///     follow a groove template of the project; an empty string returns it to the grid.
+/// </summary>
 public sealed record SetMidiRegionCommand(
     string RegionId,
     string? Name = null,
@@ -248,7 +268,8 @@ public sealed record SetMidiRegionCommand(
     int? QuantizeTicks = null,
     double? QuantizeStrength = null,
     double? Swing = null,
-    bool? Muted = null
+    bool? Muted = null,
+    string? GrooveId = null
 ) : EditCommand;
 
 public sealed record AddNotesCommand(string RegionId, IReadOnlyList<NewNote> Notes) : EditCommand;
@@ -259,16 +280,23 @@ public sealed record DeleteNotesCommand(string RegionId, IReadOnlyList<long> Not
 
 /// <summary>
 ///     Moves note starts towards the grid (destructive; <c>noteIds</c> left out: every note of the region), with the
-///     same strength and swing meaning as <see cref="RegionPlayback" />.
+///     same strength and swing meaning as <see cref="RegionPlayback" />. Phase 7: with <c>grooveId</c> (a groove
+///     template of the project), towards the template's positions instead (<c>gridTicks</c> and <c>swing</c> unused),
+///     and with <c>grooveVelocity</c> true the velocities follow its scales by the same strength. On a track whose
+///     <c>matchGroove</c> is on, a quantise without <c>grooveId</c> uses the groove track's groove, extracted from its
+///     first region at the time of the quantise.
 /// </summary>
 public sealed record QuantizeNotesCommand(
     string RegionId,
     int GridTicks,
     double Strength = 1,
     double Swing = 0,
-    IReadOnlyList<long>? NoteIds = null
+    IReadOnlyList<long>? NoteIds = null,
+    string? GrooveId = null,
+    bool? GrooveVelocity = null
 ) : EditCommand;
 
+/// <summary>Adds controller events (Phase 7: of every <see cref="ControlKind" />, poly pressure included).</summary>
 public sealed record AddControlsCommand(string RegionId, IReadOnlyList<NewControlEvent> Events) : EditCommand;
 
 public sealed record DeleteControlsCommand(string RegionId, IReadOnlyList<long> EventIds) : EditCommand;
@@ -526,13 +554,15 @@ public sealed record SetFlexMarkersCommand(string RegionId, IReadOnlyList<FlexMa
 /// <summary>
 ///     Quantises audio regions: flex markers on their transients (analysed now if need be) move toward the grid of
 ///     <c>gridTicks</c> by <c>strength</c> (0…1), with <c>swing</c> (0…1) delaying every second grid step. Turns flex
-///     on for their tracks when it is off.
+///     on for their tracks when it is off. Phase 7: <c>grooveId</c> and a matching groove track as for
+///     <see cref="QuantizeNotesCommand" /> (audio has no velocities, so no <c>grooveVelocity</c>).
 /// </summary>
 public sealed record QuantizeAudioCommand(
     IReadOnlyList<string> RegionIds,
     long GridTicks,
     double Strength = 1,
-    double Swing = 0
+    double Swing = 0,
+    string? GrooveId = null
 ) : EditCommand;
 
 /// <summary>
@@ -760,3 +790,118 @@ public sealed record LoadInsertFileCommand(string InsertId, string Path, string?
 
 /// <summary>Track activation: the tracks play their Live Loops cells (on) or their Tracks-area regions (off).</summary>
 public sealed record SetTrackActivationCommand(IReadOnlyList<string> TrackIds, bool LiveLoopsActive) : EditCommand;
+
+/// <summary>
+///     Phase 7, the Event List: changes controller events of a region (tick, channel, number, value; checked as
+///     <c>addControls</c> checks them).
+/// </summary>
+public sealed record SetControlsCommand(string RegionId, IReadOnlyList<ControlEventChange> Changes) : EditCommand;
+
+/// <summary>
+///     Phase 7, MIDI Transform: applies <c>set</c> (mode <c>operateOnly</c> or <c>selectAndOperate</c>;
+///     <c>selectOnly</c> is the editor's own, and refused) to the events of MIDI regions <c>regionIds</c>: when
+///     <c>noteIds</c> or <c>controlIds</c> is given, to those events only (the editor's selection), else to every
+///     event of the regions. Positions are project ticks while it runs, so position conditions and crescendos span
+///     the regions. One undo step, through <c>TransformEngine.Apply</c>.
+/// </summary>
+public sealed record TransformCommand(
+    IReadOnlyList<string> RegionIds,
+    TransformSet Set,
+    IReadOnlyList<long>? NoteIds = null,
+    IReadOnlyList<long>? ControlIds = null
+) : EditCommand;
+
+/// <summary>
+///     Phase 7: Make Groove Template: adds to the project's grooves a template made from a MIDI region (its notes) or an
+///     audio region (its file's transients), over its first <c>lengthBars</c> bars (1…4; left out: 1), with grid
+///     steps of <c>stepTicks</c> (left out: a 1/16, 240), named <c>name</c> (left out: the region's).
+/// </summary>
+public sealed record MakeGrooveCommand(
+    string RegionId,
+    string? Name = null,
+    int? LengthBars = null,
+    long? StepTicks = null)
+    : EditCommand;
+
+/// <summary>
+///     Phase 7: adds a groove template to the project (one from the library) or replaces the one with its id (a
+///     rename); <c>points</c> must hold lengthTicks ÷ stepTicks points.
+/// </summary>
+public sealed record SetGrooveCommand(GrooveTemplate Groove) : EditCommand;
+
+/// <summary>Phase 7: removes a groove template; regions whose playback quantise used it return to the grid.</summary>
+public sealed record DeleteGrooveCommand(string GrooveId) : EditCommand;
+
+/// <summary>Phase 7: makes a track (with regions: MIDI or audio) the groove track, or none when null.</summary>
+public sealed record SetGrooveTrackCommand(string? TrackId) : EditCommand;
+
+/// <summary>Phase 7: a track's "match groove track": its quantise follows the groove track.</summary>
+public sealed record SetMatchGrooveCommand(string TrackId, bool MatchGroove) : EditCommand;
+
+/// <summary>
+///     Phase 7: adds an articulation set to the project (one from the library) or replaces the one with its id.
+///     Articulation ids 1…254 and unique; switches and outputs name articulations of the set, with values in their
+///     ranges (<see cref="ArticulationOutputKind" />).
+/// </summary>
+public sealed record SetArticulationSetCommand(ArticulationSet Set) : EditCommand;
+
+/// <summary>Phase 7: removes an articulation set; tracks that used it have none (their notes keep their ids).</summary>
+public sealed record DeleteArticulationSetCommand(string SetId) : EditCommand;
+
+/// <summary>Phase 7: gives an instrument or external MIDI track an articulation set of the project (null: none).</summary>
+public sealed record AssignArticulationSetCommand(string TrackId, string? SetId) : EditCommand;
+
+/// <summary>Phase 7: adds a Step Editor lane set to the project or replaces the one with its id.</summary>
+public sealed record SetLaneSetCommand(LaneSet Set) : EditCommand;
+
+public sealed record DeleteLaneSetCommand(string SetId) : EditCommand;
+
+/// <summary>
+///     Phase 7, step input: adds a step of notes (one per pitch, a chord when several) at the step position. Clients
+///     (and MIDI step input) send only <c>pitches</c>, and <c>velocity</c> to override the state's; the server fills
+///     every left-out property from the step input state (<see cref="StepInputState" />) before it applies the command
+///     (a new region on <c>trackId</c> when <c>regionId</c> is left out there too), then advances the position unless
+///     chord mode is on. <c>positionTick</c> is a project tick; <c>lengthTicks</c> the step's length; <c>channel</c>
+///     1 unless given.
+/// </summary>
+public sealed record StepNotesCommand(
+    IReadOnlyList<int> Pitches,
+    int? Velocity = null,
+    string? RegionId = null,
+    string? TrackId = null,
+    long? PositionTick = null,
+    long? LengthTicks = null,
+    int? Channel = null
+) : EditCommand;
+
+/// <summary>
+///     Phase 7, step input: a tie lengthens the last step's notes (<c>noteIds</c>; the server fills them in) by one step
+///     (<c>lengthTicks</c>; filled in from the state), and advances the position. A rest is not an edit:
+///     <c>POST /project/step-input/rest</c>.
+/// </summary>
+public sealed record StepTieCommand(
+    string? RegionId = null,
+    IReadOnlyList<long>? NoteIds = null,
+    long? LengthTicks = null
+) : EditCommand;
+
+/// <summary>
+///     Phase 7, the Audio File Editor: points a file at another version of itself: <c>path</c> (relative to the
+///     project, the <c>&lt;name&gt;.vN.wav</c> an <c>audioEdit</c> job wrote) as <c>version</c>, with its frame count
+///     and rate when an operation changed them. The job applies it when it finishes (with the region shifts a length
+///     change needs, in the same undo step); undo applies it back. Clients do not send it.
+/// </summary>
+public sealed record SetFileVersionCommand(
+    string FileId,
+    int Version,
+    string Path,
+    long? Frames = null,
+    int? SampleRate = null
+) : EditCommand;
+
+/// <summary>
+///     Phase 7, Scripter: sets the script of MIDI FX slot <c>slotId</c> (an <c>anode.scripter</c> slot) of a track.
+///     The host compiles it and reports its parameters (<c>Insert.runtimeParameters</c>); a script that fails to
+///     compile is bypassed with a <c>pluginProblem</c>, and the slot keeps the source.
+/// </summary>
+public sealed record SetScriptCommand(string TrackId, string SlotId, string Source) : EditCommand;

@@ -141,6 +141,34 @@ export type LaunchRequest = Schemas['LaunchRequest'];
 export type StopRequest = Schemas['StopRequest'];
 export type LiveRecordRequest = Schemas['LiveRecordRequest'];
 
+export type ControlEventChange = Schemas['ControlEventChange'];
+export type TransformField = Schemas['TransformField'];
+export type TransformConditionOp = Schemas['TransformConditionOp'];
+export type TransformCondition = Schemas['TransformCondition'];
+export type TransformOperationKind = Schemas['TransformOperationKind'];
+export type TransformOperation = Schemas['TransformOperation'];
+export type TransformMode = Schemas['TransformMode'];
+export type TransformSet = Schemas['TransformSet'];
+export type GroovePoint = Schemas['GroovePoint'];
+export type GrooveTemplate = Schemas['GrooveTemplate'];
+export type Articulation = Schemas['Articulation'];
+export type ArticulationSwitchKind = Schemas['ArticulationSwitchKind'];
+export type ArticulationSwitch = Schemas['ArticulationSwitch'];
+export type ArticulationOutputKind = Schemas['ArticulationOutputKind'];
+export type ArticulationOutput = Schemas['ArticulationOutput'];
+export type ArticulationSet = Schemas['ArticulationSet'];
+export type LaneKind = Schemas['LaneKind'];
+export type Lane = Schemas['Lane'];
+export type LaneSet = Schemas['LaneSet'];
+export type StepInputState = Schemas['StepInputState'];
+export type StepInputRequest = Schemas['StepInputRequest'];
+export type AudioEditKind = Schemas['AudioEditKind'];
+export type AudioEditOperation = Schemas['AudioEditOperation'];
+export type LoopSearchRequest = Schemas['LoopSearchRequest'];
+export type LoopSearchResult = Schemas['LoopSearchResult'];
+export type SampleRange = Schemas['SampleRange'];
+export type PreviewRangeRequest = Schemas['PreviewRangeRequest'];
+
 /** A Live Loops cell's state in the launcher (engine/src/Anode.Contracts/LiveLoops.cs; only on `/ws`). */
 export type CellState = 'queued' | 'playing' | 'stopping' | 'stopped';
 
@@ -183,7 +211,10 @@ export interface MidiActivity {
  * every edit, undo, redo or finished recording; `transport` and `meters` stream while the engine runs; `midiActivity`
  * streams live MIDI; `pluginsChanged` and `midiDevicesChanged` ask for a refetch; `job` reports job progress (bounce, freeze, analyze, bounce in place, process); `pluginProblem` a
  * plugin the engine had to bypass; `analysis` says a file's analysis changed, so a client refetches it; `cell` reports a
- * Live Loops cell's launcher state at a project sample (for queued and stopping, the boundary it waits for).
+ * Live Loops cell's launcher state at a project sample (for queued and stopping, the boundary it waits for). Phase 7:
+ * `scriptLog` carries a Scripter slot's `Trace` lines (at most 50 a second; `dropped` counts the rest); `parameters`
+ * says a MIDI FX slot's run-time parameter list changed (a script compiled); `stepInput` carries the step input state
+ * whenever it changes.
  */
 export type ServerMessage =
   | { type: 'connected'; version: string }
@@ -201,4 +232,7 @@ export type ServerMessage =
   | { type: 'job'; job: Job }
   | { type: 'pluginProblem'; trackId: string | null; insertId: string | null; pluginId: string; message: string }
   | { type: 'analysis'; fileId: string }
-  | { type: 'cell'; cellId: string; state: CellState; sample: number };
+  | { type: 'cell'; cellId: string; state: CellState; sample: number }
+  | { type: 'scriptLog'; trackId: string; slotId: string; lines: string[]; dropped: number }
+  | { type: 'parameters'; trackId: string; slotId: string; parameters: ParameterInfo[] }
+  | { type: 'stepInput'; state: StepInputState };

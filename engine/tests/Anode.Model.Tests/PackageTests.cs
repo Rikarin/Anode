@@ -139,6 +139,49 @@ public sealed class PackageTests : IDisposable {
     }
 
     [Fact]
+    public void A_schema_6_package_without_the_Phase_7_fields_reads_them_at_their_defaults() {
+        var (state, _, _) = RandomProjects.Build(3, 40);
+        Assert.Contains(state.MidiRegions.Values, static m => m.Notes.Count > 0);
+        ProjectPackage.Save(folder, state);
+        var path = Path.Combine(folder, "project.json");
+        var root = JsonNode.Parse(File.ReadAllText(path))!.AsObject();
+        foreach (var file in root["audioFiles"]!.AsArray()) {
+            file!.AsObject().Remove("version");
+        }
+
+        foreach (var cell in root["liveLoops"]!["cells"]!.AsArray()) {
+            RemoveArticulations(cell!["content"]!["midi"]);
+        }
+
+        File.WriteAllText(path, root.ToJsonString());
+        foreach (var file in Directory.EnumerateFiles(Path.Combine(folder, "tracks"))) {
+            var json = JsonNode.Parse(File.ReadAllText(file))!.AsObject();
+            json["track"]!.AsObject().Remove("matchGroove");
+            foreach (var region in json["midiRegions"]!.AsArray()) {
+                RemoveArticulations(region);
+            }
+
+            File.WriteAllText(file, json.ToJsonString());
+        }
+
+        var loaded = ProjectPackage.Load(folder);
+        Assert.Equal(RandomProjects.Json(state), RandomProjects.Json(loaded));
+        Assert.All(loaded.Files.Values, static f => Assert.Equal(0, f.Version));
+        Assert.All(loaded.Tracks, static t => Assert.Equal((false, null), (t.MatchGroove, t.ArticulationSetId)));
+        Assert.All(
+            loaded.MidiRegions.Values.SelectMany(static m => m.Notes),
+            static n => Assert.Equal(0, n.ArticulationId)
+        );
+        Assert.Null(loaded.Settings.GrooveTrackId);
+
+        static void RemoveArticulations(JsonNode? region) {
+            foreach (var note in region?["notes"]?.AsArray() ?? []) {
+                note!.AsObject().Remove("articulationId");
+            }
+        }
+    }
+
+    [Fact]
     public void Phase_6_content_survives_the_package_format() {
         var (state, _, _) = RandomProjects.Build(3, 40);
         Assert.NotEmpty(state.PatternRegions);

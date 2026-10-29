@@ -598,6 +598,14 @@ export class ProjectStore {
       case 'liveLoopsChanged':
         this.liveLoops.set(op.liveLoops);
         break;
+      case 'grooveUpserted':
+      case 'grooveRemoved':
+      case 'articulationSetUpserted':
+      case 'articulationSetRemoved':
+      case 'laneSetUpserted':
+      case 'laneSetRemoved':
+        // Grooves, articulation sets and lane sets: Phase 7, the editor workstream (docs/08-phase-7.md).
+        break;
     }
   }
 

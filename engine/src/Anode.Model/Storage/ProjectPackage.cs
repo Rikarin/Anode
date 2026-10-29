@@ -845,6 +845,7 @@ public static class PackageMigrations {
         }
 
         json[VersionField] = CurrentSchemaVersion;
+        Phase7Fields.Fill(kind, json);
         return json;
     }
 
@@ -1017,6 +1018,43 @@ public static class PackageMigrations {
         }
 
         return json;
+    }
+}
+
+/// <summary>
+///     The Phase 7 fields (docs/08-phase-7.md) at their defaults where a file lacks them, so schema-6 packages read with
+///     the Phase 7 contracts: interim, until workstream B adds schema 7 and its migration from 6 (which replaces this,
+///     with the same defaults). Files are version 0; tracks do not match the groove track and have no articulation set
+///     (null, left out); notes have no articulation; the groove track, regions' grooves, and the project's grooves,
+///     articulation sets and lane sets (not stored yet) are none. Leaves fields that are present alone.
+/// </summary>
+static class Phase7Fields {
+    public static void Fill(string kind, JsonObject json) {
+        if (kind == "project") {
+            foreach (var file in (json["audioFiles"] as JsonArray ?? []).OfType<JsonObject>()) {
+                file["version"] ??= 0;
+            }
+
+            if (json["liveLoops"]?["cells"] is JsonArray cells) {
+                foreach (var cell in cells.OfType<JsonObject>()) {
+                    Notes(cell["content"]?["midi"] as JsonObject);
+                }
+            }
+        } else if (kind == "track") {
+            if (json["track"] is JsonObject track) {
+                track["matchGroove"] ??= false;
+            }
+
+            foreach (var region in (json["midiRegions"] as JsonArray ?? []).OfType<JsonObject>()) {
+                Notes(region);
+            }
+        }
+    }
+
+    static void Notes(JsonObject? region) {
+        foreach (var note in (region?["notes"] as JsonArray ?? []).OfType<JsonObject>()) {
+            note["articulationId"] ??= 0;
+        }
     }
 }
 

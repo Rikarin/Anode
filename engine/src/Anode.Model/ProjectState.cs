@@ -196,7 +196,10 @@ public sealed record ProjectState(
             [..Groups.Values],
             [..Automation.Values],
             [..PatternRegions.Values],
-            LiveLoops
+            LiveLoops,
+            [], // Grooves, articulation sets and lane sets: Phase 7, workstream B (docs/08-phase-7.md).
+            [],
+            []
         );
 
     /// <summary>Applies one delta operation (an edit's primitive step, also what clients apply).</summary>

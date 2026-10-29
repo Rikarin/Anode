@@ -331,7 +331,8 @@ function newTrack(project: Project, kind: 'aux' | 'vca', name: string, inputBus:
     alternativeId: null,
     drumMachine: null,
     smartControls: null,
-    liveLoopsActive: false
+    liveLoopsActive: false,
+    matchGroove: false
   };
 }
 

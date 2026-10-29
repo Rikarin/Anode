@@ -333,7 +333,10 @@ export class FakeAnodeServer implements AnodeApi {
         groups: [],
         automation: [],
         patternRegions: [],
-        liveLoops: { scenes: [], cells: [], quantize: 'bar', shown: false }
+        liveLoops: { scenes: [], cells: [], quantize: 'bar', shown: false },
+        grooves: [],
+        articulationSets: [],
+        laneSets: []
       };
       this.disk.set(path, structuredClone(project));
       this.open(project);
@@ -1396,7 +1399,8 @@ export class FakeAnodeServer implements AnodeApi {
         frames,
         tempo: info.tempo
           ? { bpm: info.tempo, variable: false, beats, downbeats: beats.filter((_, i) => i % 4 === 0) }
-          : null
+          : null,
+        version: 0
       };
       next = { ...next, audioFiles: [...next.audioFiles, file] };
       audio = {
@@ -1435,7 +1439,8 @@ export class FakeAnodeServer implements AnodeApi {
             velocity: n.velocity,
             channel: 1,
             startTick: n.startTick,
-            lengthTicks: n.lengthTicks
+            lengthTicks: n.lengthTicks,
+            articulationId: 0
           }))
         ),
         controls: [],
@@ -1536,7 +1541,8 @@ export class FakeAnodeServer implements AnodeApi {
         channels: 2,
         bitDepth: 24,
         frames: Math.max(1, framesBetween(after, source.startTick, source.endTick) + tail),
-        tempo: null
+        tempo: null,
+        version: 0
       };
       paths.push(`${projectFolder(after)}/${file.path}`);
       after = { ...after, audioFiles: [...after.audioFiles, file] };
@@ -1592,7 +1598,8 @@ export class FakeAnodeServer implements AnodeApi {
         channels: 2,
         bitDepth: 32,
         frames: b - a + (request.includeTail ? after.sampleRate : 0),
-        tempo: null
+        tempo: null,
+        version: 0
       };
       paths.push(`${projectFolder(after)}/${file.path}`);
       after = { ...after, audioFiles: [...after.audioFiles, file] };
@@ -1735,7 +1742,8 @@ export class FakeAnodeServer implements AnodeApi {
         channels: 2,
         bitDepth: request.bitDepth,
         frames,
-        tempo: null
+        tempo: null,
+        version: 0
       }));
       this.commit(project, { ...project, audioFiles: [...project.audioFiles, ...added] }, 'Add Bounce');
     }
@@ -1763,7 +1771,8 @@ export class FakeAnodeServer implements AnodeApi {
       channels: 2,
       bitDepth: 32,
       frames: Math.round(framesBetween(project, 0, last) + 2 * project.sampleRate),
-      tempo: null
+      tempo: null,
+      version: 0
     };
     this.commit(
       project,
@@ -1924,7 +1933,8 @@ export class FakeAnodeServer implements AnodeApi {
         channels: track.input.stereo ? 2 : 1,
         bitDepth: 24,
         frames: total,
-        tempo: null
+        tempo: null,
+        version: 0
       };
       after = { ...after, audioFiles: [...after.audioFiles, file] };
       // Each pass: where it is in the song and in the file, cut to the punch range under autopunch.
@@ -2383,6 +2393,12 @@ export class FakeAnodeServer implements AnodeApi {
       }
     };
 
+    if (usesPhase7Fields(command)) {
+      // Grooves on the quantise commands and setMidiRegion, articulations on notes: Phase 7, the editor workstream
+      // (docs/08-phase-7.md).
+      throw new ApiError(422, `${command.type} with grooves or articulations: not in the fake Server yet.`);
+    }
+
     switch (command.type) {
       case 'addTrack': {
         const count = project.tracks.length;
@@ -2415,6 +2431,7 @@ export class FakeAnodeServer implements AnodeApi {
           drumMachine: null,
           smartControls: null,
           liveLoopsActive: false,
+          matchGroove: false,
           // An external MIDI track sends nowhere until setMidiIo picks a port (as the Server does).
           midiOutput: null
         };
@@ -2836,7 +2853,8 @@ export class FakeAnodeServer implements AnodeApi {
             id: this.nextId++,
             ...n,
             startTick: Math.round(n.startTick),
-            lengthTicks: Math.round(n.lengthTicks)
+            lengthTicks: Math.round(n.lengthTicks),
+            articulationId: n.articulationId ?? 0
           };
         });
         return withMidiRegion({ ...r, notes: sortNotes([...r.notes, ...added]) });
@@ -2860,7 +2878,8 @@ export class FakeAnodeServer implements AnodeApi {
             velocity: c.velocity ?? n.velocity,
             channel: c.channel ?? n.channel,
             startTick: Math.round(c.startTick ?? n.startTick),
-            lengthTicks: Math.round(c.lengthTicks ?? n.lengthTicks)
+            lengthTicks: Math.round(c.lengthTicks ?? n.lengthTicks),
+            articulationId: n.articulationId
           };
           checkNote(next, true);
           return next;
@@ -3121,7 +3140,8 @@ export class FakeAnodeServer implements AnodeApi {
           alternativeId: null,
           drumMachine: null,
           smartControls: null,
-          liveLoopsActive: false
+          liveLoopsActive: false,
+          matchGroove: false
         };
         const ids = new Set(members.map(m => m.id));
         const rest = project.tracks.filter(t => !ids.has(t.id));
@@ -3214,6 +3234,25 @@ export class FakeAnodeServer implements AnodeApi {
       case 'loadInsertFile':
         // The convolution reverb's impulse response.
         return loadInsertFile(project, command, id => this.catalogue.find(p => p.id === id));
+      case 'setControls':
+      case 'transform':
+      case 'makeGroove':
+      case 'setGroove':
+      case 'deleteGroove':
+      case 'setGrooveTrack':
+      case 'setMatchGroove':
+      case 'setArticulationSet':
+      case 'deleteArticulationSet':
+      case 'assignArticulationSet':
+      case 'setLaneSet':
+      case 'deleteLaneSet':
+      case 'stepNotes':
+      case 'stepTie':
+      case 'setFileVersion':
+      case 'setScript':
+        // The Event List, MIDI Transform, grooves, articulations, lane sets, step input, the Audio File Editor and
+        // Scripter: Phase 7, the editor workstream (docs/08-phase-7.md).
+        throw new ApiError(422, `${command.type}: not in the fake Server yet.`);
       default:
         if (isPhase6Command(command)) {
           // Patterns, the Drum Machine Designer, Smart Controls and Live Loops (Phase 6).
@@ -3396,7 +3435,8 @@ export class FakeAnodeServer implements AnodeApi {
       channels: header.channels,
       bitDepth: header.bitDepth,
       frames: header.frames,
-      tempo: null
+      tempo: null,
+      version: 0
     };
     if (project.settings.smartTempo.analyzeImports) {
       file.tempo = this.analysisOf(file).tempo;
@@ -3495,7 +3535,10 @@ export class FakeAnodeServer implements AnodeApi {
       groups: [],
       automation: [],
       patternRegions: [],
-      liveLoops: { scenes: [], cells: [], quantize: 'bar', shown: false }
+      liveLoops: { scenes: [], cells: [], quantize: 'bar', shown: false },
+      grooves: [],
+      articulationSets: [],
+      laneSets: []
     };
     let project = base;
     for (const name of ['Drums', 'Bass', 'Guitar', 'Vocals']) {
@@ -3516,7 +3559,8 @@ export class FakeAnodeServer implements AnodeApi {
         channels,
         bitDepth: 24,
         frames: seconds * 48_000,
-        tempo: null
+        tempo: null,
+        version: 0
       };
       project = { ...project, audioFiles: [...project.audioFiles, file] };
       const track = project.tracks[i];
@@ -3784,6 +3828,23 @@ function readBytes(blob: Blob): Promise<ArrayBuffer> {
   });
 }
 
+/** Whether an existing command uses a Phase 7 field (docs/08-phase-7.md), which the fake Server does not apply yet. */
+function usesPhase7Fields(command: EditCommand): boolean {
+  switch (command.type) {
+    case 'quantizeNotes':
+      return command.grooveId != null || command.grooveVelocity != null;
+    case 'quantizeAudio':
+    case 'setMidiRegion':
+      return command.grooveId != null;
+    case 'addNotes':
+      return command.notes.some(n => n.articulationId != null && n.articulationId !== 0);
+    case 'editNotes':
+      return command.changes.some(c => c.articulationId != null);
+    default:
+      return false;
+  }
+}
+
 function strip(): ChannelStrip {
   return {
     volumeDb: 0,
@@ -3868,7 +3929,7 @@ function inUnit(value: number): boolean {
 }
 
 /** Refuses a note out of the contract's ranges. Positions may be negative (a trimmed start keeps notes in time). */
-function checkNote(note: Omit<Note, 'id'>, existing = false): void {
+function checkNote(note: Omit<Note, 'id' | 'articulationId'>, existing = false): void {
   if (!Number.isInteger(note.pitch) || note.pitch < 0 || note.pitch > 127) {
     throw new ApiError(422, 'A note pitch is 0…127.');
   }

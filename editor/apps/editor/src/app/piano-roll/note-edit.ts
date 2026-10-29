@@ -168,7 +168,8 @@ function noteOf(note: PlacedNote, relative: number): Note {
     velocity: note.velocity,
     channel: note.channel,
     startTick: relative,
-    lengthTicks: note.length
+    lengthTicks: note.length,
+    articulationId: 0
   };
 }
 

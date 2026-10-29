@@ -205,7 +205,7 @@ public sealed class Content(bool t1) {
         var notes = new List<Note>();
         for (var i = 0; i < 16; i++) {
             var pitch = 36 + tonic + steps[i / 4 % steps.Length];
-            notes.Add(new(i + 1, pitch, i % 4 == 0 ? 110 : 85, 1, i * 480L, 400));
+            notes.Add(new(i + 1, pitch, i % 4 == 0 ? 110 : 85, 1, i * 480L, 400, 0));
         }
 
         return [..notes];
@@ -217,7 +217,7 @@ public sealed class Content(bool t1) {
         var id = 0;
         for (var bar = 0; bar < chords.Length; bar++) {
             foreach (var interval in chords[bar]) {
-                notes.Add(new(++id, 60 + tonic + interval, 90, 1, bar * 3840L, 3600));
+                notes.Add(new(++id, 60 + tonic + interval, 90, 1, bar * 3840L, 3600, 0));
             }
         }
 

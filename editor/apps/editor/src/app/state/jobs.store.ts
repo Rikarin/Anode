@@ -17,7 +17,8 @@ const JobNames: Record<JobKind, string> = {
   freeze: 'Freeze',
   analyze: 'Analysis',
   bounceInPlace: 'Bounce in place',
-  process: 'Processing'
+  process: 'Processing',
+  audioEdit: 'Audio file edit'
 };
 
 /** A file's name from its absolute path. */

@@ -20,6 +20,9 @@ namespace Anode.Contracts;
 [JsonDerivedType(typeof(PluginProblemEvent), "pluginProblem")]
 [JsonDerivedType(typeof(AnalysisEvent), "analysis")]
 [JsonDerivedType(typeof(CellEvent), "cell")]
+[JsonDerivedType(typeof(ScriptLogEvent), "scriptLog")]
+[JsonDerivedType(typeof(SlotParametersEvent), "parameters")]
+[JsonDerivedType(typeof(StepInputEvent), "stepInput")]
 public abstract record RealtimeEvent;
 
 /// <summary>The socket is open; the client fetches the state it needs now.</summary>
@@ -92,3 +95,20 @@ public sealed record AnalysisEvent(string FileId) : RealtimeEvent;
 ///     boundary it waits for).
 /// </summary>
 public sealed record CellEvent(string CellId, CellState State, long Sample) : RealtimeEvent;
+
+/// <summary>
+///     Phase 7: a Scripter slot's <c>Trace</c> output (and its errors), in order, at most 50 lines a second per slot;
+///     <c>dropped</c> counts the lines left out since the previous event.
+/// </summary>
+public sealed record ScriptLogEvent(string TrackId, string SlotId, IReadOnlyList<string> Lines, int Dropped)
+    : RealtimeEvent;
+
+/// <summary>
+///     Phase 7: a MIDI FX slot's run-time parameter list changed (a script was compiled): the slot's
+///     <c>runtimeParameters</c> are now <c>parameters</c> (the project delta that stores them follows as well).
+/// </summary>
+public sealed record SlotParametersEvent(string TrackId, string SlotId, IReadOnlyList<ParameterInfo> Parameters)
+    : RealtimeEvent;
+
+/// <summary>Phase 7: the step input state changed (a step advanced it, or a client changed it).</summary>
+public sealed record StepInputEvent(StepInputState State) : RealtimeEvent;
