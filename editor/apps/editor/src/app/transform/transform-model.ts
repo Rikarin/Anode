@@ -14,7 +14,7 @@ import type {
   TransformGridColumn,
   TransformGridOption,
   TransformGridRow
-} from '@anode/audio-ui';
+} from '@anode/audio-ui/lazy';
 import type { MeterMap } from '@anode/timeline';
 import { formatLength, formatPosition, parseLength, parsePosition } from '../midi-edit/position';
 import { applyTransform, isFactorySet, StatusOf, type TransformResult } from '../midi-edit/transform';

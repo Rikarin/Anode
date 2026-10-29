@@ -1,5 +1,5 @@
 import { ChangeDetectionStrategy, Component, DestroyRef, computed, inject, signal } from '@angular/core';
-import { AnStepKeyboard } from '@anode/audio-ui';
+import { AnStepKeyboard } from '@anode/audio-ui/lazy';
 import { formatPosition } from '../midi-edit/position';
 import { NoteValues } from '../midi-edit/step-input';
 import { FloatingWindow } from '../shell/floating-window';

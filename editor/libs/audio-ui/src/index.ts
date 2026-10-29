@@ -20,8 +20,6 @@ export * from './lib/pitch-note';
 export * from './lib/reading-meter';
 export * from './lib/send-knob';
 export * from './lib/step-cell';
-export * from './lib/step-keyboard';
 export * from './lib/taper';
-export * from './lib/transform-grid';
 export * from './lib/varispeed-display';
 export * from './lib/xy-pad';

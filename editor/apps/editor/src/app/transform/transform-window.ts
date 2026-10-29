@@ -1,6 +1,6 @@
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import type { MidiRegion, TransformMode, TransformSet } from '@anode/api-client';
-import { AnTransformGrid, type TransformGridChange } from '@anode/audio-ui';
+import { AnTransformGrid, type TransformGridChange } from '@anode/audio-ui/lazy';
 import { XuiButtonImports } from '@xui/button';
 import { XuiInputImports } from '@xui/input';
 import { XuiNumericInputImports } from '@xui/numeric-input';
