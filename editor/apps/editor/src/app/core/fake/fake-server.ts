@@ -132,7 +132,7 @@ import {
   type Phase7Context,
   quantizeGroove,
   quantizeRegionToGroove,
-  runsAway,
+  runawayLine,
   sampleRange,
   scriptParameters,
   scriptTraces,
@@ -3564,13 +3564,14 @@ export class FakeAnodeServer implements AnodeApi {
     const traces = scriptTraces(source);
     setTimeout(() => {
       this.emit({ type: 'parameters', trackId, slotId, parameters });
-      if (runsAway(source)) {
+      const runaway = runawayLine(source);
+      if (runaway !== null) {
         this.emit({
           type: 'pluginProblem',
           trackId,
           insertId: slotId,
           pluginId: 'anode.scripter',
-          message: 'The script ran past its time budget (line 1); it is bypassed until it is edited.'
+          message: `The script ran past its time budget (line ${runaway}); it is bypassed until it is edited.`
         });
       } else if (traces.length > 0) {
         this.emit({ type: 'scriptLog', trackId, slotId, lines: traces, dropped: 0 });

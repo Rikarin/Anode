@@ -8,6 +8,7 @@ import type {
   InsertChain,
   MixerGroup,
   MixerSettings,
+  ParameterInfo,
   Send,
   Track
 } from '@anode/api-client';
@@ -222,10 +223,7 @@ export class MixerStore {
     if (pending !== undefined) {
       return pending;
     }
-    const stored =
-      insert.parameters[parameterId] ??
-      this.plugins.plugin(insert.pluginId)?.parameters.find(p => p.id === parameterId)?.default ??
-      0;
+    const stored = insert.parameters[parameterId] ?? this.parameterInfo(insert, parameterId)?.default ?? 0;
     if (this.held().has(k)) {
       return stored;
     }
@@ -395,7 +393,13 @@ export class MixerStore {
 
   private parameterName(trackId: string | null, insertId: string, parameterId: string): string {
     const insert = this.slot(trackId, insertId);
-    return this.plugins.plugin(insert?.pluginId)?.parameters.find(p => p.id === parameterId)?.name ?? 'Parameter';
+    return (insert && this.parameterInfo(insert, parameterId)?.name) ?? 'Parameter';
+  }
+
+  /** A slot's parameter: from its run-time list (Scripter's, Phase 7) when it has one, else its plugin's. */
+  private parameterInfo(insert: Insert, parameterId: string): ParameterInfo | undefined {
+    const list = insert.runtimeParameters ?? this.plugins.plugin(insert.pluginId)?.parameters;
+    return list?.find(p => p.id === parameterId);
   }
 
   private hold(k: string): void {

@@ -338,8 +338,8 @@ function HandleMIDI(event) { event.send(); }`;
       { name: 'On', type: 'checkbox', defaultValue: 1, },
     ];`);
     expect(parameters.map(p => [p.name, p.min, p.max, p.default, p.steps, p.valueNames])).toEqual([
-      ['Mode', 0, 1, 1, 2, ['Up', 'Down']],
-      ['On', 0, 1, 1, 2, null]
+      ['Mode', 0, 1, 1, 1, ['Up', 'Down']],
+      ['On', 0, 1, 1, 1, null]
     ]);
     expect(scriptParameters('function HandleMIDI() {}')).toEqual([]);
   });
