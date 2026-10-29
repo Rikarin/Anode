@@ -103,7 +103,21 @@ export function runScript(source: string, values: Record<string, number> = {}): 
   }
   class ProgramChange extends Event {}
   class PitchBend extends Event {}
-  const kinds: Record<string, typeof Event> = { Event, NoteOn, NoteOff, ControlChange, ProgramChange, PitchBend };
+  class PolyPressure extends Note {}
+  class ChannelPressure extends Event {}
+  class TargetEvent extends Event {}
+  const kinds: Record<string, typeof Event> = {
+    Event,
+    Note,
+    NoteOn,
+    NoteOff,
+    ControlChange,
+    ProgramChange,
+    PitchBend,
+    PolyPressure,
+    ChannelPressure,
+    TargetEvent
+  };
 
   const Names = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
   const MIDI = {
@@ -132,14 +146,26 @@ export function runScript(source: string, values: Record<string, number> = {}): 
   ProcessMIDI: typeof ProcessMIDI === 'function' ? ProcessMIDI : undefined,
   parameters: typeof PluginParameters !== 'undefined' ? PluginParameters : []
 };`;
-  const names = ['Event', 'NoteOn', 'NoteOff', 'ControlChange', 'ProgramChange', 'PitchBend', 'MIDI'];
+  const names = [
+    'Event',
+    'Note',
+    'NoteOn',
+    'NoteOff',
+    'ControlChange',
+    'ProgramChange',
+    'PitchBend',
+    'PolyPressure',
+    'ChannelPressure',
+    'TargetEvent',
+    'MIDI'
+  ];
   // The script runs as a function of the API's globals (test code only: the engine runs scripts in QuickJS).
   // eslint-disable-next-line @typescript-eslint/no-implied-eval
   const factory = new Function(...names, 'GetParameter', 'GetTimingInfo', 'Trace', body) as (
     ...args: unknown[]
   ) => ScriptCallbacks<Event>;
   // `PluginParameters` is read after the script's top level ran; GetParameter at top level sees none yet.
-  const callbacks = factory(...names.slice(0, 6).map(n => kinds[n]), MIDI, GetParameter, GetTimingInfo, Trace);
+  const callbacks = factory(...names.slice(0, -1).map(n => kinds[n]), MIDI, GetParameter, GetTimingInfo, Trace);
   parameters = callbacks.parameters ?? [];
 
   return {

@@ -483,6 +483,8 @@ export class AudioTrackEditor {
       }
       const level = this.peaks.levelFor(region.length / Math.max(1, width));
       const fileId = region.fileId;
+      // A new version of the file (the Audio File Editor) brings new peaks.
+      this.project.files();
       void this.peaks.get(fileId, level).then(waveform => {
         if (this.region()?.fileId === fileId) {
           this.waveform.set(waveform);

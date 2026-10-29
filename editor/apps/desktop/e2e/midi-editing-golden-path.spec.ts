@@ -798,7 +798,7 @@ test.fixme('edits MIDI and audio at the event and sample level: Event List, Step
     const editor = window.getByTestId('script-editor');
     await expect(editor).toBeVisible();
     await window.getByTestId('script-editor-presets').click();
-    await window.getByTestId('script-preset-transposer').click();
+    await window.getByTestId('script-preset-factory.transposer').click();
     await expect(window.getByTestId('script-editor-parameters')).toBeVisible();
     const script = [
       "var PluginParameters = [{ name: 'Interval', type: 'lin', minValue: 0, maxValue: 24, numberOfSteps: 24, defaultValue: 12 }];",
@@ -816,7 +816,9 @@ test.fixme('edits MIDI and audio at the event and sample level: Event List, Step
     await window.keyboard.press('ControlOrMeta+a');
     await window.keyboard.insertText(script);
     await window.keyboard.press('ControlOrMeta+Enter');
-    await expect(window.getByTestId('script-parameter-p0').getByRole('slider', { name: 'Interval' })).toBeVisible();
+    await expect(
+      window.getByTestId('script-parameter-Interval').getByRole('slider', { name: 'Interval' })
+    ).toBeVisible();
     await expect(window.getByTestId('script-editor-console')).toContainText('Octave echo ready');
     await window.keyboard.press('x');
     await soloOnly(window, 8);
@@ -883,7 +885,7 @@ test.fixme('edits MIDI and audio at the event and sample level: Event List, Step
       .getByRole('button', { name: /: Scripter/ })
       .click();
     await expect(window.getByTestId('script-editor-code')).toContainText('sendAfterMilliseconds(100)');
-    await expect(window.getByTestId('script-parameter-p0')).toBeVisible();
+    await expect(window.getByTestId('script-parameter-Interval')).toBeVisible();
   } finally {
     rmSync(scratch, { recursive: true, force: true });
   }

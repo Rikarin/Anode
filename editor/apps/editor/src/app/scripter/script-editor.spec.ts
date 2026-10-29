@@ -109,7 +109,7 @@ describe('Script Editor', () => {
     expect((query('script-editor-revert') as HTMLButtonElement | null)?.disabled).toBe(true);
 
     // Interval is a knob (a slider named by the parameter).
-    const knob = query('script-parameter-p0');
+    const knob = query('script-parameter-Interval');
     const slider = knob?.querySelector('[role="slider"]');
     expect(slider?.getAttribute('aria-valuenow')).toBe('12');
     expect(knob?.textContent).toContain('Interval');
@@ -117,7 +117,7 @@ describe('Script Editor', () => {
     // They automate and map to Smart Controls as the slot's parameters.
     const track = project.trackList()[0];
     const targets = track ? targetsOf(track, id => TestBed.inject(PluginsStore).plugin(id)) : [];
-    expect(targets.find(t => t.target === `midiEffect:${slot().id}:p0`)).toMatchObject({ name: 'Interval' });
+    expect(targets.find(t => t.target === `midiEffect:${slot().id}:Interval`)).toMatchObject({ name: 'Interval' });
 
     // The trace reached the console.
     expect(query('script-editor-console')?.textContent).toContain('Octave echo ready');
@@ -164,33 +164,33 @@ describe('Script Editor', () => {
     const { slot, editor, query, stable } = await scripterSlot();
     query('script-editor-presets')?.click();
     await stable();
-    const item = document.querySelector<HTMLElement>('[data-testid="script-preset-chord"]');
+    const item = document.querySelector<HTMLElement>('[data-testid="script-preset-factory.chord"]');
     expect(item?.getAttribute('role')).toBe('menuitem');
     expect([...document.querySelectorAll('[data-testid^="script-preset-"]')].length).toBe(FactoryScripts.length);
     item?.click();
     await stable();
-    const chord = FactoryScripts.find(s => s.id === 'chord');
+    const chord = FactoryScripts.find(s => s.id === 'factory.chord');
     expect(editor.source()).toBe(chord?.source);
     expect(slot().source).toBe(chord?.source);
-    expect(query('script-editor-presets')?.textContent).toContain('Simple Chord');
+    expect(query('script-editor-presets')?.textContent).toContain('Chord');
     // Its menu parameter is a choice.
-    expect(query('script-parameter-p0')?.tagName.toLowerCase()).toBe('an-choice');
+    expect(query('script-parameter-Shape')?.tagName.toLowerCase()).toBe('an-choice');
   });
 
   it('shows checkboxes as toggles that set the slot’s parameter', async () => {
     const { slot, editor, query, stable } = await scripterSlot();
-    const arp = FactoryScripts.find(s => s.id === 'arpeggiator');
-    if (arp) {
-      await editor.loadPreset(arp);
+    const chord = FactoryScripts.find(s => s.id === 'factory.chord');
+    if (chord) {
+      await editor.loadPreset(chord);
     }
     await stable();
-    const latch = query('script-parameter-p2');
-    expect(latch?.textContent).toContain('Latch');
+    const latch = query('script-parameter-Spread Velocity');
+    expect(latch?.textContent).toContain('Spread Velocity');
     expect(latch?.getAttribute('aria-pressed')).toBe('false');
     latch?.click();
     await new Promise(resolve => setTimeout(resolve, 100));
     await stable();
-    expect(slot().parameters['p2']).toBe(1);
+    expect(slot().parameters['Spread Velocity']).toBe(1);
     expect(latch?.getAttribute('aria-pressed')).toBe('true');
   });
 

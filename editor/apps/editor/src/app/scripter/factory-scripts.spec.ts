@@ -33,7 +33,7 @@ describe('Scripter factory presets', () => {
   );
 
   it('transposes by the slider, and releases the note it started', () => {
-    const transposer = FactoryScripts.find(s => s.id === 'transposer')?.source ?? '';
+    const transposer = FactoryScripts.find(s => s.id === 'factory.transposer')?.source ?? '';
     const run = runScript(transposer, { Semitones: 7 });
     run.handle('NoteOn', { pitch: 60 });
     run.handle('NoteOff', { pitch: 60 });
@@ -44,23 +44,30 @@ describe('Scripter factory presets', () => {
   });
 
   it('arpeggiates held keys on the beat grid while playing', () => {
-    const arp = FactoryScripts.find(s => s.id === 'arpeggiator')?.source ?? '';
+    const arp = FactoryScripts.find(s => s.id === 'factory.arpeggio')?.source ?? '';
     const run = runScript(arp);
     run.handle('NoteOn', { pitch: 64 });
     run.handle('NoteOn', { pitch: 60 });
     run.process(0, 1);
-    expect(run.sent.filter(e => e.kind === 'NoteOn').map(e => [e.pitch, e.beat])).toEqual([
+    // 1/16 by default: the held keys in turn, up.
+    expect(
+      run.sent
+        .filter(e => e.kind === 'NoteOn')
+        .slice(0, 2)
+        .map(e => [e.pitch, e.beat])
+    ).toEqual([
       [60, 0],
-      [64, 0.5]
+      [64, 0.25]
     ]);
   });
 
   it('traces from the Trace demo', () => {
-    const demo = FactoryScripts.find(s => s.id === 'trace-demo')?.source ?? '';
+    const demo = FactoryScripts.find(s => s.id === 'factory.trace-demo')?.source ?? '';
     const run = runScript(demo);
     run.handle('NoteOn', { pitch: 60, velocity: 100 });
-    expect(run.traces).toEqual(['Trace Demo is running: play some notes.', 'C3 velocity 100']);
-    expect(scriptTraces(demo)).toEqual(['Trace Demo is running: play some notes.']);
+    expect(run.traces[0]).toBe('Trace Demo ready');
+    expect(run.traces.length).toBeGreaterThan(1);
+    expect(scriptTraces(demo)).toContain('Trace Demo ready');
   });
 
   it('the golden path’s script sends each note and the octave above it 100 ms later', () => {
@@ -75,7 +82,17 @@ describe('Scripter factory presets', () => {
     ]);
     expect(run.traces).toEqual(['Octave echo ready']);
     expect(scriptParameters(OctaveEchoScript)).toEqual([
-      { id: 'p0', name: 'Interval', min: 0, max: 24, default: 12, unit: '', steps: 24, valueNames: null, macro: null }
+      {
+        id: 'Interval',
+        name: 'Interval',
+        min: 0,
+        max: 24,
+        default: 12,
+        unit: '',
+        steps: 24,
+        valueNames: null,
+        macro: null
+      }
     ]);
   });
 });

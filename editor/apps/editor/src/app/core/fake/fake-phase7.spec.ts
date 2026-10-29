@@ -319,9 +319,19 @@ function HandleMIDI(event) { event.send(); }`;
     const slot = project(server).tracks[0]?.strip.midiEffects[0];
     expect(slot?.source).toBe(source);
     expect(slot?.runtimeParameters).toEqual([
-      { id: 'p0', name: 'Interval', min: 0, max: 24, default: 12, unit: '', steps: 24, valueNames: null, macro: null }
+      {
+        id: 'Interval',
+        name: 'Interval',
+        min: 0,
+        max: 24,
+        default: 12,
+        unit: '',
+        steps: 24,
+        valueNames: null,
+        macro: null
+      }
     ]);
-    expect(slot?.parameters).toEqual({ p0: 12 });
+    expect(slot?.parameters).toEqual({ Interval: 12 });
     await settle();
     expect(messages).toContainEqual(expect.objectContaining({ type: 'parameters', trackId, slotId }));
     expect(messages).toContainEqual({ type: 'scriptLog', trackId, slotId, lines: ['ready'], dropped: 0 });
@@ -373,5 +383,37 @@ function HandleMIDI(event) { event.send(); }`;
     await server.saveLibraryArticulationSet(set);
     expect(await server.libraryArticulationSets()).toEqual([set]);
     await server.deleteLibraryArticulationSet('ars_lib');
+  });
+
+  it('matches the Server: the groove track never matches itself, library ids are file-safe, trims refuse early', async () => {
+    const { server, trackId } = await withRegion();
+    await run(server, { type: 'setMatchGroove', trackId, matchGroove: true });
+    await run(server, { type: 'setGrooveTrack', trackId });
+    expect(project(server).tracks[0]?.matchGroove).toBe(false);
+    expect(await status(server, { type: 'setMatchGroove', trackId, matchGroove: true })).toBe(422);
+
+    await expect(
+      server.saveLibraryGroove({
+        id: 'grv/../x',
+        name: 'x',
+        lengthTicks: 240,
+        stepTicks: 240,
+        points: [{ tick: 0, velocityScale: 1 }]
+      })
+    ).rejects.toMatchObject({ status: 422 });
+    await expect(
+      server.saveLibraryArticulationSet({ id: 'ars 1', name: 'x', articulations: [], switches: [], outputs: [] })
+    ).rejects.toMatchObject({ status: 422 });
+
+    await run(server, { type: 'addTrack', kind: 'audio', stereo: false });
+    const audio = project(server).tracks[1]?.id ?? '';
+    const file = await server.importAudioFile('/Users/me/Music/trim.wav');
+    await run(server, { type: 'addRegion', trackId: audio, fileId: file.id, startTick: 0, length: 4800 });
+    await expect(server.editFile(file.id, { kind: 'trim', startFrame: 9600, endFrame: 19_200 })).rejects.toMatchObject({
+      status: 422
+    });
+    await server.editFile(file.id, { kind: 'silence', startFrame: 0, endFrame: 100 });
+    server.runJobs();
+    expect((await server.history()).undo[0]?.label).toBe('Silence');
   });
 });

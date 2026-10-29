@@ -284,16 +284,24 @@ export function applyPhase7Command(project: Project, command: EditCommand, ctx: 
       };
     }
     case 'setGrooveTrack': {
+      let next = project;
       if (command.trackId) {
         const track = findTrack(project, command.trackId);
         if (track.kind === 'aux' || track.kind === 'vca') {
           refuse(`${track.name} holds no regions: it cannot be the groove track.`);
         }
+        // The groove track does not match itself (as the Server).
+        next = withTrack(project, { ...track, matchGroove: false });
       }
-      return { ...project, settings: { ...project.settings, grooveTrackId: command.trackId ?? null } };
+      return { ...next, settings: { ...next.settings, grooveTrackId: command.trackId ?? null } };
     }
-    case 'setMatchGroove':
-      return withTrack(project, { ...findTrack(project, command.trackId), matchGroove: command.matchGroove });
+    case 'setMatchGroove': {
+      const track = findTrack(project, command.trackId);
+      if (command.matchGroove && project.settings.grooveTrackId === track.id) {
+        refuse(`${track.name} is the groove track: it cannot match itself.`);
+      }
+      return withTrack(project, { ...track, matchGroove: command.matchGroove });
+    }
     case 'setArticulationSet':
       checkArticulationSet(command.set);
       if (!command.set.id.startsWith('ars_')) {
@@ -518,7 +526,8 @@ function setScript(project: Project, command: Command<'setScript'>, ctx: Phase7C
     refuse(`${slot.name} is not Scripter.`);
   }
   const runtime = ctx.compiled(track.id, slot.id, command.source);
-  const values: Record<string, number> = {};
+  // As the Server: values of earlier compiles' parameters stay (the editor shows only the listed ones).
+  const values: Record<string, number> = { ...slot.parameters };
   for (const p of runtime) {
     values[p.id] = slot.parameters[p.id] ?? p.default;
   }
@@ -560,28 +569,83 @@ export { DefaultStepInput };
 type ScriptParameterType = 'lin' | 'log' | 'menu' | 'checkbox' | 'momentary' | 'text';
 
 /**
- * The parameters a script declares, read from its `PluginParameters` array literal the way the host reports them
- * (`slotParameters`): ids `p0`, `p1`… in order. The fake does not run scripts; a script it cannot read declares none.
+ * A script's `PluginParameters` as its top level builds them (`valueStrings: Object.keys(…)`), run with stand-ins for
+ * Scripter's globals; null when it cannot run. The fake's dev mode and tests only (the host compiles real scripts); a
+ * runaway is never run.
  */
-export function scriptParameters(source: string): ParameterInfo[] {
+function evaluatedParameters(source: string): unknown {
+  if (runsAway(source)) {
+    return null;
+  }
+  const stub = function Stub(this: unknown) {
+    return this;
+  };
+  const midi = new Proxy({}, { get: () => (value: unknown) => value });
+  const noop = () => 0;
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-implied-eval -- the fake's stand-in for the host's compile
+    const run = new Function(
+      'Trace',
+      'GetParameter',
+      'SetParameter',
+      'UpdatePluginParameters',
+      'GetTimingInfo',
+      'MIDI',
+      'Event',
+      'Note',
+      'NoteOn',
+      'NoteOff',
+      'PolyPressure',
+      'ControlChange',
+      'ProgramChange',
+      'ChannelPressure',
+      'PitchBend',
+      'TargetEvent',
+      `${source}\n;return typeof PluginParameters === 'undefined' ? [] : PluginParameters;`
+    ) as (...args: unknown[]) => unknown;
+    return run(noop, noop, noop, noop, () => ({}), midi, stub, stub, stub, stub, stub, stub, stub, stub, stub, stub);
+  } catch {
+    return null;
+  }
+}
+
+/** A `PluginParameters` array literal read as JSON (when the script cannot run). */
+function literalParameters(source: string): unknown {
   const match = /PluginParameters\s*=\s*(\[[\s\S]*?\])\s*;?\s*(?:\n|$)/.exec(source);
   if (!match?.[1]) {
     return [];
   }
-  let parsed: unknown;
   try {
     const json = match[1]
       .replace(/\/\/[^\n]*/g, '')
       .replace(/'([^'\\]*)'/g, '"$1"')
       .replace(/([{,]\s*)([A-Za-z_][A-Za-z0-9_]*)\s*:/g, '$1"$2":')
       .replace(/,\s*([}\]])/g, '$1');
-    parsed = JSON.parse(json);
+    return JSON.parse(json) as unknown;
   } catch {
     return [];
   }
+}
+
+/**
+ * The parameters a script declares, the way the host reports them (`slotParameters`): its `PluginParameters`, each
+ * id its name (a repeated name gains " 2", " 3"…, as anode.scripter names them). A script the fake cannot read
+ * declares none.
+ */
+export function scriptParameters(source: string): ParameterInfo[] {
+  const parsed = evaluatedParameters(source) ?? literalParameters(source);
   if (!Array.isArray(parsed)) {
     return [];
   }
+  const used = new Set<string>();
+  const uniqueName = (name: string) => {
+    let id = name;
+    for (let n = 2; used.has(id); n++) {
+      id = `${name} ${n}`;
+    }
+    used.add(id);
+    return id;
+  };
   return parsed.flatMap((entry: unknown, index) => {
     if (typeof entry !== 'object' || entry === null) {
       return [];
@@ -606,7 +670,7 @@ export function scriptParameters(source: string): ParameterInfo[] {
           : number('numberOfSteps', 0);
     return [
       {
-        id: `p${index}`,
+        id: uniqueName(typeof e['name'] === 'string' ? e['name'] : `Parameter ${index + 1}`),
         name: typeof e['name'] === 'string' ? e['name'] : `Parameter ${index + 1}`,
         min,
         max,
@@ -786,3 +850,24 @@ export function versionPath(file: AudioFile, version: number): string {
   const base = file.path.replace(/(\.v\d+)?\.wave?$/i, '');
   return `${base}.v${version}.wav`;
 }
+
+/** Library ids are file names on the Server: letters, digits, `_` and `-` only. */
+export function checkLibraryId(id: string): void {
+  if (!/^[A-Za-z0-9_-]+$/.test(id)) {
+    throw new ApiError(422, `${id} is not a library id (letters, digits, _ and - only).`);
+  }
+}
+
+/** Logic's names for the Audio File Editor's operations, as undo steps. */
+export const AudioEditNames: Record<AudioEditOperation['kind'], string> = {
+  normalize: 'Normalize',
+  gain: 'Change Gain',
+  fadeIn: 'Fade In',
+  fadeOut: 'Fade Out',
+  reverse: 'Reverse',
+  invert: 'Invert',
+  silence: 'Silence',
+  removeDc: 'Remove DC Offset',
+  trim: 'Trim',
+  convertRate: 'Sample Rate Conversion'
+};

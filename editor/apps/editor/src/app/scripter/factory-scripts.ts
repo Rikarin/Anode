@@ -1,316 +1,343 @@
 /**
- * Scripter's factory presets, in the spirit of Logic's tutorial scripts, written for Anode against the API subset in
- * docs/08-phase-7.md ("Scripter"). They live in the Script Editor's lazy chunk: there is no endpoint for them (the
- * engine's own copies, workstream D's, should match these).
+ * Scripter's factory scripts: workstream D's `ScripterPresets.All` (engine/src/Anode.Dsp/MidiEffects/Scripter/
+ * ScripterPresets.cs), copied with their ids, names and sources, in menu order. There is no endpoint for them, so the
+ * Script Editor's lazy chunk carries this copy; keep it in step with the engine's (a spec checks it when the file is
+ * there).
  */
 export interface FactoryScript {
-  /** A stable id (`script-preset-{id}` is its menu item's test id). */
+  /** The engine's stable id (`factory.…`); `script-preset-{id}` is its menu item's test id. */
   id: string;
   name: string;
+  description: string;
   source: string;
 }
 
 export const FactoryScripts: readonly FactoryScript[] = [
   {
-    id: 'transposer',
+    id: 'factory.transposer',
     name: 'Transposer',
-    source: `// Transposer: moves every note by a number of semitones.
+    description: 'Moves notes by semitones; a note ends where it started, whatever the slider does meanwhile.',
+    source: `// Transposer: moves every note by the Semitones slider.
 var PluginParameters = [
-  { name: 'Semitones', type: 'lin', minValue: -24, maxValue: 24, numberOfSteps: 48, defaultValue: 0 }
+  { name: "Semitones", type: "lin", minValue: -24, maxValue: 24, numberOfSteps: 48, defaultValue: 0 }
 ];
 
-// The pitch each held key was sent as, so its note-off follows it after the slider moves.
-var sounding = {};
+var playing = {}; // incoming pitch (per channel) -> the pitch it was sent as
 
 function HandleMIDI(event) {
+  var key = event.channel * 128 + event.pitch;
   if (event instanceof NoteOn) {
-    var pitch = MIDI.normalizeData(event.pitch + GetParameter('Semitones'));
-    sounding[event.channel * 128 + event.pitch] = pitch;
-    event.pitch = pitch;
-  } else if (event instanceof NoteOff) {
-    var key = event.channel * 128 + event.pitch;
-    if (key in sounding) {
-      event.pitch = sounding[key];
-      delete sounding[key];
-    }
+    event.pitch = MIDI.normalizeData(event.pitch + GetParameter("Semitones"));
+    playing[key] = event.pitch;
+  } else if (event instanceof NoteOff && playing[key] !== undefined) {
+    event.pitch = playing[key];
+    delete playing[key];
+  } else if (event instanceof PolyPressure) {
+    event.pitch = MIDI.normalizeData(event.pitch + GetParameter("Semitones"));
   }
   event.send();
 }
 `
   },
   {
-    id: 'delay-notes',
+    id: 'factory.delay-notes',
     name: 'Delay Notes',
-    source: `// Delay Notes: plays every note (and its release) later by a time in milliseconds.
+    description: 'Delays every event by a time in milliseconds.',
+    source: `// Delay Notes: everything arrives Delay milliseconds late.
 var PluginParameters = [
-  { name: 'Delay', type: 'lin', unit: 'ms', minValue: 0, maxValue: 1000, numberOfSteps: 100, defaultValue: 250 }
+  { name: "Delay", type: "lin", unit: "ms", minValue: 0, maxValue: 1000, numberOfSteps: 1000, defaultValue: 100 }
 ];
 
 function HandleMIDI(event) {
-  if (event instanceof NoteOn || event instanceof NoteOff) {
-    event.sendAfterMilliseconds(GetParameter('Delay'));
-  } else {
-    event.send();
-  }
+  event.sendAfterMilliseconds(GetParameter("Delay"));
 }
 `
   },
   {
-    id: 'chord',
-    name: 'Simple Chord',
-    source: `// Simple Chord: each note becomes a triad, major or minor, built up from it.
+    id: 'factory.chord',
+    name: 'Chord',
+    description: 'Turns each note into a chord of the chosen shape.',
+    source: `// Chord: every note plays the chord built on it.
+var shapes = {
+  "Major": [0, 4, 7], "Minor": [0, 3, 7], "Sus 4": [0, 5, 7], "Major 7": [0, 4, 7, 11],
+  "Minor 7": [0, 3, 7, 10], "Dominant 7": [0, 4, 7, 10], "Power": [0, 7, 12], "Octaves": [0, 12]
+};
+var names = Object.keys(shapes);
 var PluginParameters = [
-  { name: 'Chord', type: 'menu', valueStrings: ['Major', 'Minor', 'Sus4', 'Power'], defaultValue: 0 }
+  { name: "Shape", type: "menu", valueStrings: names, defaultValue: 0 },
+  { name: "Spread Velocity", type: "checkbox", defaultValue: 0 }
 ];
 
-var Intervals = [[0, 4, 7], [0, 3, 7], [0, 5, 7], [0, 7, 12]];
-// The intervals each held key started with, so a menu change cannot leave notes hanging.
-var started = {};
+var sounding = {}; // channel and root -> the pitches sent for it
 
 function HandleMIDI(event) {
+  if (!(event instanceof Note)) { event.send(); return; }
+  var key = event.channel * 128 + event.pitch;
   if (event instanceof NoteOn) {
-    var intervals = Intervals[GetParameter('Chord')];
-    started[event.pitch] = intervals;
-    play(event, intervals, NoteOn);
-  } else if (event instanceof NoteOff) {
-    play(event, started[event.pitch] || [0], NoteOff);
-    delete started[event.pitch];
-  } else {
-    event.send();
-  }
-}
-
-function play(event, intervals, Kind) {
-  for (var i = 0; i < intervals.length; i++) {
-    var note = new Kind(event);
-    note.pitch = MIDI.normalizeData(event.pitch + intervals[i]);
-    note.send();
-  }
-}
-`
-  },
-  {
-    id: 'random-velocity',
-    name: 'Random Velocity',
-    source: `// Random Velocity: varies each note's velocity by up to a range around it.
-var PluginParameters = [
-  { name: 'Range', type: 'lin', minValue: 0, maxValue: 64, numberOfSteps: 64, defaultValue: 20 }
-];
-
-function HandleMIDI(event) {
-  if (event instanceof NoteOn) {
-    var range = GetParameter('Range');
-    var offset = Math.round((Math.random() * 2 - 1) * range);
-    event.velocity = Math.max(1, Math.min(127, event.velocity + offset));
-  }
-  event.send();
-}
-`
-  },
-  {
-    id: 'note-repeater',
-    name: 'Note Repeater',
-    source: `// Note Repeater: echoes each note a number of times, quieter each time.
-var PluginParameters = [
-  { name: 'Repeats', type: 'lin', minValue: 1, maxValue: 8, numberOfSteps: 7, defaultValue: 3 },
-  { name: 'Time', type: 'lin', unit: 'ms', minValue: 20, maxValue: 1000, numberOfSteps: 98, defaultValue: 200 },
-  { name: 'Decay', type: 'lin', unit: '%', minValue: 0, maxValue: 100, numberOfSteps: 100, defaultValue: 30 }
-];
-
-function HandleMIDI(event) {
-  event.send();
-  if (!(event instanceof NoteOn)) {
-    return;
-  }
-  var time = GetParameter('Time');
-  var velocity = event.velocity;
-  for (var i = 1; i <= GetParameter('Repeats'); i++) {
-    velocity = Math.round(velocity * (1 - GetParameter('Decay') / 100));
-    if (velocity < 1) {
-      break;
+    var shape = shapes[names[GetParameter("Shape")]];
+    var sent = [];
+    for (var i = 0; i < shape.length; i++) {
+      var note = new NoteOn(event);
+      note.pitch = event.pitch + shape[i];
+      if (note.pitch > 127) continue;
+      if (GetParameter("Spread Velocity")) note.velocity = Math.max(1, event.velocity - 8 * i);
+      note.send();
+      sent.push(note.pitch);
     }
+    sounding[key] = sent;
+  } else {
+    var pitches = sounding[key] || [event.pitch];
+    delete sounding[key];
+    for (var j = 0; j < pitches.length; j++) {
+      var off = new NoteOff(event);
+      off.pitch = pitches[j];
+      off.send();
+    }
+  }
+}
+`
+  },
+  {
+    id: 'factory.random-velocity',
+    name: 'Random Velocity',
+    description: "Varies each note's velocity at random around the played one.",
+    source: `// Random Velocity: each note-on's velocity moves up to Range either way.
+var PluginParameters = [
+  { name: "Range", type: "lin", minValue: 0, maxValue: 64, numberOfSteps: 64, defaultValue: 16 }
+];
+
+function HandleMIDI(event) {
+  if (event instanceof NoteOn) {
+    var range = GetParameter("Range");
+    var change = Math.round((Math.random() * 2 - 1) * range);
+    event.velocity = Math.min(127, Math.max(1, event.velocity + change));
+  }
+  event.send();
+}
+`
+  },
+  {
+    id: 'factory.note-repeater',
+    name: 'Note Repeater',
+    description: 'Repeats each note in time with the song, each repeat softer than the last.',
+    source: `// Note Repeater: echoes of each note on a beat grid, fading by Decay.
+var NeedsTimingInfo = true;
+var divisions = ["1/4", "1/8", "1/8 T", "1/16"];
+var beats = [1, 0.5, 1 / 3, 0.25];
+var PluginParameters = [
+  { name: "Repeats", type: "lin", minValue: 0, maxValue: 8, numberOfSteps: 8, defaultValue: 3 },
+  { name: "Time", type: "menu", valueStrings: divisions, defaultValue: 1 },
+  { name: "Decay", type: "lin", unit: "%", minValue: 0, maxValue: 100, numberOfSteps: 100, defaultValue: 30 }
+];
+
+function HandleMIDI(event) {
+  event.send();
+  if (!(event instanceof NoteOn)) return;
+  var step = beats[GetParameter("Time")];
+  var velocity = event.velocity;
+  for (var i = 1; i <= GetParameter("Repeats"); i++) {
+    velocity = Math.round(velocity * (1 - GetParameter("Decay") / 100));
+    if (velocity < 1) break;
     var on = new NoteOn(event);
     on.velocity = velocity;
-    on.sendAfterMilliseconds(time * i);
+    on.sendAfterBeats(i * step);
     var off = new NoteOff(event);
-    off.sendAfterMilliseconds(time * i + time / 2);
+    off.sendAfterBeats(i * step + step * 0.9);
   }
 }
 `
   },
   {
-    id: 'guitar-strummer',
+    id: 'factory.guitar-strummer',
     name: 'Guitar Strummer',
-    source: `// Guitar Strummer: spreads the notes of a chord out in time, in the order they are played.
+    description: 'Spreads the notes of a chord played together, like a strum, down or up.',
+    source: `// Guitar Strummer: the notes of a chord that start in the same block are spread Strum ms apart.
 var PluginParameters = [
-  { name: 'Strum', type: 'lin', unit: 'ms', minValue: 0, maxValue: 100, numberOfSteps: 100, defaultValue: 25 }
+  { name: "Strum", type: "lin", unit: "ms", minValue: 0, maxValue: 100, numberOfSteps: 100, defaultValue: 25 },
+  { name: "Direction", type: "menu", valueStrings: ["Down (low first)", "Up (high first)", "Alternate"],
+    defaultValue: 0 }
 ];
 
-// Keys held now, and the delay each was strummed with (its note-off waits as long).
-var held = 0;
-var delays = {};
+var chord = [];
+var delays = {};      // channel and pitch -> the delay its note-on got
+var upNext = false;
 
 function HandleMIDI(event) {
-  if (event instanceof NoteOn) {
-    var delay = held * GetParameter('Strum');
-    delays[event.pitch] = delay;
-    held++;
-    event.sendAfterMilliseconds(delay);
-  } else if (event instanceof NoteOff) {
-    held = Math.max(0, held - 1);
-    event.sendAfterMilliseconds(delays[event.pitch] || 0);
-    delete delays[event.pitch];
-  } else {
-    event.send();
-  }
-}
-
-function Reset() {
-  held = 0;
-  delays = {};
-}
-`
-  },
-  {
-    id: 'drum-humanizer',
-    name: 'Drum Humanizer',
-    source: `// Drum Humanizer: nudges each hit late by a little and varies its velocity, as a drummer would.
-var PluginParameters = [
-  { name: 'Timing', type: 'lin', unit: 'ms', minValue: 0, maxValue: 30, numberOfSteps: 30, defaultValue: 8 },
-  { name: 'Velocity', type: 'lin', minValue: 0, maxValue: 40, numberOfSteps: 40, defaultValue: 12 }
-];
-
-var late = {};
-
-function HandleMIDI(event) {
-  if (event instanceof NoteOn) {
-    var delay = Math.random() * GetParameter('Timing');
-    var spread = GetParameter('Velocity');
-    event.velocity = Math.max(1, Math.min(127, Math.round(event.velocity + (Math.random() * 2 - 1) * spread)));
-    late[event.pitch] = delay;
-    event.sendAfterMilliseconds(delay);
-  } else if (event instanceof NoteOff) {
-    event.sendAfterMilliseconds(late[event.pitch] || 0);
-    delete late[event.pitch];
-  } else {
-    event.send();
-  }
-}
-`
-  },
-  {
-    id: 'cc-smoother',
-    name: 'CC Smoother',
-    source: `// CC Smoother: eases a controller towards each new value instead of jumping to it.
-var PluginParameters = [
-  { name: 'Controller', type: 'lin', minValue: 0, maxValue: 127, numberOfSteps: 127, defaultValue: 1 },
-  { name: 'Smoothing', type: 'lin', unit: '%', minValue: 0, maxValue: 95, numberOfSteps: 95, defaultValue: 60 }
-];
-
-var last = -1;
-
-function HandleMIDI(event) {
-  if (event instanceof ControlChange && event.number === GetParameter('Controller')) {
-    if (last < 0) {
-      last = event.value;
-    }
-    var amount = GetParameter('Smoothing') / 100;
-    last = last + (event.value - last) * (1 - amount);
-    event.value = Math.round(last);
+  if (event instanceof NoteOn) { chord.push(event); return; }
+  if (event instanceof NoteOff) {
+    var key = event.channel * 128 + event.pitch;
+    event.sendAfterMilliseconds(delays[key] || 0);
+    delete delays[key];
+    return;
   }
   event.send();
 }
 
-function Reset() {
-  last = -1;
+function ProcessMIDI() {
+  if (chord.length === 0) return;
+  var direction = GetParameter("Direction");
+  var up = direction === 1 || (direction === 2 && upNext);
+  upNext = !upNext;
+  chord.sort(function (a, b) { return up ? b.pitch - a.pitch : a.pitch - b.pitch; });
+  for (var i = 0; i < chord.length; i++) {
+    var delay = i * GetParameter("Strum");
+    delays[chord[i].channel * 128 + chord[i].pitch] = delay;
+    chord[i].sendAfterMilliseconds(delay);
+  }
+  chord = [];
+}
+
+function Reset() { chord = []; delays = {}; }
+`
+  },
+  {
+    id: 'factory.drum-humaniser',
+    name: 'Drum Humaniser',
+    description: 'Loosens programmed drums: small random delays and velocity changes per hit.',
+    source: `// Drum Humaniser: each hit comes up to Timing ms late and up to Velocity softer or louder.
+var PluginParameters = [
+  { name: "Timing", type: "lin", unit: "ms", minValue: 0, maxValue: 30, numberOfSteps: 300, defaultValue: 8 },
+  { name: "Velocity", type: "lin", minValue: 0, maxValue: 40, numberOfSteps: 40, defaultValue: 10 }
+];
+
+var late = {}; // channel and pitch -> the delay its note-on got, so the note-off keeps the length
+
+function HandleMIDI(event) {
+  var key = event.channel * 128 + event.pitch;
+  if (event instanceof NoteOn) {
+    var delay = Math.random() * GetParameter("Timing");
+    var change = Math.round((Math.random() * 2 - 1) * GetParameter("Velocity"));
+    event.velocity = Math.min(127, Math.max(1, event.velocity + change));
+    late[key] = delay;
+    event.sendAfterMilliseconds(delay);
+  } else if (event instanceof NoteOff) {
+    event.sendAfterMilliseconds(late[key] || 0);
+    delete late[key];
+  } else {
+    event.send();
+  }
 }
 `
   },
   {
-    id: 'arpeggiator',
-    name: 'Simple Arpeggio',
-    source: `// Simple Arpeggio: plays the held keys one after another, in time with the project.
-var NeedsTimingInfo = true;
+    id: 'factory.cc-smoother',
+    name: 'CC Smoother',
+    description: 'Glides one controller from value to value instead of jumping.',
+    source: `// CC Smoother: a jump of the chosen controller becomes a ramp lasting Glide ms.
 var PluginParameters = [
-  { name: 'Rate', type: 'menu', valueStrings: ['1/4', '1/8', '1/16'], defaultValue: 1 },
-  { name: 'Gate', type: 'lin', unit: '%', minValue: 10, maxValue: 100, numberOfSteps: 90, defaultValue: 80 },
-  { name: 'Latch', type: 'checkbox', defaultValue: 0 }
+  { name: "Controller", type: "lin", minValue: 0, maxValue: 127, numberOfSteps: 127, defaultValue: 1 },
+  { name: "Glide", type: "lin", unit: "ms", minValue: 1, maxValue: 500, numberOfSteps: 499, defaultValue: 60 }
 ];
 
-var Divisions = [1, 0.5, 0.25];
+var last = {}; // channel -> the controller's last value
+var STEP_MS = 5;
+
+function HandleMIDI(event) {
+  if (!(event instanceof ControlChange) || event.number !== GetParameter("Controller")) {
+    event.send();
+    return;
+  }
+  var from = last[event.channel];
+  last[event.channel] = event.value;
+  if (from === undefined || from === event.value) { event.send(); return; }
+  var glide = GetParameter("Glide");
+  var steps = Math.max(1, Math.round(glide / STEP_MS));
+  for (var i = 1; i <= steps; i++) {
+    var cc = new ControlChange(event);
+    cc.value = Math.round(from + (event.value - from) * i / steps);
+    cc.sendAfterMilliseconds((i - 1) * glide / steps);
+  }
+}
+
+function Reset() { last = {}; }
+`
+  },
+  {
+    id: 'factory.arpeggio',
+    name: 'Arpeggio',
+    description: "Plays the held notes one at a time on the song's grid, up, down or up and down.",
+    source: `// Arpeggio: the held notes in turn, on the beat grid while the song plays.
+var NeedsTimingInfo = true;
+var rates = [1, 0.5, 0.25, 0.125];
+var PluginParameters = [
+  { name: "Rate", type: "menu", valueStrings: ["1/4", "1/8", "1/16", "1/32"], defaultValue: 2 },
+  { name: "Direction", type: "menu", valueStrings: ["Up", "Down", "Up and Down"], defaultValue: 0 },
+  { name: "Gate", type: "lin", unit: "%", minValue: 10, maxValue: 100, numberOfSteps: 90, defaultValue: 80 }
+];
+
 var held = [];
 var step = 0;
-var nextBeat = -1;
 
 function HandleMIDI(event) {
   if (event instanceof NoteOn) {
-    if (GetParameter('Latch') === 1 && held.length > 0 && step > 0) {
-      held = [];
-    }
-    held.push(event.pitch);
-    held.sort(function (a, b) {
-      return a - b;
-    });
+    held.push(event);
+    held.sort(function (a, b) { return a.pitch - b.pitch; });
   } else if (event instanceof NoteOff) {
-    if (GetParameter('Latch') === 0) {
-      var i = held.indexOf(event.pitch);
-      if (i >= 0) {
-        held.splice(i, 1);
-      }
-    }
+    held = held.filter(function (n) { return n.pitch !== event.pitch || n.channel !== event.channel; });
+    if (held.length === 0) step = 0;
   } else {
     event.send();
   }
+}
+
+function order() {
+  var direction = GetParameter("Direction");
+  if (direction === 1) return held.slice().reverse();
+  if (direction === 2 && held.length > 2) return held.concat(held.slice(1, -1).reverse());
+  return held;
 }
 
 function ProcessMIDI() {
   var info = GetTimingInfo();
-  if (!info.playing || held.length === 0) {
-    nextBeat = -1;
-    return;
-  }
-  var division = Divisions[GetParameter('Rate')];
-  if (nextBeat < 0) {
-    nextBeat = Math.ceil(info.blockStartBeat / division) * division;
-  }
-  while (nextBeat < info.blockEndBeat) {
-    var on = new NoteOn();
-    on.pitch = held[step % held.length];
-    on.velocity = 100;
-    on.sendAtBeat(nextBeat);
-    var off = new NoteOff(on);
-    off.sendAtBeat(nextBeat + (division * GetParameter('Gate')) / 100);
+  if (!info.playing || held.length === 0) return;
+  var rate = rates[GetParameter("Rate")];
+  // Grid points (beat 1 is the song's start) inside this block.
+  var beat = 1 + Math.ceil((info.blockStartBeat - 1) / rate - 1e-9) * rate;
+  for (; beat < info.blockEndBeat; beat += rate) {
+    var notes = order();
+    var source = notes[step % notes.length];
     step++;
-    nextBeat += division;
+    var on = new NoteOn(source);
+    on.sendAtBeat(beat);
+    var off = new NoteOff(source);
+    off.sendAtBeat(beat + rate * GetParameter("Gate") / 100);
   }
 }
 
-function Reset() {
-  held = [];
-  step = 0;
-  nextBeat = -1;
-}
+function Reset() { held = []; step = 0; }
 `
   },
   {
-    id: 'trace-demo',
+    id: 'factory.trace-demo',
     name: 'Trace Demo',
-    source: `// Trace Demo: writes every event, and every parameter change, to the console.
-var PluginParameters = [{ name: 'Show Names', type: 'checkbox', defaultValue: 1 }];
+    description: 'Shows what arrives in the console: each event, and the timing once a second.',
+    source: `// Trace Demo: prints each event and, while the song plays, the timing info about once a second.
+var NeedsTimingInfo = true;
+var PluginParameters = [
+  { name: "Show Events", type: "checkbox", defaultValue: 1 },
+  { name: "Show Timing", type: "checkbox", defaultValue: 1 }
+];
 
-Trace('Trace Demo is running: play some notes.');
+Trace("Trace Demo ready");
+var lastSecond = -1;
 
 function HandleMIDI(event) {
-  if (GetParameter('Show Names') === 1 && (event instanceof NoteOn || event instanceof NoteOff)) {
-    Trace(MIDI.noteName(event.pitch) + ' velocity ' + event.velocity);
-  } else {
-    event.trace();
-  }
+  if (GetParameter("Show Events")) event.trace();
   event.send();
 }
 
+function ProcessMIDI() {
+  var info = GetTimingInfo();
+  if (!info.playing || !GetParameter("Show Timing")) return;
+  var second = Math.floor((info.blockStartBeat - 1) * 60 / info.tempo);
+  if (second === lastSecond) return;
+  lastSecond = second;
+  Trace("beat " + info.blockStartBeat.toFixed(3) + " at " + info.tempo.toFixed(1) + " bpm, " +
+    info.meterNumerator + "/" + info.meterDenominator);
+}
+
 function ParameterChanged(index, value) {
-  Trace('Parameter ' + index + ' is now ' + value);
+  Trace(PluginParameters[index].name + " = " + value);
 }
 `
   }

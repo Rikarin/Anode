@@ -120,9 +120,11 @@ import {
 } from './fake-phase6';
 import {
   applyPhase7Command,
+  AudioEditNames,
   checkArticulationId,
   checkArticulationSet,
   checkGroove,
+  checkLibraryId,
   DefaultStepInput,
   editedChannels,
   fakeSamples,
@@ -1255,6 +1257,7 @@ export class FakeAnodeServer implements AnodeApi {
   saveLibraryGroove(groove: GrooveTemplate): Promise<GrooveTemplate> {
     return this.answer('SaveGroove', () => {
       checkGroove(groove);
+      checkLibraryId(groove.id);
       this.libraryGrooveSet.set(groove.id, structuredClone(groove));
       return structuredClone(groove);
     });
@@ -1282,6 +1285,7 @@ export class FakeAnodeServer implements AnodeApi {
       if (isFactorySet(set.id)) {
         throw new ApiError(422, 'A factory preset cannot be saved over: save a copy under a new id.');
       }
+      checkLibraryId(set.id);
       if (!set.name.trim()) {
         throw new ApiError(422, 'A Transform set needs a name.');
       }
@@ -1315,6 +1319,7 @@ export class FakeAnodeServer implements AnodeApi {
   saveLibraryArticulationSet(set: ArticulationSet): Promise<ArticulationSet> {
     return this.answer('SaveArticulationSet', () => {
       checkArticulationSet(set);
+      checkLibraryId(set.id);
       this.articulationSetLibrary.set(set.id, structuredClone(set));
       return structuredClone(set);
     });
@@ -1340,6 +1345,20 @@ export class FakeAnodeServer implements AnodeApi {
         (operation.startFrame < 0 || operation.endFrame > file.frames || operation.endFrame <= operation.startFrame)
       ) {
         throw new ApiError(422, 'The selection lies inside the file and ends after it starts.');
+      }
+      // Length changes are refused now, before a job runs, when a region would vanish (as the Server).
+      if (operation.kind === 'convertRate') {
+        if (!operation.targetRate || operation.targetRate < 8_000 || operation.targetRate > 384_000) {
+          throw new ApiError(422, 'Sample-rate conversion needs a target rate of 8 kHz…384 kHz.');
+        }
+        shiftRegions(
+          this.require(),
+          file,
+          operation,
+          Math.round((file.frames * operation.targetRate) / file.sampleRate)
+        );
+      } else if (operation.kind === 'trim') {
+        shiftRegions(this.require(), file, operation, operation.endFrame - operation.startFrame);
       }
       const copy = structuredClone(operation);
       return this.startJob('audioEdit', { finish: () => this.finishAudioEdit(fileId, copy) }, 1);
@@ -3646,7 +3665,7 @@ export class FakeAnodeServer implements AnodeApi {
     after = { ...after, regions };
     this.fileVersions.get(file.id)?.set(version, channels);
     this.analyses.delete(file.id);
-    this.commit(before, after, 'Audio File Edit');
+    this.commit(before, after, AudioEditNames[op.kind]);
     return [`${projectFolder(after)}/${path}`];
   }
 

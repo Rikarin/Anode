@@ -292,6 +292,8 @@ export class Timeline {
         ...this.project.takeFolderList().flatMap(folder => folder.takes.map(take => take.fileId))
       ]);
       const level = this.peaks.levelFor(this.project.framesPerTick() / this.view.pixelsPerTick());
+      // A file's new version (the Audio File Editor) brings new peaks.
+      this.project.files();
       if (this.ready()) {
         untracked(() => files.forEach(fileId => this.loadPeaks(fileId, level)));
       }
@@ -377,7 +379,7 @@ export class Timeline {
   }
 
   private loadPeaks(fileId: string, level: number): void {
-    const sent = `${fileId}@${level}`;
+    const sent = `${fileId}@${this.project.files().get(fileId)?.version ?? 0}@${level}`;
     if (this.sentWaveforms.has(sent)) {
       return;
     }
