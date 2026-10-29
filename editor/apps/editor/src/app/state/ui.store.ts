@@ -44,6 +44,11 @@ export class UiStore {
   readonly editorView = signal<EditorView>('pianoRoll');
   /** Phase 7: the MIDI Transform window. */
   readonly transformOpen = signal(false);
+  /**
+   * Phase 7: the Grooves window (Make Groove Template, the project's grooves and the library's), with the region a
+   * template is made from (null: none); null: closed.
+   */
+  readonly grooves = signal<{ regionId: string | null } | null>(null);
   /** Phase 7: the Step Input Keyboard window. */
   readonly stepInputKeyboardOpen = signal(false);
   /** Phase 7: the articulation set the Articulation Set editor shows (`ars_…`), `new` for a new one; null: closed. */

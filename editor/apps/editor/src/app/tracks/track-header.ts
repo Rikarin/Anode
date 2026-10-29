@@ -32,6 +32,7 @@ import {
   matMoreHorizRound,
   matPianoRound,
   matSettingsInputComponentRound,
+  matStarRound,
   matTuneRound
 } from '@ng-icons/material-icons/round';
 import { XuiButtonImports } from '@xui/button';
@@ -88,11 +89,12 @@ import { UiStore } from '../state/ui.store';
       matMoreHorizRound,
       matPianoRound,
       matSettingsInputComponentRound,
+      matStarRound,
       matTuneRound
     })
   ],
   host: {
-    class: 'an-track-header border-hairline flex items-stretch gap-2 border-b pe-2',
+    class: 'an-track-header group border-hairline flex items-stretch gap-2 border-b pe-2',
     role: 'group',
     '[attr.aria-label]': '"Track " + number() + ": " + track().name',
     '[attr.data-track-id]': 'track().id',
@@ -172,6 +174,32 @@ import { UiStore } from '../state/ui.store';
           </span>
         }
         @if (hasRegions()) {
+          @if (grooveTrackId() && !isGrooveTrack()) {
+            <input
+              type="checkbox"
+              class="accent-primary focus-visible:outline-focus size-3 shrink-0 focus-visible:outline-2"
+              data-testid="match-groove"
+              aria-label="Match groove track"
+              xuiTooltip="Quantise to the groove track"
+              [checked]="track().matchGroove"
+              (click)="$event.stopPropagation()"
+              (change)="setMatchGroove($event)"
+            />
+          }
+          <button
+            type="button"
+            class="hover:text-foreground focus-visible:outline-focus grid size-4 shrink-0 place-items-center rounded-[4px] group-hover:opacity-100 focus-visible:opacity-100 focus-visible:outline-2"
+            data-testid="groove-track"
+            aria-label="Groove track"
+            [class.text-lit]="isGrooveTrack()"
+            [class.text-foreground-muted]="!isGrooveTrack()"
+            [class.opacity-0]="!isGrooveTrack()"
+            [attr.aria-pressed]="isGrooveTrack()"
+            [xuiTooltip]="isGrooveTrack() ? 'The groove track: click to clear' : 'Make this the groove track'"
+            (click)="$event.stopPropagation(); toggleGrooveTrack()"
+          >
+            <ng-icon xui name="matStarRound" size="13px" />
+          </button>
           @if (renamingAlternative(); as alt) {
             <input
               #altName
@@ -551,6 +579,26 @@ export class TrackHeader {
       input?.focus();
       input?.select();
     });
+  }
+
+  /** Phase 7: the project's groove track (Logic's star column), and whether this is it. */
+  protected readonly grooveTrackId = computed(() => this.project.settings().grooveTrackId ?? null);
+  protected readonly isGrooveTrack = computed(() => this.grooveTrackId() === this.track().id);
+
+  protected toggleGrooveTrack(): void {
+    const on = !this.isGrooveTrack();
+    void this.project.execute(
+      [{ type: 'setGrooveTrack', trackId: on ? this.track().id : null }],
+      on ? 'Set Groove Track' : 'Clear Groove Track'
+    );
+  }
+
+  protected setMatchGroove(event: Event): void {
+    const matchGroove = (event.target as HTMLInputElement).checked;
+    void this.project.execute(
+      [{ type: 'setMatchGroove', trackId: this.track().id, matchGroove }],
+      matchGroove ? 'Match Groove Track' : 'Do Not Match Groove Track'
+    );
   }
 
   /** Selects the track; ⇧ or ⌘ adds it to the selected tracks (to stack them). */
