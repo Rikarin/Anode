@@ -16,7 +16,7 @@ Anode is **GPL-3.0-or-later**, as Cathode. Third-party code must be GPL-3-compat
 | Stem splitting | Demucs/HTDemucs via ONNX Runtime | MIT (verify weights at use) |
 | Notation | Verovio (WASM) | LGPL-3.0 |
 | Decoding | libFLAC, minimp3, OS AAC/ALAC decoders, FFmpeg (LGPL build) | BSD / CC0 / LGPL |
-| Scripter | QuickJS | MIT |
+| Scripter | QuickJS-ng, pinned `6d46d07` (0.17.0), in `an_script` ([ADR-0009](0009-scripter.md)) | MIT |
 
 **Spatial audio:** no Dolby SDKs or trademarks. Object panning, ADM BWF (ITU-R BS.2076) export and in-house binaural
 rendering from SOFA HRTFs.

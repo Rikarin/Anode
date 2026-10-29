@@ -255,7 +255,13 @@ public sealed partial class EngineController {
         var midiEffects = new List<ChannelMidiEffect>();
         var midiSpecs = trackId == -1 ? [] : strip.MidiEffects ?? [];
         foreach (var spec in midiSpecs) {
-            var slot = KeepMidiEffect(old, spec, claimedMidi) ?? BuildMidiEffect(trackId, spec);
+            var slot = KeepMidiEffect(old, spec, claimedMidi)
+                ?? BuildMidiEffect(
+                    trackId,
+                    spec,
+                    old.MidiEffects.Select(static m => m.Slot)
+                        .FirstOrDefault(s => s.Id == spec.Id && !claimedMidi.Contains(s))
+                );
             claimedMidi.Add(slot);
             midiEffects.Add(new(slot, spec.Bypassed));
         }
@@ -326,10 +332,17 @@ public sealed partial class EngineController {
         }
     }
 
-    /// <summary>The MIDI FX instance of <paramref name="spec" />'s id and plugin, its parameters brought up to date, or null.</summary>
+    /// <summary>
+    ///     The MIDI FX instance of <paramref name="spec" />'s id and plugin, its parameters brought up to date, or null.
+    ///     A script slot keeps its instance while the spec has no source or the same one (Phase 7).
+    /// </summary>
     static MidiEffectSlot? KeepMidiEffect(ChannelConfig old, EngineInsert spec, HashSet<MidiEffectSlot> claimed) {
         var slot = old.MidiEffects.Select(static m => m.Slot)
-            .FirstOrDefault(s => s.Id == spec.Id && s.PluginId == spec.PluginId && !claimed.Contains(s));
+            .FirstOrDefault(s => s.Id == spec.Id
+                && s.PluginId == spec.PluginId
+                && (spec.Source is null || spec.Source == s.Source)
+                && !claimed.Contains(s)
+            );
         if (slot is null) {
             return null;
         }
@@ -347,8 +360,15 @@ public sealed partial class EngineController {
     ///     A new MIDI FX slot: the effect created (a built-in; hosted MIDI effects are not supported), prepared, its
     ///     state loaded and its parameters set. One that cannot be loaded becomes an empty slot that passes MIDI
     ///     through, and is reported.
+    ///     <para>
+    ///         Phase 7: a script (<see cref="IScriptHost" />) compiles <paramref name="spec" />'s source here, on the
+    ///         control thread; one that does not compile is reported (<c>pluginProblem</c>, with its line) and passes
+    ///         MIDI through. When it replaces <paramref name="replacing" /> (the slot's previous instance), it keeps its
+    ///         log and ends the notes that one left sounding. A run-time parameter list is reported
+    ///         (<see cref="SlotParameters" />) before the slot is published.
+    ///     </para>
     /// </summary>
-    MidiEffectSlot BuildMidiEffect(int trackId, EngineInsert spec) {
+    MidiEffectSlot BuildMidiEffect(int trackId, EngineInsert spec, MidiEffectSlot? replacing = null) {
         IMidiEffect? effect = null;
         try {
             effect = Plugins.CreateMidiEffect(spec.PluginId);
@@ -362,9 +382,34 @@ public sealed partial class EngineController {
                 Log?.Invoke($"{spec.PluginId}: the saved state did not load; it starts from its defaults");
             }
 
-            var slot = new MidiEffectSlot(spec.Id, spec.PluginId, effect);
+            ScriptError? error = null;
+            if (spec.Source is not null) {
+                if (effect is IScriptHost script) {
+                    error = script.Compile(spec.Source);
+                } else {
+                    Log?.Invoke($"{spec.PluginId}: not a script; its source is ignored");
+                }
+            }
+
+            var slot = new MidiEffectSlot(spec.Id, spec.PluginId, effect) {
+                Source = spec.Source, Log = replacing?.Log ?? new()
+            };
             foreach (var (id, value) in spec.Parameters) {
                 slot.Initialise(id, value);
+            }
+
+            if (slot.Script is not null && replacing is not null) {
+                slot.Predecessor = replacing;
+            }
+
+            if (error is { } failure) {
+                slot.MarkFailed();
+                ScriptProblem(trackId, slot, failure);
+            }
+
+            if (slot.Runtime is { } runtime) {
+                runtime.TakeParametersChanged(); // read now
+                AnnounceParameters(trackId, slot);
             }
 
             return slot;

@@ -135,6 +135,7 @@ public sealed partial class EngineController : IDisposable {
         Midi.Start();
         StartMaintenance();
         StartCellPump();
+        StartScriptPump();
     }
 
     /// <summary>Where diagnostics go (missing files and the like).</summary>
@@ -508,6 +509,12 @@ public sealed partial class EngineController : IDisposable {
 
     /// <summary>Plays live MIDI (the server's on-screen keyboard) on a track; false for an unknown track.</summary>
     public bool LiveMidi(int trackId, IReadOnlyList<EngineMidiEvent> events) => Midi.Live(trackId, events);
+
+    /// <summary>
+    ///     Phase 7's MIDI step input (<c>setStepInputForward</c>): while on, live note input is also made into steps
+    ///     (<see cref="MidiHub.StepInput" />), and still sounds.
+    /// </summary>
+    public void SetStepInputForward(bool on) => Midi.StepInputForward = on;
 
     /// <summary>
     ///     Every instrument's opaque state (base64, null when it keeps none), by track, then every insert's, by track
@@ -1228,6 +1235,7 @@ public sealed partial class EngineController : IDisposable {
     public void Dispose() {
         maintenance?.Dispose();
         StopCellPump();
+        StopScriptPump();
         lock (gate) {
             if (takes.Length > 0) {
                 Writer.Retire();

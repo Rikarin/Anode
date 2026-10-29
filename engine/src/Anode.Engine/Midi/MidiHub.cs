@@ -34,6 +34,8 @@ public sealed class MidiHub : IDisposable {
     long lastScan;
     long lastActivity;
     int thru = -1;
+    readonly Lock stepGate = new();
+    StepChord? stepChord;
 
     /// <param name="engine">The audio callback whose tracks it feeds and whose queues it drains.</param>
     /// <param name="backend">The MIDI devices, or null for none (live MIDI from the server still plays).</param>
@@ -78,10 +80,50 @@ public sealed class MidiHub : IDisposable {
     }
 
     /// <summary>
+    ///     A step of MIDI step input is ready (Phase 7, while <see cref="StepInputForward" />): on the MIDI thread, or on
+    ///     the control thread for the server's live MIDI.
+    /// </summary>
+    public Action<StepInputMidiMessage>? StepInput { get; set; }
+
+    /// <summary>
+    ///     Phase 7's MIDI step input (<c>setStepInputForward</c>): while on, live note input (devices, and the server's
+    ///     live MIDI) is also made into steps for <see cref="StepInput" />; it still plays as it would otherwise (as in
+    ///     Logic, step-entered notes sound). Turning it on or off forgets the keys held so far.
+    /// </summary>
+    public bool StepInputForward {
+        get {
+            lock (stepGate) {
+                return stepChord is not null;
+            }
+        }
+        set {
+            lock (stepGate) {
+                stepChord = value ? new() : null;
+            }
+        }
+    }
+
+    /// <summary>Makes a note message a step while forwarding is on (any thread).</summary>
+    void Forward(int status, int data1, int data2) {
+        StepInputMidiMessage? step;
+        lock (stepGate) {
+            step = stepChord?.Take(status, data1, data2);
+        }
+
+        if (step is not null) {
+            StepInput?.Invoke(step);
+        }
+    }
+
+    /// <summary>
     ///     Control thread: plays <paramref name="events" /> on track <paramref name="trackId" /> now (the server's live
     ///     MIDI). False when the model has no such track.
     /// </summary>
     public bool Live(int trackId, IReadOnlyList<EngineMidiEvent> events) {
+        foreach (var e in events) {
+            Forward(e.Status, e.Data1, e.Data2);
+        }
+
         var root = engine.Root;
         var index = root.IndexOf(trackId);
         if (index < 0) {
@@ -233,6 +275,7 @@ public sealed class MidiHub : IDisposable {
             return; // system messages (clock, active sensing) are not played
         }
 
+        Forward(m.Status, m.Data1, m.Data2);
         var device = (uint)m.Source < (uint)known.Count ? known[m.Source].Uid : null;
         var live = new LiveMidi(m.TimeNs, m.Status, m.Data1, m.Data2);
         var routed = false;

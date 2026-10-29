@@ -1,4 +1,4 @@
-using Anode.Model.Audio;
+using Anode.Dsp.Resampling;
 
 namespace Anode.Model.Tests;
 

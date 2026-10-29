@@ -36,6 +36,9 @@ add_subdirectory(an_sys)
 # Time stretch / pitch shift over Signalsmith Stretch (spike S5, docs/spikes/S5-time-stretch.md).
 add_subdirectory(an_stretch)
 
+# Scripter's JavaScript engine: QuickJS-ng with an arena and a time budget (docs/adr/0009-scripter.md).
+add_subdirectory(an_script)
+
 # A CLAP instrument the tests host (docs/03-phase-2.md, workstream A). Before an_plug, which uses its CLAP headers.
 add_subdirectory(an_testclap)
 

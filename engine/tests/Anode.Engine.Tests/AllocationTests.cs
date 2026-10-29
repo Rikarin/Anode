@@ -449,4 +449,88 @@ public sealed unsafe class AllocationTests : IDisposable {
         Assert.Equal(0, controller.Engine.Snapshot.Underruns);
         Assert.True(controller.Engine.Preview!.Started);
     }
+
+    /// <summary>
+    ///     Phase 7's paths: script slots (run-time parameters, one automated; trace lines; held notes) playing dense
+    ///     regions and live MIDI, new scripts swapped in between rounds (their predecessors' notes released), a script
+    ///     that fails mid-block and is bypassed, step input forwarding, and a looping range preview. Neither the
+    ///     callback nor the disk thread's passes allocate.
+    /// </summary>
+    [Fact]
+    public void Scripts_swaps_failures_and_a_looping_range_preview_allocate_nothing() {
+        var preview = TestAudio.Write24(dir, "preview.wav", 2, Rate, 2);
+        var models = new List<TrackModel>();
+        var tracks = new List<EngineTrack>();
+        var lane = new PlaybackEvent {
+            SamplePos = 0,
+            Track = 0,
+            Kind = PlaybackEventKind.Automation,
+            Value = 3,
+            Target = 0
+        };
+        for (var t = 0; t < 6; t++) {
+            var notes = Enumerable.Range(0, 60)
+                .SelectMany(n => MidiFixtures.Notes((n * 3_000L, 1_500, 48 + (n + t) % 24)))
+                .OrderBy(static e => e.SamplePos)
+                .ToArray();
+            models.Add(new(t, t == 0 ? [lane, ..notes] : notes, []));
+            tracks.Add(
+                MidiFixtures.InstrumentTrack(t) with {
+                    Strip = TestAudio.Unity with {
+                        MidiEffects = [
+                            new(
+                                "s",
+                                TestMidiEffects.Script,
+                                false,
+                                new Dictionary<string, double> { ["shift"] = 1 },
+                                Source: t == 5 ? "trace\ncrash 70" : "param shift 0\ntrace\nhold"
+                            ),
+                            TestMidiEffects.Slot("d", TestMidiEffects.Doubler)
+                        ]
+                    }
+                }
+            );
+        }
+
+        using var segment = TestAudio.Segment(models, 1);
+        using var controller = new EngineController(new(Rate, 64), TestMidiEffects.Registry());
+        controller.LoadModel(
+            TestAudio.Load(segment, 1, true, tracks, [], dir) with {
+                AutomationTargets = [new(0, 0, "midiEffect", "s", "shift")]
+            }
+        );
+        controller.SetMidiThru(4);
+        controller.SetStepInputForward(true);
+        controller.PreviewRange(preview, 1_000, 1_777, true, 0.5f);
+        using var driver = new OfflineDriver(controller, 64);
+
+        void Callbacks() {
+            for (var i = 0; i < 100; i++) {
+                driver.Process(false);
+            }
+        }
+
+        driver.Send(new(EngineCommandKind.SetCycle, 30_000, 170_000, true));
+        driver.PlayFrom(20_000);
+        var callbackBytes = Least(Callbacks);
+        var pumps = 0L;
+        for (var round = 0; round < 20; round++) {
+            controller.LiveMidi(4, [new(0x90, 60 + round % 12, 100), new(0x90, 64, 90)]);
+            controller.LiveMidi(5, [new(0x90, round % 2 == 0 ? 70 : 50, 100)]);
+            pumps = Math.Max(pumps, Least(driver.Pump));
+            callbackBytes = Math.Max(callbackBytes, Least(Callbacks));
+            controller.LiveMidi(4, [new(0x80, 60 + round % 12, 0), new(0x80, 64, 0)]);
+            callbackBytes = Math.Max(callbackBytes, Least(Callbacks));
+            controller.PumpScripts();
+            if (round is 4 or 9 or 14) {
+                Assert.True(controller.SetScript(round % 4, "s", $"param shift 0\ntranspose {round % 3}\ntrace\nhold"));
+                Assert.True(controller.SetScript(5, "s", "trace\ncrash 70"));
+            }
+        }
+
+        Assert.Equal(0, callbackBytes);
+        Assert.Equal(0, pumps);
+        Assert.Equal(0, controller.Engine.Snapshot.Underruns);
+        Assert.True(controller.Engine.Root.Tracks[5].Channel.Config.MidiEffects[0].Slot.Failed);
+    }
 }

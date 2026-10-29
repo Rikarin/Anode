@@ -1,3 +1,5 @@
+using System.Buffers.Binary;
+
 namespace Anode.Dsp.Instruments.Sampler;
 
 /// <summary>
@@ -5,7 +7,10 @@ namespace Anode.Dsp.Instruments.Sampler;
 ///     chromatically across the keyboard around its root (its <c>smpl</c> chunk's unity note, else middle C), with 32
 ///     voices. Samples are read whole into memory by <see cref="LoadFile" />. Round robin follows SFZ: every region
 ///     counts the note-ons that match its keys and velocities, and plays on those where the count modulo
-///     <c>seq_length</c> is <c>seq_position − 1</c>.
+///     <c>seq_length</c> is <c>seq_position − 1</c>. Keyswitches follow SFZ too: a note in a keyswitch range
+///     (<c>sw_lokey</c> … <c>sw_hikey</c>, or a region's <c>sw_last</c>) makes it the active keyswitch and does not sound;
+///     a region with <c>sw_last</c> plays only while its key is the active keyswitch, which starts at
+///     <c>sw_default</c> (none without one) and is kept in the state.
 /// </summary>
 /// <remarks>
 ///     The parameters act on every region: Volume and Tune on top of each region's own, Attack and Release added to
@@ -40,6 +45,12 @@ public sealed class AnodeSampler : IInstrument {
     /// <summary>The file loaded, or null.</summary>
     public string? File => engine.Program?.Path;
 
+    /// <summary>The keyswitches of the program loaded (none for a WAV or an SFZ without them).</summary>
+    public IReadOnlyList<SamplerKeyswitch> Keyswitches => engine.Program?.Keyswitches ?? [];
+
+    /// <summary>The key of the active keyswitch, or −1 for none.</summary>
+    public int ActiveKeyswitch => engine.ActiveSwitch;
+
     internal bool IsSounding(int note) => engine.IsSounding(note);
 
     internal int ActiveVoices => engine.ActiveVoices;
@@ -70,6 +81,9 @@ public sealed class AnodeSampler : IInstrument {
         /// <summary>The Tune smoothing's time constant.</summary>
         const double SmoothingSeconds = 0.01;
 
+        /// <summary>What follows the parameters in a state when the program has keyswitches: this, then the key.</summary>
+        static ReadOnlySpan<byte> SwitchMagic => "SWKS"u8;
+
         readonly SamplerControl control;
         int[] sequence = [];
         float tune;
@@ -82,6 +96,8 @@ public sealed class AnodeSampler : IInstrument {
         }
 
         public SamplerProgram? Program { get; private set; }
+
+        public int ActiveSwitch { get; private set; } = -1;
 
         public IEnumerable<SfzRegion> SoundingRegions {
             get {
@@ -119,15 +135,34 @@ public sealed class AnodeSampler : IInstrument {
 
             Program = program;
             sequence = new int[program.Zones.Length];
+            ActiveSwitch = program.DefaultSwitch;
             Reset();
             return true;
         }
 
-        public override byte[]? SaveState() => InstrumentState.Write(Id, Program?.Path, Info.Parameters, Parameters);
+        public override byte[]? SaveState() {
+            var parameters = InstrumentState.Write(Id, Program?.Path, Info.Parameters, Parameters);
+            if (Program is not { Keyswitches.Count: > 0 }) {
+                return parameters;
+            }
+
+            var state = new byte[parameters.Length + SwitchMagic.Length + 4];
+            parameters.CopyTo(state, 0);
+            SwitchMagic.CopyTo(state.AsSpan(parameters.Length));
+            BinaryPrimitives.WriteInt32LittleEndian(state.AsSpan(parameters.Length + SwitchMagic.Length), ActiveSwitch);
+            return state;
+        }
 
         public override bool LoadState(ReadOnlySpan<byte> state) {
-            if (!InstrumentState.TryRead(state, Id, out var file, out var values)) {
+            if (!InstrumentState.TryRead(state, Id, out var file, out var values, out var end)) {
                 return false;
+            }
+
+            int? saved = null;
+            var rest = state[end..];
+            if (rest.Length >= SwitchMagic.Length + 4 && rest[..SwitchMagic.Length].SequenceEqual(SwitchMagic)) {
+                var key = BinaryPrimitives.ReadInt32LittleEndian(rest[SwitchMagic.Length..]);
+                saved = key is >= -1 and <= 127 ? key : -1;
             }
 
             InstrumentState.Apply(values, Parameters);
@@ -135,11 +170,17 @@ public sealed class AnodeSampler : IInstrument {
             if (file is null) {
                 Program = null;
                 sequence = [];
+                ActiveSwitch = -1;
                 Reset();
                 return true;
             }
 
-            return file == Program?.Path || LoadFile(file);
+            if (file != Program?.Path && !LoadFile(file)) {
+                return false;
+            }
+
+            ActiveSwitch = saved ?? Program!.DefaultSwitch;
+            return true;
         }
 
         protected override void OnReset() {
@@ -159,11 +200,16 @@ public sealed class AnodeSampler : IInstrument {
                 Compute();
             }
 
+            if (program.SwitchKeys[note]) {
+                ActiveSwitch = note; // a keyswitch selects regions and does not sound
+                return;
+            }
+
             var p = Parameters;
             var zones = program.Zones;
             for (var z = 0; z < zones.Length; z++) {
                 var region = zones[z].Region;
-                if (!region.Matches(note, velocity)) {
+                if (!region.Matches(note, velocity) || (region.SwLast >= 0 && region.SwLast != ActiveSwitch)) {
                     continue;
                 }
 

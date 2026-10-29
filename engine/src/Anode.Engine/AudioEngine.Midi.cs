@@ -129,32 +129,22 @@ public sealed unsafe partial class AudioEngine {
     ///     passes the events through, and each effect's output is sorted (stably) and kept inside the block before the
     ///     next. The result replaces the block's events (what the instrument plays, an external track sends). Effects are
     ///     reset on stop and locate, as instruments are.
+    ///     <para>
+    ///         Phase 7's scripts: a slot whose script failed (to compile, or in this block: what it wrote is discarded)
+    ///         passes the events through, and the notes it left sounding end at the block's first frame; a slot that
+    ///         replaced an older instance of its script ends the notes that one left sounding on its first block.
+    ///     </para>
     /// </summary>
     ReadOnlySpan<MidiEvent> RunMidiEffects(Mixing.MixNode node, MidiTrackState midi, int frames) {
         var chain = node.Config.MidiEffects;
         ReadOnlySpan<MidiEvent> input = new(midi.Events, 0, midi.Count);
-        var transportContext = blockTransport;
         var into = midiStageA;
         var processed = false;
         for (var k = 0; k < chain.Length; k++) {
-            var slot = chain[k].Slot;
-            slot.ApplyParameters();
-            if (slot.Effect is not { } effect) {
+            if (!RunMidiEffect(node, k, input)) {
                 continue;
             }
 
-            if (slot.Panic != panics) {
-                slot.Panic = panics;
-                effect.Reset();
-            }
-
-            SetAutomatedMidi(node.MidiEffectBindings[k], node.MidiEffectLast[k], effect);
-            if (chain[k].Bypassed) {
-                continue;
-            }
-
-            midiOutput.Clear();
-            effect.Process(transportContext, input, midiOutput);
             midiOutput.Sort();
             var produced = midiOutput.Events;
             for (var i = 0; i < produced.Length; i++) {
@@ -173,6 +163,95 @@ public sealed unsafe partial class AudioEngine {
         }
 
         return new(midi.Events, 0, midi.Count);
+    }
+
+    /// <summary>
+    ///     Slot <paramref name="k" /> of the node's chain on <paramref name="input" />, into <see cref="midiOutput" />
+    ///     (unsorted); false when it leaves the events as they are (empty, bypassed, or a failed script already
+    ///     bypassed).
+    /// </summary>
+    bool RunMidiEffect(Mixing.MixNode node, int k, ReadOnlySpan<MidiEvent> input) {
+        var placed = node.Config.MidiEffects[k];
+        var slot = placed.Slot;
+        slot.ApplyParameters();
+        if (slot.Effect is not { } effect) {
+            return false;
+        }
+
+        if (slot.Panic != panics) {
+            slot.Panic = panics;
+            effect.Reset();
+            slot.Held.Clear(); // the instrument is silenced too
+        }
+
+        SetAutomatedMidi(node.MidiEffectBindings[k], node.MidiEffectLast[k], effect);
+        var predecessor = slot.Predecessor;
+        var failing = slot.Failed || slot.Script is { Faulted: true };
+        var failedNow = failing && !slot.Bypassing;
+        if ((placed.Bypassed || (failing && !failedNow)) && predecessor is null) {
+            return false;
+        }
+
+        midiOutput.Clear();
+        if (!placed.Bypassed && !failing && !ProcessMidiEffect(slot, effect, input)) {
+            failing = failedNow = true; // it stopped in this block
+        }
+
+        if (placed.Bypassed || failing) {
+            foreach (var e in input) {
+                midiOutput.Add(e);
+            }
+        }
+
+        EndNotes(slot, predecessor, failedNow);
+        return true;
+    }
+
+    /// <summary>
+    ///     Processes one effect into <see cref="midiOutput" />, tracking the notes it leaves sounding; false when its
+    ///     script stopped in this block (what it wrote is discarded).
+    /// </summary>
+    bool ProcessMidiEffect(Mixing.MidiEffectSlot slot, IMidiEffect effect, ReadOnlySpan<MidiEvent> input) {
+        effect.Process(blockTransport, input, midiOutput);
+        if (slot.Script is { Faulted: true }) {
+            midiOutput.Clear();
+            return false;
+        }
+
+        foreach (var e in midiOutput.Events) {
+            slot.Held.Track(e.Status, e.Data1, e.Data2);
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    ///     Ends the notes a replaced instance (<paramref name="predecessor" />) left sounding, and, when the slot
+    ///     <paramref name="failedNow" />, its own, bypassing it from now on.
+    /// </summary>
+    void EndNotes(Mixing.MidiEffectSlot slot, Mixing.MidiEffectSlot? predecessor, bool failedNow) {
+        if (predecessor is not null) {
+            ReleaseInto(predecessor.Held, midiOutput); // a new script took over from the old instance
+            slot.Predecessor = null;
+        }
+
+        if (failedNow) {
+            ReleaseInto(slot.Held, midiOutput);
+            slot.Bypassing = true;
+            slot.MarkFailed();
+        }
+    }
+
+    /// <summary>Note-offs at the block's first frame for every note <paramref name="held" /> holds, which it forgets.</summary>
+    void ReleaseInto(NoteSet held, MidiEventBuffer output) {
+        if (held.IsEmpty) {
+            return;
+        }
+
+        var count = held.Release(releases);
+        for (var i = 0; i < count; i++) {
+            output.Add(new(0, releases[i].Status, releases[i].Note, 0));
+        }
     }
 
     /// <summary>Sets a MIDI FX slot's automated parameters to their lanes' values at the block's start, when they changed.</summary>
