@@ -1,5 +1,6 @@
 using Anode.Dsp.Effects;
 using Anode.Dsp.Effects.Dynamics;
+using Anode.Dsp.Instruments;
 using Anode.Dsp.Tests.Support;
 using static Anode.Dsp.Tests.Support.Analysis;
 
@@ -52,6 +53,16 @@ public sealed class EffectContractTests {
                 if (p.ValueNames is not null) {
                     Assert.Equal(p.Steps + 1, p.ValueNames.Count);
                 }
+
+                // A choice shows as a menu, an Off/On switch as a checkbox, everything else as a slider.
+                Assert.Equal(
+                    p.ValueNames switch {
+                        ["Off", "On"] => InstrumentParameterKind.Checkbox,
+                        not null => InstrumentParameterKind.Menu,
+                        _ => InstrumentParameterKind.Slider
+                    },
+                    p.ShownAs
+                );
 
                 if (p.Steps > 0) {
                     var step = (p.Max - p.Min) / p.Steps;

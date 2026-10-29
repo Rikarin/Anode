@@ -40,6 +40,7 @@ export type LiveMidiEvent = Schemas['LiveMidiEvent'];
 export type InstrumentSlot = Schemas['InstrumentSlot'];
 export type PluginInfo = Schemas['PluginInfo'];
 export type ParameterInfo = Schemas['ParameterInfo'];
+export type ParameterKind = NonNullable<Schemas['ParameterKind']>;
 export type TrackKind = Schemas['TrackKind'];
 
 export type TempoEvent = Schemas['TempoEvent'];
@@ -158,6 +159,7 @@ export type ArticulationSwitch = Schemas['ArticulationSwitch'];
 export type ArticulationOutputKind = Schemas['ArticulationOutputKind'];
 export type ArticulationOutput = Schemas['ArticulationOutput'];
 export type ArticulationSet = Schemas['ArticulationSet'];
+export type ScriptPreset = Schemas['ScriptPreset'];
 export type LaneKind = Schemas['LaneKind'];
 export type Lane = Schemas['Lane'];
 export type LaneSet = Schemas['LaneSet'];

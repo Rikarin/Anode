@@ -1261,7 +1261,14 @@ public sealed unsafe class ScripterEffect : IMidiEffect, IScriptHost {
                     p.Default,
                     p.Unit,
                     p.Steps,
-                    p.ValueNames
+                    p.ValueNames,
+                    Kind: p.Kind switch {
+                        ScriptParameterKind.Menu => InstrumentParameterKind.Menu,
+                        ScriptParameterKind.Checkbox => InstrumentParameterKind.Checkbox,
+                        ScriptParameterKind.Momentary => InstrumentParameterKind.Momentary,
+                        ScriptParameterKind.Text => InstrumentParameterKind.Text,
+                        _ => InstrumentParameterKind.Slider
+                    }
                 )
             )
         ];

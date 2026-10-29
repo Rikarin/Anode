@@ -167,7 +167,11 @@ public sealed partial class FakeHost {
                     Math.Clamp(Number(body, "defaultValue") ?? min, min, Math.Max(min, max)),
                     Text(body, "unit") ?? string.Empty,
                     steps,
-                    names.Count > 0 ? names : null
+                    names.Count > 0 ? names : null,
+                    Kind: type switch {
+                        "menu" or "checkbox" or "momentary" or "text" => type,
+                        _ => "slider"
+                    }
                 )
             );
         }

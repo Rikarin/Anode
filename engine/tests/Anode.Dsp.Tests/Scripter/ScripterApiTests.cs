@@ -1,3 +1,4 @@
+using Anode.Dsp.Instruments;
 using Anode.Dsp.MidiEffects;
 using Anode.Dsp.MidiEffects.Scripter;
 using Anode.Dsp.Tests.Support;
@@ -201,8 +202,28 @@ public sealed class ScripterApiTests {
         Assert.Equal(ScripterEffect.Id, effect.Descriptor.Id);
         Assert.Equal(["Amount", "Cutoff", "Mode", "On", "Go", "About", "Amount 2"], runtime.Select(static p => p.Id));
         Assert.Equal(
-            new(2, "Mode", "Mode", 0, 2, 1, string.Empty, 2, effect.ScriptParameters[2].ValueNames),
+            new(
+                2,
+                "Mode",
+                "Mode",
+                0,
+                2,
+                1,
+                string.Empty,
+                2,
+                effect.ScriptParameters[2].ValueNames,
+                Kind: InstrumentParameterKind.Menu
+            ),
             runtime[2]
+        );
+        // Each parameter shows as its PluginParameters type (a checkbox has value names, yet is no menu).
+        Assert.Equal(
+            [
+                InstrumentParameterKind.Slider, InstrumentParameterKind.Slider, InstrumentParameterKind.Menu,
+                InstrumentParameterKind.Checkbox, InstrumentParameterKind.Momentary, InstrumentParameterKind.Text,
+                InstrumentParameterKind.Slider
+            ],
+            runtime.Select(static p => p.ShownAs)
         );
         Assert.Equal([2f, 1000f, 1f, 1f, 0f, 0f, 0f], Enumerable.Range(0, 7).Select(effect.GetParameter));
 

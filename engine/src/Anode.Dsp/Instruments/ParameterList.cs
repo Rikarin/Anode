@@ -32,11 +32,24 @@ internal sealed class ParameterList {
         return list.Count - 1;
     }
 
-    public int Choice(string id, string name, IReadOnlyList<string> values, int value, int? macro = null) {
-        list.Add(new(list.Count, id, name, 0, values.Count - 1, value, string.Empty, values.Count - 1, values, macro));
+    public int Choice(string id, string name, IReadOnlyList<string> values, int value, int? macro = null) =>
+        Choice(id, name, values, value, macro, InstrumentParameterKind.Menu);
+
+    /// <summary>An Off/On switch: a checkbox.</summary>
+    public int Toggle(string id, string name, bool value, int? macro = null) =>
+        Choice(id, name, OffOn, value ? 1 : 0, macro, InstrumentParameterKind.Checkbox);
+
+    int Choice(
+        string id,
+        string name,
+        IReadOnlyList<string> values,
+        int value,
+        int? macro,
+        InstrumentParameterKind kind
+    ) {
+        list.Add(
+            new(list.Count, id, name, 0, values.Count - 1, value, string.Empty, values.Count - 1, values, macro, kind)
+        );
         return list.Count - 1;
     }
-
-    public int Toggle(string id, string name, bool value, int? macro = null) =>
-        Choice(id, name, OffOn, value ? 1 : 0, macro);
 }

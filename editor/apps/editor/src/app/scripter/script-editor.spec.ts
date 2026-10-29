@@ -2,13 +2,13 @@ import { TestBed } from '@angular/core/testing';
 import type { Insert } from '@anode/api-client';
 import { EditorView } from '@codemirror/view';
 import { targetsOf } from '../automation/targets';
+import { FakeScriptPresets as FactoryScripts } from '../core/fake/fake-scripts';
 import { setUpFakeServer, settle } from '../core/fake/testing';
 import { MixerStore } from '../state/mixer.store';
 import { PluginsStore } from '../state/plugins.store';
 import { ProjectStore } from '../state/project.store';
 import { ScriptLogStore } from '../state/script-log.store';
 import { UiStore } from '../state/ui.store';
-import { FactoryScripts } from './factory-scripts';
 import { ScriptEditor } from './script-editor';
 import { StarterScript, currentProblemLine, isRunShortcut, problemLine, scriptControl } from './script-model';
 import { OctaveEchoScript } from './testing';
@@ -68,6 +68,16 @@ describe('Script Editor', () => {
     expect(scriptControl({ ...base, steps: 1 })).toBe('toggle');
     expect(scriptControl(base)).toBe('knob');
     expect(scriptControl({ ...base, max: 24, steps: 24 })).toBe('knob');
+  });
+
+  it('shows each parameter by its kind when the host reports one', () => {
+    const base = { id: 'p0', name: 'P', min: 0, max: 1, default: 0, unit: '', steps: 1, valueNames: ['Off', 'On'] };
+    // A checkbox carries Off/On names, yet is a toggle, not a menu.
+    expect(scriptControl({ ...base, kind: 'checkbox' })).toBe('toggle');
+    expect(scriptControl({ ...base, kind: 'menu' })).toBe('choice');
+    expect(scriptControl({ ...base, valueNames: null, kind: 'momentary' })).toBe('momentary');
+    expect(scriptControl({ ...base, valueNames: null, kind: 'text' })).toBe('label');
+    expect(scriptControl({ ...base, valueNames: null, kind: 'slider' })).toBe('knob');
   });
 
   it('runs on ⌘↩ and Ctrl+↩ only', () => {

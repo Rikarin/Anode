@@ -104,7 +104,18 @@ public sealed class EngineCatalog(EventHub hub) {
             p.FileTypes ?? [],
             [
                 ..(p.Parameters ?? []).Select(static q =>
-                    new ParameterInfo(q.Id, q.Name, q.Min, q.Max, q.Default, q.Unit, q.Steps, q.ValueNames, q.Macro)
+                    new ParameterInfo(
+                        q.Id,
+                        q.Name,
+                        q.Min,
+                        q.Max,
+                        q.Default,
+                        q.Unit,
+                        q.Steps,
+                        q.ValueNames,
+                        q.Macro,
+                        ParameterKinds.Parse(q.Kind, q.Steps, q.Min, q.Max, q.ValueNames)
+                    )
                 )
             ],
             p.IsInstrument ? "Instrument" : p.Category,
@@ -133,7 +144,8 @@ public sealed class EngineCatalog(EventHub hub) {
                         p.Unit,
                         p.Steps,
                         p.ValueNames,
-                        p.Macro
+                        p.Macro,
+                        InstrumentParameterKinds.Name(p.ShownAs)
                     )
                 )
             ]
@@ -160,7 +172,8 @@ public sealed class EngineCatalog(EventHub hub) {
                         p.Unit,
                         p.Steps,
                         p.ValueNames,
-                        p.Macro
+                        p.Macro,
+                        InstrumentParameterKinds.Name(p.ShownAs)
                     )
                 )
             ],
@@ -189,7 +202,8 @@ public sealed class EngineCatalog(EventHub hub) {
                         p.Unit,
                         p.Steps,
                         p.ValueNames,
-                        p.Macro
+                        p.Macro,
+                        InstrumentParameterKinds.Name(p.ShownAs)
                     )
                 )
             ],

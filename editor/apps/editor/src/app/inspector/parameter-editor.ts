@@ -51,9 +51,23 @@ function capitalise(text: string): string {
   return text.charAt(0).toUpperCase() + text.slice(1);
 }
 
-/** Whether a parameter is a choice between names (shown as a drop-down) rather than a knob. */
+/**
+ * Whether a parameter is a choice between names (shown as a drop-down) rather than a knob: a `menu`, or a `checkbox`
+ * with names (Off and On); without a `kind` (a hosted plugin's), one with a name for each value.
+ */
 export function isChoice(parameter: ParameterInfo): boolean {
-  return parameter.steps > 0 && (parameter.valueNames?.length ?? 0) === parameter.steps + 1;
+  const named = parameter.steps > 0 && (parameter.valueNames?.length ?? 0) === parameter.steps + 1;
+  switch (parameter.kind) {
+    case 'menu':
+    case 'checkbox':
+      return named;
+    case 'slider':
+    case 'momentary':
+    case 'text':
+      return false;
+    default:
+      return named;
+  }
 }
 
 /**

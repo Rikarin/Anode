@@ -1,5 +1,6 @@
 using Anode.Contracts;
 using Anode.Dsp.Editing;
+using Anode.Dsp.MidiEffects.Scripter;
 using Anode.Ipc;
 using Anode.Server.Engine;
 using Anode.Server.Projects;
@@ -20,6 +21,18 @@ public sealed class Phase7ApiTests {
     static CancellationToken Token => TestContext.Current.CancellationToken;
 
     readonly string media = Directory.CreateTempSubdirectory("anode-phase7-").FullName;
+
+    [Fact]
+    public async Task The_library_lists_the_Scripter_factory_scripts() {
+        await using var server = new ServerFixture();
+        using var client = server.CreateClient();
+        var scripts = await GetAsync(client, "library/scripts", ContractsJsonContext.Default.IReadOnlyListScriptPreset);
+        Assert.Equal(
+            ScripterPresets.All.Select(static p => (p.Id, p.Name, p.Description, p.Source)),
+            scripts.Select(static p => (p.Id, p.Name, p.Description, p.Source))
+        );
+        Assert.Contains(scripts, static p => p.Id == "factory.transposer");
+    }
 
     [Fact]
     public async Task The_library_keeps_grooves_Transform_sets_and_articulation_sets() {
@@ -397,6 +410,7 @@ public sealed class Phase7ApiTests {
         var parameters = await events.WaitAsync<SlotParametersEvent>();
         Assert.Equal((track, slot), (parameters.TrackId, parameters.SlotId));
         Assert.Equal(["Interval", "Mode"], parameters.Parameters.Select(static p => p.Id));
+        Assert.Equal([ParameterKind.Slider, ParameterKind.Menu], parameters.Parameters.Select(static p => p.Kind));
         await ServerFixture.Eventually(async () =>
             (await client.ProjectAsync()).Tracks[0].Strip.MidiEffects[0].RuntimeParameters is { Count: 2 }
         );

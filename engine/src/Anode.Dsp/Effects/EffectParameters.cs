@@ -27,12 +27,19 @@ internal sealed class EffectParameters {
         return list.Count - 1;
     }
 
-    public int Choice(string id, string name, IReadOnlyList<string> values, int value) {
-        list.Add(new(list.Count, id, name, 0, values.Count - 1, value, string.Empty, values.Count - 1, values));
+    public int Choice(string id, string name, IReadOnlyList<string> values, int value) =>
+        Choice(id, name, values, value, InstrumentParameterKind.Menu);
+
+    /// <summary>An Off/On switch: a checkbox.</summary>
+    public int Toggle(string id, string name, bool value) =>
+        Choice(id, name, OffOn, value ? 1 : 0, InstrumentParameterKind.Checkbox);
+
+    int Choice(string id, string name, IReadOnlyList<string> values, int value, InstrumentParameterKind kind) {
+        list.Add(
+            new(list.Count, id, name, 0, values.Count - 1, value, string.Empty, values.Count - 1, values, Kind: kind)
+        );
         return list.Count - 1;
     }
-
-    public int Toggle(string id, string name, bool value) => Choice(id, name, OffOn, value ? 1 : 0);
 
     /// <summary>
     ///     Gives parameter <paramref name="index" /> macro hint <paramref name="order" /> (Smart Controls map hinted

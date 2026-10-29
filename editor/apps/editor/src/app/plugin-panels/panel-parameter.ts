@@ -3,9 +3,23 @@ import type { ParameterInfo } from '@anode/api-client';
 import { AnChoice, AnKnob } from '@anode/audio-ui';
 import type { PluginPanelHost } from './plugin-panel';
 
-/** A parameter with a name for each value (the generic editor's test; not imported, which would make a cycle). */
+/**
+ * A parameter shown as a choice between names (the generic editor's test; not imported, which would make a cycle): a
+ * `menu`, or a `checkbox` with names; without a `kind`, one with a name for each value.
+ */
 export function isChoice(parameter: ParameterInfo): boolean {
-  return parameter.steps > 0 && (parameter.valueNames?.length ?? 0) === parameter.steps + 1;
+  const named = parameter.steps > 0 && (parameter.valueNames?.length ?? 0) === parameter.steps + 1;
+  switch (parameter.kind) {
+    case 'menu':
+    case 'checkbox':
+      return named;
+    case 'slider':
+    case 'momentary':
+    case 'text':
+      return false;
+    default:
+      return named;
+  }
 }
 
 /**

@@ -2794,6 +2794,40 @@
         }
       }
     },
+    "/api/v1/library/scripts": {
+      "get": {
+        "tags": [
+          "Library"
+        ],
+        "summary": "The Scripter\u0027s factory scripts, in menu order.",
+        "operationId": "ListScriptPresets",
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ScriptPreset"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/project/files/{fileId}/edit": {
       "post": {
         "tags": [
@@ -10876,9 +10910,29 @@
               "integer"
             ],
             "format": "int32"
+          },
+          "kind": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ParameterKind"
+              }
+            ]
           }
         },
-        "description": "A plugin parameter. \u0060steps\u0060 \u0026gt; 0 makes it discrete (\u0060steps\u0060 \u002B 1 values from \u0060min\u0060 to\n\u0060max\u0060), with \u0060valueNames\u0060 naming them when it is a choice. \u0060macro\u0060 (Phase 6) is its macro hint:\nautomatic Smart Controls mapping takes a plugin\u0027s hinted parameters in ascending \u0060macro\u0060 order (null: not a\nmacro)."
+        "description": "A plugin parameter. \u0060steps\u0060 \u0026gt; 0 makes it discrete (\u0060steps\u0060 \u002B 1 values from \u0060min\u0060 to\n\u0060max\u0060), with \u0060valueNames\u0060 naming them when it is a choice. \u0060macro\u0060 (Phase 6) is its macro hint:\nautomatic Smart Controls mapping takes a plugin\u0027s hinted parameters in ascending \u0060macro\u0060 order (null: not a\nmacro). \u0060kind\u0060 (Phase 7) is the control that shows it: a slider when left out; a choice is a\n\u0060menu\u0060, a two-valued switch a \u0060checkbox\u0060; a Scripter parameter has its \u0060PluginParameters\u0060 type\n(\u0060lin\u0060 and \u0060log\u0060 are sliders)."
+      },
+      "ParameterKind": {
+        "enum": [
+          "slider",
+          "menu",
+          "checkbox",
+          "momentary",
+          "text",
+          null
+        ]
       },
       "PatchInfo": {
         "required": [
@@ -11895,6 +11949,30 @@
           }
         },
         "description": "A saved layout of the editor\u0027s windows (Logic\u0027s screensets), recalled with keys 1\u20139. \u0060layout\u0060 is the\neditor\u0027s own serialised layout, opaque to the server."
+      },
+      "ScriptPreset": {
+        "required": [
+          "id",
+          "name",
+          "description",
+          "source"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "source": {
+            "type": "string"
+          }
+        },
+        "description": "A Scripter factory script (Phase 7, \u0060GET /library/scripts\u0060): its stable id (\u0060factory.\u2026\u0060), name, a\nline about what it does, and its source, which the Script Editor loads as a slot\u0027s script."
       },
       "Send": {
         "required": [

@@ -409,5 +409,16 @@ public sealed class PluginRegistry {
         );
 
     internal static EngineParameter Map(InstrumentParameter p) =>
-        new(p.Id, p.Name, p.Min, p.Max, p.Default, p.Unit, p.Steps, p.ValueNames, p.Macro);
+        new(
+            p.Id,
+            p.Name,
+            p.Min,
+            p.Max,
+            p.Default,
+            p.Unit,
+            p.Steps,
+            p.ValueNames,
+            p.Macro,
+            InstrumentParameterKinds.Name(p.ShownAs)
+        );
 }

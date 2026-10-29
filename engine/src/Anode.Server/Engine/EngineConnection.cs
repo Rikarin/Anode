@@ -578,7 +578,8 @@ public sealed class EngineConnection(
                                         q.Unit ?? string.Empty,
                                         q.Steps,
                                         q.ValueNames,
-                                        q.Macro
+                                        q.Macro,
+                                        ParameterKinds.Parse(q.Kind, q.Steps, q.Min, q.Max, q.ValueNames)
                                     )
                                 )
                         ]

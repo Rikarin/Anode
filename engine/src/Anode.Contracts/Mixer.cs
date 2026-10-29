@@ -115,3 +115,9 @@ public sealed record SavePatchRequest(string TrackId, string Name, string Catego
 
 /// <summary>Opens (or closes) a plugin's own editor window: an insert, or with no <c>insertId</c> the instrument.</summary>
 public sealed record PluginEditorRequest(string? TrackId, string? InsertId, bool Open);
+
+/// <summary>
+///     A Scripter factory script (Phase 7, <c>GET /library/scripts</c>): its stable id (<c>factory.…</c>), name, a
+///     line about what it does, and its source, which the Script Editor loads as a slot's script.
+/// </summary>
+public sealed record ScriptPreset(string Id, string Name, string Description, string Source);

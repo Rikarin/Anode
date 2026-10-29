@@ -9,19 +9,19 @@ import {
   signal,
   viewChild
 } from '@angular/core';
-import type { Insert, ParameterInfo } from '@anode/api-client';
+import type { Insert, ParameterInfo, ScriptPreset } from '@anode/api-client';
 import { AnChoice, AnKnob } from '@anode/audio-ui';
 import { provideIcons } from '@ng-icons/core';
 import { matExpandMoreRound, matPlayArrowRound } from '@ng-icons/material-icons/round';
 import { XuiIconImports } from '@xui/icon';
 import { XuiMenuImports } from '@xui/menu';
 import { FloatingWindow } from '../shell/floating-window';
+import { MidiLibraryStore } from '../state/midi-library.store';
 import { MixerStore } from '../state/mixer.store';
 import { ProjectStore } from '../state/project.store';
 import { type ScriptLine, ScriptLogStore, scriptKey } from '../state/script-log.store';
 import { UiStore } from '../state/ui.store';
 import { CodeEditor } from './code-editor';
-import { type FactoryScript, FactoryScripts } from './factory-scripts';
 import { StarterScript, currentProblemLine, isRunShortcut, scriptControl } from './script-model';
 
 /**
@@ -59,7 +59,7 @@ import { StarterScript, currentProblemLine, isRunShortcut, scriptControl } from 
           </button>
           <ng-template #presetMenu>
             <xui-menu class="max-h-96 min-w-48 overflow-y-auto" aria-label="Factory presets">
-              @for (preset of presets; track preset.id) {
+              @for (preset of presets(); track preset.id) {
                 <button
                   xuiMenuItem
                   type="button"
@@ -141,6 +141,29 @@ import { StarterScript, currentProblemLine, isRunShortcut, scriptControl } from 
                       {{ parameter.name }}
                     </button>
                   }
+                  @case ('momentary') {
+                    <button
+                      type="button"
+                      class="bezel text-foreground flex h-6.5 items-center px-2 text-[11px] font-semibold"
+                      [class.text-lit]="value(s, parameter) >= 0.5"
+                      [attr.data-testid]="'script-parameter-' + parameter.id"
+                      (pointerdown)="set(s, parameter, 1)"
+                      (pointerup)="set(s, parameter, 0)"
+                      (pointerleave)="set(s, parameter, 0)"
+                      (keydown.space)="set(s, parameter, 1)"
+                      (keyup.space)="set(s, parameter, 0)"
+                    >
+                      {{ parameter.name }}
+                    </button>
+                  }
+                  @case ('label') {
+                    <span
+                      class="text-foreground-muted flex h-6.5 items-center px-1 text-[11px] font-semibold"
+                      [attr.data-testid]="'script-parameter-' + parameter.id"
+                    >
+                      {{ parameter.name }}
+                    </span>
+                  }
                   @default {
                     <an-knob
                       [label]="parameter.name"
@@ -212,8 +235,10 @@ export class ScriptEditor {
   private readonly project = inject(ProjectStore);
   private readonly mixer = inject(MixerStore);
   private readonly log = inject(ScriptLogStore);
+  private readonly library = inject(MidiLibraryStore);
 
-  protected readonly presets = FactoryScripts;
+  /** The Server's factory scripts (`GET /library/scripts`). */
+  protected readonly presets = this.library.scriptPresets;
   protected readonly control = scriptControl;
 
   private readonly console = viewChild<ElementRef<HTMLElement>>('console');
@@ -253,7 +278,7 @@ export class ScriptEditor {
   protected readonly dirty = computed(() => this.source() !== (this.saved() ?? StarterScript));
 
   /** The preset last loaded, while the text is still its own. */
-  private readonly preset = signal<FactoryScript | null>(null);
+  private readonly preset = signal<ScriptPreset | null>(null);
   protected readonly presetName = computed(() => {
     const preset = this.preset();
     return preset?.source === this.source() ? preset.name : null;
@@ -279,6 +304,7 @@ export class ScriptEditor {
   });
 
   constructor() {
+    void this.library.loadScriptPresets();
     effect(() => {
       // Keep the newest line in view.
       const count = this.lines().length;
@@ -303,7 +329,7 @@ export class ScriptEditor {
   }
 
   /** Loads a factory preset and runs it, as choosing a plugin setting does. */
-  loadPreset(preset: FactoryScript): Promise<unknown> {
+  loadPreset(preset: ScriptPreset): Promise<unknown> {
     this.source.set(preset.source);
     this.preset.set(preset);
     return this.runScript(`Load Script “${preset.name}”`);

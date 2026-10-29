@@ -1,12 +1,12 @@
 import { Injectable, inject, signal } from '@angular/core';
-import type { ArticulationSet, GrooveTemplate, TransformSet } from '@anode/api-client';
+import type { ArticulationSet, GrooveTemplate, ScriptPreset, TransformSet } from '@anode/api-client';
 import { ANODE_API } from '../core/api';
 import { Notify } from '../core/notify';
 
 /**
  * The user library's Phase 7 content (docs/08-phase-7.md): groove templates, MIDI Transform sets (the factory presets
- * first, `factory.…`) and articulation sets. Loaded on demand by the windows that list them; saves and deletes
- * refresh the list.
+ * first, `factory.…`), articulation sets, and the Scripter's factory scripts (the Server's, `GET /library/scripts`).
+ * Loaded on demand by the windows that list them; saves and deletes refresh the list.
  */
 @Injectable({ providedIn: 'root' })
 export class MidiLibraryStore {
@@ -16,6 +16,7 @@ export class MidiLibraryStore {
   readonly grooves = signal<readonly GrooveTemplate[]>([]);
   readonly transformSets = signal<readonly TransformSet[]>([]);
   readonly articulationSets = signal<readonly ArticulationSet[]>([]);
+  readonly scriptPresets = signal<readonly ScriptPreset[]>([]);
 
   async loadGrooves(): Promise<void> {
     await this.load(
@@ -38,6 +39,18 @@ export class MidiLibraryStore {
       () => this.api.libraryArticulationSets(),
       list => this.articulationSets.set(list),
       'articulation sets'
+    );
+  }
+
+  /** The factory scripts, once: they come with the Server and do not change while it runs. */
+  async loadScriptPresets(): Promise<void> {
+    if (this.scriptPresets().length > 0) {
+      return;
+    }
+    await this.load(
+      () => this.api.scriptPresets(),
+      list => this.scriptPresets.set(list),
+      'factory scripts'
     );
   }
 

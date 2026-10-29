@@ -34,14 +34,31 @@ export function currentProblemLine(lines: readonly ScriptLine[], since: ScriptLi
   return null;
 }
 
-/** How a script's parameter is shown: a menu as a choice, a checkbox (or momentary button) as a toggle, else a knob. */
-export type ScriptControl = 'choice' | 'toggle' | 'knob';
+/**
+ * How a script's parameter is shown: a menu as a choice, a checkbox as a toggle, a momentary as a button held down, a
+ * text as a label, else (lin, log) a knob.
+ */
+export type ScriptControl = 'choice' | 'toggle' | 'momentary' | 'label' | 'knob';
 
 /**
- * A run-time parameter's control. `ParameterInfo` does not say a `PluginParameters` entry's type, so it is told by
- * shape: named values make a menu; an unnamed 0…1 switch with one or two steps a checkbox or momentary button.
+ * A run-time parameter's control, by its `kind` (the `PluginParameters` type the host reports). Without one (an older
+ * Server) it is told by shape: named values make a menu; an unnamed 0…1 switch with one or two steps a checkbox.
  */
 export function scriptControl(parameter: ParameterInfo): ScriptControl {
+  switch (parameter.kind) {
+    case 'menu':
+      return 'choice';
+    case 'checkbox':
+      return 'toggle';
+    case 'momentary':
+      return 'momentary';
+    case 'text':
+      return 'label';
+    case 'slider':
+      return 'knob';
+    default:
+      break;
+  }
   if ((parameter.valueNames?.length ?? 0) > 0) {
     return 'choice';
   }

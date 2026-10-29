@@ -10,7 +10,8 @@ public readonly record struct MidiEvent(int Frame, byte Status, byte Data1, byte
 ///     across versions, stored in projects). Values are in the parameter's own unit, <paramref name="Min" /> …
 ///     <paramref name="Max" />; <paramref name="Steps" /> &gt; 0 makes it discrete. <paramref name="Macro" /> is its
 ///     macro hint (Phase 6): automatic Smart Controls mapping takes a plugin's hinted parameters in ascending order
-///     (null: not a macro).
+///     (null: not a macro). <paramref name="Kind" /> is the control that shows it (null: told by its shape, see
+///     <see cref="ShownAs" />).
 /// </summary>
 public sealed record InstrumentParameter(
     int Index,
@@ -22,8 +23,43 @@ public sealed record InstrumentParameter(
     string Unit,
     int Steps = 0,
     IReadOnlyList<string>? ValueNames = null,
-    int? Macro = null
-);
+    int? Macro = null,
+    InstrumentParameterKind? Kind = null
+) {
+    /// <summary>
+    ///     The control that shows it: its <see cref="Kind" />, else a menu when its values are named, a checkbox when it
+    ///     is a 0…1 switch of two values, and a slider otherwise.
+    /// </summary>
+    public InstrumentParameterKind ShownAs =>
+        Kind ?? InstrumentParameterKinds.Of(Steps, Min, Max, ValueNames);
+}
+
+/// <summary>The control a parameter shows as (a Scripter <c>PluginParameters</c> type, or a built-in's shape).</summary>
+public enum InstrumentParameterKind {
+    Slider,
+    Menu,
+    Checkbox,
+    Momentary,
+    Text
+}
+
+public static class InstrumentParameterKinds {
+    /// <summary>A parameter's kind by its shape: named values a menu, a two-valued 0…1 switch a checkbox, else a slider.</summary>
+    public static InstrumentParameterKind Of(int steps, double min, double max, IReadOnlyList<string>? valueNames) =>
+        valueNames is { Count: > 0 } ? InstrumentParameterKind.Menu
+        : steps == 1 && min == 0 && max == 1 ? InstrumentParameterKind.Checkbox
+        : InstrumentParameterKind.Slider;
+
+    /// <summary>As the IPC and the REST contracts spell it: <c>slider</c>, <c>menu</c>, <c>checkbox</c>, …</summary>
+    public static string Name(InstrumentParameterKind kind) =>
+        kind switch {
+            InstrumentParameterKind.Menu => "menu",
+            InstrumentParameterKind.Checkbox => "checkbox",
+            InstrumentParameterKind.Momentary => "momentary",
+            InstrumentParameterKind.Text => "text",
+            _ => "slider"
+        };
+}
 
 /// <summary>What an instrument is: its stable id (<c>anode.synth</c>), names, parameters and loadable file types.</summary>
 public sealed record InstrumentDescriptor(

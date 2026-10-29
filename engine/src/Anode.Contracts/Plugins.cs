@@ -23,7 +23,9 @@ public enum PluginFormat {
 ///     A plugin parameter. <c>steps</c> &gt; 0 makes it discrete (<c>steps</c> + 1 values from <c>min</c> to
 ///     <c>max</c>), with <c>valueNames</c> naming them when it is a choice. <c>macro</c> (Phase 6) is its macro hint:
 ///     automatic Smart Controls mapping takes a plugin's hinted parameters in ascending <c>macro</c> order (null: not a
-///     macro).
+///     macro). <c>kind</c> (Phase 7) is the control that shows it: a slider when left out; a choice is a
+///     <c>menu</c>, a two-valued switch a <c>checkbox</c>; a Scripter parameter has its <c>PluginParameters</c> type
+///     (<c>lin</c> and <c>log</c> are sliders).
 /// </summary>
 public sealed record ParameterInfo(
     string Id,
@@ -34,8 +36,30 @@ public sealed record ParameterInfo(
     string Unit,
     int Steps,
     IReadOnlyList<string>? ValueNames,
-    int? Macro = null
+    int? Macro = null,
+    ParameterKind? Kind = null
 );
+
+/// <summary>The control a parameter shows as (Phase 7).</summary>
+[JsonConverter(typeof(JsonStringEnumConverter<ParameterKind>))]
+public enum ParameterKind {
+    [JsonStringEnumMemberName("slider")]
+    Slider,
+
+    [JsonStringEnumMemberName("menu")]
+    Menu,
+
+    [JsonStringEnumMemberName("checkbox")]
+    Checkbox,
+
+    /// <summary>A button: 1 while pressed, else 0.</summary>
+    [JsonStringEnumMemberName("momentary")]
+    Momentary,
+
+    /// <summary>A label, with no value.</summary>
+    [JsonStringEnumMemberName("text")]
+    Text
+}
 
 /// <summary>
 ///     A plugin the engine can load: an instrument (<c>category</c> <c>Instrument</c>), a MIDI effect (<c>MIDI

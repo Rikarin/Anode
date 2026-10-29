@@ -298,7 +298,11 @@ public sealed record RecordingFinishedMessage(
     bool Flashback = false
 ) : IpcMessage;
 
-/// <summary>A plugin parameter as the engine numbers it; <paramref name="Macro" /> is its macro hint (Phase 6).</summary>
+/// <summary>
+///     A plugin parameter as the engine numbers it; <paramref name="Macro" /> is its macro hint (Phase 6);
+///     <paramref name="Kind" /> the control that shows it (<c>slider</c>, <c>menu</c>, <c>checkbox</c>,
+///     <c>momentary</c> or <c>text</c>; null: told by its shape).
+/// </summary>
 public sealed record EngineParameter(
     string Id,
     string Name,
@@ -308,7 +312,8 @@ public sealed record EngineParameter(
     string Unit,
     int Steps,
     IReadOnlyList<string>? ValueNames = null,
-    int? Macro = null
+    int? Macro = null,
+    string? Kind = null
 );
 
 /// <summary>

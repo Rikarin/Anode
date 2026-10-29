@@ -678,7 +678,9 @@ export function scriptParameters(source: string): ParameterInfo[] {
         unit: typeof e['unit'] === 'string' ? e['unit'] : '',
         steps,
         valueNames: type === 'menu' ? names : null,
-        macro: null
+        macro: null,
+        // The control it shows as: its PluginParameters type (`lin` and `log` are sliders).
+        kind: type === 'menu' || type === 'checkbox' || type === 'momentary' || type === 'text' ? type : 'slider'
       } satisfies ParameterInfo
     ];
   });

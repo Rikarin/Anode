@@ -1,10 +1,9 @@
-import { scriptParameters, scriptTraces } from '../core/fake/fake-phase7';
-import { FactoryScripts } from './factory-scripts';
-import { OctaveEchoScript, runScript } from './testing';
+import { OctaveEchoScript, runScript } from '../../scripter/testing';
+import { scriptParameters, scriptTraces } from './fake-phase7';
+import { FakeScriptPresets as FactoryScripts } from './fake-scripts';
 
-describe('Scripter factory presets', () => {
-  it('has about ten, with unique ids and names', () => {
-    expect(FactoryScripts.length).toBeGreaterThanOrEqual(10);
+describe('The fake Server’s Scripter factory presets', () => {
+  it('have unique ids and names', () => {
     expect(new Set(FactoryScripts.map(s => s.id)).size).toBe(FactoryScripts.length);
     expect(new Set(FactoryScripts.map(s => s.name)).size).toBe(FactoryScripts.length);
   });
@@ -91,7 +90,8 @@ describe('Scripter factory presets', () => {
         unit: '',
         steps: 24,
         valueNames: null,
-        macro: null
+        macro: null,
+        kind: 'slider'
       }
     ]);
   });

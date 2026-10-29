@@ -1,4 +1,5 @@
 using Anode.Contracts;
+using Anode.Dsp.MidiEffects.Scripter;
 using Anode.Server.Engine;
 using Anode.Server.Library;
 using Anode.Server.Projects;
@@ -11,6 +12,10 @@ namespace Anode.Server.Api;
 ///     the Audio File Editor (operations as jobs, loop search, samples, range preview); and the step input state.
 /// </summary>
 static class MidiEditApi {
+    static readonly IReadOnlyList<ScriptPreset> ScriptPresets = [
+        ..ScripterPresets.All.Select(static p => new ScriptPreset(p.Id, p.Name, p.Description, p.Source))
+    ];
+
     public static void Map(RouteGroupBuilder api) {
         var library = api.MapGroup("/library").WithTags("Library").AddEndpointFilter<ProblemFilter>();
         library.MapGet(
@@ -87,6 +92,13 @@ static class MidiEditApi {
             )
             .WithName("DeleteArticulationSet")
             .WithSummary("Deletes an articulation set from the user library; projects keep their copies.");
+
+        library.MapGet(
+                "/scripts",
+                static Ok<IReadOnlyList<ScriptPreset>>() => TypedResults.Ok(ScriptPresets)
+            )
+            .WithName("ListScriptPresets")
+            .WithSummary("The Scripter's factory scripts, in menu order.");
 
         var project = api.MapGroup("/project").WithTags("Project").AddEndpointFilter<ProblemFilter>();
         project.MapPost(

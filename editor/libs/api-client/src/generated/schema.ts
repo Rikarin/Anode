@@ -1019,6 +1019,23 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/api/v1/library/scripts': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** The Scripter's factory scripts, in menu order. */
+    get: operations['ListScriptPresets'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/api/v1/project/files/{fileId}/edit': {
     parameters: {
       query?: never;
@@ -3727,7 +3744,9 @@ export interface components {
      * @description A plugin parameter. `steps` &gt; 0 makes it discrete (`steps` + 1 values from `min` to
      *     `max`), with `valueNames` naming them when it is a choice. `macro` (Phase 6) is its macro hint:
      *     automatic Smart Controls mapping takes a plugin's hinted parameters in ascending `macro` order (null: not a
-     *     macro).
+     *     macro). `kind` (Phase 7) is the control that shows it: a slider when left out; a choice is a
+     *     `menu`, a two-valued switch a `checkbox`; a Scripter parameter has its `PluginParameters` type
+     *     (`lin` and `log` are sliders).
      */
     ParameterInfo: {
       id: string;
@@ -3744,7 +3763,10 @@ export interface components {
       valueNames?: null | string[];
       /** Format: int32 */
       macro?: null | number;
+      kind?: null | components['schemas']['ParameterKind'];
     };
+    /** @enum {unknown} */
+    ParameterKind: 'slider' | 'menu' | 'checkbox' | 'momentary' | 'text' | null;
     /** @description A saved channel strip (Logic's patch): its instrument, inserts and sends, for a kind of track. */
     PatchInfo: {
       id: string;
@@ -4116,6 +4138,16 @@ export interface components {
       name: string;
       locked: boolean;
       layout: string;
+    };
+    /**
+     * @description A Scripter factory script (Phase 7, `GET /library/scripts`): its stable id (`factory.…`), name, a
+     *     line about what it does, and its source, which the Script Editor loads as a slot's script.
+     */
+    ScriptPreset: {
+      id: string;
+      name: string;
+      description: string;
+      source: string;
     };
     /** @description A send from a channel strip to bus 1…64, at `levelDb`, before or after the fader. */
     Send: {
@@ -7025,6 +7057,35 @@ export interface operations {
           [name: string]: unknown;
         };
         content?: never;
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  ListScriptPresets: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ScriptPreset'][];
+        };
       };
       /** @description Internal Server Error */
       500: {

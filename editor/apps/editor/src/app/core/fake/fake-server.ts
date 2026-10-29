@@ -48,6 +48,7 @@ import {
   type SampleRange,
   type SavePatchRequest,
   type Screenset,
+  type ScriptPreset,
   type ServerMessage,
   type StepInputRequest,
   type StepInputState,
@@ -143,6 +144,7 @@ import {
 } from './fake-phase7';
 import { CrashyPluginId, FakeCatalogue, FakeEffects, FakeMidiDevices } from './fake-plugins';
 import { FakeMidiEffects, FakeT2Effects, FakeT2Instruments, RemixFxId, withMacros } from './fake-plugins-phase6';
+import { FakeScriptPresets } from './fake-scripts';
 
 /** Ticks per quarter note (the contract's time base). */
 const Ppq = 960;
@@ -1269,6 +1271,10 @@ export class FakeAnodeServer implements AnodeApi {
         throw new ApiError(404, `No groove ${id} in the library.`);
       }
     });
+  }
+
+  scriptPresets(): Promise<ScriptPreset[]> {
+    return this.answer('ListScriptPresets', () => FakeScriptPresets.map(p => ({ ...p })));
   }
 
   transformSets(): Promise<TransformSet[]> {

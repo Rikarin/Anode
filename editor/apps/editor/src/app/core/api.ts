@@ -40,6 +40,7 @@ import {
   type SampleRange,
   type SavePatchRequest,
   type Screenset,
+  type ScriptPreset,
   type StepInputRequest,
   type StepInputState,
   type StopRequest,
@@ -206,6 +207,8 @@ export interface AnodeApi {
   libraryArticulationSets(): Promise<ArticulationSet[]>;
   saveLibraryArticulationSet(set: ArticulationSet): Promise<ArticulationSet>;
   deleteLibraryArticulationSet(id: string): Promise<void>;
+  /** The Scripter's factory scripts (`factory.…`), in menu order. */
+  scriptPresets(): Promise<ScriptPreset[]>;
   /** Runs an Audio File Editor operation as an `audioEdit` job; the file's new version follows as one undo step. */
   editFile(fileId: string, operation: AudioEditOperation): Promise<Job>;
   /** Loop search over a range of a file: the best loops, best first. */
@@ -567,6 +570,10 @@ export class HttpAnodeApi implements AnodeApi {
 
   async deleteLibraryArticulationSet(id: string): Promise<void> {
     unwrap(await this.client.DELETE('/api/v1/library/articulation-sets/{id}', { params: { path: { id } } }));
+  }
+
+  async scriptPresets(): Promise<ScriptPreset[]> {
+    return unwrap(await this.client.GET('/api/v1/library/scripts'));
   }
 
   async editFile(fileId: string, operation: AudioEditOperation): Promise<Job> {

@@ -63,6 +63,7 @@ namespace Anode.Contracts;
 [JsonSerializable(typeof(IReadOnlyList<TransformSet>))]
 [JsonSerializable(typeof(ArticulationSet))]
 [JsonSerializable(typeof(IReadOnlyList<ArticulationSet>))]
+[JsonSerializable(typeof(IReadOnlyList<ScriptPreset>))]
 [JsonSerializable(typeof(AudioEditOperation))]
 [JsonSerializable(typeof(LoopSearchRequest))]
 [JsonSerializable(typeof(IReadOnlyList<LoopSearchResult>))]
