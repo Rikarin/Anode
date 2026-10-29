@@ -294,7 +294,7 @@ public static partial class Edits {
 
     static DeltaOp[] QuantizeNotes(ProjectState state, QuantizeNotesCommand c, IAnalysisSource analysis) {
         var region = MidiRegionOf(state, c.RegionId);
-        var groove = GrooveFor(state, region.TrackId, c.GrooveId, analysis);
+        var groove = GrooveFor(state, region.TrackId, c.GrooveId, analysis, c.GridTicks);
         if (groove is null) {
             CheckGrid(c);
         }

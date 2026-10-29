@@ -217,6 +217,13 @@ public sealed class Phase7Tests {
         Assert.Equal(300, Notes(straight)[0].StartTick);
         Assert.Empty(state.Grooves); // made at quantise time, not kept
 
+        // A plain 1/8 quantise follows the groove track's eighths (not 1/16s): the drums' swung second eighth (480 +
+        // 160, the loudest in that step) takes both notes in it, and the fourth eighth stays where it is.
+        Apply(new AddNotesCommand(swung, [new(36, 127, 1, 640, 100)]));
+        Apply(new AddNotesCommand(straight, [new(62, 100, 1, 470, 100), new(64, 100, 1, 1450, 100)]));
+        Apply(new QuantizeNotesCommand(straight, 480));
+        Assert.Equal([640L, 640, 1440], Notes(straight).Select(static n => n.StartTick));
+
         // The groove track does not match itself; removing it ends the matching.
         Refused(new SetMatchGrooveCommand(drums, true));
         Apply(new SetGrooveTrackCommand(keys));

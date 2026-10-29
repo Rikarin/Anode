@@ -187,7 +187,7 @@ public static partial class Edits {
     ///     matches it; Phase 7), else the grid.
     /// </summary>
     static Func<long, long> Target(ProjectState state, Track track, QuantizeAudioCommand c, IAnalysisSource analysis) {
-        var groove = GrooveFor(state, track.Id, c.GrooveId, analysis);
+        var groove = GrooveFor(state, track.Id, c.GrooveId, analysis, c.GridTicks);
         return groove is null
             ? at => Quantize.Tick(at, c.GridTicks, c.Strength, c.Swing)
             : at => Grooves.Target(groove, at, c.Strength).Tick;

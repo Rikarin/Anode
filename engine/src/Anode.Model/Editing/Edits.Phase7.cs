@@ -437,7 +437,18 @@ public static partial class Edits {
     ///     when one is named; else, on a track matching the groove track, the groove made now from the groove track's
     ///     first region (its bars, 1…4, at 1/16 steps); else null (the grid).
     /// </summary>
-    static GrooveTemplate? GrooveFor(ProjectState state, string trackId, string? grooveId, IAnalysisSource analysis) {
+    /// <summary>
+    ///     The groove a quantise on a track follows: the one named, else the groove track's live groove when the track
+    ///     matches it, with steps of the quantise's grid (<paramref name="gridTicks" />; a plain 1/8 quantise follows the
+    ///     groove's eighths), else none.
+    /// </summary>
+    static GrooveTemplate? GrooveFor(
+        ProjectState state,
+        string trackId,
+        string? grooveId,
+        IAnalysisSource analysis,
+        long gridTicks
+    ) {
         if (grooveId is not null) {
             return state.Grooves.TryGetValue(grooveId, out var groove)
                 ? groove
@@ -450,11 +461,19 @@ public static partial class Edits {
             return null;
         }
 
-        return LiveGroove(state, grooveTrack, analysis);
+        return LiveGroove(state, grooveTrack, analysis, gridTicks);
     }
 
-    /// <summary>The groove of the groove track: made from its first region (MIDI notes, or audio onsets), now.</summary>
-    public static GrooveTemplate LiveGroove(ProjectState state, string grooveTrackId, IAnalysisSource analysis) {
+    /// <summary>
+    ///     The groove of the groove track: made from its first region (MIDI notes, or audio onsets), now, in steps of
+    ///     <paramref name="stepTicks" /> (the quantise's grid), or 1/16 when those do not divide its bars.
+    /// </summary>
+    public static GrooveTemplate LiveGroove(
+        ProjectState state,
+        string grooveTrackId,
+        IAnalysisSource analysis,
+        long stepTicks = DefaultGrooveStepTicks
+    ) {
         var midi = state.MidiRegionsOf(grooveTrackId).FirstOrDefault();
         var audio = state.RegionsOf(grooveTrackId).FirstOrDefault();
         if (midi is null && audio is null) {
@@ -469,7 +488,10 @@ public static partial class Edits {
             ? midi.LengthTicks
             : EndTick(state, audio!) - audio!.StartTick;
         var bars = (int)Math.Clamp((span + bar - 1) / bar, 1, MaxGrooveBars);
-        var length = GrooveLength(state, start, bars, DefaultGrooveStepTicks);
+        var step = stepTicks >= 1 && bars * bar % stepTicks == 0 && bars * bar / stepTicks <= MaxGrooveSteps
+            ? stepTicks
+            : DefaultGrooveStepTicks;
+        var length = GrooveLength(state, start, bars, step);
         var groove = midi is not null && start == midi.StartTick
             ? Grooves.FromNotes(
                 LiveGrooveId,
@@ -477,7 +499,7 @@ public static partial class Edits {
                 midi.Notes,
                 midi.StartTick,
                 length,
-                DefaultGrooveStepTicks
+                step
             )
             : Grooves.FromOnsets(
                 LiveGrooveId,
@@ -485,7 +507,7 @@ public static partial class Edits {
                 OnsetTicks(state, audio!, analysis),
                 audio!.StartTick,
                 length,
-                DefaultGrooveStepTicks
+                step
             );
         return CheckGroove(groove);
     }
