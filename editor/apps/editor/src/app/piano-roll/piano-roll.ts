@@ -1,6 +1,12 @@
 import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
 import { provideIcons } from '@ng-icons/core';
-import { matAutoFixNormalRound, matGridOnRound, matZoomInRound, matZoomOutRound } from '@ng-icons/material-icons/round';
+import {
+  matAutoFixNormalRound,
+  matGridOnRound,
+  matPianoRound,
+  matZoomInRound,
+  matZoomOutRound
+} from '@ng-icons/material-icons/round';
 import { XuiButtonImports } from '@xui/button';
 import { XuiIconImports } from '@xui/icon';
 import { XuiNonIdealStateImports } from '@xui/non-ideal-state';
@@ -9,11 +15,14 @@ import { XuiSegmentedControlImports, type XuiSegmentedOption } from '@xui/segmen
 import { XuiSelectImports } from '@xui/select';
 import { XuiTooltipImports } from '@xui/tooltip';
 import { type QuantizeChoice, quantizeChoices } from '../grooves/groove-menu';
+import { formatPosition } from '../midi-edit/position';
 import { gridLabel, QuantizeGrids } from '../midi/midi-math';
 import { PianoRollStore, type PianoRollTool } from '../state/piano-roll.store';
 import { ProjectStore } from '../state/project.store';
 import { SelectionStore } from '../state/selection.store';
 import { UiStore } from '../state/ui.store';
+import { StepInputStore } from '../state/step-input.store';
+import { ArticulationLane, NoteInspector } from './note-articulations';
 import { deleteCommands, noteCommands, notesLabel, placeNotes, quantizeCommands, transposeNotes } from './note-edit';
 import { PianoRollGrid } from './piano-roll-grid';
 import { PianoRollKeys } from './piano-roll-keys';
@@ -30,6 +39,8 @@ import { VelocityLane } from './velocity-lane';
   selector: 'an-piano-roll',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
+    ArticulationLane,
+    NoteInspector,
     PianoRollGrid,
     PianoRollKeys,
     VelocityLane,
@@ -41,7 +52,7 @@ import { VelocityLane } from './velocity-lane';
     XuiSelectImports,
     XuiTooltipImports
   ],
-  providers: [provideIcons({ matAutoFixNormalRound, matGridOnRound, matZoomInRound, matZoomOutRound })],
+  providers: [provideIcons({ matAutoFixNormalRound, matGridOnRound, matPianoRound, matZoomInRound, matZoomOutRound })],
   host: {
     class: 'flex h-full min-h-0 flex-col outline-none',
     role: 'region',
@@ -134,6 +145,20 @@ import { VelocityLane } from './velocity-lane';
       >
         Transform…
       </button>
+      <button
+        type="button"
+        class="bezel text-foreground flex h-6.5 shrink-0 items-center gap-1 px-2 text-[11px] font-semibold"
+        aria-label="MIDI Step Input"
+        data-testid="midi-step-input"
+        xuiTooltip="MIDI In: step-enter notes from a MIDI keyboard"
+        [attr.aria-pressed]="midiStepInput()"
+        [class.text-lit]="midiStepInput()"
+        [disabled]="!store.track()"
+        (click)="toggleMidiStepInput()"
+      >
+        <ng-icon xui name="matPianoRound" size="15px" />
+        MIDI In
+      </button>
       <span class="text-foreground-muted min-w-0 truncate text-xs" data-testid="piano-roll-title">{{ title() }}</span>
       <div class="ms-auto flex items-center gap-1">
         <button xuiButton type="button" size="sm" variant="ghost" aria-label="Zoom out" (click)="store.zoom(1 / 1.5)">
@@ -153,7 +178,19 @@ import { VelocityLane } from './velocity-lane';
     } @else {
       <div class="flex min-h-0 flex-1">
         <an-piano-roll-keys class="w-14 shrink-0" [visibleLanes]="gridRef.visibleLanes()" />
-        <an-piano-roll-grid #gridRef class="min-w-0 flex-1" />
+        <div class="relative flex min-w-0 flex-1">
+          <an-piano-roll-grid #gridRef class="min-w-0 flex-1" />
+          @if (stepMarker(); as marker) {
+            <div
+              class="bg-primary pointer-events-none absolute inset-y-0 w-0.5 shadow-[0_0_4px_var(--color-primary)]"
+              role="img"
+              data-testid="step-input-marker"
+              [attr.aria-label]="'Step input position ' + marker.position"
+              [attr.data-tick]="marker.tick"
+              [style.left.px]="marker.x"
+            ></div>
+          }
+        </div>
       </div>
       <div class="border-hairline flex h-16 shrink-0 border-t">
         <div
@@ -163,6 +200,23 @@ import { VelocityLane } from './velocity-lane';
         </div>
         <an-velocity-lane class="min-w-0 flex-1" />
       </div>
+      @if (store.track()?.articulationSetId) {
+        <div class="border-hairline flex h-6 shrink-0 border-t">
+          <div
+            class="border-hairline bg-surface text-foreground-muted flex w-14 shrink-0 items-center border-e px-1.5 text-[10px] font-semibold"
+          >
+            Artic.
+          </div>
+          @defer (on immediate) {
+            <an-articulation-lane class="min-w-0 flex-1" />
+          }
+        </div>
+      }
+      <div class="border-hairline bg-surface flex h-8 shrink-0 border-t">
+        @defer (on immediate) {
+          <an-note-inspector class="min-w-0 flex-1" />
+        }
+      </div>
     }
   `
 })
@@ -170,6 +224,21 @@ export class PianoRoll {
   protected readonly store = inject(PianoRollStore);
   private readonly project = inject(ProjectStore);
   private readonly selection = inject(SelectionStore);
+  private readonly steps = inject(StepInputStore);
+
+  protected readonly midiStepInput = computed(() => this.steps.state().on && this.steps.state().midiInput);
+  /** Step input's position on this Piano Roll's track (Logic's step input playhead), where it is in view. */
+  protected readonly stepMarker = computed(() => {
+    const state = this.steps.state();
+    if (!state.on || !state.trackId || state.trackId !== this.store.track()?.id) {
+      return null;
+    }
+    const x = Math.round((state.positionTick - this.store.originTick()) * this.store.pixelsPerTick());
+    if (x < 0) {
+      return null;
+    }
+    return { x, tick: state.positionTick, position: formatPosition(state.positionTick, this.project.meter()) };
+  });
 
   protected readonly tools: XuiSegmentedOption<PianoRollTool>[] = [
     { value: 'pointer', label: 'Pointer' },
@@ -228,9 +297,14 @@ export class PianoRoll {
     this.store.quantizeStrength.set(Math.min(100, Math.max(0, percent)) / 100);
   }
 
+  /** Logic's MIDI In button: MIDI step input into the selected region (or track) at the playhead, or off. */
+  protected toggleMidiStepInput(): void {
+    void this.steps.toggleMidi(this.ui.stepInputKeyboardOpen());
+  }
+
   protected focus(event: PointerEvent): void {
     const target = event.target as HTMLElement | null;
-    if (!target?.closest('button, input, xui-select, [role="combobox"]')) {
+    if (!target?.closest('button, input, select, xui-select, [role="combobox"]')) {
       (event.currentTarget as HTMLElement).focus({ preventScroll: true });
     }
   }
@@ -249,7 +323,7 @@ export class PianoRoll {
 
   protected key(event: KeyboardEvent): void {
     const target = event.target as HTMLElement | null;
-    if (target?.closest('input, textarea, [contenteditable], [role="combobox"], [role="listbox"]')) {
+    if (target?.closest('input, select, textarea, [contenteditable], [role="combobox"], [role="listbox"]')) {
       return;
     }
 

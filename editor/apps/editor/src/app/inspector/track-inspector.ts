@@ -11,6 +11,8 @@ import { XuiTooltipImports } from '@xui/tooltip';
 import { ConnectionService } from '../core/connection';
 import { InstrumentStore } from '../state/instrument.store';
 import { PluginsStore } from '../state/plugins.store';
+import { ProjectStore } from '../state/project.store';
+import { UiStore } from '../state/ui.store';
 import { ParameterEditor } from './parameter-editor';
 
 /** A device choice in a picker: a port, or every device (null). */
@@ -138,6 +140,45 @@ const Channels = Array.from({ length: 17 }, (_, i) => i);
         />
       </div>
     </section>
+    <section class="flex flex-col gap-1.5 text-xs" aria-label="Articulation Set">
+      <h4 class="text-foreground-muted text-[10px] font-semibold tracking-wide uppercase">Articulation Set</h4>
+      <div class="flex items-center gap-1">
+        <select
+          class="border-border bg-surface-inset text-foreground focus-visible:outline-focus h-6 min-w-0 flex-1 rounded-[5px] border px-1 text-xs focus-visible:outline-2"
+          aria-label="Articulation set"
+          data-testid="articulation-set-select"
+          (change)="assignArticulationSet($event)"
+        >
+          <option value="" [selected]="!track().articulationSetId">None</option>
+          @for (set of project.articulationSetList(); track set.id) {
+            <option [value]="set.id" [selected]="set.id === track().articulationSetId">{{ set.name }}</option>
+          }
+        </select>
+        <button
+          xuiButton
+          type="button"
+          size="sm"
+          variant="ghost"
+          aria-label="Edit articulation set"
+          data-testid="articulation-set-edit"
+          [disabled]="!track().articulationSetId"
+          (click)="ui.articulationSetEditor.set(track().articulationSetId ?? null)"
+        >
+          Edit…
+        </button>
+        <button
+          xuiButton
+          type="button"
+          size="sm"
+          variant="ghost"
+          aria-label="New articulation set"
+          data-testid="articulation-set-new"
+          (click)="ui.articulationSetEditor.set('new')"
+        >
+          New…
+        </button>
+      </div>
+    </section>
     @if (track().kind === 'midi') {
       <section class="flex flex-col gap-1.5 text-xs" aria-label="MIDI output">
         <h4 class="text-foreground-muted text-[10px] font-semibold tracking-wide uppercase">MIDI Out</h4>
@@ -170,6 +211,8 @@ const Channels = Array.from({ length: 17 }, (_, i) => i);
 export class TrackInspector {
   protected readonly plugins = inject(PluginsStore);
   private readonly instruments = inject(InstrumentStore);
+  protected readonly project = inject(ProjectStore);
+  protected readonly ui = inject(UiStore);
   readonly track = input.required<Track>();
 
   protected readonly desktopDialog = typeof inject(ConnectionService).desktop?.dialogs?.instrumentFile === 'function';
@@ -232,6 +275,17 @@ export class TrackInspector {
 
   protected loadPath(path: string): void {
     this.instruments.loadFile(this.track().id, path);
+  }
+
+  /** Gives the track an articulation set of the project, or none (`assignArticulationSet`). */
+  protected assignArticulationSet(event: Event): void {
+    const setId = (event.target as HTMLSelectElement).value || null;
+    if (setId !== (this.track().articulationSetId ?? null)) {
+      void this.project.execute(
+        [{ type: 'assignArticulationSet', trackId: this.track().id, setId }],
+        'Assign Articulation Set'
+      );
+    }
   }
 
   protected setInput(device: DeviceChoice | null, channel: number | null): void {

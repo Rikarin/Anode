@@ -3,8 +3,10 @@ import type { CommandResult, StepInputRequest, StepInputState } from '@anode/api
 import { ANODE_API } from '../core/api';
 import { EventStream } from '../core/events';
 import { Notify } from '../core/notify';
-import { DefaultStepInput, stepLength } from '../midi-edit/step-input';
+import { DefaultStepInput, stepLength, stepTarget } from '../midi-edit/step-input';
 import { ProjectStore } from './project.store';
+import { SelectionStore } from './selection.store';
+import { TransportStore } from './transport.store';
 
 /**
  * Step input (docs/08-phase-7.md, "Step input"): the Server holds the state (on, where the next step goes, the note
@@ -17,6 +19,8 @@ export class StepInputStore {
   private readonly api = inject(ANODE_API);
   private readonly project = inject(ProjectStore);
   private readonly notify = inject(Notify);
+  private readonly selection = inject(SelectionStore);
+  private readonly transport = inject(TransportStore);
 
   readonly state = signal<StepInputState>(DefaultStepInput);
   readonly on = computed(() => this.state().on);
@@ -61,6 +65,46 @@ export class StepInputStore {
     at?: { regionId?: string | null; trackId?: string | null; positionTick?: number }
   ): Promise<void> {
     return this.set({ on, ...(at ?? {}) });
+  }
+
+  /**
+   * Turns step input on at the playhead into the selected MIDI region (or a new region on the selected instrument or
+   * MIDI track); false when nothing is selected that takes steps. With `midiInput`, steps come from MIDI input too.
+   */
+  async start(midiInput?: boolean): Promise<boolean> {
+    const target = stepTarget(
+      this.project.midiRegions(),
+      this.project.tracks(),
+      this.selection.regions(),
+      this.selection.track()
+    );
+    if (!target) {
+      return false;
+    }
+    await this.set({
+      on: true,
+      regionId: target.regionId ?? '',
+      trackId: target.trackId,
+      positionTick: Math.max(0, Math.round(this.transport.positionAt(performance.now()))),
+      ...(midiInput === undefined ? {} : { midiInput })
+    });
+    return true;
+  }
+
+  /**
+   * MIDI step input on or off (Logic's MIDI In button; the `midi.stepInput` key command): on, it starts step input
+   * from MIDI where {@link start} does (or keeps the position when step input is already on); off, step input stays
+   * on only while the Step Input Keyboard is open (`keyboardOpen`).
+   */
+  async toggleMidi(keyboardOpen: boolean): Promise<void> {
+    const state = this.state();
+    if (state.on && state.midiInput) {
+      await this.set({ midiInput: false, on: keyboardOpen });
+    } else if (state.on) {
+      await this.set({ midiInput: true });
+    } else if (!(await this.start(true))) {
+      this.notify.info('Select a MIDI region, or an instrument or MIDI track, for MIDI step input.');
+    }
   }
 
   /** A step of notes (a chord when several), at the step position. */
