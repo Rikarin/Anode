@@ -170,6 +170,21 @@ describe('note edits', () => {
     ]);
   });
 
+  it('keeps a copied note’s articulation', () => {
+    const regionsById = new Map(regions.map(r => [r.id, r]));
+    const placed = placeNotes(
+      regions.map(r => ({ ...r, notes: r.notes.map(n => ({ ...n, articulationId: 2 })) }))
+    ).find(n => n.id === 3);
+    expect(placed?.articulationId).toBe(2);
+    expect(noteCommands(placed ? [{ ...placed, start: 8640 }] : [], byId, regionsById, true)).toEqual([
+      {
+        type: 'addNotes',
+        regionId: 'mid_b',
+        notes: [{ pitch: 67, velocity: 100, channel: 1, startTick: 960, lengthTicks: 240, articulationId: 2 }]
+      }
+    ]);
+  });
+
   it('transposes a selection as a block, stopping at the keyboard edge', () => {
     expect(transposeNotes([note(1), note(2)], 12).map(n => n.pitch)).toEqual([72, 76]);
     expect(transposeNotes([note(4)], 100).map(n => n.pitch)).toEqual([127]);

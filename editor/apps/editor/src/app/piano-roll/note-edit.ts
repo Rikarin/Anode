@@ -16,6 +16,8 @@ export interface PlacedNote {
   velocity: number;
   /** MIDI channel, 1…16. */
   channel: number;
+  /** The note's articulation (0 or left out: none; Phase 7). */
+  articulationId?: number;
 }
 
 /** A region's span in project ticks. */
@@ -35,7 +37,8 @@ export function placeNotes(regions: readonly MidiRegion[]): PlacedNote[] {
       length: note.lengthTicks,
       pitch: note.pitch,
       velocity: note.velocity,
-      channel: note.channel
+      channel: note.channel,
+      articulationId: note.articulationId
     }))
   );
 }
@@ -154,7 +157,8 @@ export function noteCommands(
         velocity: n.velocity,
         channel: n.channel,
         startTick: n.startTick,
-        lengthTicks: n.lengthTicks
+        lengthTicks: n.lengthTicks,
+        ...(n.articulationId ? { articulationId: n.articulationId } : {})
       }))
     });
   }
@@ -169,7 +173,7 @@ function noteOf(note: PlacedNote, relative: number): Note {
     channel: note.channel,
     startTick: relative,
     lengthTicks: note.length,
-    articulationId: 0
+    articulationId: note.articulationId ?? 0
   };
 }
 
