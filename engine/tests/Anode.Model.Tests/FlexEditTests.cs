@@ -92,6 +92,26 @@ public sealed class FlexEditTests {
     }
 
     [Fact]
+    public void Quantising_audio_to_a_groove_needs_no_grid() {
+        // A groove of 1/16s, each 40 ticks late: the transients move onto it with gridTicks 0 (Phase 7).
+        LoopOnTrack();
+        Apply(new SetRegionFlexCommand(Region.Id, FlexFollow.On));
+        Apply(
+            new SetGrooveCommand(
+                new("grv_late", "Late", 3840, 240, [..Enumerable.Range(0, 16).Select(static i => new GroovePoint(i * 240 + 40, 1))])
+            )
+        );
+        Apply(new QuantizeAudioCommand([Region.Id], 0, GrooveId: "grv_late"));
+        var timing = RegionTiming.Of(state, Region);
+        Assert.NotEmpty(Region.FlexMarkers);
+        foreach (var transient in analysis.Transients.Where(static f => f is > 0 and < 16 * Beat)) {
+            Assert.Equal(40, Math.Round(timing.TickAt(transient)) % 240);
+        }
+
+        Refused(new QuantizeAudioCommand([Region.Id], 0, GrooveId: "grv_none"), "grv_none");
+    }
+
+    [Fact]
     public void Half_strength_moves_halfway() {
         LoopOnTrack();
         Apply(new SetRegionFlexCommand(Region.Id, FlexFollow.On));
