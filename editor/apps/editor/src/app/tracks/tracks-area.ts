@@ -5,6 +5,7 @@ import { RULER_HEIGHT } from '@anode/timeline';
 import { provideIcons } from '@ng-icons/core';
 import {
   matAddRound,
+  matAppsRound,
   matAutoFixNormalRound,
   matContentCutRound,
   matEditRound,
@@ -39,6 +40,7 @@ import { AutomationHeader } from '../automation/automation-header';
 import { AutomationLanes } from '../automation/automation-lanes';
 import { AutomationStore } from '../automation/automation.store';
 import { ConnectionService } from '../core/connection';
+import { DrumMachineStore } from '../drum-machine/drum-machine.store';
 import { GlobalHeaders } from '../global/global-headers';
 import { GlobalTracks } from '../global/global-lanes';
 import { GlobalLaneHeights } from '../global/global-math';
@@ -94,6 +96,7 @@ import { TrackHeader } from './track-header';
   providers: [
     provideIcons({
       matAddRound,
+      matAppsRound,
       matAutoFixNormalRound,
       matContentCutRound,
       matEditRound,
@@ -147,6 +150,21 @@ import { TrackHeader } from './track-header';
       >
         <ng-icon xui name="matExpandMoreRound" size="sm" />
       </button>
+      <ng-template #drumKits>
+        <xui-menu class="min-w-40" aria-label="Drum kits">
+          @for (kit of drumMachines.kits(); track kit.id) {
+            <button xuiMenuItem type="button" [attr.data-kit]="kit.id" (click)="drumMachines.create(kit)">
+              {{ kit.name }}
+            </button>
+          }
+          @if (drumMachines.kits().length > 0) {
+            <xui-menu-divider />
+          }
+          <button xuiMenuItem type="button" data-testid="empty-kit" (click)="drumMachines.create(null)">
+            Empty Kit
+          </button>
+        </xui-menu>
+      </ng-template>
       <ng-template #kinds>
         <xui-menu>
           <button xuiMenuItem type="button" icon="matGraphicEqRound" (click)="addTrack('audio')">Audio Track</button>
@@ -167,6 +185,15 @@ import { TrackHeader } from './track-header';
             (click)="addTrack('midi')"
           >
             External MIDI Track
+          </button>
+          <button
+            xuiMenuItem
+            type="button"
+            icon="matAppsRound"
+            data-testid="add-drum-machine"
+            [xuiMenuTriggerFor]="drumKits"
+          >
+            Drum Machine Designer
           </button>
           <xui-menu-divider />
           <button
@@ -533,6 +560,7 @@ export class TracksArea {
   protected readonly ui = inject(UiStore);
   protected readonly flex = inject(FlexStore);
   private readonly stepSequencer = inject(StepSequencerStore);
+  protected readonly drumMachines = inject(DrumMachineStore);
   protected readonly timeline = viewChild.required(Timeline);
   private readonly menuTrigger = viewChild(CdkContextMenuTrigger);
   private readonly globalLanes = viewChild<GlobalTracks>('global');

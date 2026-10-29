@@ -46,6 +46,26 @@ export function visibleStrips(tracks: readonly Track[], view: MixerView, hidden:
   });
 }
 
+/** A strip of the Mixer and, for a Drum Machine Designer, its pads' strips right after it (grouped, as in Logic). */
+export interface StripEntry {
+  track: Track;
+  pads: Track[];
+}
+
+/** The strips in order, a DMD's pads (its stack members) gathered under it. */
+export function stripEntries(strips: readonly Track[]): StripEntry[] {
+  const entries: StripEntry[] = [];
+  for (const track of strips) {
+    const last = entries.at(-1);
+    if (last?.track.drumMachine && track.parentId === last.track.id) {
+      last.pads.push(track);
+    } else {
+      entries.push({ track, pads: [] });
+    }
+  }
+  return entries;
+}
+
 /** The Mixer's view and filters: per window, not per project. */
 @Injectable({ providedIn: 'root' })
 export class MixerViewStore {
@@ -182,13 +202,39 @@ export class MixerViewStore {
       </div>
     </div>
     <div class="bg-surface-sunken flex min-h-0 flex-1 overflow-auto" data-testid="mixer-strips">
-      @for (track of strips(); track track.id) {
-        <an-mixer-strip
-          [track]="track"
-          [layout]="layout()"
-          [selected]="selected() === track.id"
-          [flow]="flow().has(track.id)"
-        />
+      @for (entry of entries(); track entry.track.id) {
+        @if (entry.pads.length > 0) {
+          <div
+            class="flex"
+            role="group"
+            data-testid="drum-machine-strips"
+            [attr.aria-label]="'Pads of ' + entry.track.name"
+          >
+            <an-mixer-strip
+              [track]="entry.track"
+              [layout]="layout()"
+              [selected]="selected() === entry.track.id"
+              [flow]="flow().has(entry.track.id)"
+            />
+            <div class="flex border-s-2" [style.border-inline-start-color]="entry.track.color">
+              @for (pad of entry.pads; track pad.id) {
+                <an-mixer-strip
+                  [track]="pad"
+                  [layout]="layout()"
+                  [selected]="selected() === pad.id"
+                  [flow]="flow().has(pad.id)"
+                />
+              }
+            </div>
+          </div>
+        } @else {
+          <an-mixer-strip
+            [track]="entry.track"
+            [layout]="layout()"
+            [selected]="selected() === entry.track.id"
+            [flow]="flow().has(entry.track.id)"
+          />
+        }
       } @empty {
         <p class="text-foreground-muted self-center p-4 text-xs">
           @if (project.trackList().length === 0) {
@@ -221,12 +267,16 @@ export class MixerPane {
   protected readonly strips = computed(() =>
     visibleStrips(this.project.trackList(), this.store.view(), this.store.hidden())
   );
-  /** Rows per section, the most any shown strip needs (an empty insert slot and the Send slot included). */
+  protected readonly entries = computed(() => stripEntries(this.strips()));
+  /** Rows per section, the most any shown strip needs (an empty insert, MIDI FX and Send slot included). */
   protected readonly layout = computed<StripLayout>(() => {
     const strips = this.strips();
     const master = this.project.master();
+    const midi = strips.filter(t => t.kind === 'instrument' || t.kind === 'midi');
     return {
       input: strips.some(t => t.kind === 'aux'),
+      midiEffects: midi.length ? Math.max(...midi.map(t => t.strip.midiEffects.length)) + 1 : 0,
+      instrument: midi.length > 0,
       inserts: Math.max(master.inserts.length, ...strips.map(t => t.strip.inserts.length)) + 1,
       sends: Math.max(0, ...strips.map(t => t.strip.sends.length)) + 1
     };

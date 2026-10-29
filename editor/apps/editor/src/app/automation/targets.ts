@@ -17,8 +17,8 @@ export type TargetGroup = string;
 
 /**
  * Something a track's automation can drive (docs/05-phase-4.md, `AutomationLane.target`): `volume` (dB), `pan`
- * (−1…1), `mute` (0/1), `send:{sendId}` (dB), `insert:{insertId}:{parameterId}` or `instrument:{parameterId}` (the
- * parameter's unit). Values are in the target's unit; `toNormal` and `fromNormal` map them to a lane's height (the
+ * (−1…1), `mute` (0/1), `send:{sendId}` (dB), `insert:{insertId}:{parameterId}`, `midiEffect:{slotId}:{parameterId}`
+ * or `instrument:{parameterId}` (the parameter's unit). Values are in the target's unit; `toNormal` and `fromNormal` map them to a lane's height (the
  * fader's taper for decibels, the knob's for parameters).
  */
 export interface AutomationTarget {
@@ -150,6 +150,14 @@ export function targetsOf(
     for (const parameter of plugin(insert.pluginId)?.parameters ?? []) {
       list.push(
         parameterTarget(`insert:${insert.id}:${parameter.id}`, insert.name, parameter, insert.parameters[parameter.id])
+      );
+    }
+  }
+  // MIDI FX slots' parameters (Phase 6), under the slot's plugin name: `midiEffect:{slotId}:{parameterId}`.
+  for (const slot of track.strip.midiEffects) {
+    for (const parameter of plugin(slot.pluginId)?.parameters ?? []) {
+      list.push(
+        parameterTarget(`midiEffect:${slot.id}:${parameter.id}`, slot.name, parameter, slot.parameters[parameter.id])
       );
     }
   }
