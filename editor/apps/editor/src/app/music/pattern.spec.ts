@@ -103,7 +103,8 @@ describe('Step Sequencer patterns (hand-worked from docs/07-phase-6.md)', () => 
     expect(starts(region([row([4], {}, { offset: 0.5 })]))).toEqual([960 + 120]);
     expect(starts(region([row([4], {}, { offset: -0.25 })]))).toEqual([960 - 60]);
     const early = unrollPattern(region([row([0], {}, { offset: -0.5 })]));
-    expect(early.map(n => [n.startTick, n.lengthTicks])).toEqual([[0, 120]]);
+    // The start is clamped to the region's start before the gate: the note keeps its length.
+    expect(early.map(n => [n.startTick, n.lengthTicks])).toEqual([[0, 240]]);
   });
 
   it('lengthens by the gate (in steps), ties over steps, and ends at the region end', () => {
@@ -172,6 +173,15 @@ describe('Step Sequencer patterns (hand-worked from docs/07-phase-6.md)', () => 
  * engine/tests/Anode.Model.Tests/PatternVectors.json, when the file is there. Each case is a region (and the key
  * track), and the notes it plays in project ticks (pitch, startTick, lengthTicks, velocity), in any order.
  */
+interface Draw {
+  seed: string;
+  regionId: string;
+  rowId: string;
+  step: string;
+  pass: number;
+  value: number;
+}
+
 interface Vector {
   name: string;
   region: PatternRegion;
@@ -189,7 +199,7 @@ interface ExpectedNote {
   velocity: number;
 }
 
-async function loadVectors(): Promise<Vector[] | null> {
+async function loadVectors(): Promise<{ cases: Vector[]; draws: Draw[] } | null> {
   const proc = (globalThis as { process?: { cwd(): string; env: Record<string, string | undefined> } }).process;
   if (!proc) {
     return null;
@@ -205,8 +215,8 @@ async function loadVectors(): Promise<Vector[] | null> {
     if (!fs.existsSync(path)) {
       return null;
     }
-    const parsed = JSON.parse(fs.readFileSync(path, 'utf8')) as Vector[] | { cases: Vector[] };
-    return Array.isArray(parsed) ? parsed : parsed.cases;
+    const parsed = JSON.parse(fs.readFileSync(path, 'utf8')) as Vector[] | { cases: Vector[]; draws?: Draw[] };
+    return Array.isArray(parsed) ? { cases: parsed, draws: [] } : { cases: parsed.cases, draws: parsed.draws ?? [] };
   } catch {
     return null;
   }
@@ -225,10 +235,19 @@ const key = (n: { pitch: number; start: number; length: number; velocity: number
 
 describe('Pattern parity with the Model', async () => {
   const vectors = await loadVectors();
+  it.skipIf(vectors === null)('draws as the Model does', () => {
+    for (const d of vectors?.draws ?? []) {
+      expect(patternDraw(Number(d.seed), d.regionId, d.rowId, d.step, d.pass), JSON.stringify(d)).toBe(d.value);
+    }
+  });
+
   it.skipIf(vectors === null)('matches every shared vector', () => {
-    for (const v of vectors ?? []) {
+    for (const v of vectors?.cases ?? []) {
+      // The vectors' ticks are relative to the region's start.
       const actual = unrollPattern(v.region, v.keys ? { keys: v.keys } : {})
-        .map(n => key({ pitch: n.pitch, start: n.startTick, length: n.lengthTicks, velocity: n.velocity }))
+        .map(n =>
+          key({ pitch: n.pitch, start: n.startTick - v.region.startTick, length: n.lengthTicks, velocity: n.velocity })
+        )
         .sort();
       const expected = expectedNotes(v)
         .map(n =>

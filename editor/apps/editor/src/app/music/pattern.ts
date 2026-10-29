@@ -85,10 +85,10 @@ function hash32(text: string): number {
 }
 
 /**
- * The pattern generator's draw for (seed, region, row, step, pass), uniform in [0, 1): FNV-1a 32 of the text
- * `"{seed}|{regionId}|{rowId}|{step}|{pass}"`, finalised as MurmurHash3's fmix32, over 2^32. A random row draws its
- * step at a position with the step written `r{position}`. The same project always gives the same notes; a reseed
- * changes `seed`. (The editor's reading of docs/07-phase-6.md; PatternVectors.json is the reference.)
+ * The pattern generator's draw for (seed, region, row, step, pass), uniform in [0, 1), as the Model's PatternUnroller
+ * (engine/tests/Anode.Model.Tests/PatternVectors.json): FNV-1a 32 over the UTF-16 units of `"seed:region:row:step:pass"`,
+ * finalised as MurmurHash3's fmix32, over 2^32. Chance draws step `k mod L` on pass `k div L` at position k; a random
+ * row draws step `"r"` on pass k. The same project always gives the same notes; a reseed changes `seed`.
  */
 export function patternDraw(
   seed: number,
@@ -97,7 +97,7 @@ export function patternDraw(
   step: number | string,
   pass: number
 ): number {
-  return hash32(`${seed}|${regionId}|${rowId}|${step}|${pass}`) / 4_294_967_296;
+  return hash32(`${seed}:${regionId}:${rowId}:${step}:${pass}`) / 4_294_967_296;
 }
 
 /** The step a row plays at position `position` (0-based, from the region's start) in its play mode. */
@@ -119,7 +119,7 @@ export function stepAt(
       return k < length ? k : 2 * length - 2 - k;
     }
     case 'random':
-      return Math.min(length - 1, Math.floor(draw(`r${position}`, Math.floor(position / length)) * length));
+      return Math.min(length - 1, Math.floor(draw('r', position) * length));
     default:
       return position % length;
   }
@@ -193,23 +193,22 @@ export function unrollPattern(
     if (!(stepTicks > 0)) {
       return;
     }
-    const cycle = cycleLength(row);
     const draw = (step: number | string, pass: number) => patternDraw(pattern.seed, region.id, row.id, step, pass);
     for (let position = 0; position * stepTicks < length; position++) {
-      const pass = Math.floor(position / cycle);
       const index = stepAt(row, position, draw);
       const step = row.steps[index];
       if (!step?.on) {
         continue;
       }
-      if (step.chance < 1 && !(draw(index, pass) < step.chance)) {
+      if (step.chance < 1 && !(draw(position % row.length, Math.floor(position / row.length)) < step.chance)) {
         continue;
       }
       const nominal = position * stepTicks;
       let start = nominal + step.offset * stepTicks;
-      if (pattern.swing > 0 && nominal % SixteenthTicks === 0 && (nominal / SixteenthTicks) % 2 === 1) {
+      if (pattern.swing > 0 && nominal % (2 * SixteenthTicks) === SixteenthTicks) {
         start += pattern.swing * (SixteenthTicks / 2);
       }
+      start = Math.max(0, start);
       const gate = step.gate * stepTicks;
       const repeats = Math.max(1, Math.round(step.repeats));
       const each = gate / repeats;
@@ -218,9 +217,9 @@ export function unrollPattern(
           ? chordDegreeNotes(row.note, keyAt(options.keys ?? [], region.startTick + Math.max(0, Math.round(start))))
           : [row.note];
       for (let r = 0; r < repeats; r++) {
-        const from = Math.max(0, Math.round(start + r * each));
-        const to = Math.min(length, Math.round(start + (r + 1) * each));
-        if (from >= length || to <= from) {
+        const from = Math.round(start + r * each);
+        const to = Math.min(length, Math.max(from + 1, Math.round(start + (r + 1) * each)));
+        if (from >= length) {
           continue;
         }
         for (const pitch of pitches) {
