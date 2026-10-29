@@ -1,4 +1,5 @@
 using Anode.Dsp.Effects;
+using Anode.Dsp.MidiEffects;
 using Anode.Engine.Mixing;
 using Anode.Engine.Plugins;
 using Anode.Ipc;
@@ -34,7 +35,7 @@ public sealed partial class EngineController {
             }
 
             SetFader(trackId, channel.Strip, strip);
-            var replaced = new List<InsertSlot>();
+            var replaced = new List<IDisposable>();
             ApplyChannel(channel, trackId, strip, replaced);
             PublishPlan();
             foreach (var slot in replaced) {
@@ -45,11 +46,23 @@ public sealed partial class EngineController {
         }
     }
 
-    /// <summary>Queues a change of an insert's parameter; false for an unknown track, insert or parameter.</summary>
+    /// <summary>
+    ///     Queues a change of an insert's parameter, or of a MIDI FX slot's (Phase 6: <paramref name="insertId" /> names
+    ///     a MIDI FX slot when no insert has that id); false for an unknown track, slot or parameter.
+    /// </summary>
     public bool SetInsertParameter(int trackId, string insertId, string parameterId, double value) {
         lock (gate) {
             var root = Engine.Root;
-            if (FindInsert(root, trackId, insertId) is not { } slot || !slot.Set(parameterId, value)) {
+            if (FindInsert(root, trackId, insertId) is not { } slot) {
+                if (FindMidiEffect(root, trackId, insertId) is not { } midi || !midi.Set(parameterId, value)) {
+                    return false;
+                }
+
+                Hold(root, trackId, AutomationKind.MidiEffect, insertId, parameterId);
+                return true;
+            }
+
+            if (!slot.Set(parameterId, value)) {
                 return false;
             }
 
@@ -115,27 +128,36 @@ public sealed partial class EngineController {
         }
     }
 
-    /// <summary>Every insert's opaque state (base64, null when it keeps none), keyed by track and insert id.</summary>
+    /// <summary>
+    ///     Every insert's and MIDI FX slot's opaque state (base64, null when it keeps none), keyed by track and slot id.
+    /// </summary>
     List<InstrumentState> InsertStates(ModelRoot root) {
         var states = new List<InstrumentState>();
         foreach (var (trackId, channel) in Channels(root)) {
             foreach (var insert in channel.Config.Inserts) {
-                if (insert.Slot.Effect is not { } effect) {
-                    continue;
+                if (insert.Slot.Effect is { } effect) {
+                    states.Add(new(trackId, SavedState(trackId, insert.Slot.Id, effect.SaveState), insert.Slot.Id));
                 }
+            }
 
-                string? state = null;
-                try {
-                    state = effect.SaveState() is { } bytes ? Convert.ToBase64String(bytes) : null;
-                } catch (Exception e) when (IsInstrumentFailure(e)) {
-                    Log?.Invoke($"track {trackId}: saving insert {insert.Slot.Id}'s state failed: {e.Message}");
+            foreach (var midi in channel.Config.MidiEffects) {
+                if (midi.Slot.Effect is { } effect) {
+                    states.Add(new(trackId, SavedState(trackId, midi.Slot.Id, effect.SaveState), midi.Slot.Id));
                 }
-
-                states.Add(new(trackId, state, insert.Slot.Id));
             }
         }
 
         return states;
+    }
+
+    /// <summary>A slot's saved state as base64 (null when it keeps none, or saving failed: logged).</summary>
+    string? SavedState(int trackId, string slotId, Func<byte[]?> save) {
+        try {
+            return save() is { } bytes ? Convert.ToBase64String(bytes) : null;
+        } catch (Exception e) when (IsInstrumentFailure(e)) {
+            Log?.Invoke($"track {trackId}: saving {slotId}'s state failed: {e.Message}");
+            return null;
+        }
     }
 
     /// <summary>
@@ -172,6 +194,9 @@ public sealed partial class EngineController {
     InsertSlot? FindInsert(ModelRoot root, int trackId, string insertId) =>
         ChannelOf(root, trackId)?.Config.Inserts.FirstOrDefault(i => i.Slot.Id == insertId)?.Slot;
 
+    MidiEffectSlot? FindMidiEffect(ModelRoot root, int trackId, string slotId) =>
+        ChannelOf(root, trackId)?.Config.MidiEffects.FirstOrDefault(m => m.Slot.Id == slotId)?.Slot;
+
     /// <summary>Sets a fader; a moved value of an automated volume, pan or mute holds it against its lane.</summary>
     void SetFader(int trackId, Strip fader, EngineStrip strip) {
         var root = Engine.Root;
@@ -204,7 +229,7 @@ public sealed partial class EngineController {
     ///     (prepared, state loaded, parameters set); sends keep their slots by id. The instances it no longer uses go
     ///     to <paramref name="replaced" />, to dispose once the plan without them is published.
     /// </summary>
-    void ApplyChannel(ChannelState channel, int trackId, EngineStrip strip, List<InsertSlot> replaced) {
+    void ApplyChannel(ChannelState channel, int trackId, EngineStrip strip, List<IDisposable> replaced) {
         var old = channel.Config;
         var claimed = new HashSet<InsertSlot>();
         var inserts = new List<ChannelInsert>();
@@ -225,8 +250,19 @@ public sealed partial class EngineController {
             sends.Add(new(slot, spec.Bus, spec.PreFader));
         }
 
-        channel.Config = new([..inserts], [..sends], strip.Output);
+        // MIDI FX slots (Phase 6): kept by slot id and plugin as inserts are. The master has none.
+        var claimedMidi = new HashSet<MidiEffectSlot>();
+        var midiEffects = new List<ChannelMidiEffect>();
+        var midiSpecs = trackId == -1 ? [] : strip.MidiEffects ?? [];
+        foreach (var spec in midiSpecs) {
+            var slot = KeepMidiEffect(old, spec, claimedMidi) ?? BuildMidiEffect(trackId, spec);
+            claimedMidi.Add(slot);
+            midiEffects.Add(new(slot, spec.Bypassed));
+        }
+
+        channel.Config = new([..inserts], [..sends], strip.Output) { MidiEffects = [..midiEffects] };
         replaced.AddRange(old.Inserts.Select(static i => i.Slot).Where(s => !claimed.Contains(s)));
+        replaced.AddRange(old.MidiEffects.Select(static m => m.Slot).Where(s => !claimedMidi.Contains(s)));
     }
 
     /// <summary>The instance of <paramref name="spec" />'s id and plugin, its parameters brought up to date, or null.</summary>
@@ -274,6 +310,55 @@ public sealed partial class EngineController {
             }
 
             callbacks.Slot = slot;
+            return slot;
+        } catch (Exception e) when (IsInstrumentFailure(e)) {
+            effect?.Dispose();
+            Problem(trackId, spec.Id, spec.PluginId, e.Message);
+            return new(spec.Id, spec.PluginId, null);
+        }
+    }
+
+    /// <summary>The MIDI FX instance of <paramref name="spec" />'s id and plugin, its parameters brought up to date, or null.</summary>
+    static MidiEffectSlot? KeepMidiEffect(ChannelConfig old, EngineInsert spec, HashSet<MidiEffectSlot> claimed) {
+        var slot = old.MidiEffects.Select(static m => m.Slot)
+            .FirstOrDefault(s => s.Id == spec.Id && s.PluginId == spec.PluginId && !claimed.Contains(s));
+        if (slot is null) {
+            return null;
+        }
+
+        foreach (var (id, value) in spec.Parameters) {
+            if (!slot.Values.TryGetValue(id, out var known) || Math.Abs(known - value) > 1e-9) {
+                slot.Set(id, value);
+            }
+        }
+
+        return slot;
+    }
+
+    /// <summary>
+    ///     A new MIDI FX slot: the effect created (a built-in; hosted MIDI effects are not supported), prepared, its
+    ///     state loaded and its parameters set. One that cannot be loaded becomes an empty slot that passes MIDI
+    ///     through, and is reported.
+    /// </summary>
+    MidiEffectSlot BuildMidiEffect(int trackId, EngineInsert spec) {
+        IMidiEffect? effect = null;
+        try {
+            effect = Plugins.CreateMidiEffect(spec.PluginId);
+            if (effect is null) {
+                Problem(trackId, spec.Id, spec.PluginId, $"No MIDI effect '{spec.PluginId}'.");
+                return new(spec.Id, spec.PluginId, null);
+            }
+
+            effect.Prepare(Options.SampleRate, AudioEngine.MaxFrames);
+            if (spec.State is not null && !effect.LoadState(Convert.FromBase64String(spec.State))) {
+                Log?.Invoke($"{spec.PluginId}: the saved state did not load; it starts from its defaults");
+            }
+
+            var slot = new MidiEffectSlot(spec.Id, spec.PluginId, effect);
+            foreach (var (id, value) in spec.Parameters) {
+                slot.Initialise(id, value);
+            }
+
             return slot;
         } catch (Exception e) when (IsInstrumentFailure(e)) {
             effect?.Dispose();

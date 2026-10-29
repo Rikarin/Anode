@@ -38,10 +38,10 @@ public sealed class MidiTests : IDisposable {
         controller.LoadModel(TestAudio.Load(segment, version, replace, tracks, [], dir));
     }
 
-    /// <summary>Plays from <paramref name="from" /> for <paramref name="frames" />; returns the first playing block.</summary>
+    /// <summary>Plays from <paramref name="from" /> for <paramref name="frames" />; returns the frames rendered before it.</summary>
     long Play(TestInstrument instrument, long from, int frames) {
         driver.PlayFrom(from);
-        var first = instrument.Processed;
+        var first = instrument.Rendered;
         for (var i = 0; i < frames / Block; i++) {
             driver.Process();
         }
@@ -50,10 +50,10 @@ public sealed class MidiTests : IDisposable {
     }
 
     /// <summary>Each logged event at its absolute project sample, for a pass that started at <paramref name="from" />.</summary>
-    static List<(long Sample, MidiEvent Event)> Timeline(TestInstrument instrument, long firstBlock, long from) => [
+    static List<(long Sample, MidiEvent Event)> Timeline(TestInstrument instrument, long firstFrame, long from) => [
         ..instrument.Log.Take(instrument.Logged)
-            .Where(e => e.Block >= firstBlock)
-            .Select(e => (from + (e.Block - firstBlock) * Block + e.Event.Frame, e.Event))
+            .Where(e => e.At >= firstFrame)
+            .Select(e => (from + e.At - firstFrame, e.Event))
     ];
 
     [Fact]

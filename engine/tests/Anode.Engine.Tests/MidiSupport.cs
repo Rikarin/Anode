@@ -31,7 +31,7 @@ sealed class TestInstrument : IInstrument {
     readonly double[] phases = new double[128];
     readonly bool[] held = new bool[128];
     double rate = 48_000;
-    long blocks;
+    long rendered;
 
     public InstrumentDescriptor Descriptor => Info;
 
@@ -47,8 +47,11 @@ sealed class TestInstrument : IInstrument {
 
     public int Processed { get; private set; }
 
-    /// <summary>Every event it received: the block it came in (counting from 0), its frame and bytes.</summary>
-    public (long Block, MidiEvent Event)[] Log { get; } = new (long, MidiEvent)[LogCapacity];
+    /// <summary>Every event it received: where (in frames rendered, see <see cref="Rendered" />) and its bytes.</summary>
+    public (long At, MidiEvent Event)[] Log { get; } = new (long, MidiEvent)[LogCapacity];
+
+    /// <summary>Frames rendered so far (a log entry is at <c>At</c>: the frames rendered before it plus its frame).</summary>
+    public long Rendered => rendered;
 
     public int Logged { get; private set; }
 
@@ -94,13 +97,13 @@ sealed class TestInstrument : IInstrument {
             Handle(events[next++]);
         }
 
-        blocks++;
+        rendered += left.Length;
         Processed++;
     }
 
     void Handle(in MidiEvent e) {
         if (Logged < LogCapacity) {
-            Log[Logged++] = (blocks, e);
+            Log[Logged++] = (rendered + e.Frame, e);
         }
 
         switch (e.Status & 0xF0) {

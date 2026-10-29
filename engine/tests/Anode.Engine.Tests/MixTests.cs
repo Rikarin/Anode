@@ -57,10 +57,11 @@ public sealed class MixTests : IDisposable {
             EngineFile[] files,
             EngineStrip? master = null,
             EngineAutomationTarget[]? targets = null,
-            int outputs = 2
+            int outputs = 2,
+            TempoMapPoint[]? tempo = null
         ) {
             Controller = new(new(Rate, block), TestEffects.Registry());
-            using var segment = TestAudio.Segment(models, 1);
+            using var segment = TestAudio.Segment(models, 1, tempo: tempo);
             Controller.LoadModel(
                 TestAudio.Load(segment, 1, true, tracks, files, dir, master) with { AutomationTargets = targets }
             );
@@ -396,17 +397,14 @@ public sealed class MixTests : IDisposable {
 
     [Fact]
     public void Tempo_synced_inserts_follow_the_project_tempo_at_the_playhead() {
-        // Clicks every 24,000 frames (120 bpm) up to 96,000, then every 16,000 (180 bpm).
-        var clicks = Enumerable.Range(0, 4)
-            .Select(static i => TestAudio.Click(i * 24_000L, i == 0))
-            .Concat(Enumerable.Range(0, 6).Select(static i => TestAudio.Click(96_000 + i * 16_000L, false)))
-            .ToArray();
+        // The tempo map (Phase 6): 120 bpm up to 96,000 (quarter note 4), then 180 bpm.
         using var rig = new Rig(
             dir,
             64,
-            [Model(1, 0), new(TrackEntry.MetronomeTrack, clicks, [])],
+            [Model(1, 0)],
             [Track(1, false, Strip(inserts: [TestEffects.Insert("d", "anode.stereo-delay")]))],
-            Files
+            Files,
+            tempo: [TestAudio.Tempo(0, 0, 120), TestAudio.Tempo(96_000, 4, 180, barQuarter: 4)]
         );
         var effect = rig.Controller.Engine.Root.Tracks[0].Channel.Config.Inserts[0].Slot.Effect!;
         var tempo = effect.Descriptor.Parameters.Single(static p => p.Id == "tempo").Index;

@@ -1,5 +1,6 @@
 using Anode.Dsp.Effects;
 using Anode.Dsp.Instruments;
+using Anode.Dsp.Transport;
 using Anode.Engine.Mixing;
 using Anode.Engine.Plugins;
 using Anode.Engine.Rendering;
@@ -77,6 +78,7 @@ public sealed unsafe partial class AudioEngine {
     long blockPosition;
     long blockClock;
     bool blockCountIn;
+    TransportContext blockTransport;
 
     // The gains of the edge being mixed: constant (gainLeft, gainRight) or per frame (coefLeft, coefRight).
     bool gainConstant;
@@ -173,7 +175,7 @@ public sealed unsafe partial class AudioEngine {
         }
 
         Latencies(plan);
-        FollowTempo(model, plan, position);
+        FollowTempo(plan);
         // Tracks with sandboxed inserts first hand their first sandboxed block over (ISplitProcessing), so their
         // sandboxes run in parallel with each other and with the rest of the mix; each then completes in plan order.
         foreach (var node in plan.Order) {
@@ -207,10 +209,37 @@ public sealed unsafe partial class AudioEngine {
         var sumRight = trackRight.AsSpan(0, frames);
         destLeft[0].AsSpan(0, frames).CopyTo(sumLeft);
         destRight[0].AsSpan(0, frames).CopyTo(sumRight);
-        Volatile.Read(ref preview)?.MixInto(sumLeft, sumRight);
+        MixPreview(sumLeft, sumRight);
         Channel(plan.Master, sumLeft, sumRight, true, outLeft, outRight);
         WritePairs(plan, outputs, outputChannels);
         SnapshotBuses(plan);
+    }
+
+    /// <summary>
+    ///     The preview channel into the master's sum. A source that starts on the bar (Phase 6's in-sync preview) waits,
+    ///     while the transport plays, for the next bar line from the tempo map and starts on its frame; stopped, it
+    ///     starts at once.
+    /// </summary>
+    void MixPreview(Span<float> left, Span<float> right) {
+        if (Volatile.Read(ref preview) is not { } source) {
+            return;
+        }
+
+        var from = 0;
+        if (!source.Started) {
+            if (source.Sync.StartOnBar && blockTransport.Playing) {
+                var bar = TempoOf(blockModel).NextBoundary(blockPosition, Ipc.EngineQuantize.Bar);
+                if (bar >= blockPosition + blockFrames) {
+                    return;
+                }
+
+                from = (int)(bar - blockPosition);
+            }
+
+            source.Started = true;
+        }
+
+        source.MixInto(left[from..], right[from..]);
     }
 
     /// <summary>The play-order position of every frame of the block (held while stopped or counting in).</summary>
@@ -243,6 +272,10 @@ public sealed unsafe partial class AudioEngine {
         var i = node.TrackIndex;
         var model = blockModel;
         ReadTrack(track, model.Generations[i], model.Lanes[i], left, right);
+        if (track.LiveLoopsActive && node is { InputBus: <= 0, Frozen: false } && !track.IsMidi) {
+            CellAudio(track, model.Cells, left, right); // its playing cell instead of its regions
+        }
+
         if (node.InputBus > 0) {
             if (!track.Stereo) {
                 left.CopyTo(right);
@@ -327,15 +360,14 @@ public sealed unsafe partial class AudioEngine {
         }
     }
 
-    // ---- Tempo -------------------------------------------------------------------------------------------------------
+    // ---- Tempo and the transport context -----------------------------------------------------------------------------
 
     /// <summary>
-    ///     Sets every insert's <c>tempo</c> parameter to the project's tempo at <paramref name="position" /> when it or
-    ///     the plan changed. The tempo comes from the model's metronome clicks (one per beat): 60 s over the interval
-    ///     between the beat at or before the playhead and the next. Without clicks the parameters keep their value.
+    ///     Sets every insert's <c>tempo</c> parameter (Phase 4's tempo-synced built-ins) to the block's tempo from the
+    ///     transport context, rounded to 1/1000 bpm, when it or the plan changed.
     /// </summary>
-    void FollowTempo(ModelRoot model, MixPlan plan, long position) {
-        var tempo = TempoAt(model.Metronome, position);
+    void FollowTempo(MixPlan plan) {
+        var tempo = (float)Math.Round(blockTransport.Bpm, 3);
         if (tempo <= 0 || (tempo == appliedTempo && ReferenceEquals(plan, tempoPlan))) {
             return;
         }
@@ -358,16 +390,31 @@ public sealed unsafe partial class AudioEngine {
         }
     }
 
-    /// <summary>The tempo (bpm) at <paramref name="position" /> from the clicks' spacing; 0 without two clicks.</summary>
-    float TempoAt(in Ipc.Segments.TrackView clicks, long position) {
-        var count = clicks.EventCount;
-        if (count < 2) {
-            return 0;
+    /// <summary>
+    ///     The transport for <paramref name="frames" /> frames from frame <paramref name="at" /> of the block: the
+    ///     block's context advanced linearly at its tempo (an automated insert or instrument processes 32-frame pieces,
+    ///     and each piece's <c>SetTransport</c> describes exactly its frames). The whole block is the block's context.
+    /// </summary>
+    TransportContext Piece(int at, int frames) {
+        var block = blockTransport;
+        if (at == 0 && frames == block.Frames) {
+            return block;
         }
 
-        var at = Math.Clamp(LowerBound(clicks.Events, count, position + 1) - 1, 0, count - 2);
-        var interval = clicks.Events[at + 1].SamplePos - clicks.Events[at].SamplePos;
-        return interval <= 0 ? 0 : (float)Math.Round(60.0 * SampleRate / interval, 3);
+        if (!block.Playing) {
+            return block with { Frames = frames };
+        }
+
+        var quarter = block.Quarter + at * block.QuartersPerSample;
+        var bar = block.BarQuarters;
+        var barStart = block.BarStartQuarter;
+        if (bar > 0 && quarter >= barStart + bar) {
+            barStart += Math.Floor((quarter - barStart) / bar) * bar;
+        }
+
+        return block with {
+            Sample = block.Sample + at, Quarter = quarter, BarStartQuarter = barStart, Frames = frames
+        };
     }
 
     // ---- Latency, liveness, solo -------------------------------------------------------------------------------------
@@ -883,6 +930,7 @@ public sealed unsafe partial class AudioEngine {
 
             Sidechain(node.Sidechains[k], out var sideL, out var sideR);
             if (node.InsertBindings[k].Length == 0) {
+                effect.SetTransport(blockTransport);
                 effect.Process(left, right, sideL, sideR);
             } else {
                 ProcessAutomated(effect, node.InsertBindings[k], node.InsertLast[k], left, right, sideL, sideR);
@@ -920,6 +968,7 @@ public sealed unsafe partial class AudioEngine {
                 stereo = true;
             }
 
+            effect.SetTransport(blockTransport);
             if (effect is ISplitProcessing split) {
                 ch.Begun = split.Begin(left, right, [], []);
             } else {
@@ -945,6 +994,7 @@ public sealed unsafe partial class AudioEngine {
         for (var at = 0; at < left.Length; at += ParameterBlock) {
             var count = Math.Min(ParameterBlock, left.Length - at);
             SetAutomated(bindings, last, at, effect, null);
+            effect.SetTransport(Piece(at, count));
             effect.Process(
                 left.Slice(at, count),
                 right.Slice(at, count),
@@ -1029,6 +1079,7 @@ public sealed unsafe partial class AudioEngine {
     ) {
         var bindings = node.InstrumentBindings;
         if (bindings.Length == 0) {
+            slot.Instrument.SetTransport(blockTransport);
             slot.Instrument.Process(events, left, right);
             return;
         }
@@ -1043,6 +1094,7 @@ public sealed unsafe partial class AudioEngine {
                 chunkEvents[n++] = ev with { Frame = Math.Max(0, ev.Frame - at) };
             }
 
+            slot.Instrument.SetTransport(Piece(at, count));
             slot.Instrument.Process(chunkEvents.AsSpan(0, n), left.Slice(at, count), right.Slice(at, count));
         }
     }
@@ -1057,6 +1109,14 @@ public sealed unsafe partial class AudioEngine {
         foreach (var node in model.Mix.Order) {
             ResetNode(node);
             node.Track?.Instrument?.Instrument.Reset();
+            foreach (var midi in node.Config.MidiEffects) {
+                midi.Slot.ApplyParameters();
+                midi.Slot.Effect?.Reset();
+            }
+
+            foreach (var last in node.MidiEffectLast) {
+                last.AsSpan().Fill(float.NaN);
+            }
         }
 
         ResetNode(model.Mix.Master);

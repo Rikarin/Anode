@@ -152,6 +152,10 @@ public sealed unsafe partial class AudioEngine : IAudioProcessor {
                 var count = Math.Min(frames - offset, MaxFrames);
                 if (countInRemaining > 0) {
                     count = (int)Math.Min(count, countInRemaining); // recording starts on the count-in's last frame
+                } else if (transport.Rolling) {
+                    // A block never spans a cycle jump (Phase 6): its transport context, the launcher's boundaries and
+                    // the preview's bar start each hold for one stretch of play order.
+                    count = (int)Math.Min(count, transport.PlayOrder.UntilJump(transport.Position));
                 }
 
                 RenderBlock(model, inputs, inputChannels, outputs, outputChannels, offset, count);
@@ -186,6 +190,7 @@ public sealed unsafe partial class AudioEngine : IAudioProcessor {
 
                     transport.Stop();
                     Panic();
+                    StopLaunchers(Volatile.Read(ref root));
                     break;
                 case EngineCommandKind.Record:
                     Record(command.A, command.B);
@@ -239,7 +244,11 @@ public sealed unsafe partial class AudioEngine : IAudioProcessor {
         var countIn = countInRemaining > 0;
         var position = transport.Position;
         var clock = transport.Clock;
+        var rolling = transport.Rolling && !countIn;
         BeginBlock(clock, position, frames, countIn);
+        var tempo = TempoOf(model);
+        blockTransport = tempo.Context(rolling, position, frames);
+        Launchers(model, tempo, position, clock, frames, rolling);
         var outLeft = busLeft.AsSpan(0, frames);
         var outRight = busRight.AsSpan(0, frames);
         Mix(

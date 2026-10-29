@@ -8,6 +8,10 @@ namespace Anode.Engine;
 // Phase 3's recording modes and the preview channel on the control thread (docs/04-phase-3.md, workstream A):
 // autopunch, Flashback Capture (its buffers' lifetime, and writing what they kept as takes) and preview files.
 public sealed partial class EngineController {
+    string? previewPath;
+    float previewGain;
+    PreviewSync previewSync = PreviewSync.None;
+
     /// <summary>
     ///     How far ahead of the oldest frame a Flashback Capture starts (at most a quarter of the buffer), so the audio
     ///     thread, which keeps writing while the capture copies, cannot overwrite what is being copied.
@@ -153,12 +157,32 @@ public sealed partial class EngineController {
     }
 
     /// <summary>
+    ///     How the preview channel plays from now on (Phase 6, <c>setPreviewSync</c>): at <paramref name="tempoRatio" />
+    ///     of the file's speed, transposed by <paramref name="transposeSemitones" />, from the next bar while playing
+    ///     when <paramref name="startOnBar" />. A file playing now restarts that way.
+    /// </summary>
+    public void SetPreviewSync(double tempoRatio, int transposeSemitones, bool startOnBar) {
+        if (!(tempoRatio > 0) || !double.IsFinite(tempoRatio)) {
+            throw new ArgumentException($"Tempo ratio {tempoRatio} is not a positive number.", nameof(tempoRatio));
+        }
+
+        lock (gate) {
+            previewSync = new(tempoRatio, Math.Clamp(transposeSemitones, -48, 48), startOnBar);
+            if (previewPath is not null && Engine.Preview is { Ended: false }) {
+                Preview(previewPath, previewGain);
+            }
+        }
+    }
+
+    /// <summary>
     ///     Plays <paramref name="path" /> through the preview channel at linear <paramref name="gain" />, replacing what
     ///     plays there; null stops it. Throws <see cref="IOException" /> or <see cref="InvalidDataException" /> for a
     ///     file it cannot stream (and leaves the current preview playing).
     /// </summary>
     public void Preview(string? path, float gain) {
         lock (gate) {
+            previewPath = path;
+            previewGain = gain;
             PreviewSource? next = null;
             if (path is not null) {
                 var file = new StreamFile(-1, path);
@@ -171,7 +195,12 @@ public sealed partial class EngineController {
                     Log?.Invoke($"preview {path}: {file.Format.SampleRate} Hz on a {Options.SampleRate} Hz engine");
                 }
 
-                next = new(file, gain, Options.SampleRate);
+                try {
+                    next = new(file, gain, Options.SampleRate, previewSync);
+                } catch (InvalidOperationException) {
+                    file.Dispose(); // the Stretch renderer could not be made
+                    throw;
+                }
             }
 
             var previous = Engine.SetPreview(next);

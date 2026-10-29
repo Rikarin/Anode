@@ -8,9 +8,9 @@ namespace Anode.Engine.Plugins;
 
 /// <summary>
 ///     The plugins the engine can load: Anode's built-in instruments (<see cref="BuiltinInstruments" />), effects
-///     (<see cref="BuiltinEffects" />) and MIDI effects (<see cref="BuiltinMidiEffects" />, listed only: creating
-///     them is Phase 6's workstream A), plus any registered with <see cref="AddBuiltin" /> and
-///     <see cref="AddBuiltinEffect" /> (tests, tools); the CLAP instruments found by <see cref="ScanClap" />; and
+///     (<see cref="BuiltinEffects" />) and MIDI effects (<see cref="BuiltinMidiEffects" />), plus any registered
+///     with <see cref="AddBuiltin" />, <see cref="AddBuiltinEffect" /> and <see cref="AddBuiltinMidiEffect" /> (tests,
+///     tools); the CLAP instruments found by <see cref="ScanClap" />; and
 ///     whatever the third-party <see cref="Factory" /> hosts (VST3, AU; docs/05-phase-4.md, workstream E). It answers
 ///     the catalogue the host sends the server (built-ins first, then CLAP, then the factory's) and creates instances by
 ///     plugin id.
@@ -19,6 +19,7 @@ public sealed class PluginRegistry {
     readonly Lock gate = new();
     readonly List<(InstrumentDescriptor Descriptor, Func<IInstrument> Create)> extras = [];
     readonly List<(EffectDescriptor Descriptor, Func<IAudioEffect> Create)> effects = [];
+    readonly List<(MidiEffectDescriptor Descriptor, Func<IMidiEffect> Create)> midiEffects = [];
     IPluginFactory factory = NullPluginFactory.Instance;
     TaskCompletionSource idle = Done();
     IReadOnlyList<ClapEntry> clap = [];
@@ -56,6 +57,35 @@ public sealed class PluginRegistry {
         }
     }
 
+    /// <summary>Adds a MIDI effect the engine treats as built in (tests, tools).</summary>
+    public void AddBuiltinMidiEffect(MidiEffectDescriptor descriptor, Func<IMidiEffect> create) {
+        lock (gate) {
+            midiEffects.Add((descriptor, create));
+        }
+    }
+
+    /// <summary>
+    ///     A new, unprepared MIDI effect <paramref name="pluginId" /> for a MIDI FX slot, or null when there is none: a
+    ///     built-in (<see cref="BuiltinMidiEffects" />) or one added with <see cref="AddBuiltinMidiEffect" />. Hosted
+    ///     MIDI effects are not supported (Phase 6). Control thread.
+    /// </summary>
+    public IMidiEffect? CreateMidiEffect(string pluginId) {
+        if (BuiltinMidiEffects.Create(pluginId) is { } builtin) {
+            return builtin;
+        }
+
+        Func<IMidiEffect>? create = null;
+        lock (gate) {
+            foreach (var (d, f) in midiEffects) {
+                if (d.Id == pluginId) {
+                    create = f;
+                }
+            }
+        }
+
+        return create?.Invoke();
+    }
+
     /// <summary>Third-party plugin hosting (default: none).</summary>
     public IPluginFactory Factory {
         get => Volatile.Read(ref factory);
@@ -83,6 +113,10 @@ public sealed class PluginRegistry {
             }
 
             foreach (var (d, _) in effects) {
+                list.Add(Builtin(d));
+            }
+
+            foreach (var (d, _) in midiEffects) {
                 list.Add(Builtin(d));
             }
 
