@@ -134,17 +134,22 @@ public sealed class PackageTests : IDisposable {
         );
         ProjectPackage.Save(folder, loaded);
         var saved = JsonNode.Parse(File.ReadAllText(path))!;
-        Assert.Equal(6, saved["schemaVersion"]!.GetValue<int>());
+        Assert.Equal(PackageMigrations.CurrentSchemaVersion, saved["schemaVersion"]!.GetValue<int>());
         Assert.Equal("bar", saved["liveLoops"]!["quantize"]!.GetValue<string>());
     }
 
     [Fact]
-    public void A_schema_6_package_without_the_Phase_7_fields_reads_them_at_their_defaults() {
-        var (state, _, _) = RandomProjects.Build(3, 40);
+    public void A_schema_6_package_migrates_to_schema_7_with_the_Phase_7_fields_at_their_defaults() {
+        // A project with Phase 6 content and none of Phase 7's, as a schema-6 package holds.
+        var state = Phase7Tests.WithoutPhase7(RandomProjects.Build(3, 40).State);
         Assert.Contains(state.MidiRegions.Values, static m => m.Notes.Count > 0);
         ProjectPackage.Save(folder, state);
         var path = Path.Combine(folder, "project.json");
         var root = JsonNode.Parse(File.ReadAllText(path))!.AsObject();
+        root["schemaVersion"] = 6;
+        root.Remove("grooves");
+        root.Remove("articulationSets");
+        root.Remove("laneSets");
         foreach (var file in root["audioFiles"]!.AsArray()) {
             file!.AsObject().Remove("version");
         }
@@ -156,6 +161,7 @@ public sealed class PackageTests : IDisposable {
         File.WriteAllText(path, root.ToJsonString());
         foreach (var file in Directory.EnumerateFiles(Path.Combine(folder, "tracks"))) {
             var json = JsonNode.Parse(File.ReadAllText(file))!.AsObject();
+            json["schemaVersion"] = 6;
             json["track"]!.AsObject().Remove("matchGroove");
             foreach (var region in json["midiRegions"]!.AsArray()) {
                 RemoveArticulations(region);
@@ -173,12 +179,43 @@ public sealed class PackageTests : IDisposable {
             static n => Assert.Equal(0, n.ArticulationId)
         );
         Assert.Null(loaded.Settings.GrooveTrackId);
+        Assert.Empty(loaded.Grooves);
+        Assert.Empty(loaded.ArticulationSets);
+        Assert.Empty(loaded.LaneSets);
+        ProjectPackage.Save(folder, loaded);
+        var saved = JsonNode.Parse(File.ReadAllText(path))!;
+        Assert.Equal(7, saved["schemaVersion"]!.GetValue<int>());
+        Assert.Equal(0, saved["audioFiles"]![0]!["version"]!.GetValue<int>());
+        Assert.NotNull(saved["grooves"]);
 
         static void RemoveArticulations(JsonNode? region) {
             foreach (var note in region?["notes"]?.AsArray() ?? []) {
                 note!.AsObject().Remove("articulationId");
             }
         }
+    }
+
+    [Fact]
+    public void Phase_7_content_survives_the_package_format() {
+        var (state, _, _) = RandomProjects.Build(5, 40);
+        Assert.NotEmpty(state.Grooves);
+        Assert.NotEmpty(state.ArticulationSets);
+        ProjectPackage.Save(folder, state);
+        Assert.Equal(RandomProjects.Json(state), RandomProjects.Json(ProjectPackage.Load(folder)));
+    }
+
+    [Fact]
+    public void A_package_drops_damaged_Phase_7_entries_and_references_to_what_is_not_there() {
+        var (state, _, _) = RandomProjects.Build(5, 40);
+        ProjectPackage.Save(folder, state);
+        var path = Path.Combine(folder, "project.json");
+        var root = JsonNode.Parse(File.ReadAllText(path))!.AsObject();
+        root["grooves"]!.AsArray().Add(new JsonObject { ["id"] = "grv_bad", ["name"] = "Bad", ["lengthTicks"] = 960 });
+        root["settings"]!["grooveTrackId"] = "trk_gone";
+        File.WriteAllText(path, root.ToJsonString());
+        var loaded = ProjectPackage.Load(folder);
+        Assert.DoesNotContain("grv_bad", loaded.Grooves.Keys);
+        Assert.Null(loaded.Settings.GrooveTrackId);
     }
 
     [Fact]

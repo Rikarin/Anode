@@ -46,6 +46,8 @@ builder.Services.AddSingleton<EngineCatalog>();
 builder.Services.AddSingleton<TransportClock>();
 builder.Services.AddSingleton<PatchLibrary>();
 builder.Services.AddSingleton<IAudioAnalyzer, DspAudioAnalyzer>();
+builder.Services.AddSingleton<IAudioEditor, DspAudioEditor>();
+builder.Services.AddSingleton<MidiEditLibraries>();
 builder.Services.AddSingleton<FileAnalyses>();
 builder.Services.AddSingleton<ProjectSession>();
 builder.Services.AddSingleton<Jobs>();

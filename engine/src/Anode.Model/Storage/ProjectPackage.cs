@@ -14,7 +14,8 @@ namespace Anode.Model.Storage;
 ///     <c>settings</c>), markers, arrangement sections, the project's notes and the editor's screensets; schema 4 the
 ///     mixer (the master's inserts, mixer settings), the mixer groups and the master's automation lanes; schema 5
 ///     Smart Tempo and Varispeed (in <c>settings</c>), tempo ramps' shapes and files' tempos; schema 6 the master's MIDI
-///     FX (empty) and the Live Loops grid.
+///     FX (empty) and the Live Loops grid; schema 7 the groove templates, articulation sets and Step Editor lane sets
+///     (docs/08-phase-7.md), with the groove track in <c>settings</c> and files' versions.
 /// </summary>
 public sealed record ProjectFile(
     int SchemaVersion,
@@ -31,13 +32,17 @@ public sealed record ProjectFile(
     IReadOnlyList<Screenset>? Screensets = null,
     IReadOnlyList<MixerGroup>? Groups = null,
     IReadOnlyList<AutomationLane>? Automation = null,
-    LiveLoopsGrid? LiveLoops = null
+    LiveLoopsGrid? LiveLoops = null,
+    IReadOnlyList<GrooveTemplate>? Grooves = null,
+    IReadOnlyList<ArticulationSet>? ArticulationSets = null,
+    IReadOnlyList<LaneSet>? LaneSets = null
 );
 
 /// <summary>
 ///     <c>tracks/&lt;id&gt;.json</c>: one track and its regions, audio and MIDI (schema 2), its take folders (schema 3),
 ///     its automation lanes (schema 4), and its flex and alternatives, and its regions' flex (schema 5); its MIDI FX,
-///     drum machine, Smart Controls and Live Loops activation, and its pattern regions (schema 6).
+///     drum machine, Smart Controls and Live Loops activation, and its pattern regions (schema 6); its groove matching
+///     and articulation set, and its notes' articulations (schema 7).
 /// </summary>
 public sealed record TrackFile(
     int SchemaVersion,
@@ -137,7 +142,10 @@ public static class ProjectPackage {
             [..state.Screensets.Values],
             [..state.Groups.Values],
             [..state.LanesOf(null)],
-            state.LiveLoops
+            state.LiveLoops,
+            [..state.Grooves.Values],
+            [..state.ArticulationSets.Values],
+            [..state.LaneSets.Values]
         );
         AtomicRename.Write(
             Path.Combine(folder, ProjectFileName),
@@ -203,13 +211,23 @@ public static class ProjectPackage {
         );
         Relink(tracks, groups, files);
         DrumMachines(tracks);
+        var grooves = Checked(root.Grooves, Edits.CheckGroove, static g => g.Id);
+        var articulationSets = Checked(root.ArticulationSets, Edits.CheckArticulationSet, static a => a.Id);
+        var laneSets = Checked(root.LaneSets, Edits.CheckLaneSet, static l => l.Id);
+        for (var i = 0; i < tracks.Count; i++) {
+            if (tracks[i].ArticulationSetId is { } setId
+                && (!articulationSets.ContainsKey(setId) || !Edits.IsMidiKind(tracks[i].Kind))) {
+                tracks[i] = tracks[i] with { ArticulationSetId = null };
+            }
+        }
+
         var master = Normalise(root.Master, null);
         var trackIds = tracks.Select(static t => t.Id).ToHashSet(StringComparer.Ordinal);
         var loaded = new ProjectState(
             root.Id,
             root.Name,
             root.SampleRate,
-            Normalise(root.Settings),
+            Normalise(root.Settings, tracks),
             master with {
                 Inserts = [..master.Inserts.Select(i => i with { Sidechain = Sidechain(trackIds, i.Sidechain) })]
             },
@@ -217,7 +235,7 @@ public static class ProjectPackage {
             regions.ToImmutable(),
             files,
             midiRegions.ToImmutable()
-        ) { Groups = groups };
+        ) { Groups = groups, Grooves = grooves, ArticulationSets = articulationSets, LaneSets = laneSets };
         var liveLoops = LiveLoops(root.LiveLoops, tracks, files);
         return loaded with {
             LastEventId = Math.Max(
@@ -337,6 +355,25 @@ public static class ProjectPackage {
         }
     }
 
+    /// <summary>The items <paramref name="check" /> accepts, as it returns them, keyed by id (the first of each id).</summary>
+    static ImmutableSortedDictionary<string, T> Checked<T>(
+        IReadOnlyList<T>? items,
+        Func<T?, T> check,
+        Func<T, string> id
+    ) where T : class {
+        var builder = ImmutableSortedDictionary.CreateBuilder<string, T>(StringComparer.Ordinal);
+        foreach (var item in items ?? []) {
+            try {
+                var good = check(item);
+                builder.TryAdd(id(good), good);
+            } catch (EditException) {
+                // A damaged entry is left out.
+            }
+        }
+
+        return builder.ToImmutable();
+    }
+
     /// <summary>The items that pass <paramref name="valid" />, keyed by id (the first of each id).</summary>
     static ImmutableSortedDictionary<string, T> Keyed<T>(
         IReadOnlyList<T>? items,
@@ -352,7 +389,7 @@ public static class ProjectPackage {
     ///     Settings as read: the global tracks present and well formed (else the project-start values alone), the first
     ///     events equal to <c>tempo</c> and <c>signature</c>, and recording settings.
     /// </summary>
-    static ProjectSettings Normalise(ProjectSettings settings) {
+    static ProjectSettings Normalise(ProjectSettings settings, ImmutableList<Track>.Builder tracks) {
         var signature = settings.Signature ?? new TimeSignature(4, 4);
         TempoEvent[] tempo =
             settings.TempoEvents is { Count: > 0 } t ? [..t] : [new(0, settings.Tempo, TempoCurve.Step)];
@@ -394,7 +431,11 @@ public static class ProjectPackage {
             Varispeed = settings.Varispeed is { Speed: >= Edits.MinSpeed and <= Edits.MaxSpeed } varispeed
                 && Enum.IsDefined(varispeed.Mode)
                     ? varispeed
-                    : ProjectDefaults.Varispeed
+                    : ProjectDefaults.Varispeed,
+            GrooveTrackId = settings.GrooveTrackId is { } groove
+                && tracks.Any(t => t.Id == groove && (t.Kind == TrackKind.Audio || Edits.HoldsMidi(t)))
+                    ? groove
+                    : null
         };
     }
 
@@ -825,12 +866,12 @@ public static class ProjectPackage {
 ///     refused rather than read wrongly.
 /// </remarks>
 public static class PackageMigrations {
-    public const int CurrentSchemaVersion = 6;
+    public const int CurrentSchemaVersion = 7;
     const string VersionField = "schemaVersion";
 
     /// <summary><c>Steps[n]</c> takes schema <c>n + 1</c> to <c>n + 2</c>; it gets the kind of file and its JSON.</summary>
     static readonly Func<string, JsonObject, JsonObject>[] Steps =
-        [ToSchema2, ToSchema3, ToSchema4, ToSchema5, ToSchema6];
+        [ToSchema2, ToSchema3, ToSchema4, ToSchema5, ToSchema6, ToSchema7];
 
     public static JsonObject Upgrade(JsonObject json, string kind) {
         var version = json[VersionField] is JsonValue v && v.TryGetValue<int>(out var n) ? n : 1;
@@ -845,7 +886,6 @@ public static class PackageMigrations {
         }
 
         json[VersionField] = CurrentSchemaVersion;
-        Phase7Fields.Fill(kind, json);
         return json;
     }
 
@@ -1019,39 +1059,48 @@ public static class PackageMigrations {
 
         return json;
     }
-}
 
-/// <summary>
-///     The Phase 7 fields (docs/08-phase-7.md) at their defaults where a file lacks them, so schema-6 packages read with
-///     the Phase 7 contracts: interim, until workstream B adds schema 7 and its migration from 6 (which replaces this,
-///     with the same defaults). Files are version 0; tracks do not match the groove track and have no articulation set
-///     (null, left out); notes have no articulation; the groove track, regions' grooves, and the project's grooves,
-///     articulation sets and lane sets (not stored yet) are none. Leaves fields that are present alone.
-/// </summary>
-static class Phase7Fields {
-    public static void Fill(string kind, JsonObject json) {
+    /// <summary>
+    ///     Schema 6 (Phase 6) to 7 (Phase 7, advanced MIDI editing; docs/08-phase-7.md): no groove templates,
+    ///     articulation sets or lane sets, and no groove track; files are as imported (version 0); tracks do not match
+    ///     the groove track and have no articulation set; notes have no articulation (in the Tracks area, in track
+    ///     alternatives and in Live Loops cells); regions quantise to the grid.
+    /// </summary>
+    static JsonObject ToSchema7(string kind, JsonObject json) {
         if (kind == "project") {
+            json["grooves"] ??= new JsonArray();
+            json["articulationSets"] ??= new JsonArray();
+            json["laneSets"] ??= new JsonArray();
             foreach (var file in (json["audioFiles"] as JsonArray ?? []).OfType<JsonObject>()) {
                 file["version"] ??= 0;
             }
 
-            if (json["liveLoops"]?["cells"] is JsonArray cells) {
-                foreach (var cell in cells.OfType<JsonObject>()) {
-                    Notes(cell["content"]?["midi"] as JsonObject);
-                }
+            foreach (var cell in (json["liveLoops"]?["cells"] as JsonArray ?? []).OfType<JsonObject>()) {
+                Schema7.Notes(cell["content"]?["midi"] as JsonObject);
             }
         } else if (kind == "track") {
             if (json["track"] is JsonObject track) {
                 track["matchGroove"] ??= false;
+                foreach (var alternative in (track["alternatives"] as JsonArray ?? []).OfType<JsonObject>()) {
+                    foreach (var region in (alternative["midiRegions"] as JsonArray ?? []).OfType<JsonObject>()) {
+                        Schema7.Notes(region);
+                    }
+                }
             }
 
             foreach (var region in (json["midiRegions"] as JsonArray ?? []).OfType<JsonObject>()) {
-                Notes(region);
+                Schema7.Notes(region);
             }
         }
-    }
 
-    static void Notes(JsonObject? region) {
+        return json;
+    }
+}
+
+/// <summary>The Phase 7 additions to a schema-6 file (docs/08-phase-7.md).</summary>
+static class Schema7 {
+    /// <summary>The notes of a MIDI region without articulations.</summary>
+    public static void Notes(JsonObject? region) {
         foreach (var note in (region?["notes"] as JsonArray ?? []).OfType<JsonObject>()) {
             note["articulationId"] ??= 0;
         }

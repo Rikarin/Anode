@@ -376,5 +376,9 @@ public sealed class FlexEditTests {
                     .Where(x => x.Item1 < file.Frames)
                     .Select(x => (x.Item1, Math.Min(x.Item2, file.Frames)))
             ];
+
+        /// <summary>The transients as onsets, the downbeat ones the strongest.</summary>
+        public IReadOnlyList<(long Frame, double Strength)> Onsets(AudioFile file) =>
+            [..Transients.Select(static (f, i) => (f, i % 4 == 0 ? 1.0 : 0.5))];
     }
 }

@@ -1,5 +1,6 @@
 using Anode.Dsp.Effects;
 using Anode.Dsp.Instruments;
+using Anode.Dsp.MidiEffects;
 using Anode.Ipc;
 using Anode.Ipc.Segments;
 using Anode.Ipc.Telemetry;
@@ -165,6 +166,9 @@ public sealed partial class FakeHost : IAsyncDisposable {
             [new("0", "Gain", 0, 1, 0.5, string.Empty, 0), new("1", "Detune", -1, 1, 0, string.Empty, 0)]
         ),
         ..BuiltinEffects.All.Select(EngineCatalog.From),
+        // The MIDI effects (Phase 6), and a stand-in Scripter (Phase 7) while the built-in one is not there.
+        ..BuiltinMidiEffects.All.Select(EngineCatalog.From),
+        ..BuiltinMidiEffects.All.Any(static d => d.Id == Anode.Model.Editing.Edits.ScripterId) ? [] : new[] { FakeScripter },
         new EnginePlugin(
             FakeVst3Id,
             "Fake Gain",
@@ -486,7 +490,11 @@ public sealed partial class FakeHost : IAsyncDisposable {
 
                 break;
             default:
-                if (!HandleMixer(message) && !HandleLiveLoops(message)) {
+                if (HandlePhase7(message) is { } replies) {
+                    foreach (var reply in replies) {
+                        yield return reply;
+                    }
+                } else if (!HandleMixer(message) && !HandleLiveLoops(message)) {
                     yield return new ErrorMessage($"Unsupported message {message.GetType().Name}.", Name(message));
                 }
 

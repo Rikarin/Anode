@@ -119,8 +119,6 @@ public static partial class Edits {
         IAnalysisSource? analysis = null
     ) =>
         command switch {
-            // Grooves and articulations on existing commands: Phase 7, workstream B (docs/08-phase-7.md).
-            _ when UsesPhase7Fields(command) => throw Phase7Pending($"{command.GetType().Name} with Phase 7 fields"),
             AddTrackCommand c => AddTrack(state, c, ids, plugins),
             RemoveTrackCommand c => RemoveTrack(state, c),
             MoveTrackCommand c => MoveTrack(state, c),
@@ -147,7 +145,7 @@ public static partial class Edits {
             AddNotesCommand c => AddNotes(state, c),
             EditNotesCommand c => EditNotes(state, c),
             DeleteNotesCommand c => DeleteNotes(state, c),
-            QuantizeNotesCommand c => QuantizeNotes(state, c),
+            QuantizeNotesCommand c => QuantizeNotes(state, c, analysis ?? NoAnalysis.Instance),
             AddControlsCommand c => AddControls(state, c),
             DeleteControlsCommand c => DeleteControls(state, c),
             SetMidiRecordingCommand c => [
@@ -203,7 +201,7 @@ public static partial class Edits {
             UnfreezeTrackCommand c => UnfreezeTrack(state, c),
             _ => FlexOps(state, command, ids, plugins, analysis ?? NoAnalysis.Instance)
                 ?? Phase6Ops(state, command, ids, plugins, patches ?? NoPatches.Instance)
-                ?? Phase7Ops(command)
+                ?? Phase7Ops(state, command, ids, analysis ?? NoAnalysis.Instance)
                 ?? throw new EditException($"Unknown command {command.GetType().Name}.")
         };
 
@@ -352,6 +350,10 @@ public static partial class Edits {
 
         if (Unlinked(state.Master, trackId) is var master && !ReferenceEquals(master, state.Master)) {
             step.Add(new MasterChanged(master));
+        }
+
+        if (state.Settings.GrooveTrackId == trackId) {
+            step.Add(new SettingsChanged(state.Settings with { GrooveTrackId = null }));
         }
 
         step.Add(new TrackRemoved(trackId));

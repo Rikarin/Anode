@@ -111,7 +111,15 @@ public static partial class Edits {
     ) {
         var track = MidiFxTrackOf(state, c.TrackId);
         var slot = MidiEffectOf(track, c.InsertId);
-        var value = ParameterValue(plugins, slot.PluginId, slot.Parameters, c.ParameterId, c.Value, "MIDI effect");
+        var value = ParameterValue(
+            plugins,
+            slot.PluginId,
+            slot.Parameters,
+            c.ParameterId,
+            c.Value,
+            "MIDI effect",
+            slot.RuntimeParameters
+        );
         var changed = slot with { Parameters = PluginCatalog.Sorted(slot.Parameters).SetItem(c.ParameterId, value) };
         return [WithMidiEffects(state, track, [..track.Strip.MidiEffects.Select(i => i.Id == slot.Id ? changed : i)])];
     }

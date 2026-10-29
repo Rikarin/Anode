@@ -18,10 +18,6 @@ public sealed class EditPropertyTests {
     [Theory]
     [MemberData(nameof(Commands))]
     public void Applying_then_inverting_a_command_is_the_identity(string command) {
-        Assert.SkipWhen(
-            RandomProjects.PendingPhase7.Contains(command),
-            "Phase 7 command the model does not implement yet (docs/08-phase-7.md, workstream B)."
-        );
         var type = RandomProjects.CommandTypes.Single(t => t.Name == command);
         var applied = 0;
         Gen.Int.Sample(
@@ -184,6 +180,9 @@ public sealed class EditPropertyTests {
         readonly Dictionary<string, AutomationLane> lanes = project.Automation.ToDictionary(static l => l.Id);
         readonly Dictionary<int, MixerGroup> groups = project.Groups.ToDictionary(static g => g.Number);
         readonly Dictionary<string, PatternRegion> patterns = project.PatternRegions.ToDictionary(static r => r.Id);
+        readonly Dictionary<string, GrooveTemplate> grooves = project.Grooves.ToDictionary(static g => g.Id);
+        readonly Dictionary<string, ArticulationSet> articulationSets = project.ArticulationSets.ToDictionary(static a => a.Id);
+        readonly Dictionary<string, LaneSet> laneSets = project.LaneSets.ToDictionary(static l => l.Id);
         LiveLoopsGrid liveLoops = project.LiveLoops;
         string notes = project.Notes;
         string name = project.Name;
@@ -286,6 +285,24 @@ public sealed class EditPropertyTests {
                     case LiveLoopsChanged(var grid):
                         liveLoops = grid;
                         break;
+                    case GrooveUpserted(var groove):
+                        grooves[groove.Id] = groove;
+                        break;
+                    case GrooveRemoved(var id):
+                        grooves.Remove(id);
+                        break;
+                    case ArticulationSetUpserted(var set):
+                        articulationSets[set.Id] = set;
+                        break;
+                    case ArticulationSetRemoved(var id):
+                        articulationSets.Remove(id);
+                        break;
+                    case LaneSetUpserted(var set):
+                        laneSets[set.Id] = set;
+                        break;
+                    case LaneSetRemoved(var id):
+                        laneSets.Remove(id);
+                        break;
                 }
             }
         }
@@ -310,7 +327,10 @@ public sealed class EditPropertyTests {
                     Groups = [..groups.Values.OrderBy(static g => g.Number)],
                     Automation = [..lanes.Values.OrderBy(static l => l.Id, StringComparer.Ordinal)],
                     PatternRegions = [..patterns.Values.OrderBy(static r => r.Id, StringComparer.Ordinal)],
-                    LiveLoops = liveLoops
+                    LiveLoops = liveLoops,
+                    Grooves = [..grooves.Values.OrderBy(static g => g.Id, StringComparer.Ordinal)],
+                    ArticulationSets = [..articulationSets.Values.OrderBy(static a => a.Id, StringComparer.Ordinal)],
+                    LaneSets = [..laneSets.Values.OrderBy(static l => l.Id, StringComparer.Ordinal)]
                 },
                 ContractsJsonContext.Default.Project
             );

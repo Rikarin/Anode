@@ -396,15 +396,21 @@ public static partial class Edits {
             ..slots.Select(i => i.Id == id
                     ? i with {
                         Parameters = PluginCatalog.Sorted(i.Parameters)
-                            .SetItem(parameter, Snapped(plugins, i.PluginId, parameter, value))
+                            .SetItem(parameter, Snapped(plugins, i.PluginId, parameter, value, i.RuntimeParameters))
                     }
                     : i
             )
         ];
 
     /// <summary>A value clamped to a parameter's range and rounded to its steps (as it is when it is not catalogued).</summary>
-    static double Snapped(PluginCatalog plugins, string pluginId, string parameter, double value) {
-        if (plugins.Find(pluginId)?.Parameters.FirstOrDefault(p => p.Id == parameter) is not { } info) {
+    static double Snapped(
+        PluginCatalog plugins,
+        string pluginId,
+        string parameter,
+        double value,
+        IReadOnlyList<ParameterInfo>? runtime = null
+    ) {
+        if (InfoOf(plugins, pluginId, runtime, parameter) is not { } info) {
             return value;
         }
 

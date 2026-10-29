@@ -209,6 +209,13 @@ public sealed class EngineConnection(
         Send(new PreviewFileMessage(full, PreviewGain));
     }
 
+    /// <summary>
+    ///     Plays frames <paramref name="startFrame" />…<paramref name="endFrame" /> of a file of the project through the
+    ///     preview channel, looping when asked (the Audio File Editor; Phase 7).
+    /// </summary>
+    public void PreviewRange(string path, long startFrame, long endFrame, bool loop) =>
+        Send(new PreviewRangeMessage(Path.GetFullPath(path), startFrame, endFrame, loop, PreviewGain));
+
     /// <summary>How the preview channel plays the next preview: at a tempo ratio and transpose, on the next bar.</summary>
     public void PreviewSync(SetPreviewSyncMessage message) => Send(message);
 
@@ -355,6 +362,28 @@ public sealed class EngineConnection(
         return states;
     }
 
+    /// <summary>A Scripter slot's new script, for the host to compile (dropped without an engine: a load carries it).</summary>
+    void SendScript(string trackId, string slotId, string source) {
+        if (session.View?.Ids is not { } ids) {
+            return;
+        }
+
+        try {
+            TrySend(new SetScriptMessage(ids.Track(trackId), slotId, source));
+        } catch (KeyNotFoundException) {
+            // A track the engine does not have yet: its strip brings the script when it loads.
+        }
+    }
+
+    void SendStepInputForward(bool on) => TrySend(new SetStepInputForwardMessage(on));
+
+    /// <summary>Sends a message when the engine is connected; drops it otherwise.</summary>
+    void TrySend(IpcMessage message) {
+        if (Volatile.Read(ref current) is { } link) {
+            link.Work.Writer.TryWrite(message);
+        }
+    }
+
     void Send(IpcMessage message) {
         if (Volatile.Read(ref current) is not { } link || !link.Work.Writer.TryWrite(message)) {
             throw ProjectException.Unprocessable("The engine is not connected.");
@@ -363,12 +392,16 @@ public sealed class EngineConnection(
 
     public override async Task StartAsync(CancellationToken cancellationToken) {
         session.Changed += Kick;
+        session.ScriptChanged += SendScript;
+        session.StepInputForwardChanged += SendStepInputForward;
         clock.Stopped += session.EndPass;
         await base.StartAsync(cancellationToken).ConfigureAwait(false);
     }
 
     public override async Task StopAsync(CancellationToken cancellationToken) {
         session.Changed -= Kick;
+        session.ScriptChanged -= SendScript;
+        session.StepInputForwardChanged -= SendStepInputForward;
         clock.Stopped -= session.EndPass;
         await base.StopAsync(cancellationToken).ConfigureAwait(false);
         if (InProcessHost is { } host) {
@@ -452,6 +485,10 @@ public sealed class EngineConnection(
         var connection = new Connection(link, Channel.CreateUnbounded<IpcMessage?>());
         pool.Reset();
         connection.Work.Writer.TryWrite(null); // the first sync sends the open project whole
+        if (session.ForwardsStepInput) {
+            connection.Work.Writer.TryWrite(new SetStepInputForwardMessage(true));
+        }
+
         Volatile.Write(ref current, connection);
         device.Set(hello.SampleRate);
         Set(
@@ -526,6 +563,34 @@ public sealed class EngineConnection(
                 case CellStateMessage cell:
                     liveLoops.OnCellState(cell);
                     break;
+                case SlotParametersMessage parameters when parameters.SlotId is not null:
+                    session.ApplySlotParameters(
+                        parameters.TrackId,
+                        parameters.SlotId,
+                        [
+                            ..(parameters.Parameters ?? []).Where(static q => q?.Id is not null)
+                                .Select(static q => new Contracts.ParameterInfo(
+                                        q.Id,
+                                        q.Name ?? q.Id,
+                                        q.Min,
+                                        q.Max,
+                                        q.Default,
+                                        q.Unit ?? string.Empty,
+                                        q.Steps,
+                                        q.ValueNames,
+                                        q.Macro
+                                    )
+                                )
+                        ]
+                    );
+                    break;
+                case ScriptLogMessage log when log.SlotId is not null:
+                    Relay(log);
+                    break;
+                case StepInputMidiMessage step:
+                    // In order, here: each step starts where the one before left the position.
+                    session.StepFromMidi(step.Pitches ?? [], step.Velocity);
+                    break;
                 case ErrorMessage error:
                     EngineLog.HostError(logger, error.Message, error.Request);
                     link.Error(error);
@@ -550,6 +615,13 @@ public sealed class EngineConnection(
         }
 
         Volatile.Write(ref pendingReadings, readings);
+    }
+
+    /// <summary>A Scripter slot's trace lines, with its domain track id.</summary>
+    void Relay(ScriptLogMessage log) {
+        if (session.View?.Ids.TrackOf(log.TrackId) is { } trackId) {
+            hub.Publish(new ScriptLogEvent(trackId, log.SlotId, [..log.Lines ?? []], Math.Max(0, log.Dropped)));
+        }
     }
 
     /// <summary>A plugin the host bypassed (it crashed or did not load), with domain ids.</summary>

@@ -192,6 +192,7 @@ public sealed partial class ProjectSession(
         }
 
         o.States = states;
+        PruneVersions(o);
         Publish();
         o.Dirty = false;
         var summary = o.Summary(time.GetUtcNow());
@@ -420,6 +421,7 @@ public sealed partial class ProjectSession(
         lock (gate) {
             Required();
             open = null;
+            ResetStepInput();
             Publish();
             hub.Publish(new ProjectClosedEvent());
         }
@@ -454,9 +456,15 @@ public sealed partial class ProjectSession(
             }
 
             EditResult edit;
+            StepState? steps = null;
             var analysis = new SessionAnalysis(analyses, o.Folder);
             try {
-                edit = Edits.Apply(o.State, Resolve(o, batch.Commands), ids, catalog.ForEdits, patches, analysis);
+                if (batch.Commands.Any(static c => c is StepNotesCommand or StepTieCommand)) {
+                    (edit, var stepped) = ApplySteps(o, Resolve(o, batch.Commands), analysis);
+                    steps = stepped;
+                } else {
+                    edit = Edits.Apply(o.State, Resolve(o, batch.Commands), ids, catalog.ForEdits, patches, analysis);
+                }
             } catch (EditException e) {
                 built = Keep(o, analysis.Built);
                 throw ProjectException.Unprocessable(e.Message);
@@ -487,6 +495,9 @@ public sealed partial class ProjectSession(
             }
 
             Moved(batch.Commands, state);
+            if (steps is { } kept) {
+                KeepSteps(kept);
+            }
         }
 
         return result;
@@ -932,7 +943,7 @@ public sealed partial class ProjectSession(
 
         var peaksFolder = Path.Combine(folder, ProjectPackage.PeaksFolder);
         try {
-            await peaks.EnsureAsync(peaksFolder, file.Id, Path.Combine(folder, file.Path), cancellationToken)
+            await peaks.EnsureAsync(peaksFolder, PeakKey(file), Path.Combine(folder, file.Path), cancellationToken)
                 .ConfigureAwait(false);
         } catch (Exception e) when (e is IOException
                                         or UnauthorizedAccessException
@@ -941,7 +952,7 @@ public sealed partial class ProjectSession(
             throw ProjectException.Unprocessable($"No peaks for '{fileId}': {e.Message}");
         }
 
-        return Peaks.PathOf(peaksFolder, file.Id, framesPerPeak);
+        return Peaks.PathOf(peaksFolder, PeakKey(file), framesPerPeak);
     }
 
     /// <summary>
@@ -1119,7 +1130,10 @@ public sealed partial class ProjectSession(
         var rate = state.SampleRate;
         var passStart = map.TickAtSample(Math.Max(0, take.StartSample), rate);
         var passEnd = Math.Max(passStart + 1, map.TickAtSample(Math.Max(0, take.EndSample), rate));
-        var (notes, controls) = MidiRecording.Events(take, map, rate, passEnd);
+        var switches = track.ArticulationSetId is { } setId && state.ArticulationSets.TryGetValue(setId, out var set)
+            ? set.Switches
+            : null;
+        var (notes, controls) = MidiRecording.Events(take, map, rate, passEnd, switches);
         var recording = state.Settings.Recording;
         if (!flashback && recording.Autopunch) {
             var (from, to) = (recording.PunchInTick, recording.PunchOutTick);
@@ -1292,14 +1306,14 @@ public sealed partial class ProjectSession(
 
     void StartPeaks(AudioFile file) {
         if (View is { } v) {
-            _ = peaks.Start(
-                    Path.Combine(v.Folder, ProjectPackage.PeaksFolder),
-                    file.Id,
-                    Path.Combine(v.Folder, file.Path)
-                )
-                .ContinueWith(static _ => { }, TaskScheduler.Default);
+            StartPeaks(v.Folder, file);
         }
     }
+
+    /// <summary>Starts building the peaks of a file of the project in <paramref name="folder" /> (its version's).</summary>
+    void StartPeaks(string folder, AudioFile file) =>
+        _ = peaks.Start(Path.Combine(folder, ProjectPackage.PeaksFolder), PeakKey(file), Path.Combine(folder, file.Path))
+            .ContinueWith(static _ => { }, TaskScheduler.Default);
 
     Project Replace(string folder, ProjectState state, ImmutableDictionary<string, SavedState>? states = null) {
         Project project;
@@ -1313,6 +1327,7 @@ public sealed partial class ProjectSession(
                 }
             }
 
+            ResetStepInput();
             open = new(++sessions, folder, state, new(time)) {
                 States = states ?? ImmutableDictionary.Create<string, SavedState>(StringComparer.Ordinal),
                 Analyses = FileAnalyses.CachedAll(folder, state.Files.Values)
@@ -1334,6 +1349,8 @@ public sealed partial class ProjectSession(
     }
 
     CommandResult Commit(Open o, ProjectState state, IReadOnlyList<DeltaOp> ops) {
+        NoteScripts(o.State, state);
+        NoteVersions(o, o.State, state);
         o.State = state;
         o.Revision++;
         o.Dirty = true;

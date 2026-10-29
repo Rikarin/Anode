@@ -147,7 +147,15 @@ public static partial class Edits {
             throw new EditException("The engine sets the tempo parameter from the project tempo.");
         }
 
-        var value = ParameterValue(plugins, insert.PluginId, insert.Parameters, c.ParameterId, c.Value, "Insert");
+        var value = ParameterValue(
+            plugins,
+            insert.PluginId,
+            insert.Parameters,
+            c.ParameterId,
+            c.Value,
+            "Insert",
+            insert.RuntimeParameters
+        );
         var changed = insert with {
             Parameters = PluginCatalog.Sorted(insert.Parameters).SetItem(c.ParameterId, value)
         };
@@ -161,13 +169,28 @@ public static partial class Edits {
     }
 
     /// <summary>A parameter value checked against the plugin's catalogue entry (rounded to its steps), or kept.</summary>
+    /// <summary>
+    ///     A parameter of a slot: of its run-time list when its plugin defines its parameters at run time (Scripter,
+    ///     Phase 7), else of its plugin's catalogue entry; null when neither has it.
+    /// </summary>
+    static ParameterInfo? InfoOf(
+        PluginCatalog plugins,
+        string pluginId,
+        IReadOnlyList<ParameterInfo>? runtime,
+        string parameterId
+    ) =>
+        runtime is not null
+            ? runtime.FirstOrDefault(p => p.Id == parameterId)
+            : plugins.Find(pluginId)?.Parameters.FirstOrDefault(p => p.Id == parameterId);
+
     static double ParameterValue(
         PluginCatalog plugins,
         string pluginId,
         IReadOnlyDictionary<string, double> known,
         string? parameterId,
         double value,
-        string what
+        string what,
+        IReadOnlyList<ParameterInfo>? runtime = null
     ) {
         if (string.IsNullOrEmpty(parameterId) || parameterId.Length > MaxParameterIdLength) {
             throw new EditException("Name a parameter.");
@@ -177,7 +200,7 @@ public static partial class Edits {
             throw new EditException("A parameter value is a finite number.");
         }
 
-        var info = plugins.Find(pluginId)?.Parameters.FirstOrDefault(p => p.Id == parameterId);
+        var info = InfoOf(plugins, pluginId, runtime, parameterId);
         if (info is not null) {
             if (value < info.Min || value > info.Max) {
                 throw new EditException($"Parameter '{info.Id}' takes {info.Min}…{info.Max}, not {value}.");
@@ -517,13 +540,19 @@ public static partial class Edits {
                     throw new EditException("The engine sets the tempo parameter from the project tempo.");
                 }
 
-                return ParameterRange(plugins, insert.PluginId, insert.Parameters, parameter);
+                return ParameterRange(plugins, insert.PluginId, insert.Parameters, parameter, insert.RuntimeParameters);
             case ["instrument", var parameter] when track?.Instrument is { } slot:
                 return ParameterRange(plugins, slot.PluginId, slot.Parameters, parameter);
             case ["midiEffect", var id, var parameter] when track is not null:
                 var midiEffect = strip.MidiEffects.FirstOrDefault(i => i.Id == id)
                     ?? throw new EditException($"No MIDI FX slot '{id}' on that strip.");
-                return ParameterRange(plugins, midiEffect.PluginId, midiEffect.Parameters, parameter);
+                return ParameterRange(
+                    plugins,
+                    midiEffect.PluginId,
+                    midiEffect.Parameters,
+                    parameter,
+                    midiEffect.RuntimeParameters
+                );
             case ["smartControl", var id] when track is not null
                 && HasAudioStrip(track.Kind)
                 && ControlIds(SmartControlsOf(track).Layout).Contains(id):
@@ -537,9 +566,10 @@ public static partial class Edits {
         PluginCatalog plugins,
         string pluginId,
         IReadOnlyDictionary<string, double> known,
-        string parameter
+        string parameter,
+        IReadOnlyList<ParameterInfo>? runtime = null
     ) {
-        if (plugins.Find(pluginId)?.Parameters.FirstOrDefault(p => p.Id == parameter) is { } info) {
+        if (InfoOf(plugins, pluginId, runtime, parameter) is { } info) {
             return new(info.Min, info.Max, false);
         }
 

@@ -1,4 +1,7 @@
 using Anode.Contracts;
+using Anode.Server.Engine;
+using Anode.Server.Library;
+using Anode.Server.Projects;
 using Microsoft.AspNetCore.Http.HttpResults;
 
 namespace Anode.Server.Api;
@@ -12,26 +15,32 @@ static class MidiEditApi {
         var library = api.MapGroup("/library").WithTags("Library").AddEndpointFilter<ProblemFilter>();
         library.MapGet(
                 "/grooves",
-                static Ok<IReadOnlyList<GrooveTemplate>>() => throw Pending.Phase7("ListGrooves")
+                static Ok<IReadOnlyList<GrooveTemplate>>(MidiEditLibraries libraries) =>
+                    TypedResults.Ok(libraries.Grooves.List())
             )
             .WithName("ListGrooves")
             .WithSummary("The groove templates saved in the user library.");
         library.MapPost(
                 "/grooves",
-                static Results<Ok<GrooveTemplate>, ProblemHttpResult>(GrooveTemplate groove) =>
-                    throw Pending.Phase7("SaveGroove")
+                static Results<Ok<GrooveTemplate>, ProblemHttpResult>(
+                    GrooveTemplate groove,
+                    MidiEditLibraries libraries
+                ) =>
+                    TypedResults.Ok(libraries.Grooves.Save(groove))
             )
             .WithName("SaveGroove")
             .WithSummary("Saves a groove template in the user library (replacing the one with its id).");
         library.MapDelete(
                 "/grooves/{id}",
-                static Results<NoContent, NotFound>(string id) => throw Pending.Phase7("DeleteGroove")
+                static Results<NoContent, NotFound>(string id, MidiEditLibraries libraries) =>
+                    libraries.Grooves.Delete(id) ? TypedResults.NoContent() : TypedResults.NotFound()
             )
             .WithName("DeleteGroove")
             .WithSummary("Deletes a groove template from the user library; projects keep their copies.");
         library.MapGet(
                 "/transform-sets",
-                static Ok<IReadOnlyList<TransformSet>>() => throw Pending.Phase7("ListTransformSets")
+                static Ok<IReadOnlyList<TransformSet>>(MidiEditLibraries libraries) =>
+                    TypedResults.Ok(libraries.TransformSets())
             )
             .WithName("ListTransformSets")
             .WithSummary(
@@ -39,8 +48,8 @@ static class MidiEditApi {
             );
         library.MapPost(
                 "/transform-sets",
-                static Results<Ok<TransformSet>, ProblemHttpResult>(TransformSet set) =>
-                    throw Pending.Phase7("SaveTransformSet")
+                static Results<Ok<TransformSet>, ProblemHttpResult>(TransformSet set, MidiEditLibraries libraries) =>
+                    TypedResults.Ok(libraries.SaveTransformSet(set))
             )
             .WithName("SaveTransformSet")
             .WithSummary(
@@ -49,27 +58,29 @@ static class MidiEditApi {
             );
         library.MapDelete(
                 "/transform-sets/{id}",
-                static Results<NoContent, NotFound, ProblemHttpResult>(string id) =>
-                    throw Pending.Phase7("DeleteTransformSet")
+                static Results<NoContent, NotFound, ProblemHttpResult>(string id, MidiEditLibraries libraries) =>
+                    libraries.DeleteTransformSet(id) ? TypedResults.NoContent() : TypedResults.NotFound()
             )
             .WithName("DeleteTransformSet")
             .WithSummary("Deletes a user MIDI Transform set (factory presets cannot be deleted).");
         library.MapGet(
                 "/articulation-sets",
-                static Ok<IReadOnlyList<ArticulationSet>>() => throw Pending.Phase7("ListArticulationSets")
+                static Ok<IReadOnlyList<ArticulationSet>>(MidiEditLibraries libraries) =>
+                    TypedResults.Ok(libraries.ArticulationSets.List())
             )
             .WithName("ListArticulationSets")
             .WithSummary("The articulation sets saved in the user library.");
         library.MapPost(
                 "/articulation-sets",
-                static Results<Ok<ArticulationSet>, ProblemHttpResult>(ArticulationSet set) =>
-                    throw Pending.Phase7("SaveArticulationSet")
+                static Results<Ok<ArticulationSet>, ProblemHttpResult>(ArticulationSet set, MidiEditLibraries libraries) =>
+                    TypedResults.Ok(libraries.ArticulationSets.Save(set))
             )
             .WithName("SaveArticulationSet")
             .WithSummary("Saves an articulation set in the user library (replacing the one with its id).");
         library.MapDelete(
                 "/articulation-sets/{id}",
-                static Results<NoContent, NotFound>(string id) => throw Pending.Phase7("DeleteArticulationSet")
+                static Results<NoContent, NotFound>(string id, MidiEditLibraries libraries) =>
+                    libraries.ArticulationSets.Delete(id) ? TypedResults.NoContent() : TypedResults.NotFound()
             )
             .WithName("DeleteArticulationSet")
             .WithSummary("Deletes an articulation set from the user library; projects keep their copies.");
@@ -79,8 +90,12 @@ static class MidiEditApi {
                 "/files/{fileId}/edit",
                 static Results<Accepted<Job>, NotFound, ProblemHttpResult>(
                     string fileId,
-                    AudioEditOperation operation
-                ) => throw Pending.Phase7("EditFile")
+                    AudioEditOperation operation,
+                    Jobs jobs
+                ) => {
+                    var job = jobs.EditFile(fileId, operation);
+                    return TypedResults.Accepted($"/api/v1/jobs/{job.Id}", job);
+                }
             )
             .WithName("EditFile")
             .WithSummary(
@@ -91,8 +106,9 @@ static class MidiEditApi {
                 "/files/{fileId}/loop-search",
                 static Results<Ok<IReadOnlyList<LoopSearchResult>>, NotFound, ProblemHttpResult>(
                     string fileId,
-                    LoopSearchRequest request
-                ) => throw Pending.Phase7("SearchLoops")
+                    LoopSearchRequest request,
+                    Jobs jobs
+                ) => TypedResults.Ok(jobs.SearchLoops(fileId, request))
             )
             .WithName("SearchLoops")
             .WithSummary("Loop search over a range of a file: the best loops found, best first.");
@@ -102,8 +118,9 @@ static class MidiEditApi {
                     string fileId,
                     long start,
                     long frames,
-                    int? bucket
-                ) => throw Pending.Phase7("GetFileSamples")
+                    int? bucket,
+                    ProjectSession session
+                ) => TypedResults.Ok(session.Samples(fileId, start, frames, bucket ?? 1))
             )
             .WithName("GetFileSamples")
             .WithSummary(
@@ -112,8 +129,28 @@ static class MidiEditApi {
             );
         project.MapPost(
                 "/files/{fileId}/preview",
-                static Results<NoContent, NotFound, ProblemHttpResult>(string fileId, PreviewRangeRequest request) =>
-                    throw Pending.Phase7("PreviewFileRange")
+                static Results<NoContent, NotFound, ProblemHttpResult>(
+                    string fileId,
+                    PreviewRangeRequest request,
+                    ProjectSession session,
+                    EngineConnection engine
+                ) => {
+                    var (_, folder, file) = session.FileOf(fileId);
+                    if (request is null
+                        || request.StartFrame < 0
+                        || request.EndFrame > file.Frames
+                        || request.EndFrame <= request.StartFrame) {
+                        throw ProjectException.Unprocessable($"Preview a range inside the file's 0…{file.Frames} frames.");
+                    }
+
+                    engine.PreviewRange(
+                        Path.Combine(folder, file.Path),
+                        request.StartFrame,
+                        request.EndFrame,
+                        request.Loop ?? false
+                    );
+                    return TypedResults.NoContent();
+                }
             )
             .WithName("PreviewFileRange")
             .WithSummary(
@@ -122,14 +159,18 @@ static class MidiEditApi {
             );
         project.MapGet(
                 "/step-input",
-                static Results<Ok<StepInputState>, NotFound>() => throw Pending.Phase7("GetStepInput")
+                static Results<Ok<StepInputState>, NotFound>(ProjectSession session) =>
+                    TypedResults.Ok(session.StepInput())
             )
             .WithName("GetStepInput")
             .WithSummary("The step input state (not part of the project: not saved, not undoable).");
         project.MapPut(
                 "/step-input",
-                static Results<Ok<StepInputState>, NotFound, ProblemHttpResult>(StepInputRequest request) =>
-                    throw Pending.Phase7("SetStepInput")
+                static Results<Ok<StepInputState>, NotFound, ProblemHttpResult>(
+                    StepInputRequest request,
+                    ProjectSession session
+                ) =>
+                    TypedResults.Ok(session.SetStepInput(request ?? new()))
             )
             .WithName("SetStepInput")
             .WithSummary(
@@ -138,8 +179,8 @@ static class MidiEditApi {
             );
         project.MapPost(
                 "/step-input/rest",
-                static Results<Ok<StepInputState>, NotFound, ProblemHttpResult>() =>
-                    throw Pending.Phase7("StepRest")
+                static Results<Ok<StepInputState>, NotFound, ProblemHttpResult>(ProjectSession session) =>
+                    TypedResults.Ok(session.StepRest())
             )
             .WithName("StepRest")
             .WithSummary("A rest: advances the step position by one step (not an edit).");

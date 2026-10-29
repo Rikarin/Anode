@@ -54,6 +54,18 @@ public sealed record ProjectState(
     /// <summary>The Live Loops grid (docs/07-phase-6.md).</summary>
     public LiveLoopsGrid LiveLoops { get; init; } = ProjectDefaults.LiveLoops;
 
+    /// <summary>The project's groove templates, by id (docs/08-phase-7.md).</summary>
+    public ImmutableSortedDictionary<string, GrooveTemplate> Grooves { get; init; } =
+        ImmutableSortedDictionary.Create<string, GrooveTemplate>(StringComparer.Ordinal);
+
+    /// <summary>The project's articulation sets, by id (docs/08-phase-7.md).</summary>
+    public ImmutableSortedDictionary<string, ArticulationSet> ArticulationSets { get; init; } =
+        ImmutableSortedDictionary.Create<string, ArticulationSet>(StringComparer.Ordinal);
+
+    /// <summary>The project's Step Editor lane sets, by id (docs/08-phase-7.md).</summary>
+    public ImmutableSortedDictionary<string, LaneSet> LaneSets { get; init; } =
+        ImmutableSortedDictionary.Create<string, LaneSet>(StringComparer.Ordinal);
+
     /// <summary>The project's Note Pad.</summary>
     public string Notes { get; init; } = string.Empty;
 
@@ -197,9 +209,9 @@ public sealed record ProjectState(
             [..Automation.Values],
             [..PatternRegions.Values],
             LiveLoops,
-            [], // Grooves, articulation sets and lane sets: Phase 7, workstream B (docs/08-phase-7.md).
-            [],
-            []
+            [..Grooves.Values],
+            [..ArticulationSets.Values],
+            [..LaneSets.Values]
         );
 
     /// <summary>Applies one delta operation (an edit's primitive step, also what clients apply).</summary>
@@ -251,6 +263,12 @@ public sealed record ProjectState(
             LiveLoopsChanged(var grid) => this with {
                 LiveLoops = grid, LastEventId = Math.Max(LastEventId, MaxEventId(grid))
             },
+            GrooveUpserted(var groove) => this with { Grooves = Grooves.SetItem(groove.Id, groove) },
+            GrooveRemoved(var id) => this with { Grooves = Grooves.Remove(id) },
+            ArticulationSetUpserted(var set) => this with { ArticulationSets = ArticulationSets.SetItem(set.Id, set) },
+            ArticulationSetRemoved(var id) => this with { ArticulationSets = ArticulationSets.Remove(id) },
+            LaneSetUpserted(var set) => this with { LaneSets = LaneSets.SetItem(set.Id, set) },
+            LaneSetRemoved(var id) => this with { LaneSets = LaneSets.Remove(id) },
             _ => throw new ArgumentException($"Unknown delta operation {op.GetType().Name}.", nameof(op))
         };
 
@@ -284,7 +302,29 @@ public sealed record ProjectState(
             AutomationLaneUpserted or AutomationLaneRemoved or GroupUpserted or GroupRemoved => InverseMixer(op),
             PatternRegionUpserted or PatternRegionRemoved => InversePattern(op),
             LiveLoopsChanged => new LiveLoopsChanged(LiveLoops),
+            GrooveUpserted or GrooveRemoved or ArticulationSetUpserted or ArticulationSetRemoved or LaneSetUpserted
+                or LaneSetRemoved => InverseSet(op),
             _ => throw new ArgumentException($"Unknown delta operation {op.GetType().Name}.", nameof(op))
+        };
+
+    /// <summary>The inverse of a Phase 7 set's operation: a groove template, an articulation set or a lane set.</summary>
+    DeltaOp? InverseSet(DeltaOp op) =>
+        op switch {
+            GrooveUpserted(var groove) => Grooves.TryGetValue(groove.Id, out var old)
+                ? new GrooveUpserted(old)
+                : new GrooveRemoved(groove.Id),
+            GrooveRemoved(var id) => Grooves.TryGetValue(id, out var old) ? new GrooveUpserted(old) : null,
+            ArticulationSetUpserted(var set) => ArticulationSets.TryGetValue(set.Id, out var old)
+                ? new ArticulationSetUpserted(old)
+                : new ArticulationSetRemoved(set.Id),
+            ArticulationSetRemoved(var id) => ArticulationSets.TryGetValue(id, out var old)
+                ? new ArticulationSetUpserted(old)
+                : null,
+            LaneSetUpserted(var set) => LaneSets.TryGetValue(set.Id, out var old)
+                ? new LaneSetUpserted(old)
+                : new LaneSetRemoved(set.Id),
+            LaneSetRemoved(var id) => LaneSets.TryGetValue(id, out var old) ? new LaneSetUpserted(old) : null,
+            _ => null
         };
 
     DeltaOp? InversePattern(DeltaOp op) =>

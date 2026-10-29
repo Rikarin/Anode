@@ -602,7 +602,12 @@ public sealed class ModelCompiler {
         ];
     }
 
-    /// <summary>A region's notes that start where it plays, with its playback applied (rank 2 on, 0 off).</summary>
+    /// <summary>
+    ///     A region's notes that start where it plays, with its playback applied (rank 2 on, 0 off; a groove template in
+    ///     place of the grid when the region names one), each preceded by its articulation's outputs (Phase 7): at the
+    ///     note's sample, sorted before it, on its channel; a channel output moves the note to its channel instead, and
+    ///     a keyswitch lasts one tick.
+    /// </summary>
     static void AddNotes(
         List<(PlaybackEvent Event, int Rank)> events,
         ProjectState state,
@@ -612,13 +617,15 @@ public sealed class ModelCompiler {
         List<(long From, long To)> windows
     ) {
         var playback = region.Playback;
+        var groove = playback.GrooveId is { } grooveId ? state.Grooves.GetValueOrDefault(grooveId) : null;
+        var outputs = Articulations(state, region.TrackId);
         foreach (var note in region.Notes) {
-            var at = Editing.Quantize.Tick(
-                region.StartTick + note.StartTick,
-                playback.QuantizeTicks,
-                playback.QuantizeStrength,
-                playback.Swing
-            );
+            var tick = region.StartTick + note.StartTick;
+            var at = groove is not null
+                ? playback.QuantizeStrength <= 0
+                    ? tick
+                    : MidiAlgorithms.Current.GrooveTarget(groove, tick, playback.QuantizeStrength).Tick
+                : Editing.Quantize.Tick(tick, playback.QuantizeTicks, playback.QuantizeStrength, playback.Swing);
             if (WindowAt(windows, at) is not { } window) {
                 continue;
             }
@@ -628,9 +635,82 @@ public sealed class ModelCompiler {
             var pitch = (byte)Math.Clamp(note.Pitch + playback.Transpose, 0, 127);
             var velocity = (byte)Math.Clamp(note.Velocity + playback.Velocity, 1, 127);
             var channel = (byte)(note.Channel - 1);
+            if (note.ArticulationId != 0 && outputs is not null && outputs.TryGetValue(note.ArticulationId, out var sent)) {
+                channel = AddArticulation(events, state, map, engineId, sent, at, on, channel);
+            }
+
             events.Add((Midi(engineId, on, PlaybackEventKind.NoteOn, pitch, velocity, channel), 2));
             events.Add((Midi(engineId, off, PlaybackEventKind.NoteOff, pitch, 0, channel), 0));
         }
+    }
+
+    /// <summary>The outputs of a track's articulation set by articulation id, in list order; null without a set.</summary>
+    static Dictionary<int, ArticulationOutput[]>? Articulations(ProjectState state, string trackId) =>
+        state.FindTrack(trackId)?.ArticulationSetId is { } setId
+        && state.ArticulationSets.TryGetValue(setId, out var set)
+        && set.Outputs.Count > 0
+            ? set.Outputs.GroupBy(static o => o.ArticulationId).ToDictionary(static g => g.Key, static g => g.ToArray())
+            : null;
+
+    /// <summary>
+    ///     An articulation's outputs before a note at <paramref name="tick" /> (sample <paramref name="on" />); the
+    ///     channel the note and they play on (a channel output's, else the note's).
+    /// </summary>
+    static byte AddArticulation(
+        List<(PlaybackEvent Event, int Rank)> events,
+        ProjectState state,
+        TempoMap map,
+        int engineId,
+        ArticulationOutput[] outputs,
+        long tick,
+        long on,
+        byte channel
+    ) {
+        foreach (var output in outputs) {
+            if (output.Kind == ArticulationOutputKind.Channel) {
+                channel = (byte)(Math.Clamp(output.Value, 1, 16) - 1);
+            }
+        }
+
+        foreach (var output in outputs) {
+            switch (output.Kind) {
+                case ArticulationOutputKind.Note:
+                    var key = (byte)Math.Clamp(output.Number, 0, 127);
+                    var off = Math.Max(map.SampleAt(tick + 1, state.SampleRate), on + 1);
+                    events.Add(
+                        (Midi(engineId, on, PlaybackEventKind.NoteOn, key, (byte)Math.Clamp(output.Value, 1, 127), channel),
+                            2)
+                    );
+                    events.Add((Midi(engineId, off, PlaybackEventKind.NoteOff, key, 0, channel), 0));
+                    break;
+                case ArticulationOutputKind.ControlChange:
+                    events.Add(
+                        (Midi(
+                                engineId,
+                                on,
+                                PlaybackEventKind.ControlChange,
+                                (byte)Math.Clamp(output.Number, 0, 127),
+                                (byte)Math.Clamp(output.Value, 0, 127),
+                                channel
+                            ), 1)
+                    );
+                    break;
+                case ArticulationOutputKind.Program:
+                    events.Add(
+                        (Midi(
+                            engineId,
+                            on,
+                            PlaybackEventKind.ProgramChange,
+                            (byte)Math.Clamp(output.Value, 0, 127),
+                            0,
+                            channel
+                        ), 1)
+                    );
+                    break;
+            }
+        }
+
+        return channel;
     }
 
     /// <summary>A region's controller events where it plays (rank 1: between a sample's note-offs and note-ons).</summary>
@@ -668,6 +748,14 @@ public sealed class ModelCompiler {
                 PlaybackEventKind.ChannelPressure,
                 (byte)control.Value,
                 0,
+                channel
+            ),
+            ControlKind.PolyPressure => Midi(
+                engineId,
+                sample,
+                PlaybackEventKind.PolyPressure,
+                (byte)control.Number,
+                (byte)control.Value,
                 channel
             ),
             _ => Midi(engineId, sample, PlaybackEventKind.ProgramChange, (byte)control.Value, 0, channel)

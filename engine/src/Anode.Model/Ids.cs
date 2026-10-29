@@ -7,7 +7,7 @@ namespace Anode.Model;
 ///     <c>tak</c>,
 ///     <c>mrk</c>, <c>sec</c>, <c>alt</c>, and Phase 4's <c>ins</c>, <c>snd</c>, <c>aut</c>, <c>pat</c>, <c>job</c>, and
 ///     Phase 6's <c>ptn</c>, <c>row</c>, <c>scn</c>,
-///     <c>cel</c>), an
+///     <c>cel</c>, and Phase 7's <c>grv</c>, <c>ars</c>, <c>lns</c>), an
 ///     underscore, a
 ///     suffix.
 /// </summary>
@@ -51,4 +51,7 @@ public static class IdPrefix {
     public const string PatternRow = "row";
     public const string Scene = "scn";
     public const string Cell = "cel";
+    public const string Groove = "grv";
+    public const string ArticulationSet = "ars";
+    public const string LaneSet = "lns";
 }

@@ -193,8 +193,13 @@ public static partial class Edits {
             Velocity = c.Velocity ?? p.Velocity,
             QuantizeTicks = c.QuantizeTicks ?? p.QuantizeTicks,
             QuantizeStrength = c.QuantizeStrength ?? p.QuantizeStrength,
-            Swing = c.Swing ?? p.Swing
+            Swing = c.Swing ?? p.Swing,
+            GrooveId = c.GrooveId is null ? p.GrooveId : c.GrooveId.Length == 0 ? null : c.GrooveId
         };
+        if (playback.GrooveId is { } groove && !state.Grooves.ContainsKey(groove)) {
+            throw new EditException($"No groove template '{groove}'.");
+        }
+
         if (playback.Transpose is < -MaxTranspose or > MaxTranspose) {
             throw new EditException($"Transpose {playback.Transpose} is outside ±{MaxTranspose} semitones.");
         }
@@ -270,7 +275,8 @@ public static partial class Edits {
                 Velocity = change.Velocity ?? old.Velocity,
                 Channel = change.Channel ?? old.Channel,
                 StartTick = change.StartTick ?? old.StartTick,
-                LengthTicks = change.LengthTicks ?? old.LengthTicks
+                LengthTicks = change.LengthTicks ?? old.LengthTicks,
+                ArticulationId = change.ArticulationId ?? old.ArticulationId
             };
             CheckNote(region, note, change.StartTick.HasValue);
             notes[i] = note;
@@ -285,17 +291,48 @@ public static partial class Edits {
         return [new MidiRegionUpserted(region with { Notes = [..region.Notes.Where(n => !gone.Contains(n.Id))] })];
     }
 
-    static DeltaOp[] QuantizeNotes(ProjectState state, QuantizeNotesCommand c) {
+    static DeltaOp[] QuantizeNotes(ProjectState state, QuantizeNotesCommand c, IAnalysisSource analysis) {
         var region = MidiRegionOf(state, c.RegionId);
-        if (c.GridTicks is < 1 or > MaxQuantizeTicks) {
-            throw new EditException($"A quantise grid is 1…{MaxQuantizeTicks} ticks.");
+        var groove = GrooveFor(state, region.TrackId, c.GrooveId, analysis);
+        if (groove is null) {
+            if (c.GridTicks is < 1 or > MaxQuantizeTicks) {
+                throw new EditException($"A quantise grid is 1…{MaxQuantizeTicks} ticks.");
+            }
+
+            if (c.GrooveVelocity == true) {
+                throw new EditException("Velocities follow a groove template only: name one.");
+            }
+
+            CheckUnit(c.Swing, "swing");
         }
 
         CheckUnit(c.Strength, "quantise strength");
-        CheckUnit(c.Swing, "swing");
         var chosen = c.NoteIds is null
             ? null
             : Known(region.Notes.Select(static n => n.Id), c.NoteIds, "note", region.Id);
+        if (groove is not null) {
+            var picked = region.Notes.Where(n => chosen is null || chosen.Contains(n.Id)).ToArray();
+            var moved = MidiAlgorithms.Current.GrooveQuantize(
+                    picked,
+                    region.StartTick,
+                    groove,
+                    c.Strength,
+                    c.GrooveVelocity == true
+                )
+                .Where(static n => n is not null)
+                .ToDictionary(static n => n.Id);
+            var grooved = region.Notes.Select(n => moved.TryGetValue(n.Id, out var m)
+                    ? n with { StartTick = m.StartTick, Velocity = Math.Clamp(m.Velocity, 1, 127) }
+                    : n
+                )
+                .ToArray();
+            foreach (var note in grooved) {
+                CheckNote(region, note, true);
+            }
+
+            return [new MidiRegionUpserted(region with { Notes = Sorted(grooved) })];
+        }
+
         var notes = region.Notes.Select(n => {
                 if (chosen is not null && !chosen.Contains(n.Id)) {
                     return n;
@@ -383,6 +420,10 @@ public static partial class Edits {
 
         CheckChannel(note.Channel);
         CheckLength(note.LengthTicks, "note");
+        if (note.ArticulationId is < 0 or > MaxArticulationId) {
+            throw new EditException($"A note's articulation is 1…{MaxArticulationId} (0: none), not {note.ArticulationId}.");
+        }
+
         if (checkStart) {
             CheckPosition(region, note.StartTick);
         }
@@ -396,14 +437,15 @@ public static partial class Edits {
             ControlKind.PitchBend => (-8192, 8191),
             ControlKind.ChannelPressure => (0, 127),
             ControlKind.ProgramChange => (0, 127),
+            ControlKind.PolyPressure => (0, 127),
             _ => throw new EditException($"Unknown controller kind {e.Kind}.")
         };
         if (e.Value < min || e.Value > max) {
             throw new EditException($"A {e.Kind} value is {min}…{max}, not {e.Value}.");
         }
 
-        if (e.Kind == ControlKind.ControlChange ? e.Number is < 0 or > 127 : e.Number != 0) {
-            throw new EditException("A controller number is 0…127 for a control change, 0 otherwise.");
+        if (e.Kind is ControlKind.ControlChange or ControlKind.PolyPressure ? e.Number is < 0 or > 127 : e.Number != 0) {
+            throw new EditException("A controller number (a poly pressure's key) is 0…127, 0 for the other kinds.");
         }
     }
 

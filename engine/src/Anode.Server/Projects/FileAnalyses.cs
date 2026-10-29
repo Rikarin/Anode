@@ -66,7 +66,7 @@ public sealed class AnalysisException(string message, Exception? inner = null) :
 ///     "Server"): rebuilt on demand, not undoable. Rhythm (transients and beats) is analysed synchronously when an edit
 ///     or request needs it; pitch (curve and notes) by the <c>analyze</c> job.
 /// </summary>
-public sealed class FileAnalyses(IAudioAnalyzer analyzer) {
+public sealed class FileAnalyses(IAudioAnalyzer analyzer, IAudioEditor editor) {
     public const string Folder = "Analysis";
 
     readonly ConcurrentDictionary<string, Lock> locks = new(StringComparer.Ordinal);
@@ -192,7 +192,31 @@ public sealed class FileAnalyses(IAudioAnalyzer analyzer) {
         }
     }
 
-    static (float[] Mono, int Rate) Mono(string projectFolder, AudioFile file) {
+    /// <summary>
+    ///     The file's onsets for a groove template (docs/08-phase-7.md; not cached: a groove is made once), through the
+    ///     Audio File Editor's algorithms.
+    /// </summary>
+    public IReadOnlyList<(long Frame, double Strength)> Onsets(string projectFolder, AudioFile file) {
+        var (mono, rate) = Mono(projectFolder, file);
+        try {
+            return [..editor.Onsets(mono, rate).Select(static o => (o.Frame, o.Strength))];
+        } catch (Exception e) when (e is not OperationCanceledException) {
+            throw new AnalysisException($"Could not find the onsets of '{file.Name}': {e.Message}", e);
+        }
+    }
+
+    /// <summary>Drops the cached analysis of a file (its audio changed: another version).</summary>
+    public static void Forget(string projectFolder, string fileId) {
+        try {
+            File.Delete(PathOf(projectFolder, fileId));
+        } catch (Exception e) when (e is IOException or UnauthorizedAccessException or ArgumentException) {
+            // A cache that cannot be removed is overwritten when the file is analysed again.
+            _ = e;
+        }
+    }
+
+    /// <summary>A file of the project as one channel (the mean of its channels), and its rate.</summary>
+    public static (float[] Mono, int Rate) Mono(string projectFolder, AudioFile file) {
         try {
             var (channels, rate) = BounceProcessor.Read(Path.Combine(projectFolder, file.Path));
             return (Downmix.ToMono(channels), rate);
@@ -248,6 +272,14 @@ sealed class SessionAnalysis(FileAnalyses analyses, string folder) : IAnalysisSo
     ) {
         try {
             return analyses.Silence(folder, file, thresholdDb, minTimeMs, preAttackMs, postReleaseMs);
+        } catch (AnalysisException e) {
+            throw new EditException(e.Message, e);
+        }
+    }
+
+    public IReadOnlyList<(long Frame, double Strength)>? Onsets(AudioFile file) {
+        try {
+            return analyses.Onsets(folder, file);
         } catch (AnalysisException e) {
             throw new EditException(e.Message, e);
         }

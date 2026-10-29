@@ -85,7 +85,7 @@ public sealed class CellCompiler {
         } else if (cell.Content.Midi is { } midi) {
             model = new(
                 engineId,
-                ModelCompiler.MidiEvents(state, map, engineId, [midi with { StartTick = 0, Muted = false }]),
+                ModelCompiler.MidiEvents(state, map, engineId, [midi with { StartTick = 0, Muted = false, TrackId = track.Id }]),
                 []
             );
         } else {

@@ -44,7 +44,16 @@ public static class Strips {
                 : [],
             track is null ? 0 : Output(strip.Output),
             track is not null && Edits.IsMidiKind(track.Kind)
-                ? [..strip.MidiEffects.Select(static i => new EngineInsert(i.Id, i.PluginId, i.Bypassed, i.Parameters))]
+                ? [
+                    ..strip.MidiEffects.Select(static i => new EngineInsert(
+                            i.Id,
+                            i.PluginId,
+                            i.Bypassed,
+                            i.Parameters,
+                            Source: i.Source
+                        )
+                    )
+                ]
                 : []
         );
     }

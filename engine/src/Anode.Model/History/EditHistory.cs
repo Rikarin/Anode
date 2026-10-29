@@ -107,6 +107,9 @@ public sealed class EditHistory(TimeProvider time, int capacity = EditHistory.De
     /// <summary>The step undo would undo; the caller applies its inverse, then calls <see cref="Undone" />.</summary>
     public UndoStep? PeekUndo() => undo.Last?.Value;
 
+    /// <summary>Every step undo or redo can reach, oldest undo first.</summary>
+    public IReadOnlyList<UndoStep> Steps() => [..undo, ..redo];
+
     public UndoStep? PeekRedo() => redo.Count > 0 ? redo.Peek() : null;
 
     /// <summary>The step <see cref="PeekUndo" /> gave was undone, producing <paramref name="revision" />.</summary>

@@ -162,7 +162,9 @@ static class RandomProjects {
                 "MIDI Effect",
                 false,
                 false
-            )
+            ),
+            // Phase 7: Scripter, whose parameters a script defines at run time.
+            new(Edits.ScripterId, "Scripter", "Anode", "1.0", PluginFormat.Builtin, false, [], [], "MIDI Effect", false, false)
         ]
     );
 
@@ -362,37 +364,61 @@ static class RandomProjects {
             }
         }
 
+        // Phase 7 content (docs/08-phase-7.md): grooves, articulation sets, lane sets, a Scripter with its run-time
+        // parameters, a groove track, so their commands (and the Phase 7 fields of older ones) find something.
+        if (edits > 20) {
+            Type[] phase7 = [
+                typeof(SetGrooveCommand),
+                typeof(MakeGrooveCommand),
+                typeof(SetArticulationSetCommand),
+                typeof(SetArticulationSetCommand),
+                typeof(AssignArticulationSetCommand),
+                typeof(SetLaneSetCommand),
+                typeof(AddInsertCommand),
+                typeof(SetScriptCommand),
+                typeof(SetGrooveTrackCommand),
+                typeof(SetMatchGrooveCommand),
+                typeof(AddNotesCommand)
+            ];
+            foreach (var type in phase7) {
+                var command = type == typeof(AddInsertCommand) && MidiTracks(state).FirstOrDefault() is { } t
+                    ? new AddInsertCommand(Edits.ScripterId, t.Id, Chain: InsertChain.MidiEffects)
+                    : Command(type, state, random);
+                if (command is null) {
+                    continue;
+                }
+
+                try {
+                    state = Edits.Apply(state, command, ids, Plugins, Patches, Analysis).State;
+                } catch (EditException) {
+                    // not every random edit applies
+                }
+            }
+
+            // The host's answer to a script: its parameters.
+            foreach (var track in state.Tracks) {
+                foreach (var slot in track.Strip.MidiEffects.Where(static i => i.Source is not null)) {
+                    if (Edits.WithRuntimeParameters(state, track.Id, slot.Id, ScriptParameters) is { } op) {
+                        state = state.Apply(op);
+                    }
+                }
+            }
+        }
+
         return (state, ids, random);
     }
+
+    /// <summary>The parameters the host reports for every random script.</summary>
+    public static IReadOnlyList<ParameterInfo> ScriptParameters { get; } = [
+        new("Delay", "Delay", 0, 1000, 100, "ms", 0, null),
+        new("Interval", "Interval", -24, 24, 12, string.Empty, 48, null),
+        new("Mode", "Mode", 0, 2, 0, string.Empty, 2, ["Up", "Down", "Both"])
+    ];
 
     static string? FirstAudioTrack(ProjectState state) => state.Tracks.Find(static t => t.Kind == TrackKind.Audio)?.Id;
 
     static IEnumerable<Track> MidiTracks(ProjectState state) =>
         state.Tracks.Where(static t => Edits.IsMidiKind(t.Kind) && t.FrozenFileId is null);
-
-    /// <summary>
-    ///     Phase 7 commands (docs/08-phase-7.md) the model rejects until workstream B implements them; the identity
-    ///     property skips them. (The Phase 7 fields of existing commands, grooves on the quantise commands and
-    ///     <c>setMidiRegion</c> and articulations on notes, are rejected too, and the generators never set them yet.)
-    /// </summary>
-    public static readonly IReadOnlySet<string> PendingPhase7 = new HashSet<string>(StringComparer.Ordinal) {
-        nameof(SetControlsCommand),
-        nameof(TransformCommand),
-        nameof(MakeGrooveCommand),
-        nameof(SetGrooveCommand),
-        nameof(DeleteGrooveCommand),
-        nameof(SetGrooveTrackCommand),
-        nameof(SetMatchGrooveCommand),
-        nameof(SetArticulationSetCommand),
-        nameof(DeleteArticulationSetCommand),
-        nameof(AssignArticulationSetCommand),
-        nameof(SetLaneSetCommand),
-        nameof(DeleteLaneSetCommand),
-        nameof(StepNotesCommand),
-        nameof(StepTieCommand),
-        nameof(SetFileVersionCommand),
-        nameof(SetScriptCommand)
-    };
 
     /// <summary>A random command of <paramref name="type" /> for <paramref name="s" />, or null when none can be made.</summary>
     public static EditCommand? Command(Type type, ProjectState s, Random r) {
@@ -415,6 +441,13 @@ static class RandomProjects {
         var scenes = s.LiveLoops.Scenes;
         var cells = s.LiveLoops.Cells;
         var withFx = tracks.Where(static t => t.Strip.MidiEffects.Count > 0).ToArray();
+        var grooves = s.Grooves.Values.ToArray();
+        var articulationSets = s.ArticulationSets.Values.ToArray();
+        var laneSets = s.LaneSets.Values.ToArray();
+        var scripted = tracks.SelectMany(static t => t.Strip.MidiEffects.Where(static i => i.PluginId == Edits.ScripterId)
+                .Select(i => (Track: t, Slot: i))
+            )
+            .ToArray();
         return type.Name switch {
             nameof(AddTrackCommand) => AddTrack(r, tracks.Count),
             nameof(RemoveTrackCommand) => Track() is { } t ? new RemoveTrackCommand(t) : null,
@@ -493,7 +526,8 @@ static class RandomProjects {
                     Maybe(Pick(r, [0, 120, 240, 480, 960])),
                     Maybe(Math.Round(r.NextDouble(), 2)),
                     Maybe(Math.Round(r.NextDouble(), 2)),
-                    Maybe(r.Next(2) == 0)
+                    Maybe(r.Next(2) == 0),
+                    r.Next(3) > 0 ? null : grooves.Length == 0 || r.Next(4) == 0 ? "" : Pick(r, grooves).Id
                 )
                 : null,
             nameof(AddNotesCommand) => MidiRegion() is { } m
@@ -509,7 +543,9 @@ static class RandomProjects {
                     Pick(r, [120, 160, 240, 480, 960]),
                     Math.Round(r.NextDouble(), 2),
                     r.Next(2) == 0 ? 0 : Math.Round(r.NextDouble(), 2),
-                    r.Next(2) == 0 ? null : [..Some(m.Notes, r).Select(static n => n.Id)]
+                    r.Next(2) == 0 ? null : [..Some(m.Notes, r).Select(static n => n.Id)],
+                    grooves.Length > 0 && r.Next(3) == 0 ? Pick(r, grooves).Id : null,
+                    r.Next(4) == 0 ? r.Next(2) == 0 : null
                 )
                 : null,
             nameof(AddControlsCommand) => MidiRegion() is { } m
@@ -779,7 +815,8 @@ static class RandomProjects {
                     [..Some(regions, r).Select(static x => x.Id)],
                     Pick(r, [120L, 240, 480, 960]),
                     Math.Round(r.NextDouble(), 2),
-                    r.Next(2) == 0 ? 0 : Math.Round(r.NextDouble(), 2)
+                    r.Next(2) == 0 ? 0 : Math.Round(r.NextDouble(), 2),
+                    grooves.Length > 0 && r.Next(3) == 0 ? Pick(r, grooves).Id : null
                 )
                 : null,
             nameof(SetPitchNotesCommand) => regions.Length > 0 ? PitchNotes(Pick(r, regions), r) : null,
@@ -941,65 +978,75 @@ static class RandomProjects {
             nameof(SetTrackActivationCommand) => Track() is { } t
                 ? new SetTrackActivationCommand([t, ..r.Next(2) == 0 ? [] : new[] { Track()! }], r.Next(2) == 0)
                 : null,
-            // Phase 7 commands (docs/08-phase-7.md): placeholders until the model implements them (workstream B
-            // replaces these with generators that make commands that apply, and removes PendingPhase7).
-            nameof(SetControlsCommand) => WithControls() is { } m
-                ? new SetControlsCommand(m.Id, [new(m.Controls[0].Id, Value: r.Next(128))])
-                : null,
-            nameof(TransformCommand) => MidiRegion() is { } m
-                ? new TransformCommand(
-                    [m.Id],
-                    new(
-                        "trf_random",
-                        "Random",
-                        [new(TransformField.Pitch, TransformConditionOp.GreaterEqual, 60)],
-                        [new(TransformField.Velocity, TransformOperationKind.Fix, r.Next(1, 128))],
-                        null,
-                        TransformMode.OperateOnly,
-                        r.Next()
-                    )
-                )
-                : null,
-            nameof(MakeGrooveCommand) => MidiRegion() is { } m
-                ? new MakeGrooveCommand(m.Id, MaybeText("Groove"), r.Next(1, 5))
-                : null,
+            // Phase 7 (docs/08-phase-7.md).
+            nameof(SetControlsCommand) => WithControls() is { } m ? SetControls(m, r) : null,
+            nameof(TransformCommand) => MidiRegion() is { } m ? Transform(s, m, r) : null,
+            nameof(MakeGrooveCommand) => (regions.Length + midiRegions.Length) == 0
+                ? null
+                : new MakeGrooveCommand(
+                    r.Next(regions.Length + midiRegions.Length) is var i && i < regions.Length
+                        ? regions[i].Id
+                        : midiRegions[i - regions.Length].Id,
+                    MaybeText($"Groove {r.Next(100)}"),
+                    r.Next(4) == 0 ? null : r.Next(1, 6),
+                    r.Next(3) == 0 ? null : Pick(r, [120L, 240, 480, 960, 700])
+                ),
             nameof(SetGrooveCommand) => new SetGrooveCommand(
-                new("grv_random", "Swing", 3840, 960, [new(0, 1), new(1040, 0.8), new(1920, 1), new(3000, 0.8)])
+                RandomGroove(grooves.Length > 0 && r.Next(2) == 0 ? Pick(r, grooves).Id : $"grv_r{r.Next(1000)}", r)
             ),
-            nameof(DeleteGrooveCommand) => new DeleteGrooveCommand("grv_none"),
-            nameof(SetGrooveTrackCommand) => new SetGrooveTrackCommand(Track()),
-            nameof(SetMatchGrooveCommand) => Track() is { } t ? new SetMatchGrooveCommand(t, r.Next(2) == 0) : null,
+            nameof(DeleteGrooveCommand) => new DeleteGrooveCommand(
+                grooves.Length > 0 && r.Next(6) > 0 ? Pick(r, grooves).Id : "grv_none"
+            ),
+            nameof(SetGrooveTrackCommand) => new SetGrooveTrackCommand(r.Next(5) == 0 ? null : Track()),
+            nameof(SetMatchGrooveCommand) => Track() is { } t ? new SetMatchGrooveCommand(t, r.Next(3) > 0) : null,
             nameof(SetArticulationSetCommand) => new SetArticulationSetCommand(
-                new(
-                    "ars_random",
-                    "Strings",
-                    [new(1, "Legato", null), new(2, "Staccato", "st")],
-                    [new(1, ArticulationSwitchKind.Note, 24, null)],
-                    [new(2, ArticulationOutputKind.Note, 25, 100)]
+                RandomArticulationSet(
+                    articulationSets.Length > 0 && r.Next(2) == 0 ? Pick(r, articulationSets).Id : $"ars_r{r.Next(1000)}",
+                    r
                 )
             ),
-            nameof(DeleteArticulationSetCommand) => new DeleteArticulationSetCommand("ars_none"),
-            nameof(AssignArticulationSetCommand) => Instrument() is { } t
-                ? new AssignArticulationSetCommand(t.Id, r.Next(2) == 0 ? null : "ars_none")
+            nameof(DeleteArticulationSetCommand) => new DeleteArticulationSetCommand(
+                articulationSets.Length > 0 && r.Next(6) > 0 ? Pick(r, articulationSets).Id : "ars_none"
+            ),
+            nameof(AssignArticulationSetCommand) => (r.Next(5) == 0 ? Track() : MidiTrack()?.Id) is { } t
+                ? new AssignArticulationSetCommand(
+                    t,
+                    articulationSets.Length == 0 || r.Next(4) == 0 ? null : Pick(r, articulationSets).Id
+                )
                 : null,
             nameof(SetLaneSetCommand) => new SetLaneSetCommand(
-                new("lns_random", "Lanes", [new(LaneKind.Velocity, null, "Velocity", 240)])
+                RandomLaneSet(laneSets.Length > 0 && r.Next(2) == 0 ? Pick(r, laneSets).Id : $"lns_r{r.Next(1000)}", r)
             ),
-            nameof(DeleteLaneSetCommand) => new DeleteLaneSetCommand("lns_none"),
-            nameof(StepNotesCommand) => MidiRegion() is { } m
-                ? new StepNotesCommand([r.Next(36, 84)], RegionId: m.Id, PositionTick: m.StartTick, LengthTicks: 240)
-                : null,
-            nameof(StepTieCommand) => WithNotes() is { } m
-                ? new StepTieCommand(m.Id, [m.Notes[0].Id], 240)
-                : null,
-            nameof(SetFileVersionCommand) => files.Length == 0
-                ? null
-                : Pick(r, files) is var f
-                    ? new SetFileVersionCommand(f.Id, f.Version + 1, $"Audio Files/{f.Name}.v{f.Version + 1}.wav")
+            nameof(DeleteLaneSetCommand) => new DeleteLaneSetCommand(
+                laneSets.Length > 0 && r.Next(6) > 0 ? Pick(r, laneSets).Id : "lns_none"
+            ),
+            nameof(StepNotesCommand) => r.Next(3) > 0 && MidiRegion() is { } m
+                ? new StepNotesCommand(
+                    [..Enumerable.Range(0, r.Next(1, 4)).Select(_ => r.Next(36, 84)).Distinct()],
+                    r.Next(1, 128),
+                    m.Id,
+                    PositionTick: m.StartTick + r.Next(0, 8) * 240L,
+                    LengthTicks: Pick(r, [120L, 160, 240, 360, 480]),
+                    Channel: r.Next(4) == 0 ? r.Next(1, 17) : 1
+                )
+                : MidiTrack() is { } t
+                    ? new StepNotesCommand(
+                        [r.Next(36, 84)],
+                        Maybe(r.Next(1, 128)),
+                        TrackId: t.Id,
+                        PositionTick: r.Next(0, 64) * 240L,
+                        LengthTicks: 240
+                    )
                     : null,
-            nameof(SetScriptCommand) => Instrument() is { } t
-                ? new SetScriptCommand(t.Id, "ins_none", "function HandleMIDI(event) { event.send(); }")
+            nameof(StepTieCommand) => WithNotes() is { } m
+                ? new StepTieCommand(m.Id, [..Some(m.Notes, r).Select(static n => n.Id)], Pick(r, [120L, 240, 480]))
                 : null,
+            nameof(SetFileVersionCommand) => files.Length == 0 ? null : FileVersion(s, Pick(r, files), r),
+            nameof(SetScriptCommand) => scripted.Length > 0 && r.Next(6) > 0 && Pick(r, scripted) is var (st, slot)
+                ? new SetScriptCommand(st.Id, slot.Id, Script(r))
+                : withFx.Length > 0 && Pick(r, withFx) is var fx
+                    ? new SetScriptCommand(fx.Id, Pick(r, fx.Strip.MidiEffects).Id, Script(r))
+                    : null,
             _ => throw new InvalidOperationException($"No generator for {type.Name}.")
         };
         string? Track() => tracks.Count == 0 ? null : Pick(r, tracks).Id;
@@ -1079,6 +1126,162 @@ static class RandomProjects {
         T? Maybe<T>(T value) where T : struct => r.Next(2) == 0 ? null : value;
         string? MaybeText(string value) => r.Next(2) == 0 ? null : value;
     }
+
+    static SetControlsCommand SetControls(MidiRegion region, Random r) =>
+        new(
+            region.Id,
+            [
+                ..Some(region.Controls, r)
+                    .Select(e => new ControlEventChange(
+                            e.Id,
+                            r.Next(2) == 0 ? null : r.NextInt64(0, Math.Max(1, region.LengthTicks)),
+                            r.Next(3) == 0 ? r.Next(1, 17) : null,
+                            e.Kind is ControlKind.ControlChange or ControlKind.PolyPressure && r.Next(2) == 0
+                                ? r.Next(128)
+                                : null,
+                            r.Next(2) == 0
+                                ? null
+                                : e.Kind == ControlKind.PitchBend
+                                    ? r.Next(-8192, 8192)
+                                    : r.Next(10) == 0
+                                        ? 200
+                                        : r.Next(128)
+                        )
+                    )
+            ]
+        );
+
+    static TransformCommand Transform(ProjectState s, MidiRegion region, Random r) {
+        var fields = new[] {
+            TransformField.Position, TransformField.Length, TransformField.Channel, TransformField.Pitch,
+            TransformField.Velocity
+        };
+        var operations = fields.Where(_ => r.Next(3) == 0)
+            .Select(f => new TransformOperation(
+                    f,
+                    Pick(
+                        r,
+                        [
+                            TransformOperationKind.Thru, TransformOperationKind.Fix, TransformOperationKind.Add,
+                            TransformOperationKind.Subtract, TransformOperationKind.Min, TransformOperationKind.Max,
+                            TransformOperationKind.Range, TransformOperationKind.Quantize
+                        ]
+                    ),
+                    f == TransformField.Position ? r.Next(0, 4) * 120 : r.Next(1, 16),
+                    r.Next(1, 100)
+                )
+            )
+            .ToList();
+        if (operations.Count == 0) {
+            operations.Add(new(TransformField.Velocity, TransformOperationKind.Fix, r.Next(1, 128)));
+        }
+
+        var others = s.MidiRegions.Values.Where(m => m.Id != region.Id).ToArray();
+        return new(
+            r.Next(4) == 0 && others.Length > 0 ? [region.Id, Pick(r, others).Id] : [region.Id],
+            new(
+                $"trf_{r.Next(100)}",
+                "Random",
+                r.Next(2) == 0
+                    ? []
+                    : [new(Pick(r, [TransformField.Pitch, TransformField.Velocity, TransformField.Status]), TransformConditionOp.GreaterEqual, r.Next(0, 128))],
+                operations,
+                null,
+                r.Next(12) == 0 ? TransformMode.SelectOnly : Pick(r, [TransformMode.OperateOnly, TransformMode.SelectAndOperate]),
+                r.Next()
+            ),
+            r.Next(3) == 0 && region.Notes.Count > 0 ? [..Some(region.Notes, r).Select(static n => n.Id)] : null
+        );
+    }
+
+    public static GrooveTemplate RandomGroove(string id, Random r) {
+        var step = Pick(r, [120L, 240, 480]);
+        var length = r.Next(1, 3) * 3840L;
+        var count = (int)(length / step);
+        return new(
+            id,
+            $"Groove {r.Next(100)}",
+            length,
+            step,
+            [
+                ..Enumerable.Range(0, count)
+                    .Select(n => new GroovePoint(
+                            n * step + (n % 2 == 1 ? r.Next(0, (int)step / 2) : 0),
+                            Math.Round(r.NextDouble(), 2)
+                        )
+                    )
+            ]
+        );
+    }
+
+    public static ArticulationSet RandomArticulationSet(string id, Random r) {
+        var count = r.Next(1, 5);
+        var articulations = Enumerable.Range(1, count)
+            .Select(i => new Articulation(i, $"Art {i}", r.Next(2) == 0 ? null : $"a{i}"))
+            .ToArray();
+        return new(
+            id,
+            $"Set {r.Next(100)}",
+            articulations,
+            [
+                ..articulations.Select(a => new ArticulationSwitch(
+                        a.Id,
+                        r.Next(2) == 0 ? ArticulationSwitchKind.Note : ArticulationSwitchKind.ControlChange,
+                        r.Next(0, 24),
+                        r.Next(2) == 0 ? null : r.Next(128)
+                    )
+                )
+            ],
+            [
+                ..articulations.Select(a => r.Next(4) switch {
+                        0 => new ArticulationOutput(a.Id, ArticulationOutputKind.Note, r.Next(0, 24), r.Next(1, 128)),
+                        1 => new ArticulationOutput(a.Id, ArticulationOutputKind.ControlChange, 32, r.Next(128)),
+                        2 => new ArticulationOutput(a.Id, ArticulationOutputKind.Program, 0, r.Next(128)),
+                        _ => new ArticulationOutput(a.Id, ArticulationOutputKind.Channel, 0, r.Next(1, 17))
+                    }
+                )
+            ]
+        );
+    }
+
+    static LaneSet RandomLaneSet(string id, Random r) =>
+        new(
+            id,
+            $"Lanes {r.Next(100)}",
+            [
+                ..Enumerable.Range(0, r.Next(0, 5))
+                    .Select(_ => Pick(r, Enum.GetValues<LaneKind>()) is var kind
+                        ? new Lane(
+                            kind,
+                            kind is LaneKind.ControlChange or LaneKind.PolyPressure or LaneKind.Note ? r.Next(128) : null,
+                            kind.ToString(),
+                            Pick(r, [60L, 120, 240, 480])
+                        )
+                        : null!
+                    )
+            ]
+        );
+
+    static SetFileVersionCommand FileVersion(ProjectState s, AudioFile file, Random r) {
+        var needed = s.Regions.Values.Where(x => x.FileId == file.Id)
+            .Select(static x => x.FileOffset + x.Length)
+            .DefaultIfEmpty(1)
+            .Max();
+        var version = file.Version + r.Next(1, 3);
+        return new(
+            file.Id,
+            version,
+            $"Audio Files/{file.Name}.v{version}.wav",
+            r.Next(2) == 0 ? null : needed + r.Next(0, 10_000),
+            r.Next(4) == 0 ? Pick(r, ProjectDefaults.SampleRates.ToArray()) : null
+        );
+    }
+
+    static string Script(Random r) =>
+        $$"""
+          var PluginParameters = [{ name: "Delay", type: "lin", minValue: 0, maxValue: 1000, defaultValue: {{r.Next(1000)}} }];
+          function HandleMIDI(event) { event.send(); }
+          """;
 
     /// <summary>Flex markers on a region of a flexed track: mostly valid (inside, in order), sometimes not.</summary>
     static SetFlexMarkersCommand Markers(ProjectState s, AudioRegion region, Random r) {
@@ -1193,6 +1396,9 @@ static class RandomProjects {
                     .Select(i => (i * 30_000L, Math.Min(file.Frames, i * 30_000L + 20_000)))
                     .Where(static x => x.Item1 < x.Item2)
             ];
+
+        public IReadOnlyList<(long Frame, double Strength)>? Onsets(AudioFile file) =>
+            Rhythm(file) is { } rhythm ? [..rhythm.Transients.Select(static (f, i) => (f, i % 4 == 0 ? 1 : 0.6))] : null;
     }
 
     /// <summary>A pattern for a track (pad rows on a drum machine), mostly in range, sometimes not.</summary>
@@ -1470,15 +1676,17 @@ static class RandomProjects {
             r.Next(1, 128),
             r.Next(4) == 0 ? r.Next(1, 17) : 1,
             r.NextInt64(0, Math.Max(1, region.LengthTicks + 480)),
-            r.NextInt64(1, 1920)
+            r.NextInt64(1, 1920),
+            r.Next(3) == 0 ? r.Next(0, 5) : null
         );
 
     static NewControlEvent NewControl(MidiRegion region, Random r) {
         var tick = r.NextInt64(0, Math.Max(1, region.LengthTicks));
-        return r.Next(4) switch {
+        return r.Next(5) switch {
             0 => new(ControlKind.ControlChange, 1, r.Next(128), r.Next(128), tick),
             1 => new(ControlKind.PitchBend, 1, 0, r.Next(-8192, 8192), tick),
             2 => new(ControlKind.ChannelPressure, r.Next(1, 17), 0, r.Next(128), tick),
+            3 => new(ControlKind.PolyPressure, 1, r.Next(128), r.Next(128), tick),
             _ => new(ControlKind.ProgramChange, 1, 0, r.Next(128), tick)
         };
     }
@@ -1494,7 +1702,8 @@ static class RandomProjects {
                             r.Next(2) == 0 ? null : r.Next(1, 128),
                             r.Next(4) == 0 ? r.Next(1, 17) : null,
                             r.Next(2) == 0 ? null : Math.Max(0, n.StartTick + r.Next(-4, 5) * 120L),
-                            r.Next(2) == 0 ? null : r.NextInt64(1, 1920)
+                            r.Next(2) == 0 ? null : r.NextInt64(1, 1920),
+                            r.Next(4) == 0 ? r.Next(0, 6) : null
                         )
                     )
             ]

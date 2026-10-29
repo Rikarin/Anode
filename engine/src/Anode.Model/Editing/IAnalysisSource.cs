@@ -25,6 +25,12 @@ public interface IAnalysisSource {
         double preAttackMs,
         double postReleaseMs
     );
+
+    /// <summary>
+    ///     The file's onsets for a groove template (docs/08-phase-7.md, "Grooves"): file frames, ascending, with their
+    ///     strengths 0…1 (1: the strongest of the file); null when the file cannot be analysed.
+    /// </summary>
+    IReadOnlyList<(long Frame, double Strength)>? Onsets(AudioFile file);
 }
 
 /// <summary>No analysis: edits that need one use what the project already holds (a file's tempo), or refuse.</summary>
@@ -41,4 +47,6 @@ public sealed class NoAnalysis : IAnalysisSource {
         double postReleaseMs
     ) =>
         null;
+
+    public IReadOnlyList<(long Frame, double Strength)>? Onsets(AudioFile file) => null;
 }

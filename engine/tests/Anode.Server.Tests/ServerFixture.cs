@@ -18,7 +18,8 @@ public sealed class ServerFixture(
     string? socketPath = null,
     string? token = null,
     string? editorDirectory = null,
-    IAudioAnalyzer? analyzer = null
+    IAudioAnalyzer? analyzer = null,
+    IAudioEditor? editor = null
 ) : WebApplicationFactory<Program> {
     readonly string dataDirectory = Directory.CreateTempSubdirectory("anode-server-").FullName;
 
@@ -61,6 +62,10 @@ public sealed class ServerFixture(
 
         if (analyzer is not null) {
             builder.ConfigureServices(services => services.AddSingleton(analyzer));
+        }
+
+        if (editor is not null) {
+            builder.ConfigureServices(services => services.AddSingleton(editor));
         }
 
         builder.ConfigureLogging(static logging => logging.SetMinimumLevel(LogLevel.Warning));

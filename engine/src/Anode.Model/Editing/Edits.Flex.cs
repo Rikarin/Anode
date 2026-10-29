@@ -151,11 +151,11 @@ public static partial class Edits {
             throw new EditException($"Quantise 1…{MaxBatch} regions.");
         }
 
-        if (c.GridTicks is < 1 or > MaxTick) {
+        if (c.GrooveId is null && c.GridTicks is < 1 or > MaxTick) {
             throw new EditException($"A grid is 1…{MaxTick} ticks, not {c.GridTicks}.");
         }
 
-        if (!(c.Strength is >= 0 and <= 1) || !(c.Swing is >= 0 and <= 1)) {
+        if (!(c.Strength is >= 0 and <= 1) || (c.GrooveId is null && !(c.Swing is >= 0 and <= 1))) {
             throw new EditException("Strength and swing are 0…1.");
         }
 
@@ -167,7 +167,12 @@ public static partial class Edits {
             var file = FileOf(state, region.FileId);
             var transients = analysis.Rhythm(file)?.Transients
                 ?? throw new EditException($"Quantising audio needs the transients of '{file.Name}': it has none.");
-            var markers = QuantizedMarkers(state, region, file, transients, c);
+            // A groove (named, or the groove track's when the track matches it) in place of the grid (Phase 7).
+            var groove = GrooveFor(state, track.Id, c.GrooveId, analysis);
+            Func<long, long> target = groove is null
+                ? at => Quantize.Tick(at, c.GridTicks, c.Strength, c.Swing)
+                : at => MidiAlgorithms.Current.GrooveTarget(groove, at, c.Strength).Tick;
+            var markers = QuantizedMarkers(state, region, file, transients, target);
             if (!track.FlexOn && flexed.Add(track.Id)) {
                 ops.Add(new TrackUpserted(track with { FlexOn = true }, state.IndexOfTrack(track.Id)));
             }
@@ -184,7 +189,7 @@ public static partial class Edits {
         AudioRegion region,
         AudioFile file,
         IReadOnlyList<long> transients,
-        QuantizeAudioCommand c
+        Func<long, long> target
     ) {
         var timing = RegionTiming.Of(
             region with { FlexMarkers = [] },
@@ -199,7 +204,7 @@ public static partial class Edits {
         var markers = new List<FlexMarker>();
         foreach (var frame in transients.Where(f => f > region.FileOffset && f < end)) {
             var at = (long)Math.Round(region.StartTick + timing.Base(frame));
-            var tick = Quantize.Tick(at, c.GridTicks, c.Strength, c.Swing) - region.StartTick;
+            var tick = target(at) - region.StartTick;
             if (tick > 0 && tick < endTick && (markers.Count == 0 || tick > markers[^1].Tick)) {
                 markers.Add(new(frame, tick));
             }
