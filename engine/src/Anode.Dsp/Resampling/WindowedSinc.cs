@@ -1,7 +1,7 @@
-namespace Anode.Model.Audio;
+namespace Anode.Dsp.Resampling;
 
 /// <summary>Kaiser-windowed sinc kernels, shared by the resampler and the true-peak interpolator.</summary>
-static class WindowedSinc {
+public static class WindowedSinc {
     /// <summary>
     ///     The Kaiser window's β for a stopband attenuation of <paramref name="attenuationDb" /> (Kaiser's formula).
     /// </summary>

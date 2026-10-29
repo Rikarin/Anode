@@ -53,6 +53,20 @@ public sealed record SfzRegion {
     public int SeqLength { get; init; } = 1;
     public int SeqPosition { get; init; } = 1;
 
+    /// <summary>The keyswitch range (<c>sw_lokey</c> … <c>sw_hikey</c>), or −1: notes in it switch and do not sound.</summary>
+    public int SwLoKey { get; init; } = -1;
+
+    public int SwHiKey { get; init; } = -1;
+
+    /// <summary>The keyswitch this region plays under (<c>sw_last</c>), or −1 for every one.</summary>
+    public int SwLast { get; init; } = -1;
+
+    /// <summary>The keyswitch in force before any is played (<c>sw_default</c>), or −1.</summary>
+    public int SwDefault { get; init; } = -1;
+
+    /// <summary>The name of the region's keyswitch (<c>sw_label</c>), or null.</summary>
+    public string? SwLabel { get; init; }
+
     public bool Matches(int note, int velocity) =>
         note >= LoKey && note <= HiKey && velocity >= LoVel && velocity <= HiVel;
 }
@@ -60,7 +74,9 @@ public sealed record SfzRegion {
 /// <summary>
 ///     Parses the SFZ subset Anode's sampler plays: the headers <c>&lt;control&gt;</c> (<c>default_path</c>),
 ///     <c>&lt;global&gt;</c>, <c>&lt;master&gt;</c>, <c>&lt;group&gt;</c> and <c>&lt;region&gt;</c>, and the opcodes of
-///     <see cref="SfzRegion" />. Keys are numbers or note names (<c>c4</c> is 60, <c>c#4</c> and <c>db4</c> 61).
+///     <see cref="SfzRegion" />, keyswitches among them (<c>sw_lokey</c>, <c>sw_hikey</c>, <c>sw_last</c>,
+///     <c>sw_default</c> and <c>sw_label</c>; the range and default also under <c>&lt;control&gt;</c>). Keys are numbers
+///     or note names (<c>c4</c> is 60, <c>c#4</c> and <c>db4</c> 61).
 ///     Comments (<c>//</c> and <c>/* */</c>) and preprocessor lines (<c>#define</c>, <c>#include</c>) are skipped, as
 ///     are other headers and opcodes. A value runs to the next opcode, header or line end, so sample paths may contain
 ///     spaces.
@@ -86,12 +102,13 @@ public static class SfzParser {
         var master = new List<(string, string)>();
         var group = new List<(string, string)>();
         var region = new List<(string, string)>();
+        var control = new List<(string, string)>();
         var defaultPath = string.Empty;
         var level = Level.None;
 
         void Close() {
             if (level == Level.Region) {
-                regions.Add(Build(folder, defaultPath, global, master, group, region));
+                regions.Add(Build(folder, defaultPath, control, global, master, group, region));
             }
         }
 
@@ -130,6 +147,9 @@ public static class SfzParser {
             switch (level) {
                 case Level.Control when name == "default_path":
                     defaultPath = value;
+                    break;
+                case Level.Control when name is "sw_lokey" or "sw_hikey" or "sw_default":
+                    control.Add((name, value));
                     break;
                 case Level.Global:
                     global.Add((name, value));
@@ -244,6 +264,11 @@ public static class SfzParser {
             "ampeg_release" => r with { Release = Math.Max(0, Number(value, r.Release)) },
             "seq_length" => r with { SeqLength = Math.Max(1, Int(value, r.SeqLength)) },
             "seq_position" => r with { SeqPosition = Math.Max(1, Int(value, r.SeqPosition)) },
+            "sw_lokey" when ParseNote(value) is { } k => r with { SwLoKey = k },
+            "sw_hikey" when ParseNote(value) is { } k => r with { SwHiKey = k },
+            "sw_last" when ParseNote(value) is { } k => r with { SwLast = k },
+            "sw_default" when ParseNote(value) is { } k => r with { SwDefault = k },
+            "sw_label" => r with { SwLabel = value },
             _ => r
         };
 

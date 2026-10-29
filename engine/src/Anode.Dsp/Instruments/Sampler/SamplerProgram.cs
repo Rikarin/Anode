@@ -88,7 +88,10 @@ internal sealed class SamplerZone {
     public float GainRight { get; }
 }
 
-/// <summary>What a sampler plays: its zones, from an SFZ file or a single WAV.</summary>
+/// <summary>A keyswitch of an SFZ program: its key and its <c>sw_label</c> (null when it has none).</summary>
+public sealed record SamplerKeyswitch(int Key, string? Label);
+
+/// <summary>What a sampler plays: its zones, from an SFZ file or a single WAV, and its keyswitches.</summary>
 internal sealed class SamplerProgram {
     /// <summary>The root of a WAV without a <c>smpl</c> chunk: middle C (C3 in Logic's naming, c4 in SFZ's).</summary>
     public const int DefaultRoot = 60;
@@ -99,10 +102,46 @@ internal sealed class SamplerProgram {
     SamplerProgram(string path, SamplerZone[] zones) {
         Path = path;
         Zones = zones;
+        var labels = new SortedDictionary<int, string?>();
+        foreach (var zone in zones) {
+            var r = zone.Region;
+            if (r.SwLoKey >= 0 || r.SwHiKey >= 0) {
+                var lo = r.SwLoKey >= 0 ? r.SwLoKey : r.SwHiKey;
+                var hi = r.SwHiKey >= 0 ? r.SwHiKey : r.SwLoKey;
+                for (var k = Math.Min(lo, hi); k <= Math.Max(lo, hi); k++) {
+                    SwitchKeys[k] = true;
+                }
+            }
+
+            if (r.SwLast >= 0) {
+                SwitchKeys[r.SwLast] = true;
+                if (!labels.TryGetValue(r.SwLast, out var label) || label is null) {
+                    labels[r.SwLast] = r.SwLabel;
+                }
+            }
+
+            if (DefaultSwitch < 0 && r.SwDefault >= 0) {
+                DefaultSwitch = r.SwDefault;
+            }
+        }
+
+        Keyswitches = [..labels.Select(static p => new SamplerKeyswitch(p.Key, p.Value))];
     }
 
     public string Path { get; }
     public SamplerZone[] Zones { get; }
+
+    /// <summary>
+    ///     The keys that switch rather than sound: every region's <c>sw_lokey</c> … <c>sw_hikey</c> and every
+    ///     <c>sw_last</c>.
+    /// </summary>
+    public bool[] SwitchKeys { get; } = new bool[128];
+
+    /// <summary>The keyswitch in force after loading: the first region's <c>sw_default</c>, or −1 (none).</summary>
+    public int DefaultSwitch { get; } = -1;
+
+    /// <summary>The keyswitches regions play under (their <c>sw_last</c>), ascending, with their labels.</summary>
+    public IReadOnlyList<SamplerKeyswitch> Keyswitches { get; }
 
     /// <summary>
     ///     Loads a single WAV, or an SFZ (every sample it names into memory; regions whose sample cannot be read are
