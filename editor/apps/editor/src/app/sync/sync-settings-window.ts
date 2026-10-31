@@ -57,7 +57,11 @@ import { formatOffset, FrameRates, parseOffset, SyncSources, SyncStore } from '.
 
       <h3 [class]="band">MIDI Clock and MTC Out</h3>
       <div class="flex flex-col gap-1.5 p-3 text-xs">
-        <table class="w-full border-separate border-spacing-y-1" aria-label="Sync destinations" data-testid="sync-destinations">
+        <table
+          class="w-full border-separate border-spacing-y-1"
+          aria-label="Sync destinations"
+          data-testid="sync-destinations"
+        >
           <thead>
             <tr class="text-foreground-muted text-[10px] font-semibold tracking-wide uppercase">
               <th class="text-start font-semibold">Output</th>
@@ -141,7 +145,12 @@ import { formatOffset, FrameRates, parseOffset, SyncSources, SyncStore } from '.
       <h3 [class]="band">Timecode and Inputs</h3>
       <div class="grid grid-cols-[8rem_1fr] items-center gap-x-2 gap-y-1.5 p-3 text-xs">
         <label class="text-foreground-muted" for="sync-frame-rate">MTC frame rate</label>
-        <select id="sync-frame-rate" [class]="field + ' w-40'" data-testid="sync-frame-rate" (change)="setFrameRate($event)">
+        <select
+          id="sync-frame-rate"
+          [class]="field + ' w-40'"
+          data-testid="sync-frame-rate"
+          (change)="setFrameRate($event)"
+        >
           @for (rate of frameRates; track rate.value) {
             <option [value]="rate.value" [selected]="rate.value === s.frameRate">{{ rate.label }}</option>
           }
@@ -161,14 +170,24 @@ import { formatOffset, FrameRates, parseOffset, SyncSources, SyncStore } from '.
           <span class="text-foreground-muted">hh:mm:ss:ff of timecode at bar 1</span>
         </div>
         <label class="text-foreground-muted" for="sync-clock-in">MIDI Clock in</label>
-        <select id="sync-clock-in" [class]="field + ' w-48'" data-testid="sync-clock-in" (change)="setInput('clockInPort', $event)">
+        <select
+          id="sync-clock-in"
+          [class]="field + ' w-48'"
+          data-testid="sync-clock-in"
+          (change)="setInput('clockInPort', $event)"
+        >
           <option value="" [selected]="!s.clockInPort">Any input</option>
           @for (port of inputs(); track port.id) {
             <option [value]="port.id" [selected]="port.id === s.clockInPort">{{ port.name }}</option>
           }
         </select>
         <label class="text-foreground-muted" for="sync-mtc-in">MTC in</label>
-        <select id="sync-mtc-in" [class]="field + ' w-48'" data-testid="sync-mtc-in" (change)="setInput('mtcInPort', $event)">
+        <select
+          id="sync-mtc-in"
+          [class]="field + ' w-48'"
+          data-testid="sync-mtc-in"
+          (change)="setInput('mtcInPort', $event)"
+        >
           <option value="" [selected]="!s.mtcInPort">Any input</option>
           @for (port of inputs(); track port.id) {
             <option [value]="port.id" [selected]="port.id === s.mtcInPort">{{ port.name }}</option>

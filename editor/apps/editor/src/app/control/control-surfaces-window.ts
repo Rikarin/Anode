@@ -38,7 +38,11 @@ const Strips = 8;
       <h3 [class]="band">Control Surfaces</h3>
       <ol class="flex flex-col py-1" aria-label="Control surfaces" data-testid="surface-list">
         @for (surface of control.surfaces(); track surface.id; let first = $first; let last = $last) {
-          <li class="flex h-8 items-center gap-2 px-3 text-xs" data-testid="surface-row" [attr.data-surface]="surface.id">
+          <li
+            class="flex h-8 items-center gap-2 px-3 text-xs"
+            data-testid="surface-row"
+            [attr.data-surface]="surface.id"
+          >
             <span
               class="size-2 shrink-0 rounded-full"
               role="img"
@@ -197,8 +201,19 @@ const Strips = 8;
                 </li>
               }
             </ul>
-            <form class="flex items-center gap-1.5" aria-label="Add a feedback client" (submit)="$event.preventDefault(); addClient(host.value, clientPort.value)">
-              <input #host xuiInput class="h-6 w-36 text-xs" aria-label="Client host" placeholder="192.168.1.20" data-testid="osc-client-host" />
+            <form
+              class="flex items-center gap-1.5"
+              aria-label="Add a feedback client"
+              (submit)="$event.preventDefault(); addClient(host.value, clientPort.value)"
+            >
+              <input
+                #host
+                xuiInput
+                class="h-6 w-36 text-xs"
+                aria-label="Client host"
+                placeholder="192.168.1.20"
+                data-testid="osc-client-host"
+              />
               <input
                 #clientPort
                 xuiInput
@@ -231,8 +246,18 @@ export class ControlSurfacesWindow {
     () => new Set(this.control.surfaces().flatMap(s => [s.inputPort, s.outputPort]))
   );
   /** The first free input and output (Anode's virtual pair when it is free, as most controllers' drivers are not). */
-  protected readonly inputPort = linkedSignal(() => this.firstFree(this.control.inputs().map(p => p.id), 'anode:in'));
-  protected readonly outputPort = linkedSignal(() => this.firstFree(this.control.outputs().map(p => p.id), 'anode:out'));
+  protected readonly inputPort = linkedSignal(() =>
+    this.firstFree(
+      this.control.inputs().map(p => p.id),
+      'anode:in'
+    )
+  );
+  protected readonly outputPort = linkedSignal(() =>
+    this.firstFree(
+      this.control.outputs().map(p => p.id),
+      'anode:out'
+    )
+  );
   protected readonly canAdd = computed(
     () => !!this.inputPort() && !!this.outputPort() && !this.used(this.inputPort()) && !this.used(this.outputPort())
   );

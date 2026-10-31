@@ -332,3 +332,35 @@ the selection a `bg-primary/20` band with `border-primary` edges; loop markers d
 error names in `--code-error-line` with a 2 px `--code-error` edge. Parameters follow the parameter-group pattern. The
 console is an `h-32` `bg-surface-inset` `role="log"` in `font-mono` 11 px: traces in `text-foreground`, dropped counts
 muted, problems `text-error`.
+
+## Phase 8 patterns: control and sync
+
+No new tokens: the control windows are built from the Phase 7 ones.
+
+**Control windows.** Controller Assignments, Control Surfaces Setup (with OSC) and Synchronization are
+`an-floating-window`s, lazy-loaded (`@defer`); the Stem Splitter is an `xui-dialog` like Selection-Based Processing.
+Sections start with Inspector bands; fields are the Grooves window's native selects and `readout` inputs in a
+`grid-cols-[5.5rem_1fr]` grid (`control/styles.ts`: `Field`, `Band`).
+
+**Controller Assignments.** A `glass-bar` toolbar: Learn as a `bezel` toggle (`text-lit`, with a 6 px LED in
+`bg-transport-record` while learning), New and Delete as a `bezel-group`, and a "Zones and Modes" `bezel` menu. While
+learning, a `role="status"` banner under the toolbar on `bg-primary/15` with a `border-primary` hairline: a record-red
+dot, what the next moved control is assigned to (bold), the last message received in muted `readout`, a Target `bezel`
+menu and Done. The list (`w-[24rem]`, `bg-surface`) has a band per zone with its modes as a `bezel-group` radiogroup
+(the active one `text-lit`), a muted 10 px uppercase heading per mode, and 28 px `role="option"` rows (selected
+`bg-primary/25`): the name or target in semibold, the input in muted 11 px `readout`. The inspector beside it has bands
+for Assignment, Input, Target and Value.
+
+**Learn targets.** A control that can be learned carries `[anLearnTarget]` (`control/learn-menu.ts`): its target as
+`data-learn` (a click while learning makes it Learn's target) and a context menu with one item, "Learn Assignment for
+“…”", from the app's single `an-learn-menu-host`. Mixer strips mark themselves with `data-learn-track` (the fader and
+pan knob inside are found by element); a send's own menu has the item.
+
+**Control Surfaces Setup.** Surface rows of 32 px: an 8 px status LED (`bg-meter-low` connected, `bg-meter-unlit` not,
+`role="img"` with its state), the kind in semibold, the ports in muted text, the bank in `readout`, up/down as a small
+`bezel-group`, Remove as a ghost error button; below, a hairline-topped add row (kind, input, output, Add). OSC under
+its band: the switch, the port with its status, this machine's addresses and the subscribers in `readout` lists.
+
+**Control bar, Phase 8.** After Varispeed, a Sync `bezel-group` (11 px semibold): the indicator (a 6 px LED,
+`bg-meter-low` locked, `bg-meter-mid` waiting; the source's short name; the external tempo in `readout`) opens
+Synchronization; Link (`aria-pressed`, `text-lit` when on, a link icon below 2xl) shows the peer count in `readout`.

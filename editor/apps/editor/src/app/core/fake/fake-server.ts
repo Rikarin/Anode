@@ -154,7 +154,7 @@ import {
   shiftRegions,
   versionPath
 } from './fake-phase7';
-import { applySyncSettings, type ControlEffect, FakeControl, StemNames, stemList } from './fake-phase8';
+import { applySyncSettings, type ControlEffect, FakeControl, stemList, StemNames } from './fake-phase8';
 import { CrashyPluginId, FakeCatalogue, FakeEffects, FakeMidiDevices } from './fake-plugins';
 import { FakeMidiEffects, FakeT2Effects, FakeT2Instruments, RemixFxId, withMacros } from './fake-plugins-phase6';
 import { FakeScriptPresets } from './fake-scripts';

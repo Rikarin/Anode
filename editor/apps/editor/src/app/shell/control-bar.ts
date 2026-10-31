@@ -41,7 +41,6 @@ import { XuiInputImports } from '@xui/input';
 import { XuiMenuImports } from '@xui/menu';
 import { XuiTooltipImports } from '@xui/tooltip';
 import { formatBinding } from '../keys/key-commands';
-import { SyncControl } from '../sync/sync-control';
 import { formatSpeed, parseSpeed, VarispeedModes, VarispeedUnits, type VarispeedUnit } from '../music/varispeed';
 import { HistoryStore } from '../state/history.store';
 import { KeyCommandsStore } from '../state/key-commands.store';
@@ -52,6 +51,7 @@ import { SmartTempoStore } from '../state/smart-tempo.store';
 import { ThemeStore } from '../state/theme.store';
 import { TransportStore } from '../state/transport.store';
 import { UiStore } from '../state/ui.store';
+import { SyncControl } from '../sync/sync-control';
 import { EngineStatus } from './engine-status';
 import { Lcd } from './lcd';
 
@@ -171,7 +171,12 @@ import { Lcd } from './lcd';
                 Revert to Backup
               </button>
               <xui-menu-divider />
-              <button xuiMenuItem type="button" data-testid="open-sync-settings" (click)="ui.syncSettingsOpen.set(true)">
+              <button
+                xuiMenuItem
+                type="button"
+                data-testid="open-sync-settings"
+                (click)="ui.syncSettingsOpen.set(true)"
+              >
                 Synchronization…
               </button>
               <button

@@ -120,7 +120,10 @@ export class ControlStore {
   async save(next: ControllerAssignments): Promise<boolean> {
     const previous = this.assignments();
     this.assignments.set(next);
-    const saved = await this.notify.run(() => this.api.setControllerAssignments(next), 'Could not save the assignments');
+    const saved = await this.notify.run(
+      () => this.api.setControllerAssignments(next),
+      'Could not save the assignments'
+    );
     if (!saved) {
       this.assignments.set(previous);
       return false;
@@ -141,7 +144,7 @@ export class ControlStore {
   }
 
   async deleteAssignment(id: string): Promise<void> {
-    if (await this.save(deleteAssignment(this.assignments(), id)) && this.selectedId() === id) {
+    if ((await this.save(deleteAssignment(this.assignments(), id))) && this.selectedId() === id) {
       this.selectedId.set(null);
     }
   }
@@ -156,7 +159,15 @@ export class ControlStore {
 
   addZone(): Promise<boolean> {
     const current = this.assignments();
-    return this.save(addZone(current, nextName('Zone', current.zones.map(z => z.name))));
+    return this.save(
+      addZone(
+        current,
+        nextName(
+          'Zone',
+          current.zones.map(z => z.name)
+        )
+      )
+    );
   }
 
   renameZone(zoneId: string, name: string): Promise<boolean> {

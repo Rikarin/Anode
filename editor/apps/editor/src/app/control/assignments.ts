@@ -70,7 +70,13 @@ export const SmartKnobs: readonly string[] = Array.from({ length: 8 }, (_, i) =>
 
 /** The highest number an input of a kind takes (the 14-bit pair's MSB, an NRPN, a key or controller). */
 export function maxNumber(kind: ControlInputKind): number {
-  return kind === 'nrpn' ? 16_383 : kind === 'controlChange14' ? 31 : kind === 'pitchBend' || kind === 'programChange' ? 0 : 127;
+  return kind === 'nrpn'
+    ? 16_383
+    : kind === 'controlChange14'
+      ? 31
+      : kind === 'pitchBend' || kind === 'programChange'
+        ? 0
+        : 127;
 }
 
 /** Whether an input kind carries a number (pitch bend and program change are one per channel). */
@@ -226,9 +232,7 @@ export function updateAssignment(
 
 export function deleteAssignment(assignments: ControllerAssignments, id: string): ControllerAssignments {
   return mapModes(assignments, mode =>
-    mode.assignments.some(a => a.id === id)
-      ? { ...mode, assignments: mode.assignments.filter(a => a.id !== id) }
-      : mode
+    mode.assignments.some(a => a.id === id) ? { ...mode, assignments: mode.assignments.filter(a => a.id !== id) } : mode
   );
 }
 
@@ -247,9 +251,7 @@ export function addZone(assignments: ControllerAssignments, name: string): Contr
 
 export function renameZone(assignments: ControllerAssignments, zoneId: string, name: string): ControllerAssignments {
   const trimmed = name.trim();
-  return trimmed
-    ? { zones: assignments.zones.map(z => (z.id === zoneId ? { ...z, name: trimmed } : z)) }
-    : assignments;
+  return trimmed ? { zones: assignments.zones.map(z => (z.id === zoneId ? { ...z, name: trimmed } : z)) } : assignments;
 }
 
 /** Deletes a zone with its modes and assignments; mode switches that pointed into it go too. */
@@ -264,13 +266,17 @@ export function deleteZone(assignments: ControllerAssignments, zoneId: string): 
 export function addMode(assignments: ControllerAssignments, zoneId: string, name: string): ControllerAssignments {
   const id = newId('cmd', assignments);
   return {
-    zones: assignments.zones.map(z => (z.id === zoneId ? { ...z, modes: [...z.modes, { id, name, assignments: [] }] } : z))
+    zones: assignments.zones.map(z =>
+      z.id === zoneId ? { ...z, modes: [...z.modes, { id, name, assignments: [] }] } : z
+    )
   };
 }
 
 export function renameMode(assignments: ControllerAssignments, modeId: string, name: string): ControllerAssignments {
   const trimmed = name.trim();
-  return trimmed ? mapModes(assignments, mode => (mode.id === modeId ? { ...mode, name: trimmed } : mode)) : assignments;
+  return trimmed
+    ? mapModes(assignments, mode => (mode.id === modeId ? { ...mode, name: trimmed } : mode))
+    : assignments;
 }
 
 /**
@@ -291,7 +297,11 @@ export function deleteMode(assignments: ControllerAssignments, modeId: string): 
   }));
 }
 
-export function setActiveMode(assignments: ControllerAssignments, zoneId: string, modeId: string): ControllerAssignments {
+export function setActiveMode(
+  assignments: ControllerAssignments,
+  zoneId: string,
+  modeId: string
+): ControllerAssignments {
   return {
     zones: assignments.zones.map(z =>
       z.id === zoneId && z.modes.some(m => m.id === modeId) ? { ...z, activeModeId: modeId } : z
@@ -310,7 +320,11 @@ export function nextName(base: string, taken: readonly string[]): string {
 }
 
 /** A target changed to another kind, with that kind's defaults. */
-export function retarget(target: ControlTarget, kind: ControlTargetKind, assignments: ControllerAssignments): ControlTarget {
+export function retarget(
+  target: ControlTarget,
+  kind: ControlTargetKind,
+  assignments: ControllerAssignments
+): ControlTarget {
   const trackId = target.trackId ?? null;
   switch (kind) {
     case 'parameter':

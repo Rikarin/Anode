@@ -1,4 +1,7 @@
 import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
+import { provideIcons } from '@ng-icons/core';
+import { matLinkRound } from '@ng-icons/material-icons/round';
+import { XuiIconImports } from '@xui/icon';
 import { XuiTooltipImports } from '@xui/tooltip';
 import { UiStore } from '../state/ui.store';
 import { SyncStore } from './sync.store';
@@ -11,7 +14,8 @@ import { SyncStore } from './sync.store';
 @Component({
   selector: 'an-sync-control',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [XuiTooltipImports],
+  imports: [XuiIconImports, XuiTooltipImports],
+  providers: [provideIcons({ matLinkRound })],
   host: { class: 'contents' },
   template: `
     <div class="bezel-group text-foreground h-6.5 text-[11px] font-semibold" role="toolbar" aria-label="Sync">
@@ -38,14 +42,16 @@ import { SyncStore } from './sync.store';
       </button>
       <button
         type="button"
-        class="flex items-center gap-1 px-2.5"
+        class="flex items-center gap-1 px-2 2xl:px-2.5"
         data-testid="link-toggle"
+        aria-label="Link"
         [class.text-lit]="sync.linkOn()"
         [attr.aria-pressed]="sync.linkOn() ? 'true' : 'false'"
         [xuiTooltip]="linkTip()"
         (click)="sync.toggleLink()"
       >
-        Link
+        <span class="flex 2xl:hidden"><ng-icon xui name="matLinkRound" size="14px" /></span>
+        <span class="max-2xl:sr-only">Link</span>
         @if (sync.linkOn()) {
           <span class="readout" data-testid="link-peers" [attr.aria-label]="sync.linkPeers() + ' peers'">{{
             sync.linkPeers()

@@ -52,7 +52,11 @@ interface Renaming {
     AssignmentInspector,
     FloatingWindow,
     NgTemplateOutlet,
-    XuiIconImports, XuiInputImports, XuiMenuImports, XuiTooltipImports],
+    XuiIconImports,
+    XuiInputImports,
+    XuiMenuImports,
+    XuiTooltipImports
+  ],
   providers: [provideIcons({ matAddRound, matDeleteOutlineRound, matExpandMoreRound })],
   template: `
     <an-floating-window
@@ -62,7 +66,11 @@ interface Renaming {
       [origin]="{ x: 140, y: 72 }"
       (closed)="close()"
     >
-      <div class="glass-bar flex h-9 shrink-0 items-center gap-2 px-2" role="toolbar" aria-label="Controller assignments">
+      <div
+        class="glass-bar flex h-9 shrink-0 items-center gap-2 px-2"
+        role="toolbar"
+        aria-label="Controller assignments"
+      >
         <button
           type="button"
           class="bezel text-foreground flex h-6.5 items-center gap-1.5 px-2.5 text-[11px] font-semibold"
@@ -120,7 +128,13 @@ interface Renaming {
               <button xuiMenuItem type="button" data-testid="zone-rename" (click)="rename('zone', zone.id)">
                 Rename “{{ zone.name }}”…
               </button>
-              <button xuiMenuItem type="button" color="error" data-testid="zone-delete" (click)="control.deleteZone(zone.id)">
+              <button
+                xuiMenuItem
+                type="button"
+                color="error"
+                data-testid="zone-delete"
+                (click)="control.deleteZone(zone.id)"
+              >
                 Delete “{{ zone.name }}”
               </button>
               <xui-menu-divider />
@@ -157,7 +171,8 @@ interface Renaming {
           <div class="flex min-w-0 flex-1 flex-col gap-0.5 text-xs">
             <span data-testid="learn-target">
               @if (control.learnState().target; as target) {
-                Move a control to assign it to <strong>{{ control.targetLabel(target) }}</strong>.
+                Move a control to assign it to <strong>{{ control.targetLabel(target) }}</strong
+                >.
               } @else {
                 Click a fader, knob, Smart Control or plug-in parameter, or choose a target; then move a control.
               }
@@ -240,9 +255,14 @@ interface Renaming {
                 </div>
               </div>
               @for (mode of zone.modes; track mode.id) {
-                <div class="text-foreground-muted flex h-6 items-center gap-2 px-3 text-[10px] font-semibold tracking-wide uppercase">
+                <div
+                  class="text-foreground-muted flex h-6 items-center gap-2 px-3 text-[10px] font-semibold tracking-wide uppercase"
+                >
                   @if (renaming()?.kind === 'mode' && renaming()?.id === mode.id) {
-                    <ng-container [ngTemplateOutlet]="renameField" [ngTemplateOutletContext]="{ $implicit: mode.name }" />
+                    <ng-container
+                      [ngTemplateOutlet]="renameField"
+                      [ngTemplateOutletContext]="{ $implicit: mode.name }"
+                    />
                   } @else {
                     <span class="truncate" (dblclick)="rename('mode', mode.id)">{{ mode.name }}</span>
                     @if (zone.activeModeId === mode.id) {
@@ -250,11 +270,7 @@ interface Renaming {
                     }
                   }
                 </div>
-                <ul
-                  class="flex flex-col pb-1"
-                  role="listbox"
-                  [attr.aria-label]="zone.name + ' ▸ ' + mode.name"
-                >
+                <ul class="flex flex-col pb-1" role="listbox" [attr.aria-label]="zone.name + ' ▸ ' + mode.name">
                   @for (assignment of mode.assignments; track assignment.id) {
                     <li
                       class="flex h-7 cursor-default items-center gap-2 px-3 text-xs outline-none focus-visible:ring-2 focus-visible:ring-(--color-focus)"
@@ -269,7 +285,9 @@ interface Renaming {
                       (keydown)="listKey($event)"
                     >
                       <span class="text-foreground min-w-0 flex-1 truncate">
-                        <span class="font-semibold">{{ assignment.name || control.targetLabel(assignment.target) }}</span>
+                        <span class="font-semibold">{{
+                          assignment.name || control.targetLabel(assignment.target)
+                        }}</span>
                         @if (assignment.name) {
                           <span class="text-foreground-muted"> · {{ control.targetLabel(assignment.target) }}</span>
                         }
@@ -416,7 +434,9 @@ export class ControllerAssignmentsWindow {
       return;
     }
     this.renaming.set(null);
-    void (renaming.kind === 'zone' ? this.control.renameZone(renaming.id, name) : this.control.renameMode(renaming.id, name));
+    void (renaming.kind === 'zone'
+      ? this.control.renameZone(renaming.id, name)
+      : this.control.renameMode(renaming.id, name));
   }
 
   /** ↑ and ↓ move through the assignments of a mode; Delete deletes the selected one. */

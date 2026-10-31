@@ -132,7 +132,10 @@ export class SyncStore {
     if (list.some(d => d.port === port)) {
       return Promise.resolve(null);
     }
-    return this.apply({ destinations: [...list, { port, clock: true, mtc: false, delayMs: 0 }] }, 'Add Sync Destination');
+    return this.apply(
+      { destinations: [...list, { port, clock: true, mtc: false, delayMs: 0 }] },
+      'Add Sync Destination'
+    );
   }
 
   setDestination(port: string, change: Partial<Omit<MidiSyncDestination, 'port'>>): Promise<unknown> {

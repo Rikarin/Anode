@@ -44,7 +44,12 @@ const Channels = Array.from({ length: 16 }, (_, i) => i + 1);
   selector: 'an-assignment-inspector',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [NgTemplateOutlet, XuiInputImports],
-  host: { class: 'flex flex-col text-xs', role: 'form', 'aria-label': 'Assignment', 'data-testid': 'assignment-inspector' },
+  host: {
+    class: 'flex flex-col text-xs',
+    role: 'form',
+    'aria-label': 'Assignment',
+    'data-testid': 'assignment-inspector'
+  },
   template: `
     @let a = assignment();
     <h3 [class]="band">Assignment</h3>
@@ -61,7 +66,12 @@ const Channels = Array.from({ length: 16 }, (_, i) => i + 1);
         (change)="changed.emit({ name: name.value.trim() || null })"
       />
       <label class="text-foreground-muted" for="assignment-location">Zone ▸ Mode</label>
-      <select id="assignment-location" [class]="field" data-testid="assignment-location" (change)="moved.emit(value($event))">
+      <select
+        id="assignment-location"
+        [class]="field"
+        data-testid="assignment-location"
+        (change)="moved.emit(value($event))"
+      >
         @for (option of locations(); track option.modeId) {
           <option [value]="option.modeId" [selected]="option.modeId === modeId()">{{ option.label }}</option>
         }
@@ -71,7 +81,12 @@ const Channels = Array.from({ length: 16 }, (_, i) => i + 1);
     <h3 [class]="band">Input</h3>
     <div [class]="grid">
       <label class="text-foreground-muted" for="assignment-port">Port</label>
-      <select id="assignment-port" [class]="field" data-testid="assignment-port" (change)="setInput({ port: value($event) || null })">
+      <select
+        id="assignment-port"
+        [class]="field"
+        data-testid="assignment-port"
+        (change)="setInput({ port: value($event) || null })"
+      >
         <option value="" [selected]="!a.input.port">Any</option>
         @for (port of ports(); track port.id) {
           <option [value]="port.id" [selected]="port.id === a.input.port">{{ port.name }}</option>
@@ -185,7 +200,9 @@ const Channels = Array.from({ length: 16 }, (_, i) => i + 1);
             (change)="setTarget({ transport: transportOf(value($event)) })"
           >
             @for (action of transportActions; track action.value) {
-              <option [value]="action.value" [selected]="action.value === a.target.transport">{{ action.label }}</option>
+              <option [value]="action.value" [selected]="action.value === a.target.transport">
+                {{ action.label }}
+              </option>
             }
           </select>
         }
@@ -237,7 +254,12 @@ const Channels = Array.from({ length: 16 }, (_, i) => i + 1);
     <h3 [class]="band">Value</h3>
     <div [class]="grid">
       <label class="text-foreground-muted" for="assignment-mode">Mode</label>
-      <select id="assignment-mode" [class]="field" data-testid="assignment-value-mode" (change)="setMode(value($event))">
+      <select
+        id="assignment-mode"
+        [class]="field"
+        data-testid="assignment-value-mode"
+        (change)="setMode(value($event))"
+      >
         @for (mode of valueModes; track mode.value) {
           <option [value]="mode.value" [selected]="mode.value === a.mode">{{ mode.label }}</option>
         }
@@ -324,7 +346,9 @@ export class AssignmentInspector {
   protected readonly locations = computed(() =>
     this.control
       .assignments()
-      .zones.flatMap(zone => zone.modes.map(mode => ({ modeId: mode.id, zoneId: zone.id, label: `${zone.name} ▸ ${mode.name}` })))
+      .zones.flatMap(zone =>
+        zone.modes.map(mode => ({ modeId: mode.id, zoneId: zone.id, label: `${zone.name} ▸ ${mode.name}` }))
+      )
   );
   /**
    * The parameters a target can name: a fixed track's (its main controls, sends and plug-in parameters, as automation
@@ -381,7 +405,9 @@ export class AssignmentInspector {
   }
 
   protected setTargetKind(kind: string): void {
-    this.changed.emit({ target: retarget(this.assignment().target, kind as ControlTargetKind, this.control.assignments()) });
+    this.changed.emit({
+      target: retarget(this.assignment().target, kind as ControlTargetKind, this.control.assignments())
+    });
   }
 
   /** Another track: a parameter keeps its address only when that track has it (volume, pan and mute always). */

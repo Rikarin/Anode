@@ -1,6 +1,6 @@
 import { ApiError, type ControllerAssignments, type ServerMessage } from '@anode/api-client';
-import { FakeAnodeServer } from './fake-server';
 import { inputOf } from './fake-phase8';
+import { FakeAnodeServer } from './fake-server';
 
 async function status(run: () => Promise<unknown>): Promise<number> {
   try {
@@ -19,7 +19,12 @@ async function setUp() {
   const events: ServerMessage[] = [];
   server.subscribe(message => events.push(message));
   await server.createProject({ name: 'Control' });
-  await server.applyCommands({ commands: [{ type: 'addTrack', stereo: true }, { type: 'addTrack', stereo: true }] });
+  await server.applyCommands({
+    commands: [
+      { type: 'addTrack', stereo: true },
+      { type: 'addTrack', stereo: true }
+    ]
+  });
   const [first, second] = server.current?.tracks.map(t => t.id) ?? [];
   return { server, events, first: first ?? '', second: second ?? '' };
 }
@@ -225,7 +230,9 @@ describe('FakeAnodeServer, Phase 8 (docs/09-phase-8.md)', () => {
     server.controlState.oscSubscribe({ host: '192.168.1.8', port: 9002 });
     expect((await server.osc()).subscribed).toEqual([{ host: '192.168.1.8', port: 9002 }]);
     expect(await status(() => server.setOsc({ enabled: true, port: 80, clients: [] }))).toBe(422);
-    expect(await status(() => server.setOsc({ enabled: true, port: 9000, clients: [{ host: '', port: 1 }] }))).toBe(422);
+    expect(await status(() => server.setOsc({ enabled: true, port: 9000, clients: [{ host: '', port: 1 }] }))).toBe(
+      422
+    );
   });
 
   it('takes the selection', async () => {

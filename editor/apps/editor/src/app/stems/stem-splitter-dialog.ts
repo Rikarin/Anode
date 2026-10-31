@@ -48,8 +48,8 @@ export function stemRequest(set: StemSet, custom: ReadonlySet<StemKind>, keepSou
       <xui-dialog-body class="flex flex-col gap-4 text-xs" data-testid="stem-splitter">
         @if (region(); as r) {
           <p class="text-foreground">
-            Split <strong>{{ r.name }}</strong> into stems, each on a new track below
-            <strong>{{ trackName() }}</strong>.
+            Split <strong>{{ r.name }}</strong> into stems, each on a new track below <strong>{{ trackName() }}</strong
+            >.
           </p>
           <fieldset class="flex flex-col gap-2" [disabled]="running()">
             <legend class="text-foreground-muted mb-1 text-[10px] font-semibold tracking-wide uppercase">Stems</legend>

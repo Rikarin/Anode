@@ -62,7 +62,12 @@ export function inputMatches(input: ControlInput, message: ControlInput): boolea
 }
 
 function sameInput(a: ControlInput, b: ControlInput): boolean {
-  return a.kind === b.kind && a.number === b.number && (a.port ?? null) === (b.port ?? null) && (a.channel ?? null) === (b.channel ?? null);
+  return (
+    a.kind === b.kind &&
+    a.number === b.number &&
+    (a.port ?? null) === (b.port ?? null) &&
+    (a.channel ?? null) === (b.channel ?? null)
+  );
 }
 
 /** The value mode a learned control gets: a key toggles a switch and presses a transport button; the rest is absolute. */
@@ -229,7 +234,15 @@ export class FakeControl {
       throw new ApiError(404, `No mode ${request.modeId}.`);
     }
     if (request.target) {
-      checkAssignment({ id: 'learn', input: { kind: 'controlChange', number: 0 }, target: request.target, mode: 'absolute', min: 0, max: 1, pickup: false });
+      checkAssignment({
+        id: 'learn',
+        input: { kind: 'controlChange', number: 0 },
+        target: request.target,
+        mode: 'absolute',
+        min: 0,
+        max: 1,
+        pickup: false
+      });
     }
     this.learnState = {
       on: true,
@@ -279,7 +292,12 @@ export class FakeControl {
     let zone = this.assignments.zones.find(z => z.id === this.learnState.zoneId) ?? this.assignments.zones[0];
     if (!zone) {
       const modeId = this.id('cmd');
-      zone = { id: this.id('czn'), name: 'Zone 1', modes: [{ id: modeId, name: 'Mode 1', assignments: [] }], activeModeId: modeId };
+      zone = {
+        id: this.id('czn'),
+        name: 'Zone 1',
+        modes: [{ id: modeId, name: 'Mode 1', assignments: [] }],
+        activeModeId: modeId
+      };
       this.assignments = { zones: [zone] };
     }
     const modeId = this.learnState.modeId ?? zone.activeModeId;
@@ -328,7 +346,11 @@ export class FakeControl {
         return { assignment, target, value: scale(on ? 1 : 0) };
       }
       case 'momentary':
-        return { assignment, target, value: scale(kind === 0x90 && data2 > 0 ? 1 : kind === 0xb0 && data2 >= 64 ? 1 : 0) };
+        return {
+          assignment,
+          target,
+          value: scale(kind === 0x90 && data2 > 0 ? 1 : kind === 0xb0 && data2 >= 64 ? 1 : 0)
+        };
       default: {
         // Pitch bend is 14-bit (LSB first); the rest are 7-bit values.
         const normal = kind === 0xe0 ? ((data2 << 7) | data1) / 16_383 : data2 / 127;
@@ -356,7 +378,13 @@ export class FakeControl {
     if (request.kind === 'mackieControlXt' && !this.surfaces.some(s => s.kind === 'mackieControl')) {
       refuse('Add a Mackie Control before its extenders.');
     }
-    const surface: ControlSurface = { id: this.id('srf'), kind: request.kind, inputPort: request.inputPort, outputPort: request.outputPort, order: this.surfaces.length };
+    const surface: ControlSurface = {
+      id: this.id('srf'),
+      kind: request.kind,
+      inputPort: request.inputPort,
+      outputPort: request.outputPort,
+      order: this.surfaces.length
+    };
     this.surfaces = [...this.surfaces, surface];
     // The fake surface answers at once (the real one after its handshake or HUI ping).
     this.status.set(surface.id, { id: surface.id, connected: true, bankOffset: 0 });
@@ -374,7 +402,11 @@ export class FakeControl {
   }
 
   reorderSurfaces(ids: readonly string[]): ControlSurface[] {
-    if (ids.length !== this.surfaces.length || new Set(ids).size !== ids.length || ids.some(id => !this.surfaces.some(s => s.id === id))) {
+    if (
+      ids.length !== this.surfaces.length ||
+      new Set(ids).size !== ids.length ||
+      ids.some(id => !this.surfaces.some(s => s.id === id))
+    ) {
       refuse('Give every control surface once.');
     }
     this.surfaces = ids.map((id, order) => ({ ...(this.surfaces.find(s => s.id === id) as ControlSurface), order }));
@@ -383,7 +415,9 @@ export class FakeControl {
   }
 
   surfaceStatus(): SurfaceStatus[] {
-    return this.surfaces.map(s => structuredClone(this.status.get(s.id) ?? { id: s.id, connected: false, bankOffset: 0 }));
+    return this.surfaces.map(s =>
+      structuredClone(this.status.get(s.id) ?? { id: s.id, connected: false, bankOffset: 0 })
+    );
   }
 
   /** A surface connects, disconnects or banks (tests): every client hears `surfaces`. */
