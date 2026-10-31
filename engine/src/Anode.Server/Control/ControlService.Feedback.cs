@@ -50,11 +50,11 @@ public sealed partial class ControlService {
 
         if (surfaces.Count > 0 || OscWanted) {
             var projectView = View(view);
-            foreach (var surface in surfaces) {
-                Send(surface, surface.Encode(projectView, logger));
+            foreach (var group in groups) {
+                SendAll(group, group.Encode(projectView, logger));
                 if (slow) {
-                    Send(surface, surface.EncodeMeters(projectView, logger));
-                    Send(surface, surface.Poll(NowNs, logger));
+                    SendAll(group, group.EncodeMeters(projectView, logger));
+                    SendAll(group, group.Poll(NowNs, logger));
                 }
             }
 

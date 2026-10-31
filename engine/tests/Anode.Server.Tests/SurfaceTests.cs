@@ -38,13 +38,13 @@ public sealed class SurfaceTests : IAsyncDisposable {
 
     HttpClient Client => client!;
 
-    async Task<IReadOnlyList<string>> StartAsync(int tracks, bool overSocket = false) {
+    async Task<IReadOnlyList<string>> StartAsync(int tracks, bool overSocket = false, IControlProtocols? real = null) {
         if (overSocket) {
             socketHost = new(EngineConnection.Version);
             socketHost.Listen(socketPath);
         }
 
-        server = new(overSocket ? socketPath : null, configure: s => s.AddSingleton<IControlProtocols>(protocols));
+        server = new(overSocket ? socketPath : null, configure: s => s.AddSingleton(real ?? protocols));
         client = server.CreateClient();
         await ServerFixture.Eventually(async () =>
             (await server.SystemAsync(Client)).Engine.State is EngineState.InProcess or EngineState.Connected
@@ -178,7 +178,8 @@ public sealed class SurfaceTests : IAsyncDisposable {
 
     [Fact]
     public async Task Banking_moves_the_extenders_after_it_and_is_reported() {
-        await StartAsync(20);
+        // Workstream D's Mackie Control and XT in a SurfaceGroup: the group owns the bank.
+        await StartAsync(20, real: new ControlProtocols());
         var main = await AddAsync(ControlSurfaceKind.MackieControl, "mcu-in", "mcu-out");
         var xt = await AddAsync(ControlSurfaceKind.MackieControlXt, "xt-in", "xt-out");
         var taken = await Client.PostAsJsonAsync(

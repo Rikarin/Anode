@@ -3,6 +3,10 @@
     <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing"/>
   </ItemGroup>
   <ItemGroup>
+    <!-- Workstream D's surface byte vectors, which the real-protocol tests hold the service to. -->
+    <None Include="../Anode.Control.Tests/McuVectors.json;../Anode.Control.Tests/HuiVectors.json" Link="Vectors/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest"/>
+  </ItemGroup>
+  <ItemGroup>
     <ProjectReference Include="../../src/Anode.Server/Anode.Server.csproj"/>
     <!-- Built, not referenced: the two-process test runs it as a separate anode-host process. -->
     <ProjectReference Include="../../src/Anode.Host/Anode.Host.csproj" ReferenceOutputAssembly="false" Private="false"/>

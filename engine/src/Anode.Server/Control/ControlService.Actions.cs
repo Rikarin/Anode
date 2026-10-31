@@ -372,7 +372,7 @@ public sealed partial class ControlService {
     void Act(SurfaceRuntime surface, SurfaceAction action) {
         if (session.View is not { } view) {
             if (action.Kind == SurfaceActionKind.Banked) {
-                Bank(surface, (int)action.Value);
+                PublishStatuses(); // the group moved its units itself
             }
 
             return;
@@ -463,7 +463,7 @@ public sealed partial class ControlService {
                 surface.Zoom = action.Value >= 0.5;
                 break;
             case SurfaceActionKind.Banked:
-                Bank(surface, (int)action.Value);
+                PublishStatuses(); // the group moved its units itself
                 break;
             case SurfaceActionKind.SetAutomationMode
                 when TrackOf(view, action.TrackId) is { } automated && Enum.IsDefined(action.Automation):

@@ -42,6 +42,7 @@ public sealed partial class ControlService(
 
     readonly Lock gate = new();
     readonly List<SurfaceRuntime> surfaces = [];
+    readonly List<GroupRuntime> groups = [];
     ControllerAssignments assignments = ControllerAssignments.Empty;
     IAssignmentRuntime? runtime;
     IAssignmentRuntime? learner;
@@ -62,7 +63,7 @@ public sealed partial class ControlService(
                 surfaces.Add(Start(surface));
             }
 
-            Rebank();
+            Regroup();
             StartOsc(settings.OscSettings());
         }
 
@@ -279,65 +280,77 @@ public sealed partial class ControlService(
     }
 
     /// <summary>
-    ///     Assigns <paramref name="input" /> to <paramref name="target" /> in Learn's mode (the first zone's active mode
-    ///     without one; a zone and mode are made when there is none): the assignment this Learn made for the target
-    ///     takes the new input, else a new one; another assignment of the same input there is replaced.
+    ///     Assigns <paramref name="input" /> to <paramref name="target" /> in Learn's zone and mode through
+    ///     <see cref="AssignmentEngine.Assign" /> (workstream D: the first zone's active mode without one, made when there
+    ///     is none; an assignment of the same input there, or the 7-bit halves a 14-bit or NRPN input superseded, is
+    ///     replaced; toggle for switches, absolute otherwise). The assignment this Learn made before for the same target
+    ///     gives way to the new one, so moving another control re-learns rather than adding a second assignment.
     /// </summary>
     string Assign(ControlTarget target, ControlInput input) {
-        var zones = assignments.Zones.ToList();
-        if (zones.Count == 0) {
-            var modeId = RandomIds.Instance.Next("ctm");
-            zones.Add(new(RandomIds.Instance.Next("ctz"), "Zone 1", [new(modeId, "Mode 1", [])], modeId));
+        var current = assignments;
+        if (learned is not null) {
+            var mine = current.Zones.SelectMany(static z => z.Modes)
+                .SelectMany(static m => m.Assignments)
+                .FirstOrDefault(a => a.Id == learned);
+            if (mine is not null && mine.Input == input && mine.Target == target) {
+                return mine.Id; // the same control moving on
+            }
+
+            current = new([
+                ..current.Zones.Select(z => z with {
+                        Modes = [
+                            ..z.Modes.Select(m => m with {
+                                    Assignments = [..m.Assignments.Where(a => a.Id != learned)]
+                                }
+                            )
+                        ]
+                    }
+                )
+            ]);
         }
 
-        var zoneIndex = learn.ZoneId is { } zoneId ? zones.FindIndex(z => z.Id == zoneId) : 0;
-        var zone = zones[zoneIndex];
-        var modeIndex = zone.Modes.ToList().FindIndex(m => m.Id == (learn.ModeId ?? zone.ActiveModeId));
-        var mode = zone.Modes[modeIndex];
-        var list = mode.Assignments.Where(a => a.Id == learned || a.Input != input).ToList();
-        var index = learned is null ? -1 : list.FindIndex(a => a.Id == learned);
-        string id;
-        if (index >= 0) {
-            list[index] = list[index] with { Input = input, Mode = DefaultMode(target, input) };
-            id = list[index].Id;
-        } else {
-            id = RandomIds.Instance.Next("cta");
-            list.Add(new(id, null, input, target, DefaultMode(target, input), 0, 1, false));
+        ControllerAssignments next;
+        ControlAssignment made;
+        try {
+            (next, made) = AssignmentEngine.Assign(
+                current,
+                input,
+                target,
+                learn.ZoneId,
+                learn.ModeId,
+                static () => RandomIds.Instance.Next("ctl")
+            );
+        } catch (ArgumentException e) {
+            throw ProjectException.Unprocessable(e.Message);
         }
 
-        var modesList = zone.Modes.ToList();
-        modesList[modeIndex] = mode with { Assignments = list };
-        zones[zoneIndex] = zone with { Modes = modesList };
-        var next = ControlValidation.Check(new ControllerAssignments(zones));
-        var (made, error) = Engine(next);
+        if (learned is not null) {
+            // Re-learnt, the assignment keeps its id.
+            var keep = learned;
+            var fresh = made.Id;
+            next = new([
+                ..next.Zones.Select(z => z with {
+                        Modes = [
+                            ..z.Modes.Select(m => m with {
+                                    Assignments = [..m.Assignments.Select(a => a.Id == fresh ? a with { Id = keep } : a)]
+                                }
+                            )
+                        ]
+                    }
+                )
+            ]);
+            made = made with { Id = keep };
+        }
+
+        next = ControlValidation.Check(next);
+        var (engineMade, error) = Engine(next);
         if (error is not null) {
             throw ProjectException.Unprocessable(error);
         }
 
-        Replace(next, made);
-        learned = id;
-        return id;
-    }
-
-    /// <summary>
-    ///     A learnt assignment's value mode: a button (a note or program change) toggles a switch and presses a function;
-    ///     a continuous control is absolute.
-    /// </summary>
-    static ControlValueMode DefaultMode(ControlTarget target, ControlInput input) {
-        if (input.Kind is not (ControlInputKind.Note or ControlInputKind.ProgramChange)) {
-            return ControlValueMode.Absolute;
-        }
-
-        return target switch {
-            {
-                    Kind: ControlTargetKind.TrackSwitch,
-                    Switch: TrackSwitchAction.SelectNext or TrackSwitchAction.SelectPrevious
-                }
-                => ControlValueMode.Momentary,
-            { Kind: ControlTargetKind.TrackSwitch or ControlTargetKind.Parameter or ControlTargetKind.SmartControl } =>
-                ControlValueMode.Toggle,
-            _ => ControlValueMode.Momentary
-        };
+        Replace(next, engineMade);
+        learned = made.Id;
+        return made.Id;
     }
 
     // ---- Selection ----
@@ -451,9 +464,16 @@ public sealed partial class ControlService(
         var surfaced = false;
         foreach (var surface in surfaces.Where(s => s.Config.InputPort == e.Port).ToArray()) {
             surfaced = true;
-            foreach (var action in surface.Decode(e.Data, e.TimeNs, logger)) {
+            if (surface.Group is not { } group) {
+                continue;
+            }
+
+            foreach (var action in group.Decode(surface, e.Data, e.TimeNs, logger)) {
                 Act(surface, action);
             }
+
+            // Handshake and ping replies go out at once (docs/control/README.md, "Input").
+            SendAll(group, group.Poll(NowNs, logger));
         }
 
         if (surfaced) {
@@ -577,7 +597,7 @@ public sealed partial class ControlService(
 
     void SurfacesChanged() {
         settings.SaveControlSurfaces([..surfaces.Select(static s => s.Config)]);
-        Rebank();
+        Regroup();
         PushRouting();
         PublishStatuses();
     }
@@ -594,34 +614,33 @@ public sealed partial class ControlService(
     }
 
     /// <summary>
-    ///     Extenders follow the surface before them (docs/09-phase-8.md, "Surfaces"): each shows the strips after its
-    ///     neighbour's.
+    ///     Joins the surfaces into consoles (<see cref="SurfaceGroup" />, docs/control/README.md, "Grouping"), left to
+    ///     right in <c>order</c>: a Mackie Control XT joins the Mackie Control (or XT) before it, so extenders follow the
+    ///     main unit's bank; anything else starts a group of its own (a HUI is always alone). A group keeps the bank its
+    ///     first unit showed.
     /// </summary>
-    void Rebank() {
-        for (var i = 1; i < surfaces.Count; i++) {
-            if (surfaces[i].Config.Kind == ControlSurfaceKind.MackieControlXt) {
-                surfaces[i].SetBank(surfaces[i - 1].Bank + surfaces[i - 1].Strips, logger);
+    void Regroup() {
+        groups.Clear();
+        List<SurfaceRuntime>? current = null;
+        foreach (var surface in surfaces) {
+            surface.Group = null;
+            if (surface.Protocol is null) {
+                continue;
             }
-        }
-    }
 
-    /// <summary>
-    ///     A surface banked to <paramref name="offset" />: the first surface of its chain (it and the extenders after it)
-    ///     moves so that this one shows <paramref name="offset" />, and the extenders follow.
-    /// </summary>
-    void Bank(SurfaceRuntime surface, int offset) {
-        var index = surfaces.IndexOf(surface);
-        var head = index;
-        var before = 0;
-        while (head > 0 && surfaces[head].Config.Kind == ControlSurfaceKind.MackieControlXt) {
-            head--;
-            before += surfaces[head].Strips;
+            var joins = surface.Config.Kind == ControlSurfaceKind.MackieControlXt
+                && current is [.., { Config.Kind: ControlSurfaceKind.MackieControl or ControlSurfaceKind.MackieControlXt }];
+            if (!joins || current is null) {
+                current = [];
+                groups.Add(new(current));
+            }
+
+            current.Add(surface);
         }
 
-        var tracks = session.View?.State.Tracks.Count ?? 0;
-        surfaces[head].SetBank(Math.Clamp(offset - before, 0, Math.Max(0, tracks - 1)), logger);
-        Rebank();
-        PublishStatuses();
+        foreach (var group in groups) {
+            group.Build(logger);
+        }
     }
 
     void PublishStatuses() {
@@ -629,6 +648,13 @@ public sealed partial class ControlService(
         if (!now.SequenceEqual(published)) {
             published = now;
             hub.Publish(new SurfacesEvent(now));
+        }
+    }
+
+    /// <summary>Sends each unit of a group its messages (<see cref="SurfaceGroup" /> answers per unit, in unit order).</summary>
+    void SendAll(GroupRuntime group, IReadOnlyList<IReadOnlyList<byte[]>> perUnit) {
+        for (var i = 0; i < perUnit.Count && i < group.Members.Count; i++) {
+            Send(group.Members[i], perUnit[i]);
         }
     }
 
@@ -642,68 +668,86 @@ public sealed partial class ControlService(
         engine.Post(new SendMidiMessage(surface.Config.OutputPort, data));
     }
 
-    /// <summary>A surface: its settings, its protocol object (null when it could not be made) and Zoom.</summary>
+    /// <summary>A surface: its settings, its protocol object (null when it could not be made), its group and Zoom.</summary>
     sealed class SurfaceRuntime(ControlSurface config, IControlSurface? protocol) {
-        bool failed;
-
         public ControlSurface Config { get; set; } = config;
+
+        public IControlSurface? Protocol { get; } = protocol;
+
+        /// <summary>The console it is part of; null when its protocol could not be made.</summary>
+        public GroupRuntime? Group { get; set; }
 
         public bool Zoom { get; set; }
 
-        public int Bank => Use(static p => p.BankOffset, 0);
-
-        public int Strips => Use(static p => p.Strips, 8);
-
         public SurfaceStatus Status() =>
-            new(Config.Id, Use(static p => p.Connected, false), Use(static p => p.BankOffset, 0));
+            Group is { Failed: false } && Protocol is { } p
+                ? new(Config.Id, p.Connected, p.BankOffset)
+                : new(Config.Id, false, 0);
 
-        public void SetBank(int offset, ILogger logger) =>
-            Use(
-                p => {
-                    p.BankOffset = offset;
+        public void Invalidate(ILogger logger) => Group?.Use(_ => Protocol?.Invalidate(), Config.Id, logger);
+    }
+
+    /// <summary>
+    ///     A <see cref="SurfaceGroup" /> and its surfaces, unit for unit (<c>Members[i]</c> is unit i). A protocol that
+    ///     throws stops the whole group (logged once).
+    /// </summary>
+    sealed class GroupRuntime(List<SurfaceRuntime> members) {
+        SurfaceGroup? group;
+
+        public List<SurfaceRuntime> Members => members;
+
+        public bool Failed { get; private set; }
+
+        /// <summary>Makes the group (it takes over its units' bank offsets, from the first unit's).</summary>
+        public void Build(ILogger logger) {
+            foreach (var member in members) {
+                member.Group = this;
+            }
+
+            group = null;
+            Use(static _ => { }, members[0].Config.Id, logger);
+        }
+
+        public IReadOnlyList<SurfaceAction> Decode(SurfaceRuntime surface, byte[] data, long timeNs, ILogger logger) {
+            var unit = members.IndexOf(surface);
+            return Call(g => g.Decode(unit, data, timeNs), [], surface.Config.Id, logger);
+        }
+
+        public IReadOnlyList<IReadOnlyList<byte[]>> Encode(ProjectView view, ILogger logger) =>
+            Call(g => g.Encode(view), [], members[0].Config.Id, logger);
+
+        public IReadOnlyList<IReadOnlyList<byte[]>> EncodeMeters(ProjectView view, ILogger logger) =>
+            Call(g => g.EncodeMeters(view), [], members[0].Config.Id, logger);
+
+        public IReadOnlyList<IReadOnlyList<byte[]>> Poll(long timeNs, ILogger logger) =>
+            Call(g => g.Poll(timeNs), [], members[0].Config.Id, logger);
+
+        public void Use(Action<SurfaceGroup> call, string id, ILogger logger) =>
+            Call(
+                g => {
+                    call(g);
                     return 0;
                 },
                 0,
+                id,
                 logger
             );
 
-        public void Invalidate(ILogger logger) =>
-            Use(
-                static p => {
-                    p.Invalidate();
-                    return 0;
-                },
-                0,
-                logger
-            );
-
-        public IReadOnlyList<SurfaceAction> Decode(byte[] data, long timeNs, ILogger logger) =>
-            Use(p => p.Decode(data, timeNs), [], logger);
-
-        public IReadOnlyList<byte[]> Encode(ProjectView view, ILogger logger) => Use(p => p.Encode(view), [], logger);
-
-        public IReadOnlyList<byte[]> EncodeMeters(ProjectView view, ILogger logger) =>
-            Use(p => p.EncodeMeters(view), [], logger);
-
-        public IReadOnlyList<byte[]> Poll(long timeNs, ILogger logger) => Use(p => p.Poll(timeNs), [], logger);
-
-        /// <summary>Runs <paramref name="call" /> on the protocol; a protocol that throws is stopped (logged once).</summary>
-        T Use<T>(Func<IControlSurface, T> call, T fallback, ILogger? logger = null) {
-            if (protocol is null || failed) {
+        /// <summary>Runs <paramref name="call" /> on the group (made on first use); a protocol that throws stops it.</summary>
+        T Call<T>(Func<SurfaceGroup, T> call, T fallback, string id, ILogger logger) {
+            if (Failed) {
                 return fallback;
             }
 
             try {
-                return call(protocol);
+                group ??= new([..members.Select(static m => m.Protocol!)]);
+                return call(group);
             } catch (Exception e) when (e is NotImplementedException
                                             or InvalidOperationException
                                             or ArgumentException
                                             or IndexOutOfRangeException) {
-                failed = true;
-                if (logger is not null) {
-                    ControlLog.SurfaceFailed(logger, Config.Id, e.Message);
-                }
-
+                Failed = true;
+                ControlLog.SurfaceFailed(logger, id, e.Message);
                 return fallback;
             }
         }
