@@ -20,5 +20,8 @@ dist/
 .idea/
 *.swp
 
+# Stem Splitter models (scripts/export-demucs.py, scripts/fetch-models.mjs)
+/models/
+
 # Claude Code worktrees
 .claude/worktrees/

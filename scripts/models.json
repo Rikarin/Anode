@@ -1,0 +1,36 @@
+{
+  "release": "https://github.com/Rikarin/Anode/releases/tag/models-1",
+  "published": false,
+  "models": [
+    {
+      "file": "htdemucs.onnx",
+      "url": "https://github.com/Rikarin/Anode/releases/download/models-1/htdemucs.onnx",
+      "sha256": "f0c19911d2f0c1e7290e59718192caf226f8b8348d275003bac375f19048d74f",
+      "size": 174264907,
+      "stems": [
+        "drums",
+        "bass",
+        "other",
+        "vocals"
+      ],
+      "sampleRate": 44100,
+      "segmentSamples": 343980
+    },
+    {
+      "file": "htdemucs_6s.onnx",
+      "url": "https://github.com/Rikarin/Anode/releases/download/models-1/htdemucs_6s.onnx",
+      "sha256": "6a167375c2d235967e5afcbe4a75e54d2e994e02319848d761cee29308cf6e6b",
+      "size": 114560505,
+      "stems": [
+        "drums",
+        "bass",
+        "other",
+        "vocals",
+        "guitar",
+        "piano"
+      ],
+      "sampleRate": 44100,
+      "segmentSamples": 343980
+    }
+  ]
+}

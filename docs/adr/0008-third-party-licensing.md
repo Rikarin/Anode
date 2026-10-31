@@ -13,7 +13,8 @@ Anode is **GPL-3.0-or-later**, as Cathode. Third-party code must be GPL-3-compat
 | VST3 | Steinberg VST3 SDK | MIT (3.8+) |
 | CLAP | CLAP headers | MIT |
 | Ableton Link | Link SDK | GPL-2.0-or-later |
-| Stem splitting | Demucs/HTDemucs via ONNX Runtime | MIT (verify weights at use) |
+| Stem splitting | Demucs 4.0.1 code (export only, `scripts/export-demucs.py`); ONNX Runtime (`Microsoft.ML.OnnxRuntime` 1.31.0) | MIT |
+| Stem splitting model | HTDemucs pretrained weights (`htdemucs`, `htdemucs_6s`), exported to ONNX ([ADR-0010](0010-stem-splitter.md)) | **Not MIT: "provided only for scientific purposes"** per the author (demucs issues #327, #508); no licence file covers them. Not published until settled |
 | Notation | Verovio (WASM) | LGPL-3.0 |
 | Decoding | libFLAC, minimp3, OS AAC/ALAC decoders, FFmpeg (LGPL build) | BSD / CC0 / LGPL |
 | Scripter | QuickJS-ng, pinned `6d46d07` (0.17.0), in `an_script` ([ADR-0009](0009-scripter.md)) | MIT |
