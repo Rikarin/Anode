@@ -2,6 +2,7 @@ using Anode.Contracts;
 using Anode.EngineHost;
 using Anode.Server;
 using Anode.Server.Api;
+using Anode.Server.Control;
 using Anode.Server.Engine;
 using Anode.Server.Library;
 using Anode.Server.Projects;
@@ -58,6 +59,13 @@ builder.Services.AddSingleton<LiveLoopsPlayer>();
 builder.Services.AddSingleton<EngineConnection>();
 builder.Services.AddSingleton<LoopActions>();
 builder.Services.AddHostedService(static s => s.GetRequiredService<EngineConnection>());
+// Phase 8 (docs/09-phase-8.md): hardware control, OSC, sync and the Stem Splitter's models.
+builder.Services.AddSingleton<IControlProtocols, ControlProtocols>();
+builder.Services.AddSingleton<ControlService>();
+builder.Services.AddHostedService(static s => s.GetRequiredService<ControlService>());
+builder.Services.AddSingleton<SyncService>();
+builder.Services.AddHostedService(static s => s.GetRequiredService<SyncService>());
+builder.Services.AddSingleton<IStemModels, StemModels>();
 
 var app = builder.Build();
 if (bool.TryParse(builder.Configuration["Anode:WatchStdin"], out var watchStdin) && watchStdin) {

@@ -202,7 +202,7 @@ public static partial class Edits {
             _ => FlexOps(state, command, ids, plugins, analysis ?? NoAnalysis.Instance)
                 ?? Phase6Ops(state, command, ids, plugins, patches ?? NoPatches.Instance)
                 ?? Phase7Ops(state, command, ids, analysis ?? NoAnalysis.Instance)
-                ?? Phase8Ops(command)
+                ?? Phase8Ops(state, command, ids, plugins)
                 ?? throw new EditException($"Unknown command {command.GetType().Name}.")
         };
 

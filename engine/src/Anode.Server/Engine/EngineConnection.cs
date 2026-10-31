@@ -63,6 +63,24 @@ public sealed class EngineConnection(
 
     public event Action<EngineStatus>? Changed;
 
+    /// <summary>
+    ///     Phase 8: a host connected (or reconnected), after the open project's first sync was queued: owners of host
+    ///     state the project does not carry (control routing, sync settings) send it again.
+    /// </summary>
+    public event Action? HostConnected;
+
+    /// <summary>
+    ///     Phase 8: the host's consumed control messages (<see cref="ControlMidiMessage" />), raised on the reading loop,
+    ///     in order.
+    /// </summary>
+    public event Action<ControlMidiMessage>? ControlMidi;
+
+    /// <summary>Phase 8: the host's sync state (<see cref="SyncStateMessage" />), raised on the reading loop.</summary>
+    public event Action<SyncStateMessage>? SyncStateArrived;
+
+    /// <summary>Phase 8: each telemetry frame's meters (about 30 a second while connected and a project is open).</summary>
+    public event Action<MetersEvent>? MetersRead;
+
     /// <summary>The in-process host, in <c>inprocess</c> mode (for tests).</summary>
     public FakeHost? InProcessHost { get; private set; }
 
@@ -378,11 +396,14 @@ public sealed class EngineConnection(
     void SendStepInputForward(bool on) => TrySend(new SetStepInputForwardMessage(on));
 
     /// <summary>Sends a message when the engine is connected; drops it otherwise.</summary>
-    void TrySend(IpcMessage message) {
-        if (Volatile.Read(ref current) is { } link) {
-            link.Work.Writer.TryWrite(message);
-        }
-    }
+    void TrySend(IpcMessage message) => Post(message);
+
+    /// <summary>
+    ///     Queues a message for the host after the project's pending changes, when one is connected; false (dropped)
+    ///     otherwise. Phase 8's control routing, surface feedback and sync settings go this way.
+    /// </summary>
+    public bool Post(IpcMessage message) =>
+        Volatile.Read(ref current) is { } link && link.Work.Writer.TryWrite(message);
 
     void Send(IpcMessage message) {
         if (Volatile.Read(ref current) is not { } link || !link.Work.Writer.TryWrite(message)) {
@@ -494,6 +515,7 @@ public sealed class EngineConnection(
         Set(
             new(inProcess ? EngineState.InProcess : EngineState.Connected, hello.Version, hello.Backend, RateMismatch())
         );
+        HostConnected?.Invoke();
         var reading = ReadAsync(stream, connection, stop.Token);
         var pumping = PumpAsync(connection, stop.Token);
         var publishing = telemetry is null ? Task.CompletedTask : PublishAsync(telemetry, stop.Token);
@@ -591,6 +613,13 @@ public sealed class EngineConnection(
                 case StepInputMidiMessage step:
                     // In order, here: each step starts where the one before left the position.
                     session.StepFromMidi(step.Pitches ?? [], step.Velocity);
+                    break;
+                case ControlMidiMessage control when control.Events is { Count: > 0 }:
+                    // In order, here: a gesture's moves (and a 14-bit pair's halves) follow one another.
+                    ControlMidi?.Invoke(control);
+                    break;
+                case SyncStateMessage sync:
+                    SyncStateArrived?.Invoke(sync);
                     break;
                 case ErrorMessage error:
                     EngineLog.HostError(logger, error.Message, error.Request);
@@ -707,9 +736,13 @@ public sealed class EngineConnection(
 
             last = now;
             var readings = Interlocked.Exchange(ref pendingReadings, null);
-            if (view is not null
-                && Meters(frame, view) is var (meters, live)
-                && (moving || live || metersLive || readings is { Count: > 0 })) {
+            if (view is null) {
+                continue;
+            }
+
+            var (meters, live) = Meters(frame, view);
+            MetersRead?.Invoke(meters);
+            if (moving || live || metersLive || readings is { Count: > 0 }) {
                 hub.Publish(readings is { Count: > 0 } ? meters with { Readings = readings } : meters);
                 metersLive = live;
             }

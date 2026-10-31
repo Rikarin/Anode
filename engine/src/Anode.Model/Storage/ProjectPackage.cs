@@ -875,12 +875,12 @@ public static class ProjectPackage {
 ///     refused rather than read wrongly.
 /// </remarks>
 public static class PackageMigrations {
-    public const int CurrentSchemaVersion = 7;
+    public const int CurrentSchemaVersion = 8;
     const string VersionField = "schemaVersion";
 
     /// <summary><c>Steps[n]</c> takes schema <c>n + 1</c> to <c>n + 2</c>; it gets the kind of file and its JSON.</summary>
     static readonly Func<string, JsonObject, JsonObject>[] Steps =
-        [ToSchema2, ToSchema3, ToSchema4, ToSchema5, ToSchema6, ToSchema7];
+        [ToSchema2, ToSchema3, ToSchema4, ToSchema5, ToSchema6, ToSchema7, ToSchema8];
 
     public static JsonObject Upgrade(JsonObject json, string kind) {
         var version = json[VersionField] is JsonValue v && v.TryGetValue<int>(out var n) ? n : 1;
@@ -895,7 +895,6 @@ public static class PackageMigrations {
         }
 
         json[VersionField] = CurrentSchemaVersion;
-        Phase8Fields.Fill(kind, json);
         return json;
     }
 
@@ -1085,17 +1084,25 @@ public static class PackageMigrations {
 
         return json;
     }
+
+    /// <summary>Schema 7 to 8 (Phase 8, docs/09-phase-8.md): a project's sync settings are the defaults.</summary>
+    static JsonObject ToSchema8(string kind, JsonObject json) {
+        if (kind == "project") {
+            Schema8.Project(json);
+        }
+
+        return json;
+    }
 }
 
 /// <summary>
-///     The Phase 8 fields (docs/09-phase-8.md) at their defaults where a file lacks them, so schema-7 packages read with
-///     the Phase 8 contracts: interim, until workstream B adds schema 8 and its migration from 7 (which replaces this,
-///     with the same defaults). The project's sync settings are <see cref="SyncSettings.Default" />: internal, nothing
-///     sent. Leaves fields that are present alone.
+///     The Phase 8 additions to a schema-7 file (docs/09-phase-8.md): the project's sync settings at
+///     <see cref="SyncSettings.Default" /> (internal, nothing sent, 25 fps, from timecode 0, Link start/stop off, any
+///     input). Leaves fields that are present alone.
 /// </summary>
-static class Phase8Fields {
-    public static void Fill(string kind, JsonObject json) {
-        if (kind == "project" && json["settings"] is JsonObject settings) {
+static class Schema8 {
+    public static void Project(JsonObject json) {
+        if (json["settings"] is JsonObject settings) {
             settings["sync"] ??= new JsonObject {
                 ["source"] = "internal",
                 ["destinations"] = new JsonArray(),
