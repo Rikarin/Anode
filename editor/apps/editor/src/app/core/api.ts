@@ -1,6 +1,7 @@
-import { Injectable, InjectionToken, inject } from '@angular/core';
+import { inject, Injectable, InjectionToken } from '@angular/core';
 import {
   type AddLoopRequest,
+  type AddSurfaceRequest,
   type AddToLoopLibraryRequest,
   ApiError,
   type ArticulationSet,
@@ -11,6 +12,8 @@ import {
   type BounceRequest,
   type CommandBatch,
   type CommandResult,
+  type ControllerAssignments,
+  type ControlSurface,
   type DirectoryListing,
   type FileAnalysis,
   type GrooveTemplate,
@@ -18,6 +21,8 @@ import {
   type Job,
   type KeyCommandSet,
   type LaunchRequest,
+  type LearnRequest,
+  type LearnState,
   type LiveMidiEvent,
   type LiveRecordRequest,
   type LoopInfo,
@@ -27,6 +32,8 @@ import {
   type LoopSearchRequest,
   type LoopSearchResult,
   type MidiDevices,
+  type OscSettings,
+  type OscStatus,
   type Pack,
   type PatchInfo,
   type PluginEditorRequest,
@@ -41,9 +48,12 @@ import {
   type SavePatchRequest,
   type Screenset,
   type ScriptPreset,
+  type StemSplitRequest,
   type StepInputRequest,
   type StepInputState,
   type StopRequest,
+  type SurfaceStatus,
+  type SyncState,
   type SystemInfo,
   type TransformSet,
   type TransportRequest,
@@ -223,6 +233,33 @@ export interface AnodeApi {
   setStepInput(request: StepInputRequest): Promise<StepInputState>;
   /** A rest: advances the step position by one step. */
   stepRest(): Promise<StepInputState>;
+  // ---- Phase 8 (docs/09-phase-8.md)
+  /** Every controller assignment, by zone and mode (user settings). */
+  controllerAssignments(): Promise<ControllerAssignments>;
+  /** Replaces every controller assignment; the host's matcher table follows. */
+  setControllerAssignments(assignments: ControllerAssignments): Promise<ControllerAssignments>;
+  learn(): Promise<LearnState>;
+  /** Turns Learn on, or changes its target while on; `controlLearn` events follow as controls move. */
+  startLearn(request: LearnRequest): Promise<LearnState>;
+  stopLearn(): Promise<LearnState>;
+  /** The control surfaces, in order (user settings). */
+  surfaces(): Promise<ControlSurface[]>;
+  /** Each surface's live state, in order; `surfaces` events report changes. */
+  surfaceStatus(): Promise<SurfaceStatus[]>;
+  /** Adds a control surface after the others; its ports become control ports. */
+  addSurface(request: AddSurfaceRequest): Promise<ControlSurface>;
+  removeSurface(id: string): Promise<void>;
+  /** Puts the surfaces in this order (every id once). */
+  reorderSurfaces(ids: string[]): Promise<ControlSurface[]>;
+  /** The OSC server: settings, whether it listens, this machine's addresses, subscribers. */
+  osc(): Promise<OscStatus>;
+  setOsc(settings: OscSettings): Promise<OscStatus>;
+  /** Tells the Server the selected track (selected-track assignments, surfaces and OSC follow it). */
+  setSelection(trackId: string | null): Promise<void>;
+  /** The live sync state; the settings are `settings.sync`, changed with `setSyncSettings`. */
+  syncState(): Promise<SyncState>;
+  /** Splits an audio region into stems as a `stemSplit` job; the tracks follow as one undo step. */
+  splitStems(regionId: string, request: StemSplitRequest): Promise<Job>;
 }
 
 export const ANODE_API = new InjectionToken<AnodeApi>('AnodeApi', {
@@ -615,5 +652,70 @@ export class HttpAnodeApi implements AnodeApi {
 
   async stepRest(): Promise<StepInputState> {
     return unwrap(await this.client.POST('/api/v1/project/step-input/rest'));
+  }
+
+  async controllerAssignments(): Promise<ControllerAssignments> {
+    return unwrap(await this.client.GET('/api/v1/control/assignments'));
+  }
+
+  async setControllerAssignments(assignments: ControllerAssignments): Promise<ControllerAssignments> {
+    return unwrap(await this.client.PUT('/api/v1/control/assignments', { body: assignments }));
+  }
+
+  async learn(): Promise<LearnState> {
+    return unwrap(await this.client.GET('/api/v1/control/learn'));
+  }
+
+  async startLearn(request: LearnRequest): Promise<LearnState> {
+    return unwrap(await this.client.POST('/api/v1/control/learn/start', { body: request }));
+  }
+
+  async stopLearn(): Promise<LearnState> {
+    return unwrap(await this.client.POST('/api/v1/control/learn/stop'));
+  }
+
+  async surfaces(): Promise<ControlSurface[]> {
+    return unwrap(await this.client.GET('/api/v1/control/surfaces'));
+  }
+
+  async surfaceStatus(): Promise<SurfaceStatus[]> {
+    return unwrap(await this.client.GET('/api/v1/control/surfaces/status'));
+  }
+
+  async addSurface(request: AddSurfaceRequest): Promise<ControlSurface> {
+    return unwrap(await this.client.POST('/api/v1/control/surfaces', { body: request }));
+  }
+
+  async removeSurface(id: string): Promise<void> {
+    unwrap(await this.client.DELETE('/api/v1/control/surfaces/{id}', { params: { path: { id } } }));
+  }
+
+  async reorderSurfaces(ids: string[]): Promise<ControlSurface[]> {
+    return unwrap(await this.client.PUT('/api/v1/control/surfaces/order', { body: { ids } }));
+  }
+
+  async osc(): Promise<OscStatus> {
+    return unwrap(await this.client.GET('/api/v1/control/osc'));
+  }
+
+  async setOsc(settings: OscSettings): Promise<OscStatus> {
+    return unwrap(await this.client.PUT('/api/v1/control/osc', { body: settings }));
+  }
+
+  async setSelection(trackId: string | null): Promise<void> {
+    unwrap(await this.client.PUT('/api/v1/project/selection', { body: { trackId } }));
+  }
+
+  async syncState(): Promise<SyncState> {
+    return unwrap(await this.client.GET('/api/v1/project/sync'));
+  }
+
+  async splitStems(regionId: string, request: StemSplitRequest): Promise<Job> {
+    return unwrap(
+      await this.client.POST('/api/v1/project/regions/{regionId}/split-stems', {
+        params: { path: { regionId } },
+        body: request
+      })
+    );
   }
 }

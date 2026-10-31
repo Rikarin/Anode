@@ -747,7 +747,7 @@
         "tags": [
           "MIDI"
         ],
-        "summary": "The MIDI ports of the machine the engine runs on.",
+        "summary": "The MIDI ports of the machine the engine runs on, with Anode\u0027s virtual ports (anode:in, anode:out) where the platform has them (macOS).",
         "operationId": "ListMidiDevices",
         "responses": {
           "500": {
@@ -3165,6 +3165,562 @@
           }
         }
       }
+    },
+    "/api/v1/control/assignments": {
+      "get": {
+        "tags": [
+          "Control"
+        ],
+        "summary": "Every controller assignment, by zone and mode (user settings, not the project).",
+        "operationId": "GetControllerAssignments",
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ControllerAssignments"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Control"
+        ],
+        "summary": "Replaces every controller assignment (ids unique, references valid; 422 otherwise); the host\u0027s matcher table follows.",
+        "operationId": "SetControllerAssignments",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ControllerAssignments"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ControllerAssignments"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/control/learn": {
+      "get": {
+        "tags": [
+          "Control"
+        ],
+        "summary": "The Learn state: on or off, its target, and the last message received while learning.",
+        "operationId": "GetLearn",
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LearnState"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/control/learn/start": {
+      "post": {
+        "tags": [
+          "Control"
+        ],
+        "summary": "Turns Learn on, or changes its target while on. Moving a control then assigns it to the target; each message received while learning is a controlLearn event on /ws.",
+        "operationId": "StartLearn",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LearnRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LearnState"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/control/learn/stop": {
+      "post": {
+        "tags": [
+          "Control"
+        ],
+        "summary": "Turns Learn off.",
+        "operationId": "StopLearn",
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LearnState"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/control/surfaces": {
+      "get": {
+        "tags": [
+          "Control"
+        ],
+        "summary": "The control surfaces, in order (user settings).",
+        "operationId": "ListSurfaces",
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ControlSurface"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Control"
+        ],
+        "summary": "Adds a control surface after the others; its ports become control ports (422 for a port another surface uses).",
+        "operationId": "AddSurface",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddSurfaceRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ControlSurface"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/control/surfaces/status": {
+      "get": {
+        "tags": [
+          "Control"
+        ],
+        "summary": "Each control surface\u0027s live state, in order; surfaces events on /ws report changes.",
+        "operationId": "ListSurfaceStatus",
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SurfaceStatus"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/control/surfaces/{id}": {
+      "delete": {
+        "tags": [
+          "Control"
+        ],
+        "summary": "Removes a control surface; its ports play tracks again.",
+        "operationId": "RemoveSurface",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "No Content"
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/api/v1/control/surfaces/order": {
+      "put": {
+        "tags": [
+          "Control"
+        ],
+        "summary": "Puts the control surfaces in a new order (every id once; 422 otherwise).",
+        "operationId": "ReorderSurfaces",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReorderSurfacesRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ControlSurface"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/control/osc": {
+      "get": {
+        "tags": [
+          "Control"
+        ],
+        "summary": "The OSC server: its settings, whether it listens, this machine\u0027s addresses, its subscribers.",
+        "operationId": "GetOsc",
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OscStatus"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Control"
+        ],
+        "summary": "Changes the OSC server\u0027s settings (user settings); it restarts on a new port.",
+        "operationId": "SetOsc",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OscSettings"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OscStatus"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/project/selection": {
+      "put": {
+        "tags": [
+          "Project"
+        ],
+        "summary": "The editor\u0027s selected track, which selected-track controller assignments, surfaces and OSC follow (not part of the project: not saved, not undoable).",
+        "operationId": "SetSelection",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SelectionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "No Content"
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/api/v1/project/sync": {
+      "get": {
+        "tags": [
+          "Project"
+        ],
+        "summary": "The live sync state (source, lock, external tempo, Link peers); sync events on /ws report changes. The settings are the project\u0027s settings.sync, changed with the setSyncSettings command.",
+        "operationId": "GetSync",
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SyncState"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/api/v1/project/regions/{regionId}/split-stems": {
+      "post": {
+        "tags": [
+          "Project"
+        ],
+        "summary": "Splits an audio region into stems as a stemSplit job: it writes a file per stem and, when it finishes, adds a track per stem below the region\u0027s track and mutes the region (unless kept), in one undo step.",
+        "operationId": "SplitStems",
+        "parameters": [
+          {
+            "name": "regionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StemSplitRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Job"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -3198,6 +3754,26 @@
           }
         },
         "description": "Adds a loop to the open project, as one undoable step: at \u0060tick\u0060 on \u0060trackId\u0060 (left out: a new track\nof the loop\u0027s kind), or, with \u0060cellSceneId\u0060, into the Live Loops cell of \u0060trackId\u0060 and that scene."
+      },
+      "AddSurfaceRequest": {
+        "required": [
+          "kind",
+          "inputPort",
+          "outputPort"
+        ],
+        "type": "object",
+        "properties": {
+          "kind": {
+            "$ref": "#/components/schemas/ControlSurfaceKind"
+          },
+          "inputPort": {
+            "type": "string"
+          },
+          "outputPort": {
+            "type": "string"
+          }
+        },
+        "description": "Adds a control surface (\u0060POST /control/surfaces\u0060), after the others."
       },
       "AddToLoopLibraryRequest": {
         "required": [
@@ -4121,6 +4697,50 @@
         },
         "description": "Part of a comp: take \u0060takeId\u0060 plays from \u0060startTick\u0060 to \u0060endTick\u0060."
       },
+      "ControlAssignment": {
+        "required": [
+          "id",
+          "input",
+          "target",
+          "mode",
+          "min",
+          "max",
+          "pickup"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "input": {
+            "$ref": "#/components/schemas/ControlInput"
+          },
+          "target": {
+            "$ref": "#/components/schemas/ControlTarget"
+          },
+          "mode": {
+            "$ref": "#/components/schemas/ControlValueMode"
+          },
+          "min": {
+            "type": "number",
+            "format": "double"
+          },
+          "max": {
+            "type": "number",
+            "format": "double"
+          },
+          "pickup": {
+            "type": "boolean"
+          }
+        },
+        "description": "A controller assignment (Logic\u0027s, simplified): \u0060input\u0060 drives \u0060target\u0060 in \u0060mode\u0060. \u0060min\u0060 and\n\u0060max\u0060 are the target\u0027s range, normalised 0\u20261 over the target\u0027s own range (a parameter\u0027s, a Smart\nControl\u0027s; switches and functions are 0 off, 1 on); \u0060min\u0060 above \u0060max\u0060 inverts. With \u0060pickup\u0060, an\nabsolute control has no effect until its value crosses the target\u0027s current value. Relative steps move the\ntarget by 1/128 of \u0060min\u0060\u2026\u0060max\u0060 each."
+      },
       "ControlEvent": {
         "required": [
           "id",
@@ -4199,6 +4819,47 @@
         },
         "description": "Changes to one controller event (Phase 7, the Event List; \u0060setControls\u0060); left-out properties stay. Its kind\nstays: to change it, delete the event and add another. Values are checked against the kind\u0027s range."
       },
+      "ControlInput": {
+        "required": [
+          "kind",
+          "number"
+        ],
+        "type": "object",
+        "properties": {
+          "port": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "kind": {
+            "$ref": "#/components/schemas/ControlInputKind"
+          },
+          "channel": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int32"
+          },
+          "number": {
+            "type": "integer",
+            "format": "int32"
+          }
+        },
+        "description": "What a controller assignment listens to: a port (a \u0060MidiPort.id\u0060; null: any port that is not a control\nsurface\u0027s), a kind, a channel (1\u202616; null: any) and a number (its meaning depends on \u0060kind\u0060)."
+      },
+      "ControlInputKind": {
+        "enum": [
+          "controlChange",
+          "controlChange14",
+          "nrpn",
+          "note",
+          "pitchBend",
+          "programChange"
+        ],
+        "description": "The kind of MIDI message a controller assignment listens to."
+      },
       "ControlKind": {
         "enum": [
           "controlChange",
@@ -4207,6 +4868,235 @@
           "programChange",
           "polyPressure"
         ]
+      },
+      "ControllerAssignments": {
+        "required": [
+          "zones"
+        ],
+        "type": "object",
+        "properties": {
+          "zones": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ControlZone"
+            }
+          }
+        },
+        "description": "Every controller assignment, by zone and mode, stored in the user settings (not the project, as in Logic).\nIds are unique across all zones, modes and assignments. An input matches at most one assignment among the active\nmodes (the first in zone, mode and list order)."
+      },
+      "ControlMessage": {
+        "required": [
+          "port",
+          "status",
+          "data1",
+          "data2",
+          "input"
+        ],
+        "type": "object",
+        "properties": {
+          "port": {
+            "type": "string"
+          },
+          "status": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "data1": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "data2": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "input": {
+            "$ref": "#/components/schemas/ControlInput"
+          }
+        },
+        "description": "A MIDI message the server received for control (learning, or a matched or control-port message): the port, the\nraw bytes (status and data; for a 14-bit pair or an NRPN, the message that completed it) and the input it reads\nas (what Learn would assign)."
+      },
+      "ControlMode": {
+        "required": [
+          "id",
+          "name",
+          "assignments"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "assignments": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ControlAssignment"
+            }
+          }
+        },
+        "description": "A mode of a zone: a set of assignments that are live while it is the zone\u0027s active mode."
+      },
+      "ControlSurface": {
+        "required": [
+          "id",
+          "kind",
+          "inputPort",
+          "outputPort",
+          "order"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/ControlSurfaceKind"
+          },
+          "inputPort": {
+            "type": "string"
+          },
+          "outputPort": {
+            "type": "string"
+          },
+          "order": {
+            "type": "integer",
+            "format": "int32"
+          }
+        },
+        "description": "A control surface, stored in the user settings: its protocol and port pair (\u0060MidiPort.id\u0060s; the ports become\ncontrol ports, whose messages never reach tracks). \u0060order\u0060 (0, 1, \u2026) places it left to right: extenders show\nthe strips after the surface before them."
+      },
+      "ControlSurfaceKind": {
+        "enum": [
+          "mackieControl",
+          "mackieControlXt",
+          "hui"
+        ],
+        "description": "The protocol a control surface speaks."
+      },
+      "ControlTarget": {
+        "required": [
+          "kind"
+        ],
+        "type": "object",
+        "properties": {
+          "kind": {
+            "$ref": "#/components/schemas/ControlTargetKind"
+          },
+          "trackId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "address": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "switch": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/TrackSwitchAction"
+              }
+            ]
+          },
+          "transport": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ControlTransportAction"
+              }
+            ]
+          },
+          "keyCommandId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "zoneId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "modeId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        },
+        "description": "What a controller assignment changes: \u0060kind\u0060, and the fields that kind uses (the others are null).\n\u0060trackId\u0060 (parameter, smartControl, trackSwitch) is a fixed track; null follows the selected track (which\nthe editor reports with \u0060PUT /project/selection\u0060). \u0060address\u0060 is the automation address (parameter) or\nthe Smart Control id (smartControl); \u0060switch\u0060 the track switch; \u0060transport\u0060 the transport function;\n\u0060keyCommandId\u0060 the key command; \u0060zoneId\u0060 and \u0060modeId\u0060 the mode a zoneMode target activates."
+      },
+      "ControlTargetKind": {
+        "enum": [
+          "parameter",
+          "smartControl",
+          "trackSwitch",
+          "transport",
+          "keyCommand",
+          "zoneMode"
+        ],
+        "description": "What a controller assignment changes."
+      },
+      "ControlTransportAction": {
+        "enum": [
+          "play",
+          "stop",
+          "record",
+          "cycle",
+          "rewind",
+          "forward",
+          "goToStart",
+          null
+        ]
+      },
+      "ControlValueMode": {
+        "enum": [
+          "absolute",
+          "relativeTwosComplement",
+          "relativeSignedBit",
+          "relativeBinaryOffset",
+          "toggle",
+          "momentary"
+        ],
+        "description": "How a controller assignment turns the control\u0027s values into the target\u0027s."
+      },
+      "ControlZone": {
+        "required": [
+          "id",
+          "name",
+          "modes",
+          "activeModeId"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "modes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ControlMode"
+            }
+          },
+          "activeModeId": {
+            "type": "string"
+          }
+        },
+        "description": "A zone (usually one controller): its modes, of which \u0060activeModeId\u0060 is live (only its assignments match\ninput); a zoneMode target switches it."
       },
       "CreateAlternativeRequest": {
         "required": [
@@ -5385,6 +6275,12 @@
           },
           {
             "$ref": "#/components/schemas/EditCommandSetScriptCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandSetSyncSettingsCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandAddStemsCommand"
           }
         ],
         "description": "An edit of the open project (docs/adr/0004-state-ownership.md). A batch of them is applied atomically as one\nundo step. Optional properties left out are left unchanged.",
@@ -5518,7 +6414,9 @@
             "stepNotes": "#/components/schemas/EditCommandStepNotesCommand",
             "stepTie": "#/components/schemas/EditCommandStepTieCommand",
             "setFileVersion": "#/components/schemas/EditCommandSetFileVersionCommand",
-            "setScript": "#/components/schemas/EditCommandSetScriptCommand"
+            "setScript": "#/components/schemas/EditCommandSetScriptCommand",
+            "setSyncSettings": "#/components/schemas/EditCommandSetSyncSettingsCommand",
+            "addStems": "#/components/schemas/EditCommandAddStemsCommand"
           }
         }
       },
@@ -5944,6 +6842,35 @@
           }
         },
         "description": "Adds a send to bus 1\u202664 (post-fader at \u2212\u221E dB unless told otherwise, as Logic does)."
+      },
+      "EditCommandAddStemsCommand": {
+        "required": [
+          "regionId",
+          "stems",
+          "keepSource",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "addStems"
+            ],
+            "type": "string"
+          },
+          "regionId": {
+            "type": "string"
+          },
+          "stems": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StemFile"
+            }
+          },
+          "keepSource": {
+            "type": "boolean"
+          }
+        },
+        "description": "Phase 8, the Stem Splitter\u0027s result: for each stem, in the order given (the order of StemKind), a\nnew audio track below audio region \u0060regionId\u0060\u0027s track (named after the region and the stem, with the source\ntrack\u0027s output) holding a region of the whole file at the source region\u0027s position (each file covers the\nregion\u0027s span); the source region is muted unless \u0060keepSource\u0060. The \u0060stemSplit\u0060 job applies it when it\nfinishes, after adding the files; undo removes the tracks and unmutes the region (the files stay). Clients do not\nsend it."
       },
       "EditCommandAddTrackCommand": {
         "required": [
@@ -8842,6 +9769,74 @@
         },
         "description": "Changes a track\u0027s volume, pan, mute or solo, or the master\u0027s when \u0060trackId\u0060 is left out. Members of the\ntrack\u0027s enabled mixer groups that link the property follow it (volume keeps their offsets). During playback, a\ntrack whose automation mode is touch, latch or write records the change into its lane (and the batch coalesces as\na drag does)."
       },
+      "EditCommandSetSyncSettingsCommand": {
+        "required": [
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "setSyncSettings"
+            ],
+            "type": "string"
+          },
+          "source": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SyncSource"
+              }
+            ]
+          },
+          "destinations": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/MidiSyncDestination"
+            }
+          },
+          "frameRate": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/MtcFrameRate"
+              }
+            ]
+          },
+          "startOffsetSeconds": {
+            "type": [
+              "null",
+              "number"
+            ],
+            "format": "double"
+          },
+          "linkStartStop": {
+            "type": [
+              "null",
+              "boolean"
+            ]
+          },
+          "clockInPort": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "mtcInPort": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        },
+        "description": "Phase 8: changes the project\u0027s synchronisation (\u0060ProjectSettings.sync\u0060); left-out properties stay.\n\u0060destinations\u0060 replaces the list (each port at most once). An empty \u0060clockInPort\u0060 or \u0060mtcInPort\u0060\nsets it to any input (null)."
+      },
       "EditCommandSetTakeFolderCommand": {
         "required": [
           "folderId",
@@ -9962,7 +10957,8 @@
           "analyze",
           "bounceInPlace",
           "process",
-          "audioEdit"
+          "audioEdit",
+          "stemSplit"
         ]
       },
       "JobState": {
@@ -10116,6 +11112,83 @@
           }
         },
         "description": "Launches Live Loops cells, or a scene (its cells; tracks with no cell in it stop), each at its quantise boundary."
+      },
+      "LearnRequest": {
+        "required": [
+          "target"
+        ],
+        "type": "object",
+        "properties": {
+          "target": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ControlTarget"
+              }
+            ]
+          },
+          "zoneId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "modeId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        },
+        "description": "Turns Learn on, or changes its target while on (\u0060POST /control/learn/start\u0060): the target the editor\u0027s\nselection names (or a control\u0027s \u0022Learn Assignment for \u2026\u0022); null waits for one."
+      },
+      "LearnState": {
+        "required": [
+          "on",
+          "target",
+          "last"
+        ],
+        "type": "object",
+        "properties": {
+          "on": {
+            "type": "boolean"
+          },
+          "target": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ControlTarget"
+              }
+            ]
+          },
+          "zoneId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "modeId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "last": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ControlMessage"
+              }
+            ]
+          }
+        },
+        "description": "Learn mode: while \u0060on\u0060, the next control moved is assigned to \u0060target\u0060 (when set) in mode\n\u0060modeId\u0060 of zone \u0060zoneId\u0060 (null: the first zone\u0027s active mode, made when there is none), replacing an\nassignment of the same input there. Messages still play their tracks while learning. \u0060last\u0060 is the last\nmessage received while learning."
       },
       "LiveLoopsGrid": {
         "required": [
@@ -10569,6 +11642,31 @@
         },
         "description": "A MIDI region: it starts at \u0060startTick\u0060 and lasts \u0060lengthTicks\u0060; its notes and controller events are\npositioned relative to its start (ticks at 960 PPQ). Events past the end do not play; a note that crosses the end\nis cut there. \u0060playback\u0060 holds the non-destructive region parameters."
       },
+      "MidiSyncDestination": {
+        "required": [
+          "port",
+          "clock",
+          "mtc",
+          "delayMs"
+        ],
+        "type": "object",
+        "properties": {
+          "port": {
+            "type": "string"
+          },
+          "clock": {
+            "type": "boolean"
+          },
+          "mtc": {
+            "type": "boolean"
+          },
+          "delayMs": {
+            "type": "number",
+            "format": "double"
+          }
+        },
+        "description": "A MIDI output (a \u0060MidiPort.id\u0060) that Anode sends sync to: MIDI Clock (24 ppq, Start, Stop, Continue, Song\nPosition Pointer on locate) and/or MTC (quarter frames while playing, a full frame on locate), each message\n\u0060delayMs\u0060 later than its sample (\u221250\u202650; negative sends early, within the output latency)."
+      },
       "MidiThruRequest": {
         "type": "object",
         "properties": {
@@ -10630,6 +11728,15 @@
           }
         },
         "description": "Plugin delay compensation, and low-latency mode: while it is on, plugins on the path of record-armed or\nmonitored tracks whose latency exceeds \u0060lowLatencyLimitMs\u0060 are bypassed."
+      },
+      "MtcFrameRate": {
+        "enum": [
+          "fps24",
+          "fps25",
+          "fps2997Drop",
+          "fps30"
+        ],
+        "description": "An MTC frame rate."
       },
       "NewControlEvent": {
         "required": [
@@ -10819,6 +11926,77 @@
             "type": "string"
           }
         }
+      },
+      "OscClient": {
+        "required": [
+          "host",
+          "port"
+        ],
+        "type": "object",
+        "properties": {
+          "host": {
+            "type": "string"
+          },
+          "port": {
+            "type": "integer",
+            "format": "int32"
+          }
+        },
+        "description": "An OSC client that receives feedback: a host (name or address) and UDP port."
+      },
+      "OscSettings": {
+        "required": [
+          "enabled",
+          "port",
+          "clients"
+        ],
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "port": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "clients": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OscClient"
+            }
+          }
+        },
+        "description": "The OSC server (docs/control/osc.md), stored in the user settings: on or off, its UDP port (default 8000), and\nclients that always receive feedback (others subscribe with \u0060/anode/subscribe port\u0060 for the session)."
+      },
+      "OscStatus": {
+        "required": [
+          "settings",
+          "listening",
+          "addresses",
+          "subscribed"
+        ],
+        "type": "object",
+        "properties": {
+          "settings": {
+            "$ref": "#/components/schemas/OscSettings"
+          },
+          "listening": {
+            "type": "boolean"
+          },
+          "addresses": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "subscribed": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OscClient"
+            }
+          }
+        },
+        "description": "The OSC server\u0027s state (\u0060GET /control/osc\u0060): its settings, whether it is listening (the port may be taken),\nthis machine\u0027s addresses (for the user to type into a client) and the clients subscribed this session."
       },
       "Pack": {
         "required": [
@@ -11658,7 +12836,8 @@
           "recording",
           "mixer",
           "smartTempo",
-          "varispeed"
+          "varispeed",
+          "sync"
         ],
         "type": "object",
         "properties": {
@@ -11717,9 +12896,12 @@
               "null",
               "string"
             ]
+          },
+          "sync": {
+            "$ref": "#/components/schemas/SyncSettings"
           }
         },
-        "description": "Global settings. \u0060tempo\u0060 and \u0060signature\u0060 are the values at the project start (the first of\n\u0060tempoEvents\u0060 and \u0060signatures\u0060, which are the global tempo and signature tracks).\n\u0060endTick\u0060 is the project end marker. \u0060mergeMidiRecording\u0060: a MIDI recording over an\nexisting MIDI region adds its notes to that region instead of making a new one. \u0060smartTempo\u0060 and\n\u0060varispeed\u0060 (Phase 5): the project tempo mode and Varispeed. \u0060grooveTrackId\u0060 (Phase 7) is the groove\ntrack (null: none): tracks whose \u0060matchGroove\u0060 is on quantise to the groove of its first region."
+        "description": "Global settings. \u0060tempo\u0060 and \u0060signature\u0060 are the values at the project start (the first of\n\u0060tempoEvents\u0060 and \u0060signatures\u0060, which are the global tempo and signature tracks).\n\u0060endTick\u0060 is the project end marker. \u0060mergeMidiRecording\u0060: a MIDI recording over an\nexisting MIDI region adds its notes to that region instead of making a new one. \u0060smartTempo\u0060 and\n\u0060varispeed\u0060 (Phase 5): the project tempo mode and Varispeed. \u0060grooveTrackId\u0060 (Phase 7) is the groove\ntrack (null: none): tracks whose \u0060matchGroove\u0060 is on quantise to the groove of its first region. \u0060sync\u0060\n(Phase 8, docs/09-phase-8.md) is the project\u0027s synchronisation: MIDI Clock, MTC and Link."
       },
       "ProjectSummary": {
         "required": [
@@ -11822,6 +13004,21 @@
           }
         },
         "description": "How a MIDI region plays, without changing its notes (Logic\u0027s Region inspector): transpose in semitones,\nvelocity offset (\u2212127\u2026127), quantise grid in ticks (0: off) with strength (0\u20261, 1 = all the way) and swing\n(0\u20261, 0 = straight; delays every second grid step by up to half a step). \u0060grooveId\u0060 (Phase 7): it\nquantises to that groove template of the project instead of the grid (\u0060quantizeTicks\u0060 and \u0060swing\u0060\nthen unused; null: the grid)."
+      },
+      "ReorderSurfacesRequest": {
+        "required": [
+          "ids"
+        ],
+        "type": "object",
+        "properties": {
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "description": "The surfaces\u0027 new order (\u0060PUT /control/surfaces/order\u0060): every surface id, once, left to right."
       },
       "SampleRange": {
         "required": [
@@ -11973,6 +13170,18 @@
           }
         },
         "description": "A Scripter factory script (Phase 7, \u0060GET /library/scripts\u0060): its stable id (\u0060factory.\u2026\u0060), name, a\nline about what it does, and its source, which the Script Editor loads as a slot\u0027s script."
+      },
+      "SelectionRequest": {
+        "type": "object",
+        "properties": {
+          "trackId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        },
+        "description": "The editor\u0027s selection as far as the server needs it (\u0060PUT /project/selection\u0060): the selected track, which\nselected-track controller assignments, surfaces and OSC follow; null: none."
       },
       "Send": {
         "required": [
@@ -12162,6 +13371,55 @@
         },
         "description": "Smart Tempo: the project tempo mode, the \u0060follow\u0060 new audio regions get, and whether imports are analysed\n(transients and beats) as they arrive."
       },
+      "StemFile": {
+        "required": [
+          "kind",
+          "fileId"
+        ],
+        "type": "object",
+        "properties": {
+          "kind": {
+            "$ref": "#/components/schemas/StemKind"
+          },
+          "fileId": {
+            "type": "string"
+          }
+        },
+        "description": "A stem file the Stem Splitter wrote and added to the project (an \u0060AudioFile\u0060 id)."
+      },
+      "StemKind": {
+        "enum": [
+          "vocals",
+          "drums",
+          "bass",
+          "other",
+          "guitar",
+          "piano"
+        ],
+        "description": "A stem the Stem Splitter separates (docs/adr/0010-stem-splitter.md)."
+      },
+      "StemSplitRequest": {
+        "required": [
+          "keepSource"
+        ],
+        "type": "object",
+        "properties": {
+          "stems": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/StemKind"
+            }
+          },
+          "keepSource": {
+            "type": "boolean",
+            "default": false
+          }
+        },
+        "description": "Phase 8, the Stem Splitter (\u0060POST /project/regions/{regionId}/split-stems\u0060, an audio region): the stems to\nmake, each once (left out: vocals, drums, bass and other). With guitar or piano among them the six-stem model\nruns, else the four-stem one; a stem not asked for is not written. The job writes one file per stem over the\nregion\u0027s span into the project\u0027s \u0060Audio Files\u0060, then, in one undo step (\u0060addStems\u0060), adds a track per\nstem below the region\u0027s track, in the order of StemKind, with a region at the source region\u0027s\nposition, and mutes the source region unless \u0060keepSource\u0060."
+      },
       "StepInputRequest": {
         "type": "object",
         "properties": {
@@ -12300,6 +13558,108 @@
           }
         },
         "description": "Stops the cells playing on \u0060trackIds\u0060 (left out: every track) at the grid\u0027s quantise boundary."
+      },
+      "SurfaceStatus": {
+        "required": [
+          "id",
+          "connected",
+          "bankOffset"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "connected": {
+            "type": "boolean"
+          },
+          "bankOffset": {
+            "type": "integer",
+            "format": "int32"
+          }
+        },
+        "description": "A surface\u0027s live state: whether it answers (Mackie Control\u0027s handshake or any input; HUI\u0027s ping) and the index of\nthe track on its first strip."
+      },
+      "SyncSettings": {
+        "required": [
+          "source",
+          "destinations",
+          "frameRate",
+          "startOffsetSeconds",
+          "linkStartStop"
+        ],
+        "type": "object",
+        "properties": {
+          "source": {
+            "$ref": "#/components/schemas/SyncSource"
+          },
+          "destinations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MidiSyncDestination"
+            }
+          },
+          "frameRate": {
+            "$ref": "#/components/schemas/MtcFrameRate"
+          },
+          "startOffsetSeconds": {
+            "type": "number",
+            "format": "double"
+          },
+          "linkStartStop": {
+            "type": "boolean"
+          },
+          "clockInPort": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "mtcInPort": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        },
+        "description": "The project\u0027s synchronisation settings (\u0060ProjectSettings.sync\u0060, as in Logic): the source the transport\nfollows; the destinations Anode sends MIDI Clock and MTC to; the MTC frame rate (sent and expected);\n\u0060startOffsetSeconds\u0060, the timecode of the project start in seconds (0\u202686399; MTC out starts there, MTC in\nchases relative to it); \u0060linkStartStop\u0060, whether play and stop follow and lead the Link session (when the\nsource is \u0060link\u0060); and the ports clock and MTC are received on (null: any input)."
+      },
+      "SyncSource": {
+        "enum": [
+          "internal",
+          "midiClock",
+          "mtc",
+          "link"
+        ],
+        "description": "What the transport follows (docs/09-phase-8.md, \u0022Sync\u0022): one source at a time."
+      },
+      "SyncState": {
+        "required": [
+          "source",
+          "locked",
+          "linkPeers"
+        ],
+        "type": "object",
+        "properties": {
+          "source": {
+            "$ref": "#/components/schemas/SyncSource"
+          },
+          "locked": {
+            "type": "boolean"
+          },
+          "externalTempo": {
+            "type": [
+              "null",
+              "number"
+            ],
+            "format": "double"
+          },
+          "linkPeers": {
+            "type": "integer",
+            "format": "int32"
+          }
+        },
+        "description": "The live sync state (\u0060GET /project/sync\u0060, the \u0060sync\u0060 event): the source; \u0060locked\u0060, whether the\ntransport is following it (always true for internal; for MIDI Clock and MTC, while their messages arrive in\ntime; for Link, while the session runs, peers or not); \u0060externalTempo\u0060, the tempo followed (MIDI Clock\u0027s\nestimate or the Link session\u0027s; null otherwise); and the number of other Link peers."
       },
       "SystemInfo": {
         "required": [
@@ -12672,6 +14032,16 @@
           "vca"
         ]
       },
+      "TrackSwitchAction": {
+        "enum": [
+          "mute",
+          "solo",
+          "recordArm",
+          "selectNext",
+          "selectPrevious",
+          null
+        ]
+      },
       "TransformCondition": {
         "required": [
           "field",
@@ -12974,6 +14344,9 @@
     },
     {
       "name": "Library"
+    },
+    {
+      "name": "Control"
     }
   ]
 }

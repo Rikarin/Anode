@@ -56,6 +56,11 @@ namespace Anode.Ipc;
 [JsonDerivedType(typeof(SetStepInputForwardMessage), "setStepInputForward")]
 [JsonDerivedType(typeof(StepInputMidiMessage), "stepInputMidi")]
 [JsonDerivedType(typeof(PreviewRangeMessage), "previewRange")]
+[JsonDerivedType(typeof(SetControlRoutingMessage), "setControlRouting")]
+[JsonDerivedType(typeof(ControlMidiMessage), "controlMidi")]
+[JsonDerivedType(typeof(SendMidiMessage), "sendMidi")]
+[JsonDerivedType(typeof(SetSyncMessage), "setSync")]
+[JsonDerivedType(typeof(SyncStateMessage), "syncState")]
 public abstract record IpcMessage;
 
 /// <summary>
@@ -599,4 +604,133 @@ public sealed record StepInputMidiMessage(IReadOnlyList<int> Pitches, int Veloci
 ///     until a <see cref="PreviewFileMessage" /> (a null path stops it) or another preview replaces it.
 /// </summary>
 public sealed record PreviewRangeMessage(string Path, long StartFrame, long EndFrame, bool Loop, float Gain)
+    : IpcMessage;
+
+/// <summary>Which messages a <see cref="EngineControlMatcher" /> consumes besides the one it names.</summary>
+[JsonConverter(typeof(JsonStringEnumConverter<EngineMatcherFamily>))]
+public enum EngineMatcherFamily {
+    /// <summary>
+    ///     The message alone: status nibble, channel and first data byte. A note-on matcher (0x90) also consumes the note
+    ///     offs (0x80) of its key.
+    /// </summary>
+    [JsonStringEnumMemberName("single")]
+    Single,
+
+    /// <summary>A 14-bit control change pair: controller <c>data1</c> (0…31) and <c>data1</c> + 32.</summary>
+    [JsonStringEnumMemberName("controlChange14")]
+    ControlChange14,
+
+    /// <summary>
+    ///     NRPN: control changes 99, 98, 6, 38, 96 and 97 on the channel, whatever parameter they select (<c>data1</c>
+    ///     is −1; the server's engine matches the parameter).
+    /// </summary>
+    [JsonStringEnumMemberName("nrpn")]
+    Nrpn
+}
+
+/// <summary>
+///     A message the host consumes for the server rather than playing it (docs/09-phase-8.md, "Routing"): from port
+///     <paramref name="Port" /> (a port uid; null: any), with status nibble <paramref name="Status" /> (0x80…0xE0),
+///     channel <paramref name="Channel" /> (0…15; −1: any) and first data byte <paramref name="Data1" /> (0…127; −1:
+///     any), and the rest of its <paramref name="Family" />.
+/// </summary>
+public sealed record EngineControlMatcher(
+    string? Port,
+    int Status,
+    int Channel,
+    int Data1,
+    EngineMatcherFamily Family = EngineMatcherFamily.Single
+);
+
+/// <summary>
+///     Server → host (Phase 8): the control routing, replacing the previous one. Every message from a port in
+///     <paramref name="ControlPorts" /> (control surfaces' inputs) and every message a matcher matches goes to the server
+///     as <see cref="ControlMidiMessage" /> and never to tracks; the rest play as before. While <paramref name="Learn" />,
+///     the host forwards every channel message from every port as well, and still plays those that no matcher or control
+///     port takes. The host decides per message on its MIDI thread, without allocating.
+/// </summary>
+public sealed record SetControlRoutingMessage(
+    IReadOnlyList<string> ControlPorts,
+    IReadOnlyList<EngineControlMatcher> Matchers,
+    bool Learn
+) : IpcMessage;
+
+/// <summary>
+///     One MIDI message received for control: the port uid, the time it arrived (nanoseconds on the
+///     <c>cth_midi_now_ns</c> clock) and its bytes (a channel message, or a whole SysEx on a control port where the
+///     backend delivers them).
+/// </summary>
+public sealed record EngineControlEvent(string Port, long TimeNs, byte[] Data);
+
+/// <summary>
+///     Host → server (Phase 8): the messages consumed for control (control ports, matches, and everything while
+///     learning), in arrival order, batched at most every millisecond.
+/// </summary>
+public sealed record ControlMidiMessage(IReadOnlyList<EngineControlEvent> Events) : IpcMessage;
+
+/// <summary>
+///     Server → host (Phase 8): send <paramref name="Data" /> (one or more complete messages, SysEx included, without
+///     running status) to output port <paramref name="Port" /> (a port uid) now: a control surface's feedback.
+/// </summary>
+public sealed record SendMidiMessage(string Port, byte[] Data) : IpcMessage;
+
+/// <summary>The contract's <c>SyncSource</c>.</summary>
+[JsonConverter(typeof(JsonStringEnumConverter<EngineSyncSource>))]
+public enum EngineSyncSource {
+    [JsonStringEnumMemberName("internal")]
+    Internal,
+
+    [JsonStringEnumMemberName("midiClock")]
+    MidiClock,
+
+    [JsonStringEnumMemberName("mtc")]
+    Mtc,
+
+    [JsonStringEnumMemberName("link")]
+    Link
+}
+
+/// <summary>The contract's <c>MtcFrameRate</c>.</summary>
+[JsonConverter(typeof(JsonStringEnumConverter<EngineMtcRate>))]
+public enum EngineMtcRate {
+    [JsonStringEnumMemberName("fps24")]
+    Fps24,
+
+    [JsonStringEnumMemberName("fps25")]
+    Fps25,
+
+    [JsonStringEnumMemberName("fps2997Drop")]
+    Fps2997Drop,
+
+    [JsonStringEnumMemberName("fps30")]
+    Fps30
+}
+
+/// <summary>A sync destination (the contract's <c>MidiSyncDestination</c>): a port uid, what it gets, and its delay.</summary>
+public sealed record EngineSyncDestination(string Port, bool Clock, bool Mtc, double DelayMs);
+
+/// <summary>
+///     Server → host (Phase 8): the project's sync settings (<c>ProjectSettings.sync</c>), sent on load and on every
+///     change. The host generates MIDI Clock and MTC for <paramref name="Destinations" /> in the audio callback and sends
+///     them with <c>cth_midi_send_at</c> at the sample's host time plus the delay; following MIDI Clock
+///     (<paramref name="ClockInPort" />, null any) or MTC (<paramref name="MtcInPort" />, timecode less
+///     <paramref name="StartOffsetSeconds" />), it drives the transport itself; with Link, it joins the session and
+///     aligns the transport's beat to it at a bar (the signature at the playhead), with start/stop when
+///     <paramref name="LinkStartStop" />. It answers with a <see cref="SyncStateMessage" />.
+/// </summary>
+public sealed record SetSyncMessage(
+    EngineSyncSource Source,
+    IReadOnlyList<EngineSyncDestination> Destinations,
+    EngineMtcRate FrameRate,
+    double StartOffsetSeconds,
+    bool LinkStartStop,
+    string? ClockInPort,
+    string? MtcInPort
+) : IpcMessage;
+
+/// <summary>
+///     Host → server (Phase 8): the sync state (the contract's <c>SyncState</c>), sent when it changes, at most 10 times a
+///     second (the external tempo when it moves by 0.01 bpm or more).
+/// </summary>
+public sealed record SyncStateMessage(EngineSyncSource Source, bool Locked, double? ExternalTempo, int LinkPeers)
     : IpcMessage;

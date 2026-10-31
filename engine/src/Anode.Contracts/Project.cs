@@ -45,7 +45,8 @@ public sealed record Project(
 ///     <c>endTick</c> is the project end marker. <c>mergeMidiRecording</c>: a MIDI recording over an
 ///     existing MIDI region adds its notes to that region instead of making a new one. <c>smartTempo</c> and
 ///     <c>varispeed</c> (Phase 5): the project tempo mode and Varispeed. <c>grooveTrackId</c> (Phase 7) is the groove
-///     track (null: none): tracks whose <c>matchGroove</c> is on quantise to the groove of its first region.
+///     track (null: none): tracks whose <c>matchGroove</c> is on quantise to the groove of its first region. <c>sync</c>
+///     (Phase 8, docs/09-phase-8.md) is the project's synchronisation: MIDI Clock, MTC and Link.
 /// </summary>
 public sealed record ProjectSettings(
     double Tempo,
@@ -61,7 +62,8 @@ public sealed record ProjectSettings(
     MixerSettings Mixer,
     SmartTempoSettings SmartTempo,
     VarispeedSettings Varispeed,
-    string? GrooveTrackId
+    string? GrooveTrackId,
+    SyncSettings Sync
 );
 
 public sealed record TimeSignature(int Numerator, int Denominator);

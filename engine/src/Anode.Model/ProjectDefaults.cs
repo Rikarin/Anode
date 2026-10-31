@@ -71,7 +71,8 @@ public static class ProjectDefaults {
                 Mixer,
                 SmartTempo,
                 Varispeed,
-                null
+                null,
+                SyncSettings.Default
             ),
             Strip,
             [],

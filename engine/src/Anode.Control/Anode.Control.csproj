@@ -1,0 +1,8 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <Description>Control protocols: the controller assignment engine, Mackie Control, Mackie Control XT and HUI, and the OSC codec and address space. Pure: no I/O, no engine.</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../Anode.Contracts/Anode.Contracts.csproj"/>
+  </ItemGroup>
+</Project>

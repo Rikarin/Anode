@@ -154,6 +154,132 @@ report. A REST change means regenerating `engine/src/Anode.Server/openapi.json`
   - One undoable command then adds the tracks (below the source track, in stem order, with the source's output) and
     regions, and mutes the source region unless kept.
 
+### Contract notes
+
+Where the committed code differs from, or adds to, the shapes planned for this commit, and the shapes chosen where
+the plan left latitude:
+- **Assignments** (`Control.cs`): `ControlInput(port?, kind, channel?, number)` with `ControlInputKind`
+  (`controlChange | controlChange14 | nrpn | note | pitchBend | programChange`; `number` is the controller, the
+  14-bit pair's MSB 0…31 (LSB +32), the NRPN 0…16383, the key, or 0); `port` null is any port that is not a
+  surface's, `channel` null any (else 1…16). `ControlTarget(kind, trackId?, address?, switch?, transport?,
+  keyCommandId?, zoneId?, modeId?)` with `ControlTargetKind` (`parameter | smartControl | trackSwitch | transport |
+  keyCommand | zoneMode`): typed fields instead of the planned single `action` string. `trackId` null is the selected
+  track; `address` is the automation address (parameter) or the Smart Control id, `knob1`… (smartControl);
+  `TrackSwitchAction` (`mute | solo | recordArm | selectNext | selectPrevious`); `ControlTransportAction` (`play |
+  stop | record | cycle | rewind | forward | goToStart`; not `TransportAction`, which `Anode.Ipc` has). The mode enum
+  is **`ControlValueMode`** (`absolute | relativeTwosComplement | relativeSignedBit | relativeBinaryOffset | toggle |
+  momentary`), since `ControlMode` is the record of a zone's mode. `ControlAssignment(id, name?, input, target, mode,
+  min, max, pickup)`: `min` and `max` are normalised 0…1 over the target's range (`min > max` inverts); a relative step
+  is 1/128 of the range. `ControlMode(id, name, assignments)`, `ControlZone(id, name, modes, activeModeId)`,
+  `ControllerAssignments(zones)` (`ControllerAssignments.Empty` for a new user); ids unique across all of them; an
+  input matches at most one assignment among the active modes, the first in order.
+- **Learn:** `ControlMessage(port, status, data1, data2, input)` (the raw message and the input it reads as);
+  `LearnState(on, target?, zoneId?, modeId?, last?)`; `LearnRequest(target?, zoneId?, modeId?)`. A message received
+  while learning with a target makes the assignment (replacing one of the same input in that mode; with no zone, the
+  first zone's active mode, made when there is none). `/ws` `controlLearn(message, assignmentId?)`.
+- **Surfaces:** `ControlSurfaceKind` (`mackieControl | mackieControlXt | hui`), `ControlSurface(id, kind, inputPort,
+  outputPort, order)` with no further settings (none was needed yet), `AddSurfaceRequest(kind, inputPort,
+  outputPort)`, `ReorderSurfacesRequest(ids)`, `SurfaceStatus(id, connected, bankOffset)`; `/ws` `surfaces(surfaces)`
+  carries every surface's status. Added `GET /control/surfaces/status` so the editor can show it before an event.
+- **OSC:** `OscClient(host, port)`, `OscSettings(enabled, port, clients)` (`OscSettings.Default`: off, 8000, none;
+  `clients` always get feedback, subscribers only for the session), and **`OscStatus(settings, listening, addresses,
+  subscribed)`**, added for the editor's OSC settings: `GET /control/osc` answers it and `PUT` takes `OscSettings`.
+- **Selection:** the server did not know the editor's selection, so `PUT /project/selection` takes
+  `SelectionRequest(trackId?)` (not part of the project).
+- **Virtual ports:** `VirtualMidiPorts` (`InputId` `anode:in`, `InputName` "Anode In", `OutputId` `anode:out`,
+  `OutputName` "Anode Out"), mirrored as `VirtualMidiPorts` in `models.ts`. The port list is `GET /midi/devices`
+  (there is no `/system/midi`); the host lists the virtual ports with the others, so only its summary changed.
+- **Sync** (`Sync.cs`): `SyncSource` (`internal | midiClock | mtc | link`), `MtcFrameRate` (`fps24 | fps25 |
+  fps2997Drop | fps30`), `MidiSyncDestination(port, clock, mtc, delayMs)` (−50…50 ms), `SyncSettings(source,
+  destinations, frameRate, startOffsetSeconds, linkStartStop, clockInPort?, mtcInPort?)` and `SyncState(source,
+  locked, externalTempo?, linkPeers)`. There is **no `linkEnabled`**: Link is on exactly when `source` is `link` (one
+  source at a time), so the two cannot disagree. The offset is **seconds** of timecode at the project start (0…86399),
+  independent of the frame rate. `SyncSettings.Default` (a new project's): internal, no destinations, 25 fps, 0, Link
+  start/stop off, any input. `ProjectSettings.sync` is required.
+- **`/project/sync`** is `GET` only and answers the live `SyncState`; the settings change through the
+  **`setSyncSettings`** command (`SetSyncSettingsCommand(source?, destinations?, frameRate?, startOffsetSeconds?,
+  linkStartStop?, clockInPort?, mtcInPort?)`; left out stays, `destinations` replaces the list, an empty port string
+  sets "any"), so they are undoable and saved with the project like any setting. `/ws` `sync(state)`, at most 10 a
+  second.
+- **Stem Splitter** (`Jobs.cs`): `JobKind.stemSplit`; `StemKind` (`vocals | drums | bass | other | guitar | piano`);
+  `StemSplitRequest(stems?, keepSource = false)`: a list (left out: the four), and the six-stem model runs when guitar
+  or piano is in it; the region is in the path, `POST /project/regions/{regionId}/split-stems` answering
+  `Accepted<Job>`. The result command is **`addStems`**: `AddStemsCommand(regionId, stems: StemFile(kind, fileId)[],
+  keepSource)`, applied by the job after it adds the files (each covers the region's span: a region of the whole file
+  at the source's position), like `setFileVersion`; clients do not send it.
+- **REST** (`ControlApi.cs`, `Pending.Phase8`, a new `Pending.cs` since B had removed Phase 7's):
+  `GetControllerAssignments`, `SetControllerAssignments` (`GET`/`PUT /control/assignments`), `GetLearn`,
+  `StartLearn`, `StopLearn` (`GET /control/learn`, `POST /control/learn/start`, `POST /control/learn/stop`),
+  `ListSurfaces`, `ListSurfaceStatus`,
+  `AddSurface`, `RemoveSurface`, `ReorderSurfaces` (`GET`/`POST /control/surfaces`, `GET /control/surfaces/status`,
+  `DELETE /control/surfaces/{id}`, `PUT /control/surfaces/order`), `GetOsc`, `SetOsc` (`GET`/`PUT /control/osc`),
+  `SetSelection`, `GetSync`, `SplitStems`. The editor's `AnodeApi` has a method for each (`controllerAssignments`,
+  `setControllerAssignments`, `learn`, `startLearn`, `stopLearn`, `surfaces`, `surfaceStatus`, `addSurface`,
+  `removeSurface`, `reorderSurfaces`, `osc`, `setOsc`, `setSelection`, `syncState`, `splitStems`), through the
+  generated client in `HttpAnodeApi`; the fake Server answers them 422. A nullable object property
+  (`LearnRequest.target`) is required but nullable in the generated client, as `Track.drumMachine` is: send
+  `target: null`.
+- **IPC:** `SetControlRoutingMessage(controlPorts, matchers: EngineControlMatcher[], learn)`, server → host, with
+  `EngineControlMatcher(port?, status, channel, data1, family)` (status nibble 0x80…0xE0, channel 0…15 or −1,
+  data1 0…127 or −1) and `EngineMatcherFamily` (`single | controlChange14 | nrpn`: a 0x90 matcher also takes its key's
+  note offs; a 14-bit matcher takes controllers n and n + 32; an NRPN matcher takes CC 99, 98, 6, 38, 96 and 97 on its
+  channel whatever the parameter, and the server's engine matches the parameter). `ControlMidiMessage(events:
+  EngineControlEvent(port, timeNs, data: byte[])[])`, host → server, batched (at most every millisecond): bytes rather
+  than three ints so a surface's SysEx can pass. `SendMidiMessage(port, data: byte[])`, server → host (one or more
+  whole messages, SysEx included; sent now, not scheduled). `SetSyncMessage(source, destinations:
+  EngineSyncDestination(port, clock, mtc, delayMs)[], frameRate, startOffsetSeconds, linkStartStop, clockInPort?,
+  mtcInPort?)` with `EngineSyncSource` and `EngineMtcRate` (`Anode.Ipc` does not reference the contracts), and
+  `SyncStateMessage(source, locked, externalTempo?, linkPeers)`, host → server, on change, at most 10 a second. The
+  Link quantum is not sent: the host takes the bar from the signature at the playhead.
+- **Native** (declarations only, not built): `cth_midi_virtual_open(name, uid, is_input)` and
+  `cth_midi_virtual_close(uid)` in `cth_audio.h`, one port per call, `CTH_MIDI_VIRTUAL_UNSUPPORTED` (−2) on WinMM; a
+  virtual input's messages enter the `cth_midi_read` ring like any source's. `cth_midi_event` holds three bytes and
+  the ring drops SysEx, and `cth_midi_send` says "short message": workstream A widens both for SysEx on control
+  ports and surface feedback (Mackie Control works without its SysEx handshake, but its scribble strips are SysEx).
+  `engine/native/an_link/include/an_link.h`: opaque `an_link` and `an_link_session_state`; `an_link_create(bpm)`,
+  `destroy`, `enable`/`is_enabled`, `enable_start_stop_sync`/`is_start_stop_sync_enabled`, `num_peers`,
+  `clock_micros`, `create_session_state`/`destroy_session_state`, `capture_audio_session_state`/
+  `commit_audio_session_state`, `capture_app_session_state`/`commit_app_session_state`, `tempo`, `set_tempo(bpm,
+  time)`, `beat_at_time`, `phase_at_time`, `time_at_beat`, `request_beat_at_time`, `is_playing`, `set_is_playing`, and
+  (added) `set_is_playing_and_request_beat_at_time` and `version`. No callbacks: the host polls peers and tempo.
+- **Stubs that throw:**
+  - `Anode.Control` (`Pending.WorkstreamD()`; references only the contracts):
+    `Assignments.AssignmentEngine(assignments)` with `Assignments`, `Matchers` (`ControlMatcher(port?, status, channel,
+    data1, family)`, `MatcherFamily`), `Receive(port, message, ITargetValues)` → `TargetChange(assignmentId, target,
+    value)[]` (values normalised 0…1), `Learn(port, message)` → `ControlInput?`, `Reset()`;
+    `ITargetValues.Value(target)` is the server's side (current normalised values, for pickup, relative and toggle).
+    `Surfaces.IControlSurface` (`Kind`, `Strips`, `BankOffset`, `Connected`, `Decode(message, timeNs)` →
+    `SurfaceAction[]`, `Encode(view)`, `EncodeMeters(view)`, `Poll(timeNs)`, `Invalidate()`), `MackieControl(extender)`,
+    `Hui()`, `ControlSurfaces.Create(kind)`; `SurfaceAction(kind, strip, trackId?, address?, value, automation)` with
+    `SurfaceActionKind` (`SetParameter`, `StepParameter`, `Touch`, `Mute`, `Solo`, `RecordArm`, `Select`, `Play`,
+    `Stop`, `Record`, `Rewind`, `Forward`, `Cycle`, `Jog`, `CursorUp`, `CursorDown`, `CursorLeft`, `CursorRight`,
+    `Zoom`, `Banked`, `SetAutomationMode`); the server's view of the project is `ProjectView(tracks, transport, cycle,
+    tempo, timecode, beats, markers, smartControls)` with `TrackView(id, name, fader, volumeDb, pan, mute, solo,
+    recordArm, selected, automation, meter, sends, inserts)`, `InsertView(id, name, parameters)`,
+    `ParameterView(address, name, value, display)`, `Timecode`, `BeatPosition`, `MarkerView`. `Osc`: `OscPacket`,
+    `OscMessage(address, arguments)`, `OscBundle(timeTag, elements)`, `OscArgument` (`OscInt`, `OscFloat`, `OscString`,
+    `OscBlob`, `OscBool`), `OscCodec.Decode`/`Encode`, `OscAddressSpace.Root` (`/anode`), `Resolve(message, view)` →
+    `OscRequest(kind, target?, value, text?, number)` with `OscRequestKind` (`Set`, `SetDb`, `SetName`, `GoToMarker`,
+    `Subscribe`, `Unsubscribe`), and `Feedback(view)`.
+  - `Anode.Stems` (`Pending.WorkstreamE()`; references the contracts for `StemKind`, no ONNX Runtime yet):
+    `IStemSeparator` (`Model`, `Stems`, `SampleRate`, `Separate(channels, sampleRate, stems, progress,
+    cancellationToken)` → per-stem channels of the input's length and rate), `StemModel` (`FourStems`, `SixStems`),
+    `StemSeparators.ModelFor(stems)`, `FileName(model)`, `Open(model, path)`.
+  - `Anode.Engine.Sync` (`Pending.WorkstreamA()`): `SyncMidiEvent(frame, status, data1, data2, length)`;
+    `MidiClockEncoder.Process(playing, startTick, endTick, frames, output)` and `Locate(tick, output)`;
+    `MtcEncoder(rate)` with `Process(playing, startSeconds, endSeconds, frames, output)` and `FullFrame(seconds,
+    output)`; `MidiClockDecoder.Receive(message, timeNs)` → `ClockInput(kind, songPosition, timeNs)` with
+    `ClockInputKind`; `TempoEstimator` (`Tempo`, `Locked`, `Tick(timeNs)`, `Check(nowNs)`, `Reset()`);
+    `MtcDecoder(rate)` with `Running`, `Receive(message, timeNs)` → `MtcPosition?(seconds, timeNs, fullFrame)` and
+    `Check(nowNs)`.
+- **Projects:** `Anode.Control` and `Anode.Stems` are referenced by `Anode.Server` (already, so B need not touch the
+  project file); `Anode.Control.Tests` and `Anode.Stems.Tests` hold one placeholder test each.
+- **Interim:** schema-7 packages read through `Phase8Fields.Fill` (`settings.sync` at `SyncSettings.Default`), which
+  workstream B replaces with schema 8 and its migration. The model refuses `setSyncSettings` and `addStems` (422,
+  `Edits.Phase8.cs`); the identity property skips `RandomProjects.PendingPhase8`, and random projects are built
+  without those commands (`RandomProjects.Buildable`) so they stay Phase 7's; the editor's fake Server starts projects
+  with the default sync settings and answers the new commands and endpoints 422 (`fake-phase8.spec.ts`).
+
 ## Workstreams
 
 Five, in parallel, each on its own branch; they meet only at the contracts above.

@@ -196,6 +196,30 @@ public sealed class PackageTests : IDisposable {
     }
 
     [Fact]
+    public void A_schema_7_package_without_the_Phase_8_fields_reads_them_at_their_defaults() {
+        var (state, _, _) = RandomProjects.Build(3, 40);
+        ProjectPackage.Save(folder, state);
+        var path = Path.Combine(folder, "project.json");
+        var root = JsonNode.Parse(File.ReadAllText(path))!.AsObject();
+        root["settings"]!.AsObject().Remove("sync");
+        File.WriteAllText(path, root.ToJsonString());
+        var loaded = ProjectPackage.Load(folder);
+        Assert.Equal(RandomProjects.Json(state), RandomProjects.Json(loaded));
+        Assert.Equal(SyncSettings.Default.Source, loaded.Settings.Sync.Source);
+        Assert.Empty(loaded.Settings.Sync.Destinations);
+        Assert.Equal(
+            (MtcFrameRate.Fps25, 0d, false, (string?)null, (string?)null),
+            (
+                loaded.Settings.Sync.FrameRate,
+                loaded.Settings.Sync.StartOffsetSeconds,
+                loaded.Settings.Sync.LinkStartStop,
+                loaded.Settings.Sync.ClockInPort,
+                loaded.Settings.Sync.MtcInPort
+            )
+        );
+    }
+
+    [Fact]
     public void Phase_7_content_survives_the_package_format() {
         var (state, _, _) = RandomProjects.Build(5, 40);
         Assert.NotEmpty(state.Grooves);

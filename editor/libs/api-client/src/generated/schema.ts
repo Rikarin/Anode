@@ -330,7 +330,7 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
-    /** The MIDI ports of the machine the engine runs on. */
+    /** The MIDI ports of the machine the engine runs on, with Anode's virtual ports (anode:in, anode:out) where the platform has them (macOS). */
     get: operations['ListMidiDevices'];
     put?: never;
     post?: never;
@@ -1139,6 +1139,213 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/api/v1/control/assignments': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Every controller assignment, by zone and mode (user settings, not the project). */
+    get: operations['GetControllerAssignments'];
+    /** Replaces every controller assignment (ids unique, references valid; 422 otherwise); the host's matcher table follows. */
+    put: operations['SetControllerAssignments'];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/control/learn': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** The Learn state: on or off, its target, and the last message received while learning. */
+    get: operations['GetLearn'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/control/learn/start': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Turns Learn on, or changes its target while on. Moving a control then assigns it to the target; each message received while learning is a controlLearn event on /ws. */
+    post: operations['StartLearn'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/control/learn/stop': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Turns Learn off. */
+    post: operations['StopLearn'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/control/surfaces': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** The control surfaces, in order (user settings). */
+    get: operations['ListSurfaces'];
+    put?: never;
+    /** Adds a control surface after the others; its ports become control ports (422 for a port another surface uses). */
+    post: operations['AddSurface'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/control/surfaces/status': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Each control surface's live state, in order; surfaces events on /ws report changes. */
+    get: operations['ListSurfaceStatus'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/control/surfaces/{id}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    /** Removes a control surface; its ports play tracks again. */
+    delete: operations['RemoveSurface'];
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/control/surfaces/order': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    /** Puts the control surfaces in a new order (every id once; 422 otherwise). */
+    put: operations['ReorderSurfaces'];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/control/osc': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** The OSC server: its settings, whether it listens, this machine's addresses, its subscribers. */
+    get: operations['GetOsc'];
+    /** Changes the OSC server's settings (user settings); it restarts on a new port. */
+    put: operations['SetOsc'];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/project/selection': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    /** The editor's selected track, which selected-track controller assignments, surfaces and OSC follow (not part of the project: not saved, not undoable). */
+    put: operations['SetSelection'];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/project/sync': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** The live sync state (source, lock, external tempo, Link peers); sync events on /ws report changes. The settings are the project's settings.sync, changed with the setSyncSettings command. */
+    get: operations['GetSync'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/project/regions/{regionId}/split-stems': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Splits an audio region into stems as a stemSplit job: it writes a file per stem and, when it finishes, adds a track per stem below the region's track and mutes the region (unless kept), in one undo step. */
+    post: operations['SplitStems'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1156,6 +1363,12 @@ export interface components {
        */
       tick: number;
       cellSceneId?: null | string;
+    };
+    /** @description Adds a control surface (`POST /control/surfaces`), after the others. */
+    AddSurfaceRequest: {
+      kind: components['schemas']['ControlSurfaceKind'];
+      inputPort: string;
+      outputPort: string;
     };
     /**
      * @description "Add to Loop Library": saves an audio, MIDI or pattern region as a user loop (its file copied into the library,
@@ -1529,6 +1742,25 @@ export interface components {
       takeId: string;
     };
     /**
+     * @description A controller assignment (Logic's, simplified): `input` drives `target` in `mode`. `min` and
+     *     `max` are the target's range, normalised 0…1 over the target's own range (a parameter's, a Smart
+     *     Control's; switches and functions are 0 off, 1 on); `min` above `max` inverts. With `pickup`, an
+     *     absolute control has no effect until its value crosses the target's current value. Relative steps move the
+     *     target by 1/128 of `min`…`max` each.
+     */
+    ControlAssignment: {
+      id: string;
+      name?: null | string;
+      input: components['schemas']['ControlInput'];
+      target: components['schemas']['ControlTarget'];
+      mode: components['schemas']['ControlValueMode'];
+      /** Format: double */
+      min: number;
+      /** Format: double */
+      max: number;
+      pickup: boolean;
+    };
+    /**
      * @description A controller event of a MIDI region; `tick` is relative to the region's start. `id` is unique in the
      *     project. `number` is the controller of a control change and the key of a poly pressure event, 0 for the
      *     other kinds. Together with the notes these are every event the Event List shows (Phase 7).
@@ -1562,8 +1794,112 @@ export interface components {
       /** Format: int32 */
       value?: null | number;
     };
+    /**
+     * @description What a controller assignment listens to: a port (a `MidiPort.id`; null: any port that is not a control
+     *     surface's), a kind, a channel (1…16; null: any) and a number (its meaning depends on `kind`).
+     */
+    ControlInput: {
+      port?: null | string;
+      kind: components['schemas']['ControlInputKind'];
+      /** Format: int32 */
+      channel?: null | number;
+      /** Format: int32 */
+      number: number;
+    };
+    /**
+     * @description The kind of MIDI message a controller assignment listens to.
+     * @enum {unknown}
+     */
+    ControlInputKind: 'controlChange' | 'controlChange14' | 'nrpn' | 'note' | 'pitchBend' | 'programChange';
     /** @enum {unknown} */
     ControlKind: 'controlChange' | 'pitchBend' | 'channelPressure' | 'programChange' | 'polyPressure';
+    /**
+     * @description Every controller assignment, by zone and mode, stored in the user settings (not the project, as in Logic).
+     *     Ids are unique across all zones, modes and assignments. An input matches at most one assignment among the active
+     *     modes (the first in zone, mode and list order).
+     */
+    ControllerAssignments: {
+      zones: components['schemas']['ControlZone'][];
+    };
+    /**
+     * @description A MIDI message the server received for control (learning, or a matched or control-port message): the port, the
+     *     raw bytes (status and data; for a 14-bit pair or an NRPN, the message that completed it) and the input it reads
+     *     as (what Learn would assign).
+     */
+    ControlMessage: {
+      port: string;
+      /** Format: int32 */
+      status: number;
+      /** Format: int32 */
+      data1: number;
+      /** Format: int32 */
+      data2: number;
+      input: components['schemas']['ControlInput'];
+    };
+    /** @description A mode of a zone: a set of assignments that are live while it is the zone's active mode. */
+    ControlMode: {
+      id: string;
+      name: string;
+      assignments: components['schemas']['ControlAssignment'][];
+    };
+    /**
+     * @description A control surface, stored in the user settings: its protocol and port pair (`MidiPort.id`s; the ports become
+     *     control ports, whose messages never reach tracks). `order` (0, 1, …) places it left to right: extenders show
+     *     the strips after the surface before them.
+     */
+    ControlSurface: {
+      id: string;
+      kind: components['schemas']['ControlSurfaceKind'];
+      inputPort: string;
+      outputPort: string;
+      /** Format: int32 */
+      order: number;
+    };
+    /**
+     * @description The protocol a control surface speaks.
+     * @enum {unknown}
+     */
+    ControlSurfaceKind: 'mackieControl' | 'mackieControlXt' | 'hui';
+    /**
+     * @description What a controller assignment changes: `kind`, and the fields that kind uses (the others are null).
+     *     `trackId` (parameter, smartControl, trackSwitch) is a fixed track; null follows the selected track (which
+     *     the editor reports with `PUT /project/selection`). `address` is the automation address (parameter) or
+     *     the Smart Control id (smartControl); `switch` the track switch; `transport` the transport function;
+     *     `keyCommandId` the key command; `zoneId` and `modeId` the mode a zoneMode target activates.
+     */
+    ControlTarget: {
+      kind: components['schemas']['ControlTargetKind'];
+      trackId?: null | string;
+      address?: null | string;
+      switch?: null | components['schemas']['TrackSwitchAction'];
+      transport?: null | components['schemas']['ControlTransportAction'];
+      keyCommandId?: null | string;
+      zoneId?: null | string;
+      modeId?: null | string;
+    };
+    /**
+     * @description What a controller assignment changes.
+     * @enum {unknown}
+     */
+    ControlTargetKind: 'parameter' | 'smartControl' | 'trackSwitch' | 'transport' | 'keyCommand' | 'zoneMode';
+    /** @enum {unknown} */
+    ControlTransportAction: 'play' | 'stop' | 'record' | 'cycle' | 'rewind' | 'forward' | 'goToStart' | null;
+    /**
+     * @description How a controller assignment turns the control's values into the target's.
+     * @enum {unknown}
+     */
+    ControlValueMode:
+      'absolute' | 'relativeTwosComplement' | 'relativeSignedBit' | 'relativeBinaryOffset' | 'toggle' | 'momentary';
+    /**
+     * @description A zone (usually one controller): its modes, of which `activeModeId` is live (only its assignments match
+     *     input); a zoneMode target switches it.
+     */
+    ControlZone: {
+      id: string;
+      name: string;
+      modes: components['schemas']['ControlMode'][];
+      activeModeId: string;
+    };
     CreateAlternativeRequest: {
       name: string;
     };
@@ -1934,7 +2270,9 @@ export interface components {
       | components['schemas']['EditCommandStepNotesCommand']
       | components['schemas']['EditCommandStepTieCommand']
       | components['schemas']['EditCommandSetFileVersionCommand']
-      | components['schemas']['EditCommandSetScriptCommand'];
+      | components['schemas']['EditCommandSetScriptCommand']
+      | components['schemas']['EditCommandSetSyncSettingsCommand']
+      | components['schemas']['EditCommandAddStemsCommand'];
     /**
      * @description Sets the project's tempo events from an audio region's file tempo (analysed now if need be) over the region's
      *     range, and makes the region play unwarped there.
@@ -2073,6 +2411,21 @@ export interface components {
       /** Format: double */
       levelDb?: null | number;
       preFader?: null | boolean;
+    };
+    /**
+     * @description Phase 8, the Stem Splitter's result: for each stem, in the order given (the order of StemKind), a
+     *     new audio track below audio region `regionId`'s track (named after the region and the stem, with the source
+     *     track's output) holding a region of the whole file at the source region's position (each file covers the
+     *     region's span); the source region is muted unless `keepSource`. The `stemSplit` job applies it when it
+     *     finishes, after adding the files; undo removes the tracks and unmutes the region (the files stay). Clients do not
+     *     send it.
+     */
+    EditCommandAddStemsCommand: {
+      /** @enum {string} */
+      type: 'addStems';
+      regionId: string;
+      stems: components['schemas']['StemFile'][];
+      keepSource: boolean;
     };
     /**
      * @description Adds a track at `index` (the end when left out): audio by default; an instrument track gets
@@ -3027,6 +3380,23 @@ export interface components {
       mute?: null | boolean;
       solo?: null | boolean;
     };
+    /**
+     * @description Phase 8: changes the project's synchronisation (`ProjectSettings.sync`); left-out properties stay.
+     *     `destinations` replaces the list (each port at most once). An empty `clockInPort` or `mtcInPort`
+     *     sets it to any input (null).
+     */
+    EditCommandSetSyncSettingsCommand: {
+      /** @enum {string} */
+      type: 'setSyncSettings';
+      source?: null | components['schemas']['SyncSource'];
+      destinations?: null | components['schemas']['MidiSyncDestination'][];
+      frameRate?: null | components['schemas']['MtcFrameRate'];
+      /** Format: double */
+      startOffsetSeconds?: null | number;
+      linkStartStop?: null | boolean;
+      clockInPort?: null | string;
+      mtcInPort?: null | string;
+    };
     EditCommandSetTakeFolderCommand: {
       /** @enum {string} */
       type: 'setTakeFolder';
@@ -3411,7 +3781,7 @@ export interface components {
       files: string[];
     };
     /** @enum {unknown} */
-    JobKind: 'bounce' | 'freeze' | 'analyze' | 'bounceInPlace' | 'process' | 'audioEdit';
+    JobKind: 'bounce' | 'freeze' | 'analyze' | 'bounceInPlace' | 'process' | 'audioEdit' | 'stemSplit';
     /** @enum {unknown} */
     JobState: 'queued' | 'running' | 'done' | 'failed' | 'cancelled';
     /** @description Key bindings by command id (`transport.play`); each binding like `Space` or `Meta+Shift+Z`. */
@@ -3464,6 +3834,28 @@ export interface components {
     LaunchRequest: {
       cellIds?: null | string[];
       sceneId?: null | string;
+    };
+    /**
+     * @description Turns Learn on, or changes its target while on (`POST /control/learn/start`): the target the editor's
+     *     selection names (or a control's "Learn Assignment for …"); null waits for one.
+     */
+    LearnRequest: {
+      target: null | components['schemas']['ControlTarget'];
+      zoneId?: null | string;
+      modeId?: null | string;
+    };
+    /**
+     * @description Learn mode: while `on`, the next control moved is assigned to `target` (when set) in mode
+     *     `modeId` of zone `zoneId` (null: the first zone's active mode, made when there is none), replacing an
+     *     assignment of the same input there. Messages still play their tracks while learning. `last` is the last
+     *     message received while learning.
+     */
+    LearnState: {
+      on: boolean;
+      target: null | components['schemas']['ControlTarget'];
+      zoneId?: null | string;
+      modeId?: null | string;
+      last: null | components['schemas']['ControlMessage'];
     };
     /**
      * @description The Live Loops grid (docs/07-phase-6.md): its scenes in order, its cells, the launch quantise, and whether the
@@ -3627,6 +4019,18 @@ export interface components {
       muted: boolean;
     };
     /**
+     * @description A MIDI output (a `MidiPort.id`) that Anode sends sync to: MIDI Clock (24 ppq, Start, Stop, Continue, Song
+     *     Position Pointer on locate) and/or MTC (quarter frames while playing, a full frame on locate), each message
+     *     `delayMs` later than its sample (−50…50; negative sends early, within the output latency).
+     */
+    MidiSyncDestination: {
+      port: string;
+      clock: boolean;
+      mtc: boolean;
+      /** Format: double */
+      delayMs: number;
+    };
+    /**
      * @description Which track hears live MIDI when no instrument track is record-armed (Logic sends input to the selected
      *     track); null: none.
      */
@@ -3652,6 +4056,11 @@ export interface components {
       /** Format: double */
       lowLatencyLimitMs: number;
     };
+    /**
+     * @description An MTC frame rate.
+     * @enum {unknown}
+     */
+    MtcFrameRate: 'fps24' | 'fps25' | 'fps2997Drop' | 'fps30';
     /** @description A controller event to add; `tick` relative to the region's start. */
     NewControlEvent: {
       kind: components['schemas']['ControlKind'];
@@ -3724,6 +4133,32 @@ export interface components {
     };
     OpenProjectRequest: {
       path: string;
+    };
+    /** @description An OSC client that receives feedback: a host (name or address) and UDP port. */
+    OscClient: {
+      host: string;
+      /** Format: int32 */
+      port: number;
+    };
+    /**
+     * @description The OSC server (docs/control/osc.md), stored in the user settings: on or off, its UDP port (default 8000), and
+     *     clients that always receive feedback (others subscribe with `/anode/subscribe port` for the session).
+     */
+    OscSettings: {
+      enabled: boolean;
+      /** Format: int32 */
+      port: number;
+      clients: components['schemas']['OscClient'][];
+    };
+    /**
+     * @description The OSC server's state (`GET /control/osc`): its settings, whether it is listening (the port may be taken),
+     *     this machine's addresses (for the user to type into a client) and the clients subscribed this session.
+     */
+    OscStatus: {
+      settings: components['schemas']['OscSettings'];
+      listening: boolean;
+      addresses: string[];
+      subscribed: components['schemas']['OscClient'][];
     };
     /**
      * @description A content pack (`.anodepack`: a zip of loops, patches, kits and IRs with a `pack.json` manifest),
@@ -4031,7 +4466,8 @@ export interface components {
      *     `endTick` is the project end marker. `mergeMidiRecording`: a MIDI recording over an
      *     existing MIDI region adds its notes to that region instead of making a new one. `smartTempo` and
      *     `varispeed` (Phase 5): the project tempo mode and Varispeed. `grooveTrackId` (Phase 7) is the groove
-     *     track (null: none): tracks whose `matchGroove` is on quantise to the groove of its first region.
+     *     track (null: none): tracks whose `matchGroove` is on quantise to the groove of its first region. `sync`
+     *     (Phase 8, docs/09-phase-8.md) is the project's synchronisation: MIDI Clock, MTC and Link.
      */
     ProjectSettings: {
       /** Format: double */
@@ -4050,6 +4486,7 @@ export interface components {
       smartTempo: components['schemas']['SmartTempoSettings'];
       varispeed: components['schemas']['VarispeedSettings'];
       grooveTrackId?: null | string;
+      sync: components['schemas']['SyncSettings'];
     };
     /** @description A project in the recent list. */
     ProjectSummary: {
@@ -4097,6 +4534,10 @@ export interface components {
       /** Format: double */
       swing: number;
       grooveId?: null | string;
+    };
+    /** @description The surfaces' new order (`PUT /control/surfaces/order`): every surface id, once, left to right. */
+    ReorderSurfacesRequest: {
+      ids: string[];
     };
     /**
      * @description Samples of a file's current version for the Audio File Editor (`/project/files/{fileId}/samples`):
@@ -4148,6 +4589,13 @@ export interface components {
       name: string;
       description: string;
       source: string;
+    };
+    /**
+     * @description The editor's selection as far as the server needs it (`PUT /project/selection`): the selected track, which
+     *     selected-track controller assignments, surfaces and OSC follow; null: none.
+     */
+    SelectionRequest: {
+      trackId?: null | string;
     };
     /** @description A send from a channel strip to bus 1…64, at `levelDb`, before or after the fader. */
     Send: {
@@ -4227,6 +4675,29 @@ export interface components {
       defaultFollow: components['schemas']['FlexFollow'];
       analyzeImports: boolean;
     };
+    /** @description A stem file the Stem Splitter wrote and added to the project (an `AudioFile` id). */
+    StemFile: {
+      kind: components['schemas']['StemKind'];
+      fileId: string;
+    };
+    /**
+     * @description A stem the Stem Splitter separates (docs/adr/0010-stem-splitter.md).
+     * @enum {unknown}
+     */
+    StemKind: 'vocals' | 'drums' | 'bass' | 'other' | 'guitar' | 'piano';
+    /**
+     * @description Phase 8, the Stem Splitter (`POST /project/regions/{regionId}/split-stems`, an audio region): the stems to
+     *     make, each once (left out: vocals, drums, bass and other). With guitar or piano among them the six-stem model
+     *     runs, else the four-stem one; a stem not asked for is not written. The job writes one file per stem over the
+     *     region's span into the project's `Audio Files`, then, in one undo step (`addStems`), adds a track per
+     *     stem below the region's track, in the order of StemKind, with a region at the source region's
+     *     position, and mutes the source region unless `keepSource`.
+     */
+    StemSplitRequest: {
+      stems?: null | components['schemas']['StemKind'][];
+      /** @default false */
+      keepSource: boolean;
+    };
     /**
      * @description Changes the step input state (`PUT /project/step-input`); left-out properties stay. `regionId` empty
      *     clears it (steps then make a region on `trackId`).
@@ -4274,6 +4745,52 @@ export interface components {
     /** @description Stops the cells playing on `trackIds` (left out: every track) at the grid's quantise boundary. */
     StopRequest: {
       trackIds?: null | string[];
+    };
+    /**
+     * @description A surface's live state: whether it answers (Mackie Control's handshake or any input; HUI's ping) and the index of
+     *     the track on its first strip.
+     */
+    SurfaceStatus: {
+      id: string;
+      connected: boolean;
+      /** Format: int32 */
+      bankOffset: number;
+    };
+    /**
+     * @description The project's synchronisation settings (`ProjectSettings.sync`, as in Logic): the source the transport
+     *     follows; the destinations Anode sends MIDI Clock and MTC to; the MTC frame rate (sent and expected);
+     *     `startOffsetSeconds`, the timecode of the project start in seconds (0…86399; MTC out starts there, MTC in
+     *     chases relative to it); `linkStartStop`, whether play and stop follow and lead the Link session (when the
+     *     source is `link`); and the ports clock and MTC are received on (null: any input).
+     */
+    SyncSettings: {
+      source: components['schemas']['SyncSource'];
+      destinations: components['schemas']['MidiSyncDestination'][];
+      frameRate: components['schemas']['MtcFrameRate'];
+      /** Format: double */
+      startOffsetSeconds: number;
+      linkStartStop: boolean;
+      clockInPort?: null | string;
+      mtcInPort?: null | string;
+    };
+    /**
+     * @description What the transport follows (docs/09-phase-8.md, "Sync"): one source at a time.
+     * @enum {unknown}
+     */
+    SyncSource: 'internal' | 'midiClock' | 'mtc' | 'link';
+    /**
+     * @description The live sync state (`GET /project/sync`, the `sync` event): the source; `locked`, whether the
+     *     transport is following it (always true for internal; for MIDI Clock and MTC, while their messages arrive in
+     *     time; for Link, while the session runs, peers or not); `externalTempo`, the tempo followed (MIDI Clock's
+     *     estimate or the Link session's; null otherwise); and the number of other Link peers.
+     */
+    SyncState: {
+      source: components['schemas']['SyncSource'];
+      locked: boolean;
+      /** Format: double */
+      externalTempo?: null | number;
+      /** Format: int32 */
+      linkPeers: number;
     };
     /** @description What `GET /api/v1/system` answers: the server's version and its link to the engine host. */
     SystemInfo: {
@@ -4396,6 +4913,8 @@ export interface components {
     };
     /** @enum {unknown} */
     TrackKind: 'audio' | 'instrument' | 'midi' | 'stack' | 'aux' | 'vca';
+    /** @enum {unknown} */
+    TrackSwitchAction: 'mute' | 'solo' | 'recordArm' | 'selectNext' | 'selectPrevious' | null;
     /**
      * @description A condition on one field of an event. A set's conditions are ANDed; a field without a condition (or with
      *     `all`) matches everything. `b` is used by `inside` and `outside` only.
@@ -7356,6 +7875,497 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['StepInputState'];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  GetControllerAssignments: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ControllerAssignments'];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  SetControllerAssignments: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['ControllerAssignments'];
+      };
+    };
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ControllerAssignments'];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  GetLearn: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['LearnState'];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  StartLearn: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['LearnRequest'];
+      };
+    };
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['LearnState'];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  StopLearn: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['LearnState'];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  ListSurfaces: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ControlSurface'][];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  AddSurface: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['AddSurfaceRequest'];
+      };
+    };
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ControlSurface'];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  ListSurfaceStatus: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['SurfaceStatus'][];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  RemoveSurface: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description No Content */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  ReorderSurfaces: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['ReorderSurfacesRequest'];
+      };
+    };
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ControlSurface'][];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  GetOsc: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['OscStatus'];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  SetOsc: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['OscSettings'];
+      };
+    };
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['OscStatus'];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  SetSelection: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['SelectionRequest'];
+      };
+    };
+    responses: {
+      /** @description No Content */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  GetSync: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['SyncState'];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  SplitStems: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        regionId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['StemSplitRequest'];
+      };
+    };
+    responses: {
+      /** @description Accepted */
+      202: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Job'];
         };
       };
       /** @description Not Found */

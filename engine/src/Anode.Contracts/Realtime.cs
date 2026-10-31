@@ -23,6 +23,9 @@ namespace Anode.Contracts;
 [JsonDerivedType(typeof(ScriptLogEvent), "scriptLog")]
 [JsonDerivedType(typeof(SlotParametersEvent), "parameters")]
 [JsonDerivedType(typeof(StepInputEvent), "stepInput")]
+[JsonDerivedType(typeof(ControlLearnEvent), "controlLearn")]
+[JsonDerivedType(typeof(SyncEvent), "sync")]
+[JsonDerivedType(typeof(SurfacesEvent), "surfaces")]
 public abstract record RealtimeEvent;
 
 /// <summary>The socket is open; the client fetches the state it needs now.</summary>
@@ -112,3 +115,15 @@ public sealed record SlotParametersEvent(string TrackId, string SlotId, IReadOnl
 
 /// <summary>Phase 7: the step input state changed (a step advanced it, or a client changed it).</summary>
 public sealed record StepInputEvent(StepInputState State) : RealtimeEvent;
+
+/// <summary>
+///     Phase 8: a MIDI message arrived while learning (the Learn state's <c>last</c>); <c>assignmentId</c> is the
+///     assignment it made or changed (null when Learn has no target yet).
+/// </summary>
+public sealed record ControlLearnEvent(ControlMessage Message, string? AssignmentId) : RealtimeEvent;
+
+/// <summary>Phase 8: the sync state changed (source, lock, external tempo, Link peers); at most 10 a second.</summary>
+public sealed record SyncEvent(SyncState State) : RealtimeEvent;
+
+/// <summary>Phase 8: a control surface connected or disconnected, or banked: every surface's status, in order.</summary>
+public sealed record SurfacesEvent(IReadOnlyList<SurfaceStatus> Surfaces) : RealtimeEvent;

@@ -10,7 +10,10 @@ static class MidiApi {
         var midi = api.MapGroup("/midi").WithTags("MIDI").AddEndpointFilter<ProblemFilter>();
         midi.MapGet("/devices", static Ok<MidiDevices>(EngineCatalog catalog) => TypedResults.Ok(catalog.Devices))
             .WithName("ListMidiDevices")
-            .WithSummary("The MIDI ports of the machine the engine runs on.");
+            .WithSummary(
+                "The MIDI ports of the machine the engine runs on, with Anode's virtual ports (anode:in, anode:out) "
+                + "where the platform has them (macOS)."
+            );
         midi.MapPost(
                 "/live",
                 static Results<NoContent, NotFound, ProblemHttpResult>(

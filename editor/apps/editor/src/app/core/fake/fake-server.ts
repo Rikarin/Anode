@@ -1,5 +1,6 @@
 import {
   type AddLoopRequest,
+  type AddSurfaceRequest,
   type AddToLoopLibraryRequest,
   ApiError,
   type ArticulationSet,
@@ -12,6 +13,8 @@ import {
   type ChannelStrip,
   type CommandBatch,
   type CommandResult,
+  type ControllerAssignments,
+  type ControlSurface,
   type DeltaOp,
   type DirectoryListing,
   type EditCommand,
@@ -24,6 +27,8 @@ import {
   type Job,
   type KeyCommandSet,
   type LaunchRequest,
+  type LearnRequest,
+  type LearnState,
   type LiveMidiEvent,
   type LiveRecordRequest,
   type LoopInfo,
@@ -33,6 +38,8 @@ import {
   type MidiDevices,
   type MidiRegion,
   type Note,
+  type OscSettings,
+  type OscStatus,
   type Pack,
   type PatchInfo,
   type PatternRegion,
@@ -50,9 +57,12 @@ import {
   type Screenset,
   type ScriptPreset,
   type ServerMessage,
+  type StemSplitRequest,
   type StepInputRequest,
   type StepInputState,
   type StopRequest,
+  type SurfaceStatus,
+  type SyncState,
   type SystemInfo,
   type TakeFolder,
   type Track,
@@ -370,7 +380,14 @@ export class FakeAnodeServer implements AnodeApi {
           },
           mixer: { pdc: 'all', lowLatency: false, lowLatencyLimitMs: 10 },
           smartTempo: { mode: 'keep', defaultFollow: 'off', analyzeImports: true },
-          varispeed: { enabled: false, mode: 'speedOnly', speed: 1 }
+          varispeed: { enabled: false, mode: 'speedOnly', speed: 1 },
+          sync: {
+            source: 'internal',
+            destinations: [],
+            frameRate: 'fps25',
+            startOffsetSeconds: 0,
+            linkStartStop: false
+          }
         },
         master: strip(),
         tracks: [],
@@ -1452,6 +1469,76 @@ export class FakeAnodeServer implements AnodeApi {
       this.lastStep = null;
       this.changeStepInput(next);
       return structuredClone(next);
+    });
+  }
+
+  // ---- Phase 8 (docs/09-phase-8.md): control, surfaces, OSC, sync and the Stem Splitter, until the editor workstream
+  // (C) implements them.
+
+  controllerAssignments(): Promise<ControllerAssignments> {
+    return this.phase8Pending('GetControllerAssignments');
+  }
+
+  setControllerAssignments(_assignments: ControllerAssignments): Promise<ControllerAssignments> {
+    return this.phase8Pending('SetControllerAssignments');
+  }
+
+  learn(): Promise<LearnState> {
+    return this.phase8Pending('GetLearn');
+  }
+
+  startLearn(_request: LearnRequest): Promise<LearnState> {
+    return this.phase8Pending('StartLearn');
+  }
+
+  stopLearn(): Promise<LearnState> {
+    return this.phase8Pending('StopLearn');
+  }
+
+  surfaces(): Promise<ControlSurface[]> {
+    return this.phase8Pending('ListSurfaces');
+  }
+
+  surfaceStatus(): Promise<SurfaceStatus[]> {
+    return this.phase8Pending('ListSurfaceStatus');
+  }
+
+  addSurface(_request: AddSurfaceRequest): Promise<ControlSurface> {
+    return this.phase8Pending('AddSurface');
+  }
+
+  removeSurface(_id: string): Promise<void> {
+    return this.phase8Pending('RemoveSurface');
+  }
+
+  reorderSurfaces(_ids: string[]): Promise<ControlSurface[]> {
+    return this.phase8Pending('ReorderSurfaces');
+  }
+
+  osc(): Promise<OscStatus> {
+    return this.phase8Pending('GetOsc');
+  }
+
+  setOsc(_settings: OscSettings): Promise<OscStatus> {
+    return this.phase8Pending('SetOsc');
+  }
+
+  setSelection(_trackId: string | null): Promise<void> {
+    return this.phase8Pending('SetSelection');
+  }
+
+  syncState(): Promise<SyncState> {
+    return this.phase8Pending('GetSync');
+  }
+
+  splitStems(_regionId: string, _request: StemSplitRequest): Promise<Job> {
+    return this.phase8Pending('SplitStems');
+  }
+
+  /** A Phase 8 endpoint the fake Server does not answer yet (docs/09-phase-8.md): 422. */
+  private phase8Pending<T>(operation: string): Promise<T> {
+    return this.answer(operation, () => {
+      throw new ApiError(422, `${operation}: not in the fake Server yet.`);
     });
   }
 
@@ -3515,6 +3602,10 @@ export class FakeAnodeServer implements AnodeApi {
       case 'loadInsertFile':
         // The convolution reverb's impulse response.
         return loadInsertFile(project, command, id => this.catalogue.find(p => p.id === id));
+      case 'setSyncSettings':
+      case 'addStems':
+        // Synchronisation and the Stem Splitter: Phase 8, the editor workstream (docs/09-phase-8.md).
+        throw new ApiError(422, `${command.type}: not in the fake Server yet.`);
       default:
         if (isPhase7Command(command)) {
           // The Event List, MIDI Transform, grooves, articulations, lane sets, step input, the Audio File Editor and
@@ -3912,7 +4003,8 @@ export class FakeAnodeServer implements AnodeApi {
         },
         mixer: { pdc: 'all', lowLatency: false, lowLatencyLimitMs: 10 },
         smartTempo: { mode: 'keep', defaultFollow: 'off', analyzeImports: true },
-        varispeed: { enabled: false, mode: 'speedOnly', speed: 1 }
+        varispeed: { enabled: false, mode: 'speedOnly', speed: 1 },
+        sync: { source: 'internal', destinations: [], frameRate: 'fps25', startOffsetSeconds: 0, linkStartStop: false }
       },
       master: strip(),
       tracks: [],

@@ -135,6 +135,8 @@ namespace Anode.Contracts;
 [JsonDerivedType(typeof(StepTieCommand), "stepTie")]
 [JsonDerivedType(typeof(SetFileVersionCommand), "setFileVersion")]
 [JsonDerivedType(typeof(SetScriptCommand), "setScript")]
+[JsonDerivedType(typeof(SetSyncSettingsCommand), "setSyncSettings")]
+[JsonDerivedType(typeof(AddStemsCommand), "addStems")]
 public abstract record EditCommand;
 
 /// <summary>
@@ -905,3 +907,31 @@ public sealed record SetFileVersionCommand(
 ///     compile is bypassed with a <c>pluginProblem</c>, and the slot keeps the source.
 /// </summary>
 public sealed record SetScriptCommand(string TrackId, string SlotId, string Source) : EditCommand;
+
+/// <summary>
+///     Phase 8: changes the project's synchronisation (<c>ProjectSettings.sync</c>); left-out properties stay.
+///     <c>destinations</c> replaces the list (each port at most once). An empty <c>clockInPort</c> or <c>mtcInPort</c>
+///     sets it to any input (null).
+/// </summary>
+public sealed record SetSyncSettingsCommand(
+    SyncSource? Source = null,
+    IReadOnlyList<MidiSyncDestination>? Destinations = null,
+    MtcFrameRate? FrameRate = null,
+    double? StartOffsetSeconds = null,
+    bool? LinkStartStop = null,
+    string? ClockInPort = null,
+    string? MtcInPort = null
+) : EditCommand;
+
+/// <summary>A stem file the Stem Splitter wrote and added to the project (an <c>AudioFile</c> id).</summary>
+public sealed record StemFile(StemKind Kind, string FileId);
+
+/// <summary>
+///     Phase 8, the Stem Splitter's result: for each stem, in the order given (the order of <see cref="StemKind" />), a
+///     new audio track below audio region <c>regionId</c>'s track (named after the region and the stem, with the source
+///     track's output) holding a region of the whole file at the source region's position (each file covers the
+///     region's span); the source region is muted unless <c>keepSource</c>. The <c>stemSplit</c> job applies it when it
+///     finishes, after adding the files; undo removes the tracks and unmutes the region (the files stay). Clients do not
+///     send it.
+/// </summary>
+public sealed record AddStemsCommand(string RegionId, IReadOnlyList<StemFile> Stems, bool KeepSource) : EditCommand;

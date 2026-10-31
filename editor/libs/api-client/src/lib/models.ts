@@ -172,6 +172,40 @@ export type LoopSearchResult = Schemas['LoopSearchResult'];
 export type SampleRange = Schemas['SampleRange'];
 export type PreviewRangeRequest = Schemas['PreviewRangeRequest'];
 
+export type ControlInputKind = Schemas['ControlInputKind'];
+export type ControlInput = Schemas['ControlInput'];
+export type ControlTargetKind = Schemas['ControlTargetKind'];
+export type TrackSwitchAction = Schemas['TrackSwitchAction'];
+export type ControlTransportAction = Schemas['ControlTransportAction'];
+export type ControlTarget = Schemas['ControlTarget'];
+export type ControlValueMode = Schemas['ControlValueMode'];
+export type ControlAssignment = Schemas['ControlAssignment'];
+export type ControlMode = Schemas['ControlMode'];
+export type ControlZone = Schemas['ControlZone'];
+export type ControllerAssignments = Schemas['ControllerAssignments'];
+export type ControlMessage = Schemas['ControlMessage'];
+export type LearnState = Schemas['LearnState'];
+export type LearnRequest = Schemas['LearnRequest'];
+export type ControlSurfaceKind = Schemas['ControlSurfaceKind'];
+export type ControlSurface = Schemas['ControlSurface'];
+export type AddSurfaceRequest = Schemas['AddSurfaceRequest'];
+export type ReorderSurfacesRequest = Schemas['ReorderSurfacesRequest'];
+export type SurfaceStatus = Schemas['SurfaceStatus'];
+export type OscClient = Schemas['OscClient'];
+export type OscSettings = Schemas['OscSettings'];
+export type OscStatus = Schemas['OscStatus'];
+export type SelectionRequest = Schemas['SelectionRequest'];
+export type SyncSource = Schemas['SyncSource'];
+export type MtcFrameRate = Schemas['MtcFrameRate'];
+export type MidiSyncDestination = Schemas['MidiSyncDestination'];
+export type SyncSettings = Schemas['SyncSettings'];
+export type SyncState = Schemas['SyncState'];
+export type StemKind = Schemas['StemKind'];
+export type StemSplitRequest = Schemas['StemSplitRequest'];
+
+/** Anode's virtual MIDI ports' fixed ids (engine/src/Anode.Contracts/Control.cs, `VirtualMidiPorts`; macOS only). */
+export const VirtualMidiPorts = { inputId: 'anode:in', outputId: 'anode:out' } as const;
+
 /** A Live Loops cell's state in the launcher (engine/src/Anode.Contracts/LiveLoops.cs; only on `/ws`). */
 export type CellState = 'queued' | 'playing' | 'stopping' | 'stopped';
 
@@ -217,7 +251,9 @@ export interface MidiActivity {
  * Live Loops cell's launcher state at a project sample (for queued and stopping, the boundary it waits for). Phase 7:
  * `scriptLog` carries a Scripter slot's `Trace` lines (at most 50 a second; `dropped` counts the rest); `parameters`
  * says a MIDI FX slot's run-time parameter list changed (a script compiled); `stepInput` carries the step input state
- * whenever it changes.
+ * whenever it changes. Phase 8: `controlLearn` carries a MIDI message received while learning and the assignment it
+ * made, if any; `sync` the sync state when it changes (at most 10 a second); `surfaces` every control surface's status
+ * when one connects, disconnects or banks.
  */
 export type ServerMessage =
   | { type: 'connected'; version: string }
@@ -238,4 +274,7 @@ export type ServerMessage =
   | { type: 'cell'; cellId: string; state: CellState; sample: number }
   | { type: 'scriptLog'; trackId: string; slotId: string; lines: string[]; dropped: number }
   | { type: 'parameters'; trackId: string; slotId: string; parameters: ParameterInfo[] }
-  | { type: 'stepInput'; state: StepInputState };
+  | { type: 'stepInput'; state: StepInputState }
+  | { type: 'controlLearn'; message: ControlMessage; assignmentId?: string | null }
+  | { type: 'sync'; state: SyncState }
+  | { type: 'surfaces'; surfaces: SurfaceStatus[] };

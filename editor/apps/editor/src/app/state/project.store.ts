@@ -57,7 +57,8 @@ export const DefaultSettings: ProjectSettings = {
   recording: { cycleMode: 'takeFolder', replace: false, autopunch: false, punchInTick: 0, punchOutTick: 4 * 4 * Ppq },
   mixer: { pdc: 'all', lowLatency: false, lowLatencyLimitMs: 10 },
   smartTempo: { mode: 'keep', defaultFollow: 'off', analyzeImports: true },
-  varispeed: { enabled: false, mode: 'speedOnly', speed: 1 }
+  varispeed: { enabled: false, mode: 'speedOnly', speed: 1 },
+  sync: { source: 'internal', destinations: [], frameRate: 'fps25', startOffsetSeconds: 0, linkStartStop: false }
 };
 
 const SilentStrip: ChannelStrip = {

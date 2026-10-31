@@ -23,7 +23,11 @@ public enum JobKind {
 
     /// <summary>Phase 7: an Audio File Editor operation (<c>AudioEditOperation</c>), writing a new version of a file.</summary>
     [JsonStringEnumMemberName("audioEdit")]
-    AudioEdit
+    AudioEdit,
+
+    /// <summary>Phase 8: the Stem Splitter (<c>StemSplitRequest</c>, docs/adr/0010-stem-splitter.md).</summary>
+    [JsonStringEnumMemberName("stemSplit")]
+    StemSplit
 }
 
 [JsonConverter(typeof(JsonStringEnumConverter<JobState>))]
@@ -185,3 +189,38 @@ public sealed record ProcessRequest(
     long? EndTick = null,
     bool IncludeTail = false
 );
+
+/// <summary>A stem the Stem Splitter separates (docs/adr/0010-stem-splitter.md).</summary>
+[JsonConverter(typeof(JsonStringEnumConverter<StemKind>))]
+public enum StemKind {
+    [JsonStringEnumMemberName("vocals")]
+    Vocals,
+
+    [JsonStringEnumMemberName("drums")]
+    Drums,
+
+    [JsonStringEnumMemberName("bass")]
+    Bass,
+
+    /// <summary>Everything the other stems asked for do not take.</summary>
+    [JsonStringEnumMemberName("other")]
+    Other,
+
+    /// <summary>Six-stem model only.</summary>
+    [JsonStringEnumMemberName("guitar")]
+    Guitar,
+
+    /// <summary>Six-stem model only.</summary>
+    [JsonStringEnumMemberName("piano")]
+    Piano
+}
+
+/// <summary>
+///     Phase 8, the Stem Splitter (<c>POST /project/regions/{regionId}/split-stems</c>, an audio region): the stems to
+///     make, each once (left out: vocals, drums, bass and other). With guitar or piano among them the six-stem model
+///     runs, else the four-stem one; a stem not asked for is not written. The job writes one file per stem over the
+///     region's span into the project's <c>Audio Files</c>, then, in one undo step (<c>addStems</c>), adds a track per
+///     stem below the region's track, in the order of <see cref="StemKind" />, with a region at the source region's
+///     position, and mutes the source region unless <c>keepSource</c>.
+/// </summary>
+public sealed record StemSplitRequest(IReadOnlyList<StemKind>? Stems = null, bool KeepSource = false);

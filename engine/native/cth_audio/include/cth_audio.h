@@ -128,6 +128,23 @@ CTH_API int32_t cth_midi_send_at(const char *destination_uid, const uint8_t *dat
 CTH_API void cth_midi_close(void);
 CTH_API uint64_t cth_midi_now_ns(void);
 
+/* ---- Virtual MIDI ports (Anode Phase 8, docs/09-phase-8.md; declared, implemented by workstream A) -------------
+ * A virtual port is one this process publishes for other apps (CoreMIDI MIDIDestinationCreate / MIDISourceCreate):
+ *   - an input (is_input 1) is a destination other apps send to; its messages enter the cth_midi_read ring like any
+ *     source's, timestamped the same way, with source the port's index as cth_midi_port_info numbers it;
+ *   - an output (is_input 0) is a source other apps receive from; cth_midi_send and cth_midi_send_at reach it by uid.
+ * name is what other apps show ("Anode In", "Anode Out"); uid is this port's uid in cth_midi_port_info (Anode's are
+ * "anode:in" and "anode:out"; at most 63 bytes), stable across runs. The port is listed by cth_midi_port_count and
+ * cth_midi_port_info from the next cth_midi_open (which connects a virtual input as it does sources) until it is closed.
+ * Returns 0 on success; CTH_MIDI_VIRTUAL_UNSUPPORTED where the backend has no virtual ports (WinMM); another negative
+ * value on failure (a uid already open, CoreMIDI refusing), with cth_audio_last_error saying why. */
+#define CTH_MIDI_VIRTUAL_UNSUPPORTED (-2)
+
+CTH_API int32_t cth_midi_virtual_open(const char *name, const char *uid, int32_t is_input);
+/* Removes the virtual port with this uid (other apps see it disappear); 0, or negative when none is open. Ports still
+ * open at cth_midi_close are closed with it. */
+CTH_API int32_t cth_midi_virtual_close(const char *uid);
+
 /* Enables flush-to-zero / denormals-are-zero on the calling thread (x86 MXCSR, ARM64 FPCR.FZ). */
 CTH_API void cth_fpu_flush_denormals(void);
 

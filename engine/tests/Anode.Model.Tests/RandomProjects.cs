@@ -319,7 +319,7 @@ static class RandomProjects {
                     random,
                     [typeof(SetPitchNotesCommand), typeof(NewTrackAlternativeCommand), typeof(SetRegionFlexCommand)]
                 ),
-                _ => Pick(random, CommandTypes)
+                _ => Pick(random, Buildable)
             };
             var command = i is >= 4 and < 7 && FirstAudioTrack(state) is { } audio && state.Files.Count > 0
                 ? AddRegion(audio, Pick(random, [..state.Files.Values]), random)
@@ -431,6 +431,20 @@ static class RandomProjects {
 
     static IEnumerable<Track> MidiTracks(ProjectState state) =>
         state.Tracks.Where(static t => Edits.IsMidiKind(t.Kind) && t.FrozenFileId is null);
+
+    /// <summary>
+    ///     Phase 8 commands (docs/09-phase-8.md) the model rejects until workstream B implements them; the identity
+    ///     property skips them.
+    /// </summary>
+    public static readonly IReadOnlySet<string> PendingPhase8 = new HashSet<string>(StringComparer.Ordinal) {
+        nameof(SetSyncSettingsCommand), nameof(AddStemsCommand)
+    };
+
+    /// <summary>
+    ///     The command types random projects are built from: every one but those the model refuses outright (Phase 8, until
+    ///     workstream B), so the projects stay those of Phase 7.
+    /// </summary>
+    static Type[] Buildable => [..CommandTypes.Where(static t => !PendingPhase8.Contains(t.Name))];
 
     /// <summary>A random command of <paramref name="type" /> for <paramref name="s" />, or null when none can be made.</summary>
     public static EditCommand? Command(Type type, ProjectState s, Random r) {
@@ -1062,6 +1076,22 @@ static class RandomProjects {
                 : withFx.Length > 0 && Pick(r, withFx) is var fx
                     ? new SetScriptCommand(fx.Id, Pick(r, fx.Strip.MidiEffects).Id, Script(r))
                     : null,
+            // Phase 8 commands (docs/09-phase-8.md): placeholders until the model implements them (workstream B
+            // replaces these with generators that make commands that apply, and removes PendingPhase8).
+            nameof(SetSyncSettingsCommand) => new SetSyncSettingsCommand(
+                Pick(r, Enum.GetValues<SyncSource>()),
+                r.Next(2) == 0 ? [] : [new("port-1", r.Next(2) == 0, r.Next(2) == 0, r.Next(-10, 11))],
+                Pick(r, Enum.GetValues<MtcFrameRate>()),
+                r.Next(0, 3600),
+                r.Next(2) == 0
+            ),
+            nameof(AddStemsCommand) => regions.Length == 0 || files.Length == 0
+                ? null
+                : new AddStemsCommand(
+                    Pick(r, regions).Id,
+                    [new(StemKind.Vocals, Pick(r, files).Id), new(StemKind.Drums, Pick(r, files).Id)],
+                    r.Next(2) == 0
+                ),
             _ => throw new InvalidOperationException($"No generator for {type.Name}.")
         };
         string? Track() => tracks.Count == 0 ? null : Pick(r, tracks).Id;

@@ -18,7 +18,8 @@ const JobNames: Record<JobKind, string> = {
   analyze: 'Analysis',
   bounceInPlace: 'Bounce in place',
   process: 'Processing',
-  audioEdit: 'Audio file edit'
+  audioEdit: 'Audio file edit',
+  stemSplit: 'Stem split'
 };
 
 /** A file's name from its absolute path. */

@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <Description>The Stem Splitter's separation (docs/adr/0010-stem-splitter.md): the model runner, the STFT, chunking and overlap-add. Referenced by the server only, so the engine host never loads ONNX Runtime.</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- StemKind. Workstream E adds Microsoft.ML.OnnxRuntime here. -->
+    <ProjectReference Include="../Anode.Contracts/Anode.Contracts.csproj"/>
+  </ItemGroup>
+</Project>

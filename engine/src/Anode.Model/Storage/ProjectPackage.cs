@@ -895,6 +895,7 @@ public static class PackageMigrations {
         }
 
         json[VersionField] = CurrentSchemaVersion;
+        Phase8Fields.Fill(kind, json);
         return json;
     }
 
@@ -1083,6 +1084,26 @@ public static class PackageMigrations {
         }
 
         return json;
+    }
+}
+
+/// <summary>
+///     The Phase 8 fields (docs/09-phase-8.md) at their defaults where a file lacks them, so schema-7 packages read with
+///     the Phase 8 contracts: interim, until workstream B adds schema 8 and its migration from 7 (which replaces this,
+///     with the same defaults). The project's sync settings are <see cref="SyncSettings.Default" />: internal, nothing
+///     sent. Leaves fields that are present alone.
+/// </summary>
+static class Phase8Fields {
+    public static void Fill(string kind, JsonObject json) {
+        if (kind == "project" && json["settings"] is JsonObject settings) {
+            settings["sync"] ??= new JsonObject {
+                ["source"] = "internal",
+                ["destinations"] = new JsonArray(),
+                ["frameRate"] = "fps25",
+                ["startOffsetSeconds"] = 0,
+                ["linkStartStop"] = false
+            };
+        }
     }
 }
 
