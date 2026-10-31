@@ -10,7 +10,8 @@ export const SelectionDebounceMs = 120;
 /**
  * Tells the Server which track is selected (`PUT /project/selection`, docs/09-phase-8.md): selected-track controller
  * assignments, control surfaces and OSC's `/anode/selected/…` follow it. Reported shortly after it changes, once per
- * change, and again after a reconnection or when a project opens (the Server forgets it with the project).
+ * change, and again after a reconnection or when a project opens (the Server forgets it with the project). The other
+ * way, a `selection` event (a surface's select or cursor keys, OSC) selects the track here, without reporting it back.
  */
 @Injectable({ providedIn: 'root' })
 export class SelectionReporter {
@@ -32,13 +33,33 @@ export class SelectionReporter {
       }
       this.schedule(trackId);
     });
-    inject(EventStream).connected$.subscribe(() => {
+    const events = inject(EventStream);
+    events.events$.subscribe(message => {
+      if (message.type === 'selection') {
+        this.follow(message.trackId);
+      }
+    });
+    events.connected$.subscribe(() => {
       this.sent = undefined;
       if (this.project.isOpen()) {
         this.schedule(this.selection.track());
       }
     });
     inject(DestroyRef).onDestroy(() => this.cancel());
+  }
+
+  /** The Server's selection, changed from hardware: the editor selects the track (the Server already has it). */
+  private follow(trackId: string | null): void {
+    if (!this.project.isOpen()) {
+      return;
+    }
+    this.sent = trackId;
+    if (trackId === null) {
+      this.selection.track.set(null);
+      this.selection.tracks.set(new Set());
+    } else if (this.project.tracks().has(trackId)) {
+      this.selection.selectTrack(trackId);
+    }
   }
 
   private schedule(trackId: string | null): void {

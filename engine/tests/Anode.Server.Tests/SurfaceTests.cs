@@ -73,6 +73,25 @@ public sealed class SurfaceTests : IAsyncDisposable {
         return [(byte)(0xE0 | strip), (byte)(value & 0x7F), (byte)(value >> 7)];
     }
 
+    /// <summary>
+    ///     A Mackie Control's (device 0x14) or XT's (0x15) two-line display as the scribble strip SysEx sent to
+    ///     <paramref name="port" /> left it (each message writes from its offset).
+    /// </summary>
+    string Display(string port, byte device) {
+        var display = Enumerable.Repeat((byte)' ', 112).ToArray();
+        foreach (var data in SentTo(port)) {
+            for (var i = 0; i + 7 < data.Length; i++) {
+                if (data[i] == 0xF0 && data.AsSpan(i + 1, 5).SequenceEqual(new byte[] { 0x00, 0x00, 0x66, device, 0x12 })) {
+                    var end = Array.IndexOf(data, (byte)0xF7, i);
+                    var offset = data[i + 6];
+                    data.AsSpan(i + 7, Math.Min(end - i - 7, 112 - offset)).CopyTo(display.AsSpan(offset));
+                }
+            }
+        }
+
+        return System.Text.Encoding.ASCII.GetString(display);
+    }
+
     IEnumerable<byte[]> SentTo(string port) => Host.SentMidi.Where(m => m.Port == port).Select(static m => m.Data);
 
     [Fact]
@@ -190,11 +209,13 @@ public sealed class SurfaceTests : IAsyncDisposable {
         );
         await ApiCalls.AssertProblemAsync(taken, HttpStatusCode.UnprocessableEntity);
         await using var events = await EventStream.ConnectAsync(server!);
+        // A unit banks over the tracks it was last shown: wait for the first feedback.
+        await ServerFixture.Eventually(() => Task.FromResult(Display("xt-out", 0x15).StartsWith("T9 ", StringComparison.Ordinal)));
         await Host.PlayControlAsync("mcu-in", [0x90, 0x2F, 0x7F]);
         var banked = await events.WaitAsync<SurfacesEvent>(static e => e.Surfaces[0].BankOffset == 8);
         Assert.Equal([(main.Id, 8), (xt.Id, 16)], banked.Surfaces.Select(static s => (s.Id, s.BankOffset)));
         await ServerFixture.Eventually(() => Task.FromResult(
-                SentTo("xt-out").Any(static d => d.AsSpan().IndexOf("T17"u8) >= 0)
+                Display("xt-out", 0x15).StartsWith("T17    T18", StringComparison.Ordinal)
             )
         );
 

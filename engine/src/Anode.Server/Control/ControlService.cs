@@ -363,17 +363,24 @@ public sealed partial class ControlService(
         }
 
         lock (gate) {
-            Select(view.Session, request?.TrackId);
+            Select(view.Session, request?.TrackId, false);
         }
     }
 
-    void Select(long sessionId, string? trackId) {
+    /// <summary>
+    ///     Selects a track (null none); when hardware or OSC did it (<paramref name="publish" />), the editor hears of it
+    ///     (<see cref="SelectionEvent" />) and follows.
+    /// </summary>
+    void Select(long sessionId, string? trackId, bool publish = true) {
         if (selection == (sessionId, trackId)) {
             return;
         }
 
         selection = (sessionId, trackId);
         ResetEngines();
+        if (publish) {
+            hub.Publish(new SelectionEvent(trackId));
+        }
     }
 
     /// <summary>The selected track of the open project, if it is still there.</summary>
@@ -773,6 +780,6 @@ static partial class ControlLog {
     [LoggerMessage(Level = LogLevel.Information, Message = "A control move did not apply: {Message}")]
     public static partial void MoveIgnored(ILogger logger, string message);
 
-    [LoggerMessage(Level = LogLevel.Information, Message = "Key command {Id} is not one the server runs")]
-    public static partial void KeyCommandIgnored(ILogger logger, string id);
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Key command {Id} is the editor's: relayed")]
+    public static partial void KeyCommandRelayed(ILogger logger, string id);
 }

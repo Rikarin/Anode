@@ -1594,6 +1594,12 @@ export class FakeAnodeServer implements AnodeApi {
     }
   }
 
+  /** A surface's select or cursor keys (or OSC) select a track: the Server's selection changes and the editor hears it. */
+  selectFromHardware(trackId: string | null): void {
+    this.control.selection = trackId;
+    this.emit({ type: 'selection', trackId });
+  }
+
   /** Link peers join or leave the session (tests). */
   setLinkPeers(peers: number): void {
     this.control.linkPeers = peers;
@@ -1611,6 +1617,13 @@ export class FakeAnodeServer implements AnodeApi {
     const { target, value } = effect;
     const project = this.project;
     if (!project) {
+      return;
+    }
+    if (target.kind === 'keyCommand') {
+      // The fake runs no key commands itself: all go to the editor, as the Server relays the editor's.
+      if (value >= 0.5 && target.keyCommandId) {
+        this.emit({ type: 'keyCommand', id: target.keyCommandId });
+      }
       return;
     }
     if (target.kind === 'transport') {

@@ -168,6 +168,12 @@ public sealed class RealControlTests : IAsyncDisposable {
         await Task.Delay(200, Token);
         Assert.True((await client.ProjectAsync()).Tracks[1].Strip.Mute);
 
+        // Select on strip 1 selects track 1, and the editor hears of it.
+        await using (var events = await EventStream.ConnectAsync(server)) {
+            await Host.PlayControlAsync("mcu-in", [0x90, 0x18, 0x7F], [0x90, 0x18, 0x00]);
+            await events.WaitAsync<SelectionEvent>(e => e.TrackId == tracks[0]);
+        }
+
         // Bank right: tracks 9–16 on the strips.
         await Host.PlayControlAsync("mcu-in", [0x90, 0x2F, 0x7F], [0x90, 0x2F, 0x00]);
         await ServerFixture.Eventually(async () => (await StatusAsync(surface.Id)).BankOffset == 8);
@@ -206,16 +212,18 @@ public sealed class RealControlTests : IAsyncDisposable {
         );
         await ServerFixture.Eventually(async () => (await StatusAsync(surface.Id)).Connected);
 
+        // The strip names, 4 characters each.
+        await ServerFixture.Eventually(() => Task.FromResult(
+                SentTo("hui-out").Any(static m => m is [0xF0, 0x00, 0x00, 0x66, 0x05, 0x00, 0x10, 0x00, (byte)'T', (byte)'1', ..])
+            )
+        );
+
         // A unit that pings is answered at once.
         Host.ClearSentMidi();
         await Host.PlayControlAsync("hui-in", [0x90, 0x00, 0x00]);
         await ServerFixture.Eventually(() => Task.FromResult(Sent("hui-out", [0x90, 0x00, 0x7F])));
 
-        // The strip names (4 characters) and fader 1: touch (zone 0, port 0), then the MSB/LSB pair.
-        await ServerFixture.Eventually(() => Task.FromResult(
-                SentTo("hui-out").Any(static m => m is [0xF0, 0x00, 0x00, 0x66, 0x05, 0x00, 0x10, 0x00, (byte)'T', (byte)'1', ..])
-            )
-        );
+        // Fader 1: touch (zone 0, port 0), then the MSB/LSB pair.
         await Host.PlayControlAsync(
             "hui-in",
             [0xB0, 0x0F, 0x00],
@@ -300,5 +308,12 @@ public sealed class RealControlTests : IAsyncDisposable {
         }
 
         Assert.Contains(heard, static m => m.Address == "/anode/transport/stop");
+
+        // A key command the Server does not run itself goes to the editor; the selection follows OSC.
+        await using var events = await EventStream.ConnectAsync(server);
+        await Send(new OscMessage("/anode/key/view.mixer", []));
+        await events.WaitAsync<KeyCommandEvent>(static e => e.Id == "view.mixer");
+        await Send(new OscMessage("/anode/selected/next", []));
+        await events.WaitAsync<SelectionEvent>(e => e.TrackId == track);
     }
 }

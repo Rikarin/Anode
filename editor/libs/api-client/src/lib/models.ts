@@ -253,7 +253,9 @@ export interface MidiActivity {
  * says a MIDI FX slot's run-time parameter list changed (a script compiled); `stepInput` carries the step input state
  * whenever it changes. Phase 8: `controlLearn` carries a MIDI message received while learning and the assignment it
  * made, if any; `sync` the sync state when it changes (at most 10 a second); `surfaces` every control surface's status
- * when one connects, disconnects or banks.
+ * when one connects, disconnects or banks; `selection` the selected track when hardware or OSC changed it (the editor
+ * follows; not sent for its own `PUT /project/selection`); `keyCommand` a key command a controller or OSC asked for
+ * that the Server does not run itself (the editor runs it).
  */
 export type ServerMessage =
   | { type: 'connected'; version: string }
@@ -277,4 +279,6 @@ export type ServerMessage =
   | { type: 'stepInput'; state: StepInputState }
   | { type: 'controlLearn'; message: ControlMessage; assignmentId?: string | null }
   | { type: 'sync'; state: SyncState }
-  | { type: 'surfaces'; surfaces: SurfaceStatus[] };
+  | { type: 'surfaces'; surfaces: SurfaceStatus[] }
+  | { type: 'selection'; trackId: string | null }
+  | { type: 'keyCommand'; id: string };

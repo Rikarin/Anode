@@ -1,5 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import { setUpFakeServer, settle } from '../core/fake/testing';
+import { KeyCommandsStore } from '../state/key-commands.store';
 import { ProjectStore } from '../state/project.store';
 import { SelectionStore } from '../state/selection.store';
 import { UiStore } from '../state/ui.store';
@@ -153,5 +154,65 @@ describe('SelectionReporter', () => {
     TestBed.tick();
     await vi.advanceTimersByTimeAsync(SelectionDebounceMs + 10);
     expect(server.controlState.selection).toBeNull();
+  });
+
+  it('follows a selection made on hardware, without reporting it back', async () => {
+    const { server, drums } = await setUp();
+    TestBed.inject(SelectionReporter);
+    const selection = TestBed.inject(SelectionStore);
+    const sent = () => server.requests.filter(r => r === 'SetSelection').length;
+    await vi.advanceTimersByTimeAsync(SelectionDebounceMs + 10);
+    const before = sent();
+
+    server.selectFromHardware(drums);
+    await settle();
+    expect(selection.track()).toBe(drums);
+    expect([...selection.tracks()]).toEqual([drums]);
+    TestBed.tick();
+    await vi.advanceTimersByTimeAsync(SelectionDebounceMs + 10);
+    expect(sent()).toBe(before);
+
+    server.selectFromHardware(null);
+    await settle();
+    expect(selection.track()).toBeNull();
+  });
+});
+
+describe('Key commands from hardware', () => {
+  it('runs a key command a controller asks for that the Server leaves to the editor', async () => {
+    const { server, control } = await setUp();
+    const keys = TestBed.inject(KeyCommandsStore);
+    const run = vi.fn();
+    keys.register('view.mixer', run);
+    await control.save({
+      zones: [
+        {
+          id: 'z',
+          name: 'Zone',
+          activeModeId: 'm',
+          modes: [
+            {
+              id: 'm',
+              name: 'Mode',
+              assignments: [
+                {
+                  id: 'a',
+                  name: null,
+                  input: { port: null, kind: 'note', channel: null, number: 40 },
+                  target: { kind: 'keyCommand', keyCommandId: 'view.mixer' },
+                  mode: 'momentary',
+                  min: 0,
+                  max: 1,
+                  pickup: false
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    });
+    server.controlMidi('anode:in', 0x90, 40, 127);
+    await settle();
+    expect(run).toHaveBeenCalledTimes(1);
   });
 });

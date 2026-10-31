@@ -26,6 +26,8 @@ namespace Anode.Contracts;
 [JsonDerivedType(typeof(ControlLearnEvent), "controlLearn")]
 [JsonDerivedType(typeof(SyncEvent), "sync")]
 [JsonDerivedType(typeof(SurfacesEvent), "surfaces")]
+[JsonDerivedType(typeof(SelectionEvent), "selection")]
+[JsonDerivedType(typeof(KeyCommandEvent), "keyCommand")]
 public abstract record RealtimeEvent;
 
 /// <summary>The socket is open; the client fetches the state it needs now.</summary>
@@ -127,3 +129,15 @@ public sealed record SyncEvent(SyncState State) : RealtimeEvent;
 
 /// <summary>Phase 8: a control surface connected or disconnected, or banked: every surface's status, in order.</summary>
 public sealed record SurfacesEvent(IReadOnlyList<SurfaceStatus> Surfaces) : RealtimeEvent;
+
+/// <summary>
+///     Phase 8: hardware or OSC changed the selected track (a surface's select or cursor keys, select next or previous);
+///     the editor follows it. Not sent for the editor's own <c>PUT /project/selection</c>.
+/// </summary>
+public sealed record SelectionEvent(string? TrackId) : RealtimeEvent;
+
+/// <summary>
+///     Phase 8: a controller assignment or OSC asked for a key command the Server does not run itself (menus, windows,
+///     the editor's selection); the editor runs it as if its key were pressed.
+/// </summary>
+public sealed record KeyCommandEvent(string Id) : RealtimeEvent;

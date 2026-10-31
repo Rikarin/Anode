@@ -310,8 +310,8 @@ public sealed partial class ControlService {
     }
 
     /// <summary>
-    ///     The key commands the server runs itself (transport, undo and redo, new tracks); others are the editor's
-    ///     (menus, windows, the editor's selection) and are logged and ignored: there is no event to relay them yet.
+    ///     The key commands the server runs itself (transport, undo and redo, new tracks); the others are the editor's
+    ///     (menus, windows, the editor's selection), relayed to it as a <see cref="Contracts.KeyCommandEvent" />.
     /// </summary>
     void RunKeyCommand(OpenProjectView view, string id) {
         var playing = engine.Transport().State != TransportState.Stopped;
@@ -350,7 +350,8 @@ public sealed partial class ControlService {
                 Edit(new AddTrackCommand(Kind: TrackKind.Instrument));
                 break;
             default:
-                ControlLog.KeyCommandIgnored(logger, id);
+                ControlLog.KeyCommandRelayed(logger, id);
+                hub.Publish(new KeyCommandEvent(id));
                 break;
         }
     }

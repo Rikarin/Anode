@@ -22,7 +22,14 @@ export class KeyCommandsStore {
   readonly commands = KeyCommands;
 
   constructor() {
-    inject(EventStream).connected$.subscribe(() => void this.load());
+    const events = inject(EventStream);
+    events.connected$.subscribe(() => void this.load());
+    // A key command a controller assignment or OSC asked for, which the Server leaves to the editor.
+    events.events$.subscribe(message => {
+      if (message.type === 'keyCommand') {
+        this.run(message.id);
+      }
+    });
   }
 
   async load(): Promise<void> {
