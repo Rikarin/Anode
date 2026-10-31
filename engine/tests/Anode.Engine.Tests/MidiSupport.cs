@@ -195,6 +195,35 @@ sealed class FakeMidi : IMidiBackend {
         }
     }
 
+    readonly Queue<(long TimeNs, int Source, byte[] Data)> sysex = new();
+
+    /// <summary>Queues a SysEx message from input <paramref name="source" /> (Phase 8).</summary>
+    public void PlaySysEx(int source, byte[] data, long timeNs = 0) {
+        lock (gate) {
+            sysex.Enqueue((timeNs, source, data));
+        }
+    }
+
+    public int ReadSystemExclusive(Span<byte> buffer, out long timeNs, out int source) {
+        lock (gate) {
+            timeNs = 0;
+            source = -1;
+            if (!sysex.TryPeek(out var next)) {
+                return 0;
+            }
+
+            if (next.Data.Length > buffer.Length) {
+                return -next.Data.Length;
+            }
+
+            sysex.Dequeue();
+            next.Data.CopyTo(buffer);
+            timeNs = next.TimeNs;
+            source = next.Source;
+            return next.Data.Length;
+        }
+    }
+
     public bool Send(string uid, ReadOnlySpan<byte> message, long timeNs) {
         lock (gate) {
             Sent.Add((uid, message.ToArray(), timeNs));

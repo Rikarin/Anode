@@ -90,8 +90,9 @@ public sealed partial class EngineController {
         }
 
         if (retired is not null) {
-            WaitGrace(); // the callback may still hold the old config
-            WaitCallbacks(); // and has applied the new one
+            // A callback that started before the new settings may still use the peer; one that starts after reads them
+            // first (it keeps the old settings' reference only to compare).
+            WaitGrace();
             retired.Dispose();
         }
     }
@@ -129,15 +130,6 @@ public sealed partial class EngineController {
         var root = Engine.Root;
         var tempo = root.Tempo.SampleRate > 0 ? root.Tempo : new(Options.SampleRate);
         return tempo.At(Math.Max(0, Engine.Snapshot.Position)).Bpm;
-    }
-
-    /// <summary>Waits until the audio thread has applied every command queued so far (and so has read the settings).</summary>
-    void WaitCallbacks() {
-        var deadline = DateTime.UtcNow + CommandTimeout;
-        var callbacks = Engine.Snapshot.Callbacks;
-        while (Engine.Snapshot.Callbacks < callbacks + 2 && DateTime.UtcNow < deadline && !Engine.IsOffline) {
-            Thread.Sleep(1);
-        }
     }
 
     void DisposeSync() {

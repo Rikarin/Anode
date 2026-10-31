@@ -13,7 +13,7 @@ namespace Anode.Engine.Midi;
 ///     reporting the list when devices come or go. <see cref="Pump" /> is one pass (tests call it directly).
 /// </summary>
 /// <remarks>
-///     Phase 8 (docs/09-phase-8.md, "Routing", "Sync"): it publishes Anode's virtual ports (<see cref="OpenVirtualPorts" />);
+///     Phase 8 (docs/09-phase-8.md, "Routing", "Sync"): it publishes Anode's virtual ports (<see cref="VirtualPortPrefix" />);
 ///     decides per message from the server's <see cref="ControlRouting" /> whether it goes to the server
 ///     (<see cref="ControlMidi" />, batched every pass) or plays; hands the clock or MTC input's system messages and MTC
 ///     full frames to the <see cref="Sync" /> follower; sends the audio callback's MIDI Clock and MTC to their
@@ -85,10 +85,12 @@ public sealed class MidiHub : IDisposable {
     public const string VirtualOutputId = "anode:out";
 
     /// <summary>
-    ///     Whether <see cref="Start" /> publishes Anode's virtual ports ("Anode In", "Anode Out"; anode-host does) where the
-    ///     backend has them.
+    ///     When set, <see cref="Start" /> publishes Anode's virtual ports where the backend has them, with uids
+    ///     <c>&lt;prefix&gt;:in</c> and <c>&lt;prefix&gt;:out</c>: anode-host's prefix is <c>anode</c> (the ports
+    ///     <see cref="VirtualInputId" /> "Anode In" and <see cref="VirtualOutputId" /> "Anode Out"); another prefix
+    ///     names them "Anode In (prefix)", for tests that run hosts side by side.
     /// </summary>
-    public bool OpenVirtualPorts { get; init; }
+    public string? VirtualPortPrefix { get; init; }
 
     /// <summary>A batch of messages consumed for control is ready (on the MIDI thread, at most once a pass).</summary>
     public Action<ControlMidiMessage>? ControlMidi { get; set; }
@@ -127,9 +129,10 @@ public sealed class MidiHub : IDisposable {
         }
 
         lock (pumpGate) {
-            if (OpenVirtualPorts && backend is not null) {
-                OpenVirtual("Anode In", VirtualInputId, true);
-                OpenVirtual("Anode Out", VirtualOutputId, false);
+            if (VirtualPortPrefix is { Length: > 0 } prefix && backend is not null) {
+                var suffix = prefix == "anode" ? "" : $" ({prefix})";
+                OpenVirtual($"Anode In{suffix}", $"{prefix}:in", true);
+                OpenVirtual($"Anode Out{suffix}", $"{prefix}:out", false);
             }
 
             Rescan(true);

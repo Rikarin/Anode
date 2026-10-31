@@ -171,11 +171,12 @@ public sealed unsafe partial class AudioEngine {
         var phase = NativeLink.PhaseAtTime(state, time, quantum);
         var wanted = Modulo(quarter - point.BarQuarter, quantum);
         var beats = Modulo(wanted - phase, quantum);
-        if (beats > quantum - 1e-9) {
-            beats = 0;
+        var frame = bpm / 60 / SampleRate; // one frame, in beats
+        if (beats > quantum - frame) {
+            beats = 0; // the phase is up to a frame past it (the stretch before ended on it): now, not a bar later
         }
 
-        var frames = (long)Math.Round(beats * 60 / bpm * SampleRate);
+        var frames = (long)Math.Floor(beats / frame);
         if (frames <= 0) {
             Begin(link, state, time);
             return 0;

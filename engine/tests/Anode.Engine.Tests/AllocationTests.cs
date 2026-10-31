@@ -533,4 +533,72 @@ public sealed unsafe class AllocationTests : IDisposable {
         Assert.Equal(0, controller.Engine.Snapshot.Underruns);
         Assert.True(controller.Engine.Root.Tracks[5].Channel.Config.MidiEffects[0].Slot.Failed);
     }
+
+    /// <summary>
+    ///     Phase 8's sync in the callback (docs/09-phase-8.md, "Sync"): MIDI Clock and MTC out to two destinations, with
+    ///     the source Link (the peer alone: it starts at once) and then MIDI Clock (its tempo replacing the map's),
+    ///     through a cycle wrap, a locate (the pointer and a full frame), a stop and a start. The callback allocates
+    ///     nothing, and neither does draining what it sends.
+    /// </summary>
+    [Fact]
+    public void Clock_mtc_and_link_in_the_callback_allocate_nothing() {
+        using var segment = TestAudio.Segment(
+            [new(0, [], [])],
+            1,
+            tempo: [TestAudio.Tempo(0, 0, 120), TestAudio.Tempo(4 * Rate, 8, 120, 6)]
+        );
+        using var controller = new EngineController(new(Rate, 64));
+        controller.LoadModel(TestAudio.Load(segment, 1, true, [TestAudio.Track(0)], [], dir));
+        EngineSyncDestination[] destinations = [new("a", true, true, 2), new("b", true, false, -1)];
+        var link = Audio.Native.NativeLink.IsAvailable;
+        controller.SetSync(
+            new(
+                link ? EngineSyncSource.Link : EngineSyncSource.Internal,
+                destinations,
+                EngineMtcRate.Fps2997Drop,
+                3600,
+                true,
+                null,
+                null
+            )
+        );
+        using var driver = new OfflineDriver(controller, 64);
+        var drained = 0L;
+
+        void Callbacks() {
+            for (var i = 0; i < 100; i++) {
+                driver.Process(false);
+            }
+
+            while (controller.Engine.SyncOut.TryDequeue(out _)) {
+                drained++;
+            }
+        }
+
+        driver.Send(new(EngineCommandKind.SetCycle, 30_000, 170_000, true));
+        driver.PlayFrom(20_000);
+        var callbackBytes = Least(Callbacks);
+        for (var round = 0; round < 20; round++) {
+            if (round == 8) {
+                driver.Send(new(EngineCommandKind.Stop));
+                driver.Send(new(EngineCommandKind.Locate, 300_000));
+                callbackBytes = Math.Max(callbackBytes, Least(Callbacks));
+                driver.Send(new(EngineCommandKind.Play));
+            }
+
+            if (round == 12) {
+                controller.SetSync(
+                    new(EngineSyncSource.MidiClock, destinations, EngineMtcRate.Fps25, 0, false, null, null)
+                );
+                controller.Engine.ExternalTempo = 133;
+            }
+
+            driver.Pump();
+            callbackBytes = Math.Max(callbackBytes, Least(Callbacks));
+        }
+
+        Assert.Equal(0, callbackBytes);
+        Assert.Equal(TransportState.Playing, controller.Engine.Snapshot.State);
+        Assert.True(drained > 1000, $"{drained} sync messages");
+    }
 }

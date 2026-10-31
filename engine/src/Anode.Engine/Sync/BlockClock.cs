@@ -8,7 +8,7 @@ namespace Anode.Engine.Sync;
 /// </summary>
 public sealed class BlockClock {
     /// <summary>The loop's bandwidth, in hertz.</summary>
-    const double Bandwidth = 1.0;
+    const double Bandwidth = 0.5;
 
     double predicted; // the next callback's time, ns
     double period; // ns per callback

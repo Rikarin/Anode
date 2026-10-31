@@ -7,8 +7,9 @@ namespace Anode.MidiProbe;
 /// <summary>What the received MIDI Clock and MTC say: the analyses the golden path asserts on.</summary>
 public static class Analysis {
     /// <summary>
-    ///     <c>analyzeClock</c>: the clocks' spacing (count, mean interval and its tempo, the largest deviation of an
-    ///     interval from the mean, and the standard deviation, in ms) over the clocks received since <c>since</c>, and
+    ///     <c>analyzeClock</c>: the clocks' spacing (count, the mean and median interval, the tempo of the median, the
+    ///     largest deviation of an interval from the median, the 99th percentile of the deviations, how many exceed
+    ///     0.5 ms, and the standard deviation, in ms) over the clocks received since <c>since</c>, and
     ///     the transport messages among them (Start, Continue, Stop, Song Position Pointer) in order, with their times.
     ///     Intervals across a Stop or a Start are left out.
     /// </summary>
@@ -45,12 +46,17 @@ public static class Analysis {
         var result = new JsonObject { ["clocks"] = intervals.Count + (last != 0 || intervals.Count > 0 ? 1 : 0), ["transport"] = transport };
         if (intervals.Count > 0) {
             var mean = intervals.Average();
+            var median = intervals.Order().ElementAt(intervals.Count / 2);
             result["meanMs"] = mean;
-            result["bpm"] = 60_000 / (mean * 24);
-            result["maxDeviationMs"] = intervals.Max(i => Math.Abs(i - mean));
+            result["medianMs"] = median;
+            result["bpm"] = 60_000 / (median * 24); // of the median interval: a dropout does not move it
+            result["maxDeviationMs"] = intervals.Max(i => Math.Abs(i - median));
             result["stdDevMs"] = Math.Sqrt(intervals.Average(i => (i - mean) * (i - mean)));
             result["minMs"] = intervals.Min();
             result["maxMs"] = intervals.Max();
+            var deviations = intervals.Select(i => Math.Abs(i - median)).Order().ToList();
+            result["p99DeviationMs"] = deviations[(int)Math.Floor(0.99 * (deviations.Count - 1))];
+            result["outliers"] = deviations.Count(static d => d > 0.5); // intervals off by more than half a millisecond
         }
 
         return result;

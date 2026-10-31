@@ -73,7 +73,13 @@ static class ServeCommand {
             device.BufferFrames,
             options.Flag("null-audio") ? null : options.Text("device") ?? string.Empty
         );
-        using var host = new EngineHost.EngineHost(device, version, midi: Midi(options), factory: plugins);
+        using var host = new EngineHost.EngineHost(
+            device,
+            version,
+            midi: Midi(options),
+            factory: plugins,
+            virtualMidiPrefix: options.Text("midi-port-prefix") ?? "anode"
+        );
         host.Log = Print;
         await using var server = new EngineHostServer(socket, host.HandleAsync, Print);
         host.Push = server.Push;

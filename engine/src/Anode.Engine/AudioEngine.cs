@@ -56,6 +56,12 @@ public sealed unsafe partial class AudioEngine : IAudioProcessor {
 
     public int SampleRate { get; }
 
+    /// <summary>
+    ///     Tests: the host time (ns) each callback starts at, instead of the monotonic clock (sync timing under a clock
+    ///     the test controls). Set before the first callback.
+    /// </summary>
+    public Func<long>? HostClock { get; set; }
+
     public Strip Master { get; } = new();
 
     public CommandRing Commands { get; } = new();
@@ -137,7 +143,7 @@ public sealed unsafe partial class AudioEngine : IAudioProcessor {
         Interlocked.Increment(ref started); // full fence before the root is read
         try {
             var model = Volatile.Read(ref root);
-            var now = (long)(Stopwatch.GetTimestamp() * NanosecondsPerTick);
+            var now = HostClock is { } hostClock ? hostClock() : (long)(Stopwatch.GetTimestamp() * NanosecondsPerTick);
             AudioThread.Mark();
             var observer = Volatile.Read(ref cycleObserver);
             observer?.BeginCycle(now, frames);

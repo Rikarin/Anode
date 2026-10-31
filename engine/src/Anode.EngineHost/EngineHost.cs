@@ -48,6 +48,10 @@ public sealed class EngineHost : IDisposable {
     ///     Third-party plugin hosting (anode-host: <see cref="SandboxPluginFactory" />). With one, CLAP plugins are
     ///     hosted (and scanned) by it, in sandboxes; without, the Phase 2 in-process CLAP host serves CLAP instruments.
     /// </param>
+    /// <param name="virtualMidiPrefix">
+    ///     With the native MIDI backend, the virtual ports' uid prefix (Phase 8; "anode": "Anode In" <c>anode:in</c> and
+    ///     "Anode Out" <c>anode:out</c>); null publishes none.
+    /// </param>
     public unsafe EngineHost(
         IAudioDevice device,
         string version,
@@ -55,7 +59,8 @@ public sealed class EngineHost : IDisposable {
         PluginRegistry? plugins = null,
         IMidiBackend? midi = null,
         IReadOnlyList<string>? clapFolders = null,
-        IPluginFactory? factory = null
+        IPluginFactory? factory = null,
+        string? virtualMidiPrefix = "anode"
     ) {
         Device = device;
         this.factory = factory;
@@ -67,7 +72,7 @@ public sealed class EngineHost : IDisposable {
                 device.BufferFrames,
                 latency.Input + latency.Output,
                 latency.Output,
-                VirtualMidiPorts: midi is NativeMidiBackend
+                VirtualMidiPrefix: midi is NativeMidiBackend ? virtualMidiPrefix : null
             ),
             plugins,
             midi
