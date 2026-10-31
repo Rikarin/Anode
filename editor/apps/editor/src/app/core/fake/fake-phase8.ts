@@ -128,7 +128,7 @@ function checkAssignment(assignment: ControlAssignment): void {
     refuse(`The number must be 0 to ${max}.`);
   }
   if (!ValueModes.has(assignment.mode)) {
-    refuse(`${String(assignment.mode)} is not a value mode.`);
+    refuse(`${assignment.mode} is not a value mode.`);
   }
   for (const value of [assignment.min, assignment.max]) {
     if (!(value >= 0 && value <= 1)) {
@@ -341,7 +341,7 @@ export class FakeControl {
 
   addSurface(request: AddSurfaceRequest): ControlSurface {
     if (!SurfaceKinds.has(request.kind)) {
-      refuse(`${String(request.kind)} is not a control surface kind.`);
+      refuse(`${request.kind} is not a control surface kind.`);
     }
     const devices = this.devices();
     if (!devices.inputs.some(p => p.id === request.inputPort)) {
@@ -502,7 +502,7 @@ export function stemList(stems: readonly StemKind[] | null | undefined): StemKin
   }
   for (const stem of list) {
     if (!StemOrder.includes(stem)) {
-      refuse(`${String(stem)} is not a stem.`);
+      refuse(`${stem} is not a stem.`);
     }
   }
   return StemOrder.filter(s => list.includes(s));
@@ -530,10 +530,10 @@ export function applySyncSettings(
     next.mtcInPort = command.mtcInPort === '' ? null : command.mtcInPort;
   }
   if (!['internal', 'midiClock', 'mtc', 'link'].includes(next.source)) {
-    refuse(`${String(next.source)} is not a sync source.`);
+    refuse(`${next.source} is not a sync source.`);
   }
   if (!['fps24', 'fps25', 'fps2997Drop', 'fps30'].includes(next.frameRate)) {
-    refuse(`${String(next.frameRate)} is not an MTC frame rate.`);
+    refuse(`${next.frameRate} is not an MTC frame rate.`);
   }
   if (!(next.startOffsetSeconds >= 0 && next.startOffsetSeconds <= 86_399)) {
     refuse('The start offset is 00:00:00 to 23:59:59.');

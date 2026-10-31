@@ -514,6 +514,16 @@ import { TrackHeader } from './track-header';
             <button xuiMenuItem type="button" (click)="ui.processingOpen.set(true)">
               Selection-Based Processing… ({{ keyOf('region.process') }})
             </button>
+            @if (menuAudioRegion(); as regionId) {
+              <button
+                xuiMenuItem
+                type="button"
+                data-testid="open-stem-splitter"
+                (click)="ui.stemSplitter.set({ regionId })"
+              >
+                Stem Splitter…
+              </button>
+            }
             @if (menuMidi()) {
               <button xuiMenuItem type="button" data-testid="open-transform" (click)="ui.transformOpen.set(true)">
                 MIDI Transform… ({{ keyOf('midi.transform') }})
@@ -624,6 +634,11 @@ export class TracksArea {
     return target.kind === 'regions'
       ? (target.ids.find(id => this.project.midiRegions().has(id) || this.project.regions().has(id)) ?? null)
       : null;
+  });
+  /** The audio region the Stem Splitter splits (Phase 8): the first of the menu's. */
+  protected readonly menuAudioRegion = computed(() => {
+    const target = this.timeline().menuTarget();
+    return target.kind === 'regions' ? (target.ids.find(id => this.project.regions().has(id)) ?? null) : null;
   });
   /** The instrument or DMD track a lane's tool menu makes a pattern region on. */
   protected readonly menuPatternTrack = computed(() => {

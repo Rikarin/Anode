@@ -6,6 +6,7 @@ import { matAutoFixHighRound, matExpandMoreRound, matInfoRound } from '@ng-icons
 import { XuiIconImports } from '@xui/icon';
 import { XuiMenuImports } from '@xui/menu';
 import { XuiTooltipImports } from '@xui/tooltip';
+import { LearnTarget, LearnTargets } from '../control/learn-menu';
 import { ProjectStore } from '../state/project.store';
 import { SelectionStore } from '../state/selection.store';
 import { SmartControlsInspector } from './smart-controls-inspector';
@@ -27,7 +28,7 @@ const Layouts: readonly { value: SmartControlsLayout; label: string }[] = [
 @Component({
   selector: 'an-smart-controls-pane',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [AnKnob, AnXyPad, SmartControlsInspector, XuiIconImports, XuiMenuImports, XuiTooltipImports],
+  imports: [AnKnob, AnXyPad, LearnTarget, SmartControlsInspector, XuiIconImports, XuiMenuImports, XuiTooltipImports],
   providers: [provideIcons({ matAutoFixHighRound, matExpandMoreRound, matInfoRound })],
   host: { class: 'flex h-full min-h-0 flex-col', role: 'region', 'aria-label': 'Smart Controls' },
   template: `
@@ -128,6 +129,8 @@ const Layouts: readonly { value: SmartControlsLayout; label: string }[] = [
                     role="gridcell"
                     data-testid="smart-knob"
                     [attr.data-control]="knob.id"
+                    [anLearnTarget]="learnTargets.smartControl(knob.id)"
+                    [learnLabel]="'Smart Control: ' + knob.name"
                     [attr.aria-selected]="store.selected() === knob.id"
                     [class.bg-muted]="store.selected() === knob.id"
                     [label]="knob.name"
@@ -213,6 +216,7 @@ const Layouts: readonly { value: SmartControlsLayout; label: string }[] = [
   `
 })
 export class SmartControlsPane {
+  protected readonly learnTargets = new LearnTargets();
   protected readonly project = inject(ProjectStore);
   protected readonly store = inject(SmartControlsStore);
   private readonly selection = inject(SelectionStore);

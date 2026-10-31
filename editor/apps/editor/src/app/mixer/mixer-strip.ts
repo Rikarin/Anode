@@ -14,6 +14,8 @@ import { XuiContextMenuImports } from '@xui/context-menu';
 import { XuiMenuImports } from '@xui/menu';
 import { XuiTooltipImports } from '@xui/tooltip';
 import { AutomationStore } from '../automation/automation.store';
+import { learnKey } from '../control/assignments';
+import { LearnMenu } from '../control/learn-menu';
 import { InstrumentStore } from '../state/instrument.store';
 import { IoLabelsStore } from '../state/io-labels.store';
 import { MasterMeter, MeterBus } from '../state/meters';
@@ -108,6 +110,7 @@ const BusPages = Array.from({ length: BusCount / 16 }, (_, page) => ({
       [flow]="flow()"
       [meter]="meter()"
       [attr.data-strip]="trackId() ?? 'master'"
+      [attr.data-learn-track]="trackId()"
       (volumeChange)="mixer.set(trackId(), 'volumeDb', $event)"
       (volumeCommit)="mixer.release(trackId(), 'volumeDb')"
       (panChange)="mixer.set(trackId(), 'pan', $event)"
@@ -115,6 +118,7 @@ const BusPages = Array.from({ length: BusCount / 16 }, (_, page) => ({
       (muteToggle)="mixer.toggleMute(trackId())"
       (soloToggle)="soloToggle()"
       (click)="select()"
+      (contextmenu)="stripMenu($event)"
     >
       @if (layout().input) {
         @if (kind() === 'aux') {
@@ -230,7 +234,12 @@ const BusPages = Array.from({ length: BusCount / 16 }, (_, page) => ({
           [style.min-height.px]="rowsHeight(layout().sends)"
         >
           @for (send of strip().sends; track send.id; let i = $index) {
-            <div #sendWrap [xuiContextMenuTriggerFor]="sendMenu" [xuiContextMenuTriggerData]="{ $implicit: send }">
+            <div
+              #sendWrap
+              [xuiContextMenuTriggerFor]="sendMenu"
+              [xuiContextMenuTriggerData]="{ $implicit: send }"
+              [attr.data-learn]="sendLearnKey(send)"
+            >
               <an-send-knob
                 data-testid="send"
                 [busName]="busLabel(send.bus)"
@@ -467,6 +476,11 @@ const BusPages = Array.from({ length: BusCount / 16 }, (_, page) => ({
           <button xuiMenuItem type="button" (click)="togglePre(send)">
             {{ send.preFader ? 'Post Fader' : 'Pre Fader' }}
           </button>
+          @if (trackId(); as id) {
+            <button xuiMenuItem type="button" data-testid="learn-assignment" (click)="learnSend(id, send)">
+              Learn Assignment for “{{ name() }}: Send to {{ busLabel(send.bus) }}”
+            </button>
+          }
           <xui-menu-divider />
         }
         <button
@@ -631,6 +645,7 @@ export class MixerStrip {
   private readonly labels = inject(IoLabelsStore);
   private readonly selection = inject(SelectionStore);
   private readonly meters = inject(MeterBus);
+  private readonly learnMenu = inject(LearnMenu);
 
   /** The track whose strip this is; null for the master. */
   readonly track = input.required<Track | null>();
@@ -769,6 +784,36 @@ export class MixerStrip {
     if (id) {
       this.selection.track.set(id);
     }
+  }
+
+  /** A right-click on the fader or the pan knob offers "Learn Assignment for …" (Phase 8). */
+  protected stripMenu(event: MouseEvent): void {
+    const trackId = this.trackId();
+    const element = event.target instanceof Element ? event.target : null;
+    if (!trackId || !element) {
+      return;
+    }
+    const name = this.name();
+    if (element.closest('an-fader')) {
+      this.learnMenu.open(event, [
+        { target: { kind: 'parameter', trackId, address: 'volume' }, label: `${name}: Volume` }
+      ]);
+    } else if (element.closest('an-pan-knob')) {
+      this.learnMenu.open(event, [{ target: { kind: 'parameter', trackId, address: 'pan' }, label: `${name}: Pan` }]);
+    }
+  }
+
+  /** A send's learn target, for a click while learning (`data-learn`). */
+  protected sendLearnKey(send: Send): string | null {
+    const trackId = this.trackId();
+    return trackId ? learnKey({ kind: 'parameter', trackId, address: `send:${send.id}` }) : null;
+  }
+
+  protected learnSend(trackId: string, send: Send): void {
+    this.learnMenu.learn({
+      target: { kind: 'parameter', trackId, address: `send:${send.id}` },
+      label: `${this.name()}: Send to ${this.busLabel(send.bus)}`
+    });
   }
 
   protected soloToggle(): void {

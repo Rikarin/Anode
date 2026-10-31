@@ -41,6 +41,7 @@ import { XuiInputImports } from '@xui/input';
 import { XuiMenuImports } from '@xui/menu';
 import { XuiTooltipImports } from '@xui/tooltip';
 import { formatBinding } from '../keys/key-commands';
+import { SyncControl } from '../sync/sync-control';
 import { formatSpeed, parseSpeed, VarispeedModes, VarispeedUnits, type VarispeedUnit } from '../music/varispeed';
 import { HistoryStore } from '../state/history.store';
 import { KeyCommandsStore } from '../state/key-commands.store';
@@ -63,7 +64,16 @@ import { Lcd } from './lcd';
 @Component({
   selector: 'an-control-bar',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [AnVarispeedDisplay, EngineStatus, Lcd, XuiIconImports, XuiInputImports, XuiMenuImports, XuiTooltipImports],
+  imports: [
+    AnVarispeedDisplay,
+    EngineStatus,
+    Lcd,
+    SyncControl,
+    XuiIconImports,
+    XuiInputImports,
+    XuiMenuImports,
+    XuiTooltipImports
+  ],
   providers: [
     provideIcons({
       matAvTimerRound,
@@ -159,6 +169,26 @@ import { Lcd } from './lcd';
                 (menuOpened)="session.refreshVersions()"
               >
                 Revert to Backup
+              </button>
+              <xui-menu-divider />
+              <button xuiMenuItem type="button" data-testid="open-sync-settings" (click)="ui.syncSettingsOpen.set(true)">
+                Synchronization…
+              </button>
+              <button
+                xuiMenuItem
+                type="button"
+                data-testid="open-control-surfaces"
+                (click)="ui.controlSurfacesOpen.set(true)"
+              >
+                Control Surfaces Setup…
+              </button>
+              <button
+                xuiMenuItem
+                type="button"
+                data-testid="open-controller-assignments"
+                (click)="ui.controllerAssignmentsOpen.set(true)"
+              >
+                Controller Assignments…
               </button>
               <xui-menu-divider />
               <button xuiMenuItem type="button" icon="matKeyboardRound" (click)="ui.keyCommandsOpen.set(true)">
@@ -511,6 +541,7 @@ import { Lcd } from './lcd';
             }
           </xui-menu>
         </ng-template>
+        <an-sync-control />
       }
     </div>
     <div class="flex min-w-max flex-1 items-center justify-end gap-2">

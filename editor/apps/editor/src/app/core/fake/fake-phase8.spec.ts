@@ -291,6 +291,8 @@ describe('FakeAnodeServer, Phase 8 (docs/09-phase-8.md)', () => {
 
   it('splits an audio region into stems as a job: a model download first, then the tracks below', async () => {
     const { server, events, first } = await setUp();
+    /** The open project, read afresh (TypeScript would narrow the getter once). */
+    const current = () => server.current;
     await server.applyCommands({ commands: [{ type: 'setOutput', trackId: first, output: 'bus:3' }] });
     const file = await server.importAudioFile('/Users/me/Music/Mix.wav');
     await server.applyCommands({ commands: [{ type: 'addRegion', trackId: first, fileId: file.id, startTick: 3840 }] });
@@ -308,7 +310,7 @@ describe('FakeAnodeServer, Phase 8 (docs/09-phase-8.md)', () => {
     server.runJobs();
     const done = events.filter(e => e.type === 'job').at(-1);
     expect(done?.type === 'job' ? [done.job.state, done.job.files.length] : null).toEqual(['done', 4]);
-    const tracks = server.current?.tracks ?? [];
+    const tracks = current()?.tracks ?? [];
     expect(tracks.map(t => t.name).slice(1, 5)).toEqual([
       `${tracks[0]?.name} Vocals`,
       `${tracks[0]?.name} Drums`,
@@ -316,13 +318,13 @@ describe('FakeAnodeServer, Phase 8 (docs/09-phase-8.md)', () => {
       `${tracks[0]?.name} Other`
     ]);
     expect(tracks.slice(1, 5).every(t => t.strip.output === 'bus:3')).toBe(true);
-    const stems = server.current?.regions.filter(r => r.id !== region.id) ?? [];
+    const stems = current()?.regions.filter(r => r.id !== region.id) ?? [];
     expect(stems.map(r => r.startTick)).toEqual([3840, 3840, 3840, 3840]);
-    expect(server.current?.regions.find(r => r.id === region.id)?.muted).toBe(true);
+    expect(current()?.regions.find(r => r.id === region.id)?.muted).toBe(true);
     // One undo step takes it all back.
     await server.undo();
-    expect(server.current?.tracks).toHaveLength(2);
-    expect(server.current?.regions.find(r => r.id === region.id)?.muted).toBe(false);
+    expect(current()?.tracks).toHaveLength(2);
+    expect(current()?.regions.find(r => r.id === region.id)?.muted).toBe(false);
 
     // The model is there now; six stems need the other one; keep source leaves the region playing.
     const six = await server.splitStems(region.id, {
@@ -333,8 +335,8 @@ describe('FakeAnodeServer, Phase 8 (docs/09-phase-8.md)', () => {
     const downloading = events.filter(e => e.type === 'job' && e.job.id === six.id).at(-1);
     expect(downloading?.type === 'job' ? downloading.job.message : null).toMatch(/six-stem/);
     server.runJobs();
-    expect(server.current?.tracks).toHaveLength(8);
-    expect(server.current?.regions.find(r => r.id === region.id)?.muted).toBe(false);
+    expect(current()?.tracks).toHaveLength(8);
+    expect(current()?.regions.find(r => r.id === region.id)?.muted).toBe(false);
     const again = await server.splitStems(region.id, { stems: ['drums'], keepSource: true });
     server.runJobs(1);
     const separating = events.filter(e => e.type === 'job' && e.job.id === again.id).at(-1);

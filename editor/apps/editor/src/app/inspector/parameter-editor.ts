@@ -2,6 +2,7 @@ import { NgComponentOutlet } from '@angular/common';
 import { ChangeDetectionStrategy, Component, computed, inject, input } from '@angular/core';
 import type { ParameterInfo, PluginInfo } from '@anode/api-client';
 import { AnChoice, AnKnob } from '@anode/audio-ui';
+import { LearnTarget, LearnTargets } from '../control/learn-menu';
 import { type PluginPanelHost, pluginPanel } from '../plugin-panels/plugin-panel';
 import { InstrumentStore } from '../state/instrument.store';
 
@@ -78,7 +79,7 @@ export function isChoice(parameter: ParameterInfo): boolean {
 @Component({
   selector: 'an-parameter-editor',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [AnChoice, AnKnob, NgComponentOutlet],
+  imports: [AnChoice, AnKnob, LearnTarget, NgComponentOutlet],
   host: { class: 'flex flex-col gap-3', role: 'group', '[attr.aria-label]': 'plugin().name + " parameters"' },
   template: `
     @if (panel(); as p) {
@@ -96,6 +97,8 @@ export function isChoice(parameter: ParameterInfo): boolean {
                 [min]="parameter.min"
                 [value]="value(parameter)"
                 [attr.data-parameter]="parameter.id"
+                [anLearnTarget]="learnTargets.parameter(trackId(), 'instrument:' + parameter.id)"
+                [learnLabel]="plugin().name + ': ' + parameter.name"
                 (valueChange)="set(parameter, $event)"
               />
             } @else {
@@ -108,6 +111,8 @@ export function isChoice(parameter: ParameterInfo): boolean {
                 [defaultValue]="parameter.default"
                 [value]="value(parameter)"
                 [attr.data-parameter]="parameter.id"
+                [anLearnTarget]="learnTargets.parameter(trackId(), 'instrument:' + parameter.id)"
+                [learnLabel]="plugin().name + ': ' + parameter.name"
                 (valueChange)="set(parameter, $event)"
               />
             }
@@ -120,6 +125,7 @@ export function isChoice(parameter: ParameterInfo): boolean {
   `
 })
 export class ParameterEditor {
+  protected readonly learnTargets = new LearnTargets();
   private readonly instruments = inject(InstrumentStore);
   readonly trackId = input.required<string>();
   readonly plugin = input.required<PluginInfo>();

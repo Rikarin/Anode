@@ -11,7 +11,17 @@ export interface KeyCommand {
 }
 
 export type KeyCommandGroup =
-  'Transport' | 'Edit' | 'Regions' | 'Tracks' | 'Mixer' | 'Automation' | 'Tools' | 'View' | 'Screensets' | 'Project';
+  | 'Transport'
+  | 'Edit'
+  | 'Regions'
+  | 'Tracks'
+  | 'Mixer'
+  | 'Automation'
+  | 'Tools'
+  | 'View'
+  | 'Screensets'
+  | 'Project'
+  | 'Control';
 
 const screensets: KeyCommand[] = Array.from({ length: 9 }, (_, i) => ({
   id: `screenset.recall${i + 1}`,
@@ -89,7 +99,14 @@ export const KeyCommands: readonly KeyCommand[] = [
   ...screensets,
   { id: 'project.save', label: 'Save', group: 'Project', defaults: ['Meta+S'] },
   { id: 'project.saveAlternative', label: 'Save as Alternative…', group: 'Project', defaults: [] },
-  { id: 'project.bounce', label: 'Bounce Project or Section…', group: 'Project', defaults: ['Meta+B'] }
+  { id: 'project.bounce', label: 'Bounce Project or Section…', group: 'Project', defaults: ['Meta+B'] },
+  // Phase 8 (docs/09-phase-8.md): control surfaces, controller assignments, synchronisation, the Stem Splitter.
+  { id: 'project.syncSettings', label: 'Synchronization Settings…', group: 'Project', defaults: [] },
+  { id: 'region.stemSplitter', label: 'Stem Splitter…', group: 'Regions', defaults: [] },
+  { id: 'control.surfaces', label: 'Control Surfaces Setup…', group: 'Control', defaults: [] },
+  { id: 'control.assignments', label: 'Controller Assignments…', group: 'Control', defaults: [] },
+  { id: 'control.learn', label: 'Learn New Assignment', group: 'Control', defaults: ['Meta+L'] },
+  { id: 'sync.link', label: 'Ableton Link On/Off', group: 'Control', defaults: [] }
 ];
 
 /** Modifier order in a binding. */
