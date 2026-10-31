@@ -411,3 +411,54 @@ Five, in parallel, each on its own branch; they meet only at the contracts above
    ports, Link with the probe.
 4. Run the Playwright golden path for the exit criterion.
 5. Fix the seams.
+
+## Status (2026-10-31)
+
+**Exit criterion met on macOS.** The Playwright golden path `phase8/control-sync-golden-path.spec.ts` passes on the
+real desktop app with the null audio device, `anode-midiprobe` on Anode's virtual MIDI ports and in the Link session,
+and the locally exported HTDemucs models. All ten steps pass. All nine e2e specs pass, twice in a row.
+
+| Criterion | Measured | Limit |
+|---|---|---|
+| MIDI Clock out at 120 bpm: median tick | 20.839 ms | 20.833 ms |
+| MIDI Clock out: jitter (99th percentile) / outliers | 0.023 ms / 0 | 0.5 ms / 2 |
+| MTC out against the playhead: start / drift | 0.000 s / 0.000 frames | 1 frame |
+| MIDI Clock in at 100 bpm | 100.000 bpm | ± 0.5 bpm |
+| MTC in: chase | 0.011 s, 0.008 s | 1 frame plus the read window |
+| Link: beat phase against the probe's | 0.022 ms, 0.023 ms | 1 ms |
+| Stem Splitter (four stems): SDR vocals, drums, bass, other | 12.07, 14.34, 11.91, 4.74 dB | 3, 6, 6, 3 dB |
+
+Steps 1–5 and 10 are pass/fail: Learn, a knob moving only its volume, Latch automation from the knob, a Smart Control
+from CC 22, Mackie Control (faders, scribble strips, touch, transport, bank right, meters, timecode), HUI (ping and
+fader), OSC (requests and subscribed feedback), and save and reopen.
+
+| Check | Result |
+|---|---|
+| Engine tests (`dotnet test --solution engine/Anode.slnx --max-parallel-test-modules 2`) | 2162 pass, 18 skipped (opt-in); one load-sensitive MIDI timing test failed once and passed 3 of 3 on rerun |
+| Control protocols ([docs/control](control/README.md)) | assignments, Mackie Control and XT, HUI, OSC 1.0; byte vectors shared by the protocol and server tests |
+| Sync (engine tests) | clock spacing within 0.23 ms under ±2 ms wake-up jitter; MTC within ¼ frame at every rate; clock in within 0.5 bpm 2 beats after a step; two Link peers within 0.1 ms; no allocations in the callback |
+| Stem Splitter ([ADR-0010](adr/0010-stem-splitter.md)) | HTDemucs on ONNX Runtime (CPU), about 20 s per minute of audio; matches demucs to 6.5·10⁻⁵ |
+| Editor (`nx run-many -t typecheck lint test build`) | 5 projects pass; Storybook + axe pass |
+| e2e (`nx e2e desktop`) | control and sync, MIDI editing, loops and performance, advanced audio, mixing, arranging, MIDI and Phase 1 golden paths, smoke; twice in a row |
+| Skala, Prettier, generated client | clean |
+
+**Contract changes and decisions at integration** (detailed in "Integration notes" above):
+- `/ws` events `selection(trackId?)` and `keyCommand(id)`: selection made from hardware or OSC reaches the editor, and
+  key commands the server cannot run are run by the editor.
+- The control service drives D's `SurfaceGroup` (banking across a Mackie Control and its extenders) and
+  `AssignmentEngine.Assign` (Learn).
+- Following Link, the session's tempo is written into the project (a burst of changes is one undo step); MIDI Clock in
+  drives only the transport.
+- MIDI Clock or MTC on a port a surface also uses still reaches the follower when that port is the sync input.
+- `anode-host --virtual-midi` publishes Anode's own CoreMIDI ports and hides real devices (e2e).
+- Stem models are found through `ModelStore`, installed from `ANODE_MODELS` (`Anode:ModelSource`) when missing.
+- Stem tracks are named after the source and the stem ("mix – Vocals").
+
+**Open:**
+- **The HTDemucs weights are research-only** (ADR-0010): the models are not published, and outside development the
+  Stem Splitter needs a model the user provides. A licence grant or a replacement model is needed before release.
+- The MCU master fader is ignored (the surface view has no master strip).
+- `SurfaceTests.Faders_and_LEDs_go_out_at_most_30_times_a_second…` failed once in four runs alongside another test
+  class.
+- Windows: the WinMM SysEx changes were reviewed, not compiled; WinMM has no virtual ports.
+- Linux and Windows.
