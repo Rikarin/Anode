@@ -34,7 +34,8 @@ export const test = base.extend<{
         CLAP_PATH: TestClapFolder,
         // The engine's test VST3 effects (engine/native/an_testvst3), hosted in the plugin sandbox.
         VST3_PATH: TestVst3Folder,
-        // A virtual MIDI output, so external MIDI tracks have a port on any machine.
+        // Only Anode's own virtual MIDI ports ("Anode In", "Anode Out" on macOS): external MIDI tracks have a port on any
+        // machine, the real devices stay out, and anode-midiprobe (Phase 8) reaches them.
         ANODE_VIRTUAL_MIDI: '1'
       }
     });

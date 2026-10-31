@@ -3,6 +3,7 @@ import { defineConfig } from '@playwright/test';
 /** Golden paths through the real desktop app: Electron, the built editor, and the engine sidecars (null audio). */
 export default defineConfig({
   testDir: '.',
+  globalSetup: './global-setup.ts',
   timeout: 120_000,
   expect: { timeout: 15_000 },
   workers: 1,
