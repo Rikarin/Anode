@@ -57,7 +57,13 @@ describe('Stem Splitter', () => {
     server.runJobs();
     await stable();
     expect(ui.stemSplitter()).toBeNull();
-    expect(project.trackList().map(t => t.name)).toEqual(['Mix', 'Mix Drums', 'Mix Bass', 'Mix Guitar', 'Mix Other']);
+    expect(project.trackList().map(t => t.name)).toEqual([
+      'Mix',
+      'Mix – Drums',
+      'Mix – Bass',
+      'Mix – Guitar',
+      'Mix – Other'
+    ]);
   });
 
   it('cannot split with no stem chosen', async () => {

@@ -324,7 +324,11 @@ describe('FakeAnodeServer, Phase 8 (docs/09-phase-8.md)', () => {
       `${region.name} – Bass`,
       `${region.name} – Other`
     ]);
-    expect(current()?.audioFiles.slice(-4).map(f => f.path)).toEqual([
+    expect(
+      current()
+        ?.audioFiles.slice(-4)
+        .map(f => f.path)
+    ).toEqual([
       `Audio Files/${region.name} Vocals.wav`,
       `Audio Files/${region.name} Drums.wav`,
       `Audio Files/${region.name} Bass.wav`,
