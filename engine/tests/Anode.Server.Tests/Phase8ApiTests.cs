@@ -101,6 +101,7 @@ public sealed class Phase8ApiTests : IAsyncDisposable {
     public async Task Following_Link_the_sessions_tempo_becomes_the_projects_in_one_undo_step_and_clock_tempo_does_not() {
         await StartAsync();
         await Client.CreateProjectAsync();
+
         async Task<int> StepsAsync() =>
             (await Client.GetFromJsonAsync("/api/v1/project/history", ContractsJsonContext.Default.UndoHistory, Token))!
             .Undo.Count;

@@ -23,7 +23,9 @@ namespace Anode.Server.Tests;
 public sealed class RealControlTests : IAsyncDisposable {
     static CancellationToken Token => TestContext.Current.CancellationToken;
 
-    readonly ServerFixture server = new(configure: static s => s.AddSingleton<IControlProtocols>(new ControlProtocols()));
+    readonly ServerFixture server =
+        new(configure: static s => s.AddSingleton<IControlProtocols>(new ControlProtocols()));
+
     readonly HttpClient client;
 
     public RealControlTests() {
@@ -68,7 +70,8 @@ public sealed class RealControlTests : IAsyncDisposable {
         (await client.ProjectAsync()).Tracks.Single(t => t.Id == trackId).Strip.VolumeDb;
 
     /// <summary>Every whole message sent to <paramref name="port" />, split out of the host's sends.</summary>
-    IReadOnlyList<byte[]> SentTo(string port) => [..Host.SentMidi.Where(m => m.Port == port).SelectMany(static m => Split(m.Data))];
+    IReadOnlyList<byte[]> SentTo(string port) =>
+        [..Host.SentMidi.Where(m => m.Port == port).SelectMany(static m => Split(m.Data))];
 
     bool Sent(string port, byte[] message) => SentTo(port).Any(m => m.AsSpan().SequenceEqual(message));
 
@@ -214,7 +217,8 @@ public sealed class RealControlTests : IAsyncDisposable {
 
         // The strip names, 4 characters each.
         await ServerFixture.Eventually(() => Task.FromResult(
-                SentTo("hui-out").Any(static m => m is [0xF0, 0x00, 0x00, 0x66, 0x05, 0x00, 0x10, 0x00, (byte)'T', (byte)'1', ..])
+                SentTo("hui-out")
+                    .Any(static m => m is [0xF0, 0x00, 0x00, 0x66, 0x05, 0x00, 0x10, 0x00, (byte)'T', (byte)'1', ..])
             )
         );
 
@@ -239,7 +243,13 @@ public sealed class RealControlTests : IAsyncDisposable {
         );
 
         // Play (zone 0x0E, port 4) on the press only.
-        await Host.PlayControlAsync("hui-in", [0xB0, 0x0F, 0x0E], [0xB0, 0x2F, 0x44], [0xB0, 0x0F, 0x0E], [0xB0, 0x2F, 0x04]);
+        await Host.PlayControlAsync(
+            "hui-in",
+            [0xB0, 0x0F, 0x0E],
+            [0xB0, 0x2F, 0x44],
+            [0xB0, 0x0F, 0x0E],
+            [0xB0, 0x2F, 0x04]
+        );
         await ServerFixture.Eventually(() => Task.FromResult(Host.State == TelemetryTransportState.Playing));
     }
 
@@ -275,7 +285,8 @@ public sealed class RealControlTests : IAsyncDisposable {
         );
         await ServerFixture.Eventually(async () => {
                 var project = await client.ProjectAsync();
-                return Math.Abs(project.Tracks[0].Strip.VolumeDb - Taper.Db(0.5)) < 1e-4 && project.Tracks[1].Strip.Mute;
+                return Math.Abs(project.Tracks[0].Strip.VolumeDb - Taper.Db(0.5)) < 1e-4
+                    && project.Tracks[1].Strip.Mute;
             }
         );
         await Send(new OscMessage("/anode/transport/play", []));
@@ -287,6 +298,7 @@ public sealed class RealControlTests : IAsyncDisposable {
         var me = ((IPEndPoint)udp.Client.LocalEndPoint!).Port;
         await Send(new OscMessage("/anode/subscribe", [new OscInt(me)]));
         var heard = new List<OscMessage>();
+
         async Task<OscMessage> Next() {
             using var timeout = CancellationTokenSource.CreateLinkedTokenSource(Token);
             timeout.CancelAfter(TimeSpan.FromSeconds(10));
@@ -303,7 +315,8 @@ public sealed class RealControlTests : IAsyncDisposable {
         var track = (await client.ProjectAsync()).Tracks[0].Id;
         await client.EditAsync(new SetStripCommand(track, -12));
         var expected = (float)Taper.Position(-12);
-        while (await Next() is not { Address: "/anode/track/1/volume", Arguments: [OscFloat f] } || Math.Abs(f.Value - expected) > 1e-5) {
+        while (await Next() is not { Address: "/anode/track/1/volume", Arguments: [OscFloat f] }
+               || Math.Abs(f.Value - expected) > 1e-5) {
             // other addresses, and the value before the change
         }
 

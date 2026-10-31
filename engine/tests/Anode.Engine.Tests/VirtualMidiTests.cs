@@ -22,12 +22,14 @@ public sealed class VirtualMidiTests {
     [Fact]
     public void Own_ports_only_hides_other_endpoints_and_renumbers_their_sources() {
         var inner = new FakeMidi();
-        inner.SetPorts([
-            new("keys", "Keys", true),
-            new("anode:in", "Anode In", true),
-            new("synth", "Synth", false),
-            new("anode:out", "Anode Out", false)
-        ]);
+        inner.SetPorts(
+            [
+                new("keys", "Keys", true),
+                new("anode:in", "Anode In", true),
+                new("synth", "Synth", false),
+                new("anode:out", "Anode Out", false)
+            ]
+        );
         using var midi = new OwnPortsMidiBackend(inner, "anode");
         Assert.True(midi.Open());
         Assert.Equal(["anode:in", "anode:out"], midi.Ports().Select(static p => p.Uid));

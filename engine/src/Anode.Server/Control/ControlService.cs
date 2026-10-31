@@ -296,17 +296,19 @@ public sealed partial class ControlService(
                 return mine.Id; // the same control moving on
             }
 
-            current = new([
-                ..current.Zones.Select(z => z with {
-                        Modes = [
-                            ..z.Modes.Select(m => m with {
-                                    Assignments = [..m.Assignments.Where(a => a.Id != learned)]
-                                }
-                            )
-                        ]
-                    }
-                )
-            ]);
+            current = new(
+                [
+                    ..current.Zones.Select(z => z with {
+                            Modes = [
+                                ..z.Modes.Select(m => m with {
+                                        Assignments = [..m.Assignments.Where(a => a.Id != learned)]
+                                    }
+                                )
+                            ]
+                        }
+                    )
+                ]
+            );
         }
 
         ControllerAssignments next;
@@ -328,17 +330,20 @@ public sealed partial class ControlService(
             // Re-learnt, the assignment keeps its id.
             var keep = learned;
             var fresh = made.Id;
-            next = new([
-                ..next.Zones.Select(z => z with {
-                        Modes = [
-                            ..z.Modes.Select(m => m with {
-                                    Assignments = [..m.Assignments.Select(a => a.Id == fresh ? a with { Id = keep } : a)]
-                                }
-                            )
-                        ]
-                    }
-                )
-            ]);
+            next = new(
+                [
+                    ..next.Zones.Select(z => z with {
+                            Modes = [
+                                ..z.Modes.Select(m => m with {
+                                        Assignments =
+                                            [..m.Assignments.Select(a => a.Id == fresh ? a with { Id = keep } : a)]
+                                    }
+                                )
+                            ]
+                        }
+                    )
+                ]
+            );
             made = made with { Id = keep };
         }
 
@@ -636,7 +641,9 @@ public sealed partial class ControlService(
             }
 
             var joins = surface.Config.Kind == ControlSurfaceKind.MackieControlXt
-                && current is [.., { Config.Kind: ControlSurfaceKind.MackieControl or ControlSurfaceKind.MackieControlXt }];
+                && current is [
+                    .., { Config.Kind: ControlSurfaceKind.MackieControl or ControlSurfaceKind.MackieControlXt }
+                ];
             if (!joins || current is null) {
                 current = [];
                 groups.Add(new(current));
