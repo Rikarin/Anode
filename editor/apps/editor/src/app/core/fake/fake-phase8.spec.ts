@@ -319,10 +319,16 @@ describe('FakeAnodeServer, Phase 8 (docs/09-phase-8.md)', () => {
     expect(done?.type === 'job' ? [done.job.state, done.job.files.length] : null).toEqual(['done', 4]);
     const tracks = current()?.tracks ?? [];
     expect(tracks.map(t => t.name).slice(1, 5)).toEqual([
-      `${tracks[0]?.name} Vocals`,
-      `${tracks[0]?.name} Drums`,
-      `${tracks[0]?.name} Bass`,
-      `${tracks[0]?.name} Other`
+      `${region.name} – Vocals`,
+      `${region.name} – Drums`,
+      `${region.name} – Bass`,
+      `${region.name} – Other`
+    ]);
+    expect(current()?.audioFiles.slice(-4).map(f => f.path)).toEqual([
+      `Audio Files/${region.name} Vocals.wav`,
+      `Audio Files/${region.name} Drums.wav`,
+      `Audio Files/${region.name} Bass.wav`,
+      `Audio Files/${region.name} Other.wav`
     ]);
     expect(tracks.slice(1, 5).every(t => t.strip.output === 'bus:3')).toBe(true);
     const stems = current()?.regions.filter(r => r.id !== region.id) ?? [];

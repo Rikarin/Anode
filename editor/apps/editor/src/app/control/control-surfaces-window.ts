@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, computed, inject, linkedSignal, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, DestroyRef, inject, linkedSignal, signal } from '@angular/core';
 import type { ControlSurface, ControlSurfaceKind, OscClient, OscSettings } from '@anode/api-client';
 import { provideIcons } from '@ng-icons/core';
 import { matArrowDownwardRound, matArrowUpwardRound, matCloseRound } from '@ng-icons/material-icons/round';
@@ -22,6 +22,9 @@ const Strips = 8;
  * kind on a port pair from the MIDI device list (Anode's virtual ports included), and the OSC server: on or off, its
  * port, the addresses clients reach this machine at, the clients that always get feedback, and those that subscribed.
  */
+/** How often the open window reads the OSC status again (its subscribers). */
+export const OscRefreshMs = 1_000;
+
 @Component({
   selector: 'an-control-surfaces-window',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -264,6 +267,13 @@ export class ControlSurfacesWindow {
 
   constructor() {
     void this.control.load();
+    // Subscribers come and go with no event: while the window is open and OSC is on, its status is read again.
+    const timer = setInterval(() => {
+      if (this.control.osc()?.settings.enabled) {
+        void this.control.refreshOsc(true);
+      }
+    }, OscRefreshMs);
+    inject(DestroyRef).onDestroy(() => clearInterval(timer));
   }
 
   protected kindName(kind: ControlSurfaceKind): string {

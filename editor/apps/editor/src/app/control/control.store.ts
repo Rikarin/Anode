@@ -298,8 +298,11 @@ export class ControlStore {
     }
   }
 
-  async refreshOsc(): Promise<void> {
-    const status = await this.notify.run(() => this.api.osc(), 'Could not read the OSC status');
+  /** Reads the OSC status again (its subscribers change with no event); `quiet` drops a failure unannounced. */
+  async refreshOsc(quiet = false): Promise<void> {
+    const status = quiet
+      ? await this.api.osc().catch(() => null)
+      : await this.notify.run(() => this.api.osc(), 'Could not read the OSC status');
     if (status) {
       this.osc.set(status);
     }

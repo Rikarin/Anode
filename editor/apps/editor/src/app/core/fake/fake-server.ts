@@ -154,7 +154,7 @@ import {
   shiftRegions,
   versionPath
 } from './fake-phase7';
-import { applySyncSettings, type ControlEffect, FakeControl, stemList, StemNames } from './fake-phase8';
+import { applySyncSettings, type ControlEffect, FakeControl, stemList, StemNames, stemTrackName } from './fake-phase8';
 import { CrashyPluginId, FakeCatalogue, FakeEffects, FakeMidiDevices } from './fake-plugins';
 import { FakeMidiEffects, FakeT2Effects, FakeT2Instruments, RemixFxId, withMacros } from './fake-plugins-phase6';
 import { FakeScriptPresets } from './fake-scripts';
@@ -1672,8 +1672,9 @@ export class FakeAnodeServer implements AnodeApi {
     const source = before.audioFiles.find(f => f.id === region.fileId);
     const files: AudioFile[] = stems.map(kind => ({
       id: `aud_${this.nextId++}`,
-      name: `${region.name} - ${StemNames[kind]}.wav`,
-      path: `Audio Files/${region.name} - ${StemNames[kind]}.wav`,
+      // As the Server's job names them: "<region> <Stem>.wav".
+      name: `${region.name} ${StemNames[kind]}.wav`,
+      path: `Audio Files/${region.name} ${StemNames[kind]}.wav`,
       sampleRate: source?.sampleRate ?? before.sampleRate,
       channels: 2,
       bitDepth: 32,
@@ -1715,7 +1716,8 @@ export class FakeAnodeServer implements AnodeApi {
         kind: 'audio',
         stereo: file.channels > 1,
         index,
-        name: `${sourceTrack.name} ${StemNames[stem.kind]}`
+        // The model's stem track name (Edits.StemTrackName): the region's and the stem's.
+        name: stemTrackName(region.name, stem.kind)
       });
       const trackId = next.tracks[index]?.id ?? '';
       next = {

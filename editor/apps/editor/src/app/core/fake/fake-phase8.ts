@@ -525,6 +525,17 @@ export const StemNames: Record<StemKind, string> = {
   piano: 'Piano'
 };
 
+/** A stem track's name as the model makes it (Edits.StemTrackName): "Mix – Vocals", within 128 characters. */
+export function stemTrackName(regionName: string, kind: StemKind): string {
+  const stem = StemNames[kind];
+  const suffix = ` – ${stem}`;
+  const name = regionName.trim();
+  if (!name) {
+    return stem;
+  }
+  return name.length + suffix.length <= 128 ? name + suffix : name.slice(0, 128 - suffix.length).trimEnd() + suffix;
+}
+
 /** The stems asked for, checked and in stem order. */
 export function stemList(stems: readonly StemKind[] | null | undefined): StemKind[] {
   const list = stems ?? FourStems;

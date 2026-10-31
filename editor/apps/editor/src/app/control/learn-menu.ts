@@ -48,8 +48,18 @@ export class LearnMenu {
     event.preventDefault();
     event.stopPropagation();
     this.choices.set(choices);
-    this.trigger.close();
-    this.trigger.open({ x: event.clientX, y: event.clientY });
+    const trigger = this.trigger;
+    const show = () => {
+      trigger.close();
+      trigger.open({ x: event.clientX, y: event.clientY });
+    };
+    if (event.buttons & 2) {
+      // On macOS the context menu event comes on the right button's press; its release then sends an `auxclick` that
+      // the menu's overlay, anchored away from the control, takes for a click outside and closes on. Open after it.
+      window.addEventListener('mouseup', () => setTimeout(show), { once: true, capture: true });
+    } else {
+      show();
+    }
     return true;
   }
 
