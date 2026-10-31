@@ -224,7 +224,7 @@ Five, in parallel, each on its own branch; they meet only at the contracts above
   `HuiVectors.json` (B tests against them); banking and paging; every assignment mode; OSC encode/decode round trips.
 - **Doc:** `docs/control/README.md` (surfaces, what each button does) and `docs/control/osc.md` (the address space).
 
-### E — Stem Splitter (ADR-0010)
+### E — Stem Splitter (`Anode.Stems`, `scripts/`; ADR-0010)
 
 - **Model:** export HTDemucs (4 and 6 stems) to ONNX from the official weights with a script
   (`scripts/export-demucs.py`); STFT and iSTFT stay outside the graph, in C#. Record the weights' licence in ADR-0010
