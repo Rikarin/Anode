@@ -615,6 +615,8 @@ test('builds and performs a beat from Anode content: packs, loops, DMD, Step Seq
     // the menu, and a control mapped to Cutoff is named so, as the parameter is), two points.
     await window.keyboard.press('a');
     const laneHeaders = window.getByRole('group', { name: new RegExp(`^Automation of ${synth}: `) });
+    // The track's lane shows once automation view is on: count after it, not before it renders.
+    await expect(laneHeaders.first()).toBeVisible();
     const lanesBefore = await laneHeaders.count();
     await window.getByTestId('add-automation-lane').last().click();
     await expect(laneHeaders).toHaveCount(lanesBefore + 1);

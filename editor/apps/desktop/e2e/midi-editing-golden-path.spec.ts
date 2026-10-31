@@ -679,6 +679,9 @@ test('edits MIDI and audio at the event and sample level: Event List, Step Edito
     const notesOf = async () => (await eventRows(window)).filter(r => r['status'] === 'Note');
     const beforeHumanize = await notesOf();
     await choose(window, window.getByTestId('transform-preset'), 'Humanize');
+    // Through another value: after an Apply gave the set a fresh seed, typing the same 1234 again was sometimes not
+    // reported as a change, and the set kept the fresh seed.
+    await window.getByTestId('transform-seed').fill('1');
     await window.getByTestId('transform-seed').fill('1234');
     await window.getByTestId('transform-seed').press('Enter');
     await window.getByTestId('transform-apply').click();
@@ -712,6 +715,9 @@ test('edits MIDI and audio at the event and sample level: Event List, Step Edito
     await undo(window);
     await expect.poll(notesOf).toEqual(beforeHumanize);
     await choose(window, window.getByTestId('transform-preset'), 'Humanize');
+    // Through another value: after an Apply gave the set a fresh seed, typing the same 1234 again was sometimes not
+    // reported as a change, and the set kept the fresh seed.
+    await window.getByTestId('transform-seed').fill('1');
     await window.getByTestId('transform-seed').fill('1234');
     await window.getByTestId('transform-seed').press('Enter');
     await window.getByTestId('transform-apply').click();

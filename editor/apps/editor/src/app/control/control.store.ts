@@ -313,10 +313,13 @@ export class ControlStore {
     );
     try {
       const status = await sent;
-      if (status) {
-        this.osc.set(status);
-      } else if (before && this.oscPending === 1) {
-        this.osc.set(before);
+      // Only the last change's answer is shown: an earlier one would take back the changes made since.
+      if (this.oscPending === 1) {
+        if (status) {
+          this.osc.set(status);
+        } else if (before) {
+          this.osc.set(before);
+        }
       }
     } finally {
       this.oscPending--;
