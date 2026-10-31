@@ -13,8 +13,13 @@ public enum SurfaceActionKind {
     /// <summary>A fader was touched (<c>Value</c> 1) or released (0): a gesture on <c>Address</c> of <c>TrackId</c>.</summary>
     Touch,
 
+    /// <summary>A strip's mute button: <c>Value</c> is the state it asks for (1 on, 0 off), the opposite of the view's.</summary>
     Mute,
+
+    /// <summary>A strip's solo button, as <see cref="Mute" />.</summary>
     Solo,
+
+    /// <summary>A strip's record button, as <see cref="Mute" />.</summary>
     RecordArm,
 
     /// <summary>Selects <c>TrackId</c>.</summary>
@@ -43,7 +48,10 @@ public enum SurfaceActionKind {
     /// <summary>Zoom turned on (<c>Value</c> 1) or off (0): the cursor keys zoom while on.</summary>
     Zoom,
 
-    /// <summary>The surface banked (a bank or channel button): <c>Value</c> is its new bank offset (extenders follow).</summary>
+    /// <summary>
+    ///     A bank or channel button moved the bank: from a lone surface, <c>Value</c> is its new bank offset; through a
+    ///     <see cref="SurfaceGroup" />, the group's new <see cref="SurfaceGroup.BankBase" /> (every unit already set).
+    /// </summary>
     Banked,
 
     /// <summary>The selected track's automation mode becomes <c>Automation</c>.</summary>
@@ -93,12 +101,16 @@ public interface IControlSurface {
     IReadOnlyList<byte[]> EncodeMeters(ProjectView view);
 
     /// <summary>
-    ///     Called about every 100 ms: messages the protocol sends on its own (the handshake, HUI's ping), and the
-    ///     connection timeout.
+    ///     Called about every 100 ms, and after each batch of <see cref="Decode" />: the replies <c>Decode</c> queued (the
+    ///     handshake's, HUI's ping answer), messages the protocol sends on its own (the device query, HUI's ping), and
+    ///     the connection timeout.
     /// </summary>
     IReadOnlyList<byte[]> Poll(long timeNs);
 
-    /// <summary>Forgets what was sent, so the next <see cref="Encode" /> sends everything (after a connect).</summary>
+    /// <summary>
+    ///     Forgets what was sent, so the next <see cref="Encode" /> sends everything (and the meters their levels). A
+    ///     unit does it itself when it first connects.
+    /// </summary>
     void Invalidate();
 }
 
