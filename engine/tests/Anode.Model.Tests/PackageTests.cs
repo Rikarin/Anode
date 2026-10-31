@@ -184,7 +184,7 @@ public sealed class PackageTests : IDisposable {
         Assert.Empty(loaded.LaneSets);
         ProjectPackage.Save(folder, loaded);
         var saved = JsonNode.Parse(File.ReadAllText(path))!;
-        Assert.Equal(7, saved["schemaVersion"]!.GetValue<int>());
+        Assert.Equal(PackageMigrations.CurrentSchemaVersion, saved["schemaVersion"]!.GetValue<int>());
         Assert.Equal(0, saved["audioFiles"]![0]!["version"]!.GetValue<int>());
         Assert.NotNull(saved["grooves"]);
 
@@ -196,14 +196,26 @@ public sealed class PackageTests : IDisposable {
     }
 
     [Fact]
-    public void A_schema_7_package_without_the_Phase_8_fields_reads_them_at_their_defaults() {
-        var (state, _, _) = RandomProjects.Build(3, 40);
+    public void A_schema_7_package_migrates_to_schema_8_with_the_Phase_8_fields_at_their_defaults() {
+        // A project with Phase 7 content and none of Phase 8's, as a schema-7 package holds.
+        var built = RandomProjects.Build(3, 40).State;
+        var state = built with { Settings = built.Settings with { Sync = SyncSettings.Default } };
         ProjectPackage.Save(folder, state);
         var path = Path.Combine(folder, "project.json");
         var root = JsonNode.Parse(File.ReadAllText(path))!.AsObject();
+        root["schemaVersion"] = 7;
         root["settings"]!.AsObject().Remove("sync");
         File.WriteAllText(path, root.ToJsonString());
+        foreach (var file in Directory.EnumerateFiles(Path.Combine(folder, "tracks"))) {
+            var json = JsonNode.Parse(File.ReadAllText(file))!.AsObject();
+            json["schemaVersion"] = 7;
+            File.WriteAllText(file, json.ToJsonString());
+        }
+
         var loaded = ProjectPackage.Load(folder);
+        ProjectPackage.Save(folder, loaded);
+        Assert.Equal(8, JsonNode.Parse(File.ReadAllText(path))!["schemaVersion"]!.GetValue<int>());
+        Assert.NotNull(JsonNode.Parse(File.ReadAllText(path))!["settings"]!["sync"]);
         Assert.Equal(RandomProjects.Json(state), RandomProjects.Json(loaded));
         Assert.Equal(SyncSettings.Default.Source, loaded.Settings.Sync.Source);
         Assert.Empty(loaded.Settings.Sync.Destinations);

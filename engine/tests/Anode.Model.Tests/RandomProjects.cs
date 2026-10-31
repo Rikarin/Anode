@@ -319,7 +319,7 @@ static class RandomProjects {
                     random,
                     [typeof(SetPitchNotesCommand), typeof(NewTrackAlternativeCommand), typeof(SetRegionFlexCommand)]
                 ),
-                _ => Pick(random, Buildable)
+                _ => Pick(random, CommandTypes)
             };
             var command = i is >= 4 and < 7 && FirstAudioTrack(state) is { } audio && state.Files.Count > 0
                 ? AddRegion(audio, Pick(random, [..state.Files.Values]), random)
@@ -431,20 +431,6 @@ static class RandomProjects {
 
     static IEnumerable<Track> MidiTracks(ProjectState state) =>
         state.Tracks.Where(static t => Edits.IsMidiKind(t.Kind) && t.FrozenFileId is null);
-
-    /// <summary>
-    ///     Phase 8 commands (docs/09-phase-8.md) the model rejects until workstream B implements them; the identity
-    ///     property skips them.
-    /// </summary>
-    public static readonly IReadOnlySet<string> PendingPhase8 = new HashSet<string>(StringComparer.Ordinal) {
-        nameof(SetSyncSettingsCommand), nameof(AddStemsCommand)
-    };
-
-    /// <summary>
-    ///     The command types random projects are built from: every one but those the model refuses outright (Phase 8, until
-    ///     workstream B), so the projects stay those of Phase 7.
-    /// </summary>
-    static Type[] Buildable => [..CommandTypes.Where(static t => !PendingPhase8.Contains(t.Name))];
 
     /// <summary>A random command of <paramref name="type" /> for <paramref name="s" />, or null when none can be made.</summary>
     public static EditCommand? Command(Type type, ProjectState s, Random r) {
@@ -1076,20 +1062,37 @@ static class RandomProjects {
                 : withFx.Length > 0 && Pick(r, withFx) is var fx
                     ? new SetScriptCommand(fx.Id, Pick(r, fx.Strip.MidiEffects).Id, Script(r))
                     : null,
-            // Phase 8 commands (docs/09-phase-8.md): placeholders until the model implements them (workstream B
-            // replaces these with generators that make commands that apply, and removes PendingPhase8).
+            // Phase 8 (docs/09-phase-8.md): each property left out half the time.
             nameof(SetSyncSettingsCommand) => new SetSyncSettingsCommand(
-                Pick(r, Enum.GetValues<SyncSource>()),
-                r.Next(2) == 0 ? [] : [new("port-1", r.Next(2) == 0, r.Next(2) == 0, r.Next(-10, 11))],
-                Pick(r, Enum.GetValues<MtcFrameRate>()),
-                r.Next(0, 3600),
+                r.Next(2) == 0 ? Pick(r, Enum.GetValues<SyncSource>()) : null,
                 r.Next(2) == 0
+                    ? null
+                    : [
+                        ..Enumerable.Range(1, r.Next(0, 4))
+                            .Select(n => new MidiSyncDestination(
+                                    $"port-{n}",
+                                    r.Next(2) == 0,
+                                    r.Next(2) == 0,
+                                    r.Next(-50, 51)
+                                )
+                            )
+                    ],
+                r.Next(2) == 0 ? Pick(r, Enum.GetValues<MtcFrameRate>()) : null,
+                r.Next(2) == 0 ? r.Next(0, 86_400) : null,
+                r.Next(2) == 0 ? r.Next(2) == 0 : null,
+                r.Next(3) switch { 0 => null, 1 => string.Empty, _ => "clock-in" },
+                r.Next(3) switch { 0 => null, 1 => string.Empty, _ => "mtc-in" }
             ),
             nameof(AddStemsCommand) => regions.Length == 0 || files.Length == 0
                 ? null
                 : new AddStemsCommand(
                     Pick(r, regions).Id,
-                    [new(StemKind.Vocals, Pick(r, files).Id), new(StemKind.Drums, Pick(r, files).Id)],
+                    [
+                        ..Enum.GetValues<StemKind>()
+                            .Where(_ => r.Next(2) == 0)
+                            .DefaultIfEmpty(StemKind.Vocals)
+                            .Select(k => new StemFile(k, Pick(r, files).Id))
+                    ],
                     r.Next(2) == 0
                 ),
             _ => throw new InvalidOperationException($"No generator for {type.Name}.")
