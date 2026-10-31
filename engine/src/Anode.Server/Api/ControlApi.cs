@@ -1,4 +1,7 @@
 using Anode.Contracts;
+using Anode.Server.Control;
+using Anode.Server.Engine;
+using Anode.Server.Projects;
 using Microsoft.AspNetCore.Http.HttpResults;
 
 namespace Anode.Server.Api;
@@ -12,52 +15,62 @@ static class ControlApi {
         var control = api.MapGroup("/control").WithTags("Control").AddEndpointFilter<ProblemFilter>();
         control.MapGet(
                 "/assignments",
-                static Ok<ControllerAssignments>() => throw Pending.Phase8("GetControllerAssignments")
+                static Ok<ControllerAssignments>(ControlService service) => TypedResults.Ok(service.Assignments())
             )
             .WithName("GetControllerAssignments")
             .WithSummary("Every controller assignment, by zone and mode (user settings, not the project).");
         control.MapPut(
                 "/assignments",
-                static Results<Ok<ControllerAssignments>, ProblemHttpResult>(ControllerAssignments assignments) =>
-                    throw Pending.Phase8("SetControllerAssignments")
+                static Results<Ok<ControllerAssignments>, ProblemHttpResult>(
+                    ControllerAssignments assignments,
+                    ControlService service
+                ) =>
+                    TypedResults.Ok(service.SetAssignments(assignments))
             )
             .WithName("SetControllerAssignments")
             .WithSummary(
                 "Replaces every controller assignment (ids unique, references valid; 422 otherwise); the host's matcher "
                 + "table follows."
             );
-        control.MapGet("/learn", static Ok<LearnState>() => throw Pending.Phase8("GetLearn"))
+        control.MapGet("/learn", static Ok<LearnState>(ControlService service) => TypedResults.Ok(service.Learn()))
             .WithName("GetLearn")
             .WithSummary("The Learn state: on or off, its target, and the last message received while learning.");
         control.MapPost(
                 "/learn/start",
-                static Results<Ok<LearnState>, ProblemHttpResult>(LearnRequest request) =>
-                    throw Pending.Phase8("StartLearn")
+                static Results<Ok<LearnState>, ProblemHttpResult>(LearnRequest request, ControlService service) =>
+                    TypedResults.Ok(service.StartLearn(request))
             )
             .WithName("StartLearn")
             .WithSummary(
                 "Turns Learn on, or changes its target while on. Moving a control then assigns it to the target; each "
                 + "message received while learning is a controlLearn event on /ws."
             );
-        control.MapPost("/learn/stop", static Ok<LearnState>() => throw Pending.Phase8("StopLearn"))
+        control.MapPost(
+                "/learn/stop",
+                static Ok<LearnState>(ControlService service) => TypedResults.Ok(service.StopLearn())
+            )
             .WithName("StopLearn")
             .WithSummary("Turns Learn off.");
         control.MapGet(
                 "/surfaces",
-                static Ok<IReadOnlyList<ControlSurface>>() => throw Pending.Phase8("ListSurfaces")
+                static Ok<IReadOnlyList<ControlSurface>>(ControlService service) => TypedResults.Ok(service.Surfaces())
             )
             .WithName("ListSurfaces")
             .WithSummary("The control surfaces, in order (user settings).");
         control.MapGet(
                 "/surfaces/status",
-                static Ok<IReadOnlyList<SurfaceStatus>>() => throw Pending.Phase8("ListSurfaceStatus")
+                static Ok<IReadOnlyList<SurfaceStatus>>(ControlService service) =>
+                    TypedResults.Ok(service.SurfaceStatuses())
             )
             .WithName("ListSurfaceStatus")
             .WithSummary("Each control surface's live state, in order; surfaces events on /ws report changes.");
         control.MapPost(
                 "/surfaces",
-                static Results<Ok<ControlSurface>, ProblemHttpResult>(AddSurfaceRequest request) =>
-                    throw Pending.Phase8("AddSurface")
+                static Results<Ok<ControlSurface>, ProblemHttpResult>(
+                    AddSurfaceRequest request,
+                    ControlService service
+                ) =>
+                    TypedResults.Ok(service.AddSurface(request))
             )
             .WithName("AddSurface")
             .WithSummary(
@@ -66,26 +79,30 @@ static class ControlApi {
             );
         control.MapDelete(
                 "/surfaces/{id}",
-                static Results<NoContent, NotFound>(string id) => throw Pending.Phase8("RemoveSurface")
+                static Results<NoContent, NotFound>(string id, ControlService service) =>
+                    service.RemoveSurface(id) ? TypedResults.NoContent() : TypedResults.NotFound()
             )
             .WithName("RemoveSurface")
             .WithSummary("Removes a control surface; its ports play tracks again.");
         control.MapPut(
                 "/surfaces/order",
-                static Results<Ok<IReadOnlyList<ControlSurface>>, ProblemHttpResult>(ReorderSurfacesRequest request) =>
-                    throw Pending.Phase8("ReorderSurfaces")
+                static Results<Ok<IReadOnlyList<ControlSurface>>, ProblemHttpResult>(
+                    ReorderSurfacesRequest request,
+                    ControlService service
+                ) =>
+                    TypedResults.Ok(service.ReorderSurfaces(request))
             )
             .WithName("ReorderSurfaces")
             .WithSummary("Puts the control surfaces in a new order (every id once; 422 otherwise).");
-        control.MapGet("/osc", static Ok<OscStatus>() => throw Pending.Phase8("GetOsc"))
+        control.MapGet("/osc", static Ok<OscStatus>(ControlService service) => TypedResults.Ok(service.Osc()))
             .WithName("GetOsc")
             .WithSummary(
                 "The OSC server: its settings, whether it listens, this machine's addresses, its subscribers."
             );
         control.MapPut(
                 "/osc",
-                static Results<Ok<OscStatus>, ProblemHttpResult>(OscSettings settings) =>
-                    throw Pending.Phase8("SetOsc")
+                static Results<Ok<OscStatus>, ProblemHttpResult>(OscSettings settings, ControlService service) =>
+                    TypedResults.Ok(service.SetOsc(settings))
             )
             .WithName("SetOsc")
             .WithSummary("Changes the OSC server's settings (user settings); it restarts on a new port.");
@@ -93,15 +110,23 @@ static class ControlApi {
         var project = api.MapGroup("/project").WithTags("Project").AddEndpointFilter<ProblemFilter>();
         project.MapPut(
                 "/selection",
-                static Results<NoContent, NotFound, ProblemHttpResult>(SelectionRequest request) =>
-                    throw Pending.Phase8("SetSelection")
+                static Results<NoContent, NotFound, ProblemHttpResult>(
+                    SelectionRequest request,
+                    ControlService service
+                ) => {
+                    service.SetSelection(request);
+                    return TypedResults.NoContent();
+                }
             )
             .WithName("SetSelection")
             .WithSummary(
                 "The editor's selected track, which selected-track controller assignments, surfaces and OSC follow "
                 + "(not part of the project: not saved, not undoable)."
             );
-        project.MapGet("/sync", static Results<Ok<SyncState>, NotFound>() => throw Pending.Phase8("GetSync"))
+        project.MapGet(
+                "/sync",
+                static Results<Ok<SyncState>, NotFound>(SyncService sync) => TypedResults.Ok(sync.State())
+            )
             .WithName("GetSync")
             .WithSummary(
                 "The live sync state (source, lock, external tempo, Link peers); sync events on /ws report changes. "
@@ -109,8 +134,14 @@ static class ControlApi {
             );
         project.MapPost(
                 "/regions/{regionId}/split-stems",
-                static Results<Accepted<Job>, NotFound, ProblemHttpResult>(string regionId, StemSplitRequest request) =>
-                    throw Pending.Phase8("SplitStems")
+                static Results<Accepted<Job>, NotFound, ProblemHttpResult>(
+                    string regionId,
+                    StemSplitRequest request,
+                    Jobs jobs
+                ) => {
+                    var job = jobs.SplitStems(regionId, request);
+                    return TypedResults.Accepted($"/api/v1/jobs/{job.Id}", job);
+                }
             )
             .WithName("SplitStems")
             .WithSummary(

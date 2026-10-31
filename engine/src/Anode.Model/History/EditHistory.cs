@@ -17,7 +17,9 @@ public sealed record UndoStep(
 ///     <c>setStrip</c> batches on the same control (and <c>setParameter</c> batches on the same parameter) within
 ///     <see cref="CoalesceWindow" /> merge into one step, so a fader or knob drag undoes in one go. A key starting
 ///     <see cref="PassPrefix" /> is an automation recording pass (docs/05-phase-4.md, "Automation"): its batches merge
-///     whatever they touch and however far apart they come, so a pass undoes in one go.
+///     whatever they touch and however far apart they come, so a pass undoes in one go. A key starting
+///     <see cref="GesturePrefix" /> is a hardware control's gesture (docs/09-phase-8.md): the server makes a new key
+///     when the gesture ends (500 ms after its last move, or on touch release), so its batches merge the same way.
 /// </summary>
 public sealed class EditHistory(TimeProvider time, int capacity = EditHistory.DefaultCapacity) {
     public const int DefaultCapacity = 500;
@@ -26,6 +28,9 @@ public sealed class EditHistory(TimeProvider time, int capacity = EditHistory.De
 
     /// <summary>The coalescing key prefix of an automation recording pass.</summary>
     public const string PassPrefix = "pass|";
+
+    /// <summary>The coalescing key prefix of a control surface's or controller assignment's gesture (Phase 8).</summary>
+    public const string GesturePrefix = "gesture|";
 
     readonly LinkedList<UndoStep> undo = new();
     readonly Stack<UndoStep> redo = new();
@@ -38,7 +43,8 @@ public sealed class EditHistory(TimeProvider time, int capacity = EditHistory.De
         var now = time.GetUtcNow();
         redo.Clear();
         if (coalesceKey is not null
-            && coalesceKey.StartsWith(PassPrefix, StringComparison.Ordinal)
+            && (coalesceKey.StartsWith(PassPrefix, StringComparison.Ordinal)
+                || coalesceKey.StartsWith(GesturePrefix, StringComparison.Ordinal))
             && undo.Last?.Value is { } pass
             && pass.CoalesceKey == coalesceKey) {
             // A recording pass: each batch may touch other objects, so the operations add up, kept to the last one

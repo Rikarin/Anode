@@ -433,11 +433,18 @@ public sealed partial class ProjectSession(
     ///     Applies a batch as one undo step. During playback, control moves on tracks in touch, latch or write mode also
     ///     record into their lanes (<see cref="AutomationPass" />), and the pass's batches coalesce into one step.
     /// </summary>
-    public CommandResult Apply(CommandBatch batch, long? expected) {
+    public CommandResult Apply(CommandBatch batch, long? expected) => Apply(batch, expected, null);
+
+    /// <summary>
+    ///     Applies a batch as <see cref="Apply(CommandBatch, long?)" /> does, coalescing it under
+    ///     <paramref name="coalesceKey" /> instead of the batch's own key when one is given (a hardware control's gesture,
+    ///     <see cref="EditHistory.GesturePrefix" />); an automation pass still takes over.
+    /// </summary>
+    public CommandResult Apply(CommandBatch batch, long? expected, string? coalesceKey) {
         CommandResult result;
         IReadOnlyList<FileAnalysis> built = [];
         try {
-            result = ApplyLocked(batch, expected, ref built);
+            result = ApplyLocked(batch, expected, coalesceKey, ref built);
         } finally {
             Announce(built);
         }
@@ -446,7 +453,12 @@ public sealed partial class ProjectSession(
         return result;
     }
 
-    CommandResult ApplyLocked(CommandBatch batch, long? expected, ref IReadOnlyList<FileAnalysis> built) {
+    CommandResult ApplyLocked(
+        CommandBatch batch,
+        long? expected,
+        string? coalesceKey,
+        ref IReadOnlyList<FileAnalysis> built
+    ) {
         CommandResult result;
         lock (gate) {
             var o = Required();
@@ -475,7 +487,7 @@ public sealed partial class ProjectSession(
             var forward = edit.Forward;
             var inverse = edit.Inverse;
             var state = edit.State;
-            var key = UndoLabels.CoalesceKey(batch);
+            var key = coalesceKey ?? UndoLabels.CoalesceKey(batch);
             if (AutomationPass.Records(batch.Commands) && PassOf(o) is var (pass, tick)) {
                 var recorded = pass.Record(o.State, state, tick, ids);
                 if (recorded.Count > 0) {

@@ -1080,8 +1080,16 @@ static class RandomProjects {
                 r.Next(2) == 0 ? Pick(r, Enum.GetValues<MtcFrameRate>()) : null,
                 r.Next(2) == 0 ? r.Next(0, 86_400) : null,
                 r.Next(2) == 0 ? r.Next(2) == 0 : null,
-                r.Next(3) switch { 0 => null, 1 => string.Empty, _ => "clock-in" },
-                r.Next(3) switch { 0 => null, 1 => string.Empty, _ => "mtc-in" }
+                r.Next(3) switch {
+                    0 => null,
+                    1 => string.Empty,
+                    _ => "clock-in"
+                },
+                r.Next(3) switch {
+                    0 => null,
+                    1 => string.Empty,
+                    _ => "mtc-in"
+                }
             ),
             nameof(AddStemsCommand) => regions.Length == 0 || files.Length == 0
                 ? null

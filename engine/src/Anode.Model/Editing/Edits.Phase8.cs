@@ -20,7 +20,12 @@ public static partial class Edits {
     public const int MaxPortIdLength = 256;
 
     /// <summary>The Phase 8 commands; null for every other command.</summary>
-    static IReadOnlyList<DeltaOp>? Phase8Ops(ProjectState state, EditCommand command, IIdSource ids, PluginCatalog plugins) =>
+    static IReadOnlyList<DeltaOp>? Phase8Ops(
+        ProjectState state,
+        EditCommand command,
+        IIdSource ids,
+        PluginCatalog plugins
+    ) =>
         command switch {
             SetSyncSettingsCommand c => SetSyncSettings(state, c),
             AddStemsCommand c => AddStems(state, c, ids, plugins),
@@ -29,6 +34,21 @@ public static partial class Edits {
 
     static DeltaOp[] SetSyncSettings(ProjectState state, SetSyncSettingsCommand c) {
         var old = state.Settings.Sync;
+        CheckSync(c);
+        var sync = new SyncSettings(
+            c.Source ?? old.Source,
+            c.Destinations is { } destinations ? SyncDestinations(destinations) : old.Destinations,
+            c.FrameRate ?? old.FrameRate,
+            c.StartOffsetSeconds ?? old.StartOffsetSeconds,
+            c.LinkStartStop ?? old.LinkStartStop,
+            c.ClockInPort is { } clock ? InPort(clock, "clock") : old.ClockInPort,
+            c.MtcInPort is { } mtc ? InPort(mtc, "MTC") : old.MtcInPort
+        );
+        return [new SettingsChanged(state.Settings with { Sync = sync })];
+    }
+
+    /// <summary>A sync change's source, frame rate and offset, checked.</summary>
+    static void CheckSync(SetSyncSettingsCommand c) {
         if (c.Source is { } source && !Enum.IsDefined(source)) {
             throw new EditException($"Unknown sync source {source}.");
         }
@@ -40,52 +60,47 @@ public static partial class Edits {
         if (c.StartOffsetSeconds is { } offset && !(offset is >= 0 and <= MaxStartOffsetSeconds)) {
             throw new EditException($"The start offset is 0…{MaxStartOffsetSeconds} s, not {offset}.");
         }
-
-        var sync = new SyncSettings(
-            c.Source ?? old.Source,
-            c.Destinations is { } destinations ? Destinations(destinations) : old.Destinations,
-            c.FrameRate ?? old.FrameRate,
-            c.StartOffsetSeconds ?? old.StartOffsetSeconds,
-            c.LinkStartStop ?? old.LinkStartStop,
-            c.ClockInPort is { } clock ? InPort(clock, "clock") : old.ClockInPort,
-            c.MtcInPort is { } mtc ? InPort(mtc, "MTC") : old.MtcInPort
-        );
-        return [new SettingsChanged(state.Settings with { Sync = sync })];
-
-        static MidiSyncDestination[] Destinations(IReadOnlyList<MidiSyncDestination> destinations) {
-            if (destinations.Count > MaxSyncDestinations) {
-                throw new EditException($"Send sync to at most {MaxSyncDestinations} ports.");
-            }
-
-            var seen = new HashSet<string>(StringComparer.Ordinal);
-            foreach (var destination in destinations) {
-                if (destination is null || !IsPortId(destination.Port)) {
-                    throw new EditException($"A sync destination names a MIDI port (1…{MaxPortIdLength} characters).");
-                }
-
-                if (!seen.Add(destination.Port)) {
-                    throw new EditException($"Port '{destination.Port}' is a sync destination twice.");
-                }
-
-                if (!(destination.DelayMs is >= -MaxSyncDelayMs and <= MaxSyncDelayMs)) {
-                    throw new EditException(
-                        $"A sync destination's delay is −{MaxSyncDelayMs}…{MaxSyncDelayMs} ms, not {destination.DelayMs}."
-                    );
-                }
-            }
-
-            return [..destinations];
-        }
-
-        static string? InPort(string port, string what) =>
-            port.Length == 0
-                ? null
-                : IsPortId(port)
-                    ? port
-                    : throw new EditException($"The {what} input is a MIDI port id of 1…{MaxPortIdLength} characters.");
     }
 
-    static bool IsPortId(string? port) => port is { Length: > 0 and <= MaxPortIdLength } && !string.IsNullOrWhiteSpace(port);
+    /// <summary>Sync destinations checked: at most 32, each port once, delays −50…50 ms.</summary>
+    static MidiSyncDestination[] SyncDestinations(IReadOnlyList<MidiSyncDestination> destinations) {
+        if (destinations.Count > MaxSyncDestinations) {
+            throw new EditException($"Send sync to at most {MaxSyncDestinations} ports.");
+        }
+
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var destination in destinations) {
+            if (destination is null || !IsPortId(destination.Port)) {
+                throw new EditException($"A sync destination names a MIDI port (1…{MaxPortIdLength} characters).");
+            }
+
+            if (!seen.Add(destination.Port)) {
+                throw new EditException($"Port '{destination.Port}' is a sync destination twice.");
+            }
+
+            if (!(destination.DelayMs is >= -MaxSyncDelayMs and <= MaxSyncDelayMs)) {
+                throw new EditException(
+                    $"A sync destination's delay is −{MaxSyncDelayMs}…{MaxSyncDelayMs} ms, not {destination.DelayMs}."
+                );
+            }
+        }
+
+        return [..destinations];
+    }
+
+    /// <summary>An input port setting: empty is any input (null).</summary>
+    static string? InPort(string port, string what) {
+        if (port.Length == 0) {
+            return null;
+        }
+
+        return IsPortId(port)
+            ? port
+            : throw new EditException($"The {what} input is a MIDI port id of 1…{MaxPortIdLength} characters.");
+    }
+
+    static bool IsPortId(string? port) =>
+        port is { Length: > 0 and <= MaxPortIdLength } && !string.IsNullOrWhiteSpace(port);
 
     /// <summary>
     ///     The Stem Splitter's result: a track per stem below the region's track (in the order given, with the source
@@ -123,9 +138,7 @@ public static partial class Edits {
                 plugins
             );
             var upserted = (TrackUpserted)added.Single(static o => o is TrackUpserted);
-            var stemTrack = upserted.Track with {
-                Strip = upserted.Track.Strip with { Output = track.Strip.Output }
-            };
+            var stemTrack = upserted.Track with { Strip = upserted.Track.Strip with { Output = track.Strip.Output } };
             DeltaOp[] step = [
                 ..added.Select(o => o == upserted ? upserted with { Track = stemTrack } : o)
             ];

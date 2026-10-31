@@ -37,7 +37,7 @@ public sealed class Phase8Tests : IDisposable {
         Assert.Equal(["out-1", "out-2"], sync.Destinations.Select(static d => d.Port));
 
         // An empty port is any input again; an empty list sends nothing.
-        var result = Apply(new SetSyncSettingsCommand(Destinations: [], ClockInPort: ""));
+        var result = Apply(new SetSyncSettingsCommand(Destinations: [], ClockInPort: string.Empty));
         Assert.Empty(state.Settings.Sync.Destinations);
         Assert.Null(state.Settings.Sync.ClockInPort);
         Assert.Equal(sync, state.Apply(result.Inverse).Settings.Sync);
@@ -86,7 +86,7 @@ public sealed class Phase8Tests : IDisposable {
         Assert.Equal(["Mix", "Mix – Vocals", "Mix – Drums", "After"], state.Tracks.Select(static t => t.Name));
         Assert.All(state.Tracks.Skip(1).Take(2), static t => Assert.Equal("output:2", t.Strip.Output));
         Assert.All(state.Tracks.Skip(1).Take(2), static t => Assert.True(t.Input.Stereo));
-        var stems = state.Regions.Values.Where(r => r.Id != region).OrderBy(r => r.FileId).ToArray();
+        var stems = state.Regions.Values.Where(r => r.Id != region).OrderBy(static r => r.FileId).ToArray();
         Assert.Equal([files[1], files[2]], stems.Select(static r => r.FileId));
         Assert.All(stems, static r => Assert.Equal((1920L, 0L, 96_000L), (r.StartTick, r.FileOffset, r.Length)));
         Assert.Equal(state.Tracks[1].Id, stems[0].TrackId);
@@ -106,13 +106,14 @@ public sealed class Phase8Tests : IDisposable {
             )
         );
         Assert.Throws<EditException>(() => Apply(new AddStemsCommand(region, [new(StemKind.Bass, "fil_gone")], false)));
-        Assert.Throws<EditException>(() => Apply(new AddStemsCommand("reg_gone", [new(StemKind.Bass, files[1])], false)));
+        Assert.Throws<EditException>(() => Apply(new AddStemsCommand("reg_gone", [new(StemKind.Bass, files[1])], false))
+        );
     }
 
     [Fact]
     public void Stem_track_names_fit_the_name_length() {
         Assert.Equal("Piano", Edits.StemTrackName("  ", StemKind.Piano));
-        var name = Edits.StemTrackName(new string('x', 200), StemKind.Guitar);
+        var name = Edits.StemTrackName(new('x', 200), StemKind.Guitar);
         Assert.Equal(Edits.MaxNameLength, name.Length);
         Assert.EndsWith(" – Guitar", name, StringComparison.Ordinal);
     }

@@ -142,6 +142,36 @@ public sealed class UserSettings(IOptions<ServerOptions> options) {
         }
     }
 
+    /// <summary>
+    ///     Phase 8 (docs/09-phase-8.md): the controller assignments (none: <see cref="ControllerAssignments.Empty" />),
+    ///     checked by <see cref="Control.ControlService" /> before they are saved.
+    /// </summary>
+    public ControllerAssignments ControllerAssignments() =>
+        Read("controller-assignments.json", ContractsJsonContext.Default.ControllerAssignments) is { Zones: not null } a
+            ? a
+            : Contracts.ControllerAssignments.Empty;
+
+    public void SaveControllerAssignments(ControllerAssignments assignments) =>
+        Write("controller-assignments.json", assignments, ContractsJsonContext.Default.ControllerAssignments);
+
+    /// <summary>The control surfaces, in order (none by default).</summary>
+    public IReadOnlyList<ControlSurface> ControlSurfaces() =>
+        Read("control-surfaces.json", ContractsJsonContext.Default.IReadOnlyListControlSurface) is { } surfaces
+            ? [..surfaces.Where(static s => s is { Id: not null, InputPort: not null, OutputPort: not null })]
+            : [];
+
+    public void SaveControlSurfaces(IReadOnlyList<ControlSurface> surfaces) =>
+        Write("control-surfaces.json", surfaces, ContractsJsonContext.Default.IReadOnlyListControlSurface);
+
+    /// <summary>The OSC server's settings (none: <see cref="Contracts.OscSettings.Default" />).</summary>
+    public OscSettings OscSettings() =>
+        Read("osc.json", ContractsJsonContext.Default.OscSettings) is { Clients: not null } settings
+            ? settings
+            : Contracts.OscSettings.Default;
+
+    public void SaveOscSettings(OscSettings settings) =>
+        Write("osc.json", settings, ContractsJsonContext.Default.OscSettings);
+
     T? Read<T>(string name, JsonTypeInfo<T> type) where T : class {
         lock (gate) {
             try {

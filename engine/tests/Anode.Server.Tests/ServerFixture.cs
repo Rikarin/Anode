@@ -19,9 +19,15 @@ public sealed class ServerFixture(
     string? token = null,
     string? editorDirectory = null,
     IAudioAnalyzer? analyzer = null,
-    IAudioEditor? editor = null
+    IAudioEditor? editor = null,
+    Action<IServiceCollection>? configure = null,
+    string? data = null
 ) : WebApplicationFactory<Program> {
-    readonly string dataDirectory = Directory.CreateTempSubdirectory("anode-server-").FullName;
+    readonly string dataDirectory = data ?? Directory.CreateTempSubdirectory("anode-server-").FullName;
+    readonly bool ownsData = data is null;
+
+    /// <summary>The data folder (settings, library) this server uses.</summary>
+    public string DataDirectory => dataDirectory;
 
     public async Task<SystemInfo> SystemAsync(HttpClient client) =>
         (await client.GetFromJsonAsync<SystemInfo>("/api/v1/system", TestContext.Current.CancellationToken))!;
@@ -68,6 +74,10 @@ public sealed class ServerFixture(
             builder.ConfigureServices(services => services.AddSingleton(editor));
         }
 
+        if (configure is not null) {
+            builder.ConfigureServices(configure);
+        }
+
         builder.ConfigureLogging(static logging => logging.SetMinimumLevel(LogLevel.Warning));
     }
 
@@ -82,7 +92,7 @@ public sealed class ServerFixture(
         }
 
         base.Dispose(disposing);
-        if (disposing) {
+        if (disposing && ownsData) {
             Directory.Delete(dataDirectory, true);
         }
     }

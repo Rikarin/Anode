@@ -35,6 +35,7 @@ public sealed partial class Jobs : IDisposable {
     readonly AudioImport import;
     readonly FileAnalyses analyses;
     readonly IAudioEditor editor;
+    readonly IStemModels models;
     readonly TimeProvider time;
     readonly ILogger<Jobs> logger;
     readonly ConcurrentDictionary<string, Entry> jobs = new(StringComparer.Ordinal);
@@ -50,11 +51,13 @@ public sealed partial class Jobs : IDisposable {
         AudioImport import,
         FileAnalyses analyses,
         IAudioEditor editor,
+        IStemModels models,
         TimeProvider time,
         ILogger<Jobs> logger
     ) {
         this.analyses = analyses;
         this.editor = editor;
+        this.models = models;
         this.session = session;
         this.engine = engine;
         this.hub = hub;
