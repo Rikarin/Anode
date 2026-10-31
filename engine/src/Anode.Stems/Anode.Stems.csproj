@@ -1,9 +1,19 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <Description>The Stem Splitter's separation (docs/adr/0010-stem-splitter.md): the model runner, the STFT, chunking and overlap-add. Referenced by the server only, so the engine host never loads ONNX Runtime.</Description>
+    <Description>The Stem Splitter's separation (docs/adr/0010-stem-splitter.md): the model runner, the STFT, chunking and overlap-add, and the model store. Referenced by the server only, so the engine host never loads ONNX Runtime.</Description>
   </PropertyGroup>
   <ItemGroup>
-    <!-- StemKind. Workstream E adds Microsoft.ML.OnnxRuntime here. -->
+    <InternalsVisibleTo Include="Anode.Stems.Tests"/>
+  </ItemGroup>
+  <ItemGroup>
+    <!-- StemKind. -->
     <ProjectReference Include="../Anode.Contracts/Anode.Contracts.csproj"/>
+    <!-- The Phase 7 resampler and the real FFT. -->
+    <ProjectReference Include="../Anode.Dsp/Anode.Dsp.csproj"/>
+    <PackageReference Include="Microsoft.ML.OnnxRuntime"/>
+  </ItemGroup>
+  <ItemGroup>
+    <!-- The model files' names, URLs and SHA-256, one manifest for scripts/fetch-models.mjs and the server. -->
+    <EmbeddedResource Include="../../../scripts/models.json" LogicalName="Anode.Stems.models.json" Link="models.json"/>
   </ItemGroup>
 </Project>

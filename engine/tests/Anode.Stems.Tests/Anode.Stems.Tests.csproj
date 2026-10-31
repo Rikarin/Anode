@@ -2,4 +2,8 @@
   <ItemGroup>
     <ProjectReference Include="../../src/Anode.Stems/Anode.Stems.csproj"/>
   </ItemGroup>
+  <ItemGroup>
+    <!-- The fixture models (scripts/make-stem-fixture.py), also for the server's and the editor's tests. -->
+    <None Include="Fixtures/*.onnx" CopyToOutputDirectory="PreserveNewest"/>
+  </ItemGroup>
 </Project>
