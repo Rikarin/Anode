@@ -28,6 +28,10 @@ namespace Anode.Engine;
 ///     How much of each armed audio track's input, and of live MIDI, Flashback Capture keeps (docs/04-phase-3.md: 10
 ///     minutes).
 /// </param>
+/// <param name="VirtualMidiPorts">
+///     Publish Anode's virtual MIDI ports ("Anode In", "Anode Out", Phase 8) where the MIDI backend has them
+///     (anode-host does).
+/// </param>
 public sealed record EngineOptions(
     int SampleRate,
     int BufferFrames,
@@ -35,7 +39,8 @@ public sealed record EngineOptions(
     int OutputLatency = 0,
     double StreamSeconds = 2,
     long VerifyBytes = 4 << 20,
-    double FlashbackSeconds = 600
+    double FlashbackSeconds = 600,
+    bool VirtualMidiPorts = false
 );
 
 /// <summary>The takes a recording pass produced: audio files, and the live MIDI armed MIDI tracks received.</summary>
@@ -84,7 +89,12 @@ public sealed partial class EngineController : IDisposable {
         Streamer = new(Engine, Math.Max(4 * options.BufferFrames, options.SampleRate * 15 / 100));
         Writer = new();
         Plugins = plugins ?? new();
-        Midi = new(Engine, midi) { Log = message => Log?.Invoke(message), HistoryFrames = flashbackFrames };
+        Midi = new(Engine, midi) {
+            Log = message => Log?.Invoke(message),
+            HistoryFrames = flashbackFrames,
+            OpenVirtualPorts = options.VirtualMidiPorts
+        };
+        StartSync();
     }
 
     public EngineOptions Options { get; }
@@ -1249,6 +1259,7 @@ public sealed partial class EngineController : IDisposable {
         }
 
         Midi.Dispose();
+        DisposeSync();
         Writer.Dispose();
         Streamer.Dispose();
         Engine.SetPreview(null)?.Dispose(); // no thread reads it any more

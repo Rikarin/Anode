@@ -15,6 +15,17 @@ int32_t cth_midi_send_at(const char *uid, const uint8_t *data, int32_t length, u
     return -1;
 }
 void cth_midi_close(void) { }
+int32_t cth_midi_read_sysex(uint8_t *buffer, int32_t capacity, uint64_t *time_ns, int32_t *source)
+{
+    (void)buffer; (void)capacity; (void)time_ns; (void)source;
+    return 0;
+}
+int32_t cth_midi_virtual_open(const char *name, const char *uid, int32_t is_input)
+{
+    (void)name; (void)uid; (void)is_input;
+    return CTH_MIDI_VIRTUAL_UNSUPPORTED;
+}
+int32_t cth_midi_virtual_close(const char *uid) { (void)uid; return -1; }
 
 uint64_t cth_midi_now_ns(void)
 {

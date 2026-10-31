@@ -28,10 +28,35 @@ public interface IMidiBackend : IDisposable {
     int Read(Span<MidiInputMessage> into);
 
     /// <summary>
-    ///     Sends a short message to the output <paramref name="uid" />, to be heard at <paramref name="timeNs" />
-    ///     (0: now). False when it could not.
+    ///     Sends to the output <paramref name="uid" />, to be heard at <paramref name="timeNs" /> (0: now): one or more
+    ///     whole messages (a short message, or SysEx where the backend sends it). False when it could not.
     /// </summary>
     bool Send(string uid, ReadOnlySpan<byte> message, long timeNs);
+
+    /// <summary>
+    ///     Phase 8: copies the oldest queued SysEx message (F0 … F7) into <paramref name="buffer" /> and returns its
+    ///     length, with its arrival time and source as <see cref="MidiInputMessage" /> has them; 0 when none is queued
+    ///     (or the backend delivers none); −(its length) when <paramref name="buffer" /> is too small, leaving it
+    ///     queued.
+    /// </summary>
+    int ReadSystemExclusive(Span<byte> buffer, out long timeNs, out int source) {
+        timeNs = 0;
+        source = -1;
+        return 0;
+    }
+
+    /// <summary>
+    ///     Phase 8: publishes a virtual port other applications see as <paramref name="name" />, listed here under
+    ///     <paramref name="uid" /> as an input (<paramref name="isInput" />) or an output. 0 on success,
+    ///     <see cref="VirtualUnsupported" /> where the backend has none, another negative value on failure.
+    /// </summary>
+    int OpenVirtual(string name, string uid, bool isInput) => VirtualUnsupported;
+
+    /// <summary>Removes the virtual port <paramref name="uid" />; false when none is open.</summary>
+    bool CloseVirtual(string uid) => false;
+
+    /// <summary>What <see cref="OpenVirtual" /> returns where the backend has no virtual ports.</summary>
+    const int VirtualUnsupported = -2;
 
     /// <summary>
     ///     True when <see cref="Send" /> schedules a future time itself (CoreMIDI); otherwise the caller holds a message

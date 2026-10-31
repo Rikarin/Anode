@@ -15,6 +15,12 @@ public enum EngineCommandKind : byte {
     Locate,
 
     /// <summary>
+    ///     Phase 8's MTC chase: move the playhead so that position <see cref="EngineCommand.A" /> is heard at host time
+    ///     <see cref="EngineCommand.B" /> (nanoseconds), to the sample.
+    /// </summary>
+    LocateAt,
+
+    /// <summary>
     ///     The cycle: <see cref="EngineCommand.Flag" /> enabled, <see cref="EngineCommand.A" /> start,
     ///     <see cref="EngineCommand.B" /> end.
     /// </summary>

@@ -24,9 +24,6 @@ public sealed unsafe partial class AudioEngine {
     /// <summary>A request closer than this to a boundary (1 ms, rounded up) is late and takes the next boundary.</summary>
     public int LateFrames => (SampleRate + 999) / 1000;
 
-    /// <summary>The model's tempo map at the engine's rate (a model without tempo points: 120 bpm in 4/4).</summary>
-    TempoMap TempoOf(ModelRoot model) => model.Tempo.SampleRate == SampleRate ? model.Tempo : new(SampleRate);
-
     /// <summary>The block's launcher work: queued requests, then every track's schedule.</summary>
     void Launchers(ModelRoot model, in TempoMap tempo, long position, long clock, int frames, bool rolling) {
         var tracks = model.Tracks;

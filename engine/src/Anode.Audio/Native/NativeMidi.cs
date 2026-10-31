@@ -6,7 +6,8 @@ namespace Anode.Audio.Native;
 /// <summary>
 ///     MIDI through the <c>cth_audio</c> shim (CoreMIDI on macOS, WinMM on Windows, the ALSA sequencer on Linux; ported
 ///     from Cathode's <c>NativeMidi</c>). Input from every source is timestamped and queued natively; <see cref="Read" />
-///     drains it. Output is timestamped: CoreMIDI schedules it, the other backends send at once.
+///     drains it (and <see cref="ReadSystemExclusive" /> the SysEx). Output is timestamped: CoreMIDI schedules it, the other
+///     backends send at once. Phase 8 adds virtual ports (CoreMIDI only) and SysEx both ways.
 /// </summary>
 public sealed unsafe partial class NativeMidiBackend : IMidiBackend {
     const string Library = "cth_audio";
@@ -37,6 +38,33 @@ public sealed unsafe partial class NativeMidiBackend : IMidiBackend {
         opened = OpenNative() == 0;
         return opened;
     }
+
+    public int ReadSystemExclusive(Span<byte> buffer, out long timeNs, out int source) {
+        ulong time;
+        int from;
+        int length;
+        fixed (byte* data = buffer) {
+            length = ReadSystemExclusiveNative(data, buffer.Length, &time, &from);
+        }
+
+        timeNs = length > 0 ? (long)time : 0;
+        source = length > 0 ? from : -1;
+        return length;
+    }
+
+    public int OpenVirtual(string name, string uid, bool isInput) {
+        var result = VirtualOpenNative(name, uid, isInput ? 1 : 0);
+        if (result == 0) {
+            opened = true; // closing the backend closes the port with it
+        }
+
+        return result;
+    }
+
+    public bool CloseVirtual(string uid) => VirtualCloseNative(uid) == 0;
+
+    /// <summary>The backend's last failure on this thread (an <see cref="OpenVirtual" /> that failed says why).</summary>
+    public static string LastError() => NativeMethods.LastErrorMessage();
 
     public int Read(Span<MidiInputMessage> into) {
         var buffer = stackalloc EventNative[ReadBatch];
@@ -99,6 +127,15 @@ public sealed unsafe partial class NativeMidiBackend : IMidiBackend {
 
     [LibraryImport(Library, EntryPoint = "cth_midi_read")]
     private static partial int ReadNative(EventNative* events, int max);
+
+    [LibraryImport(Library, EntryPoint = "cth_midi_read_sysex")]
+    private static partial int ReadSystemExclusiveNative(byte* buffer, int capacity, ulong* timeNs, int* source);
+
+    [LibraryImport(Library, EntryPoint = "cth_midi_virtual_open", StringMarshalling = StringMarshalling.Utf8)]
+    private static partial int VirtualOpenNative(string name, string uid, int isInput);
+
+    [LibraryImport(Library, EntryPoint = "cth_midi_virtual_close", StringMarshalling = StringMarshalling.Utf8)]
+    private static partial int VirtualCloseNative(string uid);
 
     [LibraryImport(Library, EntryPoint = "cth_midi_send_at", StringMarshalling = StringMarshalling.Utf8)]
     private static partial int SendAtNative(string? destinationUid, byte* data, int length, ulong timeNs);

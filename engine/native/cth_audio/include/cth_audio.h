@@ -97,7 +97,8 @@ CTH_API const char *cth_audio_last_error(void);
 /* ---- MIDI (docs/02-architecture.md 5.10) ----------------------------------------------------------------------
  * cth_midi_open connects every MIDI input source; incoming messages are timestamped by the OS and queued in a
  * lock-free ring that cth_midi_read drains (from one thread). Times are nanoseconds on the cth_midi_now_ns clock.
- * Channel messages and system real-time (clock, start, stop) are delivered; SysEx is dropped. */
+ * Channel messages, system common (MTC quarter frame, song position, song select, tune request) and system real-time
+ * (clock, start, stop) are delivered there; SysEx goes to a separate ring that cth_midi_read_sysex drains (Anode). */
 
 typedef struct cth_midi_port {
     char uid[64];   /* stable across runs (CoreMIDI unique id; WinMM "in:"/"out:" + name + "#n";
@@ -119,7 +120,16 @@ CTH_API int32_t cth_midi_port_info(int32_t index, cth_midi_port *port);
 CTH_API int32_t cth_midi_open(void);
 /* Copies up to max queued events into events; returns how many. Events that overflowed the ring are lost. */
 CTH_API int32_t cth_midi_read(cth_midi_event *events, int32_t max);
-/* Sends a short message to the destination with this uid, or to every destination when uid is NULL. */
+/* Copies the oldest queued SysEx message (F0 … F7, whole) into buffer and returns its length, with its arrival time
+ * and source as cth_midi_event has them; 0 when none is queued; -(its length) when capacity is too small, leaving it
+ * queued. One reader, as cth_midi_read. Messages longer than CTH_MIDI_SYSEX_MAX bytes, and messages that overflow the
+ * ring, are lost. (Anode Phase 8: Mackie Control's and HUI's SysEx, and MTC full frames.) */
+#define CTH_MIDI_SYSEX_MAX 16384
+CTH_API int32_t cth_midi_read_sysex(uint8_t *buffer, int32_t capacity, uint64_t *time_ns, int32_t *source);
+/* Sends to the destination with this uid, or to every destination when uid is NULL: one or more whole messages
+ * (channel, system common, real-time, or SysEx F0 … F7, without running status) of any total length. Returns 0 when
+ * a destination took them, negative when none did or the bytes are not whole messages. (Before Anode Phase 8: one
+ * short message of 1–3 bytes, which is still what length 1–3 means.) */
 CTH_API int32_t cth_midi_send(const char *destination_uid, const uint8_t *data, int32_t length);
 /* As cth_midi_send, delivered at time_ns on the cth_midi_now_ns clock (0 or a past time: now). CoreMIDI schedules it;
  * the other backends send at once, so their callers hold an event until it is due. Returns 1 when the backend
@@ -128,7 +138,7 @@ CTH_API int32_t cth_midi_send_at(const char *destination_uid, const uint8_t *dat
 CTH_API void cth_midi_close(void);
 CTH_API uint64_t cth_midi_now_ns(void);
 
-/* ---- Virtual MIDI ports (Anode Phase 8, docs/09-phase-8.md; declared, implemented by workstream A) -------------
+/* ---- Virtual MIDI ports (Anode Phase 8, docs/09-phase-8.md) ---------------------------------------------------
  * A virtual port is one this process publishes for other apps (CoreMIDI MIDIDestinationCreate / MIDISourceCreate):
  *   - an input (is_input 1) is a destination other apps send to; its messages enter the cth_midi_read ring like any
  *     source's, timestamped the same way, with source the port's index as cth_midi_port_info numbers it;
@@ -136,6 +146,8 @@ CTH_API uint64_t cth_midi_now_ns(void);
  * name is what other apps show ("Anode In", "Anode Out"); uid is this port's uid in cth_midi_port_info (Anode's are
  * "anode:in" and "anode:out"; at most 63 bytes), stable across runs. The port is listed by cth_midi_port_count and
  * cth_midi_port_info from the next cth_midi_open (which connects a virtual input as it does sources) until it is closed.
+ * Another process using cth_audio lists it under the same uid, from its side (CoreMIDI: the uid is a property of the
+ * endpoint): "anode:in" as an output it can send to, "anode:out" as an input it hears.
  * Returns 0 on success; CTH_MIDI_VIRTUAL_UNSUPPORTED where the backend has no virtual ports (WinMM); another negative
  * value on failure (a uid already open, CoreMIDI refusing), with cth_audio_last_error saying why. */
 #define CTH_MIDI_VIRTUAL_UNSUPPORTED (-2)
