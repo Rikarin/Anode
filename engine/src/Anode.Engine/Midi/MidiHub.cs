@@ -392,11 +392,13 @@ public sealed class MidiHub : IDisposable {
     bool Play(string? device, in MidiInputMessage m) {
         var current = Volatile.Read(ref routing);
         if (m.Status >= 0xF0) {
-            if (current.IsControlPort(device)) {
-                Control(device, m);
-            } else if (Sync is { } sync && sync.Wants(device, m.Status)) {
+            // The sync follower first: a port chosen as the clock or MTC input syncs even when a surface also uses it
+            // (surfaces send no clock); other system messages on a control port are the surface's.
+            if (Sync is { } sync && sync.Wants(device, m.Status)) {
                 Span<byte> bytes = [m.Status, m.Data1, m.Data2];
                 sync.Receive(device, bytes[..Length(m.Status)], m.TimeNs);
+            } else if (current.IsControlPort(device)) {
+                Control(device, m);
             }
 
             return false; // system messages (clock, active sensing) are not played
@@ -448,7 +450,11 @@ public sealed class MidiHub : IDisposable {
             var known = Volatile.Read(ref ports);
             var device = (uint)source < (uint)known.Count ? known[source].Uid : null;
             var data = sysex.AsSpan(0, length);
-            if (Volatile.Read(ref routing).IsControlPort(device)) {
+            // MTC's full frame (F0 7F dev 01 01 …) syncs on the MTC input even when a surface uses the port too.
+            var fullFrame = data is [0xF0, 0x7F, _, 0x01, 0x01, ..];
+            if (fullFrame && Sync is { } mtc && mtc.Wants(device, 0xF0)) {
+                mtc.Receive(device, data, timeNs);
+            } else if (Volatile.Read(ref routing).IsControlPort(device)) {
                 control.Add(new(device ?? string.Empty, timeNs, [..data]));
             } else if (Sync is { } sync && sync.Wants(device, 0xF0)) {
                 sync.Receive(device, data, timeNs);

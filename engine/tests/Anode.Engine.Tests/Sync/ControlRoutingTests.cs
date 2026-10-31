@@ -63,6 +63,24 @@ public sealed class ControlRoutingTests : IDisposable {
     }
 
     [Fact]
+    public void A_control_port_chosen_as_the_sync_input_still_syncs() {
+        controller.SetControlRouting(new(["in-b"], [], false));
+        controller.SetSync(new(EngineSyncSource.MidiClock, [], EngineMtcRate.Fps25, 0, false, "in-b", null));
+        midi.Play(1, 0xFA, 0, 0, 1_000); // Start and a clock: the follower's, not the surface's
+        midi.Play(1, 0xF8, 0, 0, 2_000);
+        midi.Play(1, 0xE0, 0x00, 0x40, 3_000); // the surface's fader still goes to the server
+        Played();
+        Assert.Equal(["in-b E00040"], Forwarded());
+
+        forwarded.Clear();
+        controller.SetSync(new(EngineSyncSource.Mtc, [], EngineMtcRate.Fps25, 0, false, null, "in-b"));
+        midi.PlaySysEx(1, [0xF0, 0x7F, 0x7F, 0x01, 0x01, 0x20, 0x00, 0x0A, 0x00, 0xF7], 4_000); // MTC full frame
+        midi.PlaySysEx(1, [0xF0, 0x00, 0x00, 0x66, 0x14, 0x01, 0xF7], 5_000); // the surface's SysEx
+        Played();
+        Assert.Equal(["in-b F00000661401F7"], Forwarded());
+    }
+
+    [Fact]
     public void Matched_messages_are_consumed_with_their_families_and_the_rest_play() {
         controller.SetControlRouting(
             new(
