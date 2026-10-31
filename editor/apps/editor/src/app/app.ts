@@ -5,6 +5,11 @@ import { XuiInputImports } from '@xui/input';
 import { XuiNonIdealStateImports } from '@xui/non-ideal-state';
 import { XuiSpinnerImports } from '@xui/spinner';
 import { ArticulationSetEditor } from './articulations/articulation-set-editor';
+import { ControlSurfacesWindow } from './control/control-surfaces-window';
+import { ControlStore } from './control/control.store';
+import { ControllerAssignmentsWindow } from './control/controller-assignments-window';
+import { LearnMenuHost } from './control/learn-menu';
+import { SelectionReporter } from './control/selection-reporter';
 import type { AppCommand } from './core/desktop';
 import { Startup } from './core/startup';
 import { BounceDialog } from './export/bounce-dialog';
@@ -33,7 +38,10 @@ import { StepInputStore } from './state/step-input.store';
 import { ThemeStore } from './state/theme.store';
 import { TransportStore } from './state/transport.store';
 import { type EditorView, UiStore } from './state/ui.store';
+import { StemSplitterDialog } from './stems/stem-splitter-dialog';
 import { StepInputKeyboard } from './step-input/step-input-keyboard';
+import { SyncSettingsWindow } from './sync/sync-settings-window';
+import { SyncStore } from './sync/sync.store';
 import { AudioImport } from './tracks/audio-import';
 import { TransformWindow } from './transform/transform-window';
 
@@ -45,17 +53,22 @@ import { TransformWindow } from './transform/transform-window';
     BounceDialog,
     BounceInPlaceDialog,
     ControlBar,
+    ControllerAssignmentsWindow,
+    ControlSurfacesWindow,
     GroupSettings,
     IoLabelsDialog,
     KeyCommandsEditor,
+    LearnMenuHost,
     PluginWindowsHost,
     ProcessingDialog,
     RouterOutlet,
     SaveAlternativeDialog,
     ScriptEditor,
     SoundLibraryDialog,
+    StemSplitterDialog,
     StepInputKeyboard,
     StripSilenceDialog,
+    SyncSettingsWindow,
     TransformWindow,
     GrooveWindow,
     XuiButtonImports,
@@ -151,7 +164,30 @@ import { TransformWindow } from './transform/transform-window';
               <an-script-editor />
             }
           }
+          <!-- Phase 8's windows (docs/09-phase-8.md), loaded when first opened. -->
+          @if (ui.syncSettingsOpen()) {
+            @defer (on immediate) {
+              <an-sync-settings-window />
+            }
+          }
+          @if (ui.stemSplitter() !== null) {
+            @defer (on immediate) {
+              <an-stem-splitter-dialog />
+            }
+          }
         }
+        <!-- Control surfaces and assignments are user settings: they open without a project too. -->
+        @if (ui.controllerAssignmentsOpen()) {
+          @defer (on immediate) {
+            <an-controller-assignments-window />
+          }
+        }
+        @if (ui.controlSurfacesOpen()) {
+          @defer (on immediate) {
+            <an-control-surfaces-window />
+          }
+        }
+        <an-learn-menu-host />
         <an-sound-library-dialog />
       }
     }
@@ -172,6 +208,8 @@ export class App {
   protected readonly live = inject(LiveMidiStore);
   private readonly audioImport = inject(AudioImport);
   private readonly mixer = inject(MixerStore);
+  private readonly control = inject(ControlStore);
+  private readonly sync = inject(SyncStore);
 
   /**
    * In the macOS desktop app the control bar is the title bar: it drags the window and leaves room for the traffic
@@ -194,6 +232,8 @@ export class App {
     window.anode?.onCommand?.(command => void this.command(command));
     // Created at start, so plugin problems are reported wherever the person is.
     inject(PluginWindows);
+    // Phase 8: the Server hears which track is selected (selected-track assignments and surfaces follow it).
+    inject(SelectionReporter);
     this.registerKeys();
     void this.startup.start();
   }
@@ -246,7 +286,13 @@ export class App {
       'mixer.groupSettings': () => this.openGroupSettings(),
       'track.newAux': () => void this.mixer.addAux(),
       'track.newVca': () => void this.mixer.addVca(),
-      'view.musicalTyping': () => this.live.typing.update(on => !on)
+      'view.musicalTyping': () => this.live.typing.update(on => !on),
+      'control.surfaces': () => this.ui.controlSurfacesOpen.set(true),
+      'control.assignments': () => this.ui.controllerAssignmentsOpen.set(true),
+      'control.learn': () => void this.learnNew(),
+      'project.syncSettings': () => this.ui.syncSettingsOpen.set(true),
+      'region.stemSplitter': () => this.openStemSplitter(),
+      'sync.link': () => void this.sync.toggleLink()
     };
     for (let n = 1; n <= 9; n++) {
       actions[`screenset.recall${n}`] = () => void this.screensets.recall(n);
@@ -301,6 +347,40 @@ export class App {
       case 'ioLabels':
         this.ui.ioLabelsOpen.set(true);
         break;
+      case 'controlSurfaces':
+        this.ui.controlSurfacesOpen.set(true);
+        break;
+      case 'controllerAssignments':
+        this.ui.controllerAssignmentsOpen.set(true);
+        break;
+      case 'syncSettings':
+        if (this.project.isOpen()) {
+          this.ui.syncSettingsOpen.set(true);
+        }
+        break;
+      case 'stemSplitter':
+        this.openStemSplitter();
+        break;
+    }
+  }
+
+  /** Edit ▸ Stem Splitter…: on the selected audio region (the first, when several are). */
+  private openStemSplitter(): void {
+    const regions = this.project.regions();
+    const regionId = [...this.selection.regions()].find(id => regions.has(id));
+    if (regionId) {
+      this.ui.stemSplitter.set({ regionId });
+    }
+  }
+
+  /** Learn New Assignment (⌘L): Controller Assignments in Learn, waiting for a control to be clicked. */
+  private async learnNew(): Promise<void> {
+    this.ui.controllerAssignmentsOpen.set(true);
+    if (!this.control.loaded()) {
+      await this.control.load();
+    }
+    if (!this.control.learning()) {
+      await this.control.startLearn(null);
     }
   }
 

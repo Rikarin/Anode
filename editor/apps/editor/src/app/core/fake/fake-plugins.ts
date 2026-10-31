@@ -275,14 +275,16 @@ export const FakeEffects: readonly PluginInfo[] = [
 /** The plugin that crashes in the fake engine as soon as it plays. */
 export const CrashyPluginId = 'com.example.crashy';
 
-/** The fake engine's MIDI ports. */
+/** The fake engine's MIDI ports, with Anode's own virtual ports (Phase 8: `anode:in`, `anode:out`) last. */
 export const FakeMidiDevices: MidiDevices = {
   inputs: [
     { id: 'in:keystation-49', name: 'Keystation 49 MK3' },
-    { id: 'in:iac-1', name: 'IAC Driver Bus 1' }
+    { id: 'in:iac-1', name: 'IAC Driver Bus 1' },
+    { id: 'anode:in', name: 'Anode In' }
   ],
   outputs: [
     { id: 'out:iac-1', name: 'IAC Driver Bus 1' },
-    { id: 'out:rev2', name: 'Prophet Rev2' }
+    { id: 'out:rev2', name: 'Prophet Rev2' },
+    { id: 'anode:out', name: 'Anode Out' }
   ]
 };

@@ -57,6 +57,7 @@ import {
   type Screenset,
   type ScriptPreset,
   type ServerMessage,
+  type StemKind,
   type StemSplitRequest,
   type StepInputRequest,
   type StepInputState,
@@ -72,6 +73,7 @@ import {
   type TransportStatus,
   type UndoHistory
 } from '@anode/api-client';
+import { faderDb } from '@anode/audio-ui';
 import { MeterMap } from '@anode/timeline';
 import { searchLoops } from '../../audio-file-editor/audio-edit-math';
 import { clampParameter, defaultParameters } from '../../instruments/parameters';
@@ -152,6 +154,7 @@ import {
   shiftRegions,
   versionPath
 } from './fake-phase7';
+import { applySyncSettings, type ControlEffect, FakeControl, stemList, StemNames } from './fake-phase8';
 import { CrashyPluginId, FakeCatalogue, FakeEffects, FakeMidiDevices } from './fake-plugins';
 import { FakeMidiEffects, FakeT2Effects, FakeT2Instruments, RemixFxId, withMacros } from './fake-plugins-phase6';
 import { FakeScriptPresets } from './fake-scripts';
@@ -179,6 +182,8 @@ interface FakeJob {
   trackId?: string;
   /** What finishing does (Phase 5's jobs): the files it wrote. */
   finish?: () => string[];
+  /** What the job says it is doing at a point of its progress (Phase 8: the stem model's download). */
+  stage?: (progress: number) => string | null;
 }
 
 interface UndoStep {
@@ -311,6 +316,12 @@ export class FakeAnodeServer implements AnodeApi {
   private readonly stepChords = new StepChordCollector();
   /** Phase 7: the samples of each file version the Audio File Editor wrote, by file id and version. */
   private readonly fileVersions = new Map<string, Map<number, Float32Array[]>>();
+  /** Phase 8: controller assignments, Learn, control surfaces, OSC, the selection, Link and external sync. */
+  private readonly control = new FakeControl(
+    message => this.emit(message),
+    prefix => `${prefix}_${this.nextId++}`,
+    () => this.devices
+  );
 
   constructor(options: FakeServerOptions = {}) {
     this.now = options.now ?? (() => Date.now());
@@ -1472,74 +1483,242 @@ export class FakeAnodeServer implements AnodeApi {
     });
   }
 
-  // ---- Phase 8 (docs/09-phase-8.md): control, surfaces, OSC, sync and the Stem Splitter, until the editor workstream
-  // (C) implements them.
+  // ---- Phase 8 (docs/09-phase-8.md): controller assignments and Learn, control surfaces, OSC, the selection, sync and
+  // the Stem Splitter. Assignments, surfaces and OSC are user settings (FakeControl), not the project's.
 
   controllerAssignments(): Promise<ControllerAssignments> {
-    return this.phase8Pending('GetControllerAssignments');
+    return this.answer('GetControllerAssignments', () => structuredClone(this.control.assignments));
   }
 
-  setControllerAssignments(_assignments: ControllerAssignments): Promise<ControllerAssignments> {
-    return this.phase8Pending('SetControllerAssignments');
+  setControllerAssignments(assignments: ControllerAssignments): Promise<ControllerAssignments> {
+    return this.answer('SetControllerAssignments', () => this.control.setAssignments(assignments));
   }
 
   learn(): Promise<LearnState> {
-    return this.phase8Pending('GetLearn');
+    return this.answer('GetLearn', () => structuredClone(this.control.learnState));
   }
 
-  startLearn(_request: LearnRequest): Promise<LearnState> {
-    return this.phase8Pending('StartLearn');
+  startLearn(request: LearnRequest): Promise<LearnState> {
+    return this.answer('StartLearn', () => this.control.startLearn(request));
   }
 
   stopLearn(): Promise<LearnState> {
-    return this.phase8Pending('StopLearn');
+    return this.answer('StopLearn', () => this.control.stopLearn());
   }
 
   surfaces(): Promise<ControlSurface[]> {
-    return this.phase8Pending('ListSurfaces');
+    return this.answer('ListSurfaces', () => structuredClone(this.control.surfaces));
   }
 
   surfaceStatus(): Promise<SurfaceStatus[]> {
-    return this.phase8Pending('ListSurfaceStatus');
+    return this.answer('ListSurfaceStatus', () => this.control.surfaceStatus());
   }
 
-  addSurface(_request: AddSurfaceRequest): Promise<ControlSurface> {
-    return this.phase8Pending('AddSurface');
+  addSurface(request: AddSurfaceRequest): Promise<ControlSurface> {
+    return this.answer('AddSurface', () => this.control.addSurface(request));
   }
 
-  removeSurface(_id: string): Promise<void> {
-    return this.phase8Pending('RemoveSurface');
+  removeSurface(id: string): Promise<void> {
+    return this.answer('RemoveSurface', () => this.control.removeSurface(id));
   }
 
-  reorderSurfaces(_ids: string[]): Promise<ControlSurface[]> {
-    return this.phase8Pending('ReorderSurfaces');
+  reorderSurfaces(ids: string[]): Promise<ControlSurface[]> {
+    return this.answer('ReorderSurfaces', () => this.control.reorderSurfaces(ids));
   }
 
   osc(): Promise<OscStatus> {
-    return this.phase8Pending('GetOsc');
+    return this.answer('GetOsc', () => this.control.oscStatus());
   }
 
-  setOsc(_settings: OscSettings): Promise<OscStatus> {
-    return this.phase8Pending('SetOsc');
+  setOsc(settings: OscSettings): Promise<OscStatus> {
+    return this.answer('SetOsc', () => this.control.setOsc(settings));
   }
 
-  setSelection(_trackId: string | null): Promise<void> {
-    return this.phase8Pending('SetSelection');
+  setSelection(trackId: string | null): Promise<void> {
+    return this.answer('SetSelection', () => {
+      const project = this.require();
+      if (trackId !== null && !project.tracks.some(t => t.id === trackId)) {
+        throw new ApiError(404, `No track ${trackId}.`);
+      }
+      this.control.selection = trackId;
+    });
   }
 
   syncState(): Promise<SyncState> {
-    return this.phase8Pending('GetSync');
+    return this.answer('GetSync', () => this.control.syncState(this.require()));
   }
 
-  splitStems(_regionId: string, _request: StemSplitRequest): Promise<Job> {
-    return this.phase8Pending('SplitStems');
-  }
-
-  /** A Phase 8 endpoint the fake Server does not answer yet (docs/09-phase-8.md): 422. */
-  private phase8Pending<T>(operation: string): Promise<T> {
-    return this.answer(operation, () => {
-      throw new ApiError(422, `${operation}: not in the fake Server yet.`);
+  splitStems(regionId: string, request: StemSplitRequest): Promise<Job> {
+    return this.answer('SplitStems', () => {
+      const project = this.require();
+      const region = project.regions.find(r => r.id === regionId);
+      if (!region) {
+        if (project.midiRegions.some(r => r.id === regionId)) {
+          throw new ApiError(422, 'The Stem Splitter works on audio regions.');
+        }
+        throw new ApiError(404, `No audio region ${regionId}.`);
+      }
+      const stems = stemList(request.stems);
+      const keepSource = request.keepSource;
+      const model = FakeControl.modelFor(stems);
+      const download = !this.control.models.has(model);
+      return this.startJob(
+        'stemSplit',
+        {
+          finish: () => {
+            this.control.models.add(model);
+            return this.finishStemSplit(regionId, stems, keepSource);
+          },
+          stage: progress => this.control.stemStage(model, download, progress)
+        },
+        download ? 2 : 1
+      );
     });
+  }
+
+  // ---- Phase 8 test hooks: what the host and the outside world would do
+
+  /** The user settings' control state (tests and stories). */
+  get controlState(): FakeControl {
+    return this.control;
+  }
+
+  /**
+   * A MIDI message from a controller on `port` (the host's `controlMidi`): offered while learning, else run through the
+   * assignments, whose effect on the project is applied as an edit (volume, pan, mute, solo, transport).
+   */
+  controlMidi(port: string, status: number, data1: number, data2: number): void {
+    const effect = this.control.receive(port, status, data1, data2);
+    if (effect) {
+      this.applyControl(effect);
+    }
+  }
+
+  /** Link peers join or leave the session (tests). */
+  setLinkPeers(peers: number): void {
+    this.control.linkPeers = peers;
+    this.control.publishSync(this.project);
+  }
+
+  /** The external MIDI Clock or MTC locks (or drops out), at a tempo (tests). */
+  setExternalSync(locked: boolean, tempo: number | null = null): void {
+    this.control.external = { locked, tempo };
+    this.control.publishSync(this.project);
+  }
+
+  /** What a control move does: the same edit the editor would send (coalesced per control, as a fader's). */
+  private applyControl(effect: ControlEffect): void {
+    const { target, value } = effect;
+    const project = this.project;
+    if (!project) {
+      return;
+    }
+    if (target.kind === 'transport') {
+      if (value < 0.5 && effect.assignment.mode !== 'toggle') {
+        return;
+      }
+      const command = target.transport === 'stop' ? 'stop' : target.transport === 'play' ? 'play' : null;
+      if (command && !(command === 'play' && this.transportState !== 'stopped')) {
+        void this.controlTransport({ command });
+      }
+      return;
+    }
+    const track = project.tracks.find(t => t.id === target.trackId);
+    if (!track) {
+      return;
+    }
+    let command: EditCommand | null = null;
+    if (target.kind === 'parameter') {
+      const address = target.address ?? '';
+      if (address === 'volume') {
+        command = { type: 'setStrip', trackId: track.id, volumeDb: Math.round(faderDb(value) * 10) / 10 };
+      } else if (address === 'pan') {
+        command = { type: 'setStrip', trackId: track.id, pan: Math.round((value * 2 - 1) * 100) / 100 };
+      } else if (address === 'mute') {
+        command = { type: 'setStrip', trackId: track.id, mute: value >= 0.5 };
+      }
+    } else if (target.kind === 'trackSwitch') {
+      if (target.switch === 'mute') {
+        command = { type: 'setStrip', trackId: track.id, mute: value >= 0.5 };
+      } else if (target.switch === 'solo') {
+        command = { type: 'setStrip', trackId: track.id, solo: value >= 0.5 };
+      }
+    }
+    if (command) {
+      void this.applyCommands({ commands: [command], label: effect.assignment.name ?? 'Controller' });
+    }
+  }
+
+  /** A finished stem split: a file per stem, then `addStems` (tracks below the source, one undo step). */
+  private finishStemSplit(regionId: string, stems: readonly StemKind[], keepSource: boolean): string[] {
+    const before = this.require();
+    const region = before.regions.find(r => r.id === regionId);
+    if (!region) {
+      throw new Error('The region was deleted during the split.');
+    }
+    const source = before.audioFiles.find(f => f.id === region.fileId);
+    const files: AudioFile[] = stems.map(kind => ({
+      id: `aud_${this.nextId++}`,
+      name: `${region.name} - ${StemNames[kind]}.wav`,
+      path: `Audio Files/${region.name} - ${StemNames[kind]}.wav`,
+      sampleRate: source?.sampleRate ?? before.sampleRate,
+      channels: 2,
+      bitDepth: 32,
+      frames: region.length,
+      tempo: null,
+      version: 0
+    }));
+    let after: Project = { ...before, audioFiles: [...before.audioFiles, ...files] };
+    after = this.applyCommand(after, {
+      type: 'addStems',
+      regionId,
+      stems: files.map((file, i) => ({ kind: stems[i] as StemKind, fileId: file.id })),
+      keepSource
+    });
+    this.commit(before, after, 'Stem Splitter');
+    return files.map(file => `${projectFolder(after)}/${file.path}`);
+  }
+
+  /** `addStems`: a track per stem below the source track, in order, with the source's output, and a region each. */
+  private addStems(project: Project, command: Extract<EditCommand, { type: 'addStems' }>): Project {
+    const region = project.regions.find(r => r.id === command.regionId);
+    if (!region) {
+      throw new ApiError(404, `No audio region ${command.regionId}.`);
+    }
+    const sourceTrack = project.tracks.find(t => t.id === region.trackId);
+    if (!sourceTrack) {
+      throw new ApiError(404, `No track ${region.trackId}.`);
+    }
+    stemList(command.stems.map(s => s.kind));
+    let next = project;
+    let index = next.tracks.findIndex(t => t.id === sourceTrack.id) + 1;
+    for (const stem of command.stems) {
+      const file = next.audioFiles.find(f => f.id === stem.fileId);
+      if (!file) {
+        throw new ApiError(404, `No audio file ${stem.fileId}.`);
+      }
+      next = this.applyCommand(next, {
+        type: 'addTrack',
+        kind: 'audio',
+        stereo: file.channels > 1,
+        index,
+        name: `${sourceTrack.name} ${StemNames[stem.kind]}`
+      });
+      const trackId = next.tracks[index]?.id ?? '';
+      next = {
+        ...next,
+        tracks: next.tracks.map(t =>
+          t.id === trackId ? { ...t, strip: { ...t.strip, output: sourceTrack.strip.output } } : t
+        )
+      };
+      next = this.applyCommand(next, { type: 'addRegion', trackId, fileId: file.id, startTick: region.startTick });
+      next = renameLast(next, `${region.name} ${StemNames[stem.kind]}`);
+      index++;
+    }
+    if (!command.keepSource) {
+      next = { ...next, regions: next.regions.map(r => (r.id === region.id ? { ...r, muted: true } : r)) };
+    }
+    return next;
   }
 
   private installedKits(): FakeKit[] {
@@ -2011,7 +2190,12 @@ export class FakeAnodeServer implements AnodeApi {
 
   private startJob(
     kind: Job['kind'],
-    extra: { bounce?: BounceRequest; trackId?: string; finish?: () => string[] },
+    extra: {
+      bounce?: BounceRequest;
+      trackId?: string;
+      finish?: () => string[];
+      stage?: (progress: number) => string | null;
+    },
     slowness: number
   ): Job {
     const job: Job = { id: `job_${this.nextId++}`, kind, state: 'queued', progress: 0, message: null, files: [] };
@@ -2040,7 +2224,9 @@ export class FakeAnodeServer implements AnodeApi {
   private stepJob(entry: FakeJob): void {
     entry.done++;
     if (entry.done < entry.steps) {
-      this.setJob(entry, { ...entry.job, state: 'running', progress: entry.done / entry.steps });
+      const progress = entry.done / entry.steps;
+      const message = entry.stage ? entry.stage(progress) : entry.job.message;
+      this.setJob(entry, { ...entry.job, state: 'running', progress, message: message ?? null });
       return;
     }
     try {
@@ -2049,7 +2235,7 @@ export class FakeAnodeServer implements AnodeApi {
         : entry.bounce
           ? this.finishBounce(entry.bounce)
           : this.finishFreeze(entry.trackId ?? '');
-      this.setJob(entry, { ...entry.job, state: 'done', progress: 1, files });
+      this.setJob(entry, { ...entry.job, state: 'done', progress: 1, files, message: null });
     } catch (error) {
       this.setJob(entry, {
         ...entry.job,
@@ -3602,10 +3788,20 @@ export class FakeAnodeServer implements AnodeApi {
       case 'loadInsertFile':
         // The convolution reverb's impulse response.
         return loadInsertFile(project, command, id => this.catalogue.find(p => p.id === id));
-      case 'setSyncSettings':
+      case 'setSyncSettings': {
+        // The project's synchronisation (Phase 8); the host follows, and the sync state with it.
+        const devices = this.devices;
+        const sync = applySyncSettings(
+          project.settings.sync,
+          command,
+          devices.outputs.map(p => p.id),
+          devices.inputs.map(p => p.id)
+        );
+        return { ...project, settings: { ...project.settings, sync } };
+      }
       case 'addStems':
-        // Synchronisation and the Stem Splitter: Phase 8, the editor workstream (docs/09-phase-8.md).
-        throw new ApiError(422, `${command.type}: not in the fake Server yet.`);
+        // The Stem Splitter's result, applied by its job (Phase 8).
+        return this.addStems(project, command);
       default:
         if (isPhase7Command(command)) {
           // The Event List, MIDI Transform, grooves, articulations, lane sets, step input, the Audio File Editor and
@@ -3891,6 +4087,10 @@ export class FakeAnodeServer implements AnodeApi {
     this.project = project;
     const delta: ProjectDelta = { revision, ops: diff(previous, project) };
     this.emit({ type: 'projectChanged', delta });
+    // The sync settings changed (setSyncSettings, an undo): the host's sync state follows.
+    if (previous.settings.sync !== project.settings.sync) {
+      this.control.publishSync(project);
+    }
     // Cells deleted while they play stop.
     this.emitCells(this.launcher.forget(new Set(project.liveLoops.cells.map(c => c.id)), this.positionTick));
     return { revision, delta: structuredClone(delta) };

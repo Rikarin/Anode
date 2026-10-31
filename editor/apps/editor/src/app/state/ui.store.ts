@@ -57,6 +57,14 @@ export class UiStore {
   readonly scriptEditor = signal<ScriptSlot | null>(null);
   /** Phase 7: the file the Audio File Editor shows (`aud_…`); null: the selected audio region's. */
   readonly audioFileId = signal<string | null>(null);
+  /** Phase 8: Controller Assignments (Logic Pro ▸ Control Surfaces ▸ Controller Assignments…). */
+  readonly controllerAssignmentsOpen = signal(false);
+  /** Phase 8: Control Surfaces Setup, with OSC (Logic Pro ▸ Control Surfaces ▸ Setup…). */
+  readonly controlSurfacesOpen = signal(false);
+  /** Phase 8: the project's Synchronization settings (File ▸ Project Settings ▸ Synchronization…). */
+  readonly syncSettingsOpen = signal(false);
+  /** Phase 8: the Stem Splitter, with the audio region it splits; null: closed. */
+  readonly stemSplitter = signal<{ regionId: string } | null>(null);
   /** The generic plugin editor windows, in the order they opened (the last is in front). */
   readonly pluginWindows = signal<readonly PluginWindow[]>([]);
 

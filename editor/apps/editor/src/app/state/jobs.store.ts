@@ -1,5 +1,12 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
-import type { BounceInPlaceRequest, BounceRequest, Job, JobKind, ProcessRequest } from '@anode/api-client';
+import type {
+  BounceInPlaceRequest,
+  BounceRequest,
+  Job,
+  JobKind,
+  ProcessRequest,
+  StemSplitRequest
+} from '@anode/api-client';
 import { ANODE_API } from '../core/api';
 import { ConnectionService } from '../core/connection';
 import { EventStream } from '../core/events';
@@ -129,6 +136,23 @@ export class JobsStore {
     const job = await this.notify.run(() => this.api.processRegions(request), 'Could not process the selection');
     if (job) {
       this.processId.set(job.id);
+      this.update(job);
+    }
+    return job;
+  }
+
+  /** The Stem Splitter follows this job. */
+  readonly stemId = signal<string | null>(null);
+  readonly stemJob = computed(() => {
+    const id = this.stemId();
+    return id ? (this.jobs().get(id) ?? null) : null;
+  });
+
+  /** Splits an audio region into stems (Phase 8); the tracks come when the job is done, as one undo step. */
+  async splitStems(regionId: string, request: StemSplitRequest): Promise<Job | null> {
+    const job = await this.notify.run(() => this.api.splitStems(regionId, request), 'Could not split the stems');
+    if (job) {
+      this.stemId.set(job.id);
       this.update(job);
     }
     return job;

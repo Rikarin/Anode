@@ -453,7 +453,9 @@ function buildMenu(): void {
   };
   // File menu items ask the editor (apps/editor/src/app/app.ts, AppCommand), which owns the project's state. ⌘S, ⌘Z and
   // ⇧⌘Z are the editor's own keys too, so the window handles them first and these accelerators only label the items.
+  // Each item has an id (`anode:<name>`), so the e2e golden paths can choose it (Menu.getMenuItemById).
   const command = (label: string, name: string, accelerator?: string): MenuItemConstructorOptions => ({
+    id: `anode:${name}`,
     label,
     ...(accelerator ? { accelerator } : {}),
     click: () => window?.webContents.send('anode:command', name)
@@ -472,8 +474,32 @@ function buildMenu(): void {
     command('I/O Labels…', 'ioLabels'),
     { type: 'separator' },
     command('Save as Alternative…', 'saveAlternative'),
-    command('Key Commands…', 'keyCommands')
+    command('Key Commands…', 'keyCommands'),
+    { type: 'separator' },
+    // Phase 8 (docs/09-phase-8.md): the project's synchronisation, as Logic's File ▸ Project Settings has it.
+    { label: 'Project Settings', submenu: [command('Synchronization…', 'syncSettings')] }
   ];
+  // Logic Pro ▸ Control Surfaces: the surfaces and controller assignments are the user's, not the project's.
+  const controlSurfaces: MenuItemConstructorOptions = {
+    label: 'Control Surfaces',
+    submenu: [command('Setup…', 'controlSurfaces'), command('Controller Assignments…', 'controllerAssignments')]
+  };
+  // Edit: the standard text roles (fields need them), then the Stem Splitter on the selected audio region.
+  const editMenu: MenuItemConstructorOptions = {
+    label: 'Edit',
+    submenu: [
+      { role: 'undo' },
+      { role: 'redo' },
+      { type: 'separator' },
+      { role: 'cut' },
+      { role: 'copy' },
+      { role: 'paste' },
+      { role: 'delete' },
+      { role: 'selectAll' },
+      { type: 'separator' },
+      command('Stem Splitter…', 'stemSplitter')
+    ]
+  };
   const template: MenuItemConstructorOptions[] =
     process.platform === 'darwin'
       ? [
@@ -483,6 +509,7 @@ function buildMenu(): void {
               { role: 'about' },
               { type: 'separator' },
               settings,
+              controlSurfaces,
               { type: 'separator' },
               { role: 'services' },
               { type: 'separator' },
@@ -494,16 +521,23 @@ function buildMenu(): void {
             ]
           },
           { label: 'File', submenu: [...fileItems, { type: 'separator' }, { role: 'close' }] },
-          { role: 'editMenu' },
+          editMenu,
           { role: 'viewMenu' },
           { role: 'windowMenu' }
         ]
       : [
           {
             label: 'File',
-            submenu: [...fileItems, { type: 'separator' }, settings, { type: 'separator' }, { role: 'quit' }]
+            submenu: [
+              ...fileItems,
+              { type: 'separator' },
+              settings,
+              controlSurfaces,
+              { type: 'separator' },
+              { role: 'quit' }
+            ]
           },
-          { role: 'editMenu' },
+          editMenu,
           { role: 'viewMenu' },
           { role: 'windowMenu' }
         ];

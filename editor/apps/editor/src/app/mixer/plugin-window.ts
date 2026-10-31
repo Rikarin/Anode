@@ -1,11 +1,12 @@
 import { NgComponentOutlet } from '@angular/common';
 import { ChangeDetectionStrategy, Component, DestroyRef, computed, inject, input, signal } from '@angular/core';
-import type { EditCommand, Insert, ParameterInfo, PluginInfo } from '@anode/api-client';
+import type { ControlTarget, EditCommand, Insert, ParameterInfo, PluginInfo } from '@anode/api-client';
 import { AnChoice, AnKnob, AnReadingMeter } from '@anode/audio-ui';
 import { provideIcons } from '@ng-icons/core';
 import { matCloseRound, matPowerSettingsNewRound } from '@ng-icons/material-icons/round';
 import { XuiButtonImports } from '@xui/button';
 import { XuiIconImports } from '@xui/icon';
+import { LearnTarget, LearnTargets } from '../control/learn-menu';
 import { ConnectionService } from '../core/connection';
 import { isChoice, parameterGroups } from '../inspector/parameter-editor';
 import { type PluginPanelHost, pluginPanel } from '../plugin-panels/plugin-panel';
@@ -44,7 +45,7 @@ export function readingKind(plugin: PluginInfo | undefined): {
 @Component({
   selector: 'an-plugin-window',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [AnChoice, AnKnob, AnReadingMeter, NgComponentOutlet, XuiButtonImports, XuiIconImports],
+  imports: [AnChoice, AnKnob, AnReadingMeter, LearnTarget, NgComponentOutlet, XuiButtonImports, XuiIconImports],
   providers: [provideIcons({ matCloseRound, matPowerSettingsNewRound })],
   host: {
     class: 'panel fixed z-40 flex max-h-[70vh] w-[26rem] flex-col overflow-hidden rounded-lg',
@@ -143,6 +144,8 @@ export function readingKind(plugin: PluginInfo | undefined): {
                     [min]="parameter.min"
                     [value]="value(i, parameter)"
                     [attr.data-parameter]="parameter.id"
+                    [anLearnTarget]="learnTarget(i, parameter.id)"
+                    [learnLabel]="title() + ': ' + parameter.name"
                     (valueChange)="set(i, parameter, $event)"
                   />
                 } @else {
@@ -155,6 +158,8 @@ export function readingKind(plugin: PluginInfo | undefined): {
                     [defaultValue]="parameter.default"
                     [value]="value(i, parameter)"
                     [attr.data-parameter]="parameter.id"
+                    [anLearnTarget]="learnTarget(i, parameter.id)"
+                    [learnLabel]="title() + ': ' + parameter.name"
                     (valueChange)="set(i, parameter, $event)"
                   />
                 }
@@ -234,6 +239,15 @@ export class PluginWindowView {
       }
     }, ReadingMs);
     inject(DestroyRef).onDestroy(() => clearInterval(timer));
+  }
+
+  private readonly learnTargets = new LearnTargets();
+
+  /** A parameter's assignment target: `insert:…:…` or a MIDI FX slot's `midiEffect:…:…` (none on the master). */
+  protected learnTarget(insert: Insert, parameterId: string): ControlTarget | null {
+    const { trackId, chain } = this.window();
+    const prefix = chain === 'midiEffects' ? 'midiEffect' : 'insert';
+    return this.learnTargets.parameter(trackId, `${prefix}:${insert.id}:${parameterId}`);
   }
 
   protected value(insert: Insert, parameter: ParameterInfo): number {

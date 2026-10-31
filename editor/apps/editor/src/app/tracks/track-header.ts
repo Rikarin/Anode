@@ -43,6 +43,7 @@ import { XuiPopoverImports } from '@xui/popover';
 import { XuiSliderImports } from '@xui/slider';
 import { XuiTooltipImports } from '@xui/tooltip';
 import { AutomationStore } from '../automation/automation.store';
+import { LearnTarget, LearnTargets } from '../control/learn-menu';
 import { flexModeLabel, FlexModes, FlexStore } from '../state/flex.store';
 import { isActive, JobsStore } from '../state/jobs.store';
 import { LiveMidiStore } from '../state/live-midi.store';
@@ -67,6 +68,7 @@ import { UiStore } from '../state/ui.store';
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     AnAutomationMode,
+    LearnTarget,
     XuiButtonImports,
     XuiIconImports,
     XuiInputImports,
@@ -478,7 +480,12 @@ import { UiStore } from '../state/ui.store';
             </button>
           </div>
         } @else {
-          <label class="an-track-volume flex min-w-0 flex-1 items-center ps-1" [attr.title]="'Volume ' + volumeText()">
+          <label
+            class="an-track-volume flex min-w-0 flex-1 items-center ps-1"
+            [attr.title]="'Volume ' + volumeText()"
+            [anLearnTarget]="learnTargets.parameter(track().id, 'volume')"
+            [learnLabel]="track().name + ': Volume'"
+          >
             <span class="sr-only">Volume of {{ track().name }}</span>
             <xui-slider
               class="min-w-0 flex-1"
@@ -497,6 +504,7 @@ import { UiStore } from '../state/ui.store';
   `
 })
 export class TrackHeader {
+  protected readonly learnTargets = new LearnTargets();
   protected readonly mixer = inject(MixerStore);
   private readonly project = inject(ProjectStore);
   private readonly selection = inject(SelectionStore);

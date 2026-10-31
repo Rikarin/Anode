@@ -51,7 +51,11 @@ export type AppCommand =
   | 'saveAlternative'
   | 'keyCommands'
   | 'bounce'
-  | 'ioLabels';
+  | 'ioLabels'
+  | 'controlSurfaces'
+  | 'controllerAssignments'
+  | 'syncSettings'
+  | 'stemSplitter';
 
 /** Native file dialogs (apps/desktop/src/main.ts, `anode:dialog:*`); each resolves empty when cancelled. */
 export interface DesktopDialogs {
