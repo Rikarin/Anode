@@ -280,6 +280,46 @@ the plan left latitude:
   without those commands (`RandomProjects.Buildable`) so they stay Phase 7's; the editor's fake Server starts projects
   with the default sync settings and answers the new commands and endpoints 422 (`fake-phase8.spec.ts`).
 
+### Integration notes
+
+Where integration settled the seams between the workstreams (contract changes are marked **contract**):
+- **Surfaces in the server:** the control service drives D's `SurfaceGroup`s, not its own bank chain: an XT joins the
+  Mackie Control (or XT) before it in `order`; anything else, a HUI always, is a group of its own. The group owns the
+  bank; the service polls a group right after its input, so handshake and ping replies go out at once. Learn makes its
+  assignment with `AssignmentEngine.Assign` (D's default modes: toggle for switches and `mute`, absolute otherwise); a
+  control moved while learning the same target re-learns it, keeping the assignment's id.
+- **Buttons:** surfaces report buttons on press only (Touch, Rewind, Forward and Zoom carry 1/0); assignment functions
+  give 1 on press and 0 on release, and the server acts on 1 (Rewind and Forward stop on 0). Strip switches set the
+  state the view does not have, so nothing toggles twice.
+- **Matchers:** pitch bend matches `data1 = −1` (its first byte is the value's LSB). A program change matches its
+  program (`data1` = the number), as D's engine claims only that program; the host compares `data1` the same way, so an
+  unassigned program still plays.
+- **contract** `/ws` gains `selection(trackId?)` (hardware or OSC changed the server's selection: a surface's select
+  or cursor keys, select next or previous; not sent for the editor's own `PUT /project/selection`) and
+  `keyCommand(id)` (a key command an assignment or OSC asked for that the server does not run itself); `models.ts`
+  mirrors both; the editor selects the track without reporting it back, and runs the key command. No REST change.
+- **Stem models:** `StemModels` goes through E's `ModelStore` in `<DataDirectory>/Models/`: a verified model opens; a
+  missing one is installed by checksum from `Anode:ModelSource` (default the `ANODE_MODELS` environment variable, the
+  name E's tests read; the e2e global setup points it at `models/`), else downloaded (refused, 422, while
+  unpublished).
+- **Stem naming:** tracks are named `Edits.StemTrackName` ("Mix – Vocals"), files "Mix Vocals.wav" (the job); the fake
+  Server does the same.
+- **External tempo:** following Link, the server writes the session's tempo into the project (`setTempo`), so regions,
+  the grid and a save follow it; a burst of changes (no more than 2 s apart) is one undo step. It cannot loop: the
+  host pushes the model's tempo to Link only when the model's changes and differs from Link's. MIDI Clock's tempo
+  stays out of the project (the rule above): the transport follows the smoothed estimate, regions keep their sample
+  positions, and the tempo map is the project's own when the clock stops; writing a jittering estimate would flood the
+  undo history and the saved project.
+- **Virtual ports in tests:** `anode-host --virtual-midi` (the e2e's `ANODE_VIRTUAL_MIDI=1`) publishes Anode's own
+  CoreMIDI ports on macOS and hides every other endpoint (`OwnPortsMidiBackend`); elsewhere it keeps the fake pair.
+- **Sync input on a control port:** system messages (and MTC full frames) go to the sync follower first when the port
+  is its clock or MTC input, so a surface and the clock can share a port; the rest of a control port's input is the
+  surface's.
+- **The golden path** uses a 44.1 kHz project (the test mix's rate; a project takes files at its own rate), judges
+  clock jitter by `p99DeviationMs` and `outliers` rather than the maximum (the JIT host on the null device stalls now
+  and then), Link phase by `linkClockError.maxAbsMs`, and MTC out by the first set of quarter frames against the
+  playhead and the drift.
+
 ## Workstreams
 
 Five, in parallel, each on its own branch; they meet only at the contracts above.
