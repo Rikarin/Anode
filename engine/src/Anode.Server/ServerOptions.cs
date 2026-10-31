@@ -18,6 +18,13 @@ public sealed class ServerOptions {
     /// </summary>
     public string? EditorDirectory { get; set; }
 
+    /// <summary>
+    ///     A folder of Stem Splitter models (<c>scripts/fetch-models.mjs</c>'s output, such as the repository's
+    ///     <c>models/</c>) to install a missing model from, checksum verified, before trying to download it; default the
+    ///     <c>ANODE_MODELS</c> environment variable (development and the e2e tests).
+    /// </summary>
+    public string? ModelSource { get; set; } = Environment.GetEnvironmentVariable("ANODE_MODELS");
+
     public EngineOptions Engine { get; set; } = new();
 }
 
