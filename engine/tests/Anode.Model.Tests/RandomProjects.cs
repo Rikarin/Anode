@@ -407,6 +407,26 @@ static class RandomProjects {
                 }
             }
 
+            // An insert that loads files (a convolution reverb, on a track with an audio strip or the master), so
+            // LoadInsertFile finds one often enough: otherwise only the random effects bring it, now and then.
+            var strips = state.Tracks.Where(static t => Edits.HasAudioStrip(t.Kind)).ToArray();
+            try {
+                state = Edits.Apply(
+                        state,
+                        new AddInsertCommand(
+                            "anode.test-space",
+                            strips.Length == 0 || random.Next(4) == 0 ? null : Pick(random, strips).Id
+                        ),
+                        ids,
+                        Plugins,
+                        Patches,
+                        Analysis
+                    )
+                    .State;
+            } catch (EditException) {
+                // a full strip
+            }
+
             // The host's answer to a script: its parameters.
             foreach (var track in state.Tracks) {
                 foreach (var slot in track.Strip.MidiEffects.Where(static i => i.Source is not null)) {
