@@ -113,6 +113,9 @@ static int32_t fail(const char *what, HRESULT status)
 const char *cth_audio_last_error(void) { return last_error; }
 const char *cth_audio_backend(void) { return "wasapi"; }
 
+/* For the MIDI backend's failures (not exported). */
+void cth_set_last_error(const char *text) { snprintf(last_error, sizeof last_error, "%s", text); }
+
 /* ---- COM scaffolding -------------------------------------------------------------------------------------------- */
 
 /* Joins the multithreaded apartment for the duration of a call. A thread already in an STA keeps it; the MMDevice

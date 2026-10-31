@@ -6,5 +6,8 @@
     <!-- Built, not referenced: the hosted-plugin tests run it as the sandbox and scanner processes. -->
     <ProjectReference Include="../../src/Anode.PluginSandbox/Anode.PluginSandbox.csproj" ReferenceOutputAssembly="false"
                       Private="false"/>
+    <!-- Built, not referenced: the Phase 8 tests run it as the hardware on the virtual ports and a Link peer. -->
+    <ProjectReference Include="../../tools/Anode.MidiProbe/Anode.MidiProbe.csproj" ReferenceOutputAssembly="false"
+                      Private="false"/>
   </ItemGroup>
 </Project>

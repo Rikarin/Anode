@@ -29,6 +29,30 @@ public readonly record struct ClockInput(ClockInputKind Kind, int SongPosition, 
 ///     ticks' times feed a <see cref="TempoEstimator" />. Runs on the host's MIDI thread: no allocation.
 /// </summary>
 public sealed class MidiClockDecoder {
+    /// <summary>When the last clock arrived (0: none yet).</summary>
+    public long LastTickNs { get; private set; }
+
     /// <summary>One message (1–3 bytes) that arrived at <paramref name="timeNs" />.</summary>
-    public ClockInput Receive(ReadOnlySpan<byte> message, long timeNs) => throw Pending.WorkstreamA();
+    public ClockInput Receive(ReadOnlySpan<byte> message, long timeNs) {
+        if (message.IsEmpty) {
+            return new(ClockInputKind.None, 0, timeNs);
+        }
+
+        if (message[0] == 0xF8) {
+            LastTickNs = timeNs;
+        }
+
+        return message[0] switch {
+            0xF8 => new(ClockInputKind.Tick, 0, timeNs),
+            0xFA => new(ClockInputKind.Start, 0, timeNs),
+            0xFB => new(ClockInputKind.Continue, 0, timeNs),
+            0xFC => new(ClockInputKind.Stop, 0, timeNs),
+            0xF2 when message.Length >= 3 => new(
+                ClockInputKind.SongPosition,
+                (message[1] & 0x7F) | ((message[2] & 0x7F) << 7),
+                timeNs
+            ),
+            _ => new(ClockInputKind.None, 0, timeNs)
+        };
+    }
 }

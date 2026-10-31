@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>anode-midiprobe</AssemblyName>
+    <Description>Stands in for MIDI hardware and a Link peer in Phase 8's tests: Anode's virtual ports, scripted messages, recording, MIDI Clock and MTC sources, control surfaces, and Ableton Link.</Description>
+    <IsPackable>false</IsPackable>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <!-- A test tool on the JIT: JsonNode freely. -->
+    <IsAotCompatible>false</IsAotCompatible>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- The cth_audio MIDI bindings and an_link (Anode.Audio), and the sync decoders the analyses share (Anode.Engine). -->
+    <ProjectReference Include="../../src/Anode.Engine/Anode.Engine.csproj"/>
+  </ItemGroup>
+</Project>

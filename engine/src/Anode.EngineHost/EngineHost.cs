@@ -22,6 +22,9 @@ public sealed class EngineHost : IDisposable {
     readonly unsafe byte* localTelemetry;
     readonly TelemetryWriter telemetry;
     Timer? readings;
+    Timer? syncTimer;
+    SyncStateMessage? lastSync;
+    long lastSyncPush;
     readonly IReadOnlyList<string>? clapFolders;
     readonly Lock scanGate = new();
     readonly Lock pushGate = new();
@@ -45,6 +48,10 @@ public sealed class EngineHost : IDisposable {
     ///     Third-party plugin hosting (anode-host: <see cref="SandboxPluginFactory" />). With one, CLAP plugins are
     ///     hosted (and scanned) by it, in sandboxes; without, the Phase 2 in-process CLAP host serves CLAP instruments.
     /// </param>
+    /// <param name="virtualMidiPrefix">
+    ///     With the native MIDI backend, the virtual ports' uid prefix (Phase 8; "anode": "Anode In" <c>anode:in</c> and
+    ///     "Anode Out" <c>anode:out</c>); null publishes none.
+    /// </param>
     public unsafe EngineHost(
         IAudioDevice device,
         string version,
@@ -52,14 +59,21 @@ public sealed class EngineHost : IDisposable {
         PluginRegistry? plugins = null,
         IMidiBackend? midi = null,
         IReadOnlyList<string>? clapFolders = null,
-        IPluginFactory? factory = null
+        IPluginFactory? factory = null,
+        string? virtualMidiPrefix = "anode"
     ) {
         Device = device;
         this.factory = factory;
         this.clapFolders = clapFolders;
         var latency = device.Latency;
         Controller = new(
-            new(device.SampleRate, device.BufferFrames, latency.Input + latency.Output, latency.Output),
+            new(
+                device.SampleRate,
+                device.BufferFrames,
+                latency.Input + latency.Output,
+                latency.Output,
+                VirtualMidiPrefix: midi is NativeMidiBackend ? virtualMidiPrefix : null
+            ),
             plugins,
             midi
         ) { Log = message => Log?.Invoke(message) };
@@ -76,6 +90,7 @@ public sealed class EngineHost : IDisposable {
         Controller.SlotParameters = parameters => Push?.Invoke(parameters);
         Controller.ScriptLog = log => Push?.Invoke(log);
         Controller.Midi.StepInput = step => Push?.Invoke(step);
+        Controller.Midi.ControlMidi = batch => Push?.Invoke(batch);
         string? telemetryName = null;
         byte* region;
         if (sharedTelemetry) {
@@ -133,12 +148,58 @@ public sealed class EngineHost : IDisposable {
         Device.Start(Controller.Engine);
         telemetry.Start();
         readings = new(_ => PushReadings(), null, ReadingsInterval, ReadingsInterval);
+        syncTimer = new(_ => PushSyncState(false), null, SyncCheckInterval, SyncCheckInterval);
         started = true;
         _ = ScanAsync(true);
     }
 
     /// <summary>How often the inserts' readings are pushed (at most 15 times a second).</summary>
     static readonly TimeSpan ReadingsInterval = TimeSpan.FromSeconds(1.0 / 15);
+
+    /// <summary>
+    ///     How often the sync state is checked: pushed on a change (at most 10 a second), and every 250 ms while
+    ///     external.
+    /// </summary>
+    static readonly TimeSpan SyncCheckInterval = TimeSpan.FromMilliseconds(100);
+
+    const long SyncRepeatMs = 250;
+
+    /// <summary>
+    ///     Pushes the sync state when it changed (the external tempo by 0.01 bpm or more), or every 250 ms while the
+    ///     source is external, once the server has sent its first <c>setSync</c>; <paramref name="force" /> (that
+    ///     answer) records it as pushed without pushing. Returns the state.
+    /// </summary>
+    SyncStateMessage PushSyncState(bool force) {
+        var state = Controller.SyncState();
+        var now = Environment.TickCount64;
+        bool push;
+        lock (pushGate) {
+            var previous = lastSync;
+            if (previous is null && !force) {
+                return state; // nothing is pushed before the server's first setSync
+            }
+
+            var changed = previous is null
+                || previous.Source != state.Source
+                || previous.Locked != state.Locked
+                || previous.LinkPeers != state.LinkPeers
+                || previous.ExternalTempo.HasValue != state.ExternalTempo.HasValue
+                || Math.Abs((previous.ExternalTempo ?? 0) - (state.ExternalTempo ?? 0)) >= 0.01;
+            push = force
+                || changed
+                || (state.Source != EngineSyncSource.Internal && now - lastSyncPush >= SyncRepeatMs);
+            if (push) {
+                lastSync = state;
+                lastSyncPush = now;
+            }
+        }
+
+        if (push && !force) {
+            Push?.Invoke(state);
+        }
+
+        return state;
+    }
 
     /// <summary>Pushes the inserts' readings when any insert has one.</summary>
     void PushReadings() {
@@ -206,13 +267,15 @@ public sealed class EngineHost : IDisposable {
     ///     (<c>setStrip</c>, <c>setTrackIo</c>, <c>setCycle</c>, <c>setMetronome</c>, <c>setInstrument</c>,
     ///     <c>setParameter</c>, <c>setMidiIo</c>, <c>setMidiThru</c>, <c>liveMidi</c>, <c>setPunch</c>,
     ///     <c>previewFile</c>, <c>previewRange</c>, <c>setPreviewSync</c>, <c>setScript</c>, <c>setStepInputForward</c>,
-    ///     <c>launchCells</c>, <c>stopCells</c> (the launcher's state
-    ///     changes are pushed as <see cref="CellStateMessage" />s), and <c>transport</c> unless a stop ends a recording
-    ///     pass, which answers
+    ///     <c>launchCells</c>, <c>stopCells</c> (the launcher's state changes are pushed as
+    ///     <see cref="CellStateMessage" />s), <c>setControlRouting</c>, <c>sendMidi</c> (unless no port took it: an
+    ///     error), and <c>transport</c> unless a stop ends a recording pass, which answers
     ///     <see cref="RecordingFinishedMessage" />). <c>flashbackCapture</c> answers a
     ///     <see cref="RecordingFinishedMessage" /> with <c>Flashback</c> set (no takes when nothing was played).
     ///     <c>scanPlugins</c>
-    ///     answers the new <see cref="PluginCatalogMessage" />, <c>requestInstrumentStates</c>
+    ///     answers the new <see cref="PluginCatalogMessage" />, <c>setSync</c> the <see cref="SyncStateMessage" />
+    ///     (which is also pushed when it changes, and every 250 ms while the source is external),
+    ///     <c>requestInstrumentStates</c>
     ///     <see cref="InstrumentStatesMessage" />; a request it cannot carry out answers <see cref="ErrorMessage" />.
     /// </summary>
     public async ValueTask<IpcMessage?> HandleAsync(IpcMessage message, CancellationToken cancellationToken) {
@@ -367,6 +430,32 @@ public sealed class EngineHost : IDisposable {
                 Controller.PreviewRange(range.Path, range.StartFrame, range.EndFrame, range.Loop, range.Gain);
                 return true;
             default:
+                return Phase8(message, out reply);
+        }
+    }
+
+    /// <summary>
+    ///     The Phase 8 messages: the control routing, a surface's feedback and the sync settings (answered with the sync
+    ///     state). False when <paramref name="message" /> is none of them.
+    /// </summary>
+    bool Phase8(IpcMessage message, out IpcMessage? reply) {
+        reply = null;
+        switch (message) {
+            case SetControlRoutingMessage routing:
+                Controller.SetControlRouting(routing);
+                return true;
+            case SendMidiMessage send:
+                reply = Refused(
+                    Controller.SendMidi(send.Port, send.Data),
+                    $"No MIDI output '{send.Port}' took the message.",
+                    "sendMidi"
+                );
+                return true;
+            case SetSyncMessage sync:
+                Controller.SetSync(sync);
+                reply = PushSyncState(true);
+                return true;
+            default:
                 return false;
         }
     }
@@ -499,6 +588,11 @@ public sealed class EngineHost : IDisposable {
             SetStepInputForwardMessage => "setStepInputForward",
             StepInputMidiMessage => "stepInputMidi",
             PreviewRangeMessage => "previewRange",
+            SetControlRoutingMessage => "setControlRouting",
+            ControlMidiMessage => "controlMidi",
+            SendMidiMessage => "sendMidi",
+            SetSyncMessage => "setSync",
+            SyncStateMessage => "syncState",
             _ => message.GetType().Name
         };
 
@@ -510,6 +604,7 @@ public sealed class EngineHost : IDisposable {
         }
 
         readings?.Dispose();
+        syncTimer?.Dispose();
         telemetry.Dispose();
         if (started) {
             Device.Stop();

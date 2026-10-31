@@ -72,6 +72,9 @@ static int32_t fail(const char *what, OSStatus status)
 const char *cth_audio_last_error(void) { return last_error; }
 const char *cth_audio_backend(void) { return "coreaudio"; }
 
+/* For the MIDI backend's failures (not exported). */
+void cth_set_last_error(const char *text) { snprintf(last_error, sizeof last_error, "%s", text); }
+
 static AudioObjectPropertyAddress address(AudioObjectPropertySelector selector, AudioObjectPropertyScope scope)
 {
     AudioObjectPropertyAddress a = {selector, scope, kAudioObjectPropertyElementMain};

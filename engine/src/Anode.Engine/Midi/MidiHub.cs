@@ -1,4 +1,5 @@
 using Anode.Audio.Midi;
+using Anode.Engine.Sync;
 using Anode.Ipc;
 using System.Diagnostics;
 
@@ -11,6 +12,14 @@ namespace Anode.Engine.Midi;
 ///     recording; batches live MIDI activity (at most 30 batches a second); and watches the ports, reopening them and
 ///     reporting the list when devices come or go. <see cref="Pump" /> is one pass (tests call it directly).
 /// </summary>
+/// <remarks>
+///     Phase 8 (docs/09-phase-8.md, "Routing", "Sync"): it publishes Anode's virtual ports
+///     (<see cref="VirtualPortPrefix" />);
+///     decides per message from the server's <see cref="ControlRouting" /> whether it goes to the server
+///     (<see cref="ControlMidi" />, batched every pass) or plays; hands the clock or MTC input's system messages and MTC
+///     full frames to the <see cref="Sync" /> follower; sends the audio callback's MIDI Clock and MTC to their
+///     destinations, each with its delay; and sends a control surface's feedback on request (<see cref="SendNow" />).
+/// </remarks>
 public sealed class MidiHub : IDisposable {
     const int ReadBatch = 256;
     static readonly double NanosecondsPerTick = 1e9 / Stopwatch.Frequency;
@@ -25,6 +34,12 @@ public sealed class MidiHub : IDisposable {
     readonly Dictionary<int, List<RecordedMidiEvent>> captured = [];
     readonly Dictionary<int, List<(long Clock, RecordedMidiEvent Event)>> history = [];
     readonly byte[] message = new byte[3];
+    readonly byte[] sysex = new byte[16384]; // CTH_MIDI_SYSEX_MAX
+    readonly byte[] syncBytes = new byte[10];
+    readonly List<PendingSync> pendingSync = [];
+    ControlRouting routing = ControlRouting.None;
+    List<EngineControlEvent> control = [];
+    IReadOnlyList<EngineSyncDestination> syncDestinations = [];
     List<MidiActivityEntry> activity = [];
     IReadOnlyList<MidiPortInfo> ports = [];
     IReadOnlyList<EngineMidiPort> enginePorts = [];
@@ -64,6 +79,50 @@ public sealed class MidiHub : IDisposable {
         set => Volatile.Write(ref thru, value);
     }
 
+    /// <summary>Anode's virtual input's uid (the contract's <c>VirtualMidiPorts.InputId</c>).</summary>
+    public const string VirtualInputId = "anode:in";
+
+    /// <summary>Anode's virtual output's uid (the contract's <c>VirtualMidiPorts.OutputId</c>).</summary>
+    public const string VirtualOutputId = "anode:out";
+
+    /// <summary>
+    ///     When set, <see cref="Start" /> publishes Anode's virtual ports where the backend has them, with uids
+    ///     <c>&lt;prefix&gt;:in</c> and <c>&lt;prefix&gt;:out</c>: anode-host's prefix is <c>anode</c> (the ports
+    ///     <see cref="VirtualInputId" /> "Anode In" and <see cref="VirtualOutputId" /> "Anode Out"); another prefix
+    ///     names them "Anode In (prefix)", for tests that run hosts side by side.
+    /// </summary>
+    public string? VirtualPortPrefix { get; init; }
+
+    /// <summary>A batch of messages consumed for control is ready (on the MIDI thread, at most once a pass).</summary>
+    public Action<ControlMidiMessage>? ControlMidi { get; set; }
+
+    /// <summary>The MIDI Clock and MTC follower the clock and MTC inputs feed (set before <see cref="Start" />).</summary>
+    public SyncFollower? Sync { get; set; }
+
+    /// <summary>The control routing in effect.</summary>
+    public ControlRouting Routing => Volatile.Read(ref routing);
+
+    /// <summary>Control thread: the server's control routing, replacing the previous one.</summary>
+    public void SetRouting(ControlRouting next) => Volatile.Write(ref routing, next);
+
+    /// <summary>Control thread: where the callback's MIDI Clock and MTC go, and each destination's delay.</summary>
+    public void SetSyncDestinations(IReadOnlyList<EngineSyncDestination> destinations) =>
+        Volatile.Write(ref syncDestinations, destinations);
+
+    /// <summary>
+    ///     Control thread: sends <paramref name="data" /> (whole messages, SysEx included) to output
+    ///     <paramref name="port" /> now: a control surface's feedback. False when it could not.
+    /// </summary>
+    public bool SendNow(string port, ReadOnlySpan<byte> data) {
+        if (backend is null || data.IsEmpty) {
+            return false;
+        }
+
+        lock (pumpGate) { // the backend is the MIDI thread's; this waits for the pass in progress
+            return backend.Send(port, data, 0);
+        }
+    }
+
     /// <summary>Opens the devices, lists the ports and starts the MIDI thread.</summary>
     public void Start() {
         if (thread is not null) {
@@ -71,6 +130,12 @@ public sealed class MidiHub : IDisposable {
         }
 
         lock (pumpGate) {
+            if (VirtualPortPrefix is { Length: > 0 } prefix && backend is not null) {
+                var suffix = prefix == "anode" ? string.Empty : $" ({prefix})";
+                OpenVirtual($"Anode In{suffix}", $"{prefix}:in", true);
+                OpenVirtual($"Anode Out{suffix}", $"{prefix}:out", false);
+            }
+
             Rescan(true);
         }
 
@@ -192,7 +257,14 @@ public sealed class MidiHub : IDisposable {
         }
     }
 
-    /// <summary>One pass: input, output, capture, activity and (when due) the port check.</summary>
+    void OpenVirtual(string name, string uid, bool input) {
+        var result = backend!.OpenVirtual(name, uid, input);
+        if (result != 0 && result != IMidiBackend.VirtualUnsupported) {
+            Log?.Invoke($"MIDI: the virtual port '{name}' could not be opened ({result})");
+        }
+    }
+
+    /// <summary>One pass: input, output, capture, control, activity and (when due) the port check.</summary>
     public void Pump() {
         lock (pumpGate) {
             var now = Stopwatch.GetTimestamp();
@@ -202,8 +274,12 @@ public sealed class MidiHub : IDisposable {
             }
 
             ReadInput();
+            ReadSystemExclusive();
             SendOutput();
+            SendSync();
+            Sync?.Poll(Now());
             DrainCaptured();
+            FlushControl();
             FlushActivity(now);
         }
     }
@@ -269,14 +345,22 @@ public sealed class MidiHub : IDisposable {
         }
     }
 
-    /// <summary>Sends a message to every armed MIDI track whose input matches, else to the thru track.</summary>
+    /// <summary>
+    ///     A message from a device: to the server when the control routing takes it (and, then, nowhere else), a
+    ///     system message to the sync follower, the rest to every armed MIDI track whose input matches, else to the thru
+    ///     track.
+    /// </summary>
     void Route(ModelRoot root, IReadOnlyList<MidiPortInfo> known, in MidiInputMessage m) {
-        if (m.Status is < 0x80 or >= 0xF0) {
-            return; // system messages (clock, active sensing) are not played
+        if (m.Status < 0x80) {
+            return;
+        }
+
+        var device = (uint)m.Source < (uint)known.Count ? known[m.Source].Uid : null;
+        if (!Play(device, m)) {
+            return;
         }
 
         Forward(m.Status, m.Data1, m.Data2);
-        var device = (uint)m.Source < (uint)known.Count ? known[m.Source].Uid : null;
         var live = new LiveMidi(m.TimeNs, m.Status, m.Data1, m.Data2);
         var routed = false;
         foreach (var track in root.Tracks) {
@@ -299,6 +383,157 @@ public sealed class MidiHub : IDisposable {
             Note(-1, device, m);
         }
     }
+
+    /// <summary>
+    ///     The control routing's and the sync follower's say: a control port's messages and matched ones go to the
+    ///     server (with every channel message while learning), the clock or MTC input's system messages to the follower;
+    ///     true when the message still plays the tracks.
+    /// </summary>
+    bool Play(string? device, in MidiInputMessage m) {
+        var current = Volatile.Read(ref routing);
+        if (m.Status >= 0xF0) {
+            if (current.IsControlPort(device)) {
+                Control(device, m);
+            } else if (Sync is { } sync && sync.Wants(device, m.Status)) {
+                Span<byte> bytes = [m.Status, m.Data1, m.Data2];
+                sync.Receive(device, bytes[..Length(m.Status)], m.TimeNs);
+            }
+
+            return false; // system messages (clock, active sensing) are not played
+        }
+
+        var (forward, play) = current.Decide(device, m.Status, m.Data1);
+        if (forward) {
+            Control(device, m);
+        }
+
+        return play;
+    }
+
+    /// <summary>The length of a message by its status (1–3 bytes).</summary>
+    static int Length(byte status) =>
+        status switch {
+            < 0xF0 => (status & 0xF0) is 0xC0 or 0xD0 ? 2 : 3,
+            0xF1 or 0xF3 => 2,
+            0xF2 => 3,
+            _ => 1
+        };
+
+    void Control(string? device, in MidiInputMessage m) {
+        var data = new byte[Length(m.Status)];
+        data[0] = m.Status;
+        if (data.Length > 1) {
+            data[1] = m.Data1;
+        }
+
+        if (data.Length > 2) {
+            data[2] = m.Data2;
+        }
+
+        control.Add(new(device ?? string.Empty, m.TimeNs, data));
+    }
+
+    /// <summary>Drains the SysEx: a control port's to the server, MTC full frames to the follower, the rest dropped.</summary>
+    void ReadSystemExclusive() {
+        if (backend is null) {
+            return;
+        }
+
+        int length;
+        while ((length = backend.ReadSystemExclusive(sysex, out var timeNs, out var source)) != 0) {
+            if (length < 0) {
+                break; // longer than any the backend queues
+            }
+
+            var known = Volatile.Read(ref ports);
+            var device = (uint)source < (uint)known.Count ? known[source].Uid : null;
+            var data = sysex.AsSpan(0, length);
+            if (Volatile.Read(ref routing).IsControlPort(device)) {
+                control.Add(new(device ?? string.Empty, timeNs, [..data]));
+            } else if (Sync is { } sync && sync.Wants(device, 0xF0)) {
+                sync.Receive(device, data, timeNs);
+            }
+        }
+    }
+
+    void FlushControl() {
+        if (control.Count == 0) {
+            return;
+        }
+
+        var batch = control;
+        control = [];
+        ControlMidi?.Invoke(new(batch));
+    }
+
+    /// <summary>
+    ///     The callback's MIDI Clock and MTC to each destination that takes them, at their time plus its delay: queued
+    ///     in time order and sent when due (CoreMIDI: a little ahead, timestamped, so it schedules them).
+    /// </summary>
+    void SendSync() {
+        var destinations = Volatile.Read(ref syncDestinations);
+        while (engine.SyncOut.TryDequeue(out var e)) {
+            if (backend is not null) {
+                QueueSync(destinations, e);
+            }
+        }
+
+        if (pendingSync.Count == 0) {
+            return;
+        }
+
+        var due = Now() + (backend!.SchedulesOutput ? SyncLeadNs : 0);
+        var sent = 0;
+        while (sent < pendingSync.Count && pendingSync[sent].TimeNs <= due) {
+            var p = pendingSync[sent++];
+            backend.Send(p.Port, SyncBytes(p.Event), Math.Max(0, p.TimeNs));
+        }
+
+        pendingSync.RemoveRange(0, sent);
+    }
+
+    /// <summary>A sync message for each destination that takes it, at its time plus the destination's delay, in time order.</summary>
+    void QueueSync(IReadOnlyList<EngineSyncDestination> destinations, in OutgoingSync e) {
+        foreach (var destination in destinations) {
+            if (e.Kind == SyncMessageKind.Clock ? !destination.Clock : !destination.Mtc) {
+                continue;
+            }
+
+            var pending = new PendingSync(e.TimeNs + (long)(destination.DelayMs * 1e6), destination.Port, e);
+            var at = pendingSync.Count;
+            while (at > 0 && pendingSync[at - 1].TimeNs > pending.TimeNs) {
+                at--;
+            }
+
+            pendingSync.Insert(at, pending);
+        }
+    }
+
+    /// <summary>How far ahead of its time a sync message goes to a backend that schedules (CoreMIDI).</summary>
+    const long SyncLeadNs = 2_000_000;
+
+    ReadOnlySpan<byte> SyncBytes(in OutgoingSync e) {
+        if (e.Length == 10) {
+            syncBytes[0] = 0xF0;
+            syncBytes[1] = 0x7F;
+            syncBytes[2] = 0x7F;
+            syncBytes[3] = 0x01;
+            syncBytes[4] = 0x01;
+            syncBytes[5] = e.B0;
+            syncBytes[6] = e.B1;
+            syncBytes[7] = e.B2;
+            syncBytes[8] = e.B3;
+            syncBytes[9] = 0xF7;
+            return syncBytes;
+        }
+
+        syncBytes[0] = e.B0;
+        syncBytes[1] = e.B1;
+        syncBytes[2] = e.B2;
+        return syncBytes.AsSpan(0, Math.Clamp((int)e.Length, 1, 3));
+    }
+
+    readonly record struct PendingSync(long TimeNs, string Port, OutgoingSync Event);
 
     static bool Matches(EngineMidiIo? io, string? device, byte status) =>
         io is null
