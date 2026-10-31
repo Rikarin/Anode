@@ -71,6 +71,9 @@ export class ControlStore {
   readonly surfaces = signal<readonly ControlSurface[]>([]);
   readonly surfaceStatus = signal<ReadonlyMap<string, SurfaceStatus>>(new Map());
   readonly osc = signal<OscStatus | null>(null);
+  /** OSC settings changes sent and not yet answered, and the chain that sends them in order. */
+  private oscPending = 0;
+  private oscQueue: Promise<void> = Promise.resolve();
   readonly loaded = signal(false);
   /** MIDI ports by id, for names (Anode's virtual ports are among them on macOS). */
   readonly inputs = computed(() => this.plugins.devices().inputs);
@@ -291,19 +294,44 @@ export class ControlStore {
 
   // ---- OSC
 
+  /**
+   * Changes the OSC settings: shown at once, so a change made before the Server answers builds on this one, and sent in
+   * order; the shown ones go back if the Server refuses them.
+   */
   async setOsc(settings: OscSettings): Promise<void> {
-    const status = await this.notify.run(() => this.api.setOsc(settings), 'Could not change the OSC settings');
-    if (status) {
-      this.osc.set(status);
+    const before = this.osc();
+    if (before) {
+      this.osc.set({ ...before, settings });
+    }
+    this.oscPending++;
+    const sent = this.oscQueue.then(() =>
+      this.notify.run(() => this.api.setOsc(settings), 'Could not change the OSC settings')
+    );
+    this.oscQueue = sent.then(
+      () => undefined,
+      () => undefined
+    );
+    try {
+      const status = await sent;
+      if (status) {
+        this.osc.set(status);
+      } else if (before && this.oscPending === 1) {
+        this.osc.set(before);
+      }
+    } finally {
+      this.oscPending--;
     }
   }
 
   /** Reads the OSC status again (its subscribers change with no event); `quiet` drops a failure unannounced. */
   async refreshOsc(quiet = false): Promise<void> {
+    if (this.oscPending > 0) {
+      return; // a change on its way answers with the status
+    }
     const status = quiet
       ? await this.api.osc().catch(() => null)
       : await this.notify.run(() => this.api.osc(), 'Could not read the OSC status');
-    if (status) {
+    if (status && this.oscPending === 0) {
       this.osc.set(status);
     }
   }

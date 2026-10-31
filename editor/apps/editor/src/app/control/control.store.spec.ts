@@ -121,6 +121,17 @@ describe('ControlStore', () => {
     expect(control.osc()?.settings.port).toBe(9100);
     expect(control.osc()?.addresses.length).toBeGreaterThan(0);
   });
+
+  it('builds an OSC change on the one before it, even before the Server answered', async () => {
+    const { server, control } = await setUp();
+    // The port, then On at once (as the window does them): On keeps the new port.
+    const settings = () => control.osc()?.settings ?? { enabled: false, port: 8000, clients: [] };
+    const port = control.setOsc({ ...settings(), port: 9123 });
+    const on = control.setOsc({ ...settings(), enabled: true });
+    await Promise.all([port, on]);
+    expect(control.osc()?.settings).toEqual(expect.objectContaining({ enabled: true, port: 9123 }));
+    expect((await server.osc()).settings).toEqual(expect.objectContaining({ enabled: true, port: 9123 }));
+  });
 });
 
 describe('SelectionReporter', () => {
