@@ -54,7 +54,7 @@ public static class Timecode {
     /// <summary>The label of frame <paramref name="count" /> (wrapping at 24 hours).</summary>
     public static TimecodeLabel Label(long count, EngineMtcRate rate) {
         var day = FramesPerDay(rate);
-        count = ((count % day) + day) % day;
+        count = (count % day + day) % day;
         if (rate == EngineMtcRate.Fps2997Drop) {
             // Every ten minutes hold 17 982 frames; the first minute of the ten keeps its two labels, the rest skip them.
             var tens = count / 17_982;

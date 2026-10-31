@@ -77,7 +77,7 @@ static async Task<int> Serve(Probe probe) {
 
 static int Run(Probe probe, string path, string? output) {
     var commands = JsonNode.Parse(File.ReadAllText(path)) as JsonArray
-                   ?? throw new InvalidDataException("run takes a JSON array of commands");
+        ?? throw new InvalidDataException("run takes a JSON array of commands");
     var results = new JsonArray();
     foreach (var command in commands) {
         results.Add(command is JsonObject request ? probe.Handle(request) : new JsonObject { ["ok"] = false });

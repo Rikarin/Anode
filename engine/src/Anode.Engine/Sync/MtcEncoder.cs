@@ -45,7 +45,13 @@ public sealed class MtcEncoder {
             var frame = (int)Math.Floor((at - startSeconds) / span * frames + Epsilon);
             var piece = (int)(k & 7);
             var label = Timecode.Label((k >> 3) * 2, Rate);
-            output[count++] = new(Math.Clamp(frame, 0, Math.Max(0, frames - 1)), 0xF1, (byte)((piece << 4) | Nibble(label, piece)), 0, 2);
+            output[count++] = new(
+                Math.Clamp(frame, 0, Math.Max(0, frames - 1)),
+                0xF1,
+                (byte)((piece << 4) | Nibble(label, piece)),
+                0,
+                2
+            );
             k++;
         }
 

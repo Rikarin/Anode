@@ -6,7 +6,8 @@ namespace Anode.Audio.Native;
 /// <summary>
 ///     MIDI through the <c>cth_audio</c> shim (CoreMIDI on macOS, WinMM on Windows, the ALSA sequencer on Linux; ported
 ///     from Cathode's <c>NativeMidi</c>). Input from every source is timestamped and queued natively; <see cref="Read" />
-///     drains it (and <see cref="ReadSystemExclusive" /> the SysEx). Output is timestamped: CoreMIDI schedules it, the other
+///     drains it (and <see cref="ReadSystemExclusive" /> the SysEx). Output is timestamped: CoreMIDI schedules it, the
+///     other
 ///     backends send at once. Phase 8 adds virtual ports (CoreMIDI only) and SysEx both ways.
 /// </summary>
 public sealed unsafe partial class NativeMidiBackend : IMidiBackend {
@@ -39,7 +40,10 @@ public sealed unsafe partial class NativeMidiBackend : IMidiBackend {
         return opened;
     }
 
+    // False positive: `fixed` pins the span and the native call fills it; it does not overwrite the parameter.
+#pragma warning disable SK2142
     public int ReadSystemExclusive(Span<byte> buffer, out long timeNs, out int source) {
+#pragma warning restore SK2142
         ulong time;
         int from;
         int length;

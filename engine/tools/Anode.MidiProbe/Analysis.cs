@@ -27,23 +27,31 @@ public static class Analysis {
                     last = m.TimeNs;
                     break;
                 case 0xFA or 0xFB or 0xFC:
-                    transport.Add(new JsonObject {
-                        ["t"] = m.TimeNs,
-                        ["kind"] = m.Data[0] switch { 0xFA => "start", 0xFB => "continue", _ => "stop" }
-                    });
+                    transport.Add(
+                        new JsonObject {
+                            ["t"] = m.TimeNs,
+                            ["kind"] = m.Data[0] switch {
+                                0xFA => "start",
+                                0xFB => "continue",
+                                _ => "stop"
+                            }
+                        }
+                    );
                     last = 0;
                     break;
                 case 0xF2 when m.Data.Length >= 3:
-                    transport.Add(new JsonObject {
-                        ["t"] = m.TimeNs,
-                        ["kind"] = "songPosition",
-                        ["sixteenths"] = (m.Data[2] << 7) | m.Data[1]
-                    });
+                    transport.Add(
+                        new JsonObject {
+                            ["t"] = m.TimeNs, ["kind"] = "songPosition", ["sixteenths"] = (m.Data[2] << 7) | m.Data[1]
+                        }
+                    );
                     break;
             }
         }
 
-        var result = new JsonObject { ["clocks"] = intervals.Count + (last != 0 || intervals.Count > 0 ? 1 : 0), ["transport"] = transport };
+        var result = new JsonObject {
+            ["clocks"] = intervals.Count + (last != 0 || intervals.Count > 0 ? 1 : 0), ["transport"] = transport
+        };
         if (intervals.Count > 0) {
             var mean = intervals.Average();
             var median = intervals.Order().ElementAt(intervals.Count / 2);
@@ -77,7 +85,7 @@ public static class Analysis {
             }
 
             var label = Timecode.Label(Timecode.CountAt(position.Seconds, decoder.Rate), decoder.Rate);
-            last = new JsonObject {
+            last = new() {
                 ["t"] = position.TimeNs,
                 ["seconds"] = position.Seconds,
                 ["label"] = $"{label.Hours:00}:{label.Minutes:00}:{label.Seconds:00}:{label.Frames:00}",
@@ -87,13 +95,17 @@ public static class Analysis {
         }
 
         // The quarter frames' positions against their times: the largest drift from the first, in frames.
-        var quarters = positions.OfType<JsonObject>().Where(static p => p["fullFrame"]!.GetValue<bool>() == false).ToList();
+        var quarters = positions.OfType<JsonObject>()
+            .Where(static p => !p["fullFrame"]!.GetValue<bool>())
+            .ToList();
         double? drift = null;
         if (quarters.Count > 1) {
             var t0 = quarters[0]["t"]!.GetValue<long>();
             var s0 = quarters[0]["seconds"]!.GetValue<double>();
-            drift = quarters.Max(p => Math.Abs(p["seconds"]!.GetValue<double>() - s0 - (p["t"]!.GetValue<long>() - t0) / 1e9))
-                    * Timecode.FramesPerSecond(decoder.Rate);
+            drift = quarters.Max(p =>
+                    Math.Abs(p["seconds"]!.GetValue<double>() - s0 - (p["t"]!.GetValue<long>() - t0) / 1e9)
+                )
+                * Timecode.FramesPerSecond(decoder.Rate);
         }
 
         return new() {

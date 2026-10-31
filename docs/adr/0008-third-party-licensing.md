@@ -12,7 +12,7 @@ Anode is **GPL-3.0-or-later**, as Cathode. Third-party code must be GPL-3-compat
 | Time stretch / pitch shift | Signalsmith Stretch, pinned `88061fd` (1.4.0 + 1), with Signalsmith Linear 0.6.6 ([S5](../spikes/S5-time-stretch.md)) | MIT |
 | VST3 | Steinberg VST3 SDK | MIT (3.8+) |
 | CLAP | CLAP headers | MIT |
-| Ableton Link | Link SDK | GPL-2.0-or-later |
+| Ableton Link | Link SDK, pinned `9c90912` (Link 4.1), through its `abl_link` C extension in `an_link`, with the standalone Asio its submodule pins (`8806a68`) | GPL-2.0-or-later (Asio: BSL-1.0) |
 | Stem splitting | Demucs/HTDemucs via ONNX Runtime | MIT (verify weights at use) |
 | Notation | Verovio (WASM) | LGPL-3.0 |
 | Decoding | libFLAC, minimp3, OS AAC/ALAC decoders, FFmpeg (LGPL build) | BSD / CC0 / LGPL |

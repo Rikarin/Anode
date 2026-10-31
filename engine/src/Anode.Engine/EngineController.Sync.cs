@@ -1,6 +1,5 @@
 using Anode.Audio;
 using Anode.Audio.Native;
-using Anode.Engine.Midi;
 using Anode.Engine.Sync;
 using Anode.Ipc;
 
@@ -54,7 +53,9 @@ public sealed partial class EngineController {
             syncSettings = message;
             if (message.Source == EngineSyncSource.Link && link is null) {
                 if (!NativeLink.IsAvailable) {
-                    throw new InvalidOperationException("Link is not available: an_link was not built (native/build.sh).");
+                    throw new InvalidOperationException(
+                        "Link is not available: an_link was not built (native/build.sh)."
+                    );
                 }
 
                 link = new(CurrentModelBpm()) { Enabled = true };
@@ -63,16 +64,15 @@ public sealed partial class EngineController {
                 link = null;
             }
 
-            if (link is not null) {
-                link.StartStopSync = message.LinkStartStop;
-            }
+            link?.StartStopSync = message.LinkStartStop;
 
             var clock = message.Destinations.Any(static d => d.Clock);
-            var mtc = message.Destinations.Any(static d => d.Mtc)
-                ? Engine.AppliedSync.Mtc is { } current && current.Rate == message.FrameRate
-                    ? current
-                    : new MtcEncoder(message.FrameRate)
-                : null;
+            MtcEncoder? mtc = null;
+            if (message.Destinations.Any(static d => d.Mtc)) {
+                var current = Engine.AppliedSync.Mtc;
+                mtc = current?.Rate == message.FrameRate ? current : new(message.FrameRate);
+            }
+
             var offset = link is null ? 0 : link.ClockMicros - Realtime.NowNanoseconds() / 1000;
             Engine.SetSync(
                 new(

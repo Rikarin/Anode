@@ -108,11 +108,12 @@ public sealed unsafe class SyncOutTests : IDisposable {
         return;
 
         static string Hex(SyncMidiEvent e) =>
-            (e.Length switch {
+            e.Length switch {
                 1 => $"{e.Status:X2}",
                 2 => $"{e.Status:X2}{e.Data1:X2}",
                 _ => $"{e.Status:X2}{e.Data1:X2}{e.Data2:X2}"
-            }) + $"@{e.Frame}";
+            }
+            + $"@{e.Frame}";
     }
 
     public static TheoryData<EngineMtcRate> Rates => [
@@ -281,7 +282,10 @@ public sealed unsafe class SyncOutTests : IDisposable {
         rig.Out.Clear();
         rig.Driver.Send(new(EngineCommandKind.Play));
         rig.Run(2 * Rate / 128);
-        Assert.Equal([0xF2, 0xFB], rig.Out.Where(static e => e.Kind == SyncMessageKind.Clock).Take(2).Select(static e => (int)e.B0));
+        Assert.Equal(
+            [0xF2, 0xFB],
+            rig.Out.Where(static e => e.Kind == SyncMessageKind.Clock).Take(2).Select(static e => (int)e.B0)
+        );
         var decoder = new MtcDecoder(EngineMtcRate.Fps25);
         var first = rig.Out.First(static e => e.Kind == SyncMessageKind.Mtc).TimeNs;
         var checkedPositions = 0;
@@ -306,7 +310,12 @@ public sealed unsafe class SyncOutTests : IDisposable {
         var midi = new FakeMidi { SchedulesOutput = true };
         midi.SetPorts([new("out-a", "A", false), new("out-b", "B", false)]);
         using var rig = new Rig(64, 0, midi);
-        rig.Controller.SetSync(Sync(new EngineSyncDestination("out-a", true, false, 5), new EngineSyncDestination("out-b", false, true, -3)));
+        rig.Controller.SetSync(
+            Sync(
+                new EngineSyncDestination("out-a", true, false, 5),
+                new EngineSyncDestination("out-b", false, true, -3)
+            )
+        );
         rig.Driver.Send(new(EngineCommandKind.Play));
         rig.Run(4);
         foreach (var e in rig.Out) {
@@ -317,8 +326,14 @@ public sealed unsafe class SyncOutTests : IDisposable {
         var sent = midi.SentNow();
         var clock = rig.Out.Where(static e => e.Kind == SyncMessageKind.Clock).ToList();
         var mtc = rig.Out.Where(static e => e.Kind == SyncMessageKind.Mtc).ToList();
-        Assert.Equal(clock.Select(static e => e.TimeNs + 5_000_000), sent.Where(static s => s.Uid == "out-a").Select(static s => s.TimeNs));
-        Assert.Equal(mtc.Select(static e => e.TimeNs - 3_000_000), sent.Where(static s => s.Uid == "out-b").Select(static s => s.TimeNs));
+        Assert.Equal(
+            clock.Select(static e => e.TimeNs + 5_000_000),
+            sent.Where(static s => s.Uid == "out-a").Select(static s => s.TimeNs)
+        );
+        Assert.Equal(
+            mtc.Select(static e => e.TimeNs - 3_000_000),
+            sent.Where(static s => s.Uid == "out-b").Select(static s => s.TimeNs)
+        );
         Assert.Equal([0xFA], sent.First(static s => s.Uid == "out-a").Message);
         Assert.All(sent.Where(static s => s.Uid == "out-b"), static s => Assert.Equal(0xF1, s.Message[0]));
     }

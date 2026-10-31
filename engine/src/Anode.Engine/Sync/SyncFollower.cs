@@ -103,8 +103,10 @@ public sealed class SyncFollower {
                 message.FrameRate,
                 message.StartOffsetSeconds
             );
-            if (next.Source != settings.Source || next.ClockInPort != settings.ClockInPort
-                || next.MtcInPort != settings.MtcInPort || next.FrameRate != settings.FrameRate) {
+            if (next.Source != settings.Source
+                || next.ClockInPort != settings.ClockInPort
+                || next.MtcInPort != settings.MtcInPort
+                || next.FrameRate != settings.FrameRate) {
                 estimator.Reset();
                 mtc = new(next.FrameRate);
                 chasing = false;
@@ -127,7 +129,7 @@ public sealed class SyncFollower {
         var current = Volatile.Read(ref settings);
         return current.Source switch {
             EngineSyncSource.MidiClock => status is 0xF8 or 0xFA or 0xFB or 0xFC or 0xF2
-                                          && (current.ClockInPort is null || current.ClockInPort == port),
+                && (current.ClockInPort is null || current.ClockInPort == port),
             EngineSyncSource.Mtc => status is 0xF1 or 0xF0 && (current.MtcInPort is null || current.MtcInPort == port),
             _ => false
         };
@@ -185,6 +187,8 @@ public sealed class SyncFollower {
                 break;
             case ClockInputKind.Stop:
                 transport.Stop();
+                break;
+            case ClockInputKind.None:
                 break;
             case ClockInputKind.SongPosition:
                 if (transport.Snapshot.State == TransportState.Stopped) {

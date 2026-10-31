@@ -80,8 +80,7 @@ public sealed unsafe partial class AudioEngine {
     TempoMapPoint* SyncPoint => (TempoMapPoint*)Unsafe.AsPointer(ref MemoryMarshal.GetArrayDataReference(syncPoints));
 
     /// <summary>The tempo map the block runs on: the sync override while one is active, else the model's.</summary>
-    TempoMap TempoOf(ModelRoot model) =>
-        syncOverride ? new(SyncPoint, 1, SampleRate) : ModelTempo(model);
+    TempoMap TempoOf(ModelRoot model) => syncOverride ? new(SyncPoint, 1, SampleRate) : ModelTempo(model);
 
     /// <summary>The model's tempo map at the engine's rate (a model without tempo points: 120 bpm in 4/4).</summary>
     TempoMap ModelTempo(ModelRoot model) => model.Tempo.SampleRate == SampleRate ? model.Tempo : new(SampleRate);
@@ -230,7 +229,9 @@ public sealed unsafe partial class AudioEngine {
         // Anode's tempo (the model's at the playhead) goes to Link when it changes; Link's comes back as the
         // transport's tempo.
         var modelBpm = tempo.At(position).Bpm;
-        if (!double.IsNaN(linkModelBpm) && Math.Abs(modelBpm - linkModelBpm) > 0.005 && Math.Abs(modelBpm - bpm) > 0.005) {
+        if (!double.IsNaN(linkModelBpm)
+            && Math.Abs(modelBpm - linkModelBpm) > 0.005
+            && Math.Abs(modelBpm - bpm) > 0.005) {
             NativeLink.SetTempo(state, modelBpm, time);
             bpm = modelBpm;
             commit = true;
@@ -239,26 +240,11 @@ public sealed unsafe partial class AudioEngine {
         linkModelBpm = modelBpm;
         Volatile.Write(ref linkTempo, bpm);
 
-        if (config.LinkStartStop) {
-            var playing = NativeLink.IsPlaying(state);
-            if (playing != linkWasPlaying) {
-                linkWasPlaying = playing;
-                if (playing && !transport.Rolling) {
-                    linkPending = true;
-                } else if (!playing && transport.Rolling) {
-                    StopFromSync(model);
-                    rolling = false;
-                }
-            } else if (transport.Rolling != linkWasRolling) {
-                // Anode started or stopped by itself (a start that waited for the phase has told Link already).
-                if (playing != transport.Rolling) {
-                    NativeLink.SetIsPlaying(state, transport.Rolling, time);
-                    linkWasPlaying = transport.Rolling;
-                    commit = true;
-                }
-            }
+        if (config.LinkStartStop && LinkStartStop(model, state, time)) {
+            commit = true;
         }
 
+        rolling &= transport.Rolling;
         linkWasRolling = transport.Rolling;
         if (rolling) {
             var current = syncOverride && syncAnchorId == transport.Anchor.Id
@@ -276,6 +262,33 @@ public sealed unsafe partial class AudioEngine {
         if (commit) {
             link.CommitAudio();
         }
+    }
+
+    /// <summary>
+    ///     Link's start/stop sync: the session's start makes a start wait for the phase, its stop stops the transport;
+    ///     Anode's own start or stop (one that did not wait for the phase) goes to the session. True when the state
+    ///     changed and must be committed.
+    /// </summary>
+    bool LinkStartStop(ModelRoot model, nint state, long time) {
+        var playing = NativeLink.IsPlaying(state);
+        if (playing != linkWasPlaying) {
+            linkWasPlaying = playing;
+            if (playing && !transport.Rolling) {
+                linkPending = true;
+            } else if (!playing && transport.Rolling) {
+                StopFromSync(model);
+            }
+
+            return false;
+        }
+
+        if (transport.Rolling == linkWasRolling || playing == transport.Rolling) {
+            return false;
+        }
+
+        NativeLink.SetIsPlaying(state, transport.Rolling, time);
+        linkWasPlaying = transport.Rolling;
+        return true;
     }
 
     /// <summary>
@@ -325,7 +338,9 @@ public sealed unsafe partial class AudioEngine {
             if (syncLocated) {
                 Span<byte> full = stackalloc byte[10];
                 if (mtc.FullFrame(start, full) == 10) {
-                    SyncOut.TryEnqueue(new(OutputNs(offset), SyncMessageKind.Mtc, 10, full[5], full[6], full[7], full[8]));
+                    SyncOut.TryEnqueue(
+                        new(OutputNs(offset), SyncMessageKind.Mtc, 10, full[5], full[6], full[7], full[8])
+                    );
                 }
             }
 

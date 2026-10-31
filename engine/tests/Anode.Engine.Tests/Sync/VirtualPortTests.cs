@@ -29,14 +29,18 @@ public sealed class VirtualPortTests {
         Assert.True(ports[input].IsInput);
 
         await using var probe = await ProbeProcess.StartAsync(Token);
-        var opened = await probe.Command(new JsonObject { ["cmd"] = "open", ["in"] = $"{prefix}:out", ["out"] = $"{prefix}:in" });
+        var opened = await probe.Command(
+            new JsonObject { ["cmd"] = "open", ["in"] = $"{prefix}:out", ["out"] = $"{prefix}:in" }
+        );
         Assert.Equal("Virtual Test In", opened["out"]!["name"]!.GetValue<string>());
 
         // The probe sends to our input: a note, a SysEx of several pieces, and system real-time.
         byte[] sysex = [0xF0, 0x00, 0x00, 0x66, 0x14, 0x12, 0x00, .."Track 1 Track 2"u8, 0xF7];
         await probe.Command(new JsonObject { ["cmd"] = "send", ["hex"] = "903C64" });
         await probe.Command(new JsonObject { ["cmd"] = "send", ["hex"] = Convert.ToHexString(sysex) });
-        await probe.Command(new JsonObject { ["cmd"] = "send", ["hex"] = "F8F15A" }); // a clock, then an MTC quarter frame
+        await probe.Command(
+            new JsonObject { ["cmd"] = "send", ["hex"] = "F8F15A" }
+        ); // a clock, then an MTC quarter frame
         var shorts = new List<MidiInputMessage>();
         var buffer = new byte[16384];
         byte[]? got = null;
@@ -54,7 +58,10 @@ public sealed class VirtualPortTests {
             await Task.Delay(5, Token);
         }
 
-        Assert.Equal([(0x90, 60, 100), (0xF8, 0, 0), (0xF1, 0x5A, 0)], shorts.Select(static m => ((int)m.Status, (int)m.Data1, (int)m.Data2)));
+        Assert.Equal(
+            [(0x90, 60, 100), (0xF8, 0, 0), (0xF1, 0x5A, 0)],
+            shorts.Select(static m => ((int)m.Status, (int)m.Data1, (int)m.Data2))
+        );
         Assert.All(shorts, m => Assert.Equal(input, m.Source));
         Assert.Equal(sysex, got);
         Assert.Equal(input, source);

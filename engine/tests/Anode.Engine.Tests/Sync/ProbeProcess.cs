@@ -44,9 +44,7 @@ sealed class ProbeProcess : IAsyncDisposable {
         Assert.True(File.Exists(Path), $"anode-midiprobe not built at {Path}");
         var process = new Process {
             StartInfo = new("dotnet", ["exec", Path, "serve"]) {
-                RedirectStandardInput = true,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true
+                RedirectStandardInput = true, RedirectStandardOutput = true, RedirectStandardError = true
             }
         };
         var probe = new ProbeProcess(process);
@@ -86,14 +84,21 @@ sealed class ProbeProcess : IAsyncDisposable {
             waiting[id] = answer;
         }
 
-        await process.StandardInput.WriteLineAsync(command.ToJsonString());
-        await process.StandardInput.FlushAsync();
-        var result = await answer.Task.WaitAsync(TimeSpan.FromMilliseconds(timeoutMs));
+        await process.StandardInput.WriteLineAsync(
+            command.ToJsonString().AsMemory(),
+            TestContext.Current.CancellationToken
+        );
+        await process.StandardInput.FlushAsync(TestContext.Current.CancellationToken);
+        var result = await answer.Task.WaitAsync(
+            TimeSpan.FromMilliseconds(timeoutMs),
+            TestContext.Current.CancellationToken
+        );
         Assert.True(result["ok"]?.GetValue<bool>() == true, $"{command.ToJsonString()} → {result.ToJsonString()}");
         return result;
     }
 
-    public Task<JsonObject> Command(string cmd, int timeoutMs = 20_000) => Command(new JsonObject { ["cmd"] = cmd }, timeoutMs);
+    public Task<JsonObject> Command(string cmd, int timeoutMs = 20_000) =>
+        Command(new JsonObject { ["cmd"] = cmd }, timeoutMs);
 
     /// <summary>The hex of every message received, in order.</summary>
     public async Task<List<string>> Received(bool clear = false) {

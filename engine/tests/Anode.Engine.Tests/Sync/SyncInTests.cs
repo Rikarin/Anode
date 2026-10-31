@@ -191,7 +191,10 @@ public sealed class SyncInTests {
         encoder.FullFrame(from, full);
         transport.Now = t0;
         follower.Receive(null, full, t0);
-        Assert.Equal($"locate {(long)Math.Round((Timecode.SecondsOf(Timecode.CountAt(from, rate), rate) - offset) * Rate)}", transport.Calls[0]);
+        Assert.Equal(
+            $"locate {(long)Math.Round((Timecode.SecondsOf(Timecode.CountAt(from, rate), rate) - offset) * Rate)}",
+            transport.Calls[0]
+        );
         var worst = 0.0;
         for (var ms = 0; ms < 3000; ms++) {
             var a = from + ms / 1000.0;

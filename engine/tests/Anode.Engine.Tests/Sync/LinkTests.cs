@@ -46,6 +46,24 @@ public sealed class LinkTests : IDisposable {
         }
     }
 
+    /// <summary>How far apart two peers' phases at a bar are half a second from now, in ms at <paramref name="bpm" />.</summary>
+    static double PhaseError(NativeLink a, NativeLink b, double bpm) {
+        var at = a.ClockMicros + 500_000;
+        double phaseA, phaseB;
+        lock (a.AppGate) {
+            a.CaptureApp();
+            phaseA = NativeLink.PhaseAtTime(a.AppState, at, 4);
+        }
+
+        lock (b.AppGate) {
+            b.CaptureApp();
+            phaseB = NativeLink.PhaseAtTime(b.AppState, at, 4);
+        }
+
+        var error = Math.Abs(phaseA - phaseB);
+        return Math.Min(error, 4 - error) * 60_000 / bpm;
+    }
+
     [Fact]
     public void Two_peers_agree_on_tempo_and_phase() {
         Assert.SkipUnless(NativeLink.IsAvailable, "an_link is not built");
@@ -60,22 +78,12 @@ public sealed class LinkTests : IDisposable {
         Assert.Equal(133.5, AppTempo(a), 3);
         SetTempo(b, 97);
         Assert.True(WaitFor(() => Math.Abs(AppTempo(a) - 97) < 1e-3));
-        Thread.Sleep(200); // the timeline settles
-        var now = a.ClockMicros;
-        double phaseA, phaseB;
-        lock (a.AppGate) {
-            a.CaptureApp();
-            phaseA = NativeLink.PhaseAtTime(a.AppState, now + 500_000, 4);
-        }
-
-        lock (b.AppGate) {
-            b.CaptureApp();
-            phaseB = NativeLink.PhaseAtTime(b.AppState, now + 500_000, 4);
-        }
-
-        var error = Math.Abs(phaseA - phaseB);
-        error = Math.Min(error, 4 - error) * 60_000 / 97; // in ms
-        Assert.True(error < 0.1, $"the peers' phases differ by {error:0.000} ms");
+        // Both peers' phase half a second from now: equal within 0.1 ms once the new timeline has gone round.
+        var error = double.MaxValue;
+        Assert.True(
+            WaitFor(() => (error = PhaseError(a, b, 97)) < 0.1),
+            $"the peers' phases differ by {error:0.000} ms"
+        );
         Assert.StartsWith("Link 4.1", NativeLink.Version, StringComparison.Ordinal);
     }
 
@@ -144,7 +152,9 @@ public sealed class LinkTests : IDisposable {
         }
 
         var worst = errors.Max(Math.Abs);
-        TestContext.Current.TestOutputHelper?.WriteLine($"{errors.Count} clocks, worst phase error {worst * 1000:0.0} µs");
+        TestContext.Current.TestOutputHelper?.WriteLine(
+            $"{errors.Count} clocks, worst phase error {worst * 1000:0.0} µs"
+        );
         Assert.True(errors.Count > 300, $"{errors.Count} clocks");
         Assert.True(worst < 0.1, $"the engine's beat is {worst:0.000} ms off Link's");
 

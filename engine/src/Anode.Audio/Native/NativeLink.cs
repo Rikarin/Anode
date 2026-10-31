@@ -94,7 +94,13 @@ public sealed unsafe partial class NativeLink : IDisposable {
 
     public static void SetIsPlaying(nint state, bool playing, long time) => SetIsPlayingNative(state, playing, time);
 
-    public static void SetIsPlayingAndRequestBeatAtTime(nint state, bool playing, long time, double beat, double quantum) =>
+    public static void SetIsPlayingAndRequestBeatAtTime(
+        nint state,
+        bool playing,
+        long time,
+        double beat,
+        double quantum
+    ) =>
         SetIsPlayingAndRequestBeatNative(state, playing, time, beat, quantum);
 
     public void Dispose() {

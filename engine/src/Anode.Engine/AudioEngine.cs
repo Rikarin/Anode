@@ -216,7 +216,9 @@ public sealed unsafe partial class AudioEngine : IAudioProcessor {
                 case EngineCommandKind.LocateAt:
                     // Position A is heard at host time B: where the playhead must be for this callback's first frame.
                     var heard = OutputNs(0);
-                    transport.Locate(Math.Max(0, command.A + (long)Math.Round((heard - command.B) * 1e-9 * SampleRate)));
+                    transport.Locate(
+                        Math.Max(0, command.A + (long)Math.Round((heard - command.B) * 1e-9 * SampleRate))
+                    );
                     hardFloor = transport.Anchor.Id;
                     syncLocated = true;
                     Panic();

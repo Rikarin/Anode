@@ -106,26 +106,48 @@ public sealed partial class HostProcessTests {
         await host.Send(new SetControlRoutingMessage([], [new(null, 0xB0, -1, 21)], false));
         await probe.Command(Cmd("send", ("hex", "B01540")));
         await probe.Command(Cmd("send", ("hex", "B01640")));
-        var control = await host.Push<ControlMidiMessage>(m => m.Events.Any(e => e.Data is [0xB0, 21, 0x40]));
+        var control = await host.Push<ControlMidiMessage>(static m => m.Events.Any(static e => e.Data is [
+                    0xB0, 21, 0x40
+                ]
+            )
+        );
         Assert.All(control.Events, e => Assert.Equal($"{prefix}:in", e.Port));
-        Assert.DoesNotContain(control.Events, e => e.Data is [0xB0, 22, _]);
+        Assert.DoesNotContain(control.Events, static e => e.Data is [0xB0, 22, _]);
         await host.Send(new SetControlRoutingMessage([$"{prefix}:in"], [], false));
         await probe.Command(Cmd("send", ("hex", "F00000661401F7")));
-        await host.Push<ControlMidiMessage>(m => m.Events.Any(e => Convert.ToHexString(e.Data) == "F00000661401F7"));
+        await host.Push<ControlMidiMessage>(static m => m.Events.Any(static e =>
+                Convert.ToHexString(e.Data) == "F00000661401F7"
+            )
+        );
         await host.Send(new SetControlRoutingMessage([], [], false));
 
         // ---- Surface feedback: SysEx and a fader, sent at once.
         await probe.Received(true);
-        await host.Send(new SendMidiMessage($"{prefix}:out", [0xF0, 0x00, 0x00, 0x66, 0x14, 0x12, 0x00, 0x41, 0xF7, 0xE0, 0x00, 0x40]));
+        await host.Send(
+            new SendMidiMessage(
+                $"{prefix}:out",
+                [0xF0, 0x00, 0x00, 0x66, 0x14, 0x12, 0x00, 0x41, 0xF7, 0xE0, 0x00, 0x40]
+            )
+        );
         var feedback = await probe.Command(Cmd("wait", ("count", 2)));
         Assert.Equal(
             ["E00040", "F000006614120041F7"],
-            feedback["messages"]!.AsArray().Select(static m => m!["hex"]!.GetValue<string>()).Order(StringComparer.Ordinal)
+            feedback["messages"]!.AsArray()
+                .Select(static m => m!["hex"]!.GetValue<string>())
+                .Order(StringComparer.Ordinal)
         );
 
         // ---- MIDI Clock and MTC out at 120 bpm: even, with Start and Stop; a locate sends the pointer and a full frame.
         var state = await host.Request<SyncStateMessage>(
-            new SetSyncMessage(EngineSyncSource.Internal, [new($"{prefix}:out", true, true, 0)], EngineMtcRate.Fps25, 0, false, null, null)
+            new SetSyncMessage(
+                EngineSyncSource.Internal,
+                [new($"{prefix}:out", true, true, 0)],
+                EngineMtcRate.Fps25,
+                0,
+                false,
+                null,
+                null
+            )
         );
         Assert.Equal(new(EngineSyncSource.Internal, false, null, 0), state);
         await probe.Received(true);
@@ -140,9 +162,14 @@ public sealed partial class HostProcessTests {
         // the clock with it): an interval or two may be off by that; the rest are within half a millisecond.
         Assert.True(clock["outliers"]!.GetValue<int>() <= 2, $"clock: {clock.ToJsonString()}");
         Assert.True(clock["p99DeviationMs"]!.GetValue<double>() < 0.5, $"clock jitter {clock["p99DeviationMs"]} ms");
-        Assert.Equal(["start", "stop"], clock["transport"]!.AsArray().Select(static t => t!["kind"]!.GetValue<string>()));
+        Assert.Equal(
+            ["start", "stop"],
+            clock["transport"]!.AsArray().Select(static t => t!["kind"]!.GetValue<string>())
+        );
         var mtc = await probe.Command(Cmd("analyzeMtc", ("rate", "fps25")));
-        TestContext.Current.TestOutputHelper?.WriteLine($"mtc out: drift {mtc["maxDriftFrames"]} frames over {mtc["count"]} positions");
+        TestContext.Current.TestOutputHelper?.WriteLine(
+            $"mtc out: drift {mtc["maxDriftFrames"]} frames over {mtc["count"]} positions"
+        );
         Assert.True(mtc["count"]!.GetValue<int>() > 30);
         Assert.True(mtc["maxDriftFrames"]!.GetValue<double>() < 1);
         Assert.InRange(mtc["positions"]![0]!["seconds"]!.GetValue<double>(), 0.06, 0.12); // 1¾ frames after the start
@@ -151,7 +178,9 @@ public sealed partial class HostProcessTests {
         var located = await probe.Command(Cmd("wait", ("count", 2)));
         Assert.Equal( // 18 sixteenths; 00:00:02:06 at 25 fps
             ["F07F7F010120000206F7", "F21200"],
-            located["messages"]!.AsArray().Select(static m => m!["hex"]!.GetValue<string>()).Order(StringComparer.Ordinal)
+            located["messages"]!.AsArray()
+                .Select(static m => m!["hex"]!.GetValue<string>())
+                .Order(StringComparer.Ordinal)
         );
 
         // ---- MIDI Clock in at 100 bpm with Start: the host follows its tempo and start, and stops on Stop.
@@ -161,7 +190,7 @@ public sealed partial class HostProcessTests {
         await host.Send(new TransportMessage(TransportAction.Locate, 0));
         await probe.Command(Cmd("clock", ("bpm", 100)));
         var following = await host.Push<SyncStateMessage>(
-            s => s is { Locked: true, ExternalTempo: > 99.5 and < 100.5 },
+            static s => s is { Locked: true, ExternalTempo: > 99.5 and < 100.5 },
             10_000
         );
         TestContext.Current.TestOutputHelper?.WriteLine($"clock in: {following}");
@@ -194,7 +223,10 @@ public sealed partial class HostProcessTests {
         Assert.True(worst < 1 / 25.0, $"the chase is {worst * 25:0.00} frames off");
         Assert.True((await host.Push<SyncStateMessage>(static s => s.Source == EngineSyncSource.Mtc)).Locked);
         await probe.Command(Cmd("mtcStop"));
-        await Until(() => Header(region).State == TelemetryTransportState.Stopped, "the host did not stop with the timecode");
+        await Until(
+            () => Header(region).State == TelemetryTransportState.Stopped,
+            "the host did not stop with the timecode"
+        );
 
         // ---- Link: the probe joins at 128; the host takes it, plays on the session's beat, and its tempo goes back.
         if (!NativeLink.IsAvailable) {
@@ -202,11 +234,22 @@ public sealed partial class HostProcessTests {
         }
 
         await host.Request<SyncStateMessage>(
-            new SetSyncMessage(EngineSyncSource.Link, [new($"{prefix}:out", true, false, 0)], EngineMtcRate.Fps25, 0, false, null, null)
+            new SetSyncMessage(
+                EngineSyncSource.Link,
+                [new($"{prefix}:out", true, false, 0)],
+                EngineMtcRate.Fps25,
+                0,
+                false,
+                null,
+                null
+            )
         );
         var joined = await probe.Command(Cmd("linkJoin", ("bpm", 128), ("timeoutMs", 10_000)));
         Assert.SkipWhen(joined["peers"]!.GetValue<int>() == 0, "the Link peers did not find each other");
-        var link = await host.Push<SyncStateMessage>(s => s is { LinkPeers: 1, ExternalTempo: > 127.99 and < 128.01 }, 10_000);
+        var link = await host.Push<SyncStateMessage>(
+            static s => s is { LinkPeers: 1, ExternalTempo: > 127.99 and < 128.01 },
+            10_000
+        );
         Assert.True(link.Locked);
         await host.Send(new TransportMessage(TransportAction.Locate, 0));
         await probe.Received(true);

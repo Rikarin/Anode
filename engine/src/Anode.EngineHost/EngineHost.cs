@@ -156,7 +156,10 @@ public sealed class EngineHost : IDisposable {
     /// <summary>How often the inserts' readings are pushed (at most 15 times a second).</summary>
     static readonly TimeSpan ReadingsInterval = TimeSpan.FromSeconds(1.0 / 15);
 
-    /// <summary>How often the sync state is checked: pushed on a change (at most 10 a second), and every 250 ms while external.</summary>
+    /// <summary>
+    ///     How often the sync state is checked: pushed on a change (at most 10 a second), and every 250 ms while
+    ///     external.
+    /// </summary>
     static readonly TimeSpan SyncCheckInterval = TimeSpan.FromMilliseconds(100);
 
     const long SyncRepeatMs = 250;
@@ -177,14 +180,14 @@ public sealed class EngineHost : IDisposable {
             }
 
             var changed = previous is null
-                          || previous.Source != state.Source
-                          || previous.Locked != state.Locked
-                          || previous.LinkPeers != state.LinkPeers
-                          || previous.ExternalTempo.HasValue != state.ExternalTempo.HasValue
-                          || Math.Abs((previous.ExternalTempo ?? 0) - (state.ExternalTempo ?? 0)) >= 0.01;
+                || previous.Source != state.Source
+                || previous.Locked != state.Locked
+                || previous.LinkPeers != state.LinkPeers
+                || previous.ExternalTempo.HasValue != state.ExternalTempo.HasValue
+                || Math.Abs((previous.ExternalTempo ?? 0) - (state.ExternalTempo ?? 0)) >= 0.01;
             push = force
-                   || changed
-                   || (state.Source != EngineSyncSource.Internal && now - lastSyncPush >= SyncRepeatMs);
+                || changed
+                || (state.Source != EngineSyncSource.Internal && now - lastSyncPush >= SyncRepeatMs);
             if (push) {
                 lastSync = state;
                 lastSyncPush = now;
@@ -264,10 +267,9 @@ public sealed class EngineHost : IDisposable {
     ///     (<c>setStrip</c>, <c>setTrackIo</c>, <c>setCycle</c>, <c>setMetronome</c>, <c>setInstrument</c>,
     ///     <c>setParameter</c>, <c>setMidiIo</c>, <c>setMidiThru</c>, <c>liveMidi</c>, <c>setPunch</c>,
     ///     <c>previewFile</c>, <c>previewRange</c>, <c>setPreviewSync</c>, <c>setScript</c>, <c>setStepInputForward</c>,
-    ///     <c>launchCells</c>, <c>stopCells</c>, <c>setControlRouting</c>, <c>sendMidi</c> (unless no port took it: an
-    ///     error) (the launcher's state
-    ///     changes are pushed as <see cref="CellStateMessage" />s), and <c>transport</c> unless a stop ends a recording
-    ///     pass, which answers
+    ///     <c>launchCells</c>, <c>stopCells</c> (the launcher's state changes are pushed as
+    ///     <see cref="CellStateMessage" />s), <c>setControlRouting</c>, <c>sendMidi</c> (unless no port took it: an
+    ///     error), and <c>transport</c> unless a stop ends a recording pass, which answers
     ///     <see cref="RecordingFinishedMessage" />). <c>flashbackCapture</c> answers a
     ///     <see cref="RecordingFinishedMessage" /> with <c>Flashback</c> set (no takes when nothing was played).
     ///     <c>scanPlugins</c>

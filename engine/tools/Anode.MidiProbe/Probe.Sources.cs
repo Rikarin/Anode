@@ -36,8 +36,13 @@ public sealed partial class Probe {
         var preRoll = (long)(Double(request, "preRollMs", 0) * 1e6);
         var startAt = first + (preRoll + period - 1) / period * period;
         byte[] begin = request["sixteenths"] is not null
-            ? [0xF2, (byte)(Int(request, "sixteenths", 0) & 0x7F), (byte)((Int(request, "sixteenths", 0) >> 7) & 0x7F), 0xFB]
-            : request["start"]?.GetValue<bool>() != false ? [0xFA] : [];
+            ? [
+                0xF2, (byte)(Int(request, "sixteenths", 0) & 0x7F), (byte)((Int(request, "sixteenths", 0) >> 7) & 0x7F),
+                0xFB
+            ]
+            : request["start"]?.GetValue<bool>() != false
+                ? [0xFA]
+                : [];
         lock (sourceGate) {
             clockBpm = bpm;
             clockTicking = true;
@@ -80,18 +85,9 @@ public sealed partial class Probe {
 
     void ClockLoop() {
         while (clockRunning) {
-            long at;
-            lock (sourceGate) {
-                if (!clockTicking && !tickWhileStopped) {
-                    return;
-                }
-
-                at = nextTickNs;
-                if (at > Now() + LookaheadNs) {
-                    at = 0;
-                } else {
-                    nextTickNs += (long)Math.Round(60e9 / (clockBpm * 24));
-                }
+            var (stop, at, begin) = NextClock();
+            if (stop) {
+                return;
             }
 
             if (at == 0) {
@@ -100,14 +96,6 @@ public sealed partial class Probe {
             }
 
             try {
-                byte[] begin = [];
-                lock (sourceGate) {
-                    if (startBytes.Length > 0 && at >= startNs) {
-                        begin = startBytes;
-                        startBytes = [];
-                    }
-                }
-
                 if (begin.Length > 0) {
                     SendBytes(begin, at - 500_000); // Start (or the pointer and Continue) just before its first clock
                 }
@@ -116,6 +104,32 @@ public sealed partial class Probe {
             } catch (InvalidOperationException) {
                 return;
             }
+        }
+    }
+
+    /// <summary>
+    ///     The next clock when it is within the lookahead (else 0), the start messages due before it, or that the clock
+    ///     has stopped.
+    /// </summary>
+    (bool Stop, long At, byte[] Begin) NextClock() {
+        lock (sourceGate) {
+            if (!clockTicking && !tickWhileStopped) {
+                return (true, 0, []);
+            }
+
+            var at = nextTickNs;
+            if (at > Now() + LookaheadNs) {
+                return (false, 0, []);
+            }
+
+            nextTickNs += (long)Math.Round(60e9 / (clockBpm * 24));
+            byte[] begin = [];
+            if (startBytes.Length > 0 && at >= startNs) {
+                begin = startBytes;
+                startBytes = [];
+            }
+
+            return (false, at, begin);
         }
     }
 

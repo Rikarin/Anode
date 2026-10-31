@@ -17,7 +17,10 @@ public sealed class BlockClock {
     int frames;
     bool started;
 
-    /// <summary>The smoothed time of the callback that started at <paramref name="nowNs" /> with <paramref name="callbackFrames" />.</summary>
+    /// <summary>
+    ///     The smoothed time of the callback that started at <paramref name="nowNs" /> with
+    ///     <paramref name="callbackFrames" />.
+    /// </summary>
     public long Update(long nowNs, int callbackFrames, int sampleRate) {
         var nominal = callbackFrames * 1e9 / sampleRate;
         if (!started || callbackFrames != frames || Math.Abs(nowNs - predicted) > 2 * nominal) {

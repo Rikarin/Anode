@@ -119,8 +119,7 @@ public sealed partial class Probe : IDisposable {
         return new() { ["ports"] = new JsonArray([..ports.Select(PortJson)]) };
     }
 
-    static JsonObject PortJson(MidiPortInfo p) =>
-        new() { ["uid"] = p.Uid, ["name"] = p.Name, ["input"] = p.IsInput };
+    static JsonObject PortJson(MidiPortInfo p) => new() { ["uid"] = p.Uid, ["name"] = p.Name, ["input"] = p.IsInput };
 
     /// <summary>The port named by uid or display name, inputs or outputs; null when none is listed.</summary>
     MidiPortInfo? Find(string name, bool input) =>
@@ -149,7 +148,9 @@ public sealed partial class Probe : IDisposable {
         }
 
         if (i is null || o is null) {
-            throw new TimeoutException($"ports not found: {(i is null ? $"input '{input}' " : "")}{(o is null ? $"output '{output}'" : "")}");
+            throw new TimeoutException(
+                $"ports not found: {(i is null ? $"input '{input}' " : string.Empty)}{(o is null ? $"output '{output}'" : string.Empty)}"
+            );
         }
 
         inPort = i.Uid;
@@ -209,7 +210,7 @@ public sealed partial class Probe : IDisposable {
                 count = midi.Read(batch);
                 int length;
                 while ((length = midi.ReadSystemExclusive(sysex, out var timeNs, out var source)) > 0) {
-                    sysexList.Add(new(timeNs, PortOf(known, source), sysex.AsSpan(0, length).ToArray()));
+                    sysexList.Add(new(timeNs, PortOf(known, source), [..sysex.AsSpan(0, length)]));
                 }
             }
 
@@ -230,7 +231,7 @@ public sealed partial class Probe : IDisposable {
     }
 
     static string PortOf(IReadOnlyList<MidiPortInfo> known, int source) =>
-        (uint)source < (uint)known.Count ? known[source].Uid : "";
+        (uint)source < (uint)known.Count ? known[source].Uid : string.Empty;
 
     void Take(Received message) {
         if (inPort is not null && message.Port != inPort) {
@@ -270,7 +271,9 @@ public sealed partial class Probe : IDisposable {
         var prefix = Text(request, "prefix");
         lock (recordGate) {
             return [
-                ..received.Where(r => r.TimeNs >= since && (prefix is null || Hex(r.Data).StartsWith(prefix, StringComparison.OrdinalIgnoreCase)))
+                ..received.Where(r => r.TimeNs >= since
+                    && (prefix is null || Hex(r.Data).StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                )
             ];
         }
     }
@@ -283,9 +286,11 @@ public sealed partial class Probe : IDisposable {
 
         return new() {
             ["count"] = list.Count,
-            ["messages"] = new JsonArray([
-                ..list.Select(static r => new JsonObject { ["t"] = r.TimeNs, ["hex"] = Hex(r.Data) })
-            ])
+            ["messages"] = new JsonArray(
+                [
+                    ..list.Select(static r => new JsonObject { ["t"] = r.TimeNs, ["hex"] = Hex(r.Data) })
+                ]
+            )
         };
     }
 
@@ -298,9 +303,11 @@ public sealed partial class Probe : IDisposable {
             if (list.Count >= count) {
                 return new() {
                     ["count"] = list.Count,
-                    ["messages"] = new JsonArray([
-                        ..list.Select(static r => new JsonObject { ["t"] = r.TimeNs, ["hex"] = Hex(r.Data) })
-                    ])
+                    ["messages"] = new JsonArray(
+                        [
+                            ..list.Select(static r => new JsonObject { ["t"] = r.TimeNs, ["hex"] = Hex(r.Data) })
+                        ]
+                    )
                 };
             }
 
@@ -325,7 +332,7 @@ public sealed partial class Probe : IDisposable {
         }
 
         if (!sent) {
-            throw new InvalidOperationException($"the output '{port}' did not take {Hex(data.ToArray())}");
+            throw new InvalidOperationException($"the output '{port}' did not take {Hex([..data])}");
         }
     }
 
@@ -376,11 +383,13 @@ public sealed partial class Probe : IDisposable {
 
     public static string Hex(byte[] data) => Convert.ToHexString(data);
 
-    static string? Text(JsonObject o, string name) => o[name] is JsonValue v && v.TryGetValue<string>(out var s) ? s : null;
+    static string? Text(JsonObject o, string name) =>
+        o[name] is JsonValue v && v.TryGetValue<string>(out var s) ? s : null;
 
     static int Int(JsonObject o, string name, int fallback) => o[name] is JsonValue v ? v.GetValue<int>() : fallback;
 
-    static long Long(JsonObject o, string name, long fallback) => o[name] is JsonValue v ? v.GetValue<long>() : fallback;
+    static long Long(JsonObject o, string name, long fallback) =>
+        o[name] is JsonValue v ? v.GetValue<long>() : fallback;
 
     static double Double(JsonObject o, string name, double fallback) =>
         o[name] is JsonValue v ? v.GetValue<double>() : fallback;
@@ -400,7 +409,7 @@ public sealed partial class Probe : IDisposable {
         }
 
         if (Text(o, "hex") is { } hex) {
-            return Convert.FromHexString(hex.Replace(" ", "", StringComparison.Ordinal));
+            return Convert.FromHexString(hex.Replace(" ", string.Empty, StringComparison.Ordinal));
         }
 
         throw new ArgumentException("no data or hex");

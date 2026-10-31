@@ -23,9 +23,7 @@ public sealed class ControlRoutingTests : IDisposable {
         driver = new(controller, Block);
         controller.Midi.ControlMidi = batch => forwarded.AddRange(batch.Events);
         using var segment = TestAudio.Segment([new(1, [], [])], 1);
-        controller.LoadModel(
-            TestAudio.Load(segment, 1, true, [MidiFixtures.InstrumentTrack(1, armed: true)], [], dir)
-        );
+        controller.LoadModel(TestAudio.Load(segment, 1, true, [MidiFixtures.InstrumentTrack(1, armed: true)], [], dir));
     }
 
     public void Dispose() {

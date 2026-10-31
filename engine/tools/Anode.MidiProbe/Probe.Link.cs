@@ -84,18 +84,22 @@ public sealed partial class Probe {
     /// </summary>
     JsonObject LinkState(JsonObject request) {
         var quantum = Double(request, "quantum", 4);
-        var times = request["at"] is JsonArray array ? [..array.Select(static t => t!.GetValue<long>())] : new[] { Now() };
+        var times = request["at"] is JsonArray array
+            ? [..array.Select(static t => t!.GetValue<long>())]
+            : new[] { Now() };
         var beats = new JsonArray();
         var summary = LinkSummary();
         lock (Peer.AppGate) {
             Peer.CaptureApp();
             foreach (var t in times) {
                 var time = LinkTime(t);
-                beats.Add(new JsonObject {
-                    ["at"] = t,
-                    ["beat"] = NativeLink.BeatAtTime(Peer.AppState, time, quantum),
-                    ["phase"] = NativeLink.PhaseAtTime(Peer.AppState, time, quantum)
-                });
+                beats.Add(
+                    new JsonObject {
+                        ["at"] = t,
+                        ["beat"] = NativeLink.BeatAtTime(Peer.AppState, time, quantum),
+                        ["phase"] = NativeLink.PhaseAtTime(Peer.AppState, time, quantum)
+                    }
+                );
             }
         }
 
