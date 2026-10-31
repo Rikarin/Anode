@@ -132,13 +132,18 @@ static class ServeCommand {
     }
 
     /// <summary>
-    ///     MIDI devices through the native shim, unless <c>--no-midi</c> (or the shim is not built); with
-    ///     <c>--virtual-midi</c>, one virtual input and output instead (tests and machines without MIDI ports).
+    ///     MIDI devices through the native shim, unless <c>--no-midi</c> (or the shim is not built). With
+    ///     <c>--virtual-midi</c> (tests and machines without MIDI ports), only a virtual input and output: on macOS Anode's
+    ///     own CoreMIDI ports ("Anode In", "Anode Out"; other processes such as <c>anode-midiprobe</c> reach them, and
+    ///     the machine's devices stay hidden), elsewhere a fake pair that goes nowhere.
     /// </summary>
     static IMidiBackend? Midi(CommandLine options) =>
-        options.Flag("virtual-midi") ? new VirtualMidiBackend()
-        : !options.Flag("no-midi") && NativeMidiBackend.IsAvailable ? new NativeMidiBackend()
-        : null;
+        options.Flag("virtual-midi")
+            ? OperatingSystem.IsMacOS() && NativeMidiBackend.IsAvailable
+                ? new OwnPortsMidiBackend(new NativeMidiBackend(), options.Text("midi-port-prefix") ?? "anode")
+                : new VirtualMidiBackend()
+            : !options.Flag("no-midi") && NativeMidiBackend.IsAvailable ? new NativeMidiBackend()
+            : null;
 
     /// <summary>
     ///     Third-party plugins (VST3, AU, CLAP) in <c>anode-plugin</c> sandboxes (docs/adr/0003-plugin-hosting.md):

@@ -49,7 +49,7 @@ public sealed class EngineHost : IDisposable {
     ///     hosted (and scanned) by it, in sandboxes; without, the Phase 2 in-process CLAP host serves CLAP instruments.
     /// </param>
     /// <param name="virtualMidiPrefix">
-    ///     With the native MIDI backend, the virtual ports' uid prefix (Phase 8; "anode": "Anode In" <c>anode:in</c> and
+    ///     With the native MIDI backend (or only its own ports, <see cref="OwnPortsMidiBackend" />), the virtual ports' uid prefix (Phase 8; "anode": "Anode In" <c>anode:in</c> and
     ///     "Anode Out" <c>anode:out</c>); null publishes none.
     /// </param>
     public unsafe EngineHost(
@@ -72,7 +72,7 @@ public sealed class EngineHost : IDisposable {
                 device.BufferFrames,
                 latency.Input + latency.Output,
                 latency.Output,
-                VirtualMidiPrefix: midi is NativeMidiBackend ? virtualMidiPrefix : null
+                VirtualMidiPrefix: midi is NativeMidiBackend or OwnPortsMidiBackend ? virtualMidiPrefix : null
             ),
             plugins,
             midi

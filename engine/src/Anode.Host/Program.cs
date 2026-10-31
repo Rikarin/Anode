@@ -65,7 +65,7 @@ int Usage() {
                                            --input-tone: the null device's inputs carry a 440 Hz tone;
                                            --lose-device-after: the null device reports itself lost (tests);
                                            --mute: silence the device output; --no-midi: open no MIDI devices;
-                                           --virtual-midi: one virtual MIDI input and output instead of devices;
+                                           --virtual-midi: only a virtual MIDI input and output (Anode's own on macOS);
                                            --midi-port-prefix: the uids of the virtual ports Anode publishes
                                            ("Anode In" <prefix>:in, "Anode Out" <prefix>:out; tests);
                                            --watch-stdin: also stop when standard input closes). CLAP, VST3 and AU
