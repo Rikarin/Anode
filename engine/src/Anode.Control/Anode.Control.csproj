@@ -4,5 +4,6 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../Anode.Contracts/Anode.Contracts.csproj"/>
+    <InternalsVisibleTo Include="Anode.Control.Tests"/>
   </ItemGroup>
 </Project>
