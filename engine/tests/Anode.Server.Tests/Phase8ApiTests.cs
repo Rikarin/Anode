@@ -97,6 +97,37 @@ public sealed class Phase8ApiTests : IAsyncDisposable {
         Assert.InRange(events.OfType<SyncEvent>().Count(), 1, 3);
     }
 
+    [Fact]
+    public async Task Following_Link_the_sessions_tempo_becomes_the_projects_in_one_undo_step_and_clock_tempo_does_not() {
+        await StartAsync();
+        await Client.CreateProjectAsync();
+        async Task<int> StepsAsync() =>
+            (await Client.GetFromJsonAsync("/api/v1/project/history", ContractsJsonContext.Default.UndoHistory, Token))!
+            .Undo.Count;
+
+        // MIDI Clock's tempo moves the host's transport only.
+        await Client.EditAsync(new SetSyncSettingsCommand(SyncSource.MidiClock));
+        await Host.ReportSyncStateAsync(new(EngineSyncSource.MidiClock, true, 100.2, 0));
+        await ServerFixture.Eventually(async () => (await SyncAsync())?.ExternalTempo == 100.2);
+        Assert.Equal(120, (await Client.ProjectAsync()).Settings.Tempo);
+
+        await Client.EditAsync(new SetSyncSettingsCommand(SyncSource.Link));
+        var steps = await StepsAsync();
+        foreach (var bpm in new[] { 128, 128.5, 129.25 }) {
+            await Host.ReportSyncStateAsync(new(EngineSyncSource.Link, true, bpm, 1));
+            await ServerFixture.Eventually(async () => (await Client.ProjectAsync()).Settings.Tempo == bpm);
+        }
+
+        // One step for the burst; undone, the tempo is the project's own again.
+        Assert.Equal(steps + 1, await StepsAsync());
+        // The same tempo again writes nothing.
+        await Host.ReportSyncStateAsync(new(EngineSyncSource.Link, true, 129.25, 1));
+        await Task.Delay(100, Token);
+        Assert.Equal(steps + 1, await StepsAsync());
+        await Client.PostResultAsync("/api/v1/project/undo");
+        Assert.Equal(120, (await Client.ProjectAsync()).Settings.Tempo);
+    }
+
     /// <summary>A project with an audio region of a stereo file at tick 960, from frame 4800 for 24000 frames.</summary>
     async Task<(string Track, AudioRegion Region)> RegionAsync() {
         await Client.CreateProjectAsync();

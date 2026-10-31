@@ -1,5 +1,6 @@
 using Anode.Contracts;
 using Anode.Ipc;
+using Anode.Model.History;
 using Anode.Server.Projects;
 using Anode.Server.Realtime;
 
@@ -11,12 +12,25 @@ namespace Anode.Server.Engine;
 ///     (internal sync when no project is open); the host's <see cref="SyncStateMessage" />s become the live
 ///     <see cref="SyncState" /> (<c>GET /project/sync</c>) and <see cref="SyncEvent" />s, at most
 ///     <see cref="MaxEventsPerSecond" /> a second (the last change always goes out).
+///     <para>
+///         Following Link, the session's tempo becomes the project's (<see cref="SetTempoCommand" />, the tempo at the
+///         project start), so regions, the grid and the LCD follow it and a save keeps it. The writes of one burst of
+///         tempo changes (no more than <see cref="LinkTempoGap" /> apart) coalesce into one undo step. It cannot loop:
+///         the host pushes the model's tempo to Link only when the model's changes and differs from Link's. MIDI Clock's
+///         tempo, a smoothed estimate, is not written (docs/09-phase-8.md, "Sync"); the host's transport follows it.
+///     </para>
 /// </summary>
 public sealed class SyncService(ProjectSession session, EngineConnection engine, EventHub hub, TimeProvider time)
     : IHostedService, IDisposable {
     public const int MaxEventsPerSecond = 10;
 
     static readonly TimeSpan EventInterval = TimeSpan.FromSeconds(1.0 / MaxEventsPerSecond);
+
+    /// <summary>Link tempo writes this close together are one undo step.</summary>
+    public static readonly TimeSpan LinkTempoGap = TimeSpan.FromSeconds(2);
+
+    /// <summary>The project's tempo is taken to match Link's within this (bpm; the host's own threshold).</summary>
+    const double TempoTolerance = 0.005;
 
     readonly Lock gate = new();
     SetSyncMessage? sent;
@@ -25,6 +39,8 @@ public sealed class SyncService(ProjectSession session, EngineConnection engine,
     SyncState? announced;
     DateTimeOffset announcedAt;
     ITimer? pending;
+    long linkBurst;
+    DateTimeOffset linkWrittenAt;
 
     /// <summary>The live sync state of the open project: the host's, or what its settings imply until it reports.</summary>
     public SyncState State() {
@@ -143,6 +159,39 @@ public sealed class SyncService(ProjectSession session, EngineConnection engine,
         lock (gate) {
             reported = state;
             Announce();
+        }
+
+        FollowLinkTempo(state);
+    }
+
+    /// <summary>Link's tempo, when the project follows Link and its tempo differs, written into the project.</summary>
+    void FollowLinkTempo(SyncState state) {
+        if (state is not { Source: SyncSource.Link, ExternalTempo: { } tempo }
+            || session.View is not { } view
+            || view.State.Settings.Sync.Source != SyncSource.Link) {
+            return;
+        }
+
+        var bpm = Math.Round(Math.Clamp(tempo, 5, 999), 3);
+        if (Math.Abs(view.State.Settings.Tempo - bpm) <= TempoTolerance) {
+            return;
+        }
+
+        string key;
+        lock (gate) {
+            var now = time.GetUtcNow();
+            if (now - linkWrittenAt > LinkTempoGap) {
+                linkBurst++;
+            }
+
+            linkWrittenAt = now;
+            key = $"{EditHistory.GesturePrefix}link-tempo|{view.Session}|{linkBurst}";
+        }
+
+        try {
+            session.Apply(new([new SetTempoCommand(bpm)]), null, key);
+        } catch (ProjectException) {
+            // A project that cannot take the tempo now (closed meanwhile): the next report tries again.
         }
     }
 
