@@ -271,7 +271,7 @@ const SymbolNames: Partial<Record<ScoreSymbolKind, string>> = {
                     [style.left.px]="e.x"
                     [style.top.px]="e.y"
                     [value]="e.text"
-                    (input)="entryInput($any($event.target).value)"
+                    (input)="entryInput(inputValue($event))"
                     (keydown)="entryKey($event)"
                     (blur)="entryBlur()"
                     (pointerdown)="$event.stopPropagation()"
@@ -763,7 +763,7 @@ export class ScoreEditor {
   private cssOf(at: PagePoint, point: Point, dy: number): { x: number; y: number } {
     const page = this.store.pages().find(p => p.page === at.page);
     const width = (page?.width ?? 0) * this.scale();
-    const height = (page?.height || this.pageHeight()) * this.scale();
+    const height = (page && page.height > 0 ? page.height : this.pageHeight()) * this.scale();
     const css = fromScorePoint(at.svg, point, width, height);
     return { x: Math.max(0, css.x - 12), y: Math.max(0, css.y + dy) };
   }
@@ -884,7 +884,7 @@ export class ScoreEditor {
         return;
       }
       const pending = this.pending;
-      if (!pending || pending.kind !== kind) {
+      if (pending?.kind !== kind) {
         this.pending = { kind, trackId, staff, noteId: note?.noteId ?? null, tick: note?.tick ?? tick };
         this.status.set(kind === 'slur' ? 'Now click the last note.' : 'Now click where it ends.');
         return;
@@ -1065,6 +1065,10 @@ export class ScoreEditor {
       : entry.mode === 'chord'
         ? 'Chord symbol'
         : (SymbolNames[entry.kind] ?? 'Text');
+  }
+
+  protected inputValue(event: Event): string {
+    return (event.target as HTMLInputElement).value;
   }
 
   protected entryInput(text: string): void {

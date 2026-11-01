@@ -285,10 +285,11 @@ function handleIpc(): void {
   // names: the page size in millimetres and a default file name from the renderer, checked; answers the path, or null.
   ipcMain.handle('anode:printToPdf', async (event, request: unknown) => {
     const valid = validPrintRequest(request);
-    if (event.sender !== window?.webContents || !valid || !window) {
+    const owner = BrowserWindow.fromWebContents(event.sender);
+    if (!owner || owner !== window || !valid) {
       return null;
     }
-    const target = await dialog.showSaveDialog(window, {
+    const target = await dialog.showSaveDialog(owner, {
       title: 'Save Score as PDF',
       defaultPath: `${valid.title}.pdf`,
       filters: [{ name: 'PDF', extensions: ['pdf'] }]

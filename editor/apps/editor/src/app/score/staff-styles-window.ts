@@ -189,7 +189,7 @@ import {
                         [class]="field"
                         [attr.aria-label]="'Clef of staff ' + (i + 1)"
                         [disabled]="!editable()"
-                        (change)="setStaff(i, { clef: $any(value($event)) })"
+                        (change)="setClef(i, value($event))"
                       >
                         @for (clef of clefs; track clef.value) {
                           <option [value]="clef.value" [selected]="clef.value === staff.clef">{{ clef.label }}</option>
@@ -311,7 +311,7 @@ import {
                           [class]="field"
                           [attr.aria-label]="'Notehead of drum ' + (i + 1)"
                           [disabled]="!editable()"
-                          (change)="setDrum(i, { notehead: $any(value($event)) })"
+                          (change)="setNotehead(i, value($event))"
                         >
                           @for (head of noteheads; track head) {
                             <option [value]="head" [selected]="head === entry.notehead">{{ head }}</option>
@@ -439,6 +439,20 @@ export class StaffStylesWindow {
     const staves = normaliseStaves(style.staves.map((s, i) => (i === index ? { ...s, ...change } : s)));
     const percussion = staves.some(s => s.clef === 'percussion');
     this.patch({ staves, drumMap: percussion ? (style.drumMap ?? []) : null });
+  }
+
+  protected setClef(index: number, value: string): void {
+    const clef = Clefs.find(c => c.value === value)?.value;
+    if (clef) {
+      this.setStaff(index, { clef });
+    }
+  }
+
+  protected setNotehead(index: number, value: string): void {
+    const notehead = Noteheads.find(n => n === value);
+    if (notehead) {
+      this.setDrum(index, { notehead });
+    }
   }
 
   protected addStaff(): void {

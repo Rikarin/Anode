@@ -135,7 +135,7 @@ export const PartBoxGroups: readonly Group[] = [
 
 /** Whether an item is the armed tool (a value matches whatever its dots and triplet). */
 function armed(item: Item, tool: PartBoxTool | null): boolean {
-  if (!tool || tool.kind !== item.tool.kind) {
+  if (tool?.kind !== item.tool.kind) {
     return false;
   }
   switch (tool.kind) {
@@ -179,6 +179,7 @@ function armed(item: Item, tool: PartBoxTool | null): boolean {
       <div
         class="grid grid-cols-4 gap-1 px-2 py-1.5"
         role="radiogroup"
+        tabindex="-1"
         [attr.aria-labelledby]="'an-part-' + group.name"
         (keydown)="arrow($event)"
       >

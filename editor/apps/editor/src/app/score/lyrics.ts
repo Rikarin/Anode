@@ -53,7 +53,7 @@ export function lyricKey(
     if (!trimmed && !existing) {
       return null;
     }
-    if (existing && existing.text === trimmed && existing.syllabic === syllabic && existing.extender === extender) {
+    if (existing?.text === trimmed && existing.syllabic === syllabic && existing.extender === extender) {
       return null;
     }
     return { noteId, text: trimmed, syllabic: trimmed ? syllabic : 'single', extender: trimmed ? extender : false };

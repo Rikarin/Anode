@@ -112,7 +112,7 @@ export function parseChord(input: string): ParsedChord | null {
   // "6/9" is a quality, not a bass.
   if (slash >= 0 && !/^6\/9$/.test(quality)) {
     const after = readNote(quality.slice(slash + 1));
-    if (!after || after.rest !== '') {
+    if (after?.rest !== '') {
       return null;
     }
     bass = after.name;

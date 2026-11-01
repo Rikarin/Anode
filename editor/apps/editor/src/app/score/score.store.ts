@@ -66,7 +66,7 @@ export class ScoreStore {
       this.project.settings();
       this.project.markers();
       const query = this.query();
-      const view = this.view();
+      this.view();
       untracked(() => {
         if (this.project.isOpen() && (query.part || query.set || this.project.trackList().length > 0)) {
           this.schedule();

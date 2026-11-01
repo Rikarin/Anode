@@ -54,10 +54,10 @@ export class ScorePrint {
           pageHeightMm: layout.pageHeightMm
         });
         if (path) {
-          const reveal = this.desktop.reveal;
+          const desktop = this.desktop;
           this.notify.success(
             `Saved ${pages.length} ${pages.length === 1 ? 'page' : 'pages'} as ${path.split(/[\\/]/).pop() ?? path}`,
-            reveal ? { text: 'Show in Finder', run: () => void reveal(path) } : undefined
+            desktop.reveal ? { text: 'Show in Finder', run: () => void desktop.reveal?.(path) } : undefined
           );
         }
         return path;
