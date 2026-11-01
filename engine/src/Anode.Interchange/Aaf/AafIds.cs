@@ -1,0 +1,144 @@
+namespace Anode.Interchange.Aaf;
+
+/// <summary>The AUIDs of the AAF classes, definitions and types Anode writes and reads (AAF Object Specification v1.1).</summary>
+static class AafIds {
+    public static readonly Guid Root = new("b3b398a5-1c90-11d4-8053-080036210804");
+    public static readonly Guid Header = Class(0x2f);
+    public static readonly Guid ContentStorage = Class(0x18);
+    public static readonly Guid Dictionary = Class(0x22);
+    public static readonly Guid Identification = Class(0x30);
+    public static readonly Guid DataDefinition = Class(0x1b);
+    public static readonly Guid OperationDefinition = Class(0x1c);
+    public static readonly Guid ParameterDefinition = Class(0x1d);
+    public static readonly Guid ContainerDefinition = Class(0x20);
+    public static readonly Guid CompositionMob = Class(0x35);
+    public static readonly Guid MasterMob = Class(0x36);
+    public static readonly Guid SourceMob = Class(0x37);
+    public static readonly Guid TimelineMobSlot = Class(0x3b);
+    public static readonly Guid EventMobSlot = Class(0x39);
+    public static readonly Guid Sequence = Class(0x0f);
+    public static readonly Guid Filler = Class(0x09);
+    public static readonly Guid SourceClip = Class(0x11);
+    public static readonly Guid Transition = Class(0x17);
+    public static readonly Guid OperationGroup = Class(0x0a);
+    public static readonly Guid ConstantValue = Class(0x3d);
+    public static readonly Guid CommentMarker = Class(0x08);
+    public static readonly Guid DescriptiveMarker = Class(0x41);
+    public static readonly Guid TaggedValue = Class(0x3f);
+    public static readonly Guid PcmDescriptor = Class(0x48);
+    public static readonly Guid SoundDescriptor = Class(0x42);
+    public static readonly Guid WaveDescriptor = Class(0x2c);
+    public static readonly Guid AifcDescriptor = Class(0x26);
+    public static readonly Guid NetworkLocator = Class(0x32);
+    public static readonly Guid EssenceData = Class(0x23);
+
+    public static readonly Guid DataDefSound = new("01030202-0200-0000-060e-2b3404010101");
+    public static readonly Guid DataDefLegacySound = new("78e1ebe1-6cef-11d2-807d-006008143e6f");
+    public static readonly Guid DataDefDescriptiveMetadata = new("01030201-1000-0000-060e-2b3404010101");
+    public static readonly Guid MonoAudioGain = new("9d2ea894-0968-11d3-8a38-0050040ef7d2");
+    public static readonly Guid StereoAudioGain = new("9d2ea895-0968-11d3-8a38-0050040ef7d2");
+    public static readonly Guid MonoAudioDissolve = new("0c3bea41-fc05-11d2-8a29-0050040ef7d2");
+    public static readonly Guid Amplitude = new("e4962321-2267-11d3-8a4c-0050040ef7d2");
+    public static readonly Guid ContainerAaf = new("4313b571-d8ba-11d2-809b-006008143e6f");
+    public static readonly Guid ContainerRiffWave = new("0d011301-0101-0100-060e-2b3404010106");
+    public static readonly Guid TypeRational = new("03010100-0000-0000-060e-2b3401040101");
+    public static readonly Guid TypeString = new("01100200-0000-0000-060e-2b3401040101");
+    public static readonly Guid EditProtocol = new("0d011201-0100-0000-060e-2b3404010105");
+    public static readonly Guid UsageTopLevel = new("0d010102-0101-0700-060e-2b3404010101");
+    public static readonly Guid CategoryEffect = new("0d010102-0101-0100-060e-2b3404010101");
+
+    /// <summary>Anode's product id in the Identification.</summary>
+    public static readonly Guid ProductId = new("5f0f3a6e-2b1c-4d7e-9a41-6c0de0a0f001");
+
+    public static readonly AafWeakTarget DataDefinitions = new([0x0002, 0x3B04, 0x2605], 0x1B01);
+    public static readonly AafWeakTarget OperationDefinitions = new([0x0002, 0x3B04, 0x2603], 0x1B01);
+    public static readonly AafWeakTarget ParameterDefinitions = new([0x0002, 0x3B04, 0x2604], 0x1B01);
+    public static readonly AafWeakTarget ContainerDefinitions = new([0x0002, 0x3B04, 0x2608], 0x1B01);
+    public static readonly AafWeakTarget TypeDefinitions = new([0x0001, 0x0004], 0x0005);
+
+    static Guid Class(byte id) => new($"0d010101-0101-{id:x2}00-060e-2b3402060101");
+}
+
+/// <summary>The local ids (pids) of the properties Anode writes and reads.</summary>
+static class AafPid {
+    public const ushort RootMetaDictionary = 0x0001;
+    public const ushort RootHeader = 0x0002;
+    public const ushort DataDefinition = 0x0201;
+    public const ushort Length = 0x0202;
+    public const ushort UserComments = 0x0204;
+    public const ushort Position = 0x0601;
+    public const ushort Comment = 0x0602;
+    public const ushort Operation = 0x0B01;
+    public const ushort InputSegments = 0x0B02;
+    public const ushort Parameters = 0x0B03;
+    public const ushort Components = 0x1001;
+    public const ushort SourceId = 0x1101;
+    public const ushort SourceMobSlotId = 0x1102;
+    public const ushort StartTime = 0x1201;
+    public const ushort FadeInLength = 0x1202;
+    public const ushort FadeInType = 0x1203;
+    public const ushort FadeOutLength = 0x1204;
+    public const ushort FadeOutType = 0x1205;
+    public const ushort TransitionOperationGroup = 0x1801;
+    public const ushort CutPoint = 0x1802;
+    public const ushort Mobs = 0x1901;
+    public const ushort EssenceDataSet = 0x1902;
+    public const ushort DefinitionId = 0x1B01;
+    public const ushort DefinitionName = 0x1B02;
+    public const ushort OperationDataDefinition = 0x1E01;
+    public const ushort IsTimeWarp = 0x1E02;
+    public const ushort OperationCategory = 0x1E06;
+    public const ushort NumberInputs = 0x1E07;
+    public const ushort ParametersDefined = 0x1E09;
+    public const ushort ParameterType = 0x1F01;
+    public const ushort OperationDefinitions = 0x2603;
+    public const ushort ParameterDefinitions = 0x2604;
+    public const ushort DataDefinitions = 0x2605;
+    public const ushort ContainerDefinitions = 0x2608;
+    public const ushort EssenceMobId = 0x2701;
+    public const ushort EssenceStream = 0x2702;
+    public const ushort Locator = 0x2F01;
+    public const ushort SampleRate = 0x3001;
+    public const ushort DescriptorLength = 0x3002;
+    public const ushort ContainerFormat = 0x3004;
+    public const ushort WaveSummary = 0x3801;
+    public const ushort ByteOrder = 0x3B01;
+    public const ushort LastModified = 0x3B02;
+    public const ushort Content = 0x3B03;
+    public const ushort HeaderDictionary = 0x3B04;
+    public const ushort Version = 0x3B05;
+    public const ushort IdentificationList = 0x3B06;
+    public const ushort ObjectModelVersion = 0x3B07;
+    public const ushort OperationalPattern = 0x3B09;
+    public const ushort CompanyName = 0x3C01;
+    public const ushort ProductName = 0x3C02;
+    public const ushort ProductVersionString = 0x3C04;
+    public const ushort ProductId = 0x3C05;
+    public const ushort Date = 0x3C06;
+    public const ushort Platform = 0x3C08;
+    public const ushort GenerationAuid = 0x3C09;
+    public const ushort QuantizationBits = 0x3D01;
+    public const ushort AudioSamplingRate = 0x3D03;
+    public const ushort Channels = 0x3D07;
+    public const ushort AverageBps = 0x3D09;
+    public const ushort BlockAlign = 0x3D0A;
+    public const ushort UrlString = 0x4001;
+    public const ushort MobId = 0x4401;
+    public const ushort MobName = 0x4402;
+    public const ushort Slots = 0x4403;
+    public const ushort MobLastModified = 0x4404;
+    public const ushort CreationTime = 0x4405;
+    public const ushort UsageCode = 0x4408;
+    public const ushort EssenceDescription = 0x4701;
+    public const ushort SlotId = 0x4801;
+    public const ushort SlotName = 0x4802;
+    public const ushort Segment = 0x4803;
+    public const ushort PhysicalTrackNumber = 0x4804;
+    public const ushort EventEditRate = 0x4901;
+    public const ushort EditRate = 0x4B01;
+    public const ushort Origin = 0x4B02;
+    public const ushort ParameterDefinition = 0x4C01;
+    public const ushort Value = 0x4D01;
+    public const ushort TaggedName = 0x5001;
+    public const ushort TaggedValue = 0x5003;
+}
