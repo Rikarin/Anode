@@ -1,4 +1,5 @@
 using Anode.Contracts;
+using Anode.Dsp.Resampling;
 using Anode.Interchange.MusicXml;
 using Anode.Interchange.Smf;
 using Anode.Model.Audio;
@@ -262,7 +263,7 @@ public sealed partial class Jobs {
                         var files = new List<(string Path, WavInfo Info)>();
                         foreach (var source in sources) {
                             token.ThrowIfCancellationRequested();
-                            var (_, brought, info) = import.Bring(source);
+                            var (_, brought, info) = import.Bring(AtRate(source, open.State.SampleRate, media));
                             if (!string.Equals(brought, Path.GetFullPath(source), StringComparison.Ordinal)) {
                                 copied.Add(brought);
                             }
@@ -302,6 +303,35 @@ public sealed partial class Jobs {
             ),
             scratch
         );
+    }
+
+    /// <summary>
+    ///     An AAF's media file at the project's sample rate: the file itself when it is at that rate, else a copy converted
+    ///     with the bounce's resampler (<see cref="SampleRateConverter" />, as the Audio File Editor's rate conversion) in
+    ///     <paramref name="scratch" />, under the same name: 16 and 24 bits as they were, 32 bits as float.
+    /// </summary>
+    static string AtRate(string source, int rate, string scratch) {
+        WavInfo info;
+        try {
+            info = WavReader.Probe(source);
+        } catch (Exception e) when (e is WavFormatException or IOException or UnauthorizedAccessException) {
+            return source; // the import's own check reports it
+        }
+
+        if (info.SampleRate == rate || info.Frames == 0) {
+            return source;
+        }
+
+        var (channels, from) = BounceProcessor.Read(source);
+        var folder = Path.Combine(scratch, $"{rate} Hz");
+        Directory.CreateDirectory(folder);
+        var target = Path.Combine(folder, Path.GetFileName(source));
+        BounceProcessor.Write(
+            target,
+            SampleRateConverter.Convert(channels, from, rate),
+            new(AudioFormat.Wav, info.BitDepth, rate, DitherMode.None, NormalizeMode.Off, -16, -1)
+        );
+        return target;
     }
 
     /// <summary>

@@ -108,7 +108,9 @@ The reader takes what Anode writes and what Pro Tools, Media Composer and pyaaf2
   120 BPM and 48 kHz a tick is 25 samples), the region starts at the last tick before it. Its file offset, length and
   fade in grow by the difference, so every file frame plays at the very sample the AAF gives it. When the clip has too
   little audio before it, the region starts at the next tick and drops those samples.
-- A composition at another sample rate is scaled to the project's. The job's media import resamples the files.
+- A composition at another sample rate is scaled to the project's. The import job resamples media at another rate to
+  the project's with the bounce's resampler (as the Audio File Editor's rate conversion does) before copying them in, and
+  a region never reaches past its file's end.
 - Markers come back as markers. AAF carries no tempo, so the project's tempo is kept.
 
 ## What is lost

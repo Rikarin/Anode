@@ -44,7 +44,8 @@ public static class AafReader {
     ///     project's tempo map; where no tick lands on a clip's sample exactly, the region starts at the nearest tick
     ///     whose sample is not later (or, when the clip has too little audio before it, not earlier) and its file offset,
     ///     length and fade in absorb the difference, so every file frame plays at the sample the AAF puts it. Positions
-    ///     and lengths in samples of another rate are scaled to the project's.
+    ///     and lengths in samples of another rate are scaled to the project's (the job resamples the media), and a region
+    ///     never reaches past the end of its project file.
     /// </summary>
     public static ImportedContent ToContent(
         AafComposition composition,
@@ -100,6 +101,11 @@ public static class AafReader {
                 (offset, length, fadeIn) = (offset + late, length - late, Math.Max(0, fadeIn - late));
             } else {
                 (offset, length, fadeIn) = (offset - early, length + early, fadeIn > 0 ? fadeIn + early : 0);
+            }
+
+            if (state.Files.TryGetValue(fileId, out var file)) {
+                // Scaled from another rate, a clip may round a frame past its resampled file.
+                length = Math.Min(length, file.Frames - offset);
             }
 
             return length <= 0
