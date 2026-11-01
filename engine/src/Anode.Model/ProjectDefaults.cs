@@ -48,6 +48,9 @@ public static class ProjectDefaults {
     /// <summary>A new region's playback: as recorded, no quantise.</summary>
     public static RegionPlayback Playback { get; } = new(0, 0, 0, 1, 0, null);
 
+    /// <summary>A new region's score settings (Phase 9): the staff style's display quantise, Logic's defaults otherwise.</summary>
+    public static RegionNotation Notation => RegionNotation.Default;
+
     /// <summary>Live MIDI from every device, on every channel.</summary>
     public static MidiInputSettings MidiInput { get; } = new(null, 0);
 

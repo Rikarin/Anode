@@ -218,7 +218,8 @@ public static partial class Edits {
             ProjectDefaults.Playback,
             Sorted(notes),
             [],
-            region.Muted
+            region.Muted,
+            ProjectDefaults.Notation
         );
         return [new PatternRegionRemoved(region.Id), new MidiRegionUpserted(midi)];
     }

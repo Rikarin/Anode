@@ -1,5 +1,5 @@
 import { TestBed } from '@angular/core/testing';
-import type { MidiRegion } from '@anode/api-client';
+import { DefaultRegionNotation, type MidiRegion } from '@anode/api-client';
 import { settle, setUpFakeServer } from '../core/fake/testing';
 import { NeutralPlayback } from '../midi/midi-math';
 import { ProjectStore } from '../state/project.store';
@@ -22,6 +22,7 @@ const region: MidiRegion = {
   startTick: 3840,
   lengthTicks: 3840,
   playback: NeutralPlayback,
+  notation: { ...DefaultRegionNotation },
   notes: [
     { id: 1, pitch: 60, velocity: 100, channel: 1, startTick: 0, lengthTicks: 480, articulationId: 0 },
     { id: 2, pitch: 64, velocity: 90, channel: 1, startTick: 0, lengthTicks: 960, articulationId: 2 },

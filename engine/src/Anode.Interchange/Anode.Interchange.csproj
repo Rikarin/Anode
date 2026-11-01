@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <Description>Interchange (docs/10-phase-9.md): MusicXML 4.0 read and write (.musicxml and .mxl), AAF read and write (the compound file and the Pro Tools and Logic subset of the object model), and the Standard MIDI File project export and import over Anode.Model's codec. Pure file formats: the server's jobs do the I/O around them. Referenced by the server, not by the host.</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../Anode.Contracts/Anode.Contracts.csproj"/>
+    <!-- ProjectState, region timing, and the Standard MIDI File reader and writer. -->
+    <ProjectReference Include="../Anode.Model/Anode.Model.csproj"/>
+    <!-- MusicXML is written from the notation engine's score view. -->
+    <ProjectReference Include="../Anode.Notation/Anode.Notation.csproj"/>
+    <InternalsVisibleTo Include="Anode.Interchange.Tests"/>
+  </ItemGroup>
+</Project>

@@ -1,4 +1,6 @@
 import {
+  type AafExportRequest,
+  type AafImportRequest,
   type AddLoopRequest,
   type AddSurfaceRequest,
   type AddToLoopLibraryRequest,
@@ -15,9 +17,11 @@ import {
   type CommandResult,
   type ControllerAssignments,
   type ControlSurface,
+  DefaultRegionNotation,
   type DeltaOp,
   type DirectoryListing,
   type EditCommand,
+  EmptyProjectScore,
   type FileAnalysis,
   type GrooveTemplate,
   type Insert,
@@ -36,7 +40,11 @@ import {
   type LoopSearchRequest,
   type LoopSearchResult,
   type MidiDevices,
+  type MidiExportRequest,
+  type MidiImportRequest,
   type MidiRegion,
+  type MusicXmlExportRequest,
+  type MusicXmlImportRequest,
   type Note,
   type OscSettings,
   type OscStatus,
@@ -54,9 +62,11 @@ import {
   type ProjectSummary,
   type SampleRange,
   type SavePatchRequest,
+  type ScoreDocument,
   type Screenset,
   type ScriptPreset,
   type ServerMessage,
+  type StaffStyle,
   type StemKind,
   type StemSplitRequest,
   type StepInputRequest,
@@ -83,7 +93,7 @@ import { StepChordCollector, stepLength as stepLengthOf } from '../../midi-edit/
 import { isFactorySet, TransformPresets } from '../../midi-edit/transform';
 import { isNoteOff, isNoteOn, NeutralPlayback, quantizeNotes } from '../../midi/midi-math';
 import { TrackColors } from '../../state/track-colors';
-import type { AnodeApi, CreateProject, LoopSearch } from '../api';
+import type { AnodeApi, CreateProject, LoopSearch, MidiImportOptions, ScoreQuery } from '../api';
 import {
   audioEnd,
   checkComp,
@@ -415,7 +425,8 @@ export class FakeAnodeServer implements AnodeApi {
         liveLoops: { scenes: [], cells: [], quantize: 'bar', shown: false },
         grooves: [],
         articulationSets: [],
-        laneSets: []
+        laneSets: [],
+        score: structuredClone(EmptyProjectScore)
       };
       this.disk.set(path, structuredClone(project));
       this.open(project);
@@ -1576,6 +1587,60 @@ export class FakeAnodeServer implements AnodeApi {
     });
   }
 
+  // ---- Phase 9 (docs/10-phase-9.md): the score, staff styles and interchange, until the editor workstream (C)
+  // implements them.
+
+  score(_query: ScoreQuery): Promise<ScoreDocument> {
+    return this.phase9Pending('GetScore');
+  }
+
+  staffStyles(): Promise<StaffStyle[]> {
+    return this.phase9Pending('ListStaffStyles');
+  }
+
+  exportMusicXml(_request: MusicXmlExportRequest): Promise<Job> {
+    return this.phase9Pending('ExportMusicXml');
+  }
+
+  exportAaf(_request: AafExportRequest): Promise<Job> {
+    return this.phase9Pending('ExportAaf');
+  }
+
+  exportMidi(_request: MidiExportRequest): Promise<Job> {
+    return this.phase9Pending('ExportMidi');
+  }
+
+  importMusicXml(_request: MusicXmlImportRequest): Promise<Job> {
+    return this.phase9Pending('ImportMusicXml');
+  }
+
+  uploadMusicXml(_file: File): Promise<Job> {
+    return this.phase9Pending('UploadMusicXml');
+  }
+
+  importAaf(_request: AafImportRequest): Promise<Job> {
+    return this.phase9Pending('ImportAaf');
+  }
+
+  uploadAaf(_file: File): Promise<Job> {
+    return this.phase9Pending('UploadAaf');
+  }
+
+  importMidi(_request: MidiImportRequest): Promise<Job> {
+    return this.phase9Pending('ImportMidi');
+  }
+
+  uploadMidi(_file: File, _options?: MidiImportOptions): Promise<Job> {
+    return this.phase9Pending('UploadMidi');
+  }
+
+  /** A Phase 9 endpoint the fake Server does not answer yet (docs/10-phase-9.md): 422. */
+  private phase9Pending<T>(operation: string): Promise<T> {
+    return this.answer(operation, () => {
+      throw new ApiError(422, `${operation}: not in the fake Server yet.`);
+    });
+  }
+
   // ---- Phase 8 test hooks: what the host and the outside world would do
 
   /** The user settings' control state (tests and stories). */
@@ -1978,6 +2043,7 @@ export class FakeAnodeServer implements AnodeApi {
         startTick: tick,
         lengthTicks,
         playback: { ...NeutralPlayback },
+        notation: { ...DefaultRegionNotation },
         notes: sortNotes(
           (loop.notes ?? []).map(n => ({
             id: this.nextId++,
@@ -3352,6 +3418,7 @@ export class FakeAnodeServer implements AnodeApi {
           startTick: Math.round(command.startTick),
           lengthTicks: Math.round(command.lengthTicks),
           playback: { ...NeutralPlayback },
+          notation: { ...DefaultRegionNotation },
           notes: [],
           controls: [],
           muted: false
@@ -3817,6 +3884,26 @@ export class FakeAnodeServer implements AnodeApi {
       case 'addStems':
         // The Stem Splitter's result, applied by its job (Phase 8).
         return this.addStems(project, command);
+      case 'setStaffStyle':
+      case 'deleteStaffStyle':
+      case 'assignStaffStyle':
+      case 'setRegionNotation':
+      case 'addScoreSymbols':
+      case 'editScoreSymbols':
+      case 'deleteScoreSymbols':
+      case 'setLyrics':
+      case 'addChordSymbols':
+      case 'editChordSymbols':
+      case 'deleteChordSymbols':
+      case 'setScoreSet':
+      case 'deleteScoreSet':
+      case 'setScoreLayout':
+      case 'moveScoreNotes':
+      case 'addScoreNote':
+      case 'importTracks':
+        // Staff styles, region notation, score symbols, lyrics, chord symbols, score sets, layout, score edits and
+        // interchange imports: Phase 9, the editor workstream (docs/10-phase-9.md).
+        throw new ApiError(422, `${command.type}: not in the fake Server yet.`);
       default:
         if (isPhase7Command(command)) {
           // The Event List, MIDI Transform, grooves, articulations, lane sets, step input, the Audio File Editor and
@@ -4236,7 +4323,8 @@ export class FakeAnodeServer implements AnodeApi {
       liveLoops: { scenes: [], cells: [], quantize: 'bar', shown: false },
       grooves: [],
       articulationSets: [],
-      laneSets: []
+      laneSets: [],
+      score: structuredClone(EmptyProjectScore)
     };
     let project = base;
     for (const name of ['Drums', 'Bass', 'Guitar', 'Vocals']) {

@@ -26,7 +26,13 @@ const JobNames: Record<JobKind, string> = {
   bounceInPlace: 'Bounce in place',
   process: 'Processing',
   audioEdit: 'Audio file edit',
-  stemSplit: 'Stem split'
+  stemSplit: 'Stem split',
+  musicXmlExport: 'MusicXML export',
+  musicXmlImport: 'MusicXML import',
+  aafExport: 'AAF export',
+  aafImport: 'AAF import',
+  midiExport: 'MIDI file export',
+  midiImport: 'MIDI file import'
 };
 
 /** A file's name from its absolute path. */

@@ -5,7 +5,8 @@ namespace Anode.Contracts;
 /// <summary>
 ///     A MIDI region: it starts at <c>startTick</c> and lasts <c>lengthTicks</c>; its notes and controller events are
 ///     positioned relative to its start (ticks at 960 PPQ). Events past the end do not play; a note that crosses the end
-///     is cut there. <c>playback</c> holds the non-destructive region parameters.
+///     is cut there. <c>playback</c> holds the non-destructive region parameters. <c>notation</c> (Phase 9,
+///     docs/10-phase-9.md) holds its score settings: display quantise and interpretation.
 /// </summary>
 public sealed record MidiRegion(
     string Id,
@@ -16,7 +17,8 @@ public sealed record MidiRegion(
     RegionPlayback Playback,
     IReadOnlyList<Note> Notes,
     IReadOnlyList<ControlEvent> Controls,
-    bool Muted
+    bool Muted,
+    RegionNotation Notation
 );
 
 /// <summary>

@@ -50,7 +50,8 @@ public sealed class LiveLoopsHostLinkTests {
             new(0, 0, 0, 1, 0, null),
             [new(0, 60, 100, 1, 0, 480, 0)],
             [],
-            false
+            false,
+            RegionNotation.Default
         );
         await client.EditAsync(
             new SetCellCommand(keys, project.LiveLoops.Scenes[0].Id, new(Midi: midi), Quantize: LaunchQuantize.Quarter)

@@ -85,4 +85,13 @@ namespace Anode.Contracts;
 [JsonSerializable(typeof(SyncSettings))]
 [JsonSerializable(typeof(SyncState))]
 [JsonSerializable(typeof(StemSplitRequest))]
+[JsonSerializable(typeof(ScoreDocument))]
+[JsonSerializable(typeof(IReadOnlyList<StaffStyle>))]
+[JsonSerializable(typeof(MusicXmlExportRequest))]
+[JsonSerializable(typeof(MusicXmlImportRequest))]
+[JsonSerializable(typeof(AafExportRequest))]
+[JsonSerializable(typeof(AafImportRequest))]
+[JsonSerializable(typeof(MidiExportRequest))]
+[JsonSerializable(typeof(MidiImportRequest))]
+[JsonSerializable(typeof(ImportedContent))]
 public sealed partial class ContractsJsonContext : JsonSerializerContext;

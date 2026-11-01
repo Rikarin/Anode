@@ -1,4 +1,4 @@
-import type { MidiRegion } from '@anode/api-client';
+import { DefaultRegionNotation, type MidiRegion } from '@anode/api-client';
 import { hitTest, LaneIntervalIndex, RULER_HEIGHT, type TimelineView } from '@anode/timeline';
 import { NeutralPlayback, playedNote, quantizeNotes, quantizeTick, velocityColor } from '../midi/midi-math';
 import {
@@ -32,6 +32,7 @@ function region(
     startTick,
     lengthTicks,
     playback: { ...NeutralPlayback },
+    notation: { ...DefaultRegionNotation },
     notes: notes.map(([noteId, pitch, start, length]) => ({
       id: noteId,
       pitch,

@@ -27,7 +27,31 @@ public enum JobKind {
 
     /// <summary>Phase 8: the Stem Splitter (<c>StemSplitRequest</c>, docs/adr/0010-stem-splitter.md).</summary>
     [JsonStringEnumMemberName("stemSplit")]
-    StemSplit
+    StemSplit,
+
+    /// <summary>Phase 9: MusicXML export (<c>MusicXmlExportRequest</c>, docs/10-phase-9.md).</summary>
+    [JsonStringEnumMemberName("musicXmlExport")]
+    MusicXmlExport,
+
+    /// <summary>Phase 9: MusicXML import (<c>MusicXmlImportRequest</c>); applies an <c>importTracks</c> command.</summary>
+    [JsonStringEnumMemberName("musicXmlImport")]
+    MusicXmlImport,
+
+    /// <summary>Phase 9: AAF export (<c>AafExportRequest</c>).</summary>
+    [JsonStringEnumMemberName("aafExport")]
+    AafExport,
+
+    /// <summary>Phase 9: AAF import (<c>AafImportRequest</c>); copies the media, then applies <c>importTracks</c>.</summary>
+    [JsonStringEnumMemberName("aafImport")]
+    AafImport,
+
+    /// <summary>Phase 9: Standard MIDI File export (<c>MidiExportRequest</c>).</summary>
+    [JsonStringEnumMemberName("midiExport")]
+    MidiExport,
+
+    /// <summary>Phase 9: Standard MIDI File import with options (<c>MidiImportRequest</c>); applies <c>importTracks</c>.</summary>
+    [JsonStringEnumMemberName("midiImport")]
+    MidiImport
 }
 
 [JsonConverter(typeof(JsonStringEnumConverter<JobState>))]

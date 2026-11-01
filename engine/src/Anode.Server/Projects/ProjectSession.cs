@@ -1182,7 +1182,8 @@ public sealed partial class ProjectSession(
                 ProjectDefaults.Playback,
                 [],
                 [],
-                false
+                false,
+                ProjectDefaults.Notation
             );
         } else if (roundedEnd > target.StartTick + target.LengthTicks) {
             target = target with { LengthTicks = roundedEnd - target.StartTick };

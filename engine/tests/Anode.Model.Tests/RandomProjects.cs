@@ -319,7 +319,7 @@ static class RandomProjects {
                     random,
                     [typeof(SetPitchNotesCommand), typeof(NewTrackAlternativeCommand), typeof(SetRegionFlexCommand)]
                 ),
-                _ => Pick(random, CommandTypes)
+                _ => Pick(random, Buildable)
             };
             var command = i is >= 4 and < 7 && FirstAudioTrack(state) is { } audio && state.Files.Count > 0
                 ? AddRegion(audio, Pick(random, [..state.Files.Values]), random)
@@ -439,6 +439,36 @@ static class RandomProjects {
 
         return (state, ids, random);
     }
+
+    /// <summary>
+    ///     Phase 9 commands (docs/10-phase-9.md) the model rejects until workstream B implements them; the identity
+    ///     property skips them.
+    /// </summary>
+    public static readonly IReadOnlySet<string> PendingPhase9 = new HashSet<string>(StringComparer.Ordinal) {
+        nameof(SetStaffStyleCommand),
+        nameof(DeleteStaffStyleCommand),
+        nameof(AssignStaffStyleCommand),
+        nameof(SetRegionNotationCommand),
+        nameof(AddScoreSymbolsCommand),
+        nameof(EditScoreSymbolsCommand),
+        nameof(DeleteScoreSymbolsCommand),
+        nameof(SetLyricsCommand),
+        nameof(AddChordSymbolsCommand),
+        nameof(EditChordSymbolsCommand),
+        nameof(DeleteChordSymbolsCommand),
+        nameof(SetScoreSetCommand),
+        nameof(DeleteScoreSetCommand),
+        nameof(SetScoreLayoutCommand),
+        nameof(MoveScoreNotesCommand),
+        nameof(AddScoreNoteCommand),
+        nameof(ImportTracksCommand)
+    };
+
+    /// <summary>
+    ///     The command types random projects are built from: every one but those the model refuses outright (Phase 9,
+    ///     until workstream B), so the projects stay those of Phase 8 and the other properties keep their odds.
+    /// </summary>
+    static Type[] Buildable { get; } = [..CommandTypes.Where(static t => !PendingPhase9.Contains(t.Name))];
 
     /// <summary>The parameters the host reports for every random script.</summary>
     public static IReadOnlyList<ParameterInfo> ScriptParameters { get; } = [
@@ -1123,6 +1153,109 @@ static class RandomProjects {
                     ],
                     r.Next(2) == 0
                 ),
+            // Phase 9 commands (docs/10-phase-9.md): placeholders until the model implements them (workstream B
+            // replaces these with generators that make commands that apply, and removes PendingPhase9).
+            nameof(SetStaffStyleCommand) => new SetStaffStyleCommand(StaffStyle(r)),
+            nameof(DeleteStaffStyleCommand) => new DeleteStaffStyleCommand($"sts_{r.Next(4)}"),
+            nameof(AssignStaffStyleCommand) => MidiTrack() is { } t
+                ? new AssignStaffStyleCommand(
+                    [t.Id],
+                    Pick(r, [null, StaffStyleIds.Piano, StaffStyleIds.ClarinetBb, $"sts_{r.Next(4)}"])
+                )
+                : null,
+            nameof(SetRegionNotationCommand) => MidiRegion() is { } m
+                ? new SetRegionNotationCommand(
+                    [m.Id],
+                    r.Next(2) == 0 ? Pick(r, [0, 240, 480]) : null,
+                    r.Next(2) == 0 ? Pick(r, [0, 160, 320]) : null,
+                    Maybe(r.Next(2) == 0),
+                    Maybe(r.Next(2) == 0),
+                    Maybe(r.Next(2) == 0),
+                    r.Next(2) == 0 ? r.Next(0, 4) : null
+                )
+                : null,
+            nameof(AddScoreSymbolsCommand) => WithNotes() is { } m
+                ? new AddScoreSymbolsCommand(
+                    [
+                        new(ScoreSymbolKind.Staccato, m.TrackId, Pick(r, m.Notes).Id),
+                        new(ScoreSymbolKind.Dynamic, m.TrackId, Tick: m.StartTick, Text: "mf")
+                    ]
+                )
+                : null,
+            nameof(EditScoreSymbolsCommand) => WithNotes() is { } m
+                ? new EditScoreSymbolsCommand(
+                    [new($"sym_{r.Next(4)}", ScoreSymbolKind.Accent, m.TrackId, Pick(r, m.Notes).Id)]
+                )
+                : null,
+            nameof(DeleteScoreSymbolsCommand) => new DeleteScoreSymbolsCommand([$"sym_{r.Next(4)}"]),
+            nameof(SetLyricsCommand) => WithNotes() is { } m
+                ? new SetLyricsCommand(
+                    r.Next(1, 3),
+                    [
+                        ..Some(m.Notes, r)
+                            .Select(n => new LyricChange(n.Id, $"la{r.Next(10)}", Pick(r, Enum.GetValues<Syllabic>())))
+                    ]
+                )
+                : null,
+            nameof(AddChordSymbolsCommand) => MidiTrack() is { } t
+                ? new AddChordSymbolsCommand(
+                    [new(t.Id, r.Next(0, 16) * 960L, new(Pick(r, Enum.GetValues<PitchStep>()), r.Next(-1, 2)), "m7")]
+                )
+                : null,
+            nameof(EditChordSymbolsCommand) => MidiTrack() is { } t
+                ? new EditChordSymbolsCommand(
+                    [new($"chd_{r.Next(4)}", t.Id, 0, new(PitchStep.G, 0), "7", new(PitchStep.B, 0), r.Next(2) == 0)]
+                )
+                : null,
+            nameof(DeleteChordSymbolsCommand) => new DeleteChordSymbolsCommand([$"chd_{r.Next(4)}"]),
+            nameof(SetScoreSetCommand) => tracks.Count == 0
+                ? null
+                : new SetScoreSetCommand(
+                    new($"scs_{r.Next(4)}", $"Set {r.Next(10)}", [..Some(tracks, r).Select(static t => t.Id)])
+                ),
+            nameof(DeleteScoreSetCommand) => new DeleteScoreSetCommand($"scs_{r.Next(4)}"),
+            nameof(SetScoreLayoutCommand) => new SetScoreLayoutCommand(
+                ScoreLayout.Default with { Title = $"Title {r.Next(10)}", TransposingScore = r.Next(2) == 0 }
+            ),
+            nameof(MoveScoreNotesCommand) => WithNotes() is { } m
+                ? new MoveScoreNotesCommand(
+                    m.Id,
+                    [..Some(m.Notes, r).Select(static n => n.Id)],
+                    r.Next(-3, 4),
+                    r.Next(-2, 3) * 240L,
+                    r.Next(3) == 0 ? Pick(r, Enum.GetValues<Accidental>()) : null
+                )
+                : null,
+            nameof(AddScoreNoteCommand) => MidiTrack() is { } t
+                ? new AddScoreNoteCommand(t.Id, r.Next(0, 32) * 240L, Pick(r, [240L, 480, 960]), r.Next(-4, 13))
+                : null,
+            nameof(ImportTracksCommand) => new ImportTracksCommand(
+                new(
+                    [
+                        new(
+                            "imported-1",
+                            $"Imported {r.Next(10)}",
+                            TrackKind.Instrument,
+                            r.Next(2) == 0 ? null : StaffStyleIds.Treble,
+                            [
+                                new(
+                                    "imported-region-1",
+                                    "imported-1",
+                                    "Imported",
+                                    0,
+                                    3840,
+                                    ProjectDefaults.Playback,
+                                    [new(1, 60 + r.Next(12), 100, 1, 0, 480, 0)],
+                                    [],
+                                    false,
+                                    ProjectDefaults.Notation
+                                )
+                            ],
+                            []
+                        )
+                    ]
+                )
+            ),
             _ => throw new InvalidOperationException($"No generator for {type.Name}.")
         };
         string? Track() => tracks.Count == 0 ? null : Pick(r, tracks).Id;
@@ -1617,7 +1750,8 @@ static class RandomProjects {
                                 )
                         ],
                         [],
-                        false
+                        false,
+                        ProjectDefaults.Notation
                     )
                 );
             } else {
@@ -1644,6 +1778,28 @@ static class RandomProjects {
         JsonSerializer.Serialize(state.ToProject(string.Empty, 0, false), ContractsJsonContext.Default.Project);
 
     public static T Pick<T>(Random r, IReadOnlyList<T> items) => items[r.Next(items.Count)];
+
+    /// <summary>A project staff style: one treble staff, or a piano-like pair (Phase 9 placeholder).</summary>
+    static StaffStyle StaffStyle(Random r) =>
+        r.Next(2) == 0
+            ? new(
+                $"sts_{r.Next(4)}",
+                $"Style {r.Next(10)}",
+                [new(Clef.Treble, r.Next(-2, 3), null, 1)],
+                null,
+                240,
+                160,
+                false
+            )
+            : new(
+                $"sts_{r.Next(4)}",
+                $"Grand {r.Next(10)}",
+                [new(Clef.Treble, 0, 60, 2), new(Clef.Bass, 0, null, 2)],
+                null,
+                240,
+                0,
+                true
+            );
 
     /// <summary>A random non-empty selection of <paramref name="items" />.</summary>
     static IEnumerable<T> Some<T>(IReadOnlyList<T> items, Random r) {

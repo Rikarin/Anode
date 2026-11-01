@@ -1,5 +1,7 @@
 import { inject, Injectable, InjectionToken } from '@angular/core';
 import {
+  type AafExportRequest,
+  type AafImportRequest,
   type AddLoopRequest,
   type AddSurfaceRequest,
   type AddToLoopLibraryRequest,
@@ -32,6 +34,10 @@ import {
   type LoopSearchRequest,
   type LoopSearchResult,
   type MidiDevices,
+  type MidiExportRequest,
+  type MidiImportRequest,
+  type MusicXmlExportRequest,
+  type MusicXmlImportRequest,
   type OscSettings,
   type OscStatus,
   type Pack,
@@ -46,8 +52,11 @@ import {
   type ProjectSummary,
   type SampleRange,
   type SavePatchRequest,
+  type ScoreDocument,
+  type ScoreViewMode,
   type Screenset,
   type ScriptPreset,
+  type StaffStyle,
   type StemSplitRequest,
   type StepInputRequest,
   type StepInputState,
@@ -84,6 +93,19 @@ export interface LoopSearch {
   offset?: number | null;
   limit?: number | null;
 }
+
+/**
+ * Which score to render (`GET /project/score`, docs/10-phase-9.md): a score set (left out: every MIDI track), or one
+ * track's part, in the linear (default) or page view.
+ */
+export interface ScoreQuery {
+  set?: string | null;
+  part?: string | null;
+  view?: ScoreViewMode | null;
+}
+
+/** A MIDI file import's options (`MidiImportRequest` without its path). */
+export type MidiImportOptions = Partial<Omit<MidiImportRequest, 'path'>>;
 
 /**
  * The Server's REST API as the stores use it (engine/src/Anode.Server/openapi.json). {@link HttpAnodeApi} talks to a
@@ -260,6 +282,29 @@ export interface AnodeApi {
   syncState(): Promise<SyncState>;
   /** Splits an audio region into stems as a `stemSplit` job; the tracks follow as one undo step. */
   splitStems(regionId: string, request: StemSplitRequest): Promise<Job>;
+  // ---- Phase 9 (docs/10-phase-9.md)
+  /** The rendered score and its MEI; refetched after deltas that change notes, meter, key, tempo or score content. */
+  score(query: ScoreQuery): Promise<ScoreDocument>;
+  /** The factory staff styles; a project's own are in `score.staffStyles`. */
+  staffStyles(): Promise<StaffStyle[]>;
+  /** Exports a score set or part as MusicXML: a `musicXmlExport` job. */
+  exportMusicXml(request: MusicXmlExportRequest): Promise<Job>;
+  /** Exports audio tracks as AAF: an `aafExport` job. */
+  exportAaf(request: AafExportRequest): Promise<Job>;
+  /** Exports a Standard MIDI File: a `midiExport` job. */
+  exportMidi(request: MidiExportRequest): Promise<Job>;
+  /** Imports a MusicXML file from the Server's disk: a `musicXmlImport` job, one undo step when done. */
+  importMusicXml(request: MusicXmlImportRequest): Promise<Job>;
+  /** Imports an uploaded MusicXML file (a browser on the network). */
+  uploadMusicXml(file: File): Promise<Job>;
+  /** Imports an AAF file from the Server's disk: an `aafImport` job. */
+  importAaf(request: AafImportRequest): Promise<Job>;
+  /** Imports an uploaded AAF file (embedded media only). */
+  uploadAaf(file: File): Promise<Job>;
+  /** Imports a Standard MIDI File from the Server's disk with options: a `midiImport` job (`importMidiFile` imports at once). */
+  importMidi(request: MidiImportRequest): Promise<Job>;
+  /** Imports an uploaded Standard MIDI File with options. */
+  uploadMidi(file: File, options?: MidiImportOptions): Promise<Job>;
 }
 
 export const ANODE_API = new InjectionToken<AnodeApi>('AnodeApi', {
@@ -718,4 +763,82 @@ export class HttpAnodeApi implements AnodeApi {
       })
     );
   }
+
+  async score(query: ScoreQuery): Promise<ScoreDocument> {
+    const params: { set?: string; part?: string; view?: string } = {};
+    if (query.set) {
+      params.set = query.set;
+    }
+    if (query.part) {
+      params.part = query.part;
+    }
+    if (query.view) {
+      params.view = query.view;
+    }
+    return unwrap(await this.client.GET('/api/v1/project/score', { params: { query: params } }));
+  }
+
+  async staffStyles(): Promise<StaffStyle[]> {
+    return unwrap(await this.client.GET('/api/v1/library/staff-styles'));
+  }
+
+  async exportMusicXml(request: MusicXmlExportRequest): Promise<Job> {
+    return unwrap(await this.client.POST('/api/v1/project/export/musicxml', { body: request }));
+  }
+
+  async exportAaf(request: AafExportRequest): Promise<Job> {
+    return unwrap(await this.client.POST('/api/v1/project/export/aaf', { body: request }));
+  }
+
+  async exportMidi(request: MidiExportRequest): Promise<Job> {
+    return unwrap(await this.client.POST('/api/v1/project/export/midi', { body: request }));
+  }
+
+  async importMusicXml(request: MusicXmlImportRequest): Promise<Job> {
+    return unwrap(await this.client.POST('/api/v1/project/import/musicxml', { body: request }));
+  }
+
+  async uploadMusicXml(file: File): Promise<Job> {
+    return unwrap(
+      await this.client.POST('/api/v1/project/import/musicxml/upload', {
+        // The generated type says string (IFormFile); the body is multipart with the File itself.
+        body: { file: file as unknown as string },
+        bodySerializer: body => upload(body.file, file.name)
+      })
+    );
+  }
+
+  async importAaf(request: AafImportRequest): Promise<Job> {
+    return unwrap(await this.client.POST('/api/v1/project/import/aaf', { body: request }));
+  }
+
+  async uploadAaf(file: File): Promise<Job> {
+    return unwrap(
+      await this.client.POST('/api/v1/project/import/aaf/upload', {
+        body: { file: file as unknown as string },
+        bodySerializer: body => upload(body.file, file.name)
+      })
+    );
+  }
+
+  async importMidi(request: MidiImportRequest): Promise<Job> {
+    return unwrap(await this.client.POST('/api/v1/project/import/midi', { body: request }));
+  }
+
+  async uploadMidi(file: File, options: MidiImportOptions = {}): Promise<Job> {
+    return unwrap(
+      await this.client.POST('/api/v1/project/import/midi/upload', {
+        params: { query: options },
+        body: { file: file as unknown as string },
+        bodySerializer: body => upload(body.file, file.name)
+      })
+    );
+  }
+}
+
+/** A multipart body with one file (the generated types say string for IFormFile). */
+function upload(file: string, name: string): FormData {
+  const form = new FormData();
+  form.append('file', file as unknown as Blob, name);
+  return form;
 }

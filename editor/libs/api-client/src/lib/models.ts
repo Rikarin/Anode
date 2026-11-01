@@ -203,6 +203,116 @@ export type SyncState = Schemas['SyncState'];
 export type StemKind = Schemas['StemKind'];
 export type StemSplitRequest = Schemas['StemSplitRequest'];
 
+export type Clef = Schemas['Clef'];
+export type Notehead = Schemas['Notehead'];
+export type StemDirection = Schemas['StemDirection'];
+export type Staff = Schemas['Staff'];
+export type DrumMapEntry = Schemas['DrumMapEntry'];
+export type StaffStyle = Schemas['StaffStyle'];
+export type RegionNotation = Schemas['RegionNotation'];
+export type ScoreSymbolKind = Schemas['ScoreSymbolKind'];
+export type ScorePlacement = Schemas['ScorePlacement'];
+export type ScoreSymbol = Schemas['ScoreSymbol'];
+export type Syllabic = Schemas['Syllabic'];
+export type LyricSyllable = Schemas['LyricSyllable'];
+export type PitchStep = Schemas['PitchStep'];
+export type PitchName = Schemas['PitchName'];
+export type ChordSymbol = Schemas['ChordSymbol'];
+export type ScoreSet = Schemas['ScoreSet'];
+export type InstrumentName = Schemas['InstrumentName'];
+export type ScoreMargins = Schemas['ScoreMargins'];
+export type ScoreLayout = Schemas['ScoreLayout'];
+export type ProjectScore = Schemas['ProjectScore'];
+export type ScoreViewMode = Schemas['ScoreViewMode'];
+export type ScoreEventKind = Schemas['ScoreEventKind'];
+export type NoteValue = Schemas['NoteValue'];
+export type Accidental = Schemas['Accidental'];
+export type Barline = Schemas['Barline'];
+export type ScoreKey = Schemas['ScoreKey'];
+export type ScorePitch = Schemas['ScorePitch'];
+export type ScoreTuplet = Schemas['ScoreTuplet'];
+export type ScoreDuration = Schemas['ScoreDuration'];
+export type ScoreNote = Schemas['ScoreNote'];
+export type ScoreEvent = Schemas['ScoreEvent'];
+export type ScoreVoice = Schemas['ScoreVoice'];
+export type ScoreStaffMeasure = Schemas['ScoreStaffMeasure'];
+export type ScorePartMeasure = Schemas['ScorePartMeasure'];
+export type ScorePart = Schemas['ScorePart'];
+export type ScoreTempoMark = Schemas['ScoreTempoMark'];
+export type ScoreRehearsal = Schemas['ScoreRehearsal'];
+export type ScoreMeasure = Schemas['ScoreMeasure'];
+export type ScoreView = Schemas['ScoreView'];
+export type ScoreDocument = Schemas['ScoreDocument'];
+export type NewScoreSymbol = Schemas['NewScoreSymbol'];
+export type LyricChange = Schemas['LyricChange'];
+export type NewChordSymbol = Schemas['NewChordSymbol'];
+export type MusicXmlExportRequest = Schemas['MusicXmlExportRequest'];
+export type MusicXmlImportRequest = Schemas['MusicXmlImportRequest'];
+export type AafExportRequest = Schemas['AafExportRequest'];
+export type AafImportRequest = Schemas['AafImportRequest'];
+export type MidiExportRequest = Schemas['MidiExportRequest'];
+export type MidiImportRequest = Schemas['MidiImportRequest'];
+export type ImportedTrack = Schemas['ImportedTrack'];
+export type ImportedScore = Schemas['ImportedScore'];
+export type ImportedContent = Schemas['ImportedContent'];
+
+/**
+ * The factory staff styles' ids (engine/src/Anode.Contracts/Score.cs, `StaffStyleIds`); a track's `staffStyleId` null
+ * means `StaffStyleIds.default`.
+ */
+export const StaffStyleIds = {
+  factoryPrefix: 'factory.',
+  treble: 'factory.treble',
+  bass: 'factory.bass',
+  piano: 'factory.piano',
+  drums: 'factory.drums',
+  guitar: 'factory.guitar',
+  bassGuitar: 'factory.bassGuitar',
+  clarinetBb: 'factory.clarinetBb',
+  trumpetBb: 'factory.trumpetBb',
+  hornF: 'factory.hornF',
+  altoSax: 'factory.altoSax',
+  tenorSax: 'factory.tenorSax',
+  viola: 'factory.viola',
+  cello: 'factory.cello',
+  default: 'factory.piano'
+} as const;
+
+/** A new region's score settings (`RegionNotation.Default`): the staff style's grids, Logic's defaults otherwise. */
+export const DefaultRegionNotation: RegionNotation = {
+  displayQuantizeTicks: 0,
+  tripletQuantizeTicks: 0,
+  interpretation: true,
+  noOverlap: true,
+  syncopation: false,
+  maxDots: 1
+};
+
+/** A new project's score layout (`ScoreLayout.Default`): A4 portrait, 15 mm margins, 7 mm staves, no texts, concert pitch. */
+export const DefaultScoreLayout: ScoreLayout = {
+  pageWidthMm: 210,
+  pageHeightMm: 297,
+  margins: { top: 15, bottom: 15, left: 15, right: 15 },
+  staffHeightMm: 7,
+  title: '',
+  subtitle: '',
+  composer: '',
+  header: '',
+  footer: '',
+  transposingScore: false,
+  instrumentNames: []
+};
+
+/** A new project's score content (`ProjectScore.Empty`): nothing stored, the default layout. */
+export const EmptyProjectScore: ProjectScore = {
+  staffStyles: [],
+  symbols: [],
+  lyrics: [],
+  chords: [],
+  sets: [],
+  layout: DefaultScoreLayout
+};
+
 /** Anode's virtual MIDI ports' fixed ids (engine/src/Anode.Contracts/Control.cs, `VirtualMidiPorts`; macOS only). */
 export const VirtualMidiPorts = { inputId: 'anode:in', outputId: 'anode:out' } as const;
 

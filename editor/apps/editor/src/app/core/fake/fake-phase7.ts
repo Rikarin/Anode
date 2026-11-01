@@ -5,6 +5,7 @@ import {
   type AudioFile,
   type AudioRegion,
   type ControlEvent,
+  DefaultRegionNotation,
   type EditCommand,
   type GrooveTemplate,
   type Insert,
@@ -467,6 +468,7 @@ function stepNotes(project: Project, command: Command<'stepNotes'>, ctx: Phase7C
       startTick: position,
       lengthTicks: meterOf(project).barTicksAt(position),
       playback: { ...NeutralPlayback },
+      notation: { ...DefaultRegionNotation },
       notes: [],
       controls: [],
       muted: false

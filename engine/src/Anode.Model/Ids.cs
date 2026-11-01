@@ -7,7 +7,8 @@ namespace Anode.Model;
 ///     <c>tak</c>,
 ///     <c>mrk</c>, <c>sec</c>, <c>alt</c>, and Phase 4's <c>ins</c>, <c>snd</c>, <c>aut</c>, <c>pat</c>, <c>job</c>, and
 ///     Phase 6's <c>ptn</c>, <c>row</c>, <c>scn</c>,
-///     <c>cel</c>, and Phase 7's <c>grv</c>, <c>ars</c>, <c>lns</c>), an
+///     <c>cel</c>, and Phase 7's <c>grv</c>, <c>ars</c>, <c>lns</c>, and Phase 9's <c>sts</c>, <c>sym</c>, <c>lyr</c>,
+///     <c>chd</c>, <c>scs</c>), an
 ///     underscore, a
 ///     suffix.
 /// </summary>
@@ -54,4 +55,9 @@ public static class IdPrefix {
     public const string Groove = "grv";
     public const string ArticulationSet = "ars";
     public const string LaneSet = "lns";
+    public const string StaffStyle = "sts";
+    public const string ScoreSymbol = "sym";
+    public const string Lyric = "lyr";
+    public const string ChordSymbol = "chd";
+    public const string ScoreSet = "scs";
 }

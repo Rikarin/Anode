@@ -121,6 +121,169 @@ report. A REST change means regenerating `engine/src/Anode.Server/openapi.json`
   - MusicXML divisions are chosen per file to express every duration exactly.
   - SMF export uses 960 PPQ, the project's own resolution.
 
+### Contract notes
+
+Where the committed code differs from, or adds to, the shapes planned for this commit, and the shapes chosen where
+the plan left latitude:
+- **Staff styles** (`Score.cs`): `Clef` (`treble | bass | alto | tenor | treble8vb | treble8va | bass8vb | percussion
+  | none`); `Staff(clef, transpose, splitPitch?, voices)`: `transpose` in semitones, written = concert + transpose (an
+  octave clef's octave is the clef's, not the transposition); with several staves (top to bottom) a note goes to the
+  first staff whose `splitPitch` (concert MIDI pitch) it reaches, the last staff's is null; `voices` 1…4 is the most
+  voices made by overlap on the staff. `DrumMapEntry(pitch, staffPosition, notehead, name)` with `Notehead` (`normal |
+  cross | circleCross | diamond | triangle | slash`). `StaffStyle(id, name, staves, drumMap?, displayQuantizeTicks,
+  tripletQuantizeTicks, brace)`: the display quantise defaults are **two grids** (straight and triplet, ticks; 0 none),
+  not a single "default quantise", and `brace` (piano) is added for the MEI `staffGrp`. Factory ids are
+  **`StaffStyleIds`** (Contracts; the data is A's `FactoryStaffStyles`): `factory.treble`, `factory.bass`,
+  `factory.piano` (treble and bass split at C3 = 60, braced), `factory.drums`, `factory.guitar` (treble 8vb),
+  `factory.bassGuitar` (bass 8vb), `factory.clarinetBb` (+2), `factory.trumpetBb` (+2), `factory.hornF` (+7),
+  `factory.altoSax` (+9), `factory.tenorSax` (+14), `factory.viola` (alto clef), `factory.cello`; `FactoryPrefix`
+  `factory.` (a project's own style ids, chosen by the client, may not use it), `All` (library order), and **`Default`
+  = `factory.piano`**: a track's `staffStyleId` null means the piano style (Logic's "Auto Grand"), not a range-based
+  automatic choice.
+- **Region notation:** `RegionNotation(displayQuantizeTicks, tripletQuantizeTicks, interpretation, noOverlap,
+  syncopation, maxDots)`; the brief's "triplets/allowTuplets" is the **triplet grid** in ticks (160 a 1/16 triplet; 0
+  none), as Logic's "16,24" settings are two grids. `displayQuantizeTicks` **0 means the staff style's grids** (both),
+  which is how a staff style's display quantise is "the default". `RegionNotation.Default` (Logic's): 0, 0,
+  interpretation on, no overlap on, syncopation off, 1 dot; `ProjectDefaults.Notation` in the model.
+  `MidiRegion.notation` is required (every region has one, as in Logic's inspector); `Track.staffStyleId` is
+  nullable, left out when null.
+- **Symbols:** `ScoreSymbolKind` (`staccato | staccatissimo | accent | marcato | tenuto | fermata | trill | tieHidden |
+  dynamic | text | tempoText | rehearsal | pedalDown | pedalUp | slur | crescendo | diminuendo | octaveUp |
+  octaveDown`): dynamics are **one kind** with the marking in `text` (one of `ScoreSymbols.Dynamics`: pppp … ffff, sf,
+  sfz, sffz, sfp, fp, fz, rf, rfz), and "ties shown or hidden" is `tieHidden` on the note whose ties are not drawn.
+  `ScoreSymbol(id, kind, trackId, noteId?, tick?, endNoteId?, endTick?, text?, placement?, staff?)` with
+  `ScorePlacement` (`above | below`; null the engine's choice); `staff` (added) puts a positioned symbol on one staff of
+  a multi-staff style. Ticks are **project** ticks (symbols belong to tracks, not regions). The anchor rules are data
+  in `ScoreSymbols`: `NoteOnly` (articulations, fermata, trill, tieHidden), `Spanning` (slur, wedges, octave lines; a
+  slur spans notes only), `WithText` (dynamic, text, tempoText, rehearsal); other kinds take a tick or a note;
+  `MaxTextLength` 200.
+- **Lyrics and chords:** `LyricSyllable(id, noteId, verse, text, syllabic, extender)` with `Syllabic` (`single | begin
+  | middle | end`), at most one per note and verse (no `trackId`: note ids are project-wide). `ChordSymbol(id,
+  trackId, tick, root, quality, bass?, showGrid)` with **`PitchName(step, alter)`** and `PitchStep` (`c` … `b`) for
+  the root and bass (spelled, as MusicXML's `root-step`/`root-alter` need); `quality` is the text after the root ("",
+  "m", "7", "maj7", "m7", "dim", "m7b5", "aug", "sus4", "6", "9"…), from which D derives MusicXML's `kind`.
+- **Sets and layout:** `ScoreSet(id, name, trackIds)` (ids chosen by the client). `ScoreLayout(pageWidthMm,
+  pageHeightMm, margins: ScoreMargins(top, bottom, left, right), staffHeightMm, title, subtitle, composer, header,
+  footer, transposingScore, instrumentNames: InstrumentName(trackId, full, short)[])`: the page is **millimetres**
+  rather than a named page size (the dialog maps presets), texts are "" when unset, and instrument names list only
+  the tracks whose names differ from the track's. `ScoreLayout.Default`: A4 portrait (210 × 297), 15 mm margins, 7 mm
+  staves, concert pitch. One layout per project (not per set).
+- **`ProjectScore(staffStyles, symbols, lyrics, chords, sets, layout)`** with `ProjectScore.Empty`;
+  `Project.score` is required.
+- **`ScoreView`** (the engine's output): `ScoreView(setId?, partTrackId?, mode, transposing, layout, measures, parts,
+  symbols, lyrics, chords)` with `ScoreViewMode` (`linear | page`). Measures are common to every part:
+  `ScoreMeasure(number, startTick, lengthTicks, time: TimeSignature, key: ScoreKey(fifths, mode), showTime, showKey,
+  tempos: ScoreTempoMark(tick, bpm)[], rehearsals: ScoreRehearsal(tick, markerId, text)[], barline)` with `Barline`
+  (`single | double | final`). `ScorePart(trackId, name, shortName, staffStyleId, transpose, brace, staves: Staff[],
+  measures: ScorePartMeasure[])` → `ScorePartMeasure(staves: ScoreStaffMeasure[])` → `ScoreStaffMeasure(clef?,
+  voices: ScoreVoice[])` → `ScoreVoice(number, events)` → `ScoreEvent(id, kind, tick, durationTicks, duration, notes,
+  stem, beam?, symbolIds, lyricIds, chordIds)` with `ScoreEventKind` (`note | chord | rest`), `ScoreDuration(value:
+  NoteValue, dots, tuplet: ScoreTuplet(group, actual, normal)?)`, `NoteValue` (`breve | whole | half | quarter |
+  eighth | sixteenth | thirtySecond | sixtyFourth | hundredTwentyEighth`), `StemDirection` (`none | up | down`), and
+  `ScoreNote(id, noteId, pitch, written: ScorePitch(step, alter, octave), staffPosition, accidental?, tieStart,
+  tieStop, notehead)` with `Accidental` (`natural | sharp | flat | doubleSharp | doubleFlat`). Beams and tuplets are
+  **group numbers** (1… within a measure's voice) rather than begin/continue/end flags. Ticks are display positions in
+  project ticks. Every list is ordered, so the view serialises deterministically.
+  - **Deviation:** there are **no systems** in the view: the linear view is one system and page breaks are Verovio's
+    (ADR-0011: the engine fixes only what is musical), so the brief's "systems of measures" is measures only.
+  - **Deviation:** the MEI is **not a property of `ScoreView`**: `GET /project/score` answers **`ScoreDocument(view,
+    mei)`**, so `MeiWriter.Write(view)` stays a pure function of the view.
+- **Element ids** (`ScoreIds`, implemented in Contracts and mirrored, implemented, in `@anode/notation`): `n{noteId}`
+  for a note's first segment and **`n{noteId}-{k}`** for its k-th tied segment (k ≥ 2; ids must be unique in MEI),
+  `c{lowest noteId}` (with the same suffix) for a chord, `r{trackId}-{measure}-{staff}-{voice}-{index}` for a rest,
+  `s{symbolId}` for a symbol, **`l{lyricId}`** for a syllable, **`h{chordId}`** for a chord symbol, `m{number}` for a
+  measure; `NoteIdOf` and `SymbolIdOf` read them back (the editor's `noteIdOf`, `symbolIdOf`, `lyricIdOf`,
+  `chordSymbolIdOf`). Symbol ids are `sym_…`, so their element is `ssym_…`.
+- **Model ids:** `IdPrefix.StaffStyle` `sts`, `ScoreSymbol` `sym`, `Lyric` `lyr`, `ChordSymbol` `chd`, `ScoreSet`
+  `scs` (staff styles and sets are client-chosen, but the editor should use these prefixes).
+- **Commands** (17): `setStaffStyle(style)`, `deleteStaffStyle(styleId)` (tracks using it return to null),
+  `assignStaffStyle(trackIds, styleId?)`, `setRegionNotation(regionIds, displayQuantizeTicks?, tripletQuantizeTicks?,
+  interpretation?, noOverlap?, syncopation?, maxDots?)` (several regions at once, as the inspector edits a selection),
+  `addScoreSymbols(symbols: NewScoreSymbol[])` (the server gives ids; they come back in `scoreSymbolUpserted`),
+  `editScoreSymbols(symbols: ScoreSymbol[])`, `deleteScoreSymbols(symbolIds)`, **`setLyrics(verse, syllables:
+  LyricChange(noteId, text, syllabic, extender)[])`** (an empty text removes the syllable; one command for lyrics entry,
+  a note's syllable keeps its id), `addChordSymbols(chords: NewChordSymbol[])`, `editChordSymbols(chords)`,
+  `deleteChordSymbols(chordIds)`, `setScoreSet(set)`, `deleteScoreSet(setId)`, `setScoreLayout(layout)` (whole
+  layout), and the score edits **`moveScoreNotes(regionId, noteIds, steps, ticks = 0, accidental?)`** (vertical by
+  diatonic steps in the written key, horizontal by MIDI ticks the editor computes from the display grid) and
+  **`addScoreNote(trackId, tick, lengthTicks, staffPosition, staff = 0, accidental?, velocity?, regionId?)`**
+  (velocity 80 by default; a new region of whole bars when the track has none at the tick). The Part box's **rests
+  are not commands**: rests are derived (no user rests in the model). Staff positions are diatonic steps above the
+  bottom line (0 the bottom line, 8 the top), as MEI's `loc`. Since the model cannot reference `Anode.Notation`, B
+  converts the score edits with A's `StaffPositions` in the session (as step input fills `stepNotes`) or gives the
+  model a notation helper interface, as it prefers; the semantics are fixed.
+- **Import result:** one command, **`importTracks(content: ImportedContent)`**, applied by all three import jobs (the
+  Phase 3 `Edits.ImportMidi` is not a command and does not carry score content or audio). `ImportedContent(tracks:
+  ImportedTrack[], tempoEvents?, signatures?, keys?, markers?, score: ImportedScore?)`, `ImportedTrack(id, name, kind,
+  staffStyleId?, midiRegions: MidiRegion[], regions: AudioRegion[])` (instrument or audio), `ImportedScore(staffStyles,
+  symbols, lyrics, chords, title?, composer?)`: every id in the content is provisional (unique within it), and the model
+  gives real ids and rewrites the references (an imported track's `staffStyleId` is a factory id, kept, or one of the
+  content's styles); audio regions name files the job added first; tempo, signatures and keys replace the project's
+  when present; the title and composer fill the layout's when empty. A nullable object property
+  (`ImportedContent.score`, `ChordSymbol.bass`) is required but nullable in the generated client: send `null`.
+- **Deltas:** `staffStyleUpserted(style)`, `staffStyleRemoved(id)`, `scoreSymbolUpserted(symbol)`,
+  `scoreSymbolRemoved(id)`, `lyricUpserted(lyric)`, `lyricRemoved(id)`, `chordSymbolUpserted(chord)`,
+  `chordSymbolRemoved(id)`, `scoreSetUpserted(set)`, `scoreSetRemoved(id)`, `scoreLayoutChanged(layout)`; a track's
+  style comes as `trackUpserted`, a region's notation as `midiRegionUpserted`. The editor's `ProjectStore` keeps
+  `score` and applies them.
+- **Interchange** (`Interchange.cs`, `Jobs.cs`): `JobKind` `musicXmlExport | musicXmlImport | aafExport | aafImport |
+  midiExport | midiImport`. Exports take a file as the bounce does: `MusicXmlExportRequest(fileName, directory?,
+  setId?, partTrackId?, compressed = false)` (`partTrackId` added, for an extracted part), `AafExportRequest(fileName,
+  directory?, trackIds?, embedMedia = true)` (linked media go to `<fileName> Media/` beside the file),
+  `MidiExportRequest(fileName, directory?, format = 1, trackIds?, regionId?)`; the extension is added when missing,
+  the directory defaults to **`<project>/Exports`**, and the job's `files` are what it wrote. Imports take a path on
+  the server's disk, `MusicXmlImportRequest(path)`, `AafImportRequest(path)`, `MidiImportRequest(path, importTempo =
+  true, importMarkers = true, merge = false)`, or an upload (multipart `file`; the MIDI options as query parameters),
+  as audio import offers both. `POST /project/files/import-midi` (Phase 3) stays.
+- **REST** (`ScoreApi.cs`, `InterchangeApi.cs`, `Pending.Phase9`, a new `Pending.cs` since B had removed Phase 8's):
+  `GetScore` (`GET /project/score?set=&part=&view=`, `ScoreDocument`; `view` is a string, `linear` or `page`, as query
+  binding does not parse contract enum names), `ListStaffStyles` (`GET /library/staff-styles`), `ExportMusicXml`,
+  `ExportAaf`, `ExportMidi` (`POST /project/export/musicxml|aaf|midi`), `ImportMusicXml`, `ImportAaf`, `ImportMidi`
+  (`POST /project/import/musicxml|aaf|midi`) and `UploadMusicXml`, `UploadAaf`, `UploadMidi`
+  (`POST /project/import/…/upload`), all answering `Accepted<Job>` except the two `GET`s. The editor's `AnodeApi`:
+  `score(query: ScoreQuery)`, `staffStyles`, `exportMusicXml`, `exportAaf`, `exportMidi`, `importMusicXml`,
+  `uploadMusicXml`, `importAaf`, `uploadAaf`, `importMidi`, `uploadMidi(file, options?: MidiImportOptions)` (`importMidi`
+  is the job; `importMidiFile` the Phase 3 import), through the generated client in `HttpAnodeApi`; the fake Server
+  answers them 422. `models.ts` mirrors every new schema, and `StaffStyleIds`, `DefaultRegionNotation`,
+  `DefaultScoreLayout` and `EmptyProjectScore` as values.
+- **Stubs that throw:**
+  - `Anode.Notation` (`Pending.WorkstreamA()`; references Contracts and Model): `NotationEngine.Render(state, score,
+    ScoreRequest(setId?, partTrackId?, mode))` → `ScoreView` (the score is passed in until the model stores it);
+    `MeiWriter.Write(view)` → MEI 5 text; `StaffPositions.PitchAt(clef, transpose, key, staffPosition, accidental?)`,
+    `PlacementOf(clef, transpose, key, pitch)` → `StaffPlacement(staffPosition, written)`, `Step(pitch, steps,
+    transpose, key, accidental?)`; `DisplayGrid.GridsOf(notation, style)`, `DisplayTick(state, region, style, tick)`,
+    `Move(state, region, style, tick, steps)` (grids counted from each bar line); `FactoryStaffStyles.All`,
+    `Find(id)`, `Resolve(score, styleId)`.
+  - `Anode.Interchange` (references Contracts, Model and Notation): `MusicXml.MusicXmlWriter.Write(view, compressed)`
+    → bytes (from the view alone: it carries the layout, symbols, lyrics and chords; `Extension(compressed)` is real),
+    `MusicXml.MusicXmlReader.Read(data)` → `ImportedContent` (`.mxl` told by content) (`Pending.WorkstreamD()`);
+    `Aaf.AafWriter.Write(state, projectFolder, request, path)` → files written, `Aaf.AafReader.Read(path, mediaFolder)`
+    → `AafComposition(name, sampleRate, tracks: AafTrack(name, clips)[], markers: AafMarker(name, position, length,
+    comment)[])` with `AafClip(name, mediaPath, position, sourceOffset, length, gainDb, fadeIn, fadeOut)` in samples
+    (embedded essence extracted to WAVs in the job's scratch folder; a transition becomes an overlap with fades), and
+    `AafReader.ToContent(composition, state, fileIds)` → `ImportedContent` (`Pending.WorkstreamE()`): E converts
+    samples to ticks, so the B↔E seam is the composition and the content.
+  - **SMF:** the project mapping lives in **`Anode.Interchange/Smf`** (`SmfExport.Write(state, request)` → bytes,
+    `SmfImport.ToContent(file: SmfFile, state, request)` → `ImportedContent`; `Pending.WorkstreamB()`), owned by B and
+    calling `Anode.Model.Midi`'s `StandardMidiFileWriter` and `StandardMidiFile`, which B extends at the byte level
+    (meta events, markers, keys, programs). Model's codec stays where loops and the Phase 3 import use it; the server's
+    jobs call one place for every format.
+- **Editor:** `libs/notation` (`@anode/notation`, tag `type:ui`): `NotationRenderer` (`render(mei, RenderOptions(view,
+  layout, zoom?))` → `RenderedPage(page, svg, width, height)[]`, `dispose()`), `PendingNotationRenderer` (rejects), and
+  the id map above, implemented with tests mirroring the engine's.
+- **Projects:** `Anode.Notation` and `Anode.Interchange` are referenced by `Anode.Server` (not by `Anode.Host`);
+  `Anode.Notation.Tests` and `Anode.Interchange.Tests` hold one placeholder test each.
+- **Interim:** schema-8 packages read through **`Phase9Fields.Fill`** (every MIDI region's `notation` at the default,
+  on tracks, in track alternatives and in Live Loops cells; the package's region normaliser and a cell's content
+  default a missing one too), which B replaces with schema 9 and its migration; `Project.score` is
+  `ProjectScore.Empty` (not stored yet). The model refuses the 17 commands, and a Live Loops cell whose region has
+  notation other than the default (422, `Edits.Phase9.cs`); the identity property skips
+  `RandomProjects.PendingPhase9`, and random projects are built without those commands (`RandomProjects.Buildable`),
+  so they stay Phase 8's and the other properties keep their odds (each pending command picked during a build would be
+  a wasted step, as `LoadInsertFile`'s flaky count in b9f7db4 showed). The editor's fake Server starts projects with
+  the empty score, gives regions the default notation, and answers the new commands and endpoints 422
+  (`fake-phase9.spec.ts`).
+
 ## Workstreams
 
 Five, in parallel, each on its own branch; they meet only at the contracts above.

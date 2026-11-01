@@ -10,6 +10,7 @@ import {
   type CommandResult,
   type DeltaOp,
   type EditCommand,
+  EmptyProjectScore,
   type GrooveTemplate,
   type LaneSet,
   type LiveLoopsGrid,
@@ -19,6 +20,7 @@ import {
   type PatternRegion,
   type Project,
   type ProjectDelta,
+  type ProjectScore,
   type ProjectSettings,
   type TakeFolder,
   type Track
@@ -139,6 +141,8 @@ export class ProjectStore {
   readonly articulationSets = signal<ReadonlyMap<string, ArticulationSet>>(new Map());
   /** Step Editor lane sets of the project (`lns_…`) by id (Phase 7); none: the editor's default set. */
   readonly laneSets = signal<ReadonlyMap<string, LaneSet>>(new Map());
+  /** The stored score content: staff styles, symbols, lyrics, chord symbols, score sets and layout (Phase 9). */
+  readonly score = signal<ProjectScore>(EmptyProjectScore);
   /** A project is being opened, created or refetched. */
   readonly loading = signal(false);
 
@@ -229,6 +233,7 @@ export class ProjectStore {
     this.grooves.set(new Map(project.grooves.map(g => [g.id, g])));
     this.articulationSets.set(new Map(project.articulationSets.map(a => [a.id, a])));
     this.laneSets.set(new Map(project.laneSets.map(l => [l.id, l])));
+    this.score.set(project.score);
   }
 
   /** No project open. */
@@ -256,6 +261,7 @@ export class ProjectStore {
     this.grooves.set(new Map());
     this.articulationSets.set(new Map());
     this.laneSets.set(new Map());
+    this.score.set(EmptyProjectScore);
   }
 
   /** Fetches the open project (or learns that none is), replacing what the store has. Concurrent calls share one. */
@@ -648,6 +654,62 @@ export class ProjectStore {
         this.laneSets.update(map => without(map, id));
         break;
       }
+      // The score content (Phase 9): score views are refetched from the Server after these.
+      case 'staffStyleUpserted': {
+        const style = op.style;
+        this.score.update(score => ({ ...score, staffStyles: upsertById(score.staffStyles, style) }));
+        break;
+      }
+      case 'staffStyleRemoved': {
+        const id = op.id;
+        this.score.update(score => ({ ...score, staffStyles: score.staffStyles.filter(s => s.id !== id) }));
+        break;
+      }
+      case 'scoreSymbolUpserted': {
+        const symbol = op.symbol;
+        this.score.update(score => ({ ...score, symbols: upsertById(score.symbols, symbol) }));
+        break;
+      }
+      case 'scoreSymbolRemoved': {
+        const id = op.id;
+        this.score.update(score => ({ ...score, symbols: score.symbols.filter(s => s.id !== id) }));
+        break;
+      }
+      case 'lyricUpserted': {
+        const lyric = op.lyric;
+        this.score.update(score => ({ ...score, lyrics: upsertById(score.lyrics, lyric) }));
+        break;
+      }
+      case 'lyricRemoved': {
+        const id = op.id;
+        this.score.update(score => ({ ...score, lyrics: score.lyrics.filter(l => l.id !== id) }));
+        break;
+      }
+      case 'chordSymbolUpserted': {
+        const chord = op.chord;
+        this.score.update(score => ({ ...score, chords: upsertById(score.chords, chord) }));
+        break;
+      }
+      case 'chordSymbolRemoved': {
+        const id = op.id;
+        this.score.update(score => ({ ...score, chords: score.chords.filter(c => c.id !== id) }));
+        break;
+      }
+      case 'scoreSetUpserted': {
+        const set = op.set;
+        this.score.update(score => ({ ...score, sets: upsertById(score.sets, set) }));
+        break;
+      }
+      case 'scoreSetRemoved': {
+        const id = op.id;
+        this.score.update(score => ({ ...score, sets: score.sets.filter(s => s.id !== id) }));
+        break;
+      }
+      case 'scoreLayoutChanged': {
+        const layout = op.layout;
+        this.score.update(score => ({ ...score, layout }));
+        break;
+      }
     }
   }
 
@@ -678,6 +740,12 @@ function byName<T extends { name: string }>(items: T[]): T[] {
 }
 
 /** A map without one key. */
+/** `list` with `item` in place of the entry with its id, or added at the end. */
+function upsertById<T extends { id: string }>(list: readonly T[], item: T): T[] {
+  const index = list.findIndex(x => x.id === item.id);
+  return index < 0 ? [...list, item] : list.map((x, i) => (i === index ? item : x));
+}
+
 function without<K, V>(map: ReadonlyMap<K, V>, key: K): Map<K, V> {
   const next = new Map(map);
   next.delete(key);

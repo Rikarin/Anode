@@ -71,7 +71,8 @@ public static partial class Edits {
                 ProjectDefaults.Playback,
                 Sorted(notes),
                 Sorted(controls),
-                false
+                false,
+                ProjectDefaults.Notation
             );
             state = Step(state, [new MidiRegionUpserted(region)], forward, inverse);
         }

@@ -232,6 +232,40 @@ public sealed class PackageTests : IDisposable {
     }
 
     [Fact]
+    public void A_schema_8_package_without_the_Phase_9_fields_reads_them_at_their_defaults() {
+        var (state, _, _) = RandomProjects.Build(3, 40);
+        Assert.Contains(state.MidiRegions.Values, static m => m.Notes.Count > 0);
+        ProjectPackage.Save(folder, state);
+        var path = Path.Combine(folder, "project.json");
+        var root = JsonNode.Parse(File.ReadAllText(path))!.AsObject();
+        foreach (var cell in root["liveLoops"]!["cells"]!.AsArray()) {
+            cell!["content"]!["midi"]?.AsObject().Remove("notation");
+        }
+
+        File.WriteAllText(path, root.ToJsonString());
+        foreach (var file in Directory.EnumerateFiles(Path.Combine(folder, "tracks"))) {
+            var json = JsonNode.Parse(File.ReadAllText(file))!.AsObject();
+            foreach (var region in json["midiRegions"]!.AsArray()) {
+                region!.AsObject().Remove("notation");
+            }
+
+            foreach (var alternative in json["track"]!["alternatives"]!.AsArray()) {
+                foreach (var region in alternative!["midiRegions"]!.AsArray()) {
+                    region!.AsObject().Remove("notation");
+                }
+            }
+
+            File.WriteAllText(file, json.ToJsonString());
+        }
+
+        var loaded = ProjectPackage.Load(folder);
+        Assert.Equal(RandomProjects.Json(state), RandomProjects.Json(loaded));
+        Assert.All(loaded.MidiRegions.Values, static m => Assert.Equal(RegionNotation.Default, m.Notation));
+        Assert.All(loaded.Tracks, static t => Assert.Null(t.StaffStyleId));
+        Assert.Equal(ProjectScore.Empty, loaded.ToProject(string.Empty, 0, false).Score);
+    }
+
+    [Fact]
     public void Phase_7_content_survives_the_package_format() {
         var (state, _, _) = RandomProjects.Build(5, 40);
         Assert.NotEmpty(state.Grooves);

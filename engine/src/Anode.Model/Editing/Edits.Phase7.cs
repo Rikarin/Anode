@@ -724,7 +724,8 @@ public static partial class Edits {
             ProjectDefaults.Playback,
             [],
             [],
-            false
+            false,
+            ProjectDefaults.Notation
         );
     }
 

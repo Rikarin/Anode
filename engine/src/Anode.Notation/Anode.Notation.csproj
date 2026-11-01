@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <Description>The notation engine (docs/10-phase-9.md, docs/adr/0011-notation-rendering.md): MIDI to a score view (display quantise, durations, ties, tuplets, voices, spelling, measures), the view as MEI 5 for Verovio, staff positions and display positions for score edits, and the factory staff styles. Pure: no I/O, no engine. Referenced by the server and Anode.Interchange, not by the host.</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../Anode.Contracts/Anode.Contracts.csproj"/>
+    <!-- ProjectState, the tempo, signature and key maps. -->
+    <ProjectReference Include="../Anode.Model/Anode.Model.csproj"/>
+    <InternalsVisibleTo Include="Anode.Notation.Tests"/>
+  </ItemGroup>
+</Project>

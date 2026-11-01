@@ -47,6 +47,7 @@ public static partial class Edits {
             null,
             false,
             false,
+            null,
             null
         );
         // Pads that leave their Drum Machine Designer are no longer pads (as setTrackParent has it).

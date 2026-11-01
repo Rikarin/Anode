@@ -1,0 +1,5 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <ProjectReference Include="../../src/Anode.Notation/Anode.Notation.csproj"/>
+  </ItemGroup>
+</Project>

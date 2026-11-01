@@ -1,4 +1,4 @@
-import type { MidiRegion } from '@anode/api-client';
+import { DefaultRegionNotation, type MidiRegion } from '@anode/api-client';
 import { MeterMap } from '@anode/timeline';
 import { DefaultLaneSet } from '../midi-edit/lanes';
 import {
@@ -32,6 +32,7 @@ function region(start = 0): MidiRegion {
     startTick: start,
     lengthTicks: 3840,
     playback: {} as MidiRegion['playback'],
+    notation: { ...DefaultRegionNotation },
     muted: false,
     notes: [0, 960, 1920, 2880].map((tick, i) => ({
       id: start + i + 1,

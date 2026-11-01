@@ -211,7 +211,9 @@ public sealed record ProjectState(
             LiveLoops,
             [..Grooves.Values],
             [..ArticulationSets.Values],
-            [..LaneSets.Values]
+            [..LaneSets.Values],
+            // The score content: Phase 9, workstream B (docs/10-phase-9.md).
+            ProjectScore.Empty
         );
 
     /// <summary>Applies one delta operation (an edit's primitive step, also what clients apply).</summary>

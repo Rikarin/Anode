@@ -1,4 +1,4 @@
-import type { AudioRegion, MidiRegion } from '@anode/api-client';
+import { type AudioRegion, DefaultRegionNotation, type MidiRegion } from '@anode/api-client';
 import {
   adjustmentCommands,
   crossfadeCommands,
@@ -36,6 +36,7 @@ const midi: MidiRegion = {
   startTick: 0,
   lengthTicks: 3840,
   playback: { transpose: 0, velocity: 0, quantizeTicks: 0, quantizeStrength: 1, swing: 0 },
+  notation: { ...DefaultRegionNotation },
   notes: [],
   controls: [],
   muted: true

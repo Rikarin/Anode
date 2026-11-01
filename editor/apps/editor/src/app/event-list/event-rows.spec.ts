@@ -1,4 +1,4 @@
-import type { MidiRegion } from '@anode/api-client';
+import { DefaultRegionNotation, type MidiRegion } from '@anode/api-client';
 import { MeterMap } from '@anode/timeline';
 import {
   buildRows,
@@ -23,6 +23,7 @@ function region(): MidiRegion {
     startTick: 3840,
     lengthTicks: 7680,
     playback: {} as MidiRegion['playback'],
+    notation: { ...DefaultRegionNotation },
     muted: false,
     notes: [
       { id: 1, pitch: 60, velocity: 100, channel: 1, startTick: 0, lengthTicks: 480, articulationId: 0 },

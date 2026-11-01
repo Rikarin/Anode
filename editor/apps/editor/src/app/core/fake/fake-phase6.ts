@@ -3,6 +3,7 @@ import {
   type Cell,
   type CellContent,
   type ChannelStrip,
+  DefaultRegionNotation,
   type DrumPad,
   type EditCommand,
   type Insert,
@@ -1076,6 +1077,7 @@ export function applyPhase6Command(project: Project, command: EditCommand, ctx: 
         startTick: region.startTick,
         lengthTicks: region.lengthTicks,
         playback: { ...NeutralPlayback },
+        notation: { ...DefaultRegionNotation },
         notes: patternNotes(project, region, region.startTick, ctx),
         controls: [],
         muted: region.muted

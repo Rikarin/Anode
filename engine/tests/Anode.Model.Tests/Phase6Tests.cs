@@ -239,7 +239,8 @@ public sealed class Phase6Tests {
             ProjectDefaults.Playback,
             [new(0, 60, 100, 1, 0, 240, 0), new(0, 64, 100, 1, 960, 240, 0)],
             [],
-            false
+            false,
+            ProjectDefaults.Notation
         );
         Apply(
             new SetCellCommand(keys, scenes[0].Id, new(Midi: midi), PlayMode: CellPlayMode.OneShot),
@@ -326,7 +327,8 @@ public sealed class Phase6Tests {
             ProjectDefaults.Playback,
             [new(0, 60, 100, 1, 0, 240, 0)],
             [],
-            false
+            false,
+            ProjectDefaults.Notation
         );
         Apply(new SetCellCommand(keys, state.LiveLoops.Scenes[0].Id, new(Midi: midi)));
         var cell = state.LiveLoops.Cells[0];

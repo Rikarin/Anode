@@ -137,6 +137,23 @@ namespace Anode.Contracts;
 [JsonDerivedType(typeof(SetScriptCommand), "setScript")]
 [JsonDerivedType(typeof(SetSyncSettingsCommand), "setSyncSettings")]
 [JsonDerivedType(typeof(AddStemsCommand), "addStems")]
+[JsonDerivedType(typeof(SetStaffStyleCommand), "setStaffStyle")]
+[JsonDerivedType(typeof(DeleteStaffStyleCommand), "deleteStaffStyle")]
+[JsonDerivedType(typeof(AssignStaffStyleCommand), "assignStaffStyle")]
+[JsonDerivedType(typeof(SetRegionNotationCommand), "setRegionNotation")]
+[JsonDerivedType(typeof(AddScoreSymbolsCommand), "addScoreSymbols")]
+[JsonDerivedType(typeof(EditScoreSymbolsCommand), "editScoreSymbols")]
+[JsonDerivedType(typeof(DeleteScoreSymbolsCommand), "deleteScoreSymbols")]
+[JsonDerivedType(typeof(SetLyricsCommand), "setLyrics")]
+[JsonDerivedType(typeof(AddChordSymbolsCommand), "addChordSymbols")]
+[JsonDerivedType(typeof(EditChordSymbolsCommand), "editChordSymbols")]
+[JsonDerivedType(typeof(DeleteChordSymbolsCommand), "deleteChordSymbols")]
+[JsonDerivedType(typeof(SetScoreSetCommand), "setScoreSet")]
+[JsonDerivedType(typeof(DeleteScoreSetCommand), "deleteScoreSet")]
+[JsonDerivedType(typeof(SetScoreLayoutCommand), "setScoreLayout")]
+[JsonDerivedType(typeof(MoveScoreNotesCommand), "moveScoreNotes")]
+[JsonDerivedType(typeof(AddScoreNoteCommand), "addScoreNote")]
+[JsonDerivedType(typeof(ImportTracksCommand), "importTracks")]
 public abstract record EditCommand;
 
 /// <summary>
@@ -935,3 +952,142 @@ public sealed record StemFile(StemKind Kind, string FileId);
 ///     send it.
 /// </summary>
 public sealed record AddStemsCommand(string RegionId, IReadOnlyList<StemFile> Stems, bool KeepSource) : EditCommand;
+
+/// <summary>
+///     Phase 9 (docs/10-phase-9.md): adds a staff style to the project or replaces the one with its id (an id the client
+///     chooses, not starting <c>factory.</c>; 1…4 staves, splits descending with the last null, clefs, transpositions
+///     −48…48, voices 1…4, grids 0 or a divisor of a whole note, a drum map only with a percussion staff).
+/// </summary>
+public sealed record SetStaffStyleCommand(StaffStyle Style) : EditCommand;
+
+/// <summary>Phase 9: removes a project staff style; tracks that used it return to the default (null).</summary>
+public sealed record DeleteStaffStyleCommand(string StyleId) : EditCommand;
+
+/// <summary>
+///     Phase 9: gives instrument and external MIDI tracks a staff style (a factory id or one of the project's; null:
+///     the default, <c>StaffStyleIds.Default</c>).
+/// </summary>
+public sealed record AssignStaffStyleCommand(IReadOnlyList<string> TrackIds, string? StyleId) : EditCommand;
+
+/// <summary>
+///     Phase 9: changes the score settings (<see cref="RegionNotation" />) of MIDI regions; left-out properties stay.
+///     Grids are 0 or divide a whole note (3840 ticks); <c>maxDots</c> 0…3.
+/// </summary>
+public sealed record SetRegionNotationCommand(
+    IReadOnlyList<string> RegionIds,
+    int? DisplayQuantizeTicks = null,
+    int? TripletQuantizeTicks = null,
+    bool? Interpretation = null,
+    bool? NoOverlap = null,
+    bool? Syncopation = null,
+    int? MaxDots = null
+) : EditCommand;
+
+/// <summary>
+///     A score symbol to add (<see cref="ScoreSymbol" /> without its id, which the server gives): its anchors as
+///     <c>ScoreSymbols</c> says for its kind; notes of MIDI regions of <c>trackId</c>; ticks of 0 or more.
+/// </summary>
+public sealed record NewScoreSymbol(
+    ScoreSymbolKind Kind,
+    string TrackId,
+    long? NoteId = null,
+    long? Tick = null,
+    long? EndNoteId = null,
+    long? EndTick = null,
+    string? Text = null,
+    ScorePlacement? Placement = null,
+    int? Staff = null
+);
+
+/// <summary>Phase 9: adds score symbols (the new ones come back as <c>scoreSymbolUpserted</c>, with their ids).</summary>
+public sealed record AddScoreSymbolsCommand(IReadOnlyList<NewScoreSymbol> Symbols) : EditCommand;
+
+/// <summary>Phase 9: replaces score symbols by id (each checked as when added; the track stays).</summary>
+public sealed record EditScoreSymbolsCommand(IReadOnlyList<ScoreSymbol> Symbols) : EditCommand;
+
+public sealed record DeleteScoreSymbolsCommand(IReadOnlyList<string> SymbolIds) : EditCommand;
+
+/// <summary>A note's syllable in a verse; an empty <c>text</c> removes the note's syllable there.</summary>
+public sealed record LyricChange(long NoteId, string Text, Syllabic Syllabic = Syllabic.Single, bool Extender = false);
+
+/// <summary>
+///     Phase 9, lyrics entry: sets the syllables of notes in verse <c>verse</c> (1…8), each note once; a note's existing
+///     syllable in the verse keeps its id, a new one gets one.
+/// </summary>
+public sealed record SetLyricsCommand(int Verse, IReadOnlyList<LyricChange> Syllables) : EditCommand;
+
+/// <summary>A chord symbol to add (<see cref="ChordSymbol" /> without its id).</summary>
+public sealed record NewChordSymbol(
+    string TrackId,
+    long Tick,
+    PitchName Root,
+    string Quality,
+    PitchName? Bass = null,
+    bool ShowGrid = false
+);
+
+/// <summary>Phase 9: adds chord symbols to tracks that hold MIDI (alterations −2…2, ticks of 0 or more).</summary>
+public sealed record AddChordSymbolsCommand(IReadOnlyList<NewChordSymbol> Chords) : EditCommand;
+
+/// <summary>Phase 9: replaces chord symbols by id.</summary>
+public sealed record EditChordSymbolsCommand(IReadOnlyList<ChordSymbol> Chords) : EditCommand;
+
+public sealed record DeleteChordSymbolsCommand(IReadOnlyList<string> ChordIds) : EditCommand;
+
+/// <summary>
+///     Phase 9: adds a score set (an id the client chooses) or replaces the one with its id; its tracks exist, each
+///     once. Removing a track removes it from the sets.
+/// </summary>
+public sealed record SetScoreSetCommand(ScoreSet Set) : EditCommand;
+
+public sealed record DeleteScoreSetCommand(string SetId) : EditCommand;
+
+/// <summary>
+///     Phase 9: replaces the score layout (page 50…2000 mm a side, margins leaving at least half of it, staff height
+///     2…20 mm, instrument names of existing tracks, each track once).
+/// </summary>
+public sealed record SetScoreLayoutCommand(ScoreLayout Layout) : EditCommand;
+
+/// <summary>
+///     Phase 9, a score edit: moves notes of region <c>regionId</c> by <c>steps</c> staff steps (each note's written
+///     pitch to the note of the key at its position that many diatonic steps up, or down when negative; MIDI stays at
+///     concert pitch, so the staff's transposition is undone) and its MIDI start by <c>ticks</c> (the editor sends a
+///     multiple of the region's display grid). <c>accidental</c> forces the written alteration of the result
+///     (modifier keys; null: the key's). Converted with the notation engine's staff positions
+///     (<c>Anode.Notation.StaffPositions</c>) into the notes' pitch and start changes, as <c>editNotes</c> makes them.
+/// </summary>
+public sealed record MoveScoreNotesCommand(
+    string RegionId,
+    IReadOnlyList<long> NoteIds,
+    int Steps,
+    long Ticks = 0,
+    Accidental? Accidental = null
+) : EditCommand;
+
+/// <summary>
+///     Phase 9, a score edit: inserts a note from the Part box at project tick <c>tick</c> (a display position) lasting
+///     <c>lengthTicks</c>, on staff <c>staff</c> (0 the top of the track's style) at staff position
+///     <c>staffPosition</c> (diatonic steps above the bottom line). Its pitch is the note of the key at that position
+///     under the staff's clef, with <c>accidental</c> forcing the alteration, less the staff's transposition. It goes
+///     into region <c>regionId</c>, else the track's region at the tick, else a new region of whole bars on the track;
+///     velocity 80 unless given, channel 1.
+/// </summary>
+public sealed record AddScoreNoteCommand(
+    string TrackId,
+    long Tick,
+    long LengthTicks,
+    int StaffPosition,
+    int Staff = 0,
+    Accidental? Accidental = null,
+    int? Velocity = null,
+    string? RegionId = null
+) : EditCommand;
+
+/// <summary>
+///     Phase 9, an interchange import's result (<see cref="ImportedContent" />): adds its tracks after the project's
+///     with their regions, staff styles and score content, gives every provisional id a real one (rewriting the
+///     references), replaces the tempo map, signatures and keys it carries, and adds its markers, in one undo step. The
+///     <c>musicXmlImport</c>, <c>aafImport</c> and <c>midiImport</c> jobs apply it after copying the media into the
+///     project (undo leaves the files); clients do not send it.
+/// </summary>
+public sealed record ImportTracksCommand(ImportedContent Content) : EditCommand;

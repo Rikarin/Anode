@@ -39,6 +39,17 @@ public sealed record ProjectDelta(long Revision, IReadOnlyList<DeltaOp> Ops);
 [JsonDerivedType(typeof(ArticulationSetRemoved), "articulationSetRemoved")]
 [JsonDerivedType(typeof(LaneSetUpserted), "laneSetUpserted")]
 [JsonDerivedType(typeof(LaneSetRemoved), "laneSetRemoved")]
+[JsonDerivedType(typeof(StaffStyleUpserted), "staffStyleUpserted")]
+[JsonDerivedType(typeof(StaffStyleRemoved), "staffStyleRemoved")]
+[JsonDerivedType(typeof(ScoreSymbolUpserted), "scoreSymbolUpserted")]
+[JsonDerivedType(typeof(ScoreSymbolRemoved), "scoreSymbolRemoved")]
+[JsonDerivedType(typeof(LyricUpserted), "lyricUpserted")]
+[JsonDerivedType(typeof(LyricRemoved), "lyricRemoved")]
+[JsonDerivedType(typeof(ChordSymbolUpserted), "chordSymbolUpserted")]
+[JsonDerivedType(typeof(ChordSymbolRemoved), "chordSymbolRemoved")]
+[JsonDerivedType(typeof(ScoreSetUpserted), "scoreSetUpserted")]
+[JsonDerivedType(typeof(ScoreSetRemoved), "scoreSetRemoved")]
+[JsonDerivedType(typeof(ScoreLayoutChanged), "scoreLayoutChanged")]
 public abstract record DeltaOp;
 
 /// <summary>A track was added or changed; <c>index</c> is its position in the track list.</summary>
@@ -108,3 +119,36 @@ public sealed record ArticulationSetRemoved(string Id) : DeltaOp;
 public sealed record LaneSetUpserted(LaneSet Set) : DeltaOp;
 
 public sealed record LaneSetRemoved(string Id) : DeltaOp;
+
+/// <summary>
+///     Phase 9 (docs/10-phase-9.md): a project staff style was added or changed. The score content's deltas change
+///     <c>Project.score</c>; a track's staff style comes as <c>trackUpserted</c>, a region's notation as
+///     <c>midiRegionUpserted</c>. Score views are refetched (<c>GET /project/score</c>) after any of them, or after
+///     notes, meter, key, tempo or markers change.
+/// </summary>
+public sealed record StaffStyleUpserted(StaffStyle Style) : DeltaOp;
+
+public sealed record StaffStyleRemoved(string Id) : DeltaOp;
+
+/// <summary>Phase 9: a score symbol was added or changed.</summary>
+public sealed record ScoreSymbolUpserted(ScoreSymbol Symbol) : DeltaOp;
+
+public sealed record ScoreSymbolRemoved(string Id) : DeltaOp;
+
+/// <summary>Phase 9: a lyric syllable was added or changed.</summary>
+public sealed record LyricUpserted(LyricSyllable Lyric) : DeltaOp;
+
+public sealed record LyricRemoved(string Id) : DeltaOp;
+
+/// <summary>Phase 9: a chord symbol was added or changed.</summary>
+public sealed record ChordSymbolUpserted(ChordSymbol Chord) : DeltaOp;
+
+public sealed record ChordSymbolRemoved(string Id) : DeltaOp;
+
+/// <summary>Phase 9: a score set was added or changed.</summary>
+public sealed record ScoreSetUpserted(ScoreSet Set) : DeltaOp;
+
+public sealed record ScoreSetRemoved(string Id) : DeltaOp;
+
+/// <summary>Phase 9: the score layout changed.</summary>
+public sealed record ScoreLayoutChanged(ScoreLayout Layout) : DeltaOp;

@@ -11,7 +11,8 @@ public sealed record ProjectSummary(string Id, string Name, string Path, DateTim
 ///     the ETag; <c>dirty</c> says whether it has unsaved edits. Phase 6 (docs/07-phase-6.md): <c>patternRegions</c>
 ///     are the Step Sequencer's regions; <c>liveLoops</c> is the Live Loops grid. Phase 7 (docs/08-phase-7.md):
 ///     <c>grooves</c> are the project's groove templates, <c>articulationSets</c> its articulation sets and
-///     <c>laneSets</c> its Step Editor lane sets.
+///     <c>laneSets</c> its Step Editor lane sets. Phase 9 (docs/10-phase-9.md): <c>score</c> is its stored score content
+///     (staff styles, symbols, lyrics, chord symbols, score sets, layout).
 /// </summary>
 public sealed record Project(
     string Id,
@@ -36,7 +37,8 @@ public sealed record Project(
     LiveLoopsGrid LiveLoops,
     IReadOnlyList<GrooveTemplate> Grooves,
     IReadOnlyList<ArticulationSet> ArticulationSets,
-    IReadOnlyList<LaneSet> LaneSets
+    IReadOnlyList<LaneSet> LaneSets,
+    ProjectScore Score
 );
 
 /// <summary>
@@ -112,7 +114,8 @@ public enum TrackKind {
 ///     (null until set up: the editor shows the 8-knob layout, unnamed, at 0 and unmapped, and the first Smart Controls
 ///     command sets them up); <c>liveLoopsActive</c>: the track plays its Live Loops cells, not its Tracks-area
 ///     regions. Phase 7: <c>matchGroove</c>: its quantise follows the groove track (<c>settings.grooveTrackId</c>);
-///     <c>articulationSetId</c> is its articulation set (null: none).
+///     <c>articulationSetId</c> is its articulation set (null: none). Phase 9: <c>staffStyleId</c> is its staff style
+///     in the score (a factory id or one of <c>score.staffStyles</c>; null: <c>StaffStyleIds.Default</c>).
 /// </summary>
 public sealed record Track(
     string Id,
@@ -140,7 +143,8 @@ public sealed record Track(
     SmartControls? SmartControls,
     bool LiveLoopsActive,
     bool MatchGroove,
-    string? ArticulationSetId
+    string? ArticulationSetId,
+    string? StaffStyleId
 );
 
 /// <summary>The device input: 1-based first channel (0: none); a stereo input takes that channel and the next.</summary>

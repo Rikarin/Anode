@@ -1346,10 +1346,220 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/api/v1/project/score': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** The rendered score and its MEI: score set `set` (left out: every MIDI track), or track `part`'s part alone, in the `view` linear (the default) or page (a ScoreViewMode); 422 for an unknown set, track or view. Cached per project revision; the same project gives the same answer. */
+    get: operations['GetScore'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/library/staff-styles': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** The factory staff styles (StaffStyleIds), in library order; a project's own are in its score. */
+    get: operations['ListStaffStyles'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/project/export/musicxml': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Exports a score set or a part as MusicXML 4.0 (.musicxml, or .mxl compressed): a musicXmlExport job. */
+    post: operations['ExportMusicXml'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/project/export/aaf': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Exports audio tracks as AAF, media embedded or linked (WAV files in a folder beside it): an aafExport job. */
+    post: operations['ExportAaf'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/project/export/midi': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Exports the project, tracks or a region as a Standard MIDI File (type 0 or 1): a midiExport job. */
+    post: operations['ExportMidi'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/project/import/musicxml': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Imports a MusicXML file from the server's disk as tracks with their score symbols: a musicXmlImport job, one undo step when it finishes. */
+    post: operations['ImportMusicXml'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/project/import/musicxml/upload': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Imports an uploaded MusicXML file (.musicxml, .xml or .mxl), as ImportMusicXml does. */
+    post: operations['UploadMusicXml'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/project/import/aaf': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Imports an AAF file from the server's disk (embedded or linked media, copied into the project) as audio tracks: an aafImport job, one undo step when it finishes. */
+    post: operations['ImportAaf'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/project/import/aaf/upload': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Imports an uploaded AAF file, as ImportAaf does (embedded media only: linked files stay behind). */
+    post: operations['UploadAaf'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/project/import/midi': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Imports a Standard MIDI File from the server's disk with options (tempo map, markers, merge): a midiImport job, one undo step when it finishes. */
+    post: operations['ImportMidi'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/project/import/midi/upload': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Imports an uploaded Standard MIDI File, as ImportMidi does; the options are query parameters (left out: MidiImportRequest's defaults). */
+    post: operations['UploadMidi'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
 }
 export type webhooks = Record<string, never>;
 export interface components {
   schemas: {
+    /**
+     * @description AAF export (`POST /project/export/aaf`, job `aafExport`): the audio tracks `trackIds` (null: every
+     *     audio track with regions) as one composition at the project's sample rate, with clips, offsets, gain, fades,
+     *     crossfades as transitions and the markers; `embedMedia` puts the audio in the file, else it is written as WAV
+     *     files in a folder beside it (`&lt;fileName&gt; Media`) that the file links to. `.aaf` added when missing.
+     */
+    AafExportRequest: {
+      fileName: string;
+      directory?: null | string;
+      trackIds?: null | string[];
+      /** @default true */
+      embedMedia: boolean;
+    };
+    /**
+     * @description AAF import (`POST /project/import/aaf`, job `aafImport`): each audio slot of the composition becomes an
+     *     audio track with its clips as regions (positions to the sample), embedded or linked media copied into the
+     *     project, and its markers.
+     */
+    AafImportRequest: {
+      path: string;
+    };
+    /** @enum {unknown} */
+    Accidental: 'natural' | 'sharp' | 'flat' | 'doubleSharp' | 'doubleFlat' | null;
     /**
      * @description Adds a loop to the open project, as one undoable step: at `tick` on `trackId` (left out: a new track
      *     of the loop's kind), or, with `cellSceneId`, into the Live Loops cell of `trackId` and that scene.
@@ -1579,6 +1789,11 @@ export interface components {
       curve: number;
     };
     /**
+     * @description A measure's closing barline.
+     * @enum {unknown}
+     */
+    Barline: 'single' | 'double' | 'final';
+    /**
      * @description Beat mapping: tick `tick` lands on project sample `sample` (the tempo events are set so that it does,
      *     keeping earlier mappings and the positions before them).
      */
@@ -1722,6 +1937,26 @@ export interface components {
       vcaId?: null | string;
       midiEffects: components['schemas']['Insert'][];
     };
+    /**
+     * @description A chord symbol on a track at project tick `tick`: its root, its quality as written after the root ("" major,
+     *     "m", "7", "maj7", "m7", "dim", "m7b5", "aug", "sus4", "6", "9"…; MusicXML's `kind` is derived from it),
+     *     an optional bass ("C/E"), and whether a chord grid (guitar diagram) is drawn with it.
+     */
+    ChordSymbol: {
+      id: string;
+      trackId: string;
+      /** Format: int64 */
+      tick: number;
+      root: components['schemas']['PitchName'];
+      quality: string;
+      bass: null | components['schemas']['PitchName'];
+      showGrid: boolean;
+    };
+    /**
+     * @description A staff's clef (docs/10-phase-9.md). The octave clefs read an octave below (8vb) or above (8va) the plain one.
+     * @enum {unknown}
+     */
+    Clef: 'treble' | 'bass' | 'alto' | 'tenor' | 'treble8vb' | 'treble8va' | 'bass8vb' | 'percussion' | 'none';
     /** @description Edits applied as one undo step; `label` names it in the undo history ("Move Region"). */
     CommandBatch: {
       commands: components['schemas']['EditCommand'][];
@@ -1948,7 +2183,18 @@ export interface components {
       | components['schemas']['DeltaOpArticulationSetUpserted']
       | components['schemas']['DeltaOpArticulationSetRemoved']
       | components['schemas']['DeltaOpLaneSetUpserted']
-      | components['schemas']['DeltaOpLaneSetRemoved'];
+      | components['schemas']['DeltaOpLaneSetRemoved']
+      | components['schemas']['DeltaOpStaffStyleUpserted']
+      | components['schemas']['DeltaOpStaffStyleRemoved']
+      | components['schemas']['DeltaOpScoreSymbolUpserted']
+      | components['schemas']['DeltaOpScoreSymbolRemoved']
+      | components['schemas']['DeltaOpLyricUpserted']
+      | components['schemas']['DeltaOpLyricRemoved']
+      | components['schemas']['DeltaOpChordSymbolUpserted']
+      | components['schemas']['DeltaOpChordSymbolRemoved']
+      | components['schemas']['DeltaOpScoreSetUpserted']
+      | components['schemas']['DeltaOpScoreSetRemoved']
+      | components['schemas']['DeltaOpScoreLayoutChanged'];
     DeltaOpArticulationSetRemoved: {
       /** @enum {string} */
       op: 'articulationSetRemoved';
@@ -1974,6 +2220,17 @@ export interface components {
       /** @enum {string} */
       op: 'automationLaneUpserted';
       lane: components['schemas']['AutomationLane'];
+    };
+    DeltaOpChordSymbolRemoved: {
+      /** @enum {string} */
+      op: 'chordSymbolRemoved';
+      id: string;
+    };
+    /** @description Phase 9: a chord symbol was added or changed. */
+    DeltaOpChordSymbolUpserted: {
+      /** @enum {string} */
+      op: 'chordSymbolUpserted';
+      chord: components['schemas']['ChordSymbol'];
     };
     DeltaOpGrooveRemoved: {
       /** @enum {string} */
@@ -2013,6 +2270,17 @@ export interface components {
       /** @enum {string} */
       op: 'liveLoopsChanged';
       liveLoops: components['schemas']['LiveLoopsGrid'];
+    };
+    DeltaOpLyricRemoved: {
+      /** @enum {string} */
+      op: 'lyricRemoved';
+      id: string;
+    };
+    /** @description Phase 9: a lyric syllable was added or changed. */
+    DeltaOpLyricUpserted: {
+      /** @enum {string} */
+      op: 'lyricUpserted';
+      lyric: components['schemas']['LyricSyllable'];
     };
     DeltaOpMarkerRemoved: {
       /** @enum {string} */
@@ -2072,6 +2340,34 @@ export interface components {
       op: 'regionUpserted';
       region: components['schemas']['AudioRegion'];
     };
+    /** @description Phase 9: the score layout changed. */
+    DeltaOpScoreLayoutChanged: {
+      /** @enum {string} */
+      op: 'scoreLayoutChanged';
+      layout: components['schemas']['ScoreLayout'];
+    };
+    DeltaOpScoreSetRemoved: {
+      /** @enum {string} */
+      op: 'scoreSetRemoved';
+      id: string;
+    };
+    /** @description Phase 9: a score set was added or changed. */
+    DeltaOpScoreSetUpserted: {
+      /** @enum {string} */
+      op: 'scoreSetUpserted';
+      set: components['schemas']['ScoreSet'];
+    };
+    DeltaOpScoreSymbolRemoved: {
+      /** @enum {string} */
+      op: 'scoreSymbolRemoved';
+      id: string;
+    };
+    /** @description Phase 9: a score symbol was added or changed. */
+    DeltaOpScoreSymbolUpserted: {
+      /** @enum {string} */
+      op: 'scoreSymbolUpserted';
+      symbol: components['schemas']['ScoreSymbol'];
+    };
     DeltaOpSectionRemoved: {
       /** @enum {string} */
       op: 'sectionRemoved';
@@ -2086,6 +2382,22 @@ export interface components {
       /** @enum {string} */
       op: 'settingsChanged';
       settings: components['schemas']['ProjectSettings'];
+    };
+    DeltaOpStaffStyleRemoved: {
+      /** @enum {string} */
+      op: 'staffStyleRemoved';
+      id: string;
+    };
+    /**
+     * @description Phase 9 (docs/10-phase-9.md): a project staff style was added or changed. The score content's deltas change
+     *     `Project.score`; a track's staff style comes as `trackUpserted`, a region's notation as
+     *     `midiRegionUpserted`. Score views are refetched (`GET /project/score`) after any of them, or after
+     *     notes, meter, key, tempo or markers change.
+     */
+    DeltaOpStaffStyleUpserted: {
+      /** @enum {string} */
+      op: 'staffStyleUpserted';
+      style: components['schemas']['StaffStyle'];
     };
     DeltaOpTakeFolderRemoved: {
       /** @enum {string} */
@@ -2130,6 +2442,18 @@ export interface components {
      */
     DrumMachine: {
       pads: components['schemas']['DrumPad'][];
+    };
+    /**
+     * @description A percussion staff's mapping of a MIDI pitch to a staff position (diatonic steps above the bottom line: 0 the
+     *     bottom line, 8 the top), a notehead and the instrument's name (for MusicXML and the staff style editor).
+     */
+    DrumMapEntry: {
+      /** Format: int32 */
+      pitch: number;
+      /** Format: int32 */
+      staffPosition: number;
+      notehead: components['schemas']['Notehead'];
+      name: string;
     };
     /** @description A pad of a Drum Machine Designer: note `note` (0…127) plays sub-track `trackId`. */
     DrumPad: {
@@ -2272,7 +2596,24 @@ export interface components {
       | components['schemas']['EditCommandSetFileVersionCommand']
       | components['schemas']['EditCommandSetScriptCommand']
       | components['schemas']['EditCommandSetSyncSettingsCommand']
-      | components['schemas']['EditCommandAddStemsCommand'];
+      | components['schemas']['EditCommandAddStemsCommand']
+      | components['schemas']['EditCommandSetStaffStyleCommand']
+      | components['schemas']['EditCommandDeleteStaffStyleCommand']
+      | components['schemas']['EditCommandAssignStaffStyleCommand']
+      | components['schemas']['EditCommandSetRegionNotationCommand']
+      | components['schemas']['EditCommandAddScoreSymbolsCommand']
+      | components['schemas']['EditCommandEditScoreSymbolsCommand']
+      | components['schemas']['EditCommandDeleteScoreSymbolsCommand']
+      | components['schemas']['EditCommandSetLyricsCommand']
+      | components['schemas']['EditCommandAddChordSymbolsCommand']
+      | components['schemas']['EditCommandEditChordSymbolsCommand']
+      | components['schemas']['EditCommandDeleteChordSymbolsCommand']
+      | components['schemas']['EditCommandSetScoreSetCommand']
+      | components['schemas']['EditCommandDeleteScoreSetCommand']
+      | components['schemas']['EditCommandSetScoreLayoutCommand']
+      | components['schemas']['EditCommandMoveScoreNotesCommand']
+      | components['schemas']['EditCommandAddScoreNoteCommand']
+      | components['schemas']['EditCommandImportTracksCommand'];
     /**
      * @description Sets the project's tempo events from an audio region's file tempo (analysed now if need be) over the region's
      *     range, and makes the region play unwarped there.
@@ -2289,6 +2630,12 @@ export interface components {
       /** Format: int32 */
       bus?: null | number;
       name?: null | string;
+    };
+    /** @description Phase 9: adds chord symbols to tracks that hold MIDI (alterations −2…2, ticks of 0 or more). */
+    EditCommandAddChordSymbolsCommand: {
+      /** @enum {string} */
+      type: 'addChordSymbols';
+      chords: components['schemas']['NewChordSymbol'][];
     };
     /** @description Adds controller events (Phase 7: of every ControlKind, poly pressure included). */
     EditCommandAddControlsCommand: {
@@ -2390,6 +2737,40 @@ export interface components {
       /** Format: int32 */
       index?: null | number;
     };
+    /**
+     * @description Phase 9, a score edit: inserts a note from the Part box at project tick `tick` (a display position) lasting
+     *     `lengthTicks`, on staff `staff` (0 the top of the track's style) at staff position
+     *     `staffPosition` (diatonic steps above the bottom line). Its pitch is the note of the key at that position
+     *     under the staff's clef, with `accidental` forcing the alteration, less the staff's transposition. It goes
+     *     into region `regionId`, else the track's region at the tick, else a new region of whole bars on the track;
+     *     velocity 80 unless given, channel 1.
+     */
+    EditCommandAddScoreNoteCommand: {
+      /** @enum {string} */
+      type: 'addScoreNote';
+      trackId: string;
+      /** Format: int64 */
+      tick: number;
+      /** Format: int64 */
+      lengthTicks: number;
+      /** Format: int32 */
+      staffPosition: number;
+      /**
+       * Format: int32
+       * @default 0
+       */
+      staff: number;
+      accidental?: null | components['schemas']['Accidental'];
+      /** Format: int32 */
+      velocity?: null | number;
+      regionId?: null | string;
+    };
+    /** @description Phase 9: adds score symbols (the new ones come back as `scoreSymbolUpserted`, with their ids). */
+    EditCommandAddScoreSymbolsCommand: {
+      /** @enum {string} */
+      type: 'addScoreSymbols';
+      symbols: components['schemas']['NewScoreSymbol'][];
+    };
     /** @description Adds an arrangement section; it must not overlap another. */
     EditCommandAddSectionCommand: {
       /** @enum {string} */
@@ -2460,6 +2841,16 @@ export interface components {
       type: 'assignArticulationSet';
       trackId: string;
       setId?: null | string;
+    };
+    /**
+     * @description Phase 9: gives instrument and external MIDI tracks a staff style (a factory id or one of the project's; null:
+     *     the default, `StaffStyleIds.Default`).
+     */
+    EditCommandAssignStaffStyleCommand: {
+      /** @enum {string} */
+      type: 'assignStaffStyle';
+      trackIds: string[];
+      styleId?: null | string;
     };
     /** @description Assigns a track to a VCA track, or removes it from its VCA (null). */
     EditCommandAssignVcaCommand: {
@@ -2538,6 +2929,11 @@ export interface components {
       type: 'deleteCells';
       cellIds: string[];
     };
+    EditCommandDeleteChordSymbolsCommand: {
+      /** @enum {string} */
+      type: 'deleteChordSymbols';
+      chordIds: string[];
+    };
     EditCommandDeleteControlsCommand: {
       /** @enum {string} */
       type: 'deleteControls';
@@ -2578,6 +2974,16 @@ export interface components {
       type: 'deleteRegions';
       regionIds: string[];
     };
+    EditCommandDeleteScoreSetCommand: {
+      /** @enum {string} */
+      type: 'deleteScoreSet';
+      setId: string;
+    };
+    EditCommandDeleteScoreSymbolsCommand: {
+      /** @enum {string} */
+      type: 'deleteScoreSymbols';
+      symbolIds: string[];
+    };
     /**
      * @description Deletes sections. With `removeContent`, also everything that starts in them, and later material closes the
      *     gap (Logic's "delete the section and its content").
@@ -2588,6 +2994,12 @@ export interface components {
       sectionIds: string[];
       /** @default false */
       removeContent: boolean;
+    };
+    /** @description Phase 9: removes a project staff style; tracks that used it return to the default (null). */
+    EditCommandDeleteStaffStyleCommand: {
+      /** @enum {string} */
+      type: 'deleteStaffStyle';
+      styleId: string;
     };
     /** @description Removes a take (and its comp segments) from a folder; the folder's last take cannot be removed. */
     EditCommandDeleteTakeCommand: {
@@ -2603,11 +3015,23 @@ export interface components {
       trackId: string;
       alternativeId: string;
     };
+    /** @description Phase 9: replaces chord symbols by id. */
+    EditCommandEditChordSymbolsCommand: {
+      /** @enum {string} */
+      type: 'editChordSymbols';
+      chords: components['schemas']['ChordSymbol'][];
+    };
     EditCommandEditNotesCommand: {
       /** @enum {string} */
       type: 'editNotes';
       regionId: string;
       changes: components['schemas']['NoteChange'][];
+    };
+    /** @description Phase 9: replaces score symbols by id (each checked as when added; the track stays). */
+    EditCommandEditScoreSymbolsCommand: {
+      /** @enum {string} */
+      type: 'editScoreSymbols';
+      symbols: components['schemas']['ScoreSymbol'][];
     };
     /** @description Replaces a take folder with regions playing its comp, crossfaded at the boundaries. */
     EditCommandFlattenTakeFolderCommand: {
@@ -2624,6 +3048,18 @@ export interface components {
       type: 'flexPitchToMidi';
       regionId: string;
       trackId?: null | string;
+    };
+    /**
+     * @description Phase 9, an interchange import's result (ImportedContent): adds its tracks after the project's
+     *     with their regions, staff styles and score content, gives every provisional id a real one (rewriting the
+     *     references), replaces the tempo map, signatures and keys it carries, and adds its markers, in one undo step. The
+     *     `musicXmlImport`, `aafImport` and `midiImport` jobs apply it after copying the media into the
+     *     project (undo leaves the files); clients do not send it.
+     */
+    EditCommandImportTracksCommand: {
+      /** @enum {string} */
+      type: 'importTracks';
+      content: components['schemas']['ImportedContent'];
     };
     /**
      * @description Glues regions of one track into one: MIDI regions merge their notes; audio regions only when they play one
@@ -2712,6 +3148,28 @@ export interface components {
       /** Format: int64 */
       startTick: number;
       trackId?: null | string;
+    };
+    /**
+     * @description Phase 9, a score edit: moves notes of region `regionId` by `steps` staff steps (each note's written
+     *     pitch to the note of the key at its position that many diatonic steps up, or down when negative; MIDI stays at
+     *     concert pitch, so the staff's transposition is undone) and its MIDI start by `ticks` (the editor sends a
+     *     multiple of the region's display grid). `accidental` forces the written alteration of the result
+     *     (modifier keys; null: the key's). Converted with the notation engine's staff positions
+     *     (`Anode.Notation.StaffPositions`) into the notes' pitch and start changes, as `editNotes` makes them.
+     */
+    EditCommandMoveScoreNotesCommand: {
+      /** @enum {string} */
+      type: 'moveScoreNotes';
+      regionId: string;
+      noteIds: number[];
+      /** Format: int32 */
+      steps: number;
+      /**
+       * Format: int64
+       * @default 0
+       */
+      ticks: number;
+      accidental?: null | components['schemas']['Accidental'];
     };
     /**
      * @description Moves (or with `copy`, copies) a section and everything that starts in it to `toTick`, which must be a
@@ -3092,6 +3550,17 @@ export interface components {
       quantize?: null | components['schemas']['LaunchQuantize'];
       shown?: null | boolean;
     };
+    /**
+     * @description Phase 9, lyrics entry: sets the syllables of notes in verse `verse` (1…8), each note once; a note's existing
+     *     syllable in the verse keeps its id, a new one gets one.
+     */
+    EditCommandSetLyricsCommand: {
+      /** @enum {string} */
+      type: 'setLyrics';
+      /** Format: int32 */
+      verse: number;
+      syllables: components['schemas']['LyricChange'][];
+    };
     EditCommandSetMarkerCommand: {
       /** @enum {string} */
       type: 'setMarker';
@@ -3262,6 +3731,24 @@ export interface components {
       /** Format: int32 */
       fineTune?: null | number;
     };
+    /**
+     * @description Phase 9: changes the score settings (RegionNotation) of MIDI regions; left-out properties stay.
+     *     Grids are 0 or divide a whole note (3840 ticks); `maxDots` 0…3.
+     */
+    EditCommandSetRegionNotationCommand: {
+      /** @enum {string} */
+      type: 'setRegionNotation';
+      regionIds: string[];
+      /** Format: int32 */
+      displayQuantizeTicks?: null | number;
+      /** Format: int32 */
+      tripletQuantizeTicks?: null | number;
+      interpretation?: null | boolean;
+      noOverlap?: null | boolean;
+      syncopation?: null | boolean;
+      /** Format: int32 */
+      maxDots?: null | number;
+    };
     /** @description Renames a scene, or moves it to `index`. */
     EditCommandSetSceneCommand: {
       /** @enum {string} */
@@ -3270,6 +3757,24 @@ export interface components {
       name?: null | string;
       /** Format: int32 */
       index?: null | number;
+    };
+    /**
+     * @description Phase 9: replaces the score layout (page 50…2000 mm a side, margins leaving at least half of it, staff height
+     *     2…20 mm, instrument names of existing tracks, each track once).
+     */
+    EditCommandSetScoreLayoutCommand: {
+      /** @enum {string} */
+      type: 'setScoreLayout';
+      layout: components['schemas']['ScoreLayout'];
+    };
+    /**
+     * @description Phase 9: adds a score set (an id the client chooses) or replaces the one with its id; its tracks exist, each
+     *     once. Removing a track removes it from the sets.
+     */
+    EditCommandSetScoreSetCommand: {
+      /** @enum {string} */
+      type: 'setScoreSet';
+      set: components['schemas']['ScoreSet'];
     };
     /**
      * @description Phase 7, Scripter: sets the script of MIDI FX slot `slotId` (an `anode.scripter` slot) of a track.
@@ -3362,6 +3867,16 @@ export interface components {
       mode?: null | components['schemas']['ProjectTempoMode'];
       defaultFollow?: null | components['schemas']['FlexFollow'];
       analyzeImports?: null | boolean;
+    };
+    /**
+     * @description Phase 9 (docs/10-phase-9.md): adds a staff style to the project or replaces the one with its id (an id the client
+     *     chooses, not starting `factory.`; 1…4 staves, splits descending with the last null, clefs, transpositions
+     *     −48…48, voices 1…4, grids 0 or a divisor of a whole note, a drum map only with a percussion staff).
+     */
+    EditCommandSetStaffStyleCommand: {
+      /** @enum {string} */
+      type: 'setStaffStyle';
+      style: components['schemas']['StaffStyle'];
     };
     /**
      * @description Changes a track's volume, pan, mute or solo, or the master's when `trackId` is left out. Members of the
@@ -3710,6 +4225,46 @@ export interface components {
     };
     /** Format: binary */
     IFormFile: string;
+    /**
+     * @description What an import adds, as the interchange readers make it: tracks (after the project's), the tempo map, signatures
+     *     and keys that replace the project's (null: kept), markers to add (provisional ids), and score content.
+     */
+    ImportedContent: {
+      tracks: components['schemas']['ImportedTrack'][];
+      tempoEvents?: null | components['schemas']['TempoEvent'][];
+      signatures?: null | components['schemas']['SignatureEvent'][];
+      keys?: null | components['schemas']['KeyEvent'][];
+      markers?: null | components['schemas']['Marker'][];
+      score: null | components['schemas']['ImportedScore'];
+    };
+    /**
+     * @description The score content an import adds: staff styles (provisional ids), symbols, lyrics and chord symbols (provisional
+     *     ids, referring to provisional track and note ids), and the title and composer (set in the layout when given and
+     *     the project's are empty).
+     */
+    ImportedScore: {
+      staffStyles: components['schemas']['StaffStyle'][];
+      symbols: components['schemas']['ScoreSymbol'][];
+      lyrics: components['schemas']['LyricSyllable'][];
+      chords: components['schemas']['ChordSymbol'][];
+      title?: null | string;
+      composer?: null | string;
+    };
+    /**
+     * @description A track an import adds. Its `id`, and every id in its regions (their `trackId` is ignored; note and
+     *     controller ids too), are provisional: unique within the ImportedContent, replaced by the model.
+     *     `kind` is `instrument` (MIDI regions, the default synth) or `audio` (audio regions, whose
+     *     `fileId` is a file of the project: the job adds the media first). `staffStyleId` is a factory style or
+     *     one of the content's score staff styles (null: the default).
+     */
+    ImportedTrack: {
+      id: string;
+      name: string;
+      kind: components['schemas']['TrackKind'];
+      staffStyleId?: null | string;
+      midiRegions: components['schemas']['MidiRegion'][];
+      regions: components['schemas']['AudioRegion'][];
+    };
     /** @description Import an audio file the server can read from its own disk (the desktop app, a headless box's library). */
     ImportFileRequest: {
       path: string;
@@ -3746,6 +4301,12 @@ export interface components {
     InstallPackRequest: {
       path: string;
     };
+    /** @description A track's instrument names in the score (full on the first system, short on the others). */
+    InstrumentName: {
+      trackId: string;
+      full: string;
+      short: string;
+    };
     /**
      * @description A track's instrument: the plugin, its parameter values by parameter id (all of them), and the file it loaded
      *     (a sampler's instrument), relative to the project folder when inside it. A plugin's opaque state lives in the
@@ -3781,7 +4342,20 @@ export interface components {
       files: string[];
     };
     /** @enum {unknown} */
-    JobKind: 'bounce' | 'freeze' | 'analyze' | 'bounceInPlace' | 'process' | 'audioEdit' | 'stemSplit';
+    JobKind:
+      | 'bounce'
+      | 'freeze'
+      | 'analyze'
+      | 'bounceInPlace'
+      | 'process'
+      | 'audioEdit'
+      | 'stemSplit'
+      | 'musicXmlExport'
+      | 'musicXmlImport'
+      | 'aafExport'
+      | 'aafImport'
+      | 'midiExport'
+      | 'midiImport';
     /** @enum {unknown} */
     JobState: 'queued' | 'running' | 'done' | 'failed' | 'cancelled';
     /** @description Key bindings by command id (`transport.play`); each binding like `Space` or `Meta+Shift+Z`. */
@@ -3961,6 +4535,29 @@ export interface components {
       /** Format: double */
       score: number;
     };
+    /** @description A note's syllable in a verse; an empty `text` removes the note's syllable there. */
+    LyricChange: {
+      /** Format: int64 */
+      noteId: number;
+      text: string;
+      syllabic: components['schemas']['Syllabic'];
+      /** @default false */
+      extender: boolean;
+    };
+    /**
+     * @description A lyric syllable on a note, in verse `verse` (1…): at most one per note and verse. `extender` draws
+     *     the line after a word's last syllable held over several notes. It follows its note and goes with it.
+     */
+    LyricSyllable: {
+      id: string;
+      /** Format: int64 */
+      noteId: number;
+      /** Format: int32 */
+      verse: number;
+      text: string;
+      syllabic: components['schemas']['Syllabic'];
+      extender: boolean;
+    };
     /** @description A marker: a named position, with an optional length, colour and text (Logic's Marker List). */
     Marker: {
       id: string;
@@ -3983,6 +4580,39 @@ export interface components {
       inputs: components['schemas']['MidiPort'][];
       outputs: components['schemas']['MidiPort'][];
     };
+    /**
+     * @description Standard MIDI File export (`POST /project/export/midi`, job `midiExport`) at 960 PPQ: `format` 0
+     *     (one track) or 1 (a tempo track, then one per track); the tempo map, signatures, keys, markers, track names, notes,
+     *     controllers, pitch bend and program changes of the MIDI tracks `trackIds` (null: every track with MIDI
+     *     regions), or of region `regionId` alone. `.mid` added when missing.
+     */
+    MidiExportRequest: {
+      fileName: string;
+      directory?: null | string;
+      /**
+       * Format: int32
+       * @default 1
+       */
+      format: number;
+      trackIds?: null | string[];
+      regionId?: null | string;
+    };
+    /**
+     * @description Standard MIDI File import as a job (`POST /project/import/midi`, job `midiImport`): with
+     *     `importTempo` the file's tempo map and signatures replace the project's; with `importMarkers` its
+     *     markers are added; each file track with events becomes an instrument track, or with `merge` all of them one.
+     *     (`POST /project/files/import-midi`, Phase 3, stays: it imports at once, with the tempo, one track per file
+     *     track.)
+     */
+    MidiImportRequest: {
+      path: string;
+      /** @default true */
+      importTempo: boolean;
+      /** @default true */
+      importMarkers: boolean;
+      /** @default false */
+      merge: boolean;
+    };
     /** @description Where a track takes live MIDI from: a device id (null: every device) and channel (0: all, else 1…16). */
     MidiInputSettings: {
       device?: null | string;
@@ -4003,7 +4633,8 @@ export interface components {
     /**
      * @description A MIDI region: it starts at `startTick` and lasts `lengthTicks`; its notes and controller events are
      *     positioned relative to its start (ticks at 960 PPQ). Events past the end do not play; a note that crosses the end
-     *     is cut there. `playback` holds the non-destructive region parameters.
+     *     is cut there. `playback` holds the non-destructive region parameters. `notation` (Phase 9,
+     *     docs/10-phase-9.md) holds its score settings: display quantise and interpretation.
      */
     MidiRegion: {
       id: string;
@@ -4017,6 +4648,7 @@ export interface components {
       notes: components['schemas']['Note'][];
       controls: components['schemas']['ControlEvent'][];
       muted: boolean;
+      notation: components['schemas']['RegionNotation'];
     };
     /**
      * @description A MIDI output (a `MidiPort.id`) that Anode sends sync to: MIDI Clock (24 ppq, Start, Stop, Continue, Song
@@ -4061,6 +4693,40 @@ export interface components {
      * @enum {unknown}
      */
     MtcFrameRate: 'fps24' | 'fps25' | 'fps2997Drop' | 'fps30';
+    /**
+     * @description MusicXML 4.0 export (`POST /project/export/musicxml`, job `musicXmlExport`): score set
+     *     `setId` (null: every MIDI track) as a partwise score, or one track's part (`partTrackId`);
+     *     `compressed` writes `.mxl` (with `META-INF/container.xml`), else `.musicxml`, the extension
+     *     added to `fileName` when missing.
+     */
+    MusicXmlExportRequest: {
+      fileName: string;
+      directory?: null | string;
+      setId?: null | string;
+      partTrackId?: null | string;
+      /** @default false */
+      compressed: boolean;
+    };
+    /**
+     * @description MusicXML import (`POST /project/import/musicxml`, job `musicXmlImport`): a `.musicxml`,
+     *     `.xml` or `.mxl` on the server's disk. Each part becomes an instrument track with a MIDI region, a
+     *     staff style for its clefs and transposition, and its symbols, lyrics and chord symbols; into an empty project
+     *     (no tracks) its tempo, meter and key changes replace the project's.
+     */
+    MusicXmlImportRequest: {
+      path: string;
+    };
+    /** @description A chord symbol to add (ChordSymbol without its id). */
+    NewChordSymbol: {
+      trackId: string;
+      /** Format: int64 */
+      tick: number;
+      root: components['schemas']['PitchName'];
+      quality: string;
+      bass: null | components['schemas']['PitchName'];
+      /** @default false */
+      showGrid: boolean;
+    };
     /** @description A controller event to add; `tick` relative to the region's start. */
     NewControlEvent: {
       kind: components['schemas']['ControlKind'];
@@ -4087,6 +4753,26 @@ export interface components {
       lengthTicks: number;
       /** Format: int32 */
       articulationId?: null | number;
+    };
+    /**
+     * @description A score symbol to add (ScoreSymbol without its id, which the server gives): its anchors as
+     *     `ScoreSymbols` says for its kind; notes of MIDI regions of `trackId`; ticks of 0 or more.
+     */
+    NewScoreSymbol: {
+      kind: components['schemas']['ScoreSymbolKind'];
+      trackId: string;
+      /** Format: int64 */
+      noteId?: null | number;
+      /** Format: int64 */
+      tick?: null | number;
+      /** Format: int64 */
+      endNoteId?: null | number;
+      /** Format: int64 */
+      endTick?: null | number;
+      text?: null | string;
+      placement?: null | components['schemas']['ScorePlacement'];
+      /** Format: int32 */
+      staff?: null | number;
     };
     /**
      * @default off
@@ -4131,6 +4817,25 @@ export interface components {
       /** Format: int32 */
       articulationId?: null | number;
     };
+    /**
+     * @description A notehead shape (a drum map's; every other note is `normal`).
+     * @enum {unknown}
+     */
+    Notehead: 'normal' | 'cross' | 'circleCross' | 'diamond' | 'triangle' | 'slash';
+    /**
+     * @description A note value (the undotted, untupled duration).
+     * @enum {unknown}
+     */
+    NoteValue:
+      | 'breve'
+      | 'whole'
+      | 'half'
+      | 'quarter'
+      | 'eighth'
+      | 'sixteenth'
+      | 'thirtySecond'
+      | 'sixtyFourth'
+      | 'hundredTwentyEighth';
     OpenProjectRequest: {
       path: string;
     };
@@ -4291,6 +4996,12 @@ export interface components {
     };
     /** @enum {unknown} */
     PdcMode: 'all' | 'tracks' | 'off';
+    /** @description A spelled pitch class: a step and an alteration in semitones (−2…2: double flat … double sharp). */
+    PitchName: {
+      step: components['schemas']['PitchStep'];
+      /** Format: int32 */
+      alter: number;
+    };
     /**
      * @description A Flex Pitch note of a region, over file frames `startFrame`…`endFrame`. Pitches are MIDI cents (6900
      *     is A4): the analysed `detectedCents` plays as `targetCents`. `drift` and `vibrato` scale the
@@ -4326,6 +5037,11 @@ export interface components {
       /** Format: double */
       confidence: number;
     };
+    /**
+     * @description A diatonic step, as MusicXML and MEI spell pitches.
+     * @enum {unknown}
+     */
+    PitchStep: 'c' | 'd' | 'e' | 'f' | 'g' | 'a' | 'b';
     /** @description Opens (or closes) a plugin's own editor window: an insert, or with no `insertId` the instrument. */
     PluginEditorRequest: {
       trackId?: null | string;
@@ -4408,7 +5124,8 @@ export interface components {
      *     the ETag; `dirty` says whether it has unsaved edits. Phase 6 (docs/07-phase-6.md): `patternRegions`
      *     are the Step Sequencer's regions; `liveLoops` is the Live Loops grid. Phase 7 (docs/08-phase-7.md):
      *     `grooves` are the project's groove templates, `articulationSets` its articulation sets and
-     *     `laneSets` its Step Editor lane sets.
+     *     `laneSets` its Step Editor lane sets. Phase 9 (docs/10-phase-9.md): `score` is its stored score content
+     *     (staff styles, symbols, lyrics, chord symbols, score sets, layout).
      */
     Project: {
       id: string;
@@ -4436,6 +5153,7 @@ export interface components {
       grooves: components['schemas']['GrooveTemplate'][];
       articulationSets: components['schemas']['ArticulationSet'][];
       laneSets: components['schemas']['LaneSet'][];
+      score: components['schemas']['ProjectScore'];
     };
     /** @description A saved alternative of the open project (Logic's project alternatives); one is current. */
     ProjectAlternative: {
@@ -4459,6 +5177,19 @@ export interface components {
       /** Format: int64 */
       revision: number;
       ops: components['schemas']['DeltaOp'][];
+    };
+    /**
+     * @description The project's stored score content (`Project.score`; docs/10-phase-9.md): its own staff styles, the
+     *     symbols, lyrics and chord symbols, the score sets and the layout. Everything else in a score is derived from the
+     *     MIDI each time (the score is a view).
+     */
+    ProjectScore: {
+      staffStyles: components['schemas']['StaffStyle'][];
+      symbols: components['schemas']['ScoreSymbol'][];
+      lyrics: components['schemas']['LyricSyllable'][];
+      chords: components['schemas']['ChordSymbol'][];
+      sets: components['schemas']['ScoreSet'][];
+      layout: components['schemas']['ScoreLayout'];
     };
     /**
      * @description Global settings. `tempo` and `signature` are the values at the project start (the first of
@@ -4516,6 +5247,26 @@ export interface components {
       punchOutTick: number;
     };
     /**
+     * @description A MIDI region's score settings (Logic's region parameters in the Score Editor's inspector): the display
+     *     quantise, a straight grid in ticks (240 a 1/16; 0: the track's staff style's grids) and a triplet grid
+     *     (160 a 1/16 triplet; 0: no triplets; used when the straight grid is not 0); `interpretation` shortens notes
+     *     to tidy rests and lengthens them over short gaps; `noOverlap` cuts a note where the next one starts (else
+     *     overlaps make voices or chords); `syncopation` shows syncopated notes undivided rather than tied across the
+     *     beat; `maxDots` (0…3) the most dots a value has before it is tied instead. Display quantise moves where
+     *     notes are drawn, never the notes.
+     */
+    RegionNotation: {
+      /** Format: int32 */
+      displayQuantizeTicks: number;
+      /** Format: int32 */
+      tripletQuantizeTicks: number;
+      interpretation: boolean;
+      noOverlap: boolean;
+      syncopation: boolean;
+      /** Format: int32 */
+      maxDots: number;
+    };
+    /**
      * @description How a MIDI region plays, without changing its notes (Logic's Region inspector): transpose in semitones,
      *     velocity offset (−127…127), quantise grid in ticks (0: off) with strength (0…1, 1 = all the way) and swing
      *     (0…1, 0 = straight; delays every second grid step by up to half a step). `grooveId` (Phase 7): it
@@ -4568,6 +5319,285 @@ export interface components {
     Scene: {
       id: string;
       name: string;
+    };
+    /**
+     * @description `GET /project/score`'s answer: the view and its MEI 5 text for Verovio, whose `xml:id`s are the
+     *                 ScoreIds of the view's elements.
+     */
+    ScoreDocument: {
+      view: components['schemas']['ScoreView'];
+      mei: string;
+    };
+    /** @description A written duration: the note value, its dots (0…3) and its tuplet, if any. */
+    ScoreDuration: {
+      value: components['schemas']['NoteValue'];
+      /** Format: int32 */
+      dots: number;
+      tuplet: null | components['schemas']['ScoreTuplet'];
+    };
+    /**
+     * @description A note, chord or rest of a voice. `id` is its element id (ScoreIds: a note's is its note's,
+     *     a chord's `c{lowest noteId}` with the segment suffix, a rest's string ScoreIds.Rest(string trackId, int measure, int staff, int voice, int index)). `tick` is
+     *     where it is drawn (a project tick, display-quantised) and `durationTicks` its written length (tuplets
+     *     included); `notes` low to high (empty for a rest); `beam` the beam group (1… within the measure's
+     *     voice; events with the same group are beamed; null: none); `symbolIds`, `lyricIds` and
+     *     `chordIds` the stored items drawn at it (note-attached ones on the note's first segment; positioned ones on
+     *     the event at or before their tick).
+     */
+    ScoreEvent: {
+      id: string;
+      kind: components['schemas']['ScoreEventKind'];
+      /** Format: int64 */
+      tick: number;
+      /** Format: int64 */
+      durationTicks: number;
+      duration: components['schemas']['ScoreDuration'];
+      notes: components['schemas']['ScoreNote'][];
+      stem: components['schemas']['StemDirection'];
+      /** Format: int32 */
+      beam?: null | number;
+      symbolIds: string[];
+      lyricIds: string[];
+      chordIds: string[];
+    };
+    /**
+     * @description What a score event is.
+     * @enum {unknown}
+     */
+    ScoreEventKind: 'note' | 'chord' | 'rest';
+    /** @description A key signature: sharps (positive) or flats (negative), −7…7, and the mode. */
+    ScoreKey: {
+      /** Format: int32 */
+      fifths: number;
+      mode: components['schemas']['KeyMode'];
+    };
+    /**
+     * @description The score's layout: the page in millimetres (portrait A4 by default), its margins, the staff height (the five
+     *     lines, mm), the title block, a header and footer printed on every page ("" for none), whether the full score
+     *     shows transposing instruments at written pitch (parts always do), and instrument names that differ from the
+     *     track's name (a track without one shows its name, full and short).
+     */
+    ScoreLayout: {
+      /** Format: double */
+      pageWidthMm: number;
+      /** Format: double */
+      pageHeightMm: number;
+      margins: components['schemas']['ScoreMargins'];
+      /** Format: double */
+      staffHeightMm: number;
+      title: string;
+      subtitle: string;
+      composer: string;
+      header: string;
+      footer: string;
+      transposingScore: boolean;
+      instrumentNames: components['schemas']['InstrumentName'][];
+    };
+    /** @description Page margins in millimetres. */
+    ScoreMargins: {
+      /** Format: double */
+      top: number;
+      /** Format: double */
+      bottom: number;
+      /** Format: double */
+      left: number;
+      /** Format: double */
+      right: number;
+    };
+    /**
+     * @description A measure, common to every part: its bar number (1…), start and length in project ticks, meter and key, whether
+     *     the meter and key are drawn here (the first measure and changes), its tempo marks and rehearsal marks, and its
+     *     closing barline.
+     */
+    ScoreMeasure: {
+      /** Format: int32 */
+      number: number;
+      /** Format: int64 */
+      startTick: number;
+      /** Format: int64 */
+      lengthTicks: number;
+      time: components['schemas']['TimeSignature'];
+      key: components['schemas']['ScoreKey'];
+      showTime: boolean;
+      showKey: boolean;
+      tempos: components['schemas']['ScoreTempoMark'][];
+      rehearsals: components['schemas']['ScoreRehearsal'][];
+      barline: components['schemas']['Barline'];
+    };
+    /**
+     * @description A note of a score event. `id` is its element id in the MEI (string ScoreIds.Note(long noteId, int segment = 1): the note's first
+     *     segment `n{noteId}`, a tied continuation `n{noteId}-{k}`). `pitch` is the concert MIDI pitch;
+     *     `written` the spelled pitch drawn (transposed when the view is); `staffPosition` its diatonic steps above
+     *     the bottom line (0 the bottom line, 8 the top; negative below); `accidental` the one drawn (null: none);
+     *     `tieStart` it is tied to the same note in the voice's next event, `tieStop` tied from the previous.
+     */
+    ScoreNote: {
+      id: string;
+      /** Format: int64 */
+      noteId: number;
+      /** Format: int32 */
+      pitch: number;
+      written: components['schemas']['ScorePitch'];
+      /** Format: int32 */
+      staffPosition: number;
+      accidental?: null | components['schemas']['Accidental'];
+      tieStart: boolean;
+      tieStop: boolean;
+      notehead: components['schemas']['Notehead'];
+    };
+    /**
+     * @description A track's part in the view: its names (from the layout, else the track's), its staff style and staves, the
+     *     transposition applied to its written pitches here (the staves' when the view is transposing, else 0), whether
+     *     its staves are braced, and one measure per `ScoreView.measures`, in order.
+     */
+    ScorePart: {
+      trackId: string;
+      name: string;
+      shortName: string;
+      staffStyleId: string;
+      /** Format: int32 */
+      transpose: number;
+      brace: boolean;
+      staves: components['schemas']['Staff'][];
+      measures: components['schemas']['ScorePartMeasure'][];
+    };
+    /** @description A part's measure: one entry per staff of the part, top to bottom. */
+    ScorePartMeasure: {
+      staves: components['schemas']['ScoreStaffMeasure'][];
+    };
+    /** @description A spelled written pitch: step, alteration (−2…2) and octave in scientific numbering (C4 is MIDI 60). */
+    ScorePitch: {
+      step: components['schemas']['PitchStep'];
+      /** Format: int32 */
+      alter: number;
+      /** Format: int32 */
+      octave: number;
+    };
+    /** @enum {unknown} */
+    ScorePlacement: 'above' | 'below' | null;
+    /** @description A project marker shown as a rehearsal mark at its tick. */
+    ScoreRehearsal: {
+      /** Format: int64 */
+      tick: number;
+      markerId: string;
+      text: string;
+    };
+    /** @description A score set (Logic's): a named selection of tracks, in score order; parts are extracted from it. */
+    ScoreSet: {
+      id: string;
+      name: string;
+      trackIds: string[];
+    };
+    /**
+     * @description A staff in a measure: a clef change at its start (in the first measure, the staff's clef; else null) and its
+     *     voices.
+     */
+    ScoreStaffMeasure: {
+      clef?: null | components['schemas']['Clef'];
+      voices: components['schemas']['ScoreVoice'][];
+    };
+    /**
+     * @description A score symbol of a track. Attached to a note (`noteId`, a note of one of the track's MIDI regions): it
+     *     follows the note and goes with it when the note is deleted (coming back on undo). Positioned: `tick` (a
+     *     project tick) on the track's staff `staff` (0 the top staff of its style; null: the notation engine's
+     *     choice). Spanning kinds end at `endNoteId` or `endTick`, the same kind of anchor as the start.
+     *     `text` for dynamic, text, tempo text and rehearsal; `placement` null is the engine's choice. Which kinds
+     *     take which anchors: `ScoreSymbols`.
+     */
+    ScoreSymbol: {
+      id: string;
+      kind: components['schemas']['ScoreSymbolKind'];
+      trackId: string;
+      /** Format: int64 */
+      noteId?: null | number;
+      /** Format: int64 */
+      tick?: null | number;
+      /** Format: int64 */
+      endNoteId?: null | number;
+      /** Format: int64 */
+      endTick?: null | number;
+      text?: null | string;
+      placement?: null | components['schemas']['ScorePlacement'];
+      /** Format: int32 */
+      staff?: null | number;
+    };
+    /**
+     * @description What a score symbol is (docs/10-phase-9.md, "Symbols").
+     * @enum {unknown}
+     */
+    ScoreSymbolKind:
+      | 'staccato'
+      | 'staccatissimo'
+      | 'accent'
+      | 'marcato'
+      | 'tenuto'
+      | 'fermata'
+      | 'trill'
+      | 'tieHidden'
+      | 'dynamic'
+      | 'text'
+      | 'tempoText'
+      | 'rehearsal'
+      | 'pedalDown'
+      | 'pedalUp'
+      | 'slur'
+      | 'crescendo'
+      | 'diminuendo'
+      | 'octaveUp'
+      | 'octaveDown';
+    /** @description A tempo mark: the project's tempo at a tick where it changes (and at the start). */
+    ScoreTempoMark: {
+      /** Format: int64 */
+      tick: number;
+      /** Format: double */
+      bpm: number;
+    };
+    /**
+     * @description A tuplet an event belongs to: `actual` notes in the time of `normal` (3:2 a triplet); the events of a
+     *     voice with the same `group` (1… within the measure's voice) form one bracket.
+     */
+    ScoreTuplet: {
+      /** Format: int32 */
+      group: number;
+      /** Format: int32 */
+      actual: number;
+      /** Format: int32 */
+      normal: number;
+    };
+    /**
+     * @description The rendered score (docs/adr/0011-notation-rendering.md): what the notation engine derives from the MIDI, the
+     *     staff styles, the regions' notation settings, the project's meter, key, tempo and markers, and the stored score
+     *     content, for a score set (`setId`; null: every track that holds MIDI, in track order) or one track's part
+     *     (`partTrackId`). `transposing`: written pitches include the staves' transposition (a part, or the full
+     *     score with `layout.transposingScore`). Measures cover the project start to the last bar with notes (at
+     *     least one). `symbols`, `lyrics` and `chords` are the stored items drawn in it. The same project
+     *     and request give the same view, byte for byte.
+     */
+    ScoreView: {
+      setId?: null | string;
+      partTrackId?: null | string;
+      mode: components['schemas']['ScoreViewMode'];
+      transposing: boolean;
+      layout: components['schemas']['ScoreLayout'];
+      measures: components['schemas']['ScoreMeasure'][];
+      parts: components['schemas']['ScorePart'][];
+      symbols: components['schemas']['ScoreSymbol'][];
+      lyrics: components['schemas']['LyricSyllable'][];
+      chords: components['schemas']['ChordSymbol'][];
+    };
+    /**
+     * @description The Score Editor's view: one long system (linear) or pages (page; the page breaks are Verovio's).
+     * @enum {unknown}
+     */
+    ScoreViewMode: 'linear' | 'page';
+    /**
+     * @description A voice of a staff in a measure (1… within the staff, 1 the upper), its events in time order filling the
+     *     measure.
+     */
+    ScoreVoice: {
+      /** Format: int32 */
+      number: number;
+      events: components['schemas']['ScoreEvent'][];
     };
     /**
      * @description A saved layout of the editor's windows (Logic's screensets), recalled with keys 1–9. `layout` is the
@@ -4675,6 +5705,46 @@ export interface components {
       defaultFollow: components['schemas']['FlexFollow'];
       analyzeImports: boolean;
     };
+    /**
+     * @description One staff of a staff style. `transpose` is in semitones, written = concert + transpose (B♭ clarinet +2, F
+     *     horn +7, alto sax +9); an octave clef's octave is the clef's, not part of it. With several staves (top to
+     *     bottom), a note goes to the first staff whose `splitPitch` (a concert MIDI pitch) it reaches; the last
+     *     staff's is null and takes the rest (one staff: null). `voices` (1…4) is the most voices the notation engine
+     *     makes on this staff from overlapping notes (1: overlaps become chords or are cut, as `noOverlap` says).
+     */
+    Staff: {
+      clef: components['schemas']['Clef'];
+      /** Format: int32 */
+      transpose: number;
+      /** Format: int32 */
+      splitPitch?: null | number;
+      /** Format: int32 */
+      voices: number;
+    };
+    /**
+     * @description A staff style (Logic's): one to four staves, the drum map of a percussion style (null otherwise; a note it does
+     *     not map is drawn at its pitch's position on a treble staff), the display quantise its tracks' regions use by
+     *     default (RegionNotation: a straight grid in ticks and a triplet grid, 0 for none), and whether its
+     *     staves are joined by a brace (piano) rather than a bracket. Factory styles (StaffStyleIds) are the
+     *     notation engine's data; a project's own are in `ProjectScore.staffStyles`, with ids chosen by the client
+     *     (not starting `factory.`).
+     */
+    StaffStyle: {
+      id: string;
+      name: string;
+      staves: components['schemas']['Staff'][];
+      drumMap?: null | components['schemas']['DrumMapEntry'][];
+      /** Format: int32 */
+      displayQuantizeTicks: number;
+      /** Format: int32 */
+      tripletQuantizeTicks: number;
+      brace: boolean;
+    };
+    /**
+     * @description A stem's direction; `none` for rests, whole notes and longer.
+     * @enum {unknown}
+     */
+    StemDirection: 'none' | 'up' | 'down';
     /** @description A stem file the Stem Splitter wrote and added to the project (an `AudioFile` id). */
     StemFile: {
       kind: components['schemas']['StemKind'];
@@ -4756,6 +5826,11 @@ export interface components {
       /** Format: int32 */
       bankOffset: number;
     };
+    /**
+     * @description A syllable's place in its word (MusicXML's and MEI's).
+     * @enum {unknown}
+     */
+    Syllabic: 'single' | 'begin' | 'middle' | 'end';
     /**
      * @description The project's synchronisation settings (`ProjectSettings.sync`, as in Logic): the source the transport
      *     follows; the destinations Anode sends MIDI Clock and MTC to; the MTC frame rate (sent and expected);
@@ -4862,7 +5937,8 @@ export interface components {
      *     (null until set up: the editor shows the 8-knob layout, unnamed, at 0 and unmapped, and the first Smart Controls
      *     command sets them up); `liveLoopsActive`: the track plays its Live Loops cells, not its Tracks-area
      *     regions. Phase 7: `matchGroove`: its quantise follows the groove track (`settings.grooveTrackId`);
-     *     `articulationSetId` is its articulation set (null: none).
+     *     `articulationSetId` is its articulation set (null: none). Phase 9: `staffStyleId` is its staff style
+     *     in the score (a factory id or one of `score.staffStyles`; null: `StaffStyleIds.Default`).
      */
     Track: {
       id: string;
@@ -4892,6 +5968,7 @@ export interface components {
       liveLoopsActive: boolean;
       matchGroove: boolean;
       articulationSetId?: null | string;
+      staffStyleId?: null | string;
     };
     /**
      * @description An inactive alternative of a track: a snapshot of its regions, MIDI regions and take folders. The track's live
@@ -8356,6 +9433,445 @@ export interface operations {
     requestBody: {
       content: {
         'application/json': components['schemas']['StemSplitRequest'];
+      };
+    };
+    responses: {
+      /** @description Accepted */
+      202: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Job'];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  GetScore: {
+    parameters: {
+      query?: {
+        set?: string;
+        part?: string;
+        view?: string;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ScoreDocument'];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  ListStaffStyles: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['StaffStyle'][];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  ExportMusicXml: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['MusicXmlExportRequest'];
+      };
+    };
+    responses: {
+      /** @description Accepted */
+      202: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Job'];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  ExportAaf: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['AafExportRequest'];
+      };
+    };
+    responses: {
+      /** @description Accepted */
+      202: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Job'];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  ExportMidi: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['MidiExportRequest'];
+      };
+    };
+    responses: {
+      /** @description Accepted */
+      202: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Job'];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  ImportMusicXml: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['MusicXmlImportRequest'];
+      };
+    };
+    responses: {
+      /** @description Accepted */
+      202: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Job'];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  UploadMusicXml: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'multipart/form-data': {
+          file: components['schemas']['IFormFile'];
+        };
+      };
+    };
+    responses: {
+      /** @description Accepted */
+      202: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Job'];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  ImportAaf: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['AafImportRequest'];
+      };
+    };
+    responses: {
+      /** @description Accepted */
+      202: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Job'];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  UploadAaf: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'multipart/form-data': {
+          file: components['schemas']['IFormFile'];
+        };
+      };
+    };
+    responses: {
+      /** @description Accepted */
+      202: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Job'];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  ImportMidi: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['MidiImportRequest'];
+      };
+    };
+    responses: {
+      /** @description Accepted */
+      202: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Job'];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  UploadMidi: {
+    parameters: {
+      query?: {
+        importTempo?: boolean;
+        importMarkers?: boolean;
+        merge?: boolean;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'multipart/form-data': {
+          file: components['schemas']['IFormFile'];
+        };
       };
     };
     responses: {

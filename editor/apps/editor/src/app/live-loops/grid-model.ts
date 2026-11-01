@@ -9,6 +9,7 @@ import type {
   PatternRegion,
   Track
 } from '@anode/api-client';
+import { DefaultRegionNotation } from '@anode/api-client';
 import type { MeterMap } from '@anode/timeline';
 import { NeutralPlayback } from '../midi/midi-math';
 import { defaultRow } from '../music/pattern';
@@ -160,6 +161,7 @@ export function midiContent(track: Track, lengthTicks: number): CellContent {
     startTick: 0,
     lengthTicks,
     playback: { ...NeutralPlayback },
+    notation: { ...DefaultRegionNotation },
     notes: [],
     controls: [],
     muted: false

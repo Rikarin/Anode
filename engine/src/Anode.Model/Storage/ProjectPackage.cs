@@ -811,6 +811,7 @@ public static class ProjectPackage {
     static MidiRegion Normalise(MidiRegion region) =>
         region with {
             Playback = region.Playback ?? ProjectDefaults.Playback,
+            Notation = region.Notation ?? ProjectDefaults.Notation,
             Notes = region.Notes ?? [],
             Controls = region.Controls ?? []
         };
@@ -895,6 +896,7 @@ public static class PackageMigrations {
         }
 
         json[VersionField] = CurrentSchemaVersion;
+        Phase9Fields.Fill(kind, json);
         return json;
     }
 
@@ -1092,6 +1094,46 @@ public static class PackageMigrations {
         }
 
         return json;
+    }
+}
+
+/// <summary>
+///     The Phase 9 fields (docs/10-phase-9.md) at their defaults where a file lacks them, so schema-8 packages read with
+///     the Phase 9 contracts: interim, until workstream B adds schema 9 and its migration from 8 (which replaces this,
+///     with the same defaults). Every MIDI region (on tracks, in track alternatives and in Live Loops cells) has
+///     <see cref="RegionNotation.Default" />; tracks have no staff style (null, left out) and the project's score
+///     content (not stored yet) is <see cref="ProjectScore.Empty" />. Leaves fields that are present alone.
+/// </summary>
+static class Phase9Fields {
+    public static void Fill(string kind, JsonObject json) {
+        if (kind == "project") {
+            foreach (var cell in (json["liveLoops"]?["cells"] as JsonArray ?? []).OfType<JsonObject>()) {
+                Notation(cell["content"]?["midi"] as JsonObject);
+            }
+        } else if (kind == "track") {
+            foreach (var alternative in (json["track"]?["alternatives"] as JsonArray ?? []).OfType<JsonObject>()) {
+                foreach (var region in (alternative["midiRegions"] as JsonArray ?? []).OfType<JsonObject>()) {
+                    Notation(region);
+                }
+            }
+
+            foreach (var region in (json["midiRegions"] as JsonArray ?? []).OfType<JsonObject>()) {
+                Notation(region);
+            }
+        }
+    }
+
+    static void Notation(JsonObject? region) {
+        if (region is not null) {
+            region["notation"] ??= new JsonObject {
+                ["displayQuantizeTicks"] = 0,
+                ["tripletQuantizeTicks"] = 0,
+                ["interpretation"] = true,
+                ["noOverlap"] = true,
+                ["syncopation"] = false,
+                ["maxDots"] = 1
+            };
+        }
     }
 }
 

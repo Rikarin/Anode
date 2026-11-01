@@ -207,6 +207,7 @@ public static partial class Edits {
             StartTick = 0,
             Name = Name(midi.Name ?? "MIDI", "region name"),
             Playback = midi.Playback ?? ProjectDefaults.Playback,
+            Notation = midi.Notation ?? ProjectDefaults.Notation,
             Notes = Sorted([..notes]),
             Controls = Sorted([..controls])
         };

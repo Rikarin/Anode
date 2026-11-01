@@ -326,7 +326,8 @@ public static partial class Edits {
                     ProjectDefaults.Playback,
                     Sorted(notes),
                     [],
-                    false
+                    false,
+                    ProjectDefaults.Notation
                 )
             )
         );

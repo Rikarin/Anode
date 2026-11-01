@@ -20,6 +20,8 @@ public static class AnodeApi {
         LoopsApi.Map(api);
         MidiEditApi.Map(api);
         ControlApi.Map(api);
+        ScoreApi.Map(api);
+        InterchangeApi.Map(api);
         RealtimeApi.Map(app);
     }
 }

@@ -99,7 +99,8 @@ public sealed class Phase7VectorTests {
                     ProjectDefaults.Playback,
                     Edits.Sorted(notes),
                     Edits.Sorted(controls),
-                    false
+                    false,
+                    ProjectDefaults.Notation
                 )
             )
         );

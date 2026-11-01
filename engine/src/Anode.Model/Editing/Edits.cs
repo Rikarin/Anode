@@ -119,6 +119,8 @@ public static partial class Edits {
         IAnalysisSource? analysis = null
     ) =>
         command switch {
+            // Region notation in a Live Loops cell's content: Phase 9, workstream B (docs/10-phase-9.md).
+            _ when UsesPhase9Fields(command) => throw Phase9Pending($"{command.GetType().Name} with Phase 9 fields"),
             AddTrackCommand c => AddTrack(state, c, ids, plugins),
             RemoveTrackCommand c => RemoveTrack(state, c),
             MoveTrackCommand c => MoveTrack(state, c),
@@ -203,6 +205,7 @@ public static partial class Edits {
                 ?? Phase6Ops(state, command, ids, plugins, patches ?? NoPatches.Instance)
                 ?? Phase7Ops(state, command, ids, analysis ?? NoAnalysis.Instance)
                 ?? Phase8Ops(state, command, ids, plugins)
+                ?? Phase9Ops(command)
                 ?? throw new EditException($"Unknown command {command.GetType().Name}.")
         };
 
@@ -273,6 +276,7 @@ public static partial class Edits {
             null,
             false,
             false,
+            null,
             null
         );
         return [new TrackUpserted(track, index)];

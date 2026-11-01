@@ -1,4 +1,4 @@
-import type { MidiRegion, Track } from '@anode/api-client';
+import { DefaultRegionNotation, type MidiRegion, type Track } from '@anode/api-client';
 import { ItemFlag } from '@anode/timeline';
 import { NeutralPlayback } from '../midi/midi-math';
 import { moveCommands, newMidiRegion, splitSpan, trimMidiEnd, trimMidiStart } from './region-edit';
@@ -94,6 +94,7 @@ describe('MIDI region edits in the Tracks area', () => {
       startTick: 960,
       lengthTicks: 3840,
       playback: { ...NeutralPlayback, transpose: 12 },
+      notation: { ...DefaultRegionNotation },
       notes: [{ id: 1, pitch: 60, velocity: 90, channel: 1, startTick: 0, lengthTicks: 480, articulationId: 0 }],
       controls: [],
       muted: false

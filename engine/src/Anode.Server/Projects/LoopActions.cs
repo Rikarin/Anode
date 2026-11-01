@@ -98,7 +98,8 @@ public sealed class LoopActions(
                             ProjectDefaults.Playback,
                             transposed,
                             controls,
-                            false
+                            false,
+                            ProjectDefaults.Notation
                         )
                     ),
                     loop.Name

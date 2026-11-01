@@ -13,8 +13,10 @@
     <Project Path="src/Anode.Engine/Anode.Engine.csproj"/>
     <Project Path="src/Anode.EngineHost/Anode.EngineHost.csproj"/>
     <Project Path="src/Anode.Host/Anode.Host.csproj"/>
+    <Project Path="src/Anode.Interchange/Anode.Interchange.csproj"/>
     <Project Path="src/Anode.Ipc/Anode.Ipc.csproj"/>
     <Project Path="src/Anode.Model/Anode.Model.csproj"/>
+    <Project Path="src/Anode.Notation/Anode.Notation.csproj"/>
     <Project Path="src/Anode.PluginSandbox/Anode.PluginSandbox.csproj"/>
     <Project Path="src/Anode.Plugins/Anode.Plugins.csproj"/>
     <Project Path="src/Anode.Server/Anode.Server.csproj"/>
@@ -24,7 +26,9 @@
     <Project Path="tests/Anode.Control.Tests/Anode.Control.Tests.csproj"/>
     <Project Path="tests/Anode.Dsp.Tests/Anode.Dsp.Tests.csproj"/>
     <Project Path="tests/Anode.Engine.Tests/Anode.Engine.Tests.csproj"/>
+    <Project Path="tests/Anode.Interchange.Tests/Anode.Interchange.Tests.csproj"/>
     <Project Path="tests/Anode.Model.Tests/Anode.Model.Tests.csproj"/>
+    <Project Path="tests/Anode.Notation.Tests/Anode.Notation.Tests.csproj"/>
     <Project Path="tests/Anode.Plugins.Tests/Anode.Plugins.Tests.csproj"/>
     <Project Path="tests/Anode.Server.Tests/Anode.Server.Tests.csproj"/>
     <Project Path="tests/Anode.Stems.Tests/Anode.Stems.Tests.csproj"/>

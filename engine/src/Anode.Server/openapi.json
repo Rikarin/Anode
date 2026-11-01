@@ -3721,10 +3721,598 @@
           }
         }
       }
+    },
+    "/api/v1/project/score": {
+      "get": {
+        "tags": [
+          "Score"
+        ],
+        "summary": "The rendered score and its MEI: score set \u0060set\u0060 (left out: every MIDI track), or track \u0060part\u0060\u0027s part alone, in the \u0060view\u0060 linear (the default) or page (a ScoreViewMode); 422 for an unknown set, track or view. Cached per project revision; the same project gives the same answer.",
+        "operationId": "GetScore",
+        "parameters": [
+          {
+            "name": "set",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "part",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "view",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScoreDocument"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/api/v1/library/staff-styles": {
+      "get": {
+        "tags": [
+          "Score"
+        ],
+        "summary": "The factory staff styles (StaffStyleIds), in library order; a project\u0027s own are in its score.",
+        "operationId": "ListStaffStyles",
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/StaffStyle"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/project/export/musicxml": {
+      "post": {
+        "tags": [
+          "Interchange"
+        ],
+        "summary": "Exports a score set or a part as MusicXML 4.0 (.musicxml, or .mxl compressed): a musicXmlExport job.",
+        "operationId": "ExportMusicXml",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MusicXmlExportRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Job"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/api/v1/project/export/aaf": {
+      "post": {
+        "tags": [
+          "Interchange"
+        ],
+        "summary": "Exports audio tracks as AAF, media embedded or linked (WAV files in a folder beside it): an aafExport job.",
+        "operationId": "ExportAaf",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AafExportRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Job"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/api/v1/project/export/midi": {
+      "post": {
+        "tags": [
+          "Interchange"
+        ],
+        "summary": "Exports the project, tracks or a region as a Standard MIDI File (type 0 or 1): a midiExport job.",
+        "operationId": "ExportMidi",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MidiExportRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Job"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/api/v1/project/import/musicxml": {
+      "post": {
+        "tags": [
+          "Interchange"
+        ],
+        "summary": "Imports a MusicXML file from the server\u0027s disk as tracks with their score symbols: a musicXmlImport job, one undo step when it finishes.",
+        "operationId": "ImportMusicXml",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MusicXmlImportRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Job"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/api/v1/project/import/musicxml/upload": {
+      "post": {
+        "tags": [
+          "Interchange"
+        ],
+        "summary": "Imports an uploaded MusicXML file (.musicxml, .xml or .mxl), as ImportMusicXml does.",
+        "operationId": "UploadMusicXml",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "required": [
+                  "file"
+                ],
+                "type": "object",
+                "properties": {
+                  "file": {
+                    "$ref": "#/components/schemas/IFormFile"
+                  }
+                }
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Job"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/api/v1/project/import/aaf": {
+      "post": {
+        "tags": [
+          "Interchange"
+        ],
+        "summary": "Imports an AAF file from the server\u0027s disk (embedded or linked media, copied into the project) as audio tracks: an aafImport job, one undo step when it finishes.",
+        "operationId": "ImportAaf",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AafImportRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Job"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/api/v1/project/import/aaf/upload": {
+      "post": {
+        "tags": [
+          "Interchange"
+        ],
+        "summary": "Imports an uploaded AAF file, as ImportAaf does (embedded media only: linked files stay behind).",
+        "operationId": "UploadAaf",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "required": [
+                  "file"
+                ],
+                "type": "object",
+                "properties": {
+                  "file": {
+                    "$ref": "#/components/schemas/IFormFile"
+                  }
+                }
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Job"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/api/v1/project/import/midi": {
+      "post": {
+        "tags": [
+          "Interchange"
+        ],
+        "summary": "Imports a Standard MIDI File from the server\u0027s disk with options (tempo map, markers, merge): a midiImport job, one undo step when it finishes.",
+        "operationId": "ImportMidi",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MidiImportRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Job"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/api/v1/project/import/midi/upload": {
+      "post": {
+        "tags": [
+          "Interchange"
+        ],
+        "summary": "Imports an uploaded Standard MIDI File, as ImportMidi does; the options are query parameters (left out: MidiImportRequest\u0027s defaults).",
+        "operationId": "UploadMidi",
+        "parameters": [
+          {
+            "name": "importTempo",
+            "in": "query",
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "importMarkers",
+            "in": "query",
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "merge",
+            "in": "query",
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "required": [
+                  "file"
+                ],
+                "type": "object",
+                "properties": {
+                  "file": {
+                    "$ref": "#/components/schemas/IFormFile"
+                  }
+                }
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Job"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
     }
   },
   "components": {
     "schemas": {
+      "AafExportRequest": {
+        "required": [
+          "fileName",
+          "embedMedia"
+        ],
+        "type": "object",
+        "properties": {
+          "fileName": {
+            "type": "string"
+          },
+          "directory": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "trackIds": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "type": "string"
+            }
+          },
+          "embedMedia": {
+            "type": "boolean",
+            "default": true
+          }
+        },
+        "description": "AAF export (\u0060POST /project/export/aaf\u0060, job \u0060aafExport\u0060): the audio tracks \u0060trackIds\u0060 (null: every\naudio track with regions) as one composition at the project\u0027s sample rate, with clips, offsets, gain, fades,\ncrossfades as transitions and the markers; \u0060embedMedia\u0060 puts the audio in the file, else it is written as WAV\nfiles in a folder beside it (\u0060\u0026lt;fileName\u0026gt; Media\u0060) that the file links to. \u0060.aaf\u0060 added when missing."
+      },
+      "AafImportRequest": {
+        "required": [
+          "path"
+        ],
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string"
+          }
+        },
+        "description": "AAF import (\u0060POST /project/import/aaf\u0060, job \u0060aafImport\u0060): each audio slot of the composition becomes an\naudio track with its clips as regions (positions to the sample), embedded or linked media copied into the\nproject, and its markers."
+      },
+      "Accidental": {
+        "enum": [
+          "natural",
+          "sharp",
+          "flat",
+          "doubleSharp",
+          "doubleFlat",
+          null
+        ]
+      },
       "AddLoopRequest": {
         "required": [
           "loopId",
@@ -4260,6 +4848,14 @@
         },
         "description": "A point of an automation lane, in the target\u0027s own unit; \u0060curve\u0060 \u22121\u20261 shapes the segment to the next."
       },
+      "Barline": {
+        "enum": [
+          "single",
+          "double",
+          "final"
+        ],
+        "description": "A measure\u0027s closing barline."
+      },
       "BeatMapping": {
         "required": [
           "tick",
@@ -4636,6 +5232,64 @@
           }
         },
         "description": "A channel strip: volume in dB (\u2212\u221E as \u2212144), pan \u22121 (left) \u2026 1 (right), mute and solo; its insert effects in\norder; its sends to buses; where it goes (\u0060output\u0060: \u0060master\u0060, \u0060bus:N\u0060 for bus 1\u202664, or\n\u0060output:N\u0060 for the device\u0027s stereo output pair N); the mixer groups it belongs to (1\u202632); and the VCA track\nthat offsets its volume, if any. The master strip uses only volume, pan, mute and its inserts. Phase 6:\n\u0060midiEffects\u0060 are its MIDI FX slots (instrument and external MIDI tracks only; empty elsewhere), in the\nsame shape as inserts: they run in slot order on the block\u0027s MIDI (regions, live and step input) before the\ninstrument; bypassed slots pass it through."
+      },
+      "ChordSymbol": {
+        "required": [
+          "id",
+          "trackId",
+          "tick",
+          "root",
+          "quality",
+          "bass",
+          "showGrid"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "trackId": {
+            "type": "string"
+          },
+          "tick": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "root": {
+            "$ref": "#/components/schemas/PitchName"
+          },
+          "quality": {
+            "type": "string"
+          },
+          "bass": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PitchName"
+              }
+            ]
+          },
+          "showGrid": {
+            "type": "boolean"
+          }
+        },
+        "description": "A chord symbol on a track at project tick \u0060tick\u0060: its root, its quality as written after the root (\u0022\u0022 major,\n\u0022m\u0022, \u00227\u0022, \u0022maj7\u0022, \u0022m7\u0022, \u0022dim\u0022, \u0022m7b5\u0022, \u0022aug\u0022, \u0022sus4\u0022, \u00226\u0022, \u00229\u0022\u2026; MusicXML\u0027s \u0060kind\u0060 is derived from it),\nan optional bass (\u0022C/E\u0022), and whether a chord grid (guitar diagram) is drawn with it."
+      },
+      "Clef": {
+        "enum": [
+          "treble",
+          "bass",
+          "alto",
+          "tenor",
+          "treble8vb",
+          "treble8va",
+          "bass8vb",
+          "percussion",
+          "none"
+        ],
+        "description": "A staff\u0027s clef (docs/10-phase-9.md). The octave clefs read an octave below (8vb) or above (8va) the plain one."
       },
       "CommandBatch": {
         "required": [
@@ -5255,6 +5909,39 @@
           },
           {
             "$ref": "#/components/schemas/DeltaOpLaneSetRemoved"
+          },
+          {
+            "$ref": "#/components/schemas/DeltaOpStaffStyleUpserted"
+          },
+          {
+            "$ref": "#/components/schemas/DeltaOpStaffStyleRemoved"
+          },
+          {
+            "$ref": "#/components/schemas/DeltaOpScoreSymbolUpserted"
+          },
+          {
+            "$ref": "#/components/schemas/DeltaOpScoreSymbolRemoved"
+          },
+          {
+            "$ref": "#/components/schemas/DeltaOpLyricUpserted"
+          },
+          {
+            "$ref": "#/components/schemas/DeltaOpLyricRemoved"
+          },
+          {
+            "$ref": "#/components/schemas/DeltaOpChordSymbolUpserted"
+          },
+          {
+            "$ref": "#/components/schemas/DeltaOpChordSymbolRemoved"
+          },
+          {
+            "$ref": "#/components/schemas/DeltaOpScoreSetUpserted"
+          },
+          {
+            "$ref": "#/components/schemas/DeltaOpScoreSetRemoved"
+          },
+          {
+            "$ref": "#/components/schemas/DeltaOpScoreLayoutChanged"
           }
         ],
         "discriminator": {
@@ -5289,7 +5976,18 @@
             "articulationSetUpserted": "#/components/schemas/DeltaOpArticulationSetUpserted",
             "articulationSetRemoved": "#/components/schemas/DeltaOpArticulationSetRemoved",
             "laneSetUpserted": "#/components/schemas/DeltaOpLaneSetUpserted",
-            "laneSetRemoved": "#/components/schemas/DeltaOpLaneSetRemoved"
+            "laneSetRemoved": "#/components/schemas/DeltaOpLaneSetRemoved",
+            "staffStyleUpserted": "#/components/schemas/DeltaOpStaffStyleUpserted",
+            "staffStyleRemoved": "#/components/schemas/DeltaOpStaffStyleRemoved",
+            "scoreSymbolUpserted": "#/components/schemas/DeltaOpScoreSymbolUpserted",
+            "scoreSymbolRemoved": "#/components/schemas/DeltaOpScoreSymbolRemoved",
+            "lyricUpserted": "#/components/schemas/DeltaOpLyricUpserted",
+            "lyricRemoved": "#/components/schemas/DeltaOpLyricRemoved",
+            "chordSymbolUpserted": "#/components/schemas/DeltaOpChordSymbolUpserted",
+            "chordSymbolRemoved": "#/components/schemas/DeltaOpChordSymbolRemoved",
+            "scoreSetUpserted": "#/components/schemas/DeltaOpScoreSetUpserted",
+            "scoreSetRemoved": "#/components/schemas/DeltaOpScoreSetRemoved",
+            "scoreLayoutChanged": "#/components/schemas/DeltaOpScoreLayoutChanged"
           }
         }
       },
@@ -5378,6 +6076,41 @@
             "$ref": "#/components/schemas/AutomationLane"
           }
         }
+      },
+      "DeltaOpChordSymbolRemoved": {
+        "required": [
+          "id",
+          "op"
+        ],
+        "properties": {
+          "op": {
+            "enum": [
+              "chordSymbolRemoved"
+            ],
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          }
+        }
+      },
+      "DeltaOpChordSymbolUpserted": {
+        "required": [
+          "chord",
+          "op"
+        ],
+        "properties": {
+          "op": {
+            "enum": [
+              "chordSymbolUpserted"
+            ],
+            "type": "string"
+          },
+          "chord": {
+            "$ref": "#/components/schemas/ChordSymbol"
+          }
+        },
+        "description": "Phase 9: a chord symbol was added or changed."
       },
       "DeltaOpGrooveRemoved": {
         "required": [
@@ -5501,6 +6234,41 @@
           }
         },
         "description": "The Live Loops grid changed: its scenes, cells, quantise or visibility (the whole grid)."
+      },
+      "DeltaOpLyricRemoved": {
+        "required": [
+          "id",
+          "op"
+        ],
+        "properties": {
+          "op": {
+            "enum": [
+              "lyricRemoved"
+            ],
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          }
+        }
+      },
+      "DeltaOpLyricUpserted": {
+        "required": [
+          "lyric",
+          "op"
+        ],
+        "properties": {
+          "op": {
+            "enum": [
+              "lyricUpserted"
+            ],
+            "type": "string"
+          },
+          "lyric": {
+            "$ref": "#/components/schemas/LyricSyllable"
+          }
+        },
+        "description": "Phase 9: a lyric syllable was added or changed."
       },
       "DeltaOpMarkerRemoved": {
         "required": [
@@ -5692,6 +6460,94 @@
           }
         }
       },
+      "DeltaOpScoreLayoutChanged": {
+        "required": [
+          "layout",
+          "op"
+        ],
+        "properties": {
+          "op": {
+            "enum": [
+              "scoreLayoutChanged"
+            ],
+            "type": "string"
+          },
+          "layout": {
+            "$ref": "#/components/schemas/ScoreLayout"
+          }
+        },
+        "description": "Phase 9: the score layout changed."
+      },
+      "DeltaOpScoreSetRemoved": {
+        "required": [
+          "id",
+          "op"
+        ],
+        "properties": {
+          "op": {
+            "enum": [
+              "scoreSetRemoved"
+            ],
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          }
+        }
+      },
+      "DeltaOpScoreSetUpserted": {
+        "required": [
+          "set",
+          "op"
+        ],
+        "properties": {
+          "op": {
+            "enum": [
+              "scoreSetUpserted"
+            ],
+            "type": "string"
+          },
+          "set": {
+            "$ref": "#/components/schemas/ScoreSet"
+          }
+        },
+        "description": "Phase 9: a score set was added or changed."
+      },
+      "DeltaOpScoreSymbolRemoved": {
+        "required": [
+          "id",
+          "op"
+        ],
+        "properties": {
+          "op": {
+            "enum": [
+              "scoreSymbolRemoved"
+            ],
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          }
+        }
+      },
+      "DeltaOpScoreSymbolUpserted": {
+        "required": [
+          "symbol",
+          "op"
+        ],
+        "properties": {
+          "op": {
+            "enum": [
+              "scoreSymbolUpserted"
+            ],
+            "type": "string"
+          },
+          "symbol": {
+            "$ref": "#/components/schemas/ScoreSymbol"
+          }
+        },
+        "description": "Phase 9: a score symbol was added or changed."
+      },
       "DeltaOpSectionRemoved": {
         "required": [
           "id",
@@ -5742,6 +6598,41 @@
             "$ref": "#/components/schemas/ProjectSettings"
           }
         }
+      },
+      "DeltaOpStaffStyleRemoved": {
+        "required": [
+          "id",
+          "op"
+        ],
+        "properties": {
+          "op": {
+            "enum": [
+              "staffStyleRemoved"
+            ],
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          }
+        }
+      },
+      "DeltaOpStaffStyleUpserted": {
+        "required": [
+          "style",
+          "op"
+        ],
+        "properties": {
+          "op": {
+            "enum": [
+              "staffStyleUpserted"
+            ],
+            "type": "string"
+          },
+          "style": {
+            "$ref": "#/components/schemas/StaffStyle"
+          }
+        },
+        "description": "Phase 9 (docs/10-phase-9.md): a project staff style was added or changed. The score content\u0027s deltas change\n\u0060Project.score\u0060; a track\u0027s staff style comes as \u0060trackUpserted\u0060, a region\u0027s notation as\n\u0060midiRegionUpserted\u0060. Score views are refetched (\u0060GET /project/score\u0060) after any of them, or after\nnotes, meter, key, tempo or markers change."
       },
       "DeltaOpTakeFolderRemoved": {
         "required": [
@@ -5864,6 +6755,32 @@
           }
         },
         "description": "A Drum Machine Designer (docs/07-phase-6.md): the track is a stack whose members are its pads, each an instrument\ntrack with its own channel strip; \u0060pads\u0060 (at most one per note, sorted by note) map a note to a pad. The\nDMD track\u0027s region and pattern notes are routed to the pad tracks by note (live MIDI too, by the host), their\nnote numbers unchanged: a pad plays its own sound whatever the note (the Drum Synth ignores pitch; a Quick\nSampler pad has key follow off and plays at its root)."
+      },
+      "DrumMapEntry": {
+        "required": [
+          "pitch",
+          "staffPosition",
+          "notehead",
+          "name"
+        ],
+        "type": "object",
+        "properties": {
+          "pitch": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "staffPosition": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "notehead": {
+            "$ref": "#/components/schemas/Notehead"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "description": "A percussion staff\u0027s mapping of a MIDI pitch to a staff position (diatonic steps above the bottom line: 0 the\nbottom line, 8 the top), a notehead and the instrument\u0027s name (for MusicXML and the staff style editor)."
       },
       "DrumPad": {
         "required": [
@@ -6281,6 +7198,57 @@
           },
           {
             "$ref": "#/components/schemas/EditCommandAddStemsCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandSetStaffStyleCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandDeleteStaffStyleCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandAssignStaffStyleCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandSetRegionNotationCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandAddScoreSymbolsCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandEditScoreSymbolsCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandDeleteScoreSymbolsCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandSetLyricsCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandAddChordSymbolsCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandEditChordSymbolsCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandDeleteChordSymbolsCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandSetScoreSetCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandDeleteScoreSetCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandSetScoreLayoutCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandMoveScoreNotesCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandAddScoreNoteCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandImportTracksCommand"
           }
         ],
         "description": "An edit of the open project (docs/adr/0004-state-ownership.md). A batch of them is applied atomically as one\nundo step. Optional properties left out are left unchanged.",
@@ -6416,7 +7384,24 @@
             "setFileVersion": "#/components/schemas/EditCommandSetFileVersionCommand",
             "setScript": "#/components/schemas/EditCommandSetScriptCommand",
             "setSyncSettings": "#/components/schemas/EditCommandSetSyncSettingsCommand",
-            "addStems": "#/components/schemas/EditCommandAddStemsCommand"
+            "addStems": "#/components/schemas/EditCommandAddStemsCommand",
+            "setStaffStyle": "#/components/schemas/EditCommandSetStaffStyleCommand",
+            "deleteStaffStyle": "#/components/schemas/EditCommandDeleteStaffStyleCommand",
+            "assignStaffStyle": "#/components/schemas/EditCommandAssignStaffStyleCommand",
+            "setRegionNotation": "#/components/schemas/EditCommandSetRegionNotationCommand",
+            "addScoreSymbols": "#/components/schemas/EditCommandAddScoreSymbolsCommand",
+            "editScoreSymbols": "#/components/schemas/EditCommandEditScoreSymbolsCommand",
+            "deleteScoreSymbols": "#/components/schemas/EditCommandDeleteScoreSymbolsCommand",
+            "setLyrics": "#/components/schemas/EditCommandSetLyricsCommand",
+            "addChordSymbols": "#/components/schemas/EditCommandAddChordSymbolsCommand",
+            "editChordSymbols": "#/components/schemas/EditCommandEditChordSymbolsCommand",
+            "deleteChordSymbols": "#/components/schemas/EditCommandDeleteChordSymbolsCommand",
+            "setScoreSet": "#/components/schemas/EditCommandSetScoreSetCommand",
+            "deleteScoreSet": "#/components/schemas/EditCommandDeleteScoreSetCommand",
+            "setScoreLayout": "#/components/schemas/EditCommandSetScoreLayoutCommand",
+            "moveScoreNotes": "#/components/schemas/EditCommandMoveScoreNotesCommand",
+            "addScoreNote": "#/components/schemas/EditCommandAddScoreNoteCommand",
+            "importTracks": "#/components/schemas/EditCommandImportTracksCommand"
           }
         }
       },
@@ -6464,6 +7449,27 @@
           }
         },
         "description": "Adds an aux track listening to bus \u0060bus\u0060 (the lowest unused bus when left out)."
+      },
+      "EditCommandAddChordSymbolsCommand": {
+        "required": [
+          "chords",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "addChordSymbols"
+            ],
+            "type": "string"
+          },
+          "chords": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/NewChordSymbol"
+            }
+          }
+        },
+        "description": "Phase 9: adds chord symbols to tracks that hold MIDI (alterations \u22122\u20262, ticks of 0 or more)."
       },
       "EditCommandAddControlsCommand": {
         "required": [
@@ -6773,6 +7779,89 @@
         },
         "description": "Adds an empty scene to the Live Loops grid at \u0060index\u0060 (the end when left out)."
       },
+      "EditCommandAddScoreNoteCommand": {
+        "required": [
+          "trackId",
+          "tick",
+          "lengthTicks",
+          "staffPosition",
+          "type",
+          "staff"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "addScoreNote"
+            ],
+            "type": "string"
+          },
+          "trackId": {
+            "type": "string"
+          },
+          "tick": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "lengthTicks": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "staffPosition": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "staff": {
+            "type": "integer",
+            "format": "int32",
+            "default": 0
+          },
+          "accidental": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/Accidental"
+              }
+            ]
+          },
+          "velocity": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int32"
+          },
+          "regionId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        },
+        "description": "Phase 9, a score edit: inserts a note from the Part box at project tick \u0060tick\u0060 (a display position) lasting\n\u0060lengthTicks\u0060, on staff \u0060staff\u0060 (0 the top of the track\u0027s style) at staff position\n\u0060staffPosition\u0060 (diatonic steps above the bottom line). Its pitch is the note of the key at that position\nunder the staff\u0027s clef, with \u0060accidental\u0060 forcing the alteration, less the staff\u0027s transposition. It goes\ninto region \u0060regionId\u0060, else the track\u0027s region at the tick, else a new region of whole bars on the track;\nvelocity 80 unless given, channel 1."
+      },
+      "EditCommandAddScoreSymbolsCommand": {
+        "required": [
+          "symbols",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "addScoreSymbols"
+            ],
+            "type": "string"
+          },
+          "symbols": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/NewScoreSymbol"
+            }
+          }
+        },
+        "description": "Phase 9: adds score symbols (the new ones come back as \u0060scoreSymbolUpserted\u0060, with their ids)."
+      },
       "EditCommandAddSectionCommand": {
         "required": [
           "name",
@@ -6985,6 +8074,33 @@
         },
         "description": "Phase 7: gives an instrument or external MIDI track an articulation set of the project (null: none)."
       },
+      "EditCommandAssignStaffStyleCommand": {
+        "required": [
+          "trackIds",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "assignStaffStyle"
+            ],
+            "type": "string"
+          },
+          "trackIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "styleId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        },
+        "description": "Phase 9: gives instrument and external MIDI tracks a staff style (a factory id or one of the project\u0027s; null:\nthe default, \u0060StaffStyleIds.Default\u0060)."
+      },
       "EditCommandAssignVcaCommand": {
         "required": [
           "trackId",
@@ -7196,6 +8312,26 @@
           }
         }
       },
+      "EditCommandDeleteChordSymbolsCommand": {
+        "required": [
+          "chordIds",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "deleteChordSymbols"
+            ],
+            "type": "string"
+          },
+          "chordIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
       "EditCommandDeleteControlsCommand": {
         "required": [
           "regionId",
@@ -7340,6 +8476,43 @@
           }
         }
       },
+      "EditCommandDeleteScoreSetCommand": {
+        "required": [
+          "setId",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "deleteScoreSet"
+            ],
+            "type": "string"
+          },
+          "setId": {
+            "type": "string"
+          }
+        }
+      },
+      "EditCommandDeleteScoreSymbolsCommand": {
+        "required": [
+          "symbolIds",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "deleteScoreSymbols"
+            ],
+            "type": "string"
+          },
+          "symbolIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
       "EditCommandDeleteSectionsCommand": {
         "required": [
           "sectionIds",
@@ -7365,6 +8538,24 @@
           }
         },
         "description": "Deletes sections. With \u0060removeContent\u0060, also everything that starts in them, and later material closes the\ngap (Logic\u0027s \u0022delete the section and its content\u0022)."
+      },
+      "EditCommandDeleteStaffStyleCommand": {
+        "required": [
+          "styleId",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "deleteStaffStyle"
+            ],
+            "type": "string"
+          },
+          "styleId": {
+            "type": "string"
+          }
+        },
+        "description": "Phase 9: removes a project staff style; tracks that used it return to the default (null)."
       },
       "EditCommandDeleteTakeCommand": {
         "required": [
@@ -7410,6 +8601,27 @@
         },
         "description": "Deletes a track alternative with its content; deleting the active one selects another first."
       },
+      "EditCommandEditChordSymbolsCommand": {
+        "required": [
+          "chords",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "editChordSymbols"
+            ],
+            "type": "string"
+          },
+          "chords": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ChordSymbol"
+            }
+          }
+        },
+        "description": "Phase 9: replaces chord symbols by id."
+      },
       "EditCommandEditNotesCommand": {
         "required": [
           "regionId",
@@ -7433,6 +8645,27 @@
             }
           }
         }
+      },
+      "EditCommandEditScoreSymbolsCommand": {
+        "required": [
+          "symbols",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "editScoreSymbols"
+            ],
+            "type": "string"
+          },
+          "symbols": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ScoreSymbol"
+            }
+          }
+        },
+        "description": "Phase 9: replaces score symbols by id (each checked as when added; the track stays)."
       },
       "EditCommandFlattenTakeFolderCommand": {
         "required": [
@@ -7475,6 +8708,24 @@
           }
         },
         "description": "Makes a MIDI region of an audio region\u0027s pitch notes (their target pitches, at the times they play) on\n\u0060trackId\u0060, or on a new instrument track under the region\u0027s when left out."
+      },
+      "EditCommandImportTracksCommand": {
+        "required": [
+          "content",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "importTracks"
+            ],
+            "type": "string"
+          },
+          "content": {
+            "$ref": "#/components/schemas/ImportedContent"
+          }
+        },
+        "description": "Phase 9, an interchange import\u0027s result (ImportedContent): adds its tracks after the project\u0027s\nwith their regions, staff styles and score content, gives every provisional id a real one (rewriting the\nreferences), replaces the tempo map, signatures and keys it carries, and adds its markers, in one undo step. The\n\u0060musicXmlImport\u0060, \u0060aafImport\u0060 and \u0060midiImport\u0060 jobs apply it after copying the media into the\nproject (undo leaves the files); clients do not send it."
       },
       "EditCommandJoinRegionsCommand": {
         "required": [
@@ -7704,6 +8955,53 @@
           }
         },
         "description": "Moves a region (audio, MIDI, pattern, or a take folder) in time, and to another track of a kind that can hold it\nwhen \u0060trackId\u0060 is given. \u0060deleteRegions\u0060 and \u0060copyRegions\u0060 also take every kind;\n\u0060splitRegion\u0060 takes audio and MIDI."
+      },
+      "EditCommandMoveScoreNotesCommand": {
+        "required": [
+          "regionId",
+          "noteIds",
+          "steps",
+          "type",
+          "ticks"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "moveScoreNotes"
+            ],
+            "type": "string"
+          },
+          "regionId": {
+            "type": "string"
+          },
+          "noteIds": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          "steps": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "ticks": {
+            "type": "integer",
+            "format": "int64",
+            "default": 0
+          },
+          "accidental": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/Accidental"
+              }
+            ]
+          }
+        },
+        "description": "Phase 9, a score edit: moves notes of region \u0060regionId\u0060 by \u0060steps\u0060 staff steps (each note\u0027s written\npitch to the note of the key at its position that many diatonic steps up, or down when negative; MIDI stays at\nconcert pitch, so the staff\u0027s transposition is undone) and its MIDI start by \u0060ticks\u0060 (the editor sends a\nmultiple of the region\u0027s display grid). \u0060accidental\u0060 forces the written alteration of the result\n(modifier keys; null: the key\u0027s). Converted with the notation engine\u0027s staff positions\n(\u0060Anode.Notation.StaffPositions\u0060) into the notes\u0027 pitch and start changes, as \u0060editNotes\u0060 makes them."
       },
       "EditCommandMoveSectionCommand": {
         "required": [
@@ -8819,6 +10117,32 @@
         },
         "description": "Sets the Live Loops grid\u0027s launch quantise, or shows or hides it."
       },
+      "EditCommandSetLyricsCommand": {
+        "required": [
+          "verse",
+          "syllables",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "setLyrics"
+            ],
+            "type": "string"
+          },
+          "verse": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "syllables": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LyricChange"
+            }
+          }
+        },
+        "description": "Phase 9, lyrics entry: sets the syllables of notes in verse \u0060verse\u0060 (1\u20268), each note once; a note\u0027s existing\nsyllable in the verse keeps its id, a new one gets one."
+      },
       "EditCommandSetMarkerCommand": {
         "required": [
           "markerId",
@@ -9397,6 +10721,66 @@
         },
         "description": "Sets an audio region\u0027s Flex \u0026amp; Follow, transpose (semitones) or fine tune (cents). A transpose or fine tune\nneeds Flex or Follow (the track\u0027s flex on, or a \u0060follow\u0060 other than \u0060off\u0060), else 422."
       },
+      "EditCommandSetRegionNotationCommand": {
+        "required": [
+          "regionIds",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "setRegionNotation"
+            ],
+            "type": "string"
+          },
+          "regionIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "displayQuantizeTicks": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int32"
+          },
+          "tripletQuantizeTicks": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int32"
+          },
+          "interpretation": {
+            "type": [
+              "null",
+              "boolean"
+            ]
+          },
+          "noOverlap": {
+            "type": [
+              "null",
+              "boolean"
+            ]
+          },
+          "syncopation": {
+            "type": [
+              "null",
+              "boolean"
+            ]
+          },
+          "maxDots": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int32"
+          }
+        },
+        "description": "Phase 9: changes the score settings (RegionNotation) of MIDI regions; left-out properties stay.\nGrids are 0 or divide a whole note (3840 ticks); \u0060maxDots\u0060 0\u20263."
+      },
       "EditCommandSetSceneCommand": {
         "required": [
           "sceneId",
@@ -9427,6 +10811,42 @@
           }
         },
         "description": "Renames a scene, or moves it to \u0060index\u0060."
+      },
+      "EditCommandSetScoreLayoutCommand": {
+        "required": [
+          "layout",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "setScoreLayout"
+            ],
+            "type": "string"
+          },
+          "layout": {
+            "$ref": "#/components/schemas/ScoreLayout"
+          }
+        },
+        "description": "Phase 9: replaces the score layout (page 50\u20262000 mm a side, margins leaving at least half of it, staff height\n2\u202620 mm, instrument names of existing tracks, each track once)."
+      },
+      "EditCommandSetScoreSetCommand": {
+        "required": [
+          "set",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "setScoreSet"
+            ],
+            "type": "string"
+          },
+          "set": {
+            "$ref": "#/components/schemas/ScoreSet"
+          }
+        },
+        "description": "Phase 9: adds a score set (an id the client chooses) or replaces the one with its id; its tracks exist, each\nonce. Removing a track removes it from the sets."
       },
       "EditCommandSetScriptCommand": {
         "required": [
@@ -9722,6 +11142,24 @@
           }
         },
         "description": "Sets the project tempo mode, the follow new audio regions get, or whether imports are analysed."
+      },
+      "EditCommandSetStaffStyleCommand": {
+        "required": [
+          "style",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "setStaffStyle"
+            ],
+            "type": "string"
+          },
+          "style": {
+            "$ref": "#/components/schemas/StaffStyle"
+          }
+        },
+        "description": "Phase 9 (docs/10-phase-9.md): adds a staff style to the project or replaces the one with its id (an id the client\nchooses, not starting \u0060factory.\u0060; 1\u20264 staves, splits descending with the last null, clefs, transpositions\n\u221248\u202648, voices 1\u20264, grids 0 or a divisor of a whole note, a drum map only with a percussion staff)."
       },
       "EditCommandSetStripCommand": {
         "required": [
@@ -10747,6 +12185,156 @@
         "type": "string",
         "format": "binary"
       },
+      "ImportedContent": {
+        "required": [
+          "tracks",
+          "score"
+        ],
+        "type": "object",
+        "properties": {
+          "tracks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ImportedTrack"
+            }
+          },
+          "tempoEvents": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/TempoEvent"
+            }
+          },
+          "signatures": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/SignatureEvent"
+            }
+          },
+          "keys": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/KeyEvent"
+            }
+          },
+          "markers": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/Marker"
+            }
+          },
+          "score": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ImportedScore"
+              }
+            ]
+          }
+        },
+        "description": "What an import adds, as the interchange readers make it: tracks (after the project\u0027s), the tempo map, signatures\nand keys that replace the project\u0027s (null: kept), markers to add (provisional ids), and score content."
+      },
+      "ImportedScore": {
+        "required": [
+          "staffStyles",
+          "symbols",
+          "lyrics",
+          "chords"
+        ],
+        "type": "object",
+        "properties": {
+          "staffStyles": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StaffStyle"
+            }
+          },
+          "symbols": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ScoreSymbol"
+            }
+          },
+          "lyrics": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LyricSyllable"
+            }
+          },
+          "chords": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ChordSymbol"
+            }
+          },
+          "title": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "composer": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        },
+        "description": "The score content an import adds: staff styles (provisional ids), symbols, lyrics and chord symbols (provisional\nids, referring to provisional track and note ids), and the title and composer (set in the layout when given and\nthe project\u0027s are empty)."
+      },
+      "ImportedTrack": {
+        "required": [
+          "id",
+          "name",
+          "kind",
+          "midiRegions",
+          "regions"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/TrackKind"
+          },
+          "staffStyleId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "midiRegions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MidiRegion"
+            }
+          },
+          "regions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AudioRegion"
+            }
+          }
+        },
+        "description": "A track an import adds. Its \u0060id\u0060, and every id in its regions (their \u0060trackId\u0060 is ignored; note and\ncontroller ids too), are provisional: unique within the ImportedContent, replaced by the model.\n\u0060kind\u0060 is \u0060instrument\u0060 (MIDI regions, the default synth) or \u0060audio\u0060 (audio regions, whose\n\u0060fileId\u0060 is a file of the project: the job adds the media first). \u0060staffStyleId\u0060 is a factory style or\none of the content\u0027s score staff styles (null: the default)."
+      },
       "ImportFileRequest": {
         "required": [
           "path"
@@ -10836,6 +12424,26 @@
           }
         },
         "description": "Installs a \u0060.anodepack\u0060 from the server\u0027s disk (replacing an installed version of the same pack)."
+      },
+      "InstrumentName": {
+        "required": [
+          "trackId",
+          "full",
+          "short"
+        ],
+        "type": "object",
+        "properties": {
+          "trackId": {
+            "type": "string"
+          },
+          "full": {
+            "type": "string"
+          },
+          "short": {
+            "type": "string"
+          }
+        },
+        "description": "A track\u0027s instrument names in the score (full on the first system, short on the others)."
       },
       "InstrumentSlot": {
         "required": [
@@ -10958,7 +12566,13 @@
           "bounceInPlace",
           "process",
           "audioEdit",
-          "stemSplit"
+          "stemSplit",
+          "musicXmlExport",
+          "musicXmlImport",
+          "aafExport",
+          "aafImport",
+          "midiExport",
+          "midiImport"
         ]
       },
       "JobState": {
@@ -11460,6 +13074,66 @@
         },
         "description": "A loop found by loop search: frames \u0060startFrame\u0060\u2026\u0060endFrame\u0060 (exclusive), and how seamlessly it\nrepeats (\u0060score\u0060 0\u20261, 1 best). Results come best first."
       },
+      "LyricChange": {
+        "required": [
+          "noteId",
+          "text",
+          "syllabic",
+          "extender"
+        ],
+        "type": "object",
+        "properties": {
+          "noteId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "text": {
+            "type": "string"
+          },
+          "syllabic": {
+            "$ref": "#/components/schemas/Syllabic"
+          },
+          "extender": {
+            "type": "boolean",
+            "default": false
+          }
+        },
+        "description": "A note\u0027s syllable in a verse; an empty \u0060text\u0060 removes the note\u0027s syllable there."
+      },
+      "LyricSyllable": {
+        "required": [
+          "id",
+          "noteId",
+          "verse",
+          "text",
+          "syllabic",
+          "extender"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "noteId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "verse": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "text": {
+            "type": "string"
+          },
+          "syllabic": {
+            "$ref": "#/components/schemas/Syllabic"
+          },
+          "extender": {
+            "type": "boolean"
+          }
+        },
+        "description": "A lyric syllable on a note, in verse \u0060verse\u0060 (1\u2026): at most one per note and verse. \u0060extender\u0060 draws\nthe line after a word\u0027s last syllable held over several notes. It follows its note and goes with it."
+      },
       "Marker": {
         "required": [
           "id",
@@ -11538,6 +13212,72 @@
           }
         }
       },
+      "MidiExportRequest": {
+        "required": [
+          "fileName",
+          "format"
+        ],
+        "type": "object",
+        "properties": {
+          "fileName": {
+            "type": "string"
+          },
+          "directory": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "format": {
+            "type": "integer",
+            "format": "int32",
+            "default": 1
+          },
+          "trackIds": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "type": "string"
+            }
+          },
+          "regionId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        },
+        "description": "Standard MIDI File export (\u0060POST /project/export/midi\u0060, job \u0060midiExport\u0060) at 960 PPQ: \u0060format\u0060 0\n(one track) or 1 (a tempo track, then one per track); the tempo map, signatures, keys, markers, track names, notes,\ncontrollers, pitch bend and program changes of the MIDI tracks \u0060trackIds\u0060 (null: every track with MIDI\nregions), or of region \u0060regionId\u0060 alone. \u0060.mid\u0060 added when missing."
+      },
+      "MidiImportRequest": {
+        "required": [
+          "path",
+          "importTempo",
+          "importMarkers",
+          "merge"
+        ],
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "importTempo": {
+            "type": "boolean",
+            "default": true
+          },
+          "importMarkers": {
+            "type": "boolean",
+            "default": true
+          },
+          "merge": {
+            "type": "boolean",
+            "default": false
+          }
+        },
+        "description": "Standard MIDI File import as a job (\u0060POST /project/import/midi\u0060, job \u0060midiImport\u0060): with\n\u0060importTempo\u0060 the file\u0027s tempo map and signatures replace the project\u0027s; with \u0060importMarkers\u0060 its\nmarkers are added; each file track with events becomes an instrument track, or with \u0060merge\u0060 all of them one.\n(\u0060POST /project/files/import-midi\u0060, Phase 3, stays: it imports at once, with the tempo, one track per file\ntrack.)"
+      },
       "MidiInputSettings": {
         "required": [
           "channel"
@@ -11600,7 +13340,8 @@
           "playback",
           "notes",
           "controls",
-          "muted"
+          "muted",
+          "notation"
         ],
         "type": "object",
         "properties": {
@@ -11638,9 +13379,12 @@
           },
           "muted": {
             "type": "boolean"
+          },
+          "notation": {
+            "$ref": "#/components/schemas/RegionNotation"
           }
         },
-        "description": "A MIDI region: it starts at \u0060startTick\u0060 and lasts \u0060lengthTicks\u0060; its notes and controller events are\npositioned relative to its start (ticks at 960 PPQ). Events past the end do not play; a note that crosses the end\nis cut there. \u0060playback\u0060 holds the non-destructive region parameters."
+        "description": "A MIDI region: it starts at \u0060startTick\u0060 and lasts \u0060lengthTicks\u0060; its notes and controller events are\npositioned relative to its start (ticks at 960 PPQ). Events past the end do not play; a note that crosses the end\nis cut there. \u0060playback\u0060 holds the non-destructive region parameters. \u0060notation\u0060 (Phase 9,\ndocs/10-phase-9.md) holds its score settings: display quantise and interpretation."
       },
       "MidiSyncDestination": {
         "required": [
@@ -11738,6 +13482,94 @@
         ],
         "description": "An MTC frame rate."
       },
+      "MusicXmlExportRequest": {
+        "required": [
+          "fileName",
+          "compressed"
+        ],
+        "type": "object",
+        "properties": {
+          "fileName": {
+            "type": "string"
+          },
+          "directory": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "setId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "partTrackId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "compressed": {
+            "type": "boolean",
+            "default": false
+          }
+        },
+        "description": "MusicXML 4.0 export (\u0060POST /project/export/musicxml\u0060, job \u0060musicXmlExport\u0060): score set\n\u0060setId\u0060 (null: every MIDI track) as a partwise score, or one track\u0027s part (\u0060partTrackId\u0060);\n\u0060compressed\u0060 writes \u0060.mxl\u0060 (with \u0060META-INF/container.xml\u0060), else \u0060.musicxml\u0060, the extension\nadded to \u0060fileName\u0060 when missing."
+      },
+      "MusicXmlImportRequest": {
+        "required": [
+          "path"
+        ],
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string"
+          }
+        },
+        "description": "MusicXML import (\u0060POST /project/import/musicxml\u0060, job \u0060musicXmlImport\u0060): a \u0060.musicxml\u0060,\n\u0060.xml\u0060 or \u0060.mxl\u0060 on the server\u0027s disk. Each part becomes an instrument track with a MIDI region, a\nstaff style for its clefs and transposition, and its symbols, lyrics and chord symbols; into an empty project\n(no tracks) its tempo, meter and key changes replace the project\u0027s."
+      },
+      "NewChordSymbol": {
+        "required": [
+          "trackId",
+          "tick",
+          "root",
+          "quality",
+          "bass",
+          "showGrid"
+        ],
+        "type": "object",
+        "properties": {
+          "trackId": {
+            "type": "string"
+          },
+          "tick": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "root": {
+            "$ref": "#/components/schemas/PitchName"
+          },
+          "quality": {
+            "type": "string"
+          },
+          "bass": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PitchName"
+              }
+            ]
+          },
+          "showGrid": {
+            "type": "boolean",
+            "default": false
+          }
+        },
+        "description": "A chord symbol to add (ChordSymbol without its id)."
+      },
       "NewControlEvent": {
         "required": [
           "kind",
@@ -11809,6 +13641,73 @@
           }
         },
         "description": "A note to add; positions relative to the region\u0027s start; \u0060articulationId\u0060 left out: 0 (none)."
+      },
+      "NewScoreSymbol": {
+        "required": [
+          "kind",
+          "trackId"
+        ],
+        "type": "object",
+        "properties": {
+          "kind": {
+            "$ref": "#/components/schemas/ScoreSymbolKind"
+          },
+          "trackId": {
+            "type": "string"
+          },
+          "noteId": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int64"
+          },
+          "tick": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int64"
+          },
+          "endNoteId": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int64"
+          },
+          "endTick": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int64"
+          },
+          "text": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "placement": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ScorePlacement"
+              }
+            ]
+          },
+          "staff": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int32"
+          }
+        },
+        "description": "A score symbol to add (ScoreSymbol without its id, which the server gives): its anchors as\n\u0060ScoreSymbols\u0060 says for its kind; notes of MIDI regions of \u0060trackId\u0060; ticks of 0 or more."
       },
       "NormalizeMode": {
         "enum": [
@@ -11915,6 +13814,31 @@
           }
         },
         "description": "Changes to one note; left-out properties stay. \u0060articulationId\u0060 0 clears its articulation."
+      },
+      "Notehead": {
+        "enum": [
+          "normal",
+          "cross",
+          "circleCross",
+          "diamond",
+          "triangle",
+          "slash"
+        ],
+        "description": "A notehead shape (a drum map\u0027s; every other note is \u0060normal\u0060)."
+      },
+      "NoteValue": {
+        "enum": [
+          "breve",
+          "whole",
+          "half",
+          "quarter",
+          "eighth",
+          "sixteenth",
+          "thirtySecond",
+          "sixtyFourth",
+          "hundredTwentyEighth"
+        ],
+        "description": "A note value (the undotted, untupled duration)."
       },
       "OpenProjectRequest": {
         "required": [
@@ -12318,6 +14242,23 @@
           "off"
         ]
       },
+      "PitchName": {
+        "required": [
+          "step",
+          "alter"
+        ],
+        "type": "object",
+        "properties": {
+          "step": {
+            "$ref": "#/components/schemas/PitchStep"
+          },
+          "alter": {
+            "type": "integer",
+            "format": "int32"
+          }
+        },
+        "description": "A spelled pitch class: a step and an alteration in semitones (\u22122\u20262: double flat \u2026 double sharp)."
+      },
       "PitchNote": {
         "required": [
           "startFrame",
@@ -12393,6 +14334,18 @@
           }
         },
         "description": "A stable voiced run of a file\u0027s pitch curve, in file frames, at \u0060cents\u0060 (MIDI cents)."
+      },
+      "PitchStep": {
+        "enum": [
+          "c",
+          "d",
+          "e",
+          "f",
+          "g",
+          "a",
+          "b"
+        ],
+        "description": "A diatonic step, as MusicXML and MEI spell pitches."
       },
       "PluginEditorRequest": {
         "required": [
@@ -12643,7 +14596,8 @@
           "liveLoops",
           "grooves",
           "articulationSets",
-          "laneSets"
+          "laneSets",
+          "score"
         ],
         "type": "object",
         "properties": {
@@ -12756,9 +14710,12 @@
             "items": {
               "$ref": "#/components/schemas/LaneSet"
             }
+          },
+          "score": {
+            "$ref": "#/components/schemas/ProjectScore"
           }
         },
-        "description": "The open project (docs/01-implementation-plan.md \u00A75). Musical positions are ticks at 960 PPQ; audio offsets,\nlengths and fades are frames at the project\u0027s \u0060sampleRate\u0060. \u0060revision\u0060 grows with every edit and is\nthe ETag; \u0060dirty\u0060 says whether it has unsaved edits. Phase 6 (docs/07-phase-6.md): \u0060patternRegions\u0060\nare the Step Sequencer\u0027s regions; \u0060liveLoops\u0060 is the Live Loops grid. Phase 7 (docs/08-phase-7.md):\n\u0060grooves\u0060 are the project\u0027s groove templates, \u0060articulationSets\u0060 its articulation sets and\n\u0060laneSets\u0060 its Step Editor lane sets."
+        "description": "The open project (docs/01-implementation-plan.md \u00A75). Musical positions are ticks at 960 PPQ; audio offsets,\nlengths and fades are frames at the project\u0027s \u0060sampleRate\u0060. \u0060revision\u0060 grows with every edit and is\nthe ETag; \u0060dirty\u0060 says whether it has unsaved edits. Phase 6 (docs/07-phase-6.md): \u0060patternRegions\u0060\nare the Step Sequencer\u0027s regions; \u0060liveLoops\u0060 is the Live Loops grid. Phase 7 (docs/08-phase-7.md):\n\u0060grooves\u0060 are the project\u0027s groove templates, \u0060articulationSets\u0060 its articulation sets and\n\u0060laneSets\u0060 its Step Editor lane sets. Phase 9 (docs/10-phase-9.md): \u0060score\u0060 is its stored score content\n(staff styles, symbols, lyrics, chord symbols, score sets, layout)."
       },
       "ProjectAlternative": {
         "required": [
@@ -12821,6 +14778,53 @@
           }
         },
         "description": "What changed between two revisions of the open project (docs/adr/0004-state-ownership.md). Clients apply the\noperations in order; a client that misses a revision refetches the project."
+      },
+      "ProjectScore": {
+        "required": [
+          "staffStyles",
+          "symbols",
+          "lyrics",
+          "chords",
+          "sets",
+          "layout"
+        ],
+        "type": "object",
+        "properties": {
+          "staffStyles": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StaffStyle"
+            }
+          },
+          "symbols": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ScoreSymbol"
+            }
+          },
+          "lyrics": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LyricSyllable"
+            }
+          },
+          "chords": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ChordSymbol"
+            }
+          },
+          "sets": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ScoreSet"
+            }
+          },
+          "layout": {
+            "$ref": "#/components/schemas/ScoreLayout"
+          }
+        },
+        "description": "The project\u0027s stored score content (\u0060Project.score\u0060; docs/10-phase-9.md): its own staff styles, the\nsymbols, lyrics and chord symbols, the score sets and the layout. Everything else in a score is derived from the\nMIDI each time (the score is a view)."
       },
       "ProjectSettings": {
         "required": [
@@ -12965,6 +14969,41 @@
           }
         },
         "description": "How recording works: cycle recording mode; replace mode (a recording removes what it covers on its track); and\nautopunch, which records only between \u0060punchInTick\u0060 and \u0060punchOutTick\u0060 while playback continues around\nthem."
+      },
+      "RegionNotation": {
+        "required": [
+          "displayQuantizeTicks",
+          "tripletQuantizeTicks",
+          "interpretation",
+          "noOverlap",
+          "syncopation",
+          "maxDots"
+        ],
+        "type": "object",
+        "properties": {
+          "displayQuantizeTicks": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "tripletQuantizeTicks": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "interpretation": {
+            "type": "boolean"
+          },
+          "noOverlap": {
+            "type": "boolean"
+          },
+          "syncopation": {
+            "type": "boolean"
+          },
+          "maxDots": {
+            "type": "integer",
+            "format": "int32"
+          }
+        },
+        "description": "A MIDI region\u0027s score settings (Logic\u0027s region parameters in the Score Editor\u0027s inspector): the display\nquantise, a straight grid in ticks (240 a 1/16; 0: the track\u0027s staff style\u0027s grids) and a triplet grid\n(160 a 1/16 triplet; 0: no triplets; used when the straight grid is not 0); \u0060interpretation\u0060 shortens notes\nto tidy rests and lengthens them over short gaps; \u0060noOverlap\u0060 cuts a note where the next one starts (else\noverlaps make voices or chords); \u0060syncopation\u0060 shows syncopated notes undivided rather than tied across the\nbeat; \u0060maxDots\u0060 (0\u20263) the most dots a value has before it is tied instead. Display quantise moves where\nnotes are drawn, never the notes."
       },
       "RegionPlayback": {
         "required": [
@@ -13121,6 +15160,730 @@
           }
         },
         "description": "A row of the Live Loops grid."
+      },
+      "ScoreDocument": {
+        "required": [
+          "view",
+          "mei"
+        ],
+        "type": "object",
+        "properties": {
+          "view": {
+            "$ref": "#/components/schemas/ScoreView"
+          },
+          "mei": {
+            "type": "string"
+          }
+        },
+        "description": "\u0060GET /project/score\u0060\u0027s answer: the view and its MEI 5 text for Verovio, whose \u0060xml:id\u0060s are the\n            ScoreIds of the view\u0027s elements."
+      },
+      "ScoreDuration": {
+        "required": [
+          "value",
+          "dots",
+          "tuplet"
+        ],
+        "type": "object",
+        "properties": {
+          "value": {
+            "$ref": "#/components/schemas/NoteValue"
+          },
+          "dots": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "tuplet": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ScoreTuplet"
+              }
+            ]
+          }
+        },
+        "description": "A written duration: the note value, its dots (0\u20263) and its tuplet, if any."
+      },
+      "ScoreEvent": {
+        "required": [
+          "id",
+          "kind",
+          "tick",
+          "durationTicks",
+          "duration",
+          "notes",
+          "stem",
+          "symbolIds",
+          "lyricIds",
+          "chordIds"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/ScoreEventKind"
+          },
+          "tick": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "durationTicks": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "duration": {
+            "$ref": "#/components/schemas/ScoreDuration"
+          },
+          "notes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ScoreNote"
+            }
+          },
+          "stem": {
+            "$ref": "#/components/schemas/StemDirection"
+          },
+          "beam": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int32"
+          },
+          "symbolIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "lyricIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "chordIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "description": "A note, chord or rest of a voice. \u0060id\u0060 is its element id (ScoreIds: a note\u0027s is its note\u0027s,\na chord\u0027s \u0060c{lowest noteId}\u0060 with the segment suffix, a rest\u0027s string ScoreIds.Rest(string trackId, int measure, int staff, int voice, int index)). \u0060tick\u0060 is\nwhere it is drawn (a project tick, display-quantised) and \u0060durationTicks\u0060 its written length (tuplets\nincluded); \u0060notes\u0060 low to high (empty for a rest); \u0060beam\u0060 the beam group (1\u2026 within the measure\u0027s\nvoice; events with the same group are beamed; null: none); \u0060symbolIds\u0060, \u0060lyricIds\u0060 and\n\u0060chordIds\u0060 the stored items drawn at it (note-attached ones on the note\u0027s first segment; positioned ones on\nthe event at or before their tick)."
+      },
+      "ScoreEventKind": {
+        "enum": [
+          "note",
+          "chord",
+          "rest"
+        ],
+        "description": "What a score event is."
+      },
+      "ScoreKey": {
+        "required": [
+          "fifths",
+          "mode"
+        ],
+        "type": "object",
+        "properties": {
+          "fifths": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "mode": {
+            "$ref": "#/components/schemas/KeyMode"
+          }
+        },
+        "description": "A key signature: sharps (positive) or flats (negative), \u22127\u20267, and the mode."
+      },
+      "ScoreLayout": {
+        "required": [
+          "pageWidthMm",
+          "pageHeightMm",
+          "margins",
+          "staffHeightMm",
+          "title",
+          "subtitle",
+          "composer",
+          "header",
+          "footer",
+          "transposingScore",
+          "instrumentNames"
+        ],
+        "type": "object",
+        "properties": {
+          "pageWidthMm": {
+            "type": "number",
+            "format": "double"
+          },
+          "pageHeightMm": {
+            "type": "number",
+            "format": "double"
+          },
+          "margins": {
+            "$ref": "#/components/schemas/ScoreMargins"
+          },
+          "staffHeightMm": {
+            "type": "number",
+            "format": "double"
+          },
+          "title": {
+            "type": "string"
+          },
+          "subtitle": {
+            "type": "string"
+          },
+          "composer": {
+            "type": "string"
+          },
+          "header": {
+            "type": "string"
+          },
+          "footer": {
+            "type": "string"
+          },
+          "transposingScore": {
+            "type": "boolean"
+          },
+          "instrumentNames": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/InstrumentName"
+            }
+          }
+        },
+        "description": "The score\u0027s layout: the page in millimetres (portrait A4 by default), its margins, the staff height (the five\nlines, mm), the title block, a header and footer printed on every page (\u0022\u0022 for none), whether the full score\nshows transposing instruments at written pitch (parts always do), and instrument names that differ from the\ntrack\u0027s name (a track without one shows its name, full and short)."
+      },
+      "ScoreMargins": {
+        "required": [
+          "top",
+          "bottom",
+          "left",
+          "right"
+        ],
+        "type": "object",
+        "properties": {
+          "top": {
+            "type": "number",
+            "format": "double"
+          },
+          "bottom": {
+            "type": "number",
+            "format": "double"
+          },
+          "left": {
+            "type": "number",
+            "format": "double"
+          },
+          "right": {
+            "type": "number",
+            "format": "double"
+          }
+        },
+        "description": "Page margins in millimetres."
+      },
+      "ScoreMeasure": {
+        "required": [
+          "number",
+          "startTick",
+          "lengthTicks",
+          "time",
+          "key",
+          "showTime",
+          "showKey",
+          "tempos",
+          "rehearsals",
+          "barline"
+        ],
+        "type": "object",
+        "properties": {
+          "number": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "startTick": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "lengthTicks": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "time": {
+            "$ref": "#/components/schemas/TimeSignature"
+          },
+          "key": {
+            "$ref": "#/components/schemas/ScoreKey"
+          },
+          "showTime": {
+            "type": "boolean"
+          },
+          "showKey": {
+            "type": "boolean"
+          },
+          "tempos": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ScoreTempoMark"
+            }
+          },
+          "rehearsals": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ScoreRehearsal"
+            }
+          },
+          "barline": {
+            "$ref": "#/components/schemas/Barline"
+          }
+        },
+        "description": "A measure, common to every part: its bar number (1\u2026), start and length in project ticks, meter and key, whether\nthe meter and key are drawn here (the first measure and changes), its tempo marks and rehearsal marks, and its\nclosing barline."
+      },
+      "ScoreNote": {
+        "required": [
+          "id",
+          "noteId",
+          "pitch",
+          "written",
+          "staffPosition",
+          "tieStart",
+          "tieStop",
+          "notehead"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "noteId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "pitch": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "written": {
+            "$ref": "#/components/schemas/ScorePitch"
+          },
+          "staffPosition": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "accidental": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/Accidental"
+              }
+            ]
+          },
+          "tieStart": {
+            "type": "boolean"
+          },
+          "tieStop": {
+            "type": "boolean"
+          },
+          "notehead": {
+            "$ref": "#/components/schemas/Notehead"
+          }
+        },
+        "description": "A note of a score event. \u0060id\u0060 is its element id in the MEI (string ScoreIds.Note(long noteId, int segment = 1): the note\u0027s first\nsegment \u0060n{noteId}\u0060, a tied continuation \u0060n{noteId}-{k}\u0060). \u0060pitch\u0060 is the concert MIDI pitch;\n\u0060written\u0060 the spelled pitch drawn (transposed when the view is); \u0060staffPosition\u0060 its diatonic steps above\nthe bottom line (0 the bottom line, 8 the top; negative below); \u0060accidental\u0060 the one drawn (null: none);\n\u0060tieStart\u0060 it is tied to the same note in the voice\u0027s next event, \u0060tieStop\u0060 tied from the previous."
+      },
+      "ScorePart": {
+        "required": [
+          "trackId",
+          "name",
+          "shortName",
+          "staffStyleId",
+          "transpose",
+          "brace",
+          "staves",
+          "measures"
+        ],
+        "type": "object",
+        "properties": {
+          "trackId": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "shortName": {
+            "type": "string"
+          },
+          "staffStyleId": {
+            "type": "string"
+          },
+          "transpose": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "brace": {
+            "type": "boolean"
+          },
+          "staves": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Staff"
+            }
+          },
+          "measures": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ScorePartMeasure"
+            }
+          }
+        },
+        "description": "A track\u0027s part in the view: its names (from the layout, else the track\u0027s), its staff style and staves, the\ntransposition applied to its written pitches here (the staves\u0027 when the view is transposing, else 0), whether\nits staves are braced, and one measure per \u0060ScoreView.measures\u0060, in order."
+      },
+      "ScorePartMeasure": {
+        "required": [
+          "staves"
+        ],
+        "type": "object",
+        "properties": {
+          "staves": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ScoreStaffMeasure"
+            }
+          }
+        },
+        "description": "A part\u0027s measure: one entry per staff of the part, top to bottom."
+      },
+      "ScorePitch": {
+        "required": [
+          "step",
+          "alter",
+          "octave"
+        ],
+        "type": "object",
+        "properties": {
+          "step": {
+            "$ref": "#/components/schemas/PitchStep"
+          },
+          "alter": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "octave": {
+            "type": "integer",
+            "format": "int32"
+          }
+        },
+        "description": "A spelled written pitch: step, alteration (\u22122\u20262) and octave in scientific numbering (C4 is MIDI 60)."
+      },
+      "ScorePlacement": {
+        "enum": [
+          "above",
+          "below",
+          null
+        ]
+      },
+      "ScoreRehearsal": {
+        "required": [
+          "tick",
+          "markerId",
+          "text"
+        ],
+        "type": "object",
+        "properties": {
+          "tick": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "markerId": {
+            "type": "string"
+          },
+          "text": {
+            "type": "string"
+          }
+        },
+        "description": "A project marker shown as a rehearsal mark at its tick."
+      },
+      "ScoreSet": {
+        "required": [
+          "id",
+          "name",
+          "trackIds"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "trackIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "description": "A score set (Logic\u0027s): a named selection of tracks, in score order; parts are extracted from it."
+      },
+      "ScoreStaffMeasure": {
+        "required": [
+          "voices"
+        ],
+        "type": "object",
+        "properties": {
+          "clef": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/Clef"
+              }
+            ]
+          },
+          "voices": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ScoreVoice"
+            }
+          }
+        },
+        "description": "A staff in a measure: a clef change at its start (in the first measure, the staff\u0027s clef; else null) and its\nvoices."
+      },
+      "ScoreSymbol": {
+        "required": [
+          "id",
+          "kind",
+          "trackId"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/ScoreSymbolKind"
+          },
+          "trackId": {
+            "type": "string"
+          },
+          "noteId": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int64"
+          },
+          "tick": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int64"
+          },
+          "endNoteId": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int64"
+          },
+          "endTick": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int64"
+          },
+          "text": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "placement": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ScorePlacement"
+              }
+            ]
+          },
+          "staff": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int32"
+          }
+        },
+        "description": "A score symbol of a track. Attached to a note (\u0060noteId\u0060, a note of one of the track\u0027s MIDI regions): it\nfollows the note and goes with it when the note is deleted (coming back on undo). Positioned: \u0060tick\u0060 (a\nproject tick) on the track\u0027s staff \u0060staff\u0060 (0 the top staff of its style; null: the notation engine\u0027s\nchoice). Spanning kinds end at \u0060endNoteId\u0060 or \u0060endTick\u0060, the same kind of anchor as the start.\n\u0060text\u0060 for dynamic, text, tempo text and rehearsal; \u0060placement\u0060 null is the engine\u0027s choice. Which kinds\ntake which anchors: \u0060ScoreSymbols\u0060."
+      },
+      "ScoreSymbolKind": {
+        "enum": [
+          "staccato",
+          "staccatissimo",
+          "accent",
+          "marcato",
+          "tenuto",
+          "fermata",
+          "trill",
+          "tieHidden",
+          "dynamic",
+          "text",
+          "tempoText",
+          "rehearsal",
+          "pedalDown",
+          "pedalUp",
+          "slur",
+          "crescendo",
+          "diminuendo",
+          "octaveUp",
+          "octaveDown"
+        ],
+        "description": "What a score symbol is (docs/10-phase-9.md, \u0022Symbols\u0022)."
+      },
+      "ScoreTempoMark": {
+        "required": [
+          "tick",
+          "bpm"
+        ],
+        "type": "object",
+        "properties": {
+          "tick": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "bpm": {
+            "type": "number",
+            "format": "double"
+          }
+        },
+        "description": "A tempo mark: the project\u0027s tempo at a tick where it changes (and at the start)."
+      },
+      "ScoreTuplet": {
+        "required": [
+          "group",
+          "actual",
+          "normal"
+        ],
+        "type": "object",
+        "properties": {
+          "group": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "actual": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "normal": {
+            "type": "integer",
+            "format": "int32"
+          }
+        },
+        "description": "A tuplet an event belongs to: \u0060actual\u0060 notes in the time of \u0060normal\u0060 (3:2 a triplet); the events of a\nvoice with the same \u0060group\u0060 (1\u2026 within the measure\u0027s voice) form one bracket."
+      },
+      "ScoreView": {
+        "required": [
+          "mode",
+          "transposing",
+          "layout",
+          "measures",
+          "parts",
+          "symbols",
+          "lyrics",
+          "chords"
+        ],
+        "type": "object",
+        "properties": {
+          "setId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "partTrackId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "mode": {
+            "$ref": "#/components/schemas/ScoreViewMode"
+          },
+          "transposing": {
+            "type": "boolean"
+          },
+          "layout": {
+            "$ref": "#/components/schemas/ScoreLayout"
+          },
+          "measures": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ScoreMeasure"
+            }
+          },
+          "parts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ScorePart"
+            }
+          },
+          "symbols": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ScoreSymbol"
+            }
+          },
+          "lyrics": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LyricSyllable"
+            }
+          },
+          "chords": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ChordSymbol"
+            }
+          }
+        },
+        "description": "The rendered score (docs/adr/0011-notation-rendering.md): what the notation engine derives from the MIDI, the\nstaff styles, the regions\u0027 notation settings, the project\u0027s meter, key, tempo and markers, and the stored score\ncontent, for a score set (\u0060setId\u0060; null: every track that holds MIDI, in track order) or one track\u0027s part\n(\u0060partTrackId\u0060). \u0060transposing\u0060: written pitches include the staves\u0027 transposition (a part, or the full\nscore with \u0060layout.transposingScore\u0060). Measures cover the project start to the last bar with notes (at\nleast one). \u0060symbols\u0060, \u0060lyrics\u0060 and \u0060chords\u0060 are the stored items drawn in it. The same project\nand request give the same view, byte for byte."
+      },
+      "ScoreViewMode": {
+        "enum": [
+          "linear",
+          "page"
+        ],
+        "description": "The Score Editor\u0027s view: one long system (linear) or pages (page; the page breaks are Verovio\u0027s)."
+      },
+      "ScoreVoice": {
+        "required": [
+          "number",
+          "events"
+        ],
+        "type": "object",
+        "properties": {
+          "number": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "events": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ScoreEvent"
+            }
+          }
+        },
+        "description": "A voice of a staff in a measure (1\u2026 within the staff, 1 the upper), its events in time order filling the\nmeasure."
       },
       "Screenset": {
         "required": [
@@ -13371,6 +16134,89 @@
         },
         "description": "Smart Tempo: the project tempo mode, the \u0060follow\u0060 new audio regions get, and whether imports are analysed\n(transients and beats) as they arrive."
       },
+      "Staff": {
+        "required": [
+          "clef",
+          "transpose",
+          "voices"
+        ],
+        "type": "object",
+        "properties": {
+          "clef": {
+            "$ref": "#/components/schemas/Clef"
+          },
+          "transpose": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "splitPitch": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int32"
+          },
+          "voices": {
+            "type": "integer",
+            "format": "int32"
+          }
+        },
+        "description": "One staff of a staff style. \u0060transpose\u0060 is in semitones, written = concert \u002B transpose (B\u266D clarinet \u002B2, F\nhorn \u002B7, alto sax \u002B9); an octave clef\u0027s octave is the clef\u0027s, not part of it. With several staves (top to\nbottom), a note goes to the first staff whose \u0060splitPitch\u0060 (a concert MIDI pitch) it reaches; the last\nstaff\u0027s is null and takes the rest (one staff: null). \u0060voices\u0060 (1\u20264) is the most voices the notation engine\nmakes on this staff from overlapping notes (1: overlaps become chords or are cut, as \u0060noOverlap\u0060 says)."
+      },
+      "StaffStyle": {
+        "required": [
+          "id",
+          "name",
+          "staves",
+          "displayQuantizeTicks",
+          "tripletQuantizeTicks",
+          "brace"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "staves": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Staff"
+            }
+          },
+          "drumMap": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/DrumMapEntry"
+            }
+          },
+          "displayQuantizeTicks": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "tripletQuantizeTicks": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "brace": {
+            "type": "boolean"
+          }
+        },
+        "description": "A staff style (Logic\u0027s): one to four staves, the drum map of a percussion style (null otherwise; a note it does\nnot map is drawn at its pitch\u0027s position on a treble staff), the display quantise its tracks\u0027 regions use by\ndefault (RegionNotation: a straight grid in ticks and a triplet grid, 0 for none), and whether its\nstaves are joined by a brace (piano) rather than a bracket. Factory styles (StaffStyleIds) are the\nnotation engine\u0027s data; a project\u0027s own are in \u0060ProjectScore.staffStyles\u0060, with ids chosen by the client\n(not starting \u0060factory.\u0060)."
+      },
+      "StemDirection": {
+        "enum": [
+          "none",
+          "up",
+          "down"
+        ],
+        "description": "A stem\u0027s direction; \u0060none\u0060 for rests, whole notes and longer."
+      },
       "StemFile": {
         "required": [
           "kind",
@@ -13579,6 +16425,15 @@
           }
         },
         "description": "A surface\u0027s live state: whether it answers (Mackie Control\u0027s handshake or any input; HUI\u0027s ping) and the index of\nthe track on its first strip."
+      },
+      "Syllabic": {
+        "enum": [
+          "single",
+          "begin",
+          "middle",
+          "end"
+        ],
+        "description": "A syllable\u0027s place in its word (MusicXML\u0027s and MEI\u0027s)."
       },
       "SyncSettings": {
         "required": [
@@ -13964,9 +16819,15 @@
               "null",
               "string"
             ]
+          },
+          "staffStyleId": {
+            "type": [
+              "null",
+              "string"
+            ]
           }
         },
-        "description": "A track and its channel strip. \u0060color\u0060 is a CSS colour; \u0060input\u0060 is where an audio track records from.\nAn instrument track has an \u0060instrument\u0060; instrument and external MIDI tracks take MIDI from\n\u0060midiInput\u0060, and an external MIDI track sends its regions to \u0060midiOutput\u0060. Phase 5: \u0060flexOn\u0060 and\n\u0060flexMode\u0060 are its flex algorithm; \u0060alternatives\u0060 are its inactive track alternatives, and\n\u0060alternativeId\u0060 names the active one (null until the track has alternatives). Phase 6: a Drum Machine\nDesigner stack has a \u0060drumMachine\u0060 (null on every other track); \u0060smartControls\u0060 are its Smart Controls\n(null until set up: the editor shows the 8-knob layout, unnamed, at 0 and unmapped, and the first Smart Controls\ncommand sets them up); \u0060liveLoopsActive\u0060: the track plays its Live Loops cells, not its Tracks-area\nregions. Phase 7: \u0060matchGroove\u0060: its quantise follows the groove track (\u0060settings.grooveTrackId\u0060);\n\u0060articulationSetId\u0060 is its articulation set (null: none)."
+        "description": "A track and its channel strip. \u0060color\u0060 is a CSS colour; \u0060input\u0060 is where an audio track records from.\nAn instrument track has an \u0060instrument\u0060; instrument and external MIDI tracks take MIDI from\n\u0060midiInput\u0060, and an external MIDI track sends its regions to \u0060midiOutput\u0060. Phase 5: \u0060flexOn\u0060 and\n\u0060flexMode\u0060 are its flex algorithm; \u0060alternatives\u0060 are its inactive track alternatives, and\n\u0060alternativeId\u0060 names the active one (null until the track has alternatives). Phase 6: a Drum Machine\nDesigner stack has a \u0060drumMachine\u0060 (null on every other track); \u0060smartControls\u0060 are its Smart Controls\n(null until set up: the editor shows the 8-knob layout, unnamed, at 0 and unmapped, and the first Smart Controls\ncommand sets them up); \u0060liveLoopsActive\u0060: the track plays its Live Loops cells, not its Tracks-area\nregions. Phase 7: \u0060matchGroove\u0060: its quantise follows the groove track (\u0060settings.grooveTrackId\u0060);\n\u0060articulationSetId\u0060 is its articulation set (null: none). Phase 9: \u0060staffStyleId\u0060 is its staff style\nin the score (a factory id or one of \u0060score.staffStyles\u0060; null: \u0060StaffStyleIds.Default\u0060)."
       },
       "TrackAlternative": {
         "required": [
@@ -14347,6 +17208,12 @@
     },
     {
       "name": "Control"
+    },
+    {
+      "name": "Score"
+    },
+    {
+      "name": "Interchange"
     }
   ]
 }

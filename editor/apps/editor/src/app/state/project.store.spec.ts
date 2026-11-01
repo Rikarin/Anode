@@ -1,5 +1,5 @@
 import { TestBed } from '@angular/core/testing';
-import type { AudioRegion, Project, ProjectDelta, Track } from '@anode/api-client';
+import { type AudioRegion, EmptyProjectScore, type Project, type ProjectDelta, type Track } from '@anode/api-client';
 import { EventStream } from '../core/events';
 import { setUpFakeServer, settle } from '../core/fake/testing';
 import { Notify } from '../core/notify';
@@ -131,7 +131,8 @@ function snapshot(revision = 3): Project {
     liveLoops: { scenes: [], cells: [], quantize: 'bar', shown: false },
     grooves: [],
     articulationSets: [],
-    laneSets: []
+    laneSets: [],
+    score: structuredClone(EmptyProjectScore)
   };
 }
 
@@ -190,6 +191,22 @@ describe('ProjectStore deltas', () => {
     expect(store.info()?.name).toBe('Renamed');
     expect(store.revision()).toBe(4);
     expect(store.dirty()).toBe(true);
+  });
+
+  it('applies the score content deltas (Phase 9)', () => {
+    expect(store.score()).toEqual(EmptyProjectScore);
+    store.apply(
+      delta(4, [
+        { op: 'scoreSymbolUpserted', symbol: { id: 'sym_1', kind: 'dynamic', trackId: 'trk_1', tick: 0, text: 'mf' } },
+        { op: 'scoreSymbolUpserted', symbol: { id: 'sym_2', kind: 'staccato', trackId: 'trk_1', noteId: 1 } },
+        { op: 'scoreSymbolRemoved', id: 'sym_1' },
+        { op: 'scoreSetUpserted', set: { id: 'scs_1', name: 'All', trackIds: ['trk_1', 'trk_2'] } },
+        { op: 'scoreLayoutChanged', layout: { ...EmptyProjectScore.layout, title: 'Song' } }
+      ])
+    );
+    expect(store.score().symbols.map(s => s.id)).toEqual(['sym_2']);
+    expect(store.score().sets.map(s => s.name)).toEqual(['All']);
+    expect(store.score().layout.title).toBe('Song');
   });
 
   it('moves a track when its index changes', () => {
