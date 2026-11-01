@@ -10,7 +10,27 @@ export interface PluginWindow {
 
 /** The editors of the Editors pane (Phase 7: the Event List, the Step Editor and the Audio File Editor). */
 export type EditorView =
-  'pianoRoll' | 'audio' | 'smartTempo' | 'stepSequencer' | 'drumMachine' | 'eventList' | 'stepEditor' | 'audioFile';
+  | 'pianoRoll'
+  | 'score'
+  | 'audio'
+  | 'smartTempo'
+  | 'stepSequencer'
+  | 'drumMachine'
+  | 'eventList'
+  | 'stepEditor'
+  | 'audioFile';
+
+/** Phase 9's score windows: a score set's score, or one track's extracted part (the Score Editor in a window). */
+export interface ScoreWindow {
+  setId: string | null;
+  partTrackId: string | null;
+}
+
+/** Phase 9's interchange dialogs (File ▸ Import / Export). */
+export interface InterchangeDialog {
+  direction: 'import' | 'export';
+  format: 'musicxml' | 'aaf' | 'midi';
+}
 
 /** A Scripter slot whose Script Editor is open. */
 export interface ScriptSlot {
@@ -65,6 +85,16 @@ export class UiStore {
   readonly syncSettingsOpen = signal(false);
   /** Phase 8: the Stem Splitter, with the audio region it splits; null: closed. */
   readonly stemSplitter = signal<{ regionId: string } | null>(null);
+  /** Phase 9: the Score Editor in a window, for a score set or an extracted part; null: closed. */
+  readonly scoreWindow = signal<ScoreWindow | null>(null);
+  /** Phase 9: the Staff Styles window. */
+  readonly staffStylesOpen = signal(false);
+  /** Phase 9: the Score Sets window. */
+  readonly scoreSetsOpen = signal(false);
+  /** Phase 9: the Score Layout window. */
+  readonly scoreLayoutOpen = signal(false);
+  /** Phase 9: the MusicXML, AAF or MIDI file import or export dialog; null: closed. */
+  readonly interchange = signal<InterchangeDialog | null>(null);
   /** The generic plugin editor windows, in the order they opened (the last is in front). */
   readonly pluginWindows = signal<readonly PluginWindow[]>([]);
 

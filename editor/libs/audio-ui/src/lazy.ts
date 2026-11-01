@@ -4,6 +4,8 @@
  * bundle, even when only a lazy chunk uses it.
  */
 export * from './lib/event-row';
+export * from './lib/part-box';
+export * from './lib/score-toolbar';
 export * from './lib/step-keyboard';
 export * from './lib/step-lane';
 export * from './lib/transform-grid';

@@ -55,7 +55,14 @@ export type AppCommand =
   | 'controlSurfaces'
   | 'controllerAssignments'
   | 'syncSettings'
-  | 'stemSplitter';
+  | 'stemSplitter'
+  | 'importMusicXml'
+  | 'importAaf'
+  | 'importMidiOptions'
+  | 'exportMusicXml'
+  | 'exportAaf'
+  | 'exportMidi'
+  | 'printScore';
 
 /** Native file dialogs (apps/desktop/src/main.ts, `anode:dialog:*`); each resolves empty when cancelled. */
 export interface DesktopDialogs {
@@ -71,6 +78,15 @@ export interface DesktopDialogs {
   instrumentFile?(fileTypes: readonly string[]): Promise<string | null>;
   /** A content pack (`.anodepack`) to install in the Sound Library. */
   contentPack?(): Promise<string | null>;
+  /** A MusicXML (`.musicxml`, `.mxl`, `.xml`) or AAF file to import (Phase 9). */
+  importFile?(kind: 'musicxml' | 'aaf'): Promise<string | null>;
+}
+
+/** What the desktop app prints to PDF: the page size and the file name it suggests. */
+export interface PrintToPdfRequest {
+  title: string;
+  pageWidthMm: number;
+  pageHeightMm: number;
 }
 
 /**
@@ -83,6 +99,11 @@ export interface AnodeDesktop {
   dialogs?: DesktopDialogs;
   /** Shows a file the engine wrote (a bounce) in Finder or the file manager; false when there is no such file here. */
   reveal?(path: string): Promise<boolean>;
+  /**
+   * Prints the window's print view (Phase 9's score pages, laid out for print) to a PDF the person names in a save
+   * dialog; resolves its path, or null when cancelled.
+   */
+  printToPdf?(request: PrintToPdfRequest): Promise<string | null>;
   /** Called when an app menu item (File ▸ Save…) asks the editor to act. */
   onCommand?(listener: (command: AppCommand) => void): void;
   /** Node's `process.platform` of the desktop app ('darwin' on macOS). */

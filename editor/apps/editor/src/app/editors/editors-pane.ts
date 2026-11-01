@@ -6,6 +6,7 @@ import { drumMachineOf } from '../drum-machine/drum-machine';
 import { DrumMachineEditor } from '../drum-machine/drum-machine-editor';
 import { EventList } from '../event-list/event-list';
 import { PianoRoll } from '../piano-roll/piano-roll';
+import { ScoreEditor } from '../score/score-editor';
 import { ProjectStore } from '../state/project.store';
 import { SelectionStore } from '../state/selection.store';
 import { type EditorView, UiStore } from '../state/ui.store';
@@ -14,6 +15,7 @@ import { StepSequencer } from '../step-sequencer/step-sequencer';
 
 const Views: readonly { value: EditorView; label: string }[] = [
   { value: 'pianoRoll', label: 'Piano Roll' },
+  { value: 'score', label: 'Score' },
   { value: 'audio', label: 'Audio Track' },
   { value: 'smartTempo', label: 'Smart Tempo' },
   { value: 'stepSequencer', label: 'Step Sequencer' },
@@ -24,7 +26,7 @@ const Views: readonly { value: EditorView; label: string }[] = [
 ];
 
 /** The editors that show MIDI regions: a selected MIDI region keeps them, and brings the Piano Roll from the others. */
-const MidiViews: ReadonlySet<EditorView> = new Set(['pianoRoll', 'eventList', 'stepEditor']);
+const MidiViews: ReadonlySet<EditorView> = new Set(['pianoRoll', 'score', 'eventList', 'stepEditor']);
 
 /**
  * The Editors pane (Logic's editor area): the Piano Roll, the Audio Track Editor, the Smart Tempo Editor, the Step
@@ -42,6 +44,7 @@ const MidiViews: ReadonlySet<EditorView> = new Set(['pianoRoll', 'eventList', 's
     DrumMachineEditor,
     EventList,
     PianoRoll,
+    ScoreEditor,
     SmartTempoEditor,
     StepEditor,
     StepSequencer
@@ -84,6 +87,12 @@ const MidiViews: ReadonlySet<EditorView> = new Set(['pianoRoll', 'eventList', 's
         }
         @case ('drumMachine') {
           <an-drum-machine-editor />
+        }
+        <!-- Phase 9's Score Editor loads when first shown (Verovio with it, in its worker). -->
+        @case ('score') {
+          @defer (on immediate) {
+            <an-score-editor />
+          }
         }
         <!-- Phase 7's editors load when first shown. -->
         @case ('eventList') {

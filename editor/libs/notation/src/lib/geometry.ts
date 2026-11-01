@@ -286,3 +286,44 @@ export function toScorePoint(page: SVGSVGElement, clientX: number, clientY: numb
     y: ((clientY - rect.top) / (rect.height || 1)) * height - Number(offset?.[2] ?? 0)
   };
 }
+
+/**
+ * A point in the page's drawing units as CSS pixels from the page's top left, for overlays (the marquee, the playhead,
+ * the lyric field) at the page's displayed size.
+ */
+export function fromScorePoint(page: Element, point: Point, width: number, height: number): Point {
+  const margin = page.querySelector('g.page-margin');
+  const inner = viewBoxOf(page.querySelector('svg.definition-scale'));
+  const outer = viewBoxOf(page);
+  const units = { width: inner[2] ?? outer[2] ?? 1, height: inner[3] ?? outer[3] ?? 1 };
+  const offset = Translate.exec(margin?.getAttribute('transform') ?? '');
+  return {
+    x: ((point.x + Number(offset?.[1] ?? 0)) / units.width) * width,
+    y: ((point.y + Number(offset?.[2] ?? 0)) / units.height) * height
+  };
+}
+
+/**
+ * The note whose head is nearest a point, within `radius` drawing units (a click on a head that sits on a staff line
+ * or a ledger line can land on the line).
+ */
+export function noteNear(svg: Element, point: Point, radius: number): number | null {
+  let best: number | null = null;
+  let distance = radius;
+  for (const [noteId, head] of notePoints(svg)) {
+    // A head's point is its left edge, on its middle: measure to its centre (about a staff space wide).
+    const d = Math.hypot(head.x + radius / 2 - point.x, head.y - point.y);
+    if (d <= distance) {
+      best = noteId;
+      distance = d;
+    }
+  }
+  return best;
+}
+
+/** The distance between two staff lines of a staff box (a staff space), in drawing units. */
+export function staffSpace(box: Pick<StaffBox, 'lines'>): number {
+  const top = box.lines[0] ?? 0;
+  const bottom = box.lines.at(-1) ?? top;
+  return box.lines.length > 1 ? (bottom - top) / (box.lines.length - 1) : 180;
+}

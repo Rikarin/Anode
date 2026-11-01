@@ -4,6 +4,7 @@ import { ProjectStore } from '../state/project.store';
 import { SelectionStore } from '../state/selection.store';
 import { AudioRegionInspector, TakeFolderInspector } from './audio-region-inspector';
 import { RegionInspector } from './region-inspector';
+import { RegionNotationInspector, TrackStaffStyle } from './score-inspector';
 import { TrackDetails } from './track-details';
 import { TrackInspector } from './track-inspector';
 
@@ -18,13 +19,22 @@ const Band =
 @Component({
   selector: 'an-inspector',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [AudioRegionInspector, RegionInspector, TakeFolderInspector, TrackDetails, TrackInspector],
+  imports: [
+    AudioRegionInspector,
+    RegionInspector,
+    RegionNotationInspector,
+    TakeFolderInspector,
+    TrackDetails,
+    TrackInspector,
+    TrackStaffStyle
+  ],
   host: { class: 'flex h-full flex-col gap-3 overflow-y-auto px-3 pb-3', role: 'region', 'aria-label': 'Inspector' },
   template: `
     @if (region(); as r) {
       @switch (r.kind) {
         @case ('midi') {
           <an-region-inspector [region]="r.midi" />
+          <an-region-notation [region]="r.midi" />
         }
         @case ('audio') {
           <an-audio-region-inspector [region]="r.audio" />
@@ -37,6 +47,7 @@ const Band =
     @if (track(); as t) {
       @if (t.kind === 'instrument' || t.kind === 'midi') {
         <an-track-inspector [track]="t" />
+        <an-track-staff-style [track]="t" />
       } @else {
         <h3 [class]="band" [attr.title]="t.name">Track: {{ t.name }}</h3>
       }

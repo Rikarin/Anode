@@ -171,6 +171,15 @@ import { Lcd } from './lcd';
                 Revert to Backup
               </button>
               <xui-menu-divider />
+              <!-- Phase 9: File ▸ Import / Export and the score windows (the desktop app's File menu has them too). -->
+              <button xuiMenuItem type="button" data-testid="import-menu" [xuiMenuTriggerFor]="importMenu">
+                Import
+              </button>
+              <button xuiMenuItem type="button" data-testid="export-menu" [xuiMenuTriggerFor]="exportMenu">
+                Export
+              </button>
+              <button xuiMenuItem type="button" data-testid="score-menu" [xuiMenuTriggerFor]="scoreMenu">Score</button>
+              <xui-menu-divider />
               <button
                 xuiMenuItem
                 type="button"
@@ -225,6 +234,75 @@ import { Lcd } from './lcd';
               } @empty {
                 <button xuiMenuItem type="button" disabled>No alternatives yet</button>
               }
+            </xui-menu>
+          </ng-template>
+          <ng-template #importMenu>
+            <xui-menu>
+              <button
+                xuiMenuItem
+                type="button"
+                data-testid="import-musicxml"
+                (click)="ui.interchange.set({ direction: 'import', format: 'musicxml' })"
+              >
+                MusicXML…
+              </button>
+              <button
+                xuiMenuItem
+                type="button"
+                data-testid="import-aaf"
+                (click)="ui.interchange.set({ direction: 'import', format: 'aaf' })"
+              >
+                AAF…
+              </button>
+              <button
+                xuiMenuItem
+                type="button"
+                data-testid="import-midi"
+                (click)="ui.interchange.set({ direction: 'import', format: 'midi' })"
+              >
+                MIDI File…
+              </button>
+            </xui-menu>
+          </ng-template>
+          <ng-template #exportMenu>
+            <xui-menu>
+              <button
+                xuiMenuItem
+                type="button"
+                data-testid="export-musicxml"
+                (click)="ui.interchange.set({ direction: 'export', format: 'musicxml' })"
+              >
+                Score as MusicXML…
+              </button>
+              <button
+                xuiMenuItem
+                type="button"
+                data-testid="export-aaf"
+                (click)="ui.interchange.set({ direction: 'export', format: 'aaf' })"
+              >
+                Project as AAF…
+              </button>
+              <button
+                xuiMenuItem
+                type="button"
+                data-testid="export-midi"
+                (click)="ui.interchange.set({ direction: 'export', format: 'midi' })"
+              >
+                Project as MIDI File…
+              </button>
+            </xui-menu>
+          </ng-template>
+          <ng-template #scoreMenu>
+            <xui-menu>
+              <button xuiMenuItem type="button" data-testid="open-score-sets" (click)="ui.scoreSetsOpen.set(true)">
+                Score Sets…
+              </button>
+              <button xuiMenuItem type="button" data-testid="open-staff-styles" (click)="ui.staffStylesOpen.set(true)">
+                Staff Styles…
+              </button>
+              <button xuiMenuItem type="button" data-testid="open-score-layout" (click)="ui.scoreLayoutOpen.set(true)">
+                Score Layout…
+              </button>
             </xui-menu>
           </ng-template>
           <ng-template #backupsMenu>

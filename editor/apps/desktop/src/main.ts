@@ -11,6 +11,7 @@ import {
   shell
 } from 'electron';
 import { existsSync, statSync } from 'node:fs';
+import { writeFile } from 'node:fs/promises';
 import { extname, isAbsolute, join, normalize, resolve, sep } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { networkStatus, newToken, portFree } from './network';
@@ -265,6 +266,46 @@ function handleIpc(): void {
       })
     )
   );
+  // Phase 9's imports (docs/10-phase-9.md): a MusicXML or AAF file; the kind is checked against the two main knows.
+  ipcMain.handle('anode:dialog:importFile', async (event, kind: unknown) => {
+    const filter = ImportFilters[kind === 'aaf' ? 'aaf' : kind === 'musicxml' ? 'musicxml' : ''];
+    if (!filter) {
+      return null;
+    }
+    return first(
+      await pick(event.sender, {
+        title: filter.title,
+        buttonLabel: 'Import',
+        properties: ['openFile'],
+        filters: [filter.filter]
+      })
+    );
+  });
+  // Prints the editor's print view (the Score Editor's pages, which the renderer lays out for print) to a PDF the person
+  // names: the page size in millimetres and a default file name from the renderer, checked; answers the path, or null.
+  ipcMain.handle('anode:printToPdf', async (event, request: unknown) => {
+    const valid = validPrintRequest(request);
+    if (event.sender !== window?.webContents || !valid || !window) {
+      return null;
+    }
+    const target = await dialog.showSaveDialog(window, {
+      title: 'Save Score as PDF',
+      defaultPath: `${valid.title}.pdf`,
+      filters: [{ name: 'PDF', extensions: ['pdf'] }]
+    });
+    if (target.canceled || !target.filePath) {
+      return null;
+    }
+    const pdf = await event.sender.printToPDF({
+      pageSize: { width: valid.pageWidthMm / 25.4, height: valid.pageHeightMm / 25.4 },
+      margins: { top: 0, bottom: 0, left: 0, right: 0 },
+      printBackground: true,
+      preferCSSPageSize: true,
+      generateTaggedPDF: true
+    });
+    await writeFile(target.filePath, pdf);
+    return target.filePath;
+  });
   ipcMain.handle('anode:dialog:contentPack', async event =>
     first(
       await pick(event.sender, {
@@ -366,12 +407,40 @@ function validFileTypes(value: unknown): string[] {
 }
 
 /** A path the renderer may reveal: an absolute path to an existing WAV or AIFF file; null for anything else. */
+/** The files the editor may show in Finder: bounces, and Phase 9's exports and printed scores. */
+const RevealableExtensions = ['.wav', '.wave', '.aif', '.aiff', '.musicxml', '.mxl', '.aaf', '.mid', '.midi', '.pdf'];
+
+/** The import dialogs' filters by kind (`anode:dialog:importFile`). */
+const ImportFilters: Record<string, { title: string; filter: { name: string; extensions: string[] } } | undefined> = {
+  musicxml: { title: 'Import MusicXML', filter: { name: 'MusicXML', extensions: ['musicxml', 'mxl', 'xml'] } },
+  aaf: { title: 'Import AAF', filter: { name: 'AAF', extensions: ['aaf'] } }
+};
+
+/** A print request: a page of 50…2000 mm a side and a file name of at most 200 characters without folders. */
+function validPrintRequest(value: unknown): { title: string; pageWidthMm: number; pageHeightMm: number } | null {
+  if (typeof value !== 'object' || value === null) {
+    return null;
+  }
+  const { title, pageWidthMm, pageHeightMm } = value as Record<string, unknown>;
+  const size = (n: unknown): n is number => typeof n === 'number' && Number.isFinite(n) && n >= 50 && n <= 2000;
+  if (
+    typeof title !== 'string' ||
+    title.length > 200 ||
+    /[\\/\0]/.test(title) ||
+    !size(pageWidthMm) ||
+    !size(pageHeightMm)
+  ) {
+    return null;
+  }
+  return { title: title.trim() || 'Score', pageWidthMm, pageHeightMm };
+}
+
 function revealablePath(value: unknown): string | null {
   if (typeof value !== 'string' || value.length > 4096 || value.includes('\0') || !isAbsolute(value)) {
     return null;
   }
   const path = normalize(value);
-  if (!['.wav', '.wave', '.aif', '.aiff'].includes(extname(path).toLowerCase())) {
+  if (!RevealableExtensions.includes(extname(path).toLowerCase())) {
     return null;
   }
   try {
@@ -470,6 +539,25 @@ function buildMenu(): void {
     { type: 'separator' },
     command('Import Audio…', 'importAudio', 'CmdOrCtrl+Shift+I'),
     command('Import MIDI File…', 'importMidi'),
+    // Phase 9 (docs/10-phase-9.md): interchange, through the editor's dialogs and the Server's jobs.
+    {
+      label: 'Import',
+      submenu: [
+        command('MusicXML…', 'importMusicXml'),
+        command('AAF…', 'importAaf'),
+        command('MIDI File (with options)…', 'importMidiOptions')
+      ]
+    },
+    {
+      label: 'Export',
+      submenu: [
+        command('Score as MusicXML…', 'exportMusicXml'),
+        command('Project as AAF…', 'exportAaf'),
+        command('Project as MIDI File…', 'exportMidi')
+      ]
+    },
+    { type: 'separator' },
+    command('Print Score…', 'printScore', 'CmdOrCtrl+P'),
     { type: 'separator' },
     command('Bounce Project or Section…', 'bounce', 'CmdOrCtrl+B'),
     command('I/O Labels…', 'ioLabels'),
