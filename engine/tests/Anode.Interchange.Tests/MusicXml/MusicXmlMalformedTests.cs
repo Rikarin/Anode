@@ -16,21 +16,33 @@ public sealed class MusicXmlMalformedTests {
 
     public static TheoryData<string, string> Documents() =>
         new() {
-            { "empty", "" },
+            { "empty", string.Empty },
             { "not XML", "MThd this is not a score" },
             { "another document", "<html><body/></html>" },
-            { "timewise", "<score-timewise version=\"4.0\"><part-list/><measure number=\"1\"/></score-timewise>" },
+            { "timewise", """<score-timewise version="4.0"><part-list/><measure number="1"/></score-timewise>""" },
             { "truncated", Score("<note><pitch><step>C</step><octave>4</octave></pitch>")[..120] },
-            { "no parts", "<score-partwise version=\"4.0\"><part-list/></score-partwise>" },
+            { "no parts", """<score-partwise version="4.0"><part-list/></score-partwise>""" },
             { "a note without a step", Score("<note><pitch><octave>4</octave></pitch><duration>1</duration></note>") },
             { "a note without an octave", Score("<note><pitch><step>C</step></pitch><duration>1</duration></note>") },
-            { "an unknown step", Score("<note><pitch><step>H</step><octave>4</octave></pitch><duration>1</duration></note>") },
+            {
+                "an unknown step",
+                Score("<note><pitch><step>H</step><octave>4</octave></pitch><duration>1</duration></note>")
+            },
             { "a note without a duration", Score("<note><pitch><step>C</step><octave>4</octave></pitch></note>") },
-            { "a duration that is not a number", Score("<note><pitch><step>C</step><octave>4</octave></pitch><duration>x</duration></note>") },
+            {
+                "a duration that is not a number",
+                Score("<note><pitch><step>C</step><octave>4</octave></pitch><duration>x</duration></note>")
+            },
             { "a negative duration", Score("<note><rest/><duration>-4</duration></note>") },
-            { "zero divisions", Score("<attributes><divisions>0</divisions></attributes><note><rest/><duration>1</duration></note>") },
+            {
+                "zero divisions",
+                Score("<attributes><divisions>0</divisions></attributes><note><rest/><duration>1</duration></note>")
+            },
             { "a huge duration", Score("<note><rest/><duration>79228162514264337593543950335</duration></note>") },
-            { "an external entity", "<?xml version=\"1.0\"?><!DOCTYPE s [<!ENTITY x SYSTEM \"file:///etc/passwd\">]><score-partwise>&x;</score-partwise>" }
+            {
+                "an external entity",
+                """<?xml version="1.0"?><!DOCTYPE s [<!ENTITY x SYSTEM "file:///etc/passwd">]><score-partwise>&x;</score-partwise>"""
+            }
         };
 
     [Theory]
@@ -42,7 +54,7 @@ public sealed class MusicXmlMalformedTests {
 
     [Fact]
     public void Timewise_scores_are_refused_with_a_clear_message() {
-        var e = Assert.Throws<FormatException>(() =>
+        var e = Assert.Throws<FormatException>(static () =>
             MusicXmlReader.Read("<score-timewise version=\"4.0\"><part-list/></score-timewise>"u8)
         );
         Assert.Contains("score-timewise", e.Message, StringComparison.Ordinal);
@@ -76,14 +88,15 @@ public sealed class MusicXmlMalformedTests {
                 if (i % 3 == 0) {
                     damaged = damaged[..random.Next(damaged.Length)];
                 } else {
-                    for (var flips = 0; flips < 1 + (i % 4); flips++) {
+                    for (var flips = 0; flips < 1 + i % 4; flips++) {
                         damaged[random.Next(damaged.Length)] = (byte)random.Next(256);
                     }
                 }
 
                 try {
                     MusicXmlReader.Read(damaged);
-                } catch (FormatException) {
+                } catch (FormatException e) {
+                    Assert.False(string.IsNullOrEmpty(e.Message));
                 }
             }
         }

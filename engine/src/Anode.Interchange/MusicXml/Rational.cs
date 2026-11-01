@@ -49,10 +49,16 @@ readonly record struct Rational : IComparable<Rational> {
     public long InDivisions(long divisions) => checked(Numerator * (divisions / Denominator));
 
     public static Rational operator +(Rational a, Rational b) =>
-        new(checked((a.Numerator * b.Denominator) + (b.Numerator * a.Denominator)), checked(a.Denominator * b.Denominator));
+        new(
+            checked(a.Numerator * b.Denominator + b.Numerator * a.Denominator),
+            checked(a.Denominator * b.Denominator)
+        );
 
     public static Rational operator -(Rational a, Rational b) =>
-        new(checked((a.Numerator * b.Denominator) - (b.Numerator * a.Denominator)), checked(a.Denominator * b.Denominator));
+        new(
+            checked(a.Numerator * b.Denominator - b.Numerator * a.Denominator),
+            checked(a.Denominator * b.Denominator)
+        );
 
     public static Rational operator *(Rational a, Rational b) =>
         new(checked(a.Numerator * b.Numerator), checked(a.Denominator * b.Denominator));

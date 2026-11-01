@@ -47,7 +47,7 @@ sealed class MusicXmlScoreReader {
     }
 
     public void AddMarker(long tick, string text) {
-        if (!Markers.Any(m => m.Tick == tick && m.Name == text)) {
+        if (!Markers.Exists(m => m.Tick == tick && m.Name == text)) {
             Markers.Add(new(Ids.Next(IdPrefix.Marker), text, tick, 0, null, string.Empty));
         }
     }
@@ -64,7 +64,8 @@ sealed class MusicXmlScoreReader {
         IReadOnlyList<KeyEvent>? keys = null;
         for (var i = 0; i < parts.Count; i++) {
             var id = (string?)parts[i].Attribute("id") ?? string.Empty;
-            var info = list.GetValueOrDefault(id) ?? new PartInfo(string.Empty, string.Empty, new Dictionary<string, int>());
+            var info = list.GetValueOrDefault(id)
+                ?? new PartInfo(string.Empty, string.Empty, new Dictionary<string, int>());
             var trackId = Ids.Next(IdPrefix.Track);
             var reader = new MusicXmlPartReader(this, parts[i], info, trackId);
             var result = reader.Read();
@@ -73,7 +74,8 @@ sealed class MusicXmlScoreReader {
                 keys = result.Keys;
             }
 
-            var name = info.Name.Length > 0 ? info.Name : info.Abbreviation.Length > 0 ? info.Abbreviation : $"Part {i + 1}";
+            var name = info.Name.Length > 0 ? info.Name :
+                info.Abbreviation.Length > 0 ? info.Abbreviation : $"Part {i + 1}";
             var region = new MidiRegion(
                 Ids.Next(IdPrefix.MidiRegion),
                 trackId,
@@ -89,7 +91,9 @@ sealed class MusicXmlScoreReader {
             tracks.Add(new(trackId, name, TrackKind.Instrument, Style(result, name), [region], []));
         }
 
-        var tempos = tempoByTick.OrderBy(t => t.Key).Select(t => new TempoEvent(t.Key, t.Value, TempoCurve.Step)).ToList();
+        var tempos = tempoByTick.OrderBy(static t => t.Key)
+            .Select(static t => new TempoEvent(t.Key, t.Value, TempoCurve.Step))
+            .ToList();
         if (tempos.Count > 0 && tempos[0].Tick > 0) {
             tempos.Insert(0, new(0, 120, TempoCurve.Step));
         }
@@ -99,7 +103,7 @@ sealed class MusicXmlScoreReader {
             tempos.Count > 0 ? tempos : null,
             signatures,
             keys,
-            Markers.Count > 0 ? [..Markers.OrderBy(m => m.Tick)] : null,
+            Markers.Count > 0 ? [..Markers.OrderBy(static m => m.Tick)] : null,
             new(
                 [..customStyles.Values],
                 Symbols,
@@ -125,7 +129,9 @@ sealed class MusicXmlScoreReader {
             var unpitched = new Dictionary<string, int>();
             foreach (var midi in part.Elements("midi-instrument")) {
                 if ((string?)midi.Attribute("id") is { } instrument
-                    && MusicXmlPartReader.Integer(midi.Element("midi-unpitched")?.Value) is { } key and >= 1 and <= 128) {
+                    && MusicXmlPartReader.Integer(midi.Element("midi-unpitched")?.Value) is { } key
+                        and >= 1
+                        and <= 128) {
                     unpitched[instrument] = key - 1;
                 }
             }
@@ -148,7 +154,9 @@ sealed class MusicXmlScoreReader {
                 : Credit("title");
 
     string? Composer() =>
-        root.Element("identification")?.Elements("creator").FirstOrDefault(c => (string?)c.Attribute("type") == "composer")
+        root.Element("identification")
+            ?.Elements("creator")
+            .FirstOrDefault(static c => (string?)c.Attribute("type") == "composer")
             ?.Value
         ?? Credit("composer");
 
@@ -183,36 +191,43 @@ sealed class MusicXmlScoreReader {
             transpose = 0;
         }
 
-        var lower = name.ToLowerInvariant();
-        var factory = (clefs, transpose) switch {
+        return Factory(clefs, transpose, name.ToLowerInvariant()) ?? Custom(part, transpose, name);
+    }
+
+    static string? Factory(IReadOnlyList<Clef> clefs, int transpose, string name) =>
+        (clefs, transpose) switch {
             ([Clef.Percussion], _) => StaffStyleIds.Drums,
             ([Clef.Treble or Clef.None], 0) => StaffStyleIds.Treble,
             ([Clef.Treble8vb], 0) => StaffStyleIds.Guitar,
             ([Clef.Bass8vb], 0) => StaffStyleIds.BassGuitar,
             ([Clef.Alto], 0) => StaffStyleIds.Viola,
-            ([Clef.Bass], 0) => lower.Contains("cello", StringComparison.Ordinal) || lower.Contains("violoncello", StringComparison.Ordinal)
+            ([Clef.Bass], 0) => name.Contains("cello", StringComparison.Ordinal)
                 ? StaffStyleIds.Cello
                 : StaffStyleIds.Bass,
-            ([Clef.Treble], 2) => lower.Contains("trumpet", StringComparison.Ordinal) ? StaffStyleIds.TrumpetBb : StaffStyleIds.ClarinetBb,
+            ([Clef.Treble], 2) => name.Contains("trumpet", StringComparison.Ordinal)
+                ? StaffStyleIds.TrumpetBb
+                : StaffStyleIds.ClarinetBb,
             ([Clef.Treble], 7) => StaffStyleIds.HornF,
             ([Clef.Treble], 9) => StaffStyleIds.AltoSax,
             ([Clef.Treble], 14) => StaffStyleIds.TenorSax,
             ([Clef.Treble, Clef.Bass], 0) => StaffStyleIds.Piano,
             _ => null
         };
-        if (factory is not null) {
-            return factory;
-        }
 
+    /// <summary>A style of the part's own staves (shared by parts with the same setup).</summary>
+    string Custom(MusicXmlPartReader.Result part, int transpose, string name) {
+        var clefs = part.Clefs;
         var staves = new List<Staff>();
         for (var s = 0; s < clefs.Count; s++) {
-            int? split = s == clefs.Count - 1 ? null : Math.Clamp(part.LowestPitches[s] ?? DefaultSplit(clefs[s]), 0, 127);
+            int? split = s == clefs.Count - 1
+                ? null
+                : Math.Clamp(part.LowestPitches[s] ?? DefaultSplit(clefs[s]), 0, 127);
             staves.Add(new(clefs[s], transpose, split, Math.Clamp(part.Voices[s], 1, 4)));
         }
 
         var key = string.Join(
             ";",
-            staves.Select(s => FormattableString.Invariant($"{s.Clef}:{s.Transpose}:{s.SplitPitch}:{s.Voices}"))
+            staves.Select(static s => FormattableString.Invariant($"{s.Clef}:{s.Transpose}:{s.SplitPitch}:{s.Voices}"))
         );
         if (!customStyles.TryGetValue(key, out var style)) {
             var brace = clefs.Count > 1 && (part.Brace ?? (clefs[0] is Clef.Treble && clefs[^1] is Clef.Bass));

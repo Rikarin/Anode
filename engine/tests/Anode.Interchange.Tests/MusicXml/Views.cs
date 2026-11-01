@@ -12,7 +12,8 @@ static class Views {
         (PitchStep.F, 1), (PitchStep.G, 0), (PitchStep.G, 1), (PitchStep.A, 0), (PitchStep.A, 1), (PitchStep.B, 0)
     ];
 
-    public static readonly ScoreLayout Layout = ScoreLayout.Default with { Title = "Test Piece", Composer = "A. Composer" };
+    public static readonly ScoreLayout Layout =
+        ScoreLayout.Default with { Title = "Test Piece", Composer = "A. Composer" };
 
     public static ScoreView View(
         IReadOnlyList<ScoreMeasure> measures,
@@ -23,7 +24,18 @@ static class Views {
         bool transposing = false,
         ScoreLayout? layout = null
     ) =>
-        new(null, null, ScoreViewMode.Page, transposing, layout ?? Layout, measures, parts, symbols ?? [], lyrics ?? [], chords ?? []);
+        new(
+            null,
+            null,
+            ScoreViewMode.Page,
+            transposing,
+            layout ?? Layout,
+            measures,
+            parts,
+            symbols ?? [],
+            lyrics ?? [],
+            chords ?? []
+        );
 
     public static ScoreMeasure Measure(
         int number,
@@ -59,7 +71,16 @@ static class Views {
         int transpose = 0,
         string? shortName = null
     ) =>
-        new(trackId, name, shortName ?? name[..Math.Min(3, name.Length)] + ".", styleId, transpose, staves.Count > 1, staves, measures);
+        new(
+            trackId,
+            name,
+            shortName ?? name[..Math.Min(3, name.Length)] + ".",
+            styleId,
+            transpose,
+            staves.Count > 1,
+            staves,
+            measures
+        );
 
     public static readonly Staff Treble = new(Clef.Treble, 0, null, 2);
 
@@ -77,7 +98,19 @@ static class Views {
         ScoreTuplet? tuplet = null,
         IReadOnlyList<string>? symbols = null
     ) =>
-        new($"r{tick}", ScoreEventKind.Rest, tick, ticks, new(value, dots, tuplet), [], StemDirection.None, null, symbols ?? [], [], []);
+        new(
+            $"r{tick}",
+            ScoreEventKind.Rest,
+            tick,
+            ticks,
+            new(value, dots, tuplet),
+            [],
+            StemDirection.None,
+            null,
+            symbols ?? [],
+            [],
+            []
+        );
 
     public static ScoreEvent Event(
         long tick,
@@ -121,7 +154,7 @@ static class Views {
     ) {
         var written = pitch + transpose;
         var (step, alter) = spelling ?? Sharps[written % 12];
-        var octave = ((written - alter) / 12) - 1;
+        var octave = (written - alter) / 12 - 1;
         return new(
             ScoreIds.Note(noteId, segment),
             noteId,

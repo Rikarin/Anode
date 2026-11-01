@@ -24,7 +24,7 @@ static class MusicXmlContainer {
 
     public static byte[] Write(byte[] score) {
         var container = new XDocument(
-            new XDeclaration("1.0", "UTF-8", null),
+            new("1.0", "UTF-8", null),
             new XElement(
                 "container",
                 new XElement(
@@ -50,10 +50,10 @@ static class MusicXmlContainer {
 
     /// <summary>The root score's bytes from a container; a damaged or empty container throws <see cref="FormatException" />.</summary>
     public static byte[] Read(ReadOnlySpan<byte> data) {
-        using var zip = new ZipArchive(new MemoryStream(data.ToArray()), ZipArchiveMode.Read);
+        using var zip = new ZipArchive(new MemoryStream([..data]), ZipArchiveMode.Read);
         var path = RootPath(zip);
         var entry = (path is null ? null : zip.GetEntry(path))
-            ?? zip.Entries.FirstOrDefault(e =>
+            ?? zip.Entries.FirstOrDefault(static e =>
                 !e.FullName.StartsWith("META-INF/", StringComparison.Ordinal)
                 && (e.FullName.EndsWith(".musicxml", StringComparison.OrdinalIgnoreCase)
                     || e.FullName.EndsWith(".xml", StringComparison.OrdinalIgnoreCase))
@@ -71,9 +71,9 @@ static class MusicXmlContainer {
         var document = MusicXmlReader.Parse(ReadEntry(entry));
         var roots = document.Root?.Element("rootfiles")?.Elements("rootfile") ?? [];
         return roots
-            .Where(r => (string?)r.Attribute("media-type") is null or ScoreMediaType)
-            .Select(r => (string?)r.Attribute("full-path"))
-            .FirstOrDefault(p => !string.IsNullOrEmpty(p));
+            .Where(static r => (string?)r.Attribute("media-type") is null or ScoreMediaType)
+            .Select(static r => (string?)r.Attribute("full-path"))
+            .FirstOrDefault(static p => !string.IsNullOrEmpty(p));
     }
 
     static byte[] ReadEntry(ZipArchiveEntry entry) {

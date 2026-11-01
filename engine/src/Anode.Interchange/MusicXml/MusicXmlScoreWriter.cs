@@ -51,7 +51,18 @@ sealed class MusicXmlScoreWriter {
 
         if (view.Parts.Count == 0) {
             view = view with {
-                Parts = [new(string.Empty, "Score", string.Empty, StaffStyleIds.Treble, 0, false, [new(Clef.Treble, 0, null, 1)], [])]
+                Parts = [
+                    new(
+                        string.Empty,
+                        "Score",
+                        string.Empty,
+                        StaffStyleIds.Treble,
+                        0,
+                        false,
+                        [new(Clef.Treble, 0, null, 1)],
+                        []
+                    )
+                ]
             };
         }
 
@@ -115,7 +126,7 @@ sealed class MusicXmlScoreWriter {
         new("supports", new XAttribute("element", element), new XAttribute("type", "yes"));
 
     XElement Defaults(ScoreLayout layout) {
-        var concert = !view.Transposing && view.Parts.Any(p => p.Staves.Any(s => s.Transpose != 0));
+        var concert = !view.Transposing && view.Parts.Any(static p => p.Staves.Any(static s => s.Transpose != 0));
         return new(
             "defaults",
             new XElement(
@@ -148,7 +159,7 @@ sealed class MusicXmlScoreWriter {
             ("subtitle", layout.Subtitle, "center", width / 2, top - 60, 16),
             ("composer", layout.Composer, "right", width - Tenths(layout, layout.Margins.Right), top - 100, 12)
         ];
-        foreach (var credit in credits.Where(c => c.Text.Length > 0)) {
+        foreach (var credit in credits.Where(static c => c.Text.Length > 0)) {
             yield return new(
                 "credit",
                 new XAttribute("page", "1"),

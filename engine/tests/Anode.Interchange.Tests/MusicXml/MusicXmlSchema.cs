@@ -10,8 +10,8 @@ namespace Anode.Interchange.Tests.MusicXml;
 ///     imports resolved locally, and the container schema for <c>.mxl</c>'s <c>META-INF/container.xml</c>.
 /// </summary>
 static class MusicXmlSchema {
-    static readonly Lazy<XmlSchemaSet> Score = new(() => Load("musicxml.xsd"));
-    static readonly Lazy<XmlSchemaSet> Container = new(() => Load("container.xsd"));
+    static readonly Lazy<XmlSchemaSet> Score = new(static () => Load("musicxml.xsd"));
+    static readonly Lazy<XmlSchemaSet> Container = new(static () => Load("container.xsd"));
 
     public static string Directory { get; } = Path.Combine(AppContext.BaseDirectory, "MusicXml", "Schema");
 
@@ -48,17 +48,21 @@ static class MusicXmlSchema {
             Schemas = schemas,
             ValidationFlags = XmlSchemaValidationFlags.ReportValidationWarnings
         };
-        settings.ValidationEventHandler += (_, e) => errors.Add($"{e.Severity} {e.Exception.LineNumber}:{e.Exception.LinePosition} {e.Message}");
+        settings.ValidationEventHandler += (_, e) => errors.Add(
+            $"{e.Severity} {e.Exception.LineNumber}:{e.Exception.LinePosition} {e.Message}"
+        );
         using var reader = XmlReader.Create(new MemoryStream(xml), settings);
-        while (reader.Read()) {
-        }
+        while (reader.Read()) { }
 
         return errors;
     }
 
     static XmlSchemaSet Load(string file) {
         var set = new XmlSchemaSet { XmlResolver = new LocalResolver() };
-        using (var reader = XmlReader.Create(Path.Combine(Directory, file), new() { DtdProcessing = DtdProcessing.Ignore })) {
+        using (var reader = XmlReader.Create(
+                   Path.Combine(Directory, file),
+                   new() { DtdProcessing = DtdProcessing.Ignore }
+               )) {
             set.Add(null, reader);
         }
 
@@ -71,7 +75,9 @@ static class MusicXmlSchema {
         public override object? GetEntity(Uri absoluteUri, string? role, Type? ofObjectToReturn) {
             var name = Path.GetFileName(absoluteUri.AbsolutePath);
             var path = Path.Combine(Directory, name);
-            return File.Exists(path) ? File.OpenRead(path) : throw new XmlException($"No local schema for {absoluteUri}.");
+            return File.Exists(path)
+                ? File.OpenRead(path)
+                : throw new XmlException($"No local schema for {absoluteUri}.");
         }
     }
 }

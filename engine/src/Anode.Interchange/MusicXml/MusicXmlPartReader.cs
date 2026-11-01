@@ -26,7 +26,9 @@ sealed class MusicXmlPartReader {
     readonly List<Building> notes = [];
     readonly Dictionary<int, Building> openTies = [];
     readonly Dictionary<int, (long NoteId, ScorePlacement? Placement)> openSlurs = [];
-    readonly Dictionary<(string Kind, int Number), (ScoreSymbolKind Kind, Rational Start, int? Staff, ScorePlacement? Placement)> openSpans = [];
+
+    readonly Dictionary<(string Family, int Number), (ScoreSymbolKind Kind, Anchor Anchor)> openSpans = [];
+
     readonly Dictionary<string, List<(int Pitch, int Staff, bool Chord)>> graces = [];
     readonly Dictionary<int, Clef> clefs = [];
     readonly Dictionary<int, HashSet<string>> voices = [];
@@ -41,9 +43,11 @@ sealed class MusicXmlPartReader {
     Rational cursor = Rational.Zero;
     Rational highWater = Rational.Zero;
     Rational lastStart = Rational.Zero;
+    (int, int)? lastSignature;
 
     /// <summary>Where a padded pickup's music starts (0 without one).</summary>
     Rational pickup = Rational.Zero;
+
     int beats = 4;
     int beatType = 4;
     int staves = 1;
@@ -54,7 +58,12 @@ sealed class MusicXmlPartReader {
     int fifths;
     KeyMode mode = KeyMode.Major;
 
-    public MusicXmlPartReader(MusicXmlScoreReader score, XElement part, MusicXmlScoreReader.PartInfo info, string trackId) {
+    public MusicXmlPartReader(
+        MusicXmlScoreReader score,
+        XElement part,
+        MusicXmlScoreReader.PartInfo info,
+        string trackId
+    ) {
         this.score = score;
         this.part = part;
         this.info = info;
@@ -93,71 +102,20 @@ sealed class MusicXmlPartReader {
 
     public Result Read() {
         var measures = part.Elements("measure").ToList();
-        (int Beats, int BeatType)? lastSignature = null;
         for (var m = 0; m < measures.Count; m++) {
-            var measure = measures[m];
             if (m == 0) {
-                measureStart = pickup = Pickup(measure);
+                measureStart = pickup = Pickup(measures[m]);
             }
 
             cursor = Rational.Zero;
             highWater = Rational.Zero;
             lastStart = measureStart;
             var keyBefore = (keySeen, fifths, mode);
-            foreach (var element in measure.Elements()) {
-                switch (element.Name.LocalName) {
-                    case "attributes":
-                        Attributes(element);
-                        break;
-                    case "note":
-                        NoteElement(element);
-                        break;
-                    case "backup":
-                        cursor -= Duration(element.Element("duration"), true);
-                        if (cursor < Rational.Zero) {
-                            cursor = Rational.Zero;
-                        }
-
-                        break;
-                    case "forward":
-                        cursor += Duration(element.Element("duration"), true);
-                        highWater = Rational.Max(highWater, cursor);
-                        break;
-                    case "direction":
-                        Direction(element);
-                        break;
-                    case "harmony":
-                        Harmony(element);
-                        break;
-                    case "sound":
-                        Tempo(element, At(Rational.Zero));
-                        break;
-                }
+            foreach (var element in measures[m].Elements()) {
+                MusicData(element);
             }
 
-            // A padded pickup's bar starts at the score's start, before the measure's own start.
-            var signature = SignatureLength();
-            var implicitMeasure = (string?)measure.Attribute("implicit") == "yes";
-            var length = implicitMeasure && highWater.IsPositive ? highWater : Rational.Max(highWater, signature);
-            var barStart = m == 0 ? Rational.Zero : measureStart;
-            var barLength = measureStart + length - barStart;
-            var startTick = barStart.ToTicks();
-            var (num, den) = barLength == signature ? (beats, beatType) : Irregular(barLength) ?? (beats, beatType);
-            if (lastSignature != (num, den)) {
-                signatures.Add(new(startTick, num, den));
-                lastSignature = (num, den);
-            }
-
-            if (keySeen && (m == 0 || keyBefore != (keySeen, fifths, mode))) {
-                // Keys in the project are at concert pitch.
-                var concert = transpose == 0 ? fifths : MusicXmlVocabulary.TransposeFifths(fifths, -transpose);
-                var key = new KeyEvent(startTick, MusicXmlVocabulary.Tonic(concert, mode), mode);
-                if (keys.Count == 0 || keys[^1].Tonic != key.Tonic || keys[^1].Mode != key.Mode) {
-                    keys.Add(key);
-                }
-            }
-
-            measureStart += length;
+            EndMeasure(m, measures[m], keyBefore != (keySeen, fifths, mode));
         }
 
         foreach (var voice in graces.Keys.ToList()) {
@@ -165,6 +123,66 @@ sealed class MusicXmlPartReader {
         }
 
         return Finish(measures.Count == 0 ? 0 : measureStart.ToTicks());
+    }
+
+    void MusicData(XElement element) {
+        switch (element.Name.LocalName) {
+            case "attributes":
+                Attributes(element);
+                break;
+            case "note":
+                NoteElement(element);
+                break;
+            case "backup":
+                cursor = Rational.Max(Rational.Zero, cursor - Duration(element.Element("duration"), true));
+                break;
+            case "forward":
+                cursor += Duration(element.Element("duration"), true);
+                highWater = Rational.Max(highWater, cursor);
+                break;
+            case "direction":
+                Direction(element);
+                break;
+            case "harmony":
+                Harmony(element);
+                break;
+            case "sound":
+                Tempo(element, At(Rational.Zero));
+                break;
+        }
+    }
+
+    /// <summary>
+    ///     A measure's length (its content's, at least its meter's unless it is marked implicit), and the signature and key
+    ///     events at its bar line. A padded pickup's bar starts at the score's start, before the measure's own start.
+    /// </summary>
+    void EndMeasure(int m, XElement measure, bool keyChanged) {
+        var signature = SignatureLength();
+        var implicitMeasure = (string?)measure.Attribute("implicit") == "yes";
+        var length = implicitMeasure && highWater.IsPositive ? highWater : Rational.Max(highWater, signature);
+        var barStart = m == 0 ? Rational.Zero : measureStart;
+        var barLength = measureStart + length - barStart;
+        var startTick = barStart.ToTicks();
+        var meter = barLength == signature ? (beats, beatType) : Irregular(barLength) ?? (beats, beatType);
+        if (lastSignature != meter) {
+            signatures.Add(new(startTick, meter.Item1, meter.Item2));
+            lastSignature = meter;
+        }
+
+        if (keySeen && (m == 0 || keyChanged)) {
+            Key(startTick);
+        }
+
+        measureStart += length;
+    }
+
+    /// <summary>The key at a bar line, at concert pitch as the project keeps it.</summary>
+    void Key(long tick) {
+        var concert = transpose == 0 ? fifths : MusicXmlVocabulary.TransposeFifths(fifths, -transpose);
+        var key = new KeyEvent(tick, MusicXmlVocabulary.Tonic(concert, mode), mode);
+        if (keys.Count == 0 || keys[^1].Tonic != key.Tonic || keys[^1].Mode != key.Mode) {
+            keys.Add(key);
+        }
     }
 
     /// <summary>The padding before a pickup: the meter's length less the first measure's, if it is short and implicit.</summary>
@@ -191,7 +209,11 @@ sealed class MusicXmlPartReader {
                     break;
                 case "note" when element.Element("grace") is null && element.Element("chord") is null:
                 case "forward":
-                    position += Divisions(element.Element("duration"), scanDivisions, element.Name.LocalName == "forward");
+                    position += Divisions(
+                        element.Element("duration"),
+                        scanDivisions,
+                        element.Name.LocalName == "forward"
+                    );
                     high = Rational.Max(high, position);
                     break;
                 case "backup":
@@ -268,7 +290,8 @@ sealed class MusicXmlPartReader {
 
     /// <summary>A <c>transpose</c> (written to sounding) as the staff's transposition (written above concert).</summary>
     static int WrittenAboveConcert(XElement transpose) =>
-        -((Integer(transpose.Element("chromatic")?.Value) ?? 0) + (12 * (Integer(transpose.Element("octave-change")?.Value) ?? 0)));
+        -((Integer(transpose.Element("chromatic")?.Value) ?? 0)
+            + 12 * (Integer(transpose.Element("octave-change")?.Value) ?? 0));
 
     static (int, int)? Beats(XElement time) {
         // "3+2" beats add up; a senza-misura time has none.
@@ -304,14 +327,7 @@ sealed class MusicXmlPartReader {
             return;
         }
 
-        var duration = Duration(note.Element("duration"), false);
-        var start = chord ? lastStart : At(Rational.Zero);
-        if (!chord) {
-            lastStart = start;
-            cursor += duration;
-            highWater = Rational.Max(highWater, cursor);
-        }
-
+        var start = Advance(chord, Duration(note.Element("duration"), false), out var duration);
         if (note.Element("rest") is not null || note.Element("cue") is not null) {
             return;
         }
@@ -326,20 +342,8 @@ sealed class MusicXmlPartReader {
             FlushGraces(voice, start);
         }
 
-        var segment = openTies.Remove(pitch, out var open) && Near(open.End, start) ? open : null;
-        if (segment is null) {
-            var velocity = Number((string?)note.Attribute("dynamics")) is { } percent
-                ? (int?)Math.Clamp((int)Math.Round(percent * 90 / 100), 1, 127)
-                : null;
-            segment = new(score.NextNoteId(), pitch, start, start + duration, staff, velocity, Unpitched(note) ? 10 : 1);
-            notes.Add(segment);
-        } else {
-            segment.End = start + duration;
-        }
-
-        var tieStart = note.Elements("tie").Any(t => (string?)t.Attribute("type") == "start")
-            || note.Elements("notations").Elements("tied").Any(t => (string?)t.Attribute("type") == "start");
-        if (tieStart) {
+        var segment = Segment(note, pitch, start, duration, staff);
+        if (TieStarts(note)) {
             openTies[pitch] = segment;
         }
 
@@ -352,6 +356,47 @@ sealed class MusicXmlPartReader {
         }
     }
 
+    /// <summary>Where a note starts: a chord's with the note before it, else at the cursor, which it moves on.</summary>
+    Rational Advance(bool chord, Rational length, out Rational duration) {
+        duration = length;
+        if (chord) {
+            return lastStart;
+        }
+
+        var start = At(Rational.Zero);
+        lastStart = start;
+        cursor += length;
+        highWater = Rational.Max(highWater, cursor);
+        return start;
+    }
+
+    /// <summary>The note a segment belongs to: the open tie it continues (within a tick), else a new note.</summary>
+    Building Segment(XElement note, int pitch, Rational start, Rational duration, int staff) {
+        if (openTies.Remove(pitch, out var open) && Near(open.End, start)) {
+            open.End = start + duration;
+            return open;
+        }
+
+        var velocity = Number((string?)note.Attribute("dynamics")) is { } percent
+            ? (int?)Math.Clamp((int)Math.Round(percent * 90 / 100), 1, 127)
+            : null;
+        var segment = new Building(
+            score.NextNoteId(),
+            pitch,
+            start,
+            start + duration,
+            staff,
+            velocity,
+            Unpitched(note) ? 10 : 1
+        );
+        notes.Add(segment);
+        return segment;
+    }
+
+    static bool TieStarts(XElement note) =>
+        note.Elements("tie").Any(static t => (string?)t.Attribute("type") == "start")
+        || note.Elements("notations").Elements("tied").Any(static t => (string?)t.Attribute("type") == "start");
+
     static bool Unpitched(XElement note) => note.Element("unpitched") is not null;
 
     /// <summary>A note's concert MIDI pitch, or null for a rest.</summary>
@@ -360,7 +405,8 @@ sealed class MusicXmlPartReader {
             var step = MusicXmlVocabulary.ParseStep(pitch.Element("step")?.Value)
                 ?? throw new FormatException("A pitch without a step.");
             var alter = (int)Math.Round(Number(pitch.Element("alter")?.Value) ?? 0);
-            var octave = Integer(pitch.Element("octave")?.Value) ?? throw new FormatException("A pitch without an octave.");
+            var octave = Integer(pitch.Element("octave")?.Value)
+                ?? throw new FormatException("A pitch without an octave.");
             return Math.Clamp(MusicXmlVocabulary.Midi(step, alter, octave) - transpose, 0, 127);
         }
 
@@ -387,14 +433,14 @@ sealed class MusicXmlPartReader {
             return;
         }
 
-        var slots = pending.Count(g => !g.Chord);
+        var slots = pending.Count(static g => !g.Chord);
         var slot = -1;
         foreach (var (pitch, staff, chord) in pending) {
             if (!chord || slot < 0) {
                 slot++;
             }
 
-            var start = principal - (GraceLength * new Rational(slots - slot, 1));
+            var start = principal - GraceLength * new Rational(slots - slot, 1);
             if (start < Rational.Zero) {
                 start = Rational.Zero;
             }
@@ -414,25 +460,7 @@ sealed class MusicXmlPartReader {
                     Slur(child, noteId);
                     break;
                 case "articulations":
-                    foreach (var articulation in child.Elements()) {
-                        var kind = articulation.Name.LocalName switch {
-                            "accent" => ScoreSymbolKind.Accent,
-                            "strong-accent" => ScoreSymbolKind.Marcato,
-                            "staccato" => ScoreSymbolKind.Staccato,
-                            "tenuto" => ScoreSymbolKind.Tenuto,
-                            "staccatissimo" or "spiccato" => ScoreSymbolKind.Staccatissimo,
-                            "detached-legato" => ScoreSymbolKind.Tenuto,
-                            _ => (ScoreSymbolKind?)null
-                        };
-                        if (kind is { } k) {
-                            NoteSymbol(k, noteId, Placement(articulation));
-                        }
-
-                        if (articulation.Name.LocalName == "detached-legato") {
-                            NoteSymbol(ScoreSymbolKind.Staccato, noteId, Placement(articulation));
-                        }
-                    }
-
+                    Articulations(child, noteId);
                     break;
                 case "ornaments":
                     foreach (var ornament in child.Elements("trill-mark")) {
@@ -441,22 +469,52 @@ sealed class MusicXmlPartReader {
 
                     break;
                 case "fermata":
-                    NoteSymbol(
-                        ScoreSymbolKind.Fermata,
-                        noteId,
-                        (string?)child.Attribute("type") == "inverted" ? ScorePlacement.Below : null
-                    );
+                    var inverted = (string?)child.Attribute("type") == "inverted";
+                    NoteSymbol(ScoreSymbolKind.Fermata, noteId, inverted ? ScorePlacement.Below : null);
                     break;
                 case "dynamics":
-                    foreach (var text in DynamicTexts(child)) {
-                        if (ScoreSymbols.Dynamics.Contains(text)) {
-                            AddSymbol(new(score.Ids.Next(IdPrefix.ScoreSymbol), ScoreSymbolKind.Dynamic, trackId, noteId, Text: text, Placement: Placement(child)));
-                            Level(at, text);
-                        }
-                    }
-
+                    NoteDynamics(child, noteId, at);
                     break;
             }
+        }
+    }
+
+    void Articulations(XElement articulations, long noteId) {
+        foreach (var articulation in articulations.Elements()) {
+            var name = articulation.Name.LocalName;
+            if (Articulation(name) is { } kind) {
+                NoteSymbol(kind, noteId, Placement(articulation));
+            }
+
+            if (name == "detached-legato") {
+                NoteSymbol(ScoreSymbolKind.Staccato, noteId, Placement(articulation));
+            }
+        }
+    }
+
+    static ScoreSymbolKind? Articulation(string name) =>
+        name switch {
+            "accent" => ScoreSymbolKind.Accent,
+            "strong-accent" => ScoreSymbolKind.Marcato,
+            "staccato" => ScoreSymbolKind.Staccato,
+            "tenuto" or "detached-legato" => ScoreSymbolKind.Tenuto,
+            "staccatissimo" or "spiccato" => ScoreSymbolKind.Staccatissimo,
+            _ => null
+        };
+
+    void NoteDynamics(XElement dynamics, long noteId, Rational at) {
+        foreach (var text in DynamicTexts(dynamics).Where(ScoreSymbols.Dynamics.Contains)) {
+            AddSymbol(
+                new(
+                    score.Ids.Next(IdPrefix.ScoreSymbol),
+                    ScoreSymbolKind.Dynamic,
+                    trackId,
+                    noteId,
+                    Text: text,
+                    Placement: Placement(dynamics)
+                )
+            );
+            Level(at, text);
         }
     }
 
@@ -541,89 +599,82 @@ sealed class MusicXmlPartReader {
         var at = At(Offset(direction));
         var staff = StaffOf(direction);
         var placement = Placement(direction);
-        var tempo = direction.Element("sound") is { } sound && Number((string?)sound.Attribute("tempo")) is not null;
-        var types = direction.Elements("direction-type").SelectMany(t => t.Elements()).ToList();
-        var hasMetronome = types.Any(t => t.Name.LocalName == "metronome");
+        var types = direction.Elements("direction-type").SelectMany(static t => t.Elements()).ToList();
+        var tempo = Number((string?)direction.Element("sound")?.Attribute("tempo")) is not null;
+        // Words beside a tempo are tempo text.
+        var tempoText = tempo || types.Exists(static t => t.Name.LocalName == "metronome");
         foreach (var type in types) {
-            switch (type.Name.LocalName) {
-                case "dynamics":
-                    foreach (var text in DynamicTexts(type)) {
-                        var kind = ScoreSymbols.Dynamics.Contains(text) ? ScoreSymbolKind.Dynamic : ScoreSymbolKind.Text;
-                        Positioned(kind, at, staff, placement ?? Placement(type), text);
-                        Level(at, text);
-                    }
-
-                    break;
-                case "words":
-                    if (MusicXmlScoreReader.Text(type.Value) is { } words) {
-                        var bold = (string?)type.Attribute("font-weight") == "bold";
-                        Positioned(bold || tempo || hasMetronome ? ScoreSymbolKind.TempoText : ScoreSymbolKind.Text, at, staff, placement, words);
-                    }
-
-                    break;
-                case "rehearsal":
-                    if (MusicXmlScoreReader.Text(type.Value) is { } mark) {
-                        score.AddMarker(at.ToTicks(), mark);
-                    }
-
-                    break;
-                case "metronome" when !tempo:
-                    if (Metronome(type) is { } bpm) {
-                        score.AddTempo(TempoTick(at), bpm);
-                    }
-
-                    break;
-                case "pedal":
-                    switch ((string?)type.Attribute("type")) {
-                        case "start":
-                            Positioned(ScoreSymbolKind.PedalDown, at, staff, placement, null);
-                            break;
-                        case "stop":
-                            Positioned(ScoreSymbolKind.PedalUp, at, staff, placement, null);
-                            break;
-                        case "change":
-                            Positioned(ScoreSymbolKind.PedalUp, at, staff, placement, null);
-                            Positioned(ScoreSymbolKind.PedalDown, at, staff, placement, null);
-                            break;
-                    }
-
-                    break;
-                case "wedge":
-                    Span(
-                        "wedge",
-                        type,
-                        (string?)type.Attribute("type") switch {
-                            "crescendo" => ScoreSymbolKind.Crescendo,
-                            "diminuendo" => ScoreSymbolKind.Diminuendo,
-                            _ => null
-                        },
-                        at,
-                        staff,
-                        placement
-                    );
-                    break;
-                case "octave-shift":
-                    // MusicXML's "down" is an 8va line: the notes are written below their pitch.
-                    Span(
-                        "octave",
-                        type,
-                        (string?)type.Attribute("type") switch {
-                            "down" => ScoreSymbolKind.OctaveUp,
-                            "up" => ScoreSymbolKind.OctaveDown,
-                            _ => null
-                        },
-                        at,
-                        staff,
-                        placement
-                    );
-                    break;
-            }
+            DirectionType(type, new(at, staff, placement), tempo, tempoText);
         }
 
-        if (direction.Element("sound") is { } s) {
-            Tempo(s, at);
+        if (direction.Element("sound") is { } sound) {
+            Tempo(sound, at);
         }
     }
+
+    /// <summary>Where a direction is: its position, staff (multi-staff parts) and placement.</summary>
+    readonly record struct Anchor(Rational At, int? Staff, ScorePlacement? Placement);
+
+    void DirectionType(XElement type, Anchor anchor, bool tempo, bool tempoText) {
+        switch (type.Name.LocalName) {
+            case "dynamics":
+                DirectionDynamics(type, anchor);
+                break;
+            case "words" when MusicXmlScoreReader.Text(type.Value) is { } words:
+                var bold = (string?)type.Attribute("font-weight") == "bold";
+                Positioned(bold || tempoText ? ScoreSymbolKind.TempoText : ScoreSymbolKind.Text, anchor, words);
+                break;
+            case "rehearsal" when MusicXmlScoreReader.Text(type.Value) is { } mark:
+                score.AddMarker(anchor.At.ToTicks(), mark);
+                break;
+            case "metronome" when !tempo && Metronome(type) is { } bpm:
+                score.AddTempo(TempoTick(anchor.At), bpm);
+                break;
+            case "pedal":
+                Pedal((string?)type.Attribute("type"), anchor);
+                break;
+            case "wedge":
+                Span("wedge", type, WedgeKind((string?)type.Attribute("type")), anchor);
+                break;
+            case "octave-shift":
+                Span("octave", type, OctaveKind((string?)type.Attribute("type")), anchor);
+                break;
+        }
+    }
+
+    void DirectionDynamics(XElement dynamics, Anchor anchor) {
+        var placed = anchor with { Placement = anchor.Placement ?? Placement(dynamics) };
+        foreach (var text in DynamicTexts(dynamics)) {
+            var kind = ScoreSymbols.Dynamics.Contains(text) ? ScoreSymbolKind.Dynamic : ScoreSymbolKind.Text;
+            Positioned(kind, placed, text);
+            Level(anchor.At, text);
+        }
+    }
+
+    void Pedal(string? type, Anchor anchor) {
+        if (type is "stop" or "change") {
+            Positioned(ScoreSymbolKind.PedalUp, anchor, null);
+        }
+
+        if (type is "start" or "change") {
+            Positioned(ScoreSymbolKind.PedalDown, anchor, null);
+        }
+    }
+
+    static ScoreSymbolKind? WedgeKind(string? type) =>
+        type switch {
+            "crescendo" => ScoreSymbolKind.Crescendo,
+            "diminuendo" => ScoreSymbolKind.Diminuendo,
+            _ => null
+        };
+
+    /// <summary>MusicXML's "down" is an 8va line: the notes are written below their pitch.</summary>
+    static ScoreSymbolKind? OctaveKind(string? type) =>
+        type switch {
+            "down" => ScoreSymbolKind.OctaveUp,
+            "up" => ScoreSymbolKind.OctaveDown,
+            _ => null
+        };
 
     void Tempo(XElement sound, Rational at) {
         if (Number((string?)sound.Attribute("tempo")) is { } bpm) {
@@ -646,34 +697,44 @@ sealed class MusicXmlPartReader {
         return perMinute * unit.Numerator / unit.Denominator * factor;
     }
 
-    void Span(string family, XElement element, ScoreSymbolKind? kind, Rational at, int? staff, ScorePlacement? placement) {
+    void Span(string family, XElement element, ScoreSymbolKind? kind, Anchor anchor) {
         var number = Integer((string?)element.Attribute("number")) ?? 1;
         if (kind is { } k) {
-            openSpans[(family, number)] = (k, at, staff, placement);
+            openSpans[(family, number)] = (k, anchor);
             return;
         }
 
-        if ((string?)element.Attribute("type") == "stop" && openSpans.Remove((family, number), out var open)) {
-            var (start, end) = (open.Start.ToTicks(), at.ToTicks());
-            if (end > start) {
-                AddSymbol(
-                    new(
-                        score.Ids.Next(IdPrefix.ScoreSymbol),
-                        open.Kind,
-                        trackId,
-                        Tick: start,
-                        EndTick: end,
-                        Placement: open.Placement,
-                        Staff: open.Staff
-                    )
-                );
-            }
+        if ((string?)element.Attribute("type") != "stop" || !openSpans.Remove((family, number), out var open)) {
+            return;
+        }
+
+        var (start, end) = (open.Anchor.At.ToTicks(), anchor.At.ToTicks());
+        if (end > start) {
+            AddSymbol(
+                new(
+                    score.Ids.Next(IdPrefix.ScoreSymbol),
+                    open.Kind,
+                    trackId,
+                    Tick: start,
+                    EndTick: end,
+                    Placement: open.Anchor.Placement,
+                    Staff: open.Anchor.Staff
+                )
+            );
         }
     }
 
-    void Positioned(ScoreSymbolKind kind, Rational at, int? staff, ScorePlacement? placement, string? text) =>
+    void Positioned(ScoreSymbolKind kind, Anchor anchor, string? text) =>
         AddSymbol(
-            new(score.Ids.Next(IdPrefix.ScoreSymbol), kind, trackId, Tick: at.ToTicks(), Text: text, Placement: placement, Staff: staff)
+            new(
+                score.Ids.Next(IdPrefix.ScoreSymbol),
+                kind,
+                trackId,
+                Tick: anchor.At.ToTicks(),
+                Text: text,
+                Placement: anchor.Placement,
+                Staff: anchor.Staff
+            )
         );
 
     void Harmony(XElement harmony) {
@@ -690,9 +751,10 @@ sealed class MusicXmlPartReader {
         var quality = kind?.Attribute("text") is { } text
             ? MusicXmlScoreReader.Text(text.Value) ?? string.Empty
             : MusicXmlVocabulary.QualityOf(kind?.Value.Trim() ?? "major");
-        var bass = harmony.Element("bass") is { } b && MusicXmlVocabulary.ParseStep(b.Element("bass-step")?.Value) is { } bassStep
-            ? new PitchName(bassStep, Alter(b.Element("bass-alter")))
-            : null;
+        var bass = harmony.Element("bass") is { } b
+            && MusicXmlVocabulary.ParseStep(b.Element("bass-step")?.Value) is { } bassStep
+                ? new PitchName(bassStep, Alter(b.Element("bass-alter")))
+                : null;
         var grid = (string?)harmony.Attribute("print-frame") == "yes" || harmony.Element("frame") is not null;
         score.Chords.Add(
             new(
@@ -727,7 +789,10 @@ sealed class MusicXmlPartReader {
 
     static IEnumerable<string> DynamicTexts(XElement dynamics) =>
         dynamics.Elements()
-            .Select(d => d.Name.LocalName == "other-dynamics" ? MusicXmlScoreReader.Text(d.Value) : d.Name.LocalName)
+            .Select(static d => d.Name.LocalName == "other-dynamics"
+                    ? MusicXmlScoreReader.Text(d.Value)
+                    : d.Name.LocalName
+            )
             .OfType<string>();
 
     void Level(Rational at, string dynamic) {
@@ -741,12 +806,14 @@ sealed class MusicXmlPartReader {
     // ---- The result.
 
     Result Finish(long lengthTicks) {
-        var levels = dynamics.OrderBy(d => d.At).ToList();
+        var levels = dynamics.OrderBy(static d => d.At).ToList();
         var result = new List<Note>();
-        foreach (var note in notes.OrderBy(n => n.Start).ThenBy(n => n.Pitch).ThenBy(n => n.Id)) {
+        foreach (var note in notes.OrderBy(static n => n.Start).ThenBy(static n => n.Pitch).ThenBy(static n => n.Id)) {
             var start = note.Start.ToTicks();
             var velocity = note.Velocity ?? LevelAt(levels, note.Start) ?? 80;
-            result.Add(new(note.Id, note.Pitch, velocity, note.Channel, start, Math.Max(1, note.End.ToTicks() - start), 0));
+            result.Add(
+                new(note.Id, note.Pitch, velocity, note.Channel, start, Math.Max(1, note.End.ToTicks() - start), 0)
+            );
         }
 
         var count = Math.Clamp(Math.Max(staves, clefs.Count == 0 ? 1 : clefs.Keys.Max() + 1), 1, 4);
@@ -755,7 +822,7 @@ sealed class MusicXmlPartReader {
         var voiceCounts = new List<int>();
         for (var s = 0; s < count; s++) {
             staffClefs.Add(clefs.TryGetValue(s, out var clef) ? clef : s == 0 ? Clef.Treble : Clef.Bass);
-            lowest.Add(notes.Where(n => n.Staff == s).Select(n => (int?)n.Pitch).Min());
+            lowest.Add(notes.Where(n => n.Staff == s).Select(static n => (int?)n.Pitch).Min());
             voiceCounts.Add(voices.TryGetValue(s, out var v) ? v.Count : 1);
         }
 
@@ -818,7 +885,9 @@ sealed class MusicXmlPartReader {
 
         var bits = decimal.GetBits(decimal.Round(value, 6));
         var scale = (bits[3] >> 16) & 0xFF;
-        var mantissa = new BigInteger((uint)bits[0]) | (new BigInteger((uint)bits[1]) << 32) | (new BigInteger((uint)bits[2]) << 64);
+        var mantissa = new BigInteger((uint)bits[0])
+            | (new BigInteger((uint)bits[1]) << 32)
+            | (new BigInteger((uint)bits[2]) << 64);
         if (bits[3] < 0) {
             mantissa = -mantissa;
         }
@@ -830,7 +899,8 @@ sealed class MusicXmlPartReader {
         int.TryParse(text?.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var value) ? value : null;
 
     static double? Number(string? text) =>
-        double.TryParse(text?.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var value) && double.IsFinite(value)
+        double.TryParse(text?.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var value)
+        && double.IsFinite(value)
             ? value
             : null;
 

@@ -5,7 +5,8 @@ using static Anode.Interchange.Tests.MusicXml.Views;
 namespace Anode.Interchange.Tests.MusicXml;
 
 /// <summary>
-///     Random two-staff views (quarters, eighths, halves, dotted values, triplets, rests, ties across bar lines, chords and
+///     Random two-staff views (quarters, eighths, halves, dotted values, triplets, rests, ties across bar lines, chords
+///     and
 ///     a second voice): every export validates and reads back as the same notes.
 /// </summary>
 public sealed class MusicXmlPropertyTests {
@@ -68,7 +69,16 @@ public sealed class MusicXmlPropertyTests {
                         beam++;
                         for (var i = 0; i < 3; i++) {
                             var pitch = random.Next(60, 84);
-                            events.Add(Event(tick, 320, NoteValue.Eighth, [Note(nextId++, pitch)], tuplet: new(tuplet, 3, 2), beam: beam));
+                            events.Add(
+                                Event(
+                                    tick,
+                                    320,
+                                    NoteValue.Eighth,
+                                    [Note(nextId++, pitch)],
+                                    tuplet: new(tuplet, 3, 2),
+                                    beam: beam
+                                )
+                            );
                             expected.Add((pitch, tick, 320));
                             tick += 320;
                         }
@@ -80,7 +90,14 @@ public sealed class MusicXmlPropertyTests {
                         var low = random.Next(55, 70);
                         var ties = tick + 960 == start + 3840 && b < bars - 1;
                         var lowId = nextId++;
-                        events.Add(Event(tick, 960, NoteValue.Quarter, [Note(lowId, low, tieStart: ties), Note(nextId++, low + 4)]));
+                        events.Add(
+                            Event(
+                                tick,
+                                960,
+                                NoteValue.Quarter,
+                                [Note(lowId, low, tieStart: ties), Note(nextId++, low + 4)]
+                            )
+                        );
                         expected.Add((low, tick, 960));
                         if (ties) {
                             tie = (low, lowId, expected.Count - 1);
@@ -113,17 +130,33 @@ public sealed class MusicXmlPropertyTests {
             var voices = new List<ScoreVoice> { Voice(1, [..events]) };
             if (random.Next(2) == 0) {
                 var pitch = random.Next(52, 60);
-                voices.Add(Voice(2, Event(start + 1920, 1920, NoteValue.Half, [Note(nextId++, pitch)], stem: StemDirection.Down)));
+                voices.Add(
+                    Voice(
+                        2,
+                        Event(start + 1920, 1920, NoteValue.Half, [Note(nextId++, pitch)], stem: StemDirection.Down)
+                    )
+                );
                 expected.Add((pitch, start + 1920, 1920));
             }
 
             var bass = random.Next(36, 52);
             var bassVoice = Voice(1, Event(start, 3840, NoteValue.Whole, [Note(nextId++, bass)]));
             expected.Add((bass, start, 3840));
-            partMeasures.Add(Bar(new ScoreStaffMeasure(b == 0 ? Clef.Treble : null, voices), new ScoreStaffMeasure(b == 0 ? Clef.Bass : null, [bassVoice])));
+            partMeasures.Add(
+                Bar(
+                    new ScoreStaffMeasure(b == 0 ? Clef.Treble : null, voices),
+                    new ScoreStaffMeasure(b == 0 ? Clef.Bass : null, [bassVoice])
+                )
+            );
         }
 
-        var part = Part("trk_p", "Piano", [new(Clef.Treble, 0, 60, 2), new(Clef.Bass, 0, null, 1)], partMeasures, StaffStyleIds.Piano);
+        var part = Part(
+            "trk_p",
+            "Piano",
+            [new(Clef.Treble, 0, 60, 2), new(Clef.Bass, 0, null, 1)],
+            partMeasures,
+            StaffStyleIds.Piano
+        );
         return (View(measures, [part]), expected);
     }
 }

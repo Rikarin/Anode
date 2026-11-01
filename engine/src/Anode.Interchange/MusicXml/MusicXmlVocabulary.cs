@@ -11,7 +11,7 @@ static class MusicXmlVocabulary {
     static readonly int[] DiatonicOfSemitones = [0, 1, 1, 2, 2, 3, 3, 4, 5, 5, 6, 6];
 
     static readonly (string Kind, string Quality)[] Kinds = [
-        ("major", ""),
+        ("major", string.Empty),
         ("minor", "m"),
         ("augmented", "aug"),
         ("diminished", "dim"),
@@ -53,7 +53,8 @@ static class MusicXmlVocabulary {
         };
 
     /// <summary>The MIDI pitch of a spelled pitch (C4 is 60).</summary>
-    public static int Midi(PitchStep step, int alter, int octave) => ((octave + 1) * 12) + StepSemitones[(int)step] + alter;
+    public static int Midi(PitchStep step, int alter, int octave) =>
+        (octave + 1) * 12 + StepSemitones[(int)step] + alter;
 
     /// <summary>MusicXML's <c>transpose</c> for a part written <paramref name="transpose" /> semitones above concert.</summary>
     public static (int Diatonic, int Chromatic, int OctaveChange) TransposeElement(int transpose) {
@@ -67,7 +68,7 @@ static class MusicXmlVocabulary {
 
     /// <summary>A key signature moved by <paramref name="semitones" />, kept to −6…6 flats or sharps where it can.</summary>
     public static int TransposeFifths(int fifths, int semitones) {
-        var shift = ((semitones * 7 % 12) + 12) % 12;
+        var shift = (semitones * 7 % 12 + 12) % 12;
         var result = fifths + shift;
         while (result > 6) {
             result -= 12;
@@ -82,7 +83,7 @@ static class MusicXmlVocabulary {
 
     /// <summary>The tonic pitch class (0 C … 11 B) of a key signature in a mode.</summary>
     public static int Tonic(int fifths, KeyMode mode) {
-        var major = ((fifths * 7 % 12) + 12) % 12;
+        var major = (fifths * 7 % 12 + 12) % 12;
         return mode == KeyMode.Minor ? (major + 9) % 12 : major;
     }
 
@@ -253,8 +254,7 @@ static class MusicXmlVocabulary {
         };
 
     /// <summary>The General MIDI percussion name of a key (35…81), for a percussion part's instruments.</summary>
-    public static string DrumName(int pitch) =>
-        pitch is >= 35 and <= 81 ? GmDrums[pitch - 35] : $"Percussion {pitch}";
+    public static string DrumName(int pitch) => pitch is >= 35 and <= 81 ? GmDrums[pitch - 35] : $"Percussion {pitch}";
 
     static readonly string[] GmDrums = [
         "Acoustic Bass Drum", "Bass Drum 1", "Side Stick", "Acoustic Snare", "Hand Clap", "Electric Snare",
