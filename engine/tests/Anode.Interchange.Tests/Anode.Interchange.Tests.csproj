@@ -2,4 +2,8 @@
   <ItemGroup>
     <ProjectReference Include="../../src/Anode.Interchange/Anode.Interchange.csproj"/>
   </ItemGroup>
+  <ItemGroup>
+    <!-- MusicXML: the 4.0 XSD (scripts/fetch-musicxml-schema.mjs) and the import fixtures. -->
+    <None Update="MusicXml/Schema/**;MusicXml/Fixtures/**" CopyToOutputDirectory="PreserveNewest"/>
+  </ItemGroup>
 </Project>

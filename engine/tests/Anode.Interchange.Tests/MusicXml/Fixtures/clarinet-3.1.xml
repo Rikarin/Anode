@@ -1,0 +1,88 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE score-partwise PUBLIC "-//Recordare//DTD MusicXML 3.1 Partwise//EN" "http://www.musicxml.org/dtds/partwise.dtd">
+<!-- Hand-written for Anode's MusicXML import tests in the style most notation software writes (MusicXML 3.1): a B-flat
+     clarinet part at written pitch (transpose), a one-beat pickup marked implicit, a tempo by a measure-level sound
+     element, MIDI instrument data, print and layout elements the reader passes over. -->
+<score-partwise version="3.1">
+  <work>
+    <work-title>Pickup Study</work-title>
+  </work>
+  <identification>
+    <creator type="composer">Anode Tests</creator>
+    <encoding>
+      <software>Hand-written</software>
+      <encoding-date>2026-11-01</encoding-date>
+    </encoding>
+  </identification>
+  <defaults>
+    <scaling><millimeters>7.05556</millimeters><tenths>40</tenths></scaling>
+  </defaults>
+  <part-list>
+    <score-part id="P1">
+      <part-name>Clarinet in B♭</part-name>
+      <part-abbreviation>Cl.</part-abbreviation>
+      <score-instrument id="P1-I1"><instrument-name>Clarinet in B♭</instrument-name></score-instrument>
+      <midi-device id="P1-I1" port="1"/>
+      <midi-instrument id="P1-I1">
+        <midi-channel>1</midi-channel>
+        <midi-program>72</midi-program>
+        <volume>80</volume>
+        <pan>0</pan>
+      </midi-instrument>
+    </score-part>
+  </part-list>
+  <part id="P1">
+    <measure number="0" implicit="yes" width="120">
+      <print>
+        <system-layout><system-margins><left-margin>0</left-margin><right-margin>0</right-margin></system-margins></system-layout>
+      </print>
+      <attributes>
+        <divisions>2</divisions>
+        <key><fifths>2</fifths><mode>major</mode></key>
+        <time><beats>3</beats><beat-type>4</beat-type></time>
+        <clef><sign>G</sign><line>2</line></clef>
+        <transpose><diatonic>-1</diatonic><chromatic>-2</chromatic></transpose>
+      </attributes>
+      <sound tempo="90"/>
+      <note default-x="80">
+        <pitch><step>D</step><octave>5</octave></pitch>
+        <duration>2</duration>
+        <voice>1</voice>
+        <type>quarter</type>
+        <stem>down</stem>
+      </note>
+    </measure>
+    <measure number="1" width="200">
+      <direction placement="below">
+        <direction-type><words font-style="italic">dolce</words></direction-type>
+      </direction>
+      <note>
+        <pitch><step>E</step><octave>5</octave></pitch>
+        <duration>4</duration>
+        <voice>1</voice>
+        <type>half</type>
+        <stem>down</stem>
+        <notations><slur type="start" number="1"/></notations>
+      </note>
+      <note>
+        <pitch><step>F</step><alter>1</alter><octave>5</octave></pitch>
+        <duration>2</duration>
+        <voice>1</voice>
+        <type>quarter</type>
+        <stem>down</stem>
+        <notations><slur type="stop" number="1"/></notations>
+      </note>
+    </measure>
+    <measure number="2" width="180">
+      <note>
+        <pitch><step>G</step><octave>5</octave></pitch>
+        <duration>6</duration>
+        <voice>1</voice>
+        <type>half</type>
+        <dot/>
+        <stem>down</stem>
+      </note>
+      <barline location="right"><bar-style>light-heavy</bar-style></barline>
+    </measure>
+  </part>
+</score-partwise>
