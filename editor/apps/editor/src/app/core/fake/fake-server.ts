@@ -24,6 +24,8 @@ import {
   EmptyProjectScore,
   type FileAnalysis,
   type GrooveTemplate,
+  type ImportedContent,
+  type ImportedTrack,
   type Insert,
   type InsertReading,
   type IoLabel,
@@ -125,6 +127,7 @@ import {
   patchOf,
   type StoredPatch
 } from './fake-mix';
+import { renderScore } from './fake-notation';
 import {
   applyMidiEffectCommand,
   applyPhase6Command,
@@ -165,9 +168,19 @@ import {
   versionPath
 } from './fake-phase7';
 import { applySyncSettings, type ControlEffect, FakeControl, stemList, StemNames, stemTrackName } from './fake-phase8';
+import {
+  applyPhase9Command,
+  baseName,
+  diffScore,
+  isPhase9Command,
+  musicXmlContent,
+  pruneScore,
+  withExtension
+} from './fake-phase9';
 import { CrashyPluginId, FakeCatalogue, FakeEffects, FakeMidiDevices } from './fake-plugins';
 import { FakeMidiEffects, FakeT2Effects, FakeT2Instruments, RemixFxId, withMacros } from './fake-plugins-phase6';
 import { FakeScriptPresets } from './fake-scripts';
+import { FactoryStaffStyles } from './fake-staff-styles';
 
 /** Ticks per quarter note (the contract's time base). */
 const Ppq = 960;
@@ -501,6 +514,8 @@ export class FakeAnodeServer implements AnodeApi {
         after = this.applyCommand(keepSavedValues(after, command), command);
         this.notePerformance(command);
       }
+      // Score content anchored to deleted notes or tracks goes with them (Phase 9).
+      after = pruneScore(after);
 
       // Compare swaps saved and edited values without an undo step (its delta still reaches every client).
       if (batch.commands.every(c => c.type === 'compareSmartControls')) {
@@ -1587,58 +1602,389 @@ export class FakeAnodeServer implements AnodeApi {
     });
   }
 
-  // ---- Phase 9 (docs/10-phase-9.md): the score, staff styles and interchange, until the editor workstream (C)
-  // implements them.
+  // ---- Phase 9 (docs/10-phase-9.md): the score (through the notation stand-in), staff styles and interchange.
 
-  score(_query: ScoreQuery): Promise<ScoreDocument> {
-    return this.phase9Pending('GetScore');
+  score(query: ScoreQuery): Promise<ScoreDocument> {
+    return this.answer('GetScore', () => {
+      const project = this.require();
+      if (query.set && !project.score.sets.some(s => s.id === query.set)) {
+        throw new ApiError(404, `No score set ${query.set}.`);
+      }
+      if (query.part) {
+        const track = project.tracks.find(t => t.id === query.part);
+        if (!track) {
+          throw new ApiError(404, `No track ${query.part}.`);
+        }
+        if (track.kind !== 'instrument' && track.kind !== 'midi') {
+          throw new ApiError(422, `${track.name} is not a MIDI track: the score shows MIDI.`);
+        }
+      }
+      return structuredClone(renderScore(project, query));
+    });
   }
 
   staffStyles(): Promise<StaffStyle[]> {
-    return this.phase9Pending('ListStaffStyles');
+    return this.answer('ListStaffStyles', () => structuredClone([...FactoryStaffStyles]));
   }
 
-  exportMusicXml(_request: MusicXmlExportRequest): Promise<Job> {
-    return this.phase9Pending('ExportMusicXml');
-  }
-
-  exportAaf(_request: AafExportRequest): Promise<Job> {
-    return this.phase9Pending('ExportAaf');
-  }
-
-  exportMidi(_request: MidiExportRequest): Promise<Job> {
-    return this.phase9Pending('ExportMidi');
-  }
-
-  importMusicXml(_request: MusicXmlImportRequest): Promise<Job> {
-    return this.phase9Pending('ImportMusicXml');
-  }
-
-  uploadMusicXml(_file: File): Promise<Job> {
-    return this.phase9Pending('UploadMusicXml');
-  }
-
-  importAaf(_request: AafImportRequest): Promise<Job> {
-    return this.phase9Pending('ImportAaf');
-  }
-
-  uploadAaf(_file: File): Promise<Job> {
-    return this.phase9Pending('UploadAaf');
-  }
-
-  importMidi(_request: MidiImportRequest): Promise<Job> {
-    return this.phase9Pending('ImportMidi');
-  }
-
-  uploadMidi(_file: File, _options?: MidiImportOptions): Promise<Job> {
-    return this.phase9Pending('UploadMidi');
-  }
-
-  /** A Phase 9 endpoint the fake Server does not answer yet (docs/10-phase-9.md): 422. */
-  private phase9Pending<T>(operation: string): Promise<T> {
-    return this.answer(operation, () => {
-      throw new ApiError(422, `${operation}: not in the fake Server yet.`);
+  exportMusicXml(request: MusicXmlExportRequest): Promise<Job> {
+    return this.answer('ExportMusicXml', () => {
+      const project = this.require();
+      if (request.setId && !project.score.sets.some(s => s.id === request.setId)) {
+        throw new ApiError(404, `No score set ${request.setId}.`);
+      }
+      if (request.partTrackId && !project.tracks.some(t => t.id === request.partTrackId)) {
+        throw new ApiError(404, `No track ${request.partTrackId}.`);
+      }
+      const name = this.exportName(request.fileName, request.compressed ? 'mxl' : 'musicxml');
+      const directory = this.exportFolder(project, request.directory);
+      return this.startJob('musicXmlExport', { finish: () => [`${directory}/${name}`] }, 1);
     });
+  }
+
+  exportAaf(request: AafExportRequest): Promise<Job> {
+    return this.answer('ExportAaf', () => {
+      const project = this.require();
+      const audio = project.tracks.filter(t => t.kind === 'audio');
+      const ids = request.trackIds ?? audio.map(t => t.id);
+      for (const id of ids) {
+        if (!audio.some(t => t.id === id)) {
+          throw new ApiError(422, `${id} is not an audio track: AAF carries the audio tracks.`);
+        }
+      }
+      const name = this.exportName(request.fileName, 'aaf');
+      const directory = this.exportFolder(project, request.directory);
+      const embed = request.embedMedia;
+      return this.startJob(
+        'aafExport',
+        {
+          finish: () => {
+            const now = this.require();
+            const files = [`${directory}/${name}`];
+            if (!embed) {
+              // Linked media: the WAVs beside the file, in "<name> Media/".
+              const used = new Set(now.regions.filter(r => ids.includes(r.trackId)).map(r => r.fileId));
+              for (const file of now.audioFiles.filter(f => used.has(f.id))) {
+                files.push(`${directory}/${baseName(name)} Media/${baseName(file.name)}.wav`);
+              }
+            }
+            return files;
+          }
+        },
+        1
+      );
+    });
+  }
+
+  exportMidi(request: MidiExportRequest): Promise<Job> {
+    return this.answer('ExportMidi', () => {
+      const project = this.require();
+      if (request.format !== 0 && request.format !== 1) {
+        throw new ApiError(422, 'A Standard MIDI File is type 0 or 1.');
+      }
+      for (const id of request.trackIds ?? []) {
+        if (!project.tracks.some(t => t.id === id)) {
+          throw new ApiError(404, `No track ${id}.`);
+        }
+      }
+      if (request.regionId && !project.midiRegions.some(r => r.id === request.regionId)) {
+        throw new ApiError(404, `No MIDI region ${request.regionId}.`);
+      }
+      const name = this.exportName(request.fileName, 'mid');
+      const directory = this.exportFolder(project, request.directory);
+      return this.startJob('midiExport', { finish: () => [`${directory}/${name}`] }, 1);
+    });
+  }
+
+  importMusicXml(request: MusicXmlImportRequest): Promise<Job> {
+    return this.answer('ImportMusicXml', () => this.startMusicXmlImport(request.path));
+  }
+
+  uploadMusicXml(file: File): Promise<Job> {
+    return this.answer('UploadMusicXml', () => this.startMusicXmlImport(file.name));
+  }
+
+  importAaf(request: AafImportRequest): Promise<Job> {
+    return this.answer('ImportAaf', () => this.startAafImport(request.path));
+  }
+
+  uploadAaf(file: File): Promise<Job> {
+    return this.answer('UploadAaf', () => this.startAafImport(file.name));
+  }
+
+  importMidi(request: MidiImportRequest): Promise<Job> {
+    return this.answer('ImportMidi', () => this.startMidiImport(request.path, request));
+  }
+
+  uploadMidi(file: File, options: MidiImportOptions = {}): Promise<Job> {
+    return this.answer('UploadMidi', () =>
+      this.startMidiImport(file.name, {
+        importTempo: options.importTempo ?? true,
+        importMarkers: options.importMarkers ?? true,
+        merge: options.merge ?? false
+      })
+    );
+  }
+
+  /** A file name for an export: not empty, the extension added when missing. */
+  private exportName(fileName: string, extension: string): string {
+    const name = fileName.trim();
+    if (!name || /[\\/]/.test(name)) {
+      throw new ApiError(422, 'An export needs a file name (without folders).');
+    }
+    return withExtension(name, extension);
+  }
+
+  /** Where exports go: the folder asked for, else the project's Exports folder. */
+  private exportFolder(project: Project, directory: string | null | undefined): string {
+    return (directory?.trim() || `${projectFolder(project)}/Exports`).replace(/\/+$/, '');
+  }
+
+  private startMusicXmlImport(path: string): Job {
+    this.require();
+    if (!/\.(musicxml|mxl|xml)$/i.test(path)) {
+      throw new ApiError(422, `${path} is not a MusicXML file (.musicxml, .mxl or .xml).`);
+    }
+    return this.startJob(
+      'musicXmlImport',
+      { finish: () => this.finishImport(musicXmlContent(path), 'Import MusicXML') },
+      1
+    );
+  }
+
+  private startAafImport(path: string): Job {
+    this.require();
+    if (!/\.aaf$/i.test(path)) {
+      throw new ApiError(422, `${path} is not an AAF file.`);
+    }
+    return this.startJob('aafImport', { finish: () => this.finishAafImport(path) }, 1);
+  }
+
+  private startMidiImport(path: string, options: Omit<MidiImportRequest, 'path'>): Job {
+    this.require();
+    if (fileKind(path) !== 'midi') {
+      throw new ApiError(422, `${path} is not a Standard MIDI File.`);
+    }
+    return this.startJob('midiImport', { finish: () => this.finishMidiImport(path, options) }, 1);
+  }
+
+  /** An import's content applied as one undo step (`importTracks`); imports write no files. */
+  private finishImport(content: ImportedContent, label: string, base?: Project): string[] {
+    const before = this.require();
+    const after = pruneScore(this.applyCommand(base ?? before, { type: 'importTracks', content }));
+    this.commit(before, after, label);
+    return [];
+  }
+
+  /** An AAF composition (E's reader stands behind the real one): two audio tracks of clips, gain and fades. */
+  private finishAafImport(path: string): string[] {
+    const before = this.require();
+    const name = baseName(path);
+    const rate = before.sampleRate;
+    const files: AudioFile[] = ['Drums', 'Bass'].map(part => ({
+      id: `aud_${this.nextId++}`,
+      name: `${name} ${part}.wav`,
+      path: `Audio Files/${name} ${part}.wav`,
+      sampleRate: rate,
+      channels: 2,
+      bitDepth: 24,
+      frames: rate * 8,
+      tempo: null,
+      version: 0
+    }));
+    const withFiles: Project = { ...before, audioFiles: [...before.audioFiles, ...files] };
+    const clip = (
+      id: string,
+      trackId: string,
+      file: AudioFile,
+      startTick: number,
+      fileOffset: number,
+      length: number
+    ): AudioRegion => ({
+      id,
+      trackId,
+      fileId: file.id,
+      name: baseName(file.name),
+      startTick,
+      fileOffset,
+      length,
+      gainDb: -3,
+      fadeIn: Math.round(rate / 100),
+      fadeOut: Math.round(rate / 10),
+      fadeInCurve: 0,
+      fadeOutCurve: 0,
+      muted: false,
+      follow: 'off',
+      flexMarkers: [],
+      transpose: 0,
+      fineTune: 0,
+      pitchNotes: []
+    });
+    const [drums, bass] = files as [AudioFile, AudioFile];
+    const content: ImportedContent = {
+      tracks: [
+        {
+          id: 't1',
+          name: 'Drums',
+          kind: 'audio',
+          midiRegions: [],
+          regions: [clip('a1', 't1', drums, 0, 0, rate * 4), clip('a2', 't1', drums, 7 * Ppq, rate * 2, rate * 4)]
+        },
+        {
+          id: 't2',
+          name: 'Bass',
+          kind: 'audio',
+          midiRegions: [],
+          regions: [clip('a3', 't2', bass, 4 * Ppq, 0, rate * 6)]
+        }
+      ],
+      markers: [{ id: 'm1', name: 'Verse', tick: 0, lengthTicks: 0, color: null, text: '' }],
+      score: null
+    };
+    return this.finishImport(content, 'Import AAF', withFiles);
+  }
+
+  /** A Standard MIDI File's tracks (the fake reads them as the Phase 3 import does), with the options. */
+  private finishMidiImport(path: string, options: Omit<MidiImportRequest, 'path'>): string[] {
+    const before = this.require();
+    const read = this.midiFileTracks(before, path);
+    const added = read.tracks.filter(t => !before.tracks.some(b => b.id === t.id));
+    let tracks: ImportedTrack[] = added.map(t => ({
+      id: t.id,
+      name: t.name,
+      kind: t.kind,
+      midiRegions: read.midiRegions.filter(r => r.trackId === t.id),
+      regions: []
+    }));
+    const first = tracks[0];
+    if (options.merge && first && tracks.length > 1) {
+      tracks = [
+        {
+          ...first,
+          name: baseName(path),
+          midiRegions: tracks.flatMap(t => t.midiRegions.map(r => ({ ...r, trackId: first.id })))
+        }
+      ];
+    }
+    const content: ImportedContent = {
+      tracks,
+      tempoEvents: options.importTempo ? read.settings.tempoEvents : null,
+      signatures: options.importTempo ? read.settings.signatures : null,
+      markers: options.importMarkers
+        ? [{ id: 'm1', name: baseName(path), tick: 0, lengthTicks: 0, color: null, text: '' }]
+        : null,
+      score: null
+    };
+    return this.finishImport(content, 'Import MIDI File');
+  }
+
+  /**
+   * `importTracks`: the content's tracks, regions and score content with real ids (the content's are provisional and
+   * its references are rewritten), tempo, signatures and keys replacing the project's, markers added, the layout's
+   * title and composer filled when empty.
+   */
+  private importTracks(project: Project, content: ImportedContent): Project {
+    let next = project;
+    const tracks = new Map<string, string>();
+    const notes = new Map<number, number>();
+    const styles = new Map<string, string>();
+    const score = content.score;
+    const staffStyles = (score?.staffStyles ?? []).map(style => {
+      const id = `sts_${this.nextId++}`;
+      styles.set(style.id, id);
+      return { ...style, id };
+    });
+    for (const imported of content.tracks) {
+      if (imported.kind !== 'instrument' && imported.kind !== 'midi' && imported.kind !== 'audio') {
+        throw new ApiError(422, 'Imported tracks are instrument, MIDI or audio tracks.');
+      }
+      next = this.applyCommand(next, { type: 'addTrack', kind: imported.kind, stereo: true, name: imported.name });
+      const track = next.tracks.at(-1) as Track;
+      tracks.set(imported.id, track.id);
+      const styleId = imported.staffStyleId ? (styles.get(imported.staffStyleId) ?? imported.staffStyleId) : null;
+      const midiRegions: MidiRegion[] = imported.midiRegions.map(r => ({
+        ...structuredClone(r),
+        id: `mid_${this.nextId++}`,
+        trackId: track.id,
+        notes: r.notes.map(n => {
+          const id = this.nextId++;
+          notes.set(n.id, id);
+          return { ...n, id };
+        })
+      }));
+      const files = next.audioFiles;
+      const regions: AudioRegion[] = imported.regions.map(r => {
+        if (!files.some(f => f.id === r.fileId)) {
+          throw new ApiError(422, `No audio file ${r.fileId} for ${r.name}.`);
+        }
+        return { ...structuredClone(r), id: `rgn_${this.nextId++}`, trackId: track.id };
+      });
+      next = {
+        ...next,
+        tracks: next.tracks.map(t => (t.id === track.id && styleId ? { ...t, staffStyleId: styleId } : t)),
+        midiRegions: [...next.midiRegions, ...midiRegions],
+        regions: [...next.regions, ...regions]
+      };
+    }
+    if (content.tempoEvents?.length) {
+      next = this.applyCommand(next, { type: 'setTempoEvents', events: content.tempoEvents });
+    }
+    if (content.signatures?.length) {
+      next = this.applyCommand(next, { type: 'setSignatures', events: content.signatures });
+    }
+    if (content.keys?.length) {
+      next = this.applyCommand(next, { type: 'setKeys', events: content.keys });
+    }
+    for (const marker of content.markers ?? []) {
+      next = this.applyCommand(next, {
+        type: 'addMarker',
+        name: marker.name,
+        tick: marker.tick,
+        lengthTicks: marker.lengthTicks
+      });
+    }
+    if (score) {
+      const trackOf = (id: string): string => {
+        const real = tracks.get(id);
+        if (!real) {
+          throw new ApiError(422, `No imported track ${id}.`);
+        }
+        return real;
+      };
+      const noteOf = (id: number | null | undefined): number | null => (id == null ? null : (notes.get(id) ?? -1));
+      const layout = next.score.layout;
+      next = {
+        ...next,
+        score: {
+          ...next.score,
+          staffStyles: [...next.score.staffStyles, ...staffStyles],
+          symbols: [
+            ...next.score.symbols,
+            ...score.symbols.map(s => ({
+              ...s,
+              id: `sym_${this.nextId++}`,
+              trackId: trackOf(s.trackId),
+              noteId: noteOf(s.noteId),
+              endNoteId: noteOf(s.endNoteId)
+            }))
+          ],
+          lyrics: [
+            ...next.score.lyrics,
+            ...score.lyrics.map(l => ({ ...l, id: `lyr_${this.nextId++}`, noteId: notes.get(l.noteId) ?? -1 }))
+          ],
+          chords: [
+            ...next.score.chords,
+            ...score.chords.map(c => ({ ...c, id: `chd_${this.nextId++}`, trackId: trackOf(c.trackId) }))
+          ],
+          layout: {
+            ...layout,
+            title: layout.title || score.title || '',
+            composer: layout.composer || score.composer || ''
+          }
+        }
+      };
+    }
+    return next;
   }
 
   // ---- Phase 8 test hooks: what the host and the outside world would do
@@ -3884,27 +4230,18 @@ export class FakeAnodeServer implements AnodeApi {
       case 'addStems':
         // The Stem Splitter's result, applied by its job (Phase 8).
         return this.addStems(project, command);
-      case 'setStaffStyle':
-      case 'deleteStaffStyle':
-      case 'assignStaffStyle':
-      case 'setRegionNotation':
-      case 'addScoreSymbols':
-      case 'editScoreSymbols':
-      case 'deleteScoreSymbols':
-      case 'setLyrics':
-      case 'addChordSymbols':
-      case 'editChordSymbols':
-      case 'deleteChordSymbols':
-      case 'setScoreSet':
-      case 'deleteScoreSet':
-      case 'setScoreLayout':
-      case 'moveScoreNotes':
-      case 'addScoreNote':
       case 'importTracks':
-        // Staff styles, region notation, score symbols, lyrics, chord symbols, score sets, layout, score edits and
-        // interchange imports: Phase 9, the editor workstream (docs/10-phase-9.md).
-        throw new ApiError(422, `${command.type}: not in the fake Server yet.`);
+        // The interchange imports' result (Phase 9), applied by their jobs.
+        return this.importTracks(project, command.content);
       default:
+        if (isPhase9Command(command)) {
+          // Staff styles, region notation, score symbols, lyrics, chord symbols, score sets, layout and score edits
+          // (Phase 9).
+          return applyPhase9Command(project, command, {
+            id: prefix => `${prefix}_${this.nextId++}`,
+            noteId: () => this.nextId++
+          });
+        }
         if (isPhase7Command(command)) {
           // The Event List, MIDI Transform, grooves, articulations, lane sets, step input, the Audio File Editor and
           // Scripter (Phase 7).
@@ -4840,6 +5177,7 @@ export function diff(before: Project, after: Project): DeltaOp[] {
     id => ops.push({ op: 'laneSetRemoved', id }),
     set => ops.push({ op: 'laneSetUpserted', set })
   );
+  diffScore(before.score, after.score, ops);
   const groupsAfter = new Map(after.groups.map(g => [g.number, g]));
   const groupsBefore = new Map(before.groups.map(g => [g.number, g]));
   for (const group of before.groups) {

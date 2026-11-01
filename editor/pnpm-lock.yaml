@@ -295,6 +295,9 @@ importers:
       tailwind-merge:
         specifier: ^3.7.0
         version: 3.7.0
+      verovio:
+        specifier: 6.4.0
+        version: 6.4.0
     devDependencies:
       '@analogjs/vite-plugin-angular':
         specifier: ~2.7.3
@@ -6708,6 +6711,10 @@ packages:
   verkit@0.5.0:
     resolution: {integrity: sha512-u4J1hr6Y+C/hit34GwL3eIcUf3wngT8TlYUjK7tk0jxydKLAq3sYvifjdTDA6U3KCKRcQCQDGf/srjxfZF3l7g==}
     engines: {node: '>=18.12.0'}
+
+  verovio@6.4.0:
+    resolution: {integrity: sha512-xI10NuwOZ2VZHKG9i4HGaj7TXp7xgThNG2soVy1aDwH9O7oO/j5vdfrMO56EqB1XZ8WmhwXHprtUuFlgE3I7wg==}
+    engines: {node: '>= 14.18.0'}
 
   vite-tsconfig-paths@6.1.1:
     resolution: {integrity: sha512-2cihq7zliibCCZ8P9cKJrQBkfgdvcFkOOc3Y02o3GWUDLgqjWsZudaoiuOwO/gzTzy17cS5F7ZPo4bsnS4DGkg==}
@@ -13321,6 +13328,8 @@ snapshots:
   verkit@0.3.2: {}
 
   verkit@0.5.0: {}
+
+  verovio@6.4.0: {}
 
   vite-tsconfig-paths@6.1.1(supports-color@10.2.2)(typescript@6.0.3)(vite@8.3.5(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0)(sass-embedded@1.104.1)(sass@1.104.1)(yaml@2.9.0)):
     dependencies:

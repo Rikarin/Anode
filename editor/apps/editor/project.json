@@ -18,6 +18,11 @@
           {
             "glob": "**/*",
             "input": "apps/editor/public"
+          },
+          {
+            "glob": "{verovio-module.mjs,verovio.mjs}",
+            "input": "node_modules/verovio/dist",
+            "output": "verovio"
           }
         ],
         "styles": ["apps/editor/src/styles.css"]

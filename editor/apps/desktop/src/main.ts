@@ -121,7 +121,8 @@ function contentSecurityPolicy(): string {
     : 'http://127.0.0.1:* ws://127.0.0.1:*';
   return [
     "default-src 'self'",
-    "script-src 'self'",
+    // Verovio (the Score Editor's engraver, ADR-0011) compiles its WebAssembly in a worker.
+    "script-src 'self' 'wasm-unsafe-eval'",
     // Angular and the overlay CDK set inline styles.
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: blob:",
