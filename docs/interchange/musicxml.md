@@ -134,7 +134,8 @@ tuplets do not drift. Ids are provisional and sequential: `trk_000001`, `mid_…
   dynamic mark at or before the note in that part (pp 36, p 50, mp 64, mf 80, f 96, ff 112…). The default is 80.
 
 **Staff styles.**
-- A part whose clefs and transposition match a factory style gets that style:
+- A part whose clefs and transposition match a factory style (the notation engine's `FactoryStaffStyles`) gets that
+  style:
   - percussion: drums;
   - treble: treble; treble 8vb: guitar; bass 8vb: bass guitar;
   - alto: viola;
@@ -236,6 +237,10 @@ The tests validate every exported file, and the hand-written 4.0 fixtures, again
 [W3C Community Final Specification Agreement](https://www.w3.org/community/about/agreements/final/). That agreement
 grants a copyright licence to reproduce, distribute and make derivative works of the specification, so committing the
 XSD with the tests is allowed. `xml.xsd` is the W3C's schema for the XML namespace.
+
+The notation engine's shared vectors (`ScoreVectors.json`) and golden views are exported, validated and read back too
+(`MusicXmlEngineTests`): every note comes back where the score draws it, with its staff style, and the imported notes
+render to the same events; every factory style comes back as itself.
 
 **Fixtures** (`engine/tests/Anode.Interchange.Tests/MusicXml/Fixtures/`, hand-written):
 - `string-quartet.musicxml`: four parts. Key and meter change in bar 3, with ties across bar lines, a triplet, slurs,

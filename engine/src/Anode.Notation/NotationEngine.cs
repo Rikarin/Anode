@@ -19,6 +19,9 @@ public sealed record ScoreRequest(
 ///     Verovio engraves (docs/adr/0011-notation-rendering.md).
 /// </summary>
 public static class NotationEngine {
+    /// <summary>The length of a default short instrument name (<see cref="DefaultShortName" />).</summary>
+    public const int ShortNameLength = 5;
+
     /// <summary>
     ///     The score view of <paramref name="state" /> for <paramref name="request" />: each track's MIDI regions under its
     ///     staff style (<see cref="FactoryStaffStyles.Resolve" />) and their <see cref="RegionNotation" />, measured by the
@@ -199,14 +202,27 @@ public static class NotationEngine {
 
         return new(
             track.Id,
-            name?.Full ?? track.Name,
-            name?.Short ?? track.Name,
+            name is { Full.Length: > 0 } ? name.Full : track.Name,
+            name is { Short.Length: > 0 } ? name.Short : DefaultShortName(track.Name),
             style.Id,
             transposing ? style.Staves[0].Transpose : 0,
             style.Brace && style.Staves.Count > 1,
             style.Staves,
             partMeasures
         );
+    }
+
+    /// <summary>
+    ///     A track's short instrument name when the layout gives none (<see cref="ScoreLayout.InstrumentNames" /> lists
+    ///     only the tracks whose names differ from these defaults, as the editor does): the track's name cut to
+    ///     <see cref="ShortNameLength" /> characters, never inside a surrogate pair.
+    /// </summary>
+    public static string DefaultShortName(string trackName) {
+        if (trackName.Length <= ShortNameLength) {
+            return trackName;
+        }
+
+        return trackName[..(char.IsHighSurrogate(trackName[ShortNameLength - 1]) ? ShortNameLength - 1 : ShortNameLength)];
     }
 
     /// <summary>

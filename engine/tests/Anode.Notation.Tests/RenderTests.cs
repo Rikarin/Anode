@@ -26,6 +26,28 @@ public sealed class RenderTests {
         );
 
     [Fact]
+    public void Instrument_names_default_to_the_track_name_and_its_first_five_characters() {
+        var project = new TestProject();
+        var clarinet = project.Track("Clarinet", StaffStyleIds.ClarinetBb);
+        var oboe = project.Track("Oboe", StaffStyleIds.Treble);
+        var horn = project.Track("Horn", StaffStyleIds.HornF);
+        foreach (var track in new[] { clarinet, oboe, horn }) {
+            project.Region(track, 0, Bar, null, N(1, 60, 0, Q));
+        }
+
+        // A layout entry names only what differs ("" is unset): the horn's short name.
+        var layout = ScoreLayout.Default with { InstrumentNames = [new(horn, string.Empty, "Hn.")] };
+        var view = NotationEngine.Render(project.State, ProjectScore.Empty with { Layout = layout }, new());
+        Assert.Equal(
+            [("Clarinet", "Clari"), ("Oboe", "Oboe"), ("Horn", "Hn.")],
+            view.Parts.Select(static p => (p.Name, p.ShortName))
+        );
+        Assert.Equal("Clari", NotationEngine.DefaultShortName("Clarinet"));
+        Assert.Equal("Abc\uD834\uDD1E", NotationEngine.DefaultShortName("Abc\uD834\uDD1Edef"));
+        Assert.Equal("Abcd", NotationEngine.DefaultShortName("Abcd\uD834\uDD1E"));
+    }
+
+    [Fact]
     public void A_note_across_a_bar_line_is_tied() =>
         Same(
             """

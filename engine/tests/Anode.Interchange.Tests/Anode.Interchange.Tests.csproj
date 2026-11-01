@@ -5,5 +5,8 @@
   <ItemGroup>
     <!-- MusicXML: the 4.0 XSD (scripts/fetch-musicxml-schema.mjs) and the import fixtures. -->
     <None Update="MusicXml/Schema/**;MusicXml/Fixtures/**" CopyToOutputDirectory="PreserveNewest"/>
+    <!-- The notation engine's shared vectors and golden views, written as MusicXML by MusicXmlEngineTests. -->
+    <None Include="../Anode.Notation.Tests/ScoreVectors.json" Link="MusicXml/Notation/ScoreVectors.json" CopyToOutputDirectory="PreserveNewest"/>
+    <None Include="../Anode.Notation.Tests/Golden/*.json" Link="MusicXml/Notation/Golden/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest"/>
   </ItemGroup>
 </Project>

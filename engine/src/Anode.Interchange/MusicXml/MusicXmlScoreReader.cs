@@ -1,4 +1,5 @@
 using Anode.Contracts;
+using Anode.Notation;
 using Anode.Model;
 using System.Xml.Linq;
 
@@ -194,25 +195,48 @@ sealed class MusicXmlScoreReader {
         return Factory(clefs, transpose, name.ToLowerInvariant()) ?? Custom(part, transpose, name);
     }
 
-    static string? Factory(IReadOnlyList<Clef> clefs, int transpose, string name) =>
-        (clefs, transpose) switch {
-            ([Clef.Percussion], _) => StaffStyleIds.Drums,
-            ([Clef.Treble or Clef.None], 0) => StaffStyleIds.Treble,
-            ([Clef.Treble8vb], 0) => StaffStyleIds.Guitar,
-            ([Clef.Bass8vb], 0) => StaffStyleIds.BassGuitar,
-            ([Clef.Alto], 0) => StaffStyleIds.Viola,
-            ([Clef.Bass], 0) => name.Contains("cello", StringComparison.Ordinal)
-                ? StaffStyleIds.Cello
-                : StaffStyleIds.Bass,
-            ([Clef.Treble], 2) => name.Contains("trumpet", StringComparison.Ordinal)
-                ? StaffStyleIds.TrumpetBb
-                : StaffStyleIds.ClarinetBb,
-            ([Clef.Treble], 7) => StaffStyleIds.HornF,
-            ([Clef.Treble], 9) => StaffStyleIds.AltoSax,
-            ([Clef.Treble], 14) => StaffStyleIds.TenorSax,
-            ([Clef.Treble, Clef.Bass], 0) => StaffStyleIds.Piano,
-            _ => null
-        };
+    /// <summary>
+    ///     The factory style (<see cref="FactoryStaffStyles.All" />, the notation engine's) whose staves have these clefs
+    ///     (no clef reads as treble) and this transposition, a percussion staff being the drums whatever it says; of two
+    ///     with the same staves (bass and cello, B♭ clarinet and trumpet) the one whose name's last word the part's name
+    ///     holds, else the first in library order.
+    /// </summary>
+    static string? Factory(IReadOnlyList<Clef> clefs, int transpose, string name) {
+        if (clefs is [Clef.Percussion]) {
+            return StaffStyleIds.Drums;
+        }
+
+        StaffStyle? first = null;
+        foreach (var style in FactoryStaffStyles.All) {
+            if (style.DrumMap is not null || !Matches(style.Staves, clefs, transpose)) {
+                continue;
+            }
+
+            var word = style.Name.Split(' ')[^1].ToLowerInvariant();
+            if (name.Contains(word, StringComparison.Ordinal)) {
+                return style.Id;
+            }
+
+            first ??= style;
+        }
+
+        return first?.Id;
+    }
+
+    static bool Matches(IReadOnlyList<Staff> staves, IReadOnlyList<Clef> clefs, int transpose) {
+        if (staves.Count != clefs.Count) {
+            return false;
+        }
+
+        for (var s = 0; s < staves.Count; s++) {
+            var clef = clefs[s] is Clef.None ? Clef.Treble : clefs[s];
+            if (staves[s].Clef != clef || staves[s].Transpose != transpose) {
+                return false;
+            }
+        }
+
+        return true;
+    }
 
     /// <summary>A style of the part's own staves (shared by parts with the same setup).</summary>
     string Custom(MusicXmlPartReader.Result part, int transpose, string name) {
