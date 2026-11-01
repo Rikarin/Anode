@@ -66,6 +66,42 @@ public sealed record ProjectState(
     public ImmutableSortedDictionary<string, LaneSet> LaneSets { get; init; } =
         ImmutableSortedDictionary.Create<string, LaneSet>(StringComparer.Ordinal);
 
+    /// <summary>The project's own staff styles, by id (docs/10-phase-9.md; factory styles are the notation engine's).</summary>
+    public ImmutableSortedDictionary<string, StaffStyle> StaffStyles { get; init; } =
+        ImmutableSortedDictionary.Create<string, StaffStyle>(StringComparer.Ordinal);
+
+    /// <summary>The score symbols, by id (Phase 9).</summary>
+    public ImmutableSortedDictionary<string, ScoreSymbol> ScoreSymbols { get; init; } =
+        ImmutableSortedDictionary.Create<string, ScoreSymbol>(StringComparer.Ordinal);
+
+    /// <summary>The lyric syllables, by id (Phase 9): at most one per note and verse.</summary>
+    public ImmutableSortedDictionary<string, LyricSyllable> Lyrics { get; init; } =
+        ImmutableSortedDictionary.Create<string, LyricSyllable>(StringComparer.Ordinal);
+
+    /// <summary>The chord symbols, by id (Phase 9).</summary>
+    public ImmutableSortedDictionary<string, ChordSymbol> ChordSymbols { get; init; } =
+        ImmutableSortedDictionary.Create<string, ChordSymbol>(StringComparer.Ordinal);
+
+    /// <summary>The score sets, by id (Phase 9).</summary>
+    public ImmutableSortedDictionary<string, ScoreSet> ScoreSets { get; init; } =
+        ImmutableSortedDictionary.Create<string, ScoreSet>(StringComparer.Ordinal);
+
+    /// <summary>The score's layout (Phase 9): one per project.</summary>
+    public ScoreLayout ScoreLayout { get; init; } = ScoreLayout.Default;
+
+    /// <summary>
+    ///     The stored score content as the contract has it (<c>Project.score</c>): every list by id, the layout.
+    /// </summary>
+    public ProjectScore Score =>
+        new(
+            [..StaffStyles.Values],
+            [..ScoreSymbols.Values],
+            [..Lyrics.Values],
+            [..ChordSymbols.Values],
+            [..ScoreSets.Values],
+            ScoreLayout
+        );
+
     /// <summary>The project's Note Pad.</summary>
     public string Notes { get; init; } = string.Empty;
 
@@ -212,8 +248,7 @@ public sealed record ProjectState(
             [..Grooves.Values],
             [..ArticulationSets.Values],
             [..LaneSets.Values],
-            // The score content: Phase 9, workstream B (docs/10-phase-9.md).
-            ProjectScore.Empty
+            Score
         );
 
     /// <summary>Applies one delta operation (an edit's primitive step, also what clients apply).</summary>
@@ -271,6 +306,17 @@ public sealed record ProjectState(
             ArticulationSetRemoved(var id) => this with { ArticulationSets = ArticulationSets.Remove(id) },
             LaneSetUpserted(var set) => this with { LaneSets = LaneSets.SetItem(set.Id, set) },
             LaneSetRemoved(var id) => this with { LaneSets = LaneSets.Remove(id) },
+            StaffStyleUpserted(var style) => this with { StaffStyles = StaffStyles.SetItem(style.Id, style) },
+            StaffStyleRemoved(var id) => this with { StaffStyles = StaffStyles.Remove(id) },
+            ScoreSymbolUpserted(var symbol) => this with { ScoreSymbols = ScoreSymbols.SetItem(symbol.Id, symbol) },
+            ScoreSymbolRemoved(var id) => this with { ScoreSymbols = ScoreSymbols.Remove(id) },
+            LyricUpserted(var lyric) => this with { Lyrics = Lyrics.SetItem(lyric.Id, lyric) },
+            LyricRemoved(var id) => this with { Lyrics = Lyrics.Remove(id) },
+            ChordSymbolUpserted(var chord) => this with { ChordSymbols = ChordSymbols.SetItem(chord.Id, chord) },
+            ChordSymbolRemoved(var id) => this with { ChordSymbols = ChordSymbols.Remove(id) },
+            ScoreSetUpserted(var set) => this with { ScoreSets = ScoreSets.SetItem(set.Id, set) },
+            ScoreSetRemoved(var id) => this with { ScoreSets = ScoreSets.Remove(id) },
+            ScoreLayoutChanged(var layout) => this with { ScoreLayout = layout },
             _ => throw new ArgumentException($"Unknown delta operation {op.GetType().Name}.", nameof(op))
         };
 
@@ -310,7 +356,8 @@ public sealed record ProjectState(
                 or ArticulationSetRemoved
                 or LaneSetUpserted
                 or LaneSetRemoved => InverseSet(op),
-            _ => throw new ArgumentException($"Unknown delta operation {op.GetType().Name}.", nameof(op))
+            // Phase 9's score operations, else unknown.
+            _ => InverseScore(op)
         };
 
     /// <summary>The inverse of a Phase 7 set's operation: a groove template, an articulation set or a lane set.</summary>
@@ -331,6 +378,45 @@ public sealed record ProjectState(
                 : new LaneSetRemoved(set.Id),
             LaneSetRemoved(var id) => LaneSets.TryGetValue(id, out var old) ? new LaneSetUpserted(old) : null,
             _ => null
+        };
+
+    /// <summary>
+    ///     The inverse of a Phase 9 score operation (docs/10-phase-9.md): a staff style, symbol, lyric or the layout here,
+    ///     a chord symbol or score set in <see cref="InverseScoreItem" />; any other operation is unknown.
+    /// </summary>
+    DeltaOp? InverseScore(DeltaOp op) =>
+        op switch {
+            ScoreLayoutChanged => new ScoreLayoutChanged(ScoreLayout),
+            StaffStyleUpserted(var style) => StaffStyles.TryGetValue(style.Id, out var old)
+                ? new StaffStyleUpserted(old)
+                : new StaffStyleRemoved(style.Id),
+            StaffStyleRemoved(var id) => StaffStyles.TryGetValue(id, out var old) ? new StaffStyleUpserted(old) : null,
+            ScoreSymbolUpserted(var symbol) => ScoreSymbols.TryGetValue(symbol.Id, out var old)
+                ? new ScoreSymbolUpserted(old)
+                : new ScoreSymbolRemoved(symbol.Id),
+            ScoreSymbolRemoved(var id) => ScoreSymbols.TryGetValue(id, out var old)
+                ? new ScoreSymbolUpserted(old)
+                : null,
+            LyricUpserted(var lyric) => Lyrics.TryGetValue(lyric.Id, out var old)
+                ? new LyricUpserted(old)
+                : new LyricRemoved(lyric.Id),
+            LyricRemoved(var id) => Lyrics.TryGetValue(id, out var old) ? new LyricUpserted(old) : null,
+            _ => InverseScoreItem(op)
+        };
+
+    DeltaOp? InverseScoreItem(DeltaOp op) =>
+        op switch {
+            ChordSymbolUpserted(var chord) => ChordSymbols.TryGetValue(chord.Id, out var old)
+                ? new ChordSymbolUpserted(old)
+                : new ChordSymbolRemoved(chord.Id),
+            ChordSymbolRemoved(var id) => ChordSymbols.TryGetValue(id, out var old)
+                ? new ChordSymbolUpserted(old)
+                : null,
+            ScoreSetUpserted(var set) => ScoreSets.TryGetValue(set.Id, out var old)
+                ? new ScoreSetUpserted(old)
+                : new ScoreSetRemoved(set.Id),
+            ScoreSetRemoved(var id) => ScoreSets.TryGetValue(id, out var old) ? new ScoreSetUpserted(old) : null,
+            _ => throw new ArgumentException($"Unknown delta operation {op.GetType().Name}.", nameof(op))
         };
 
     DeltaOp? InversePattern(DeltaOp op) =>

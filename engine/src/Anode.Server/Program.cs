@@ -1,5 +1,6 @@
 using Anode.Contracts;
 using Anode.EngineHost;
+using Anode.Model.Editing;
 using Anode.Server;
 using Anode.Server.Api;
 using Anode.Server.Control;
@@ -66,6 +67,11 @@ builder.Services.AddHostedService(static s => s.GetRequiredService<ControlServic
 builder.Services.AddSingleton<SyncService>();
 builder.Services.AddHostedService(static s => s.GetRequiredService<SyncService>());
 builder.Services.AddSingleton<IStemModels, StemModels>();
+// Phase 9 (docs/10-phase-9.md): the notation engine, the score edits' conversion, the score cache and interchange.
+builder.Services.AddSingleton<INotation, EngineNotation>();
+builder.Services.AddSingleton<IScoreNotation, EngineScoreNotation>();
+builder.Services.AddSingleton<ScoreService>();
+builder.Services.AddSingleton<IInterchangeFormats, InterchangeFormats>();
 
 var app = builder.Build();
 if (bool.TryParse(builder.Configuration["Anode:WatchStdin"], out var watchStdin) && watchStdin) {

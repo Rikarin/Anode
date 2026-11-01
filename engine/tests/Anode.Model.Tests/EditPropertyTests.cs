@@ -19,10 +19,6 @@ public sealed class EditPropertyTests {
     [MemberData(nameof(Commands))]
     public void Applying_then_inverting_a_command_is_the_identity(string command) {
         var type = RandomProjects.CommandTypes.Single(t => t.Name == command);
-        Assert.SkipWhen(
-            RandomProjects.PendingPhase9.Contains(command),
-            "Phase 9 command the model does not implement yet (docs/10-phase-9.md, workstream B)."
-        );
         var applied = 0;
         Gen.Int.Sample(
             seed => {
@@ -39,7 +35,8 @@ public sealed class EditPropertyTests {
                         ids,
                         RandomProjects.Plugins,
                         RandomProjects.Patches,
-                        RandomProjects.Analysis
+                        RandomProjects.Analysis,
+                        RandomProjects.Notation
                     );
                 } catch (EditException) {
                     return;
@@ -79,7 +76,8 @@ public sealed class EditPropertyTests {
                         ids,
                         RandomProjects.Plugins,
                         RandomProjects.Patches,
-                        RandomProjects.Analysis
+                        RandomProjects.Analysis,
+                        RandomProjects.Notation
                     );
                     Assert.Equal(RandomProjects.Json(state), RandomProjects.Json(result.State.Apply(result.Inverse)));
                 } catch (EditException) {
@@ -155,7 +153,8 @@ public sealed class EditPropertyTests {
                                     ids,
                                     RandomProjects.Plugins,
                                     RandomProjects.Patches,
-                                    RandomProjects.Analysis
+                                    RandomProjects.Analysis,
+                                    RandomProjects.Notation
                                 );
                             history.Push(type.Name, step, new(result.Forward, result.Inverse), null);
                             ops = result.Forward;
@@ -190,6 +189,12 @@ public sealed class EditPropertyTests {
             project.ArticulationSets.ToDictionary(static a => a.Id);
 
         readonly Dictionary<string, LaneSet> laneSets = project.LaneSets.ToDictionary(static l => l.Id);
+        readonly Dictionary<string, StaffStyle> staffStyles = project.Score.StaffStyles.ToDictionary(static s => s.Id);
+        readonly Dictionary<string, ScoreSymbol> symbols = project.Score.Symbols.ToDictionary(static s => s.Id);
+        readonly Dictionary<string, LyricSyllable> lyrics = project.Score.Lyrics.ToDictionary(static l => l.Id);
+        readonly Dictionary<string, ChordSymbol> chords = project.Score.Chords.ToDictionary(static c => c.Id);
+        readonly Dictionary<string, ScoreSet> sets = project.Score.Sets.ToDictionary(static s => s.Id);
+        ScoreLayout layout = project.Score.Layout;
         LiveLoopsGrid liveLoops = project.LiveLoops;
         string notes = project.Notes;
         string name = project.Name;
@@ -310,6 +315,39 @@ public sealed class EditPropertyTests {
                     case LaneSetRemoved(var id):
                         laneSets.Remove(id);
                         break;
+                    case StaffStyleUpserted(var style):
+                        staffStyles[style.Id] = style;
+                        break;
+                    case StaffStyleRemoved(var id):
+                        staffStyles.Remove(id);
+                        break;
+                    case ScoreSymbolUpserted(var symbol):
+                        symbols[symbol.Id] = symbol;
+                        break;
+                    case ScoreSymbolRemoved(var id):
+                        symbols.Remove(id);
+                        break;
+                    case LyricUpserted(var lyric):
+                        lyrics[lyric.Id] = lyric;
+                        break;
+                    case LyricRemoved(var id):
+                        lyrics.Remove(id);
+                        break;
+                    case ChordSymbolUpserted(var chord):
+                        chords[chord.Id] = chord;
+                        break;
+                    case ChordSymbolRemoved(var id):
+                        chords.Remove(id);
+                        break;
+                    case ScoreSetUpserted(var set):
+                        sets[set.Id] = set;
+                        break;
+                    case ScoreSetRemoved(var id):
+                        sets.Remove(id);
+                        break;
+                    case ScoreLayoutChanged(var l):
+                        layout = l;
+                        break;
                 }
             }
         }
@@ -337,7 +375,15 @@ public sealed class EditPropertyTests {
                     LiveLoops = liveLoops,
                     Grooves = [..grooves.Values.OrderBy(static g => g.Id, StringComparer.Ordinal)],
                     ArticulationSets = [..articulationSets.Values.OrderBy(static a => a.Id, StringComparer.Ordinal)],
-                    LaneSets = [..laneSets.Values.OrderBy(static l => l.Id, StringComparer.Ordinal)]
+                    LaneSets = [..laneSets.Values.OrderBy(static l => l.Id, StringComparer.Ordinal)],
+                    Score = new(
+                        [..staffStyles.Values.OrderBy(static x => x.Id, StringComparer.Ordinal)],
+                        [..symbols.Values.OrderBy(static x => x.Id, StringComparer.Ordinal)],
+                        [..lyrics.Values.OrderBy(static x => x.Id, StringComparer.Ordinal)],
+                        [..chords.Values.OrderBy(static x => x.Id, StringComparer.Ordinal)],
+                        [..sets.Values.OrderBy(static x => x.Id, StringComparer.Ordinal)],
+                        layout
+                    )
                 },
                 ContractsJsonContext.Default.Project
             );

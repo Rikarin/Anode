@@ -7,6 +7,10 @@
     <None Include="../Anode.Control.Tests/McuVectors.json;../Anode.Control.Tests/HuiVectors.json" Link="Vectors/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest"/>
   </ItemGroup>
   <ItemGroup>
+    <!-- The notation engine's stand-in for the score edits (Phase 9), shared with the model's tests. -->
+    <Compile Include="../Anode.Model.Tests/ScoreNotationDouble.cs" Link="Doubles/ScoreNotationDouble.cs"/>
+  </ItemGroup>
+  <ItemGroup>
     <ProjectReference Include="../../src/Anode.Server/Anode.Server.csproj"/>
     <!-- Built, not referenced: the two-process test runs it as a separate anode-host process. -->
     <ProjectReference Include="../../src/Anode.Host/Anode.Host.csproj" ReferenceOutputAssembly="false" Private="false"/>

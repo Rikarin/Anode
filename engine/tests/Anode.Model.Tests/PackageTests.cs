@@ -2,6 +2,7 @@ using Anode.Contracts;
 using Anode.Model.Editing;
 using Anode.Model.Storage;
 using Anode.Model.Time;
+using System.Text.Json;
 using System.Text.Json.Nodes;
 
 namespace Anode.Model.Tests;
@@ -214,7 +215,10 @@ public sealed class PackageTests : IDisposable {
 
         var loaded = ProjectPackage.Load(folder);
         ProjectPackage.Save(folder, loaded);
-        Assert.Equal(8, JsonNode.Parse(File.ReadAllText(path))!["schemaVersion"]!.GetValue<int>());
+        Assert.Equal(
+            PackageMigrations.CurrentSchemaVersion,
+            JsonNode.Parse(File.ReadAllText(path))!["schemaVersion"]!.GetValue<int>()
+        );
         Assert.NotNull(JsonNode.Parse(File.ReadAllText(path))!["settings"]!["sync"]);
         Assert.Equal(RandomProjects.Json(state), RandomProjects.Json(loaded));
         Assert.Equal(SyncSettings.Default.Source, loaded.Settings.Sync.Source);
@@ -232,12 +236,54 @@ public sealed class PackageTests : IDisposable {
     }
 
     [Fact]
-    public void A_schema_8_package_without_the_Phase_9_fields_reads_them_at_their_defaults() {
-        var (state, _, _) = RandomProjects.Build(3, 40);
+    public void A_schema_8_package_migrates_to_schema_9_with_the_Phase_9_defaults() {
+        var (built, _, _) = RandomProjects.Build(3, 40);
+        // What a Phase 8 project held: no score content, no staff styles, regions at the default notation.
+        var state = built with {
+            StaffStyles = built.StaffStyles.Clear(),
+            ScoreSymbols = built.ScoreSymbols.Clear(),
+            Lyrics = built.Lyrics.Clear(),
+            ChordSymbols = built.ChordSymbols.Clear(),
+            ScoreSets = built.ScoreSets.Clear(),
+            ScoreLayout = ScoreLayout.Default,
+            Tracks = [
+                ..built.Tracks.Select(static t => t with {
+                        StaffStyleId = null,
+                        Alternatives = [
+                            ..t.Alternatives.Select(static a => a with {
+                                    MidiRegions = [
+                                        ..a.MidiRegions.Select(static m => m with { Notation = RegionNotation.Default })
+                                    ]
+                                }
+                            )
+                        ]
+                    }
+                )
+            ],
+            MidiRegions = built.MidiRegions.SetItems(
+                built.MidiRegions.Select(static p => KeyValuePair.Create(
+                        p.Key,
+                        p.Value with { Notation = RegionNotation.Default }
+                    )
+                )
+            ),
+            LiveLoops = built.LiveLoops with {
+                Cells = [
+                    ..built.LiveLoops.Cells.Select(static c => c.Content.Midi is { } midi
+                            ? c with {
+                                Content = c.Content with { Midi = midi with { Notation = RegionNotation.Default } }
+                            }
+                            : c
+                    )
+                ]
+            }
+        };
         Assert.Contains(state.MidiRegions.Values, static m => m.Notes.Count > 0);
         ProjectPackage.Save(folder, state);
         var path = Path.Combine(folder, "project.json");
         var root = JsonNode.Parse(File.ReadAllText(path))!.AsObject();
+        root["schemaVersion"] = 8;
+        root.Remove("score");
         foreach (var cell in root["liveLoops"]!["cells"]!.AsArray()) {
             cell!["content"]!["midi"]?.AsObject().Remove("notation");
         }
@@ -245,6 +291,7 @@ public sealed class PackageTests : IDisposable {
         File.WriteAllText(path, root.ToJsonString());
         foreach (var file in Directory.EnumerateFiles(Path.Combine(folder, "tracks"))) {
             var json = JsonNode.Parse(File.ReadAllText(file))!.AsObject();
+            json["schemaVersion"] = 8;
             foreach (var region in json["midiRegions"]!.AsArray()) {
                 region!.AsObject().Remove("notation");
             }
@@ -262,7 +309,92 @@ public sealed class PackageTests : IDisposable {
         Assert.Equal(RandomProjects.Json(state), RandomProjects.Json(loaded));
         Assert.All(loaded.MidiRegions.Values, static m => Assert.Equal(RegionNotation.Default, m.Notation));
         Assert.All(loaded.Tracks, static t => Assert.Null(t.StaffStyleId));
-        Assert.Equal(ProjectScore.Empty, loaded.ToProject(string.Empty, 0, false).Score);
+        Assert.Equal(
+            JsonSerializer.Serialize(ProjectScore.Empty, ContractsJsonContext.Default.ProjectScore),
+            JsonSerializer.Serialize(loaded.Score, ContractsJsonContext.Default.ProjectScore)
+        );
+
+        // Saved again, it is schema 9 with its score.
+        ProjectPackage.Save(folder, loaded);
+        var saved = JsonNode.Parse(File.ReadAllText(path))!.AsObject();
+        Assert.Equal(9, saved["schemaVersion"]!.GetValue<int>());
+        Assert.NotNull(saved["score"]);
+    }
+
+    [Fact]
+    public void Phase_9_content_survives_the_package_format_and_damage_is_left_out() {
+        var ids = new SequentialIds();
+        var state = Edits.Apply(
+                ProjectDefaults.NewProject("prj_1", "Song", 48_000),
+                new AddTrackCommand("Piano", Kind: TrackKind.Instrument),
+                ids,
+                RandomProjects.Plugins
+            )
+            .State;
+        var track = state.Tracks[0];
+        state = Edits.Apply(state, new AddMidiRegionCommand(track.Id, 0, 3840), ids).State;
+        var region = state.MidiRegions.Values.Single();
+        state = Edits.Apply(
+                state,
+                new AddNotesCommand(region.Id, [new(60, 90, 1, 0, 480), new(64, 90, 1, 480, 480)]),
+                ids
+            )
+            .State;
+        region = state.MidiRegions[region.Id];
+        state = Edits.Apply(
+                state,
+                [
+                    new SetStaffStyleCommand(
+                        new("sts_saved", "Saved", [new(Clef.Bass, -12, null, 1)], null, 240, 160, false)
+                    ),
+                    new AssignStaffStyleCommand([track.Id], "sts_saved"),
+                    new AddScoreSymbolsCommand([new(ScoreSymbolKind.Fermata, track.Id, region.Notes[0].Id)]),
+                    new SetLyricsCommand(2, [new(region.Notes[0].Id, "ah", Syllabic.Single, true)]),
+                    new AddChordSymbolsCommand([new(track.Id, 960, new(PitchStep.B, -1), "7", new(PitchStep.D, 0))]),
+                    new SetScoreSetCommand(new("scs_saved", "Saved", [track.Id])),
+                    new SetScoreLayoutCommand(ScoreLayout.Default with { Title = "Saved", Footer = "p." }),
+                    new SetRegionNotationCommand([region.Id], 480, 0, false, false, true, 3)
+                ],
+                ids
+            )
+            .State;
+        ProjectPackage.Save(folder, state);
+        Assert.Equal(RandomProjects.Json(state), RandomProjects.Json(ProjectPackage.Load(folder)));
+
+        // A symbol of a note that is gone, a style with a bad grid, a track naming no style: left out or cleared.
+        var path = Path.Combine(folder, "project.json");
+        var root = JsonNode.Parse(File.ReadAllText(path))!.AsObject();
+        var score = root["score"]!.AsObject();
+        score["symbols"]!.AsArray()
+            .Add(
+                new JsonObject {
+                    ["id"] = "sym_gone", ["kind"] = "accent", ["trackId"] = track.Id, ["noteId"] = 999_999_999
+                }
+            );
+        score["staffStyles"]!.AsArray()
+            .Add(
+                new JsonObject {
+                    ["id"] = "sts_bad",
+                    ["name"] = "Bad",
+                    ["staves"] = new JsonArray(
+                        new JsonObject { ["clef"] = "treble", ["transpose"] = 0, ["voices"] = 1 }
+                    ),
+                    ["displayQuantizeTicks"] = 7,
+                    ["tripletQuantizeTicks"] = 0,
+                    ["brace"] = false
+                }
+            );
+        File.WriteAllText(path, root.ToJsonString());
+        var trackFile = Path.Combine(folder, "tracks", track.Id + ".json");
+        var json = JsonNode.Parse(File.ReadAllText(trackFile))!.AsObject();
+        json["track"]!["staffStyleId"] = "sts_bad";
+        File.WriteAllText(trackFile, json.ToJsonString());
+        var loaded = ProjectPackage.Load(folder);
+        Assert.False(loaded.ScoreSymbols.ContainsKey("sym_gone"));
+        Assert.False(loaded.StaffStyles.ContainsKey("sts_bad"));
+        Assert.Null(loaded.FindTrack(track.Id)!.StaffStyleId);
+        Assert.Equal(state.ScoreSymbols.Count, loaded.ScoreSymbols.Count);
+        Assert.Equal("Saved", loaded.ScoreLayout.Title);
     }
 
     [Fact]

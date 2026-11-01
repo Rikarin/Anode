@@ -36,6 +36,8 @@ public sealed partial class Jobs : IDisposable {
     readonly FileAnalyses analyses;
     readonly IAudioEditor editor;
     readonly IStemModels models;
+    readonly INotation notation;
+    readonly IInterchangeFormats formats;
     readonly TimeProvider time;
     readonly ILogger<Jobs> logger;
     readonly ConcurrentDictionary<string, Entry> jobs = new(StringComparer.Ordinal);
@@ -52,9 +54,13 @@ public sealed partial class Jobs : IDisposable {
         FileAnalyses analyses,
         IAudioEditor editor,
         IStemModels models,
+        INotation notation,
+        IInterchangeFormats formats,
         TimeProvider time,
         ILogger<Jobs> logger
     ) {
+        this.notation = notation;
+        this.formats = formats;
         this.analyses = analyses;
         this.editor = editor;
         this.models = models;
@@ -75,10 +81,17 @@ public sealed partial class Jobs : IDisposable {
             return null;
         }
 
+        var dropped = false;
         lock (entry) {
             if (entry.Job.State == JobState.Queued) {
                 Set(entry, entry.Job with { State = JobState.Cancelled, Message = "Cancelled." });
+                dropped = true;
             }
+        }
+
+        if (dropped) {
+            // An import's saved upload goes with the job that never ran.
+            RemoveScratch(entry.Scratch);
         }
 
         entry.Cancel.Cancel();
@@ -230,12 +243,16 @@ public sealed partial class Jobs : IDisposable {
         return (map.SampleAt(from, state.SampleRate), map.SampleAt(to, state.SampleRate));
     }
 
-    Job Enqueue(JobKind kind, Func<Entry, CancellationToken, Task<IReadOnlyList<string>>> work) {
+    Job Enqueue(
+        JobKind kind,
+        Func<Entry, CancellationToken, Task<IReadOnlyList<string>>> work,
+        string? scratch = null
+    ) {
         var entry = new Entry(
             new(RandomIds.Instance.Next(IdPrefix.Job), kind, JobState.Queued, 0, null, []),
             Interlocked.Increment(ref engineIds),
             work
-        );
+        ) { Scratch = scratch };
         jobs[entry.Job.Id] = entry;
         hub.Publish(new JobEvent(entry.Job));
         queue.Writer.TryWrite(entry);
@@ -269,6 +286,13 @@ public sealed partial class Jobs : IDisposable {
                                                 or ArgumentException) {
                     ProjectLog.JobFailed(logger, entry.Job.Id, e.Message);
                     Set(entry, entry.Job with { State = JobState.Failed, Message = e.Message });
+                } catch (Exception e) when (e is not OperationCanceledException) {
+                    // Anything else fails this job, not the queue (the jobs after it still run).
+                    ProjectLog.JobFailed(logger, entry.Job.Id, e.ToString());
+                    Set(entry, entry.Job with { State = JobState.Failed, Message = e.Message });
+                } finally {
+                    // An import's saved upload, also when the job was cancelled before its work began.
+                    RemoveScratch(entry.Scratch);
                 }
             }
         } catch (OperationCanceledException) {
@@ -463,6 +487,10 @@ public sealed partial class Jobs : IDisposable {
         public int EngineId { get; } = engineId;
         public Func<Entry, CancellationToken, Task<IReadOnlyList<string>>> Work { get; } = work;
         public CancellationTokenSource Cancel { get; } = new();
+
+        /// <summary>A folder the job removes when it ends, and the queue when the job is cancelled before it runs.</summary>
+        public string? Scratch { get; init; }
+
         public DateTimeOffset Published { get; set; }
     }
 }

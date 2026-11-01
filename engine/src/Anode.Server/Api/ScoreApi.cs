@@ -1,4 +1,5 @@
 using Anode.Contracts;
+using Anode.Server.Projects;
 using Microsoft.AspNetCore.Http.HttpResults;
 
 namespace Anode.Server.Api;
@@ -16,9 +17,10 @@ static class ScoreApi {
                 static Results<Ok<ScoreDocument>, NotFound, ProblemHttpResult>(
                     string? set,
                     string? part,
-                    string? view
+                    string? view,
+                    ScoreService scores
                 ) =>
-                    throw Pending.Phase9("GetScore")
+                    TypedResults.Ok(scores.Get(set, part, view))
             )
             .WithName("GetScore")
             .WithSummary(
@@ -30,7 +32,7 @@ static class ScoreApi {
         var library = api.MapGroup("/library").WithTags("Score").AddEndpointFilter<ProblemFilter>();
         library.MapGet(
                 "/staff-styles",
-                static Ok<IReadOnlyList<StaffStyle>>() => throw Pending.Phase9("ListStaffStyles")
+                static Ok<IReadOnlyList<StaffStyle>>(INotation notation) => TypedResults.Ok(notation.FactoryStyles)
             )
             .WithName("ListStaffStyles")
             .WithSummary(

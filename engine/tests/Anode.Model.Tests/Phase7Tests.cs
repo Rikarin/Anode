@@ -531,7 +531,8 @@ public sealed class Phase7Tests {
                 ids,
                 RandomProjects.Plugins,
                 RandomProjects.Patches,
-                RandomProjects.Analysis
+                RandomProjects.Analysis,
+                RandomProjects.Notation
             )
             .State;
 

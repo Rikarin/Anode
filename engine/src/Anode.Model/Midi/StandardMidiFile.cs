@@ -11,17 +11,26 @@ namespace Anode.Model.Midi;
 /// </summary>
 public sealed record SmfTrack(string? Name, IReadOnlyList<Note> Notes, IReadOnlyList<ControlEvent> Controls);
 
+/// <summary>A marker of a Standard MIDI File (meta event 6) at a tick of 960 PPQ.</summary>
+public sealed record SmfMarker(long Tick, string Name);
+
 /// <summary>
 ///     A Standard MIDI File read for import: its format (0 or 1), its tracks, and its tempo and signature events from
 ///     every track at 960 PPQ — a tempo track and a signature track as the project keeps them (120 BPM and 4/4 at tick 0
-///     where the file says nothing, changes off a bar line moved to the next one).
+///     where the file says nothing, changes off a bar line moved to the next one). Phase 9 (docs/10-phase-9.md): its key
+///     signatures as a key track (empty when the file has none; C major at tick 0 when its first is later) and its
+///     markers, from every track, in time order.
 /// </summary>
 public sealed record SmfFile(
     int Format,
     IReadOnlyList<SmfTrack> Tracks,
     IReadOnlyList<TempoEvent> Tempo,
     IReadOnlyList<SignatureEvent> Signatures
-);
+) {
+    public IReadOnlyList<KeyEvent> Keys { get; init; } = [];
+
+    public IReadOnlyList<SmfMarker> Markers { get; init; } = [];
+}
 
 /// <summary>
 ///     Reads Standard MIDI Files, format 0 and 1, with a PPQ time division. A damaged file throws
@@ -66,6 +75,7 @@ public static class StandardMidiFile {
         var tracks = new List<SmfTrack>();
         var tempo = new SortedDictionary<long, double>();
         var signatures = new SortedDictionary<long, (int Numerator, int Denominator)>();
+        var meta = new FileMeta();
         for (var t = 0; t < trackCount && !reader.AtEnd; t++) {
             var tag = reader.Tag();
             var length = reader.UInt32();
@@ -76,19 +86,77 @@ public static class StandardMidiFile {
             }
 
             var chunk = new Reader(reader.Bytes(length));
-            tracks.Add(ReadTrack(chunk, division, tempo, signatures));
+            tracks.Add(ReadTrack(chunk, division, tempo, signatures, meta));
         }
 
-        return new(format, tracks, TempoTrack(tempo), SignatureTrack(signatures));
+        return new(format, tracks, TempoTrack(tempo), SignatureTrack(signatures)) {
+            Keys = KeyTrack(meta.Keys), Markers = [..meta.Markers.OrderBy(static m => m.Tick)]
+        };
+    }
+
+    /// <summary>The key signatures and markers of every track.</summary>
+    sealed class FileMeta {
+        public SortedDictionary<long, KeyEvent> Keys { get; } = [];
+
+        public List<SmfMarker> Markers { get; } = [];
+    }
+
+    /// <summary>A key signature's tonic: sharps or flats (−7…7) and minor, as a pitch class.</summary>
+    public static int TonicOf(int fifths, bool minor) {
+        var major = (fifths * 7 % 12 + 12) % 12;
+        return minor ? (major + 9) % 12 : major;
+    }
+
+    /// <summary>The key signature (sharps positive, flats negative) of a key: F♯ major and D♯ minor have six sharps.</summary>
+    public static int FifthsOf(KeyEvent key) {
+        var major = key.Mode == KeyMode.Minor ? (key.Tonic + 3) % 12 : key.Tonic % 12;
+        return major switch {
+            0 => 0,
+            1 => -5,
+            2 => 2,
+            3 => -3,
+            4 => 4,
+            5 => -1,
+            6 => 6,
+            7 => 1,
+            8 => -4,
+            9 => 3,
+            10 => -2,
+            _ => 5
+        };
+    }
+
+    static KeyEvent[] KeyTrack(SortedDictionary<long, KeyEvent> keys) {
+        if (keys.Count == 0) {
+            return [];
+        }
+
+        var events = new List<KeyEvent>();
+        if (!keys.ContainsKey(0)) {
+            events.Add(new(0, 0, KeyMode.Major));
+        }
+
+        events.AddRange(keys.Values);
+        return [..events];
+    }
+
+    /// <summary>A meta event's text: UTF-8 when it is valid UTF-8, else Latin-1 (older files).</summary>
+    static string Text(byte[] data) {
+        try {
+            return new UTF8Encoding(false, true).GetString(data).Trim();
+        } catch (DecoderFallbackException) {
+            return Encoding.Latin1.GetString(data).Trim();
+        }
     }
 
     static SmfTrack ReadTrack(
         Reader r,
         int division,
         SortedDictionary<long, double> tempo,
-        SortedDictionary<long, (int, int)> signatures
+        SortedDictionary<long, (int, int)> signatures,
+        FileMeta meta
     ) {
-        var track = new TrackParser(tempo, signatures);
+        var track = new TrackParser(tempo, signatures, meta);
         long ticks = 0;
         var status = 0;
         while (!r.AtEnd) {
@@ -131,7 +199,11 @@ public static class StandardMidiFile {
     }
 
     /// <summary>One track's events as they are read: notes paired up, controllers, and the meta events kept.</summary>
-    sealed class TrackParser(SortedDictionary<long, double> tempo, SortedDictionary<long, (int, int)> signatures) {
+    sealed class TrackParser(
+        SortedDictionary<long, double> tempo,
+        SortedDictionary<long, (int, int)> signatures,
+        FileMeta meta
+    ) {
         readonly List<Note> notes = [];
         readonly List<ControlEvent> controls = [];
         readonly Dictionary<(int Channel, int Pitch), Queue<(long Tick, int Velocity)>> held = [];
@@ -140,7 +212,17 @@ public static class StandardMidiFile {
         public void Meta(int type, byte[] data, long tick) {
             switch (type) {
                 case 0x03 when name is null:
-                    name = Encoding.Latin1.GetString(data).Trim();
+                    name = Text(data);
+                    break;
+                case 0x06 when Text(data) is { Length: > 0 } marker:
+                    meta.Markers.Add(new(tick, marker));
+                    break;
+                case 0x59 when data.Length >= 2 && (sbyte)data[0] is >= -7 and <= 7 && data[1] <= 1:
+                    meta.Keys[tick] = new(
+                        tick,
+                        TonicOf((sbyte)data[0], data[1] == 1),
+                        data[1] == 1 ? KeyMode.Minor : KeyMode.Major
+                    );
                     break;
                 case 0x51 when data.Length >= 3 && ((data[0] << 16) | (data[1] << 8) | data[2]) is > 0 and var micros:
                     // To a thousandth of a BPM: a file stores whole microseconds per beat, so 90 BPM reads as 89.99995.
@@ -170,6 +252,9 @@ public static class StandardMidiFile {
                         );
                     }
 
+                    break;
+                case 0xA0:
+                    controls.Add(new(0, ControlKind.PolyPressure, channel, data1, data2, tick));
                     break;
                 case 0xB0:
                     controls.Add(new(0, ControlKind.ControlChange, channel, data1, data2, tick));

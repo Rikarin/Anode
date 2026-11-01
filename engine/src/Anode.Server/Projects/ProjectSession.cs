@@ -69,6 +69,7 @@ public sealed partial class ProjectSession(
     PatchLibrary patches,
     TransportClock clock,
     FileAnalyses analyses,
+    IScoreNotation notation,
     TimeProvider time,
     ILogger<ProjectSession> logger
 ) {
@@ -475,7 +476,15 @@ public sealed partial class ProjectSession(
                     (edit, var stepped) = ApplySteps(o, Resolve(o, batch.Commands), analysis);
                     steps = stepped;
                 } else {
-                    edit = Edits.Apply(o.State, Resolve(o, batch.Commands), ids, catalog.ForEdits, patches, analysis);
+                    edit = Edits.Apply(
+                        o.State,
+                        Resolve(o, batch.Commands),
+                        ids,
+                        catalog.ForEdits,
+                        patches,
+                        analysis,
+                        notation
+                    );
                 }
             } catch (EditException e) {
                 built = Keep(o, analysis.Built);
