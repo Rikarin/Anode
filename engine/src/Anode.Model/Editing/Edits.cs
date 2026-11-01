@@ -40,7 +40,8 @@ public static partial class Edits {
         IIdSource ids,
         PluginCatalog? plugins = null,
         IPatchSource? patches = null,
-        IAnalysisSource? analysis = null
+        IAnalysisSource? analysis = null,
+        IScoreNotation? notation = null
     ) {
         plugins ??= PluginCatalog.Empty;
         patches ??= NoPatches.Instance;
@@ -64,7 +65,8 @@ public static partial class Edits {
                     ids,
                     plugins,
                     patches,
-                    analysis
+                    analysis,
+                    notation
                 );
             } catch (EditException e) when (commands.Count > 1) {
                 throw new EditException($"Command {i + 1} ({commands[i]?.GetType().Name}): {e.Message}", e);
@@ -83,13 +85,15 @@ public static partial class Edits {
         IIdSource ids,
         PluginCatalog? plugins = null,
         IPatchSource? patches = null,
-        IAnalysisSource? analysis = null
+        IAnalysisSource? analysis = null,
+        IScoreNotation? notation = null
     ) =>
-        Apply(state, [command], ids, plugins, patches, analysis);
+        Apply(state, [command], ids, plugins, patches, analysis, notation);
 
     /// <summary>
     ///     Applies delta operations, collecting them and their inverses (in application order; the caller reverses the
-    ///     inverses once at the end).
+    ///     inverses once at the end). Operations that remove or move notes are followed by those that keep the score
+    ///     content attached (<see cref="Detached" />: a note's symbols and lyrics go with it, and come back on undo).
     /// </summary>
     public static ProjectState Step(
         ProjectState state,
@@ -97,16 +101,28 @@ public static partial class Edits {
         List<DeltaOp> forward,
         List<DeltaOp> inverse
     ) {
+        var detach = false;
         foreach (var op in ops) {
-            if (state.Inverse(op) is { } undo) {
-                inverse.Add(undo);
-            }
+            state = StepOne(state, op, forward, inverse);
+            detach |= MayDetach(op);
+        }
 
-            forward.Add(op);
-            state = state.Apply(op);
+        if (detach) {
+            foreach (var op in Detached(state)) {
+                state = StepOne(state, op, forward, inverse);
+            }
         }
 
         return state;
+    }
+
+    static ProjectState StepOne(ProjectState state, DeltaOp op, List<DeltaOp> forward, List<DeltaOp> inverse) {
+        if (state.Inverse(op) is { } undo) {
+            inverse.Add(undo);
+        }
+
+        forward.Add(op);
+        return state.Apply(op);
     }
 
     /// <summary>The delta operations of one command against <paramref name="state" />.</summary>
@@ -116,11 +132,10 @@ public static partial class Edits {
         IIdSource ids,
         PluginCatalog plugins,
         IPatchSource? patches = null,
-        IAnalysisSource? analysis = null
+        IAnalysisSource? analysis = null,
+        IScoreNotation? notation = null
     ) =>
         command switch {
-            // Region notation in a Live Loops cell's content: Phase 9, workstream B (docs/10-phase-9.md).
-            _ when UsesPhase9Fields(command) => throw Phase9Pending($"{command.GetType().Name} with Phase 9 fields"),
             AddTrackCommand c => AddTrack(state, c, ids, plugins),
             RemoveTrackCommand c => RemoveTrack(state, c),
             MoveTrackCommand c => MoveTrack(state, c),
@@ -205,7 +220,7 @@ public static partial class Edits {
                 ?? Phase6Ops(state, command, ids, plugins, patches ?? NoPatches.Instance)
                 ?? Phase7Ops(state, command, ids, analysis ?? NoAnalysis.Instance)
                 ?? Phase8Ops(state, command, ids, plugins)
-                ?? Phase9Ops(command)
+                ?? Phase9Ops(state, command, ids, plugins, notation ?? NoScoreNotation.Instance)
                 ?? throw new EditException($"Unknown command {command.GetType().Name}.")
         };
 

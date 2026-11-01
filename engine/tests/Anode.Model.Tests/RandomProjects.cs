@@ -187,6 +187,9 @@ static class RandomProjects {
     /// <summary>The analysis edits ask for (<see cref="FakeAnalysis" />).</summary>
     public static FakeAnalysis Analysis { get; } = new();
 
+    /// <summary>The score edits' notation (a stand-in for the notation engine's staff positions).</summary>
+    public static ScoreNotationDouble Notation => ScoreNotationDouble.Instance;
+
     /// <summary>The effects of <see cref="Plugins" />.</summary>
     public static IReadOnlyList<PluginInfo> Effects { get; } =
         [..Plugins.Plugins.Where(static p => !p.IsInstrument && p.Category != "MIDI Effect")];
@@ -319,7 +322,7 @@ static class RandomProjects {
                     random,
                     [typeof(SetPitchNotesCommand), typeof(NewTrackAlternativeCommand), typeof(SetRegionFlexCommand)]
                 ),
-                _ => Pick(random, Buildable)
+                _ => Pick(random, CommandTypes)
             };
             var command = i is >= 4 and < 7 && FirstAudioTrack(state) is { } audio && state.Files.Count > 0
                 ? AddRegion(audio, Pick(random, [..state.Files.Values]), random)
@@ -328,7 +331,7 @@ static class RandomProjects {
                     : Command(type, state, random);
             if (command is not null) {
                 try {
-                    state = Edits.Apply(state, command, ids, Plugins, Patches, Analysis).State;
+                    state = Edits.Apply(state, command, ids, Plugins, Patches, Analysis, Notation).State;
                 } catch (EditException) {
                     // not every random edit applies
                 }
@@ -369,7 +372,7 @@ static class RandomProjects {
                 }
 
                 try {
-                    state = Edits.Apply(state, command, ids, Plugins, Patches, Analysis).State;
+                    state = Edits.Apply(state, command, ids, Plugins, Patches, Analysis, Notation).State;
                 } catch (EditException) {
                     // not every random edit applies
                 }
@@ -401,7 +404,7 @@ static class RandomProjects {
                 }
 
                 try {
-                    state = Edits.Apply(state, command, ids, Plugins, Patches, Analysis).State;
+                    state = Edits.Apply(state, command, ids, Plugins, Patches, Analysis, Notation).State;
                 } catch (EditException) {
                     // not every random edit applies
                 }
@@ -420,7 +423,8 @@ static class RandomProjects {
                         ids,
                         Plugins,
                         Patches,
-                        Analysis
+                        Analysis,
+                        Notation
                     )
                     .State;
             } catch (EditException) {
@@ -437,38 +441,34 @@ static class RandomProjects {
             }
         }
 
+        // Phase 9 content (docs/10-phase-9.md): staff styles, symbols, lyrics, chord symbols, sets and a layout, so
+        // their commands (and what deletes notes and tracks) find something.
+        if (edits > 20) {
+            Type[] phase9 = [
+                typeof(SetStaffStyleCommand),
+                typeof(AssignStaffStyleCommand),
+                typeof(AddScoreSymbolsCommand),
+                typeof(AddScoreSymbolsCommand),
+                typeof(SetLyricsCommand),
+                typeof(AddChordSymbolsCommand),
+                typeof(SetScoreSetCommand),
+                typeof(SetScoreLayoutCommand)
+            ];
+            foreach (var type in phase9) {
+                if (Command(type, state, random) is not { } command) {
+                    continue;
+                }
+
+                try {
+                    state = Edits.Apply(state, command, ids, Plugins, Patches, Analysis, Notation).State;
+                } catch (EditException) {
+                    // not every random edit applies
+                }
+            }
+        }
+
         return (state, ids, random);
     }
-
-    /// <summary>
-    ///     Phase 9 commands (docs/10-phase-9.md) the model rejects until workstream B implements them; the identity
-    ///     property skips them.
-    /// </summary>
-    public static readonly IReadOnlySet<string> PendingPhase9 = new HashSet<string>(StringComparer.Ordinal) {
-        nameof(SetStaffStyleCommand),
-        nameof(DeleteStaffStyleCommand),
-        nameof(AssignStaffStyleCommand),
-        nameof(SetRegionNotationCommand),
-        nameof(AddScoreSymbolsCommand),
-        nameof(EditScoreSymbolsCommand),
-        nameof(DeleteScoreSymbolsCommand),
-        nameof(SetLyricsCommand),
-        nameof(AddChordSymbolsCommand),
-        nameof(EditChordSymbolsCommand),
-        nameof(DeleteChordSymbolsCommand),
-        nameof(SetScoreSetCommand),
-        nameof(DeleteScoreSetCommand),
-        nameof(SetScoreLayoutCommand),
-        nameof(MoveScoreNotesCommand),
-        nameof(AddScoreNoteCommand),
-        nameof(ImportTracksCommand)
-    };
-
-    /// <summary>
-    ///     The command types random projects are built from: every one but those the model refuses outright (Phase 9,
-    ///     until workstream B), so the projects stay those of Phase 8 and the other properties keep their odds.
-    /// </summary>
-    static Type[] Buildable { get; } = [..CommandTypes.Where(static t => !PendingPhase9.Contains(t.Name))];
 
     /// <summary>The parameters the host reports for every random script.</summary>
     public static IReadOnlyList<ParameterInfo> ScriptParameters { get; } = [
@@ -506,6 +506,10 @@ static class RandomProjects {
         var grooves = s.Grooves.Values.ToArray();
         var articulationSets = s.ArticulationSets.Values.ToArray();
         var laneSets = s.LaneSets.Values.ToArray();
+        var staffStyles = s.StaffStyles.Values.ToArray();
+        var symbols = s.ScoreSymbols.Values.ToArray();
+        var chords = s.ChordSymbols.Values.ToArray();
+        var sets = s.ScoreSets.Values.ToArray();
         var scripted = tracks.SelectMany(static t => t.Strip.MidiEffects
                 .Where(static i => i.PluginId == Edits.ScripterId)
                 .Select(i => (Track: t, Slot: i))
@@ -1153,69 +1157,130 @@ static class RandomProjects {
                     ],
                     r.Next(2) == 0
                 ),
-            // Phase 9 commands (docs/10-phase-9.md): placeholders until the model implements them (workstream B
-            // replaces these with generators that make commands that apply, and removes PendingPhase9).
-            nameof(SetStaffStyleCommand) => new SetStaffStyleCommand(StaffStyle(r)),
-            nameof(DeleteStaffStyleCommand) => new DeleteStaffStyleCommand($"sts_{r.Next(4)}"),
+            // Phase 9 (docs/10-phase-9.md): the score content, the score edits and the imports' result.
+            nameof(SetStaffStyleCommand) => new SetStaffStyleCommand(
+                StaffStyle(r, staffStyles.Length > 0 && r.Next(2) == 0 ? Pick(r, staffStyles).Id : $"sts_{r.Next(4)}")
+            ),
+            nameof(DeleteStaffStyleCommand) => new DeleteStaffStyleCommand(
+                staffStyles.Length > 0 && r.Next(8) > 0 ? Pick(r, staffStyles).Id : $"sts_{r.Next(4)}"
+            ),
             nameof(AssignStaffStyleCommand) => MidiTrack() is { } t
                 ? new AssignStaffStyleCommand(
-                    [t.Id],
-                    Pick(r, [null, StaffStyleIds.Piano, StaffStyleIds.ClarinetBb, $"sts_{r.Next(4)}"])
+                    r.Next(4) == 0 ? [..Some(midiTracks, r).Select(static x => x.Id)] : [t.Id],
+                    Pick(
+                        r,
+                        [
+                            null, StaffStyleIds.Piano, StaffStyleIds.ClarinetBb, StaffStyleIds.Drums,
+                            staffStyles.Length > 0 ? Pick(r, staffStyles).Id : StaffStyleIds.Bass
+                        ]
+                    )
                 )
                 : null,
             nameof(SetRegionNotationCommand) => MidiRegion() is { } m
                 ? new SetRegionNotationCommand(
-                    [m.Id],
-                    r.Next(2) == 0 ? Pick(r, [0, 240, 480]) : null,
+                    r.Next(4) == 0 ? [..Some(midiRegions, r).Select(static x => x.Id)] : [m.Id],
+                    r.Next(2) == 0 ? Pick(r, [0, 240, 480, 100]) : null,
                     r.Next(2) == 0 ? Pick(r, [0, 160, 320]) : null,
                     Maybe(r.Next(2) == 0),
                     Maybe(r.Next(2) == 0),
                     Maybe(r.Next(2) == 0),
-                    r.Next(2) == 0 ? r.Next(0, 4) : null
+                    r.Next(2) == 0 ? r.Next(0, 5) : null
                 )
                 : null,
             nameof(AddScoreSymbolsCommand) => WithNotes() is { } m
-                ? new AddScoreSymbolsCommand(
+                ? new AddScoreSymbolsCommand([..Enumerable.Range(0, r.Next(1, 4)).Select(_ => NewSymbol(m, r))])
+                : null,
+            nameof(EditScoreSymbolsCommand) => symbols.Length > 0
+                ? new EditScoreSymbolsCommand(
                     [
-                        new(ScoreSymbolKind.Staccato, m.TrackId, Pick(r, m.Notes).Id),
-                        new(ScoreSymbolKind.Dynamic, m.TrackId, Tick: m.StartTick, Text: "mf")
+                        ..Some(symbols, r)
+                            .Select(x => x with {
+                                    Placement = Pick<ScorePlacement?>(
+                                        r,
+                                        [null, ScorePlacement.Above, ScorePlacement.Below]
+                                    ),
+                                    Text = x.Kind == ScoreSymbolKind.Dynamic ? Pick(r, ScoreSymbols.Dynamics) : x.Text,
+                                    Tick = x.Tick is { } tick ? tick + r.Next(0, 3) * 240L : null,
+                                    EndTick = x.EndTick is { } endTick ? endTick + r.Next(3, 5) * 240L : null
+                                }
+                            )
                     ]
                 )
                 : null,
-            nameof(EditScoreSymbolsCommand) => WithNotes() is { } m
-                ? new EditScoreSymbolsCommand(
-                    [new($"sym_{r.Next(4)}", ScoreSymbolKind.Accent, m.TrackId, Pick(r, m.Notes).Id)]
-                )
-                : null,
-            nameof(DeleteScoreSymbolsCommand) => new DeleteScoreSymbolsCommand([$"sym_{r.Next(4)}"]),
+            nameof(DeleteScoreSymbolsCommand) => new DeleteScoreSymbolsCommand(
+                symbols.Length > 0 && r.Next(8) > 0
+                    ? [..Some(symbols, r).Select(static x => x.Id)]
+                    : [$"sym_{r.Next(4)}"]
+            ),
             nameof(SetLyricsCommand) => WithNotes() is { } m
                 ? new SetLyricsCommand(
                     r.Next(1, 3),
                     [
                         ..Some(m.Notes, r)
-                            .Select(n => new LyricChange(n.Id, $"la{r.Next(10)}", Pick(r, Enum.GetValues<Syllabic>())))
+                            .Select(n => new LyricChange(
+                                    n.Id,
+                                    r.Next(5) == 0 ? string.Empty : $"la{r.Next(10)}",
+                                    Pick(r, Enum.GetValues<Syllabic>()),
+                                    r.Next(4) == 0
+                                )
+                            )
                     ]
                 )
                 : null,
             nameof(AddChordSymbolsCommand) => MidiTrack() is { } t
                 ? new AddChordSymbolsCommand(
-                    [new(t.Id, r.Next(0, 16) * 960L, new(Pick(r, Enum.GetValues<PitchStep>()), r.Next(-1, 2)), "m7")]
+                    [
+                        new(
+                            t.Id,
+                            r.Next(0, 16) * 960L,
+                            new(Pick(r, Enum.GetValues<PitchStep>()), r.Next(-1, 2)),
+                            Pick(r, [string.Empty, "m", "7", "maj7", "m7", "dim", "sus4"]),
+                            r.Next(3) == 0 ? new(Pick(r, Enum.GetValues<PitchStep>()), 0) : null,
+                            r.Next(4) == 0
+                        )
+                    ]
                 )
                 : null,
-            nameof(EditChordSymbolsCommand) => MidiTrack() is { } t
+            nameof(EditChordSymbolsCommand) => chords.Length > 0 && MidiTrack() is { } t
                 ? new EditChordSymbolsCommand(
-                    [new($"chd_{r.Next(4)}", t.Id, 0, new(PitchStep.G, 0), "7", new(PitchStep.B, 0), r.Next(2) == 0)]
+                    [
+                        Pick(r, chords) with {
+                            TrackId = r.Next(3) == 0 ? t.Id : Pick(r, chords).TrackId,
+                            Tick = r.Next(0, 16) * 480L,
+                            Root = new(PitchStep.G, r.Next(-2, 3)),
+                            Quality = "7",
+                            Bass = r.Next(2) == 0 ? null : new(PitchStep.B, 0),
+                            ShowGrid = r.Next(2) == 0
+                        }
+                    ]
                 )
                 : null,
-            nameof(DeleteChordSymbolsCommand) => new DeleteChordSymbolsCommand([$"chd_{r.Next(4)}"]),
-            nameof(SetScoreSetCommand) => tracks.Count == 0
+            nameof(DeleteChordSymbolsCommand) => new DeleteChordSymbolsCommand(
+                chords.Length > 0 && r.Next(8) > 0 ? [..Some(chords, r).Select(static x => x.Id)] : [$"chd_{r.Next(4)}"]
+            ),
+            nameof(SetScoreSetCommand) => midiTracks.Length == 0
                 ? null
                 : new SetScoreSetCommand(
-                    new($"scs_{r.Next(4)}", $"Set {r.Next(10)}", [..Some(tracks, r).Select(static t => t.Id)])
+                    new(
+                        sets.Length > 0 && r.Next(2) == 0 ? Pick(r, sets).Id : $"scs_{r.Next(4)}",
+                        $"Set {r.Next(10)}",
+                        [..Some(midiTracks, r).Select(static t => t.Id)]
+                    )
                 ),
-            nameof(DeleteScoreSetCommand) => new DeleteScoreSetCommand($"scs_{r.Next(4)}"),
+            nameof(DeleteScoreSetCommand) => new DeleteScoreSetCommand(
+                sets.Length > 0 && r.Next(8) > 0 ? Pick(r, sets).Id : $"scs_{r.Next(4)}"
+            ),
             nameof(SetScoreLayoutCommand) => new SetScoreLayoutCommand(
-                ScoreLayout.Default with { Title = $"Title {r.Next(10)}", TransposingScore = r.Next(2) == 0 }
+                ScoreLayout.Default with {
+                    Title = $"Title {r.Next(10)}",
+                    Composer = r.Next(2) == 0 ? string.Empty : "Composer",
+                    TransposingScore = r.Next(2) == 0,
+                    PageWidthMm = Pick(r, [210.0, 297, 216]),
+                    StaffHeightMm = Pick(r, [7.0, 5.5, 25]),
+                    InstrumentNames = Track() is { } named && r.Next(2) == 0
+                        ? [new(named, $"Instrument {r.Next(10)}", "Inst.")]
+                        : []
+                }
             ),
             nameof(MoveScoreNotesCommand) => WithNotes() is { } m
                 ? new MoveScoreNotesCommand(
@@ -1227,35 +1292,18 @@ static class RandomProjects {
                 )
                 : null,
             nameof(AddScoreNoteCommand) => MidiTrack() is { } t
-                ? new AddScoreNoteCommand(t.Id, r.Next(0, 32) * 240L, Pick(r, [240L, 480, 960]), r.Next(-4, 13))
-                : null,
-            nameof(ImportTracksCommand) => new ImportTracksCommand(
-                new(
-                    [
-                        new(
-                            "imported-1",
-                            $"Imported {r.Next(10)}",
-                            TrackKind.Instrument,
-                            r.Next(2) == 0 ? null : StaffStyleIds.Treble,
-                            [
-                                new(
-                                    "imported-region-1",
-                                    "imported-1",
-                                    "Imported",
-                                    0,
-                                    3840,
-                                    ProjectDefaults.Playback,
-                                    [new(1, 60 + r.Next(12), 100, 1, 0, 480, 0)],
-                                    [],
-                                    false,
-                                    ProjectDefaults.Notation
-                                )
-                            ],
-                            []
-                        )
-                    ]
+                ? new AddScoreNoteCommand(
+                    t.Id,
+                    r.Next(0, 64) * 240L,
+                    Pick(r, [240L, 480, 960]),
+                    r.Next(-4, 13),
+                    r.Next(4) == 0 ? 1 : 0,
+                    r.Next(3) == 0 ? Pick(r, Enum.GetValues<Accidental>()) : null,
+                    r.Next(3) == 0 ? r.Next(1, 128) : null,
+                    r.Next(3) == 0 ? s.MidiRegionsOf(t.Id).FirstOrDefault()?.Id : null
                 )
-            ),
+                : null,
+            nameof(ImportTracksCommand) => new ImportTracksCommand(Imported(s, r)),
             _ => throw new InvalidOperationException($"No generator for {type.Name}.")
         };
         string? Track() => tracks.Count == 0 ? null : Pick(r, tracks).Id;
@@ -1779,27 +1827,173 @@ static class RandomProjects {
 
     public static T Pick<T>(Random r, IReadOnlyList<T> items) => items[r.Next(items.Count)];
 
-    /// <summary>A project staff style: one treble staff, or a piano-like pair (Phase 9 placeholder).</summary>
-    static StaffStyle StaffStyle(Random r) =>
-        r.Next(2) == 0
-            ? new(
-                $"sts_{r.Next(4)}",
+    /// <summary>A project staff style: one treble staff, a piano-like pair, or drums with a map; now and then a bad one.</summary>
+    static StaffStyle StaffStyle(Random r, string id) =>
+        r.Next(3) switch {
+            0 => new(
+                id,
                 $"Style {r.Next(10)}",
-                [new(Clef.Treble, r.Next(-2, 3), null, 1)],
+                [new(Pick(r, Enum.GetValues<Clef>()), r.Next(-2, 3), null, r.Next(1, 4))],
                 null,
-                240,
-                160,
+                Pick(r, [0, 240, 480]),
+                Pick(r, [0, 160, 100]),
                 false
-            )
-            : new(
-                $"sts_{r.Next(4)}",
+            ),
+            1 => new(
+                id,
                 $"Grand {r.Next(10)}",
-                [new(Clef.Treble, 0, 60, 2), new(Clef.Bass, 0, null, 2)],
+                [new(Clef.Treble, 0, Pick(r, [60, 55]), 2), new(Clef.Bass, 0, r.Next(10) == 0 ? 40 : null, 2)],
                 null,
                 240,
                 0,
                 true
+            ),
+            _ => new(
+                r.Next(10) == 0 ? StaffStyleIds.Drums : id,
+                $"Kit {r.Next(10)}",
+                [new(Clef.Percussion, 0, null, 2)],
+                [
+                    new(36, 1, Notehead.Normal, "Kick"), new(38, 5, Notehead.Normal, "Snare"),
+                    new(42, r.Next(-2, 10), Notehead.Cross, "Hat")
+                ],
+                240,
+                0,
+                false
+            )
+        };
+
+    /// <summary>A symbol for a region's notes: an articulation, a dynamic or text, a slur, a wedge, a pedal.</summary>
+    static NewScoreSymbol NewSymbol(MidiRegion m, Random r) {
+        var first = Pick(r, m.Notes);
+        var later = m.Notes.Where(n => n.StartTick > first.StartTick).ToArray();
+        var tick = m.StartTick + first.StartTick;
+        return r.Next(7) switch {
+            0 => new(
+                Pick(r, [..ScoreSymbols.NoteOnly]),
+                m.TrackId,
+                first.Id,
+                Placement: r.Next(2) == 0 ? ScorePlacement.Above : null
+            ),
+            1 => new(
+                ScoreSymbolKind.Dynamic,
+                m.TrackId,
+                Tick: tick,
+                Text: Pick(r, ScoreSymbols.Dynamics),
+                Staff: r.Next(3) == 0 ? 1 : null
+            ),
+            2 => later.Length > 0
+                ? new(ScoreSymbolKind.Slur, m.TrackId, first.Id, EndNoteId: Pick(r, later).Id)
+                : new(ScoreSymbolKind.Slur, m.TrackId, first.Id, EndNoteId: first.Id),
+            3 => new(
+                Pick(r, [ScoreSymbolKind.Crescendo, ScoreSymbolKind.Diminuendo, ScoreSymbolKind.OctaveUp]),
+                m.TrackId,
+                Tick: tick,
+                EndTick: tick + r.Next(0, 8) * 240L
+            ),
+            4 => new(
+                Pick(r, [ScoreSymbolKind.Text, ScoreSymbolKind.TempoText, ScoreSymbolKind.Rehearsal]),
+                m.TrackId,
+                r.Next(2) == 0 ? first.Id : null,
+                r.Next(2) == 0 ? null : tick,
+                Text: $"Text {r.Next(10)}"
+            ),
+            5 => new(Pick(r, [ScoreSymbolKind.PedalDown, ScoreSymbolKind.PedalUp]), m.TrackId, Tick: tick),
+            _ => new(ScoreSymbolKind.Accent, m.TrackId, first.Id, r.Next(4) == 0 ? tick : null)
+        };
+    }
+
+    /// <summary>
+    ///     An import's content: an instrument track with a region of notes and controllers, now and then an audio track
+    ///     with a region of a file, a staff style, symbols, lyrics and chord symbols on the provisional ids, and sometimes
+    ///     the tempo map, signatures, keys and markers.
+    /// </summary>
+    static ImportedContent Imported(ProjectState s, Random r) {
+        var withStyle = r.Next(3) == 0;
+        var notes = Enumerable.Range(0, r.Next(1, 5))
+            .Select(i => new Note(100 + i, 60 + r.Next(12), 100, 1, i * 480L, 480, 0))
+            .ToArray();
+        List<ImportedTrack> tracks = [
+            new(
+                "imported-1",
+                $"Imported {r.Next(10)}",
+                TrackKind.Instrument,
+                withStyle ? "style-1" : r.Next(2) == 0 ? null : StaffStyleIds.Treble,
+                [
+                    new(
+                        "imported-region-1",
+                        "ignored",
+                        "Imported",
+                        r.Next(0, 4) * 3840L,
+                        3840,
+                        ProjectDefaults.Playback,
+                        notes,
+                        [
+                            new(7, ControlKind.ControlChange, 1, 64, 127, 0),
+                            new(8, ControlKind.ProgramChange, 1, 0, 5, 0)
+                        ],
+                        false,
+                        ProjectDefaults.Notation
+                    )
+                ],
+                []
+            )
+        ];
+        if (s.Files.Count > 0 && r.Next(3) == 0) {
+            var file = Pick(r, [..s.Files.Values]);
+            tracks.Add(
+                new(
+                    "imported-2",
+                    "Imported audio",
+                    TrackKind.Audio,
+                    null,
+                    [],
+                    [
+                        new(
+                            "imported-region-2",
+                            "ignored",
+                            file.Id,
+                            "Clip",
+                            960,
+                            0,
+                            Math.Max(1, file.Frames / 2),
+                            -3,
+                            10,
+                            10,
+                            0,
+                            0,
+                            false,
+                            FlexFollow.Off,
+                            [],
+                            0,
+                            0,
+                            []
+                        )
+                    ]
+                )
             );
+        }
+
+        var score = new ImportedScore(
+            withStyle ? [new("style-1", "Imported style", [new(Clef.Treble, 2, null, 1)], null, 240, 0, false)] : [],
+            [
+                new("s1", ScoreSymbolKind.Staccato, "imported-1", notes[0].Id),
+                new("s2", ScoreSymbolKind.Dynamic, "imported-1", Tick: 0, Text: "p")
+            ],
+            [new("l1", notes[0].Id, 1, "Hel", Syllabic.Begin, false)],
+            r.Next(2) == 0 ? [new("c1", "imported-1", 0, new(PitchStep.C, 0), "maj7", null, false)] : [],
+            r.Next(2) == 0 ? $"Imported title {r.Next(10)}" : null,
+            r.Next(2) == 0 ? "Imported composer" : null
+        );
+        var timed = r.Next(3) == 0;
+        return new(
+            tracks,
+            timed ? [new(0, 100 + r.Next(40), TempoCurve.Step), new(7680, 90, TempoCurve.Step)] : null,
+            timed ? [new(0, 3, 4), new(5760, 4, 4)] : null,
+            timed ? [new(0, r.Next(12), KeyMode.Minor)] : null,
+            r.Next(2) == 0 ? [new("m1", "Imported marker", 1920, 0, null, "From the file")] : null,
+            score
+        );
+    }
 
     /// <summary>A random non-empty selection of <paramref name="items" />.</summary>
     static IEnumerable<T> Some<T>(IReadOnlyList<T> items, Random r) {

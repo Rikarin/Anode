@@ -1,4 +1,5 @@
 using Anode.Contracts;
+using Anode.Server.Projects;
 using Microsoft.AspNetCore.Http.HttpResults;
 
 namespace Anode.Server.Api;
@@ -13,8 +14,8 @@ static class InterchangeApi {
         var project = api.MapGroup("/project").WithTags("Interchange").AddEndpointFilter<ProblemFilter>();
         project.MapPost(
                 "/export/musicxml",
-                static Results<Accepted<Job>, NotFound, ProblemHttpResult>(MusicXmlExportRequest request) =>
-                    throw Pending.Phase9("ExportMusicXml")
+                static Results<Accepted<Job>, NotFound, ProblemHttpResult>(MusicXmlExportRequest request, Jobs jobs) =>
+                    Accepted(jobs.ExportMusicXml(request))
             )
             .WithName("ExportMusicXml")
             .WithSummary(
@@ -22,8 +23,8 @@ static class InterchangeApi {
             );
         project.MapPost(
                 "/export/aaf",
-                static Results<Accepted<Job>, NotFound, ProblemHttpResult>(AafExportRequest request) =>
-                    throw Pending.Phase9("ExportAaf")
+                static Results<Accepted<Job>, NotFound, ProblemHttpResult>(AafExportRequest request, Jobs jobs) =>
+                    Accepted(jobs.ExportAaf(request))
             )
             .WithName("ExportAaf")
             .WithSummary(
@@ -31,8 +32,8 @@ static class InterchangeApi {
             );
         project.MapPost(
                 "/export/midi",
-                static Results<Accepted<Job>, NotFound, ProblemHttpResult>(MidiExportRequest request) =>
-                    throw Pending.Phase9("ExportMidi")
+                static Results<Accepted<Job>, NotFound, ProblemHttpResult>(MidiExportRequest request, Jobs jobs) =>
+                    Accepted(jobs.ExportMidi(request))
             )
             .WithName("ExportMidi")
             .WithSummary(
@@ -40,8 +41,8 @@ static class InterchangeApi {
             );
         project.MapPost(
                 "/import/musicxml",
-                static Results<Accepted<Job>, NotFound, ProblemHttpResult>(MusicXmlImportRequest request) =>
-                    throw Pending.Phase9("ImportMusicXml")
+                static Results<Accepted<Job>, NotFound, ProblemHttpResult>(MusicXmlImportRequest request, Jobs jobs) =>
+                    Accepted(jobs.ImportMusicXml(request))
             )
             .WithName("ImportMusicXml")
             .WithSummary(
@@ -50,16 +51,20 @@ static class InterchangeApi {
             );
         project.MapPost(
                 "/import/musicxml/upload",
-                static Results<Accepted<Job>, NotFound, ProblemHttpResult>(IFormFile file) =>
-                    throw Pending.Phase9("UploadMusicXml")
+                static async Task<Results<Accepted<Job>, NotFound, ProblemHttpResult>>(
+                    IFormFile file,
+                    Jobs jobs,
+                    CancellationToken token
+                ) =>
+                    Accepted(await jobs.UploadMusicXmlAsync(file, token))
             )
             .WithName("UploadMusicXml")
             .WithSummary("Imports an uploaded MusicXML file (.musicxml, .xml or .mxl), as ImportMusicXml does.")
             .DisableAntiforgery();
         project.MapPost(
                 "/import/aaf",
-                static Results<Accepted<Job>, NotFound, ProblemHttpResult>(AafImportRequest request) =>
-                    throw Pending.Phase9("ImportAaf")
+                static Results<Accepted<Job>, NotFound, ProblemHttpResult>(AafImportRequest request, Jobs jobs) =>
+                    Accepted(jobs.ImportAaf(request))
             )
             .WithName("ImportAaf")
             .WithSummary(
@@ -68,8 +73,12 @@ static class InterchangeApi {
             );
         project.MapPost(
                 "/import/aaf/upload",
-                static Results<Accepted<Job>, NotFound, ProblemHttpResult>(IFormFile file) =>
-                    throw Pending.Phase9("UploadAaf")
+                static async Task<Results<Accepted<Job>, NotFound, ProblemHttpResult>>(
+                    IFormFile file,
+                    Jobs jobs,
+                    CancellationToken token
+                ) =>
+                    Accepted(await jobs.UploadAafAsync(file, token))
             )
             .WithName("UploadAaf")
             .WithSummary(
@@ -78,8 +87,8 @@ static class InterchangeApi {
             .DisableAntiforgery();
         project.MapPost(
                 "/import/midi",
-                static Results<Accepted<Job>, NotFound, ProblemHttpResult>(MidiImportRequest request) =>
-                    throw Pending.Phase9("ImportMidi")
+                static Results<Accepted<Job>, NotFound, ProblemHttpResult>(MidiImportRequest request, Jobs jobs) =>
+                    Accepted(jobs.ImportMidi(request))
             )
             .WithName("ImportMidi")
             .WithSummary(
@@ -88,13 +97,15 @@ static class InterchangeApi {
             );
         project.MapPost(
                 "/import/midi/upload",
-                static Results<Accepted<Job>, NotFound, ProblemHttpResult>(
+                static async Task<Results<Accepted<Job>, NotFound, ProblemHttpResult>>(
                     IFormFile file,
                     bool? importTempo,
                     bool? importMarkers,
-                    bool? merge
+                    bool? merge,
+                    Jobs jobs,
+                    CancellationToken token
                 ) =>
-                    throw Pending.Phase9("UploadMidi")
+                    Accepted(await jobs.UploadMidiAsync(file, importTempo, importMarkers, merge, token))
             )
             .WithName("UploadMidi")
             .WithSummary(
@@ -103,4 +114,6 @@ static class InterchangeApi {
             )
             .DisableAntiforgery();
     }
+
+    static Accepted<Job> Accepted(Job job) => TypedResults.Accepted($"/api/v1/jobs/{job.Id}", job);
 }

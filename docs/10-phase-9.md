@@ -317,6 +317,30 @@ Five, in parallel, each on its own branch; they meet only at the contracts above
   markers, names, CCs, pitch bend, programs) and import options.
 - **Tests:** properties for every command; migration; score API; jobs with D's and E's stubs replaced by test doubles
   until they merge; SMF round trips; API tests.
+- **As built:**
+  - The score content is stored in the snapshot by id (`ProjectState.StaffStyles`, `ScoreSymbols`, `Lyrics`,
+    `ChordSymbols`, `ScoreSets`, `ScoreLayout`; `Project.score` lists each by id) and in `project.json`'s `score`
+    (schema 9; the migration from 8 gives regions the default notation and the project the empty score).
+  - **Attachment** is enforced after every edit, whatever made it: `Edits.Step` follows operations that remove or move
+    tracks, MIDI regions or notes with `Edits.Detached` (a note-attached symbol or syllable whose note is gone is
+    removed, one whose note moved to another track follows it, a slur or wedge whose notes are on two tracks goes, a
+    removed track's positioned symbols and chord symbols go and it leaves score sets and instrument names). A note in
+    one of its track's other alternatives still counts, so symbols survive switching alternatives. The removals are
+    ordinary deltas in the same undo step, so undo brings them back.
+  - **Score edits** are converted in the model through `IScoreNotation` (factory styles, `PitchAt`, `Step`), which
+    `Edits.Apply` takes like the analysis source: the server passes `EngineScoreNotation` (A's `FactoryStaffStyles`
+    and `StaffPositions`), tests a stand-in. So `moveScoreNotes` and `addScoreNote` are commands in history as
+    themselves (one undo step each, labelled as such), and the identity property covers them. Without a notation
+    source the model refuses them. The staff of a note comes from the style's split points; the key from the key track
+    at the note; a percussion staff takes its drum map's pitch at the position.
+  - **Staff styles have no user library** in Phase 9: `GET /library/staff-styles` lists the factory styles; a
+    project's own styles live in its score (`setStaffStyle`), and the editor copies between projects if it wants to.
+  - `GET /project/score` is cached per project opening and revision and request (set, part, view), at most 16
+    documents per revision.
+  - The interchange jobs reach D and E through `IInterchangeFormats` and A through `INotation` (server seams with
+    doubles in the tests). A MusicXML import into a project with tracks drops the file's tempo, meter and key. An
+    upload is saved in `<project>/.upload-<id>/` under its own name for the job, which removes it. A job that throws
+    anything unexpected now fails itself instead of stopping the queue.
 
 ### C — Editor (`editor/`, `libs/notation`; built with `editor/DESIGN.md`)
 

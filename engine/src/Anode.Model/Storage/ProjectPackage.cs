@@ -15,7 +15,9 @@ namespace Anode.Model.Storage;
 ///     mixer (the master's inserts, mixer settings), the mixer groups and the master's automation lanes; schema 5
 ///     Smart Tempo and Varispeed (in <c>settings</c>), tempo ramps' shapes and files' tempos; schema 6 the master's MIDI
 ///     FX (empty) and the Live Loops grid; schema 7 the groove templates, articulation sets and Step Editor lane sets
-///     (docs/08-phase-7.md), with the groove track in <c>settings</c> and files' versions.
+///     (docs/08-phase-7.md), with the groove track in <c>settings</c> and files' versions; schema 8 the sync settings;
+///     schema 9 the score content (docs/10-phase-9.md: staff styles, symbols, lyrics, chord symbols, score sets, layout),
+///     with tracks' staff styles and regions' notation in the track files.
 /// </summary>
 public sealed record ProjectFile(
     int SchemaVersion,
@@ -35,7 +37,8 @@ public sealed record ProjectFile(
     LiveLoopsGrid? LiveLoops = null,
     IReadOnlyList<GrooveTemplate>? Grooves = null,
     IReadOnlyList<ArticulationSet>? ArticulationSets = null,
-    IReadOnlyList<LaneSet>? LaneSets = null
+    IReadOnlyList<LaneSet>? LaneSets = null,
+    ProjectScore? Score = null
 );
 
 /// <summary>
@@ -145,7 +148,8 @@ public static class ProjectPackage {
             state.LiveLoops,
             [..state.Grooves.Values],
             [..state.ArticulationSets.Values],
-            [..state.LaneSets.Values]
+            [..state.LaneSets.Values],
+            state.Score
         );
         AtomicRename.Write(
             Path.Combine(folder, ProjectFileName),
@@ -232,7 +236,7 @@ public static class ProjectPackage {
             midiRegions.ToImmutable()
         ) { Groups = groups, Grooves = grooves, ArticulationSets = articulationSets, LaneSets = laneSets };
         var liveLoops = LiveLoops(root.LiveLoops, tracks, files);
-        return loaded with {
+        var read = loaded with {
             LastEventId = Math.Max(
                 midiRegions.Values.Select(ProjectState.MaxEventId).DefaultIfEmpty().Max(),
                 ProjectState.MaxEventId(liveLoops)
@@ -267,6 +271,40 @@ public static class ProjectPackage {
                         .Select(static l => l with { TrackId = null })
                 ]
             )
+        };
+        return WithScore(read, root.Score);
+    }
+
+    /// <summary>
+    ///     The score content as read (schema 9, docs/10-phase-9.md): each item that passes its command's checks against
+    ///     the project read so far, the first of each id; tracks name a staff style that exists (else none); a damaged
+    ///     layout keeps what still holds, else is the default.
+    /// </summary>
+    static ProjectState WithScore(ProjectState state, ProjectScore? score) {
+        var styles = Checked(score?.StaffStyles, static s => Edits.CheckStaffStyle(s, true), static s => s.Id);
+        state = state with {
+            StaffStyles = styles,
+            Tracks = [
+                ..state.Tracks.Select(t => t.StaffStyleId is { } id
+                    && (!Edits.IsMidiKind(t.Kind) || !(StaffStyleIds.All.Contains(id) || styles.ContainsKey(id)))
+                        ? t with { StaffStyleId = null }
+                        : t
+                )
+            ]
+        };
+        var symbols = Checked(score?.Symbols, s => Edits.CheckStoredSymbol(state, s), static s => s.Id);
+        var chords = Checked(score?.Chords, c => Edits.CheckStoredChord(state, c), static c => c.Id);
+        var lyrics = Checked(score?.Lyrics, l => Edits.CheckStoredLyric(state, l), static l => l.Id);
+        var verses = new HashSet<(long, int)>();
+        var sets = Checked(score?.Sets, s => Edits.CheckStoredSet(state, s), static s => s.Id);
+        return state with {
+            ScoreSymbols = symbols,
+            ChordSymbols = chords,
+            Lyrics = lyrics.RemoveRange(
+                lyrics.Values.Where(l => !verses.Add((l.NoteId, l.Verse))).Select(static l => l.Id).ToArray()
+            ),
+            ScoreSets = sets,
+            ScoreLayout = Edits.CheckStoredLayout(state, score?.Layout)
         };
     }
 
@@ -876,12 +914,12 @@ public static class ProjectPackage {
 ///     refused rather than read wrongly.
 /// </remarks>
 public static class PackageMigrations {
-    public const int CurrentSchemaVersion = 8;
+    public const int CurrentSchemaVersion = 9;
     const string VersionField = "schemaVersion";
 
     /// <summary><c>Steps[n]</c> takes schema <c>n + 1</c> to <c>n + 2</c>; it gets the kind of file and its JSON.</summary>
     static readonly Func<string, JsonObject, JsonObject>[] Steps =
-        [ToSchema2, ToSchema3, ToSchema4, ToSchema5, ToSchema6, ToSchema7, ToSchema8];
+        [ToSchema2, ToSchema3, ToSchema4, ToSchema5, ToSchema6, ToSchema7, ToSchema8, ToSchema9];
 
     public static JsonObject Upgrade(JsonObject json, string kind) {
         var version = json[VersionField] is JsonValue v && v.TryGetValue<int>(out var n) ? n : 1;
@@ -896,7 +934,6 @@ public static class PackageMigrations {
         }
 
         json[VersionField] = CurrentSchemaVersion;
-        Phase9Fields.Fill(kind, json);
         return json;
     }
 
@@ -1095,18 +1132,30 @@ public static class PackageMigrations {
 
         return json;
     }
+
+    /// <summary>
+    ///     Schema 8 to 9 (Phase 9, notation and interchange; docs/10-phase-9.md): every MIDI region (on tracks, in track
+    ///     alternatives and in Live Loops cells) has the default notation settings, tracks have no staff style (left
+    ///     out), and the project's score content is empty with the default layout.
+    /// </summary>
+    static JsonObject ToSchema9(string kind, JsonObject json) {
+        Schema9.Fill(kind, json);
+        return json;
+    }
 }
 
 /// <summary>
-///     The Phase 9 fields (docs/10-phase-9.md) at their defaults where a file lacks them, so schema-8 packages read with
-///     the Phase 9 contracts: interim, until workstream B adds schema 9 and its migration from 8 (which replaces this,
-///     with the same defaults). Every MIDI region (on tracks, in track alternatives and in Live Loops cells) has
-///     <see cref="RegionNotation.Default" />; tracks have no staff style (null, left out) and the project's score
-///     content (not stored yet) is <see cref="ProjectScore.Empty" />. Leaves fields that are present alone.
+///     The Phase 9 additions to a schema-8 file (docs/10-phase-9.md): every MIDI region (on tracks, in track
+///     alternatives and in Live Loops cells) has <see cref="RegionNotation.Default" />; tracks have no staff style (null,
+///     left out) and the project's score is <see cref="ProjectScore.Empty" />. Leaves fields that are present alone.
 /// </summary>
-static class Phase9Fields {
+static class Schema9 {
     public static void Fill(string kind, JsonObject json) {
         if (kind == "project") {
+            json["score"] ??= JsonSerializer.SerializeToNode(
+                ProjectScore.Empty,
+                PackageJsonContext.Default.ProjectScore
+            );
             foreach (var cell in (json["liveLoops"]?["cells"] as JsonArray ?? []).OfType<JsonObject>()) {
                 Notation(cell["content"]?["midi"] as JsonObject);
             }
