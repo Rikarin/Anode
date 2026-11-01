@@ -1,7 +1,6 @@
 using Anode.Contracts;
 using Anode.Model;
 using Anode.Model.Editing;
-using System.Collections.Immutable;
 using System.Globalization;
 using System.Text;
 
@@ -12,7 +11,9 @@ sealed class TestProject {
     readonly SequentialIds ids = new();
     long nextRegion;
 
-    public TestProject() => State = ProjectDefaults.NewProject("prj_test", "Test", 48_000);
+    public TestProject() {
+        State = ProjectDefaults.NewProject("prj_test", "Test", 48_000);
+    }
 
     public ProjectState State { get; private set; }
 
@@ -44,7 +45,11 @@ sealed class TestProject {
     }
 
     public TestProject Signatures(params SignatureEvent[] signatures) {
-        State = State with { Settings = State.Settings with { Signatures = signatures, Signature = new(signatures[0].Numerator, signatures[0].Denominator) } };
+        State = State with {
+            Settings = State.Settings with {
+                Signatures = signatures, Signature = new(signatures[0].Numerator, signatures[0].Denominator)
+            }
+        };
         return this;
     }
 
@@ -65,7 +70,8 @@ sealed class TestProject {
 
     public static Note N(long id, int pitch, long start, long length) => new(id, pitch, 80, 1, start, length, 0);
 
-    public static RegionNotation Grid(int straight, int triplet = 0) => RegionNotation.Default with { DisplayQuantizeTicks = straight, TripletQuantizeTicks = triplet };
+    public static RegionNotation Grid(int straight, int triplet = 0) =>
+        RegionNotation.Default with { DisplayQuantizeTicks = straight, TripletQuantizeTicks = triplet };
 }
 
 /// <summary>A compact text of a score view for assertions: one line per measure, staff and voice.</summary>
@@ -113,7 +119,7 @@ static class Describe {
             text += $"t{tuplet.Group}";
         }
 
-        if (e.Notes.Any(n => n.TieStart)) {
+        if (e.Notes.Any(static n => n.TieStart)) {
             text += "~";
         }
 

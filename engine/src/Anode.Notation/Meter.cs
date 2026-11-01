@@ -104,7 +104,9 @@ static class Meter {
             return [..Enumerable.Repeat(1, numerator)];
         }
 
-        return numerator % 2 == 1 ? [3, ..Enumerable.Repeat(2, (numerator - 3) / 2)] : [..Enumerable.Repeat(2, numerator / 2)];
+        return numerator % 2 != 0
+            ? [3, ..Enumerable.Repeat(2, (numerator - 3) / 2)]
+            : [..Enumerable.Repeat(2, numerator / 2)];
     }
 
     /// <summary>
@@ -223,7 +225,13 @@ static class Meter {
     ///     (docs/notation/README.md, "Durations"): one value where the meter allows it, else split at the metric tree's
     ///     boundaries. Rests are stricter than notes (no dots except a compound beat, no syncopation).
     /// </summary>
-    public static void Split(SplitContext context, long a, long b, bool rest, List<(long Start, long End, Written Written)> into) =>
+    public static void Split(
+        SplitContext context,
+        long a,
+        long b,
+        bool rest,
+        List<(long Start, long End, Written Written)> into
+    ) =>
         Split(context, context.Tree, a, b, rest, into);
 
     static void Split(
@@ -234,20 +242,14 @@ static class Meter {
         bool rest,
         List<(long Start, long End, Written Written)> into
     ) {
-        var length = b - a;
-        if (a == node.Start && b == node.End) {
-            var dots = rest ? node.IsBeat && context.Compound ? 1 : 0 : context.MaxDots;
-            if (TryWrite(length, dots, out var whole)) {
-                into.Add((a, b, whole));
-                return;
-            }
+        if (a == node.Start && b == node.End && TryWrite(b - a, DotsOf(context, node, rest), out var whole)) {
+            into.Add((a, b, whole));
+            return;
         }
 
-        foreach (var child in node.Children) {
-            if (a >= child.Start && b <= child.End) {
-                Split(context, child, a, b, rest, into);
-                return;
-            }
+        if (Array.Find(node.Children, c => a >= c.Start && b <= c.End) is { } inside) {
+            Split(context, inside, a, b, rest, into);
+            return;
         }
 
         if (node.Children.Length == 0) {
@@ -267,6 +269,15 @@ static class Meter {
                 Split(context, child, from, to, rest, into);
             }
         }
+    }
+
+    /// <summary>The dots a span filling <paramref name="node" /> may have: a note's maximum; a rest's only as a compound beat.</summary>
+    static int DotsOf(SplitContext context, MetricNode node, bool rest) {
+        if (!rest) {
+            return context.MaxDots;
+        }
+
+        return node.IsBeat && context.Compound ? 1 : 0;
     }
 
     /// <summary>Whether a span crossing <paramref name="node" />'s children is written as one value.</summary>

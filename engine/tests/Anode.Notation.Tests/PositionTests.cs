@@ -40,8 +40,14 @@ public sealed class PositionTests {
         Assert.Equal(64, StaffPositions.PitchAt(Clef.Treble, 2, C, 1));
         Assert.Equal(new StaffPlacement(-1, new(PitchStep.D, 0, 4)), StaffPositions.PlacementOf(Clef.Treble, 2, C, 60));
         Assert.Equal(new StaffPlacement(-2, new(PitchStep.C, 1, 4)), StaffPositions.PlacementOf(Clef.Treble, 0, C, 61));
-        Assert.Equal(new StaffPlacement(-1, new(PitchStep.D, -1, 4)), StaffPositions.PlacementOf(Clef.Treble, 0, F, 61));
-        Assert.Equal(new StaffPlacement(-7, new(PitchStep.E, 0, 2)), StaffPositions.PlacementOf(Clef.Treble8vb, 0, C, 40));
+        Assert.Equal(
+            new StaffPlacement(-1, new(PitchStep.D, -1, 4)),
+            StaffPositions.PlacementOf(Clef.Treble, 0, F, 61)
+        );
+        Assert.Equal(
+            new StaffPlacement(-7, new(PitchStep.E, 0, 2)),
+            StaffPositions.PlacementOf(Clef.Treble8vb, 0, C, 40)
+        );
     }
 
     [Fact]
@@ -58,16 +64,16 @@ public sealed class PositionTests {
 
     [Fact]
     public void Keys_have_conventional_signatures() {
-        Assert.Equal(new ScoreKey(6, KeyMode.Major), StaffPositions.KeyOf(new(0, 6, KeyMode.Major)));
-        Assert.Equal(new ScoreKey(-5, KeyMode.Major), StaffPositions.KeyOf(new(0, 1, KeyMode.Major)));
-        Assert.Equal(new ScoreKey(-6, KeyMode.Minor), StaffPositions.KeyOf(new(0, 3, KeyMode.Minor)));
-        Assert.Equal(new ScoreKey(5, KeyMode.Minor), StaffPositions.KeyOf(new(0, 8, KeyMode.Minor)));
-        Assert.Equal(new ScoreKey(-5, KeyMode.Minor), StaffPositions.KeyOf(new(0, 10, KeyMode.Minor)));
-        Assert.Equal(new ScoreKey(0, KeyMode.Minor), StaffPositions.KeyOf(new(0, 9, KeyMode.Minor)));
-        Assert.Equal(new ScoreKey(2, KeyMode.Major), StaffPositions.WrittenKey(new(0, KeyMode.Major), 2));
-        Assert.Equal(new ScoreKey(-5, KeyMode.Major), StaffPositions.WrittenKey(new(5, KeyMode.Major), 2));
-        Assert.Equal(new ScoreKey(3, KeyMode.Major), StaffPositions.WrittenKey(new(0, KeyMode.Major), 9));
-        Assert.Equal(new ScoreKey(1, KeyMode.Major), StaffPositions.WrittenKey(new(0, KeyMode.Major), 7));
+        Assert.Equal(new(6, KeyMode.Major), StaffPositions.KeyOf(new(0, 6, KeyMode.Major)));
+        Assert.Equal(new(-5, KeyMode.Major), StaffPositions.KeyOf(new(0, 1, KeyMode.Major)));
+        Assert.Equal(new(-6, KeyMode.Minor), StaffPositions.KeyOf(new(0, 3, KeyMode.Minor)));
+        Assert.Equal(new(5, KeyMode.Minor), StaffPositions.KeyOf(new(0, 8, KeyMode.Minor)));
+        Assert.Equal(new(-5, KeyMode.Minor), StaffPositions.KeyOf(new(0, 10, KeyMode.Minor)));
+        Assert.Equal(new(0, KeyMode.Minor), StaffPositions.KeyOf(new(0, 9, KeyMode.Minor)));
+        Assert.Equal(new(2, KeyMode.Major), StaffPositions.WrittenKey(new(0, KeyMode.Major), 2));
+        Assert.Equal(new(-5, KeyMode.Major), StaffPositions.WrittenKey(new(5, KeyMode.Major), 2));
+        Assert.Equal(new(3, KeyMode.Major), StaffPositions.WrittenKey(new(0, KeyMode.Major), 9));
+        Assert.Equal(new(1, KeyMode.Major), StaffPositions.WrittenKey(new(0, KeyMode.Major), 7));
         Assert.Equal([1, 4, 5, 8, -1], new[] { 2, 7, 9, 14, -2 }.Select(StaffPositions.DiatonicSteps));
     }
 
@@ -81,26 +87,27 @@ public sealed class PositionTests {
     [Fact]
     public void Placement_and_pitch_round_trip_on_every_clef_key_and_transposition() =>
         Gen.Select(
-                Gen.Enum<Clef>().Where(c => c != Clef.Percussion),
+                Gen.Enum<Clef>().Where(static c => c != Clef.Percussion),
                 Gen.Int[-7, 14],
                 Gen.Int[0, 11],
                 Gen.Bool,
                 Gen.Int[21, 108]
             )
-            .Sample((clef, transpose, tonic, minor, pitch) => {
-                var key = new KeyEvent(0, tonic, minor ? KeyMode.Minor : KeyMode.Major);
-                var placement = StaffPositions.PlacementOf(clef, transpose, key, pitch);
-                var accidental = placement.Written.Alter switch {
-                    1 => Accidental.Sharp,
-                    -1 => Accidental.Flat,
-                    2 => Accidental.DoubleSharp,
-                    -2 => Accidental.DoubleFlat,
-                    _ => Accidental.Natural
-                };
-                return StaffPositions.PitchAt(clef, transpose, key, placement.StaffPosition, accidental) == pitch
-                    && StaffPositions.Step(pitch, 0, transpose, key, accidental) == pitch
-                    && Math.Abs(placement.Written.Alter) <= 2;
-            });
+            .Sample(static (clef, transpose, tonic, minor, pitch) => {
+                    var key = new KeyEvent(0, tonic, minor ? KeyMode.Minor : KeyMode.Major);
+                    var placement = StaffPositions.PlacementOf(clef, transpose, key, pitch);
+                    var accidental = placement.Written.Alter switch {
+                        1 => Accidental.Sharp,
+                        -1 => Accidental.Flat,
+                        2 => Accidental.DoubleSharp,
+                        -2 => Accidental.DoubleFlat,
+                        _ => Accidental.Natural
+                    };
+                    return StaffPositions.PitchAt(clef, transpose, key, placement.StaffPosition, accidental) == pitch
+                        && StaffPositions.Step(pitch, 0, transpose, key, accidental) == pitch
+                        && Math.Abs(placement.Written.Alter) <= 2;
+                }
+            );
 
     [Fact]
     public void Grids_come_from_the_region_or_the_style_and_are_drawable() {
@@ -109,7 +116,13 @@ public sealed class PositionTests {
         Assert.Equal((480, 320), DisplayGrid.GridsOf(Grid(480, 320), piano));
         Assert.Equal((480, 0), DisplayGrid.GridsOf(Grid(480), piano));
         Assert.Equal((60, 80), DisplayGrid.GridsOf(Grid(100, 100), piano));
-        Assert.Equal((30, 0), DisplayGrid.GridsOf(RegionNotation.Default, piano with { DisplayQuantizeTicks = 0, TripletQuantizeTicks = 0 }));
+        Assert.Equal(
+            (30, 0),
+            DisplayGrid.GridsOf(
+                RegionNotation.Default,
+                piano with { DisplayQuantizeTicks = 0, TripletQuantizeTicks = 0 }
+            )
+        );
         Assert.Equal((3840, 0), DisplayGrid.GridsOf(Grid(9999), piano));
     }
 
@@ -117,7 +130,16 @@ public sealed class PositionTests {
     public void Display_ticks_and_moves_follow_the_display_grid() {
         var project = new TestProject();
         var track = project.Track("T");
-        var id = project.Region(track, 0, 3840 * 2, Grid(240, 160), N(1, 60, 250, 200), N(2, 62, 965, 300), N(3, 64, 1290, 300), N(4, 65, 1595, 300));
+        var id = project.Region(
+            track,
+            0,
+            3840 * 2,
+            Grid(240, 160),
+            N(1, 60, 250, 200),
+            N(2, 62, 965, 300),
+            N(3, 64, 1290, 300),
+            N(4, 65, 1595, 300)
+        );
         var region = project.State.MidiRegions[id];
         var style = FactoryStaffStyles.Find(StaffStyleIds.Piano)!;
         Assert.Equal(240, DisplayGrid.DisplayTick(project.State, region, style, 250));
@@ -133,16 +155,16 @@ public sealed class PositionTests {
 
     [Fact]
     public void The_factory_styles_are_the_contract_s_in_library_order() {
-        Assert.Equal(StaffStyleIds.All, FactoryStaffStyles.All.Select(s => s.Id));
-        Assert.All(FactoryStaffStyles.All, s => Assert.Same(s, FactoryStaffStyles.Find(s.Id)));
+        Assert.Equal(StaffStyleIds.All, FactoryStaffStyles.All.Select(static s => s.Id));
+        Assert.All(FactoryStaffStyles.All, static s => Assert.Same(s, FactoryStaffStyles.Find(s.Id)));
         Assert.Null(FactoryStaffStyles.Find("factory.none"));
         var piano = FactoryStaffStyles.Find(StaffStyleIds.Piano)!;
         Assert.True(piano.Brace);
-        Assert.Equal([60, null], piano.Staves.Select(s => s.SplitPitch));
-        Assert.Equal([Clef.Treble, Clef.Bass], piano.Staves.Select(s => s.Clef));
+        Assert.Equal([60, null], piano.Staves.Select(static s => s.SplitPitch));
+        Assert.Equal([Clef.Treble, Clef.Bass], piano.Staves.Select(static s => s.Clef));
         Assert.Equal(
             [0, 0, 0, 0, 0, 0, 2, 2, 7, 9, 14, 0, 0],
-            FactoryStaffStyles.All.Select(s => s.Staves[0].Transpose)
+            FactoryStaffStyles.All.Select(static s => s.Staves[0].Transpose)
         );
         Assert.Equal(Clef.Treble8vb, FactoryStaffStyles.Find(StaffStyleIds.Guitar)!.Staves[0].Clef);
         Assert.Equal(Clef.Bass8vb, FactoryStaffStyles.Find(StaffStyleIds.BassGuitar)!.Staves[0].Clef);
@@ -150,8 +172,11 @@ public sealed class PositionTests {
         Assert.Equal(Clef.Bass, FactoryStaffStyles.Find(StaffStyleIds.Cello)!.Staves[0].Clef);
         Assert.Equal(Clef.Percussion, FactoryStaffStyles.Find(StaffStyleIds.Drums)!.Staves[0].Clef);
         Assert.NotEmpty(FactoryStaffStyles.Find(StaffStyleIds.Drums)!.DrumMap!);
-        Assert.All(FactoryStaffStyles.All, s => Assert.Null(s.Staves[^1].SplitPitch));
-        Assert.All(FactoryStaffStyles.All, s => Assert.StartsWith(StaffStyleIds.FactoryPrefix, s.Id, StringComparison.Ordinal));
+        Assert.All(FactoryStaffStyles.All, static s => Assert.Null(s.Staves[^1].SplitPitch));
+        Assert.All(
+            FactoryStaffStyles.All,
+            static s => Assert.StartsWith(StaffStyleIds.FactoryPrefix, s.Id, StringComparison.Ordinal)
+        );
         Assert.Same(piano, FactoryStaffStyles.Resolve(ProjectScore.Empty, null));
         Assert.Same(piano, FactoryStaffStyles.Resolve(ProjectScore.Empty, "sts_missing"));
     }

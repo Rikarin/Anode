@@ -26,7 +26,7 @@ public static class StaffPositions {
     ) {
         var written = WrittenKey(KeyOf(key), transpose);
         var diatonic = Spelling.BottomLine(clef) + staffPosition;
-        var step = ((diatonic % 7) + 7) % 7;
+        var step = (diatonic % 7 + 7) % 7;
         var octave = (int)Math.Floor(diatonic / 7.0);
         var alter = accidental is { } a ? Spelling.AlterOf(a) : Spelling.KeyAlter(written.Fifths, step);
         return Spelling.PitchOf(new((PitchStep)step, alter, octave)) - transpose;
@@ -45,7 +45,7 @@ public static class StaffPositions {
         var writtenKey = WrittenKey(KeyOf(key), transpose);
         var from = Spelling.Spell(pitch + transpose, writtenKey);
         var diatonic = Spelling.DiatonicOf(from) + steps;
-        var step = ((diatonic % 7) + 7) % 7;
+        var step = (diatonic % 7 + 7) % 7;
         var octave = (int)Math.Floor(diatonic / 7.0);
         var alter = accidental is { } a ? Spelling.AlterOf(a) : Spelling.KeyAlter(writtenKey.Fifths, step);
         return Spelling.PitchOf(new((PitchStep)step, alter, octave)) - transpose;
@@ -86,11 +86,12 @@ public static class StaffPositions {
         return new(PositionOf(clef, spelled), spelled);
     }
 
-    internal static int PositionOf(Clef clef, ScorePitch written) => Spelling.DiatonicOf(written) - Spelling.BottomLine(clef);
+    internal static int PositionOf(Clef clef, ScorePitch written) =>
+        Spelling.DiatonicOf(written) - Spelling.BottomLine(clef);
 
     /// <summary>The written pitch (natural) at a staff position of a clef.</summary>
     internal static ScorePitch WrittenAt(Clef clef, int staffPosition) {
         var diatonic = Spelling.BottomLine(clef) + staffPosition;
-        return new((PitchStep)(((diatonic % 7) + 7) % 7), 0, (int)Math.Floor(diatonic / 7.0));
+        return new((PitchStep)((diatonic % 7 + 7) % 7), 0, (int)Math.Floor(diatonic / 7.0));
     }
 }

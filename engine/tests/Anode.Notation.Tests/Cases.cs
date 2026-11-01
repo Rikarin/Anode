@@ -14,7 +14,10 @@ static class Cases {
     ///     a triplet, a two-voice passage and notes slightly off the grid, under the piano style (split at C3 = 60) with
     ///     display quantise 1/16 and the 1/16-triplet grid (Logic's "16,24"; the step's "1/8" is 480 and 320, "8,12").
     /// </summary>
-    public static (ProjectState State, string Track, string Region) ExitCriterion(int straight = 240, int triplet = 160) {
+    public static (ProjectState State, string Track, string Region) ExitCriterion(
+        int straight = 240,
+        int triplet = 160
+    ) {
         var project = new TestProject();
         var track = project.Track("Piano", StaffStyleIds.Piano);
         var region = project.Region(
@@ -79,28 +82,37 @@ static class Cases {
             N(10, 55, 2 * Bar, Bar),
             N(11, 59, 2 * Bar, Bar)
         );
-        project.Region(clarinet, 0, Bar * 3, null, N(21, 60, 0, 2 * Q), N(22, 62, 2 * Q, 2 * Q), N(23, 64, Bar, Bar), N(24, 66, 2 * Bar, Bar));
+        project.Region(
+            clarinet,
+            0,
+            Bar * 3,
+            null,
+            N(21, 60, 0, 2 * Q),
+            N(22, 62, 2 * Q, 2 * Q),
+            N(23, 64, Bar, Bar),
+            N(24, 66, 2 * Bar, Bar)
+        );
         var score = ProjectScore.Empty with {
             Symbols = [
-                new("sym_01", ScoreSymbolKind.Staccato, piano, NoteId: 1),
-                new("sym_02", ScoreSymbolKind.Accent, piano, NoteId: 2),
-                new("sym_03", ScoreSymbolKind.Tenuto, piano, NoteId: 3, Placement: ScorePlacement.Below),
+                new("sym_01", ScoreSymbolKind.Staccato, piano, 1),
+                new("sym_02", ScoreSymbolKind.Accent, piano, 2),
+                new("sym_03", ScoreSymbolKind.Tenuto, piano, 3, Placement: ScorePlacement.Below),
                 new("sym_04", ScoreSymbolKind.Dynamic, piano, Tick: 0, Text: "mf"),
-                new("sym_05", ScoreSymbolKind.Slur, piano, NoteId: 1, EndNoteId: 3),
+                new("sym_05", ScoreSymbolKind.Slur, piano, 1, EndNoteId: 3),
                 new("sym_06", ScoreSymbolKind.Crescendo, piano, Tick: 0, EndTick: Bar),
-                new("sym_07", ScoreSymbolKind.Diminuendo, piano, NoteId: 5, EndNoteId: 6),
+                new("sym_07", ScoreSymbolKind.Diminuendo, piano, 5, EndNoteId: 6),
                 new("sym_08", ScoreSymbolKind.Text, piano, Tick: Bar, Text: "dolce"),
                 new("sym_09", ScoreSymbolKind.TempoText, piano, Tick: 0, Text: "Andante"),
                 new("sym_10", ScoreSymbolKind.Rehearsal, piano, Tick: Bar, Text: "B"),
                 new("sym_11", ScoreSymbolKind.PedalDown, piano, Tick: 0),
                 new("sym_12", ScoreSymbolKind.PedalUp, piano, Tick: Bar - 240),
-                new("sym_13", ScoreSymbolKind.Trill, piano, NoteId: 7),
-                new("sym_14", ScoreSymbolKind.Fermata, piano, NoteId: 7, Placement: ScorePlacement.Above),
+                new("sym_13", ScoreSymbolKind.Trill, piano, 7),
+                new("sym_14", ScoreSymbolKind.Fermata, piano, 7, Placement: ScorePlacement.Above),
                 new("sym_15", ScoreSymbolKind.OctaveUp, piano, Tick: Bar, EndTick: Bar * 2),
-                new("sym_16", ScoreSymbolKind.TieHidden, piano, NoteId: 4),
-                new("sym_17", ScoreSymbolKind.Marcato, clarinet, NoteId: 21),
-                new("sym_18", ScoreSymbolKind.Staccatissimo, clarinet, NoteId: 22),
-                new("sym_19", ScoreSymbolKind.Dynamic, clarinet, NoteId: 23, Text: "p")
+                new("sym_16", ScoreSymbolKind.TieHidden, piano, 4),
+                new("sym_17", ScoreSymbolKind.Marcato, clarinet, 21),
+                new("sym_18", ScoreSymbolKind.Staccatissimo, clarinet, 22),
+                new("sym_19", ScoreSymbolKind.Dynamic, clarinet, 23, Text: "p")
             ],
             Lyrics = [
                 new("lyr_1", 21, 1, "Hal", Syllabic.Begin, false),
@@ -110,7 +122,7 @@ static class Cases {
                 new("lyr_5", 21, 2, "Sing", Syllabic.Single, false)
             ],
             Chords = [
-                new("chd_1", piano, 0, new(PitchStep.C, 0), "", null, false),
+                new("chd_1", piano, 0, new(PitchStep.C, 0), string.Empty, null, false),
                 new("chd_2", piano, 2 * Q, new(PitchStep.A, 0), "m7", null, false),
                 new("chd_3", piano, Bar, new(PitchStep.F, 0), "maj7", new(PitchStep.A, 0), false),
                 new("chd_4", piano, Bar * 2, new(PitchStep.G, 0), "7", null, true),
@@ -139,11 +151,11 @@ static class Cases {
             for (var eighth = 0; eighth < 8; eighth++) {
                 var tick = bar * Bar + eighth * 480;
                 notes.Add(N(++id, eighth == 0 && bar == 1 ? 49 : 42, tick, 120));
-                if (eighth % 4 == 0) {
+                if (eighth is 0 or 4) {
                     notes.Add(N(++id, 36, tick, 120));
                 }
 
-                if (eighth % 4 == 2) {
+                if (eighth is 2 or 6) {
                     notes.Add(N(++id, 38, tick, 120));
                 }
             }

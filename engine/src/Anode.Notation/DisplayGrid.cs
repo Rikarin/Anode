@@ -156,7 +156,9 @@ sealed class Quantizer(Bars bars) {
     /// <summary>The spans of <paramref name="bar" /> drawn as triplets, with the bar's triplet grid, in order.</summary>
     public List<(long Start, long End, int Triplet)> TripletSpans(Bar bar) {
         var triplet = TripletOf(bar);
-        return [..Spans(bar, triplet).Where(s => IsTriplet(bar, s.Start) is not null).Select(s => (s.Start, s.End, triplet))];
+        return [
+            ..Spans(bar, triplet).Where(s => IsTriplet(bar, s.Start) is not null).Select(s => (s.Start, s.End, triplet))
+        ];
     }
 
     /// <summary>The next (or previous) display position from <paramref name="display" />.</summary>
@@ -180,7 +182,7 @@ sealed class Quantizer(Bars bars) {
         var triplet = TripletOf(bar);
         var spans = TripletSpans(bar);
         for (var p = bar.Start; p < bar.End; p += straight) {
-            if (!spans.Any(s => p > s.Start && p < s.End)) {
+            if (!spans.Exists(s => p > s.Start && p < s.End)) {
                 points.Add(p);
             }
         }
@@ -216,7 +218,11 @@ sealed class Quantizer(Bars bars) {
 
         triplets = [];
         errors = [];
-        var ordered = onsets.Select((o, i) => (Onset: o, Index: i)).OrderBy(x => x.Onset.Tick).ThenBy(x => x.Index).Select(x => x.Onset).ToList();
+        var ordered = onsets.Select(static (o, i) => (Onset: o, Index: i))
+            .OrderBy(static x => x.Onset.Tick)
+            .ThenBy(static x => x.Index)
+            .Select(static x => x.Onset)
+            .ToList();
         foreach (var (tick, _, triplet) in ordered) {
             var bar = bars.At(tick);
             if (triplet > 0) {
@@ -248,8 +254,8 @@ sealed class Quantizer(Bars bars) {
         }
 
         var span = 3L * triplet;
-        if (bar.Beats.All(b => b.Length % span == 0)) {
-            return [..bar.Beats.Select(b => (b.Start, b.End))];
+        if (bar.Beats.TrueForAll(b => b.Length % span == 0)) {
+            return [..bar.Beats.Select(static b => (b.Start, b.End))];
         }
 
         var spans = new List<(long Start, long End)>();

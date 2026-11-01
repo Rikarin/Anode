@@ -19,10 +19,10 @@ sealed class StaffMeasureBuilder(
 
     public ScoreStaffMeasure Build() {
         var units = notation.Staves[staff].Where(u => u.Start < bar.End && u.End > bar.Start).ToList();
-        var voices = units.Select(u => u.Voice).Append(1).Distinct().Order().ToList();
+        var voices = units.Select(static u => u.Voice).Append(1).Distinct().Order().ToList();
         var drafts = new List<List<Draft>>();
         foreach (var voice in voices) {
-            var list = Notate(units.Where(u => u.Voice == voice).OrderBy(u => u.Start).ToList());
+            var list = Notate([..units.Where(u => u.Voice == voice).OrderBy(static u => u.Start)]);
             foreach (var draft in list) {
                 draft.Voice = voice;
             }
@@ -31,7 +31,7 @@ sealed class StaffMeasureBuilder(
             drafts.Add(list);
         }
 
-        Spell(drafts.SelectMany(d => d));
+        Spell(drafts.SelectMany(static d => d));
         foreach (var list in drafts) {
             Stem(list, voices.Count > 1, definition.Clef == Clef.Percussion);
         }
@@ -50,6 +50,29 @@ sealed class StaffMeasureBuilder(
             return [new() { Tick = bar.Start, End = bar.End, Written = new(NoteValue.Whole, 0), FullMeasure = true }];
         }
 
+        var segments = Segments(units);
+        var groups = TupletGroups(segments);
+        var context = SplitContext.Of(bar.Tree, bar.Time, settings);
+        var drafts = new List<Draft>();
+        var numbers = new Dictionary<long, int>();
+        foreach (var (start, end, unit) in segments) {
+            var cuts = groups.SelectMany(static g => new[] { g.Start, g.End })
+                .Where(c => c > start && c < end)
+                .Append(start)
+                .Append(end)
+                .Distinct()
+                .Order()
+                .ToList();
+            for (var c = 0; c + 1 < cuts.Count; c++) {
+                Write(cuts[c], cuts[c + 1], unit, groups, numbers, context, drafts);
+            }
+        }
+
+        return drafts;
+    }
+
+    /// <summary>A voice's units clipped to the bar, and the rests between them.</summary>
+    List<(long Start, long End, Unit? Unit)> Segments(List<Unit> units) {
         var segments = new List<(long Start, long End, Unit? Unit)>();
         var at = bar.Start;
         foreach (var unit in units) {
@@ -67,42 +90,43 @@ sealed class StaffMeasureBuilder(
             segments.Add((at, bar.End, null));
         }
 
-        var groups = TupletGroups(segments);
-        var context = SplitContext.Of(bar.Tree, bar.Time, settings);
-        var drafts = new List<Draft>();
-        var numbers = new Dictionary<long, int>();
-        foreach (var (start, end, unit) in segments) {
-            var cuts = groups.SelectMany(g => new[] { g.Start, g.End })
-                .Where(c => c > start && c < end)
-                .Append(start)
-                .Append(end)
-                .Distinct()
-                .Order()
-                .ToList();
-            for (var c = 0; c + 1 < cuts.Count; c++) {
-                var (from, to) = (cuts[c], cuts[c + 1]);
-                var group = groups.FirstOrDefault(g => from >= g.Start && to <= g.End);
-                if (group.Unit > 0 && Meter.TryWrite((to - from) * 3 / 2, 0, out var tuplet) && (to - from) * 3 % 2 == 0) {
-                    if (!numbers.TryGetValue(group.Start, out var number)) {
-                        number = numbers.Count + 1;
-                        numbers[group.Start] = number;
-                    }
+        return segments;
+    }
 
-                    drafts.Add(Piece(from, to, unit, tuplet, number));
-                    continue;
-                }
-
-                var pieces = new List<(long Start, long End, Written Written)>();
-                Meter.Split(context, from, to, unit is null, pieces);
-                drafts.AddRange(pieces.Select(p => Piece(p.Start, p.End, unit, p.Written, 0)));
+    /// <summary>A piece of a segment: one triplet value inside a tuplet group, else tied values by the meter.</summary>
+    void Write(
+        long from,
+        long to,
+        Unit? unit,
+        List<(long Start, long End, long Unit)> groups,
+        Dictionary<long, int> numbers,
+        SplitContext context,
+        List<Draft> drafts
+    ) {
+        var group = groups.Find(g => from >= g.Start && to <= g.End);
+        if (group.Unit > 0 && (to - from) * 3 % 2 == 0 && Meter.TryWrite((to - from) * 3 / 2, 0, out var tuplet)) {
+            if (!numbers.TryGetValue(group.Start, out var number)) {
+                number = numbers.Count + 1;
+                numbers[group.Start] = number;
             }
+
+            drafts.Add(Piece(from, to, unit, tuplet, number));
+            return;
         }
 
-        return drafts;
+        var pieces = new List<(long Start, long End, Written Written)>();
+        Meter.Split(context, from, to, unit is null, pieces);
+        drafts.AddRange(pieces.Select(p => Piece(p.Start, p.End, unit, p.Written, 0)));
     }
 
     Draft Piece(long from, long to, Unit? unit, Written written, int tuplet) {
-        var draft = new Draft { Tick = from, End = to, Written = written, Tuplet = tuplet, Unit = unit };
+        var draft = new Draft {
+            Tick = from,
+            End = to,
+            Written = written,
+            Tuplet = tuplet,
+            Unit = unit
+        };
         if (unit is null) {
             return draft;
         }
@@ -115,7 +139,9 @@ sealed class StaffMeasureBuilder(
             draft.Notes.Add(Place(note));
         }
 
-        draft.Notes.Sort((x, y) => x.Position != y.Position ? x.Position.CompareTo(y.Position) : x.Note.Pitch != y.Note.Pitch ? x.Note.Pitch.CompareTo(y.Note.Pitch) : x.Note.Id.CompareTo(y.Note.Id));
+        draft.Notes.Sort(static (x, y) => x.Position != y.Position ? x.Position.CompareTo(y.Position) :
+            x.Note.Pitch != y.Note.Pitch ? x.Note.Pitch.CompareTo(y.Note.Pitch) : x.Note.Id.CompareTo(y.Note.Id)
+        );
         return draft;
     }
 
@@ -124,7 +150,13 @@ sealed class StaffMeasureBuilder(
         if (definition.Clef == Clef.Percussion && notation.Style.DrumMap is { } map) {
             foreach (var entry in map) {
                 if (entry.Pitch == note.Pitch) {
-                    return new(note, StaffPositions.WrittenAt(Clef.Percussion, entry.StaffPosition), entry.StaffPosition, entry.Notehead, true);
+                    return new(
+                        note,
+                        StaffPositions.WrittenAt(Clef.Percussion, entry.StaffPosition),
+                        entry.StaffPosition,
+                        entry.Notehead,
+                        true
+                    );
                 }
             }
         }
@@ -144,21 +176,21 @@ sealed class StaffMeasureBuilder(
     ///     falls on; a group without a boundary inside is written straight.
     /// </summary>
     List<(long Start, long End, long Unit)> TupletGroups(List<(long Start, long End, Unit? Unit)> segments) {
-        var boundaries = segments.Select(s => s.End).ToList();
+        var boundaries = segments.Select(static s => s.End).ToList();
         var groups = new List<(long Start, long End, long Unit)>();
         foreach (var (start, end, triplet) in notation.Quantizer.TripletSpans(bar)) {
             var inside = boundaries.Where(b => b > start && b < end).ToList();
-            if (inside.Count == 0 || inside.Any(b => (b - start) % triplet != 0)) {
+            if (inside.Count == 0 || inside.Exists(b => (b - start) % triplet != 0)) {
                 continue;
             }
 
             long unit = triplet;
-            while ((end - start) % (6 * unit) == 0 && inside.All(b => (b - start) % (2 * unit) == 0)) {
+            while ((end - start) % (6 * unit) == 0 && inside.TrueForAll(b => (b - start) % (2 * unit) == 0)) {
                 unit *= 2;
             }
 
             for (var g = start; g + 3 * unit <= end; g += 3 * unit) {
-                if (inside.Any(b => b > g && b < g + 3 * unit)) {
+                if (inside.Exists(b => b > g && b < g + 3 * unit)) {
                     groups.Add((g, g + 3 * unit, unit));
                 }
             }
@@ -173,49 +205,63 @@ sealed class StaffMeasureBuilder(
     ///     beam.
     /// </summary>
     void Beam(List<Draft> drafts) {
-        var spans = bar.Beats.Select(b => (b.Start, b.End)).ToList();
-        var simple = bar.Time.Denominator <= 4 && !Meter.IsCompound(bar.Time.Numerator, bar.Time.Denominator);
-        if (simple && bar.Tree.Children is [{ IsBeat: false } first, { IsBeat: false } second]) {
-            foreach (var half in new[] { first, second }) {
-                var inside = drafts.Where(d => d.Tick >= half.Start && d.End <= half.End).ToList();
-                if (inside.Count > 1
-                    && inside.Sum(d => d.End - d.Tick) == half.Length
-                    && inside.All(d => d.Notes.Count > 0 && d.Tuplet == 0 && d.Written == new Written(NoteValue.Eighth, 0))) {
-                    spans.RemoveAll(s => s.Start >= half.Start && s.End <= half.End);
-                    spans.Add((half.Start, half.End));
-                }
-            }
-
-            spans.Sort();
-        }
-
         var group = 0;
-        foreach (var (start, end) in spans) {
+        foreach (var (start, end) in BeamSpans(drafts)) {
             var run = new List<Draft>();
             foreach (var draft in drafts.Where(d => d.Tick >= start && d.End <= end)) {
-                var beamable = draft.Notes.Count > 0 && draft.Written.Value >= NoteValue.Eighth;
-                if (beamable && (run.Count == 0 || (run[^1].End == draft.Tick && run[^1].Tuplet == draft.Tuplet))) {
-                    run.Add(draft);
-                    continue;
-                }
-
-                Flush(run, ref group);
-                run = beamable ? [draft] : [];
+                run = Extend(run, draft, ref group);
             }
 
             Flush(run, ref group);
         }
+    }
 
-        static void Flush(List<Draft> run, ref int group) {
-            if (run.Count < 2) {
-                return;
-            }
+    /// <summary>A run of beamable events extended by <paramref name="draft" />, or flushed and restarted.</summary>
+    static List<Draft> Extend(List<Draft> run, Draft draft, ref int group) {
+        var beamable = draft.Notes.Count > 0 && draft.Written.Value >= NoteValue.Eighth;
+        if (beamable && (run.Count == 0 || (run[^1].End == draft.Tick && run[^1].Tuplet == draft.Tuplet))) {
+            run.Add(draft);
+            return run;
+        }
 
-            group++;
-            foreach (var draft in run) {
-                draft.Beam = group;
+        Flush(run, ref group);
+        return beamable ? [draft] : [];
+    }
+
+    /// <summary>A run of two or more is the next beam group.</summary>
+    static void Flush(List<Draft> run, ref int group) {
+        if (run.Count < 2) {
+            return;
+        }
+
+        group++;
+        foreach (var draft in run) {
+            draft.Beam = group;
+        }
+    }
+
+    /// <summary>The spans beams stay within: the beats, or a half bar of plain eighths in a simple meter of four beats.</summary>
+    List<(long Start, long End)> BeamSpans(List<Draft> drafts) {
+        var spans = bar.Beats.Select(static b => (b.Start, b.End)).ToList();
+        var simple = bar.Time.Denominator <= 4 && !Meter.IsCompound(bar.Time.Numerator, bar.Time.Denominator);
+        if (!simple || bar.Tree.Children is not [{ IsBeat: false } first, { IsBeat: false } second]) {
+            return spans;
+        }
+
+        foreach (var half in new[] { first, second }) {
+            var inside = drafts.FindAll(d => d.Tick >= half.Start && d.End <= half.End);
+            if (inside.Count > 1
+                && inside.Sum(static d => d.End - d.Tick) == half.Length
+                && inside.TrueForAll(static d =>
+                    d.Notes.Count > 0 && d.Tuplet == 0 && d.Written == new Written(NoteValue.Eighth, 0)
+                )) {
+                spans.RemoveAll(s => s.Start >= half.Start && s.End <= half.End);
+                spans.Add((half.Start, half.End));
             }
         }
+
+        spans.Sort();
+        return spans;
     }
 
     /// <summary>
@@ -226,10 +272,10 @@ sealed class StaffMeasureBuilder(
     void Spell(IEnumerable<Draft> drafts) {
         var key = WrittenKey;
         var state = new Dictionary<(PitchStep, int), int>();
-        foreach (var (draft, note) in drafts.SelectMany(d => d.Notes.Select(n => (Draft: d, Note: n)))
-                     .OrderBy(x => x.Draft.Tick)
-                     .ThenBy(x => x.Draft.Voice)
-                     .ThenBy(x => x.Note.Position)) {
+        foreach (var (draft, note) in drafts.SelectMany(static d => d.Notes.Select(n => (Draft: d, Note: n)))
+                     .OrderBy(static x => x.Draft.Tick)
+                     .ThenBy(static x => x.Draft.Voice)
+                     .ThenBy(static x => x.Note.Position)) {
             if (note.Mapped || draft.TieStop) {
                 continue;
             }
@@ -247,7 +293,8 @@ sealed class StaffMeasureBuilder(
 
     /// <summary>
     ///     Stems (docs/notation/README.md, "Stems"): with several voices odd voices up and even down; else a beam's notes or
-    ///     an event's away from the note farthest from the middle line (down on a tie), a percussion staff's up; none for rests and whole notes.
+    ///     an event's away from the note farthest from the middle line (down on a tie), a percussion staff's up; none for
+    ///     rests and whole notes.
     /// </summary>
     static void Stem(List<Draft> drafts, bool voices, bool percussion) {
         foreach (var draft in drafts) {
@@ -256,12 +303,12 @@ sealed class StaffMeasureBuilder(
             }
 
             if (voices || percussion) {
-                draft.Stem = draft.Voice % 2 == 1 ? StemDirection.Up : StemDirection.Down;
+                draft.Stem = draft.Voice % 2 != 0 ? StemDirection.Up : StemDirection.Down;
                 continue;
             }
 
             var group = draft.Beam > 0 ? drafts.Where(d => d.Beam == draft.Beam) : [draft];
-            var positions = group.SelectMany(d => d.Notes).Select(n => n.Position).ToList();
+            var positions = group.SelectMany(static d => d.Notes).Select(static n => n.Position).ToList();
             var above = positions.Max() - 4;
             var below = 4 - positions.Min();
             draft.Stem = above >= below ? StemDirection.Down : StemDirection.Up;
@@ -273,7 +320,11 @@ sealed class StaffMeasureBuilder(
         var rests = 0;
         var track = notation.Track.Id;
         foreach (var draft in drafts) {
-            var duration = new ScoreDuration(draft.Written.Value, draft.Written.Dots, draft.Tuplet > 0 ? new(draft.Tuplet, 3, 2) : null);
+            var duration = new ScoreDuration(
+                draft.Written.Value,
+                draft.Written.Dots,
+                draft.Tuplet > 0 ? new(draft.Tuplet, 3, 2) : null
+            );
             if (draft.Unit is null) {
                 rests++;
                 events.Add(
@@ -295,31 +346,32 @@ sealed class StaffMeasureBuilder(
             }
 
             var notes = draft.Notes.Select(n => new ScoreNote(
-                    ScoreIds.Note(n.Note.Id, draft.Segment),
-                    n.Note.Id,
-                    n.Note.Pitch,
-                    n.Written,
-                    n.Position,
-                    n.Accidental,
-                    draft.TieStart,
-                    draft.TieStop,
-                    n.Head
-                ))
+                        ScoreIds.Note(n.Note.Id, draft.Segment),
+                        n.Note.Id,
+                        n.Note.Pitch,
+                        n.Written,
+                        n.Position,
+                        n.Accidental,
+                        draft.TieStart,
+                        draft.TieStop,
+                        n.Head
+                    )
+                )
                 .ToList();
             var first = draft.Segment == 1;
             var symbols = first ? draft.Notes.SelectMany(n => attachments.OfNote(n.Note.Id)) : [];
             var lyrics = first
                 ? draft.Notes.SelectMany(n => attachments.LyricsOf(n.Note.Id))
-                    .OrderBy(l => l.Verse)
-                    .ThenBy(l => l.Id, StringComparer.Ordinal)
-                    .Select(l => l.Id)
+                    .OrderBy(static l => l.Verse)
+                    .ThenBy(static l => l.Id, StringComparer.Ordinal)
+                    .Select(static l => l.Id)
                     .ToList()
                 : [];
             events.Add(
                 new(
                     notes.Count == 1
                         ? ScoreIds.Note(notes[0].NoteId, draft.Segment)
-                        : ScoreIds.Chord(notes.Min(n => n.NoteId), draft.Segment),
+                        : ScoreIds.Chord(notes.Min(static n => n.NoteId), draft.Segment),
                     notes.Count == 1 ? ScoreEventKind.Note : ScoreEventKind.Chord,
                     draft.Tick,
                     draft.End - draft.Tick,
@@ -339,7 +391,10 @@ sealed class StaffMeasureBuilder(
 
     List<string> Positioned(Draft draft, int voice) =>
         voice == 1
-            ? [..attachments.At(notation.Track.Id, staff, notation.Style.Staves.Count, draft.Tick, draft.End).Order(StringComparer.Ordinal)]
+            ? [
+                ..attachments.At(notation.Track.Id, staff, notation.Style.Staves.Count, draft.Tick, draft.End)
+                    .Order(StringComparer.Ordinal)
+            ]
             : [];
 
     List<string> Chords(Draft draft, int voice) =>

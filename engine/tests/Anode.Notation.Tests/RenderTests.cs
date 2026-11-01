@@ -20,7 +20,10 @@ public sealed class RenderTests {
     }
 
     static void Same(string expected, ScoreView view, int part = 0) =>
-        Assert.Equal(expected.Replace("\r", "", StringComparison.Ordinal).Trim(), Describe.View(view, part).Trim());
+        Assert.Equal(
+            expected.Replace("\r", string.Empty, StringComparison.Ordinal).Trim(),
+            Describe.View(view, part).Trim()
+        );
 
     [Fact]
     public void A_note_across_a_bar_line_is_tied() =>
@@ -56,7 +59,14 @@ public sealed class RenderTests {
     public void Syncopation_off_ties_at_the_beat_and_beams_the_half_bar() =>
         Same(
             "m1 s0 v1: C4/8b1 D4/8~b1 D4/8b1 E4/8b1 F4/h",
-            Render(StaffStyleIds.Treble, null, N(1, 60, 0, 480), N(2, 62, 480, Q), N(3, 64, 1440, 480), N(4, 65, 2 * Q, 2 * Q))
+            Render(
+                StaffStyleIds.Treble,
+                null,
+                N(1, 60, 0, 480),
+                N(2, 62, 480, Q),
+                N(3, 64, 1440, 480),
+                N(4, 65, 2 * Q, 2 * Q)
+            )
         );
 
     [Fact]
@@ -76,7 +86,10 @@ public sealed class RenderTests {
     [Fact]
     public void Syncopation_decides_a_half_note_on_beat_two() {
         Same("m1 s0 v1: r/q C4/q~ C4/q r/q", Render(StaffStyleIds.Treble, null, N(1, 60, Q, 2 * Q)));
-        Same("m1 s0 v1: r/q C4/h r/q", Render(StaffStyleIds.Treble, RegionNotation.Default with { Syncopation = true }, N(1, 60, Q, 2 * Q)));
+        Same(
+            "m1 s0 v1: r/q C4/h r/q",
+            Render(StaffStyleIds.Treble, RegionNotation.Default with { Syncopation = true }, N(1, 60, Q, 2 * Q))
+        );
     }
 
     [Fact]
@@ -92,14 +105,25 @@ public sealed class RenderTests {
     [Fact]
     public void Interpretation_shortens_a_note_just_past_a_beat_to_tidy_rests() {
         Same("m1 s0 v1: C4/q r/q r/h", Render(StaffStyleIds.Treble, null, N(1, 60, 0, 1200)));
-        Same("m1 s0 v1: C4/q~ C4/16 r/16 r/8 r/h", Render(StaffStyleIds.Treble, RegionNotation.Default with { Interpretation = false }, N(1, 60, 0, 1200)));
+        Same(
+            "m1 s0 v1: C4/q~ C4/16 r/16 r/8 r/h",
+            Render(StaffStyleIds.Treble, RegionNotation.Default with { Interpretation = false }, N(1, 60, 0, 1200))
+        );
     }
 
     [Fact]
     public void Notes_slightly_off_the_grid_are_drawn_on_it() =>
         Same(
             "m1 s0 v1: C4/8b1 D4/8b1 E4/8b1 F4/8b1 G4/h",
-            Render(StaffStyleIds.Treble, null, N(1, 60, 15, 450), N(2, 62, 470, 500), N(3, 64, 975, 440), N(4, 65, 1430, 470), N(5, 67, 1910, 1900))
+            Render(
+                StaffStyleIds.Treble,
+                null,
+                N(1, 60, 15, 450),
+                N(2, 62, 470, 500),
+                N(3, 64, 975, 440),
+                N(4, 65, 1430, 470),
+                N(5, 67, 1910, 1900)
+            )
         );
 
     [Fact]
@@ -153,7 +177,15 @@ public sealed class RenderTests {
             m1 s0 v1: E4/q G4/q E4/q G4/q
             m1 s0 v2: C4/w
             """,
-            Render(StaffStyleIds.Treble, null, N(1, 60, 0, Bar), N(2, 64, 0, Q), N(3, 67, Q, Q), N(4, 64, 2 * Q, Q), N(5, 67, 3 * Q, Q))
+            Render(
+                StaffStyleIds.Treble,
+                null,
+                N(1, 60, 0, Bar),
+                N(2, 64, 0, Q),
+                N(3, 67, Q, Q),
+                N(4, 64, 2 * Q, Q),
+                N(5, 67, 3 * Q, Q)
+            )
         );
 
     [Fact]
@@ -167,7 +199,13 @@ public sealed class RenderTests {
     public void Legato_overlaps_are_cut_with_no_overlap() =>
         Same(
             "m1 s0 v1: C4/q D4/q E4/h",
-            Render(StaffStyleIds.Treble, Grid(240) with { Interpretation = false }, N(1, 60, 0, Q + 240), N(2, 62, Q, Q + 240), N(3, 64, 2 * Q, 2 * Q))
+            Render(
+                StaffStyleIds.Treble,
+                Grid(240) with { Interpretation = false },
+                N(1, 60, 0, Q + 240),
+                N(2, 62, Q, Q + 240),
+                N(3, 64, 2 * Q, 2 * Q)
+            )
         );
 
     [Fact]
@@ -177,7 +215,12 @@ public sealed class RenderTests {
             m1 s0 v1: r/q D4/q r/h
             m1 s0 v2: C4/q~ C4/16 r/16 r/8 r/h
             """,
-            Render(StaffStyleIds.Treble, Grid(240) with { Interpretation = false, NoOverlap = false }, N(1, 60, 0, Q + 240), N(2, 62, Q, Q))
+            Render(
+                StaffStyleIds.Treble,
+                Grid(240) with { Interpretation = false, NoOverlap = false },
+                N(1, 60, 0, Q + 240),
+                N(2, 62, Q, Q)
+            )
         );
 
     [Fact]
@@ -254,8 +297,21 @@ public sealed class RenderTests {
     public void Five_eight_groups_three_and_two() {
         var project = new TestProject().Signatures(new SignatureEvent(0, 5, 8));
         var track = project.Track("T", StaffStyleIds.Treble);
-        project.Region(track, 0, 2400, null, N(1, 60, 0, 480), N(2, 62, 480, 480), N(3, 64, 960, 480), N(4, 65, 1440, 480), N(5, 67, 1920, 480));
-        Same("m1 s0 v1: C4/8b1 D4/8b1 E4/8b1 F4/8b2 G4/8b2", NotationEngine.Render(project.State, ProjectScore.Empty, new()));
+        project.Region(
+            track,
+            0,
+            2400,
+            null,
+            N(1, 60, 0, 480),
+            N(2, 62, 480, 480),
+            N(3, 64, 960, 480),
+            N(4, 65, 1440, 480),
+            N(5, 67, 1920, 480)
+        );
+        Same(
+            "m1 s0 v1: C4/8b1 D4/8b1 E4/8b1 F4/8b2 G4/8b2",
+            NotationEngine.Render(project.State, ProjectScore.Empty, new())
+        );
     }
 
     [Fact]
@@ -284,8 +340,8 @@ public sealed class RenderTests {
             """,
             view
         );
-        Assert.Equal(new ScoreKey(1, KeyMode.Major), view.Measures[0].Key);
-        Assert.Equal(new ScoreKey(-1, KeyMode.Major), view.Measures[1].Key);
+        Assert.Equal(new(1, KeyMode.Major), view.Measures[0].Key);
+        Assert.Equal(new(-1, KeyMode.Major), view.Measures[1].Key);
         Assert.True(view.Measures[1].ShowKey);
         Assert.Equal(Barline.Double, view.Measures[0].Barline);
         Assert.Equal(Barline.Final, view.Measures[1].Barline);
@@ -295,7 +351,16 @@ public sealed class RenderTests {
     public void C_major_spells_black_keys_as_C_sharp_E_flat_F_sharp_G_sharp_B_flat() =>
         Same(
             "m1 s0 v1: !C#4/8b1 !Eb4/8b1 !F#4/8b1 !G#4/8b1 !Bb4/8b2 !B4/8b2 r/q",
-            Render(StaffStyleIds.Treble, null, N(1, 61, 0, 480), N(2, 63, 480, 480), N(3, 66, 960, 480), N(4, 68, 1440, 480), N(5, 70, 1920, 480), N(6, 71, 2400, 480))
+            Render(
+                StaffStyleIds.Treble,
+                null,
+                N(1, 61, 0, 480),
+                N(2, 63, 480, 480),
+                N(3, 66, 960, 480),
+                N(4, 68, 1440, 480),
+                N(5, 70, 1920, 480),
+                N(6, 71, 2400, 480)
+            )
         );
 
     [Fact]
@@ -325,16 +390,20 @@ public sealed class RenderTests {
         Same("m1 s0 v1: D4/q !G#4/q !C5/h", part);
         Assert.Equal(60, part.Parts[0].Measures[0].Staves[0].Voices[0].Events[0].Notes[0].Pitch);
 
-        var transposing = NotationEngine.Render(project.State, ProjectScore.Empty with { Layout = ScoreLayout.Default with { TransposingScore = true } }, new());
+        var transposing = NotationEngine.Render(
+            project.State,
+            ProjectScore.Empty with { Layout = ScoreLayout.Default with { TransposingScore = true } },
+            new()
+        );
         Same("m1 s0 v1: D4/q !G#4/q !C5/h", transposing, 1);
-        Same("m1 s0 v1: C4/w\nm1 s1 v1: r/w", transposing, 0);
+        Same("m1 s0 v1: C4/w\nm1 s1 v1: r/w", transposing);
     }
 
     [Fact]
     public void Octave_clefs_put_the_octave_in_the_clef() {
         var view = Render(StaffStyleIds.Guitar, null, N(1, 40, 0, Bar));
         var note = view.Parts[0].Measures[0].Staves[0].Voices[0].Events[0].Notes[0];
-        Assert.Equal(new ScorePitch(PitchStep.E, 0, 2), note.Written);
+        Assert.Equal(new(PitchStep.E, 0, 2), note.Written);
         Assert.Equal(-7, note.StaffPosition);
         Assert.Equal(Clef.Treble8vb, view.Parts[0].Measures[0].Staves[0].Clef);
     }
@@ -350,19 +419,39 @@ public sealed class RenderTests {
 
     [Fact]
     public void Drums_use_the_drum_map_positions_and_noteheads() {
-        var view = Render(StaffStyleIds.Drums, null, N(1, 36, 0, 240), N(2, 42, 0, 240), N(3, 42, 480, 240), N(4, 38, 960, 240), N(5, 42, 960, 240), N(6, 46, 1440, 240));
+        var view = Render(
+            StaffStyleIds.Drums,
+            null,
+            N(1, 36, 0, 240),
+            N(2, 42, 0, 240),
+            N(3, 42, 480, 240),
+            N(4, 38, 960, 240),
+            N(5, 42, 960, 240),
+            N(6, 46, 1440, 240)
+        );
         Same("m1 s0 v1: F4+G5/8b1 G5/8b1 C5+G5/8b1 G5/8b1 r/h", view);
         var events = view.Parts[0].Measures[0].Staves[0].Voices[0].Events;
-        Assert.Equal([1, 9], events[0].Notes.Select(n => n.StaffPosition));
-        Assert.Equal([Notehead.Normal, Notehead.Cross], events[0].Notes.Select(n => n.Notehead));
+        Assert.Equal([1, 9], events[0].Notes.Select(static n => n.StaffPosition));
+        Assert.Equal([Notehead.Normal, Notehead.Cross], events[0].Notes.Select(static n => n.Notehead));
         Assert.Equal(Notehead.CircleCross, events[3].Notes[0].Notehead);
-        Assert.All(events.SelectMany(e => e.Notes), n => Assert.Null(n.Accidental));
+        Assert.All(events.SelectMany(static e => e.Notes), static n => Assert.Null(n.Accidental));
     }
 
     [Fact]
     public void Stems_point_away_from_the_farthest_note() {
-        var view = Render(StaffStyleIds.Treble, null, N(1, 60, 0, Q), N(2, 79, Q, Q), N(3, 71, 2 * Q, Q), N(4, 60, 3 * Q, 240), N(5, 81, 3 * Q + 240, 720));
+        var view = Render(
+            StaffStyleIds.Treble,
+            null,
+            N(1, 60, 0, Q),
+            N(2, 79, Q, Q),
+            N(3, 71, 2 * Q, Q),
+            N(4, 60, 3 * Q, 240),
+            N(5, 81, 3 * Q + 240, 720)
+        );
         var events = view.Parts[0].Measures[0].Staves[0].Voices[0].Events;
-        Assert.Equal([StemDirection.Up, StemDirection.Down, StemDirection.Down, StemDirection.Down, StemDirection.Down], events.Select(e => e.Stem));
+        Assert.Equal(
+            [StemDirection.Up, StemDirection.Down, StemDirection.Down, StemDirection.Down, StemDirection.Down],
+            events.Select(static e => e.Stem)
+        );
     }
 }

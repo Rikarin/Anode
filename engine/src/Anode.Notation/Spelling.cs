@@ -28,7 +28,7 @@ static class Spelling {
 
     /// <summary>A project key as a key signature: major by its tonic, minor by its relative major (E♭ minor, not D♯).</summary>
     public static ScoreKey KeyOf(KeyEvent key) {
-        var tonic = ((key.Tonic % 12) + 12) % 12;
+        var tonic = (key.Tonic % 12 + 12) % 12;
         if (key.Mode == KeyMode.Major) {
             return new(MajorFifths[tonic], KeyMode.Major);
         }
@@ -43,7 +43,7 @@ static class Spelling {
             return key;
         }
 
-        var fifths = key.Fifths + IntervalFifths[((semitones % 12) + 12) % 12];
+        var fifths = key.Fifths + IntervalFifths[(semitones % 12 + 12) % 12];
         while (fifths > 6) {
             fifths -= 12;
         }
@@ -82,10 +82,10 @@ static class Spelling {
     ///     B♭).
     /// </summary>
     public static ScorePitch Spell(int pitch, ScoreKey key) {
-        var pc = ((pitch % 12) + 12) % 12;
+        var pc = (pitch % 12 + 12) % 12;
         for (var step = 0; step < 7; step++) {
             var alter = KeyAlter(key.Fifths, step);
-            if ((((StepClass[step] + alter) % 12) + 12) % 12 == pc) {
+            if (((StepClass[step] + alter) % 12 + 12) % 12 == pc) {
                 return Of(pitch, step, alter);
             }
         }
@@ -95,7 +95,7 @@ static class Spelling {
             var (tonicStep, tonicAlter) = FromFifths(key.Fifths + 3);
             var tonicClass = StepClass[tonicStep] + tonicAlter;
             foreach (var (degreeBelow, semitones) in new[] { (1, 1), (2, 3) }) {
-                if ((((tonicClass - semitones) % 12) + 12) % 12 == pc) {
+                if (((tonicClass - semitones) % 12 + 12) % 12 == pc) {
                     var step = (tonicStep - degreeBelow + 7) % 7;
                     return Of(pitch, step, AlterFor(pc, step));
                 }
@@ -108,7 +108,9 @@ static class Spelling {
         }
 
         var sharp = key.Fifths > 0 || (key.Fifths == 0 && pc is 1 or 6 or 8);
-        return sharp ? Of(pitch, Array.IndexOf(StepClass, pc - 1), 1) : Of(pitch, Array.IndexOf(StepClass, (pc + 1) % 12), -1);
+        return sharp
+            ? Of(pitch, Array.IndexOf(StepClass, pc - 1), 1)
+            : Of(pitch, Array.IndexOf(StepClass, (pc + 1) % 12), -1);
     }
 
     /// <summary>The step and alteration at a position on the line of fifths (0 C, 1 G, −1 F).</summary>
@@ -116,12 +118,12 @@ static class Spelling {
         // F C G D A E B are −1…5.
         var index = fifths + 1;
         var alter = (int)Math.Floor(index / 7.0);
-        var step = SharpOrder[((index % 7) + 7) % 7];
+        var step = SharpOrder[(index % 7 + 7) % 7];
         return (step, alter);
     }
 
     static int AlterFor(int pc, int step) {
-        var alter = (((pc - StepClass[step]) % 12) + 12) % 12;
+        var alter = ((pc - StepClass[step]) % 12 + 12) % 12;
         return alter > 6 ? alter - 12 : alter;
     }
 
@@ -132,7 +134,8 @@ static class Spelling {
     }
 
     /// <summary>The MIDI pitch of a written pitch.</summary>
-    public static int PitchOf(ScorePitch written) => (written.Octave + 1) * 12 + StepClass[(int)written.Step] + written.Alter;
+    public static int PitchOf(ScorePitch written) =>
+        (written.Octave + 1) * 12 + StepClass[(int)written.Step] + written.Alter;
 
     /// <summary>Diatonic number: octave × 7 + step (C4 is 28).</summary>
     public static int DiatonicOf(ScorePitch written) => written.Octave * 7 + (int)written.Step;

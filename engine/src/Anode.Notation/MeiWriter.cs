@@ -49,13 +49,19 @@ public static class MeiWriter {
     static string D(double value) => value.ToString("0.####", CultureInfo.InvariantCulture);
 
     sealed class Writer(XmlWriter xml, ScoreView view) {
-        readonly Dictionary<string, ScoreSymbol> symbols = view.Symbols.ToDictionary(s => s.Id, StringComparer.Ordinal);
-        readonly Dictionary<string, LyricSyllable> lyrics = view.Lyrics.ToDictionary(l => l.Id, StringComparer.Ordinal);
-        readonly Dictionary<string, ChordSymbol> chords = view.Chords.ToDictionary(c => c.Id, StringComparer.Ordinal);
+        readonly Dictionary<string, ScoreSymbol> symbols =
+            view.Symbols.ToDictionary(static s => s.Id, StringComparer.Ordinal);
+
+        readonly Dictionary<string, LyricSyllable> lyrics =
+            view.Lyrics.ToDictionary(static l => l.Id, StringComparer.Ordinal);
+
+        readonly Dictionary<string, ChordSymbol> chords =
+            view.Chords.ToDictionary(static c => c.Id, StringComparer.Ordinal);
 
         /// <summary>The notes whose ties are hidden.</summary>
-        readonly HashSet<long> hiddenTies = view.Symbols.Where(s => s.Kind == ScoreSymbolKind.TieHidden && s.NoteId is not null)
-            .Select(s => s.NoteId!.Value)
+        readonly HashSet<long> hiddenTies = view.Symbols
+            .Where(static s => s.Kind == ScoreSymbolKind.TieHidden && s.NoteId is not null)
+            .Select(static s => s.NoteId!.Value)
             .ToHashSet();
 
         /// <summary>Whether the staff being written is a percussion staff (its notes carry <c>loc</c>).</summary>
@@ -174,25 +180,7 @@ public static class MeiWriter {
             if (layout.Title.Length + layout.Subtitle.Length + layout.Composer.Length + layout.Header.Length > 0) {
                 xml.WriteStartElement("pgHead", Ns);
                 xml.WriteAttributeString("func", "first");
-                if (layout.Title.Length + layout.Subtitle.Length > 0) {
-                    xml.WriteStartElement("rend", Ns);
-                    xml.WriteAttributeString("halign", "center");
-                    xml.WriteAttributeString("valign", "top");
-                    if (layout.Title.Length > 0) {
-                        Rend(layout.Title, "x-large");
-                    }
-
-                    if (layout.Subtitle.Length > 0) {
-                        if (layout.Title.Length > 0) {
-                            xml.WriteElementString("lb", Ns, string.Empty);
-                        }
-
-                        Rend(layout.Subtitle, "large");
-                    }
-
-                    xml.WriteEndElement();
-                }
-
+                TitleBlock(layout);
                 if (layout.Composer.Length > 0) {
                     Aligned(layout.Composer, "right", "bottom");
                 }
@@ -210,6 +198,30 @@ public static class MeiWriter {
                 Aligned(layout.Footer, "center", "bottom");
                 xml.WriteEndElement();
             }
+        }
+
+        /// <summary>The title and subtitle, centred at the top, on two lines.</summary>
+        void TitleBlock(ScoreLayout layout) {
+            if (layout.Title.Length + layout.Subtitle.Length == 0) {
+                return;
+            }
+
+            xml.WriteStartElement("rend", Ns);
+            xml.WriteAttributeString("halign", "center");
+            xml.WriteAttributeString("valign", "top");
+            if (layout.Title.Length > 0) {
+                Rend(layout.Title, "x-large");
+            }
+
+            if (layout.Title.Length > 0 && layout.Subtitle.Length > 0) {
+                xml.WriteElementString("lb", Ns, string.Empty);
+            }
+
+            if (layout.Subtitle.Length > 0) {
+                Rend(layout.Subtitle, "large");
+            }
+
+            xml.WriteEndElement();
         }
 
         void Rend(string text, string size) {
@@ -257,10 +269,14 @@ public static class MeiWriter {
             xml.WriteEndElement();
         }
 
-        int WrittenFifths(Staff staff, ScoreKey concert) =>
-            staff.Clef == Contracts.Clef.Percussion
-                ? 0
-                : StaffPositions.WrittenKey(concert, view.Transposing ? staff.Transpose : 0).Fifths;
+        int WrittenFifths(Staff staff, ScoreKey concert) {
+            if (staff.Clef == Contracts.Clef.Percussion) {
+                return 0;
+            }
+
+            var transpose = view.Transposing ? staff.Transpose : 0;
+            return StaffPositions.WrittenKey(concert, transpose).Fifths;
+        }
 
         void Clef(Clef clef) {
             var (shape, line) = clef switch {
@@ -296,7 +312,7 @@ public static class MeiWriter {
 
             if (measure.ShowKey) {
                 xml.WriteAttributeString("keysig", KeySig(measure.Key.Fifths));
-                var staves = view.Parts.SelectMany(p => p.Staves).ToList();
+                var staves = view.Parts.SelectMany(static p => p.Staves).ToList();
                 if (staves.Any(s => WrittenFifths(s, measure.Key) != measure.Key.Fifths)) {
                     xml.WriteStartElement("staffGrp", Ns);
                     for (var s = 0; s < staves.Count; s++) {
@@ -592,30 +608,32 @@ public static class MeiWriter {
             for (var p = 0; p < view.Parts.Count; p++) {
                 var part = view.Parts[p];
                 for (var s = 0; s < part.Staves.Count; s++) {
-                    var staff = firstStaff[p] + s;
-                    foreach (var voice in part.Measures[index].Staves[s].Voices) {
-                        foreach (var e in voice.Events) {
-                            foreach (var id in e.SymbolIds) {
-                                if (symbols.TryGetValue(id, out var symbol) && ArticOf(symbol.Kind) is null) {
-                                    Control(symbol, e, staff, index);
-                                }
-                            }
-
-                            foreach (var id in e.ChordIds) {
-                                Harm(chords[id], staff, measure);
-                            }
-
-                            // A hidden tie (tieHidden) is left out: MEI 5's tie has no visibility.
-                            foreach (var note in e.Notes.Where(n => n.TieStart && !hiddenTies.Contains(n.NoteId))) {
-                                xml.WriteStartElement("tie", Ns);
-                                xml.WriteAttributeString("staff", N(staff));
-                                xml.WriteAttributeString("startid", "#" + note.Id);
-                                xml.WriteAttributeString("endid", "#" + ScoreIds.Note(note.NoteId, SegmentOf(note) + 1));
-                                xml.WriteEndElement();
-                            }
-                        }
+                    foreach (var e in part.Measures[index].Staves[s].Voices.SelectMany(static v => v.Events)) {
+                        EventControls(e, firstStaff[p] + s, index);
                     }
                 }
+            }
+        }
+
+        /// <summary>An event's symbols (in id order), chord symbols and ties.</summary>
+        void EventControls(ScoreEvent e, int staff, int index) {
+            foreach (var id in e.SymbolIds) {
+                if (symbols.TryGetValue(id, out var symbol) && ArticOf(symbol.Kind) is null) {
+                    Control(symbol, e, staff, index);
+                }
+            }
+
+            foreach (var id in e.ChordIds) {
+                Harm(chords[id], staff, view.Measures[index]);
+            }
+
+            // A hidden tie (tieHidden) is left out: MEI 5's tie has no visibility.
+            foreach (var note in e.Notes.Where(n => n.TieStart && !hiddenTies.Contains(n.NoteId))) {
+                xml.WriteStartElement("tie", Ns);
+                xml.WriteAttributeString("staff", N(staff));
+                xml.WriteAttributeString("startid", "#" + note.Id);
+                xml.WriteAttributeString("endid", "#" + ScoreIds.Note(note.NoteId, SegmentOf(note) + 1));
+                xml.WriteEndElement();
             }
         }
 
@@ -625,8 +643,25 @@ public static class MeiWriter {
         }
 
         void Control(ScoreSymbol symbol, ScoreEvent e, int staff, int index) {
-            var measure = view.Measures[index];
-            var name = symbol.Kind switch {
+            if (ElementOf(symbol.Kind) is not { } name) {
+                return;
+            }
+
+            xml.WriteStartElement(name, Ns);
+            xml.WriteAttributeString("id", XmlNs, ScoreIds.Symbol(symbol.Id));
+            xml.WriteAttributeString("staff", N(staff));
+            Anchors(symbol, e, index);
+            Kind(symbol.Kind);
+            Place(symbol);
+            if (ScoreSymbols.WithText.Contains(symbol.Kind)) {
+                xml.WriteString(symbol.Text ?? string.Empty);
+            }
+
+            xml.WriteEndElement();
+        }
+
+        static string? ElementOf(ScoreSymbolKind kind) =>
+            kind switch {
                 ScoreSymbolKind.Fermata => "fermata",
                 ScoreSymbolKind.Trill => "trill",
                 ScoreSymbolKind.Dynamic => "dynam",
@@ -639,13 +674,10 @@ public static class MeiWriter {
                 ScoreSymbolKind.OctaveUp or ScoreSymbolKind.OctaveDown => "octave",
                 _ => null
             };
-            if (name is null) {
-                return;
-            }
 
-            xml.WriteStartElement(name, Ns);
-            xml.WriteAttributeString("id", XmlNs, ScoreIds.Symbol(symbol.Id));
-            xml.WriteAttributeString("staff", N(staff));
+        /// <summary>A symbol's start and end: notes by id, positions by timestamp.</summary>
+        void Anchors(ScoreSymbol symbol, ScoreEvent e, int index) {
+            var measure = view.Measures[index];
             if (symbol.NoteId is { } note) {
                 xml.WriteAttributeString("startid", "#" + ScoreIds.Note(note));
             } else {
@@ -657,26 +689,22 @@ public static class MeiWriter {
             } else if (symbol.EndTick is { } endTick && ScoreSymbols.Spanning.Contains(symbol.Kind)) {
                 xml.WriteAttributeString("tstamp2", Tstamp2(index, endTick));
             }
+        }
 
-            switch (symbol.Kind) {
+        /// <summary>The attributes a kind of symbol adds: a pedal's direction, a hairpin's form, an octave line's.</summary>
+        void Kind(ScoreSymbolKind kind) {
+            switch (kind) {
                 case ScoreSymbolKind.PedalDown or ScoreSymbolKind.PedalUp:
-                    xml.WriteAttributeString("dir", symbol.Kind == ScoreSymbolKind.PedalDown ? "down" : "up");
+                    xml.WriteAttributeString("dir", kind == ScoreSymbolKind.PedalDown ? "down" : "up");
                     break;
                 case ScoreSymbolKind.Crescendo or ScoreSymbolKind.Diminuendo:
-                    xml.WriteAttributeString("form", symbol.Kind == ScoreSymbolKind.Crescendo ? "cres" : "dim");
+                    xml.WriteAttributeString("form", kind == ScoreSymbolKind.Crescendo ? "cres" : "dim");
                     break;
                 case ScoreSymbolKind.OctaveUp or ScoreSymbolKind.OctaveDown:
                     xml.WriteAttributeString("dis", "8");
-                    xml.WriteAttributeString("dis.place", symbol.Kind == ScoreSymbolKind.OctaveUp ? "above" : "below");
+                    xml.WriteAttributeString("dis.place", kind == ScoreSymbolKind.OctaveUp ? "above" : "below");
                     break;
             }
-
-            Place(symbol);
-            if (ScoreSymbols.WithText.Contains(symbol.Kind)) {
-                xml.WriteString(symbol.Text ?? string.Empty);
-            }
-
-            xml.WriteEndElement();
         }
 
         void Place(ScoreSymbol symbol) {
@@ -711,8 +739,10 @@ public static class MeiWriter {
         }
 
         /// <summary>MEI's beat timestamp: 1 + the beats (of the meter's unit) into the measure.</summary>
-        static string Tstamp(ScoreMeasure measure, long tick) =>
-            D(1 + (tick - measure.StartTick) / (double)(Notation.Meter.Whole / measure.Time.Denominator));
+        static string Tstamp(ScoreMeasure measure, long tick) {
+            var unit = (double)Notation.Meter.Whole / measure.Time.Denominator;
+            return D(1 + (tick - measure.StartTick) / unit);
+        }
 
         /// <summary>MEI's end timestamp: measures forward and the beat ("1m+3"); an end on a bar line is past the last beat.</summary>
         string Tstamp2(int from, long tick) {
@@ -726,7 +756,13 @@ public static class MeiWriter {
             return $"{N(to - from)}m+{Tstamp(measure, beats)}";
         }
 
-        static string KeySig(int fifths) => fifths == 0 ? "0" : fifths > 0 ? $"{N(fifths)}s" : $"{N(-fifths)}f";
+        static string KeySig(int fifths) {
+            if (fifths == 0) {
+                return "0";
+            }
+
+            return fifths > 0 ? $"{N(fifths)}s" : $"{N(-fifths)}f";
+        }
 
         static string Mm(double value) => D(value) + "mm";
     }

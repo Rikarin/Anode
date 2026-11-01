@@ -31,40 +31,64 @@ public static class NotationEngine {
         var tracks = TracksOf(state, score, request);
         var transposing = request.PartTrackId is not null || score.Layout.TransposingScore;
         var bars = new Bars(state.SignatureMap);
-        var notations = tracks.Select(t => TrackNotation.Build(state, t, FactoryStaffStyles.Resolve(score, t.StaffStyleId), bars))
+        var notations = tracks.Select(t => TrackNotation.Build(
+                    state,
+                    t,
+                    FactoryStaffStyles.Resolve(score, t.StaffStyleId),
+                    bars
+                )
+            )
             .ToList();
-        var trackIds = tracks.Select(t => t.Id).ToHashSet(StringComparer.Ordinal);
-        var notesInView = notations.SelectMany(n => n.Staves.SelectMany(s => s).SelectMany(u => u.Notes))
-            .Select(n => n.Id)
+        var trackIds = tracks.Select(static t => t.Id).ToHashSet(StringComparer.Ordinal);
+        var notesInView = notations
+            .SelectMany(static n => n.Staves.SelectMany(static s => s).SelectMany(static u => u.Notes))
+            .Select(static n => n.Id)
             .ToHashSet();
         var symbols = score.Symbols.Where(s => trackIds.Contains(s.TrackId) && Drawn(s, notesInView))
-            .OrderBy(s => s.Id, StringComparer.Ordinal)
+            .OrderBy(static s => s.Id, StringComparer.Ordinal)
             .ToList();
-        var lyrics = score.Lyrics.Where(l => notesInView.Contains(l.NoteId)).OrderBy(l => l.Id, StringComparer.Ordinal).ToList();
+        var lyrics = score.Lyrics.Where(l => notesInView.Contains(l.NoteId))
+            .OrderBy(static l => l.Id, StringComparer.Ordinal)
+            .ToList();
         var chords = score.Chords.Where(c => trackIds.Contains(c.TrackId) && c.Tick >= 0)
-            .OrderBy(c => c.Tick)
-            .ThenBy(c => c.Id, StringComparer.Ordinal)
+            .OrderBy(static c => c.Tick)
+            .ThenBy(static c => c.Id, StringComparer.Ordinal)
             .ToList();
-        var last = notations.Select(n => n.LastTick)
-            .Concat(symbols.Where(s => s.NoteId is null).SelectMany(s => new[] { s.Tick ?? -1, (s.EndTick ?? 0) - 1 }))
-            .Concat(chords.Select(c => c.Tick))
+        var last = notations.Select(static n => n.LastTick)
+            .Concat(
+                symbols.Where(static s => s.NoteId is null)
+                    .SelectMany(static s => new[] { s.Tick ?? -1, (s.EndTick ?? 0) - 1 })
+            )
+            .Concat(chords.Select(static c => c.Tick))
             .DefaultIfEmpty(-1)
             .Max();
         var lastBar = last < 0 ? 0 : bars.At(last).Index;
         var measures = Measures(state, bars, lastBar);
         var attachments = new Attachments(symbols, lyrics, chords);
         var parts = notations.Select(n => Part(n, score.Layout, measures, bars, transposing, attachments)).ToList();
-        return new(request.SetId, request.PartTrackId, request.Mode, transposing, score.Layout, measures, parts, symbols, lyrics, chords);
+        return new(
+            request.SetId,
+            request.PartTrackId,
+            request.Mode,
+            transposing,
+            score.Layout,
+            measures,
+            parts,
+            symbols,
+            lyrics,
+            chords
+        );
     }
 
     static List<Track> TracksOf(ProjectState state, ProjectScore score, ScoreRequest request) {
         List<Track> tracks;
         ScoreSet? set = null;
         if (request.SetId is { } setId) {
-            set = score.Sets.FirstOrDefault(s => s.Id == setId) ?? throw new ArgumentException($"No score set {setId}.", nameof(request));
+            set = score.Sets.FirstOrDefault(s => s.Id == setId)
+                ?? throw new ArgumentException($"No score set {setId}.", nameof(request));
             tracks = [..set.TrackIds.Select(state.FindTrack).OfType<Track>()];
         } else {
-            var withMidi = state.MidiRegions.Values.Select(r => r.TrackId).ToHashSet(StringComparer.Ordinal);
+            var withMidi = state.MidiRegions.Values.Select(static r => r.TrackId).ToHashSet(StringComparer.Ordinal);
             tracks = [..state.Tracks.Where(t => withMidi.Contains(t.Id))];
         }
 
@@ -87,11 +111,13 @@ public static class NotationEngine {
         && (symbol.NoteId is not null || symbol.Tick is >= 0);
 
     static List<ScoreMeasure> Measures(ProjectState state, Bars bars, long lastBar) {
-        var keys = state.Settings.Keys.OrderBy(k => k.Tick).ToList();
+        var keys = state.Settings.Keys.OrderBy(static k => k.Tick).ToList();
         var tempos = state.Settings.TempoEvents is { Count: > 0 } events
-            ? events.OrderBy(t => t.Tick).ToList()
+            ? events.OrderBy(static t => t.Tick).ToList()
             : [new(0, state.Settings.Tempo, TempoCurve.Step)];
-        var markers = state.Markers.Values.OrderBy(m => m.Tick).ThenBy(m => m.Id, StringComparer.Ordinal).ToList();
+        var markers = state.Markers.Values.OrderBy(static m => m.Tick)
+            .ThenBy(static m => m.Id, StringComparer.Ordinal)
+            .ToList();
         var drafts = new List<ScoreMeasure>();
         for (var i = 0L; i <= lastBar; i++) {
             var bar = bars.Of(i);
@@ -99,14 +125,6 @@ public static class NotationEngine {
                 ? Spelling.KeyOf(k)
                 : new(0, KeyMode.Major);
             var previous = drafts.Count > 0 ? drafts[^1] : null;
-            var marks = new List<ScoreTempoMark>();
-            for (var t = 0; t < tempos.Count; t++) {
-                var tempo = tempos[t];
-                if (tempo.Tick >= bar.Start && tempo.Tick < bar.End && (t == 0 || tempos[t - 1].Bpm != tempo.Bpm)) {
-                    marks.Add(new(tempo.Tick, tempo.Bpm));
-                }
-            }
-
             drafts.Add(
                 new(
                     (int)i + 1,
@@ -116,29 +134,44 @@ public static class NotationEngine {
                     key,
                     previous is null || previous.Time != bar.Time,
                     previous is null || previous.Key != key,
-                    marks,
-                    [..markers.Where(m => m.Tick >= bar.Start && m.Tick < bar.End).Select(m => new ScoreRehearsal(m.Tick, m.Id, m.Name))],
+                    TempoMarks(tempos, bar),
+                    [
+                        ..markers.Where(m => m.Tick >= bar.Start && m.Tick < bar.End)
+                            .Select(static m => new ScoreRehearsal(m.Tick, m.Id, m.Name))
+                    ],
                     Barline.Single
                 )
             );
         }
 
         for (var i = 0; i < drafts.Count; i++) {
-            Barline barline;
-            if (i == drafts.Count - 1) {
-                barline = Barline.Final;
-            } else {
-                var next = drafts[i + 1];
-                barline = next.ShowTime || next.ShowKey || next.Rehearsals.Any(r => r.Tick == next.StartTick)
-                    ? Barline.Double
-                    : Barline.Single;
-            }
-
-            drafts[i] = drafts[i] with { Barline = barline };
+            drafts[i] = drafts[i] with {
+                Barline = i == drafts.Count - 1 ? Barline.Final : BarlineBefore(drafts[i + 1])
+            };
         }
 
         return drafts;
     }
+
+    /// <summary>The tempo marks of a bar: where the tempo changes value, and at the start.</summary>
+    static List<ScoreTempoMark> TempoMarks(List<TempoEvent> tempos, Bar bar) {
+        var marks = new List<ScoreTempoMark>();
+        for (var t = 0; t < tempos.Count; t++) {
+            var tempo = tempos[t];
+            var changes = t == 0 || tempos[t - 1].Bpm != tempo.Bpm;
+            if (changes && tempo.Tick >= bar.Start && tempo.Tick < bar.End) {
+                marks.Add(new(tempo.Tick, tempo.Bpm));
+            }
+        }
+
+        return marks;
+    }
+
+    /// <summary>A double barline before a meter or key change or a marker on the bar line, else a single one.</summary>
+    static Barline BarlineBefore(ScoreMeasure next) =>
+        next.ShowTime || next.ShowKey || next.Rehearsals.Any(r => r.Tick == next.StartTick)
+            ? Barline.Double
+            : Barline.Single;
 
     static ScorePart Part(
         TrackNotation notation,
@@ -181,16 +214,17 @@ public static class NotationEngine {
     ///     else the track's first region, else the defaults.
     /// </summary>
     static RegionNotation SettingsOf(TrackNotation notation, Bar bar) {
-        var first = notation.Staves.SelectMany(s => s)
+        var first = notation.Staves.SelectMany(static s => s)
             .Where(u => u.Start >= bar.Start && u.Start < bar.End)
-            .OrderBy(u => u.Start)
-            .ThenBy(u => u.Notes[0].Id)
+            .OrderBy(static u => u.Start)
+            .ThenBy(static u => u.Notes[0].Id)
             .FirstOrDefault();
         if (first is not null) {
             return first.Notation;
         }
 
-        return notation.Regions.FirstOrDefault(r => r.StartTick <= bar.Start && r.StartTick + r.LengthTicks > bar.Start)?.Notation
+        return notation.Regions.Find(r => r.StartTick <= bar.Start && r.StartTick + r.LengthTicks > bar.Start)
+                ?.Notation
             ?? notation.Regions.FirstOrDefault()?.Notation
             ?? RegionNotation.Default;
     }
@@ -228,11 +262,13 @@ sealed class Attachments {
     /// <summary>The positioned symbols of a track's staff (of <paramref name="staves" />) in [from, to).</summary>
     public IEnumerable<string> At(string trackId, int staff, int staves, long from, long to) =>
         positioned.TryGetValue(trackId, out var symbols)
-            ? symbols.Where(s => StaffOf(s, staves) == staff && s.Tick >= from && s.Tick < to).Select(s => s.Id)
+            ? symbols.Where(s => StaffOf(s, staves) == staff && s.Tick >= from && s.Tick < to).Select(static s => s.Id)
             : [];
 
     public IEnumerable<string> ChordsAt(string trackId, long from, long to) =>
-        chords.TryGetValue(trackId, out var list) ? list.Where(c => c.Tick >= from && c.Tick < to).Select(c => c.Id) : [];
+        chords.TryGetValue(trackId, out var list)
+            ? list.Where(c => c.Tick >= from && c.Tick < to).Select(static c => c.Id)
+            : [];
 
     /// <summary>A positioned symbol's staff: its own, else the bottom staff for pedals and the top for the rest.</summary>
     public static int StaffOf(ScoreSymbol symbol, int staves) =>

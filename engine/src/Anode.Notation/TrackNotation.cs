@@ -31,8 +31,8 @@ sealed class Unit(List<SourceNote> notes, int staff, long start, long end) {
     public int Segments { get; set; }
 
     public RegionNotation Notation => Notes[0].Region.Notation;
-    public int Top => Notes.Max(n => n.Pitch);
-    public double Mean => Notes.Average(n => n.Pitch);
+    public int Top => Notes.Max(static n => n.Pitch);
+    public double Mean => Notes.Average(static n => n.Pitch);
 }
 
 /// <summary>
@@ -58,24 +58,15 @@ sealed class TrackNotation {
     public List<Unit>[] Staves { get; }
 
     /// <summary>The last display tick any unit reaches (−1 without notes).</summary>
-    public long LastTick => Staves.SelectMany(s => s).Select(u => u.End - 1).DefaultIfEmpty(-1).Max();
+    public long LastTick => Staves.SelectMany(static s => s).Select(static u => u.End - 1).DefaultIfEmpty(-1).Max();
 
     public static TrackNotation Build(ProjectState state, Track track, StaffStyle style, Bars bars) {
         var regions = state.MidiRegionsOf(track.Id).ToList();
         var quantizer = new Quantizer(bars);
-        var notes = new List<SourceNote>();
-        foreach (var region in regions) {
-            var regionEnd = region.StartTick + region.LengthTicks;
-            foreach (var note in region.Notes) {
-                var start = region.StartTick + note.StartTick;
-                var end = Math.Min(start + note.LengthTicks, regionEnd);
-                if (note.StartTick >= 0 && start < regionEnd && end > start) {
-                    notes.Add(new(note, region, start, end));
-                }
-            }
-        }
-
-        notes.Sort((x, y) => x.Start != y.Start ? x.Start.CompareTo(y.Start) : x.Pitch != y.Pitch ? x.Pitch.CompareTo(y.Pitch) : x.Id.CompareTo(y.Id));
+        var notes = Sounding(regions);
+        notes.Sort(static (x, y) => x.Start != y.Start ? x.Start.CompareTo(y.Start) :
+            x.Pitch != y.Pitch ? x.Pitch.CompareTo(y.Pitch) : x.Id.CompareTo(y.Id)
+        );
         foreach (var note in notes) {
             note.Staff = StaffOf(style, note.Pitch);
             quantizer.Add(note.Start, DisplayGrid.GridsOf(note.Region.Notation, style));
@@ -90,23 +81,52 @@ sealed class TrackNotation {
 
         var staves = new List<Unit>[style.Staves.Count];
         for (var s = 0; s < staves.Length; s++) {
-            var units = notes.Where(n => n.Staff == s)
-                .GroupBy(n => (n.DisplayStart, n.DisplayEnd))
-                .Select(g => new Unit([..g.OrderBy(n => n.Pitch).ThenBy(n => n.Id)], s, g.Key.DisplayStart, g.Key.DisplayEnd))
-                .OrderBy(u => u.Start)
-                .ThenByDescending(u => u.Top)
-                .ThenBy(u => u.Notes[0].Id)
-                .ToList();
-            var lanes = Lanes(units, Math.Clamp(style.Staves[s].Voices, 1, 4));
-            foreach (var lane in lanes) {
-                Interpret(lane, bars, quantizer, style);
-            }
-
-            staves[s] = [..units.OrderBy(u => u.Start).ThenBy(u => u.Lane)];
-            NumberVoices(staves[s]);
+            staves[s] = Staff(notes, s, style, bars, quantizer);
         }
 
         return new(track, style, regions, quantizer, staves);
+    }
+
+    /// <summary>The notes of the regions that sound, in project ticks, cut at their region's end.</summary>
+    static List<SourceNote> Sounding(List<MidiRegion> regions) {
+        var notes = new List<SourceNote>();
+        foreach (var region in regions) {
+            var regionEnd = region.StartTick + region.LengthTicks;
+            foreach (var note in region.Notes) {
+                var start = region.StartTick + note.StartTick;
+                var end = Math.Min(start + note.LengthTicks, regionEnd);
+                if (note.StartTick >= 0 && start < regionEnd && end > start) {
+                    notes.Add(new(note, region, start, end));
+                }
+            }
+        }
+
+        return notes;
+    }
+
+    /// <summary>A staff's units: chords of its notes, in lanes, interpreted, numbered into voices, by start.</summary>
+    static List<Unit> Staff(List<SourceNote> notes, int s, StaffStyle style, Bars bars, Quantizer quantizer) {
+        var units = notes.Where(n => n.Staff == s)
+            .GroupBy(static n => (n.DisplayStart, n.DisplayEnd))
+            .Select(g => new Unit(
+                    [..g.OrderBy(static n => n.Pitch).ThenBy(static n => n.Id)],
+                    s,
+                    g.Key.DisplayStart,
+                    g.Key.DisplayEnd
+                )
+            )
+            .OrderBy(static u => u.Start)
+            .ThenByDescending(static u => u.Top)
+            .ThenBy(static u => u.Notes[0].Id)
+            .ToList();
+        var lanes = Lanes(units, Math.Clamp(style.Staves[s].Voices, 1, 4));
+        foreach (var lane in lanes) {
+            Interpret(lane, bars, quantizer, style);
+        }
+
+        List<Unit> staff = [..units.OrderBy(static u => u.Start).ThenBy(static u => u.Lane)];
+        NumberVoices(staff);
+        return staff;
     }
 
     /// <summary>The first staff whose split point the pitch reaches (a null split point takes every pitch).</summary>
@@ -146,18 +166,9 @@ sealed class TrackNotation {
                 lanes.Add(chosen);
             }
 
+            chosen ??= Displace(lanes, unit);
             if (chosen is null) {
-                var latest = lanes.OrderByDescending(l => l[^1].Start).ThenBy(lanes.IndexOf).First();
-                var held = latest[^1];
-                if (held.Start == unit.Start) {
-                    held.Notes.AddRange(unit.Notes);
-                    held.Notes.Sort((x, y) => x.Pitch != y.Pitch ? x.Pitch.CompareTo(y.Pitch) : x.Id.CompareTo(y.Id));
-                    held.End = Math.Max(held.End, unit.End);
-                    continue;
-                }
-
-                held.End = unit.Start;
-                chosen = latest;
+                continue;
             }
 
             unit.Lane = lanes.IndexOf(chosen);
@@ -169,10 +180,28 @@ sealed class TrackNotation {
 
         static List<Unit>? Nearest(IEnumerable<List<Unit>> candidates, Unit unit) =>
             candidates.Select((l, i) => (Lane: l, Distance: Math.Abs(l[^1].Mean - unit.Mean), Index: i))
-                .OrderBy(c => c.Distance)
-                .ThenBy(c => c.Index)
-                .Select(c => c.Lane)
+                .OrderBy(static c => c.Distance)
+                .ThenBy(static c => c.Index)
+                .Select(static c => c.Lane)
                 .FirstOrDefault();
+    }
+
+    /// <summary>
+    ///     With every voice taken: the lane of the most recent unit, cut where <paramref name="unit" /> starts, or null when
+    ///     they start together and the unit joins it as a chord.
+    /// </summary>
+    static List<Unit>? Displace(List<List<Unit>> lanes, Unit unit) {
+        var latest = lanes.OrderByDescending(static l => l[^1].Start).ThenBy(lanes.IndexOf).First();
+        var held = latest[^1];
+        if (held.Start != unit.Start) {
+            held.End = unit.Start;
+            return latest;
+        }
+
+        held.Notes.AddRange(unit.Notes);
+        held.Notes.Sort(static (x, y) => x.Pitch != y.Pitch ? x.Pitch.CompareTo(y.Pitch) : x.Id.CompareTo(y.Id));
+        held.End = Math.Max(held.End, unit.End);
+        return null;
     }
 
     /// <summary>
@@ -236,11 +265,11 @@ sealed class TrackNotation {
             }
 
             var passage = units.GetRange(i, j - i);
-            var order = passage.GroupBy(u => u.Lane)
-                .Select(g => (Lane: g.Key, Mean: g.SelectMany(u => u.Notes).Average(n => n.Pitch)))
-                .OrderByDescending(l => l.Mean)
-                .ThenBy(l => l.Lane)
-                .Select(l => l.Lane)
+            var order = passage.GroupBy(static u => u.Lane)
+                .Select(static g => (Lane: g.Key, Mean: g.SelectMany(static u => u.Notes).Average(static n => n.Pitch)))
+                .OrderByDescending(static l => l.Mean)
+                .ThenBy(static l => l.Lane)
+                .Select(static l => l.Lane)
                 .ToList();
             foreach (var unit in passage) {
                 unit.Voice = order.IndexOf(unit.Lane) + 1;
