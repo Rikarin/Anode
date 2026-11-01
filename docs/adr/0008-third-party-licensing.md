@@ -20,7 +20,7 @@ Anode is **GPL-3.0-or-later**, as Cathode. Third-party code must be GPL-3-compat
 | Scripter | QuickJS-ng, pinned `6d46d07` (0.17.0), in `an_script` ([ADR-0009](0009-scripter.md)) | MIT |
 | Script Editor | CodeMirror 6 (`@codemirror/state`, `view`, `commands`, `language`, `lang-javascript`), `@lezer/highlight` | MIT |
 | AAF container (Compound File Binary, [MS-CFB]) | Anode's own reader and writer (`Anode.Interchange/Aaf/Cfb`) | GPL-3.0-or-later (ours) |
-| AAF object model | The standard class and type definitions, generated from pyaaf2 1.7.1's model tables (`scripts/aaf-model.py` → `AafMetaModel.g.cs`) | MIT (pyaaf2) |
+| AAF object model | The standard class and type definitions, generated from pyaaf2 1.7.1's model tables (`scripts/aaf-model.py` → `AafMetaModel.g.cs`, which carries pyaaf2's copyright and licence notice, "Copyright (c) 2017 Mark Reid", in its header) | MIT (pyaaf2) |
 | AAF verification | pyaaf2 1.7.1, an independent reader in opt-in tests and the writer of the import fixtures (`scripts/setup-pyaaf2.py`); not shipped | MIT |
 
 **AAF's compound file:** Anode writes and reads [MS-CFB] itself ([docs/interchange/aaf.md](../interchange/aaf.md)).

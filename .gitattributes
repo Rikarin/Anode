@@ -3,6 +3,7 @@
 * text=auto eol=lf
 
 *.wav binary
+*.aaf binary
 *.nam binary
 *.png binary
 *.dylib binary
