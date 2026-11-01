@@ -14,9 +14,9 @@ public sealed record ScoreRequest(
     ScoreViewMode Mode = ScoreViewMode.Linear);
 
 /// <summary>
-///     MIDI to notation, as Logic's score does it (docs/10-phase-9.md, workstream A). The engine decides what is
-///     musically fixed (which notes, durations, ties, tuplets, voices, spelling, measures); Verovio engraves
-///     (docs/adr/0011-notation-rendering.md).
+///     MIDI to notation, as Logic's score does it (docs/10-phase-9.md, workstream A; the rules: docs/notation/README.md).
+///     The engine decides what is musically fixed (which notes, durations, ties, tuplets, voices, spelling, measures);
+///     Verovio engraves (docs/adr/0011-notation-rendering.md).
 /// </summary>
 public static class NotationEngine {
     /// <summary>
@@ -25,8 +25,229 @@ public static class NotationEngine {
     ///     project's signatures, spelled by its keys, with its tempo marks and markers as rehearsal marks, and the stored
     ///     symbols, lyrics and chord symbols of <paramref name="score" /> (the project's <c>score</c>; passed in until the
     ///     model stores it). Deterministic: the same input gives the same view. Throws <see cref="ArgumentException" />
-    ///     for a set or track that does not exist.
+    ///     for a set or track that does not exist (or a part track outside the set).
     /// </summary>
-    public static ScoreView Render(ProjectState state, ProjectScore score, ScoreRequest request) =>
-        throw Pending.WorkstreamA();
+    public static ScoreView Render(ProjectState state, ProjectScore score, ScoreRequest request) {
+        var tracks = TracksOf(state, score, request);
+        var transposing = request.PartTrackId is not null || score.Layout.TransposingScore;
+        var bars = new Bars(state.SignatureMap);
+        var notations = tracks.Select(t => TrackNotation.Build(state, t, FactoryStaffStyles.Resolve(score, t.StaffStyleId), bars))
+            .ToList();
+        var trackIds = tracks.Select(t => t.Id).ToHashSet(StringComparer.Ordinal);
+        var notesInView = notations.SelectMany(n => n.Staves.SelectMany(s => s).SelectMany(u => u.Notes))
+            .Select(n => n.Id)
+            .ToHashSet();
+        var symbols = score.Symbols.Where(s => trackIds.Contains(s.TrackId) && Drawn(s, notesInView))
+            .OrderBy(s => s.Id, StringComparer.Ordinal)
+            .ToList();
+        var lyrics = score.Lyrics.Where(l => notesInView.Contains(l.NoteId)).OrderBy(l => l.Id, StringComparer.Ordinal).ToList();
+        var chords = score.Chords.Where(c => trackIds.Contains(c.TrackId) && c.Tick >= 0)
+            .OrderBy(c => c.Tick)
+            .ThenBy(c => c.Id, StringComparer.Ordinal)
+            .ToList();
+        var last = notations.Select(n => n.LastTick)
+            .Concat(symbols.Where(s => s.NoteId is null).SelectMany(s => new[] { s.Tick ?? -1, (s.EndTick ?? 0) - 1 }))
+            .Concat(chords.Select(c => c.Tick))
+            .DefaultIfEmpty(-1)
+            .Max();
+        var lastBar = last < 0 ? 0 : bars.At(last).Index;
+        var measures = Measures(state, bars, lastBar);
+        var attachments = new Attachments(symbols, lyrics, chords);
+        var parts = notations.Select(n => Part(n, score.Layout, measures, bars, transposing, attachments)).ToList();
+        return new(request.SetId, request.PartTrackId, request.Mode, transposing, score.Layout, measures, parts, symbols, lyrics, chords);
+    }
+
+    static List<Track> TracksOf(ProjectState state, ProjectScore score, ScoreRequest request) {
+        List<Track> tracks;
+        ScoreSet? set = null;
+        if (request.SetId is { } setId) {
+            set = score.Sets.FirstOrDefault(s => s.Id == setId) ?? throw new ArgumentException($"No score set {setId}.", nameof(request));
+            tracks = [..set.TrackIds.Select(state.FindTrack).OfType<Track>()];
+        } else {
+            var withMidi = state.MidiRegions.Values.Select(r => r.TrackId).ToHashSet(StringComparer.Ordinal);
+            tracks = [..state.Tracks.Where(t => withMidi.Contains(t.Id))];
+        }
+
+        if (request.PartTrackId is { } partId) {
+            var track = state.FindTrack(partId) ?? throw new ArgumentException($"No track {partId}.", nameof(request));
+            if (set is not null && !set.TrackIds.Contains(partId)) {
+                throw new ArgumentException($"Track {partId} is not in score set {set.Id}.", nameof(request));
+            }
+
+            tracks = [track];
+        }
+
+        return tracks;
+    }
+
+    /// <summary>A symbol is drawn when every note it is anchored to is in the view.</summary>
+    static bool Drawn(ScoreSymbol symbol, HashSet<long> notes) =>
+        (symbol.NoteId is not { } start || notes.Contains(start))
+        && (symbol.EndNoteId is not { } end || notes.Contains(end))
+        && (symbol.NoteId is not null || symbol.Tick is >= 0);
+
+    static List<ScoreMeasure> Measures(ProjectState state, Bars bars, long lastBar) {
+        var keys = state.Settings.Keys.OrderBy(k => k.Tick).ToList();
+        var tempos = state.Settings.TempoEvents is { Count: > 0 } events
+            ? events.OrderBy(t => t.Tick).ToList()
+            : [new(0, state.Settings.Tempo, TempoCurve.Step)];
+        var markers = state.Markers.Values.OrderBy(m => m.Tick).ThenBy(m => m.Id, StringComparer.Ordinal).ToList();
+        var drafts = new List<ScoreMeasure>();
+        for (var i = 0L; i <= lastBar; i++) {
+            var bar = bars.Of(i);
+            var key = keys.LastOrDefault(k => bars.Map.BarLineAtOrAfter(k.Tick) <= bar.Start) is { } k
+                ? Spelling.KeyOf(k)
+                : new(0, KeyMode.Major);
+            var previous = drafts.Count > 0 ? drafts[^1] : null;
+            var marks = new List<ScoreTempoMark>();
+            for (var t = 0; t < tempos.Count; t++) {
+                var tempo = tempos[t];
+                if (tempo.Tick >= bar.Start && tempo.Tick < bar.End && (t == 0 || tempos[t - 1].Bpm != tempo.Bpm)) {
+                    marks.Add(new(tempo.Tick, tempo.Bpm));
+                }
+            }
+
+            drafts.Add(
+                new(
+                    (int)i + 1,
+                    bar.Start,
+                    bar.Length,
+                    bar.Time,
+                    key,
+                    previous is null || previous.Time != bar.Time,
+                    previous is null || previous.Key != key,
+                    marks,
+                    [..markers.Where(m => m.Tick >= bar.Start && m.Tick < bar.End).Select(m => new ScoreRehearsal(m.Tick, m.Id, m.Name))],
+                    Barline.Single
+                )
+            );
+        }
+
+        for (var i = 0; i < drafts.Count; i++) {
+            Barline barline;
+            if (i == drafts.Count - 1) {
+                barline = Barline.Final;
+            } else {
+                var next = drafts[i + 1];
+                barline = next.ShowTime || next.ShowKey || next.Rehearsals.Any(r => r.Tick == next.StartTick)
+                    ? Barline.Double
+                    : Barline.Single;
+            }
+
+            drafts[i] = drafts[i] with { Barline = barline };
+        }
+
+        return drafts;
+    }
+
+    static ScorePart Part(
+        TrackNotation notation,
+        ScoreLayout layout,
+        List<ScoreMeasure> measures,
+        Bars bars,
+        bool transposing,
+        Attachments attachments
+    ) {
+        var track = notation.Track;
+        var style = notation.Style;
+        var name = layout.InstrumentNames.FirstOrDefault(n => n.TrackId == track.Id);
+        var partMeasures = new List<ScorePartMeasure>(measures.Count);
+        foreach (var measure in measures) {
+            var bar = bars.Of(measure.Number - 1);
+            var settings = SettingsOf(notation, bar);
+            var staves = new List<ScoreStaffMeasure>(style.Staves.Count);
+            for (var s = 0; s < style.Staves.Count; s++) {
+                var builder = new StaffMeasureBuilder(notation, s, bar, measure, settings, transposing, attachments);
+                staves.Add(builder.Build());
+            }
+
+            partMeasures.Add(new(staves));
+        }
+
+        return new(
+            track.Id,
+            name?.Full ?? track.Name,
+            name?.Short ?? track.Name,
+            style.Id,
+            transposing ? style.Staves[0].Transpose : 0,
+            style.Brace && style.Staves.Count > 1,
+            style.Staves,
+            partMeasures
+        );
+    }
+
+    /// <summary>
+    ///     A measure's splitting settings (syncopation, dots): the region of its first note, else the region over its start,
+    ///     else the track's first region, else the defaults.
+    /// </summary>
+    static RegionNotation SettingsOf(TrackNotation notation, Bar bar) {
+        var first = notation.Staves.SelectMany(s => s)
+            .Where(u => u.Start >= bar.Start && u.Start < bar.End)
+            .OrderBy(u => u.Start)
+            .ThenBy(u => u.Notes[0].Id)
+            .FirstOrDefault();
+        if (first is not null) {
+            return first.Notation;
+        }
+
+        return notation.Regions.FirstOrDefault(r => r.StartTick <= bar.Start && r.StartTick + r.LengthTicks > bar.Start)?.Notation
+            ?? notation.Regions.FirstOrDefault()?.Notation
+            ?? RegionNotation.Default;
+    }
+}
+
+/// <summary>The stored items of the view, indexed for drawing at events.</summary>
+sealed class Attachments {
+    readonly Dictionary<long, List<string>> byNote = [];
+    readonly Dictionary<long, List<LyricSyllable>> lyricsByNote = [];
+    readonly Dictionary<string, List<ScoreSymbol>> positioned = new(StringComparer.Ordinal);
+    readonly Dictionary<string, List<ChordSymbol>> chords = new(StringComparer.Ordinal);
+
+    public Attachments(List<ScoreSymbol> symbols, List<LyricSyllable> lyrics, List<ChordSymbol> chordSymbols) {
+        foreach (var symbol in symbols) {
+            if (symbol.NoteId is { } note) {
+                Add(byNote, note, symbol.Id);
+            } else {
+                Add(positioned, symbol.TrackId, symbol);
+            }
+        }
+
+        foreach (var lyric in lyrics) {
+            Add(lyricsByNote, lyric.NoteId, lyric);
+        }
+
+        foreach (var chord in chordSymbols) {
+            Add(chords, chord.TrackId, chord);
+        }
+    }
+
+    public IEnumerable<string> OfNote(long noteId) => byNote.TryGetValue(noteId, out var ids) ? ids : [];
+
+    public IEnumerable<LyricSyllable> LyricsOf(long noteId) => lyricsByNote.TryGetValue(noteId, out var l) ? l : [];
+
+    /// <summary>The positioned symbols of a track's staff (of <paramref name="staves" />) in [from, to).</summary>
+    public IEnumerable<string> At(string trackId, int staff, int staves, long from, long to) =>
+        positioned.TryGetValue(trackId, out var symbols)
+            ? symbols.Where(s => StaffOf(s, staves) == staff && s.Tick >= from && s.Tick < to).Select(s => s.Id)
+            : [];
+
+    public IEnumerable<string> ChordsAt(string trackId, long from, long to) =>
+        chords.TryGetValue(trackId, out var list) ? list.Where(c => c.Tick >= from && c.Tick < to).Select(c => c.Id) : [];
+
+    /// <summary>A positioned symbol's staff: its own, else the bottom staff for pedals and the top for the rest.</summary>
+    public static int StaffOf(ScoreSymbol symbol, int staves) =>
+        Math.Clamp(
+            symbol.Staff ?? (symbol.Kind is ScoreSymbolKind.PedalDown or ScoreSymbolKind.PedalUp ? staves - 1 : 0),
+            0,
+            staves - 1
+        );
+
+    static void Add<TKey, TValue>(Dictionary<TKey, List<TValue>> into, TKey key, TValue value) where TKey : notnull {
+        if (!into.TryGetValue(key, out var list)) {
+            list = [];
+            into[key] = list;
+        }
+
+        list.Add(value);
+    }
 }
