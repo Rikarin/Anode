@@ -1,6 +1,7 @@
 using Anode.Contracts;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
+using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Serialization.Metadata;
 using System.Xml.Linq;
@@ -18,7 +19,8 @@ public sealed class MeiTests {
 
     static readonly JsonSerializerOptions Json = new(ContractsJsonContext.Default.Options) {
         TypeInfoResolver = JsonTypeInfoResolver.Combine(ContractsJsonContext.Default, new DefaultJsonTypeInfoResolver()),
-        WriteIndented = true
+        WriteIndented = true,
+        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
     };
 
     public static TheoryData<string> Named => ["exit-criterion", "exit-criterion-eighths", "content", "content-part", "content-transposing", "drums", "meters"];

@@ -12,8 +12,8 @@
       "right": 15
     },
     "staffHeightMm": 7,
-    "title": "Test \u0026 Score",
-    "subtitle": "For \u003CMEI\u003E",
+    "title": "Test & Score",
+    "subtitle": "For <MEI>",
     "composer": "A. Composer",
     "header": "Header",
     "footer": "Footer",
@@ -21,7 +21,7 @@
     "instrumentNames": [
       {
         "trackId": "trk_000002",
-        "full": "Clarinet in B\u266D",
+        "full": "Clarinet in B♭",
         "short": "Cl."
       }
     ]
@@ -570,7 +570,7 @@
     },
     {
       "trackId": "trk_000002",
-      "name": "Clarinet in B\u266D",
+      "name": "Clarinet in B♭",
       "shortName": "Cl.",
       "staffStyleId": "factory.clarinetBb",
       "transpose": 0,

@@ -1,0 +1,6477 @@
+{
+  "description": "Anode notation vectors (docs/notation/README.md, \"Vectors\"): MIDI notes of one region at tick 0 on one track with a staff style and region notation settings in; the measures and every voice's events out, as the notation engine renders them. Ticks are 960 PPQ project ticks; written pitches use scientific octaves (C4 is MIDI 60); staff positions are diatonic steps above the bottom line (MEI loc); voices count from 1 within a staff, staves from 0. A case with part true is rendered as the track's extracted part (written at transposed pitch); otherwise as the full score at concert pitch.",
+  "ppq": 960,
+  "cases": [
+    {
+      "name": "quarters",
+      "description": "Four quarter notes in 4/4.",
+      "staffStyleId": "factory.treble",
+      "part": false,
+      "signatures": [
+        {
+          "tick": 0,
+          "numerator": 4,
+          "denominator": 4
+        }
+      ],
+      "keys": [
+        {
+          "tick": 0,
+          "tonic": 0,
+          "mode": "major"
+        }
+      ],
+      "notation": {
+        "displayQuantizeTicks": 0,
+        "tripletQuantizeTicks": 0,
+        "interpretation": true,
+        "noOverlap": true,
+        "syncopation": false,
+        "maxDots": 1
+      },
+      "regionLengthTicks": 30720,
+      "notes": [
+        {
+          "id": 1,
+          "pitch": 60,
+          "startTick": 0,
+          "lengthTicks": 960
+        },
+        {
+          "id": 2,
+          "pitch": 62,
+          "startTick": 960,
+          "lengthTicks": 960
+        },
+        {
+          "id": 3,
+          "pitch": 64,
+          "startTick": 1920,
+          "lengthTicks": 960
+        },
+        {
+          "id": 4,
+          "pitch": 65,
+          "startTick": 2880,
+          "lengthTicks": 960
+        }
+      ],
+      "expected": {
+        "transposing": false,
+        "transpose": 0,
+        "measures": [
+          {
+            "number": 1,
+            "startTick": 0,
+            "lengthTicks": 3840,
+            "time": {
+              "numerator": 4,
+              "denominator": 4
+            },
+            "key": {
+              "fifths": 0,
+              "mode": "major"
+            },
+            "barline": "final"
+          }
+        ],
+        "events": [
+          {
+            "measure": 1,
+            "staff": 0,
+            "voice": 1,
+            "id": "n1",
+            "kind": "note",
+            "tick": 0,
+            "durationTicks": 960,
+            "value": "quarter",
+            "dots": 0,
+            "tuplet": null,
+            "beam": null,
+            "stem": "up",
+            "notes": [
+              {
+                "id": "n1",
+                "noteId": 1,
+                "pitch": 60,
+                "written": {
+                  "step": "c",
+                  "alter": 0,
+                  "octave": 4
+                },
+                "staffPosition": -2,
+                "accidental": null,
+                "tieStart": false,
+                "tieStop": false,
+                "notehead": "normal"
+              }
+            ]
+          },
+          {
+            "measure": 1,
+            "staff": 0,
+            "voice": 1,
+            "id": "n2",
+            "kind": "note",
+            "tick": 960,
+            "durationTicks": 960,
+            "value": "quarter",
+            "dots": 0,
+            "tuplet": null,
+            "beam": null,
+            "stem": "up",
+            "notes": [
+              {
+                "id": "n2",
+                "noteId": 2,
+                "pitch": 62,
+                "written": {
+                  "step": "d",
+                  "alter": 0,
+                  "octave": 4
+                },
+                "staffPosition": -1,
+                "accidental": null,
+                "tieStart": false,
+                "tieStop": false,
+                "notehead": "normal"
+              }
+            ]
+          },
+          {
+            "measure": 1,
+            "staff": 0,
+            "voice": 1,
+            "id": "n3",
+            "kind": "note",
+            "tick": 1920,
+            "durationTicks": 960,
+            "value": "quarter",
+            "dots": 0,
+            "tuplet": null,
+            "beam": null,
+            "stem": "up",
+            "notes": [
+              {
+                "id": "n3",
+                "noteId": 3,
+                "pitch": 64,
+                "written": {
+                  "step": "e",
+                  "alter": 0,
+                  "octave": 4
+                },
+                "staffPosition": 0,
+                "accidental": null,
+                "tieStart": false,
+                "tieStop": false,
+                "notehead": "normal"
+              }
+            ]
+          },
+          {
+            "measure": 1,
+            "staff": 0,
+            "voice": 1,
+            "id": "n4",
+            "kind": "note",
+            "tick": 2880,
+            "durationTicks": 960,
+            "value": "quarter",
+            "dots": 0,
+            "tuplet": null,
+            "beam": null,
+            "stem": "up",
+            "notes": [
+              {
+                "id": "n4",
+                "noteId": 4,
+                "pitch": 65,
+                "written": {
+                  "step": "f",
+                  "alter": 0,
+                  "octave": 4
+                },
+                "staffPosition": 1,
+                "accidental": null,
+                "tieStart": false,
+                "tieStop": false,
+                "notehead": "normal"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "tie-across-bar",
+      "description": "A half note from beat 4 tied over the bar line; rests by the meter.",
+      "staffStyleId": "factory.treble",
+      "part": false,
+      "signatures": [
+        {
+          "tick": 0,
+          "numerator": 4,
+          "denominator": 4
+        }
+      ],
+      "keys": [
+        {
+          "tick": 0,
+          "tonic": 0,
+          "mode": "major"
+        }
+      ],
+      "notation": {
+        "displayQuantizeTicks": 0,
+        "tripletQuantizeTicks": 0,
+        "interpretation": true,
+        "noOverlap": true,
+        "syncopation": false,
+        "maxDots": 1
+      },
+      "regionLengthTicks": 30720,
+      "notes": [
+        {
+          "id": 1,
+          "pitch": 72,
+          "startTick": 2880,
+          "lengthTicks": 1920
+        }
+      ],
+      "expected": {
+        "transposing": false,
+        "transpose": 0,
+        "measures": [
+          {
+            "number": 1,
+            "startTick": 0,
+            "lengthTicks": 3840,
+            "time": {
+              "numerator": 4,
+              "denominator": 4
+            },
+            "key": {
+              "fifths": 0,
+              "mode": "major"
+            },
+            "barline": "single"
+          },
+          {
+            "number": 2,
+            "startTick": 3840,
+            "lengthTicks": 3840,
+            "time": {
+              "numerator": 4,
+              "denominator": 4
+            },
+            "key": {
+              "fifths": 0,
+              "mode": "major"
+            },
+            "barline": "final"
+          }
+        ],
+        "events": [
+          {
+            "measure": 1,
+            "staff": 0,
+            "voice": 1,
+            "id": "rtrk_000001-1-0-1-1",
+            "kind": "rest",
+            "tick": 0,
+            "durationTicks": 1920,
+            "value": "half",
+            "dots": 0,
+            "tuplet": null,
+            "beam": null,
+            "stem": "none",
+            "notes": []
+          },
+          {
+            "measure": 1,
+            "staff": 0,
+            "voice": 1,
+            "id": "rtrk_000001-1-0-1-2",
+            "kind": "rest",
+            "tick": 1920,
+            "durationTicks": 960,
+            "value": "quarter",
+            "dots": 0,
+            "tuplet": null,
+            "beam": null,
+            "stem": "none",
+            "notes": []
+          },
+          {
+            "measure": 1,
+            "staff": 0,
+            "voice": 1,
+            "id": "n1",
+            "kind": "note",
+            "tick": 2880,
+            "durationTicks": 960,
+            "value": "quarter",
+            "dots": 0,
+            "tuplet": null,
+            "beam": null,
+            "stem": "down",
+            "notes": [
+              {
+                "id": "n1",
+                "noteId": 1,
+                "pitch": 72,
+                "written": {
+                  "step": "c",
+                  "alter": 0,
+                  "octave": 5
+                },
+                "staffPosition": 5,
+                "accidental": null,
+                "tieStart": true,
+                "tieStop": false,
+                "notehead": "normal"
+              }
+            ]
+          },
+          {
+            "measure": 2,
+            "staff": 0,
+            "voice": 1,
+            "id": "n1-2",
+            "kind": "note",
+            "tick": 3840,
+            "durationTicks": 960,
+            "value": "quarter",
+            "dots": 0,
+            "tuplet": null,
+            "beam": null,
+            "stem": "down",
+            "notes": [
+              {
+                "id": "n1-2",
+                "noteId": 1,
+                "pitch": 72,
+                "written": {
+                  "step": "c",
+                  "alter": 0,
+                  "octave": 5
+                },
+                "staffPosition": 5,
+                "accidental": null,
+                "tieStart": false,
+                "tieStop": true,
+                "notehead": "normal"
+              }
+            ]
+          },
+          {
+            "measure": 2,
+            "staff": 0,
+            "voice": 1,
+            "id": "rtrk_000001-2-0-1-1",
+            "kind": "rest",
+            "tick": 4800,
+            "durationTicks": 960,
+            "value": "quarter",
+            "dots": 0,
+            "tuplet": null,
+            "beam": null,
+            "stem": "none",
+            "notes": []
+          },
+          {
+            "measure": 2,
+            "staff": 0,
+            "voice": 1,
+            "id": "rtrk_000001-2-0-1-2",
+            "kind": "rest",
+            "tick": 5760,
+            "durationTicks": 1920,
+            "value": "half",
+            "dots": 0,
+            "tuplet": null,
+            "beam": null,
+            "stem": "none",
+            "notes": []
+          }
+        ]
+      }
+    },
+    {
+      "name": "dotted",
+      "description": "Dotted quarter, eighth, half.",
+      "staffStyleId": "factory.treble",
+      "part": false,
+      "signatures": [
+        {
+          "tick": 0,
+          "numerator": 4,
+          "denominator": 4
+        }
+      ],
+      "keys": [
+        {
+          "tick": 0,
+          "tonic": 0,
+          "mode": "major"
+        }
+      ],
+      "notation": {
+        "displayQuantizeTicks": 0,
+        "tripletQuantizeTicks": 0,
+        "interpretation": true,
+        "noOverlap": true,
+        "syncopation": false,
+        "maxDots": 1
+      },
+      "regionLengthTicks": 30720,
+      "notes": [
+        {
+          "id": 1,
+          "pitch": 60,
+          "startTick": 0,
+          "lengthTicks": 1440
+        },
+        {
+          "id": 2,
+          "pitch": 62,
+          "startTick": 1440,
+          "lengthTicks": 480
+        },
+        {
+          "id": 3,
+          "pitch": 64,
+          "startTick": 1920,
+          "lengthTicks": 1920
+        }
+      ],
+      "expected": {
+        "transposing": false,
+        "transpose": 0,
+        "measures": [
+          {
+            "number": 1,
+            "startTick": 0,
+            "lengthTicks": 3840,
+            "time": {
+              "numerator": 4,
+              "denominator": 4
+            },
+            "key": {
+              "fifths": 0,
+              "mode": "major"
+            },
+            "barline": "final"
+          }
+        ],
+        "events": [
+          {
+            "measure": 1,
+            "staff": 0,
+            "voice": 1,
+            "id": "n1",
+            "kind": "note",
+            "tick": 0,
+            "durationTicks": 1440,
+            "value": "quarter",
+            "dots": 1,
+            "tuplet": null,
+            "beam": null,
+            "stem": "up",
+            "notes": [
+              {
+                "id": "n1",
+                "noteId": 1,
+                "pitch": 60,
+                "written": {
+                  "step": "c",
+                  "alter": 0,
+                  "octave": 4
+                },
+                "staffPosition": -2,
+                "accidental": null,
+                "tieStart": false,
+                "tieStop": false,
+                "notehead": "normal"
+              }
+            ]
+          },
+          {
+            "measure": 1,
+            "staff": 0,
+            "voice": 1,
+            "id": "n2",
+            "kind": "note",
+            "tick": 1440,
+            "durationTicks": 480,
+            "value": "eighth",
+            "dots": 0,
+            "tuplet": null,
+            "beam": null,
+            "stem": "up",
+            "notes": [
+              {
+                "id": "n2",
+                "noteId": 2,
+                "pitch": 62,
+                "written": {
+                  "step": "d",
+                  "alter": 0,
+                  "octave": 4
+                },
+                "staffPosition": -1,
+                "accidental": null,
+                "tieStart": false,
+                "tieStop": false,
+                "notehead": "normal"
+              }
+            ]
+          },
+          {
+            "measure": 1,
+            "staff": 0,
+            "voice": 1,
+            "id": "n3",
+            "kind": "note",
+            "tick": 1920,
+            "durationTicks": 1920,
+            "value": "half",
+            "dots": 0,
+            "tuplet": null,
+            "beam": null,
+            "stem": "up",
+            "notes": [
+              {
+                "id": "n3",
+                "noteId": 3,
+                "pitch": 64,
+                "written": {
+                  "step": "e",
+                  "alter": 0,
+                  "octave": 4
+                },
+                "staffPosition": 0,
+                "accidental": null,
+                "tieStart": false,
+                "tieStop": false,
+                "notehead": "normal"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "no-dots",
+      "description": "The dotted quarter with max dots 0: quarter tied to an eighth.",
+      "staffStyleId": "factory.treble",
+      "part": false,
+      "signatures": [
+        {
+          "tick": 0,
+          "numerator": 4,
+          "denominator": 4
+        }
+      ],
+      "keys": [
+        {
+          "tick": 0,
+          "tonic": 0,
+          "mode": "major"
+        }
+      ],
+      "notation": {
+        "displayQuantizeTicks": 0,
+        "tripletQuantizeTicks": 0,
+        "interpretation": true,
+        "noOverlap": true,
+        "syncopation": false,
+        "maxDots": 0
+      },
+      "regionLengthTicks": 30720,
+      "notes": [
+        {
+          "id": 1,
+          "pitch": 60,
+          "startTick": 0,
+          "lengthTicks": 1440
+        },
+        {
+          "id": 2,
+          "pitch": 62,
+          "startTick": 1440,
+          "lengthTicks": 480
+        },
+        {
+          "id": 3,
+          "pitch": 64,
+          "startTick": 1920,
+          "lengthTicks": 1920
+        }
+      ],
+      "expected": {
+        "transposing": false,
+        "transpose": 0,
+        "measures": [
+          {
+            "number": 1,
+            "startTick": 0,
+            "lengthTicks": 3840,
+            "time": {
+              "numerator": 4,
+              "denominator": 4
+            },
+            "key": {
+              "fifths": 0,
+              "mode": "major"
+            },
+            "barline": "final"
+          }
+        ],
+        "events": [
+          {
+            "measure": 1,
+            "staff": 0,
+            "voice": 1,
+            "id": "n1",
+            "kind": "note",
+            "tick": 0,
+            "durationTicks": 960,
+            "value": "quarter",
+            "dots": 0,
+            "tuplet": null,
+            "beam": null,
+            "stem": "up",
+            "notes": [
+              {
+                "id": "n1",
+                "noteId": 1,
+                "pitch": 60,
+                "written": {
+                  "step": "c",
+                  "alter": 0,
+                  "octave": 4
+                },
+                "staffPosition": -2,
+                "accidental": null,
+                "tieStart": true,
+                "tieStop": false,
+                "notehead": "normal"
+              }
+            ]
+          },
+          {
+            "measure": 1,
+            "staff": 0,
+            "voice": 1,
+            "id": "n1-2",
+            "kind": "note",
+            "tick": 960,
+            "durationTicks": 480,
+            "value": "eighth",
+            "dots": 0,
+            "tuplet": null,
+            "beam": 1,
+            "stem": "up",
+            "notes": [
+              {
+                "id": "n1-2",
+                "noteId": 1,
+                "pitch": 60,
+                "written": {
+                  "step": "c",
+                  "alter": 0,
+                  "octave": 4
+                },
+                "staffPosition": -2,
+                "accidental": null,
+                "tieStart": false,
+                "tieStop": true,
+                "notehead": "normal"
+              }
+            ]
+          },
+          {
+            "measure": 1,
+            "staff": 0,
+            "voice": 1,
+            "id": "n2",
+            "kind": "note",
+            "tick": 1440,
+            "durationTicks": 480,
+            "value": "eighth",
+            "dots": 0,
+            "tuplet": null,
+            "beam": 1,
+            "stem": "up",
+            "notes": [
+              {
+                "id": "n2",
+                "noteId": 2,
+                "pitch": 62,
+                "written": {
+                  "step": "d",
+                  "alter": 0,
+                  "octave": 4
+                },
+                "staffPosition": -1,
+                "accidental": null,
+                "tieStart": false,
+                "tieStop": false,
+                "notehead": "normal"
+              }
+            ]
+          },
+          {
+            "measure": 1,
+            "staff": 0,
+            "voice": 1,
+            "id": "n3",
+            "kind": "note",
+            "tick": 1920,
+            "durationTicks": 1920,
+            "value": "half",
+            "dots": 0,
+            "tuplet": null,
+            "beam": null,
+            "stem": "up",
+            "notes": [
+              {
+                "id": "n3",
+                "noteId": 3,
+                "pitch": 64,
+                "written": {
+                  "step": "e",
+                  "alter": 0,
+                  "octave": 4
+                },
+                "staffPosition": 0,
+                "accidental": null,
+                "tieStart": false,
+                "tieStop": false,
+                "notehead": "normal"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "syncopation-off",
+      "description": "Eighth, quarter, eighth: the quarter tied at the beat; the half bar beamed.",
+      "staffStyleId": "factory.treble",
+      "part": false,
+      "signatures": [
+        {
+          "tick": 0,
+          "numerator": 4,
+          "denominator": 4
+        }
+      ],
+      "keys": [
+        {
+          "tick": 0,
+          "tonic": 0,
+          "mode": "major"
+        }
+      ],
+      "notation": {
+        "displayQuantizeTicks": 0,
+        "tripletQuantizeTicks": 0,
+        "interpretation": true,
+        "noOverlap": true,
+        "syncopation": false,
+        "maxDots": 1
+      },
+      "regionLengthTicks": 30720,
+      "notes": [
+        {
+          "id": 1,
+          "pitch": 60,
+          "startTick": 0,
+          "lengthTicks": 480
+        },
+        {
+          "id": 2,
+          "pitch": 62,
+          "startTick": 480,
+          "lengthTicks": 960
+        },
+        {
+          "id": 3,
+          "pitch": 64,
+          "startTick": 1440,
+          "lengthTicks": 480
+        },
+        {
+          "id": 4,
+          "pitch": 65,
+          "startTick": 1920,
+          "lengthTicks": 1920
+        }
+      ],
+      "expected": {
+        "transposing": false,
+        "transpose": 0,
+        "measures": [
+          {
+            "number": 1,
+            "startTick": 0,
+            "lengthTicks": 3840,
+            "time": {
+              "numerator": 4,
+              "denominator": 4
+            },
+            "key": {
+              "fifths": 0,
+              "mode": "major"
+            },
+            "barline": "final"
+          }
+        ],
+        "events": [
+          {
+            "measure": 1,
+            "staff": 0,
+            "voice": 1,
+            "id": "n1",
+            "kind": "note",
+            "tick": 0,
+            "durationTicks": 480,
+            "value": "eighth",
+            "dots": 0,
+            "tuplet": null,
+            "beam": 1,
+            "stem": "up",
+            "notes": [
+              {
+                "id": "n1",
+                "noteId": 1,
+                "pitch": 60,
+                "written": {
+                  "step": "c",
+                  "alter": 0,
+                  "octave": 4
+                },
+                "staffPosition": -2,
+                "accidental": null,
+                "tieStart": false,
+                "tieStop": false,
+                "notehead": "normal"
+              }
+            ]
+          },
+          {
+            "measure": 1,
+            "staff": 0,
+            "voice": 1,
+            "id": "n2",
+            "kind": "note",
+            "tick": 480,
+            "durationTicks": 480,
+            "value": "eighth",
+            "dots": 0,
+            "tuplet": null,
+            "beam": 1,
+            "stem": "up",
+            "notes": [
+              {
+                "id": "n2",
+                "noteId": 2,
+                "pitch": 62,
+                "written": {
+                  "step": "d",
+                  "alter": 0,
+                  "octave": 4
+                },
+                "staffPosition": -1,
+                "accidental": null,
+                "tieStart": true,
+                "tieStop": false,
+                "notehead": "normal"
+              }
+            ]
+          },
+          {
+            "measure": 1,
+            "staff": 0,
+            "voice": 1,
+            "id": "n2-2",
+            "kind": "note",
+            "tick": 960,
+            "durationTicks": 480,
+            "value": "eighth",
+            "dots": 0,
+            "tuplet": null,
+            "beam": 1,
+            "stem": "up",
+            "notes": [
+              {
+                "id": "n2-2",
+                "noteId": 2,
+                "pitch": 62,
+                "written": {
+                  "step": "d",
+                  "alter": 0,
+                  "octave": 4
+                },
+                "staffPosition": -1,
+                "accidental": null,
+                "tieStart": false,
+                "tieStop": true,
+                "notehead": "normal"
+              }
+            ]
+          },
+          {
+            "measure": 1,
+            "staff": 0,
+            "voice": 1,
+            "id": "n3",
+            "kind": "note",
+            "tick": 1440,
+            "durationTicks": 480,
+            "value": "eighth",
+            "dots": 0,
+            "tuplet": null,
+            "beam": 1,
+            "stem": "up",
+            "notes": [
+              {
+                "id": "n3",
+                "noteId": 3,
+                "pitch": 64,
+                "written": {
+                  "step": "e",
+                  "alter": 0,
+                  "octave": 4
+                },
+                "staffPosition": 0,
+                "accidental": null,
+                "tieStart": false,
+                "tieStop": false,
+                "notehead": "normal"
+              }
+            ]
+          },
+          {
+            "measure": 1,
+            "staff": 0,
+            "voice": 1,
+            "id": "n4",
+            "kind": "note",
+            "tick": 1920,
+            "durationTicks": 1920,
+            "value": "half",
+            "dots": 0,
+            "tuplet": null,
+            "beam": null,
+            "stem": "up",
+            "notes": [
+              {
+                "id": "n4",
+                "noteId": 4,
+                "pitch": 65,
+                "written": {
+                  "step": "f",
+                  "alter": 0,
+                  "octave": 4
+                },
+                "staffPosition": 1,
+                "accidental": null,
+                "tieStart": false,
+                "tieStop": false,
+                "notehead": "normal"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "syncopation-on",
+      "description": "The same with syncopation shown: the quarter undivided.",
+      "staffStyleId": "factory.treble",
+      "part": false,
+      "signatures": [
+        {
+          "tick": 0,
+          "numerator": 4,
+          "denominator": 4
+        }
+      ],
+      "keys": [
+        {
+          "tick": 0,
+          "tonic": 0,
+          "mode": "major"
+        }
+      ],
+      "notation": {
+        "displayQuantizeTicks": 0,
+        "tripletQuantizeTicks": 0,
+        "interpretation": true,
+        "noOverlap": true,
+        "syncopation": true,
+        "maxDots": 1
+      },
+      "regionLengthTicks": 30720,
+      "notes": [
+        {
+          "id": 1,
+          "pitch": 60,
+          "startTick": 0,
+          "lengthTicks": 480
+        },
+        {
+          "id": 2,
+          "pitch": 62,
+          "startTick": 480,
+          "lengthTicks": 960
+        },
+        {
+          "id": 3,
+          "pitch": 64,
+          "startTick": 1440,
+          "lengthTicks": 480
+        },
+        {
+          "id": 4,
+          "pitch": 65,
+          "startTick": 1920,
+          "lengthTicks": 1920
+        }
+      ],
+      "expected": {
+        "transposing": false,
+        "transpose": 0,
+        "measures": [
+          {
+            "number": 1,
+            "startTick": 0,
+            "lengthTicks": 3840,
+            "time": {
+              "numerator": 4,
+              "denominator": 4
+            },
+            "key": {
+              "fifths": 0,
+              "mode": "major"
+            },
+            "barline": "final"
+          }
+        ],
+        "events": [
+          {
+            "measure": 1,
+            "staff": 0,
+            "voice": 1,
+            "id": "n1",
+            "kind": "note",
+            "tick": 0,
+            "durationTicks": 480,
+            "value": "eighth",
+            "dots": 0,
+            "tuplet": null,
+            "beam": null,
+            "stem": "up",
+            "notes": [
+              {
+                "id": "n1",
+                "noteId": 1,
+                "pitch": 60,
+                "written": {
+                  "step": "c",
+                  "alter": 0,
+                  "octave": 4
+                },
+                "staffPosition": -2,
+                "accidental": null,
+                "tieStart": false,
+                "tieStop": false,
+                "notehead": "normal"
+              }
+            ]
+          },
+          {
+            "measure": 1,
+            "staff": 0,
+            "voice": 1,
+            "id": "n2",
+            "kind": "note",
+            "tick": 480,
+            "durationTicks": 960,
+            "value": "quarter",
+            "dots": 0,
+            "tuplet": null,
+            "beam": null,
+            "stem": "up",
+            "notes": [
+              {
+                "id": "n2",
+                "noteId": 2,
+                "pitch": 62,
+                "written": {
+                  "step": "d",
+                  "alter": 0,
+                  "octave": 4
+                },
+                "staffPosition": -1,
+                "accidental": null,
+                "tieStart": false,
+                "tieStop": false,
+                "notehead": "normal"
+              }
+            ]
+          },
+          {
+            "measure": 1,
+            "staff": 0,
+            "voice": 1,
+            "id": "n3",
+            "kind": "note",
+            "tick": 1440,
+            "durationTicks": 480,
+            "value": "eighth",
+            "dots": 0,
+            "tuplet": null,
+            "beam": null,
+            "stem": "up",
+            "notes": [
+              {
+                "id": "n3",
+                "noteId": 3,
+                "pitch": 64,
+                "written": {
+                  "step": "e",
+                  "alter": 0,
+                  "octave": 4
+                },
+                "staffPosition": 0,
+                "accidental": null,
+                "tieStart": false,
+                "tieStop": false,
+                "notehead": "normal"
+              }
+            ]
+          },
+          {
+            "measure": 1,
+            "staff": 0,
+            "voice": 1,
+            "id": "n4",
+            "kind": "note",
+            "tick": 1920,
+            "durationTicks": 1920,
+            "value": "half",
+            "dots": 0,
+            "tuplet": null,
+            "beam": null,
+            "stem": "up",
+            "notes": [
+              {
+                "id": "n4",
+                "noteId": 4,
+                "pitch": 65,
+                "written": {
+                  "step": "f",
+                  "alter": 0,
+                  "octave": 4
+                },
+                "staffPosition": 1,
+                "accidental": null,
+                "tieStart": false,
+                "tieStop": false,
+                "notehead": "normal"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "interpretation-on",
+      "description": "Short notes on the beats read as quarters.",
+      "staffStyleId": "factory.treble",
+      "part": false,
+      "signatures": [
+        {
+          "tick": 0,
+          "numerator": 4,
+          "denominator": 4
+        }
+      ],
+      "keys": [
+        {
+          "tick": 0,
+          "tonic": 0,
+          "mode": "major"
+        }
+      ],
+      "notation": {
+        "displayQuantizeTicks": 0,
+        "tripletQuantizeTicks": 0,
+        "interpretation": true,
+        "noOverlap": true,
+        "syncopation": false,
+        "maxDots": 1
+      },
+      "regionLengthTicks": 30720,
+      "notes": [
+        {
+          "id": 1,
+          "pitch": 60,
+          "startTick": 0,
+          "lengthTicks": 200
+        },
+        {
+          "id": 2,
+          "pitch": 62,
+          "startTick": 960,
+          "lengthTicks": 200
+        },
+        {
+          "id": 3,
+          "pitch": 64,
+          "startTick": 1920,
+          "lengthTicks": 200
+        },
+        {
+          "id": 4,
+          "pitch": 65,
+          "startTick": 2880,
+          "lengthTicks": 200
+        }
+      ],
+      "expected": {
+        "transposing": false,
+        "transpose": 0,
+        "measures": [
+          {
+            "number": 1,
+            "startTick": 0,
+            "lengthTicks": 3840,
+            "time": {
+              "numerator": 4,
+              "denominator": 4
+            },
+            "key": {
+              "fifths": 0,
+              "mode": "major"
+            },
+            "barline": "final"
+          }
+        ],
+        "events": [
+          {
+            "measure": 1,
+            "staff": 0,
+            "voice": 1,
+            "id": "n1",
+            "kind": "note",
+            "tick": 0,
+            "durationTicks": 960,
+            "value": "quarter",
+            "dots": 0,
+            "tuplet": null,
+            "beam": null,
+            "stem": "up",
+            "notes": [
+              {
+                "id": "n1",
+                "noteId": 1,
+                "pitch": 60,
+                "written": {
+                  "step": "c",
+                  "alter": 0,
+                  "octave": 4
+                },
+                "staffPosition": -2,
+                "accidental": null,
+                "tieStart": false,
+                "tieStop": false,
+                "notehead": "normal"
+              }
+            ]
+          },
+          {
+            "measure": 1,
+            "staff": 0,
+            "voice": 1,
+            "id": "n2",
+            "kind": "note",
+            "tick": 960,
+            "durationTicks": 960,
+            "value": "quarter",
+            "dots": 0,
+            "tuplet": null,
+            "beam": null,
+            "stem": "up",
+            "notes": [
+              {
+                "id": "n2",
+                "noteId": 2,
+                "pitch": 62,
+                "written": {
+                  "step": "d",
+                  "alter": 0,
+                  "octave": 4
+                },
+                "staffPosition": -1,
+                "accidental": null,
+                "tieStart": false,
+                "tieStop": false,
+                "notehead": "normal"
+              }
+            ]
+          },
+          {
+            "measure": 1,
+            "staff": 0,
+            "voice": 1,
+            "id": "n3",
+            "kind": "note",
+            "tick": 1920,
+            "durationTicks": 960,
+            "value": "quarter",
+            "dots": 0,
+            "tuplet": null,
+            "beam": null,
+            "stem": "up",
+            "notes": [
+              {
+                "id": "n3",
+                "noteId": 3,
+                "pitch": 64,
+                "written": {
+                  "step": "e",
+                  "alter": 0,
+                  "octave": 4
+                },
+                "staffPosition": 0,
+                "accidental": null,
+                "tieStart": false,
+                "tieStop": false,
+                "notehead": "normal"
+              }
+            ]
+          },
+          {
+            "measure": 1,
+            "staff": 0,
+            "voice": 1,
+            "id": "n4",
+            "kind": "note",
+            "tick": 2880,
+            "durationTicks": 960,
+            "value": "quarter",
+            "dots": 0,
+            "tuplet": null,
+            "beam": null,
+            "stem": "up",
+            "notes": [
+              {
+                "id": "n4",
+                "noteId": 4,
+                "pitch": 65,
+                "written": {
+                  "step": "f",
+                  "alter": 0,
+                  "octave": 4
+                },
+                "staffPosition": 1,
+                "accidental": null,
+                "tieStart": false,
+                "tieStop": false,
+                "notehead": "normal"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "interpretation-off",
+      "description": "The same without interpretation: sixteenths and rests.",
+      "staffStyleId": "factory.treble",
+      "part": false,
+      "signatures": [
+        {
+          "tick": 0,
+          "numerator": 4,
+          "denominator": 4
+        }
+      ],
+      "keys": [
+        {
+          "tick": 0,
+          "tonic": 0,
+          "mode": "major"
+        }
+      ],
+      "notation": {
+        "displayQuantizeTicks": 0,
+        "tripletQuantizeTicks": 0,
+        "interpretation": false,
+        "noOverlap": true,
+        "syncopation": false,
+        "maxDots": 1
+      },
+      "regionLengthTicks": 30720,
+      "notes": [
+        {
+          "id": 1,
+          "pitch": 60,
+          "startTick": 0,
+          "lengthTicks": 200
+        },
+        {
+          "id": 2,
+          "pitch": 62,
+          "startTick": 960,
+          "lengthTicks": 200
+        },
+        {
+          "id": 3,
+          "pitch": 64,
+          "startTick": 1920,
+          "lengthTicks": 200
+        },
+        {
+          "id": 4,
+          "pitch": 65,
+          "startTick": 2880,
+          "lengthTicks": 200
+        }
+      ],
+      "expected": {
+        "transposing": false,
+        "transpose": 0,
+        "measures": [
+          {
+            "number": 1,
+            "startTick": 0,
+            "lengthTicks": 3840,
+            "time": {
+              "numerator": 4,
+              "denominator": 4
+            },
+            "key": {
+              "fifths": 0,
+              "mode": "major"
+            },
+            "barline": "final"
+          }
+        ],
+        "events": [
+          {
+            "measure": 1,
+            "staff": 0,
+            "voice": 1,
+            "id": "n1",
+            "kind": "note",
+            "tick": 0,
+            "durationTicks": 240,
+            "value": "sixteenth",
+            "dots": 0,
+            "tuplet": null,
+            "beam": null,
+            "stem": "up",
+            "notes": [
+              {
+                "id": "n1",
+                "noteId": 1,
+                "pitch": 60,
+                "written": {
+                  "step": "c",
+                  "alter": 0,
+                  "octave": 4
+                },
+                "staffPosition": -2,
+                "accidental": null,
+                "tieStart": false,
+                "tieStop": false,
+                "notehead": "normal"
+              }
+            ]
+          },
+          {
+            "measure": 1,
+            "staff": 0,
+            "voice": 1,
+            "id": "rtrk_000001-1-0-1-1",
+            "kind": "rest",
+            "tick": 240,
+            "durationTicks": 240,
+            "value": "sixteenth",
+            "dots": 0,
+            "tuplet": null,
+            "beam": null,
+            "stem": "none",
+            "notes": []
+          },
+          {
+            "measure": 1,
+            "staff": 0,
+            "voice": 1,
+            "id": "rtrk_000001-1-0-1-2",
+            "kind": "rest",
+            "tick": 480,
+            "durationTicks": 480,
+            "value": "eighth",
+            "dots": 0,
+            "tuplet": null,
+            "beam": null,
+            "stem": "none",
+            "notes": []
+          },
+          {
+            "measure": 1,
+            "staff": 0,
+            "voice": 1,
+            "id": "n2",
+            "kind": "note",
+            "tick": 960,
+            "durationTicks": 240,
+            "value": "sixteenth",
+            "dots": 0,
+            "tuplet": null,
+            "beam": null,
+            "stem": "up",
+            "notes": [
+              {
+                "id": "n2",
+                "noteId": 2,
+                "pitch": 62,
+                "written": {
+                  "step": "d",
+                  "alter": 0,
+                  "octave": 4
+                },
+                "staffPosition": -1,
+                "accidental": null,
+                "tieStart": false,
+                "tieStop": false,
+                "notehead": "normal"
+              }
+            ]
+          },
+          {
+            "measure": 1,
+            "staff": 0,
+            "voice": 1,
+            "id": "rtrk_000001-1-0-1-3",
+            "kind": "rest",
+            "tick": 1200,
+            "durationTicks": 240,
+            "value": "sixteenth",
+            "dots": 0,
+            "tuplet": null,
+            "beam": null,
+            "stem": "none",
+            "notes": []
+          },
+          {
+            "measure": 1,
+            "staff": 0,
+            "voice": 1,
+            "id": "rtrk_000001-1-0-1-4",
+            "kind": "rest",
+            "tick": 1440,
+            "durationTicks": 480,
+            "value": "eighth",
+            "dots": 0,
+            "tuplet": null,
+            "beam": null,
+            "stem": "none",
+            "notes": []
+          },
+          {
+            "measure": 1,
+            "staff": 0,
+            "voice": 1,
+            "id": "n3",
+            "kind": "note",
+            "tick": 1920,
+            "durationTicks": 240,
+            "value": "sixteenth",
+            "dots": 0,
+            "tuplet": null,
+            "beam": null,
+            "stem": "up",
+            "notes": [
+              {
+                "id": "n3",
+                "noteId": 3,
+                "pitch": 64,
+                "written": {
+                  "step": "e",
+                  "alter": 0,
+                  "octave": 4
+                },
+                "staffPosition": 0,
+                "accidental": null,
+                "tieStart": false,
+                "tieStop": false,
+                "notehead": "normal"
+              }
+            ]
+          },
+          {
+            "measure": 1,
+            "staff": 0,
+            "voice": 1,
+            "id": "rtrk_000001-1-0-1-5",
+            "kind": "rest",
+            "tick": 2160,
+            "durationTicks": 240,
+            "value": "sixteenth",
+            "dots": 0,
+            "tuplet": null,
+            "beam": null,
+            "stem": "none",
+            "notes": []
+          },
+          {
+            "measure": 1,
+            "staff": 0,
+            "voice": 1,
+            "id": "rtrk_000001-1-0-1-6",
+            "kind": "rest",
+            "tick": 2400,
+            "durationTicks": 480,
+            "value": "eighth",
+            "dots": 0,
+            "tuplet": null,
+            "beam": null,
+            "stem": "none",
+            "notes": []
+          },
+          {
+            "measure": 1,
+            "staff": 0,
+            "voice": 1,
+            "id": "n4",
+            "kind": "note",
+            "tick": 2880,
+            "durationTicks": 240,
+            "value": "sixteenth",
+            "dots": 0,
+            "tuplet": null,
+            "beam": null,
+            "stem": "up",
+            "notes": [
+              {
+                "id": "n4",
+                "noteId": 4,
+                "pitch": 65,
+                "written": {
+                  "step": "f",
+                  "alter": 0,
+                  "octave": 4
+                },
+                "staffPosition": 1,
+                "accidental": null,
+                "tieStart": false,
+                "tieStop": false,
+                "notehead": "normal"
+              }
+            ]
+          },
+          {
+            "measure": 1,
+            "staff": 0,
+            "voice": 1,
+            "id": "rtrk_000001-1-0-1-7",
+            "kind": "rest",
+            "tick": 3120,
+            "durationTicks": 240,
+            "value": "sixteenth",
+            "dots": 0,
+            "tuplet": null,
+            "beam": null,
+            "stem": "none",
+            "notes": []
+          },
+          {
+            "measure": 1,
+            "staff": 0,
+            "voice": 1,
+            "id": "rtrk_000001-1-0-1-8",
+            "kind": "rest",
+            "tick": 3360,
+            "durationTicks": 480,
+            "value": "eighth",
+            "dots": 0,
+            "tuplet": null,
+            "beam": null,
+            "stem": "none",
+            "notes": []
+          }
+        ]
+      }
+    },
+    {
+      "name": "off-grid",
+      "description": "Eighths and a half note slightly off the 1/16 grid.",
+      "staffStyleId": "factory.treble",
+      "part": false,
+      "signatures": [
+        {
+          "tick": 0,
+          "numerator": 4,
+          "denominator": 4
+        }
+      ],
+      "keys": [
+        {
+          "tick": 0,
+          "tonic": 0,
+          "mode": "major"
+        }
+      ],
+      "notation": {
+        "displayQuantizeTicks": 0,
+        "tripletQuantizeTicks": 0,
+        "interpretation": true,
+        "noOverlap": true,
+        "syncopation": false,
+        "maxDots": 1
+      },
+      "regionLengthTicks": 30720,
+      "notes": [
+        {
+          "id": 1,
+          "pitch": 60,
+          "startTick": 15,
+          "lengthTicks": 450
+        },
+        {
+          "id": 2,
+          "pitch": 62,
+          "startTick": 470,
+          "lengthTicks": 500
+        },
+        {
+          "id": 3,
+          "pitch": 64,
+          "startTick": 975,
+          "lengthTicks": 440
+        },
+        {
+          "id": 4,
+          "pitch": 65,
+          "startTick": 1430,
+          "lengthTicks": 470
+        },
+        {
+          "id": 5,
+          "pitch": 67,
+          "startTick": 1910,
+          "lengthTicks": 1900
+        }
+      ],
+      "expected": {
+        "transposing": false,
+        "transpose": 0,
+        "measures": [
+          {
+            "number": 1,
+            "startTick": 0,
+            "lengthTicks": 3840,
+            "time": {
+              "numerator": 4,
+              "denominator": 4
+            },
+            "key": {
+              "fifths": 0,
+              "mode": "major"
+            },
+            "barline": "final"
+          }
+        ],
+        "events": [
+          {
+            "measure": 1,
+            "staff": 0,
+            "voice": 1,
+            "id": "n1",
+            "kind": "note",
+            "tick": 0,
+            "durationTicks": 480,
+            "value": "eighth",
+            "dots": 0,
+            "tuplet": null,
+            "beam": 1,
+            "stem": "up",
+            "notes": [
+              {
+                "id": "n1",
+                "noteId": 1,
+                "pitch": 60,
+                "written": {
+                  "step": "c",
+                  "alter": 0,
+                  "octave": 4
+                },
+                "staffPosition": -2,
+                "accidental": null,
+                "tieStart": false,
+                "tieStop": false,
+                "notehead": "normal"
+              }
+            ]
+          },
+          {
+            "measure": 1,
+            "staff": 0,
+            "voice": 1,
+            "id": "n2",
+            "kind": "note",
+            "tick": 480,
+            "durationTicks": 480,
+            "value": "eighth",
+            "dots": 0,
+            "tuplet": null,
+            "beam": 1,
+            "stem": "up",
+            "notes": [
+              {
+                "id": "n2",
+                "noteId": 2,
+                "pitch": 62,
+                "written": {
+                  "step": "d",
+                  "alter": 0,
+                  "octave": 4
+                },
+                "staffPosition": -1,
+                "accidental": null,
+                "tieStart": false,
+                "tieStop": false,
+                "notehead": "normal"
+              }
+            ]
+          },
+          {
+            "measure": 1,
+            "staff": 0,
+            "voice": 1,
+            "id": "n3",
+            "kind": "note",
+            "tick": 960,
+            "durationTicks": 480,
+            "value": "eighth",
+            "dots": 0,
+            "tuplet": null,
+            "beam": 1,
+            "stem": "up",
+            "notes": [
+              {
+                "id": "n3",
+                "noteId": 3,
+                "pitch": 64,
+                "written": {
+                  "step": "e",
+                  "alter": 0,
+                  "octave": 4
+                },
+                "staffPosition": 0,
+                "accidental": null,
+                "tieStart": false,
+                "tieStop": false,
+                "notehead": "normal"
+              }
+            ]
+          },
+          {
+            "measure": 1,
+            "staff": 0,
+            "voice": 1,
+            "id": "n4",
+            "kind": "note",
+            "tick": 1440,
+            "durationTicks": 480,
+            "value": "eighth",
+            "dots": 0,
+            "tuplet": null,
+            "beam": 1,
+            "stem": "up",
+            "notes": [
+              {
+                "id": "n4",
+                "noteId": 4,
+                "pitch": 65,
+                "written": {
+                  "step": "f",
+                  "alter": 0,
+                  "octave": 4
+                },
+                "staffPosition": 1,
+                "accidental": null,
+                "tieStart": false,
+                "tieStop": false,
+                "notehead": "normal"
+              }
+            ]
+          },
+          {
+            "measure": 1,
+            "staff": 0,
+            "voice": 1,
+            "id": "n5",
+            "kind": "note",
+            "tick": 1920,
+            "durationTicks": 1920,
+            "value": "half",
+            "dots": 0,
+            "tuplet": null,
+            "beam": null,
+            "stem": "up",
+            "notes": [
+              {
+                "id": "n5",
+                "noteId": 5,
+                "pitch": 67,
+                "written": {
+                  "step": "g",
+                  "alter": 0,
+                  "octave": 4
+                },
+                "staffPosition": 2,
+                "accidental": null,
+                "tieStart": false,
+                "tieStop": false,
+                "notehead": "normal"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "triplets",
+      "description": "Eighth triplets (one group) and sixteenth triplets (two groups).",
+      "staffStyleId": "factory.treble",
+      "part": false,
+      "signatures": [
+        {
+          "tick": 0,
+          "numerator": 4,
+          "denominator": 4
+        }
+      ],
+      "keys": [
+        {
+          "tick": 0,
+          "tonic": 0,
+          "mode": "major"
+        }
+      ],
+      "notation": {
+        "displayQuantizeTicks": 0,
+        "tripletQuantizeTicks": 0,
+        "interpretation": true,
+        "noOverlap": true,
+        "syncopation": false,
+        "maxDots": 1
+      },
+      "regionLengthTicks": 30720,
+      "notes": [
+        {
+          "id": 1,
+          "pitch": 60,
+          "startTick": 0,
+          "lengthTicks": 320
+        },
+        {
+          "id": 2,
+          "pitch": 62,
+          "startTick": 320,
+          "lengthTicks": 320
+        },
+        {
+          "id": 3,
+          "pitch": 64,
+          "startTick": 640,
+          "lengthTicks": 320
+        },
+        {
+          "id": 4,
+          "pitch": 65,
+          "startTick": 960,
+          "lengthTicks": 160
+        },
+        {
+          "id": 5,
+          "pitch": 67,
+          "startTick": 1120,
+          "lengthTicks": 160
+        },
+        {
+          "id": 6,
+          "pitch": 69,
+          "startTick": 1280,
+          "lengthTicks": 160
+        },
+        {
+          "id": 7,
+          "pitch": 71,
+          "startTick": 1440,
+          "lengthTicks": 160
+        },
+        {
+          "id": 8,
+          "pitch": 72,
+          "startTick": 1600,
+          "lengthTicks": 160
+        },
+        {
+          "id": 9,
+          "pitch": 74,
+          "startTick": 1760,
+          "lengthTicks": 160
+        }
+      ],
+      "expected": {
+        "transposing": false,
+        "transpose": 0,
+        "measures": [
+          {
+            "number": 1,
+            "startTick": 0,
+            "lengthTicks": 3840,
+            "time": {
+              "numerator": 4,
+              "denominator": 4
+            },
+            "key": {
+              "fifths": 0,
+              "mode": "major"
+            },
+            "barline": "final"
+          }
+        ],
+        "events": [
+          {
+            "measure": 1,
+            "staff": 0,
+            "voice": 1,
+            "id": "n1",
+            "kind": "note",
+            "tick": 0,
+            "durationTicks": 320,
+            "value": "eighth",
+            "dots": 0,
+            "tuplet": {
+              "group": 1,
+              "actual": 3,
+              "normal": 2
+            },
+            "beam": 1,
+            "stem": "up",
+            "notes": [
+              {
+                "id": "n1",
+                "noteId": 1,
+                "pitch": 60,
+                "written": {
+                  "step": "c",
+                  "alter": 0,
+                  "octave": 4
+                },
+                "staffPosition": -2,
+                "accidental": null,
+                "tieStart": false,
+                "tieStop": false,
+                "notehead": "normal"
+              }
+            ]
+          },
+          {
+            "measure": 1,
+            "staff": 0,
+            "voice": 1,
+            "id": "n2",
+            "kind": "note",
+            "tick": 320,
+            "durationTicks": 320,
+            "value": "eighth",
+            "dots": 0,
+            "tuplet": {
+              "group": 1,
+              "actual": 3,
+              "normal": 2
+            },
+            "beam": 1,
+            "stem": "up",
+            "notes": [
+              {
+                "id": "n2",
+                "noteId": 2,
+                "pitch": 62,
+                "written": {
+                  "step": "d",
+                  "alter": 0,
+                  "octave": 4
+                },
+                "staffPosition": -1,
+                "accidental": null,
+                "tieStart": false,
+                "tieStop": false,
+                "notehead": "normal"
+              }
+            ]
+          },
+          {
+            "measure": 1,
+            "staff": 0,
+            "voice": 1,
+            "id": "n3",
+            "kind": "note",
+            "tick": 640,
+            "durationTicks": 320,
+            "value": "eighth",
+            "dots": 0,
+            "tuplet": {
+              "group": 1,
+              "actual": 3,
+              "normal": 2
+            },
+            "beam": 1,
+            "stem": "up",
+            "notes": [
+              {
+                "id": "n3",
+                "noteId": 3,
+                "pitch": 64,
+                "written": {
+                  "step": "e",
+                  "alter": 0,
+                  "octave": 4
+                },
+                "staffPosition": 0,
+                "accidental": null,
+                "tieStart": false,
+                "tieStop": false,
+                "notehead": "normal"
+              }
+            ]
+          },
+          {
+            "measure": 1,
+            "staff": 0,
+            "voice": 1,
+            "id": "n4",
+            "kind": "note",
+            "tick": 960,
+            "durationTicks": 160,
+            "value": "sixteenth",
+            "dots": 0,
+            "tuplet": {
+              "group": 2,
+              "actual": 3,
+              "normal": 2
+            },
+            "beam": 2,
+            "stem": "up",
+            "notes": [
+              {
+                "id": "n4",
+                "noteId": 4,
+                "pitch": 65,
+                "written": {
+                  "step": "f",
+                  "alter": 0,
+                  "octave": 4
+                },
+                "staffPosition": 1,
+                "accidental": null,
+                "tieStart": false,
+                "tieStop": false,
+                "notehead": "normal"
+              }
+            ]
+          },
+          {
+            "measure": 1,
+            "staff": 0,
+            "voice": 1,
+            "id": "n5",
+            "kind": "note",
+            "tick": 1120,
+            "durationTicks": 160,
+            "value": "sixteenth",
+            "dots": 0,
+            "tuplet": {
+              "group": 2,
+              "actual": 3,
+              "normal": 2
+            },
+            "beam": 2,
+            "stem": "up",
+            "notes": [
+              {
+                "id": "n5",
+                "noteId": 5,
+                "pitch": 67,
+                "written": {
+                  "step": "g",
+                  "alter": 0,
+                  "octave": 4
+                },
+                "staffPosition": 2,
+                "accidental": null,
+                "tieStart": false,
+                "tieStop": false,
+                "notehead": "normal"
+              }
+            ]
+          },
+          {
+            "measure": 1,
+            "staff": 0,
+            "voice": 1,
+            "id": "n6",
+            "kind": "note",
+            "tick": 1280,
+            "durationTicks": 160,
+            "value": "sixteenth",
+            "dots": 0,
+            "tuplet": {
+              "group": 2,
+              "actual": 3,
+              "normal": 2
+            },
+            "beam": 2,
+            "stem": "up",
+            "notes": [
+              {
+                "id": "n6",
+                "noteId": 6,
+                "pitch": 69,
+                "written": {
+                  "step": "a",
+                  "alter": 0,
+                  "octave": 4
+                },
+                "staffPosition": 3,
+                "accidental": null,
+                "tieStart": false,
+                "tieStop": false,
+                "notehead": "normal"
+              }
+            ]
+          },
+          {
+            "measure": 1,
+            "staff": 0,
+            "voice": 1,
+            "id": "n7",
+            "kind": "note",
+            "tick": 1440,
+            "durationTicks": 160,
+            "value": "sixteenth",
+            "dots": 0,
+            "tuplet": {
+              "group": 3,
+              "actual": 3,
+              "normal": 2
+            },
+            "beam": 3,
+            "stem": "down",
+            "notes": [
+              {
+                "id": "n7",
+                "noteId": 7,
+                "pitch": 71,
+                "written": {
+                  "step": "b",
+                  "alter": 0,
+                  "octave": 4
+                },
+                "staffPosition": 4,
+                "accidental": null,
+                "tieStart": false,
+                "tieStop": false,
+                "notehead": "normal"
+              }
+            ]
+          },
+          {
+            "measure": 1,
+            "staff": 0,
+            "voice": 1,
+            "id": "n8",
+            "kind": "note",
+            "tick": 1600,
+            "durationTicks": 160,
+            "value": "sixteenth",
+            "dots": 0,
+            "tuplet": {
+              "group": 3,
+              "actual": 3,
+              "normal": 2
+            },
+            "beam": 3,
+            "stem": "down",
+            "notes": [
+              {
+                "id": "n8",
+                "noteId": 8,
+                "pitch": 72,
+                "written": {
+                  "step": "c",
+                  "alter": 0,
+                  "octave": 5
+                },
+                "staffPosition": 5,
+                "accidental": null,
+                "tieStart": false,
+                "tieStop": false,
+                "notehead": "normal"
+              }
+            ]
+          },
+          {
+            "measure": 1,
+            "staff": 0,
+            "voice": 1,
+            "id": "n9",
+            "kind": "note",
+            "tick": 1760,
+            "durationTicks": 160,
+            "value": "sixteenth",
+            "dots": 0,
+            "tuplet": {
+              "group": 3,
+              "actual": 3,
+              "normal": 2
+            },
+            "beam": 3,
+            "stem": "down",
+            "notes": [
+              {
+                "id": "n9",
+                "noteId": 9,
+                "pitch": 74,
+                "written": {
+                  "step": "d",
+                  "alter": 0,
+                  "octave": 5
+                },
+                "staffPosition": 6,
+                "accidental": null,
+                "tieStart": false,
+                "tieStop": false,
+                "notehead": "normal"
+              }
+            ]
+          },
+          {
+            "measure": 1,
+            "staff": 0,
+            "voice": 1,
+            "id": "rtrk_000001-1-0-1-1",
+            "kind": "rest",
+            "tick": 1920,
+            "durationTicks": 1920,
+            "value": "half",
+            "dots": 0,
+            "tuplet": null,
+            "beam": null,
+            "stem": "none",
+            "notes": []
+          }
+        ]
+      }
+    },
+    {
+      "name": "triplet-quarter-eighth",
+      "description": "A triplet quarter and eighth under one bracket.",
+      "staffStyleId": "factory.treble",
+      "part": false,
+      "signatures": [
+        {
+          "tick": 0,
+          "numerator": 4,
+          "denominator": 4
+        }
+      ],
+      "keys": [
+        {
+          "tick": 0,
+          "tonic": 0,
+          "mode": "major"
+        }
+      ],
+      "notation": {
+        "displayQuantizeTicks": 0,
+        "tripletQuantizeTicks": 0,
+        "interpretation": true,
+        "noOverlap": true,
+        "syncopation": false,
+        "maxDots": 1
+      },
+      "regionLengthTicks": 30720,
+      "notes": [
+        {
+          "id": 1,
+          "pitch": 60,
+          "startTick": 0,
+          "lengthTicks": 640
+        },
+        {
+          "id": 2,
+          "pitch": 62,
+          "startTick": 640,
+          "lengthTicks": 320
+        }
+      ],
+      "expected": {
+        "transposing": false,
+        "transpose": 0,
+        "measures": [
+          {
+            "number": 1,
+            "startTick": 0,
+            "lengthTicks": 3840,
+            "time": {
+              "numerator": 4,
+              "denominator": 4
+            },
+            "key": {
+              "fifths": 0,
+              "mode": "major"
+            },
+            "barline": "final"
+          }
+        ],
+        "events": [
+          {
+            "measure": 1,
+            "staff": 0,
+            "voice": 1,
+            "id": "n1",
+            "kind": "note",
+            "tick": 0,
+            "durationTicks": 640,
+            "value": "quarter",
+            "dots": 0,
+            "tuplet": {
+              "group": 1,
+              "actual": 3,
+              "normal": 2
+            },
+            "beam": null,
+            "stem": "up",
+            "notes": [
+              {
+                "id": "n1",
+                "noteId": 1,
+                "pitch": 60,
+                "written": {
+                  "step": "c",
+                  "alter": 0,
+                  "octave": 4
+                },
+                "staffPosition": -2,
+                "accidental": null,
+                "tieStart": false,
+                "tieStop": false,
+                "notehead": "normal"
+              }
+            ]
+          },
+          {
+            "measure": 1,
+            "staff": 0,
+            "voice": 1,
+            "id": "n2",
+            "kind": "note",
+            "tick": 640,
+            "durationTicks": 320,
+            "value": "eighth",
+            "dots": 0,
+            "tuplet": {
+              "group": 1,
+              "actual": 3,
+              "normal": 2
+            },
+            "beam": null,
+            "stem": "up",
+            "notes": [
+              {
+                "id": "n2",
+                "noteId": 2,
+                "pitch": 62,
+                "written": {
+                  "step": "d",
+                  "alter": 0,
+                  "octave": 4
+                },
+                "staffPosition": -1,
+                "accidental": null,
+                "tieStart": false,
+                "tieStop": false,
+                "notehead": "normal"
+              }
+            ]
+          },
+          {
+            "measure": 1,
+            "staff": 0,
+            "voice": 1,
+            "id": "rtrk_000001-1-0-1-1",
+            "kind": "rest",
+            "tick": 960,
+            "durationTicks": 960,
+            "value": "quarter",
+            "dots": 0,
+            "tuplet": null,
+            "beam": null,
+            "stem": "none",
+            "notes": []
+          },
+          {
+            "measure": 1,
+            "staff": 0,
+            "voice": 1,
+            "id": "rtrk_000001-1-0-1-2",
+            "kind": "rest",
+            "tick": 1920,
+            "durationTicks": 1920,
+            "value": "half",
+            "dots": 0,
+            "tuplet": null,
+            "beam": null,
+            "stem": "none",
+            "notes": []
+          }
+        ]
+      }
+    },
+    {
+      "name": "two-voices",
+      "description": "A held half note over two quarters: voice 1 up, voice 2 down.",
+      "staffStyleId": "factory.treble",
+      "part": false,
+      "signatures": [
+        {
+          "tick": 0,
+          "numerator": 4,
+          "denominator": 4
+        }
+      ],
+      "keys": [
+        {
+          "tick": 0,
+          "tonic": 0,
+          "mode": "major"
+        }
+      ],
+      "notation": {
+        "displayQuantizeTicks": 0,
+        "tripletQuantizeTicks": 0,
+        "interpretation": true,
+        "noOverlap": true,
+        "syncopation": false,
+        "maxDots": 1
+      },
+      "regionLengthTicks": 30720,
+      "notes": [
+        {
+          "id": 1,
+          "pitch": 76,
+          "startTick": 0,
+          "lengthTicks": 1920
+        },
+        {
+          "id": 2,
+          "pitch": 72,
+          "startTick": 0,
+          "lengthTicks": 960
+        },
+        {
+          "id": 3,
+          "pitch": 74,
+          "startTick": 960,
+          "lengthTicks": 960
+        }
+      ],
+      "expected": {
+        "transposing": false,
+        "transpose": 0,
+        "measures": [
+          {
+            "number": 1,
+            "startTick": 0,
+            "lengthTicks": 3840,
+            "time": {
+              "numerator": 4,
+              "denominator": 4
+            },
+            "key": {
+              "fifths": 0,
+              "mode": "major"
+            },
+            "barline": "final"
+          }
+        ],
+        "events": [
+          {
+            "measure": 1,
+            "staff": 0,
+            "voice": 1,
+            "id": "n1",
+            "kind": "note",
+            "tick": 0,
+            "durationTicks": 1920,
+            "value": "half",
+            "dots": 0,
+            "tuplet": null,
+            "beam": null,
+            "stem": "up",
+            "notes": [
+              {
+                "id": "n1",
+                "noteId": 1,
+                "pitch": 76,
+                "written": {
+                  "step": "e",
+                  "alter": 0,
+                  "octave": 5
+                },
+                "staffPosition": 7,
+                "accidental": null,
+                "tieStart": false,
+                "tieStop": false,
+                "notehead": "normal"
+              }
+            ]
+          },
+          {
+            "measure": 1,
+            "staff": 0,
+            "voice": 1,
+            "id": "rtrk_000001-1-0-1-1",
+            "kind": "rest",
+            "tick": 1920,
+            "durationTicks": 1920,
+            "value": "half",
+            "dots": 0,
+            "tuplet": null,
+            "beam": null,
+            "stem": "none",
+            "notes": []
+          },
+          {
+            "measure": 1,
+            "staff": 0,
+            "voice": 2,
+            "id": "n2",
+            "kind": "note",
+            "tick": 0,
+            "durationTicks": 960,
+            "value": "quarter",
+            "dots": 0,
+            "tuplet": null,
+            "beam": null,
+            "stem": "down",
+            "notes": [
+              {
+                "id": "n2",
+                "noteId": 2,
+                "pitch": 72,
+                "written": {
+                  "step": "c",
+                  "alter": 0,
+                  "octave": 5
+                },
+                "staffPosition": 5,
+                "accidental": null,
+                "tieStart": false,
+                "tieStop": false,
+                "notehead": "normal"
+              }
+            ]
+          },
+          {
+            "measure": 1,
+            "staff": 0,
+            "voice": 2,
+            "id": "n3",
+            "kind": "note",
+            "tick": 960,
+            "durationTicks": 960,
+            "value": "quarter",
+            "dots": 0,
+            "tuplet": null,
+            "beam": null,
+            "stem": "down",
+            "notes": [
+              {
+                "id": "n3",
+                "noteId": 3,
+                "pitch": 74,
+                "written": {
+                  "step": "d",
+                  "alter": 0,
+                  "octave": 5
+                },
+                "staffPosition": 6,
+                "accidental": null,
+                "tieStart": false,
+                "tieStop": false,
+                "notehead": "normal"
+              }
+            ]
+          },
+          {
+            "measure": 1,
+            "staff": 0,
+            "voice": 2,
+            "id": "rtrk_000001-1-0-2-1",
+            "kind": "rest",
+            "tick": 1920,
+            "durationTicks": 1920,
+            "value": "half",
+            "dots": 0,
+            "tuplet": null,
+            "beam": null,
+            "stem": "none",
+            "notes": []
+          }
+        ]
+      }
+    },
+    {
+      "name": "piano-split",
+      "description": "Chords on both staves of the piano (split at C3 = 60).",
+      "staffStyleId": "factory.piano",
+      "part": false,
+      "signatures": [
+        {
+          "tick": 0,
+          "numerator": 4,
+          "denominator": 4
+        }
+      ],
+      "keys": [
+        {
+          "tick": 0,
+          "tonic": 0,
+          "mode": "major"
+        }
+      ],
+      "notation": {
+        "displayQuantizeTicks": 0,
+        "tripletQuantizeTicks": 0,
+        "interpretation": true,
+        "noOverlap": true,
+        "syncopation": false,
+        "maxDots": 1
+      },
+      "regionLengthTicks": 30720,
+      "notes": [
+        {
+          "id": 1,
+          "pitch": 60,
+          "startTick": 0,
+          "lengthTicks": 1920
+        },
+        {
+          "id": 2,
+          "pitch": 64,
+          "startTick": 0,
+          "lengthTicks": 1920
+        },
+        {
+          "id": 3,
+          "pitch": 59,
+          "startTick": 0,
+          "lengthTicks": 1920
+        },
+        {
+          "id": 4,
+          "pitch": 55,
+          "startTick": 0,
+          "lengthTicks": 1920
+        },
+        {
+          "id": 5,
+          "pitch": 48,
+          "startTick": 1920,
+          "lengthTicks": 1920
+        }
+      ],
+      "expected": {
+        "transposing": false,
+        "transpose": 0,
+        "measures": [
+          {
+            "number": 1,
+            "startTick": 0,
+            "lengthTicks": 3840,
+            "time": {
+              "numerator": 4,
+              "denominator": 4
+            },
+            "key": {
+              "fifths": 0,
+              "mode": "major"
+            },
+            "barline": "final"
+          }
+        ],
+        "events": [
+          {
+            "measure": 1,
+            "staff": 0,
+            "voice": 1,
+            "id": "c1",
+            "kind": "chord",
+            "tick": 0,
+            "durationTicks": 1920,
+            "value": "half",
+            "dots": 0,
+            "tuplet": null,
+            "beam": null,
+            "stem": "up",
+            "notes": [
+              {
+                "id": "n1",
+                "noteId": 1,
+                "pitch": 60,
+                "written": {
+                  "step": "c",
+                  "alter": 0,
+                  "octave": 4
+                },
+                "staffPosition": -2,
+                "accidental": null,
+                "tieStart": false,
+                "tieStop": false,
+                "notehead": "normal"
+              },
+              {
+                "id": "n2",
+                "noteId": 2,
+                "pitch": 64,
+                "written": {
+                  "step": "e",
+                  "alter": 0,
+                  "octave": 4
+                },
+                "staffPosition": 0,
+                "accidental": null,
+                "tieStart": false,
+                "tieStop": false,
+                "notehead": "normal"
+              }
+            ]
+          },
+          {
+            "measure": 1,
+            "staff": 0,
+            "voice": 1,
+            "id": "rtrk_000001-1-0-1-1",
+            "kind": "rest",
+            "tick": 1920,
+            "durationTicks": 1920,
+            "value": "half",
+            "dots": 0,
+            "tuplet": null,
+            "beam": null,
+            "stem": "none",
+            "notes": []
+          },
+          {
+            "measure": 1,
+            "staff": 1,
+            "voice": 1,
+            "id": "c3",
+            "kind": "chord",
+            "tick": 0,
+            "durationTicks": 1920,
+            "value": "half",
+            "dots": 0,
+            "tuplet": null,
+            "beam": null,
+            "stem": "down",
+            "notes": [
+              {
+                "id": "n4",
+                "noteId": 4,
+                "pitch": 55,
+                "written": {
+                  "step": "g",
+                  "alter": 0,
+                  "octave": 3
+                },
+                "staffPosition": 7,
+                "accidental": null,
+                "tieStart": false,
+                "tieStop": false,
+                "notehead": "normal"
+              },
+              {
+                "id": "n3",
+                "noteId": 3,
+                "pitch": 59,
+                "written": {
+                  "step": "b",
+                  "alter": 0,
+                  "octave": 3
+                },
+                "staffPosition": 9,
+                "accidental": null,
+                "tieStart": false,
+                "tieStop": false,
+                "notehead": "normal"
+              }
+            ]
+          },
+          {
+            "measure": 1,
+            "staff": 1,
+            "voice": 1,
+            "id": "n5",
+            "kind": "note",
+            "tick": 1920,
+            "durationTicks": 1920,
+            "value": "half",
+            "dots": 0,
+            "tuplet": null,
+            "beam": null,
+            "stem": "up",
+            "notes": [
+              {
+                "id": "n5",
+                "noteId": 5,
+                "pitch": 48,
+                "written": {
+                  "step": "c",
+                  "alter": 0,
+                  "octave": 3
+                },
+                "staffPosition": 3,
+                "accidental": null,
+                "tieStart": false,
+                "tieStop": false,
+                "notehead": "normal"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "clarinet-part",
+      "description": "A B♭ clarinet part: written a major second up, in D major.",
+      "staffStyleId": "factory.clarinetBb",
+      "part": true,
+      "signatures": [
+        {
+          "tick": 0,
+          "numerator": 4,
+          "denominator": 4
+        }
+      ],
+      "keys": [
+        {
+          "tick": 0,
+          "tonic": 0,
+          "mode": "major"
+        }
+      ],
+      "notation": {
+        "displayQuantizeTicks": 0,
+        "tripletQuantizeTicks": 0,
+        "interpretation": true,
+        "noOverlap": true,
+        "syncopation": false,
+        "maxDots": 1
+      },
+      "regionLengthTicks": 30720,
+      "notes": [
+        {
+          "id": 1,
+          "pitch": 60,
+          "startTick": 0,
+          "lengthTicks": 960
+        },
+        {
+          "id": 2,
+          "pitch": 66,
+          "startTick": 960,
+          "lengthTicks": 960
+        },
+        {
+          "id": 3,
+          "pitch": 70,
+          "startTick": 1920,
+          "lengthTicks": 1920
+        }
+      ],
+      "expected": {
+        "transposing": true,
+        "transpose": 2,
+        "measures": [
+          {
+            "number": 1,
+            "startTick": 0,
+            "lengthTicks": 3840,
+            "time": {
+              "numerator": 4,
+              "denominator": 4
+            },
+            "key": {
+              "fifths": 0,
+              "mode": "major"
+            },
+            "barline": "final"
+          }
+        ],
+        "events": [
+          {
+            "measure": 1,
+            "staff": 0,
+            "voice": 1,
+            "id": "n1",
+            "kind": "note",
+            "tick": 0,
+            "durationTicks": 960,
+            "value": "quarter",
+            "dots": 0,
+            "tuplet": null,
+            "beam": null,
+            "stem": "up",
+            "notes": [
+              {
+                "id": "n1",
+                "noteId": 1,
+                "pitch": 60,
+                "written": {
+                  "step": "d",
+                  "alter": 0,
+                  "octave": 4
+                },
+                "staffPosition": -1,
+                "accidental": null,
+                "tieStart": false,
+                "tieStop": false,
+                "notehead": "normal"
+              }
+            ]
+          },
+          {
+            "measure": 1,
+            "staff": 0,
+            "voice": 1,
+            "id": "n2",
+            "kind": "note",
+            "tick": 960,
+            "durationTicks": 960,
+            "value": "quarter",
+            "dots": 0,
+            "tuplet": null,
+            "beam": null,
+            "stem": "up",
+            "notes": [
+              {
+                "id": "n2",
+                "noteId": 2,
+                "pitch": 66,
+                "written": {
+                  "step": "g",
+                  "alter": 1,
+                  "octave": 4
+                },
+                "staffPosition": 2,
+                "accidental": "sharp",
+                "tieStart": false,
+                "tieStop": false,
+                "notehead": "normal"
+              }
+            ]
+          },
+          {
+            "measure": 1,
+            "staff": 0,
+            "voice": 1,
+            "id": "n3",
+            "kind": "note",
+            "tick": 1920,
+            "durationTicks": 1920,
+            "value": "half",
+            "dots": 0,
+            "tuplet": null,
+            "beam": null,
+            "stem": "down",
+            "notes": [
+              {
+                "id": "n3",
+                "noteId": 3,
+                "pitch": 70,
+                "written": {
+                  "step": "c",
+                  "alter": 0,
+                  "octave": 5
+                },
+                "staffPosition": 5,
+                "accidental": "natural",
+                "tieStart": false,
+                "tieStop": false,
+                "notehead": "normal"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "key-change",
+      "description": "G major then F major: accidentals carried in the bar and cancelled.",
+      "staffStyleId": "factory.treble",
+      "part": false,
+      "signatures": [
+        {
+          "tick": 0,
+          "numerator": 4,
+          "denominator": 4
+        }
+      ],
+      "keys": [
+        {
+          "tick": 0,
+          "tonic": 7,
+          "mode": "major"
+        },
+        {
+          "tick": 3840,
+          "tonic": 5,
+          "mode": "major"
+        }
+      ],
+      "notation": {
+        "displayQuantizeTicks": 0,
+        "tripletQuantizeTicks": 0,
+        "interpretation": true,
+        "noOverlap": true,
+        "syncopation": false,
+        "maxDots": 1
+      },
+      "regionLengthTicks": 30720,
+      "notes": [
+        {
+          "id": 1,
+          "pitch": 66,
+          "startTick": 0,
+          "lengthTicks": 960
+        },
+        {
+          "id": 2,
+          "pitch": 65,
+          "startTick": 960,
+          "lengthTicks": 960
+        },
+        {
+          "id": 3,
+          "pitch": 65,
+          "startTick": 1920,
+          "lengthTicks": 960
+        },
+        {
+          "id": 4,
+          "pitch": 66,
+          "startTick": 2880,
+          "lengthTicks": 960
+        },
+        {
+          "id": 5,
+          "pitch": 70,
+          "startTick": 3840,
+          "lengthTicks": 960
+        },
+        {
+          "id": 6,
+          "pitch": 71,
+          "startTick": 4800,
+          "lengthTicks": 960
+        },
+        {
+          "id": 7,
+          "pitch": 70,
+          "startTick": 5760,
+          "lengthTicks": 960
+        },
+        {
+          "id": 8,
+          "pitch": 61,
+          "startTick": 6720,
+          "lengthTicks": 960
+        }
+      ],
+      "expected": {
+        "transposing": false,
+        "transpose": 0,
+        "measures": [
+          {
+            "number": 1,
+            "startTick": 0,
+            "lengthTicks": 3840,
+            "time": {
+              "numerator": 4,
+              "denominator": 4
+            },
+            "key": {
+              "fifths": 1,
+              "mode": "major"
+            },
+            "barline": "double"
+          },
+          {
+            "number": 2,
+            "startTick": 3840,
+            "lengthTicks": 3840,
+            "time": {
+              "numerator": 4,
+              "denominator": 4
+            },
+            "key": {
+              "fifths": -1,
+              "mode": "major"
+            },
+            "barline": "final"
+          }
+        ],
+        "events": [
+          {
+            "measure": 1,
+            "staff": 0,
+            "voice": 1,
+            "id": "n1",
+            "kind": "note",
+            "tick": 0,
+            "durationTicks": 960,
+            "value": "quarter",
+            "dots": 0,
+            "tuplet": null,
+            "beam": null,
+            "stem": "up",
+            "notes": [
+              {
+                "id": "n1",
+                "noteId": 1,
+                "pitch": 66,
+                "written": {
+                  "step": "f",
+                  "alter": 1,
+                  "octave": 4
+                },
+                "staffPosition": 1,
+                "accidental": null,
+                "tieStart": false,
+                "tieStop": false,
+                "notehead": "normal"
+              }
+            ]
+          },
+          {
+            "measure": 1,
+            "staff": 0,
+            "voice": 1,
+            "id": "n2",
+            "kind": "note",
+            "tick": 960,
+            "durationTicks": 960,
+            "value": "quarter",
+            "dots": 0,
+            "tuplet": null,
+            "beam": null,
+            "stem": "up",
+            "notes": [
+              {
+                "id": "n2",
+                "noteId": 2,
+                "pitch": 65,
+                "written": {
+                  "step": "f",
+                  "alter": 0,
+                  "octave": 4
+                },
+                "staffPosition": 1,
+                "accidental": "natural",
+                "tieStart": false,
+                "tieStop": false,
+                "notehead": "normal"
+              }
+            ]
+          },
+          {
+            "measure": 1,
+            "staff": 0,
+            "voice": 1,
+            "id": "n3",
+            "kind": "note",
+            "tick": 1920,
+            "durationTicks": 960,
+            "value": "quarter",
+            "dots": 0,
+            "tuplet": null,
+            "beam": null,
+            "stem": "up",
+            "notes": [
+              {
+                "id": "n3",
+                "noteId": 3,
+                "pitch": 65,
+                "written": {
+                  "step": "f",
+                  "alter": 0,
+                  "octave": 4
+                },
+                "staffPosition": 1,
+                "accidental": null,
+                "tieStart": false,
+                "tieStop": false,
+                "notehead": "normal"
+              }
+            ]
+          },
+          {
+            "measure": 1,
+            "staff": 0,
+            "voice": 1,
+            "id": "n4",
+            "kind": "note",
+            "tick": 2880,
+            "durationTicks": 960,
+            "value": "quarter",
+            "dots": 0,
+            "tuplet": null,
+            "beam": null,
+            "stem": "up",
+            "notes": [
+              {
+                "id": "n4",
+                "noteId": 4,
+                "pitch": 66,
+                "written": {
+                  "step": "f",
+                  "alter": 1,
+                  "octave": 4
+                },
+                "staffPosition": 1,
+                "accidental": "sharp",
+                "tieStart": false,
+                "tieStop": false,
+                "notehead": "normal"
+              }
+            ]
+          },
+          {
+            "measure": 2,
+            "staff": 0,
+            "voice": 1,
+            "id": "n5",
+            "kind": "note",
+            "tick": 3840,
+            "durationTicks": 960,
+            "value": "quarter",
+            "dots": 0,
+            "tuplet": null,
+            "beam": null,
+            "stem": "down",
+            "notes": [
+              {
+                "id": "n5",
+                "noteId": 5,
+                "pitch": 70,
+                "written": {
+                  "step": "b",
+                  "alter": -1,
+                  "octave": 4
+                },
+                "staffPosition": 4,
+                "accidental": null,
+                "tieStart": false,
+                "tieStop": false,
+                "notehead": "normal"
+              }
+            ]
+          },
+          {
+            "measure": 2,
+            "staff": 0,
+            "voice": 1,
+            "id": "n6",
+            "kind": "note",
+            "tick": 4800,
+            "durationTicks": 960,
+            "value": "quarter",
+            "dots": 0,
+            "tuplet": null,
+            "beam": null,
+            "stem": "down",
+            "notes": [
+              {
+                "id": "n6",
+                "noteId": 6,
+                "pitch": 71,
+                "written": {
+                  "step": "b",
+                  "alter": 0,
+                  "octave": 4
+                },
+                "staffPosition": 4,
+                "accidental": "natural",
+                "tieStart": false,
+                "tieStop": false,
+                "notehead": "normal"
+              }
+            ]
+          },
+          {
+            "measure": 2,
+            "staff": 0,
+            "voice": 1,
+            "id": "n7",
+            "kind": "note",
+            "tick": 5760,
+            "durationTicks": 960,
+            "value": "quarter",
+            "dots": 0,
+            "tuplet": null,
+            "beam": null,
+            "stem": "down",
+            "notes": [
+              {
+                "id": "n7",
+                "noteId": 7,
+                "pitch": 70,
+                "written": {
+                  "step": "b",
+                  "alter": -1,
+                  "octave": 4
+                },
+                "staffPosition": 4,
+                "accidental": "flat",
+                "tieStart": false,
+                "tieStop": false,
+                "notehead": "normal"
+              }
+            ]
+          },
+          {
+            "measure": 2,
+            "staff": 0,
+            "voice": 1,
+            "id": "n8",
+            "kind": "note",
+            "tick": 6720,
+            "durationTicks": 960,
+            "value": "quarter",
+            "dots": 0,
+            "tuplet": null,
+            "beam": null,
+            "stem": "up",
+            "notes": [
+              {
+                "id": "n8",
+                "noteId": 8,
+                "pitch": 61,
+                "written": {
+                  "step": "d",
+                  "alter": -1,
+                  "octave": 4
+                },
+                "staffPosition": -1,
+                "accidental": "flat",
+                "tieStart": false,
+                "tieStop": false,
+                "notehead": "normal"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "compound",
+      "description": "6/8: dotted quarter, three beamed eighths; quarter, eighth, dotted quarter; dotted half.",
+      "staffStyleId": "factory.treble",
+      "part": false,
+      "signatures": [
+        {
+          "tick": 0,
+          "numerator": 6,
+          "denominator": 8
+        }
+      ],
+      "keys": [
+        {
+          "tick": 0,
+          "tonic": 0,
+          "mode": "major"
+        }
+      ],
+      "notation": {
+        "displayQuantizeTicks": 0,
+        "tripletQuantizeTicks": 0,
+        "interpretation": true,
+        "noOverlap": true,
+        "syncopation": false,
+        "maxDots": 1
+      },
+      "regionLengthTicks": 30720,
+      "notes": [
+        {
+          "id": 1,
+          "pitch": 60,
+          "startTick": 0,
+          "lengthTicks": 1440
+        },
+        {
+          "id": 2,
+          "pitch": 62,
+          "startTick": 1440,
+          "lengthTicks": 480
+        },
+        {
+          "id": 3,
+          "pitch": 64,
+          "startTick": 1920,
+          "lengthTicks": 480
+        },
+        {
+          "id": 4,
+          "pitch": 65,
+          "startTick": 2400,
+          "lengthTicks": 480
+        },
+        {
+          "id": 5,
+          "pitch": 67,
+          "startTick": 2880,
+          "lengthTicks": 960
+        },
+        {
+          "id": 6,
+          "pitch": 69,
+          "startTick": 3840,
+          "lengthTicks": 480
+        },
+        {
+          "id": 7,
+          "pitch": 71,
+          "startTick": 4320,
+          "lengthTicks": 1440
+        },
+        {
+          "id": 8,
+          "pitch": 72,
+          "startTick": 5760,
+          "lengthTicks": 2880
+        }
+      ],
+      "expected": {
+        "transposing": false,
+        "transpose": 0,
+        "measures": [
+          {
+            "number": 1,
+            "startTick": 0,
+            "lengthTicks": 2880,
+            "time": {
+              "numerator": 6,
+              "denominator": 8
+            },
+            "key": {
+              "fifths": 0,
+              "mode": "major"
+            },
+            "barline": "single"
+          },
+          {
+            "number": 2,
+            "startTick": 2880,
+            "lengthTicks": 2880,
+            "time": {
+              "numerator": 6,
+              "denominator": 8
+            },
+            "key": {
+              "fifths": 0,
+              "mode": "major"
+            },
+            "barline": "single"
+          },
+          {
+            "number": 3,
+            "startTick": 5760,
+            "lengthTicks": 2880,
+            "time": {
+              "numerator": 6,
+              "denominator": 8
+            },
+            "key": {
+              "fifths": 0,
+              "mode": "major"
+            },
+            "barline": "final"
+          }
+        ],
+        "events": [
+          {
+            "measure": 1,
+            "staff": 0,
+            "voice": 1,
+            "id": "n1",
+            "kind": "note",
+            "tick": 0,
+            "durationTicks": 1440,
+            "value": "quarter",
+            "dots": 1,
+            "tuplet": null,
+            "beam": null,
+            "stem": "up",
+            "notes": [
+              {
+                "id": "n1",
+                "noteId": 1,
+                "pitch": 60,
+                "written": {
+                  "step": "c",
+                  "alter": 0,
+                  "octave": 4
+                },
+                "staffPosition": -2,
+                "accidental": null,
+                "tieStart": false,
+                "tieStop": false,
+                "notehead": "normal"
+              }
+            ]
+          },
+          {
+            "measure": 1,
+            "staff": 0,
+            "voice": 1,
+            "id": "n2",
+            "kind": "note",
+            "tick": 1440,
+            "durationTicks": 480,
+            "value": "eighth",
+            "dots": 0,
+            "tuplet": null,
+            "beam": 1,
+            "stem": "up",
+            "notes": [
+              {
+                "id": "n2",
+                "noteId": 2,
+                "pitch": 62,
+                "written": {
+                  "step": "d",
+                  "alter": 0,
+                  "octave": 4
+                },
+                "staffPosition": -1,
+                "accidental": null,
+                "tieStart": false,
+                "tieStop": false,
+                "notehead": "normal"
+              }
+            ]
+          },
+          {
+            "measure": 1,
+            "staff": 0,
+            "voice": 1,
+            "id": "n3",
+            "kind": "note",
+            "tick": 1920,
+            "durationTicks": 480,
+            "value": "eighth",
+            "dots": 0,
+            "tuplet": null,
+            "beam": 1,
+            "stem": "up",
+            "notes": [
+              {
+                "id": "n3",
+                "noteId": 3,
+                "pitch": 64,
+                "written": {
+                  "step": "e",
+                  "alter": 0,
+                  "octave": 4
+                },
+                "staffPosition": 0,
+                "accidental": null,
+                "tieStart": false,
+                "tieStop": false,
+                "notehead": "normal"
+              }
+            ]
+          },
+          {
+            "measure": 1,
+            "staff": 0,
+            "voice": 1,
+            "id": "n4",
+            "kind": "note",
+            "tick": 2400,
+            "durationTicks": 480,
+            "value": "eighth",
+            "dots": 0,
+            "tuplet": null,
+            "beam": 1,
+            "stem": "up",
+            "notes": [
+              {
+                "id": "n4",
+                "noteId": 4,
+                "pitch": 65,
+                "written": {
+                  "step": "f",
+                  "alter": 0,
+                  "octave": 4
+                },
+                "staffPosition": 1,
+                "accidental": null,
+                "tieStart": false,
+                "tieStop": false,
+                "notehead": "normal"
+              }
+            ]
+          },
+          {
+            "measure": 2,
+            "staff": 0,
+            "voice": 1,
+            "id": "n5",
+            "kind": "note",
+            "tick": 2880,
+            "durationTicks": 960,
+            "value": "quarter",
+            "dots": 0,
+            "tuplet": null,
+            "beam": null,
+            "stem": "up",
+            "notes": [
+              {
+                "id": "n5",
+                "noteId": 5,
+                "pitch": 67,
+                "written": {
+                  "step": "g",
+                  "alter": 0,
+                  "octave": 4
+                },
+                "staffPosition": 2,
+                "accidental": null,
+                "tieStart": false,
+                "tieStop": false,
+                "notehead": "normal"
+              }
+            ]
+          },
+          {
+            "measure": 2,
+            "staff": 0,
+            "voice": 1,
+            "id": "n6",
+            "kind": "note",
+            "tick": 3840,
+            "durationTicks": 480,
+            "value": "eighth",
+            "dots": 0,
+            "tuplet": null,
+            "beam": null,
+            "stem": "up",
+            "notes": [
+              {
+                "id": "n6",
+                "noteId": 6,
+                "pitch": 69,
+                "written": {
+                  "step": "a",
+                  "alter": 0,
+                  "octave": 4
+                },
+                "staffPosition": 3,
+                "accidental": null,
+                "tieStart": false,
+                "tieStop": false,
+                "notehead": "normal"
+              }
+            ]
+          },
+          {
+            "measure": 2,
+            "staff": 0,
+            "voice": 1,
+            "id": "n7",
+            "kind": "note",
+            "tick": 4320,
+            "durationTicks": 1440,
+            "value": "quarter",
+            "dots": 1,
+            "tuplet": null,
+            "beam": null,
+            "stem": "down",
+            "notes": [
+              {
+                "id": "n7",
+                "noteId": 7,
+                "pitch": 71,
+                "written": {
+                  "step": "b",
+                  "alter": 0,
+                  "octave": 4
+                },
+                "staffPosition": 4,
+                "accidental": null,
+                "tieStart": false,
+                "tieStop": false,
+                "notehead": "normal"
+              }
+            ]
+          },
+          {
+            "measure": 3,
+            "staff": 0,
+            "voice": 1,
+            "id": "n8",
+            "kind": "note",
+            "tick": 5760,
+            "durationTicks": 2880,
+            "value": "half",
+            "dots": 1,
+            "tuplet": null,
+            "beam": null,
+            "stem": "down",
+            "notes": [
+              {
+                "id": "n8",
+                "noteId": 8,
+                "pitch": 72,
+                "written": {
+                  "step": "c",
+                  "alter": 0,
+                  "octave": 5
+                },
+                "staffPosition": 5,
+                "accidental": null,
+                "tieStart": false,
+                "tieStop": false,
+                "notehead": "normal"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "meter-changes",
+      "description": "4/4, 6/8, 3/4, 5/8 and 2/2 with ties over their bar lines.",
+      "staffStyleId": "factory.treble",
+      "part": false,
+      "signatures": [
+        {
+          "tick": 0,
+          "numerator": 4,
+          "denominator": 4
+        },
+        {
+          "tick": 3840,
+          "numerator": 6,
+          "denominator": 8
+        },
+        {
+          "tick": 6720,
+          "numerator": 3,
+          "denominator": 4
+        },
+        {
+          "tick": 9600,
+          "numerator": 5,
+          "denominator": 8
+        },
+        {
+          "tick": 12000,
+          "numerator": 2,
+          "denominator": 2
+        }
+      ],
+      "keys": [
+        {
+          "tick": 0,
+          "tonic": 0,
+          "mode": "major"
+        }
+      ],
+      "notation": {
+        "displayQuantizeTicks": 0,
+        "tripletQuantizeTicks": 0,
+        "interpretation": true,
+        "noOverlap": true,
+        "syncopation": false,
+        "maxDots": 1
+      },
+      "regionLengthTicks": 30720,
+      "notes": [
+        {
+          "id": 1,
+          "pitch": 60,
+          "startTick": 1920,
+          "lengthTicks": 2880
+        },
+        {
+          "id": 2,
+          "pitch": 62,
+          "startTick": 5280,
+          "lengthTicks": 480
+        },
+        {
+          "id": 3,
+          "pitch": 64,
+          "startTick": 5760,
+          "lengthTicks": 1920
+        },
+        {
+          "id": 4,
+          "pitch": 65,
+          "startTick": 7680,
+          "lengthTicks": 2880
+        },
+        {
+          "id": 5,
+          "pitch": 67,
+          "startTick": 12000,
+          "lengthTicks": 3840
+        }
+      ],
+      "expected": {
+        "transposing": false,
+        "transpose": 0,
+        "measures": [
+          {
+            "number": 1,
+            "startTick": 0,
+            "lengthTicks": 3840,
+            "time": {
+              "numerator": 4,
+              "denominator": 4
+            },
+            "key": {
+              "fifths": 0,
+              "mode": "major"
+            },
+            "barline": "double"
+          },
+          {
+            "number": 2,
+            "startTick": 3840,
+            "lengthTicks": 2880,
+            "time": {
+              "numerator": 6,
+              "denominator": 8
+            },
+            "key": {
+              "fifths": 0,
+              "mode": "major"
+            },
+            "barline": "double"
+          },
+          {
+            "number": 3,
+            "startTick": 6720,
+            "lengthTicks": 2880,
+            "time": {
+              "numerator": 3,
+              "denominator": 4
+            },
+            "key": {
+              "fifths": 0,
+              "mode": "major"
+            },
+            "barline": "double"
+          },
+          {
+            "number": 4,
+            "startTick": 9600,
+            "lengthTicks": 2400,
+            "time": {
+              "numerator": 5,
+              "denominator": 8
+            },
+            "key": {
+              "fifths": 0,
+              "mode": "major"
+            },
+            "barline": "double"
+          },
+          {
+            "number": 5,
+            "startTick": 12000,
+            "lengthTicks": 3840,
+            "time": {
+              "numerator": 2,
+              "denominator": 2
+            },
+            "key": {
+              "fifths": 0,
+              "mode": "major"
+            },
+            "barline": "final"
+          }
+        ],
+        "events": [
+          {
+            "measure": 1,
+            "staff": 0,
+            "voice": 1,
+            "id": "rtrk_000001-1-0-1-1",
+            "kind": "rest",
+            "tick": 0,
+            "durationTicks": 1920,
+            "value": "half",
+            "dots": 0,
+            "tuplet": null,
+            "beam": null,
+            "stem": "none",
+            "notes": []
+          },
+          {
+            "measure": 1,
+            "staff": 0,
+            "voice": 1,
+            "id": "n1",
+            "kind": "note",
+            "tick": 1920,
+            "durationTicks": 1920,
+            "value": "half",
+            "dots": 0,
+            "tuplet": null,
+            "beam": null,
+            "stem": "up",
+            "notes": [
+              {
+                "id": "n1",
+                "noteId": 1,
+                "pitch": 60,
+                "written": {
+                  "step": "c",
+                  "alter": 0,
+                  "octave": 4
+                },
+                "staffPosition": -2,
+                "accidental": null,
+                "tieStart": true,
+                "tieStop": false,
+                "notehead": "normal"
+              }
+            ]
+          },
+          {
+            "measure": 2,
+            "staff": 0,
+            "voice": 1,
+            "id": "n1-2",
+            "kind": "note",
+            "tick": 3840,
+            "durationTicks": 960,
+            "value": "quarter",
+            "dots": 0,
+            "tuplet": null,
+            "beam": null,
+            "stem": "up",
+            "notes": [
+              {
+                "id": "n1-2",
+                "noteId": 1,
+                "pitch": 60,
+                "written": {
+                  "step": "c",
+                  "alter": 0,
+                  "octave": 4
+                },
+                "staffPosition": -2,
+                "accidental": null,
+                "tieStart": false,
+                "tieStop": true,
+                "notehead": "normal"
+              }
+            ]
+          },
+          {
+            "measure": 2,
+            "staff": 0,
+            "voice": 1,
+            "id": "rtrk_000001-2-0-1-1",
+            "kind": "rest",
+            "tick": 4800,
+            "durationTicks": 480,
+            "value": "eighth",
+            "dots": 0,
+            "tuplet": null,
+            "beam": null,
+            "stem": "none",
+            "notes": []
+          },
+          {
+            "measure": 2,
+            "staff": 0,
+            "voice": 1,
+            "id": "n2",
+            "kind": "note",
+            "tick": 5280,
+            "durationTicks": 480,
+            "value": "eighth",
+            "dots": 0,
+            "tuplet": null,
+            "beam": null,
+            "stem": "up",
+            "notes": [
+              {
+                "id": "n2",
+                "noteId": 2,
+                "pitch": 62,
+                "written": {
+                  "step": "d",
+                  "alter": 0,
+                  "octave": 4
+                },
+                "staffPosition": -1,
+                "accidental": null,
+                "tieStart": false,
+                "tieStop": false,
+                "notehead": "normal"
+              }
+            ]
+          },
+          {
+            "measure": 2,
+            "staff": 0,
+            "voice": 1,
+            "id": "n3",
+            "kind": "note",
+            "tick": 5760,
+            "durationTicks": 960,
+            "value": "quarter",
+            "dots": 0,
+            "tuplet": null,
+            "beam": null,
+            "stem": "up",
+            "notes": [
+              {
+                "id": "n3",
+                "noteId": 3,
+                "pitch": 64,
+                "written": {
+                  "step": "e",
+                  "alter": 0,
+                  "octave": 4
+                },
+                "staffPosition": 0,
+                "accidental": null,
+                "tieStart": true,
+                "tieStop": false,
+                "notehead": "normal"
+              }
+            ]
+          },
+          {
+            "measure": 3,
+            "staff": 0,
+            "voice": 1,
+            "id": "n3-2",
+            "kind": "note",
+            "tick": 6720,
+            "durationTicks": 960,
+            "value": "quarter",
+            "dots": 0,
+            "tuplet": null,
+            "beam": null,
+            "stem": "up",
+            "notes": [
+              {
+                "id": "n3-2",
+                "noteId": 3,
+                "pitch": 64,
+                "written": {
+                  "step": "e",
+                  "alter": 0,
+                  "octave": 4
+                },
+                "staffPosition": 0,
+                "accidental": null,
+                "tieStart": false,
+                "tieStop": true,
+                "notehead": "normal"
+              }
+            ]
+          },
+          {
+            "measure": 3,
+            "staff": 0,
+            "voice": 1,
+            "id": "n4",
+            "kind": "note",
+            "tick": 7680,
+            "durationTicks": 1920,
+            "value": "half",
+            "dots": 0,
+            "tuplet": null,
+            "beam": null,
+            "stem": "up",
+            "notes": [
+              {
+                "id": "n4",
+                "noteId": 4,
+                "pitch": 65,
+                "written": {
+                  "step": "f",
+                  "alter": 0,
+                  "octave": 4
+                },
+                "staffPosition": 1,
+                "accidental": null,
+                "tieStart": true,
+                "tieStop": false,
+                "notehead": "normal"
+              }
+            ]
+          },
+          {
+            "measure": 4,
+            "staff": 0,
+            "voice": 1,
+            "id": "n4-2",
+            "kind": "note",
+            "tick": 9600,
+            "durationTicks": 960,
+            "value": "quarter",
+            "dots": 0,
+            "tuplet": null,
+            "beam": null,
+            "stem": "up",
+            "notes": [
+              {
+                "id": "n4-2",
+                "noteId": 4,
+                "pitch": 65,
+                "written": {
+                  "step": "f",
+                  "alter": 0,
+                  "octave": 4
+                },
+                "staffPosition": 1,
+                "accidental": null,
+                "tieStart": false,
+                "tieStop": true,
+                "notehead": "normal"
+              }
+            ]
+          },
+          {
+            "measure": 4,
+            "staff": 0,
+            "voice": 1,
+            "id": "rtrk_000001-4-0-1-1",
+            "kind": "rest",
+            "tick": 10560,
+            "durationTicks": 480,
+            "value": "eighth",
+            "dots": 0,
+            "tuplet": null,
+            "beam": null,
+            "stem": "none",
+            "notes": []
+          },
+          {
+            "measure": 4,
+            "staff": 0,
+            "voice": 1,
+            "id": "rtrk_000001-4-0-1-2",
+            "kind": "rest",
+            "tick": 11040,
+            "durationTicks": 960,
+            "value": "quarter",
+            "dots": 0,
+            "tuplet": null,
+            "beam": null,
+            "stem": "none",
+            "notes": []
+          },
+          {
+            "measure": 5,
+            "staff": 0,
+            "voice": 1,
+            "id": "n5",
+            "kind": "note",
+            "tick": 12000,
+            "durationTicks": 3840,
+            "value": "whole",
+            "dots": 0,
+            "tuplet": null,
+            "beam": null,
+            "stem": "none",
+            "notes": [
+              {
+                "id": "n5",
+                "noteId": 5,
+                "pitch": 67,
+                "written": {
+                  "step": "g",
+                  "alter": 0,
+                  "octave": 4
+                },
+                "staffPosition": 2,
+                "accidental": null,
+                "tieStart": false,
+                "tieStop": false,
+                "notehead": "normal"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "drums",
+      "description": "Kick, snare and hi-hats on the drum map: positions, noteheads, stems up.",
+      "staffStyleId": "factory.drums",
+      "part": false,
+      "signatures": [
+        {
+          "tick": 0,
+          "numerator": 4,
+          "denominator": 4
+        }
+      ],
+      "keys": [
+        {
+          "tick": 0,
+          "tonic": 0,
+          "mode": "major"
+        }
+      ],
+      "notation": {
+        "displayQuantizeTicks": 0,
+        "tripletQuantizeTicks": 0,
+        "interpretation": true,
+        "noOverlap": true,
+        "syncopation": false,
+        "maxDots": 1
+      },
+      "regionLengthTicks": 30720,
+      "notes": [
+        {
+          "id": 1,
+          "pitch": 36,
+          "startTick": 0,
+          "lengthTicks": 120
+        },
+        {
+          "id": 2,
+          "pitch": 42,
+          "startTick": 0,
+          "lengthTicks": 120
+        },
+        {
+          "id": 3,
+          "pitch": 42,
+          "startTick": 480,
+          "lengthTicks": 120
+        },
+        {
+          "id": 4,
+          "pitch": 38,
+          "startTick": 960,
+          "lengthTicks": 120
+        },
+        {
+          "id": 5,
+          "pitch": 42,
+          "startTick": 960,
+          "lengthTicks": 120
+        },
+        {
+          "id": 6,
+          "pitch": 46,
+          "startTick": 1440,
+          "lengthTicks": 120
+        }
+      ],
+      "expected": {
+        "transposing": false,
+        "transpose": 0,
+        "measures": [
+          {
+            "number": 1,
+            "startTick": 0,
+            "lengthTicks": 3840,
+            "time": {
+              "numerator": 4,
+              "denominator": 4
+            },
+            "key": {
+              "fifths": 0,
+              "mode": "major"
+            },
+            "barline": "final"
+          }
+        ],
+        "events": [
+          {
+            "measure": 1,
+            "staff": 0,
+            "voice": 1,
+            "id": "c1",
+            "kind": "chord",
+            "tick": 0,
+            "durationTicks": 480,
+            "value": "eighth",
+            "dots": 0,
+            "tuplet": null,
+            "beam": 1,
+            "stem": "up",
+            "notes": [
+              {
+                "id": "n1",
+                "noteId": 1,
+                "pitch": 36,
+                "written": {
+                  "step": "f",
+                  "alter": 0,
+                  "octave": 4
+                },
+                "staffPosition": 1,
+                "accidental": null,
+                "tieStart": false,
+                "tieStop": false,
+                "notehead": "normal"
+              },
+              {
+                "id": "n2",
+                "noteId": 2,
+                "pitch": 42,
+                "written": {
+                  "step": "g",
+                  "alter": 0,
+                  "octave": 5
+                },
+                "staffPosition": 9,
+                "accidental": null,
+                "tieStart": false,
+                "tieStop": false,
+                "notehead": "cross"
+              }
+            ]
+          },
+          {
+            "measure": 1,
+            "staff": 0,
+            "voice": 1,
+            "id": "n3",
+            "kind": "note",
+            "tick": 480,
+            "durationTicks": 480,
+            "value": "eighth",
+            "dots": 0,
+            "tuplet": null,
+            "beam": 1,
+            "stem": "up",
+            "notes": [
+              {
+                "id": "n3",
+                "noteId": 3,
+                "pitch": 42,
+                "written": {
+                  "step": "g",
+                  "alter": 0,
+                  "octave": 5
+                },
+                "staffPosition": 9,
+                "accidental": null,
+                "tieStart": false,
+                "tieStop": false,
+                "notehead": "cross"
+              }
+            ]
+          },
+          {
+            "measure": 1,
+            "staff": 0,
+            "voice": 1,
+            "id": "c4",
+            "kind": "chord",
+            "tick": 960,
+            "durationTicks": 480,
+            "value": "eighth",
+            "dots": 0,
+            "tuplet": null,
+            "beam": 1,
+            "stem": "up",
+            "notes": [
+              {
+                "id": "n4",
+                "noteId": 4,
+                "pitch": 38,
+                "written": {
+                  "step": "c",
+                  "alter": 0,
+                  "octave": 5
+                },
+                "staffPosition": 5,
+                "accidental": null,
+                "tieStart": false,
+                "tieStop": false,
+                "notehead": "normal"
+              },
+              {
+                "id": "n5",
+                "noteId": 5,
+                "pitch": 42,
+                "written": {
+                  "step": "g",
+                  "alter": 0,
+                  "octave": 5
+                },
+                "staffPosition": 9,
+                "accidental": null,
+                "tieStart": false,
+                "tieStop": false,
+                "notehead": "cross"
+              }
+            ]
+          },
+          {
+            "measure": 1,
+            "staff": 0,
+            "voice": 1,
+            "id": "n6",
+            "kind": "note",
+            "tick": 1440,
+            "durationTicks": 480,
+            "value": "eighth",
+            "dots": 0,
+            "tuplet": null,
+            "beam": 1,
+            "stem": "up",
+            "notes": [
+              {
+                "id": "n6",
+                "noteId": 6,
+                "pitch": 46,
+                "written": {
+                  "step": "g",
+                  "alter": 0,
+                  "octave": 5
+                },
+                "staffPosition": 9,
+                "accidental": null,
+                "tieStart": false,
+                "tieStop": false,
+                "notehead": "circleCross"
+              }
+            ]
+          },
+          {
+            "measure": 1,
+            "staff": 0,
+            "voice": 1,
+            "id": "rtrk_000001-1-0-1-1",
+            "kind": "rest",
+            "tick": 1920,
+            "durationTicks": 1920,
+            "value": "half",
+            "dots": 0,
+            "tuplet": null,
+            "beam": null,
+            "stem": "none",
+            "notes": []
+          }
+        ]
+      }
+    },
+    {
+      "name": "exit-criterion",
+      "description": "The exit criterion's step 1 region (docs/10-phase-9.md) at 1/16 with the 1/16-triplet grid.",
+      "staffStyleId": "factory.piano",
+      "part": false,
+      "signatures": [
+        {
+          "tick": 0,
+          "numerator": 4,
+          "denominator": 4
+        }
+      ],
+      "keys": [
+        {
+          "tick": 0,
+          "tonic": 0,
+          "mode": "major"
+        }
+      ],
+      "notation": {
+        "displayQuantizeTicks": 240,
+        "tripletQuantizeTicks": 160,
+        "interpretation": true,
+        "noOverlap": true,
+        "syncopation": false,
+        "maxDots": 1
+      },
+      "regionLengthTicks": 30720,
+      "notes": [
+        {
+          "id": 1,
+          "pitch": 60,
+          "startTick": 12,
+          "lengthTicks": 940
+        },
+        {
+          "id": 2,
+          "pitch": 64,
+          "startTick": 12,
+          "lengthTicks": 940
+        },
+        {
+          "id": 3,
+          "pitch": 67,
+          "startTick": 12,
+          "lengthTicks": 940
+        },
+        {
+          "id": 4,
+          "pitch": 62,
+          "startTick": 965,
+          "lengthTicks": 300
+        },
+        {
+          "id": 5,
+          "pitch": 64,
+          "startTick": 1290,
+          "lengthTicks": 300
+        },
+        {
+          "id": 6,
+          "pitch": 65,
+          "startTick": 1595,
+          "lengthTicks": 300
+        },
+        {
+          "id": 7,
+          "pitch": 67,
+          "startTick": 1920,
+          "lengthTicks": 2880
+        },
+        {
+          "id": 8,
+          "pitch": 48,
+          "startTick": 0,
+          "lengthTicks": 3840
+        },
+        {
+          "id": 9,
+          "pitch": 76,
+          "startTick": 4800,
+          "lengthTicks": 2880
+        },
+        {
+          "id": 10,
+          "pitch": 72,
+          "startTick": 4800,
+          "lengthTicks": 960
+        },
+        {
+          "id": 11,
+          "pitch": 74,
+          "startTick": 5760,
+          "lengthTicks": 960
+        },
+        {
+          "id": 12,
+          "pitch": 71,
+          "startTick": 6720,
+          "lengthTicks": 960
+        },
+        {
+          "id": 13,
+          "pitch": 41,
+          "startTick": 3850,
+          "lengthTicks": 1900
+        },
+        {
+          "id": 14,
+          "pitch": 43,
+          "startTick": 5770,
+          "lengthTicks": 1900
+        },
+        {
+          "id": 15,
+          "pitch": 64,
+          "startTick": 7680,
+          "lengthTicks": 240
+        },
+        {
+          "id": 16,
+          "pitch": 65,
+          "startTick": 7920,
+          "lengthTicks": 240
+        },
+        {
+          "id": 17,
+          "pitch": 67,
+          "startTick": 8160,
+          "lengthTicks": 480
+        },
+        {
+          "id": 18,
+          "pitch": 60,
+          "startTick": 8640,
+          "lengthTicks": 2880
+        },
+        {
+          "id": 19,
+          "pitch": 64,
+          "startTick": 8640,
+          "lengthTicks": 2880
+        },
+        {
+          "id": 20,
+          "pitch": 67,
+          "startTick": 8640,
+          "lengthTicks": 2880
+        },
+        {
+          "id": 21,
+          "pitch": 48,
+          "startTick": 7680,
+          "lengthTicks": 3840
+        }
+      ],
+      "expected": {
+        "transposing": false,
+        "transpose": 0,
+        "measures": [
+          {
+            "number": 1,
+            "startTick": 0,
+            "lengthTicks": 3840,
+            "time": {
+              "numerator": 4,
+              "denominator": 4
+            },
+            "key": {
+              "fifths": 0,
+              "mode": "major"
+            },
+            "barline": "single"
+          },
+          {
+            "number": 2,
+            "startTick": 3840,
+            "lengthTicks": 3840,
+            "time": {
+              "numerator": 4,
+              "denominator": 4
+            },
+            "key": {
+              "fifths": 0,
+              "mode": "major"
+            },
+            "barline": "single"
+          },
+          {
+            "number": 3,
+            "startTick": 7680,
+            "lengthTicks": 3840,
+            "time": {
+              "numerator": 4,
+              "denominator": 4
+            },
+            "key": {
+              "fifths": 0,
+              "mode": "major"
+            },
+            "barline": "final"
+          }
+        ],
+        "events": [
+          {
+            "measure": 1,
+            "staff": 0,
+            "voice": 1,
+            "id": "c1",
+            "kind": "chord",
+            "tick": 0,
+            "durationTicks": 960,
+            "value": "quarter",
+            "dots": 0,
+            "tuplet": null,
+            "beam": null,
+            "stem": "up",
+            "notes": [
+              {
+                "id": "n1",
+                "noteId": 1,
+                "pitch": 60,
+                "written": {
+                  "step": "c",
+                  "alter": 0,
+                  "octave": 4
+                },
+                "staffPosition": -2,
+                "accidental": null,
+                "tieStart": false,
+                "tieStop": false,
+                "notehead": "normal"
+              },
+              {
+                "id": "n2",
+                "noteId": 2,
+                "pitch": 64,
+                "written": {
+                  "step": "e",
+                  "alter": 0,
+                  "octave": 4
+                },
+                "staffPosition": 0,
+                "accidental": null,
+                "tieStart": false,
+                "tieStop": false,
+                "notehead": "normal"
+              },
+              {
+                "id": "n3",
+                "noteId": 3,
+                "pitch": 67,
+                "written": {
+                  "step": "g",
+                  "alter": 0,
+                  "octave": 4
+                },
+                "staffPosition": 2,
+                "accidental": null,
+                "tieStart": false,
+                "tieStop": false,
+                "notehead": "normal"
+              }
+            ]
+          },
+          {
+            "measure": 1,
+            "staff": 0,
+            "voice": 1,
+            "id": "n4",
+            "kind": "note",
+            "tick": 960,
+            "durationTicks": 320,
+            "value": "eighth",
+            "dots": 0,
+            "tuplet": {
+              "group": 1,
+              "actual": 3,
+              "normal": 2
+            },
+            "beam": 1,
+            "stem": "up",
+            "notes": [
+              {
+                "id": "n4",
+                "noteId": 4,
+                "pitch": 62,
+                "written": {
+                  "step": "d",
+                  "alter": 0,
+                  "octave": 4
+                },
+                "staffPosition": -1,
+                "accidental": null,
+                "tieStart": false,
+                "tieStop": false,
+                "notehead": "normal"
+              }
+            ]
+          },
+          {
+            "measure": 1,
+            "staff": 0,
+            "voice": 1,
+            "id": "n5",
+            "kind": "note",
+            "tick": 1280,
+            "durationTicks": 320,
+            "value": "eighth",
+            "dots": 0,
+            "tuplet": {
+              "group": 1,
+              "actual": 3,
+              "normal": 2
+            },
+            "beam": 1,
+            "stem": "up",
+            "notes": [
+              {
+                "id": "n5",
+                "noteId": 5,
+                "pitch": 64,
+                "written": {
+                  "step": "e",
+                  "alter": 0,
+                  "octave": 4
+                },
+                "staffPosition": 0,
+                "accidental": null,
+                "tieStart": false,
+                "tieStop": false,
+                "notehead": "normal"
+              }
+            ]
+          },
+          {
+            "measure": 1,
+            "staff": 0,
+            "voice": 1,
+            "id": "n6",
+            "kind": "note",
+            "tick": 1600,
+            "durationTicks": 320,
+            "value": "eighth",
+            "dots": 0,
+            "tuplet": {
+              "group": 1,
+              "actual": 3,
+              "normal": 2
+            },
+            "beam": 1,
+            "stem": "up",
+            "notes": [
+              {
+                "id": "n6",
+                "noteId": 6,
+                "pitch": 65,
+                "written": {
+                  "step": "f",
+                  "alter": 0,
+                  "octave": 4
+                },
+                "staffPosition": 1,
+                "accidental": null,
+                "tieStart": false,
+                "tieStop": false,
+                "notehead": "normal"
+              }
+            ]
+          },
+          {
+            "measure": 1,
+            "staff": 0,
+            "voice": 1,
+            "id": "n7",
+            "kind": "note",
+            "tick": 1920,
+            "durationTicks": 1920,
+            "value": "half",
+            "dots": 0,
+            "tuplet": null,
+            "beam": null,
+            "stem": "up",
+            "notes": [
+              {
+                "id": "n7",
+                "noteId": 7,
+                "pitch": 67,
+                "written": {
+                  "step": "g",
+                  "alter": 0,
+                  "octave": 4
+                },
+                "staffPosition": 2,
+                "accidental": null,
+                "tieStart": true,
+                "tieStop": false,
+                "notehead": "normal"
+              }
+            ]
+          },
+          {
+            "measure": 1,
+            "staff": 1,
+            "voice": 1,
+            "id": "n8",
+            "kind": "note",
+            "tick": 0,
+            "durationTicks": 3840,
+            "value": "whole",
+            "dots": 0,
+            "tuplet": null,
+            "beam": null,
+            "stem": "none",
+            "notes": [
+              {
+                "id": "n8",
+                "noteId": 8,
+                "pitch": 48,
+                "written": {
+                  "step": "c",
+                  "alter": 0,
+                  "octave": 3
+                },
+                "staffPosition": 3,
+                "accidental": null,
+                "tieStart": false,
+                "tieStop": false,
+                "notehead": "normal"
+              }
+            ]
+          },
+          {
+            "measure": 2,
+            "staff": 0,
+            "voice": 1,
+            "id": "n7-2",
+            "kind": "note",
+            "tick": 3840,
+            "durationTicks": 960,
+            "value": "quarter",
+            "dots": 0,
+            "tuplet": null,
+            "beam": null,
+            "stem": "up",
+            "notes": [
+              {
+                "id": "n7-2",
+                "noteId": 7,
+                "pitch": 67,
+                "written": {
+                  "step": "g",
+                  "alter": 0,
+                  "octave": 4
+                },
+                "staffPosition": 2,
+                "accidental": null,
+                "tieStart": false,
+                "tieStop": true,
+                "notehead": "normal"
+              }
+            ]
+          },
+          {
+            "measure": 2,
+            "staff": 0,
+            "voice": 1,
+            "id": "n9",
+            "kind": "note",
+            "tick": 4800,
+            "durationTicks": 960,
+            "value": "quarter",
+            "dots": 0,
+            "tuplet": null,
+            "beam": null,
+            "stem": "up",
+            "notes": [
+              {
+                "id": "n9",
+                "noteId": 9,
+                "pitch": 76,
+                "written": {
+                  "step": "e",
+                  "alter": 0,
+                  "octave": 5
+                },
+                "staffPosition": 7,
+                "accidental": null,
+                "tieStart": true,
+                "tieStop": false,
+                "notehead": "normal"
+              }
+            ]
+          },
+          {
+            "measure": 2,
+            "staff": 0,
+            "voice": 1,
+            "id": "n9-2",
+            "kind": "note",
+            "tick": 5760,
+            "durationTicks": 1920,
+            "value": "half",
+            "dots": 0,
+            "tuplet": null,
+            "beam": null,
+            "stem": "up",
+            "notes": [
+              {
+                "id": "n9-2",
+                "noteId": 9,
+                "pitch": 76,
+                "written": {
+                  "step": "e",
+                  "alter": 0,
+                  "octave": 5
+                },
+                "staffPosition": 7,
+                "accidental": null,
+                "tieStart": false,
+                "tieStop": true,
+                "notehead": "normal"
+              }
+            ]
+          },
+          {
+            "measure": 2,
+            "staff": 0,
+            "voice": 2,
+            "id": "rtrk_000001-2-0-2-1",
+            "kind": "rest",
+            "tick": 3840,
+            "durationTicks": 960,
+            "value": "quarter",
+            "dots": 0,
+            "tuplet": null,
+            "beam": null,
+            "stem": "none",
+            "notes": []
+          },
+          {
+            "measure": 2,
+            "staff": 0,
+            "voice": 2,
+            "id": "n10",
+            "kind": "note",
+            "tick": 4800,
+            "durationTicks": 960,
+            "value": "quarter",
+            "dots": 0,
+            "tuplet": null,
+            "beam": null,
+            "stem": "down",
+            "notes": [
+              {
+                "id": "n10",
+                "noteId": 10,
+                "pitch": 72,
+                "written": {
+                  "step": "c",
+                  "alter": 0,
+                  "octave": 5
+                },
+                "staffPosition": 5,
+                "accidental": null,
+                "tieStart": false,
+                "tieStop": false,
+                "notehead": "normal"
+              }
+            ]
+          },
+          {
+            "measure": 2,
+            "staff": 0,
+            "voice": 2,
+            "id": "n11",
+            "kind": "note",
+            "tick": 5760,
+            "durationTicks": 960,
+            "value": "quarter",
+            "dots": 0,
+            "tuplet": null,
+            "beam": null,
+            "stem": "down",
+            "notes": [
+              {
+                "id": "n11",
+                "noteId": 11,
+                "pitch": 74,
+                "written": {
+                  "step": "d",
+                  "alter": 0,
+                  "octave": 5
+                },
+                "staffPosition": 6,
+                "accidental": null,
+                "tieStart": false,
+                "tieStop": false,
+                "notehead": "normal"
+              }
+            ]
+          },
+          {
+            "measure": 2,
+            "staff": 0,
+            "voice": 2,
+            "id": "n12",
+            "kind": "note",
+            "tick": 6720,
+            "durationTicks": 960,
+            "value": "quarter",
+            "dots": 0,
+            "tuplet": null,
+            "beam": null,
+            "stem": "down",
+            "notes": [
+              {
+                "id": "n12",
+                "noteId": 12,
+                "pitch": 71,
+                "written": {
+                  "step": "b",
+                  "alter": 0,
+                  "octave": 4
+                },
+                "staffPosition": 4,
+                "accidental": null,
+                "tieStart": false,
+                "tieStop": false,
+                "notehead": "normal"
+              }
+            ]
+          },
+          {
+            "measure": 2,
+            "staff": 1,
+            "voice": 1,
+            "id": "n13",
+            "kind": "note",
+            "tick": 3840,
+            "durationTicks": 1920,
+            "value": "half",
+            "dots": 0,
+            "tuplet": null,
+            "beam": null,
+            "stem": "up",
+            "notes": [
+              {
+                "id": "n13",
+                "noteId": 13,
+                "pitch": 41,
+                "written": {
+                  "step": "f",
+                  "alter": 0,
+                  "octave": 2
+                },
+                "staffPosition": -1,
+                "accidental": null,
+                "tieStart": false,
+                "tieStop": false,
+                "notehead": "normal"
+              }
+            ]
+          },
+          {
+            "measure": 2,
+            "staff": 1,
+            "voice": 1,
+            "id": "n14",
+            "kind": "note",
+            "tick": 5760,
+            "durationTicks": 1920,
+            "value": "half",
+            "dots": 0,
+            "tuplet": null,
+            "beam": null,
+            "stem": "up",
+            "notes": [
+              {
+                "id": "n14",
+                "noteId": 14,
+                "pitch": 43,
+                "written": {
+                  "step": "g",
+                  "alter": 0,
+                  "octave": 2
+                },
+                "staffPosition": 0,
+                "accidental": null,
+                "tieStart": false,
+                "tieStop": false,
+                "notehead": "normal"
+              }
+            ]
+          },
+          {
+            "measure": 3,
+            "staff": 0,
+            "voice": 1,
+            "id": "n15",
+            "kind": "note",
+            "tick": 7680,
+            "durationTicks": 240,
+            "value": "sixteenth",
+            "dots": 0,
+            "tuplet": null,
+            "beam": 1,
+            "stem": "up",
+            "notes": [
+              {
+                "id": "n15",
+                "noteId": 15,
+                "pitch": 64,
+                "written": {
+                  "step": "e",
+                  "alter": 0,
+                  "octave": 4
+                },
+                "staffPosition": 0,
+                "accidental": null,
+                "tieStart": false,
+                "tieStop": false,
+                "notehead": "normal"
+              }
+            ]
+          },
+          {
+            "measure": 3,
+            "staff": 0,
+            "voice": 1,
+            "id": "n16",
+            "kind": "note",
+            "tick": 7920,
+            "durationTicks": 240,
+            "value": "sixteenth",
+            "dots": 0,
+            "tuplet": null,
+            "beam": 1,
+            "stem": "up",
+            "notes": [
+              {
+                "id": "n16",
+                "noteId": 16,
+                "pitch": 65,
+                "written": {
+                  "step": "f",
+                  "alter": 0,
+                  "octave": 4
+                },
+                "staffPosition": 1,
+                "accidental": null,
+                "tieStart": false,
+                "tieStop": false,
+                "notehead": "normal"
+              }
+            ]
+          },
+          {
+            "measure": 3,
+            "staff": 0,
+            "voice": 1,
+            "id": "n17",
+            "kind": "note",
+            "tick": 8160,
+            "durationTicks": 480,
+            "value": "eighth",
+            "dots": 0,
+            "tuplet": null,
+            "beam": 1,
+            "stem": "up",
+            "notes": [
+              {
+                "id": "n17",
+                "noteId": 17,
+                "pitch": 67,
+                "written": {
+                  "step": "g",
+                  "alter": 0,
+                  "octave": 4
+                },
+                "staffPosition": 2,
+                "accidental": null,
+                "tieStart": false,
+                "tieStop": false,
+                "notehead": "normal"
+              }
+            ]
+          },
+          {
+            "measure": 3,
+            "staff": 0,
+            "voice": 1,
+            "id": "c18",
+            "kind": "chord",
+            "tick": 8640,
+            "durationTicks": 960,
+            "value": "quarter",
+            "dots": 0,
+            "tuplet": null,
+            "beam": null,
+            "stem": "up",
+            "notes": [
+              {
+                "id": "n18",
+                "noteId": 18,
+                "pitch": 60,
+                "written": {
+                  "step": "c",
+                  "alter": 0,
+                  "octave": 4
+                },
+                "staffPosition": -2,
+                "accidental": null,
+                "tieStart": true,
+                "tieStop": false,
+                "notehead": "normal"
+              },
+              {
+                "id": "n19",
+                "noteId": 19,
+                "pitch": 64,
+                "written": {
+                  "step": "e",
+                  "alter": 0,
+                  "octave": 4
+                },
+                "staffPosition": 0,
+                "accidental": null,
+                "tieStart": true,
+                "tieStop": false,
+                "notehead": "normal"
+              },
+              {
+                "id": "n20",
+                "noteId": 20,
+                "pitch": 67,
+                "written": {
+                  "step": "g",
+                  "alter": 0,
+                  "octave": 4
+                },
+                "staffPosition": 2,
+                "accidental": null,
+                "tieStart": true,
+                "tieStop": false,
+                "notehead": "normal"
+              }
+            ]
+          },
+          {
+            "measure": 3,
+            "staff": 0,
+            "voice": 1,
+            "id": "c18-2",
+            "kind": "chord",
+            "tick": 9600,
+            "durationTicks": 1920,
+            "value": "half",
+            "dots": 0,
+            "tuplet": null,
+            "beam": null,
+            "stem": "up",
+            "notes": [
+              {
+                "id": "n18-2",
+                "noteId": 18,
+                "pitch": 60,
+                "written": {
+                  "step": "c",
+                  "alter": 0,
+                  "octave": 4
+                },
+                "staffPosition": -2,
+                "accidental": null,
+                "tieStart": false,
+                "tieStop": true,
+                "notehead": "normal"
+              },
+              {
+                "id": "n19-2",
+                "noteId": 19,
+                "pitch": 64,
+                "written": {
+                  "step": "e",
+                  "alter": 0,
+                  "octave": 4
+                },
+                "staffPosition": 0,
+                "accidental": null,
+                "tieStart": false,
+                "tieStop": true,
+                "notehead": "normal"
+              },
+              {
+                "id": "n20-2",
+                "noteId": 20,
+                "pitch": 67,
+                "written": {
+                  "step": "g",
+                  "alter": 0,
+                  "octave": 4
+                },
+                "staffPosition": 2,
+                "accidental": null,
+                "tieStart": false,
+                "tieStop": true,
+                "notehead": "normal"
+              }
+            ]
+          },
+          {
+            "measure": 3,
+            "staff": 1,
+            "voice": 1,
+            "id": "n21",
+            "kind": "note",
+            "tick": 7680,
+            "durationTicks": 3840,
+            "value": "whole",
+            "dots": 0,
+            "tuplet": null,
+            "beam": null,
+            "stem": "none",
+            "notes": [
+              {
+                "id": "n21",
+                "noteId": 21,
+                "pitch": 48,
+                "written": {
+                  "step": "c",
+                  "alter": 0,
+                  "octave": 3
+                },
+                "staffPosition": 3,
+                "accidental": null,
+                "tieStart": false,
+                "tieStop": false,
+                "notehead": "normal"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "exit-criterion-eighths",
+      "description": "The same at 1/8 with the 1/8-triplet grid (Logic's \"8,12\").",
+      "staffStyleId": "factory.piano",
+      "part": false,
+      "signatures": [
+        {
+          "tick": 0,
+          "numerator": 4,
+          "denominator": 4
+        }
+      ],
+      "keys": [
+        {
+          "tick": 0,
+          "tonic": 0,
+          "mode": "major"
+        }
+      ],
+      "notation": {
+        "displayQuantizeTicks": 480,
+        "tripletQuantizeTicks": 320,
+        "interpretation": true,
+        "noOverlap": true,
+        "syncopation": false,
+        "maxDots": 1
+      },
+      "regionLengthTicks": 30720,
+      "notes": [
+        {
+          "id": 1,
+          "pitch": 60,
+          "startTick": 12,
+          "lengthTicks": 940
+        },
+        {
+          "id": 2,
+          "pitch": 64,
+          "startTick": 12,
+          "lengthTicks": 940
+        },
+        {
+          "id": 3,
+          "pitch": 67,
+          "startTick": 12,
+          "lengthTicks": 940
+        },
+        {
+          "id": 4,
+          "pitch": 62,
+          "startTick": 965,
+          "lengthTicks": 300
+        },
+        {
+          "id": 5,
+          "pitch": 64,
+          "startTick": 1290,
+          "lengthTicks": 300
+        },
+        {
+          "id": 6,
+          "pitch": 65,
+          "startTick": 1595,
+          "lengthTicks": 300
+        },
+        {
+          "id": 7,
+          "pitch": 67,
+          "startTick": 1920,
+          "lengthTicks": 2880
+        },
+        {
+          "id": 8,
+          "pitch": 48,
+          "startTick": 0,
+          "lengthTicks": 3840
+        },
+        {
+          "id": 9,
+          "pitch": 76,
+          "startTick": 4800,
+          "lengthTicks": 2880
+        },
+        {
+          "id": 10,
+          "pitch": 72,
+          "startTick": 4800,
+          "lengthTicks": 960
+        },
+        {
+          "id": 11,
+          "pitch": 74,
+          "startTick": 5760,
+          "lengthTicks": 960
+        },
+        {
+          "id": 12,
+          "pitch": 71,
+          "startTick": 6720,
+          "lengthTicks": 960
+        },
+        {
+          "id": 13,
+          "pitch": 41,
+          "startTick": 3850,
+          "lengthTicks": 1900
+        },
+        {
+          "id": 14,
+          "pitch": 43,
+          "startTick": 5770,
+          "lengthTicks": 1900
+        },
+        {
+          "id": 15,
+          "pitch": 64,
+          "startTick": 7680,
+          "lengthTicks": 240
+        },
+        {
+          "id": 16,
+          "pitch": 65,
+          "startTick": 7920,
+          "lengthTicks": 240
+        },
+        {
+          "id": 17,
+          "pitch": 67,
+          "startTick": 8160,
+          "lengthTicks": 480
+        },
+        {
+          "id": 18,
+          "pitch": 60,
+          "startTick": 8640,
+          "lengthTicks": 2880
+        },
+        {
+          "id": 19,
+          "pitch": 64,
+          "startTick": 8640,
+          "lengthTicks": 2880
+        },
+        {
+          "id": 20,
+          "pitch": 67,
+          "startTick": 8640,
+          "lengthTicks": 2880
+        },
+        {
+          "id": 21,
+          "pitch": 48,
+          "startTick": 7680,
+          "lengthTicks": 3840
+        }
+      ],
+      "expected": {
+        "transposing": false,
+        "transpose": 0,
+        "measures": [
+          {
+            "number": 1,
+            "startTick": 0,
+            "lengthTicks": 3840,
+            "time": {
+              "numerator": 4,
+              "denominator": 4
+            },
+            "key": {
+              "fifths": 0,
+              "mode": "major"
+            },
+            "barline": "single"
+          },
+          {
+            "number": 2,
+            "startTick": 3840,
+            "lengthTicks": 3840,
+            "time": {
+              "numerator": 4,
+              "denominator": 4
+            },
+            "key": {
+              "fifths": 0,
+              "mode": "major"
+            },
+            "barline": "single"
+          },
+          {
+            "number": 3,
+            "startTick": 7680,
+            "lengthTicks": 3840,
+            "time": {
+              "numerator": 4,
+              "denominator": 4
+            },
+            "key": {
+              "fifths": 0,
+              "mode": "major"
+            },
+            "barline": "final"
+          }
+        ],
+        "events": [
+          {
+            "measure": 1,
+            "staff": 0,
+            "voice": 1,
+            "id": "c1",
+            "kind": "chord",
+            "tick": 0,
+            "durationTicks": 960,
+            "value": "quarter",
+            "dots": 0,
+            "tuplet": null,
+            "beam": null,
+            "stem": "up",
+            "notes": [
+              {
+                "id": "n1",
+                "noteId": 1,
+                "pitch": 60,
+                "written": {
+                  "step": "c",
+                  "alter": 0,
+                  "octave": 4
+                },
+                "staffPosition": -2,
+                "accidental": null,
+                "tieStart": false,
+                "tieStop": false,
+                "notehead": "normal"
+              },
+              {
+                "id": "n2",
+                "noteId": 2,
+                "pitch": 64,
+                "written": {
+                  "step": "e",
+                  "alter": 0,
+                  "octave": 4
+                },
+                "staffPosition": 0,
+                "accidental": null,
+                "tieStart": false,
+                "tieStop": false,
+                "notehead": "normal"
+              },
+              {
+                "id": "n3",
+                "noteId": 3,
+                "pitch": 67,
+                "written": {
+                  "step": "g",
+                  "alter": 0,
+                  "octave": 4
+                },
+                "staffPosition": 2,
+                "accidental": null,
+                "tieStart": false,
+                "tieStop": false,
+                "notehead": "normal"
+              }
+            ]
+          },
+          {
+            "measure": 1,
+            "staff": 0,
+            "voice": 1,
+            "id": "n4",
+            "kind": "note",
+            "tick": 960,
+            "durationTicks": 320,
+            "value": "eighth",
+            "dots": 0,
+            "tuplet": {
+              "group": 1,
+              "actual": 3,
+              "normal": 2
+            },
+            "beam": 1,
+            "stem": "up",
+            "notes": [
+              {
+                "id": "n4",
+                "noteId": 4,
+                "pitch": 62,
+                "written": {
+                  "step": "d",
+                  "alter": 0,
+                  "octave": 4
+                },
+                "staffPosition": -1,
+                "accidental": null,
+                "tieStart": false,
+                "tieStop": false,
+                "notehead": "normal"
+              }
+            ]
+          },
+          {
+            "measure": 1,
+            "staff": 0,
+            "voice": 1,
+            "id": "n5",
+            "kind": "note",
+            "tick": 1280,
+            "durationTicks": 320,
+            "value": "eighth",
+            "dots": 0,
+            "tuplet": {
+              "group": 1,
+              "actual": 3,
+              "normal": 2
+            },
+            "beam": 1,
+            "stem": "up",
+            "notes": [
+              {
+                "id": "n5",
+                "noteId": 5,
+                "pitch": 64,
+                "written": {
+                  "step": "e",
+                  "alter": 0,
+                  "octave": 4
+                },
+                "staffPosition": 0,
+                "accidental": null,
+                "tieStart": false,
+                "tieStop": false,
+                "notehead": "normal"
+              }
+            ]
+          },
+          {
+            "measure": 1,
+            "staff": 0,
+            "voice": 1,
+            "id": "n6",
+            "kind": "note",
+            "tick": 1600,
+            "durationTicks": 320,
+            "value": "eighth",
+            "dots": 0,
+            "tuplet": {
+              "group": 1,
+              "actual": 3,
+              "normal": 2
+            },
+            "beam": 1,
+            "stem": "up",
+            "notes": [
+              {
+                "id": "n6",
+                "noteId": 6,
+                "pitch": 65,
+                "written": {
+                  "step": "f",
+                  "alter": 0,
+                  "octave": 4
+                },
+                "staffPosition": 1,
+                "accidental": null,
+                "tieStart": false,
+                "tieStop": false,
+                "notehead": "normal"
+              }
+            ]
+          },
+          {
+            "measure": 1,
+            "staff": 0,
+            "voice": 1,
+            "id": "n7",
+            "kind": "note",
+            "tick": 1920,
+            "durationTicks": 1920,
+            "value": "half",
+            "dots": 0,
+            "tuplet": null,
+            "beam": null,
+            "stem": "up",
+            "notes": [
+              {
+                "id": "n7",
+                "noteId": 7,
+                "pitch": 67,
+                "written": {
+                  "step": "g",
+                  "alter": 0,
+                  "octave": 4
+                },
+                "staffPosition": 2,
+                "accidental": null,
+                "tieStart": true,
+                "tieStop": false,
+                "notehead": "normal"
+              }
+            ]
+          },
+          {
+            "measure": 1,
+            "staff": 1,
+            "voice": 1,
+            "id": "n8",
+            "kind": "note",
+            "tick": 0,
+            "durationTicks": 3840,
+            "value": "whole",
+            "dots": 0,
+            "tuplet": null,
+            "beam": null,
+            "stem": "none",
+            "notes": [
+              {
+                "id": "n8",
+                "noteId": 8,
+                "pitch": 48,
+                "written": {
+                  "step": "c",
+                  "alter": 0,
+                  "octave": 3
+                },
+                "staffPosition": 3,
+                "accidental": null,
+                "tieStart": false,
+                "tieStop": false,
+                "notehead": "normal"
+              }
+            ]
+          },
+          {
+            "measure": 2,
+            "staff": 0,
+            "voice": 1,
+            "id": "n7-2",
+            "kind": "note",
+            "tick": 3840,
+            "durationTicks": 960,
+            "value": "quarter",
+            "dots": 0,
+            "tuplet": null,
+            "beam": null,
+            "stem": "up",
+            "notes": [
+              {
+                "id": "n7-2",
+                "noteId": 7,
+                "pitch": 67,
+                "written": {
+                  "step": "g",
+                  "alter": 0,
+                  "octave": 4
+                },
+                "staffPosition": 2,
+                "accidental": null,
+                "tieStart": false,
+                "tieStop": true,
+                "notehead": "normal"
+              }
+            ]
+          },
+          {
+            "measure": 2,
+            "staff": 0,
+            "voice": 1,
+            "id": "n9",
+            "kind": "note",
+            "tick": 4800,
+            "durationTicks": 960,
+            "value": "quarter",
+            "dots": 0,
+            "tuplet": null,
+            "beam": null,
+            "stem": "up",
+            "notes": [
+              {
+                "id": "n9",
+                "noteId": 9,
+                "pitch": 76,
+                "written": {
+                  "step": "e",
+                  "alter": 0,
+                  "octave": 5
+                },
+                "staffPosition": 7,
+                "accidental": null,
+                "tieStart": true,
+                "tieStop": false,
+                "notehead": "normal"
+              }
+            ]
+          },
+          {
+            "measure": 2,
+            "staff": 0,
+            "voice": 1,
+            "id": "n9-2",
+            "kind": "note",
+            "tick": 5760,
+            "durationTicks": 1920,
+            "value": "half",
+            "dots": 0,
+            "tuplet": null,
+            "beam": null,
+            "stem": "up",
+            "notes": [
+              {
+                "id": "n9-2",
+                "noteId": 9,
+                "pitch": 76,
+                "written": {
+                  "step": "e",
+                  "alter": 0,
+                  "octave": 5
+                },
+                "staffPosition": 7,
+                "accidental": null,
+                "tieStart": false,
+                "tieStop": true,
+                "notehead": "normal"
+              }
+            ]
+          },
+          {
+            "measure": 2,
+            "staff": 0,
+            "voice": 2,
+            "id": "rtrk_000001-2-0-2-1",
+            "kind": "rest",
+            "tick": 3840,
+            "durationTicks": 960,
+            "value": "quarter",
+            "dots": 0,
+            "tuplet": null,
+            "beam": null,
+            "stem": "none",
+            "notes": []
+          },
+          {
+            "measure": 2,
+            "staff": 0,
+            "voice": 2,
+            "id": "n10",
+            "kind": "note",
+            "tick": 4800,
+            "durationTicks": 960,
+            "value": "quarter",
+            "dots": 0,
+            "tuplet": null,
+            "beam": null,
+            "stem": "down",
+            "notes": [
+              {
+                "id": "n10",
+                "noteId": 10,
+                "pitch": 72,
+                "written": {
+                  "step": "c",
+                  "alter": 0,
+                  "octave": 5
+                },
+                "staffPosition": 5,
+                "accidental": null,
+                "tieStart": false,
+                "tieStop": false,
+                "notehead": "normal"
+              }
+            ]
+          },
+          {
+            "measure": 2,
+            "staff": 0,
+            "voice": 2,
+            "id": "n11",
+            "kind": "note",
+            "tick": 5760,
+            "durationTicks": 960,
+            "value": "quarter",
+            "dots": 0,
+            "tuplet": null,
+            "beam": null,
+            "stem": "down",
+            "notes": [
+              {
+                "id": "n11",
+                "noteId": 11,
+                "pitch": 74,
+                "written": {
+                  "step": "d",
+                  "alter": 0,
+                  "octave": 5
+                },
+                "staffPosition": 6,
+                "accidental": null,
+                "tieStart": false,
+                "tieStop": false,
+                "notehead": "normal"
+              }
+            ]
+          },
+          {
+            "measure": 2,
+            "staff": 0,
+            "voice": 2,
+            "id": "n12",
+            "kind": "note",
+            "tick": 6720,
+            "durationTicks": 960,
+            "value": "quarter",
+            "dots": 0,
+            "tuplet": null,
+            "beam": null,
+            "stem": "down",
+            "notes": [
+              {
+                "id": "n12",
+                "noteId": 12,
+                "pitch": 71,
+                "written": {
+                  "step": "b",
+                  "alter": 0,
+                  "octave": 4
+                },
+                "staffPosition": 4,
+                "accidental": null,
+                "tieStart": false,
+                "tieStop": false,
+                "notehead": "normal"
+              }
+            ]
+          },
+          {
+            "measure": 2,
+            "staff": 1,
+            "voice": 1,
+            "id": "n13",
+            "kind": "note",
+            "tick": 3840,
+            "durationTicks": 1920,
+            "value": "half",
+            "dots": 0,
+            "tuplet": null,
+            "beam": null,
+            "stem": "up",
+            "notes": [
+              {
+                "id": "n13",
+                "noteId": 13,
+                "pitch": 41,
+                "written": {
+                  "step": "f",
+                  "alter": 0,
+                  "octave": 2
+                },
+                "staffPosition": -1,
+                "accidental": null,
+                "tieStart": false,
+                "tieStop": false,
+                "notehead": "normal"
+              }
+            ]
+          },
+          {
+            "measure": 2,
+            "staff": 1,
+            "voice": 1,
+            "id": "n14",
+            "kind": "note",
+            "tick": 5760,
+            "durationTicks": 1920,
+            "value": "half",
+            "dots": 0,
+            "tuplet": null,
+            "beam": null,
+            "stem": "up",
+            "notes": [
+              {
+                "id": "n14",
+                "noteId": 14,
+                "pitch": 43,
+                "written": {
+                  "step": "g",
+                  "alter": 0,
+                  "octave": 2
+                },
+                "staffPosition": 0,
+                "accidental": null,
+                "tieStart": false,
+                "tieStop": false,
+                "notehead": "normal"
+              }
+            ]
+          },
+          {
+            "measure": 3,
+            "staff": 0,
+            "voice": 1,
+            "id": "n15",
+            "kind": "note",
+            "tick": 7680,
+            "durationTicks": 480,
+            "value": "eighth",
+            "dots": 0,
+            "tuplet": null,
+            "beam": 1,
+            "stem": "up",
+            "notes": [
+              {
+                "id": "n15",
+                "noteId": 15,
+                "pitch": 64,
+                "written": {
+                  "step": "e",
+                  "alter": 0,
+                  "octave": 4
+                },
+                "staffPosition": 0,
+                "accidental": null,
+                "tieStart": false,
+                "tieStop": false,
+                "notehead": "normal"
+              }
+            ]
+          },
+          {
+            "measure": 3,
+            "staff": 0,
+            "voice": 1,
+            "id": "c16",
+            "kind": "chord",
+            "tick": 8160,
+            "durationTicks": 480,
+            "value": "eighth",
+            "dots": 0,
+            "tuplet": null,
+            "beam": 1,
+            "stem": "up",
+            "notes": [
+              {
+                "id": "n16",
+                "noteId": 16,
+                "pitch": 65,
+                "written": {
+                  "step": "f",
+                  "alter": 0,
+                  "octave": 4
+                },
+                "staffPosition": 1,
+                "accidental": null,
+                "tieStart": false,
+                "tieStop": false,
+                "notehead": "normal"
+              },
+              {
+                "id": "n17",
+                "noteId": 17,
+                "pitch": 67,
+                "written": {
+                  "step": "g",
+                  "alter": 0,
+                  "octave": 4
+                },
+                "staffPosition": 2,
+                "accidental": null,
+                "tieStart": false,
+                "tieStop": false,
+                "notehead": "normal"
+              }
+            ]
+          },
+          {
+            "measure": 3,
+            "staff": 0,
+            "voice": 1,
+            "id": "c18",
+            "kind": "chord",
+            "tick": 8640,
+            "durationTicks": 960,
+            "value": "quarter",
+            "dots": 0,
+            "tuplet": null,
+            "beam": null,
+            "stem": "up",
+            "notes": [
+              {
+                "id": "n18",
+                "noteId": 18,
+                "pitch": 60,
+                "written": {
+                  "step": "c",
+                  "alter": 0,
+                  "octave": 4
+                },
+                "staffPosition": -2,
+                "accidental": null,
+                "tieStart": true,
+                "tieStop": false,
+                "notehead": "normal"
+              },
+              {
+                "id": "n19",
+                "noteId": 19,
+                "pitch": 64,
+                "written": {
+                  "step": "e",
+                  "alter": 0,
+                  "octave": 4
+                },
+                "staffPosition": 0,
+                "accidental": null,
+                "tieStart": true,
+                "tieStop": false,
+                "notehead": "normal"
+              },
+              {
+                "id": "n20",
+                "noteId": 20,
+                "pitch": 67,
+                "written": {
+                  "step": "g",
+                  "alter": 0,
+                  "octave": 4
+                },
+                "staffPosition": 2,
+                "accidental": null,
+                "tieStart": true,
+                "tieStop": false,
+                "notehead": "normal"
+              }
+            ]
+          },
+          {
+            "measure": 3,
+            "staff": 0,
+            "voice": 1,
+            "id": "c18-2",
+            "kind": "chord",
+            "tick": 9600,
+            "durationTicks": 1920,
+            "value": "half",
+            "dots": 0,
+            "tuplet": null,
+            "beam": null,
+            "stem": "up",
+            "notes": [
+              {
+                "id": "n18-2",
+                "noteId": 18,
+                "pitch": 60,
+                "written": {
+                  "step": "c",
+                  "alter": 0,
+                  "octave": 4
+                },
+                "staffPosition": -2,
+                "accidental": null,
+                "tieStart": false,
+                "tieStop": true,
+                "notehead": "normal"
+              },
+              {
+                "id": "n19-2",
+                "noteId": 19,
+                "pitch": 64,
+                "written": {
+                  "step": "e",
+                  "alter": 0,
+                  "octave": 4
+                },
+                "staffPosition": 0,
+                "accidental": null,
+                "tieStart": false,
+                "tieStop": true,
+                "notehead": "normal"
+              },
+              {
+                "id": "n20-2",
+                "noteId": 20,
+                "pitch": 67,
+                "written": {
+                  "step": "g",
+                  "alter": 0,
+                  "octave": 4
+                },
+                "staffPosition": 2,
+                "accidental": null,
+                "tieStart": false,
+                "tieStop": true,
+                "notehead": "normal"
+              }
+            ]
+          },
+          {
+            "measure": 3,
+            "staff": 1,
+            "voice": 1,
+            "id": "n21",
+            "kind": "note",
+            "tick": 7680,
+            "durationTicks": 3840,
+            "value": "whole",
+            "dots": 0,
+            "tuplet": null,
+            "beam": null,
+            "stem": "none",
+            "notes": [
+              {
+                "id": "n21",
+                "noteId": 21,
+                "pitch": 48,
+                "written": {
+                  "step": "c",
+                  "alter": 0,
+                  "octave": 3
+                },
+                "staffPosition": 3,
+                "accidental": null,
+                "tieStart": false,
+                "tieStop": false,
+                "notehead": "normal"
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

@@ -14,7 +14,8 @@ namespace Anode.Notation;
 ///     <c>verse</c>/<c>syl</c>, and as control events: ties (<c>tie</c>), symbols (<c>dynam</c>, <c>hairpin</c>,
 ///     <c>slur</c>, <c>fermata</c>, <c>trill</c>, <c>octave</c>, <c>pedal</c>, <c>dir</c>, <c>tempo</c>, <c>reh</c>),
 ///     tempo marks, markers as <c>reh</c> and chord symbols as <c>harm</c>. Every element of the view carries its
-///     <see cref="ScoreIds" /> as <c>xml:id</c>. Pitches are written (MEI octaves: C4 is MIDI 60).
+///     <see cref="ScoreIds" /> as <c>xml:id</c>. Pitches are written (MEI octaves: C4 is MIDI 60); a percussion staff's
+///     notes also carry their staff position as <c>loc</c>. A hidden tie is left out (MEI 5's tie has no visibility).
 /// </summary>
 public static class MeiWriter {
     const string Ns = "http://www.music-encoding.org/ns/mei";
@@ -56,6 +57,9 @@ public static class MeiWriter {
         readonly HashSet<long> hiddenTies = view.Symbols.Where(s => s.Kind == ScoreSymbolKind.TieHidden && s.NoteId is not null)
             .Select(s => s.NoteId!.Value)
             .ToHashSet();
+
+        /// <summary>Whether the staff being written is a percussion staff (its notes carry <c>loc</c>).</summary>
+        bool percussion;
 
         /// <summary>Each part's first staff number (MEI staves count from 1 across the score).</summary>
         readonly int[] firstStaff = FirstStaves(view);
@@ -324,6 +328,7 @@ public static class MeiWriter {
                     var staff = part.Measures[index].Staves[s];
                     xml.WriteStartElement("staff", Ns);
                     xml.WriteAttributeString("n", N(firstStaff[p] + s));
+                    percussion = part.Staves[s].Clef == Contracts.Clef.Percussion;
                     foreach (var voice in staff.Voices) {
                         xml.WriteStartElement("layer", Ns);
                         xml.WriteAttributeString("n", N(voice.Number));
@@ -433,6 +438,10 @@ public static class MeiWriter {
 
             xml.WriteAttributeString("pname", note.Written.Step.ToString().ToLowerInvariant());
             xml.WriteAttributeString("oct", N(note.Written.Octave));
+            if (percussion) {
+                xml.WriteAttributeString("loc", N(note.StaffPosition));
+            }
+
             if (note.Accidental is { } accidental) {
                 xml.WriteAttributeString(
                     "accid",
