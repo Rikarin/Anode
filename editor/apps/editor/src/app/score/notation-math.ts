@@ -74,31 +74,51 @@ export function keyAlter(fifths: number, step: PitchStep): number {
   return 0;
 }
 
-/** A pitch spelled in a key: sharps in sharp keys and C, flats in flat keys, the key's own notes as they are. */
-export function spell(pitch: number, fifths: number): ScorePitch {
-  const pc = ((pitch % 12) + 12) % 12;
-  // A step of the key that sounds this pitch class.
+/**
+ * A pitch spelled in a key, as the notation engine spells it (`Anode.Notation`'s `Spelling.Spell`): the key's own notes;
+ * in minor its raised sixth and seventh; naturals; then sharps in sharp keys and flats in flat keys (C major and A minor:
+ * C♯ E♭ F♯ G♯ B♭).
+ */
+export function spell(pitch: number, fifths: number, mode: 'major' | 'minor' = 'major'): ScorePitch {
+  const pc = mod12(pitch);
   for (let s = 0; s < 7; s++) {
     const step = Steps[s] as PitchStep;
     const alter = keyAlter(fifths, step);
-    if (((((StepPitchClass[s] as number) + alter) % 12) + 12) % 12 === pc) {
+    if (mod12((StepPitchClass[s] as number) + alter) === pc) {
       return withOctave(pitch, step, alter);
     }
   }
-  const sharps = fifths >= 0;
-  for (let s = 0; s < 7; s++) {
-    const natural = StepPitchClass[s] as number;
-    const alter = sharps ? 1 : -1;
-    if ((((natural + alter) % 12) + 12) % 12 === pc) {
-      return withOctave(pitch, Steps[s] as PitchStep, alter);
+  if (mode === 'minor') {
+    // The tonic is three fifths above the relative major's; its raised seventh and sixth are a semitone and three below.
+    const index = fifths + 4;
+    const tonicStep = Steps.indexOf(SharpOrder[((index % 7) + 7) % 7] as PitchStep);
+    const tonicClass = (StepPitchClass[tonicStep] as number) + Math.floor(index / 7);
+    for (const [degreeBelow, semitones] of [
+      [1, 1],
+      [2, 3]
+    ] as const) {
+      if (mod12(tonicClass - semitones) === pc) {
+        const step = (tonicStep - degreeBelow + 7) % 7;
+        let alter = mod12(pc - (StepPitchClass[step] as number));
+        if (alter > 6) {
+          alter -= 12;
+        }
+        return withOctave(pitch, Steps[step] as PitchStep, alter);
+      }
     }
   }
-  for (let s = 0; s < 7; s++) {
-    if (StepPitchClass[s] === pc) {
-      return withOctave(pitch, Steps[s] as PitchStep, 0);
-    }
+  const natural = StepPitchClass.indexOf(pc);
+  if (natural >= 0) {
+    return withOctave(pitch, Steps[natural] as PitchStep, 0);
   }
-  return withOctave(pitch, 'c', 0);
+  const sharp = fifths > 0 || (fifths === 0 && (pc === 1 || pc === 6 || pc === 8));
+  return sharp
+    ? withOctave(pitch, Steps[StepPitchClass.indexOf(pc - 1)] as PitchStep, 1)
+    : withOctave(pitch, Steps[StepPitchClass.indexOf((pc + 1) % 12)] as PitchStep, -1);
+}
+
+function mod12(n: number): number {
+  return ((n % 12) + 12) % 12;
 }
 
 function withOctave(pitch: number, step: PitchStep, alter: number): ScorePitch {
@@ -141,9 +161,10 @@ export function placementOf(
   clef: Clef,
   transpose: number,
   fifths: number,
-  pitch: number
+  pitch: number,
+  mode: 'major' | 'minor' = 'major'
 ): { staffPosition: number; written: ScorePitch } {
-  const written = spell(pitch + transpose, writtenFifths(fifths, transpose));
+  const written = spell(pitch + transpose, writtenFifths(fifths, transpose), mode);
   return {
     staffPosition: diatonic(written) - BottomLine[clef],
     written: { ...written, octave: written.octave + clefOctave(clef) }
@@ -174,9 +195,10 @@ export function stepPitch(
   steps: number,
   transpose: number,
   fifths: number,
-  accidental: Accidental | null = null
+  accidental: Accidental | null = null,
+  mode: 'major' | 'minor' = 'major'
 ): number {
-  const { staffPosition } = placementOf('treble', transpose, fifths, pitch);
+  const { staffPosition } = placementOf('treble', transpose, fifths, pitch, mode);
   return pitchAt('treble', transpose, fifths, staffPosition + steps, accidental);
 }
 

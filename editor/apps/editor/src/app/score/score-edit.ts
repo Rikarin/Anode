@@ -10,7 +10,7 @@ import type {
   StaffStyle
 } from '@anode/api-client';
 import type { PartBoxTool } from '@anode/audio-ui/lazy';
-import { type Accidental, gridsOf, pitchAt, placementOf, snapToGrids } from './notation-math';
+import { type Accidental, accidentalOf, gridsOf, pitchAt, placementOf, snapToGrids, stepPitch } from './notation-math';
 
 /**
  * The Score Editor's edits as commands (docs/10-phase-9.md, "Score edits"): what a click with a Part box tool, a drag
@@ -178,13 +178,14 @@ export function writtenPosition(
   clef: Clef,
   drawnTranspose: number,
   styleTranspose: number,
-  fifths: number
+  fifths: number,
+  mode: 'major' | 'minor' = 'major'
 ): number {
   if (drawnTranspose === styleTranspose) {
     return drawn;
   }
   const pitch = pitchAt(clef, drawnTranspose, fifths, drawn);
-  return placementOf(clef, styleTranspose, fifths, pitch).staffPosition;
+  return placementOf(clef, styleTranspose, fifths, pitch, mode).staffPosition;
 }
 
 /** A note tool's click: `addScoreNote` at the snapped tick, staff position and staff. */
@@ -209,27 +210,66 @@ export function insertNote(args: {
   };
 }
 
-/** A drag: `moveScoreNotes` per region (one batch, one undo step); nothing when it did not move. */
+/**
+ * A vertical drag as `moveScoreNotes` reads it: steps of the written key and a written accidental. As dragged, except in
+ * a concert-pitch score of a transposing staff: there the drag reaches a concert pitch (steps of the concert key drawn,
+ * the accidental forcing a concert alteration), which becomes the written steps to it and, when the written key does not
+ * give it there, the written accidental that does. Without an accidental the step counts agree (transposition keeps the
+ * scale's degrees); a forced accidental is where they part (concert B♭ is a B♭ clarinet's C♮, not C♭).
+ */
+export function writtenMove(
+  pitch: number,
+  steps: number,
+  accidental: Accidental | null,
+  drawnTranspose: number,
+  styleTranspose: number,
+  fifths: number,
+  mode: 'major' | 'minor' = 'major'
+): { steps: number; accidental: Accidental | null } {
+  if (drawnTranspose === styleTranspose || (steps === 0 && !accidental)) {
+    return { steps, accidental };
+  }
+  const target = stepPitch(pitch, steps, drawnTranspose, fifths, accidental, mode);
+  const from = placementOf('treble', styleTranspose, fifths, pitch, mode).staffPosition;
+  const to = placementOf('treble', styleTranspose, fifths, target, mode);
+  const keyed = pitchAt('treble', styleTranspose, fifths, to.staffPosition);
+  return { steps: to.staffPosition - from, accidental: keyed === target ? null : accidentalOf(to.written.alter) };
+}
+
+/**
+ * A drag: `moveScoreNotes` per region (one batch, one undo step), and per written move where notes need different ones
+ * (`writtenMove`); nothing for a note that did not move.
+ */
 export function moveNotes(
-  notes: readonly { noteId: number; regionId: string }[],
+  notes: readonly { noteId: number; regionId: string; steps?: number; accidental?: Accidental | null }[],
   steps: number,
   ticks: number,
   accidental: Accidental | null
 ): EditCommand[] {
-  if (steps === 0 && ticks === 0 && !accidental) {
-    return [];
-  }
-  const byRegion = new Map<string, number[]>();
+  const groups = new Map<
+    string,
+    { regionId: string; steps: number; accidental: Accidental | null; noteIds: number[] }
+  >();
   for (const note of notes) {
-    byRegion.set(note.regionId, [...(byRegion.get(note.regionId) ?? []), note.noteId]);
+    const own = {
+      steps: note.steps ?? steps,
+      accidental: note.accidental === undefined ? accidental : note.accidental
+    };
+    if (own.steps === 0 && ticks === 0 && !own.accidental) {
+      continue;
+    }
+    const key = `${note.regionId}\u0000${own.steps}\u0000${own.accidental ?? ''}`;
+    const group = groups.get(key) ?? { regionId: note.regionId, ...own, noteIds: [] };
+    group.noteIds.push(note.noteId);
+    groups.set(key, group);
   }
-  return [...byRegion].map(([regionId, noteIds]) => ({
+  return [...groups.values()].map(group => ({
     type: 'moveScoreNotes' as const,
-    regionId,
-    noteIds: [...noteIds].sort((a, b) => a - b),
-    steps,
+    regionId: group.regionId,
+    noteIds: [...group.noteIds].sort((a, b) => a - b),
+    steps: group.steps,
     ticks,
-    accidental
+    accidental: group.accidental
   }));
 }
 

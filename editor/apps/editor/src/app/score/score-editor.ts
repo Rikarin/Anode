@@ -41,7 +41,7 @@ import { TransportStore } from '../state/transport.store';
 import { UiStore } from '../state/ui.store';
 import { chordText, parseChord } from './chords';
 import { continuesWord, lyricKey, lyricNotes } from './lyrics';
-import { dragAccidental } from './notation-math';
+import { type Accidental, dragAccidental } from './notation-math';
 import {
   deleteSelection,
   insertNote,
@@ -56,6 +56,7 @@ import {
   symbolsForNotes,
   TextSymbols,
   valueTicks,
+  writtenMove,
   writtenPosition
 } from './score-edit';
 import { ScorePrint } from './score-print';
@@ -833,7 +834,14 @@ export class ScoreEditor {
     const styleTranspose = style.staves[staff.staff]?.transpose ?? 0;
     const staffPosition = style.drumMap?.length
       ? place.position
-      : writtenPosition(place.position, staff.clef, staff.transpose, styleTranspose, measure.key.fifths);
+      : writtenPosition(
+          place.position,
+          staff.clef,
+          staff.transpose,
+          styleTranspose,
+          measure.key.fifths,
+          measure.key.mode
+        );
     await this.project.execute(
       [
         insertNote({
@@ -977,13 +985,44 @@ export class ScoreEditor {
         ticks = snapDisplayTick(target, measure, region, style) - grabbed.tick;
       }
     }
+    const accidental = dragAccidental(event);
     const notes = this.selectedNotes()
-      .map(n => ({ noteId: n.noteId, regionId: regionOfNote(regions.values(), n.noteId)?.id ?? '' }))
+      .map(n => ({
+        noteId: n.noteId,
+        regionId: regionOfNote(regions.values(), n.noteId)?.id ?? '',
+        ...this.writtenMoveOf(n.noteId, steps, accidental)
+      }))
       .filter(n => n.regionId);
-    const commands = moveNotes(notes, steps, ticks, dragAccidental(event));
+    const commands = moveNotes(notes, steps, ticks, accidental);
     if (commands.length) {
       await this.project.execute(commands, 'Move Notes');
     }
+  }
+
+  /** A drag of a note as the model reads it: written steps and accidental (`writtenMove`; concert-pitch scores differ). */
+  private writtenMoveOf(
+    noteId: number,
+    steps: number,
+    accidental: Accidental | null
+  ): { steps: number; accidental: Accidental | null } {
+    const index = this.store.index();
+    const note = index?.notes.get(noteId);
+    const staff = note ? index?.staves[note.staff] : undefined;
+    const style = staff ? this.store.styleOf(staff.trackId) : null;
+    const measure = note && index ? measureAtTick(index.measures, note.tick) : null;
+    if (!note || !staff || !style || !measure || style.drumMap?.length) {
+      return { steps, accidental };
+    }
+    const styleTranspose = style.staves[staff.staff]?.transpose ?? 0;
+    return writtenMove(
+      note.pitch,
+      steps,
+      accidental,
+      staff.transpose,
+      styleTranspose,
+      measure.key.fifths,
+      measure.key.mode
+    );
   }
 
   // ---- delete

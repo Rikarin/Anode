@@ -24,6 +24,7 @@ import {
   symbolAt,
   symbolsForNotes,
   valueTicks,
+  writtenMove,
   writtenPosition
 } from './score-edit';
 import {
@@ -235,6 +236,13 @@ describe('notation math', () => {
     expect(spell(61, -3)).toEqual({ step: 'd', alter: -1, octave: 4 });
     expect(spell(66, 0)).toEqual({ step: 'f', alter: 1, octave: 4 });
     expect(spell(71, -6)).toEqual({ step: 'c', alter: -1, octave: 5 });
+    // As the engine spells (Spelling.Spell): naturals before sharps, C major's E♭ and B♭, minor's raised degrees.
+    expect(spell(72, 2)).toEqual({ step: 'c', alter: 0, octave: 5 });
+    expect(spell(63, 0)).toEqual({ step: 'e', alter: -1, octave: 4 });
+    expect(spell(70, 0)).toEqual({ step: 'b', alter: -1, octave: 4 });
+    expect(spell(61, -1, 'minor')).toEqual({ step: 'c', alter: 1, octave: 4 });
+    expect(spell(62, 6, 'minor')).toEqual({ step: 'c', alter: 2, octave: 4 });
+    expect(spell(59, -1, 'minor')).toEqual({ step: 'b', alter: 0, octave: 3 });
   });
 
   it('places pitches on staves and back, with clefs and transposition', () => {
@@ -357,6 +365,37 @@ describe('score edits', () => {
     ]);
     expect(moveNotes([{ noteId: 1, regionId: 'a' }], 0, 0, null)).toEqual([]);
     expect(moveNotes([{ noteId: 1, regionId: 'a' }], 0, 0, 'flat')).toHaveLength(1);
+  });
+
+  it('turns a drag in a concert-pitch score of a transposing staff into written steps and accidentals', () => {
+    // As drawn: written steps of the written key, whatever the transposition.
+    expect(writtenMove(71, 1, null, 2, 2, 0)).toEqual({ steps: 1, accidental: null });
+    // Concert C major on a B♭ clarinet (written D major): a step from concert E4 (written F♯4) to F4 is a written step to G4.
+    expect(writtenMove(64, 1, null, 0, 2, 0)).toEqual({ steps: 1, accidental: null });
+    // From concert A4 a step up forced flat is B♭4: written C5, natural in D major (a written flat would be C♭, concert A).
+    expect(writtenMove(69, 1, 'flat', 0, 2, 0)).toEqual({ steps: 1, accidental: 'natural' });
+    // Concert B♯4 (C5) from A4: written D5, two written steps from B4, natural in D major.
+    expect(writtenMove(69, 1, 'sharp', 0, 2, 0)).toEqual({ steps: 2, accidental: null });
+    // An alto sax (+9) in concert E♭ major (written C major): from concert G4 a step down is F4, written D5.
+    expect(writtenMove(67, -1, null, 0, 9, -3)).toEqual({ steps: -1, accidental: null });
+  });
+
+  it('groups notes that need different written moves', () => {
+    expect(
+      moveNotes(
+        [
+          { noteId: 1, regionId: 'a', steps: 1, accidental: null },
+          { noteId: 2, regionId: 'a', steps: 1, accidental: 'sharp' },
+          { noteId: 3, regionId: 'a', steps: 0, accidental: null }
+        ],
+        1,
+        0,
+        'natural'
+      )
+    ).toEqual([
+      { type: 'moveScoreNotes', regionId: 'a', noteIds: [1], steps: 1, ticks: 0, accidental: null },
+      { type: 'moveScoreNotes', regionId: 'a', noteIds: [2], steps: 1, ticks: 0, accidental: 'sharp' }
+    ]);
   });
 
   it('deletes notes, symbols, syllables and chord symbols in one batch', () => {
