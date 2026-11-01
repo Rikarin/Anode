@@ -245,6 +245,13 @@
   --code-function: #326d74;
   --code-error: #d70015;
   --code-error-line: rgb(215 0 21 / 0.14);
+
+  /* Score (Phase 9): paper and ink are physical, the same in both themes; the selection and playhead follow them. */
+  --score-paper: #ffffff;
+  --score-ink: #000000;
+  --score-selected: #0071e3;
+  --score-playhead: rgb(215 0 21 / 0.8);
+  --score-shadow: rgb(0 0 0 / 0.18);
 }
 
 /* -------------------------------------------------------------------------------------------- dark theme (primary) */
@@ -376,6 +383,13 @@
   --code-function: #78c2b3;
   --code-error: #ff453a;
   --code-error-line: rgb(255 69 58 / 0.2);
+
+  /* Score (Phase 9): paper and ink are physical, the same in both themes; the selection and playhead follow them. */
+  --score-paper: #ffffff;
+  --score-ink: #000000;
+  --score-selected: #0071e3;
+  --score-playhead: rgb(215 0 21 / 0.8);
+  --score-shadow: rgb(0 0 0 / 0.6);
 }
 
 /* --------------------------------------------------------------------------------------------------- composites */

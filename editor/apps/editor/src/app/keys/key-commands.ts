@@ -21,7 +21,8 @@ export type KeyCommandGroup =
   | 'View'
   | 'Screensets'
   | 'Project'
-  | 'Control';
+  | 'Control'
+  | 'Score';
 
 const screensets: KeyCommand[] = Array.from({ length: 9 }, (_, i) => ({
   id: `screenset.recall${i + 1}`,
@@ -106,7 +107,13 @@ export const KeyCommands: readonly KeyCommand[] = [
   { id: 'control.surfaces', label: 'Control Surfaces Setup…', group: 'Control', defaults: [] },
   { id: 'control.assignments', label: 'Controller Assignments…', group: 'Control', defaults: [] },
   { id: 'control.learn', label: 'Learn New Assignment', group: 'Control', defaults: ['Meta+L'] },
-  { id: 'sync.link', label: 'Ableton Link On/Off', group: 'Control', defaults: [] }
+  { id: 'sync.link', label: 'Ableton Link On/Off', group: 'Control', defaults: [] },
+  // Phase 9 (docs/10-phase-9.md): the Score Editor and its windows.
+  { id: 'view.score', label: 'Show Score Editor', group: 'View', defaults: ['N'] },
+  { id: 'score.sets', label: 'Score Sets…', group: 'Score', defaults: [] },
+  { id: 'score.staffStyles', label: 'Staff Styles…', group: 'Score', defaults: [] },
+  { id: 'score.layout', label: 'Score Layout…', group: 'Score', defaults: [] },
+  { id: 'score.print', label: 'Print Score…', group: 'Score', defaults: ['Meta+P'] }
 ];
 
 /** Modifier order in a binding. */

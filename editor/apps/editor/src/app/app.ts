@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, Injector, computed, inject, signal } from '@angular/core';
 import { RouterOutlet } from '@angular/router';
 import { XuiButtonImports } from '@xui/button';
 import { XuiInputImports } from '@xui/input';
@@ -17,12 +17,17 @@ import { BounceInPlaceDialog } from './functions/bounce-in-place-dialog';
 import { ProcessingDialog } from './functions/processing-dialog';
 import { StripSilenceDialog } from './functions/strip-silence-dialog';
 import { GrooveWindow } from './grooves/groove-window';
+import { InterchangeDialog } from './interchange/interchange-dialog';
 import { KeyCommandsEditor } from './keys/key-commands-editor';
 import { SoundLibraryDialog } from './loops/sound-library-dialog';
 import { GroupSettings } from './mixer/group-settings';
 import { IoLabelsDialog } from './mixer/io-labels-dialog';
 import { PluginWindowsHost } from './mixer/plugin-window';
 import { PluginWindows } from './mixer/plugin-windows';
+import { ScoreLayoutWindow } from './score/score-layout-window';
+import { ScoreSetsWindow } from './score/score-sets-window';
+import { ScoreWindow } from './score/score-window';
+import { StaffStylesWindow } from './score/staff-styles-window';
 import { ScriptEditor } from './scripter/script-editor';
 import { ControlBar } from './shell/control-bar';
 import { SaveAlternativeDialog } from './shell/save-alternative';
@@ -30,6 +35,7 @@ import { HistoryStore } from './state/history.store';
 import { KeyCommandsStore } from './state/key-commands.store';
 import { LiveMidiStore } from './state/live-midi.store';
 import { MixerStore } from './state/mixer.store';
+import { PianoRollStore } from './state/piano-roll.store';
 import { ProjectSession } from './state/project-session';
 import { ProjectStore } from './state/project.store';
 import { ScreensetStore } from './state/screenset.store';
@@ -44,6 +50,16 @@ import { SyncSettingsWindow } from './sync/sync-settings-window';
 import { SyncStore } from './sync/sync.store';
 import { AudioImport } from './tracks/audio-import';
 import { TransformWindow } from './transform/transform-window';
+
+/** The interchange dialogs the app menu opens (Phase 9). */
+const InterchangeCommands = {
+  importMusicXml: { direction: 'import', format: 'musicxml' },
+  importAaf: { direction: 'import', format: 'aaf' },
+  importMidiOptions: { direction: 'import', format: 'midi' },
+  exportMusicXml: { direction: 'export', format: 'musicxml' },
+  exportAaf: { direction: 'export', format: 'aaf' },
+  exportMidi: { direction: 'export', format: 'midi' }
+} as const;
 
 @Component({
   selector: 'an-root',
@@ -71,6 +87,11 @@ import { TransformWindow } from './transform/transform-window';
     SyncSettingsWindow,
     TransformWindow,
     GrooveWindow,
+    InterchangeDialog,
+    ScoreLayoutWindow,
+    ScoreSetsWindow,
+    ScoreWindow,
+    StaffStylesWindow,
     XuiButtonImports,
     XuiInputImports,
     XuiNonIdealStateImports,
@@ -175,6 +196,33 @@ import { TransformWindow } from './transform/transform-window';
               <an-stem-splitter-dialog />
             }
           }
+          <!-- Phase 9's score windows and interchange dialogs (docs/10-phase-9.md), loaded when first opened: Verovio and
+               the score's parts stay out of the initial bundle. -->
+          @if (ui.scoreWindow() !== null) {
+            @defer (on immediate) {
+              <an-score-window />
+            }
+          }
+          @if (ui.staffStylesOpen()) {
+            @defer (on immediate) {
+              <an-staff-styles-window />
+            }
+          }
+          @if (ui.scoreSetsOpen()) {
+            @defer (on immediate) {
+              <an-score-sets-window />
+            }
+          }
+          @if (ui.scoreLayoutOpen()) {
+            @defer (on immediate) {
+              <an-score-layout-window />
+            }
+          }
+          @if (ui.interchange() !== null) {
+            @defer (on immediate) {
+              <an-interchange-dialog />
+            }
+          }
         }
         <!-- Control surfaces and assignments are user settings: they open without a project too. -->
         @if (ui.controllerAssignmentsOpen()) {
@@ -210,6 +258,8 @@ export class App {
   private readonly mixer = inject(MixerStore);
   private readonly control = inject(ControlStore);
   private readonly sync = inject(SyncStore);
+  private readonly injector = inject(Injector);
+  private readonly pianoRoll = inject(PianoRollStore);
 
   /**
    * In the macOS desktop app the control bar is the title bar: it drags the window and leaves room for the traffic
@@ -292,7 +342,12 @@ export class App {
       'control.learn': () => void this.learnNew(),
       'project.syncSettings': () => this.ui.syncSettingsOpen.set(true),
       'region.stemSplitter': () => this.openStemSplitter(),
-      'sync.link': () => void this.sync.toggleLink()
+      'sync.link': () => void this.sync.toggleLink(),
+      'view.score': () => this.showEditor('score'),
+      'score.sets': () => this.ui.scoreSetsOpen.set(true),
+      'score.staffStyles': () => this.ui.staffStylesOpen.set(true),
+      'score.layout': () => this.ui.scoreLayoutOpen.set(true),
+      'score.print': () => void this.printScore()
     };
     for (let n = 1; n <= 9; n++) {
       actions[`screenset.recall${n}`] = () => void this.screensets.recall(n);
@@ -361,7 +416,39 @@ export class App {
       case 'stemSplitter':
         this.openStemSplitter();
         break;
+      case 'importMusicXml':
+      case 'importAaf':
+      case 'importMidiOptions':
+      case 'exportMusicXml':
+      case 'exportAaf':
+      case 'exportMidi':
+        if (this.project.isOpen()) {
+          this.ui.interchange.set(InterchangeCommands[command]);
+        }
+        break;
+      case 'printScore':
+        await this.printScore();
+        break;
     }
+  }
+
+  /** File ▸ Print Score…: the open score window's score, else the Piano Roll's track, else every MIDI track. */
+  private async printScore(): Promise<void> {
+    if (!this.project.isOpen()) {
+      return;
+    }
+    const window = this.ui.scoreWindow();
+    const track = this.pianoRoll.track()?.id ?? null;
+    const query = window?.setId
+      ? { set: window.setId }
+      : window?.partTrackId
+        ? { part: window.partTrackId }
+        : track
+          ? { part: track }
+          : {};
+    // Loaded on first use: printing engraves with Verovio, which stays out of the initial bundle.
+    const { ScorePrint } = await import('./score/score-print');
+    await this.injector.get(ScorePrint).print(query, this.project.info()?.name ?? 'Score');
   }
 
   /** Edit ▸ Stem Splitter…: on the selected audio region (the first, when several are). */

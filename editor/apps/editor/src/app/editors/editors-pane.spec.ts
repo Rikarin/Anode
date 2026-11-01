@@ -26,7 +26,7 @@ describe('Editors pane', () => {
     await fixture.whenStable();
     expect(ui.editorView()).toBe('audio');
     expect(element.querySelector('[aria-label="Audio Track Editor"]')).not.toBeNull();
-    (element.querySelectorAll<HTMLButtonElement>('[role="tab"]')[2] as HTMLButtonElement).click();
+    (element.querySelectorAll<HTMLButtonElement>('[role="tab"]')[3] as HTMLButtonElement).click();
     await fixture.whenStable();
     expect(element.querySelector('[aria-label="Smart Tempo Editor"]')).not.toBeNull();
   });

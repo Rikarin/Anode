@@ -364,3 +364,39 @@ its band: the switch, the port with its status, this machine's addresses and the
 **Control bar, Phase 8.** After Varispeed, a Sync `bezel-group` (11 px semibold): the indicator (a 6 px LED,
 `bg-meter-low` locked, `bg-meter-mid` waiting; the source's short name; the external tempo in `readout`) opens
 Synchronization; Link (`aria-pressed`, `text-lit` when on, a link icon below 2xl) shows the peer count in `readout`.
+
+## Phase 9 patterns: the score
+
+New tokens, in both theme blocks of `anode-theme.css` (paper and ink are physical: the same in both themes):
+
+| Group | Variables                                                                                       |
+| ----- | ----------------------------------------------------------------------------------------------- |
+| Score | `--score-paper`, `--score-ink`, `--score-selected`, `--score-playhead`, `--score-shadow` (page) |
+
+**Score Editor** (`score/score-editor.ts`, a tab of the Editors pane and the Score window). `an-score-toolbar`
+(audio-ui lazy) is a `glass-bar` row: the Part Box `bezel` toggle (`text-lit`), what the score shows in 12 px
+semibold, then the Linear/Page `bezel-group` radiogroup (`text-lit` when checked), zoom as a `bezel-group` of −, a
+`readout` percentage and +, Follow (a `bezel` toggle), the Staff Styles…, Score Sets…, Layout… `bezel-group` and
+Print…. Below it a `role="status"` band on `bg-primary/15` for tool hints and refused input. The pages
+(`.an-score-page`, in `styles.css`) are Verovio's SVG on `--score-paper` with a soft `--score-shadow`, on
+`bg-surface-sunken`, side by side in the linear view and stacked and centred in the page view; zoom scales them as CSS.
+The selection is drawn in `--score-selected` (`.an-selected` on the note, symbol, syllable or chord symbol's element);
+the playhead is a 1 px `--score-playhead` line; the marquee a `bg-primary/15` box with a `border-primary` edge; lyric,
+chord and text fields are small `bg-surface-inset` inputs with a `border-primary` edge (`border-transport-record` when a
+chord symbol does not parse) over the page.
+
+**Part box** (`an-part-box`, audio-ui lazy): a `w-44` `bg-surface` column with a hairline edge, groups under compact
+Inspector bands (10 px bold) — Notes, Rests, Articulations, Dynamics, Lines, Text, Pedal — each a four-column grid of
+24 px `bezel` chips (`role="radio"`, the armed one `text-lit`) with arrow keys; Dotted and Triplet `bezel` toggles
+under the note values.
+
+**Score windows.** Staff Styles, Score Sets and Score Layout are `an-floating-window`s (lazy), built from the control
+windows' `Field` and `Band` (`control/styles.ts`): a `bg-surface` list of 28 px `role="option"` rows (selected
+`bg-primary/25`) beside the editor; staves and drum maps as dense tables under 10 px uppercase heads. The Score window
+holds a Score Editor at `75vh`. In the Inspector, a MIDI region's Score settings (display quantise, triplets,
+interpretation, no overlap, syncopation, max dots) follow its playback settings under a 10 px uppercase "Score" label,
+and a track's Staff Style is a native select with a `bezel` "…" to the window.
+
+**Interchange dialogs** (File ▸ Import / Export): one `xui-dialog` in the Bounce window's manner (Save As, Where with
+Choose…, the format's options, "Writes …", the job's `well` progress bar); imports pick a file with Choose… (desktop)
+or a file input (browser).

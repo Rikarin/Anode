@@ -168,3 +168,50 @@ xui-segmented-control [role='radio'][aria-checked='true'] {
   backdrop-filter: blur(24px) saturate(1.8);
   -webkit-backdrop-filter: blur(24px) saturate(1.8);
 }
+
+/* The Score Editor (Phase 9): Verovio's pages on paper, the selection in --score-selected. */
+.an-score-page {
+  background-color: var(--score-paper);
+  color: var(--score-ink);
+  box-shadow: 0 1px 4px var(--score-shadow);
+}
+.an-score-page svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.an-score-page .an-selected,
+.an-score-page .an-selected * {
+  fill: var(--score-selected);
+  stroke: var(--score-selected);
+  color: var(--score-selected);
+}
+.an-score-page .an-dragging {
+  opacity: 0.6;
+}
+
+/* Printing a score: only the print view, its pages at the layout's size (the @page size is set with it). */
+.an-print-root {
+  display: none;
+}
+@media print {
+  html.an-printing body > :not(.an-print-root) {
+    display: none !important;
+  }
+  html.an-printing,
+  html.an-printing body {
+    background: var(--score-paper) !important;
+  }
+  html.an-printing .an-print-root {
+    display: block;
+  }
+  .an-print-page {
+    overflow: hidden;
+    break-after: page;
+  }
+  .an-print-page svg {
+    display: block;
+    width: 100%;
+    height: 100%;
+  }
+}

@@ -17,8 +17,10 @@ contextBridge.exposeInMainWorld('anode', {
     importAudio: () => ipcRenderer.invoke('anode:dialog:importAudio'),
     importMidi: () => ipcRenderer.invoke('anode:dialog:importMidi'),
     contentPack: () => ipcRenderer.invoke('anode:dialog:contentPack'),
-    instrumentFile: (fileTypes: unknown) => ipcRenderer.invoke('anode:dialog:instrumentFile', fileTypes)
+    instrumentFile: (fileTypes: unknown) => ipcRenderer.invoke('anode:dialog:instrumentFile', fileTypes),
+    importFile: (kind: unknown) => ipcRenderer.invoke('anode:dialog:importFile', kind)
   },
+  printToPdf: (request: unknown) => ipcRenderer.invoke('anode:printToPdf', request),
   reveal: (path: unknown) => ipcRenderer.invoke('anode:reveal', path),
   onCommand: (listener: (command: unknown) => void) => {
     ipcRenderer.on('anode:command', (_event, command: unknown) => listener(command));

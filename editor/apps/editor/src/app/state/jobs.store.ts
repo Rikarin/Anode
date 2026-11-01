@@ -164,6 +164,18 @@ export class JobsStore {
     return job;
   }
 
+  /**
+   * Starts an interchange export or import (Phase 9: MusicXML, AAF, MIDI files); the dialog follows it by id. A finished
+   * export says where its file is (and reveals it in the desktop app), an import that it is in the project.
+   */
+  async interchange(start: () => Promise<Job>, failure: string): Promise<Job | null> {
+    const job = await this.notify.run(start, failure);
+    if (job) {
+      this.update(job);
+    }
+    return job;
+  }
+
   async cancel(id: string): Promise<void> {
     const job = await this.notify.run(() => this.api.cancelJob(id), 'Could not cancel');
     if (job) {
@@ -194,6 +206,15 @@ export class JobsStore {
     }
     switch (job.state) {
       case 'done':
+        if (job.kind === 'musicXmlExport' || job.kind === 'aafExport' || job.kind === 'midiExport') {
+          const first = job.files[0];
+          this.notify.success(
+            `Exported ${first ? fileName(first) : JobNames[job.kind]}`,
+            first && this.canReveal ? { text: 'Show in Finder', run: () => void this.reveal(first) } : undefined
+          );
+        } else if (job.kind === 'musicXmlImport' || job.kind === 'aafImport' || job.kind === 'midiImport') {
+          this.notify.success(`${JobNames[job.kind]} done: the tracks are in the project.`);
+        }
         if (job.kind === 'bounce') {
           const first = job.files[0];
           const what = job.files.length === 1 && first ? fileName(first) : `${job.files.length} files`;
