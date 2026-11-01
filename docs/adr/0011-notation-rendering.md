@@ -57,6 +57,15 @@ generates ids for elements without an `xml:id` that can begin with the engine's 
 checks an element's class and the model's `ssym_`, `llyr_`, `hchd_` prefixes as well as its id. The desktop CSP allows
 `'wasm-unsafe-eval'` for the worker's WebAssembly.
 
+**Checked at integration** (the engine's own golden MEI engraved by Verovio 6.4 in Node, `libs/notation`'s
+`engine-mei.spec.ts`): the engine writes `meiversion="5.0"`, so `pgHead` is read without the rewrite (which stays for
+5.1); every note, chord, rest, symbol, syllable and chord-symbol id is in the SVG, and a `ScoreEvent.id` is its element's
+`xml:id`; the k-th `g.staff` of a measure is the k-th staff of the view across the parts (Verovio's `condense` is set to
+`none` so empty staves are never hidden); the percussion clef (`clef.shape="perc"`) draws SMuFL's unpercussion clef and
+drum notes sit at their `loc`; tempo marks ("♩ = 96") and chord symbols are text, a chord symbol's ♯ and ♭ drawn in the
+music font; hairpins and octave lines with `tstamp2="0m+5"` end at their bar line; a key change mid-score draws its
+signature. Nothing in the engine's MEI needed changing.
+
 ## Consequences
 
 - Two layout engines are never involved: what the editor shows is what prints.

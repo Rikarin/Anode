@@ -27,6 +27,11 @@ export interface EngraveOptions {
   smuflTextFont: 'embedded';
   /** Generated ids (for elements without an `xml:id`) are the same on every render. */
   xmlIdSeed: number;
+  /**
+   * Empty staves are never hidden: the k-th staff of every measure in the SVG is the k-th staff of the view (counted
+   * across the parts), which hit testing relies on.
+   */
+  condense: 'none';
 }
 
 /** Verovio units per millimetre (tenths of a millimetre). */
@@ -76,7 +81,8 @@ export function engraveOptions(options: Pick<RenderOptions, 'view' | 'layout'>):
     svgRemoveXlink: true,
     svgFormatRaw: true,
     smuflTextFont: 'embedded',
-    xmlIdSeed: 1
+    xmlIdSeed: 1,
+    condense: 'none'
   };
 }
 
