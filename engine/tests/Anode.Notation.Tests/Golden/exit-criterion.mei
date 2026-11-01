@@ -1,0 +1,109 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?xml-model href="https://music-encoding.org/schema/5.0/mei-all.rng" type="application/xml" schematypens="http://relaxng.org/ns/structure/1.0"?>
+<mei meiversion="5.0" xmlns="http://www.music-encoding.org/ns/mei">
+  <meiHead>
+    <fileDesc>
+      <titleStmt>
+        <title />
+      </titleStmt>
+      <pubStmt />
+    </fileDesc>
+  </meiHead>
+  <music>
+    <body>
+      <mdiv>
+        <score>
+          <scoreDef meter.count="4" meter.unit="4" keysig="0" page.width="210mm" page.height="297mm" page.topmar="15mm" page.botmar="15mm" page.leftmar="15mm" page.rightmar="15mm" vu.height="0.875mm">
+            <staffGrp>
+              <staffGrp symbol="brace" bar.thru="true">
+                <label>Piano</label>
+                <labelAbbr>Piano</labelAbbr>
+                <staffDef n="1" lines="5" clef.shape="G" clef.line="2" />
+                <staffDef n="2" lines="5" clef.shape="F" clef.line="4" />
+              </staffGrp>
+            </staffGrp>
+          </scoreDef>
+          <section>
+            <measure n="1" xml:id="m1">
+              <staff n="1">
+                <layer n="1">
+                  <chord xml:id="c1" dur="4" stem.dir="up">
+                    <note xml:id="n1" pname="c" oct="4" />
+                    <note xml:id="n2" pname="e" oct="4" />
+                    <note xml:id="n3" pname="g" oct="4" />
+                  </chord>
+                  <tuplet num="3" numbase="2">
+                    <beam>
+                      <note xml:id="n4" dur="8" pname="d" oct="4" stem.dir="up" />
+                      <note xml:id="n5" dur="8" pname="e" oct="4" stem.dir="up" />
+                      <note xml:id="n6" dur="8" pname="f" oct="4" stem.dir="up" />
+                    </beam>
+                  </tuplet>
+                  <note xml:id="n7" dur="2" pname="g" oct="4" stem.dir="up" />
+                </layer>
+              </staff>
+              <staff n="2">
+                <layer n="1">
+                  <note xml:id="n8" dur="1" pname="c" oct="3" />
+                </layer>
+              </staff>
+              <tempo staff="1" tstamp="1" place="above" midi.bpm="120">♩ = 120</tempo>
+              <tie staff="1" startid="#n7" endid="#n7-2" />
+            </measure>
+            <measure n="2" xml:id="m2">
+              <staff n="1">
+                <layer n="1">
+                  <note xml:id="n7-2" dur="4" pname="g" oct="4" stem.dir="up" />
+                  <note xml:id="n9" dur="4" pname="e" oct="5" stem.dir="up" />
+                  <note xml:id="n9-2" dur="2" pname="e" oct="5" stem.dir="up" />
+                </layer>
+                <layer n="2">
+                  <rest xml:id="rtrk_000001-2-0-2-1" dur="4" />
+                  <note xml:id="n10" dur="4" pname="c" oct="5" stem.dir="down" />
+                  <note xml:id="n11" dur="4" pname="d" oct="5" stem.dir="down" />
+                  <note xml:id="n12" dur="4" pname="b" oct="4" stem.dir="down" />
+                </layer>
+              </staff>
+              <staff n="2">
+                <layer n="1">
+                  <note xml:id="n13" dur="2" pname="f" oct="2" stem.dir="up" />
+                  <note xml:id="n14" dur="2" pname="g" oct="2" stem.dir="up" />
+                </layer>
+              </staff>
+              <tie staff="1" startid="#n9" endid="#n9-2" />
+            </measure>
+            <measure n="3" xml:id="m3" right="end">
+              <staff n="1">
+                <layer n="1">
+                  <beam>
+                    <note xml:id="n15" dur="16" pname="e" oct="4" stem.dir="up" />
+                    <note xml:id="n16" dur="16" pname="f" oct="4" stem.dir="up" />
+                    <note xml:id="n17" dur="8" pname="g" oct="4" stem.dir="up" />
+                  </beam>
+                  <chord xml:id="c18" dur="4" stem.dir="up">
+                    <note xml:id="n18" pname="c" oct="4" />
+                    <note xml:id="n19" pname="e" oct="4" />
+                    <note xml:id="n20" pname="g" oct="4" />
+                  </chord>
+                  <chord xml:id="c18-2" dur="2" stem.dir="up">
+                    <note xml:id="n18-2" pname="c" oct="4" />
+                    <note xml:id="n19-2" pname="e" oct="4" />
+                    <note xml:id="n20-2" pname="g" oct="4" />
+                  </chord>
+                </layer>
+              </staff>
+              <staff n="2">
+                <layer n="1">
+                  <note xml:id="n21" dur="1" pname="c" oct="3" />
+                </layer>
+              </staff>
+              <tie staff="1" startid="#n18" endid="#n18-2" />
+              <tie staff="1" startid="#n19" endid="#n19-2" />
+              <tie staff="1" startid="#n20" endid="#n20-2" />
+            </measure>
+          </section>
+        </score>
+      </mdiv>
+    </body>
+  </music>
+</mei>

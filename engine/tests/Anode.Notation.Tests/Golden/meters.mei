@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?xml-model href="https://music-encoding.org/schema/5.0/mei-all.rng" type="application/xml" schematypens="http://relaxng.org/ns/structure/1.0"?>
+<mei meiversion="5.0" xmlns="http://www.music-encoding.org/ns/mei">
+  <meiHead>
+    <fileDesc>
+      <titleStmt>
+        <title />
+      </titleStmt>
+      <pubStmt />
+    </fileDesc>
+  </meiHead>
+  <music>
+    <body>
+      <mdiv>
+        <score>
+          <scoreDef meter.count="4" meter.unit="4" keysig="0" page.width="210mm" page.height="297mm" page.topmar="15mm" page.botmar="15mm" page.leftmar="15mm" page.rightmar="15mm" vu.height="0.875mm">
+            <staffGrp>
+              <staffDef n="1" lines="5" clef.shape="G" clef.line="2">
+                <label>T</label>
+                <labelAbbr>T</labelAbbr>
+              </staffDef>
+            </staffGrp>
+          </scoreDef>
+          <section>
+            <measure n="1" xml:id="m1" right="dbl">
+              <staff n="1">
+                <layer n="1">
+                  <rest xml:id="rtrk_000001-1-0-1-1" dur="2" />
+                  <note xml:id="n1" dur="2" pname="c" oct="4" stem.dir="up" />
+                </layer>
+              </staff>
+              <tempo staff="1" tstamp="1" place="above" midi.bpm="120">♩ = 120</tempo>
+              <tie staff="1" startid="#n1" endid="#n1-2" />
+            </measure>
+            <scoreDef meter.count="6" meter.unit="8" />
+            <measure n="2" xml:id="m2" right="dbl">
+              <staff n="1">
+                <layer n="1">
+                  <note xml:id="n1-2" dur="4" pname="c" oct="4" stem.dir="up" />
+                  <rest xml:id="rtrk_000001-2-0-1-1" dur="8" />
+                  <note xml:id="n2" dur="8" pname="d" oct="4" stem.dir="up" />
+                  <note xml:id="n3" dur="4" pname="e" oct="4" stem.dir="up" />
+                </layer>
+              </staff>
+              <tie staff="1" startid="#n3" endid="#n3-2" />
+            </measure>
+            <scoreDef meter.count="3" meter.unit="4" />
+            <measure n="3" xml:id="m3" right="dbl">
+              <staff n="1">
+                <layer n="1">
+                  <note xml:id="n3-2" dur="4" pname="e" oct="4" stem.dir="up" />
+                  <note xml:id="n4" dur="2" pname="f" oct="4" stem.dir="up" />
+                </layer>
+              </staff>
+              <tie staff="1" startid="#n4" endid="#n4-2" />
+            </measure>
+            <scoreDef meter.count="5" meter.unit="8" />
+            <measure n="4" xml:id="m4" right="dbl">
+              <staff n="1">
+                <layer n="1">
+                  <note xml:id="n4-2" dur="4" pname="f" oct="4" stem.dir="up" />
+                  <rest xml:id="rtrk_000001-4-0-1-1" dur="8" />
+                  <rest xml:id="rtrk_000001-4-0-1-2" dur="4" />
+                </layer>
+              </staff>
+            </measure>
+            <scoreDef meter.count="2" meter.unit="2" />
+            <measure n="5" xml:id="m5" right="end">
+              <staff n="1">
+                <layer n="1">
+                  <note xml:id="n5" dur="1" pname="g" oct="4" />
+                </layer>
+              </staff>
+            </measure>
+          </section>
+        </score>
+      </mdiv>
+    </body>
+  </music>
+</mei>

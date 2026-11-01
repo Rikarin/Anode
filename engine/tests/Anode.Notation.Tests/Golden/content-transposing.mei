@@ -1,0 +1,167 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?xml-model href="https://music-encoding.org/schema/5.0/mei-all.rng" type="application/xml" schematypens="http://relaxng.org/ns/structure/1.0"?>
+<mei meiversion="5.0" xmlns="http://www.music-encoding.org/ns/mei">
+  <meiHead>
+    <fileDesc>
+      <titleStmt>
+        <title>Test &amp; Score</title>
+        <title type="subtitle">For &lt;MEI&gt;</title>
+        <respStmt>
+          <persName role="composer">A. Composer</persName>
+        </respStmt>
+      </titleStmt>
+      <pubStmt />
+    </fileDesc>
+  </meiHead>
+  <music>
+    <body>
+      <mdiv>
+        <score>
+          <scoreDef meter.count="4" meter.unit="4" keysig="0" page.width="210mm" page.height="297mm" page.topmar="15mm" page.botmar="15mm" page.leftmar="15mm" page.rightmar="15mm" vu.height="0.875mm">
+            <pgHead func="first">
+              <rend halign="center" valign="top">
+                <rend fontsize="x-large">Test &amp; Score</rend>
+                <lb />
+                <rend fontsize="large">For &lt;MEI&gt;</rend>
+              </rend>
+              <rend halign="right" valign="bottom">A. Composer</rend>
+              <rend halign="left" valign="top">Header</rend>
+            </pgHead>
+            <pgFoot func="all">
+              <rend halign="center" valign="bottom">Footer</rend>
+            </pgFoot>
+            <staffGrp bar.thru="false">
+              <staffGrp symbol="brace" bar.thru="true">
+                <label>Piano</label>
+                <labelAbbr>Piano</labelAbbr>
+                <staffDef n="1" lines="5" clef.shape="G" clef.line="2" />
+                <staffDef n="2" lines="5" clef.shape="F" clef.line="4" />
+              </staffGrp>
+              <staffDef n="3" lines="5" clef.shape="G" clef.line="2" keysig="2s" trans.diat="-1" trans.semi="-2">
+                <label>Clarinet in B♭</label>
+                <labelAbbr>Cl.</labelAbbr>
+              </staffDef>
+            </staffGrp>
+          </scoreDef>
+          <section>
+            <measure n="1" xml:id="m1">
+              <staff n="1">
+                <layer n="1">
+                  <note xml:id="n1" dur="4" pname="c" oct="5" stem.dir="down">
+                    <artic xml:id="ssym_01" artic="stacc" />
+                  </note>
+                  <note xml:id="n2" dur="4" pname="d" oct="5" stem.dir="down">
+                    <artic xml:id="ssym_02" artic="acc" />
+                  </note>
+                  <note xml:id="n3" dur="4" pname="e" oct="5" stem.dir="down">
+                    <artic xml:id="ssym_03" artic="ten" place="below" />
+                  </note>
+                  <note xml:id="n4" dur="4" pname="f" oct="5" stem.dir="down" />
+                </layer>
+              </staff>
+              <staff n="2">
+                <layer n="1">
+                  <note xml:id="n8" dur="1" pname="c" oct="3" />
+                </layer>
+              </staff>
+              <staff n="3">
+                <layer n="1">
+                  <note xml:id="n21" dur="2" pname="d" oct="4" stem.dir="up">
+                    <artic xml:id="ssym_17" artic="marc" />
+                    <verse n="1">
+                      <syl xml:id="llyr_1" wordpos="i" con="d">Hal</syl>
+                    </verse>
+                    <verse n="2">
+                      <syl xml:id="llyr_5">Sing</syl>
+                    </verse>
+                  </note>
+                  <note xml:id="n22" dur="2" pname="e" oct="4" stem.dir="up">
+                    <artic xml:id="ssym_18" artic="stacciss" />
+                    <verse n="1">
+                      <syl xml:id="llyr_2" wordpos="m" con="d">le</syl>
+                    </verse>
+                  </note>
+                </layer>
+              </staff>
+              <tempo staff="1" tstamp="1" place="above" midi.bpm="96">♩ = 96</tempo>
+              <dynam xml:id="ssym_04" staff="1" tstamp="1">mf</dynam>
+              <slur xml:id="ssym_05" staff="1" startid="#n1" endid="#n3" />
+              <hairpin xml:id="ssym_06" staff="1" tstamp="1" tstamp2="0m+5" form="cres" />
+              <tempo xml:id="ssym_09" staff="1" tstamp="1">Andante</tempo>
+              <harm xml:id="hchd_1" staff="1" tstamp="1">C</harm>
+              <harm xml:id="hchd_2" staff="1" tstamp="3">Am7</harm>
+              <pedal xml:id="ssym_11" staff="2" tstamp="1" dir="down" />
+              <pedal xml:id="ssym_12" staff="2" tstamp="4.75" dir="up" />
+            </measure>
+            <measure n="2" xml:id="m2" right="dbl">
+              <staff n="1">
+                <layer n="1">
+                  <note xml:id="n4-2" dur="4" pname="f" oct="5" stem.dir="down" />
+                  <note xml:id="n5" dur="4" pname="g" oct="5" stem.dir="down" />
+                  <note xml:id="n6" dur="2" pname="f" oct="5" accid="s" stem.dir="down" />
+                </layer>
+              </staff>
+              <staff n="2">
+                <layer n="1">
+                  <note xml:id="n9" dur="1" pname="g" oct="2" />
+                </layer>
+              </staff>
+              <staff n="3">
+                <layer n="1">
+                  <note xml:id="n23" dur="1" pname="f" oct="4" accid.ges="s">
+                    <verse n="1">
+                      <syl xml:id="llyr_3" wordpos="t">lu</syl>
+                    </verse>
+                  </note>
+                </layer>
+              </staff>
+              <dir xml:id="ssym_08" staff="1" tstamp="1">dolce</dir>
+              <reh xml:id="ssym_10" staff="1" tstamp="1">B</reh>
+              <octave xml:id="ssym_15" staff="1" tstamp="1" tstamp2="0m+5" dis="8" dis.place="above" />
+              <harm xml:id="hchd_3" staff="1" tstamp="1">Fmaj7/A</harm>
+              <hairpin xml:id="ssym_07" staff="1" startid="#n5" endid="#n6" form="dim" />
+              <dynam xml:id="ssym_19" staff="3" startid="#n23">p</dynam>
+            </measure>
+            <scoreDef keysig="1s">
+              <staffGrp>
+                <staffDef n="1" keysig="1s" />
+                <staffDef n="2" keysig="1s" />
+                <staffDef n="3" keysig="3s" />
+              </staffGrp>
+            </scoreDef>
+            <measure n="3" xml:id="m3" right="end">
+              <staff n="1">
+                <layer n="1">
+                  <note xml:id="n7" dur="1" pname="g" oct="5" />
+                </layer>
+              </staff>
+              <staff n="2">
+                <layer n="1">
+                  <chord xml:id="c10" dur="1">
+                    <note xml:id="n10" pname="g" oct="3" />
+                    <note xml:id="n11" pname="b" oct="3" />
+                  </chord>
+                </layer>
+              </staff>
+              <staff n="3">
+                <layer n="1">
+                  <note xml:id="n24" dur="1" pname="g" oct="4" accid.ges="s">
+                    <verse n="1">
+                      <syl xml:id="llyr_4" con="u">jah</syl>
+                    </verse>
+                  </note>
+                </layer>
+              </staff>
+              <tempo staff="1" tstamp="1" place="above" midi.bpm="108">♩ = 108</tempo>
+              <reh staff="1" tstamp="1">A</reh>
+              <trill xml:id="ssym_13" staff="1" startid="#n7" />
+              <fermata xml:id="ssym_14" staff="1" startid="#n7" place="above" />
+              <harm xml:id="hchd_4" staff="1" tstamp="1">G7</harm>
+              <harm xml:id="hchd_5" staff="1" tstamp="3">F♯m7b5</harm>
+            </measure>
+          </section>
+        </score>
+      </mdiv>
+    </body>
+  </music>
+</mei>

@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?xml-model href="https://music-encoding.org/schema/5.0/mei-all.rng" type="application/xml" schematypens="http://relaxng.org/ns/structure/1.0"?>
+<mei meiversion="5.0" xmlns="http://www.music-encoding.org/ns/mei">
+  <meiHead>
+    <fileDesc>
+      <titleStmt>
+        <title />
+      </titleStmt>
+      <pubStmt />
+    </fileDesc>
+  </meiHead>
+  <music>
+    <body>
+      <mdiv>
+        <score>
+          <scoreDef meter.count="4" meter.unit="4" keysig="0" page.width="210mm" page.height="297mm" page.topmar="15mm" page.botmar="15mm" page.leftmar="15mm" page.rightmar="15mm" vu.height="0.875mm">
+            <staffGrp>
+              <staffDef n="1" lines="5" clef.shape="perc" clef.line="3">
+                <label>Drums</label>
+                <labelAbbr>Drums</labelAbbr>
+              </staffDef>
+            </staffGrp>
+          </scoreDef>
+          <section>
+            <measure n="1" xml:id="m1">
+              <staff n="1">
+                <layer n="1">
+                  <beam>
+                    <chord xml:id="c1" dur="8" stem.dir="up">
+                      <note xml:id="n2" pname="f" oct="4" loc="1" />
+                      <note xml:id="n1" pname="g" oct="5" loc="9" head.shape="x" />
+                    </chord>
+                    <note xml:id="n3" dur="8" pname="g" oct="5" loc="9" head.shape="x" stem.dir="up" />
+                    <chord xml:id="c4" dur="8" stem.dir="up">
+                      <note xml:id="n5" pname="c" oct="5" loc="5" />
+                      <note xml:id="n4" pname="g" oct="5" loc="9" head.shape="x" />
+                    </chord>
+                    <note xml:id="n6" dur="8" pname="g" oct="5" loc="9" head.shape="x" stem.dir="up" />
+                  </beam>
+                  <beam>
+                    <chord xml:id="c7" dur="8" stem.dir="up">
+                      <note xml:id="n8" pname="f" oct="4" loc="1" />
+                      <note xml:id="n7" pname="g" oct="5" loc="9" head.shape="x" />
+                    </chord>
+                    <note xml:id="n9" dur="8" pname="g" oct="5" loc="9" head.shape="x" stem.dir="up" />
+                    <chord xml:id="c10" dur="8" stem.dir="up">
+                      <note xml:id="n11" pname="c" oct="5" loc="5" />
+                      <note xml:id="n10" pname="g" oct="5" loc="9" head.shape="x" />
+                    </chord>
+                    <note xml:id="n12" dur="8" pname="g" oct="5" loc="9" head.shape="x" stem.dir="up" />
+                  </beam>
+                </layer>
+              </staff>
+              <tempo staff="1" tstamp="1" place="above" midi.bpm="120">♩ = 120</tempo>
+            </measure>
+            <measure n="2" xml:id="m2" right="end">
+              <staff n="1">
+                <layer n="1">
+                  <beam>
+                    <chord xml:id="c13" dur="8" stem.dir="up">
+                      <note xml:id="n14" pname="f" oct="4" loc="1" />
+                      <note xml:id="n13" pname="a" oct="5" loc="10" head.shape="x" />
+                    </chord>
+                    <note xml:id="n15" dur="8" pname="g" oct="5" loc="9" head.shape="x" stem.dir="up" />
+                    <chord xml:id="c16" dur="8" stem.dir="up">
+                      <note xml:id="n17" pname="c" oct="5" loc="5" />
+                      <note xml:id="n16" pname="g" oct="5" loc="9" head.shape="x" />
+                    </chord>
+                    <note xml:id="n18" dur="8" pname="g" oct="5" loc="9" head.shape="x" stem.dir="up" />
+                  </beam>
+                  <beam>
+                    <chord xml:id="c19" dur="8" stem.dir="up">
+                      <note xml:id="n20" pname="f" oct="4" loc="1" />
+                      <note xml:id="n19" pname="g" oct="5" loc="9" head.shape="x" />
+                    </chord>
+                    <note xml:id="n21" dur="8" pname="g" oct="5" loc="9" head.shape="x" stem.dir="up" />
+                    <chord xml:id="c22" dur="8" stem.dir="up">
+                      <note xml:id="n23" pname="c" oct="5" loc="5" />
+                      <note xml:id="n22" pname="g" oct="5" loc="9" head.shape="x" />
+                    </chord>
+                    <note xml:id="n24" dur="8" pname="g" oct="5" loc="9" head.shape="x" stem.dir="up" />
+                  </beam>
+                </layer>
+              </staff>
+            </measure>
+          </section>
+        </score>
+      </mdiv>
+    </body>
+  </music>
+</mei>

@@ -1,0 +1,722 @@
+{
+  "mode": "linear",
+  "transposing": false,
+  "layout": {
+    "pageWidthMm": 210,
+    "pageHeightMm": 297,
+    "margins": {
+      "top": 15,
+      "bottom": 15,
+      "left": 15,
+      "right": 15
+    },
+    "staffHeightMm": 7,
+    "title": "",
+    "subtitle": "",
+    "composer": "",
+    "header": "",
+    "footer": "",
+    "transposingScore": false,
+    "instrumentNames": []
+  },
+  "measures": [
+    {
+      "number": 1,
+      "startTick": 0,
+      "lengthTicks": 3840,
+      "time": {
+        "numerator": 4,
+        "denominator": 4
+      },
+      "key": {
+        "fifths": 0,
+        "mode": "major"
+      },
+      "showTime": true,
+      "showKey": true,
+      "tempos": [
+        {
+          "tick": 0,
+          "bpm": 120
+        }
+      ],
+      "rehearsals": [],
+      "barline": "single"
+    },
+    {
+      "number": 2,
+      "startTick": 3840,
+      "lengthTicks": 3840,
+      "time": {
+        "numerator": 4,
+        "denominator": 4
+      },
+      "key": {
+        "fifths": 0,
+        "mode": "major"
+      },
+      "showTime": false,
+      "showKey": false,
+      "tempos": [],
+      "rehearsals": [],
+      "barline": "final"
+    }
+  ],
+  "parts": [
+    {
+      "trackId": "trk_000001",
+      "name": "Drums",
+      "shortName": "Drums",
+      "staffStyleId": "factory.drums",
+      "transpose": 0,
+      "brace": false,
+      "staves": [
+        {
+          "clef": "percussion",
+          "transpose": 0,
+          "voices": 1
+        }
+      ],
+      "measures": [
+        {
+          "staves": [
+            {
+              "clef": "percussion",
+              "voices": [
+                {
+                  "number": 1,
+                  "events": [
+                    {
+                      "id": "c1",
+                      "kind": "chord",
+                      "tick": 0,
+                      "durationTicks": 480,
+                      "duration": {
+                        "value": "eighth",
+                        "dots": 0
+                      },
+                      "notes": [
+                        {
+                          "id": "n2",
+                          "noteId": 2,
+                          "pitch": 36,
+                          "written": {
+                            "step": "f",
+                            "alter": 0,
+                            "octave": 4
+                          },
+                          "staffPosition": 1,
+                          "tieStart": false,
+                          "tieStop": false,
+                          "notehead": "normal"
+                        },
+                        {
+                          "id": "n1",
+                          "noteId": 1,
+                          "pitch": 42,
+                          "written": {
+                            "step": "g",
+                            "alter": 0,
+                            "octave": 5
+                          },
+                          "staffPosition": 9,
+                          "tieStart": false,
+                          "tieStop": false,
+                          "notehead": "cross"
+                        }
+                      ],
+                      "stem": "up",
+                      "beam": 1,
+                      "symbolIds": [],
+                      "lyricIds": [],
+                      "chordIds": []
+                    },
+                    {
+                      "id": "n3",
+                      "kind": "note",
+                      "tick": 480,
+                      "durationTicks": 480,
+                      "duration": {
+                        "value": "eighth",
+                        "dots": 0
+                      },
+                      "notes": [
+                        {
+                          "id": "n3",
+                          "noteId": 3,
+                          "pitch": 42,
+                          "written": {
+                            "step": "g",
+                            "alter": 0,
+                            "octave": 5
+                          },
+                          "staffPosition": 9,
+                          "tieStart": false,
+                          "tieStop": false,
+                          "notehead": "cross"
+                        }
+                      ],
+                      "stem": "up",
+                      "beam": 1,
+                      "symbolIds": [],
+                      "lyricIds": [],
+                      "chordIds": []
+                    },
+                    {
+                      "id": "c4",
+                      "kind": "chord",
+                      "tick": 960,
+                      "durationTicks": 480,
+                      "duration": {
+                        "value": "eighth",
+                        "dots": 0
+                      },
+                      "notes": [
+                        {
+                          "id": "n5",
+                          "noteId": 5,
+                          "pitch": 38,
+                          "written": {
+                            "step": "c",
+                            "alter": 0,
+                            "octave": 5
+                          },
+                          "staffPosition": 5,
+                          "tieStart": false,
+                          "tieStop": false,
+                          "notehead": "normal"
+                        },
+                        {
+                          "id": "n4",
+                          "noteId": 4,
+                          "pitch": 42,
+                          "written": {
+                            "step": "g",
+                            "alter": 0,
+                            "octave": 5
+                          },
+                          "staffPosition": 9,
+                          "tieStart": false,
+                          "tieStop": false,
+                          "notehead": "cross"
+                        }
+                      ],
+                      "stem": "up",
+                      "beam": 1,
+                      "symbolIds": [],
+                      "lyricIds": [],
+                      "chordIds": []
+                    },
+                    {
+                      "id": "n6",
+                      "kind": "note",
+                      "tick": 1440,
+                      "durationTicks": 480,
+                      "duration": {
+                        "value": "eighth",
+                        "dots": 0
+                      },
+                      "notes": [
+                        {
+                          "id": "n6",
+                          "noteId": 6,
+                          "pitch": 42,
+                          "written": {
+                            "step": "g",
+                            "alter": 0,
+                            "octave": 5
+                          },
+                          "staffPosition": 9,
+                          "tieStart": false,
+                          "tieStop": false,
+                          "notehead": "cross"
+                        }
+                      ],
+                      "stem": "up",
+                      "beam": 1,
+                      "symbolIds": [],
+                      "lyricIds": [],
+                      "chordIds": []
+                    },
+                    {
+                      "id": "c7",
+                      "kind": "chord",
+                      "tick": 1920,
+                      "durationTicks": 480,
+                      "duration": {
+                        "value": "eighth",
+                        "dots": 0
+                      },
+                      "notes": [
+                        {
+                          "id": "n8",
+                          "noteId": 8,
+                          "pitch": 36,
+                          "written": {
+                            "step": "f",
+                            "alter": 0,
+                            "octave": 4
+                          },
+                          "staffPosition": 1,
+                          "tieStart": false,
+                          "tieStop": false,
+                          "notehead": "normal"
+                        },
+                        {
+                          "id": "n7",
+                          "noteId": 7,
+                          "pitch": 42,
+                          "written": {
+                            "step": "g",
+                            "alter": 0,
+                            "octave": 5
+                          },
+                          "staffPosition": 9,
+                          "tieStart": false,
+                          "tieStop": false,
+                          "notehead": "cross"
+                        }
+                      ],
+                      "stem": "up",
+                      "beam": 2,
+                      "symbolIds": [],
+                      "lyricIds": [],
+                      "chordIds": []
+                    },
+                    {
+                      "id": "n9",
+                      "kind": "note",
+                      "tick": 2400,
+                      "durationTicks": 480,
+                      "duration": {
+                        "value": "eighth",
+                        "dots": 0
+                      },
+                      "notes": [
+                        {
+                          "id": "n9",
+                          "noteId": 9,
+                          "pitch": 42,
+                          "written": {
+                            "step": "g",
+                            "alter": 0,
+                            "octave": 5
+                          },
+                          "staffPosition": 9,
+                          "tieStart": false,
+                          "tieStop": false,
+                          "notehead": "cross"
+                        }
+                      ],
+                      "stem": "up",
+                      "beam": 2,
+                      "symbolIds": [],
+                      "lyricIds": [],
+                      "chordIds": []
+                    },
+                    {
+                      "id": "c10",
+                      "kind": "chord",
+                      "tick": 2880,
+                      "durationTicks": 480,
+                      "duration": {
+                        "value": "eighth",
+                        "dots": 0
+                      },
+                      "notes": [
+                        {
+                          "id": "n11",
+                          "noteId": 11,
+                          "pitch": 38,
+                          "written": {
+                            "step": "c",
+                            "alter": 0,
+                            "octave": 5
+                          },
+                          "staffPosition": 5,
+                          "tieStart": false,
+                          "tieStop": false,
+                          "notehead": "normal"
+                        },
+                        {
+                          "id": "n10",
+                          "noteId": 10,
+                          "pitch": 42,
+                          "written": {
+                            "step": "g",
+                            "alter": 0,
+                            "octave": 5
+                          },
+                          "staffPosition": 9,
+                          "tieStart": false,
+                          "tieStop": false,
+                          "notehead": "cross"
+                        }
+                      ],
+                      "stem": "up",
+                      "beam": 2,
+                      "symbolIds": [],
+                      "lyricIds": [],
+                      "chordIds": []
+                    },
+                    {
+                      "id": "n12",
+                      "kind": "note",
+                      "tick": 3360,
+                      "durationTicks": 480,
+                      "duration": {
+                        "value": "eighth",
+                        "dots": 0
+                      },
+                      "notes": [
+                        {
+                          "id": "n12",
+                          "noteId": 12,
+                          "pitch": 42,
+                          "written": {
+                            "step": "g",
+                            "alter": 0,
+                            "octave": 5
+                          },
+                          "staffPosition": 9,
+                          "tieStart": false,
+                          "tieStop": false,
+                          "notehead": "cross"
+                        }
+                      ],
+                      "stem": "up",
+                      "beam": 2,
+                      "symbolIds": [],
+                      "lyricIds": [],
+                      "chordIds": []
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "staves": [
+            {
+              "voices": [
+                {
+                  "number": 1,
+                  "events": [
+                    {
+                      "id": "c13",
+                      "kind": "chord",
+                      "tick": 3840,
+                      "durationTicks": 480,
+                      "duration": {
+                        "value": "eighth",
+                        "dots": 0
+                      },
+                      "notes": [
+                        {
+                          "id": "n14",
+                          "noteId": 14,
+                          "pitch": 36,
+                          "written": {
+                            "step": "f",
+                            "alter": 0,
+                            "octave": 4
+                          },
+                          "staffPosition": 1,
+                          "tieStart": false,
+                          "tieStop": false,
+                          "notehead": "normal"
+                        },
+                        {
+                          "id": "n13",
+                          "noteId": 13,
+                          "pitch": 49,
+                          "written": {
+                            "step": "a",
+                            "alter": 0,
+                            "octave": 5
+                          },
+                          "staffPosition": 10,
+                          "tieStart": false,
+                          "tieStop": false,
+                          "notehead": "cross"
+                        }
+                      ],
+                      "stem": "up",
+                      "beam": 1,
+                      "symbolIds": [],
+                      "lyricIds": [],
+                      "chordIds": []
+                    },
+                    {
+                      "id": "n15",
+                      "kind": "note",
+                      "tick": 4320,
+                      "durationTicks": 480,
+                      "duration": {
+                        "value": "eighth",
+                        "dots": 0
+                      },
+                      "notes": [
+                        {
+                          "id": "n15",
+                          "noteId": 15,
+                          "pitch": 42,
+                          "written": {
+                            "step": "g",
+                            "alter": 0,
+                            "octave": 5
+                          },
+                          "staffPosition": 9,
+                          "tieStart": false,
+                          "tieStop": false,
+                          "notehead": "cross"
+                        }
+                      ],
+                      "stem": "up",
+                      "beam": 1,
+                      "symbolIds": [],
+                      "lyricIds": [],
+                      "chordIds": []
+                    },
+                    {
+                      "id": "c16",
+                      "kind": "chord",
+                      "tick": 4800,
+                      "durationTicks": 480,
+                      "duration": {
+                        "value": "eighth",
+                        "dots": 0
+                      },
+                      "notes": [
+                        {
+                          "id": "n17",
+                          "noteId": 17,
+                          "pitch": 38,
+                          "written": {
+                            "step": "c",
+                            "alter": 0,
+                            "octave": 5
+                          },
+                          "staffPosition": 5,
+                          "tieStart": false,
+                          "tieStop": false,
+                          "notehead": "normal"
+                        },
+                        {
+                          "id": "n16",
+                          "noteId": 16,
+                          "pitch": 42,
+                          "written": {
+                            "step": "g",
+                            "alter": 0,
+                            "octave": 5
+                          },
+                          "staffPosition": 9,
+                          "tieStart": false,
+                          "tieStop": false,
+                          "notehead": "cross"
+                        }
+                      ],
+                      "stem": "up",
+                      "beam": 1,
+                      "symbolIds": [],
+                      "lyricIds": [],
+                      "chordIds": []
+                    },
+                    {
+                      "id": "n18",
+                      "kind": "note",
+                      "tick": 5280,
+                      "durationTicks": 480,
+                      "duration": {
+                        "value": "eighth",
+                        "dots": 0
+                      },
+                      "notes": [
+                        {
+                          "id": "n18",
+                          "noteId": 18,
+                          "pitch": 42,
+                          "written": {
+                            "step": "g",
+                            "alter": 0,
+                            "octave": 5
+                          },
+                          "staffPosition": 9,
+                          "tieStart": false,
+                          "tieStop": false,
+                          "notehead": "cross"
+                        }
+                      ],
+                      "stem": "up",
+                      "beam": 1,
+                      "symbolIds": [],
+                      "lyricIds": [],
+                      "chordIds": []
+                    },
+                    {
+                      "id": "c19",
+                      "kind": "chord",
+                      "tick": 5760,
+                      "durationTicks": 480,
+                      "duration": {
+                        "value": "eighth",
+                        "dots": 0
+                      },
+                      "notes": [
+                        {
+                          "id": "n20",
+                          "noteId": 20,
+                          "pitch": 36,
+                          "written": {
+                            "step": "f",
+                            "alter": 0,
+                            "octave": 4
+                          },
+                          "staffPosition": 1,
+                          "tieStart": false,
+                          "tieStop": false,
+                          "notehead": "normal"
+                        },
+                        {
+                          "id": "n19",
+                          "noteId": 19,
+                          "pitch": 42,
+                          "written": {
+                            "step": "g",
+                            "alter": 0,
+                            "octave": 5
+                          },
+                          "staffPosition": 9,
+                          "tieStart": false,
+                          "tieStop": false,
+                          "notehead": "cross"
+                        }
+                      ],
+                      "stem": "up",
+                      "beam": 2,
+                      "symbolIds": [],
+                      "lyricIds": [],
+                      "chordIds": []
+                    },
+                    {
+                      "id": "n21",
+                      "kind": "note",
+                      "tick": 6240,
+                      "durationTicks": 480,
+                      "duration": {
+                        "value": "eighth",
+                        "dots": 0
+                      },
+                      "notes": [
+                        {
+                          "id": "n21",
+                          "noteId": 21,
+                          "pitch": 42,
+                          "written": {
+                            "step": "g",
+                            "alter": 0,
+                            "octave": 5
+                          },
+                          "staffPosition": 9,
+                          "tieStart": false,
+                          "tieStop": false,
+                          "notehead": "cross"
+                        }
+                      ],
+                      "stem": "up",
+                      "beam": 2,
+                      "symbolIds": [],
+                      "lyricIds": [],
+                      "chordIds": []
+                    },
+                    {
+                      "id": "c22",
+                      "kind": "chord",
+                      "tick": 6720,
+                      "durationTicks": 480,
+                      "duration": {
+                        "value": "eighth",
+                        "dots": 0
+                      },
+                      "notes": [
+                        {
+                          "id": "n23",
+                          "noteId": 23,
+                          "pitch": 38,
+                          "written": {
+                            "step": "c",
+                            "alter": 0,
+                            "octave": 5
+                          },
+                          "staffPosition": 5,
+                          "tieStart": false,
+                          "tieStop": false,
+                          "notehead": "normal"
+                        },
+                        {
+                          "id": "n22",
+                          "noteId": 22,
+                          "pitch": 42,
+                          "written": {
+                            "step": "g",
+                            "alter": 0,
+                            "octave": 5
+                          },
+                          "staffPosition": 9,
+                          "tieStart": false,
+                          "tieStop": false,
+                          "notehead": "cross"
+                        }
+                      ],
+                      "stem": "up",
+                      "beam": 2,
+                      "symbolIds": [],
+                      "lyricIds": [],
+                      "chordIds": []
+                    },
+                    {
+                      "id": "n24",
+                      "kind": "note",
+                      "tick": 7200,
+                      "durationTicks": 480,
+                      "duration": {
+                        "value": "eighth",
+                        "dots": 0
+                      },
+                      "notes": [
+                        {
+                          "id": "n24",
+                          "noteId": 24,
+                          "pitch": 42,
+                          "written": {
+                            "step": "g",
+                            "alter": 0,
+                            "octave": 5
+                          },
+                          "staffPosition": 9,
+                          "tieStart": false,
+                          "tieStop": false,
+                          "notehead": "cross"
+                        }
+                      ],
+                      "stem": "up",
+                      "beam": 2,
+                      "symbolIds": [],
+                      "lyricIds": [],
+                      "chordIds": []
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "symbols": [],
+  "lyrics": [],
+  "chords": []
+}
