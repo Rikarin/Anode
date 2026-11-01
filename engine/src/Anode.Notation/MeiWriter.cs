@@ -596,15 +596,12 @@ public static class MeiWriter {
                                 Harm(chords[id], staff, measure);
                             }
 
-                            foreach (var note in e.Notes.Where(n => n.TieStart)) {
+                            // A hidden tie (tieHidden) is left out: MEI 5's tie has no visibility.
+                            foreach (var note in e.Notes.Where(n => n.TieStart && !hiddenTies.Contains(n.NoteId))) {
                                 xml.WriteStartElement("tie", Ns);
                                 xml.WriteAttributeString("staff", N(staff));
                                 xml.WriteAttributeString("startid", "#" + note.Id);
                                 xml.WriteAttributeString("endid", "#" + ScoreIds.Note(note.NoteId, SegmentOf(note) + 1));
-                                if (hiddenTies.Contains(note.NoteId)) {
-                                    xml.WriteAttributeString("visible", "false");
-                                }
-
                                 xml.WriteEndElement();
                             }
                         }

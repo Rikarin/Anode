@@ -85,8 +85,7 @@ sealed class TrackNotation {
             var grids = DisplayGrid.GridsOf(note.Region.Notation, style);
             note.DisplayStart = quantizer.Start(note.Start, grids);
             var end = quantizer.End(note.End, grids);
-            var unit = quantizer.UnitAt(note.DisplayStart, grids);
-            note.DisplayEnd = Math.Max(end, note.DisplayStart + unit);
+            note.DisplayEnd = Math.Max(end, quantizer.Step(note.DisplayStart, 1, grids));
         }
 
         var staves = new List<Unit>[style.Staves.Count];
@@ -188,23 +187,23 @@ sealed class TrackNotation {
             var grids = DisplayGrid.GridsOf(unit.Notation, style);
             var end = unit.End;
             if (unit.Notation.Interpretation) {
-                end = Round(unit.Start, end, grids.Triplet, bars, quantizer);
+                end = Round(unit.Start, end, bars, quantizer);
             }
 
             end = Math.Min(end, next);
-            var least = unit.Start + quantizer.UnitAt(unit.Start, grids);
+            var least = quantizer.Step(unit.Start, 1, grids);
             unit.End = end < least ? Math.Min(least, next) : end;
         }
     }
 
-    static long Round(long start, long end, int triplet, Bars bars, Quantizer quantizer) {
+    static long Round(long start, long end, Bars bars, Quantizer quantizer) {
         var bar = bars.At(end);
         if (end == bar.Start) {
             return end;
         }
 
         long before, after;
-        if (quantizer.TripletSpanAt(end, triplet) is { } span) {
+        if (quantizer.TripletSpanAt(end) is { } span) {
             (before, after) = span;
             if (end == before) {
                 return end;
@@ -219,7 +218,7 @@ sealed class TrackNotation {
         }
 
         var rounded = end - before < after - end ? before : after;
-        return rounded <= start ? after : rounded;
+        return quantizer.Normalize(rounded <= start ? after : rounded);
     }
 
     /// <summary>

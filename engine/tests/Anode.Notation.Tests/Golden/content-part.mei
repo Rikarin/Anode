@@ -1,0 +1,98 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?xml-model href="https://music-encoding.org/schema/5.0/mei-all.rng" type="application/xml" schematypens="http://relaxng.org/ns/structure/1.0"?>
+<mei meiversion="5.0" xmlns="http://www.music-encoding.org/ns/mei">
+  <meiHead>
+    <fileDesc>
+      <titleStmt>
+        <title>Test &amp; Score</title>
+        <title type="subtitle">For &lt;MEI&gt;</title>
+        <respStmt>
+          <persName role="composer">A. Composer</persName>
+        </respStmt>
+      </titleStmt>
+      <pubStmt />
+    </fileDesc>
+  </meiHead>
+  <music>
+    <body>
+      <mdiv>
+        <score>
+          <scoreDef meter.count="4" meter.unit="4" keysig="0" page.width="210mm" page.height="297mm" page.topmar="15mm" page.botmar="15mm" page.leftmar="15mm" page.rightmar="15mm" vu.height="0.875mm">
+            <pgHead func="first">
+              <rend halign="center" valign="top">
+                <rend fontsize="x-large">Test &amp; Score</rend>
+                <lb />
+                <rend fontsize="large">For &lt;MEI&gt;</rend>
+              </rend>
+              <rend halign="right" valign="bottom">A. Composer</rend>
+              <rend halign="left" valign="top">Header</rend>
+            </pgHead>
+            <pgFoot func="all">
+              <rend halign="center" valign="bottom">Footer</rend>
+            </pgFoot>
+            <staffGrp>
+              <staffDef n="1" lines="5" clef.shape="G" clef.line="2" keysig="2s" trans.diat="-1" trans.semi="-2">
+                <label>Clarinet in B♭</label>
+                <labelAbbr>Cl.</labelAbbr>
+              </staffDef>
+            </staffGrp>
+          </scoreDef>
+          <section>
+            <measure n="1" xml:id="m1">
+              <staff n="1">
+                <layer n="1">
+                  <note xml:id="n21" dur="2" pname="d" oct="4" stem.dir="up">
+                    <artic xml:id="ssym_17" artic="marc" />
+                    <verse n="1">
+                      <syl xml:id="llyr_1" wordpos="i" con="d">Hal</syl>
+                    </verse>
+                    <verse n="2">
+                      <syl xml:id="llyr_5">Sing</syl>
+                    </verse>
+                  </note>
+                  <note xml:id="n22" dur="2" pname="e" oct="4" stem.dir="up">
+                    <artic xml:id="ssym_18" artic="stacciss" />
+                    <verse n="1">
+                      <syl xml:id="llyr_2" wordpos="m" con="d">le</syl>
+                    </verse>
+                  </note>
+                </layer>
+              </staff>
+              <tempo staff="1" tstamp="1" place="above" midi.bpm="96">♩ = 96</tempo>
+            </measure>
+            <measure n="2" xml:id="m2" right="dbl">
+              <staff n="1">
+                <layer n="1">
+                  <note xml:id="n23" dur="1" pname="f" oct="4" accid.ges="s">
+                    <verse n="1">
+                      <syl xml:id="llyr_3" wordpos="t">lu</syl>
+                    </verse>
+                  </note>
+                </layer>
+              </staff>
+              <dynam xml:id="ssym_19" staff="1" startid="#n23">p</dynam>
+            </measure>
+            <scoreDef keysig="1s">
+              <staffGrp>
+                <staffDef n="1" keysig="3s" />
+              </staffGrp>
+            </scoreDef>
+            <measure n="3" xml:id="m3" right="end">
+              <staff n="1">
+                <layer n="1">
+                  <note xml:id="n24" dur="1" pname="g" oct="4" accid.ges="s">
+                    <verse n="1">
+                      <syl xml:id="llyr_4" con="u">jah</syl>
+                    </verse>
+                  </note>
+                </layer>
+              </staff>
+              <tempo staff="1" tstamp="1" place="above" midi.bpm="108">♩ = 108</tempo>
+              <reh staff="1" tstamp="1">A</reh>
+            </measure>
+          </section>
+        </score>
+      </mdiv>
+    </body>
+  </music>
+</mei>

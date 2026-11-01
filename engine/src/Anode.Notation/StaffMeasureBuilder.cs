@@ -33,7 +33,7 @@ sealed class StaffMeasureBuilder(
 
         Spell(drafts.SelectMany(d => d));
         foreach (var list in drafts) {
-            Stem(list, voices.Count > 1);
+            Stem(list, voices.Count > 1, definition.Clef == Clef.Percussion);
         }
 
         var result = new List<ScoreVoice>(voices.Count);
@@ -247,15 +247,15 @@ sealed class StaffMeasureBuilder(
 
     /// <summary>
     ///     Stems (docs/notation/README.md, "Stems"): with several voices odd voices up and even down; else a beam's notes or
-    ///     an event's away from the note farthest from the middle line (down on a tie); none for rests and whole notes.
+    ///     an event's away from the note farthest from the middle line (down on a tie), a percussion staff's up; none for rests and whole notes.
     /// </summary>
-    static void Stem(List<Draft> drafts, bool voices) {
+    static void Stem(List<Draft> drafts, bool voices, bool percussion) {
         foreach (var draft in drafts) {
             if (draft.Notes.Count == 0 || draft.Written.Value <= NoteValue.Whole) {
                 continue;
             }
 
-            if (voices) {
+            if (voices || percussion) {
                 draft.Stem = draft.Voice % 2 == 1 ? StemDirection.Up : StemDirection.Down;
                 continue;
             }

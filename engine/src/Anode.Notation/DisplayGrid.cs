@@ -104,36 +104,44 @@ sealed class Bars(SignatureMap map) {
     }
 }
 
+
 /// <summary>
 ///     Display quantise for one track (docs/notation/README.md, "Display quantise"): the notes' starts are added with
-///     their region's grids, then each triplet span (a beat, or three triplet units) is drawn on the triplet grid when
-///     its starts are nearer it in sum than the straight grid.
+///     their region's grids. Each bar has one triplet grid, its first note's (by start) that has one, so every display
+///     position of a bar fits together (straight grids, plain values, always nest). Each triplet span (a beat, or three
+///     triplet units) is drawn on the triplet grid when its starts are nearer it in sum than their straight grids.
 /// </summary>
 sealed class Quantizer(Bars bars) {
-    readonly Dictionary<(long Start, int Triplet), (long Straight, long Triplet)> errors = [];
+    readonly List<(long Tick, int Straight, int Triplet)> onsets = [];
+    Dictionary<long, int>? triplets;
+    Dictionary<long, (long Straight, long Triplet)>? errors;
 
     public Bars Bars => bars;
 
     /// <summary>A note's start (raw) with its region's grids.</summary>
     public void Add(long tick, (int Straight, int Triplet) grids) {
-        var bar = bars.At(tick);
-        if (SpanAt(bar, tick, grids.Triplet) is not { } span) {
-            return;
-        }
-
-        var straight = Math.Abs(tick - SnapStraight(bar, tick, grids.Straight));
-        var triplet = Math.Abs(tick - SnapIn(span, tick, grids.Triplet));
-        var key = (span.Start, grids.Triplet);
-        errors.TryGetValue(key, out var sum);
-        errors[key] = (sum.Straight + straight, sum.Triplet + triplet);
+        onsets.Add((tick, grids.Straight, grids.Triplet));
+        triplets = null;
+        errors = null;
     }
 
-    /// <summary>Where a start is drawn.</summary>
+    /// <summary>Where a start is drawn (with its region's straight grid).</summary>
     public long Start(long tick, (int Straight, int Triplet) grids) {
         var bar = bars.At(tick);
-        return IsTriplet(bar, tick, grids.Triplet) is { } span
-            ? SnapIn(span, tick, grids.Triplet)
-            : SnapStraight(bar, tick, grids.Straight);
+        return IsTriplet(bar, tick) is { } span
+            ? SnapIn(span, tick, TripletOf(bar))
+            : Normalize(SnapStraight(bar, tick, grids.Straight));
+    }
+
+    /// <summary>
+    ///     A position that falls inside a span drawn as triplets (a straight grid coarser than the span, a beat line in a
+    ///     span of three triplet units) moved to the nearest position of the triplet grid, so every boundary of a bar fits.
+    /// </summary>
+    public long Normalize(long display) {
+        var bar = bars.At(display);
+        return display > bar.Start && IsTriplet(bar, display) is { } span && display > span.Start
+            ? SnapIn(span, display, TripletOf(bar))
+            : display;
     }
 
     /// <summary>Where an end is drawn: the nearest display position of its span (a bar line stays).</summary>
@@ -142,35 +150,20 @@ sealed class Quantizer(Bars bars) {
         return tick == bar.Start ? tick : Start(tick, grids);
     }
 
-    /// <summary>The grid unit at a display position: the triplet unit in a triplet span, else the straight grid.</summary>
-    public long UnitAt(long display, (int Straight, int Triplet) grids) =>
-        IsTriplet(bars.At(display), display, grids.Triplet) is not null ? grids.Triplet : grids.Straight;
-
     /// <summary>The triplet span drawn as triplets that contains <paramref name="tick" />, if any.</summary>
-    public (long Start, long End)? TripletSpanAt(long tick, int triplet) => IsTriplet(bars.At(tick), tick, triplet);
+    public (long Start, long End)? TripletSpanAt(long tick) => IsTriplet(bars.At(tick), tick);
 
-    /// <summary>The spans of <paramref name="bar" /> drawn as triplets, with their grid, in order (one grid per span).</summary>
+    /// <summary>The spans of <paramref name="bar" /> drawn as triplets, with the bar's triplet grid, in order.</summary>
     public List<(long Start, long End, int Triplet)> TripletSpans(Bar bar) {
-        var spans = new List<(long Start, long End, int Triplet)>();
-        foreach (var ((start, triplet), sum) in errors.OrderBy(e => e.Key.Start).ThenBy(e => e.Key.Triplet)) {
-            if (start < bar.Start || start >= bar.End || sum.Triplet >= sum.Straight) {
-                continue;
-            }
-
-            var span = SpanAt(bar, start, triplet)!.Value;
-            if (spans.Count == 0 || spans[^1].End <= span.Start) {
-                spans.Add((span.Start, span.End, triplet));
-            }
-        }
-
-        return spans;
+        var triplet = TripletOf(bar);
+        return [..Spans(bar, triplet).Where(s => IsTriplet(bar, s.Start) is not null).Select(s => (s.Start, s.End, triplet))];
     }
 
     /// <summary>The next (or previous) display position from <paramref name="display" />.</summary>
     public long Step(long display, int direction, (int Straight, int Triplet) grids) {
         if (direction > 0) {
             var bar = bars.At(display);
-            return Points(bar, grids).First(p => p > display);
+            return Points(bar, grids.Straight).First(p => p > display);
         }
 
         if (display <= 0) {
@@ -178,21 +171,22 @@ sealed class Quantizer(Bars bars) {
         }
 
         var before = bars.At(display - 1);
-        return Points(before, grids).Last(p => p < display);
+        return Points(before, grids.Straight).Last(p => p < display);
     }
 
     /// <summary>The display positions of a bar, its end included.</summary>
-    List<long> Points(Bar bar, (int Straight, int Triplet) grids) {
+    List<long> Points(Bar bar, int straight) {
         var points = new SortedSet<long> { bar.End };
-        var triplets = grids.Triplet > 0 ? Spans(bar, grids.Triplet).Where(s => IsTriplet(bar, s.Start, grids.Triplet) is not null).ToList() : [];
-        for (var p = bar.Start; p < bar.End; p += grids.Straight) {
-            if (!triplets.Any(s => p > s.Start && p < s.End)) {
+        var triplet = TripletOf(bar);
+        var spans = TripletSpans(bar);
+        for (var p = bar.Start; p < bar.End; p += straight) {
+            if (!spans.Any(s => p > s.Start && p < s.End)) {
                 points.Add(p);
             }
         }
 
-        foreach (var (start, end) in triplets) {
-            for (var p = start; p <= end; p += grids.Triplet) {
+        foreach (var (start, end, _) in spans) {
+            for (var p = start; p <= end; p += triplet) {
                 points.Add(p);
             }
         }
@@ -200,12 +194,49 @@ sealed class Quantizer(Bars bars) {
         return [..points];
     }
 
-    (long Start, long End)? IsTriplet(Bar bar, long tick, int triplet) =>
-        SpanAt(bar, tick, triplet) is { } span
-        && errors.TryGetValue((span.Start, triplet), out var sum)
-        && sum.Triplet < sum.Straight
-            ? span
-            : null;
+    /// <summary>The bar's triplet grid: its first note's (by start) that has one, else 0.</summary>
+    int TripletOf(Bar bar) {
+        Decide();
+        return triplets!.GetValueOrDefault(bar.Index);
+    }
+
+    (long Start, long End)? IsTriplet(Bar bar, long tick) {
+        var triplet = TripletOf(bar);
+        return SpanAt(bar, tick, triplet) is { } span
+            && errors!.TryGetValue(span.Start, out var sum)
+            && sum.Triplet < sum.Straight
+                ? span
+                : null;
+    }
+
+    void Decide() {
+        if (triplets is not null) {
+            return;
+        }
+
+        triplets = [];
+        errors = [];
+        var ordered = onsets.Select((o, i) => (Onset: o, Index: i)).OrderBy(x => x.Onset.Tick).ThenBy(x => x.Index).Select(x => x.Onset).ToList();
+        foreach (var (tick, _, triplet) in ordered) {
+            var bar = bars.At(tick);
+            if (triplet > 0) {
+                triplets.TryAdd(bar.Index, triplet);
+            }
+        }
+
+        foreach (var (tick, straight, _) in ordered) {
+            var bar = bars.At(tick);
+            var triplet = triplets.GetValueOrDefault(bar.Index);
+            if (SpanAt(bar, tick, triplet) is not { } span) {
+                continue;
+            }
+
+            var straightError = Math.Abs(tick - SnapStraight(bar, tick, straight));
+            var tripletError = Math.Abs(tick - SnapIn(span, tick, triplet));
+            errors.TryGetValue(span.Start, out var sum);
+            errors[span.Start] = (sum.Straight + straightError, sum.Triplet + tripletError);
+        }
+    }
 
     /// <summary>
     ///     A bar's triplet spans for a triplet grid: its beats when every beat holds whole triplets of the grid, else

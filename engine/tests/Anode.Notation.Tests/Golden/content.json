@@ -1,0 +1,994 @@
+{
+  "setId": "scs_both",
+  "mode": "page",
+  "transposing": false,
+  "layout": {
+    "pageWidthMm": 210,
+    "pageHeightMm": 297,
+    "margins": {
+      "top": 15,
+      "bottom": 15,
+      "left": 15,
+      "right": 15
+    },
+    "staffHeightMm": 7,
+    "title": "Test \u0026 Score",
+    "subtitle": "For \u003CMEI\u003E",
+    "composer": "A. Composer",
+    "header": "Header",
+    "footer": "Footer",
+    "transposingScore": false,
+    "instrumentNames": [
+      {
+        "trackId": "trk_000002",
+        "full": "Clarinet in B\u266D",
+        "short": "Cl."
+      }
+    ]
+  },
+  "measures": [
+    {
+      "number": 1,
+      "startTick": 0,
+      "lengthTicks": 3840,
+      "time": {
+        "numerator": 4,
+        "denominator": 4
+      },
+      "key": {
+        "fifths": 0,
+        "mode": "major"
+      },
+      "showTime": true,
+      "showKey": true,
+      "tempos": [
+        {
+          "tick": 0,
+          "bpm": 96
+        }
+      ],
+      "rehearsals": [],
+      "barline": "single"
+    },
+    {
+      "number": 2,
+      "startTick": 3840,
+      "lengthTicks": 3840,
+      "time": {
+        "numerator": 4,
+        "denominator": 4
+      },
+      "key": {
+        "fifths": 0,
+        "mode": "major"
+      },
+      "showTime": false,
+      "showKey": false,
+      "tempos": [],
+      "rehearsals": [],
+      "barline": "double"
+    },
+    {
+      "number": 3,
+      "startTick": 7680,
+      "lengthTicks": 3840,
+      "time": {
+        "numerator": 4,
+        "denominator": 4
+      },
+      "key": {
+        "fifths": 1,
+        "mode": "major"
+      },
+      "showTime": false,
+      "showKey": true,
+      "tempos": [
+        {
+          "tick": 7680,
+          "bpm": 108
+        }
+      ],
+      "rehearsals": [
+        {
+          "tick": 7680,
+          "markerId": "mrk_a",
+          "text": "A"
+        }
+      ],
+      "barline": "final"
+    }
+  ],
+  "parts": [
+    {
+      "trackId": "trk_000001",
+      "name": "Piano",
+      "shortName": "Piano",
+      "staffStyleId": "factory.piano",
+      "transpose": 0,
+      "brace": true,
+      "staves": [
+        {
+          "clef": "treble",
+          "transpose": 0,
+          "splitPitch": 60,
+          "voices": 2
+        },
+        {
+          "clef": "bass",
+          "transpose": 0,
+          "voices": 2
+        }
+      ],
+      "measures": [
+        {
+          "staves": [
+            {
+              "clef": "treble",
+              "voices": [
+                {
+                  "number": 1,
+                  "events": [
+                    {
+                      "id": "n1",
+                      "kind": "note",
+                      "tick": 0,
+                      "durationTicks": 960,
+                      "duration": {
+                        "value": "quarter",
+                        "dots": 0
+                      },
+                      "notes": [
+                        {
+                          "id": "n1",
+                          "noteId": 1,
+                          "pitch": 72,
+                          "written": {
+                            "step": "c",
+                            "alter": 0,
+                            "octave": 5
+                          },
+                          "staffPosition": 5,
+                          "tieStart": false,
+                          "tieStop": false,
+                          "notehead": "normal"
+                        }
+                      ],
+                      "stem": "down",
+                      "symbolIds": [
+                        "sym_01",
+                        "sym_04",
+                        "sym_05",
+                        "sym_06",
+                        "sym_09"
+                      ],
+                      "lyricIds": [],
+                      "chordIds": [
+                        "chd_1"
+                      ]
+                    },
+                    {
+                      "id": "n2",
+                      "kind": "note",
+                      "tick": 960,
+                      "durationTicks": 960,
+                      "duration": {
+                        "value": "quarter",
+                        "dots": 0
+                      },
+                      "notes": [
+                        {
+                          "id": "n2",
+                          "noteId": 2,
+                          "pitch": 74,
+                          "written": {
+                            "step": "d",
+                            "alter": 0,
+                            "octave": 5
+                          },
+                          "staffPosition": 6,
+                          "tieStart": false,
+                          "tieStop": false,
+                          "notehead": "normal"
+                        }
+                      ],
+                      "stem": "down",
+                      "symbolIds": [
+                        "sym_02"
+                      ],
+                      "lyricIds": [],
+                      "chordIds": []
+                    },
+                    {
+                      "id": "n3",
+                      "kind": "note",
+                      "tick": 1920,
+                      "durationTicks": 960,
+                      "duration": {
+                        "value": "quarter",
+                        "dots": 0
+                      },
+                      "notes": [
+                        {
+                          "id": "n3",
+                          "noteId": 3,
+                          "pitch": 76,
+                          "written": {
+                            "step": "e",
+                            "alter": 0,
+                            "octave": 5
+                          },
+                          "staffPosition": 7,
+                          "tieStart": false,
+                          "tieStop": false,
+                          "notehead": "normal"
+                        }
+                      ],
+                      "stem": "down",
+                      "symbolIds": [
+                        "sym_03"
+                      ],
+                      "lyricIds": [],
+                      "chordIds": [
+                        "chd_2"
+                      ]
+                    },
+                    {
+                      "id": "n4",
+                      "kind": "note",
+                      "tick": 2880,
+                      "durationTicks": 960,
+                      "duration": {
+                        "value": "quarter",
+                        "dots": 0
+                      },
+                      "notes": [
+                        {
+                          "id": "n4",
+                          "noteId": 4,
+                          "pitch": 77,
+                          "written": {
+                            "step": "f",
+                            "alter": 0,
+                            "octave": 5
+                          },
+                          "staffPosition": 8,
+                          "tieStart": true,
+                          "tieStop": false,
+                          "notehead": "normal"
+                        }
+                      ],
+                      "stem": "down",
+                      "symbolIds": [
+                        "sym_16"
+                      ],
+                      "lyricIds": [],
+                      "chordIds": []
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "clef": "bass",
+              "voices": [
+                {
+                  "number": 1,
+                  "events": [
+                    {
+                      "id": "n8",
+                      "kind": "note",
+                      "tick": 0,
+                      "durationTicks": 3840,
+                      "duration": {
+                        "value": "whole",
+                        "dots": 0
+                      },
+                      "notes": [
+                        {
+                          "id": "n8",
+                          "noteId": 8,
+                          "pitch": 48,
+                          "written": {
+                            "step": "c",
+                            "alter": 0,
+                            "octave": 3
+                          },
+                          "staffPosition": 3,
+                          "tieStart": false,
+                          "tieStop": false,
+                          "notehead": "normal"
+                        }
+                      ],
+                      "stem": "none",
+                      "symbolIds": [
+                        "sym_11",
+                        "sym_12"
+                      ],
+                      "lyricIds": [],
+                      "chordIds": []
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "staves": [
+            {
+              "voices": [
+                {
+                  "number": 1,
+                  "events": [
+                    {
+                      "id": "n4-2",
+                      "kind": "note",
+                      "tick": 3840,
+                      "durationTicks": 960,
+                      "duration": {
+                        "value": "quarter",
+                        "dots": 0
+                      },
+                      "notes": [
+                        {
+                          "id": "n4-2",
+                          "noteId": 4,
+                          "pitch": 77,
+                          "written": {
+                            "step": "f",
+                            "alter": 0,
+                            "octave": 5
+                          },
+                          "staffPosition": 8,
+                          "tieStart": false,
+                          "tieStop": true,
+                          "notehead": "normal"
+                        }
+                      ],
+                      "stem": "down",
+                      "symbolIds": [
+                        "sym_08",
+                        "sym_10",
+                        "sym_15"
+                      ],
+                      "lyricIds": [],
+                      "chordIds": [
+                        "chd_3"
+                      ]
+                    },
+                    {
+                      "id": "n5",
+                      "kind": "note",
+                      "tick": 4800,
+                      "durationTicks": 960,
+                      "duration": {
+                        "value": "quarter",
+                        "dots": 0
+                      },
+                      "notes": [
+                        {
+                          "id": "n5",
+                          "noteId": 5,
+                          "pitch": 79,
+                          "written": {
+                            "step": "g",
+                            "alter": 0,
+                            "octave": 5
+                          },
+                          "staffPosition": 9,
+                          "tieStart": false,
+                          "tieStop": false,
+                          "notehead": "normal"
+                        }
+                      ],
+                      "stem": "down",
+                      "symbolIds": [
+                        "sym_07"
+                      ],
+                      "lyricIds": [],
+                      "chordIds": []
+                    },
+                    {
+                      "id": "n6",
+                      "kind": "note",
+                      "tick": 5760,
+                      "durationTicks": 1920,
+                      "duration": {
+                        "value": "half",
+                        "dots": 0
+                      },
+                      "notes": [
+                        {
+                          "id": "n6",
+                          "noteId": 6,
+                          "pitch": 78,
+                          "written": {
+                            "step": "f",
+                            "alter": 1,
+                            "octave": 5
+                          },
+                          "staffPosition": 8,
+                          "accidental": "sharp",
+                          "tieStart": false,
+                          "tieStop": false,
+                          "notehead": "normal"
+                        }
+                      ],
+                      "stem": "down",
+                      "symbolIds": [],
+                      "lyricIds": [],
+                      "chordIds": []
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "voices": [
+                {
+                  "number": 1,
+                  "events": [
+                    {
+                      "id": "n9",
+                      "kind": "note",
+                      "tick": 3840,
+                      "durationTicks": 3840,
+                      "duration": {
+                        "value": "whole",
+                        "dots": 0
+                      },
+                      "notes": [
+                        {
+                          "id": "n9",
+                          "noteId": 9,
+                          "pitch": 43,
+                          "written": {
+                            "step": "g",
+                            "alter": 0,
+                            "octave": 2
+                          },
+                          "staffPosition": 0,
+                          "tieStart": false,
+                          "tieStop": false,
+                          "notehead": "normal"
+                        }
+                      ],
+                      "stem": "none",
+                      "symbolIds": [],
+                      "lyricIds": [],
+                      "chordIds": []
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "staves": [
+            {
+              "voices": [
+                {
+                  "number": 1,
+                  "events": [
+                    {
+                      "id": "n7",
+                      "kind": "note",
+                      "tick": 7680,
+                      "durationTicks": 3840,
+                      "duration": {
+                        "value": "whole",
+                        "dots": 0
+                      },
+                      "notes": [
+                        {
+                          "id": "n7",
+                          "noteId": 7,
+                          "pitch": 79,
+                          "written": {
+                            "step": "g",
+                            "alter": 0,
+                            "octave": 5
+                          },
+                          "staffPosition": 9,
+                          "tieStart": false,
+                          "tieStop": false,
+                          "notehead": "normal"
+                        }
+                      ],
+                      "stem": "none",
+                      "symbolIds": [
+                        "sym_13",
+                        "sym_14"
+                      ],
+                      "lyricIds": [],
+                      "chordIds": [
+                        "chd_4",
+                        "chd_5"
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "voices": [
+                {
+                  "number": 1,
+                  "events": [
+                    {
+                      "id": "c10",
+                      "kind": "chord",
+                      "tick": 7680,
+                      "durationTicks": 3840,
+                      "duration": {
+                        "value": "whole",
+                        "dots": 0
+                      },
+                      "notes": [
+                        {
+                          "id": "n10",
+                          "noteId": 10,
+                          "pitch": 55,
+                          "written": {
+                            "step": "g",
+                            "alter": 0,
+                            "octave": 3
+                          },
+                          "staffPosition": 7,
+                          "tieStart": false,
+                          "tieStop": false,
+                          "notehead": "normal"
+                        },
+                        {
+                          "id": "n11",
+                          "noteId": 11,
+                          "pitch": 59,
+                          "written": {
+                            "step": "b",
+                            "alter": 0,
+                            "octave": 3
+                          },
+                          "staffPosition": 9,
+                          "tieStart": false,
+                          "tieStop": false,
+                          "notehead": "normal"
+                        }
+                      ],
+                      "stem": "none",
+                      "symbolIds": [],
+                      "lyricIds": [],
+                      "chordIds": []
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "trackId": "trk_000002",
+      "name": "Clarinet in B\u266D",
+      "shortName": "Cl.",
+      "staffStyleId": "factory.clarinetBb",
+      "transpose": 0,
+      "brace": false,
+      "staves": [
+        {
+          "clef": "treble",
+          "transpose": 2,
+          "voices": 1
+        }
+      ],
+      "measures": [
+        {
+          "staves": [
+            {
+              "clef": "treble",
+              "voices": [
+                {
+                  "number": 1,
+                  "events": [
+                    {
+                      "id": "n21",
+                      "kind": "note",
+                      "tick": 0,
+                      "durationTicks": 1920,
+                      "duration": {
+                        "value": "half",
+                        "dots": 0
+                      },
+                      "notes": [
+                        {
+                          "id": "n21",
+                          "noteId": 21,
+                          "pitch": 60,
+                          "written": {
+                            "step": "c",
+                            "alter": 0,
+                            "octave": 4
+                          },
+                          "staffPosition": -2,
+                          "tieStart": false,
+                          "tieStop": false,
+                          "notehead": "normal"
+                        }
+                      ],
+                      "stem": "up",
+                      "symbolIds": [
+                        "sym_17"
+                      ],
+                      "lyricIds": [
+                        "lyr_1",
+                        "lyr_5"
+                      ],
+                      "chordIds": []
+                    },
+                    {
+                      "id": "n22",
+                      "kind": "note",
+                      "tick": 1920,
+                      "durationTicks": 1920,
+                      "duration": {
+                        "value": "half",
+                        "dots": 0
+                      },
+                      "notes": [
+                        {
+                          "id": "n22",
+                          "noteId": 22,
+                          "pitch": 62,
+                          "written": {
+                            "step": "d",
+                            "alter": 0,
+                            "octave": 4
+                          },
+                          "staffPosition": -1,
+                          "tieStart": false,
+                          "tieStop": false,
+                          "notehead": "normal"
+                        }
+                      ],
+                      "stem": "up",
+                      "symbolIds": [
+                        "sym_18"
+                      ],
+                      "lyricIds": [
+                        "lyr_2"
+                      ],
+                      "chordIds": []
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "staves": [
+            {
+              "voices": [
+                {
+                  "number": 1,
+                  "events": [
+                    {
+                      "id": "n23",
+                      "kind": "note",
+                      "tick": 3840,
+                      "durationTicks": 3840,
+                      "duration": {
+                        "value": "whole",
+                        "dots": 0
+                      },
+                      "notes": [
+                        {
+                          "id": "n23",
+                          "noteId": 23,
+                          "pitch": 64,
+                          "written": {
+                            "step": "e",
+                            "alter": 0,
+                            "octave": 4
+                          },
+                          "staffPosition": 0,
+                          "tieStart": false,
+                          "tieStop": false,
+                          "notehead": "normal"
+                        }
+                      ],
+                      "stem": "none",
+                      "symbolIds": [
+                        "sym_19"
+                      ],
+                      "lyricIds": [
+                        "lyr_3"
+                      ],
+                      "chordIds": []
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "staves": [
+            {
+              "voices": [
+                {
+                  "number": 1,
+                  "events": [
+                    {
+                      "id": "n24",
+                      "kind": "note",
+                      "tick": 7680,
+                      "durationTicks": 3840,
+                      "duration": {
+                        "value": "whole",
+                        "dots": 0
+                      },
+                      "notes": [
+                        {
+                          "id": "n24",
+                          "noteId": 24,
+                          "pitch": 66,
+                          "written": {
+                            "step": "f",
+                            "alter": 1,
+                            "octave": 4
+                          },
+                          "staffPosition": 1,
+                          "tieStart": false,
+                          "tieStop": false,
+                          "notehead": "normal"
+                        }
+                      ],
+                      "stem": "none",
+                      "symbolIds": [],
+                      "lyricIds": [
+                        "lyr_4"
+                      ],
+                      "chordIds": []
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "symbols": [
+    {
+      "id": "sym_01",
+      "kind": "staccato",
+      "trackId": "trk_000001",
+      "noteId": 1
+    },
+    {
+      "id": "sym_02",
+      "kind": "accent",
+      "trackId": "trk_000001",
+      "noteId": 2
+    },
+    {
+      "id": "sym_03",
+      "kind": "tenuto",
+      "trackId": "trk_000001",
+      "noteId": 3,
+      "placement": "below"
+    },
+    {
+      "id": "sym_04",
+      "kind": "dynamic",
+      "trackId": "trk_000001",
+      "tick": 0,
+      "text": "mf"
+    },
+    {
+      "id": "sym_05",
+      "kind": "slur",
+      "trackId": "trk_000001",
+      "noteId": 1,
+      "endNoteId": 3
+    },
+    {
+      "id": "sym_06",
+      "kind": "crescendo",
+      "trackId": "trk_000001",
+      "tick": 0,
+      "endTick": 3840
+    },
+    {
+      "id": "sym_07",
+      "kind": "diminuendo",
+      "trackId": "trk_000001",
+      "noteId": 5,
+      "endNoteId": 6
+    },
+    {
+      "id": "sym_08",
+      "kind": "text",
+      "trackId": "trk_000001",
+      "tick": 3840,
+      "text": "dolce"
+    },
+    {
+      "id": "sym_09",
+      "kind": "tempoText",
+      "trackId": "trk_000001",
+      "tick": 0,
+      "text": "Andante"
+    },
+    {
+      "id": "sym_10",
+      "kind": "rehearsal",
+      "trackId": "trk_000001",
+      "tick": 3840,
+      "text": "B"
+    },
+    {
+      "id": "sym_11",
+      "kind": "pedalDown",
+      "trackId": "trk_000001",
+      "tick": 0
+    },
+    {
+      "id": "sym_12",
+      "kind": "pedalUp",
+      "trackId": "trk_000001",
+      "tick": 3600
+    },
+    {
+      "id": "sym_13",
+      "kind": "trill",
+      "trackId": "trk_000001",
+      "noteId": 7
+    },
+    {
+      "id": "sym_14",
+      "kind": "fermata",
+      "trackId": "trk_000001",
+      "noteId": 7,
+      "placement": "above"
+    },
+    {
+      "id": "sym_15",
+      "kind": "octaveUp",
+      "trackId": "trk_000001",
+      "tick": 3840,
+      "endTick": 7680
+    },
+    {
+      "id": "sym_16",
+      "kind": "tieHidden",
+      "trackId": "trk_000001",
+      "noteId": 4
+    },
+    {
+      "id": "sym_17",
+      "kind": "marcato",
+      "trackId": "trk_000002",
+      "noteId": 21
+    },
+    {
+      "id": "sym_18",
+      "kind": "staccatissimo",
+      "trackId": "trk_000002",
+      "noteId": 22
+    },
+    {
+      "id": "sym_19",
+      "kind": "dynamic",
+      "trackId": "trk_000002",
+      "noteId": 23,
+      "text": "p"
+    }
+  ],
+  "lyrics": [
+    {
+      "id": "lyr_1",
+      "noteId": 21,
+      "verse": 1,
+      "text": "Hal",
+      "syllabic": "begin",
+      "extender": false
+    },
+    {
+      "id": "lyr_2",
+      "noteId": 22,
+      "verse": 1,
+      "text": "le",
+      "syllabic": "middle",
+      "extender": false
+    },
+    {
+      "id": "lyr_3",
+      "noteId": 23,
+      "verse": 1,
+      "text": "lu",
+      "syllabic": "end",
+      "extender": false
+    },
+    {
+      "id": "lyr_4",
+      "noteId": 24,
+      "verse": 1,
+      "text": "jah",
+      "syllabic": "single",
+      "extender": true
+    },
+    {
+      "id": "lyr_5",
+      "noteId": 21,
+      "verse": 2,
+      "text": "Sing",
+      "syllabic": "single",
+      "extender": false
+    }
+  ],
+  "chords": [
+    {
+      "id": "chd_1",
+      "trackId": "trk_000001",
+      "tick": 0,
+      "root": {
+        "step": "c",
+        "alter": 0
+      },
+      "quality": "",
+      "showGrid": false
+    },
+    {
+      "id": "chd_2",
+      "trackId": "trk_000001",
+      "tick": 1920,
+      "root": {
+        "step": "a",
+        "alter": 0
+      },
+      "quality": "m7",
+      "showGrid": false
+    },
+    {
+      "id": "chd_3",
+      "trackId": "trk_000001",
+      "tick": 3840,
+      "root": {
+        "step": "f",
+        "alter": 0
+      },
+      "quality": "maj7",
+      "bass": {
+        "step": "a",
+        "alter": 0
+      },
+      "showGrid": false
+    },
+    {
+      "id": "chd_4",
+      "trackId": "trk_000001",
+      "tick": 7680,
+      "root": {
+        "step": "g",
+        "alter": 0
+      },
+      "quality": "7",
+      "showGrid": true
+    },
+    {
+      "id": "chd_5",
+      "trackId": "trk_000001",
+      "tick": 9600,
+      "root": {
+        "step": "f",
+        "alter": 1
+      },
+      "quality": "m7b5",
+      "showGrid": false
+    }
+  ]
+}
