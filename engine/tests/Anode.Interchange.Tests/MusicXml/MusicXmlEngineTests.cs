@@ -33,7 +33,8 @@ public sealed class MusicXmlEngineTests {
 
     public static TheoryData<string> Goldens() {
         var data = new TheoryData<string>();
-        foreach (var file in Directory.GetFiles(Path.Combine(Shared, "Golden"), "*.json").Order(StringComparer.Ordinal)) {
+        foreach (var file in Directory.GetFiles(Path.Combine(Shared, "Golden"), "*.json")
+                     .Order(StringComparer.Ordinal)) {
             data.Add(Path.GetFileNameWithoutExtension(file));
         }
 
@@ -78,7 +79,10 @@ public sealed class MusicXmlEngineTests {
             var content = MusicXmlReader.Read(file);
             Assert.Equal(view.Parts.Count, content.Tracks.Count);
             Assert.Equal(view.Parts.Select(static p => p.Name), content.Tracks.Select(static t => t.Name));
-            Assert.Equal(view.Parts.Select(static p => p.StaffStyleId), content.Tracks.Select(static t => t.StaffStyleId));
+            Assert.Equal(
+                view.Parts.Select(static p => p.StaffStyleId),
+                content.Tracks.Select(static t => t.StaffStyleId)
+            );
             for (var p = 0; p < view.Parts.Count; p++) {
                 Assert.Equal(Drawn(view, p), Notes(content.Tracks[p]));
             }
@@ -202,8 +206,11 @@ public sealed class MusicXmlEngineTests {
         return [..spans.Values.Select(static s => (s.Start, s.End - s.Start, s.Pitch)).Order()];
     }
 
-    static List<(long Start, long Length, int Pitch)> Notes(ImportedTrack track) =>
-        [..track.MidiRegions.SelectMany(static r => r.Notes.Select(n => (r.StartTick + n.StartTick, n.LengthTicks, n.Pitch))).Order()];
+    static List<(long Start, long Length, int Pitch)> Notes(ImportedTrack track) => [
+        ..track.MidiRegions
+            .SelectMany(static r => r.Notes.Select(n => (r.StartTick + n.StartTick, n.LengthTicks, n.Pitch)))
+            .Order()
+    ];
 
     /// <summary>Every event as the score draws it, without ids: measure, staff, voice, kind, timing, value, pitches, ties.</summary>
     static List<string> Events(ScoreView view) {
@@ -216,11 +223,11 @@ public sealed class MusicXmlEngineTests {
                         var notes = string.Join(
                             '+',
                             e.Notes.Select(static n =>
-                                $"{n.Pitch}{n.Written.Step}{n.Written.Alter}{n.Written.Octave}{(n.TieStart ? "~" : "")}{(n.TieStop ? "^" : "")}"
+                                $"{n.Pitch}{n.Written.Step}{n.Written.Alter}{n.Written.Octave}{(n.TieStart ? "~" : string.Empty)}{(n.TieStop ? "^" : string.Empty)}"
                             )
                         );
                         events.Add(
-                            $"m{m + 1} s{s} v{voice.Number} {e.Kind} {e.Tick}+{e.DurationTicks} {e.Duration.Value}{new string('.', e.Duration.Dots)}{(e.Duration.Tuplet is null ? "" : "t")} {notes}"
+                            $"m{m + 1} s{s} v{voice.Number} {e.Kind} {e.Tick}+{e.DurationTicks} {e.Duration.Value}{new string('.', e.Duration.Dots)}{(e.Duration.Tuplet is null ? string.Empty : "t")} {notes}"
                         );
                     }
                 }

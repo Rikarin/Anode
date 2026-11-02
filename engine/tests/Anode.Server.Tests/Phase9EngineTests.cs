@@ -72,7 +72,10 @@ public sealed class Phase9EngineTests : IAsyncDisposable {
             (67, 2 * Bar + 960, 2880), (48, 2 * Bar, Bar)
         ];
         await Client.EditAsync(
-            new AddNotesCommand(pianoRegion, [..passage.Select(static n => new NewNote(n.Pitch, 90, 1, n.Start, n.Length))]),
+            new AddNotesCommand(
+                pianoRegion,
+                [..passage.Select(static n => new NewNote(n.Pitch, 90, 1, n.Start, n.Length))]
+            ),
             new AddNotesCommand(clarinetRegion, [new(70, 90, 1, 0, Bar)]),
             new SetRegionNotationCommand([pianoRegion], 240, 160)
         );
@@ -80,7 +83,11 @@ public sealed class Phase9EngineTests : IAsyncDisposable {
     }
 
     async Task<ScoreDocument> ScoreAsync(string query) =>
-        (await Client.GetFromJsonAsync($"/api/v1/project/score?{query}", ContractsJsonContext.Default.ScoreDocument, Token))!;
+        (await Client.GetFromJsonAsync(
+            $"/api/v1/project/score?{query}",
+            ContractsJsonContext.Default.ScoreDocument,
+            Token
+        ))!;
 
     async Task<Job> DoneAsync<T>(string path, T request, System.Text.Json.Serialization.Metadata.JsonTypeInfo<T> type) {
         var response = await Client.PostAsJsonAsync(path, request, type, Token);
@@ -119,7 +126,10 @@ public sealed class Phase9EngineTests : IAsyncDisposable {
         var document = await ScoreAsync($"part={piano}&view=linear");
         Assert.Equal(MeiWriter.Write(document.View), document.Mei);
         var treble = Events(document, piano, 0, 1).ToList();
-        Assert.Equal((ScoreEventKind.Chord, 0L, NoteValue.Quarter), (treble[0].Kind, treble[0].Tick, treble[0].Duration.Value));
+        Assert.Equal(
+            (ScoreEventKind.Chord, 0L, NoteValue.Quarter),
+            (treble[0].Kind, treble[0].Tick, treble[0].Duration.Value)
+        );
         var triplet = treble.Where(static e => e.Duration.Tuplet is not null).ToList();
         Assert.Equal([960L, 1280, 1600], triplet.Select(static e => e.Tick));
         Assert.Equal([Id(62, 965), Id(64, 1290), Id(65, 1595)], triplet.Select(static e => e.Notes[0].NoteId));
@@ -131,20 +141,27 @@ public sealed class Phase9EngineTests : IAsyncDisposable {
         );
         Assert.Equal(
             [72, 74, 71],
-            Events(document, piano, 0, 2).Where(static e => e.Kind != ScoreEventKind.Rest).Select(static e => e.Notes[0].Pitch)
+            Events(document, piano, 0, 2)
+                .Where(static e => e.Kind != ScoreEventKind.Rest)
+                .Select(static e => e.Notes[0].Pitch)
         );
         Assert.Equal(
             [48, 41, 43, 48],
-            Events(document, piano, 1, 1).Where(static e => e.Kind != ScoreEventKind.Rest).Select(static e => e.Notes[0].Pitch)
+            Events(document, piano, 1, 1)
+                .Where(static e => e.Kind != ScoreEventKind.Rest)
+                .Select(static e => e.Notes[0].Pitch)
         );
-        Assert.All(notes, n => Assert.Contains($"xml:id=\"{ScoreIds.Note(n.Id)}\"", document.Mei, StringComparison.Ordinal));
+        Assert.All(
+            notes,
+            n => Assert.Contains($"xml:id=\"{ScoreIds.Note(n.Id)}\"", document.Mei, StringComparison.Ordinal)
+        );
 
         // The clarinet: written a major second up in its part, at concert pitch in the full score.
         var part = await ScoreAsync($"part={clarinet}");
-        Assert.Equal(new ScorePitch(PitchStep.C, 0, 5), Events(part, clarinet, 0, 1).First().Notes[0].Written);
+        Assert.Equal(new(PitchStep.C, 0, 5), Events(part, clarinet, 0, 1).First().Notes[0].Written);
         var full = await ScoreAsync("view=page");
         Assert.False(full.View.Transposing);
-        Assert.Equal(new ScorePitch(PitchStep.B, -1, 4), Events(full, clarinet, 0, 1).First().Notes[0].Written);
+        Assert.Equal(new(PitchStep.B, -1, 4), Events(full, clarinet, 0, 1).First().Notes[0].Written);
 
         // Display quantise 1/8 with the 1/8-triplet grid (Logic's "8,12") changes the score, not the notes: bar 3's
         // sixteenths become E4/8 F4+G4/8.
@@ -154,7 +171,8 @@ public sealed class Phase9EngineTests : IAsyncDisposable {
         Assert.NotEqual(document.Mei, eighths.Mei);
         Assert.Equal(
             [(7680L, NoteValue.Eighth, 1), (8160L, NoteValue.Eighth, 2)],
-            Events(eighths, piano, 0, 1).Where(static e => e.Tick is >= 2 * Bar and < 2 * Bar + 960)
+            Events(eighths, piano, 0, 1)
+                .Where(static e => e.Tick is >= 2 * Bar and < 2 * Bar + 960)
                 .Select(static e => (e.Tick, e.Duration.Value, e.Notes.Count))
         );
         Assert.Equal(notes, (await Client.ProjectAsync()).MidiRegions.Single(r => r.TrackId == piano).Notes);
@@ -181,7 +199,9 @@ public sealed class Phase9EngineTests : IAsyncDisposable {
         var clarinetRegion = (await Client.ProjectAsync()).MidiRegions.Single(r => r.TrackId == clarinet);
         var a4 = clarinetRegion.Notes.Single(static n => n.StartTick == 1920);
         Assert.Equal(69, a4.Pitch);
-        await Client.EditAsync(new MoveScoreNotesCommand(clarinetRegion.Id, [a4.Id], 1, Accidental: Accidental.Natural));
+        await Client.EditAsync(
+            new MoveScoreNotesCommand(clarinetRegion.Id, [a4.Id], 1, Accidental: Accidental.Natural)
+        );
         clarinetRegion = (await Client.ProjectAsync()).MidiRegions.Single(r => r.TrackId == clarinet);
         Assert.Equal(70, clarinetRegion.Notes.Single(n => n.Id == a4.Id).Pitch);
     }
@@ -223,10 +243,17 @@ public sealed class Phase9EngineTests : IAsyncDisposable {
 
         await Client.PostAsync("/api/v1/project/close", null, Token);
         await Client.CreateProjectAsync("Reimport");
-        await DoneAsync("/api/v1/project/import/musicxml", new(file), ContractsJsonContext.Default.MusicXmlImportRequest);
+        await DoneAsync(
+            "/api/v1/project/import/musicxml",
+            new(file),
+            ContractsJsonContext.Default.MusicXmlImportRequest
+        );
         var imported = await Client.ProjectAsync();
         Assert.Equal(["Piano", "Clarinet"], imported.Tracks.Select(static t => t.Name));
-        Assert.Equal([StaffStyleIds.Piano, StaffStyleIds.ClarinetBb], imported.Tracks.Select(static t => t.StaffStyleId));
+        Assert.Equal(
+            [StaffStyleIds.Piano, StaffStyleIds.ClarinetBb],
+            imported.Tracks.Select(static t => t.StaffStyleId)
+        );
         Assert.Equal("Golden Etude", imported.Score.Layout.Title);
         // The notes where the score draws them (display quantise is what a MusicXML file holds).
         Assert.Equal(drawn, Notes(imported));
@@ -235,11 +262,16 @@ public sealed class Phase9EngineTests : IAsyncDisposable {
             original.Score.Symbols.Select(static s => s.Kind).Order(),
             imported.Score.Symbols.Select(static s => s.Kind).Order()
         );
-        var starts = imported.MidiRegions.SelectMany(static r => r.Notes).ToDictionary(static n => n.Id, static n => n.StartTick);
-        Assert.Equal(["Hap", "py", "day"], imported.Score.Lyrics.OrderBy(l => starts[l.NoteId]).Select(static l => l.Text));
+        var starts = imported.MidiRegions.SelectMany(static r => r.Notes)
+            .ToDictionary(static n => n.Id, static n => n.StartTick);
+        Assert.Equal(
+            ["Hap", "py", "day"],
+            imported.Score.Lyrics.OrderBy(l => starts[l.NoteId]).Select(static l => l.Text)
+        );
         Assert.Equal(
             ["0 C", "1920 Am7", "3840 Fmaj7", "7680 G7"],
-            imported.Score.Chords.OrderBy(static ch => ch.Tick).Select(static ch => $"{ch.Tick} {ch.Root.Step.ToString().ToUpperInvariant()}{ch.Quality}")
+            imported.Score.Chords.OrderBy(static ch => ch.Tick)
+                .Select(static ch => $"{ch.Tick} {ch.Root.Step.ToString().ToUpperInvariant()}{ch.Quality}")
         );
         var again = await ScoreAsync($"part={imported.Tracks[0].Id}");
         var treble = Events(again, imported.Tracks[0].Id, 0, 1).ToList();
@@ -265,8 +297,11 @@ public sealed class Phase9EngineTests : IAsyncDisposable {
         var regions = project.Regions;
         await Client.EditAsync(
             new SetRegionCommand(regions.Single(r => r.TrackId == b).Id, GainDb: -6, FadeIn: 480, FadeOut: 4800),
-            new SetRegionCommand(regions.Single(r => r is { TrackId: var t, StartTick: 0 } && t == a).Id, FadeOut: 2400),
-            new SetRegionCommand(regions.Single(r => r.StartTick == Bar).Id, FadeIn: 2400)
+            new SetRegionCommand(
+                regions.Single(r => r is { TrackId: var t, StartTick: 0 } && t == a).Id,
+                FadeOut: 2400
+            ),
+            new SetRegionCommand(regions.Single(static r => r.StartTick == Bar).Id, FadeIn: 2400)
         );
         var original = (await Client.ProjectAsync()).Regions;
         var exported = new List<string>();
@@ -283,7 +318,11 @@ public sealed class Phase9EngineTests : IAsyncDisposable {
         foreach (var file in exported) {
             await Client.PostAsync("/api/v1/project/close", null, Token);
             await Client.CreateProjectAsync(Path.GetFileNameWithoutExtension(file));
-            var job = await DoneAsync("/api/v1/project/import/aaf", new(file), ContractsJsonContext.Default.AafImportRequest);
+            var job = await DoneAsync(
+                "/api/v1/project/import/aaf",
+                new(file),
+                ContractsJsonContext.Default.AafImportRequest
+            );
             var imported = await Client.ProjectAsync();
             Assert.Equal(["Audio A", "Audio B"], imported.Tracks.Select(static t => t.Name));
             Assert.Equal(Placed(project, original), Placed(imported, imported.Regions));
@@ -322,11 +361,17 @@ public sealed class Phase9EngineTests : IAsyncDisposable {
         var info = WavReader.Probe(Assert.Single(job.Files));
         Assert.Equal((48_000, 2L * 48_000), (info.SampleRate, info.Frames));
         var region = Assert.Single(project.Regions);
-        Assert.Equal((960L, 4800L, 24_000L, 480L, 960L), (region.StartTick, region.FileOffset, region.Length, region.FadeIn, region.FadeOut));
+        Assert.Equal(
+            (960L, 4800L, 24_000L, 480L, 960L),
+            (region.StartTick, region.FileOffset, region.Length, region.FadeIn, region.FadeOut)
+        );
     }
 
-    static List<(long Start, long Length, int Pitch)> Notes(Project project) =>
-        [..project.MidiRegions.SelectMany(static r => r.Notes.Select(n => (r.StartTick + n.StartTick, n.LengthTicks, n.Pitch))).Order()];
+    static List<(long Start, long Length, int Pitch)> Notes(Project project) => [
+        ..project.MidiRegions
+            .SelectMany(static r => r.Notes.Select(n => (r.StartTick + n.StartTick, n.LengthTicks, n.Pitch)))
+            .Order()
+    ];
 
     /// <summary>Every note as the score draws it: the start of its first segment to the end of its last, concert pitch.</summary>
     static List<(long Start, long Length, int Pitch)> Drawn(ScoreDocument document) {
@@ -353,7 +398,7 @@ public sealed class Phase9EngineTests : IAsyncDisposable {
     ) =>
         [
             ..regions.Select(r => (project.Tracks.Single(t => t.Id == r.TrackId).Name, r.StartTick * 25, r.FileOffset,
-                    r.Length, Math.Round(r.GainDb, 6), r.FadeIn, r.FadeOut)
+                        r.Length, Math.Round(r.GainDb, 6), r.FadeIn, r.FadeOut)
                 )
                 .Order()
         ];

@@ -20,7 +20,11 @@ public interface IInterchangeFormats {
     /// </summary>
     ImportedContent ReadMusicXml(byte[] data);
 
-    /// <summary>Writes the AAF and its linked media (<see cref="AafWriter.Write" />); every file written, the AAF first.</summary>
+    /// <summary>
+    ///     Writes the AAF and its linked media
+    ///     (<see cref="AafWriter.Write(ProjectState, string, AafExportRequest, string)" />); every file written, the AAF
+    ///     first.
+    /// </summary>
     IReadOnlyList<string> WriteAaf(ProjectState state, string projectFolder, AafExportRequest request, string path);
 
     /// <summary>

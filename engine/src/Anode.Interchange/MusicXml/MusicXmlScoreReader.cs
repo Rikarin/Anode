@@ -1,6 +1,6 @@
 using Anode.Contracts;
-using Anode.Notation;
 using Anode.Model;
+using Anode.Notation;
 using System.Xml.Linq;
 
 namespace Anode.Interchange.MusicXml;

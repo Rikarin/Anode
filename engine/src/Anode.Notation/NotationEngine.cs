@@ -222,7 +222,9 @@ public static class NotationEngine {
             return trackName;
         }
 
-        return trackName[..(char.IsHighSurrogate(trackName[ShortNameLength - 1]) ? ShortNameLength - 1 : ShortNameLength)];
+        return trackName[..(char.IsHighSurrogate(trackName[ShortNameLength - 1])
+            ? ShortNameLength - 1
+            : ShortNameLength)];
     }
 
     /// <summary>
