@@ -687,4 +687,5 @@ shared package exists.
    [docs/06-phase-5.md](06-phase-5.md#status-2026-10-28). Phase 6 (loops, patterns and performance) done on macOS:
    see [docs/07-phase-6.md](07-phase-6.md#status-2026-10-29). Phase 7 (advanced MIDI editing) done on macOS: see
    [docs/08-phase-7.md](08-phase-7.md#status-2026-10-29). Phase 8 (control and sync) done on macOS: see
-   [docs/09-phase-8.md](09-phase-8.md#status-2026-10-31).
+   [docs/09-phase-8.md](09-phase-8.md#status-2026-10-31). Phase 9 (notation and interchange) done on macOS: see
+   [docs/10-phase-9.md](10-phase-9.md#status-2026-11-02).

@@ -422,3 +422,52 @@ Five, in parallel, each on its own branch; they meet only at the contracts above
 3. Run the server tests with the real notation engine and interchange.
 4. Run the Playwright golden path for the exit criterion.
 5. Fix the seams.
+
+## Status (2026-11-02)
+
+**Exit criterion met on macOS.** The Playwright golden path `phase9/notation-interchange-golden-path.spec.ts` passes on
+the real desktop app with the null device, with all nine steps (pyaaf2 as the independent AAF reader, `xmllint` with
+the MusicXML 4.0 schema, `pdftotext` for the PDF). All ten e2e specs pass, twice in a row.
+
+| Step | Checked | Result |
+|---|---|---|
+| 1. Score | chord, one triplet group, a tie across the bar, beams, voice 2, the piano's bass staff; every note id in the SVG | 21 of 21 ids |
+| 1. Display quantise | "8,12" (480/320) draws bar 3 as E4/8 F4+G4/8; the MIDI is unchanged | as expected |
+| 2. Editing | drag up a step, insert a quarter at 2 3 1 1, delete; one undo step each; the Piano Roll agrees | as expected |
+| 3. Symbols and text | staccato, accent, mf, a slur over 3 notes, a crescendo, "Hap-py day", C Am7 Fmaj7 G7 | all drawn with their ids |
+| 4. Staff styles | B♭ clarinet part written C5, full score B♭4; a set of two tracks; the part extracted | as expected |
+| 5. Print | title, instrument names, lyrics and chord symbols as text in the PDF | found |
+| 6. MusicXML | valid against the 4.0 schema; 22 notes back as drawn, with 5 symbols, 3 syllables, 4 chord symbols, tie and triplet; the string quartet fixture's four parts | as expected |
+| 7. AAF | embedded and linked: every clip's position, offset and length, the crossfade, −6 dB gain and fades as pyaaf2 reads them; a pyaaf2 fixture imported | exact to the sample |
+| 8. Standard MIDI File | type 1 at 960 PPQ: tempo map, a meter change, markers, notes and CCs back | equal |
+| 9. Save and reopen | notes, score content, staff styles and region notation | intact |
+
+| Check | Result |
+|---|---|
+| Engine tests (`dotnet test --solution engine/Anode.slnx --max-parallel-test-modules 2`) | 2427 pass, 18 skipped (opt-in); no failures |
+| Notation ([docs/notation](notation/README.md)) | golden views and MEI valid against the MEI 5.0 RELAX NG schema; every note once and full measures over random projects; 20 shared vectors |
+| Rendering ([ADR-0011](adr/0011-notation-rendering.md)) | Verovio 6.4.0: 4 staves × 100 bars in 145 ms, a one-note edit re-rendered in 116–149 ms; outside every bundle |
+| MusicXML ([docs/interchange/musicxml.md](interchange/musicxml.md)) | every export valid against the 4.0 XSD; the engine's vectors and goldens round-trip |
+| AAF ([docs/interchange/aaf.md](interchange/aaf.md)) | own compound-file container; pyaaf2 reads exports to the sample; media at another rate resampled on import |
+| Editor (`nx run-many -t typecheck lint test build`) | 6 projects pass (editor 705 tests); Storybook + axe pass |
+| e2e (`nx e2e desktop`) | notation and interchange, control and sync, MIDI editing, loops and performance, advanced audio, mixing, arranging, MIDI and Phase 1 golden paths, smoke; twice in a row |
+| Skala, Prettier, generated client | clean |
+
+**Contract changes and decisions at integration** (detailed in "Integration notes" above):
+- The MusicXML reader picks the engine's factory staff styles (clefs and transposition, then the part name).
+- Vertical drags are in the written key in every view; the editor's spelling mirrors the engine's.
+- AAF media at another sample rate are converted on import.
+- The default short instrument name is the track name cut to five characters, in the engine, the editor and MusicXML.
+- Verovio renders with `condense: 'none'`, so every staff is drawn and hit testing holds.
+- pyaaf2's MIT notice stays with the AAF model generated from it.
+
+**Open:**
+- MusicXML import does not bring back instrument-name overrides (`ImportedScore` has no field for them).
+- Imported lyrics, chord symbols and markers are listed by id, not by time.
+- Tempo marks draw "♩" as a text character (font fallback), not in the music font.
+- AAF: stereo is written as one interleaved slot, not Avid's split mono, untested in Pro Tools or Media Composer; region
+  names, fade curves, uneven crossfades and automation are not carried.
+- Notation: no grace notes, courtesy accidentals or tuplets other than triplets; the Score Editor's click and lyric
+  fixes are covered by the golden path, not unit tests.
+- The editor's initial bundle is 1.30 MB against its 1.00 MB budget (#18).
+- Linux and Windows.
