@@ -399,6 +399,8 @@ test('plays and mixes from hardware, syncs with other gear and splits stems: ass
       // MTC decodes to the playhead within a frame: played from bar 3 (4 s at 120 bpm), its timecode starts there and
       // keeps to the playhead's time.
       await probe.record();
+      // The LCD follows the locate a moment later (it still shows where the last play stopped, about 3 s).
+      await expect.poll(() => playheadSeconds(window)).toBeCloseTo(2 * 4 * (60 / Bpm), 1);
       const from = await playheadSeconds(window);
       await window.getByTestId('play').click();
       await window.waitForTimeout(1_500);
