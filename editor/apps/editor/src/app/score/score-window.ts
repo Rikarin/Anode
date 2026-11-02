@@ -1,10 +1,14 @@
-import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, effect, inject } from '@angular/core';
 import { FloatingWindow } from '../shell/floating-window';
 import { ProjectStore } from '../state/project.store';
 import { UiStore } from '../state/ui.store';
 import { ScoreEditor } from './score-editor';
 
-/** The Score Editor in a window (Logic's Score window): a score set's full score, or a part extracted from one. */
+/**
+ * The Score Editor in a window (Logic's Score window): a score set's full score, or a part extracted from one. It closes
+ * when what it shows is gone: the set deleted, the track removed, or the project closed (another project's score
+ * would otherwise stay open over the next one).
+ */
 @Component({
   selector: 'an-score-window',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -36,4 +40,19 @@ export class ScoreWindow {
     }
     return `Part: ${this.project.track(w?.partTrackId ?? '')?.name ?? ''}`;
   });
+
+  constructor() {
+    effect(() => {
+      const w = this.ui.scoreWindow();
+      if (!w) {
+        return;
+      }
+      const shown = w.setId
+        ? this.project.score().sets.some(s => s.id === w.setId)
+        : this.project.track(w.partTrackId ?? '') !== undefined;
+      if (!shown) {
+        this.ui.scoreWindow.set(null);
+      }
+    });
+  }
 }

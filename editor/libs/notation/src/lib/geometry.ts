@@ -307,9 +307,9 @@ export function fromScorePoint(page: Element, point: Point, width: number, heigh
  * The note whose head is nearest a point, within `radius` drawing units (a click on a head that sits on a staff line
  * or a ledger line can land on the line).
  */
-export function noteNear(svg: Element, point: Point, radius: number): number | null {
+export function noteNear(svg: Element, point: Point, radius: number, within = radius): number | null {
   let best: number | null = null;
-  let distance = radius;
+  let distance = within;
   for (const [noteId, head] of notePoints(svg)) {
     // A head's point is its left edge, on its middle: measure to its centre (about a staff space wide).
     const d = Math.hypot(head.x + radius / 2 - point.x, head.y - point.y);

@@ -12,7 +12,7 @@ import {
   untracked,
   viewChild
 } from '@angular/core';
-import type { EditCommand, ScoreSymbolKind } from '@anode/api-client';
+import type { EditCommand, LyricSyllable, ScoreSymbolKind } from '@anode/api-client';
 import { AnPartBox, AnScoreToolbar, type PartBoxTool } from '@anode/audio-ui/lazy';
 import {
   type Anchor,
@@ -91,6 +91,8 @@ interface Drag {
   noteId: number;
   lines: readonly number[];
   moved: boolean;
+  /** Shift or ⌘ was held: the click toggled the note in the selection. */
+  add: boolean;
 }
 
 /** A text field over the score: a syllable, a chord symbol, or a text symbol. */
@@ -130,6 +132,9 @@ const SymbolNames: Partial<Record<ScoreSymbolKind, string>> = {
   tempoText: 'Tempo Text',
   rehearsal: 'Rehearsal Mark'
 };
+
+/** Half a black note head's width in staff spaces (SMuFL `noteheadBlack`: 1.18). */
+const HeadHalfWidth = 0.59;
 
 /**
  * The Score Editor (Logic's, docs/10-phase-9.md): the score the Server derives, engraved by Verovio (ADR-0011), in the
@@ -319,6 +324,9 @@ export class ScoreEditor {
   private readonly entryField = viewChild<ElementRef<HTMLInputElement>>('entryField');
   private drag: Drag | null = null;
   private marqueeStart: PagePoint | null = null;
+  /** The syllable lyrics entry last entered, until the model has it (see `lyricStep`). */
+  private enteredLyric: LyricSyllable | null = null;
+
   /** The first click of a two-click symbol (a slur's first note, a line's start). */
   private pending: {
     kind: ScoreSymbolKind;
@@ -490,7 +498,8 @@ export class ScoreEditor {
         clientY: event.clientY,
         noteId: hit.noteId,
         lines: box?.lines ?? [],
-        moved: false
+        moved: false,
+        add: event.shiftKey || event.metaKey
       };
     } else if (hit?.kind === 'symbol' || hit?.kind === 'lyric' || hit?.kind === 'chordSymbol') {
       this.selectScoreItem(hit, event.shiftKey || event.metaKey);
@@ -545,6 +554,11 @@ export class ScoreEditor {
       void this.finishDrag(drag, event);
       return;
     }
+    if (drag && !drag.add && this.selection.notes().size > 1) {
+      // A click (not a drag) on a note of a selection selects that note alone; pressing kept the others for a drag.
+      this.selection.selectNotes([drag.noteId]);
+      return;
+    }
     const start = this.marqueeStart;
     this.marqueeStart = null;
     if (start && this.marquee()) {
@@ -572,13 +586,19 @@ export class ScoreEditor {
     this.clearDragPreview();
   }
 
-  /** What a pointer is on: the element under it, else a note head near it (a head on a line can lose to the line). */
+  /**
+   * What a pointer is on: the element under it, else a note head near it (a head on a line can lose to the line). A
+   * symbol drawn over a note head (a slur or hairpin crossing it, an articulation beside it) loses to the head when the
+   * pointer is within half a staff space of the head's centre.
+   */
   private hitAt(target: Element, at: PagePoint): ScoreHit | null {
     const hit = hitOf(target, at.element);
-    if (hit && hit.kind !== 'measure') {
-      return hit;
-    }
     const box = staffAt(staffBoxes(at.svg), at.point);
+    if (hit && hit.kind !== 'measure') {
+      const under =
+        hit.kind === 'symbol' && box ? noteNear(at.svg, at.point, staffSpace(box), staffSpace(box) / 2) : null;
+      return under !== null ? { kind: 'note', noteId: under, elementId: `n${under}` } : hit;
+    }
     const noteId = box ? noteNear(at.svg, at.point, staffSpace(box)) : null;
     return noteId !== null ? { kind: 'note', noteId, elementId: `n${noteId}` } : hit;
   }
@@ -743,11 +763,14 @@ export class ScoreEditor {
     if (!index || !measure) {
       return null;
     }
+    // An event's glyph point is its head's left edge; its beat is under the head's centre (SMuFL's black note head is
+    // 1.18 staff spaces wide), so a click on a head means its own tick.
+    const space = box.lines.length > 1 ? ((box.lines.at(-1) ?? 0) - (box.lines[0] ?? 0)) / (box.lines.length - 1) : 0;
     const anchors: Anchor[] = [];
     for (const event of eventPoints(box.element)) {
       const tick = index.ticks.get(event.elementId);
       if (tick !== undefined) {
-        anchors.push({ x: event.point.x, tick });
+        anchors.push({ x: event.point.x + space * HeadHalfWidth, tick });
       }
     }
     return Math.round(
@@ -1159,7 +1182,14 @@ export class ScoreEditor {
     if (entry?.mode !== 'lyric' || !document) {
       return;
     }
-    const lyrics = this.project.score().lyrics;
+    // The syllable just entered counts at once: its command may still be on its way when the next key comes.
+    const entered = this.enteredLyric;
+    const lyrics = entered
+      ? [
+          ...this.project.score().lyrics.filter(l => l.noteId !== entered.noteId || l.verse !== entered.verse),
+          entered
+        ]
+      : this.project.score().lyrics;
     const order = lyricNotes(document.view, entry.trackId);
     const existing = lyrics.find(l => l.noteId === entry.noteId && l.verse === entry.verse) ?? null;
     const result = lyricKey(
@@ -1191,7 +1221,20 @@ export class ScoreEditor {
           svg,
           point: { x: 0, y: 0 }
         });
+        // The field stays the same element: give it the next note's text now, not at the next render, or keys typed
+        // in between land after the syllable just entered ("Hap" then "py" read "Happy").
+        const field = event?.target;
+        const opened = this.entry();
+        if (field instanceof HTMLInputElement && opened?.mode === 'lyric') {
+          field.value = opened.text;
+        }
       }
+    }
+    this.enteredLyric = result.change
+      ? { id: existing?.id ?? '', verse: entry.verse, ...result.change, extender: result.change.extender ?? false }
+      : this.enteredLyric;
+    if (result.done) {
+      this.enteredLyric = null;
     }
     if (result.change) {
       await this.project.execute([{ type: 'setLyrics', verse: entry.verse, syllables: [result.change] }], 'Lyrics');
