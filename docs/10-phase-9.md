@@ -284,6 +284,39 @@ the plan left latitude:
   the empty score, gives regions the default notation, and answers the new commands and endpoints 422
   (`fake-phase9.spec.ts`).
 
+### Integration notes
+
+How the seams were settled when the workstreams met (the contracts above stand; these refine them):
+- **Real classes through the server:** the server's own registrations (`EngineNotation`, `EngineScoreNotation`,
+  `InterchangeFormats`) are covered by `Phase9EngineTests` beside B's tests with doubles: the score API and library,
+  score edits, a score set through MusicXML into a new project, AAF export and import to the sample.
+- **Factory staff styles:** D's reader matches a part against A's `FactoryStaffStyles` (clefs, no clef reading as
+  treble, and the transposition; of two styles with the same staves the one whose name's last word the part's name
+  holds: bass or cello, clarinet or trumpet). Every factory style round-trips through MusicXML.
+- **MusicXML from the engine:** every vector of `ScoreVectors.json` and A's golden views are written, validated against
+  the 4.0 XSD and read back (`MusicXmlEngineTests`): notes come back where the score draws them, with their staff style,
+  and render to the same events.
+- **AAF at another rate:** the import job resamples media at another rate to the project's (the bounce's
+  `SampleRateConverter`, as the Audio File Editor's rate conversion) before `AudioImport.Bring`; `ToContent` scales
+  positions and keeps a region inside its file. Media at the project's rate are copied as before.
+- **Housekeeping:** `AafMetaModel.g.cs` carries pyaaf2's copyright and MIT notice (and ADR-0008 says so); `*.aaf` is
+  binary in `.gitattributes`; Interchange's `Pending` is gone.
+- **MEI in Verovio:** checked with the real Verovio on A's golden MEI (ADR-0011, "Checked at integration"); nothing in
+  the MEI changed. The renderer sets `condense: none`, so the k-th `g.staff` of a measure is always the k-th staff of
+  the view.
+- **Transposing scores:** `moveScoreNotes` reads steps of the written key and a written accidental, as A said. In a
+  concert-pitch score of a transposing staff the editor turns the concert pitch a drag reaches into written steps and
+  accidental (`writtenMove`); the editor's spelling mirrors A's `Spelling.Spell` (naturals before sharps, minor keys'
+  raised degrees), which insert positions and drag targets use.
+- **Instrument names:** a part's default names are the track's name and its first five characters
+  (`NotationEngine.DefaultShortName`, the editor's rule); an empty `InstrumentName.full` or `short` is unset. MusicXML's
+  `part-abbreviation` is that short name.
+- **Golden path:** the piano passage is A's exit-criterion case (the "exit-criterion" vector), and step 1's "display
+  quantise 1/8" is Logic's "8,12" (480/320, the "exit-criterion-eighths" vector), which draws bar 3's sixteenths as
+  E4/8 F4+G4/8; with the 1/16-triplet grid kept (480/160) they would be drawn as triplets. A crossfade is an overlap
+  with matching fades (no `setCrossfade` command). Helpers: `scripts/aaf-check.py read|make` (pyaaf2),
+  `scripts/musicxml-validate.py` (xmllint), `pdftotext`; the e2e global setup makes the pyaaf2 venv.
+
 ## Workstreams
 
 Five, in parallel, each on its own branch; they meet only at the contracts above.
