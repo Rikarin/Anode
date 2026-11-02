@@ -535,7 +535,7 @@ test('builds and performs a beat from Anode content: packs, loops, DMD, Step Seq
       ['mode', 'Up']
     ] as const) {
       await arp.locator(`[data-parameter="${parameter}"]`).locator('xui-select').click();
-      await window.getByRole('option', { name: value, exact: true }).click();
+      await window.getByRole('listbox').getByRole('option', { name: value, exact: true }).click();
       await expect(window.getByRole('listbox')).toHaveCount(0);
     }
     // The closing list hands focus back to its select: focus the knob once it has.
@@ -771,7 +771,7 @@ test('builds and performs a beat from Anode content: packs, loops, DMD, Step Seq
     ] as const) {
       await addInstrumentTrack(window);
       await window.getByTestId('instrument-picker').click();
-      await window.getByRole('option', { name: instrument }).first().click();
+      await window.getByRole('listbox').getByRole('option', { name: instrument }).first().click();
       await expect(window.getByTestId('instrument-picker')).toContainText(instrument);
       if (panel) {
         await expect(window.getByTestId(panel)).toBeVisible();

@@ -490,7 +490,7 @@ async function drawLine(window: Page, lane: Locator, from: [number, number], to:
 /** Chooses an option of an xUI select by its text. */
 async function choose(window: Page, select: Locator, option: string | RegExp): Promise<void> {
   await select.click();
-  await window.getByRole('option', { name: option }).first().click();
+  await window.getByRole('listbox').getByRole('option', { name: option }).first().click();
 }
 
 /**
@@ -840,7 +840,7 @@ test('edits MIDI and audio at the event and sample level: Event List, Step Edito
     //    second as a square (its third harmonic).
     await addInstrumentTrack(window); // track 5, lane 4
     await window.getByTestId('instrument-picker').click();
-    await window.getByRole('option', { name: 'Anode Sampler' }).click();
+    await window.getByRole('listbox').getByRole('option', { name: 'Anode Sampler' }).click();
     await app.evaluate(({ dialog }, path) => {
       dialog.showOpenDialog = () => Promise.resolve({ canceled: false, filePaths: [path] });
     }, sfz);

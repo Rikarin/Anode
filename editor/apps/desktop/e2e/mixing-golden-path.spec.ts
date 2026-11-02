@@ -267,7 +267,7 @@ test('mixes, automates, freezes and bounces a session: inserts, sends, routing, 
     await window.getByTestId('bounce-folder').fill(bounces);
     await window.getByTestId('bounce-end').locator('input').fill('3');
     await window.getByTestId('bounce-normalize').click();
-    await window.getByRole('option', { name: 'Loudness (EBU R128)' }).click();
+    await window.getByRole('listbox').getByRole('option', { name: 'Loudness (EBU R128)' }).click();
     await window.getByTestId('bounce-lufs').locator('input').fill('-16');
     await window.getByTestId('bounce-start-button').click();
     await expect(window.getByTestId('bounce-dialog')).toBeHidden({ timeout: 60_000 });
@@ -282,9 +282,9 @@ test('mixes, automates, freezes and bounces a session: inserts, sends, routing, 
     await window.getByTestId('bounce-source').getByRole('radio', { name: 'Stems' }).click();
     await window.getByTestId('bounce-format').getByRole('radio', { name: 'AIFF' }).click();
     await window.getByTestId('bounce-bit-depth').click();
-    await window.getByRole('option', { name: '16-bit' }).click();
+    await window.getByRole('listbox').getByRole('option', { name: '16-bit' }).click();
     await window.getByTestId('bounce-dither').click();
-    await window.getByRole('option', { name: 'Noise Shaped' }).click();
+    await window.getByRole('listbox').getByRole('option', { name: 'Noise Shaped' }).click();
     await window.getByTestId('bounce-start-button').click();
     await expect(window.getByTestId('bounce-dialog')).toBeHidden({ timeout: 60_000 });
     expect(existsSync(join(bounces, 'Stems - Audio 1.aif'))).toBe(true);

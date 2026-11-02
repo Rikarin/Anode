@@ -110,7 +110,7 @@ test('makes a song with MIDI and audio: synth, sampler, CLAP, external MIDI, Pia
     await window.getByTestId('add-track-menu').click();
     await window.getByTestId('add-instrument-track').click();
     await window.getByTestId('instrument-picker').click();
-    await window.getByRole('option', { name: 'Anode Sampler' }).click();
+    await window.getByRole('listbox').getByRole('option', { name: 'Anode Sampler' }).click();
     await app.evaluate(({ dialog }, path) => {
       dialog.showOpenDialog = () => Promise.resolve({ canceled: false, filePaths: [path] });
     }, sfz);
@@ -123,7 +123,7 @@ test('makes a song with MIDI and audio: synth, sampler, CLAP, external MIDI, Pia
     await window.getByTestId('add-track-menu').click();
     await window.getByTestId('add-instrument-track').click();
     await window.getByTestId('instrument-picker').click();
-    await window.getByRole('option', { name: /CLAP/ }).first().click();
+    await window.getByRole('listbox').getByRole('option', { name: /CLAP/ }).first().click();
     await expect(window.getByTestId('instrument-picker')).toContainText('CLAP');
 
     // An external MIDI track sending to the first output port.
