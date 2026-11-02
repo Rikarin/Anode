@@ -38,7 +38,9 @@ export default function globalSetup(): void {
       execFileSync(tool, ['-v'], { stdio: 'ignore' });
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
-        throw new Error(`${tool} is not on the PATH: the Phase 9 golden path needs it (poppler, libxml2).`);
+        throw new Error(`${tool} is not on the PATH: the Phase 9 golden path needs it (poppler, libxml2).`, {
+          cause: error
+        });
       }
     }
   }

@@ -1185,10 +1185,7 @@ export class ScoreEditor {
     // The syllable just entered counts at once: its command may still be on its way when the next key comes.
     const entered = this.enteredLyric;
     const lyrics = entered
-      ? [
-          ...this.project.score().lyrics.filter(l => l.noteId !== entered.noteId || l.verse !== entered.verse),
-          entered
-        ]
+      ? [...this.project.score().lyrics.filter(l => l.noteId !== entered.noteId || l.verse !== entered.verse), entered]
       : this.project.score().lyrics;
     const order = lyricNotes(document.view, entry.trackId);
     const existing = lyrics.find(l => l.noteId === entry.noteId && l.verse === entry.verse) ?? null;
@@ -1231,7 +1228,7 @@ export class ScoreEditor {
       }
     }
     this.enteredLyric = result.change
-      ? { id: existing?.id ?? '', verse: entry.verse, ...result.change, extender: result.change.extender ?? false }
+      ? { id: existing?.id ?? '', verse: entry.verse, ...result.change }
       : this.enteredLyric;
     if (result.done) {
       this.enteredLyric = null;
