@@ -359,8 +359,12 @@ public static partial class MovieMedia {
 
     static readonly string[] WebmEncoders = ["libvpx-vp9"];
 
-    /// <summary>Solid backgrounds far apart in brightness and hue, one per scene.</summary>
-    static readonly string[] Colours = ["0x203080", "0xE0D020", "0x208030", "0xE040C0", "0x804010", "0x30D0E0"];
+    /// <summary>
+    ///     Solid backgrounds, one per scene, dark and bright in turn (luma about 50 and 180, hues far apart), so every cut
+    ///     scores well above Detect Scene Cuts' 0.4 (FFmpeg's scene score follows the luma change: green to magenta, two
+    ///     neighbours of the first palette, scored 0.24).
+    /// </summary>
+    static readonly string[] Colours = ["0x203080", "0xE0D020", "0x802010", "0x30E0E0", "0x403040", "0xF0A0F0"];
 
     /// <summary>The probe and the start times the operations align by.</summary>
     internal sealed record ProbeDetail(

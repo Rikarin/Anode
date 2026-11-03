@@ -64,7 +64,7 @@ export default function globalSetup(): void {
     [
       join(root, 'scripts', 'media-check.mjs'),
       'make-movie',
-      join(media, 'movie-12s-25fps-50_125_200.mov'),
+      join(media, 'movie2-12s-25fps-50_125_200.mov'),
       '12',
       '25',
       '50,125,200'
