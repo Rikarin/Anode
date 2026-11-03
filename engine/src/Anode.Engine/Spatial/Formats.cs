@@ -25,10 +25,10 @@ public static class Formats {
     ///     down-mix (ITU-R BS.775 and its extensions) to a smaller layout; to a larger one, each channel to the speaker
     ///     of its label, or else to the nearest speaker of its layer (the LFE to the LFE, or nowhere). Control thread.
     /// </summary>
-    public static float[] Conversion(SpeakerLayout from, SpeakerLayout to, ISpatialFactory spatial) {
+    public static float[] Conversion(SpeakerLayout from, SpeakerLayout to, SpatialContext spatial) {
         var m = new float[to.ChannelCount * from.ChannelCount];
-        if (to.ChannelCount < from.ChannelCount) {
-            var downmix = spatial.CreateDownmix(from, to);
+        if (to.ChannelCount < from.ChannelCount
+            && spatial.Try(() => spatial.Factory.CreateDownmix(from, to), "the down-mix") is { } downmix) {
             for (var o = 0; o < to.ChannelCount; o++) {
                 for (var i = 0; i < from.ChannelCount; i++) {
                     m[o * from.ChannelCount + i] = downmix.Gain(o, i);

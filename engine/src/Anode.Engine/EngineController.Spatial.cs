@@ -21,7 +21,7 @@ public sealed partial class EngineController {
         get => Engine.Spatial.Factory;
         set {
             lock (gate) {
-                Engine.Spatial = new(value, Options.SampleRate);
+                Engine.Spatial = new(value, Options.SampleRate) { Log = message => Log?.Invoke(message) };
                 monitoredFormat = null;
                 ApplyMonitoring();
             }
@@ -44,7 +44,7 @@ public sealed partial class EngineController {
             monitoring = message;
             monitoredFormat = null;
             try {
-                ApplyMonitoring();
+                ApplyMonitoring(true);
             } catch {
                 monitoring = previous;
                 monitoredFormat = null;
@@ -59,9 +59,11 @@ public sealed partial class EngineController {
 
     /// <summary>
     ///     Builds the device stage's monitoring for the current master's format, when it or the settings changed (the
-    ///     binaural renderer and the down-mix are prepared here, off the audio thread).
+    ///     binaural renderer and the down-mix are prepared here, off the audio thread). What cannot be made throws
+    ///     <see cref="InvalidOperationException" /> with <paramref name="strict" /> (a <c>setMonitoring</c>); otherwise
+    ///     (a new master format) it is logged and the master is sent as it is.
     /// </summary>
-    void ApplyMonitoring() {
+    void ApplyMonitoring(bool strict = false) {
         var format = Engine.Root.Mix.MasterFormat;
         if (monitoredFormat == format) {
             return;
@@ -79,13 +81,24 @@ public sealed partial class EngineController {
         IDownmix? downmix = null;
         var channels = layout.ChannelCount;
         if (message.Binaural) {
-            binaural = spatial.Factory.CreateBinaural(message.HrtfPath!, layout, Options.SampleRate, AudioEngine.MaxFrames);
-            channels = 2;
+            binaural = spatial.Try(
+                () => spatial.Factory.CreateBinaural(message.HrtfPath!, layout, Options.SampleRate, AudioEngine.MaxFrames),
+                $"binaural monitoring through {message.HrtfPath}"
+            );
+            if (binaural is null && strict) {
+                throw new InvalidOperationException($"Binaural monitoring through {message.HrtfPath} is not available.");
+            }
+
+            channels = binaural is null ? channels : 2;
         } else if (message.DownmixTo is { } to
                    && SpeakerLayout.Of(Formats.Of(to)) is var target
                    && target.ChannelCount < layout.ChannelCount) {
-            downmix = spatial.Factory.CreateDownmix(layout, target);
-            channels = target.ChannelCount;
+            downmix = spatial.Try(() => spatial.Factory.CreateDownmix(layout, target), "the monitoring down-mix");
+            if (downmix is null && strict) {
+                throw new InvalidOperationException($"The down-mix to {to} is not available.");
+            }
+
+            channels = downmix is null ? channels : target.ChannelCount;
         }
 
         var setup = new MonitorSetup {

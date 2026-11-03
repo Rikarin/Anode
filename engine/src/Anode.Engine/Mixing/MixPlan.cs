@@ -375,7 +375,10 @@ public sealed class MixPlan {
                 };
             }
 
-            if (objectMode && destination == 0 && objects.Count < Dsp.Spatial.ObjectRenderer.MaxObjects) {
+            if (objectMode
+                && destination == 0
+                && objects.Count < Dsp.Spatial.ObjectRenderer.MaxObjects
+                && spatial.ObjectRenderer(toFormat) is not null) {
                 return new() {
                     Kind = EdgeKind.Object,
                     Width = to,
@@ -391,14 +394,23 @@ public sealed class MixPlan {
                     : new() { Kind = EdgeKind.Matrix, Width = to, Format = toFormat, Matrix = Convert(format, toLayout) };
             }
 
-            var panner = send is null
-                ? channel.OutputPanner.Get(toFormat, width, spatial)
-                : send.Panner.Get(toFormat, width, spatial);
+            var panner = spatial.Try(
+                () => send is null
+                    ? channel.OutputPanner.Get(toFormat, width, spatial)
+                    : send.Panner.Get(toFormat, width, spatial),
+                "the Surround Panner"
+            );
+            if (panner is null) {
+                // No panner to be had: the signal's channels by label (a mono one to the centre).
+                var from = width == 1 ? SpeakerFormat.Mono : SpeakerFormat.Stereo;
+                return new() { Kind = EdgeKind.Matrix, Width = to, Format = toFormat, Matrix = Convert(from, toLayout) };
+            }
+
             return new() { Kind = EdgeKind.Panner, Width = to, Format = toFormat, Panner = panner, PannerInputs = width };
         }
 
         float[] Convert(SpeakerFormat from, SpeakerLayout to) =>
-            Spatial.Formats.Conversion(SpeakerLayout.Of(from), to, spatial.Factory);
+            Spatial.Formats.Conversion(SpeakerLayout.Of(from), to, spatial);
 
         static readonly MixEdge StereoEdge = new() { Kind = EdgeKind.Stereo };
 

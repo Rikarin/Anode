@@ -956,7 +956,7 @@ public sealed unsafe partial class AudioEngine {
         }
 
         masterPlanar.AsSpan(0, frames).CopyTo(outLeft);
-        masterPlanar.AsSpan(frames, frames).CopyTo(outRight);
+        masterPlanar.AsSpan(width > 1 ? frames : 0, frames).CopyTo(outRight); // a mono master's one channel twice
         MeterPlanar(ch, masterPlanar.AsSpan(0, width * frames), width);
         if (blockCapture is { MonitoringRender: false, Master: { } target }) {
             target.WritePlanar(masterPlanar.AsSpan(0, width * frames), width, frames, ch.Latency + masterOutputDelay);

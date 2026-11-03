@@ -40,7 +40,16 @@ public enum MultichannelPolicy {
 
 /// <summary>The policy of each built-in effect; hosted plugins and unknown ids are <see cref="MultichannelPolicy.FrontPair" />.</summary>
 public static class MultichannelEffects {
+    static readonly System.Collections.Concurrent.ConcurrentDictionary<string, MultichannelPolicy> Registered =
+        new(StringComparer.Ordinal);
+
+    /// <summary>Gives effect <paramref name="pluginId" /> a policy (registered effects: tests, future built-ins).</summary>
+    public static void Register(string pluginId, MultichannelPolicy policy) => Registered[pluginId] = policy;
+
     public static MultichannelPolicy PolicyOf(string pluginId) =>
+        Registered.TryGetValue(pluginId, out var registered) ? registered : BuiltinPolicy(pluginId);
+
+    static MultichannelPolicy BuiltinPolicy(string pluginId) =>
         pluginId switch {
             ChannelEq.Id or LinearPhaseEq.Id or Gain.Id or StereoDelay.Id or TapeDelay.Id or Reverb.Id
                 or ConvolutionReverb.Id or Chorus.Id or Flanger.Id or Phaser.Id or Tremolo.Id or Ensemble.Id

@@ -81,7 +81,7 @@ public sealed partial class EngineController : IDisposable {
     public EngineController(EngineOptions options, PluginRegistry? plugins = null, IMidiBackend? midi = null) {
         Options = options;
         Engine = new(options.SampleRate) {
-            Spatial = new(Spatial.DspSpatial.Instance, options.SampleRate),
+            Spatial = new(Spatial.DspSpatial.Instance, options.SampleRate) { Log = message => Log?.Invoke(message) },
             OutputLatency = options.OutputLatency,
             MidiRecordShift = options.BufferFrames + options.OutputLatency,
             RecordLatency = Math.Max(0, options.RoundTripLatency)
