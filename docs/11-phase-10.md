@@ -435,3 +435,66 @@ Five, in parallel, each on its own branch; they meet only at the contracts above
 3. Run the two-process tests: multichannel bounces, monitoring, the listen-in ring.
 4. Run the Playwright golden path for the exit criterion.
 5. Fix the seams.
+
+### Integration decisions
+
+Settled when the five workstreams met (the contract changes are marked **contract**):
+- **Real classes everywhere.** The host runs A's graph with D's DSP and HRTF set, the Server B's domain with D's ADM
+  writer and reader and E's FFmpeg runner, Opus encoder and framer; nothing catches `NotImplementedException` any more
+  and `Anode.Interchange`'s `Pending` is gone. `Phase10TwoProcessTests` runs them in two processes: a 7.1.4 bounce
+  (a Surround-Panner track in Ls and the LFE, an object moving from L to the top rear right), Channel EQ on a 7.1.4 bus,
+  the monitoring bounce (BS.775 down-mix coefficients within 0.1 dB; binaural ILD and ITD), the ADM export read back by
+  D's reader, and listen-in from the host's tap decoded with E's Opus decoder. The 7.1.4 session's allocation and
+  callback-cost tests also run with D's DSP.
+- **The HRTF set** travels with the Server: its build and publish copy `sadie2-d2-48k.anhrtf`, `LICENSE` and `NOTICE`
+  into `hrtf/` beside it (the packaged app's `resources/engine/hrtf/`; `publish-engine.mjs` checks them). Without that
+  copy the Server finds the committed set from its folder up (`HrtfSet.Find`), not `engine/artifacts/hrtf`.
+- **Surround WAVs.** The host's renders of more than two channels are WAVE_FORMAT_EXTENSIBLE in mask order; the Server
+  read them as if in layout order (7.x's rears and sides swapped in the ADM bed and the movie export's down-mix).
+  `WavInfo.ChannelMask` and `BounceProcessor.ReadLayout` read them back into the layout's (ADM) order, and a surround
+  bounce is written extensible with the layout's mask (it was a plain WAV in mask order). `WaveChannels` moved to
+  `Anode.Dsp.Spatial`.
+- **ADM export** (replaces B's "one stem render" decision): the bed is A's bed-only master render
+  (`RenderMessage.BedOnly`: every bed contribution, aux returns included, through the master's inserts and fader,
+  without the objects), the objects a stem render of the object tracks only, each before the renderer and through the
+  master's fader; every source is cut or padded to the scene's frames. B's sum of a multichannel stem per track was
+  equivalent without master inserts but wrote a 7.1.4 file per track. An object has the channels the engine rendered
+  (its stem's, one or two): the engine's width for a track is its own (a mono audio track without inserts is one
+  channel) while new strips store a stereo input format, so the strip's format made a mono object stereo, 6 dB louder
+  in `ear`. (Open: the stored input format of a mono track does not say mono.) The export dialog offers 24-bit (the default,
+  which `ear` 2.1.0 reads correctly) and 32-bit float; 16-bit, which the Server refuses, is gone.
+- **Diversity** is 1 = a point, 0 = every speaker in D's panner, C's Surround Panner (the puck's distance from the
+  centre) and the fake Server alike: no change.
+- **Per-channel meters** (**contract**): `TrackMeter.Peaks` (`Realtime.cs`), every channel's peak in layout order for a
+  meter wider than stereo, read by the Server from the host's channel meters; `models.ts`'s `peaks` is that field.
+- **Remote** (**contract**): `POST /remote/pads/run` (`RunKeyCommandRequest(commandId)`, 204) broadcasts the Phase 8
+  `keyCommand` event, so a pad whose command acts on the desktop's views runs in the desktop editor; the remote's pads
+  no longer show them disabled. A new user's pad sets are `RemotePads.Default` (the fake Server's `DefaultRemotePads`,
+  by `keys/key-commands.ts` ids, which a spec checks), not none. Discovery advertises the first address a remote can
+  reach (the desktop app's Server also listens on a loopback port, which it advertised before).
+- **Movie media**: `GET /project/movie/frames/{frame}` renders a frame not in the cache (at most two FFmpeg runs at
+  once; 404 past the end); the stream is `video/mp4` for MOV and M4V too (Chromium refuses `video/quicktime`); `Access`
+  takes `?access_token=` on the movie's stream and frames as on the sockets, since `mediaUrl` gives it to `<video>` and
+  `<img>`. The stream ignores other query parameters (the editor's `?v=`).
+- **Bounce** (**contract**): `BounceRequest.monitoring` bounces what the monitoring sends the device (A's
+  `RenderMessage.Monitoring`, a mix only): the golden path's binaural ears and down-mix.
+- **Panner modes and strips**: B's compiler sends the whole `EngineStrip` (formats and panner) on every
+  `setStrip`/`setChannel`/`loadModel`; `setSurroundFormat` puts the strips into the master on the Surround Panner and
+  the editor follows the `trackUpserted` deltas (the golden path checks the mode after the switch).
+- **Network access** (desktop): turning it on or off restarts the Server, which closed the open project; the app now
+  refuses while the project has unsaved edits and opens the saved project again on the new Server.
+- **The desktop editor's CSP** allows the Server in `img-src` and `media-src` (the movie's frames and stream load from
+  it; the movie window fell back to "cannot play h264" and the movie track had no thumbnails).
+- **Listen-in over plain HTTP.** A remote on the LAN opens `http://<host>.local:<port>`, not a secure context: no
+  AudioWorklet and no WebCodecs. The player falls back to a `ScriptProcessorNode` over the same jitter buffer (512
+  frames), the decoder to the WebAssembly Opus build; on a secure context (`localhost`, HTTPS) the worklet and WebCodecs
+  play. The golden path hears both.
+- **Renders after quick edits**: a render waits for every stream to hold its fill with the device's callbacks parked;
+  the stale fills of a few quick edits filled the streams' queues and nothing dropped them (the stopped callback does),
+  so it timed out ("the disk did not keep up"). The render's thread now drops them as it waits.
+- **The test movie** alternates dark and bright backgrounds: E's palette gave the golden path's third cut (green to
+  magenta) a scene score of 0.24, under Detect Scene Cuts' 0.4.
+- **Golden path**: `remote-video-surround-golden-path.spec.ts` is a test; its helpers are `scripts/media-check.mjs`
+  and `scripts/ear-check.py`, and the e2e global setup fetches FFmpeg (by checksum), makes the movie and sets up `ear`.
+  The spec takes Ls as 7.1.4's side surround (`M+090`, Logic's Ls), where a point puck leaves every other speaker
+  silent, and checks the LFE send on a 60 Hz component (a 1 kHz tone is 74 dB down after the 120 Hz low-pass).

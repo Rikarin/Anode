@@ -70,8 +70,8 @@ Frame numbers count decoded frames from 0. "The movie's start" is the first vide
 48 kHz, videoEncoder = auto)`. The golden path's movie is `new(6, [40, 100], TimecodeStartSeconds: 10)`, made by
 `dotnet run scripts/make-test-movie.cs` (into `engine/artifacts/media/test-movie.mov`) and by the tests' fixture.
 
-- **Picture:** a solid background that changes colour at each scene cut (six colours, far apart, in rotation). In the
-  middle, FFmpeg's `testsrc` at half size; its own counter shows the time in hundredths, so every frame differs. With
+- **Picture:** a solid background that changes colour at each scene cut (six colours in rotation, dark and bright in
+  turn, so every cut scores well above Detect Scene Cuts' 0.4). In the middle, FFmpeg's `testsrc` at half size; its own counter shows the time in hundredths, so every frame differs. With
   `drawtext` and a system font (Arial on macOS and Windows, DejaVu or Liberation on Linux), the frame number is burned
   in top left and the timecode bottom left.
 - **Sound:** a stereo 1 kHz sine at half scale (−6 dBFS), 50 ms long, starting at sample k × rate of every second k.

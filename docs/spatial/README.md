@@ -101,7 +101,8 @@ file's `License` attribute), subject **D2 (KEMAR)**, 48 kHz, 256 taps. `scripts/
 every 15°, and the poles), stores the raw HRIR pairs (the interaural delay in them) as 16-bit integers with one scale,
 and each ear's delay (the peak of the response low-passed at 1.5 kHz, to a fraction of a sample). The result,
 `engine/src/Anode.Dsp/Spatial/Hrtf/sadie2-d2-48k.anhrtf` (2.06 MB, SHA-256 `377b8265…51e85`), is committed with the
-licence and a `NOTICE` (source, citation, changes); whatever ships it must keep both beside it. The format is in
+licence and a `NOTICE` (source, citation, changes); whatever ships it must keep both beside it. The Server's build and
+publish copy all three into `hrtf/` beside it, where binaural monitoring finds them. The format is in
 `HrtfSet`'s remarks and the script's header. KEMAR rather than KU100 (D1): D1's interaural delay at 90° is 0.79–0.81 ms
 (cross-correlation), at the edge of the exit criterion's 0.5–0.8 ms; D2's is 0.71.
 
