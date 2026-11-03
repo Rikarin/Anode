@@ -113,7 +113,9 @@ export const KeyCommands: readonly KeyCommand[] = [
   { id: 'score.sets', label: 'Score Sets…', group: 'Score', defaults: [] },
   { id: 'score.staffStyles', label: 'Staff Styles…', group: 'Score', defaults: [] },
   { id: 'score.layout', label: 'Score Layout…', group: 'Score', defaults: [] },
-  { id: 'score.print', label: 'Print Score…', group: 'Score', defaults: ['Meta+P'] }
+  { id: 'score.print', label: 'Print Score…', group: 'Score', defaults: ['Meta+P'] },
+  // Phase 11 (docs/12-phase-11.md): the MIDI Environment window (Logic's ⌘0 is the app's Actual Size here).
+  { id: 'view.environment', label: 'Open MIDI Environment', group: 'View', defaults: ['Meta+Alt+0'] }
 ];
 
 /** Modifier order in a binding. */
