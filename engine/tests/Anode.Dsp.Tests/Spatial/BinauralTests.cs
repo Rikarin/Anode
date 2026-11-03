@@ -55,14 +55,14 @@ public sealed class BinauralTests {
         );
     }
 
-    static double IldDb((float[] Left, float[] Right) ears) =>
+    internal static double IldDb((float[] Left, float[] Right) ears) =>
         Support.Analysis.ToDb(Support.Analysis.Rms(ears.Left) / Support.Analysis.Rms(ears.Right));
 
     /// <summary>
     ///     How much later the right ear hears than the left, in ms: the lag of the peak of the cross-correlation of the
     ///     two responses low-passed at 1.5 kHz (4th-order Butterworth), the usual measure of the interaural time difference.
     /// </summary>
-    static double ItdMs((float[] Left, float[] Right) ears, float rate) {
+    internal static double ItdMs((float[] Left, float[] Right) ears, float rate) {
         var left = LowPass(ears.Left, rate);
         var right = LowPass(ears.Right, rate);
         var reach = (int)(0.0015 * rate);
