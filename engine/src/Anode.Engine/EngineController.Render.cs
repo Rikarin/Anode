@@ -1,4 +1,7 @@
+using Anode.Dsp.Spatial;
+using Anode.Engine.Mixing;
 using Anode.Engine.Rendering;
+using Anode.Engine.Spatial;
 using Anode.Engine.Streaming;
 using Anode.Ipc;
 using System.Diagnostics;
@@ -47,7 +50,7 @@ public sealed partial class EngineController {
         }
 
         RenderCapture? capture = null;
-        var writers = new List<(RenderTarget Target, FloatWavWriter Writer)>();
+        var writers = new List<(RenderTarget Target, RenderFile Writer)>();
         var finished = false;
         try {
             capture = Prepare(message, writers);
@@ -66,7 +69,7 @@ public sealed partial class EngineController {
             Complete(writers);
             finished = true;
             progress?.Invoke(1);
-            return [..writers.Select(static w => w.Writer.Path)];
+            return [..writers.SelectMany(static w => w.Writer.Paths)];
         } finally {
             Release(writers, !finished);
             Volatile.Write(ref rendering, 0);
@@ -74,7 +77,7 @@ public sealed partial class EngineController {
     }
 
     /// <summary>Completes the files; throws when a real-time render dropped frames.</summary>
-    static void Complete(List<(RenderTarget Target, FloatWavWriter Writer)> writers) {
+    static void Complete(List<(RenderTarget Target, RenderFile Writer)> writers) {
         foreach (var (target, writer) in writers) {
             writer.Complete();
             if (target.Dropped > 0) {
@@ -84,18 +87,20 @@ public sealed partial class EngineController {
     }
 
     /// <summary>Closes the files and frees the rings; <paramref name="delete" /> removes the files (a failed render).</summary>
-    void Release(List<(RenderTarget Target, FloatWavWriter Writer)> writers, bool delete) {
+    void Release(List<(RenderTarget Target, RenderFile Writer)> writers, bool delete) {
         foreach (var (target, writer) in writers) {
             writer.Dispose();
             target.Dispose();
             if (delete) {
-                TryDelete(writer.Path);
+                foreach (var path in writer.Paths) {
+                    TryDelete(path);
+                }
             }
         }
     }
 
     /// <summary>The render's targets and files.</summary>
-    RenderCapture Prepare(RenderMessage message, List<(RenderTarget, FloatWavWriter)> writers) {
+    RenderCapture Prepare(RenderMessage message, List<(RenderTarget, RenderFile)> writers) {
         lock (gate) {
             if (takes.Length > 0 || recordingPass) {
                 throw new InvalidOperationException("Cannot render while recording.");
@@ -111,10 +116,12 @@ public sealed partial class EngineController {
 
             var frames = message.EndSample - message.StartSample;
             var ring = message.Realtime ? 4 * Options.SampleRate : 2 * AudioEngine.MaxFrames;
+            var plan = root.Mix;
             if (kind == RenderKind.Master) {
-                var master = new RenderTarget(-1, Path.GetFullPath(message.Path), frames, ring);
-                Open(master);
-                return new(kind, master, []);
+                var (channels, format) = MasterFormat(plan, message.Monitoring);
+                var master = new RenderTarget(-1, Path.GetFullPath(message.Path), frames, ring, channels);
+                Open(message, master, format, writers);
+                return new(kind, master, []) { MonitoringRender = message.Monitoring, BedOnly = message.BedOnly };
             }
 
             var tracks = new Dictionary<int, RenderTarget>();
@@ -123,14 +130,11 @@ public sealed partial class EngineController {
                     throw new InvalidOperationException($"No track {id}.");
                 }
 
-                var target = new RenderTarget(
-                    id,
-                    Path.Combine(Path.GetFullPath(message.Path), $"{id}.wav"),
-                    frames,
-                    ring
-                );
+                var (channels, format) = kind == RenderKind.Freeze ? (2, null) : StemFormat(plan, id);
+                var path = Path.Combine(Path.GetFullPath(message.Path), $"{id}.wav");
+                var target = new RenderTarget(id, path, frames, ring, channels);
                 tracks[id] = target;
-                Open(target);
+                Open(message, target, format, writers);
             }
 
             return new(kind, null, tracks) {
@@ -138,15 +142,26 @@ public sealed partial class EngineController {
                 BypassInserts = message.BypassInserts
             };
         }
+    }
 
-        void Open(RenderTarget target) {
-            try {
-                Directory.CreateDirectory(Path.GetDirectoryName(target.Path)!);
-                writers.Add((target, new(target.Path, 2, Options.SampleRate)));
-            } catch {
-                target.Dispose();
-                throw;
-            }
+    /// <summary>
+    ///     A target's file: extensible with <paramref name="format" />'s mask for more than two channels, or one per
+    ///     channel when the render splits them (never a freeze).
+    /// </summary>
+    void Open(
+        RenderMessage message,
+        RenderTarget target,
+        SpeakerFormat? format,
+        List<(RenderTarget, RenderFile)> writers
+    ) {
+        try {
+            Directory.CreateDirectory(Path.GetDirectoryName(target.Path)!);
+            var layout = format is { } f && target.Channels > 2 ? SpeakerLayout.Of(f) : null;
+            var split = message is { SplitChannels: true, Freeze: false };
+            writers.Add((target, new(target.Path, target.Channels, Options.SampleRate, layout, split)));
+        } catch {
+            target.Dispose();
+            throw;
         }
     }
 
@@ -154,7 +169,7 @@ public sealed partial class EngineController {
     unsafe void Offline(
         RenderMessage message,
         RenderCapture capture,
-        List<(RenderTarget Target, FloatWavWriter Writer)> writers,
+        List<(RenderTarget Target, RenderFile Writer)> writers,
         Action<double>? progress,
         CancellationToken cancellationToken
     ) {
@@ -206,7 +221,7 @@ public sealed partial class EngineController {
     async Task RealtimeAsync(
         RenderMessage message,
         RenderCapture capture,
-        List<(RenderTarget Target, FloatWavWriter Writer)> writers,
+        List<(RenderTarget Target, RenderFile Writer)> writers,
         Action<double>? progress,
         CancellationToken cancellationToken
     ) {
@@ -240,7 +255,7 @@ public sealed partial class EngineController {
         }
     }
 
-    static void Drain(List<(RenderTarget Target, FloatWavWriter Writer)> writers) {
+    static void Drain(List<(RenderTarget Target, RenderFile Writer)> writers) {
         foreach (var (target, writer) in writers) {
             var ring = target.Ring;
             var available = ring.Available;
@@ -255,7 +270,7 @@ public sealed partial class EngineController {
         }
     }
 
-    static double Fraction(List<(RenderTarget Target, FloatWavWriter Writer)> writers) {
+    static double Fraction(List<(RenderTarget Target, RenderFile Writer)> writers) {
         double total = 0, left = 0;
         foreach (var (target, _) in writers) {
             total += target.Frames;
@@ -334,6 +349,22 @@ public sealed partial class EngineController {
         }
 
         return true;
+    }
+
+    /// <summary>A master render's channels: the master's, or what the monitoring sends when it renders that.</summary>
+    (int Channels, SpeakerFormat? Format) MasterFormat(MixPlan plan, bool monitored) {
+        var format = plan.MasterFormat;
+        if (!monitored || Engine.Monitoring is not { } setup || setup.From != format) {
+            return (SpeakerLayout.Of(format).ChannelCount, format);
+        }
+
+        if (setup.Binaural is not null) {
+            return (2, SpeakerFormat.Stereo);
+        }
+
+        return setup.Downmix is not null && monitoring?.DownmixTo is { } to
+            ? (setup.Channels, Formats.Of(to))
+            : (SpeakerLayout.Of(format).ChannelCount, format);
     }
 
     void RefuseWhileRendering() {

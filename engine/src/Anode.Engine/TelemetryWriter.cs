@@ -33,6 +33,8 @@ public sealed unsafe class TelemetryWriter : IDisposable {
 
     MeterEntry* Meters => (MeterEntry*)(region + sizeof(TelemetryHeader));
 
+    ChannelMeterEntry* ChannelMeters => (ChannelMeterEntry*)(region + TelemetryLayout.ChannelMetersOffset);
+
     /// <summary>Writes every <see cref="Interval" /> on a background thread until disposed.</summary>
     public void Start() {
         running = true;
@@ -62,13 +64,55 @@ public sealed unsafe class TelemetryWriter : IDisposable {
         h->ModelVersion = snapshot.ModelVersion;
         var meters = Meters;
         for (var i = 0; i < count; i++) {
-            var (left, right) = tracks[i].Strip.TakePeaks();
-            meters[i] = new() { TrackId = tracks[i].Id, PeakLeft = left, PeakRight = right };
+            meters[i] = Entry(tracks[i].Id, tracks[i].Strip, i);
         }
 
-        var (masterLeft, masterRight) = engine.Master.TakePeaks();
-        meters[count] = new() { TrackId = -1, PeakLeft = masterLeft, PeakRight = masterRight };
+        meters[count] = Entry(-1, engine.Master, count);
         Volatile.Write(ref h->Sequence, h->Sequence + 1);
+    }
+
+    /// <summary>
+    ///     A strip's meter entry, its channel peaks (a surround meter) into the channel table at
+    ///     <paramref name="index" />.
+    /// </summary>
+    MeterEntry Entry(int trackId, Strip strip, int index) {
+        var peaks = new Span<float>(ChannelMeters[index].Peaks, ChannelMeterEntry.MaxChannels);
+        var (left, right) = strip.TakePeaks(peaks, out var channels);
+        return new() { TrackId = trackId, PeakLeft = left, PeakRight = right, Channels = channels > 2 ? channels : 0 };
+    }
+
+    /// <summary>
+    ///     Reader side (Phase 10): a consistent copy of the header, its meters and their channel meters (as many as
+    ///     <paramref name="channelMeters" /> holds).
+    /// </summary>
+    public static bool TryRead(
+        byte* region,
+        out TelemetryHeader header,
+        Span<MeterEntry> meters,
+        Span<ChannelMeterEntry> channelMeters
+    ) {
+        var h = (TelemetryHeader*)region;
+        for (var attempt = 0; attempt < 64; attempt++) {
+            var before = Volatile.Read(ref h->Sequence);
+            if ((before & 1) != 0) {
+                Thread.SpinWait(16);
+                continue;
+            }
+
+            header = *h;
+            var count = Math.Min(Math.Min(header.TrackCount, TelemetryHeader.MaxTracks) + 1, meters.Length);
+            new ReadOnlySpan<MeterEntry>(region + sizeof(TelemetryHeader), count).CopyTo(meters);
+            var channels = Math.Min(count, channelMeters.Length);
+            new ReadOnlySpan<ChannelMeterEntry>(region + TelemetryLayout.ChannelMetersOffset, channels)
+                .CopyTo(channelMeters);
+            Interlocked.MemoryBarrier();
+            if (Volatile.Read(ref h->Sequence) == before) {
+                return true;
+            }
+        }
+
+        header = default;
+        return false;
     }
 
     /// <summary>Reader side, for tests and in-process readers: a consistent copy of the header and its meters.</summary>

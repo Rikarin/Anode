@@ -2,6 +2,7 @@ using Anode.Dsp.Effects;
 using Anode.Dsp.MidiEffects;
 using Anode.Engine.Mixing;
 using Anode.Engine.Plugins;
+using Anode.Engine.Spatial;
 using Anode.Ipc;
 using Anode.Plugins;
 
@@ -212,6 +213,7 @@ public sealed partial class EngineController {
             Hold(root, trackId, AutomationKind.Mute);
         }
 
+        HoldPanner(root, trackId, fader.Panner, strip.Panner);
         fader.Set(strip);
     }
 
@@ -233,9 +235,11 @@ public sealed partial class EngineController {
         var old = channel.Config;
         var claimed = new HashSet<InsertSlot>();
         var inserts = new List<ChannelInsert>();
+        var input = Formats.Of(strip.InputFormat);
         foreach (var spec in strip.Inserts ?? []) {
             var slot = KeepInsert(old, spec, claimed) ?? BuildInsert(trackId, spec);
             claimed.Add(slot);
+            EnsureMulti(slot, trackId, input, spec.State, replaced);
             inserts.Add(new(slot, spec.Bypassed, spec.SidechainTrack, spec.SidechainBus));
         }
 
@@ -266,7 +270,12 @@ public sealed partial class EngineController {
             midiEffects.Add(new(slot, spec.Bypassed));
         }
 
-        channel.Config = new([..inserts], [..sends], strip.Output) { MidiEffects = [..midiEffects] };
+        channel.Config = new([..inserts], [..sends], strip.Output) {
+            MidiEffects = [..midiEffects],
+            InputFormat = input,
+            OutputFormat = Formats.Of(strip.OutputFormat),
+            PannerMode = strip.Panner?.Mode ?? EnginePannerMode.Stereo
+        };
         replaced.AddRange(old.Inserts.Select(static i => i.Slot).Where(s => !claimed.Contains(s)));
         replaced.AddRange(old.MidiEffects.Select(static m => m.Slot).Where(s => !claimedMidi.Contains(s)));
     }
@@ -439,10 +448,12 @@ public sealed partial class EngineController {
     /// </summary>
     MixPlan BuildPlan(TrackState[] tracks, AutomationSet automation) {
         Engine.CycleObserver = Plugins.Factory as IAudioCycleObserver;
-        var plan = MixPlan.Build(tracks, Engine.MasterChannel, automation);
+        var plan = MixPlan.Build(tracks, Engine.MasterChannel, automation, Engine.Spatial);
         foreach (var bus in plan.SnapshotBuses) {
             Engine.EnsureBusSnapshot(bus);
         }
+
+        EnsureBuffers(plan);
 
         GrowDelays(plan);
         return plan;
@@ -473,8 +484,9 @@ public sealed partial class EngineController {
 
         var frames = (int)Math.Min(int.MaxValue / 4, Math.Max(MinDelayFrames, 2 * bound));
         foreach (var node in plan.Order.Append(plan.Master)) {
-            if (node.Channel.Delay is not { } line || line.MaxDelay < bound) {
-                node.Channel.Delay = new(frames);
+            var extra = Math.Max(0, node.Width - 2); // a surround strip's channels after the first two
+            if (node.Channel.Delay is not { } line || line.MaxDelay < bound || line.ExtraChannels < extra) {
+                node.Channel.Delay = new(frames, extra);
             }
         }
     }

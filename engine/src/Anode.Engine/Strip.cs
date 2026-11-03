@@ -20,6 +20,12 @@ public sealed class Strip {
     int resetRequested;
     int resetSeen;
 
+    // Phase 10: a surround meter's channels (published while meterChannels > 0).
+    readonly float[] accumulatedChannels = new float[Spatial.Formats.MaxChannels];
+    readonly float[] publishedChannels = new float[Spatial.Formats.MaxChannels];
+    int meterChannels;
+    EnginePanner? panner;
+
     public Strip() { }
 
     public Strip(EngineStrip strip) {
@@ -34,12 +40,16 @@ public sealed class Strip {
 
     public bool Solo => Volatile.Read(ref solo);
 
+    /// <summary>The panner's settings (Phase 10; null: the stereo pan), swapped whole by the control thread.</summary>
+    public EnginePanner? Panner => Volatile.Read(ref panner);
+
     /// <summary>Control thread.</summary>
     public void Set(EngineStrip strip) {
         Volatile.Write(ref gain, float.IsFinite(strip.Gain) ? Math.Max(0f, strip.Gain) : 0f);
         Volatile.Write(ref pan, float.IsFinite(strip.Pan) ? Math.Clamp(strip.Pan, -1f, 1f) : 0f);
         Volatile.Write(ref mute, strip.Mute);
         Volatile.Write(ref solo, strip.Solo);
+        Volatile.Write(ref panner, strip.Panner);
     }
 
     public EngineStrip Settings => new(Gain, Pan, Mute, Solo);
@@ -69,6 +79,20 @@ public sealed class Strip {
         return peaks;
     }
 
+    /// <summary>
+    ///     Reader (telemetry, Phase 10): the peaks since the previous call, and each channel's when the strip's meter
+    ///     has more than two (a surround output, a surround bus or master): their count (0 for a mono or stereo meter)
+    ///     with the peaks in <paramref name="channels" />.
+    /// </summary>
+    public (float Left, float Right) TakePeaks(Span<float> channels, out int count) {
+        count = Math.Min(Volatile.Read(ref meterChannels), channels.Length);
+        for (var c = 0; c < count; c++) {
+            channels[c] = Volatile.Read(ref publishedChannels[c]);
+        }
+
+        return TakePeaks();
+    }
+
     /// <summary>Audio thread: adds a block's post-fader peaks to the meter.</summary>
     internal void Meter(float left, float right) {
         var request = Volatile.Read(ref resetRequested);
@@ -81,5 +105,38 @@ public sealed class Strip {
         accumulatedRight = Math.Max(accumulatedRight, right);
         Volatile.Write(ref publishedLeft, accumulatedLeft);
         Volatile.Write(ref publishedRight, accumulatedRight);
+        if (meterChannels != 0) {
+            Volatile.Write(ref meterChannels, 0); // a mono or stereo meter again
+        }
+    }
+
+    /// <summary>
+    ///     Audio thread (Phase 10): adds a block's post-fader peaks per channel (more than two: a surround meter; channels
+    ///     0 and 1 are also the left and right peaks).
+    /// </summary>
+    internal void MeterChannels(ReadOnlySpan<float> peaks) {
+        if (peaks.Length <= 2) {
+            Meter(peaks[0], peaks.Length > 1 ? peaks[1] : peaks[0]);
+            return;
+        }
+
+        var request = Volatile.Read(ref resetRequested);
+        if (request != resetSeen) {
+            resetSeen = request;
+            accumulatedLeft = accumulatedRight = 0;
+            Array.Clear(accumulatedChannels);
+        }
+
+        var n = Math.Min(peaks.Length, accumulatedChannels.Length);
+        for (var c = 0; c < n; c++) {
+            accumulatedChannels[c] = Math.Max(accumulatedChannels[c], peaks[c]);
+            Volatile.Write(ref publishedChannels[c], accumulatedChannels[c]);
+        }
+
+        accumulatedLeft = accumulatedChannels[0];
+        accumulatedRight = accumulatedChannels[1];
+        Volatile.Write(ref publishedLeft, accumulatedLeft);
+        Volatile.Write(ref publishedRight, accumulatedRight);
+        Volatile.Write(ref meterChannels, n);
     }
 }

@@ -529,6 +529,16 @@ public sealed record SetMixerMessage(string Pdc, bool LowLatency, double LowLate
 ///     <paramref name="Tracks" />: each isolated (its source alone, no sends), through its inserts unless
 ///     <paramref name="BypassInserts" />, and through its fader and pan too when <paramref name="IncludeVolumePan" />
 ///     (both apply only with <paramref name="Freeze" />); the server extends the range by the tail it wants.
+///     <para>
+///         Phase 10 (docs/11-phase-10.md, "Bounce"): a master render has the master's channels, and a stem its
+///         destination's (an object's stem is its own mono or stereo signal, before the renderer); a file of more than
+///         two channels is WAVE_FORMAT_EXTENSIBLE with the layout's channel mask, its channels in the mask's order
+///         (7.x: the rears before the sides), RF64 (<c>ds64</c>) past 4 GB. <paramref name="SplitChannels" /> writes one
+///         mono file per channel instead, <c>{name}.{ADM label}.wav</c> (<c>mix.M+030.wav</c>, …; a stereo file too).
+///         <paramref name="Monitoring" /> renders the master as the monitoring sends it to the device (binaural or the
+///         down-mix, before the speaker map); without it no render hears the monitoring. <paramref name="BedOnly" />
+///         renders the master without its objects (the bed of an ADM export). A freeze stays stereo.
+///     </para>
 /// </remarks>
 public sealed record RenderMessage(
     int JobId,
@@ -539,7 +549,10 @@ public sealed record RenderMessage(
     bool Freeze = false,
     bool Realtime = false,
     bool IncludeVolumePan = false,
-    bool BypassInserts = false
+    bool BypassInserts = false,
+    bool SplitChannels = false,
+    bool Monitoring = false,
+    bool BedOnly = false
 ) : IpcMessage;
 
 public sealed record CancelRenderMessage(int JobId) : IpcMessage;

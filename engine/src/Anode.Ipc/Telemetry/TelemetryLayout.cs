@@ -39,16 +39,37 @@ public struct TelemetryHeader {
     public long ModelVersion;
 }
 
-/// <summary>Peak levels since the previous write (linear, 0…), per track and for the master (track id −1).</summary>
+/// <summary>
+///     Peak levels since the previous write (linear, 0…), per track and for the master (track id −1). Phase 10: a meter of
+///     more than two channels (a surround output, bus or master) has their count in <see cref="Channels" /> and each
+///     channel's peak, in its layout's (ADM) order, in the <see cref="ChannelMeterEntry" /> of the same index (the first
+///     two are also <see cref="PeakLeft" /> and <see cref="PeakRight" />); 0 for a mono or stereo meter.
+/// </summary>
 [StructLayout(LayoutKind.Sequential)]
 public struct MeterEntry {
     public int TrackId;
     public float PeakLeft;
     public float PeakRight;
-    public int Reserved;
+    public int Channels;
+}
+
+/// <summary>A surround meter's peaks per channel (Phase 10), at the index of its <see cref="MeterEntry" />.</summary>
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct ChannelMeterEntry {
+    /// <summary>The most channels a format has (9.1.6).</summary>
+    public const int MaxChannels = 16;
+
+    public fixed float Peaks[MaxChannels];
 }
 
 public static unsafe class TelemetryLayout {
-    /// <summary>Bytes of a region with room for <see cref="TelemetryHeader.MaxTracks" /> tracks and the master.</summary>
-    public static long Size => sizeof(TelemetryHeader) + (long)(TelemetryHeader.MaxTracks + 1) * sizeof(MeterEntry);
+    /// <summary>Where the channel meters start (after the header and every <see cref="MeterEntry" />).</summary>
+    public static long ChannelMetersOffset =>
+        sizeof(TelemetryHeader) + (long)(TelemetryHeader.MaxTracks + 1) * sizeof(MeterEntry);
+
+    /// <summary>
+    ///     Bytes of a region with room for <see cref="TelemetryHeader.MaxTracks" /> tracks and the master, and (Phase 10)
+    ///     their channel meters.
+    /// </summary>
+    public static long Size => ChannelMetersOffset + (long)(TelemetryHeader.MaxTracks + 1) * sizeof(ChannelMeterEntry);
 }

@@ -14,7 +14,13 @@ public enum AutomationKind : byte {
     Instrument,
 
     /// <summary>A MIDI FX slot's parameter (Phase 6): the target's id is the slot's.</summary>
-    MidiEffect
+    MidiEffect,
+
+    /// <summary>The Surround Panner's parameter (Phase 10): <c>angle</c>, <c>diversity</c>, … in engine units.</summary>
+    Surround,
+
+    /// <summary>The object's position (Phase 10): <c>azimuth</c>, <c>elevation</c>, <c>distance</c>, <c>size</c>.</summary>
+    Object
 }
 
 /// <summary>
@@ -144,6 +150,8 @@ public sealed class AutomationLane {
             "insert" => AutomationKind.Insert,
             "instrument" => AutomationKind.Instrument,
             "midiEffect" => AutomationKind.MidiEffect,
+            "surround" => AutomationKind.Surround,
+            "object" => AutomationKind.Object,
             _ => AutomationKind.Unknown
         };
 }

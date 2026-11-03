@@ -3,16 +3,19 @@ namespace Anode.Engine.Mixing;
 /// <summary>
 ///     A stereo delay line with any number of read taps, for plugin delay compensation: each block a channel writes its
 ///     post-insert signal once, and each of its outputs and sends reads it back delayed by what its summing point needs.
-///     Allocated by the control thread; written and read by the audio thread only.
+///     Allocated by the control thread; written and read by the audio thread only. Phase 10: a multichannel strip's
+///     line also carries its channels after the first two (<see cref="ExtraChannels" />).
 /// </summary>
 public sealed class DelayLine {
     readonly float[] left;
     readonly float[] right;
+    readonly float[][] extra;
     readonly int mask;
     int write;
 
     /// <param name="maxDelay">The longest delay a tap may ask for, in frames.</param>
-    public DelayLine(int maxDelay) {
+    /// <param name="extraChannels">Channels beyond the left and right (a surround strip's).</param>
+    public DelayLine(int maxDelay, int extraChannels = 0) {
         var size = 1;
         while (size < maxDelay + AudioEngine.MaxFrames) {
             size <<= 1;
@@ -20,8 +23,38 @@ public sealed class DelayLine {
 
         left = GC.AllocateArray<float>(size, true);
         right = GC.AllocateArray<float>(size, true);
+        extra = new float[Math.Max(0, extraChannels)][];
+        for (var c = 0; c < extra.Length; c++) {
+            extra[c] = GC.AllocateArray<float>(size, true);
+        }
+
         mask = size - 1;
         MaxDelay = size - AudioEngine.MaxFrames;
+    }
+
+    /// <summary>Channels the line keeps beyond the left and right.</summary>
+    public int ExtraChannels => extra.Length;
+
+    /// <summary>
+    ///     Audio thread: appends a block of extra channel <paramref name="channel" /> (0: the strip's third), before
+    ///     <see cref="Write" /> appends the left and right and moves on.
+    /// </summary>
+    public void WriteExtra(int channel, ReadOnlySpan<float> block) {
+        var line = extra[channel];
+        var w = write;
+        for (var i = 0; i < block.Length; i++) {
+            line[(w + i) & mask] = block[i];
+        }
+    }
+
+    /// <summary>Audio thread, after <see cref="Write" />: extra channel <paramref name="channel" />'s block, delayed.</summary>
+    public void ReadExtra(int channel, int delay, Span<float> block) {
+        delay = Math.Clamp(delay, 0, MaxDelay);
+        var line = extra[channel];
+        var start = write - block.Length - delay;
+        for (var i = 0; i < block.Length; i++) {
+            block[i] = line[(start + i) & mask];
+        }
     }
 
     /// <summary>The longest delay a tap gets; longer requests are clamped to it.</summary>
@@ -57,5 +90,8 @@ public sealed class DelayLine {
     public void Clear() {
         Array.Clear(left);
         Array.Clear(right);
+        foreach (var line in extra) {
+            Array.Clear(line);
+        }
     }
 }
