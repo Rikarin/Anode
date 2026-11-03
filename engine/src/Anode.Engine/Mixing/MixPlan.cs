@@ -109,10 +109,10 @@ public sealed class MixNode {
     public MixEdge?[] SendEdges { get; init; } = [];
 
     /// <summary>The Surround Panner's automation targets: angle, diversity, elevation, centre, LFE, spread (−1: none).</summary>
-    public int[] SurroundTargets { get; init; } = MixPlan.NoSurroundTargets;
+    public int[] SurroundTargets { get; init; } = [-1, -1, -1, -1, -1, -1];
 
     /// <summary>The object's automation targets: azimuth, elevation, distance, size (−1: none).</summary>
-    public int[] ObjectTargets { get; init; } = MixPlan.NoObjectTargets;
+    public int[] ObjectTargets { get; init; } = [-1, -1, -1, -1];
 
     /// <summary>Whether any panner target has a lane (the panners then run in 32-frame pieces).</summary>
     public bool PannerAutomated { get; init; }
@@ -183,15 +183,6 @@ public sealed class MixPlan {
 
     public static readonly MixPlan Empty =
         new([], new() { Channel = new(new()), Config = ChannelConfig.Empty }, [0], []);
-
-    internal static readonly int[] NoSurroundTargets = [-1, -1, -1, -1, -1, -1];
-    internal static readonly int[] NoObjectTargets = [-1, -1, -1, -1];
-
-    /// <summary>The Surround Panner's automation parameters, in <see cref="MixNode.SurroundTargets" />' order.</summary>
-    internal static readonly string[] SurroundParameters = ["angle", "diversity", "elevation", "centre", "lfe", "spread"];
-
-    /// <summary>The object's automation parameters, in <see cref="MixNode.ObjectTargets" />' order.</summary>
-    internal static readonly string[] ObjectParameters = ["azimuth", "elevation", "distance", "size"];
 
     MixPlan(MixNode[] order, MixNode master, int[] used, int[] snapshotBuses) {
         Order = order;
@@ -265,6 +256,13 @@ public sealed class MixPlan {
         readonly HashSet<int> sidechainSources = [];
         readonly SortedSet<int> snapshots = [];
         readonly SortedSet<int> used = [0];
+
+        /// <summary>The Surround Panner's automation parameters, in <see cref="MixNode.SurroundTargets" />' order.</summary>
+        static readonly string[] SurroundParameters = ["angle", "diversity", "elevation", "centre", "lfe", "spread"];
+
+        /// <summary>The object's automation parameters, in <see cref="MixNode.ObjectTargets" />' order.</summary>
+        static readonly string[] ObjectParameters = ["azimuth", "elevation", "distance", "size"];
+
         readonly SpatialContext spatial;
         readonly int[] widths = [..Enumerable.Repeat(2, Destinations)];
         readonly SpeakerFormat[] formats = [..Enumerable.Repeat(SpeakerFormat.Stereo, Destinations)];
@@ -283,6 +281,7 @@ public sealed class MixPlan {
                     SetFormat(tracks[i].InputBus, configs[i].InputFormat);
                 }
             }
+
             var levels = Levels();
             sequence = [..Enumerable.Range(0, tracks.Length).OrderBy(i => levels[i]).ThenBy(static i => i)];
             position = new int[tracks.Length];
@@ -305,6 +304,9 @@ public sealed class MixPlan {
             for (var k = 0; k < order.Length; k++) {
                 var i = sequence[k];
                 order[k] = Node(i, k, tracks[i], configs[i]);
+                if (order[k].OutputEdge is { Kind: EdgeKind.Object }) {
+                    objects.Add(order[k]); // its index is the count before it
+                }
             }
 
             var masterNode = Node(-1, order.Length, null, master.Config);
@@ -334,6 +336,70 @@ public sealed class MixPlan {
             }
 
             return track.Stereo || config.Inserts.Length > 0 ? 2 : 1;
+        }
+
+        /// <summary>A channel's Phase 10 parts of the plan: its width and format, its edges and its panner's targets.</summary>
+        readonly record struct Parts(
+            bool Multi,
+            int Width,
+            SpeakerFormat Format,
+            MixEdge? Output,
+            MixEdge?[] Sends,
+            int[] Surround,
+            int[] Object,
+            bool Automated
+        );
+
+        Parts SpatialParts(
+            TrackState? track,
+            int trackId,
+            ChannelState channel,
+            ChannelConfig config,
+            int output,
+            int[] sends
+        ) {
+            var width = WidthOf(track, config);
+            var format = FormatOf(track, width);
+            surroundUsed = false;
+            var outputEdge = track is null
+                ? null
+                : Edge(channel, null, width, format, output, config.PannerMode == EnginePannerMode.Object);
+            var sendEdges = new MixEdge?[sends.Length];
+            for (var s = 0; s < sends.Length; s++) {
+                sendEdges[s] = Edge(channel, config.Sends[s].Slot, width, format, sends[s], false);
+            }
+
+            var multi = width > 2 || surroundUsed;
+            if (!multi || track is null) {
+                return new(
+                    multi,
+                    width,
+                    format,
+                    outputEdge,
+                    sendEdges,
+                    [-1, -1, -1, -1, -1, -1],
+                    [-1, -1, -1, -1],
+                    false
+                );
+            }
+
+            int[] surround = [..SurroundParameters.Select(p => Lane(trackId, AutomationKind.Surround, null, p))];
+            int[] position = [..ObjectParameters.Select(p => Lane(trackId, AutomationKind.Object, null, p))];
+            var automated = surround.Any(static t => t >= 0) || position.Any(static t => t >= 0);
+            return new(true, width, format, outputEdge, sendEdges, surround, position, automated);
+        }
+
+        /// <summary>The format of a channel's signal: the master's, an aux's bus's, a track's mono or stereo.</summary>
+        SpeakerFormat FormatOf(TrackState? track, int width) {
+            if (track is null) {
+                return formats[0];
+            }
+
+            if (track.InputBus is >= 1 and <= Buses) {
+                return formats[track.InputBus];
+            }
+
+            return width == 1 ? SpeakerFormat.Mono : SpeakerFormat.Stereo;
         }
 
         /// <summary>
@@ -375,6 +441,21 @@ public sealed class MixPlan {
                 };
             }
 
+            return SurroundEdge(channel, send, width, format, destination, objectMode);
+        }
+
+        /// <summary>An edge into a surround point: an object, a bed, a format conversion or the Surround Panner.</summary>
+        MixEdge SurroundEdge(
+            ChannelState channel,
+            SendSlot? send,
+            int width,
+            SpeakerFormat format,
+            int destination,
+            bool objectMode
+        ) {
+            var to = widths[destination];
+            var toFormat = formats[destination];
+            var toLayout = SpeakerLayout.Of(toFormat);
             if (objectMode
                 && destination == 0
                 && objects.Count < Dsp.Spatial.ObjectRenderer.MaxObjects
@@ -391,7 +472,9 @@ public sealed class MixPlan {
             if (width > 2) {
                 return format == toFormat
                     ? new() { Kind = EdgeKind.Straight, Width = to, Format = toFormat }
-                    : new() { Kind = EdgeKind.Matrix, Width = to, Format = toFormat, Matrix = Convert(format, toLayout) };
+                    : new() {
+                        Kind = EdgeKind.Matrix, Width = to, Format = toFormat, Matrix = Convert(format, toLayout)
+                    };
             }
 
             var panner = spatial.Try(
@@ -403,14 +486,22 @@ public sealed class MixPlan {
             if (panner is null) {
                 // No panner to be had: the signal's channels by label (a mono one to the centre).
                 var from = width == 1 ? SpeakerFormat.Mono : SpeakerFormat.Stereo;
-                return new() { Kind = EdgeKind.Matrix, Width = to, Format = toFormat, Matrix = Convert(from, toLayout) };
+                return new() {
+                    Kind = EdgeKind.Matrix, Width = to, Format = toFormat, Matrix = Convert(from, toLayout)
+                };
             }
 
-            return new() { Kind = EdgeKind.Panner, Width = to, Format = toFormat, Panner = panner, PannerInputs = width };
+            return new() {
+                Kind = EdgeKind.Panner,
+                Width = to,
+                Format = toFormat,
+                Panner = panner,
+                PannerInputs = width
+            };
         }
 
         float[] Convert(SpeakerFormat from, SpeakerLayout to) =>
-            Spatial.Formats.Conversion(SpeakerLayout.Of(from), to, spatial);
+            Formats.Conversion(SpeakerLayout.Of(from), to, spatial);
 
         static readonly MixEdge StereoEdge = new() { Kind = EdgeKind.Stereo };
 
@@ -489,38 +580,16 @@ public sealed class MixPlan {
             }
 
             var channel = track?.Channel ?? master;
-            var width = WidthOf(track, config);
-            var format = track is null ? formats[0]
-                : track.InputBus is >= 1 and <= Buses ? formats[track.InputBus]
-                : width == 1 ? SpeakerFormat.Mono
-                : SpeakerFormat.Stereo;
-            surroundUsed = false;
-            var outputEdge = track is null
-                ? null
-                : Edge(channel, null, width, format, output, config.PannerMode == EnginePannerMode.Object);
-            var sendEdges = new MixEdge?[sends.Length];
-            for (var s = 0; s < sends.Length; s++) {
-                sendEdges[s] = Edge(channel, config.Sends[s].Slot, width, format, sends[s], false);
-            }
-
-            var multi = width > 2 || surroundUsed;
-            int[] surroundTargets = NoSurroundTargets, objectTargets = NoObjectTargets;
-            var automated = false;
-            if (multi && track is not null) {
-                surroundTargets = [..SurroundParameters.Select(p => Lane(trackId, AutomationKind.Surround, null, p))];
-                objectTargets = [..ObjectParameters.Select(p => Lane(trackId, AutomationKind.Object, null, p))];
-                automated = surroundTargets.Any(static t => t >= 0) || objectTargets.Any(static t => t >= 0);
-            }
-
-            var node = new MixNode {
-                Multi = multi,
-                Width = width,
-                Format = format,
-                OutputEdge = outputEdge,
-                SendEdges = sendEdges,
-                SurroundTargets = surroundTargets,
-                ObjectTargets = objectTargets,
-                PannerAutomated = automated,
+            var spatialParts = SpatialParts(track, trackId, channel, config, output, sends);
+            return new() {
+                Multi = spatialParts.Multi,
+                Width = spatialParts.Width,
+                Format = spatialParts.Format,
+                OutputEdge = spatialParts.Output,
+                SendEdges = spatialParts.Sends,
+                SurroundTargets = spatialParts.Surround,
+                ObjectTargets = spatialParts.Object,
+                PannerAutomated = spatialParts.Automated,
                 Channel = channel,
                 Config = config,
                 TrackIndex = index,
@@ -547,11 +616,6 @@ public sealed class MixPlan {
                 WritePost = index >= 0 && sidechainSources.Contains(index),
                 Prefetch = Prefetches(track, inserts)
             };
-            if (outputEdge is { Kind: EdgeKind.Object }) {
-                objects.Add(node);
-            }
-
-            return node;
         }
 
         /// <summary>Whether a track (not an aux, not frozen) has a sandboxed insert; gives it work buffers.</summary>

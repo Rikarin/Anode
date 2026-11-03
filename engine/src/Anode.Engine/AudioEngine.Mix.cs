@@ -189,33 +189,7 @@ public sealed unsafe partial class AudioEngine {
         }
 
         foreach (var node in plan.Order) {
-            var ch = node.Channel;
-            if (ch.Prefetched) {
-                ch.Prefetched = false;
-                var l = ch.WorkLeft.AsSpan(0, frames);
-                var r = ch.WorkRight.AsSpan(0, frames);
-                if (ch.Begun && node.Config.Inserts[ch.Resume - 1].Slot.Effect is ISplitProcessing split) {
-                    split.End(l, r); // on a miss the block stays dry
-                }
-
-                if (node.Multi) {
-                    ChannelMulti(node, ch.WorkLeft!, ch.WorkRight!, ch.PrefetchStereo ? 2 : 1, ch.Resume);
-                } else {
-                    Channel(node, l, r, ch.PrefetchStereo, default, default, ch.Resume);
-                }
-
-                continue;
-            }
-
-            var left = trackLeft.AsSpan(0, frames);
-            var right = trackRight.AsSpan(0, frames);
-            if (node.Multi) {
-                ChannelMulti(node, trackLeft, trackRight, SourceMulti(node, left, right));
-                continue;
-            }
-
-            var stereo = Source(node, left, right);
-            Channel(node, left, right, stereo, default, default);
+            MixChannel(node, frames);
         }
 
         // The master: everything routed to it (and the preview), its inserts, then its fader.
@@ -232,6 +206,40 @@ public sealed unsafe partial class AudioEngine {
 
         WritePairs(plan, outputs, outputChannels);
         SnapshotBuses(plan);
+    }
+
+    /// <summary>
+    ///     A channel of the plan: its source (or what its prefetch began) on the stereo path, or the multichannel one
+    ///     (Phase 10).
+    /// </summary>
+    void MixChannel(MixNode node, int frames) {
+        var ch = node.Channel;
+        if (ch.Prefetched) {
+            ch.Prefetched = false;
+            var l = ch.WorkLeft.AsSpan(0, frames);
+            var r = ch.WorkRight.AsSpan(0, frames);
+            if (ch.Begun && node.Config.Inserts[ch.Resume - 1].Slot.Effect is ISplitProcessing split) {
+                split.End(l, r); // on a miss the block stays dry
+            }
+
+            if (node.Multi) {
+                ChannelMulti(node, ch.WorkLeft!, ch.WorkRight!, ch.PrefetchStereo ? 2 : 1, ch.Resume);
+            } else {
+                Channel(node, l, r, ch.PrefetchStereo, default, default, ch.Resume);
+            }
+
+            return;
+        }
+
+        var left = trackLeft.AsSpan(0, frames);
+        var right = trackRight.AsSpan(0, frames);
+        if (node.Multi) {
+            ChannelMulti(node, trackLeft, trackRight, SourceMulti(node, left, right));
+            return;
+        }
+
+        var stereo = Source(node, left, right);
+        Channel(node, left, right, stereo, default, default);
     }
 
     /// <summary>

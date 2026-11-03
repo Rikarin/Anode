@@ -296,7 +296,9 @@ public sealed unsafe partial class AudioEngine : IAudioProcessor {
             TapMaster(outLeft, outRight, position, rolling);
         }
 
-        if (model.Mix.MasterMulti || Volatile.Read(ref monitor) is not null || blockCapture is { MonitoringRender: true }) {
+        if (model.Mix.MasterMulti
+            || Volatile.Read(ref monitor) is not null
+            || blockCapture is { MonitoringRender: true }) {
             MonitorOutputs(outputs, outputChannels, offset, outLeft, outRight, click);
         } else {
             WriteOutputs(outputs, outputChannels, offset, outLeft, outRight, click);

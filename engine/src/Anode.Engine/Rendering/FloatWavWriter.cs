@@ -198,12 +198,16 @@ public sealed class RenderFile : IDisposable {
 
         var labels = layout?.ChannelCount == channels
             ? Enumerable.Range(0, channels).Select(layout.Label).ToArray()
-            : channels == 2 ? ["M+030", "M-030"]
-            : channels == 1 ? ["M+000"]
-            : Enumerable.Range(0, channels).Select(static c => (c + 1).ToString(System.Globalization.CultureInfo.InvariantCulture)).ToArray();
-        var stem = System.IO.Path.Combine(
-            System.IO.Path.GetDirectoryName(path)!,
-            System.IO.Path.GetFileNameWithoutExtension(path)
+            : channels == 2
+                ? ["M+030", "M-030"]
+                : channels == 1
+                    ? ["M+000"]
+                    : Enumerable.Range(0, channels)
+                        .Select(static c => (c + 1).ToString(System.Globalization.CultureInfo.InvariantCulture))
+                        .ToArray();
+        var stem = Path.Combine(
+            Path.GetDirectoryName(path)!,
+            Path.GetFileNameWithoutExtension(path)
         );
         var writers = new List<FloatWavWriter>();
         try {

@@ -71,7 +71,10 @@ public sealed unsafe class TelemetryWriter : IDisposable {
         Volatile.Write(ref h->Sequence, h->Sequence + 1);
     }
 
-    /// <summary>A strip's meter entry, its channel peaks (a surround meter) into the channel table at <paramref name="index" />.</summary>
+    /// <summary>
+    ///     A strip's meter entry, its channel peaks (a surround meter) into the channel table at
+    ///     <paramref name="index" />.
+    /// </summary>
     MeterEntry Entry(int trackId, Strip strip, int index) {
         var peaks = new Span<float>(ChannelMeters[index].Peaks, ChannelMeterEntry.MaxChannels);
         var (left, right) = strip.TakePeaks(peaks, out var channels);

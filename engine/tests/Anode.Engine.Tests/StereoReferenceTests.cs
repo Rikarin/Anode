@@ -84,7 +84,11 @@ public sealed class StereoReferenceTests : IDisposable {
                 ),
                 [TestAudio.Region(0, Seconds * Rate, 0)]
             ),
-            new(2, [Automation(0, 3, 0.8f, 2), Automation(50_000, 3, 0.1f, 2)], [TestAudio.Region(0, Seconds * Rate, 1)]),
+            new(
+                2,
+                [Automation(0, 3, 0.8f, 2), Automation(50_000, 3, 0.1f, 2)],
+                [TestAudio.Region(0, Seconds * Rate, 1)]
+            ),
             new(3, Sorted([..notes, Automation(0, 2, 20f, 3), Automation(70_000, 2, 80f, 3)]), []),
             new(4, [], [TestAudio.Region(1_000, Seconds * Rate - 1_000, 0, 500, 0.7f, 300, 400)]),
             new(5, [], [TestAudio.Region(0, Seconds * Rate, 1, 0, 0.9f)]),
@@ -116,7 +120,9 @@ public sealed class StereoReferenceTests : IDisposable {
                             "comp",
                             Compressor.Id,
                             new() { ["threshold"] = -30, ["ratio"] = 6, ["sidechain"] = 1 }
-                        ) with { SidechainTrack = 1 }
+                        ) with {
+                            SidechainTrack = 1
+                        }
                     ],
                     [new("post", 2, 0.6f, -0.4f, false)]
                 )
@@ -137,12 +143,8 @@ public sealed class StereoReferenceTests : IDisposable {
                 true,
                 new(0.6f, 0f, false, false, [Insert("lim", AdaptiveLimiter.Id)], Output: -2)
             ),
-            TestAudio.Track(10, true, new(0.9f, 0f, false, false, [Insert("verb", Reverb.Id)]), -1) with {
-                InputBus = 1
-            },
-            TestAudio.Track(11, true, new(1f, -0.2f, false, false, [Insert("cho", Chorus.Id)])) with {
-                InputBus = 2
-            }
+            TestAudio.Track(10, true, new(0.9f, 0f, false, false, [Insert("verb", Reverb.Id)])) with { InputBus = 1 },
+            TestAudio.Track(11, true, new(1f, -0.2f, false, false, [Insert("cho", Chorus.Id)])) with { InputBus = 2 }
         ];
         var master = new EngineStrip(0.9f, 0f, false, false, [Insert("mlim", Limiter.Id)]);
         var controller = new EngineController(new(Rate, Block));
@@ -231,6 +233,5 @@ public sealed class StereoReferenceTests : IDisposable {
     }
 
     [Fact]
-    public void Rendering_the_reference_project_twice_gives_the_same_bits() =>
-        Assert.Equal(RenderAll(), RenderAll());
+    public void Rendering_the_reference_project_twice_gives_the_same_bits() => Assert.Equal(RenderAll(), RenderAll());
 }

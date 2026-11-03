@@ -120,7 +120,7 @@ public sealed partial class EngineController {
             if (kind == RenderKind.Master) {
                 var (channels, format) = MasterFormat(plan, message.Monitoring);
                 var master = new RenderTarget(-1, Path.GetFullPath(message.Path), frames, ring, channels);
-                Open(master, format);
+                Open(message, master, format, writers);
                 return new(kind, master, []) { MonitoringRender = message.Monitoring, BedOnly = message.BedOnly };
             }
 
@@ -131,15 +131,10 @@ public sealed partial class EngineController {
                 }
 
                 var (channels, format) = kind == RenderKind.Freeze ? (2, null) : StemFormat(plan, id);
-                var target = new RenderTarget(
-                    id,
-                    Path.Combine(Path.GetFullPath(message.Path), $"{id}.wav"),
-                    frames,
-                    ring,
-                    channels
-                );
+                var path = Path.Combine(Path.GetFullPath(message.Path), $"{id}.wav");
+                var target = new RenderTarget(id, path, frames, ring, channels);
                 tracks[id] = target;
-                Open(target, format);
+                Open(message, target, format, writers);
             }
 
             return new(kind, null, tracks) {
@@ -147,24 +142,26 @@ public sealed partial class EngineController {
                 BypassInserts = message.BypassInserts
             };
         }
+    }
 
-        void Open(RenderTarget target, SpeakerFormat? format) {
-            try {
-                Directory.CreateDirectory(Path.GetDirectoryName(target.Path)!);
-                writers.Add(
-                    (target,
-                        new(
-                            target.Path,
-                            target.Channels,
-                            Options.SampleRate,
-                            format is { } f && target.Channels > 2 ? SpeakerLayout.Of(f) : null,
-                            message.SplitChannels && message.Freeze is false
-                        ))
-                );
-            } catch {
-                target.Dispose();
-                throw;
-            }
+    /// <summary>
+    ///     A target's file: extensible with <paramref name="format" />'s mask for more than two channels, or one per
+    ///     channel when the render splits them (never a freeze).
+    /// </summary>
+    void Open(
+        RenderMessage message,
+        RenderTarget target,
+        SpeakerFormat? format,
+        List<(RenderTarget, RenderFile)> writers
+    ) {
+        try {
+            Directory.CreateDirectory(Path.GetDirectoryName(target.Path)!);
+            var layout = format is { } f && target.Channels > 2 ? SpeakerLayout.Of(f) : null;
+            var split = message is { SplitChannels: true, Freeze: false };
+            writers.Add((target, new(target.Path, target.Channels, Options.SampleRate, layout, split)));
+        } catch {
+            target.Dispose();
+            throw;
         }
     }
 

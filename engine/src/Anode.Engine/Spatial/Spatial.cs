@@ -62,7 +62,10 @@ public interface ISpatialFactory {
     /// <summary>A down-mix from <paramref name="from" /> to <paramref name="to" /> (fewer channels).</summary>
     IDownmix CreateDownmix(SpeakerLayout from, SpeakerLayout to);
 
-    /// <summary>The binaural renderer of <paramref name="layout" />'s speakers through the HRTF file at <paramref name="hrtfPath" />.</summary>
+    /// <summary>
+    ///     The binaural renderer of <paramref name="layout" />'s speakers through the HRTF file at
+    ///     <paramref name="hrtfPath" />.
+    /// </summary>
     IBinaural CreateBinaural(string hrtfPath, SpeakerLayout layout, float sampleRate, int maxFrames);
 }
 

@@ -47,7 +47,10 @@ public static class Formats {
         return m;
     }
 
-    /// <summary>The channel of <paramref name="to" /> that takes channel <paramref name="i" /> of <paramref name="from" /> (−1: none).</summary>
+    /// <summary>
+    ///     The channel of <paramref name="to" /> that takes channel <paramref name="i" /> of <paramref name="from" />
+    ///     (−1: none).
+    /// </summary>
     static int Nearest(SpeakerLayout from, int i, SpeakerLayout to) {
         var label = from.Label(i);
         for (var o = 0; o < to.ChannelCount; o++) {
@@ -107,18 +110,7 @@ public static class Formats {
             }
 
             taken[c] = true;
-            var label = layout.Label(c);
-            var twin = -1;
-            if (label.Length > 1 && label[1] == '+') {
-                var other = string.Concat(label.AsSpan(0, 1), "-", label.AsSpan(2));
-                for (var d = c + 1; d < n; d++) {
-                    if (!taken[d] && layout.Label(d) == other) {
-                        twin = d;
-                        break;
-                    }
-                }
-            }
-
+            var twin = Twin(layout, c, taken);
             if (twin >= 0) {
                 taken[twin] = true;
             }
@@ -127,6 +119,26 @@ public static class Formats {
         }
 
         return [..pairs];
+    }
+
+    /// <summary>
+    ///     The right-hand twin of a left-hand speaker <paramref name="c" /> not yet taken (<c>M+110</c>: <c>M-110</c>),
+    ///     or −1.
+    /// </summary>
+    static int Twin(SpeakerLayout layout, int c, bool[] taken) {
+        var label = layout.Label(c);
+        if (label.Length < 2 || label[1] != '+') {
+            return -1;
+        }
+
+        var other = string.Concat(label.AsSpan(0, 1), "-", label.AsSpan(2));
+        for (var d = c + 1; d < layout.ChannelCount; d++) {
+            if (!taken[d] && layout.Label(d) == other) {
+                return d;
+            }
+        }
+
+        return -1;
     }
 }
 

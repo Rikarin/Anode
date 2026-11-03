@@ -22,12 +22,15 @@ namespace Anode.Engine.Tests;
 sealed class TestSpatial : ISpatialFactory {
     public int BinauralLatency { get; init; }
 
+    /// <summary>Whether the doubles record their calls (off for the allocation and cost tests).</summary>
+    public bool Record { get; init; } = true;
+
     public List<TestPanner> Panners { get; } = [];
 
     public TestObjects? Objects { get; private set; }
 
     public ISurroundPanner CreateSurroundPanner() {
-        var panner = new TestPanner();
+        var panner = new TestPanner { Record = Record };
         lock (Panners) {
             Panners.Add(panner);
         }
@@ -35,7 +38,7 @@ sealed class TestSpatial : ISpatialFactory {
         return panner;
     }
 
-    public IObjectRenderer CreateObjectRenderer() => Objects = new();
+    public IObjectRenderer CreateObjectRenderer() => Objects = new() { Record = Record };
 
     public IDownmix CreateDownmix(SpeakerLayout from, SpeakerLayout to) => new TestDownmix(from, to);
 
@@ -64,7 +67,7 @@ class RampedGains {
     protected void Target(int channel, float gain, float lfe, int lfeIndex) {
         Array.Clear(target);
         for (var i = 0; i < Inputs; i++) {
-            target[i * Outputs + (((channel + i) % Outputs) + Outputs) % Outputs] += gain;
+            target[i * Outputs + ((channel + i) % Outputs + Outputs) % Outputs] += gain;
             if (lfeIndex >= 0) {
                 target[i * Outputs + lfeIndex] += lfe;
             }
@@ -104,6 +107,8 @@ class RampedGains {
 sealed class TestPanner : RampedGains, ISurroundPanner {
     int lfe = -1;
 
+    public bool Record { get; init; } = true;
+
     /// <summary>Every <c>Set</c>, with the frames of the <c>Process</c> that followed it.</summary>
     public List<(SurroundPannerSettings Settings, int Frames)> Calls { get; } = [];
 
@@ -123,7 +128,7 @@ sealed class TestPanner : RampedGains, ISurroundPanner {
     }
 
     public void Process(PlanarBlock input, PlanarBlock output) {
-        if (Calls.Count < 100_000) {
+        if (Record && Calls.Count < 100_000) {
             Calls.Add((pending, input.Frames));
         }
 
@@ -135,6 +140,8 @@ sealed class TestPanner : RampedGains, ISurroundPanner {
 
 sealed class TestObjects : IObjectRenderer {
     ObjectSlot[] slots = [];
+
+    public bool Record { get; init; } = true;
 
     /// <summary>Every <c>SetPosition</c> by object, with the frames of the render that followed it.</summary>
     public List<(int Index, ObjectPosition Position, int Frames)> Calls { get; } = [];
@@ -149,7 +156,7 @@ sealed class TestObjects : IObjectRenderer {
     public void SetPosition(int index, in ObjectPosition position, int frame = 0) => slots[index].Set(position);
 
     public void Render(int index, PlanarBlock input, PlanarBlock output) {
-        if (Calls.Count < 100_000) {
+        if (Record && Calls.Count < 100_000) {
             Calls.Add((index, slots[index].Position, input.Frames));
         }
 

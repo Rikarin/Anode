@@ -21,7 +21,13 @@ public sealed class StereoCostTests : IDisposable {
     public void Dispose() => Directory.Delete(dir, true);
 
     static PlaybackEvent Automation(long position, int target, float value, int track) =>
-        new() { SamplePos = position, Track = track, Kind = PlaybackEventKind.Automation, Value = value, Target = target };
+        new() {
+            SamplePos = position,
+            Track = track,
+            Kind = PlaybackEventKind.Automation,
+            Value = value,
+            Target = target
+        };
 
     (double Mean, double P99) Measure(bool effects) {
         var run = Guid.NewGuid().ToString("n")[..8];
@@ -53,7 +59,8 @@ public sealed class StereoCostTests : IDisposable {
             tracks.Add(TestAudio.Track(100 + b, true, new(0.8f, 0f, false, false, inserts)) with { InputBus = b });
         }
 
-        EngineInsert[]? masterInserts = effects ? [new("lim", Limiter.Id, false, new Dictionary<string, double>())] : null;
+        EngineInsert[]? masterInserts =
+            effects ? [new("lim", Limiter.Id, false, new Dictionary<string, double>())] : null;
         using var segment = TestAudio.Segment(models, 1);
         using var controller = new EngineController(new(Rate, Block));
         controller.LoadModel(
@@ -65,7 +72,9 @@ public sealed class StereoCostTests : IDisposable {
                 [new(0, mono, 1, Rate, 4 * Rate), new(1, stereo, 2, Rate, 4 * Rate)],
                 dir,
                 new(0.9f, 0f, false, false, masterInserts)
-            ) with { AutomationTargets = targets }
+            ) with {
+                AutomationTargets = targets
+            }
         );
         using var driver = new OfflineDriver(controller, Block);
         driver.PlayFrom(0);

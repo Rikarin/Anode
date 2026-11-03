@@ -76,6 +76,32 @@ public sealed class HostTests : IAsyncLifetime {
         }
     }
 
+    [Fact]
+    public async Task Its_hello_names_the_master_tap_written_only_while_on() {
+        var hello = await Expect<HelloMessage>(new HelloMessage("server"));
+        Assert.NotNull(hello.MasterTapName);
+        using var tap = SharedSegment.Open(hello.MasterTapName!, MasterTapLayout.Size);
+        Assert.IsType<PongMessage>(await Request(new PingMessage(1)));
+        Assert.Equal(0, WriteFrame(tap));
+        await Send(new SetMasterTapMessage(true));
+        await Eventually(() => WriteFrame(tap) > 4_096);
+        await Send(new SetMasterTapMessage(false));
+        Assert.IsType<PongMessage>(await Request(new PingMessage(2)));
+        await Task.Delay(20, Token); // a callback in flight may finish its block
+        var written = WriteFrame(tap);
+        await Task.Delay(100, Token);
+        Assert.Equal(written, WriteFrame(tap));
+
+        var error = await Expect<ErrorMessage>(new SetMonitoringMessage(true, null, [], "/nowhere/set.anhrtf"));
+        Assert.Equal("setMonitoring", error.Request);
+        await Send(new SetMonitoringMessage(false, null, [1, 0]));
+        Assert.IsType<PongMessage>(await Request(new PingMessage(3)));
+        Assert.NotNull(Host.Controller.Engine.Monitoring);
+
+        static unsafe long WriteFrame(SharedSegment tap) =>
+            Volatile.Read(ref ((MasterTapHeader*)tap.Pointer)->WriteFrame);
+    }
+
     async Task LoadAsync(long version, EngineTrack[] tracks, TrackModel[] models, EngineFile[] files) {
         using var segment = TestAudio.Segment(models, version);
         var loaded = await Expect<ModelLoadedMessage>(TestAudio.Load(segment, version, true, tracks, files, dir));

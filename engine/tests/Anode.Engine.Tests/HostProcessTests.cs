@@ -190,6 +190,131 @@ public sealed partial class HostProcessTests : IDisposable {
     }
 
     /// <summary>
+    ///     Phase 10 through the real host (docs/11-phase-10.md): the hello names the master tap ring, which fills while
+    ///     setMasterTap has it on, with a stamp per block; a 7.1.4 master loads, plays to the device through the
+    ///     monitoring's speaker map and bounces to a WAVE_FORMAT_EXTENSIBLE file (or one per speaker); binaural
+    ///     monitoring without an HRTF file is refused. Until workstream D's DSP lands the host pans by label (it logs
+    ///     what it cannot make), so the mono track's signal is in the centre.
+    /// </summary>
+    [Fact]
+    public async Task Serves_a_surround_master_with_its_tap_monitoring_and_bounces() {
+        await StartAsync();
+        using var socket = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
+        await socket.ConnectAsync(new UnixDomainSocketEndPoint(socketPath), Token);
+        await using var stream = new NetworkStream(socket);
+
+        async Task<IpcMessage?> Next() {
+            while (true) {
+                var message = await IpcFraming.ReadAsync(stream, Token);
+                if (message is not (PluginCatalogMessage
+                    or MidiPortsMessage
+                    or MidiActivityMessage
+                    or RenderProgressMessage)) {
+                    return message;
+                }
+            }
+        }
+
+        await IpcFraming.WriteAsync(stream, new HelloMessage("test"), Token);
+        var hello = Assert.IsType<HelloMessage>(await Next());
+        Assert.Equal(16, hello.OutputChannels);
+        Assert.NotNull(hello.MasterTapName);
+        using var region = SharedSegment.Open(hello.TelemetryName!, TelemetryLayout.Size);
+        using var tap = SharedSegment.Open(hello.MasterTapName!, MasterTapLayout.Size);
+        unsafe {
+            var header = (MasterTapHeader*)tap.Pointer;
+            Assert.Equal(
+                (MasterTapHeader.MagicValue, (ushort)5, Rate),
+                (header->Magic, header->Format, header->SampleRate)
+            );
+        }
+
+        const EngineChannelFormat f714 = EngineChannelFormat.Surround714;
+        var file = TestAudio.Write24(dir, "a.wav", 1, 2 * Rate, 1);
+        using (var segment = TestAudio.Segment([new(1, [], [TestAudio.Region(0, 2 * Rate, 0)])], 2)) {
+            await IpcFraming.WriteAsync(
+                stream,
+                TestAudio.Load(
+                    segment,
+                    2,
+                    true,
+                    [
+                        TestAudio.Track(
+                            1,
+                            false,
+                            MultichannelTests.Strip(outputFormat: f714, panner: MultichannelTests.Surround(0))
+                        )
+                    ],
+                    [new(0, file, 1, Rate, 2 * Rate)],
+                    dir,
+                    MultichannelTests.Strip(input: f714, outputFormat: f714)
+                ),
+                Token
+            );
+            Assert.Equal(new ModelLoadedMessage(2), await Next());
+        }
+
+        var refused = Assert.IsType<ErrorMessage>(await Request(new SetMonitoringMessage(true, null, [])));
+        Assert.Contains("HRTF", refused.Message, StringComparison.Ordinal);
+        await IpcFraming.WriteAsync(stream, new SetMonitoringMessage(false, null, [-1, -1, 13]), Token);
+        await IpcFraming.WriteAsync(stream, new SetMasterTapMessage(true), Token);
+        Assert.IsType<PongMessage>(await Request(new PingMessage(2)));
+        await IpcFraming.WriteAsync(stream, new TransportMessage(TransportAction.Play, 0), Token);
+        for (var polls = 0; Header(region).PositionSamples < Rate / 2; polls++) {
+            Assert.True(polls < 500, "the playhead did not move");
+            await Task.Delay(20, Token);
+        }
+
+        unsafe {
+            var stamps = new List<TapStamp>();
+            var (count, written) = MasterTapWriter.Read(tap.Pointer, 0, [], stamps);
+            Assert.True(written > Rate / 4, $"{written} frames tapped");
+            Assert.Equal(written, count * 64); // a stamp per 64-frame block
+            Assert.Contains(stamps, static s => (s.Flags & TapStamp.FlagPlaying) != 0 && s.TransportSample > 0);
+        }
+
+        await IpcFraming.WriteAsync(stream, new SetMasterTapMessage(false), Token);
+        await IpcFraming.WriteAsync(stream, new TransportMessage(TransportAction.Stop), Token);
+        Assert.IsType<PongMessage>(await Request(new PingMessage(3)));
+
+        foreach (var (job, split) in new[] { (11, false), (12, true) }) {
+            await IpcFraming.WriteAsync(
+                stream,
+                new RenderMessage(job, 0, Rate / 2, Path.Combine(dir, $"mix{job}.wav"), SplitChannels: split),
+                Token
+            );
+            RenderFinishedMessage finished;
+            while (true) {
+                if (await Next() is RenderFinishedMessage f) {
+                    finished = f;
+                    break;
+                }
+            }
+
+            Assert.Null(finished.Error);
+            if (split) {
+                Assert.Equal(12, finished.Files.Count);
+                var (centre, channels, _) = MultichannelTests.Wav.Read(finished.Files[2]);
+                Assert.EndsWith(".M+000.wav", finished.Files[2], StringComparison.Ordinal);
+                Assert.Equal(1, channels);
+                Assert.Equal(TestAudio.Sample(1_000, 1), centre[1_000]);
+            } else {
+                var (data, channels, mask) = MultichannelTests.Wav.Read(Assert.Single(finished.Files));
+                Assert.Equal((12, 0x2D63Fu), (channels, mask));
+                Assert.Equal(TestAudio.Sample(1_000, 1), data[1_000 * 12 + 2]); // the centre, third in both orders
+                Assert.Equal(0f, data[1_000 * 12]);
+            }
+        }
+
+        return;
+
+        async Task<IpcMessage?> Request(IpcMessage message) {
+            await IpcFraming.WriteAsync(stream, message, Token);
+            return await Next();
+        }
+    }
+
+    /// <summary>
     ///     Phase 5 through the real host: a format-3 segment with a warped region (its warp points in the segment) loads,
     ///     plays, and bounces in place over the socket, with the region's onsets where its warp map puts them.
     /// </summary>

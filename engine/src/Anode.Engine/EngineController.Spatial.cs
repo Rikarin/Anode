@@ -76,35 +76,50 @@ public sealed partial class EngineController {
         }
 
         var layout = SpeakerLayout.Of(format);
-        var spatial = Engine.Spatial;
-        IBinaural? binaural = null;
-        IDownmix? downmix = null;
-        var channels = layout.ChannelCount;
-        if (message.Binaural) {
-            binaural = spatial.Try(
-                () => spatial.Factory.CreateBinaural(message.HrtfPath!, layout, Options.SampleRate, AudioEngine.MaxFrames),
-                $"binaural monitoring through {message.HrtfPath}"
-            );
-            if (binaural is null && strict) {
-                throw new InvalidOperationException($"Binaural monitoring through {message.HrtfPath} is not available.");
-            }
-
-            channels = binaural is null ? channels : 2;
-        } else if (message.DownmixTo is { } to
-                   && SpeakerLayout.Of(Formats.Of(to)) is var target
-                   && target.ChannelCount < layout.ChannelCount) {
-            downmix = spatial.Try(() => spatial.Factory.CreateDownmix(layout, target), "the monitoring down-mix");
-            if (downmix is null && strict) {
-                throw new InvalidOperationException($"The down-mix to {to} is not available.");
-            }
-
-            channels = downmix is null ? channels : target.ChannelCount;
-        }
-
+        var binaural = message.Binaural ? Binaural(message, layout, strict) : null;
+        var (downmix, channels) = message.Binaural ? (null, layout.ChannelCount) : Downmix(message, layout, strict);
         var setup = new MonitorSetup {
-            From = format, Binaural = binaural, Downmix = downmix, Channels = channels, Map = [..message.SpeakerMap]
+            From = format,
+            Binaural = binaural,
+            Downmix = downmix,
+            Channels = binaural is not null ? 2 : channels,
+            Map = [..message.SpeakerMap]
         };
         Engine.Monitoring = setup.IsIdentity ? null : setup;
+    }
+
+    /// <summary>The binaural renderer of <paramref name="layout" /> through the message's HRTF file (null: none to be had).</summary>
+    IBinaural? Binaural(SetMonitoringMessage message, SpeakerLayout layout, bool strict) {
+        var spatial = Engine.Spatial;
+        var binaural = spatial.Try(
+            () => spatial.Factory.CreateBinaural(message.HrtfPath!, layout, Options.SampleRate, AudioEngine.MaxFrames),
+            $"binaural monitoring through {message.HrtfPath}"
+        );
+        return binaural is null && strict
+            ? throw new InvalidOperationException($"Binaural monitoring through {message.HrtfPath} is not available.")
+            : binaural;
+    }
+
+    /// <summary>The down-mix to the message's smaller format and its channels (none: the master as it is).</summary>
+    (IDownmix? Downmix, int Channels) Downmix(SetMonitoringMessage message, SpeakerLayout layout, bool strict) {
+        if (message.DownmixTo is not { } to) {
+            return (null, layout.ChannelCount);
+        }
+
+        var target = SpeakerLayout.Of(Formats.Of(to));
+        if (target.ChannelCount >= layout.ChannelCount) {
+            return (null, layout.ChannelCount);
+        }
+
+        var spatial = Engine.Spatial;
+        var downmix = spatial.Try(() => spatial.Factory.CreateDownmix(layout, target), "the monitoring down-mix");
+        if (downmix is null) {
+            return strict
+                ? throw new InvalidOperationException($"The down-mix to {to} is not available.")
+                : (null, layout.ChannelCount);
+        }
+
+        return (downmix, target.ChannelCount);
     }
 
     /// <summary>
@@ -184,7 +199,9 @@ public sealed partial class EngineController {
             return effect;
         } catch (Exception e) when (IsInstrumentFailure(e)) {
             effect?.Dispose();
-            Log?.Invoke($"track {trackId}: {slot.PluginId} (insert {slot.Id}): a surround channel's instance: {e.Message}");
+            Log?.Invoke(
+                $"track {trackId}: {slot.PluginId} (insert {slot.Id}): a surround channel's instance: {e.Message}"
+            );
             return null;
         }
     }

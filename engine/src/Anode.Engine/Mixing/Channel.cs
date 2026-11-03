@@ -377,7 +377,10 @@ internal struct PannerCache {
     SpeakerFormat format;
     int inputs;
 
-    /// <summary>The panner for <paramref name="output" /> and <paramref name="inputChannels" />: the kept one, or a new one prepared.</summary>
+    /// <summary>
+    ///     The panner for <paramref name="output" /> and <paramref name="inputChannels" />: the kept one, or a new one
+    ///     prepared.
+    /// </summary>
     internal ISurroundPanner Get(SpeakerFormat output, int inputChannels, SpatialContext spatial) {
         if (panner is null || format != output || inputs != inputChannels) {
             var next = spatial.Factory.CreateSurroundPanner();

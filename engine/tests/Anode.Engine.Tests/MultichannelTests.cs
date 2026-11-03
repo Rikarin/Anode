@@ -220,7 +220,8 @@ public sealed class MultichannelTests : IDisposable {
     public void Beds_buses_and_sends_meet_across_formats() {
         const EngineChannelFormat f714 = EngineChannelFormat.Surround714;
         const EngineChannelFormat f51 = EngineChannelFormat.Surround51;
-        EngineInsert[] doubled = [TestEffects.Insert("g", TestEffects.Gain, new Dictionary<string, double> { ["gain"] = 2 })];
+        EngineInsert[] doubled =
+            [TestEffects.Insert("g", TestEffects.Gain, new Dictionary<string, double> { ["gain"] = 2 })];
         EngineTrack[] tracks = [
             TestAudio.Track(1, false, Strip(1f, 1, outputFormat: f714, panner: Surround(6))),
             TestAudio.Track(
@@ -233,7 +234,9 @@ public sealed class MultichannelTests : IDisposable {
                 10,
                 true,
                 Strip(0.8f, 0, f714, f714, inserts: doubled, sends: [new("dm", 3, 1f, 0f, false)])
-            ) with { InputBus = 1 },
+            ) with {
+                InputBus = 1
+            },
             TestAudio.Track(11, true, Strip(1f, 0, f51, f714)) with { InputBus = 2 }, // 5.1 into a 7.1.4 master
             TestAudio.Track(12, true, Strip(1f, -7)) with { InputBus = 3 } // the stereo bus to outputs 13-14
         ];
@@ -354,7 +357,8 @@ public sealed class MultichannelTests : IDisposable {
     [InlineData(37)]
     public void Panner_automation_follows_its_lane_through_the_automation_path(int block) {
         const EngineChannelFormat f714 = EngineChannelFormat.Surround714;
-        EngineAutomationTarget[] targets = [new(0, 1, "surround", null, "diversity"), new(1, 1, "surround", null, "angle")];
+        EngineAutomationTarget[] targets =
+            [new(0, 1, "surround", null, "diversity"), new(1, 1, "surround", null, "angle")];
         PlaybackEvent[] events = [
             Automation(0, 0, 0f, 1), Automation(0, 1, 2f, 1), Automation(9_600, 0, 1f, 1),
             Automation(12_000, 1, 9f, 1, true)
@@ -450,6 +454,43 @@ public sealed class MultichannelTests : IDisposable {
     }
 
     [Fact]
+    public void A_panner_move_holds_its_automation_and_a_mode_change_rebuilds_the_plan() {
+        const EngineChannelFormat f714 = EngineChannelFormat.Surround714;
+        EngineAutomationTarget[] targets = [new(0, 1, "surround", null, "angle")];
+        PlaybackEvent[] events = [Automation(0, 0, 2f, 1)];
+        EngineTrack[] tracks = [TestAudio.Track(1, false, Strip(outputFormat: f714, panner: Surround(2)))];
+        using var rig = new Rig(
+            dir,
+            64,
+            [Model(1, 0, events)],
+            tracks,
+            Files,
+            Strip(input: f714, outputFormat: f714),
+            12,
+            targets: targets
+        );
+        var o = rig.Render(640);
+        Near(M(320), o[2][320], 320, "the lane's angle");
+
+        // A move holds the lane until the next play or locate (a touch pass is heard as it is recorded).
+        Assert.True(rig.Controller.SetStrip(1, Strip(outputFormat: f714, panner: Surround(7))));
+        Assert.True(rig.Controller.Engine.Overrides.IsHeld(0));
+        for (var b = 0; b < 3; b++) {
+            rig.Driver.Process();
+        }
+
+        Assert.Equal(0f, rig.Driver.Output(2)[10]);
+        Assert.NotEqual(0f, rig.Driver.Output(7)[10]);
+
+        // Object mode through setStrip: the plan is rebuilt with the track as an object.
+        Assert.Empty(rig.Controller.Engine.Root.Mix.Objects);
+        Assert.True(rig.Controller.SetStrip(1, Strip(outputFormat: f714, panner: Object(4))));
+        Assert.Single(rig.Controller.Engine.Root.Mix.Objects);
+        var objects = rig.Render(640);
+        Near(M(320), objects[4][320], 320, "the object at its channel");
+    }
+
+    [Fact]
     public void Object_mode_without_a_surround_master_is_a_stereo_pan() {
         EngineTrack[] tracks = [TestAudio.Track(1, false, Strip(1f, panner: Object(3)))];
         using var rig = new Rig(dir, 64, [Model(1, 0)], tracks, Files, Strip(), 2);
@@ -478,7 +519,7 @@ public sealed class MultichannelTests : IDisposable {
             Files,
             Strip(input: f714, outputFormat: f714),
             12,
-            new TestSpatial { BinauralLatency = 7 }
+            new() { BinauralLatency = 7 }
         );
         Assert.Throws<ArgumentException>(() => rig.Controller.SetMonitoring(new(true, null, [])));
         rig.Controller.SetMonitoring(new(true, null, [5, 4], "set.anhrtf"));
@@ -554,16 +595,14 @@ public sealed class MultichannelTests : IDisposable {
         using var rig = new Rig(
             dir,
             64,
-            [..Enumerable.Range(0, 8).Select(c => Model(c + 1, 0))],
+            [..Enumerable.Range(0, 8).Select(static c => Model(c + 1, 0))],
             tracks,
             Files,
             Strip(input: f71, outputFormat: f71),
             8
         );
         var frames = 2_000;
-        var file = Assert.Single(
-            Bounce(rig.Controller, new(1, 0, frames, Path.Combine(dir, "mix.wav")))
-        );
+        var file = Assert.Single(Bounce(rig.Controller, new(1, 0, frames, Path.Combine(dir, "mix.wav"))));
         var (data, channels, mask) = Wav.Read(file);
         Assert.Equal(8, channels);
         Assert.Equal(0x63Fu, mask); // FL FR FC LFE BL BR SL SR
@@ -606,13 +645,17 @@ public sealed class MultichannelTests : IDisposable {
         );
         var frames = 2_000;
         var stems = Bounce(rig.Controller, new(1, 0, frames, Path.Combine(dir, "stems"), [1, 2]));
-        var (objectStem, objectChannels, _) = Wav.Read(stems.Single(static s => s.EndsWith("1.wav", StringComparison.Ordinal)));
+        var (objectStem, objectChannels, _) = Wav.Read(
+            stems.Single(static s => s.EndsWith("1.wav", StringComparison.Ordinal))
+        );
         Assert.Equal(1, objectChannels);
         for (var f = 0; f < frames; f++) {
             Near(M(f) * 0.5f, objectStem[f], f, "the object's own signal, post-fader");
         }
 
-        var (bedStem, bedChannels, _) = Wav.Read(stems.Single(static s => s.EndsWith("2.wav", StringComparison.Ordinal)));
+        var (bedStem, bedChannels, _) = Wav.Read(
+            stems.Single(static s => s.EndsWith("2.wav", StringComparison.Ordinal))
+        );
         Assert.Equal(12, bedChannels);
         var order = WaveChannels.Of(SpeakerLayout.Of(SpeakerFormat.Surround714)).Order;
         var k1 = Array.IndexOf(order, 1);

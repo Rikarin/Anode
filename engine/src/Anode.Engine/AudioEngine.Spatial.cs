@@ -3,7 +3,6 @@ using Anode.Dsp.Spatial;
 using Anode.Engine.Mixing;
 using Anode.Engine.Rendering;
 using Anode.Engine.Spatial;
-using Anode.Ipc;
 
 namespace Anode.Engine;
 
@@ -81,7 +80,10 @@ public sealed unsafe partial class AudioEngine {
 
     public bool MasterTapEnabled => Volatile.Read(ref masterTapOn) != 0;
 
-    /// <summary>Control thread: gives summing point <paramref name="destination" /> room for <paramref name="width" /> channels.</summary>
+    /// <summary>
+    ///     Control thread: gives summing point <paramref name="destination" /> room for <paramref name="width" />
+    ///     channels.
+    /// </summary>
     public void EnsureDestination(int destination, int width) {
         var have = destExtra[destination];
         if (width - 2 > (have?.Length ?? 0)) {
@@ -152,95 +154,131 @@ public sealed unsafe partial class AudioEngine {
     ///     the extra channels: inserts, delay compensation, then its output and sends by their edges.
     /// </summary>
     void ChannelMulti(MixNode node, float[] left, float[] right, int width, int firstInsert = 0) {
-        var ch = node.Channel;
         var frames = blockFrames;
         signalLeft = left;
         signalRight = right;
         var l = left.AsSpan(0, frames);
         var r = right.AsSpan(0, frames);
-        bool stereo;
-        if (width <= 2) {
-            stereo = Inserts(node, l, r, width == 2, firstInsert);
-            width = stereo ? 2 : 1;
-        } else {
-            stereo = true;
-            InsertsMulti(node, width, firstInsert);
-        }
-
+        var stereo = InsertsAny(node, l, r, ref width, firstInsert);
         var source = stereo ? r : l;
-        if (width <= 2) {
-            CaptureFreeze(node, l, source, stereo);
-        }
-
-        var line = ch.Delay;
-        if (line is not null) {
-            for (var c = 2; c < width && c - 2 < line.ExtraChannels; c++) {
-                line.WriteExtra(c - 2, trackExtra[c - 2].AsSpan(0, frames));
-            }
-
-            line.Write(l, source);
-        }
-
+        var line = node.Channel.Delay;
+        WriteLine(line, l, source, width);
         var tapped = -1;
         tappedExtra = -1;
-        var edge = node.OutputEdge;
-        if (edge is null or { Kind: EdgeKind.Stereo }) {
-            if (width <= 2) {
-                OutputGains(node, stereo);
-                if (node.WritePost) {
-                    WritePost(ch, l, source);
-                }
-
-                TrackOutput(node, line, l, source, ref tapped);
-            } else {
-                // A surround aux routed nowhere: metered all the same.
-                FaderGains(node, ref ch.Fader);
-                MeterPlanar(ch, Gained(line, 0, width, ref tapped), width);
+        OutputMulti(node, line, l, source, width, stereo, ref tapped);
+        for (var s = 0; s < node.SendDestinations.Length; s++) {
+            if (node.SendDestinations[s] >= 0 && node.SendEdges[s] is { } send) {
+                SendMulti(node, s, send, line, l, source, width, stereo, ref tapped);
             }
-        } else {
+        }
+    }
+
+    /// <summary>
+    ///     The inserts of a mono or stereo signal as on the stereo path (and its freeze capture), or of a surround one;
+    ///     returns whether the signal is (at least) stereo after them, and its channels in <paramref name="width" />.
+    /// </summary>
+    bool InsertsAny(MixNode node, Span<float> left, Span<float> right, ref int width, int first) {
+        if (width > 2) {
+            InsertsMulti(node, width, first);
+            return true;
+        }
+
+        var stereo = Inserts(node, left, right, width == 2, first);
+        width = stereo ? 2 : 1;
+        CaptureFreeze(node, left, stereo ? right : left, stereo);
+        return stereo;
+    }
+
+    /// <summary>Appends the channel's block to its delay line (its channels after the first two too).</summary>
+    void WriteLine(DelayLine? line, Span<float> left, Span<float> source, int width) {
+        if (line is null) {
+            return;
+        }
+
+        for (var c = 2; c < width && c - 2 < line.ExtraChannels; c++) {
+            line.WriteExtra(c - 2, trackExtra[c - 2].AsSpan(0, blockFrames));
+        }
+
+        line.Write(left, source);
+    }
+
+    /// <summary>The output: by its edge, or (a stereo edge, or none) as on the stereo path.</summary>
+    void OutputMulti(
+        MixNode node,
+        DelayLine? line,
+        Span<float> left,
+        Span<float> source,
+        int width,
+        bool stereo,
+        ref int tapped
+    ) {
+        var ch = node.Channel;
+        if (node.OutputEdge is { Kind: not EdgeKind.Stereo } edge) {
             FaderGains(node, ref ch.Fader);
             if (node.WritePost) {
                 PostMulti(ch, width);
             }
 
             OutputEdge(node, edge, line, width, ref tapped);
+            return;
         }
 
-        var sends = node.Config.Sends;
-        for (var s = 0; s < node.SendDestinations.Length; s++) {
-            var destination = node.SendDestinations[s];
-            if (destination < 0 || node.SendEdges[s] is not { } send) {
-                continue;
-            }
+        if (width > 2) {
+            // A surround aux routed nowhere: metered all the same.
+            FaderGains(node, ref ch.Fader);
+            MeterPlanar(ch, Gained(line, 0, width, ref tapped), width);
+            return;
+        }
 
-            var delay = Delay(destination, ch.Latency);
-            if (send.Kind == EdgeKind.Stereo) {
-                Tap(line, delay, l, source, ref tapped, out var srcL, out var srcR);
-                SendGains(node, sends[s], node.SendTargets[s], stereo);
+        OutputGains(node, stereo);
+        if (node.WritePost) {
+            WritePost(ch, left, source);
+        }
+
+        TrackOutput(node, line, left, source, ref tapped);
+    }
+
+    /// <summary>Send <paramref name="s" /> by its edge.</summary>
+    void SendMulti(
+        MixNode node,
+        int s,
+        MixEdge send,
+        DelayLine? line,
+        Span<float> left,
+        Span<float> source,
+        int width,
+        bool stereo,
+        ref int tapped
+    ) {
+        var frames = blockFrames;
+        var destination = node.SendDestinations[s];
+        var delay = Delay(destination, node.Channel.Latency);
+        var slot = node.Config.Sends[s];
+        switch (send.Kind) {
+            case EdgeKind.Stereo:
+                Tap(line, delay, left, source, ref tapped, out var srcL, out var srcR);
+                SendGains(node, slot, node.SendTargets[s], stereo);
                 Accumulate(
                     srcL,
                     srcR,
                     destLeft[destination].AsSpan(0, frames),
                     destRight[destination].AsSpan(0, frames)
                 );
-                continue;
-            }
-
-            if (send.Kind == EdgeKind.DownmixStereo) {
+                break;
+            case EdgeKind.DownmixStereo:
                 Downmix(send, line, delay, width, ref tapped);
-                SendGains(node, sends[s], node.SendTargets[s], true);
+                SendGains(node, slot, node.SendTargets[s], true);
                 Accumulate(
                     pieceOut.AsSpan(0, frames),
                     pieceOut.AsSpan(frames, frames),
                     destLeft[destination].AsSpan(0, frames),
                     destRight[destination].AsSpan(0, frames)
                 );
-                continue;
-            }
-
-            SendLevelGains(node, sends[s], node.SendTargets[s]);
-            var count = Render(node, send, line, delay, width, ref tapped);
-            AddToDestination(destination, send.Width, count);
+                break;
+            default:
+                SendLevelGains(node, slot, node.SendTargets[s]);
+                AddToDestination(destination, send.Width, Render(node, send, line, delay, width, ref tapped));
+                break;
         }
     }
 
@@ -290,67 +328,76 @@ public sealed unsafe partial class AudioEngine {
     ///     <see cref="planar" />; returns its channels (the point's, or an object's one or two).
     /// </summary>
     int Render(MixNode node, MixEdge edge, DelayLine? line, int delay, int width, ref int tapped) {
-        var frames = blockFrames;
         TapAll(line, delay, width, ref tapped);
         switch (edge.Kind) {
-            case EdgeKind.Mono: {
-                var o = planar.AsSpan(0, frames);
-                if (edge.Matrix is { } m) {
-                    Mix(m, 1, width, 0, o);
-                } else if (width == 1) {
-                    Tapped(0).CopyTo(o);
-                } else {
-                    var a = Tapped(0);
-                    var b = Tapped(1);
-                    for (var i = 0; i < frames; i++) {
-                        o[i] = 0.5f * (a[i] + b[i]);
-                    }
-                }
-
-                ApplyFader(o);
+            case EdgeKind.Mono:
+                RenderMono(edge, width);
                 return 1;
-            }
-            case EdgeKind.Straight: {
+            case EdgeKind.Straight:
                 for (var c = 0; c < edge.Width; c++) {
-                    var o = planar.AsSpan(c * frames, frames);
-                    if (c < width) {
-                        Tapped(c).CopyTo(o);
-                        ApplyFader(o);
-                    } else {
-                        o.Clear();
-                    }
+                    RenderChannel(c, c < width ? c : -1);
                 }
 
                 return edge.Width;
-            }
-            case EdgeKind.Matrix: {
+            case EdgeKind.Matrix:
                 for (var c = 0; c < edge.Width; c++) {
-                    var o = planar.AsSpan(c * frames, frames);
-                    Mix(edge.Matrix!, edge.Width, width, c, o);
-                    ApplyFader(o);
+                    RenderMixed(edge.Matrix!, edge.Width, width, c);
                 }
 
                 return edge.Width;
-            }
-            case EdgeKind.Object: {
+            case EdgeKind.Object:
                 var count = Math.Min(width, 2);
                 for (var c = 0; c < count; c++) {
-                    var o = planar.AsSpan(c * frames, frames);
                     if (edge.Matrix is { } m) {
-                        Mix(m, 2, width, c, o);
+                        RenderMixed(m, 2, width, c);
                     } else {
-                        Tapped(c).CopyTo(o);
+                        RenderChannel(c, c);
                     }
-
-                    ApplyFader(o);
                 }
 
                 return count;
-            }
             default:
                 Pan(node, edge, width);
                 return edge.Width;
         }
+    }
+
+    /// <summary>Into a mono point: a surround signal's down-mix, a stereo one's mean, a mono one as it is; faded.</summary>
+    void RenderMono(MixEdge edge, int width) {
+        var frames = blockFrames;
+        var o = planar.AsSpan(0, frames);
+        if (edge.Matrix is { } m) {
+            Mix(m, 1, width, 0, o);
+        } else if (width == 1) {
+            Tapped(0).CopyTo(o);
+        } else {
+            var a = Tapped(0);
+            var b = Tapped(1);
+            for (var i = 0; i < frames; i++) {
+                o[i] = 0.5f * (a[i] + b[i]);
+            }
+        }
+
+        ApplyFader(o);
+    }
+
+    /// <summary>Planar channel <paramref name="c" /> = the signal's channel <paramref name="from" /> (−1: silence), faded.</summary>
+    void RenderChannel(int c, int from) {
+        var o = planar.AsSpan(c * blockFrames, blockFrames);
+        if (from < 0) {
+            o.Clear();
+            return;
+        }
+
+        Tapped(from).CopyTo(o);
+        ApplyFader(o);
+    }
+
+    /// <summary>Planar channel <paramref name="c" /> = row <paramref name="c" /> of a gain matrix over the signal, faded.</summary>
+    void RenderMixed(float[] matrix, int outputs, int width, int c) {
+        var o = planar.AsSpan(c * blockFrames, blockFrames);
+        Mix(matrix, outputs, width, c, o);
+        ApplyFader(o);
     }
 
     /// <summary>
@@ -387,38 +434,57 @@ public sealed unsafe partial class AudioEngine {
         for (var at = 0; at < frames; at += piece) {
             var n = Math.Min(piece, frames - at);
             for (var c = 0; c < inputs; c++) {
-                var o = pieceIn.AsSpan(c * n, n);
-                if (inputs == width) {
-                    Tapped(c).Slice(at, n).CopyTo(o);
-                } else if (inputs == 1) {
-                    // The plan expected a mono signal, its inserts made it stereo: their mean.
-                    var a = Tapped(0).Slice(at, n);
-                    var b = Tapped(1).Slice(at, n);
-                    for (var i = 0; i < n; i++) {
-                        o[i] = 0.5f * (a[i] + b[i]);
-                    }
-                } else {
-                    Tapped(0).Slice(at, n).CopyTo(o); // a mono signal on both inputs
-                }
-
-                ApplyFader(o, at);
+                PannerInput(c, inputs, width, at, n);
             }
 
             panner.Set(SurroundAt(node, at + n - 1));
-            var outBlock = pieceOut.AsSpan(0, outputs * n);
-            outBlock.Clear();
+            pieceOut.AsSpan(0, outputs * n).Clear();
             panner.Process(new(pieceIn, inputs, n), new(pieceOut, outputs, n));
-            for (var c = 0; c < outputs; c++) {
-                var o = planar.AsSpan(c * frames + at, n);
-                var p = outBlock.Slice(c * n, n);
-                for (var i = 0; i < n; i++) {
-                    o[i] += p[i];
-                }
+            AddPiece(planar, outputs, at, n);
+        }
+    }
+
+    /// <summary>
+    ///     A panner's input <paramref name="c" /> for the piece of <paramref name="n" /> frames at <paramref name="at" />,
+    ///     faded: the signal's channel, or (the plan expected a mono signal and its inserts made it stereo) their mean,
+    ///     or a mono signal on both inputs.
+    /// </summary>
+    void PannerInput(int c, int inputs, int width, int at, int n) {
+        var o = pieceIn.AsSpan(c * n, n);
+        if (inputs == width) {
+            Tapped(c).Slice(at, n).CopyTo(o);
+        } else if (inputs == 1) {
+            var a = Tapped(0).Slice(at, n);
+            var b = Tapped(1).Slice(at, n);
+            for (var i = 0; i < n; i++) {
+                o[i] = 0.5f * (a[i] + b[i]);
+            }
+        } else {
+            Tapped(0).Slice(at, n).CopyTo(o);
+        }
+
+        ApplyFader(o, at);
+    }
+
+    /// <summary>
+    ///     Adds the piece in <see cref="pieceOut" /> (planar, <paramref name="n" /> frames) into a block-planar buffer at
+    ///     <paramref name="at" />.
+    /// </summary>
+    void AddPiece(float[] block, int channels, int at, int n) {
+        var frames = blockFrames;
+        for (var c = 0; c < channels; c++) {
+            var o = block.AsSpan(c * frames + at, n);
+            var p = pieceOut.AsSpan(c * n, n);
+            for (var i = 0; i < n; i++) {
+                o[i] += p[i];
             }
         }
     }
 
-    /// <summary>The strip's Surround Panner settings at frame <paramref name="frame" /> of the block (its lanes, else its settings).</summary>
+    /// <summary>
+    ///     The strip's Surround Panner settings at frame <paramref name="frame" /> of the block (its lanes, else its
+    ///     settings).
+    /// </summary>
     SurroundPannerSettings SurroundAt(MixNode node, int frame) {
         var settings = node.Channel.Strip.Panner?.Surround;
         var targets = node.SurroundTargets;
@@ -769,42 +835,72 @@ public sealed unsafe partial class AudioEngine {
     ) {
         var frames = blockFrames;
         var piece = bindings.Length > 0 ? ParameterBlock : frames;
-        var singles = pairScratch;
         for (var at = 0; at < frames; at += piece) {
             var n = Math.Min(piece, frames - at);
             if (bindings.Length > 0) {
                 SetAutomated(bindings, last, at, effect, null);
-                for (var b = 0; b < bindings.Length; b++) {
-                    foreach (var extra in multi.Extras) {
-                        extra?.SetParameter(bindings[b].Parameter, last[b]);
-                    }
-                }
+                Mirror(multi, bindings, last);
             }
 
-            var transport = Piece(at, n);
-            var sl = sideL.IsEmpty ? sideL : sideL.Slice(at, n);
-            var sr = sideR.IsEmpty ? sideR : sideR.Slice(at, n);
-            for (var p = 0; p < multi.Pairs.Length; p++) {
-                var instance = p == 0 ? effect : multi.Extras[p - 1];
-                if (instance is null) {
-                    continue;
-                }
+            ProcessPairs(
+                effect,
+                multi,
+                at,
+                n,
+                sideL.IsEmpty ? sideL : sideL.Slice(at, n),
+                sideR.IsEmpty ? sideR : sideR.Slice(at, n)
+            );
+        }
+    }
 
-                var (a, b) = multi.Pairs[p];
-                var x = Signal(a).Slice(at, n);
-                instance.SetTransport(transport);
-                if (b >= 0) {
-                    instance.Process(x, Signal(b).Slice(at, n), sl, sr);
-                    continue;
-                }
-
-                var y = singles.AsSpan(0, n);
-                x.CopyTo(y);
-                instance.Process(x, y, sl, sr);
-                for (var i = 0; i < n; i++) {
-                    x[i] = 0.5f * (x[i] + y[i]);
-                }
+    /// <summary>Every pair's instance over the piece of <paramref name="n" /> frames at <paramref name="at" />.</summary>
+    void ProcessPairs(
+        IAudioEffect effect,
+        MultiInsert multi,
+        int at,
+        int n,
+        ReadOnlySpan<float> sideL,
+        ReadOnlySpan<float> sideR
+    ) {
+        var transport = Piece(at, n);
+        for (var p = 0; p < multi.Pairs.Length; p++) {
+            if ((p == 0 ? effect : multi.Extras[p - 1]) is { } instance) {
+                ProcessPair(instance, multi.Pairs[p], at, n, transport, sideL, sideR);
             }
+        }
+    }
+
+    /// <summary>The automated parameters' values (as the insert's own instance has them) on the extra instances.</summary>
+    static void Mirror(MultiInsert multi, ParameterBinding[] bindings, float[] last) {
+        foreach (var extra in multi.Extras) {
+            for (var b = 0; b < bindings.Length; b++) {
+                extra?.SetParameter(bindings[b].Parameter, last[b]);
+            }
+        }
+    }
+
+    /// <summary>One instance over a pair of channels, or one channel on both inputs (the mean of the outputs kept).</summary>
+    void ProcessPair(
+        IAudioEffect instance,
+        (int A, int B) pair,
+        int at,
+        int n,
+        in Dsp.Transport.TransportContext transport,
+        ReadOnlySpan<float> sideL,
+        ReadOnlySpan<float> sideR
+    ) {
+        var x = Signal(pair.A).Slice(at, n);
+        instance.SetTransport(transport);
+        if (pair.B >= 0) {
+            instance.Process(x, Signal(pair.B).Slice(at, n), sideL, sideR);
+            return;
+        }
+
+        var y = pairScratch.AsSpan(0, n);
+        x.CopyTo(y);
+        instance.Process(x, y, sideL, sideR);
+        for (var i = 0; i < n; i++) {
+            x[i] = 0.5f * (x[i] + y[i]);
         }
     }
 
@@ -974,6 +1070,33 @@ public sealed unsafe partial class AudioEngine {
 
         var objects = plan.Objects;
         var frames = blockFrames;
+        var piece = Owners(renderer, objects) ? ParameterBlock : frames;
+        for (var at = 0; at < frames; at += piece) {
+            var n = Math.Min(piece, frames - at);
+            pieceOut.AsSpan(0, width * n).Clear();
+            for (var k = 0; k < objects.Length; k++) {
+                if (objectActive[k] && objectBuffers[k] is { } buffer) {
+                    RenderObject(renderer, k, objects[k], buffer, width, at, n);
+                }
+            }
+
+            for (var c = 0; c < width; c++) {
+                var sum = Signal(c).Slice(at, n);
+                var o = pieceOut.AsSpan(c * n, n);
+                for (var i = 0; i < n; i++) {
+                    sum[i] += o[i];
+                }
+            }
+        }
+
+        Array.Clear(objectActive);
+    }
+
+    /// <summary>
+    ///     Starts afresh each renderer index whose channel changed (a new plan); returns whether any object's position
+    ///     is automated.
+    /// </summary>
+    bool Owners(IObjectRenderer renderer, MixNode[] objects) {
         var automated = false;
         for (var k = 0; k < objects.Length; k++) {
             if (objectOwners[k] != objects[k].TrackId) {
@@ -984,39 +1107,18 @@ public sealed unsafe partial class AudioEngine {
             automated |= objects[k].PannerAutomated;
         }
 
-        var piece = automated ? ParameterBlock : frames;
-        for (var at = 0; at < frames; at += piece) {
-            var n = Math.Min(piece, frames - at);
-            var output = pieceOut.AsSpan(0, width * n);
-            output.Clear();
-            for (var k = 0; k < objects.Length; k++) {
-                if (!objectActive[k] || objectBuffers[k] is not { } buffer) {
-                    continue;
-                }
+        return automated;
+    }
 
-                var channels = objectWidths[k];
-                for (var c = 0; c < channels; c++) {
-                    buffer.AsSpan(c * frames + at, n).CopyTo(pieceIn.AsSpan(c * n, n));
-                }
-
-                renderer.SetPosition(k, ObjectAt(objects[k], at + n - 1));
-                renderer.Render(k, new(pieceIn, channels, n), new(pieceOut, width, n));
-            }
-
-            for (var c = 0; c < width; c++) {
-                var sum = (c switch {
-                    0 => trackLeft,
-                    1 => trackRight,
-                    _ => trackExtra[c - 2]
-                }).AsSpan(at, n);
-                var o = output.Slice(c * n, n);
-                for (var i = 0; i < n; i++) {
-                    sum[i] += o[i];
-                }
-            }
+    /// <summary>Object <paramref name="k" />'s piece at its position into <see cref="pieceOut" />.</summary>
+    void RenderObject(IObjectRenderer renderer, int k, MixNode node, float[] buffer, int width, int at, int n) {
+        var channels = objectWidths[k];
+        for (var c = 0; c < channels; c++) {
+            buffer.AsSpan(c * blockFrames + at, n).CopyTo(pieceIn.AsSpan(c * n, n));
         }
 
-        Array.Clear(objectActive);
+        renderer.SetPosition(k, ObjectAt(node, at + n - 1));
+        renderer.Render(k, new(pieceIn, channels, n), new(pieceOut, width, n));
     }
 
     // ---- The device stage: monitoring and the speaker map ------------------------------------------------------------
@@ -1044,26 +1146,7 @@ public sealed unsafe partial class AudioEngine {
         }
 
         var setup = Volatile.Read(ref monitor);
-        var sent = masterPlanar;
-        var count = width;
-        var latency = 0;
-        if (setup is not null && setup.From == plan.MasterFormat) {
-            if (setup.Binaural is { } binaural) {
-                binaural.Process(
-                    new(masterPlanar, width, frames),
-                    sentPlanar.AsSpan(0, frames),
-                    sentPlanar.AsSpan(frames, frames)
-                );
-                sent = sentPlanar;
-                count = 2;
-                latency = binaural.LatencySamples;
-            } else if (setup.Downmix is { } downmix) {
-                downmix.Process(new(masterPlanar, width, frames), new(sentPlanar, setup.Channels, frames));
-                sent = sentPlanar;
-                count = setup.Channels;
-            }
-        }
-
+        var sent = Monitor(setup, plan, width, out var count, out var latency);
         if (blockCapture is { MonitoringRender: true, Master: { } target }) {
             var m = plan.Master.Channel;
             target.WritePlanar(sent.AsSpan(0, count * frames), count, frames, m.Latency + masterOutputDelay + latency);
@@ -1072,21 +1155,56 @@ public sealed unsafe partial class AudioEngine {
         var map = setup?.Map;
         for (var i = 0; i < count; i++) {
             var output = map is not null && i < map.Length ? map[i] : i;
-            if (output < 0 || output >= outputChannels) {
-                continue;
+            if (output >= 0 && output < outputChannels) {
+                AddSent(outputs[output] + offset, sent.AsSpan(i * frames, frames), i < 2 || count == 1, click);
+            }
+        }
+    }
+
+    /// <summary>
+    ///     What the monitoring sends (planar): the master's binaural render or down-mix through
+    ///     <paramref name="setup" />, or the master as it is; its channels and the latency the monitoring added.
+    /// </summary>
+    float[] Monitor(MonitorSetup? setup, MixPlan plan, int width, out int count, out int latency) {
+        var frames = blockFrames;
+        count = width;
+        latency = 0;
+        if (setup is null || setup.From != plan.MasterFormat) {
+            return masterPlanar;
+        }
+
+        if (setup.Binaural is { } binaural) {
+            binaural.Process(
+                new(masterPlanar, width, frames),
+                sentPlanar.AsSpan(0, frames),
+                sentPlanar.AsSpan(frames, frames)
+            );
+            count = 2;
+            latency = binaural.LatencySamples;
+            return sentPlanar;
+        }
+
+        if (setup.Downmix is { } downmix) {
+            downmix.Process(new(masterPlanar, width, frames), new(sentPlanar, setup.Channels, frames));
+            count = setup.Channels;
+            return sentPlanar;
+        }
+
+        return masterPlanar;
+    }
+
+    /// <summary>Adds a channel that is sent into a device output (with the click when <paramref name="clicked" />).</summary>
+    static void AddSent(float* destination, ReadOnlySpan<float> source, bool clicked, ReadOnlySpan<float> click) {
+        if (clicked) {
+            for (var f = 0; f < source.Length; f++) {
+                destination[f] += source[f] + click[f];
             }
 
-            var destination = outputs[output] + offset;
-            var source = sent.AsSpan(i * frames, frames);
-            if (i < 2 || count == 1) {
-                for (var f = 0; f < frames; f++) {
-                    destination[f] += source[f] + click[f];
-                }
-            } else {
-                for (var f = 0; f < frames; f++) {
-                    destination[f] += source[f];
-                }
-            }
+            return;
+        }
+
+        for (var f = 0; f < source.Length; f++) {
+            destination[f] += source[f];
         }
     }
 

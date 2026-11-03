@@ -38,7 +38,10 @@ public enum MultichannelPolicy {
     FrontPair
 }
 
-/// <summary>The policy of each built-in effect; hosted plugins and unknown ids are <see cref="MultichannelPolicy.FrontPair" />.</summary>
+/// <summary>
+///     The policy of each built-in effect; hosted plugins and unknown ids are
+///     <see cref="MultichannelPolicy.FrontPair" />.
+/// </summary>
 public static class MultichannelEffects {
     static readonly System.Collections.Concurrent.ConcurrentDictionary<string, MultichannelPolicy> Registered =
         new(StringComparer.Ordinal);
@@ -51,10 +54,27 @@ public static class MultichannelEffects {
 
     static MultichannelPolicy BuiltinPolicy(string pluginId) =>
         pluginId switch {
-            ChannelEq.Id or LinearPhaseEq.Id or Gain.Id or StereoDelay.Id or TapeDelay.Id or Reverb.Id
-                or ConvolutionReverb.Id or Chorus.Id or Flanger.Id or Phaser.Id or Tremolo.Id or Ensemble.Id
-                or AutoFilter.Id or Overdrive.Id or Distortion.Id or Bitcrusher.Id or Exciter.Id or SubBass.Id
-                or PitchShifter.Id or DeEsser.Id or Multipressor.Id => MultichannelPolicy.PerChannel,
+            ChannelEq.Id
+                or LinearPhaseEq.Id
+                or Gain.Id
+                or StereoDelay.Id
+                or TapeDelay.Id
+                or Reverb.Id
+                or ConvolutionReverb.Id
+                or Chorus.Id
+                or Flanger.Id
+                or Phaser.Id
+                or Tremolo.Id
+                or Ensemble.Id
+                or AutoFilter.Id
+                or Overdrive.Id
+                or Distortion.Id
+                or Bitcrusher.Id
+                or Exciter.Id
+                or SubBass.Id
+                or PitchShifter.Id
+                or DeEsser.Id
+                or Multipressor.Id => MultichannelPolicy.PerChannel,
             Compressor.Id or NoiseGate.Id or Limiter.Id or AdaptiveLimiter.Id or Enveloper.Id =>
                 MultichannelPolicy.Linked,
             _ => MultichannelPolicy.FrontPair
