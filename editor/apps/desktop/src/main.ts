@@ -117,6 +117,7 @@ function connection(): Promise<Connection> {
 /** Allows the renderer to reach exactly the Server it uses, and nothing else. */
 function contentSecurityPolicy(): string {
   const remote = settings.target.mode === 'remote' ? new URL(settings.target.baseUrl) : null;
+  const server = remote ? remote.origin : 'http://127.0.0.1:*';
   const servers = remote
     ? `${remote.origin} ${remote.protocol === 'https:' ? 'wss' : 'ws'}://${remote.host}`
     : 'http://127.0.0.1:* ws://127.0.0.1:*';
@@ -126,7 +127,9 @@ function contentSecurityPolicy(): string {
     "script-src 'self' 'wasm-unsafe-eval'",
     // Angular and the overlay CDK set inline styles.
     "style-src 'self' 'unsafe-inline'",
-    "img-src 'self' data: blob:",
+    // Phase 10: the movie's frames and thumbnails (<img>) and its stream (<video>) load from the Server themselves.
+    `img-src 'self' data: blob: ${server}`,
+    `media-src 'self' ${server}`,
     "font-src 'self' data:",
     `connect-src 'self' ${servers}`,
     "object-src 'none'",
