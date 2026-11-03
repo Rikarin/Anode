@@ -29,15 +29,11 @@ static class SessionPlayerContent {
     public static bool Ready => true;
 
     /// <summary>
-    ///     Adds the Drummer kits to <paramref name="pack" /> (the test pack: one kit), drums from the T1 synth when
-    ///     <paramref name="t1" />, as <see cref="Content" /> does.
+    ///     Adds the Drummer kits to <paramref name="pack" /> (the test pack too: a golden path's Drummer takes its style's
+    ///     kit), drums from the T1 synth when <paramref name="t1" />, as <see cref="Content" /> does.
     /// </summary>
-    public static void AddKits(PackBuilder pack, bool test, bool t1) {
+    public static void AddKits(PackBuilder pack, bool t1) {
         pack.Kit("kit_drummer_acoustic", "Session Acoustic Kit", Pads(Acoustic, t1));
-        if (test) {
-            return;
-        }
-
         pack.Kit("kit_drummer_electronic", "Session Electronic Kit", Pads(Electronic, t1));
         pack.Kit("kit_drummer_brushes", "Session Brushes Kit", Pads(Brushes, t1));
     }

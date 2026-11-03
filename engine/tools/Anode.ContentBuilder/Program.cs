@@ -27,7 +27,7 @@ try {
     // Phase 11 (docs/12-phase-11.md): the Drummer kits (workstream D) and the tape sets (workstream E), each skipped
     // until its workstream makes it.
     if (SessionPlayerContent.Ready) {
-        SessionPlayerContent.AddKits(pack, test, t1);
+        SessionPlayerContent.AddKits(pack, t1);
     }
 
     if (TapeContent.Ready) {

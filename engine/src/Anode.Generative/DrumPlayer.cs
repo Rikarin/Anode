@@ -11,6 +11,9 @@ static class DrumPlayer {
     const long GhostKey = 0x47484F53;
     const int DrumLength = 120;
 
+    /// <summary>How far from an onset a fill's kick stays (ticks): inside a sixteenth, with room for the humanising.</summary>
+    const long FillKickReach = 180;
+
     public static List<Hit> Play(
         Style style,
         SessionPlayerParameters parameters,
@@ -32,6 +35,9 @@ static class DrumPlayer {
                 }
             } else if (plan.Role == PhraseRole.Fill) {
                 Fill(style, plan, steps, bar);
+                if (onsets is not null) {
+                    KeepKicksOnOnsets(style, plan, bar, onsets);
+                }
             }
 
             // A crash on the one after a fill, and on a section's first beat where the grammar has it.
@@ -289,6 +295,23 @@ static class DrumPlayer {
         bar.RemoveAll(static h => h.Note == DrumKitNotes.Kick);
         foreach (var step in kicks) {
             bar.Add((step, DrumKitNotes.Kick, step % beat == 0 ? 'X' : 'x'));
+        }
+    }
+
+    /// <summary>
+    ///     A fill while following a rhythm source: its kicks stay only near the source's onsets, so the kick follows
+    ///     through the fill bars too (a bar without onsets keeps its fill).
+    /// </summary>
+    static void KeepKicksOnOnsets(
+        Style style,
+        BarPlan plan,
+        List<(int Step, int Note, char Mark)> bar,
+        IReadOnlyList<long> onsets
+    ) {
+        var inBar = onsets.Where(o => o >= plan.Bar.Start && o < plan.Bar.End).ToArray();
+        if (inBar.Length > 0) {
+            bar.RemoveAll(h => h.Note == DrumKitNotes.Kick
+                && !inBar.Any(o => Math.Abs(plan.Bar.Start + h.Step * style.StepTicks - o) <= FillKickReach));
         }
     }
 

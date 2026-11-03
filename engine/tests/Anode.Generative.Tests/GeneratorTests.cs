@@ -228,6 +228,27 @@ public sealed class GeneratorTests {
         }
     }
 
+    /// <summary>The same on a bass of plain quarter notes, fills and all (a kick roll stays only on the onsets).</summary>
+    [Theory]
+    [MemberData(nameof(DrumStyles))]
+    public void Fill_kicks_follow_a_quarter_note_rhythm_source_too(string styleId) {
+        var onsets = Enumerable.Range(0, 32).Select(static beat => beat * 960L).ToList();
+        foreach (var c in (double[])[0.5, 0.9]) {
+            var parameters = Inputs.Parameters(styleId, c, 0.9);
+            var notes = Notes(
+                Inputs.Input(
+                    SessionPlayerKind.Drummer,
+                    parameters with { Drums = parameters.Drums! with { RhythmSourceTrackId = "bass" } },
+                    onsets: onsets
+                )
+            );
+            var kicks = notes.Where(static n => n.Pitch == DrumKitNotes.Kick).ToList();
+            Assert.NotEmpty(kicks);
+            var near = kicks.Count(k => onsets.Exists(o => Math.Abs(o - k.StartTick) <= Bar / 16));
+            Assert.True(near >= 0.75 * kicks.Count, $"{styleId} at {c}: {near} of {kicks.Count} kicks on onsets");
+        }
+    }
+
     [Fact]
     public void Switched_off_pieces_are_silent_and_the_ride_keeps_time() {
         var parameters = Inputs.Parameters("drums-rock");
