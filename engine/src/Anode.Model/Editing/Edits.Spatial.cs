@@ -48,13 +48,12 @@ public static partial class Edits {
 
     /// <summary>Whether a track of <paramref name="kind" /> takes <paramref name="format" /> as its input format.</summary>
     static void CheckInputFormat(TrackKind kind, ChannelFormat format) {
-        switch (kind) {
-            case TrackKind.Instrument when format is not (ChannelFormat.Mono or ChannelFormat.Stereo):
+        if (IsInstrumentKind(kind)) {
+            if (format is not (ChannelFormat.Mono or ChannelFormat.Stereo)) {
                 throw new EditException("An instrument track's input is mono or stereo.");
-            case TrackKind.Instrument or TrackKind.Audio or TrackKind.Aux:
-                return;
-            default:
-                throw new EditException($"A {Kind(kind)} track has no input format.");
+            }
+        } else if (kind is not (TrackKind.Audio or TrackKind.Aux)) {
+            throw new EditException($"A {Kind(kind)} track has no input format.");
         }
     }
 

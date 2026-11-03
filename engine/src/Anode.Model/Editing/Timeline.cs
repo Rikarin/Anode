@@ -8,12 +8,13 @@ public enum TimelineKind {
     TakeFolder,
     Marker,
     Section,
-    PatternRegion
+    PatternRegion,
+    SessionPlayerRegion
 }
 
 /// <summary>
-///     Something placed on the timeline: a region of any kind (audio, MIDI, pattern), a take folder, a marker or a
-///     section.
+///     Something placed on the timeline: a region of any kind (audio, MIDI, pattern, Session Player), a take folder, a
+///     marker or a section.
 /// </summary>
 public readonly record struct TimelineItem(TimelineKind Kind, string Id, long Start);
 
@@ -47,11 +48,15 @@ static class Timeline {
         foreach (var p in state.PatternRegions.Values) {
             yield return new(TimelineKind.PatternRegion, p.Id, p.StartTick);
         }
+
+        foreach (var p in state.SessionPlayerRegions.Values) {
+            yield return new(TimelineKind.SessionPlayerRegion, p.Id, p.StartTick);
+        }
     }
 
     /// <summary>
-    ///     The item <paramref name="id" /> that a region edit may name (audio, MIDI, pattern or a take folder), or
-    ///     null.
+    ///     The item <paramref name="id" /> that a region edit may name (audio, MIDI, pattern, Session Player or a take
+    ///     folder), or null.
     /// </summary>
     public static TimelineItem? Region(ProjectState state, string? id) {
         if (id is null) {
@@ -70,6 +75,10 @@ static class Timeline {
             return new(TimelineKind.PatternRegion, id, pattern.StartTick);
         }
 
+        if (state.SessionPlayerRegions.TryGetValue(id, out var player)) {
+            return new(TimelineKind.SessionPlayerRegion, id, player.StartTick);
+        }
+
         return state.TakeFolders.TryGetValue(id, out var folder)
             ? new(TimelineKind.TakeFolder, id, folder.StartTick)
             : null;
@@ -82,6 +91,7 @@ static class Timeline {
             TimelineKind.MidiRegion => state.MidiRegions[item.Id].TrackId,
             TimelineKind.TakeFolder => state.TakeFolders[item.Id].TrackId,
             TimelineKind.PatternRegion => state.PatternRegions[item.Id].TrackId,
+            TimelineKind.SessionPlayerRegion => state.SessionPlayerRegions[item.Id].TrackId,
             _ => null
         };
 
@@ -102,6 +112,11 @@ static class Timeline {
                 return new PatternRegionUpserted(
                     pattern with { StartTick = start, TrackId = trackId ?? pattern.TrackId }
                 );
+            case TimelineKind.SessionPlayerRegion:
+                var player = state.SessionPlayerRegions[item.Id];
+                return new SessionPlayerRegionUpserted(
+                    player with { StartTick = start, TrackId = trackId ?? player.TrackId }
+                );
             case TimelineKind.Marker:
                 return new MarkerUpserted(state.Markers[item.Id] with { Tick = start });
             default:
@@ -116,12 +131,14 @@ static class Timeline {
             TimelineKind.TakeFolder => new TakeFolderRemoved(item.Id),
             TimelineKind.Marker => new MarkerRemoved(item.Id),
             TimelineKind.PatternRegion => new PatternRegionRemoved(item.Id),
+            TimelineKind.SessionPlayerRegion => new SessionPlayerRegionRemoved(item.Id),
             _ => new SectionRemoved(item.Id)
         };
 
     /// <summary>
     ///     A copy of the item <paramref name="offset" /> ticks later (on <paramref name="trackId" /> when given), with
-    ///     ids of its own: a MIDI copy's notes and controller events are numbered on from <paramref name="next" />.
+    ///     ids of its own: a MIDI copy's notes and controller events are numbered on from <paramref name="next" />; a
+    ///     Session Player copy keeps its seed (over the same chords and sections it plays the same notes).
     /// </summary>
     public static DeltaOp Copy(
         ProjectState state,
@@ -183,6 +200,16 @@ static class Timeline {
                 return new PatternRegionUpserted(
                     p with {
                         Id = ids.Next(IdPrefix.PatternRegion),
+                        StartTick = p.StartTick + offset,
+                        TrackId = trackId ?? p.TrackId
+                    }
+                );
+            }
+            case TimelineKind.SessionPlayerRegion: {
+                var p = state.SessionPlayerRegions[item.Id];
+                return new SessionPlayerRegionUpserted(
+                    p with {
+                        Id = ids.Next(IdPrefix.SessionPlayerRegion),
                         StartTick = p.StartTick + offset,
                         TrackId = trackId ?? p.TrackId
                     }

@@ -32,7 +32,8 @@ public static partial class Edits {
     /// <summary>
     ///     Applies a batch atomically: all of it, or (on <see cref="EditException" />) none of it.
     ///     <paramref name="plugins" /> is what instrument and insert edits may name (none when left out), and
-    ///     <paramref name="patches" /> what <c>applyPatch</c> may.
+    ///     <paramref name="patches" /> what <c>applyPatch</c> may, and <paramref name="styles" /> the Session Player
+    ///     styles (Phase 11; none when left out).
     /// </summary>
     public static EditResult Apply(
         ProjectState state,
@@ -41,7 +42,8 @@ public static partial class Edits {
         PluginCatalog? plugins = null,
         IPatchSource? patches = null,
         IAnalysisSource? analysis = null,
-        IScoreNotation? notation = null
+        IScoreNotation? notation = null,
+        SessionPlayerCatalog? styles = null
     ) {
         plugins ??= PluginCatalog.Empty;
         patches ??= NoPatches.Instance;
@@ -66,7 +68,8 @@ public static partial class Edits {
                     plugins,
                     patches,
                     analysis,
-                    notation
+                    notation,
+                    styles
                 );
             } catch (EditException e) when (commands.Count > 1) {
                 throw new EditException($"Command {i + 1} ({commands[i]?.GetType().Name}): {e.Message}", e);
@@ -86,9 +89,10 @@ public static partial class Edits {
         PluginCatalog? plugins = null,
         IPatchSource? patches = null,
         IAnalysisSource? analysis = null,
-        IScoreNotation? notation = null
+        IScoreNotation? notation = null,
+        SessionPlayerCatalog? styles = null
     ) =>
-        Apply(state, [command], ids, plugins, patches, analysis, notation);
+        Apply(state, [command], ids, plugins, patches, analysis, notation, styles);
 
     /// <summary>
     ///     Applies delta operations, collecting them and their inverses (in application order; the caller reverses the
@@ -145,11 +149,10 @@ public static partial class Edits {
         PluginCatalog plugins,
         IPatchSource? patches = null,
         IAnalysisSource? analysis = null,
-        IScoreNotation? notation = null
+        IScoreNotation? notation = null,
+        SessionPlayerCatalog? styles = null
     ) =>
         command switch {
-            // Session Player track kinds: Phase 11, workstream B (docs/12-phase-11.md).
-            _ when UsesPhase11Fields(command) => throw Phase11Pending($"{command.GetType().Name} with Phase 11 fields"),
             AddTrackCommand c => AddTrack(state, c, ids, plugins),
             RemoveTrackCommand c => RemoveTrack(state, c),
             MoveTrackCommand c => MoveTrack(state, c),
@@ -236,7 +239,7 @@ public static partial class Edits {
                 ?? Phase8Ops(state, command, ids, plugins)
                 ?? Phase9Ops(state, command, ids, plugins, notation ?? NoScoreNotation.Instance)
                 ?? Phase10Ops(state, command, ids)
-                ?? Phase11Ops(command)
+                ?? Phase11Ops(state, command, ids, plugins, patches ?? NoPatches.Instance, styles ?? NoStyles)
                 ?? throw new EditException($"Unknown command {command.GetType().Name}.")
         };
 
@@ -271,6 +274,10 @@ public static partial class Edits {
 
         if (kind is TrackKind.Aux or TrackKind.Vca) {
             throw new EditException($"Add {(kind == TrackKind.Aux ? "an aux with addAux" : "a VCA with addVca")}.");
+        }
+
+        if (IsSessionPlayerKind(kind)) {
+            throw new EditException("Add a Drummer, Bass Player or Keyboard Player track with addSessionPlayerTrack.");
         }
 
         if (c.PluginId is not null && kind != TrackKind.Instrument) {
@@ -320,6 +327,9 @@ public static partial class Edits {
             TrackKind.Stack => "Stack",
             TrackKind.Aux => "Aux",
             TrackKind.Vca => "VCA",
+            TrackKind.Drummer => "Drummer",
+            TrackKind.BassPlayer => "Bass Player",
+            TrackKind.KeyboardPlayer => "Keyboard Player",
             _ => "Audio"
         };
         // Numbered by kind, as Logic does: the first instrument track is "Inst 1" whatever else the project holds.
@@ -360,6 +370,23 @@ public static partial class Edits {
         step.AddRange(state.MidiRegionsOf(trackId).Select(static r => new MidiRegionRemoved(r.Id)));
         step.AddRange(state.TakeFoldersOf(trackId).Select(static f => new TakeFolderRemoved(f.Id)));
         step.AddRange(state.PatternRegionsOf(trackId).Select(static r => new PatternRegionRemoved(r.Id)));
+        step.AddRange(state.SessionPlayerRegionsOf(trackId).Select(static r => new SessionPlayerRegionRemoved(r.Id)));
+        // Regions that followed the track's rhythm no longer do; the Environment's objects no longer reach it.
+        step.AddRange(
+            state.SessionPlayerRegions.Values.Where(r => r.TrackId != trackId && r.Parameters.Drums?.RhythmSourceTrackId == trackId)
+                .Select(static r => new SessionPlayerRegionUpserted(
+                        r with {
+                            Parameters = r.Parameters with {
+                                Drums = r.Parameters.Drums! with { RhythmSourceTrackId = null }
+                            }
+                        }
+                    )
+                )
+        );
+        if (UnlinkedEnvironment(state.Environment, trackId) is { } environment) {
+            step.Add(new EnvironmentChanged(environment));
+        }
+
         step.AddRange(state.LanesOf(trackId).ToArray().Select(static l => new AutomationLaneRemoved(l.Id)));
         if (state.CellsOf(trackId).Any()) {
             step.Add(
@@ -439,9 +466,7 @@ public static partial class Edits {
             // Group members that link record arm follow (those that can record).
             ops.AddRange(
                 Linked(state, track, static p => p.RecordArm)
-                    .Where(m => m.RecordArmed != armed
-                        && m.Kind is TrackKind.Audio or TrackKind.Instrument or TrackKind.Midi
-                    )
+                    .Where(m => m.RecordArmed != armed && (m.Kind == TrackKind.Audio || IsMidiKind(m.Kind)))
                     .Select(m => new TrackUpserted(m with { RecordArmed = armed }, state.IndexOfTrack(m.Id)))
             );
         }
@@ -601,6 +626,11 @@ public static partial class Edits {
         if (state.PatternRegions.TryGetValue(c.RegionId ?? string.Empty, out var pattern)) {
             var patternTrack = c.TrackId is null ? pattern.TrackId : MidiTrackOf(state, c.TrackId).Id;
             return [new PatternRegionUpserted(pattern with { StartTick = c.StartTick, TrackId = patternTrack })];
+        }
+
+        if (state.SessionPlayerRegions.TryGetValue(c.RegionId ?? string.Empty, out var player)) {
+            var playerTrack = c.TrackId is null ? player.TrackId : SamePlayerTrack(state, player, c.TrackId).Id;
+            return [new SessionPlayerRegionUpserted(player with { StartTick = c.StartTick, TrackId = playerTrack })];
         }
 
         if (state.TakeFolders.TryGetValue(c.RegionId ?? string.Empty, out var folder)) {
@@ -834,8 +864,11 @@ public static partial class Edits {
             );
     }
 
-    /// <summary>Whether a track of <paramref name="kind" /> holds MIDI regions and takes live MIDI.</summary>
-    public static bool IsMidiKind(TrackKind kind) => kind is TrackKind.Instrument or TrackKind.Midi;
+    /// <summary>
+    ///     Whether a track of <paramref name="kind" /> holds MIDI regions and takes live MIDI: an instrument track (a Bass
+    ///     or Keyboard Player's too) or an external MIDI track.
+    /// </summary>
+    public static bool IsMidiKind(TrackKind kind) => IsInstrumentKind(kind) || kind == TrackKind.Midi;
 
     /// <summary>
     ///     Whether a track holds MIDI and pattern regions and takes live MIDI: an instrument or external MIDI track, or a

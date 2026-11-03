@@ -93,7 +93,7 @@ public sealed partial class Jobs {
         var sources = new List<InPlace>();
         foreach (var id in request.TrackIds!.Distinct(StringComparer.Ordinal)) {
             var track = state.FindTrack(id ?? string.Empty) ?? throw ProjectException.NotFound($"No track '{id}'.");
-            if (track.Kind is not (TrackKind.Audio or TrackKind.Instrument)) {
+            if (track.Kind != TrackKind.Audio && !Edits.IsInstrumentKind(track.Kind)) {
                 throw ProjectException.Unprocessable("Only audio and instrument tracks bounce in place.");
             }
 
@@ -148,7 +148,7 @@ public sealed partial class Jobs {
             .ToArray();
         foreach (var group in items.GroupBy(static i => i.TrackId, StringComparer.Ordinal)) {
             var track = state.FindTrack(group.Key)!;
-            if (track.Kind is not (TrackKind.Audio or TrackKind.Instrument)) {
+            if (track.Kind != TrackKind.Audio && !Edits.IsInstrumentKind(track.Kind)) {
                 throw ProjectException.Unprocessable("Only audio and instrument tracks bounce in place.");
             }
 

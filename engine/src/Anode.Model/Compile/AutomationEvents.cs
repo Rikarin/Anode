@@ -108,7 +108,7 @@ public static class AutomationEvents {
     /// <summary>A track's stack and VCA, when their lanes play (not off).</summary>
     static IEnumerable<Track> Outers(ProjectState state, Track track) {
         if (track.ParentId is not null
-            && state.FindTrack(track.ParentId) is { Kind: TrackKind.Stack } stack
+            && state.FindTrack(track.ParentId) is { Kind: TrackKind.Stack or TrackKind.Drummer } stack
             && stack.AutomationMode != AutomationMode.Off) {
             yield return stack;
         }
@@ -188,7 +188,7 @@ public static class AutomationEvents {
     }
 
     static IEnumerable<Track> OuterTracks(ProjectState state, Track track) {
-        if (track.ParentId is not null && state.FindTrack(track.ParentId) is { Kind: TrackKind.Stack } stack) {
+        if (track.ParentId is not null && state.FindTrack(track.ParentId) is { Kind: TrackKind.Stack or TrackKind.Drummer } stack) {
             yield return stack;
         }
 

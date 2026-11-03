@@ -204,7 +204,7 @@ public sealed partial class Jobs : IDisposable {
         var view = session.View ?? throw ProjectException.NoProject();
         var state = view.State;
         var track = state.FindTrack(trackId) ?? throw ProjectException.NotFound($"No track '{trackId}'.");
-        if (track.Kind is not (TrackKind.Audio or TrackKind.Instrument)) {
+        if (track.Kind != TrackKind.Audio && !Edits.IsInstrumentKind(track.Kind)) {
             throw ProjectException.Unprocessable("Only audio and instrument tracks freeze.");
         }
 

@@ -10,18 +10,21 @@ namespace Anode.Model.Compile;
 ///     with their sidechains as engine track ids or buses, the sends at linear gain, and the output (0 the master, N bus
 ///     N, −N device output pair N), and an instrument or external MIDI track's MIDI FX slots (Phase 6). A VCA's solo
 ///     solos its members. Phase 10 (docs/11-phase-10.md): the input and output formats, and the panner unless it is the
-///     stereo pan (the master has none), its levels as linear gains.
+///     stereo pan (the master has none), its levels as linear gains. Phase 11 (docs/12-phase-11.md): an analysed
+///     Mastering Assistant carries its chain (<see cref="EngineInsert.Mastering" />, <see cref="MasteringChains" />).
 /// </summary>
 public static class Strips {
     /// <summary>
     ///     A track's engine strip (null: the master's); <paramref name="stateOf" /> gives an insert's saved opaque state
-    ///     (base64) when the host is to build it from scratch.
+    ///     (base64) when the host is to build it from scratch, and <paramref name="chainOf" /> a Mastering Assistant's
+    ///     chain (none when left out).
     /// </summary>
     public static EngineStrip Engine(
         ProjectState state,
         Track? track,
         EngineIds ids,
-        Func<Insert, string?>? stateOf = null
+        Func<Insert, string?>? stateOf = null,
+        Func<Insert, EngineMasteringChain?>? chainOf = null
     ) {
         var strip = track is null ? state.Master : Stacks.EffectiveStrip(state, track);
         var full = track is null || Edits.HasAudioStrip(track.Kind);
@@ -30,7 +33,7 @@ public static class Strips {
             (float)strip.Pan,
             strip.Mute,
             strip.Solo,
-            full ? [..strip.Inserts.Select(i => Insert(state, ids, i, stateOf?.Invoke(i)))] : [],
+            full ? [..strip.Inserts.Select(i => Insert(state, ids, i, stateOf?.Invoke(i), chainOf?.Invoke(i)))] : [],
             full && track is not null
                 ? [
                     ..strip.Sends.Select(static s => new EngineSend(
@@ -91,19 +94,35 @@ public static class Strips {
     public static int Output(string output) =>
         Routing.BusOf(output) is { } bus ? bus : Routing.PairOf(output) is { } pair ? -pair : 0;
 
-    static EngineInsert Insert(ProjectState state, EngineIds ids, Insert insert, string? saved) {
+    static EngineInsert Insert(
+        ProjectState state,
+        EngineIds ids,
+        Insert insert,
+        string? saved,
+        EngineMasteringChain? chain
+    ) {
         var (track, bus) = insert.Sidechain switch {
             null => (-1, 0),
             var s when Routing.BusOf(s) is { } b => (-1, b),
             var s when state.FindTrack(s) is { } t && Stacks.IsPlayable(t) => (ids.Track(t.Id), 0),
             _ => (-1, 0)
         };
-        return new(insert.Id, insert.PluginId, insert.Bypassed, insert.Parameters, saved, track, bus, insert.File);
+        return new(
+            insert.Id,
+            insert.PluginId,
+            insert.Bypassed,
+            insert.Parameters,
+            saved,
+            track,
+            bus,
+            insert.File,
+            Mastering: chain
+        );
     }
 
     /// <summary>
-    ///     Whether two engine strips differ in structure (inserts, sends, output, formats, the panner's mode), not just
-    ///     levels (and panner settings).
+    ///     Whether two engine strips differ in structure (inserts, sends, output, formats, the panner's mode, a Mastering
+    ///     Assistant's chain), not just levels (and panner settings).
     /// </summary>
     public static bool StructureDiffers(EngineStrip a, EngineStrip b) =>
         a.Output != b.Output
@@ -119,6 +138,7 @@ public static class Strips {
                 && x.SidechainTrack == y.SidechainTrack
                 && x.SidechainBus == y.SidechainBus
                 && x.File == y.File
+                && SameChain(x.Mastering, y.Mastering)
         )
         || !Same(a.Sends, b.Sends, static (x, y) => x.Id == y.Id && x.Bus == y.Bus && x.PreFader == y.PreFader)
         || !Same(
@@ -126,6 +146,16 @@ public static class Strips {
             b.MidiEffects,
             static (x, y) => x.Id == y.Id && x.PluginId == y.PluginId && x.Bypassed == y.Bypassed
         );
+
+    static bool SameChain(EngineMasteringChain? a, EngineMasteringChain? b) =>
+        ReferenceEquals(a, b)
+        || (a is not null
+            && b is not null
+            && a.CompressorThresholdDb.Equals(b.CompressorThresholdDb)
+            && a.CompressorRatio.Equals(b.CompressorRatio)
+            && a.LoudnessLufs.Equals(b.LoudnessLufs)
+            && a.ChainGainDb.Equals(b.ChainGainDb)
+            && a.EqGainsDb.SequenceEqual(b.EqGainsDb));
 
     static bool Same<T>(IReadOnlyList<T>? a, IReadOnlyList<T>? b, Func<T, T, bool> equal) {
         a ??= [];

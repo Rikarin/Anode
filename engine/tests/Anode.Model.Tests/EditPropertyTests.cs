@@ -19,10 +19,6 @@ public sealed class EditPropertyTests {
     [MemberData(nameof(Commands))]
     public void Applying_then_inverting_a_command_is_the_identity(string command) {
         var type = RandomProjects.CommandTypes.Single(t => t.Name == command);
-        Assert.SkipWhen(
-            RandomProjects.PendingPhase11.Contains(command),
-            "Phase 11 command the model does not implement yet (docs/12-phase-11.md, workstream B)."
-        );
         var applied = 0;
         Gen.Int.Sample(
             seed => {
@@ -40,7 +36,8 @@ public sealed class EditPropertyTests {
                         RandomProjects.Plugins,
                         RandomProjects.Patches,
                         RandomProjects.Analysis,
-                        RandomProjects.Notation
+                        RandomProjects.Notation,
+                        RandomProjects.Styles
                     );
                 } catch (EditException) {
                     return;
@@ -81,7 +78,8 @@ public sealed class EditPropertyTests {
                         RandomProjects.Plugins,
                         RandomProjects.Patches,
                         RandomProjects.Analysis,
-                        RandomProjects.Notation
+                        RandomProjects.Notation,
+                        RandomProjects.Styles
                     );
                     Assert.Equal(RandomProjects.Json(state), RandomProjects.Json(result.State.Apply(result.Inverse)));
                 } catch (EditException) {
@@ -158,7 +156,8 @@ public sealed class EditPropertyTests {
                                     RandomProjects.Plugins,
                                     RandomProjects.Patches,
                                     RandomProjects.Analysis,
-                                    RandomProjects.Notation
+                                    RandomProjects.Notation,
+                                    RandomProjects.Styles
                                 );
                             history.Push(type.Name, step, new(result.Forward, result.Inverse), null);
                             ops = result.Forward;
@@ -198,6 +197,12 @@ public sealed class EditPropertyTests {
         readonly Dictionary<string, LyricSyllable> lyrics = project.Score.Lyrics.ToDictionary(static l => l.Id);
         readonly Dictionary<string, ChordSymbol> chords = project.Score.Chords.ToDictionary(static c => c.Id);
         readonly Dictionary<string, ScoreSet> sets = project.Score.Sets.ToDictionary(static s => s.Id);
+
+        readonly Dictionary<string, SessionPlayerRegion> players =
+            project.SessionPlayerRegions.ToDictionary(static r => r.Id);
+
+        ChordTrack chordTrack = project.ChordTrack;
+        MidiEnvironment environment = project.Environment;
         ScoreLayout layout = project.Score.Layout;
         LiveLoopsGrid liveLoops = project.LiveLoops;
         string notes = project.Notes;
@@ -233,6 +238,10 @@ public sealed class EditPropertyTests {
 
                         foreach (var gone in patterns.Values.Where(p => p.TrackId == id).ToArray()) {
                             patterns.Remove(gone.Id);
+                        }
+
+                        foreach (var gone in players.Values.Where(p => p.TrackId == id).ToArray()) {
+                            players.Remove(gone.Id);
                         }
 
                         break;
@@ -356,6 +365,18 @@ public sealed class EditPropertyTests {
                     case MovieChanged(var m):
                         movie = m;
                         break;
+                    case ChordTrackChanged(var c):
+                        chordTrack = c;
+                        break;
+                    case SessionPlayerRegionUpserted(var region):
+                        players[region.Id] = region;
+                        break;
+                    case SessionPlayerRegionRemoved(var id):
+                        players.Remove(id);
+                        break;
+                    case EnvironmentChanged(var e):
+                        environment = e;
+                        break;
                 }
             }
         }
@@ -382,6 +403,9 @@ public sealed class EditPropertyTests {
                     PatternRegions = [..patterns.Values.OrderBy(static r => r.Id, StringComparer.Ordinal)],
                     LiveLoops = liveLoops,
                     Movie = movie,
+                    ChordTrack = chordTrack,
+                    SessionPlayerRegions = [..players.Values.OrderBy(static r => r.Id, StringComparer.Ordinal)],
+                    Environment = environment,
                     Grooves = [..grooves.Values.OrderBy(static g => g.Id, StringComparer.Ordinal)],
                     ArticulationSets = [..articulationSets.Values.OrderBy(static a => a.Id, StringComparer.Ordinal)],
                     LaneSets = [..laneSets.Values.OrderBy(static l => l.Id, StringComparer.Ordinal)],

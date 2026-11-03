@@ -289,7 +289,11 @@ public static partial class Edits {
             Playback = playback,
             Notes = [],
             Controls = [],
-            Notation = CheckNotation(source.Notation ?? ProjectDefaults.Notation)
+            Notation = CheckNotation(source.Notation ?? ProjectDefaults.Notation),
+            PitchSource = Enum.IsDefined(source.PitchSource)
+                ? source.PitchSource
+                : throw new EditException($"Unknown Pitch Source {source.PitchSource}."),
+            Key = source.Key is null ? null : CheckRegionKey(source.Key)
         };
         var notes = source.Notes ?? [];
         var controls = source.Controls ?? [];
@@ -353,7 +357,11 @@ public static partial class Edits {
             FlexMarkers = [],
             Transpose = 0,
             FineTune = 0,
-            PitchNotes = []
+            PitchNotes = [],
+            PitchSource = source.PitchSource is PitchSourceMode.Off or PitchSourceMode.Root
+                ? source.PitchSource
+                : throw new EditException("An audio region follows the chord track by root only."),
+            Key = source.Key is null ? null : CheckRegionKey(source.Key)
         };
     }
 }

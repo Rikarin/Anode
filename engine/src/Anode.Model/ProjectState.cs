@@ -105,6 +105,16 @@ public sealed record ProjectState(
     /// <summary>The project's movie (docs/11-phase-10.md), or null when it has none.</summary>
     public Movie? Movie { get; init; }
 
+    /// <summary>The chord track (docs/12-phase-11.md): its chords in tick order (one per tick), its key and scale changes.</summary>
+    public ChordTrack ChordTrack { get; init; } = ChordTrack.Empty;
+
+    /// <summary>The Session Player regions of the Drummer, Bass Player and Keyboard Player tracks, by id (Phase 11).</summary>
+    public ImmutableSortedDictionary<string, SessionPlayerRegion> SessionPlayerRegions { get; init; } =
+        ImmutableSortedDictionary.Create<string, SessionPlayerRegion>(StringComparer.Ordinal);
+
+    /// <summary>The MIDI Environment (Phase 11, docs/adr/0015-environment.md); empty: the default input path.</summary>
+    public MidiEnvironment Environment { get; init; } = MidiEnvironment.Empty;
+
     /// <summary>The project's Note Pad.</summary>
     public string Notes { get; init; } = string.Empty;
 
@@ -204,6 +214,12 @@ public sealed record ProjectState(
             .OrderBy(static r => r.StartTick)
             .ThenBy(static r => r.Id, StringComparer.Ordinal);
 
+    /// <summary>The Session Player regions of a track, by start.</summary>
+    public IEnumerable<SessionPlayerRegion> SessionPlayerRegionsOf(string trackId) =>
+        SessionPlayerRegions.Values.Where(r => r.TrackId == trackId)
+            .OrderBy(static r => r.StartTick)
+            .ThenBy(static r => r.Id, StringComparer.Ordinal);
+
     /// <summary>The Live Loops cells of a track.</summary>
     public IEnumerable<Cell> CellsOf(string trackId) => LiveLoops.Cells.Where(c => c.TrackId == trackId);
 
@@ -253,11 +269,9 @@ public sealed record ProjectState(
             [..LaneSets.Values],
             Score,
             Movie,
-            // The chord track, Session Player regions and the Environment: Phase 11, workstream B
-            // (docs/12-phase-11.md).
-            ChordTrack.Empty,
-            [],
-            MidiEnvironment.Empty
+            ChordTrack,
+            [..SessionPlayerRegions.Values],
+            Environment
         );
 
     /// <summary>Applies one delta operation (an edit's primitive step, also what clients apply).</summary>
@@ -275,6 +289,9 @@ public sealed record ProjectState(
                 ),
                 PatternRegions = PatternRegions.RemoveRange(
                     PatternRegions.Values.Where(r => r.TrackId == id).Select(static r => r.Id)
+                ),
+                SessionPlayerRegions = SessionPlayerRegions.RemoveRange(
+                    SessionPlayerRegions.Values.Where(r => r.TrackId == id).Select(static r => r.Id)
                 ),
                 Automation = Automation.RemoveRange(
                     Automation.Values.Where(l => l.TrackId == id).Select(static l => l.Id)
@@ -327,6 +344,12 @@ public sealed record ProjectState(
             ScoreSetRemoved(var id) => this with { ScoreSets = ScoreSets.Remove(id) },
             ScoreLayoutChanged(var layout) => this with { ScoreLayout = layout },
             MovieChanged(var movie) => this with { Movie = movie },
+            ChordTrackChanged(var chords) => this with { ChordTrack = chords },
+            SessionPlayerRegionUpserted(var region) => this with {
+                SessionPlayerRegions = SessionPlayerRegions.SetItem(region.Id, region)
+            },
+            SessionPlayerRegionRemoved(var id) => this with { SessionPlayerRegions = SessionPlayerRegions.Remove(id) },
+            EnvironmentChanged(var environment) => this with { Environment = environment },
             _ => throw new ArgumentException($"Unknown delta operation {op.GetType().Name}.", nameof(op))
         };
 
@@ -361,6 +384,14 @@ public sealed record ProjectState(
             PatternRegionUpserted or PatternRegionRemoved => InversePattern(op),
             LiveLoopsChanged => new LiveLoopsChanged(LiveLoops),
             MovieChanged => new MovieChanged(Movie),
+            ChordTrackChanged => new ChordTrackChanged(ChordTrack),
+            EnvironmentChanged => new EnvironmentChanged(Environment),
+            SessionPlayerRegionUpserted(var region) => SessionPlayerRegions.TryGetValue(region.Id, out var old)
+                ? new SessionPlayerRegionUpserted(old)
+                : new SessionPlayerRegionRemoved(region.Id),
+            SessionPlayerRegionRemoved(var id) => SessionPlayerRegions.TryGetValue(id, out var old)
+                ? new SessionPlayerRegionUpserted(old)
+                : null,
             GrooveUpserted
                 or GrooveRemoved
                 or ArticulationSetUpserted
