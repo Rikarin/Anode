@@ -50,6 +50,13 @@ public sealed class Compressor : AudioEffect {
 
     public static readonly int Mix = P.Add("mix", "Mix", 0, 100, 100, "%");
 
+    /// <summary>
+    ///     Phase 11: on a surround strip, one gain for every channel or one per speaker group
+    ///     (<see cref="Spatial.ChannelLink" />, which the engine's linked policy applies); a stereo strip ignores it.
+    /// </summary>
+    public static readonly int Link =
+        P.Choice("link", "Channel Link", Spatial.ChannelLink.Names, Spatial.ChannelLink.All);
+
     public static EffectDescriptor Info { get; } =
         P.Describe(
             Id,
