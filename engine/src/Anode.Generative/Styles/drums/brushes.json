@@ -1,0 +1,88 @@
+// Brushes written for Anode: a triplet-feel ballad, the snare swept in triplets with the backbeat tapped, the pedal hat
+// on two and four, the ride's swung pattern higher on the pad. Lanes are one character per triplet eighth (12 a bar).
+{
+  "format": 1,
+  "id": "drums-brushes",
+  "name": "Ballad, Brushes",
+  "player": "drummer",
+  "genre": "Jazz",
+  "description": "A brushed ballad in a triplet feel: swept snare, the pedal hi-hat on two and four, a swung ride and soft tom fills.",
+  "kitPatchId": "kit_drummer_brushes",
+  "stepsPerBar": 12,
+  "humanise": { "timingTicks": 12, "velocity": 8 },
+  "timekeeper": "ride",
+  "defaults": { "complexity": 0.4, "intensity": 0.4, "fillAmount": 0.25, "fillAtSectionEnds": true, "swing": 0, "feel": -0.15 },
+  "presets": [
+    { "id": "late-night", "name": "Late Night", "parameters": {} },
+    { "id": "swinging", "name": "Swinging", "parameters": { "complexity": 0.75, "intensity": 0.6, "fillAmount": 0.4 } },
+    { "id": "whisper", "name": "Whisper", "parameters": { "complexity": 0.15, "intensity": 0.1, "fillAmount": 0.1 } }
+  ],
+  "sections": {
+    "intro": { "complexity": 0.2, "intensity": 0.25 },
+    "verse": { "complexity": 0.35, "intensity": 0.35 },
+    "chorus": { "complexity": 0.55, "intensity": 0.55 },
+    "bridge": { "complexity": 0.45, "intensity": 0.45 },
+    "outro": { "complexity": 0.3, "intensity": 0.35 }
+  },
+  "grammar": {
+    "intro": { "form": "A", "intensity": -0.1 },
+    "verse": { "form": "AAAB", "substitutions": ["ghostNotes"] },
+    "chorus": { "form": "AB", "complexity": 0.1, "intensity": 0.15, "substitutions": ["crashOnOne", "ghostNotes"] },
+    "bridge": { "form": "AB", "substitutions": ["rideForHat"] },
+    "outro": { "form": "AAAB", "intensity": -0.1, "last": "ending" }
+  },
+  "variations": {
+    "hiHat": ["..x|..x|..x|..x", "x..|x..|x..|x.."],
+    "cymbals": ["x.x|x.x|x.x|x.x"]
+  },
+  "phrases": [
+    {
+      "id": "sweep", "role": "groove", "complexity": 0.0, "intensity": 0.2,
+      "lanes": { "kick": "x..|...|x..|...", "snare": "o..|o..|o..|o..", "pedal": "...|x..|...|x.." }
+    },
+    {
+      "id": "sweep-triplets", "role": "groove", "complexity": 0.25, "intensity": 0.3,
+      "lanes": { "kick": "x..|...|x..|...", "snare": "o.g|o.g|o.g|o.g", "pedal": "...|x..|...|x.." }
+    },
+    {
+      "id": "sweep-whisper", "role": "groove", "complexity": 0.5, "intensity": 0.0,
+      "lanes": { "kick": "o..|...|o..|...", "snare": "o.g|o.g|o.g|o.g", "pedal": "...|o..|...|o..", "ride": "o..|o.o|o..|o.o" }
+    },
+    {
+      "id": "ride-swing", "role": "groove", "complexity": 0.5, "intensity": 0.4,
+      "lanes": { "kick": "x..|...|x..|.g.", "snare": "o.g|x.g|o.g|x.g", "pedal": "...|x..|...|x..", "ride": "x..|x.x|x..|x.x" }
+    },
+    {
+      "id": "ride-swing-loud", "role": "groove", "complexity": 0.5, "intensity": 0.9,
+      "lanes": { "kick": "x..|...|x..|...", "snare": "o.g|X.g|o.g|X.g", "pedal": "...|x..|...|x..", "ride": "X..|x.x|X..|x.x" }
+    },
+    {
+      "id": "ride-comping", "role": "groove", "complexity": 0.75, "intensity": 0.5,
+      "lanes": { "kick": "x.g|...|x.g|...", "snare": "o.g|x.g|o.g|x.g", "pedal": "...|x..|...|x..", "ride": "x..|x.x|x..|x.x", "stick": "...|...|..o|..." }
+    },
+    {
+      "id": "busy", "role": "groove", "complexity": 1.0, "intensity": 0.6,
+      "lanes": { "kick": "x.g|..g|x.g|..g", "snare": "ogg|xgg|ogg|xgg", "pedal": "...|x..|...|x..", "ride": "x..|x.x|x..|x.x", "stick": "...|..o|...|..o" }
+    },
+    {
+      "id": "last-swell", "role": "ending", "complexity": 0.5, "intensity": 0.5,
+      "lanes": { "kick": "x..|...|...|...", "ride": "X..|...|...|...", "snare": "o..|...|...|..." }
+    },
+    {
+      "id": "fill-tap", "role": "fill", "complexity": 0.25, "intensity": 0.4, "from": 9,
+      "lanes": { "snare": "...|...|...|xxX" }
+    },
+    {
+      "id": "fill-half", "role": "fill", "complexity": 0.5, "intensity": 0.5, "from": 6,
+      "lanes": { "kick": "...|...|x..|...", "snare": "...|...|x.x|xxx" }
+    },
+    {
+      "id": "fill-toms", "role": "fill", "complexity": 0.75, "intensity": 0.55, "from": 6,
+      "lanes": { "kick": "...|...|x..|...", "tom1": "...|...|xx.|...", "tom3": "...|...|..x|x..", "floor": "...|...|...|.xX" }
+    },
+    {
+      "id": "fill-bar", "role": "fill", "complexity": 0.9, "intensity": 0.7, "from": 0,
+      "lanes": { "kick": "x..|...|x..|...", "snare": "x.g|x.g|x.x|...", "tom1": "...|...|...|xx.", "floor": "...|...|...|..X" }
+    }
+  ]
+}

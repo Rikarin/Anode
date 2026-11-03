@@ -1,0 +1,98 @@
+// Pop drums written for Anode: a tight kick and snare, shaker and tambourine layers, claps doubling the backbeat.
+{
+  "format": 1,
+  "id": "drums-pop",
+  "name": "Pop, Modern Groove",
+  "player": "drummer",
+  "genre": "Pop",
+  "description": "A modern pop groove: a syncopated kick, claps on the backbeat, shaker and tambourine layers that build into the chorus.",
+  "kitPatchId": "kit_drummer_acoustic",
+  "humanise": { "timingTicks": 6, "velocity": 5 },
+  "timekeeper": "ride",
+  "defaults": { "complexity": 0.45, "intensity": 0.5, "fillAmount": 0.3, "fillAtSectionEnds": true, "swing": 0, "feel": 0 },
+  "presets": [
+    { "id": "radio", "name": "Radio", "parameters": {} },
+    { "id": "big-chorus", "name": "Big Chorus", "parameters": { "complexity": 0.65, "intensity": 0.9, "fillAmount": 0.5 } },
+    { "id": "intimate", "name": "Intimate", "parameters": { "complexity": 0.2, "intensity": 0.1, "fillAmount": 0.15, "pieces": { "cymbals": { "on": false } } } }
+  ],
+  "sections": {
+    "intro": { "complexity": 0.25, "intensity": 0.3 },
+    "verse": { "complexity": 0.4, "intensity": 0.45 },
+    "chorus": { "complexity": 0.6, "intensity": 0.75 },
+    "bridge": { "complexity": 0.35, "intensity": 0.4 },
+    "outro": { "complexity": 0.45, "intensity": 0.6 }
+  },
+  "grammar": {
+    "intro": { "form": "A", "complexity": -0.2, "intensity": -0.2, "last": "pickup" },
+    "verse": { "form": "AAAB", "substitutions": ["openHat"] },
+    "chorus": { "form": "AB", "complexity": 0.15, "intensity": 0.25, "substitutions": ["crashOnOne", "openHat"] },
+    "bridge": { "form": "AAAB", "complexity": -0.1, "substitutions": ["halfTime", "crashOnOne"] },
+    "outro": { "form": "A", "last": "ending", "substitutions": ["crashOnOne"] }
+  },
+  "variations": {
+    "hiHat": ["xoxo|xoxo|xoxo|xoxo", "..x.|..x.|..x.|..x."],
+    "percussion": ["xoxo|xoxo|xoxo|xoxo"]
+  },
+  "phrases": [
+    {
+      "id": "shaker-only", "role": "groove", "complexity": 0.0, "intensity": 0.0,
+      "lanes": { "kick": "x...|....|x...|....", "stick": "....|o...|....|o...", "shaker": "o.o.|o.o.|o.o.|o.o." }
+    },
+    {
+      "id": "four", "role": "groove", "complexity": 0.0, "intensity": 0.3,
+      "lanes": { "kick": "x...|....|x...|....", "snare": "....|x...|....|x...", "hat": "x.o.|x.o.|x.o.|x.o." }
+    },
+    {
+      "id": "four-tamb", "role": "groove", "complexity": 0.25, "intensity": 0.4,
+      "lanes": { "kick": "x...|...x|x...|....", "snare": "....|x...|....|x...", "hat": "x.o.|x.o.|x.o.|x.o.", "tamb": "....|x...|....|x..." }
+    },
+    {
+      "id": "shaker-push", "role": "groove", "complexity": 0.5, "intensity": 0.1,
+      "lanes": { "kick": "x...|...x|x...|....", "stick": "....|o...|....|o...", "hat": "o.o.|o.o.|o.o.|o.o.", "shaker": "o.o.|o.o.|o.o.|o.o." }
+    },
+    {
+      "id": "clap-push", "role": "groove", "complexity": 0.5, "intensity": 0.5,
+      "lanes": { "kick": "x...|...x|x.x.|....", "snare": "....|x...|....|x...", "clap": "....|x...|....|x...", "hat": "x.o.|x.o.|x.o.|x.o.", "shaker": "xoxo|xoxo|xoxo|xoxo" }
+    },
+    {
+      "id": "anthem", "role": "groove", "complexity": 0.5, "intensity": 0.95,
+      "lanes": { "kick": "x...|x...|x...|x...", "snare": "....|X...|....|X...", "clap": "....|x...|....|x...", "open": "..x.|..x.|..x.|..x.", "crash": "X...|....|....|...." }
+    },
+    {
+      "id": "syncopated", "role": "groove", "complexity": 0.75, "intensity": 0.6,
+      "lanes": { "kick": "x..x|...x|x.x.|....", "snare": "....|x..g|....|x...", "hat": "x.xo|x.xo|x.xo|x.xo", "shaker": "xoxo|xoxo|xoxo|xoxo" }
+    },
+    {
+      "id": "syncopated-soft", "role": "groove", "complexity": 0.75, "intensity": 0.15,
+      "lanes": { "kick": "x..x|...x|x...|....", "stick": "....|o..g|....|o...", "shaker": "ogog|ogog|ogog|ogog", "hat": "o...|o...|o...|o..." }
+    },
+    {
+      "id": "busy", "role": "groove", "complexity": 1.0, "intensity": 0.75,
+      "lanes": { "kick": "x..x|..xx|x.x.|.x..", "snare": "....|x..g|.g..|x.gg", "hat": "xxxx|xxxx|xxxx|xxxx", "tamb": "..x.|..x.|..x.|..x." }
+    },
+    {
+      "id": "pickup", "role": "pickup", "complexity": 0.3, "intensity": 0.5,
+      "lanes": { "kick": "x...|....|x...|....", "snare": "....|....|....|x.xx", "hat": "x.o.|x.o.|x.o.|....", "clap": "....|....|....|...x" }
+    },
+    {
+      "id": "last-hit", "role": "ending", "complexity": 0.5, "intensity": 0.5,
+      "lanes": { "kick": "X...|....|....|....", "clap": "X...|....|....|....", "crash": "X...|....|....|...." }
+    },
+    {
+      "id": "fill-claps", "role": "fill", "complexity": 0.2, "intensity": 0.4, "from": 12,
+      "lanes": { "kick": "....|....|....|x...", "snare": "....|....|....|x.xx", "clap": "....|....|....|..xX" }
+    },
+    {
+      "id": "fill-snare-build", "role": "fill", "complexity": 0.45, "intensity": 0.5, "from": 8,
+      "lanes": { "kick": "....|....|x...|x...", "snare": "....|....|x.x.|xxxX" }
+    },
+    {
+      "id": "fill-toms", "role": "fill", "complexity": 0.75, "intensity": 0.7, "from": 8,
+      "lanes": { "kick": "....|....|x...|x...", "snare": "....|....|xgxg|....", "tom1": "....|....|....|xx..", "floor": "....|....|....|..xX" }
+    },
+    {
+      "id": "fill-bar", "role": "fill", "complexity": 0.9, "intensity": 0.85, "from": 0,
+      "lanes": { "kick": "x...|x...|x...|x...", "snare": "x.x.|x.x.|xxxx|....", "tom1": "....|....|....|xx..", "tom2": "....|....|....|..x.", "floor": "....|....|....|...X" }
+    }
+  ]
+}

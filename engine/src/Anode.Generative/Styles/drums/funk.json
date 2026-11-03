@@ -1,0 +1,96 @@
+// Funk drums written for Anode: sixteenth-note hi-hats, ghost notes around the backbeat, a kick that dances off the
+// one, a touch of swing on the sixteenths.
+{
+  "format": 1,
+  "id": "drums-funk",
+  "name": "Funk, Sixteenth Pocket",
+  "player": "drummer",
+  "genre": "Funk",
+  "description": "A sixteenth-note funk pocket: ghost notes on the snare, a syncopated kick, cowbell at the top of the pad and slightly swung sixteenths.",
+  "kitPatchId": "kit_drummer_acoustic",
+  "humanise": { "timingTicks": 8, "velocity": 8 },
+  "timekeeper": "ride",
+  "defaults": { "complexity": 0.55, "intensity": 0.55, "fillAmount": 0.35, "fillAtSectionEnds": true, "swing": 0.15, "feel": 0 },
+  "presets": [
+    { "id": "pocket", "name": "Pocket", "parameters": {} },
+    { "id": "greasy", "name": "Greasy", "parameters": { "complexity": 0.8, "intensity": 0.65, "swing": 0.3, "feel": -0.3 } },
+    { "id": "tight", "name": "Tight", "parameters": { "complexity": 0.45, "intensity": 0.5, "swing": 0, "fillAmount": 0.2 } }
+  ],
+  "sections": {
+    "intro": { "complexity": 0.35, "intensity": 0.4 },
+    "verse": { "complexity": 0.55, "intensity": 0.5 },
+    "chorus": { "complexity": 0.7, "intensity": 0.7 },
+    "bridge": { "complexity": 0.5, "intensity": 0.55 },
+    "outro": { "complexity": 0.5, "intensity": 0.6 }
+  },
+  "grammar": {
+    "intro": { "form": "A", "complexity": -0.1, "intensity": -0.1, "first": "intro" },
+    "verse": { "form": "AAAB", "substitutions": ["ghostNotes", "openHat"] },
+    "chorus": { "form": "ABAB", "complexity": 0.1, "intensity": 0.15, "substitutions": ["crashOnOne", "openHat", "ghostNotes"] },
+    "bridge": { "form": "AB", "substitutions": ["crashOnOne", "rideForHat"] },
+    "outro": { "form": "AAAB", "last": "ending", "substitutions": ["crashOnOne", "ghostNotes"] }
+  },
+  "variations": {
+    "hiHat": ["x.x.|x.x.|x.x.|x.x.", "xoxo|xoxo|xoxo|xoxo"],
+    "kick": ["x.x.|..x.|.x..|x...", "x...|..x.|..x.|...."],
+    "percussion": ["x..x|..x.|..x.|x...", "x.x.|x.x.|x.x.|x.x."]
+  },
+  "phrases": [
+    {
+      "id": "pocket-soft", "role": "groove", "complexity": 0.25, "intensity": 0.05,
+      "lanes": { "kick": "x...|..x.|..x.|....", "stick": "....|o..g|....|o...", "hat": "o.o.|o.o.|o.o.|o.o." }
+    },
+    {
+      "id": "pocket-simple", "role": "groove", "complexity": 0.0, "intensity": 0.3,
+      "lanes": { "kick": "x...|..x.|..x.|....", "snare": "....|x...|....|x...", "hat": "x.o.|x.o.|x.o.|x.o." }
+    },
+    {
+      "id": "pocket", "role": "groove", "complexity": 0.25, "intensity": 0.45,
+      "lanes": { "kick": "x.x.|..x.|..x.|....", "snare": "....|x..g|.g..|x...", "hat": "xoxo|xoxo|xoxo|xoxo" }
+    },
+    {
+      "id": "ghosts", "role": "groove", "complexity": 0.5, "intensity": 0.55,
+      "lanes": { "kick": "x.x.|..x.|.x.x|....", "snare": "..g.|x..g|.g.g|x..g", "hat": "xoxo|xoxo|xoxo|xoxo" }
+    },
+    {
+      "id": "ghosts-soft", "role": "groove", "complexity": 0.75, "intensity": 0.1,
+      "lanes": { "kick": "x.x.|..x.|.x.x|....", "stick": "..g.|o..g|.g.g|o..g", "hat": "ogog|ogog|ogog|ogog" }
+    },
+    {
+      "id": "broken", "role": "groove", "complexity": 0.75, "intensity": 0.6,
+      "lanes": { "kick": "x.x.|..xx|..x.|.x..", "snare": "..g.|x.gg|.g.g|x.gg", "hat": "xoxo|Xoxo|xoxo|Xoxo" }
+    },
+    {
+      "id": "broken-loud", "role": "groove", "complexity": 0.6, "intensity": 0.95,
+      "lanes": { "kick": "x.x.|..xx|..x.|.x..", "snare": "....|X..g|.g..|X..g", "open": "..x.|..x.|..x.|..x.", "hat": "x...|x...|x...|x...", "cowbell": "x...|x...|x...|x..." }
+    },
+    {
+      "id": "busy", "role": "groove", "complexity": 1.0, "intensity": 0.75,
+      "lanes": { "kick": "x.xx|..x.|.xx.|.x.x", "snare": "gg.g|x.gg|.ggg|x.gg", "hat": "xoxo|xoxo|xoxo|xoxo", "cowbell": "x..x|..x.|..x.|x..." }
+    },
+    {
+      "id": "stick-intro", "role": "intro", "complexity": 0.3, "intensity": 0.4,
+      "lanes": { "kick": "x...|....|..x.|....", "hat": "xoxo|xoxo|xoxo|xoxo" }
+    },
+    {
+      "id": "stab", "role": "ending", "complexity": 0.5, "intensity": 0.5,
+      "lanes": { "kick": "X...|....|....|....", "snare": "X...|....|....|....", "crash": "X...|....|....|...." }
+    },
+    {
+      "id": "fill-snare", "role": "fill", "complexity": 0.3, "intensity": 0.45, "from": 12,
+      "lanes": { "kick": "....|....|....|x...", "snare": "....|....|....|xgxX" }
+    },
+    {
+      "id": "fill-ghost-run", "role": "fill", "complexity": 0.55, "intensity": 0.55, "from": 8,
+      "lanes": { "kick": "....|....|x...|x...", "snare": "....|....|xgxg|xgxX" }
+    },
+    {
+      "id": "fill-toms", "role": "fill", "complexity": 0.8, "intensity": 0.7, "from": 8,
+      "lanes": { "kick": "....|....|x..x|....", "snare": "....|....|Xg.g|....", "tom1": "....|....|..x.|x...", "tom2": "....|....|....|.x..", "floor": "....|....|....|..xX" }
+    },
+    {
+      "id": "fill-long", "role": "fill", "complexity": 0.9, "intensity": 0.85, "from": 4,
+      "lanes": { "kick": "....|x...|x...|x...", "snare": "....|xgxg|Xgxg|....", "tom1": "....|....|....|xx..", "floor": "....|....|....|..xX" }
+    }
+  ]
+}

@@ -1,0 +1,47 @@
+// Funk bass written for Anode: syncopated sixteenths around the one, octaves and sevenths, dead notes between them.
+{
+  "format": 1,
+  "id": "bass-funk",
+  "name": "Funk, Syncopated Sixteenths",
+  "player": "bass",
+  "genre": "Funk",
+  "description": "A funk bass on the one: syncopated sixteenths, octave pops and sevenths, dead notes in the gaps and slides into the changes.",
+  "humanise": { "timingTicks": 6, "velocity": 8 },
+  "defaults": {
+    "complexity": 0.55, "intensity": 0.55, "fillAmount": 0.3, "fillAtSectionEnds": true, "swing": 0.15, "feel": 0, "followChords": true,
+    "bass": { "lowNote": 28, "highNote": 60, "slides": false, "deadNotes": true }
+  },
+  "presets": [
+    { "id": "on-the-one", "name": "On the One", "parameters": {} },
+    { "id": "slap", "name": "Slap", "parameters": { "complexity": 0.85, "intensity": 0.8, "bass": { "slides": true } } },
+    { "id": "clean", "name": "Clean", "parameters": { "complexity": 0.4, "intensity": 0.45, "swing": 0, "bass": { "deadNotes": false } } }
+  ],
+  "sections": {
+    "intro": { "complexity": 0.35, "intensity": 0.4 },
+    "verse": { "complexity": 0.55, "intensity": 0.5 },
+    "chorus": { "complexity": 0.7, "intensity": 0.7 },
+    "bridge": { "complexity": 0.45, "intensity": 0.55 },
+    "outro": { "complexity": 0.5, "intensity": 0.55 }
+  },
+  "grammar": {
+    "intro": { "form": "A", "complexity": -0.15, "intensity": -0.1 },
+    "verse": { "form": "AAAB", "substitutions": ["approachNotes"] },
+    "chorus": { "form": "ABAB", "complexity": 0.1, "intensity": 0.15, "substitutions": ["approachNotes", "octaveDoubling"] },
+    "bridge": { "form": "AB", "substitutions": ["approachNotes"] },
+    "outro": { "form": "AAAB", "last": "ending" }
+  },
+  "phrases": [
+    { "id": "one", "role": "groove", "complexity": 0.0, "intensity": 0.3, "lanes": { "bass": "R! - . . | . . R . | . . R - | . . . ." } },
+    { "id": "one-soft", "role": "groove", "complexity": 0.25, "intensity": 0.1, "lanes": { "bass": "R? - . . | . . . . | R? . . . | 5? - . ." } },
+    { "id": "octave-pop", "role": "groove", "complexity": 0.25, "intensity": 0.45, "lanes": { "bass": "R! . . R | . . X . | R . . 8 | . . 5 ." } },
+    { "id": "sevenths", "role": "groove", "complexity": 0.5, "intensity": 0.55, "lanes": { "bass": "R! . X R | . . 8 . | X . R . | 7 . 5 ." } },
+    { "id": "sevenths-soft", "role": "groove", "complexity": 0.75, "intensity": 0.1, "lanes": { "bass": "R? . X R? | . . 8? . | X . R? . | 7? . 5? ." } },
+    { "id": "syncopated", "role": "groove", "complexity": 0.75, "intensity": 0.65, "lanes": { "bass": "R! X . R | . 8 X R | . R 7 . | 5 X 8 ." } },
+    { "id": "busy", "role": "groove", "complexity": 1.0, "intensity": 0.8, "lanes": { "bass": "R! X R 8 | . R X 8 | 7 . 5 X | R 8 A ." } },
+    { "id": "busy-loud", "role": "groove", "complexity": 0.9, "intensity": 1.0, "lanes": { "bass": "R! X R 8! | . R X 8! | 7 . 5 X | R 8! A ." } },
+    { "id": "stab", "role": "ending", "complexity": 0.5, "intensity": 0.5, "lanes": { "bass": "R! - . . | . . . . | . . . . | . . . ." } },
+    { "id": "run-half", "role": "fill", "complexity": 0.5, "intensity": 0.55, "from": 8, "lanes": { "bass": ". . . . | . . . . | R 8 7 5 | 4 3 2 A" } },
+    { "id": "run-beat", "role": "fill", "complexity": 0.3, "intensity": 0.5, "from": 12, "lanes": { "bass": ". . . . | . . . . | . . . . | 8 7 5 A" } },
+    { "id": "run-long", "role": "fill", "complexity": 0.85, "intensity": 0.7, "from": 4, "lanes": { "bass": ". . . . | R . 8 . | 7 . 5 . | 3 . A ." } }
+  ]
+}

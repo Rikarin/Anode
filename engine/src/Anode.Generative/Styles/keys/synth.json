@@ -1,0 +1,53 @@
+// A Synth Player style written for Anode: a held pad at the bottom of the pad, pulsing chords and sixteenth-note
+// arpeggios higher up, the left hand pulsing the bass.
+{
+  "format": 1,
+  "id": "keys-synth-arp",
+  "name": "Synth, Pulsing Arpeggio",
+  "player": "keyboard",
+  "genre": "Electronic",
+  "description": "A Synth Player: held pads when calm, offbeat pulses and sixteenth-note arpeggios as complexity rises, a pulsing bass in the left hand.",
+  "synthPlayer": true,
+  "humanise": { "timingTicks": 0, "velocity": 2 },
+  "defaults": {
+    "complexity": 0.5, "intensity": 0.5, "fillAmount": 0.2, "fillAtSectionEnds": true, "swing": 0, "feel": 0, "followChords": true,
+    "keys": { "voicing": "close", "lowNote": 55, "highNote": 84, "leftHand": "off" }
+  },
+  "rhythms": [
+    { "id": "pulse", "name": "Pulse", "rh": "C . C . | C . C . | C . C . | C . C ." },
+    { "id": "offbeat", "name": "Offbeat", "rh": ". . C . | . . C . | . . C . | . . C ." },
+    { "id": "arp-up", "name": "Arpeggio Up", "rh": "1 2 3 4 | 1 2 3 4 | 1 2 3 4 | 1 2 3 4" },
+    { "id": "gated", "name": "Gated", "rh": "C - . C | - . C - | . C - . | C . C .", "lh": "R . R . | R . R . | R . R . | R . R ." }
+  ],
+  "presets": [
+    { "id": "arpeggio", "name": "Arpeggio", "parameters": {} },
+    { "id": "pad", "name": "Pad", "parameters": { "complexity": 0.05, "intensity": 0.35, "keys": { "voicing": "spread" } } },
+    { "id": "pulse-bass", "name": "Pulse and Bass", "parameters": { "complexity": 0.4, "intensity": 0.6, "keys": { "rhythmId": "pulse", "leftHand": "root" } } }
+  ],
+  "sections": {
+    "intro": { "complexity": 0.2, "intensity": 0.3 },
+    "verse": { "complexity": 0.45, "intensity": 0.45 },
+    "chorus": { "complexity": 0.7, "intensity": 0.75 },
+    "bridge": { "complexity": 0.15, "intensity": 0.35 },
+    "outro": { "complexity": 0.35, "intensity": 0.45 }
+  },
+  "grammar": {
+    "intro": { "form": "A", "complexity": -0.2, "intensity": -0.2 },
+    "verse": { "form": "AAAB" },
+    "chorus": { "form": "AB", "complexity": 0.1, "intensity": 0.2, "substitutions": ["octaveDoubling"] },
+    "bridge": { "form": "A", "complexity": -0.2 },
+    "outro": { "form": "AAAB", "last": "ending" }
+  },
+  "phrases": [
+    { "id": "pad", "role": "groove", "complexity": 0.0, "intensity": 0.3, "lanes": { "rh": "C - - - | - - - - | - - - - | - - - -", "lh": "R - - - | - - - - | - - - - | - - - -" } },
+    { "id": "pad-halves", "role": "groove", "complexity": 0.25, "intensity": 0.4, "lanes": { "rh": "C - - - | - - - - | C - - - | - - - -", "lh": "R - - - | - - - - | R - - - | - - - -" } },
+    { "id": "offbeat", "role": "groove", "complexity": 0.5, "intensity": 0.5, "lanes": { "rh": ". . C . | . . C . | . . C . | . . C .", "lh": "R . R . | R . R . | R . R . | R . R ." } },
+    { "id": "offbeat-soft", "role": "groove", "complexity": 0.5, "intensity": 0.05, "lanes": { "rh": ". . c . | . . c . | . . c . | . . c .", "lh": "R? - - - | - - - - | - - - - | - - - -" } },
+    { "id": "arp-eighths", "role": "groove", "complexity": 0.75, "intensity": 0.6, "lanes": { "rh": "1 . 2 . | 3 . 4 . | 1 . 2 . | 3 . 4 .", "lh": "R . R . | R . R . | R . R . | R . R ." } },
+    { "id": "arp-sixteenths", "role": "groove", "complexity": 1.0, "intensity": 0.75, "lanes": { "rh": "1 2 3 4 | 1 2 3 4 | 2 3 4 3 | 1 2 3 4", "lh": "R . R R | . R . R | R . R R | . R . R" } },
+    { "id": "arp-loud", "role": "groove", "complexity": 0.9, "intensity": 1.0, "lanes": { "rh": "1! 2 3 4 | 1! 2 3 4 | 1! 2 3 4 | 1! 2 3 4", "lh": "R! . R . | R! . R . | R! . R . | R! . R ." } },
+    { "id": "release", "role": "ending", "complexity": 0.5, "intensity": 0.5, "lanes": { "rh": "C - - - | - - - - | - - - - | - - - -", "lh": "R - - - | - - - - | - - - - | - - - -" } },
+    { "id": "riser", "role": "fill", "complexity": 0.4, "intensity": 0.5, "from": 8, "lanes": { "rh": ". . . . | . . . . | 1 2 3 4 | 1 2 3 4", "lh": ". . . . | . . . . | R . R . | R R R R" } },
+    { "id": "gate", "role": "fill", "complexity": 0.8, "intensity": 0.7, "from": 12, "lanes": { "rh": ". . . . | . . . . | . . . . | C C C C", "lh": ". . . . | . . . . | . . . . | R R R R" } }
+  ]
+}

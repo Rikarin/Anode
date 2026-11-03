@@ -1,0 +1,117 @@
+// Rock drums written for Anode: straight eighths on the hi-hat, kick and snare on the beats, toms and snare in the fills.
+// Lanes are one character per sixteenth (X accent, x normal, o soft, g ghost: kept by complexity, . rest); | marks beats.
+{
+  "format": 1,
+  "id": "drums-rock",
+  "name": "Rock, Straight Eights",
+  "player": "drummer",
+  "genre": "Rock",
+  "description": "A straight rock beat: eighth-note hi-hat, a solid backbeat, the ride in loud choruses and tom fills into each section.",
+  "kitPatchId": "kit_drummer_acoustic",
+  "humanise": { "timingTicks": 10, "velocity": 6 },
+  "timekeeper": "ride",
+  "defaults": { "complexity": 0.45, "intensity": 0.5, "fillAmount": 0.4, "fillAtSectionEnds": true, "swing": 0, "feel": 0 },
+  "presets": [
+    { "id": "straight", "name": "Straight", "parameters": {} },
+    { "id": "driving", "name": "Driving", "parameters": { "complexity": 0.7, "intensity": 0.8, "fillAmount": 0.6, "feel": 0.2 } },
+    { "id": "laid-back", "name": "Laid Back", "parameters": { "complexity": 0.3, "intensity": 0.35, "fillAmount": 0.25, "feel": -0.4 } },
+    { "id": "sparse", "name": "Sparse", "parameters": { "complexity": 0.1, "intensity": 0.4, "fillAmount": 0.1, "pieces": { "toms": { "on": false } } } }
+  ],
+  "sections": {
+    "intro": { "complexity": 0.3, "intensity": 0.35 },
+    "verse": { "complexity": 0.45, "intensity": 0.45 },
+    "chorus": { "complexity": 0.6, "intensity": 0.7 },
+    "bridge": { "complexity": 0.4, "intensity": 0.5 },
+    "outro": { "complexity": 0.4, "intensity": 0.55 }
+  },
+  "grammar": {
+    "intro": { "form": "A", "complexity": -0.15, "intensity": -0.15, "first": "intro", "last": "pickup" },
+    "verse": { "form": "AAAB", "substitutions": ["openHat", "ghostNotes"] },
+    "chorus": { "form": "ABAB", "complexity": 0.1, "intensity": 0.2, "substitutions": ["crashOnOne", "rideForHat", "openHat"] },
+    "bridge": { "form": "AB", "intensity": -0.05, "substitutions": ["halfTime", "crashOnOne"] },
+    "outro": { "form": "AAAB", "intensity": -0.05, "last": "ending", "substitutions": ["crashOnOne"] }
+  },
+  "variations": {
+    "hiHat": ["xoxo|xoxo|xoxo|xoxo", "x...|x...|x...|x...", "..x.|..x.|..x.|..x."],
+    "kick": ["x...|x...|x...|x...", "x...|....|x.x.|...."],
+    "snare": ["....|x...|....|x..x", "....|x..x|....|x..."]
+  },
+  "phrases": [
+    {
+      "id": "quiet-quarters", "role": "groove", "complexity": 0.0, "intensity": 0.0,
+      "lanes": { "kick": "x...|....|x...|....", "stick": "....|o...|....|o...", "hat": "o.o.|o.o.|o.o.|o.o." }
+    },
+    {
+      "id": "basic", "role": "groove", "complexity": 0.0, "intensity": 0.3,
+      "lanes": { "kick": "x...|....|x...|....", "snare": "....|x...|....|x...", "hat": "x.o.|x.o.|x.o.|x.o." }
+    },
+    {
+      "id": "basic-push", "role": "groove", "complexity": 0.25, "intensity": 0.4,
+      "lanes": { "kick": "x...|....|x.x.|....", "snare": "....|x...|....|x...", "hat": "x.o.|x.o.|x.o.|x.o." }
+    },
+    {
+      "id": "ride-push", "role": "groove", "complexity": 0.25, "intensity": 0.9,
+      "lanes": { "kick": "x...|....|x.x.|....", "snare": "....|X...|....|X...", "ride": "x.x.|x.x.|x.x.|x.x.", "crash": "X...|....|....|...." }
+    },
+    {
+      "id": "quiet-syncopated", "role": "groove", "complexity": 0.5, "intensity": 0.1,
+      "lanes": { "kick": "x...|..x.|x...|....", "stick": "....|o..g|....|o...", "hat": "o.o.|o.o.|o.o.|o.o." }
+    },
+    {
+      "id": "syncopated", "role": "groove", "complexity": 0.5, "intensity": 0.5,
+      "lanes": { "kick": "x...|..x.|x.x.|....", "snare": "....|X..g|....|X...", "hat": "x.o.|x.o.|x.o.|x.o." }
+    },
+    {
+      "id": "syncopated-ride", "role": "groove", "complexity": 0.5, "intensity": 0.9,
+      "lanes": { "kick": "x...|..x.|x.x.|....", "snare": "....|X..g|....|X...", "ride": "x.x.|x.x.|x.x.|x.x.", "bell": "....|....|....|..x." }
+    },
+    {
+      "id": "sixteenths", "role": "groove", "complexity": 0.75, "intensity": 0.6,
+      "lanes": { "kick": "x...|..x.|x.x.|..x.", "snare": "....|X..g|.g..|X..g", "hat": "xoxo|xoxo|xoxo|xoxo" }
+    },
+    {
+      "id": "sixteenths-quiet", "role": "groove", "complexity": 0.75, "intensity": 0.15,
+      "lanes": { "kick": "x...|..x.|x.x.|....", "stick": "....|o..g|.g..|o..g", "hat": "ogog|ogog|ogog|ogog" }
+    },
+    {
+      "id": "busy", "role": "groove", "complexity": 1.0, "intensity": 0.7,
+      "lanes": { "kick": "x..x|..x.|x.x.|.x..", "snare": "..g.|X..g|.g.g|X..g", "hat": "xoxo|xoxo|xoxo|xoxo" }
+    },
+    {
+      "id": "busy-loud", "role": "groove", "complexity": 1.0, "intensity": 1.0,
+      "lanes": { "kick": "x.x.|..x.|x.x.|.x..", "snare": "....|X..g|.g.g|X..g", "ride": "xxxx|xxxx|xxxx|xxxx", "bell": "x...|....|x...|...." }
+    },
+    {
+      "id": "count-in", "role": "intro", "complexity": 0.3, "intensity": 0.4,
+      "lanes": { "kick": "x...|....|x...|....", "hat": "x.x.|x.x.|x.x.|x.x." }
+    },
+    {
+      "id": "pickup", "role": "pickup", "complexity": 0.3, "intensity": 0.5,
+      "lanes": { "kick": "x...|....|x...|....", "snare": "....|x...|....|xxXX", "hat": "x.o.|x.o.|x.o.|...." }
+    },
+    {
+      "id": "last-hit", "role": "ending", "complexity": 0.5, "intensity": 0.5,
+      "lanes": { "kick": "X...|....|....|....", "snare": "X...|....|....|....", "crash": "X...|....|....|...." }
+    },
+    {
+      "id": "fill-beat", "role": "fill", "complexity": 0.2, "intensity": 0.4, "from": 12,
+      "lanes": { "kick": "....|....|....|x...", "snare": "....|....|....|xxxX" }
+    },
+    {
+      "id": "fill-half", "role": "fill", "complexity": 0.4, "intensity": 0.5, "from": 8,
+      "lanes": { "kick": "....|....|x...|x...", "snare": "....|....|xoxo|....", "tom1": "....|....|....|xx..", "tom3": "....|....|....|..xx" }
+    },
+    {
+      "id": "fill-half-toms", "role": "fill", "complexity": 0.7, "intensity": 0.7, "from": 8,
+      "lanes": { "kick": "....|....|x...|....", "snare": "....|....|Xgxg|X...", "tom1": "....|....|....|.x..", "tom2": "....|....|....|..x.", "floor": "....|....|....|...X" }
+    },
+    {
+      "id": "fill-three-beats", "role": "fill", "complexity": 0.9, "intensity": 0.9, "from": 4,
+      "lanes": { "kick": "....|x...|x...|x...", "snare": "....|XgXg|xxxx|....", "tom1": "....|....|....|xx..", "tom2": "....|....|....|..x.", "floor": "....|....|....|...X" }
+    },
+    {
+      "id": "fill-bar", "role": "fill", "complexity": 0.6, "intensity": 0.7, "from": 0,
+      "lanes": { "kick": "x...|x...|x...|x...", "snare": "x.x.|xxxx|....|....", "tom1": "....|....|xxxx|....", "tom3": "....|....|....|xx..", "floor": "....|....|....|..xx" }
+    }
+  ]
+}

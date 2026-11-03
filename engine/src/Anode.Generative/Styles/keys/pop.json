@@ -1,0 +1,56 @@
+// Pop piano written for Anode. Right hand (rh), a token per sixteenth: C the voicing (c softer), T its top voice, U all
+// but its bottom, 1-4 one voice from the bottom; left hand (lh): R the bass, 5 the fifth, 8 the root's octave;
+// ! accent, ? soft; - holds, . rests; | marks beats.
+{
+  "format": 1,
+  "id": "keys-pop",
+  "name": "Pop, Piano Eighths",
+  "player": "keyboard",
+  "genre": "Pop",
+  "description": "A pop piano: held chords at the bottom of the pad, pulsing and syncopated voicings higher up, the left hand on the roots.",
+  "humanise": { "timingTicks": 6, "velocity": 6 },
+  "defaults": {
+    "complexity": 0.45, "intensity": 0.5, "fillAmount": 0.25, "fillAtSectionEnds": true, "swing": 0, "feel": 0, "followChords": true,
+    "keys": { "voicing": "close", "lowNote": 52, "highNote": 79, "leftHand": "root" }
+  },
+  "rhythms": [
+    { "id": "quarters", "name": "Quarters", "rh": "C - - - | C - - - | C - - - | C - - -", "lh": "R - - - | - - - - | R - - - | - - - -" },
+    { "id": "eighths", "name": "Eighths", "rh": "C - c - | C - c - | C - c - | C - c -" },
+    { "id": "syncopated", "name": "Syncopated", "rh": "C - - C | - - C - | - - C - | C - - -", "lh": "R - - - | - - - - | 5 - - - | - - - -" },
+    { "id": "offbeats", "name": "Offbeats", "rh": ". . C - | . . C - | . . C - | . . C -" }
+  ],
+  "presets": [
+    { "id": "ballad", "name": "Ballad", "parameters": { "complexity": 0.2, "intensity": 0.35, "keys": { "voicing": "spread", "leftHand": "octaves" } } },
+    { "id": "eighths", "name": "Eighths", "parameters": { "keys": { "rhythmId": "eighths" } } },
+    { "id": "driving", "name": "Driving", "parameters": { "complexity": 0.75, "intensity": 0.8, "keys": { "leftHand": "rootFifth" } } },
+    { "id": "shells", "name": "Shells", "parameters": { "complexity": 0.5, "intensity": 0.45, "keys": { "voicing": "shell", "leftHand": "off" } } }
+  ],
+  "sections": {
+    "intro": { "complexity": 0.2, "intensity": 0.35 },
+    "verse": { "complexity": 0.4, "intensity": 0.45 },
+    "chorus": { "complexity": 0.6, "intensity": 0.7 },
+    "bridge": { "complexity": 0.35, "intensity": 0.45 },
+    "outro": { "complexity": 0.3, "intensity": 0.5 }
+  },
+  "grammar": {
+    "intro": { "form": "A", "complexity": -0.15, "intensity": -0.1 },
+    "verse": { "form": "AAAB", "substitutions": ["passingNotes"] },
+    "chorus": { "form": "AB", "complexity": 0.1, "intensity": 0.2, "substitutions": ["octaveDoubling", "passingNotes"] },
+    "bridge": { "form": "AB", "substitutions": ["passingNotes"] },
+    "outro": { "form": "AAAB", "last": "ending" }
+  },
+  "phrases": [
+    { "id": "held", "role": "groove", "complexity": 0.0, "intensity": 0.3, "lanes": { "rh": "C - - - | - - - - | - - - - | - - - -", "lh": "R - - - | - - - - | - - - - | - - - -" } },
+    { "id": "held-soft", "role": "groove", "complexity": 0.25, "intensity": 0.05, "lanes": { "rh": "c - - - | - - - - | - - - - | - - - -", "lh": "R? - - - | - - - - | - - - - | - - - -" } },
+    { "id": "halves", "role": "groove", "complexity": 0.25, "intensity": 0.4, "lanes": { "rh": "C - - - | - - - - | C - - - | - - - -", "lh": "R - - - | - - - - | 5 - - - | - - - -" } },
+    { "id": "pulse", "role": "groove", "complexity": 0.5, "intensity": 0.5, "lanes": { "rh": "C - - - | c - - - | C - - - | c - - -", "lh": "R - - - | - - - - | 5 - - - | - - - -" } },
+    { "id": "pulse-soft", "role": "groove", "complexity": 0.6, "intensity": 0.1, "lanes": { "rh": "c - - - | . . c - | c - - - | . . c -", "lh": "R? - - - | - - - - | - - - - | - - - -" } },
+    { "id": "syncopated", "role": "groove", "complexity": 0.75, "intensity": 0.6, "lanes": { "rh": "C - - c | - - C - | - - c - | C - - -", "lh": "R - - - | - - 5 - | R - - - | - - - -" } },
+    { "id": "syncopated-loud", "role": "groove", "complexity": 0.7, "intensity": 0.95, "lanes": { "rh": "C! - - C | - - C! - | - - C - | C! - - -", "lh": "R! - - - | - - 5 - | R! - - - | 8 - - -" } },
+    { "id": "busy", "role": "groove", "complexity": 1.0, "intensity": 0.75, "lanes": { "rh": "C - c - | U - c - | C - c - | T - c -", "lh": "R - - - | 5 - - - | 8 - - - | 5 - - -" } },
+    { "id": "last-chord", "role": "ending", "complexity": 0.5, "intensity": 0.5, "lanes": { "rh": "C! - - - | - - - - | - - - - | - - - -", "lh": "R - - - | - - - - | - - - - | - - - -" } },
+    { "id": "lift", "role": "fill", "complexity": 0.3, "intensity": 0.5, "from": 12, "lanes": { "rh": ". . . . | . . . . | . . . . | C - c c", "lh": ". . . . | . . . . | . . . . | R - - -" } },
+    { "id": "climb", "role": "fill", "complexity": 0.6, "intensity": 0.6, "from": 8, "lanes": { "rh": ". . . . | . . . . | C - c - | U - T -", "lh": ". . . . | . . . . | R - - - | 5 - - -" } },
+    { "id": "stabs", "role": "fill", "complexity": 0.85, "intensity": 0.75, "lanes": { "rh": "C - . C | - . C - | . C - . | C! C! C! -", "lh": "R - - - | - - - - | R - - - | R R R -" } }
+  ]
+}
