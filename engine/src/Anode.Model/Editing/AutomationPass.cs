@@ -34,6 +34,7 @@ public sealed class AutomationPass(long number, long startTick) {
             or SetParameterCommand
             or SetSmartControlCommand { Name: null, Value: not null }
             or SetPannerCommand { Mode: null }
+            or SetMasteringCommand
         );
 
     /// <summary>Whether a track in <paramref name="mode" /> records control moves.</summary>

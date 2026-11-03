@@ -17,7 +17,7 @@ public static partial class Edits {
             .Select(id => TrackOf(state, id ?? string.Empty))
             .OrderBy(t => state.IndexOfTrack(t.Id))
             .ToArray();
-        if (members.Any(static t => t.Kind == TrackKind.Stack)) {
+        if (members.Any(static t => IsStackKind(t.Kind))) {
             throw new EditException("Stacks do not nest: a stack cannot go into a stack.");
         }
 
@@ -112,7 +112,7 @@ public static partial class Edits {
             return PadOwner(state, track.Id) is { } left ? [WithoutPad(state, left, track.Id), moved] : [moved];
         }
 
-        if (track.Kind == TrackKind.Stack) {
+        if (IsStackKind(track.Kind)) {
             throw new EditException("Stacks do not nest: a stack cannot go into a stack.");
         }
 

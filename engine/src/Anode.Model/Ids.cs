@@ -8,7 +8,7 @@ namespace Anode.Model;
 ///     <c>mrk</c>, <c>sec</c>, <c>alt</c>, and Phase 4's <c>ins</c>, <c>snd</c>, <c>aut</c>, <c>pat</c>, <c>job</c>, and
 ///     Phase 6's <c>ptn</c>, <c>row</c>, <c>scn</c>,
 ///     <c>cel</c>, and Phase 7's <c>grv</c>, <c>ars</c>, <c>lns</c>, and Phase 9's <c>sts</c>, <c>sym</c>, <c>lyr</c>,
-///     <c>chd</c>, <c>scs</c>), an
+///     <c>chd</c>, <c>scs</c>, and Phase 11's <c>crd</c>, <c>spr</c>, <c>env</c>, <c>eob</c>, <c>ecb</c>), an
 ///     underscore, a
 ///     suffix.
 /// </summary>
@@ -60,4 +60,18 @@ public static class IdPrefix {
     public const string Lyric = "lyr";
     public const string ChordSymbol = "chd";
     public const string ScoreSet = "scs";
+    public const string Chord = "crd";
+    public const string SessionPlayerRegion = "spr";
+    public const string EnvironmentLayer = "env";
+    public const string EnvironmentObject = "eob";
+    public const string EnvironmentCable = "ecb";
+
+    /// <summary>
+    ///     A Session Player seed drawn from a fresh id (<see cref="IIdSource.Next" />): random with the server's ids,
+    ///     deterministic with a test's; never negative.
+    /// </summary>
+    public static long Seed(IIdSource ids) {
+        var hash = SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(ids.Next("sed")));
+        return BitConverter.ToInt64(hash) & long.MaxValue;
+    }
 }

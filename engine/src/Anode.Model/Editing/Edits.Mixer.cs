@@ -363,7 +363,7 @@ public static partial class Edits {
 
     static List<DeltaOp> AssignVca(ProjectState state, AssignVcaCommand c) {
         var track = TrackOf(state, c.TrackId);
-        if (track.Kind is TrackKind.Vca or TrackKind.Stack or TrackKind.Midi) {
+        if (track.Kind is TrackKind.Vca or TrackKind.Stack or TrackKind.Drummer or TrackKind.Midi) {
             throw new EditException($"A {Kind(track.Kind)} track does not join a VCA.");
         }
 
@@ -412,7 +412,7 @@ public static partial class Edits {
 
     static List<DeltaOp> SetTrackGroups(ProjectState state, SetTrackGroupsCommand c) {
         var track = TrackOf(state, c.TrackId);
-        if (track.Kind == TrackKind.Stack) {
+        if (IsStackKind(track.Kind)) {
             throw new EditException("A stack joins no mixer group: its members do.");
         }
 
@@ -513,7 +513,7 @@ public static partial class Edits {
 
     static LaneRange RangeOf(ProjectState state, Track? track, string target, PluginCatalog plugins) {
         var kind = track?.Kind;
-        if (kind is TrackKind.Stack or TrackKind.Midi) {
+        if (kind is TrackKind.Stack or TrackKind.Drummer or TrackKind.Midi) {
             throw new EditException($"A {Kind(kind.Value)} track has no automation.");
         }
 
@@ -619,7 +619,7 @@ public static partial class Edits {
     static List<DeltaOp> ApplyPatch(ProjectState state, ApplyPatchCommand c, IIdSource ids, IPatchSource patches) {
         var track = MixTrackOf(state, c.TrackId, "patches");
         var patch = patches.Find(c.PatchId ?? string.Empty) ?? throw new EditException($"No patch '{c.PatchId}'.");
-        if (patch.Kind == TrackKind.Instrument && track.Kind != TrackKind.Instrument) {
+        if (IsInstrumentKind(patch.Kind) && !IsInstrumentKind(track.Kind)) {
             throw new EditException(
                 $"Patch '{patch.Name}' is an instrument patch; '{track.Name}' is not an instrument track."
             );
@@ -631,7 +631,7 @@ public static partial class Edits {
 
         var ops = new List<DeltaOp>();
         var instrument = track.Instrument;
-        if (track.Kind == TrackKind.Instrument && patch.Instrument is { } slot) {
+        if (IsInstrumentKind(track.Kind) && patch.Instrument is { } slot) {
             if (instrument?.PluginId != slot.PluginId) {
                 ops.AddRange(
                     LanesFor(state, track.Id, "instrument:").Select(static l => new AutomationLaneRemoved(l.Id))
@@ -685,7 +685,7 @@ public static partial class Edits {
     /// </summary>
     public static EditResult Freeze(ProjectState state, string trackId, string fileId) {
         var track = TrackOf(state, trackId);
-        if (track.Kind is not (TrackKind.Audio or TrackKind.Instrument)) {
+        if (track.Kind != TrackKind.Audio && !IsInstrumentKind(track.Kind)) {
             throw new EditException("Only audio and instrument tracks freeze.");
         }
 
@@ -724,12 +724,14 @@ public static partial class Edits {
 
     /// <summary>Whether a track of <paramref name="kind" /> has a full channel strip (inserts, sends, an output).</summary>
     public static bool HasAudioStrip(TrackKind kind) =>
-        kind is TrackKind.Audio or TrackKind.Instrument or TrackKind.Aux;
+        kind is TrackKind.Audio or TrackKind.Aux || IsInstrumentKind(kind);
 
     static string Kind(TrackKind kind) =>
         kind switch {
             TrackKind.Midi => "external MIDI",
             TrackKind.Vca => "VCA",
+            TrackKind.BassPlayer => "Bass Player",
+            TrackKind.KeyboardPlayer => "Keyboard Player",
             _ => kind.ToString().ToLowerInvariant()
         };
 

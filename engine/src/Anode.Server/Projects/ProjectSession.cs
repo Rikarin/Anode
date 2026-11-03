@@ -48,6 +48,15 @@ public sealed record OpenProjectView(
     /// <summary>Where an instrument's file is on disk: <c>instrument.file</c> is relative to the project inside it.</summary>
     public string? InstrumentFile(InstrumentSlot slot) =>
         slot.File is { } file ? Path.GetFullPath(Path.Combine(Folder, file)) : null;
+
+    /// <summary>
+    ///     Phase 11: the analysed Mastering Assistants' chains (designed once per analysis and character); null: none
+    ///     are sent.
+    /// </summary>
+    public MasteringChains? Mastering { get; init; }
+
+    /// <summary>An insert's Mastering Assistant chain, or null.</summary>
+    public EngineMasteringChain? ChainOf(Insert insert) => Mastering?.Of(insert);
 }
 
 /// <summary>A plugin's opaque state (<c>Plugin States/&lt;key&gt;.bin</c>) and the plugin it belongs to.</summary>
@@ -70,6 +79,8 @@ public sealed partial class ProjectSession(
     TransportClock clock,
     FileAnalyses analyses,
     IScoreNotation notation,
+    ISessionPlayerLibrary players,
+    MasteringChains mastering,
     TimeProvider time,
     ILogger<ProjectSession> logger
 ) {
@@ -483,7 +494,8 @@ public sealed partial class ProjectSession(
                         catalog.ForEdits,
                         patches,
                         analysis,
-                        notation
+                        notation,
+                        StylesFor(batch.Commands)
                     );
                 }
             } catch (EditException e) {
@@ -1388,13 +1400,36 @@ public sealed partial class ProjectSession(
     void Publish() {
         if (open is { } o) {
             o.Ids = o.Ids.With(o.State);
-            Volatile.Write(ref view, new(o.Session, o.Folder, o.State, o.Ids, o.Revision, o.States, o.Analyses));
+            Volatile.Write(
+                ref view,
+                new(o.Session, o.Folder, o.State, o.Ids, o.Revision, o.States, o.Analyses) { Mastering = mastering }
+            );
         } else {
             Volatile.Write(ref view, null);
         }
     }
 
     Open Required() => open ?? throw ProjectException.NoProject();
+
+    /// <summary>
+    ///     The Session Player styles a batch needs (Phase 11): the library's catalogue for the commands that pick styles
+    ///     and presets, else none (the library is not loaded for every edit).
+    /// </summary>
+    SessionPlayerCatalog? StylesFor(IReadOnlyList<EditCommand> commands) {
+        if (!commands.Any(static c => c is AddSessionPlayerTrackCommand
+                or AddSessionPlayerRegionCommand
+                or SetSessionPlayerRegionCommand
+            )) {
+            return null;
+        }
+
+        try {
+            return players.Catalog;
+        } catch (ProjectException) {
+            // No library: the commands refuse, naming the style they lack.
+            return Edits.NoStyles;
+        }
+    }
 
     static void CheckRevision(Open o, long? expected) {
         if (expected is { } e && e != o.Revision) {

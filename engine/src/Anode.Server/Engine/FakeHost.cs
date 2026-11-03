@@ -442,6 +442,7 @@ public sealed partial class FakeHost : IAsyncDisposable {
                 yield return new PongMessage(ping.Id);
                 break;
             case LoadModelMessage load:
+                LoadEnvironment(load);
                 yield return Load(load);
                 break;
             case SetStripMessage strip:
@@ -504,7 +505,8 @@ public sealed partial class FakeHost : IAsyncDisposable {
 
     /// <summary>The messages of the later phases (an error for one this host does not know): what they answer.</summary>
     IpcMessage[] HandleOther(IpcMessage message) {
-        var replies = HandlePhase7(message) ?? HandlePhase8(message) ?? HandlePhase10(message);
+        var replies = HandlePhase7(message)
+            ?? HandlePhase8(message) ?? HandlePhase10(message) ?? HandlePhase11(message);
         if (message is SetChannelMessage) {
             HandleMixer(message);
         } else if (replies is null && !HandleMixer(message) && !HandleLiveLoops(message)) {

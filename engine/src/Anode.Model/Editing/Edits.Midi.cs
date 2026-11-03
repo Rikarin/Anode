@@ -532,7 +532,7 @@ public static partial class Edits {
 
     static Track InstrumentTrackOf(ProjectState state, string id) {
         var track = TrackOf(state, id);
-        return track is { Kind: TrackKind.Instrument, Instrument: not null }
+        return IsInstrumentKind(track.Kind) && track.Instrument is not null
             ? track
             : throw new EditException($"Track '{id}' is not an instrument track.");
     }

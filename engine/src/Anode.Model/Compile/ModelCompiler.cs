@@ -38,6 +38,10 @@ public sealed record CompiledModel(
 ///     Incremental: a track is recompiled only when its regions (audio or MIDI), take folders, their files, the tempo
 ///     track or the sample rate changed since the previous call; otherwise the previous <see cref="TrackModel" />
 ///     instance is reused, so a caller finds the dirty tracks by reference.
+///     Phase 11 (docs/12-phase-11.md): Session Player regions play as MIDI regions of the notes the server generated
+///     for them (<c>sessionPlayers</c>, by region id; a Drummer's through its kit's pads, as a Drum Machine Designer's);
+///     regions that follow the chord track play as <see cref="PitchFollow" /> says, and recompile when the chord track
+///     or the key track changes.
 /// </summary>
 public sealed class ModelCompiler {
     readonly Dictionary<int, (TrackKey Key, TrackModel Model)> cache = [];
@@ -51,12 +55,16 @@ public sealed class ModelCompiler {
 
     /// <summary>
     ///     Compiles <paramref name="state" />; <paramref name="analyses" /> are the files' cached analyses by file id
-    ///     (Flex Pitch shapes pitch notes' drift and vibrato from their pitch curves).
+    ///     (Flex Pitch shapes pitch notes' drift and vibrato from their pitch curves), and
+    ///     <paramref name="sessionPlayers" /> the Session Player regions' generated notes by region id (relative to the
+    ///     region's start; a region without any plays nothing). The same note lists give the same models: the server
+    ///     caches them by their input's hash.
     /// </summary>
     public CompiledModel Compile(
         ProjectState state,
         EngineIds ids,
-        IReadOnlyDictionary<string, FileAnalysis>? analyses = null
+        IReadOnlyDictionary<string, FileAnalysis>? analyses = null,
+        IReadOnlyDictionary<string, IReadOnlyList<Note>>? sessionPlayers = null
     ) {
         var map = state.TempoMap;
         var source = new Source(
@@ -65,7 +73,8 @@ public sealed class ModelCompiler {
             map,
             analyses ?? new Dictionary<string, FileAnalysis>(StringComparer.Ordinal),
             state.Regions.Values.ToLookup(static r => r.TrackId, StringComparer.Ordinal),
-            state.MidiRegions.Values.ToLookup(static r => r.TrackId, StringComparer.Ordinal),
+            state.MidiRegions.Values.Concat(Played(state, sessionPlayers))
+                .ToLookup(static r => r.TrackId, StringComparer.Ordinal),
             state.TakeFolders.Values.ToLookup(static f => f.TrackId, StringComparer.Ordinal)
         ) { Patterns = state.PatternRegions.Values.ToLookup(static r => r.TrackId, StringComparer.Ordinal) };
         var models = new List<TrackModel>(state.Tracks.Count + 2);
@@ -121,6 +130,32 @@ public sealed class ModelCompiler {
         };
     }
 
+    /// <summary>
+    ///     The Session Player regions as the MIDI regions they play: their generated notes (none when there are none),
+    ///     their place, name and mute, following nothing (the generator follows the chord track itself).
+    /// </summary>
+    public static IEnumerable<MidiRegion> Played(
+        ProjectState state,
+        IReadOnlyDictionary<string, IReadOnlyList<Note>>? sessionPlayers
+    ) {
+        foreach (var region in state.SessionPlayerRegions.Values) {
+            yield return new(
+                region.Id,
+                region.TrackId,
+                region.Name,
+                region.StartTick,
+                region.LengthTicks,
+                ProjectDefaults.Playback,
+                sessionPlayers?.GetValueOrDefault(region.Id) ?? [],
+                [],
+                region.Muted,
+                ProjectDefaults.Notation,
+                PitchSourceMode.Off,
+                null
+            );
+        }
+    }
+
     /// <summary>The cells by engine track, reusing the previous array of a track whose cells are the same instances.</summary>
     Dictionary<int, CellModel[]> CellsByTrack(IReadOnlyList<CellModel> cells) {
         var now = new Dictionary<int, CellModel[]>();
@@ -174,6 +209,9 @@ public sealed class ModelCompiler {
 
         var patterns = dmd ? [] : Ordered(source.Patterns[track.Id]);
         var routed = Routed(source, track);
+        // Regions that follow the chord track recompile when it, or the key track, changes (Phase 11).
+        var follows = regions.Any(r => PitchFollow.Follows(r.PitchSource, state.ChordTrack))
+            || midi.Concat(routed?.Midi ?? []).Any(r => PitchFollow.Follows(r.PitchSource, state.ChordTrack));
         var key = new TrackKey(
             state.Settings.TempoEvents ?? [],
             state.Settings.Tempo,
@@ -195,13 +233,14 @@ public sealed class ModelCompiler {
                 routed?.Midi ?? [],
                 routed?.Patterns ?? [],
                 routed?.Note ?? -1,
-                patterns.Length + (routed?.Patterns.Length ?? 0) > 0 ? state.Settings.Keys ?? [] : []
-            )
+                patterns.Length + (routed?.Patterns.Length ?? 0) > 0 || follows ? state.Settings.Keys ?? [] : []
+            ),
+            Chords = follows ? state.ChordTrack : null
         };
         if (!cache.TryGetValue(engineId, out var cached) || !cached.Key.Equals(key)) {
             var (playlist, warp, pitch) = Playlist(state, map, ids, regions, folders, track, source.Analyses);
             var events = Merge(
-                MidiEvents(state, map, engineId, midi),
+                MidiEvents(state, map, engineId, [..midi.Select(r => PitchFollow.Followed(state, r))]),
                 PatternEvents(state, map, engineId, patterns),
                 routed is { } r ? RoutedEvents(state, map, engineId, r) : []
             );
@@ -244,7 +283,7 @@ public sealed class ModelCompiler {
     /// </summary>
     static PlaybackEvent[] RoutedEvents(ProjectState state, TempoMap map, int engineId, Route route) {
         var all = Merge(
-            MidiEvents(state, map, engineId, route.Midi),
+            MidiEvents(state, map, engineId, [..route.Midi.Select(r => PitchFollow.Followed(state, r))]),
             PatternEvents(state, map, engineId, route.Patterns)
         );
         return [
@@ -388,15 +427,18 @@ public sealed class ModelCompiler {
         var entries = new List<(PlacedEntry Entry, int Order)>();
         foreach (var (_, _, region, folder) in placed) {
             if (region is not null) {
-                var entry = Warps.Entry(
-                    RegionTiming.Of(state, region),
-                    track ?? state.FindTrack(region.TrackId)!,
-                    map,
-                    state.SampleRate,
-                    ids.File(region.FileId),
-                    analyses?.GetValueOrDefault(region.FileId)
-                );
-                entries.Add((entry, entries.Count));
+                // One entry, or (following the chord track, Phase 11) one per chord segment, crossfaded.
+                foreach (var entry in PitchFollow.Entries(
+                             state,
+                             region,
+                             track ?? state.FindTrack(region.TrackId)!,
+                             map,
+                             ids.File(region.FileId),
+                             analyses?.GetValueOrDefault(region.FileId)
+                         )) {
+                    entries.Add((entry, entries.Count));
+                }
+
                 continue;
             }
 
@@ -862,8 +904,12 @@ public sealed class ModelCompiler {
         /// <summary>Its pattern regions, and what it plays of its Drum Machine Designer's (Phase 6).</summary>
         public MidiSources Sources { get; init; } = MidiSources.None;
 
+        /// <summary>The chord track, when a region of the track follows it (Phase 11); else null.</summary>
+        public ChordTrack? Chords { get; init; }
+
         public bool Equals(TrackKey? other) =>
             other is not null
+            && Equals(Chords, other.Chords)
             && Sources.Equals(other.Sources)
             && Flex == other.Flex
             && Signatures.SequenceEqual(other.Signatures)

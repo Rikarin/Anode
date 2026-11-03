@@ -18,7 +18,9 @@ namespace Anode.Model.Storage;
 ///     (docs/08-phase-7.md), with the groove track in <c>settings</c> and files' versions; schema 8 the sync settings;
 ///     schema 9 the score content (docs/10-phase-9.md: staff styles, symbols, lyrics, chord symbols, score sets, layout),
 ///     with tracks' staff styles and regions' notation in the track files; schema 10 (docs/11-phase-10.md) the
-///     project's surround format (in <c>settings</c>), strips' formats and panners, markers' kinds and the movie.
+///     project's surround format (in <c>settings</c>), strips' formats and panners, markers' kinds and the movie;
+///     schema 11 (docs/12-phase-11.md) the chord track and the Environment, with the Mastering Assistant's analysis in
+///     its insert, and regions' Pitch Source and keys and the Session Player regions in the track files.
 /// </summary>
 public sealed record ProjectFile(
     int SchemaVersion,
@@ -40,14 +42,16 @@ public sealed record ProjectFile(
     IReadOnlyList<ArticulationSet>? ArticulationSets = null,
     IReadOnlyList<LaneSet>? LaneSets = null,
     ProjectScore? Score = null,
-    Movie? Movie = null
+    Movie? Movie = null,
+    ChordTrack? ChordTrack = null,
+    MidiEnvironment? Environment = null
 );
 
 /// <summary>
 ///     <c>tracks/&lt;id&gt;.json</c>: one track and its regions, audio and MIDI (schema 2), its take folders (schema 3),
 ///     its automation lanes (schema 4), and its flex and alternatives, and its regions' flex (schema 5); its MIDI FX,
 ///     drum machine, Smart Controls and Live Loops activation, and its pattern regions (schema 6); its groove matching
-///     and articulation set, and its notes' articulations (schema 7).
+///     and articulation set, and its notes' articulations (schema 7); its Session Player regions (schema 11).
 /// </summary>
 public sealed record TrackFile(
     int SchemaVersion,
@@ -56,7 +60,8 @@ public sealed record TrackFile(
     IReadOnlyList<MidiRegion>? MidiRegions = null,
     IReadOnlyList<TakeFolder>? TakeFolders = null,
     IReadOnlyList<AutomationLane>? Automation = null,
-    IReadOnlyList<PatternRegion>? PatternRegions = null
+    IReadOnlyList<PatternRegion>? PatternRegions = null,
+    IReadOnlyList<SessionPlayerRegion>? SessionPlayerRegions = null
 );
 
 /// <summary>A package that cannot be read: missing, damaged, or from a newer Anode.</summary>
@@ -124,7 +129,8 @@ public static class ProjectPackage {
                 ],
                 [..state.TakeFoldersOf(track.Id)],
                 [..state.LanesOf(track.Id)],
-                [..state.PatternRegionsOf(track.Id)]
+                [..state.PatternRegionsOf(track.Id)],
+                [..state.SessionPlayerRegionsOf(track.Id)]
             );
             AtomicRename.Write(
                 Path.Combine(tracksFolder, TrackFileName(track.Id)),
@@ -152,7 +158,9 @@ public static class ProjectPackage {
             [..state.ArticulationSets.Values],
             [..state.LaneSets.Values],
             state.Score,
-            state.Movie
+            state.Movie,
+            state.ChordTrack,
+            state.Environment
         );
         AtomicRename.Write(
             Path.Combine(folder, ProjectFileName),
@@ -192,6 +200,7 @@ public static class ProjectPackage {
         var midiRegions = ImmutableSortedDictionary.CreateBuilder<string, MidiRegion>(StringComparer.Ordinal);
         var folders = ImmutableSortedDictionary.CreateBuilder<string, TakeFolder>(StringComparer.Ordinal);
         var patterns = ImmutableSortedDictionary.CreateBuilder<string, PatternRegion>(StringComparer.Ordinal);
+        var players = ImmutableSortedDictionary.CreateBuilder<string, SessionPlayerRegion>(StringComparer.Ordinal);
         var trackFiles = new List<TrackFile>();
         foreach (var id in (root.Tracks ?? []).Distinct(StringComparer.Ordinal)) {
             if (ReadTrack(folder, id) is { } file) {
@@ -205,6 +214,7 @@ public static class ProjectPackage {
         foreach (var file in trackFiles) {
             AddRegions(file, file.Track, files, regions, midiRegions, folders);
             AddPatterns(file, file.Track, patterns);
+            AddSessionPlayers(file, file.Track, players);
         }
 
         var groups = ImmutableSortedDictionary.CreateRange(
@@ -246,6 +256,8 @@ public static class ProjectPackage {
             ),
             TakeFolders = folders.ToImmutable(),
             PatternRegions = patterns.ToImmutable(),
+            SessionPlayerRegions = players.ToImmutable(),
+            ChordTrack = ChordTrack(root.ChordTrack),
             LiveLoops = liveLoops,
             Movie = Movie(root.Movie),
             Markers = Keyed(
@@ -276,6 +288,11 @@ public static class ProjectPackage {
                 ]
             )
         };
+        // The Environment's track inputs and control targets, and the rhythm sources, need the tracks read.
+        read = read with {
+            Environment = Edits.StoredEnvironment(read, root.Environment),
+            SessionPlayerRegions = Followed(read, read.SessionPlayerRegions)
+        };
         // Output formats and panner modes follow the routing (docs/11-phase-10.md), whatever the file says.
         return Edits.Conformed(WithScore(read, root.Score));
     }
@@ -289,6 +306,92 @@ public static class ProjectPackage {
         var kind = Enum.IsDefined(marker.Kind) ? marker.Kind : MarkerKind.Marker;
         return marker with { Text = marker.Text ?? string.Empty, Kind = kind };
     }
+
+    /// <summary>
+    ///     The chord track as read (schema 11): the chords and key and scale changes that pass their commands' checks,
+    ///     the first at each tick, in tick order.
+    /// </summary>
+    static ChordTrack ChordTrack(ChordTrack? stored) {
+        if (stored is null) {
+            return Contracts.ChordTrack.Empty;
+        }
+
+        var chords = new List<Chord>();
+        foreach (var chord in stored.Chords ?? []) {
+            try {
+                if (chord?.Id is not null) {
+                    chords.Add(Edits.CheckChord(chord));
+                }
+            } catch (EditException) {
+                // a chord the chord track cannot hold
+            }
+        }
+
+        var scales = (stored.Scales ?? []).Where(static s => s is { Tick: >= 0 and <= Edits.MaxTick, Tonic: not null }
+            && Enum.IsDefined(s.Tonic.Step)
+            && s.Tonic.Alter is >= -2 and <= 2
+            && Enum.IsDefined(s.Scale)
+            )
+            .DistinctBy(static s => s.Tick)
+            .OrderBy(static s => s.Tick);
+        return new(
+            [
+                ..chords.DistinctBy(static c => c.Id)
+                    .DistinctBy(static c => c.Tick)
+                    .OrderBy(static c => c.Tick)
+                    .Take(Edits.MaxChords)
+            ],
+            [..scales.Take(Edits.MaxScales)]
+        );
+    }
+
+    /// <summary>
+    ///     A track file's Session Player regions that belong to it (schema 11): on a track of their player, with a style,
+    ///     a pad and a length, only their player's switches (its defaults when left out) and their values in range.
+    ///     Styles are not checked against a library: a region of a style no longer installed is kept.
+    /// </summary>
+    static void AddSessionPlayers(
+        TrackFile file,
+        Track track,
+        ImmutableSortedDictionary<string, SessionPlayerRegion>.Builder players
+    ) {
+        if (Edits.PlayerOf(track.Kind) is not { } player) {
+            return;
+        }
+
+        foreach (var region in file.SessionPlayerRegions ?? []) {
+            if (region?.Id is not null
+                && region.TrackId == track.Id
+                && region is { StartTick: >= 0 and <= Edits.MaxTick, LengthTicks: >= 1 and <= Edits.MaxTick }
+                && region.Parameters is { StyleId.Length: > 0, Pad: not null } parameters) {
+                players[region.Id] = region with {
+                    Name = region.Name ?? track.Name, Parameters = Edits.StoredParameters(parameters, player)
+                };
+            }
+        }
+    }
+
+    /// <summary>Session Player regions whose rhythm source is a track of the project with notes or audio (else none).</summary>
+    static ImmutableSortedDictionary<string, SessionPlayerRegion> Followed(
+        ProjectState state,
+        ImmutableSortedDictionary<string, SessionPlayerRegion> regions
+    ) =>
+        regions.SetItems(
+            regions.Values.Where(r => r.Parameters.Drums?.RhythmSourceTrackId is { } source
+                    && (source == r.TrackId
+                        || state.FindTrack(source) is not { } t
+                        || !(t.Kind == TrackKind.Audio || Edits.HoldsMidi(t)))
+                )
+                .Select(static r => KeyValuePair.Create(
+                        r.Id,
+                        r with {
+                            Parameters = r.Parameters with {
+                                Drums = r.Parameters.Drums! with { RhythmSourceTrackId = null }
+                            }
+                        }
+                    )
+                )
+        );
 
     /// <summary>The movie as read: one the project could have been given (<see cref="Edits.CheckMovie" />), else none.</summary>
     static Movie? Movie(Movie? movie) {
@@ -407,10 +510,10 @@ public static class ProjectPackage {
 
     /// <summary>Stacks do not nest, and a member's stack is one of the project's: other parents are dropped.</summary>
     static void Unnest(ImmutableList<Track>.Builder tracks) {
-        var stacks = tracks.Where(static t => t.Kind == TrackKind.Stack).Select(static t => t.Id).ToHashSet();
+        var stacks = tracks.Where(static t => Edits.IsStackKind(t.Kind)).Select(static t => t.Id).ToHashSet();
         for (var i = 0; i < tracks.Count; i++) {
             var t = tracks[i];
-            if (t.ParentId is not null && (t.Kind == TrackKind.Stack || !stacks.Contains(t.ParentId))) {
+            if (t.ParentId is not null && (Edits.IsStackKind(t.Kind) || !stacks.Contains(t.ParentId))) {
                 tracks[i] = t with { ParentId = null };
             }
         }
@@ -650,7 +753,7 @@ public static class ProjectPackage {
                 continue;
             }
 
-            if (t.Kind != TrackKind.Stack) {
+            if (!Edits.IsStackKind(t.Kind)) {
                 tracks[i] = t with { DrumMachine = null };
                 continue;
             }
@@ -801,10 +904,7 @@ public static class ProjectPackage {
             Inserts = full
                 ? [
                     ..(strip.Inserts ?? []).Where(static i => i?.Id is not null && i.PluginId is not null)
-                        .Select(static i => i with {
-                                Name = i.Name ?? i.PluginId, Parameters = PluginCatalog.Sorted(i.Parameters)
-                            }
-                        )
+                        .Select(i => Normalise(i, track is null))
                         .DistinctBy(static i => i.Id)
                 ]
                 : [],
@@ -836,8 +936,44 @@ public static class ProjectPackage {
         region with {
             Follow = Enum.IsDefined(region.Follow) ? region.Follow : FlexFollow.Off,
             FlexMarkers = [..(region.FlexMarkers ?? []).Where(static m => m is not null)],
-            PitchNotes = [..(region.PitchNotes ?? []).Where(static n => n is not null)]
+            PitchNotes = [..(region.PitchNotes ?? []).Where(static n => n is not null)],
+            PitchSource = region.PitchSource == PitchSourceMode.Root ? PitchSourceMode.Root : PitchSourceMode.Off,
+            Key = Key(region.Key)
         };
+
+    /// <summary>An insert as read: named, its parameters sorted, an analysis only on the master's Mastering Assistant.</summary>
+    static Insert Normalise(Insert insert, bool master) =>
+        insert with {
+            Name = insert.Name ?? insert.PluginId,
+            Parameters = PluginCatalog.Sorted(insert.Parameters),
+            Mastering = master && Edits.IsMasteringAssistant(insert) ? Analysis(insert.Mastering) : null
+        };
+
+    /// <summary>A Mastering Assistant's analysis as read: one <c>setMasteringAnalysis</c> would take, else none.</summary>
+    static MasteringAnalysis? Analysis(MasteringAnalysis? analysis) {
+        if (analysis is null) {
+            return null;
+        }
+
+        try {
+            return Edits.CheckMasteringAnalysis(analysis);
+        } catch (EditException) {
+            return null;
+        }
+    }
+
+    /// <summary>A region's key as read: a spelled tonic and a mode, else none (the project's).</summary>
+    static RegionKey? Key(RegionKey? key) {
+        if (key?.Tonic is null) {
+            return null;
+        }
+
+        try {
+            return Edits.CheckRegionKey(key);
+        } catch (EditException) {
+            return null;
+        }
+    }
 
     /// <summary>
     ///     A track's alternatives as read: well formed, their regions those of known files, the active one listed (a
@@ -888,7 +1024,9 @@ public static class ProjectPackage {
             Playback = region.Playback ?? ProjectDefaults.Playback,
             Notation = region.Notation ?? ProjectDefaults.Notation,
             Notes = region.Notes ?? [],
-            Controls = region.Controls ?? []
+            Controls = region.Controls ?? [],
+            PitchSource = Enum.IsDefined(region.PitchSource) ? region.PitchSource : PitchSourceMode.Off,
+            Key = Key(region.Key)
         };
 
     /// <summary>The track file of <paramref name="id" />, or null when it is missing, unreadable or not that track's.</summary>
@@ -951,12 +1089,13 @@ public static class ProjectPackage {
 ///     refused rather than read wrongly.
 /// </remarks>
 public static class PackageMigrations {
-    public const int CurrentSchemaVersion = 10;
+    public const int CurrentSchemaVersion = 11;
     const string VersionField = "schemaVersion";
 
     /// <summary><c>Steps[n]</c> takes schema <c>n + 1</c> to <c>n + 2</c>; it gets the kind of file and its JSON.</summary>
-    static readonly Func<string, JsonObject, JsonObject>[] Steps =
-        [ToSchema2, ToSchema3, ToSchema4, ToSchema5, ToSchema6, ToSchema7, ToSchema8, ToSchema9, ToSchema10];
+    static readonly Func<string, JsonObject, JsonObject>[] Steps = [
+        ToSchema2, ToSchema3, ToSchema4, ToSchema5, ToSchema6, ToSchema7, ToSchema8, ToSchema9, ToSchema10, ToSchema11
+    ];
 
     public static JsonObject Upgrade(JsonObject json, string kind) {
         var version = json[VersionField] is JsonValue v && v.TryGetValue<int>(out var n) ? n : 1;
@@ -1187,6 +1326,58 @@ public static class PackageMigrations {
     static JsonObject ToSchema10(string kind, JsonObject json) {
         Schema10.Fill(kind, json);
         return json;
+    }
+
+    /// <summary>
+    ///     Schema 10 to 11 (Phase 11, generative and analysis; docs/12-phase-11.md): the chord track and the Environment
+    ///     are empty (the Environment's default path), every region follows nothing and has no key of its own, and no
+    ///     track has Session Player regions.
+    /// </summary>
+    static JsonObject ToSchema11(string kind, JsonObject json) {
+        Schema11.Fill(kind, json);
+        return json;
+    }
+}
+
+/// <summary>
+///     The Phase 11 additions to a schema-10 file (docs/12-phase-11.md): an empty chord track and Environment, Pitch
+///     Source <c>off</c> on every MIDI and audio region (on tracks, in track alternatives and in Live Loops cells; their
+///     keys null, left out), and no Session Player regions. No Mastering Assistant has an analysis (left out). Leaves
+///     fields that are present alone.
+/// </summary>
+static class Schema11 {
+    public static void Fill(string kind, JsonObject json) {
+        if (kind == "project") {
+            json["chordTrack"] ??= new JsonObject { ["chords"] = new JsonArray(), ["scales"] = new JsonArray() };
+            json["environment"] ??= new JsonObject {
+                ["layers"] = new JsonArray(), ["objects"] = new JsonArray(), ["cables"] = new JsonArray()
+            };
+            foreach (var cell in (json["liveLoops"]?["cells"] as JsonArray ?? []).OfType<JsonObject>()) {
+                Follows(cell["content"]?["midi"] as JsonObject);
+                Follows(cell["content"]?["audio"] as JsonObject);
+            }
+        } else if (kind == "track") {
+            json["sessionPlayerRegions"] ??= new JsonArray();
+            foreach (var alternative in (json["track"]?["alternatives"] as JsonArray ?? []).OfType<JsonObject>()) {
+                Regions(alternative);
+            }
+
+            Regions(json);
+        }
+    }
+
+    static void Regions(JsonObject holder) {
+        foreach (var list in (string[])["regions", "midiRegions"]) {
+            foreach (var region in (holder[list] as JsonArray ?? []).OfType<JsonObject>()) {
+                Follows(region);
+            }
+        }
+    }
+
+    static void Follows(JsonObject? region) {
+        if (region is not null) {
+            region["pitchSource"] ??= "off";
+        }
     }
 }
 

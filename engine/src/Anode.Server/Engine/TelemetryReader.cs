@@ -6,12 +6,19 @@ namespace Anode.Server.Engine;
 /// <summary>
 ///     One consistent read of the host's telemetry region: the header, each track's meter, and the master's; and
 ///     (Phase 10) the per-channel peaks of each meter wider than stereo (<see cref="TrackPeaks" /> by track index,
-///     <see cref="MasterPeaks" />), null for the others.
+///     <see cref="MasterPeaks" />), null for the others; (Phase 11) the Environment's monitors and faders in use (their
+///     slots' entries with an object) and the Mastering Assistant's entry.
 /// </summary>
 public sealed record TelemetryFrame(TelemetryHeader Header, MeterEntry[] Tracks, MeterEntry Master) {
     public float[]?[] TrackPeaks { get; init; } = [];
 
     public float[]? MasterPeaks { get; init; }
+
+    public EnvironmentMonitorEntry[] Monitors { get; init; } = [];
+
+    public EnvironmentFaderEntry[] Faders { get; init; } = [];
+
+    public MasteringEntry? Mastering { get; init; }
 }
 
 /// <summary>
@@ -73,13 +80,42 @@ public sealed unsafe class TelemetryReader : IDisposable {
             }
 
             var masterPeaks = Peaks(master, channels + count);
+            var (monitors, faders, mastering) = Phase11(segment.Pointer);
             Interlocked.MemoryBarrier();
             if (Volatile.Read(ref header->Sequence) == before) {
-                return new(copy, tracks, master) { TrackPeaks = peaks, MasterPeaks = masterPeaks };
+                return new(copy, tracks, master) {
+                    TrackPeaks = peaks,
+                    MasterPeaks = masterPeaks,
+                    Monitors = monitors,
+                    Faders = faders,
+                    Mastering = mastering
+                };
             }
         }
 
         return null;
+    }
+
+    /// <summary>The Environment's monitor and fader entries in use, and the assistant's entry when it is active.</summary>
+    static (EnvironmentMonitorEntry[], EnvironmentFaderEntry[], MasteringEntry?) Phase11(byte* region) {
+        var monitors = (EnvironmentMonitorEntry*)(region + TelemetryLayout.MonitorsOffset);
+        var faders = (EnvironmentFaderEntry*)(region + TelemetryLayout.FadersOffset);
+        var inUse = new List<EnvironmentMonitorEntry>();
+        for (var i = 0; i < TelemetryLayout.MaxMonitors; i++) {
+            if (monitors[i].Object != 0) {
+                inUse.Add(monitors[i]);
+            }
+        }
+
+        var moved = new List<EnvironmentFaderEntry>();
+        for (var i = 0; i < TelemetryLayout.MaxFaders; i++) {
+            if (faders[i].Object != 0) {
+                moved.Add(faders[i]);
+            }
+        }
+
+        var mastering = *(MasteringEntry*)(region + TelemetryLayout.MasteringOffset);
+        return ([..inUse], [..moved], mastering.Active != 0 ? mastering : null);
     }
 
     /// <summary>A meter's channel peaks when it has more than two channels, else null.</summary>
@@ -140,6 +176,28 @@ public sealed unsafe class TelemetryWriter : IDisposable {
         meters[count] = master;
         Interlocked.MemoryBarrier();
         Volatile.Write(ref h->Sequence, sequence + 2);
+    }
+
+    /// <summary>
+    ///     Phase 11: the Environment's monitor and fader slots and the Mastering Assistant's entry, which the next read
+    ///     sees (tests and <see cref="FakeHost" />; the host writes them with its meters).
+    /// </summary>
+    public void Write(
+        ReadOnlySpan<EnvironmentMonitorEntry> monitors,
+        ReadOnlySpan<EnvironmentFaderEntry> faders,
+        MasteringEntry mastering
+    ) {
+        var m = (EnvironmentMonitorEntry*)(segment.Pointer + TelemetryLayout.MonitorsOffset);
+        for (var i = 0; i < Math.Min(monitors.Length, TelemetryLayout.MaxMonitors); i++) {
+            m[i] = monitors[i];
+        }
+
+        var f = (EnvironmentFaderEntry*)(segment.Pointer + TelemetryLayout.FadersOffset);
+        for (var i = 0; i < Math.Min(faders.Length, TelemetryLayout.MaxFaders); i++) {
+            f[i] = faders[i];
+        }
+
+        *(MasteringEntry*)(segment.Pointer + TelemetryLayout.MasteringOffset) = mastering;
     }
 
     public void Dispose() => segment.Dispose();

@@ -30,7 +30,8 @@ public static class Stacks {
     /// <summary>The strips that offset <paramref name="track" />'s: its stack's, then its VCA's.</summary>
     public static IReadOnlyList<ChannelStrip> Offsets(ProjectState state, Track track) {
         var offsets = new List<ChannelStrip>(2);
-        if (track.ParentId is not null && state.FindTrack(track.ParentId) is { Kind: TrackKind.Stack } stack) {
+        if (track.ParentId is not null
+            && state.FindTrack(track.ParentId) is { Kind: TrackKind.Stack or TrackKind.Drummer } stack) {
             offsets.Add(stack.Strip);
         }
 

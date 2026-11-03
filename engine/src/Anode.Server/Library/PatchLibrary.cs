@@ -165,7 +165,7 @@ public sealed class PatchLibrary(IOptions<ServerOptions> options) : IPatchSource
             trimmedName,
             trimmedCategory.Length == 0 ? "Uncategorized" : trimmedCategory,
             track.Kind,
-            track.Kind == TrackKind.Instrument ? track.Instrument : null,
+            Edits.IsInstrumentKind(track.Kind) ? track.Instrument : null,
             track.Strip.Inserts,
             track.Strip.Sends,
             track.Instrument is not null && states.TryGetValue(track.Id, out var instrument)

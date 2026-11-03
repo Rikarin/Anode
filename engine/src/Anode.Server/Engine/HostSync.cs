@@ -74,9 +74,12 @@ public sealed class HostLink(Stream stream) : IDisposable {
 ///     tempo points and every cell, a track's segment its cells (sent again when they change); MIDI FX slots travel in
 ///     the strip (their parameters as <see cref="SetInsertParameterMessage" />s by slot id); a Drum Machine Designer's
 ///     engine track carries its note routes, and a track its Live Loops activation (sent again with its segment when
-///     either changes); a signature change sends the model whole (the tempo points carry the signature).
+///     either changes); a signature change sends the model whole (the tempo points carry the signature). Phase 11
+///     (docs/12-phase-11.md): Session Player regions compile as their generated notes (<see cref="SessionPlayers" />,
+///     cached by input), a whole model carries the Environment and a change to it goes as
+///     <see cref="SetEnvironmentMessage" />, and an analysed Mastering Assistant's chain travels in its insert.
 /// </summary>
-public sealed class HostSync(HostLink link, SegmentPool pool, ILogger logger) {
+public sealed class HostSync(HostLink link, SegmentPool pool, ILogger logger, SessionPlayers? players = null) {
     /// <summary>More dirty tracks than this go as one whole model.</summary>
     public const int MaxPatchTracks = 8;
 
@@ -139,7 +142,7 @@ public sealed class HostSync(HostLink link, SegmentPool pool, ILogger logger) {
             compilerSession = target.Session;
         }
 
-        var model = compiler.Compile(target.State, target.Ids, target.Analyses);
+        var model = compiler.Compile(target.State, target.Ids, target.Analyses, players?.Played(target));
         var full = sent is null || sent.Session != target.Session;
         var previous = sent;
         var carried = new HashSet<string>(StringComparer.Ordinal);
@@ -151,12 +154,20 @@ public sealed class HostSync(HostLink link, SegmentPool pool, ILogger logger) {
                     Master(target, true),
                     target.AudioFolder,
                     target.Ids.AutomationTargets(target.State),
-                    cancellationToken
+                    cancellationToken,
+                    EnvironmentCompiler.Compile(target.State, target.Ids)
                 )
                 .ConfigureAwait(false);
             carried.UnionWith(target.State.Tracks.Select(static t => t.Id));
         } else {
             await PatchAsync(target, model, carried, cancellationToken).ConfigureAwait(false);
+            if (EnvironmentChanged(previous!.State, target.State)) {
+                await link.SendAsync(
+                        new SetEnvironmentMessage(EnvironmentCompiler.Compile(target.State, target.Ids)),
+                        cancellationToken
+                    )
+                    .ConfigureAwait(false);
+            }
         }
 
         foreach (var message in Messages(full ? null : previous, target, carried)) {
@@ -181,6 +192,15 @@ public sealed class HostSync(HostLink link, SegmentPool pool, ILogger logger) {
         && Edits.HoldsMidi(track)
             ? target.Ids.Track(track.Id)
             : -1;
+
+    /// <summary>
+    ///     Whether the Environment the host runs changed: its document, or the tracks and strips its track inputs and
+    ///     control targets name (their engine ids and automation targets).
+    /// </summary>
+    static bool EnvironmentChanged(ProjectState before, ProjectState now) =>
+        !ReferenceEquals(before.Environment, now.Environment)
+        || (now.Environment.Objects.Any(static o => o.TrackId is not null || o.Address is not null)
+            && (!ReferenceEquals(before.Tracks, now.Tracks) || !ReferenceEquals(before.Master, now.Master)));
 
     bool NeedsWhole(OpenProjectView previous, OpenProjectView target, CompiledModel model) {
         // A global change (the tempo map) recompiles every track: one whole swap (docs/adr/0006-bulk-ipc.md).
@@ -293,7 +313,8 @@ public sealed class HostSync(HostLink link, SegmentPool pool, ILogger logger) {
         EngineStrip master,
         string recordDirectory,
         IReadOnlyList<EngineAutomationTarget> targets,
-        CancellationToken cancellationToken
+        CancellationToken cancellationToken,
+        EngineEnvironment? environment = null
     ) {
         var version = pool.NextVersion();
         var size = SegmentWriter.Size(model.Tracks, model.Tempo, model.Cells);
@@ -316,7 +337,8 @@ public sealed class HostSync(HostLink link, SegmentPool pool, ILogger logger) {
             files,
             master,
             recordDirectory,
-            targets
+            targets,
+            environment
         );
         if (await link.LoadAsync(message, LoadTimeout, cancellationToken).ConfigureAwait(false)) {
             pool.Loaded(slot);
@@ -550,7 +572,16 @@ public sealed class HostSync(HostLink link, SegmentPool pool, ILogger logger) {
 
     /// <summary>The master's engine strip; its inserts' saved states when <paramref name="withState" />.</summary>
     public static EngineStrip Master(OpenProjectView view, bool withState) =>
-        Files(Strips.Engine(view.State, null, view.Ids, withState ? i => Base64(view.StateOf(null, i)) : null), view);
+        Files(
+            Strips.Engine(
+                view.State,
+                null,
+                view.Ids,
+                withState ? i => Base64(view.StateOf(null, i)) : null,
+                view.ChainOf
+            ),
+            view
+        );
 
     /// <summary>A strip with its inserts' files as absolute paths (the model keeps the project's relative).</summary>
     static EngineStrip Files(EngineStrip strip, OpenProjectView view) =>
@@ -579,7 +610,13 @@ public sealed class HostSync(HostLink link, SegmentPool pool, ILogger logger) {
             track.RecordArmed,
             track.InputMonitoring,
             Files(
-                Strips.Engine(view.State, track, view.Ids, withState ? i => Base64(view.StateOf(track.Id, i)) : null),
+                Strips.Engine(
+                    view.State,
+                    track,
+                    view.Ids,
+                    withState ? i => Base64(view.StateOf(track.Id, i)) : null,
+                    view.ChainOf
+                ),
                 view
             ),
             track.Instrument is { } slot ? Engine(slot, view, state) : null,

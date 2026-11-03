@@ -26,9 +26,11 @@ namespace Anode.Server.Engine;
 ///     <see cref="TransportClock" /> (whose stops end automation passes), runs renders for jobs
 ///     (<see cref="RenderAsync" />), relays plugin editor windows, applies parameter changes from plugins' own editors
 ///     as edits and relays plugin problems as <see cref="PluginProblemEvent" />s. <see cref="Changed" /> fires on every
-///     status change.
+///     status change. Phase 11: the Session Player regions' notes go to the host with the model
+///     (<see cref="SessionPlayers" />), and the Environment's and the Mastering Assistant's telemetry out as events
+///     (<c>EngineConnection.Phase11.cs</c>).
 /// </summary>
-public sealed class EngineConnection(
+public sealed partial class EngineConnection(
     IOptions<ServerOptions> options,
     ProjectSession session,
     EngineDevice device,
@@ -36,6 +38,7 @@ public sealed class EngineConnection(
     EventHub hub,
     TransportClock clock,
     LiveLoopsPlayer liveLoops,
+    SessionPlayers players,
     ILogger<EngineConnection> logger
 ) : BackgroundService {
     public const int MaxLiveEvents = 1024;
@@ -714,7 +717,7 @@ public sealed class EngineConnection(
 
     /// <summary>Sends the host what it is owed, in order: the project's changes first, then each queued message.</summary>
     async Task PumpAsync(Connection connection, CancellationToken cancellationToken) {
-        var sync = new HostSync(connection.Link, pool, logger);
+        var sync = new HostSync(connection.Link, pool, logger, players);
         await foreach (var message in connection.Work.Reader.ReadAllAsync(cancellationToken).ConfigureAwait(false)) {
             await sync.SyncAsync(session.View, Volatile.Read(ref thru), cancellationToken).ConfigureAwait(false);
             if (message is not null) {
@@ -755,6 +758,8 @@ public sealed class EngineConnection(
                 hub.Publish(readings is { Count: > 0 } ? meters with { Readings = readings } : meters);
                 metersLive = live;
             }
+
+            PublishPhase11(frame, view, moving);
         }
     }
 

@@ -388,7 +388,7 @@ public sealed class Phase10Tests : IDisposable {
         ProjectPackage.Save(folder, state);
         var path = Path.Combine(folder, "project.json");
         var root = JsonNode.Parse(File.ReadAllText(path))!.AsObject();
-        Assert.Equal(10, (int)root["schemaVersion"]!);
+        Assert.Equal(PackageMigrations.CurrentSchemaVersion, (int)root["schemaVersion"]!);
         root["schemaVersion"] = 9;
         root["settings"]!.AsObject().Remove("surroundFormat");
         Strip(root["master"]!.AsObject());
