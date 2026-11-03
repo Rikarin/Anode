@@ -358,7 +358,7 @@ test.describe('Phase 11: generative and analysis', () => {
       const keysAudio = state.tracks.find(t => t.name === 'Keys Audio')?.id ?? '';
       await commands(window, [
         { type: 'addRegion', trackId: keysAudio, fileId: file.id, startTick: 0 },
-        { type: 'setTrack', trackId: keys.trackId, mute: true }
+        { type: 'setStrip', trackId: keys.trackId, mute: true }
       ]);
       const audioRegion = (await project(window)).regions.find(r => r.trackId === keysAudio)?.id ?? '';
       await finished(
@@ -969,8 +969,12 @@ test.describe('Phase 11: generative and analysis', () => {
         }
       ]);
       // Play a chord through live MIDI while recording: the region holds it an octave up, on the 1/16 grid.
-      await commands(window, [{ type: 'setTrack', trackId: keys.trackId, recordArmed: true, mute: false }]);
-      await transport(window, 'record', 16 * Bar);
+      await commands(window, [
+        { type: 'setTrack', trackId: keys.trackId, recordArmed: true },
+        { type: 'setStrip', trackId: keys.trackId, mute: false }
+      ]);
+      await transport(window, 'locate', 16 * Bar);
+      await transport(window, 'record');
       await api(window, 'POST', '/midi/live', {
         trackId: keys.trackId,
         events: [60, 64, 67].map(data1 => ({ status: 0x90, data1, data2: 100 }))
