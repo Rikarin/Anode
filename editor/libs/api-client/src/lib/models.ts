@@ -532,6 +532,13 @@ export interface TrackMeter {
   trackId: string;
   peakLeft: number;
   peakRight: number;
+  /**
+   * Phase 10 (docs/11-phase-10.md, multichannel metering): the linear peak of every channel of the strip's output
+   * format, in its layout's order (`SpeakerLayouts`), for a strip (or the master) wider than stereo. Not in the
+   * committed contracts yet: the editor reads it when a Server sends it (the fake Server does), and meters fall back to
+   * `peakLeft`/`peakRight` otherwise.
+   */
+  peaks?: number[];
 }
 
 /**

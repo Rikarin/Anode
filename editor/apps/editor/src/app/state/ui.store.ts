@@ -29,8 +29,12 @@ export interface ScoreWindow {
 /** Phase 9's interchange dialogs (File ▸ Import / Export). */
 export interface InterchangeDialog {
   direction: 'import' | 'export';
-  format: 'musicxml' | 'aaf' | 'midi';
+  /** Phase 10 adds ADM BWF (File ▸ Export ▸ Project as ADM BWF…, Import ▸ ADM BWF…). */
+  format: 'musicxml' | 'aaf' | 'midi' | 'adm';
 }
+
+/** Phase 10's movie dialogs (the Movie menu): Open Movie…, Export Audio to Movie…, Detect Scene Cuts…. */
+export type MovieDialog = 'open' | 'exportAudio' | 'detectScenes';
 
 /** A Scripter slot whose Script Editor is open. */
 export interface ScriptSlot {
@@ -95,6 +99,16 @@ export class UiStore {
   readonly scoreLayoutOpen = signal(false);
   /** Phase 9: the MusicXML, AAF or MIDI file import or export dialog; null: closed. */
   readonly interchange = signal<InterchangeDialog | null>(null);
+  /** Phase 10: File ▸ Project Settings ▸ Surround… (the project's format). */
+  readonly surroundSettingsOpen = signal(false);
+  /** Phase 10: File ▸ Project Settings ▸ Movie… (start position, offset, frame rate, timecode). */
+  readonly movieSettingsOpen = signal(false);
+  /** Phase 10: Settings… (the app menu's ⌘,): the user's audio settings, monitoring among them. */
+  readonly settingsOpen = signal(false);
+  /** Phase 10: the floating movie window. */
+  readonly movieWindowOpen = signal(false);
+  /** Phase 10: a Movie menu dialog; null: none. */
+  readonly movieDialog = signal<MovieDialog | null>(null);
   /** The generic plugin editor windows, in the order they opened (the last is in front). */
   readonly pluginWindows = signal<readonly PluginWindow[]>([]);
 

@@ -1,7 +1,13 @@
-import type { AafExportRequest, MidiExportRequest, MidiImportRequest, MusicXmlExportRequest } from '@anode/api-client';
+import type {
+  AafExportRequest,
+  AdmExportRequest,
+  MidiExportRequest,
+  MidiImportRequest,
+  MusicXmlExportRequest
+} from '@anode/api-client';
 
-/** The interchange formats (docs/10-phase-9.md). */
-export type InterchangeFormat = 'musicxml' | 'aaf' | 'midi';
+/** The interchange formats (docs/10-phase-9.md; Phase 10 adds ADM BWF, docs/11-phase-10.md). */
+export type InterchangeFormat = 'musicxml' | 'aaf' | 'midi' | 'adm';
 
 /** What a score export takes: every MIDI track, a score set, or one track's part. */
 export type ScoreSource = { kind: 'all' } | { kind: 'set'; setId: string } | { kind: 'part'; trackId: string };
@@ -21,6 +27,8 @@ export interface ExportForm {
   /** MIDI: type 0 or 1, and one region only. */
   format: 0 | 1;
   regionId: string | null;
+  /** ADM BWF: the sample size. */
+  bitDepth: 16 | 24 | 32;
 }
 
 /** The import dialog's form: the file (a path on the Server's disk, or an upload), and the MIDI options. */
@@ -35,19 +43,30 @@ export interface ImportForm {
 export const FormatNames: Record<InterchangeFormat, string> = {
   musicxml: 'MusicXML',
   aaf: 'AAF',
-  midi: 'MIDI File'
+  midi: 'MIDI File',
+  adm: 'ADM BWF'
 };
 
 /** The extensions an import accepts (the browser's file picker). */
 export const ImportAccept: Record<InterchangeFormat, string> = {
   musicxml: '.musicxml,.mxl,.xml',
   aaf: '.aaf',
-  midi: '.mid,.midi,.smf'
+  midi: '.mid,.midi,.smf',
+  adm: '.wav,.bwf'
 };
 
 /** The extension an export writes. */
 export function exportExtension(format: InterchangeFormat, form: Pick<ExportForm, 'compressed'>): string {
-  return format === 'musicxml' ? (form.compressed ? 'mxl' : 'musicxml') : format === 'aaf' ? 'aaf' : 'mid';
+  switch (format) {
+    case 'musicxml':
+      return form.compressed ? 'mxl' : 'musicxml';
+    case 'aaf':
+      return 'aaf';
+    case 'adm':
+      return 'wav';
+    default:
+      return 'mid';
+  }
 }
 
 /** The name the export writes (the extension added when missing, as the Server does). */
@@ -102,6 +121,16 @@ export function midiRequest(form: ExportForm, midiTrackIds: readonly string[]): 
     format: form.format,
     trackIds: form.regionId ? null : chosenTracks(form.trackIds, midiTrackIds),
     regionId: form.regionId
+  };
+}
+
+/** ADM BWF export (Phase 10): the whole mix (bed and objects), at the bit depth asked for. */
+export function admRequest(form: ExportForm): AdmExportRequest {
+  return {
+    fileName: form.fileName.trim(),
+    directory: form.directory.trim() || null,
+    trackIds: null,
+    bitDepth: form.bitDepth
   };
 }
 

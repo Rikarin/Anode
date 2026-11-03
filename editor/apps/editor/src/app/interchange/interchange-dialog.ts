@@ -1,5 +1,5 @@
 import { ChangeDetectionStrategy, Component, computed, effect, inject, signal, untracked } from '@angular/core';
-import type { Job } from '@anode/api-client';
+import { type Job, SpeakerLayouts } from '@anode/api-client';
 import { provideIcons } from '@ng-icons/core';
 import { matFolderOpenRound } from '@ng-icons/material-icons/round';
 import { XuiButtonImports } from '@xui/button';
@@ -16,6 +16,7 @@ import { SelectionStore } from '../state/selection.store';
 import { UiStore } from '../state/ui.store';
 import {
   aafRequest,
+  admRequest,
   exportFileName,
   type ExportForm,
   exportProblems,
@@ -143,6 +144,22 @@ import {
                   }
                 </div>
               }
+              @case ('adm') {
+                <span class="text-foreground-muted">Bit depth</span>
+                <xui-segmented-control
+                  size="sm"
+                  aria-label="ADM BWF bit depth"
+                  data-testid="export-adm-depth"
+                  [options]="bitDepths"
+                  [value]="'' + form().bitDepth"
+                  (valueChange)="patch({ bitDepth: depthOf($event) })"
+                />
+                <span></span>
+                <p class="text-foreground-muted">
+                  The {{ surroundName() }} mix: tracks on the Surround Panner as the bed (DirectSpeakers), object tracks
+                  as Objects with their position automation.
+                </p>
+              }
               @case ('midi') {
                 <span class="text-foreground-muted">Format</span>
                 <xui-segmented-control
@@ -194,7 +211,19 @@ import {
           <div class="grid grid-cols-[7rem_1fr] items-center gap-x-3 gap-y-2.5">
             <span class="text-foreground-muted">File</span>
             <div class="flex min-w-0 items-center gap-2">
-              @if (pickFile()) {
+              @if (format() === 'adm' && !pickFile()) {
+                <!-- ADM files are large: a browser names one on the Server's disk rather than uploading it. -->
+                <input
+                  #admPath
+                  xuiInput
+                  class="h-7 min-w-0 flex-1 text-xs"
+                  placeholder="/path/on/the/server/Mix.wav"
+                  aria-label="ADM BWF path on the Server"
+                  data-testid="import-path-field"
+                  [value]="importForm().path"
+                  (input)="patchImport({ path: admPath.value, file: null })"
+                />
+              } @else if (pickFile()) {
                 <button
                   xuiButton
                   type="button"
@@ -235,10 +264,12 @@ import {
           </div>
           <p class="text-foreground-muted">
             {{
-              format() === 'aaf'
-                ? 'The tracks, regions and media come in as new audio tracks; the media are copied into the project.'
-                : 'The parts come in as new tracks with their notes' +
-                  (format() === 'musicxml' ? ', symbols, lyrics and chord symbols.' : '.')
+              format() === 'adm'
+                ? 'The bed comes in as a multichannel audio track, each object as an audio track in object mode with its position automation; a stereo project takes the file’s format.'
+                : format() === 'aaf'
+                  ? 'The tracks, regions and media come in as new audio tracks; the media are copied into the project.'
+                  : 'The parts come in as new tracks with their notes' +
+                    (format() === 'musicxml' ? ', symbols, lyrics and chord symbols.' : '.')
             }}
           </p>
         }
@@ -300,6 +331,12 @@ export class InterchangeDialog {
     { value: 'type1', label: 'Type 1 (tracks)' },
     { value: 'type0', label: 'Type 0 (one track)' }
   ];
+  protected readonly bitDepths = [
+    { value: '16', label: '16-bit' },
+    { value: '24', label: '24-bit' },
+    { value: '32', label: '32-bit float' }
+  ];
+  protected readonly surroundName = computed(() => SpeakerLayouts[this.project.settings().surroundFormat].name);
   protected readonly midiOptions: readonly { key: 'importTempo' | 'importMarkers' | 'merge'; label: string }[] = [
     { key: 'importTempo', label: 'Import the tempo map and signatures' },
     { key: 'importMarkers', label: 'Import markers' },
@@ -387,7 +424,8 @@ export class InterchangeDialog {
       embedMedia: true,
       trackIds: (format === 'aaf' ? this.audioTracks() : this.midiTracks()).map(t => t.id),
       format: 1,
-      regionId: null
+      regionId: null,
+      bitDepth: 24
     };
   }
 
@@ -429,6 +467,10 @@ export class InterchangeDialog {
     this.patch({ source });
   }
 
+  protected depthOf(value: string | null): 16 | 24 | 32 {
+    return value === '16' ? 16 : value === '32' ? 32 : 24;
+  }
+
   protected toggleTrack(id: string): void {
     const ids = this.form().trackIds;
     this.patch({ trackIds: ids.includes(id) ? ids.filter(t => t !== id) : [...ids, id] });
@@ -446,7 +488,9 @@ export class InterchangeDialog {
     const path =
       this.format() === 'midi'
         ? await dialogs?.importMidi?.()
-        : await dialogs?.importFile?.(this.format() === 'aaf' ? 'aaf' : 'musicxml');
+        : await dialogs?.importFile?.(
+            this.format() === 'musicxml' ? 'musicxml' : this.format() === 'adm' ? 'adm' : 'aaf'
+          );
     if (path) {
       this.patchImport({ path, file: null });
     }
@@ -482,21 +526,23 @@ export class InterchangeDialog {
       const run =
         format === 'musicxml'
           ? () => this.api.exportMusicXml(musicXmlRequest(form))
-          : format === 'aaf'
-            ? () =>
-                this.api.exportAaf(
-                  aafRequest(
-                    form,
-                    this.audioTracks().map(t => t.id)
+          : format === 'adm'
+            ? () => this.api.exportAdm(admRequest(form))
+            : format === 'aaf'
+              ? () =>
+                  this.api.exportAaf(
+                    aafRequest(
+                      form,
+                      this.audioTracks().map(t => t.id)
+                    )
                   )
-                )
-            : () =>
-                this.api.exportMidi(
-                  midiRequest(
-                    form,
-                    this.midiTracks().map(t => t.id)
-                  )
-                );
+              : () =>
+                  this.api.exportMidi(
+                    midiRequest(
+                      form,
+                      this.midiTracks().map(t => t.id)
+                    )
+                  );
       job = await this.jobs.interchange(run, `Could not export the ${FormatNames[format]}`);
     } else {
       const form = this.importForm();
@@ -512,11 +558,13 @@ export class InterchangeDialog {
                   importMarkers: form.importMarkers,
                   merge: form.merge
                 })
-        : format === 'musicxml'
-          ? () => this.api.importMusicXml({ path: form.path })
-          : format === 'aaf'
-            ? () => this.api.importAaf({ path: form.path })
-            : () => this.api.importMidi(midiImportRequest(form));
+        : format === 'adm'
+          ? () => this.api.importAdm({ path: form.path.trim() })
+          : format === 'musicxml'
+            ? () => this.api.importMusicXml({ path: form.path })
+            : format === 'aaf'
+              ? () => this.api.importAaf({ path: form.path })
+              : () => this.api.importMidi(midiImportRequest(form));
       job = await this.jobs.interchange(run, `Could not import the ${FormatNames[format]}`);
     }
     if (job) {

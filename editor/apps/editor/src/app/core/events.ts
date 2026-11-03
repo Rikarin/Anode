@@ -2,7 +2,7 @@ import { DestroyRef, Injectable, inject, signal } from '@angular/core';
 import { eventsUrl, type ServerMessage } from '@anode/api-client';
 import { Subject } from 'rxjs';
 import { ConnectionService } from './connection';
-import { FAKE_SERVER } from './fake/fake-backend';
+import { FAKE_SERVER } from './fake/fake-token';
 
 const MaxBackoffMs = 5_000;
 

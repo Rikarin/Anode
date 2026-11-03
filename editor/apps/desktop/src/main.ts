@@ -266,9 +266,10 @@ function handleIpc(): void {
       })
     )
   );
-  // Phase 9's imports (docs/10-phase-9.md): a MusicXML or AAF file; the kind is checked against the two main knows.
+  // Phase 9's imports (docs/10-phase-9.md): a MusicXML or AAF file; Phase 10's: a movie or an ADM BWF. The kind is
+  // checked against the ones main knows.
   ipcMain.handle('anode:dialog:importFile', async (event, kind: unknown) => {
-    const filter = ImportFilters[kind === 'aaf' ? 'aaf' : kind === 'musicxml' ? 'musicxml' : ''];
+    const filter = typeof kind === 'string' && Object.hasOwn(ImportFilters, kind) ? ImportFilters[kind] : undefined;
     if (!filter) {
       return null;
     }
@@ -414,7 +415,9 @@ const RevealableExtensions = ['.wav', '.wave', '.aif', '.aiff', '.musicxml', '.m
 /** The import dialogs' filters by kind (`anode:dialog:importFile`). */
 const ImportFilters: Record<string, { title: string; filter: { name: string; extensions: string[] } } | undefined> = {
   musicxml: { title: 'Import MusicXML', filter: { name: 'MusicXML', extensions: ['musicxml', 'mxl', 'xml'] } },
-  aaf: { title: 'Import AAF', filter: { name: 'AAF', extensions: ['aaf'] } }
+  aaf: { title: 'Import AAF', filter: { name: 'AAF', extensions: ['aaf'] } },
+  movie: { title: 'Open Movie', filter: { name: 'Movies', extensions: ['mov', 'mp4', 'm4v'] } },
+  adm: { title: 'Import ADM BWF', filter: { name: 'ADM BWF', extensions: ['wav', 'bwf'] } }
 };
 
 /** A print request: a page of 50…2000 mm a side and a file name of at most 200 characters without folders. */
@@ -546,7 +549,9 @@ function buildMenu(): void {
       submenu: [
         command('MusicXML…', 'importMusicXml'),
         command('AAF…', 'importAaf'),
-        command('MIDI File (with options)…', 'importMidiOptions')
+        command('MIDI File (with options)…', 'importMidiOptions'),
+        // Phase 10 (docs/11-phase-10.md): an ADM BWF's bed and objects as tracks.
+        command('ADM BWF…', 'importAdm')
       ]
     },
     {
@@ -554,7 +559,8 @@ function buildMenu(): void {
       submenu: [
         command('Score as MusicXML…', 'exportMusicXml'),
         command('Project as AAF…', 'exportAaf'),
-        command('Project as MIDI File…', 'exportMidi')
+        command('Project as MIDI File…', 'exportMidi'),
+        command('Project as ADM BWF…', 'exportAdm')
       ]
     },
     { type: 'separator' },
@@ -567,8 +573,31 @@ function buildMenu(): void {
     command('Key Commands…', 'keyCommands'),
     { type: 'separator' },
     // Phase 8 (docs/09-phase-8.md): the project's synchronisation, as Logic's File ▸ Project Settings has it.
-    { label: 'Project Settings', submenu: [command('Synchronization…', 'syncSettings')] }
+    {
+      label: 'Project Settings',
+      submenu: [
+        command('Synchronization…', 'syncSettings'),
+        // Phase 10: the project's surround format, and the movie's position.
+        command('Surround…', 'surroundSettings'),
+        command('Movie…', 'movieSettings')
+      ]
+    }
   ];
+  // Phase 10 (docs/11-phase-10.md): Logic's Movie menu (File ▸ Movie in Logic), through the editor's dialogs and jobs.
+  const movieMenu: MenuItemConstructorOptions = {
+    label: 'Movie',
+    submenu: [
+      command('Open Movie…', 'openMovie', 'CmdOrCtrl+Alt+O'),
+      command('Remove Movie', 'removeMovie'),
+      { type: 'separator' },
+      command('Show Movie Window', 'movieWindow'),
+      { type: 'separator' },
+      command('Import Audio from Movie', 'importMovieAudio'),
+      command('Export Audio to Movie…', 'exportMovieAudio'),
+      { type: 'separator' },
+      command('Detect Scene Cuts…', 'detectSceneCuts')
+    ]
+  };
   // Logic Pro ▸ Control Surfaces: the surfaces and controller assignments are the user's, not the project's.
   const controlSurfaces: MenuItemConstructorOptions = {
     label: 'Control Surfaces',
@@ -612,6 +641,7 @@ function buildMenu(): void {
           },
           { label: 'File', submenu: [...fileItems, { type: 'separator' }, { role: 'close' }] },
           editMenu,
+          movieMenu,
           { role: 'viewMenu' },
           { role: 'windowMenu' }
         ]
@@ -628,6 +658,7 @@ function buildMenu(): void {
             ]
           },
           editMenu,
+          movieMenu,
           { role: 'viewMenu' },
           { role: 'windowMenu' }
         ];

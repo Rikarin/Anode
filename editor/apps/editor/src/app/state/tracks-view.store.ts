@@ -27,9 +27,22 @@ export const MaxPixelsPerQuarter = 960;
 export const MinLaneHeight = 36;
 export const MaxLaneHeight = 160;
 
-/** The global tracks Logic shows above the tracks, in its order. */
-export type GlobalLane = 'marker' | 'arrangement' | 'tempo' | 'beatMapping' | 'signature' | 'key';
-export const GlobalLanes: readonly GlobalLane[] = ['arrangement', 'marker', 'tempo', 'beatMapping', 'signature', 'key'];
+/** The global tracks Logic shows above the tracks, in its order (Phase 10 adds the movie track). */
+export type GlobalLane = 'marker' | 'arrangement' | 'movie' | 'tempo' | 'beatMapping' | 'signature' | 'key';
+export const GlobalLanes: readonly GlobalLane[] = [
+  'arrangement',
+  'marker',
+  'movie',
+  'tempo',
+  'beatMapping',
+  'signature',
+  'key'
+];
+
+/** The global tracks that show, in order: those chosen, the movie track only when the project has a movie. */
+export function visibleGlobalLanes(chosen: ReadonlySet<GlobalLane>, hasMovie: boolean): GlobalLane[] {
+  return GlobalLanes.filter(lane => chosen.has(lane) && (lane !== 'movie' || hasMovie));
+}
 
 /** A time range picked with the marquee tool, across lanes `laneFrom…laneTo` (inclusive). */
 export interface MarqueeRange {
@@ -61,7 +74,9 @@ export class TracksViewStore {
   readonly follow = signal(true);
   /** Whether the global tracks show, and which. */
   readonly globalTracks = signal(false);
-  readonly globalLanes = signal<ReadonlySet<GlobalLane>>(new Set(['arrangement', 'marker', 'tempo', 'signature']));
+  readonly globalLanes = signal<ReadonlySet<GlobalLane>>(
+    new Set(['arrangement', 'marker', 'movie', 'tempo', 'signature'])
+  );
   /** Take folders shown open, their takes in rows under them. */
   readonly expandedFolders = signal<ReadonlySet<string>>(new Set());
   /** The marquee tool's selection. */

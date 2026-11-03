@@ -1,5 +1,5 @@
 import { ChangeDetectionStrategy, Component, Injector, computed, inject, signal } from '@angular/core';
-import { RouterOutlet } from '@angular/router';
+import { NavigationEnd, Router, RouterOutlet } from '@angular/router';
 import { XuiButtonImports } from '@xui/button';
 import { XuiInputImports } from '@xui/input';
 import { XuiNonIdealStateImports } from '@xui/non-ideal-state';
@@ -11,6 +11,7 @@ import { ControllerAssignmentsWindow } from './control/controller-assignments-wi
 import { LearnMenuHost } from './control/learn-menu';
 import { SelectionReporter } from './control/selection-reporter';
 import type { AppCommand } from './core/desktop';
+import { Notify } from './core/notify';
 import { Startup } from './core/startup';
 import { BounceDialog } from './export/bounce-dialog';
 import { BounceInPlaceDialog } from './functions/bounce-in-place-dialog';
@@ -46,10 +47,15 @@ import { TransportStore } from './state/transport.store';
 import { type EditorView, UiStore } from './state/ui.store';
 import { StemSplitterDialog } from './stems/stem-splitter-dialog';
 import { StepInputKeyboard } from './step-input/step-input-keyboard';
+import { SettingsWindow } from './surround/settings-window';
+import { SurroundSettingsWindow } from './surround/surround-settings-window';
 import { SyncSettingsWindow } from './sync/sync-settings-window';
 import { SyncStore } from './sync/sync.store';
 import { AudioImport } from './tracks/audio-import';
 import { TransformWindow } from './transform/transform-window';
+import { MovieDialogHost } from './video/movie-dialog';
+import { MovieSettingsWindow } from './video/movie-settings-window';
+import { MovieWindow } from './video/movie-window';
 
 /** The interchange dialogs the app menu opens (Phase 9). */
 const InterchangeCommands = {
@@ -58,7 +64,9 @@ const InterchangeCommands = {
   importMidiOptions: { direction: 'import', format: 'midi' },
   exportMusicXml: { direction: 'export', format: 'musicxml' },
   exportAaf: { direction: 'export', format: 'aaf' },
-  exportMidi: { direction: 'export', format: 'midi' }
+  exportMidi: { direction: 'export', format: 'midi' },
+  importAdm: { direction: 'import', format: 'adm' },
+  exportAdm: { direction: 'export', format: 'adm' }
 } as const;
 
 @Component({
@@ -92,6 +100,11 @@ const InterchangeCommands = {
     ScoreSetsWindow,
     ScoreWindow,
     StaffStylesWindow,
+    SurroundSettingsWindow,
+    SettingsWindow,
+    MovieWindow,
+    MovieSettingsWindow,
+    MovieDialogHost,
     XuiButtonImports,
     XuiInputImports,
     XuiNonIdealStateImports,
@@ -145,98 +158,169 @@ const InterchangeCommands = {
         </xui-non-ideal-state>
       }
       @default {
-        <an-control-bar [class.window-drag]="macWindow" [class.ps-21]="trafficLights()" />
-        <main class="relative min-h-0 flex-1 overflow-hidden">
-          <router-outlet />
-        </main>
-        <an-key-commands-editor />
-        <an-save-alternative />
-        @if (project.isOpen()) {
-          <an-bounce-dialog />
-          <an-strip-silence-dialog />
-          <an-bounce-in-place-dialog />
-          <an-processing-dialog />
-          <an-io-labels-dialog />
-          <an-group-settings />
-          <an-plugin-windows />
-          <!-- Phase 7's windows load when first opened (docs/08-phase-7.md; the initial bundle stays small). -->
-          @if (ui.transformOpen()) {
+        @if (remote()) {
+          <!-- Phase 10: the touch remote has its own chrome (remote/remote-page.ts). -->
+          <main class="relative min-h-0 flex-1 overflow-hidden">
+            <router-outlet />
+          </main>
+        } @else {
+          <an-control-bar [class.window-drag]="macWindow" [class.ps-21]="trafficLights()" />
+          <main class="relative min-h-0 flex-1 overflow-hidden">
+            <router-outlet />
+          </main>
+          <!-- Dialogs load when first opened, so the initial bundle carries none of them (Phase 10). -->
+          @if (ui.keyCommandsOpen()) {
             @defer (on immediate) {
-              <an-transform-window />
+              <an-key-commands-editor />
             }
           }
-          @if (ui.grooves() !== null) {
+          @if (ui.saveAlternativeOpen()) {
             @defer (on immediate) {
-              <an-groove-window />
+              <an-save-alternative />
             }
           }
-          @if (ui.stepInputKeyboardOpen()) {
-            @defer (on immediate) {
-              <an-step-input-keyboard />
+          @if (project.isOpen()) {
+            @if (ui.bounceOpen()) {
+              @defer (on immediate) {
+                <an-bounce-dialog />
+              }
             }
-          }
-          @if (ui.articulationSetEditor() !== null) {
-            @defer (on immediate) {
-              <an-articulation-set-editor />
+            @if (ui.stripSilenceOpen()) {
+              @defer (on immediate) {
+                <an-strip-silence-dialog />
+              }
             }
-          }
-          @if (ui.scriptEditor() !== null) {
-            @defer (on immediate) {
-              <an-script-editor />
+            @if (ui.bounceInPlaceOpen()) {
+              @defer (on immediate) {
+                <an-bounce-in-place-dialog />
+              }
             }
-          }
-          <!-- Phase 8's windows (docs/09-phase-8.md), loaded when first opened. -->
-          @if (ui.syncSettingsOpen()) {
-            @defer (on immediate) {
-              <an-sync-settings-window />
+            @if (ui.processingOpen()) {
+              @defer (on immediate) {
+                <an-processing-dialog />
+              }
             }
-          }
-          @if (ui.stemSplitter() !== null) {
-            @defer (on immediate) {
-              <an-stem-splitter-dialog />
+            @if (ui.ioLabelsOpen()) {
+              @defer (on immediate) {
+                <an-io-labels-dialog />
+              }
             }
-          }
-          <!-- Phase 9's score windows and interchange dialogs (docs/10-phase-9.md), loaded when first opened: Verovio and
+            @if (ui.groupSettings() !== null) {
+              @defer (on immediate) {
+                <an-group-settings />
+              }
+            }
+            <an-plugin-windows />
+            <!-- Phase 7's windows load when first opened (docs/08-phase-7.md; the initial bundle stays small). -->
+            @if (ui.transformOpen()) {
+              @defer (on immediate) {
+                <an-transform-window />
+              }
+            }
+            @if (ui.grooves() !== null) {
+              @defer (on immediate) {
+                <an-groove-window />
+              }
+            }
+            @if (ui.stepInputKeyboardOpen()) {
+              @defer (on immediate) {
+                <an-step-input-keyboard />
+              }
+            }
+            @if (ui.articulationSetEditor() !== null) {
+              @defer (on immediate) {
+                <an-articulation-set-editor />
+              }
+            }
+            @if (ui.scriptEditor() !== null) {
+              @defer (on immediate) {
+                <an-script-editor />
+              }
+            }
+            <!-- Phase 8's windows (docs/09-phase-8.md), loaded when first opened. -->
+            @if (ui.syncSettingsOpen()) {
+              @defer (on immediate) {
+                <an-sync-settings-window />
+              }
+            }
+            @if (ui.stemSplitter() !== null) {
+              @defer (on immediate) {
+                <an-stem-splitter-dialog />
+              }
+            }
+            <!-- Phase 9's score windows and interchange dialogs (docs/10-phase-9.md), loaded when first opened: Verovio and
                the score's parts stay out of the initial bundle. -->
-          @if (ui.scoreWindow() !== null) {
-            @defer (on immediate) {
-              <an-score-window />
+            @if (ui.scoreWindow() !== null) {
+              @defer (on immediate) {
+                <an-score-window />
+              }
+            }
+            @if (ui.staffStylesOpen()) {
+              @defer (on immediate) {
+                <an-staff-styles-window />
+              }
+            }
+            @if (ui.scoreSetsOpen()) {
+              @defer (on immediate) {
+                <an-score-sets-window />
+              }
+            }
+            @if (ui.scoreLayoutOpen()) {
+              @defer (on immediate) {
+                <an-score-layout-window />
+              }
+            }
+            @if (ui.interchange() !== null) {
+              @defer (on immediate) {
+                <an-interchange-dialog />
+              }
+            }
+            <!-- Phase 10's surround and movie windows (docs/11-phase-10.md), loaded when first opened. -->
+            @if (ui.surroundSettingsOpen()) {
+              @defer (on immediate) {
+                <an-surround-settings-window />
+              }
+            }
+            @if (ui.movieWindowOpen() && project.movie()) {
+              @defer (on immediate) {
+                <an-movie-window />
+              }
+            }
+            @if (ui.movieSettingsOpen()) {
+              @defer (on immediate) {
+                <an-movie-settings-window />
+              }
+            }
+            @if (ui.movieDialog() !== null) {
+              @defer (on immediate) {
+                <an-movie-dialog />
+              }
             }
           }
-          @if (ui.staffStylesOpen()) {
+          <!-- Settings… (monitoring is the user's, not the project's). -->
+          @if (ui.settingsOpen()) {
             @defer (on immediate) {
-              <an-staff-styles-window />
+              <an-settings-window />
             }
           }
-          @if (ui.scoreSetsOpen()) {
+          <!-- Control surfaces and assignments are user settings: they open without a project too. -->
+          @if (ui.controllerAssignmentsOpen()) {
             @defer (on immediate) {
-              <an-score-sets-window />
+              <an-controller-assignments-window />
             }
           }
-          @if (ui.scoreLayoutOpen()) {
+          @if (ui.controlSurfacesOpen()) {
             @defer (on immediate) {
-              <an-score-layout-window />
+              <an-control-surfaces-window />
             }
           }
-          @if (ui.interchange() !== null) {
+          <an-learn-menu-host />
+          @if (ui.soundLibraryOpen()) {
             @defer (on immediate) {
-              <an-interchange-dialog />
+              <an-sound-library-dialog />
             }
           }
         }
-        <!-- Control surfaces and assignments are user settings: they open without a project too. -->
-        @if (ui.controllerAssignmentsOpen()) {
-          @defer (on immediate) {
-            <an-controller-assignments-window />
-          }
-        }
-        @if (ui.controlSurfacesOpen()) {
-          @defer (on immediate) {
-            <an-control-surfaces-window />
-          }
-        }
-        <an-learn-menu-host />
-        <an-sound-library-dialog />
       }
     }
   `
@@ -260,6 +344,10 @@ export class App {
   private readonly sync = inject(SyncStore);
   private readonly injector = inject(Injector);
   private readonly pianoRoll = inject(PianoRollStore);
+  private readonly notify = inject(Notify);
+
+  /** Phase 10: the `remote` route shows only itself, without the desktop editor's shell, keys or windows. */
+  protected readonly remote = signal(isRemoteRoute(typeof location === 'undefined' ? '' : location.hash.slice(1)));
 
   /**
    * In the macOS desktop app the control bar is the title bar: it drags the window and leaves room for the traffic
@@ -280,6 +368,12 @@ export class App {
     // The desktop app asks before it quits: the open project lives in its own Server and goes with it.
     window.anode?.onQuit?.(() => this.session.mayDiscard('quit'));
     window.anode?.onCommand?.(command => void this.command(command));
+    window.anode?.onOpenSettings?.(() => this.ui.settingsOpen.set(true));
+    inject(Router).events.subscribe(event => {
+      if (event instanceof NavigationEnd) {
+        this.remote.set(isRemoteRoute(event.urlAfterRedirects));
+      }
+    });
     // Created at start, so plugin problems are reported wherever the person is.
     inject(PluginWindows);
     // Phase 8: the Server hears which track is selected (selected-track assignments and surfaces follow it).
@@ -429,7 +523,55 @@ export class App {
       case 'printScore':
         await this.printScore();
         break;
+      case 'importAdm':
+      case 'exportAdm':
+        if (this.project.isOpen()) {
+          this.ui.interchange.set(InterchangeCommands[command]);
+        }
+        break;
+      case 'surroundSettings':
+        if (this.project.isOpen()) {
+          this.ui.surroundSettingsOpen.set(true);
+        }
+        break;
+      case 'movieSettings':
+      case 'movieWindow':
+        if (this.project.isOpen() && this.requireMovie()) {
+          (command === 'movieWindow' ? this.ui.movieWindowOpen : this.ui.movieSettingsOpen).set(true);
+        }
+        break;
+      case 'openMovie':
+        if (this.project.isOpen()) {
+          this.ui.movieDialog.set('open');
+        }
+        break;
+      case 'exportMovieAudio':
+      case 'detectSceneCuts':
+        if (this.project.isOpen() && this.requireMovie()) {
+          this.ui.movieDialog.set(command === 'exportMovieAudio' ? 'exportAudio' : 'detectScenes');
+        }
+        break;
+      case 'removeMovie':
+      case 'importMovieAudio': {
+        if (!this.project.isOpen()) {
+          break;
+        }
+        // Loaded on first use: the video code stays out of the initial bundle.
+        const { MovieActions } = await import('./video/movie-actions');
+        const actions = this.injector.get(MovieActions);
+        await (command === 'removeMovie' ? actions.removeMovie() : actions.importAudio());
+        break;
+      }
     }
+  }
+
+  /** Whether the project has a movie; says so when it has none. */
+  private requireMovie(): boolean {
+    if (this.project.movie()) {
+      return true;
+    }
+    this.notify.info('The project has no movie: Movie ▸ Open Movie… adds one.');
+    return false;
   }
 
   /** File ▸ Print Score…: the open score window's score, else the Piano Roll's track, else every MIDI track. */
@@ -502,6 +644,7 @@ export class App {
   protected onKeydown(event: KeyboardEvent): void {
     const target = event.target as HTMLElement | null;
     if (
+      this.remote() ||
       !this.project.isOpen() ||
       target?.closest('input, textarea, select, [contenteditable], [role="dialog"], [role="menu"]')
     ) {
@@ -524,8 +667,13 @@ export class App {
   }
 
   protected onKeyup(event: KeyboardEvent): void {
-    if (this.live.typeUp(event.code)) {
+    if (!this.remote() && this.live.typeUp(event.code)) {
       event.preventDefault();
     }
   }
+}
+
+/** Whether a router URL is the remote's (`/remote`, `/remote/…`, `/remote?…`). */
+export function isRemoteRoute(url: string): boolean {
+  return /^\/remote(?:[/?#]|$)/.test(url);
 }

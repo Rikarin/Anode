@@ -8,7 +8,7 @@ import { AnPeakMeter, type MeterSource } from './peak-meter';
  * projected content), pan, then the fader beside its meter, mute and solo, and the channel's name on a bar of its
  * colour. Values come in as inputs and go out as events; the owner decides what a change does (the editor sends it,
  * coalesced). The master has no solo; a VCA strip has no pan and no meter; `flow` lights the strips the selected
- * strip's signal passes through.
+ * strip's signal passes through. A surround strip projects its own panner and meter (`customPan`, `customMeter`).
  */
 @Component({
   selector: 'an-channel-strip',
@@ -26,6 +26,9 @@ import { AnPeakMeter, type MeterSource } from './peak-meter';
     <div class="flex w-full flex-col gap-0.5 px-1 empty:hidden"><ng-content /></div>
     @if (vca()) {
       <div class="h-12 shrink-0" aria-hidden="true"></div>
+    } @else if (customPan()) {
+      <!-- Phase 10: the owner's panner (the Surround Panner or the 3D Object Panner) in place of the pan knob. -->
+      <ng-content select="[stripPan]" />
     } @else {
       <an-pan-knob
         [label]="name() + ' pan'"
@@ -42,7 +45,9 @@ import { AnPeakMeter, type MeterSource } from './peak-meter';
         (valueChange)="volumeChange.emit($event)"
         (committed)="volumeCommit.emit($event)"
       />
-      @if (!vca()) {
+      @if (customMeter()) {
+        <ng-content select="[stripMeter]" />
+      } @else if (!vca()) {
         <an-peak-meter class="h-auto! pt-6 pb-2" [label]="name() + ' level'" [source]="meter()" [mono]="mono()" />
       }
     </div>
@@ -94,6 +99,13 @@ export class AnChannelStrip {
   readonly vca = input(false, { transform: booleanAttribute });
   /** On the selected strip's signal flow (Logic's signal-flow highlight). */
   readonly flow = input(false, { transform: booleanAttribute });
+  /**
+   * The owner projects its own panner (`[stripPan]`) in place of the pan knob: a strip whose output is surround (the
+   * Surround Panner) or an object (the 3D Object Panner), Phase 10.
+   */
+  readonly customPan = input(false, { transform: booleanAttribute });
+  /** The owner projects its own meter (`[stripMeter]`): a multichannel meter for a surround strip, Phase 10. */
+  readonly customMeter = input(false, { transform: booleanAttribute });
   /** Where the meter reads its level each animation frame. */
   readonly meter = input<MeterSource | null>(null);
 

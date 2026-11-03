@@ -213,14 +213,28 @@ export class JobsStore {
     }
     switch (job.state) {
       case 'done':
-        if (job.kind === 'musicXmlExport' || job.kind === 'aafExport' || job.kind === 'midiExport') {
+        if (
+          job.kind === 'musicXmlExport' ||
+          job.kind === 'aafExport' ||
+          job.kind === 'midiExport' ||
+          job.kind === 'admExport' ||
+          job.kind === 'movieAudioExport'
+        ) {
           const first = job.files[0];
           this.notify.success(
             `Exported ${first ? fileName(first) : JobNames[job.kind]}`,
             first && this.canReveal ? { text: 'Show in Finder', run: () => void this.reveal(first) } : undefined
           );
-        } else if (job.kind === 'musicXmlImport' || job.kind === 'aafImport' || job.kind === 'midiImport') {
+        } else if (
+          job.kind === 'musicXmlImport' ||
+          job.kind === 'aafImport' ||
+          job.kind === 'midiImport' ||
+          job.kind === 'admImport' ||
+          job.kind === 'movieAudioImport'
+        ) {
           this.notify.success(`${JobNames[job.kind]} done: the tracks are in the project.`);
+        } else if (job.kind === 'sceneDetect') {
+          this.notify.success('Scene cuts detected: the scene markers are on the marker track.');
         }
         if (job.kind === 'bounce') {
           const first = job.files[0];

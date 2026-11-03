@@ -1,7 +1,7 @@
 import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
 import type { Marker } from '@anode/api-client';
 import { provideIcons } from '@ng-icons/core';
-import { matAddRound, matDeleteRound } from '@ng-icons/material-icons/round';
+import { matAddRound, matDeleteRound, matMovieRound } from '@ng-icons/material-icons/round';
 import { XuiButtonImports } from '@xui/button';
 import { XuiIconImports } from '@xui/icon';
 import { XuiInputImports } from '@xui/input';
@@ -9,14 +9,15 @@ import { ProjectStore } from '../state/project.store';
 import { TransportStore } from '../state/transport.store';
 
 /**
- * The Marker List (Logic's): every marker with its position (bars and beats), name, length and text, in time order.
+ * The Marker List (Logic's): every marker with its position (bars and beats), name, length and text, in time order;
+ * scene markers (Phase 10, Detect Scene Cuts) show a film glyph.
  * Click a position to go there; edit a name or text in place; + adds a marker at the playhead.
  */
 @Component({
   selector: 'an-marker-list',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [XuiButtonImports, XuiIconImports, XuiInputImports],
-  providers: [provideIcons({ matAddRound, matDeleteRound })],
+  providers: [provideIcons({ matAddRound, matDeleteRound, matMovieRound })],
   host: { class: 'flex h-full min-h-0 flex-col', role: 'region', 'aria-label': 'Marker List' },
   template: `
     <div class="glass-bar flex h-9 shrink-0 items-center gap-2 px-2">
@@ -48,18 +49,24 @@ import { TransportStore } from '../state/transport.store';
           class="border-hairline grid grid-cols-[4.5rem_1fr_1fr_1.5rem] items-center gap-2 border-b px-2 py-1 text-xs"
           role="listitem"
           [attr.data-testid]="'marker-row-' + marker.name"
+          [attr.data-kind]="marker.kind"
         >
           <button
             type="button"
             class="text-foreground readout hover:text-primary text-start"
-            [attr.aria-label]="'Go to ' + marker.name"
+            [attr.aria-label]="'Go to ' + (marker.kind === 'scene' ? 'scene marker ' : '') + marker.name"
             (click)="transport.locate(marker.tick)"
           >
-            <span
-              class="me-1 inline-block size-2 rounded-full"
-              [style.background-color]="marker.color || 'var(--color-primary)'"
-            ></span
-            >{{ position(marker.tick) }}
+            @if (marker.kind === 'scene') {
+              <!-- Phase 10: a scene marker (Detect Scene Cuts). -->
+              <ng-icon xui name="matMovieRound" size="11px" class="text-lit me-0.5 align-[-1px]" />
+            } @else {
+              <span
+                class="me-1 inline-block size-2 rounded-full"
+                [style.background-color]="marker.color || 'var(--color-primary)'"
+              ></span>
+            }
+            {{ position(marker.tick) }}
           </button>
           <input
             #name

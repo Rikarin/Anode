@@ -25,7 +25,8 @@
             "output": "verovio"
           }
         ],
-        "styles": ["apps/editor/src/styles.css"]
+        "styles": ["apps/editor/src/styles.css"],
+        "allowedCommonJsDependencies": ["@eshaz/web-worker"]
       },
       "configurations": {
         "production": {

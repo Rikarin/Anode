@@ -9,14 +9,18 @@ import {
   viewChild
 } from '@angular/core';
 import type { ArrangementMarker, EditCommand, Marker, TempoEvent } from '@anode/api-client';
+import { provideIcons } from '@ng-icons/core';
+import { matMovieRound } from '@ng-icons/material-icons/round';
 import { XuiContextMenuImports } from '@xui/context-menu';
+import { XuiIconImports } from '@xui/icon';
 import { XuiInputImports } from '@xui/input';
 import { XuiMenuImports } from '@xui/menu';
 import { ProjectStore } from '../state/project.store';
 import { SmartTempoStore } from '../state/smart-tempo.store';
-import { type GlobalLane, GlobalLanes, TracksViewStore } from '../state/tracks-view.store';
+import { type GlobalLane, TracksViewStore, visibleGlobalLanes } from '../state/tracks-view.store';
 import { parseSignature, TransportStore } from '../state/transport.store';
 import { snapBy } from '../tracks/snap';
+import { MovieLane } from '../video/movie-lane';
 import { BeatMappingLane } from './beat-mapping-lane';
 import {
   addKey,
@@ -69,7 +73,8 @@ interface Field {
 @Component({
   selector: 'an-global-lanes',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [BeatMappingLane, XuiContextMenuImports, XuiInputImports, XuiMenuImports],
+  imports: [BeatMappingLane, MovieLane, XuiContextMenuImports, XuiIconImports, XuiInputImports, XuiMenuImports],
+  providers: [provideIcons({ matMovieRound })],
   host: {
     class: 'border-hairline bg-surface/85 block overflow-hidden border-b select-none',
     role: 'group',
@@ -117,8 +122,10 @@ interface Field {
                 type="button"
                 class="text-foreground focus-visible:outline-focus bg-surface-raised absolute top-0.5 bottom-0.5 max-w-40 truncate rounded-e-[4px] border-s-2 px-1.5 text-start text-[11px] font-medium focus-visible:outline-2"
                 [style.left.px]="x(markerTick(marker))"
-                [style.border-color]="marker.color || 'var(--color-primary)'"
-                [attr.aria-label]="'Marker ' + marker.name"
+                [class.border-dashed]="marker.kind === 'scene'"
+                [style.border-color]="marker.color || (marker.kind === 'scene' ? 'var(--lit)' : 'var(--color-primary)')"
+                [attr.aria-label]="(marker.kind === 'scene' ? 'Scene marker ' : 'Marker ') + marker.name"
+                [attr.data-kind]="marker.kind"
                 [attr.data-testid]="'marker-' + marker.name"
                 [xuiContextMenuTriggerFor]="markerMenu"
                 [xuiContextMenuTriggerData]="{ $implicit: marker }"
@@ -127,6 +134,10 @@ interface Field {
                 (keydown.delete)="deleteMarker(marker)"
                 (keydown.backspace)="deleteMarker(marker)"
               >
+                @if (marker.kind === 'scene') {
+                  <!-- Phase 10: a scene marker (Detect Scene Cuts), an ordinary marker otherwise. -->
+                  <ng-icon xui name="matMovieRound" size="11px" class="text-lit me-0.5 align-[-1px]" />
+                }
                 {{ marker.name }}
               </button>
             }
@@ -183,6 +194,12 @@ interface Field {
           }
           @case ('beatMapping') {
             <an-beat-mapping-lane />
+          }
+          @case ('movie') {
+            <!-- Phase 10: the movie's thumbnails, loaded with the video code only when a project has a movie. -->
+            @defer (on immediate) {
+              <an-movie-lane />
+            }
           }
           @case ('signature') {
             @for (event of settings().signatures; track event.tick; let i = $index) {
@@ -252,6 +269,9 @@ interface Field {
     <ng-template #markerMenu let-marker>
       <xui-menu>
         <button xuiMenuItem type="button" (click)="edit('marker', marker.id, marker.tick, marker.name)">Rename</button>
+        <button xuiMenuItem type="button" data-testid="marker-kind" (click)="toggleKind(marker)">
+          {{ marker.kind === 'scene' ? 'Make Ordinary Marker' : 'Make Scene Marker' }}
+        </button>
         <button xuiMenuItem type="button" color="error" (click)="deleteMarker(marker)">Delete Marker</button>
       </xui-menu>
     </ng-template>
@@ -289,6 +309,7 @@ export class GlobalTracks {
   protected readonly laneNames: Record<GlobalLane, string> = {
     arrangement: 'Arrangement',
     marker: 'Marker',
+    movie: 'Movie',
     tempo: 'Tempo',
     beatMapping: 'Beat Mapping',
     signature: 'Signature',
@@ -298,7 +319,7 @@ export class GlobalTracks {
   protected readonly settings = this.project.settings;
   protected readonly sections = this.project.sections;
   protected readonly markers = this.project.markers;
-  protected readonly lanes = computed(() => GlobalLanes.filter(lane => this.view.globalLanes().has(lane)));
+  protected readonly lanes = computed(() => visibleGlobalLanes(this.view.globalLanes(), !!this.project.movie()));
   protected readonly ppt = this.view.pixelsPerTick;
   protected readonly drag = signal<Drag | null>(null);
   /** Where the drag is now, in ticks (snapped). */
@@ -481,7 +502,8 @@ export class GlobalTracks {
     const meter = this.project.meter();
     switch (lane) {
       case 'beatMapping':
-        return; // beats are mapped by dragging
+      case 'movie':
+        return; // beats are mapped by dragging; the movie track locates (its own double-click)
       case 'arrangement':
         this.addSection(tick);
         return;
@@ -550,6 +572,7 @@ export class GlobalTracks {
     return {
       arrangement: 'Section name',
       marker: 'Marker name',
+      movie: 'Movie',
       tempo: 'Tempo',
       beatMapping: 'Beat',
       signature: 'Time signature',
@@ -623,6 +646,15 @@ export class GlobalTracks {
 
   protected deleteMarker(marker: Marker): void {
     void this.project.execute([{ type: 'deleteMarkers', markerIds: [marker.id] }], 'Delete Marker');
+  }
+
+  /** Phase 10: a marker becomes a scene marker, or a scene marker an ordinary one. */
+  protected toggleKind(marker: Marker): void {
+    const kind = marker.kind === 'scene' ? 'marker' : 'scene';
+    void this.project.execute(
+      [{ type: 'setMarker', markerId: marker.id, kind }],
+      kind === 'scene' ? 'Make Scene Marker' : 'Make Marker'
+    );
   }
 
   protected ramp(index: number): void {

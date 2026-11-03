@@ -56,7 +56,7 @@ function fromParameter(target: string, group: string, parameter: ParameterInfo):
 /**
  * What a track's Smart Controls can map to, grouped for the parameter picker in Logic's order: the instrument
  * ("Instrument: Synth"), each insert (by its name), each MIDI FX slot ("MIDI FX: Arpeggiator"), then Main (volume, pan
- * and the sends). Mute and the controls' own lanes are not mapping targets. The automation targets supply the strip and
+ * and the sends), then the panner's (Phase 10: surround or object). Mute and the controls' own lanes are not mapping targets. The automation targets supply the strip and
  * plugin parameters; MIDI FX slots are added here unless the automation list already has them.
  */
 export function mappingTargets(
@@ -68,6 +68,7 @@ export function mappingTargets(
   const inserts = new Map<string, MappingTarget[]>();
   const midiEffects = new Map<string, MappingTarget[]>();
   const main: MappingTarget[] = [];
+  const panner: MappingTarget[] = [];
   for (const t of automation) {
     const slot = /^(insert|midiEffect):([^:]+):/.exec(t.target);
     if (t.target.startsWith('instrument:')) {
@@ -80,6 +81,9 @@ export function mappingTargets(
       const fx = track.strip.midiEffects.find(i => i.id === slot[2]);
       const group = midiEffectGroup(fx?.name ?? t.group);
       midiEffects.set(slot[2], [...(midiEffects.get(slot[2]) ?? []), fromAutomation(t, group)]);
+    } else if (t.group === 'Panner') {
+      // Phase 10: the Surround Panner's and the 3D Object Panner's parameters.
+      panner.push(fromAutomation(t, 'Panner'));
     } else {
       main.push(fromAutomation(t, 'Main'));
     }
@@ -107,6 +111,7 @@ export function mappingTargets(
   inserts.forEach(push);
   midiEffects.forEach(push);
   push(main);
+  push(panner);
   return groups;
 }
 

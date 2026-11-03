@@ -52,7 +52,7 @@ import { KeyCommandsStore } from '../state/key-commands.store';
 import { LanesStore } from '../state/lanes.store';
 import { ProjectStore } from '../state/project.store';
 import { SelectionStore } from '../state/selection.store';
-import { type GlobalLane, GlobalLanes as GlobalLaneOrder, Tools, TracksViewStore } from '../state/tracks-view.store';
+import { type GlobalLane, Tools, TracksViewStore, visibleGlobalLanes } from '../state/tracks-view.store';
 import { TransportStore } from '../state/transport.store';
 import { UiStore } from '../state/ui.store';
 import { StepSequencerStore, takesPatterns } from '../step-sequencer/step-sequencer.store';
@@ -601,7 +601,7 @@ export class TracksArea {
   protected readonly offset = computed(() => -this.view.firstLane() * this.view.laneHeight());
   protected readonly globalHeight = computed(() =>
     this.view.globalTracks()
-      ? GlobalLaneOrder.filter(lane => this.view.globalLanes().has(lane)).reduce(
+      ? visibleGlobalLanes(this.view.globalLanes(), !!this.project.movie()).reduce(
           (sum, lane) => sum + GlobalLaneHeights[lane],
           0
         )
