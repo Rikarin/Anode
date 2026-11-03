@@ -1,6 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <ItemGroup>
     <ProjectReference Include="../../src/Anode.Interchange/Anode.Interchange.csproj"/>
+    <!-- ADM: Anode's own object render, compared with the EBU ADM Renderer's. -->
+    <ProjectReference Include="../../src/Anode.Dsp/Anode.Dsp.csproj"/>
   </ItemGroup>
   <ItemGroup>
     <!-- MusicXML: the 4.0 XSD (scripts/fetch-musicxml-schema.mjs) and the import fixtures. -->
