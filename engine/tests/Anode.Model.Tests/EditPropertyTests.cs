@@ -19,10 +19,6 @@ public sealed class EditPropertyTests {
     [MemberData(nameof(Commands))]
     public void Applying_then_inverting_a_command_is_the_identity(string command) {
         var type = RandomProjects.CommandTypes.Single(t => t.Name == command);
-        Assert.SkipWhen(
-            RandomProjects.PendingPhase10.Contains(command),
-            "Phase 10 command the model does not implement yet (docs/11-phase-10.md, workstream B)."
-        );
         var applied = 0;
         Gen.Int.Sample(
             seed => {
@@ -204,6 +200,7 @@ public sealed class EditPropertyTests {
         string name = project.Name;
         ProjectSettings settings = project.Settings;
         ChannelStrip master = project.Master;
+        Movie? movie = project.Movie;
 
         public void Apply(IEnumerable<DeltaOp> ops) {
             foreach (var op in ops) {
@@ -352,6 +349,9 @@ public sealed class EditPropertyTests {
                     case ScoreLayoutChanged(var l):
                         layout = l;
                         break;
+                    case MovieChanged(var m):
+                        movie = m;
+                        break;
                 }
             }
         }
@@ -377,6 +377,7 @@ public sealed class EditPropertyTests {
                     Automation = [..lanes.Values.OrderBy(static l => l.Id, StringComparer.Ordinal)],
                     PatternRegions = [..patterns.Values.OrderBy(static r => r.Id, StringComparer.Ordinal)],
                     LiveLoops = liveLoops,
+                    Movie = movie,
                     Grooves = [..grooves.Values.OrderBy(static g => g.Id, StringComparer.Ordinal)],
                     ArticulationSets = [..articulationSets.Values.OrderBy(static a => a.Id, StringComparer.Ordinal)],
                     LaneSets = [..laneSets.Values.OrderBy(static l => l.Id, StringComparer.Ordinal)],

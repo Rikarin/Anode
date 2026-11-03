@@ -314,10 +314,10 @@ public sealed class PackageTests : IDisposable {
             JsonSerializer.Serialize(loaded.Score, ContractsJsonContext.Default.ProjectScore)
         );
 
-        // Saved again, it is schema 9 with its score.
+        // Saved again, it is the current schema with its score.
         ProjectPackage.Save(folder, loaded);
         var saved = JsonNode.Parse(File.ReadAllText(path))!.AsObject();
-        Assert.Equal(9, saved["schemaVersion"]!.GetValue<int>());
+        Assert.Equal(PackageMigrations.CurrentSchemaVersion, saved["schemaVersion"]!.GetValue<int>());
         Assert.NotNull(saved["score"]);
     }
 

@@ -397,7 +397,11 @@ public sealed class HostSync(HostLink link, SegmentPool pool, ILogger logger) {
         }
 
         IEnumerable<IpcMessage> levels =
-            old.Gain != now.Gain || old.Pan != now.Pan || old.Mute != now.Mute || old.Solo != now.Solo
+            old.Gain != now.Gain
+            || old.Pan != now.Pan
+            || old.Mute != now.Mute
+            || old.Solo != now.Solo
+            || old.Panner != now.Panner
                 ? [new SetStripMessage(id, now)]
                 : [];
         return levels.Concat(

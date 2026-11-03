@@ -322,7 +322,7 @@ static class RandomProjects {
                     random,
                     [typeof(SetPitchNotesCommand), typeof(NewTrackAlternativeCommand), typeof(SetRegionFlexCommand)]
                 ),
-                _ => Pick(random, Buildable)
+                _ => Pick(random, CommandTypes)
             };
             var command = i is >= 4 and < 7 && FirstAudioTrack(state) is { } audio && state.Files.Count > 0
                 ? AddRegion(audio, Pick(random, [..state.Files.Values]), random)
@@ -467,28 +467,55 @@ static class RandomProjects {
             }
         }
 
+        // Phase 10 content (docs/11-phase-10.md): a surround project half the time, with a surround aux, objects and
+        // panner automation; a movie half the time; scene markers.
+        if (edits > 20) {
+            var commands = new List<EditCommand?>();
+            if (random.Next(2) == 0) {
+                commands.Add(
+                    new SetSurroundFormatCommand(
+                        Pick(random, [ChannelFormat.Surround51, ChannelFormat.Surround714, ChannelFormat.Quad])
+                    )
+                );
+            }
+
+            if (random.Next(2) == 0) {
+                commands.Add(new SetMovieCommand(Movie(random)));
+            }
+
+            commands.Add(new AddSceneMarkersCommand([3840, 7680 + random.Next(0, 960)], random.Next(2) == 0));
+            foreach (var command in commands) {
+                state = Edits.Apply(state, command!, ids, Plugins).State;
+            }
+
+            foreach (var type in (Type[]) [
+                         typeof(SetStripFormatCommand),
+                         typeof(SetPannerCommand),
+                         typeof(SetPannerCommand),
+                         typeof(SetAutomationCommand)
+                     ]) {
+                var command = type == typeof(SetAutomationCommand)
+                    && state.Tracks.Find(static t => Edits.HasAudioStrip(t.Kind)) is { } panned
+                        ? new SetAutomationCommand(
+                            Pick(random, PannerTargets.All),
+                            [new(0, 0, 0), new(1920, 0, 0)],
+                            panned.Id
+                        )
+                        : Command(type, state, random);
+                if (command is null) {
+                    continue;
+                }
+
+                try {
+                    state = Edits.Apply(state, command, ids, Plugins, Patches, Analysis, Notation).State;
+                } catch (EditException) {
+                    // not every random edit applies
+                }
+            }
+        }
+
         return (state, ids, random);
     }
-
-    /// <summary>
-    ///     Phase 10 commands (docs/11-phase-10.md) the model rejects until workstream B implements them; the identity
-    ///     property skips them.
-    /// </summary>
-    public static readonly IReadOnlySet<string> PendingPhase10 = new HashSet<string>(StringComparer.Ordinal) {
-        nameof(SetSurroundFormatCommand),
-        nameof(SetStripFormatCommand),
-        nameof(SetPannerCommand),
-        nameof(SetMovieCommand),
-        nameof(SetMoviePositionCommand),
-        nameof(RemoveMovieCommand),
-        nameof(AddSceneMarkersCommand)
-    };
-
-    /// <summary>
-    ///     The command types random projects are built from: every one but those the model refuses outright (Phase 10,
-    ///     until workstream B), so the projects stay those of Phase 9 and the other properties keep their odds.
-    /// </summary>
-    static Type[] Buildable { get; } = [..CommandTypes.Where(static t => !PendingPhase10.Contains(t.Name))];
 
     /// <summary>The parameters the host reports for every random script.</summary>
     public static IReadOnlyList<ParameterInfo> ScriptParameters { get; } = [
@@ -654,7 +681,8 @@ static class RandomProjects {
                 $"Marker {r.Next(100)}",
                 r.Next(64) * 480L,
                 r.Next(3) == 0 ? r.Next(1, 8) * 960L : 0,
-                MaybeText("#ffaa00")
+                MaybeText("#ffaa00"),
+                r.Next(3) == 0 ? Pick(r, Enum.GetValues<MarkerKind>()) : null
             ),
             nameof(SetMarkerCommand) => markers.Length > 0
                 ? new SetMarkerCommand(
@@ -663,7 +691,8 @@ static class RandomProjects {
                     r.Next(2) == 0 ? null : r.Next(64) * 480L,
                     r.Next(2) == 0 ? null : r.Next(4) * 960L,
                     MaybeText("#00aaff"),
-                    MaybeText($"Text {r.Next(100)}")
+                    MaybeText($"Text {r.Next(100)}"),
+                    r.Next(3) == 0 ? Pick(r, Enum.GetValues<MarkerKind>()) : null
                 )
                 : null,
             nameof(DeleteMarkersCommand) => markers.Length > 0
@@ -1324,23 +1353,30 @@ static class RandomProjects {
                 )
                 : null,
             nameof(ImportTracksCommand) => new ImportTracksCommand(Imported(s, r)),
-            // Phase 10 commands (docs/11-phase-10.md): placeholders until the model implements them (workstream B
-            // replaces these with generators that make commands that apply, and removes PendingPhase10).
+            // Phase 10 (docs/11-phase-10.md).
             nameof(SetSurroundFormatCommand) => new SetSurroundFormatCommand(Pick(r, Enum.GetValues<ChannelFormat>())),
-            nameof(SetStripFormatCommand) => Track() is { } id
+            nameof(SetStripFormatCommand) => mixed.Length > 0 && Pick(r, mixed) is var formatted
                 ? new SetStripFormatCommand(
-                    id,
-                    Pick(r, [ChannelFormat.Mono, ChannelFormat.Stereo, ChannelFormat.Surround51])
+                    formatted.Id,
+                    formatted.Kind == TrackKind.Instrument
+                        ? Pick(r, [ChannelFormat.Mono, ChannelFormat.Stereo])
+                        : Pick(r, Enum.GetValues<ChannelFormat>())
                 )
                 : null,
-            nameof(SetPannerCommand) => Track() is { } id
+            nameof(SetPannerCommand) => mixed.Length > 0 && Pick(r, mixed) is var panned
                 ? new SetPannerCommand(
-                    id,
-                    r.Next(2) == 0 ? Pick(r, Enum.GetValues<PannerMode>()) : null,
+                    panned.Id,
+                    r.Next(2) == 0 ? null : Mode(panned),
                     r.Next(2) == 0 ? r.Next(-180, 181) : null,
                     r.Next(2) == 0 ? r.Next(0, 11) / 10.0 : null,
-                    Azimuth: r.Next(2) == 0 ? r.Next(-180, 181) : null,
-                    ObjectElevation: r.Next(2) == 0 ? r.Next(0, 91) : null
+                    r.Next(3) == 0 ? r.Next(0, 91) : null,
+                    r.Next(3) == 0 ? -r.Next(0, 145) : null,
+                    r.Next(3) == 0 ? -r.Next(0, 145) : null,
+                    r.Next(3) == 0 ? r.Next(0, 181) : null,
+                    r.Next(2) == 0 ? r.Next(-180, 181) : null,
+                    r.Next(2) == 0 ? r.Next(-90, 91) : null,
+                    r.Next(3) == 0 ? r.Next(0, 11) / 10.0 : null,
+                    r.Next(3) == 0 ? r.Next(0, 11) / 10.0 : null
                 )
                 : null,
             nameof(SetMovieCommand) => new SetMovieCommand(Movie(r)),
@@ -1356,6 +1392,13 @@ static class RandomProjects {
             _ => throw new InvalidOperationException($"No generator for {type.Name}.")
         };
         string? Track() => tracks.Count == 0 ? null : Pick(r, tracks).Id;
+
+        // A panner mode the strip's output allows (now and then one it does not).
+        PannerMode Mode(Track t) =>
+            r.Next(8) == 0 ? Pick(r, Enum.GetValues<PannerMode>())
+            : !SpeakerLayouts.IsSurround(t.Strip.OutputFormat) ? PannerMode.Stereo
+            : t.Strip.Output == "master" && r.Next(2) == 0 ? PannerMode.Object
+            : PannerMode.Surround;
 
         Track? AudioTrack() =>
             tracks.Where(static t => t.Kind == TrackKind.Audio).ToArray() is { Length: > 0 } audio
@@ -2017,7 +2060,25 @@ static class RandomProjects {
                             0,
                             []
                         )
-                    ]
+                    ],
+                    // Phase 10: an ADM import's object (or a bed in the project's format).
+                    r.Next(2) == 0 ? null : Pick(r, [ChannelFormat.Mono, s.Settings.SurroundFormat]),
+                    r.Next(2) == 0
+                        ? null
+                        : Panner.Default with {
+                            Mode = Pick(r, Enum.GetValues<PannerMode>()),
+                            Object = new(r.Next(-180, 181), r.Next(-90, 91), 1, 0)
+                        },
+                    r.Next(2) == 0
+                        ? null
+                        : [
+                            new(
+                                "lane-1",
+                                "ignored",
+                                PannerTargets.ObjectAzimuth,
+                                [new(0, 30, 0), new(1920, -110, 0)]
+                            )
+                        ]
                 )
             );
         }

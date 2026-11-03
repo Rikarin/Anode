@@ -136,6 +136,7 @@ public static partial class Edits {
 
         CheckTick(c.Tick, "marker");
         CheckMarkerLength(c.LengthTicks);
+        CheckMarkerKind(c.Kind);
         var marker = new Marker(
             ids.Next(IdPrefix.Marker),
             Name(c.Name ?? string.Empty, "marker name"),
@@ -160,6 +161,7 @@ public static partial class Edits {
             CheckMarkerLength(length);
         }
 
+        CheckMarkerKind(c.Kind);
         return [
             new MarkerUpserted(
                 marker with {
@@ -167,7 +169,8 @@ public static partial class Edits {
                     Tick = c.Tick ?? marker.Tick,
                     LengthTicks = c.LengthTicks ?? marker.LengthTicks,
                     Color = c.Color is null ? marker.Color : Color(c.Color),
-                    Text = c.Text is null ? marker.Text : Text(c.Text, "marker text")
+                    Text = c.Text is null ? marker.Text : Text(c.Text, "marker text"),
+                    Kind = c.Kind ?? marker.Kind
                 }
             )
         ];

@@ -73,6 +73,11 @@ public static partial class Edits {
             }
 
             state = Step(state, ops, forward, inverse);
+            if (MayReformat(ops)) {
+                // Every strip's output format is its destination's (docs/11-phase-10.md): whatever changed the
+                // routing or a format, the strips that follow it come along in the same command.
+                state = Step(state, Conform(state), forward, inverse);
+            }
         }
 
         inverse.Reverse();
@@ -136,8 +141,6 @@ public static partial class Edits {
         IScoreNotation? notation = null
     ) =>
         command switch {
-            // Scene markers and imported formats, panners and automation: Phase 10, workstream B (docs/11-phase-10.md).
-            _ when UsesPhase10Fields(command) => throw Phase10Pending($"{command.GetType().Name} with Phase 10 fields"),
             AddTrackCommand c => AddTrack(state, c, ids, plugins),
             RemoveTrackCommand c => RemoveTrack(state, c),
             MoveTrackCommand c => MoveTrack(state, c),
@@ -223,7 +226,7 @@ public static partial class Edits {
                 ?? Phase7Ops(state, command, ids, analysis ?? NoAnalysis.Instance)
                 ?? Phase8Ops(state, command, ids, plugins)
                 ?? Phase9Ops(state, command, ids, plugins, notation ?? NoScoreNotation.Instance)
-                ?? Phase10Ops(command)
+                ?? Phase10Ops(state, command, ids)
                 ?? throw new EditException($"Unknown command {command.GetType().Name}.")
         };
 

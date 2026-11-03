@@ -128,6 +128,9 @@ public static class AutomationEvents {
             ["insert", var id, var parameter] => new(index, engineTrack, "insert", id, parameter),
             ["instrument", var parameter] => new(index, engineTrack, "instrument", null, parameter),
             ["midiEffect", var id, var parameter] => new(index, engineTrack, "midiEffect", id, parameter),
+            // Phase 10: the panners' parameters, the levels as gains (docs/11-phase-10.md).
+            ["surround", var parameter] => new(index, engineTrack, "surround", null, parameter),
+            ["object", var parameter] => new(index, engineTrack, "object", null, parameter),
             _ => new(index, engineTrack, target)
         };
     }
@@ -200,7 +203,7 @@ public static class AutomationEvents {
             "volume" => strip.VolumeDb,
             "pan" => strip.Pan,
             "mute" => strip.Mute ? 1 : 0,
-            _ => 0
+            _ => Edits.PannerValue(strip.Panner, target) ?? 0
         };
 
     /// <summary>Mute: a step wherever the combined value changes (and at the start).</summary>
@@ -263,9 +266,11 @@ public static class AutomationEvents {
         int index,
         string target
     ) {
-        readonly bool gainLike = target == "volume" || target.StartsWith("send:", StringComparison.Ordinal);
+        readonly bool gainLike = target is "volume" or PannerTargets.SurroundCentre or PannerTargets.SurroundLfe
+            || target.StartsWith("send:", StringComparison.Ordinal);
 
-        readonly double tolerance = target == "volume" || target.StartsWith("send:", StringComparison.Ordinal)
+        readonly double tolerance = target is "volume" or PannerTargets.SurroundCentre or PannerTargets.SurroundLfe
+            || target.StartsWith("send:", StringComparison.Ordinal)
             ? 0.01
             : 1e-4 * Math.Max(1, curves.Max(static c => c.Magnitude));
 

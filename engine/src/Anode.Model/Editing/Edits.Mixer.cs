@@ -528,6 +528,10 @@ public static partial class Edits {
                 return new(-1, 1, false);
         }
 
+        if (PannerRange(target) is { } panner && track is not null && HasAudioStrip(track.Kind)) {
+            return panner;
+        }
+
         var parts = target.Split(':');
         switch (parts) {
             case ["send", var id] when track is not null && !vca:

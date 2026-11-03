@@ -356,6 +356,8 @@ public static partial class Edits {
                 return track with { Strip = strip with { VolumeDb = Math.Clamp(value, Units.SilenceDb, MaxVolumeDb) } };
             case ["pan"]:
                 return track with { Strip = strip with { Pan = Math.Clamp(value, -1, 1) } };
+            case ["surround" or "object", _] when PannerValue(strip.Panner, target) is not null:
+                return track with { Strip = strip with { Panner = WithPannerValue(strip.Panner, target, value) } };
             case ["send", var id] when strip.Sends.Any(s => s.Id == id):
                 var level = Math.Clamp(value, Units.SilenceDb, MaxVolumeDb);
                 return track with {

@@ -33,6 +33,7 @@ public sealed class AutomationPass(long number, long startTick) {
             or SetInsertParameterCommand
             or SetParameterCommand
             or SetSmartControlCommand { Name: null, Value: not null }
+            or SetPannerCommand { Mode: null }
         );
 
     /// <summary>Whether a track in <paramref name="mode" /> records control moves.</summary>
@@ -157,6 +158,11 @@ public sealed class AutomationPass(long number, long startTick) {
 
         Plugins(controls, track);
         if (Edits.HasAudioStrip(track.Kind)) {
+            // Phase 10: the panners' parameters (docs/11-phase-10.md), whatever the mode.
+            foreach (var target in PannerTargets.All) {
+                controls[target] = Edits.PannerValue(strip.Panner, target)!.Value;
+            }
+
             foreach (var control in Edits.SmartControlsOf(track).Controls) {
                 controls[$"smartControl:{control.Id}"] = control.Value;
             }
