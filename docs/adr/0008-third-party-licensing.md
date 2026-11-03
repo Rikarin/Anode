@@ -22,6 +22,9 @@ Anode is **GPL-3.0-or-later**, as Cathode. Third-party code must be GPL-3-compat
 | AAF container (Compound File Binary, [MS-CFB]) | Anode's own reader and writer (`Anode.Interchange/Aaf/Cfb`) | GPL-3.0-or-later (ours) |
 | AAF object model | The standard class and type definitions, generated from pyaaf2 1.7.1's model tables (`scripts/aaf-model.py` → `AafMetaModel.g.cs`, which carries pyaaf2's copyright and licence notice, "Copyright (c) 2017 Mark Reid", in its header) | MIT (pyaaf2) |
 | AAF verification | pyaaf2 1.7.1, an independent reader in opt-in tests and the writer of the import fixtures (`scripts/setup-pyaaf2.py`); not shipped | MIT |
+| HRTFs (binaural monitoring) | SADIE II Database v2-2 (University of York), subject D2 (KEMAR), 48 kHz HRIRs, converted by `scripts/build-hrtf.py` into `engine/src/Anode.Dsp/Spatial/Hrtf/sadie2-d2-48k.anhrtf` (2 MB, committed with the licence and a `NOTICE` of the source and the changes) | Apache-2.0 (stated on the database's page and in the SOFA file's `License` attribute) |
+| Object panning reference | The EBU ADM Renderer's point-source and extent panners (ITU-R BS.2127), ported to C# in `Anode.Dsp/Spatial/PointSourcePanner.cs` and `Vbap.cs` (the algorithm, from BS.2127 and `ear` 2.1.0's `point_source.py` and `extent.py`) | BSD-3-Clause-Clear ("Copyright (c) 2018-2019 EBU ADM Renderer Authors", kept with the licence in the port's header) |
+| ADM verification | The EBU ADM Renderer (`ear`, pinned commit `5bb17b4`, 2.1.0), validating and rendering Anode's ADM BWF in opt-in tests (`scripts/setup-ear.py`); not shipped | BSD-3-Clause-Clear |
 
 **AAF's compound file:** Anode writes and reads [MS-CFB] itself ([docs/interchange/aaf.md](../interchange/aaf.md)).
 OpenMcdf (MPL-2.0, compatible with GPL-3.0) was the alternative. The reader and writer together are about 900 lines.
@@ -29,7 +32,11 @@ In-house, the writer streams each large essence stream from its WAV file in one 
 and adds no dependency to an AOT-compiled engine. The reader reads streams in place, sector by sector.
 
 **Spatial audio:** no Dolby SDKs or trademarks. Object panning, ADM BWF (ITU-R BS.2076) export and in-house binaural
-rendering from SOFA HRTFs.
+rendering from SOFA HRTFs ([ADR-0012](0012-spatial-audio.md), [docs/spatial](../spatial/README.md)). Apache-2.0 data
+may be combined with GPL-3.0 code; redistributing it needs its licence, its notices and a statement of the changes,
+which `Spatial/Hrtf/LICENSE` and `NOTICE` carry and anything that bundles the file must keep beside it. The
+BSD-3-Clause-Clear port carries `ear`'s copyright in its header (the clause grants no patent rights; BS.2127 is an ITU
+recommendation implemented by the EBU's reference code).
 
 **Content:** no Apple content (loops, kits, Session Player libraries, presets). Anode ships its own or CC0 content and
 imports SFZ and ACID-tagged WAV.

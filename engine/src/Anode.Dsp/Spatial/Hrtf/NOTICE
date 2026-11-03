@@ -1,0 +1,16 @@
+sadie2-d2-48k.anhrtf
+
+Derived from the SADIE II Database (https://www.york.ac.uk/sadie-project/database.html, release v2-2,
+https://zenodo.org/records/12092466), subject D2 (KEMAR), the 48 kHz 256-tap HRIRs
+(D2_HRIR_SOFA/D2_48K_24bit_256tap_FIR_SOFA.sofa).
+
+Copyright 2018, University of York. Licensed under the Apache License, Version 2.0 (LICENSE in this folder). All
+measurements are Copyright University of York. Recorded and developed at The Audio Lab, Department of Electronic
+Engineering, University of York, UK, by Cal Armstrong, Lewis Thresh and Gavin Kearney.
+
+Reference: C. Armstrong, L. Thresh, D. Murphy, G. Kearney, "A Perceptual Evaluation of Individual and Non-Individual
+HRTFs: A Case Study of the SADIE II Database", Applied Sciences 8(11), 2029 (2018), doi:10.3390/app8112029.
+
+Modified by Anode (scripts/build-hrtf.py): a subset of the directions (a 2-degree azimuth grid at elevations -75 to 75
+in steps of 15, and the two poles: 1982 of 8802), quantised to 16-bit integers with one scale, with each ear's delay
+(the peak of the response low-passed at 1.5 kHz) added, in Anode's .anhrtf format.
