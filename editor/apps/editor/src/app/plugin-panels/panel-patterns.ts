@@ -1,7 +1,14 @@
 import type { ParameterInfo, PluginInfo } from '@anode/api-client';
 
 /** The custom panels (docs/07-phase-6.md, "C — Editor": where a generic editor is unusable). */
-export type PanelKind = 'drawbars' | 'fmAlgorithm' | 'delayTaps' | 'multipressorBands';
+export type PanelKind =
+  | 'drawbars'
+  | 'fmAlgorithm'
+  | 'delayTaps'
+  | 'multipressorBands'
+  // Phase 11 (docs/12-phase-11.md): the physical model's object and pickups, Sample Alchemy's source view.
+  | 'physicalModel'
+  | 'sampleAlchemy';
 
 /**
  * A plugin's parameters bound to a panel's roles: `roles` the single ones (a role is absent when no parameter
@@ -54,6 +61,14 @@ function holdsValues(parameter: ParameterInfo | undefined, count: number): boole
  *   least 2 bands from 1; `crossover1` … (`xover1`, `split1`, `crossover.1`) one fewer than the bands; optional
  *   `bandN.bypass` (`bandN.off`, `bandN.mute`), or its inverse `bandNOn` (workstream D: `band1Threshold`, `band1On`,
  *   `cross1`…`cross3`).
+ * - **Physical model** (Phase 11, workstream E's ids to come; the fake's `core/fake/fake-plugins-phase11.ts`): `object`
+ *   (`object.kind`) with at least 4 values (string, bar, membrane, tube); `exciter1.position` (`exciter1Position`,
+ *   `exciter_1_pos`) for at least one exciter, `pickup1.position` and `pickup2.position`; optional `stiffness`,
+ *   `damping` (`loss`), `inharmonicity` (each also `material.…`), `exciterN.type`, `exciterN.strength`,
+ *   `pickupN.level`.
+ * - **Sample Alchemy**: `mode` with at least 3 values (granular, additive, spectral), `grainPosition` (`position`)
+ *   and `grainSize`; optional `grainSpray`, `grainDensity`, `partials` (`partialCount`), `partialSpread`,
+ *   `spectralSmoothing`.
  */
 export const PanelPatterns: readonly PanelPattern[] = [
   {
@@ -109,6 +124,41 @@ export const PanelPatterns: readonly PanelPattern[] = [
       const bands = bandCount(b);
       return bands >= 2 && (b.series['crossover']?.length ?? 0) >= bands - 1;
     }
+  },
+  {
+    kind: 'physicalModel',
+    roles: {
+      object: new RegExp(`^object(${S}(kind|type))?$`, 'i'),
+      stiffness: /^(material[._-]?)?stiffness$/i,
+      damping: /^(material[._-]?)?(damping|loss)$/i,
+      inharmonicity: /^(material[._-]?)?inharmonicity$/i
+    },
+    series: {
+      exciterType: new RegExp(`^exciter${S}(\\d)${S}(?:type|kind)$`, 'i'),
+      exciterPosition: new RegExp(`^exciter${S}(\\d)${S}pos(?:ition)?$`, 'i'),
+      exciterStrength: new RegExp(`^exciter${S}(\\d)${S}(?:strength|level|amount)$`, 'i'),
+      pickupPosition: new RegExp(`^pickup${S}(\\d)${S}pos(?:ition)?$`, 'i'),
+      pickupLevel: new RegExp(`^pickup${S}(\\d)${S}(?:level|gain)$`, 'i')
+    },
+    accepts: b =>
+      holdsValues(b.roles['object'], 4) &&
+      (b.series['exciterPosition']?.length ?? 0) >= 1 &&
+      (b.series['pickupPosition']?.length ?? 0) >= 2
+  },
+  {
+    kind: 'sampleAlchemy',
+    roles: {
+      mode: /^(synthesis[._-]?)?mode$/i,
+      position: new RegExp(`^(grain${S})?pos(ition)?$`, 'i'),
+      size: new RegExp(`^grain${S}size$`, 'i'),
+      spray: new RegExp(`^(grain${S})?spray$`, 'i'),
+      density: new RegExp(`^(grain${S})?density$`, 'i'),
+      partials: new RegExp(`^partials?(${S}(count|number))?$`, 'i'),
+      spread: new RegExp(`^partial${S}spread$`, 'i'),
+      smoothing: new RegExp(`^spectral${S}smoothing$`, 'i')
+    },
+    series: {},
+    accepts: b => holdsValues(b.roles['mode'], 3) && !!b.roles['position'] && !!b.roles['size']
   }
 ];
 

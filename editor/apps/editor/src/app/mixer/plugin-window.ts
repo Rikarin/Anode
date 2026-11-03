@@ -9,7 +9,8 @@ import { XuiIconImports } from '@xui/icon';
 import { LearnTarget, LearnTargets } from '../control/learn-menu';
 import { ConnectionService } from '../core/connection';
 import { isChoice, parameterGroups } from '../inspector/parameter-editor';
-import { type PluginPanelHost, pluginPanel } from '../plugin-panels/plugin-panel';
+import { type PluginPanelHost, deferredPanel, pluginPanel } from '../plugin-panels/plugin-panel';
+import { T3Panel } from '../plugin-panels/t3-panel';
 import { MeterBus } from '../state/meters';
 import { MixerStore } from '../state/mixer.store';
 import { PluginsStore } from '../state/plugins.store';
@@ -45,7 +46,16 @@ export function readingKind(plugin: PluginInfo | undefined): {
 @Component({
   selector: 'an-plugin-window',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [AnChoice, AnKnob, AnReadingMeter, LearnTarget, NgComponentOutlet, XuiButtonImports, XuiIconImports],
+  imports: [
+    AnChoice,
+    AnKnob,
+    AnReadingMeter,
+    LearnTarget,
+    NgComponentOutlet,
+    T3Panel,
+    XuiButtonImports,
+    XuiIconImports
+  ],
   providers: [provideIcons({ matCloseRound, matPowerSettingsNewRound })],
   host: {
     class: 'panel fixed z-40 flex max-h-[70vh] w-[26rem] flex-col overflow-hidden rounded-lg',
@@ -132,6 +142,14 @@ export function readingKind(plugin: PluginInfo | undefined): {
         @if (panel(); as p) {
           <ng-container *ngComponentOutlet="p; inputs: { host: host() }" />
         }
+        <!-- Phase 11: the T3 panels load when first shown. -->
+        @if (deferredPanel(); as kind) {
+          @if (host(); as h) {
+            @defer (on immediate) {
+              <an-t3-panel [kind]="kind" [host]="h" />
+            }
+          }
+        }
         @for (group of groups(); track group.name) {
           <section class="flex flex-col gap-1" [attr.aria-label]="group.name">
             <h4 class="text-foreground-muted text-[10px] font-semibold tracking-wide uppercase">{{ group.name }}</h4>
@@ -207,6 +225,8 @@ export class PluginWindowView {
   protected readonly plugin = computed(() => this.plugins.plugin(this.insert()?.pluginId));
   /** A custom panel for the plugin (drawbars, Delay Designer taps…) when its parameters match one; else none. */
   protected readonly panel = computed(() => pluginPanel(this.plugin()));
+  /** Phase 11: a T3 panel, loaded when shown. */
+  protected readonly deferredPanel = computed(() => deferredPanel(this.plugin()));
   protected readonly host = computed<PluginPanelHost | null>(() => {
     const plugin = this.plugin();
     const insert = this.insert();

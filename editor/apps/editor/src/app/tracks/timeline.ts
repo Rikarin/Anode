@@ -37,6 +37,7 @@ import { LanesStore } from '../state/lanes.store';
 import { PeaksCache } from '../state/peaks';
 import { ProjectStore } from '../state/project.store';
 import { SelectionStore } from '../state/selection.store';
+import { SessionPlayersStore } from '../state/session-players.store';
 import { ThemeStore } from '../state/theme.store';
 import { type TracksTool, TracksViewStore } from '../state/tracks-view.store';
 import { barTicks, TransportStore } from '../state/transport.store';
@@ -206,6 +207,7 @@ const ToolCursors: Record<TracksTool, string> = {
 })
 export class Timeline {
   private readonly project = inject(ProjectStore);
+  private readonly players = inject(SessionPlayersStore);
   private readonly transport = inject(TransportStore);
   private readonly selection = inject(SelectionStore);
   private readonly view = inject(TracksViewStore);
@@ -252,7 +254,8 @@ export class Timeline {
       this.project.regions().size +
       this.project.midiRegions().size +
       this.project.takeFolders().size +
-      this.project.patternRegions().size;
+      this.project.patternRegions().size +
+      this.project.sessionPlayerRegions().size;
     const tracks = this.project.trackIds().length;
     return `Tracks area: ${regions} ${regions === 1 ? 'region' : 'regions'} on ${tracks} ${tracks === 1 ? 'track' : 'tracks'}`;
   });
@@ -266,6 +269,8 @@ export class Timeline {
       regions: this.project.regionList(),
       midiRegions: this.project.midiRegionList(),
       patternRegions: this.project.patternRegionList(),
+      sessionPlayerRegions: this.players.regions(),
+      sessionPlayerNotes: this.players.notes(),
       keys: settings.keys,
       takeFolders: this.project.takeFolderList(),
       framesPerTick: this.project.framesPerTick(),
@@ -504,6 +509,7 @@ export class Timeline {
       midiRegions: this.project.midiRegions(),
       takeFolders: this.project.takeFolders(),
       patternRegions: this.project.patternRegions(),
+      sessionPlayerRegions: this.project.sessionPlayerRegions(),
       endOf: r => this.project.regionEnd(r),
       frames: (from, to) => Math.round(tempo.framesBetween(from, to - from, rate)),
       fileFrames: fileId => this.project.files().get(fileId)?.frames ?? Infinity
@@ -1101,15 +1107,22 @@ export class Timeline {
       ...this.project.regions(),
       ...this.project.midiRegions(),
       ...this.project.takeFolders(),
-      ...this.project.patternRegions()
+      ...this.project.patternRegions(),
+      ...this.project.sessionPlayerRegions()
     ]);
     const tracks = this.project.tracks();
     const patterns = this.project.patternRegions();
+    const players = this.project.sessionPlayerRegions();
     const fits = (id: string, trackId: string) => {
       const track = tracks.get(trackId);
       const kind = track?.kind;
       if (patterns.has(id)) {
         return kind === 'instrument' || !!track?.drumMachine;
+      }
+      const player = players.get(id);
+      if (player) {
+        // A Session Player region moves only between tracks of its player.
+        return kind === tracks.get(player.trackId)?.kind;
       }
       return id.startsWith('mid_') ? kind === 'instrument' || kind === 'midi' : kind === 'audio';
     };
@@ -1200,7 +1213,8 @@ export class Timeline {
 
   /** A region of any kind by id. */
   private span(id: string): RegionSpan | undefined {
-    const pattern = this.project.patternRegion(id);
+    // Session Player regions are spans as pattern regions are: moved, copied, muted and deleted, not split or joined.
+    const pattern = this.project.patternRegion(id) ?? this.project.sessionPlayerRegions().get(id);
     if (pattern) {
       return {
         id,
@@ -1248,7 +1262,8 @@ export class Timeline {
       ...[...this.project.regions().keys()],
       ...[...this.project.midiRegions().keys()],
       ...[...this.project.takeFolders().keys()],
-      ...[...this.project.patternRegions().keys()]
+      ...[...this.project.patternRegions().keys()],
+      ...[...this.project.sessionPlayerRegions().keys()]
     ]
       .map(id => this.span(id))
       .filter((s): s is RegionSpan => s !== undefined);

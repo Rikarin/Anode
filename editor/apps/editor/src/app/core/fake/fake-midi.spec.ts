@@ -19,7 +19,7 @@ function midi(server: FakeAnodeServer, id: string): MidiRegion {
 }
 
 describe('FakeAnodeServer: MIDI and instruments', () => {
-  it('serves a catalogue with a synth, a sampler, the T2 instruments and a CLAP instrument, and MIDI devices', async () => {
+  it('serves a catalogue with a synth, a sampler, the T2 and T3 instruments and a CLAP instrument, and MIDI devices', async () => {
     const server = new FakeAnodeServer();
     const plugins = await server.plugins();
     expect(plugins.filter(p => p.isInstrument).map(p => p.id)).toEqual([
@@ -31,6 +31,10 @@ describe('FakeAnodeServer: MIDI and instruments', () => {
       'anode.organ',
       'anode.electric-piano',
       'anode.wavetable',
+      // Phase 11's T3 instruments.
+      'anode.physical-model',
+      'anode.tape-replay',
+      'anode.sample-alchemy',
       'org.anode.test-sine'
     ]);
     expect(plugins[1]?.fileTypes).toEqual(['.sfz', '.wav']);

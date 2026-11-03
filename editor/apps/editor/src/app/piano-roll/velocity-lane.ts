@@ -140,7 +140,7 @@ export class VelocityLane {
   }
 
   protected down(event: PointerEvent): void {
-    if (event.button !== 0) {
+    if (event.button !== 0 || this.store.readOnly()) {
       return;
     }
 

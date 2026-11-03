@@ -1,4 +1,11 @@
-import type { AudioRegion, EditCommand, MidiRegion, PatternRegion, TakeFolder } from '@anode/api-client';
+import type {
+  AudioRegion,
+  EditCommand,
+  MidiRegion,
+  PatternRegion,
+  SessionPlayerRegion,
+  TakeFolder
+} from '@anode/api-client';
 import type { DragAdjustment } from './drag-modes';
 import { crossfadeAt } from './drag-modes';
 
@@ -9,6 +16,8 @@ export interface RegionLookup {
   takeFolders: ReadonlyMap<string, TakeFolder>;
   /** Step Sequencer pattern regions (Phase 6). */
   patternRegions?: ReadonlyMap<string, PatternRegion>;
+  /** Session Player regions (Phase 11). */
+  sessionPlayerRegions?: ReadonlyMap<string, SessionPlayerRegion>;
   /** Where an audio region ends, in ticks. */
   endOf: (region: Pick<AudioRegion, 'startTick' | 'length'>) => number;
   /** Frames between two ticks. */
@@ -24,6 +33,7 @@ export function muteCommands(ids: readonly string[], lookup: RegionLookup): Edit
     lookup.midiRegions.get(id)?.muted ??
     lookup.takeFolders.get(id)?.muted ??
     lookup.patternRegions?.get(id)?.muted ??
+    lookup.sessionPlayerRegions?.get(id)?.muted ??
     false;
   const first = ids[0];
   if (first === undefined) {
@@ -43,6 +53,9 @@ export function muteCommands(ids: readonly string[], lookup: RegionLookup): Edit
     if (lookup.patternRegions?.has(id)) {
       return [{ type: 'setPatternRegion', regionId: id, muted: to }];
     }
+    if (lookup.sessionPlayerRegions?.has(id)) {
+      return [{ type: 'setSessionPlayerRegion', regionId: id, muted: to, drums: null, bass: null, keys: null }];
+    }
     return [];
   });
 }
@@ -60,6 +73,9 @@ export function renameCommand(id: string, name: string, lookup: RegionLookup): E
   }
   if (lookup.patternRegions?.has(id)) {
     return { type: 'setPatternRegion', regionId: id, name };
+  }
+  if (lookup.sessionPlayerRegions?.has(id)) {
+    return { type: 'setSessionPlayerRegion', regionId: id, name, drums: null, bass: null, keys: null };
   }
   return null;
 }

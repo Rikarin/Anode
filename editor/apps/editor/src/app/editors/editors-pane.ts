@@ -7,8 +7,10 @@ import { DrumMachineEditor } from '../drum-machine/drum-machine-editor';
 import { EventList } from '../event-list/event-list';
 import { PianoRoll } from '../piano-roll/piano-roll';
 import { ScoreEditor } from '../score/score-editor';
+import { SessionPlayerEditor } from '../session-players/session-player-editor';
 import { ProjectStore } from '../state/project.store';
 import { SelectionStore } from '../state/selection.store';
+import { playerOf } from '../state/session-players.store';
 import { type EditorView, UiStore } from '../state/ui.store';
 import { StepEditor } from '../step-editor/step-editor';
 import { StepSequencer } from '../step-sequencer/step-sequencer';
@@ -20,6 +22,7 @@ const Views: readonly { value: EditorView; label: string }[] = [
   { value: 'smartTempo', label: 'Smart Tempo' },
   { value: 'stepSequencer', label: 'Step Sequencer' },
   { value: 'drumMachine', label: 'Drum Machine' },
+  { value: 'sessionPlayer', label: 'Session Player' },
   { value: 'eventList', label: 'Event List' },
   { value: 'stepEditor', label: 'Step Editor' },
   { value: 'audioFile', label: 'Audio File' }
@@ -45,6 +48,7 @@ const MidiViews: ReadonlySet<EditorView> = new Set(['pianoRoll', 'score', 'event
     EventList,
     PianoRoll,
     ScoreEditor,
+    SessionPlayerEditor,
     SmartTempoEditor,
     StepEditor,
     StepSequencer
@@ -110,6 +114,12 @@ const MidiViews: ReadonlySet<EditorView> = new Set(['pianoRoll', 'score', 'event
             <an-audio-file-editor />
           }
         }
+        <!-- Phase 11's Session Player Editor loads when first shown. -->
+        @case ('sessionPlayer') {
+          @defer (on immediate) {
+            <an-session-player-editor />
+          }
+        }
         @default {
           <an-piano-roll />
         }
@@ -130,8 +140,11 @@ export class EditorsPane {
         const audio = [...selected].some(id => this.project.regions().has(id));
         const midi = [...selected].some(id => this.project.midiRegions().has(id));
         const pattern = [...selected].some(id => this.project.patternRegions().has(id));
+        const player = [...selected].some(id => this.project.sessionPlayerRegions().has(id));
         const view = this.ui.editorView();
-        if (pattern && !audio && !midi) {
+        if (player && !pattern && !audio && !midi) {
+          this.ui.editorView.set('sessionPlayer');
+        } else if (pattern && !audio && !midi) {
           this.ui.editorView.set('stepSequencer');
         } else if (audio && !midi && MidiViews.has(view)) {
           this.ui.editorView.set('audio');
@@ -146,7 +159,13 @@ export class EditorsPane {
       const id = this.selection.track();
       untracked(() => {
         const track = id ? this.project.track(id) : null;
-        if (this.selection.regions().size === 0 && drumMachineOf(track, this.project.tracks())) {
+        if (this.selection.regions().size > 0) {
+          return;
+        }
+        // A Session Player track (a Drummer is a Drum Machine Designer too) brings its player's editor.
+        if (playerOf(track?.kind)) {
+          this.ui.editorView.set('sessionPlayer');
+        } else if (drumMachineOf(track, this.project.tracks())) {
           this.ui.editorView.set('drumMachine');
         }
       });

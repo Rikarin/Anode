@@ -7,6 +7,7 @@ import { canPitch } from '../music/region-timing';
 import { FlexStore, FollowModes } from '../state/flex.store';
 import { ProjectStore } from '../state/project.store';
 import { UiStore } from '../state/ui.store';
+import { PitchSourceFields } from './pitch-source-fields';
 
 /** A native select in the Inspector's dense grid, on the field surface. */
 const Field =
@@ -23,7 +24,7 @@ const Band =
 @Component({
   selector: 'an-audio-region-inspector',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [AnFadeCurve, XuiNumericInputImports],
+  imports: [AnFadeCurve, PitchSourceFields, XuiNumericInputImports],
   host: { class: 'flex flex-col gap-2', role: 'group', '[attr.aria-label]': '"Region: " + region().name' },
   template: `
     <h3 [class]="band" [attr.title]="region().name">Region: {{ region().name }}</h3>
@@ -39,6 +40,12 @@ const Band =
       >
         M
       </button>
+      <an-pitch-source-fields
+        [audio]="true"
+        [regionId]="region().id"
+        [mode]="region().pitchSource"
+        [regionKey]="region().key ?? null"
+      />
       <label class="text-foreground-muted" for="quantize-audio-grid">Quantize</label>
       <div class="flex min-w-0 items-center gap-1">
         <select

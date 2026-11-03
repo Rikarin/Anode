@@ -32,6 +32,7 @@
     "@xui/kbd": "^3.0.1",
     "@xui/menu": "^3.0.1",
     "@xui/menubar": "^3.0.1",
+    "@xui/node-graph": "^3.0.1",
     "@xui/non-ideal-state": "^3.0.1",
     "@xui/numeric-input": "^3.0.1",
     "@xui/popover": "^3.0.1",

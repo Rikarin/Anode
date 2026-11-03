@@ -73,7 +73,11 @@ export type AppCommand =
   | 'importMovieAudio'
   | 'exportMovieAudio'
   | 'detectSceneCuts'
-  | 'movieWindow';
+  | 'movieWindow'
+  // Phase 11 (docs/12-phase-11.md): the master's Mastering Assistant.
+  | 'masteringAssistant'
+  // Phase 11: the MIDI Environment window.
+  | 'environment';
 
 /** Native file dialogs (apps/desktop/src/main.ts, `anode:dialog:*`); each resolves empty when cancelled. */
 export interface DesktopDialogs {

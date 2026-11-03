@@ -2,6 +2,8 @@
 @import '@xui/core/styles/theme.css';
 @import '../src/styles/anode-theme.css';
 @source '../src';
+/* The Environment nodes' stories render @xui/node-graph's canvas (the app sources every @xui package). */
+@source '../../../node_modules/@xui/node-graph';
 
 body {
   @apply bg-background text-foreground font-sans antialiased;

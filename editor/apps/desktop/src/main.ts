@@ -611,6 +611,8 @@ function buildMenu(): void {
     command('Print Score…', 'printScore', 'CmdOrCtrl+P'),
     { type: 'separator' },
     command('Bounce Project or Section…', 'bounce', 'CmdOrCtrl+B'),
+    // Phase 11 (docs/12-phase-11.md): the master's Mastering Assistant (analysis, character, loudness target).
+    command('Mastering Assistant…', 'masteringAssistant'),
     command('I/O Labels…', 'ioLabels'),
     { type: 'separator' },
     command('Save as Alternative…', 'saveAlternative'),
@@ -646,6 +648,20 @@ function buildMenu(): void {
   const controlSurfaces: MenuItemConstructorOptions = {
     label: 'Control Surfaces',
     submenu: [command('Setup…', 'controlSurfaces'), command('Controller Assignments…', 'controllerAssignments')]
+  };
+  // Window: Electron's window items, and Phase 11's MIDI Environment (Logic's Window ▸ Open MIDI Environment; ⌥⌘0, as
+  // the View menu's Actual Size has ⌘0).
+  const windowMenu: MenuItemConstructorOptions = {
+    role: 'windowMenu',
+    submenu: [
+      { role: 'minimize' },
+      { role: 'zoom' },
+      { type: 'separator' },
+      command('Open MIDI Environment', 'environment', 'CmdOrCtrl+Alt+0'),
+      ...(process.platform === 'darwin'
+        ? [{ type: 'separator' } as const, { role: 'front' } as const]
+        : [{ role: 'close' } as const])
+    ]
   };
   // Edit: the standard text roles (fields need them), then the Stem Splitter on the selected audio region.
   const editMenu: MenuItemConstructorOptions = {
@@ -687,7 +703,7 @@ function buildMenu(): void {
           editMenu,
           movieMenu,
           { role: 'viewMenu' },
-          { role: 'windowMenu' }
+          windowMenu
         ]
       : [
           {
@@ -704,7 +720,7 @@ function buildMenu(): void {
           editMenu,
           movieMenu,
           { role: 'viewMenu' },
-          { role: 'windowMenu' }
+          windowMenu
         ];
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));
 }

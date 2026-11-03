@@ -1,8 +1,9 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
-import type { MidiRegion } from '@anode/api-client';
-import { Ppq } from '../midi/midi-math';
+import { DefaultRegionNotation, type MidiRegion } from '@anode/api-client';
+import { NeutralPlayback, Ppq } from '../midi/midi-math';
 import { ProjectStore } from './project.store';
 import { SelectionStore } from './selection.store';
+import { SessionPlayersStore } from './session-players.store';
 
 /** The Piano Roll's tools (Logic's Left-click tool menu, the part Phase 2 has). */
 export type PianoRollTool = 'pointer' | 'pencil' | 'eraser';
@@ -20,6 +21,7 @@ export const MaxNoteHeight = 32;
 export class PianoRollStore {
   private readonly project = inject(ProjectStore);
   private readonly selection = inject(SelectionStore);
+  private readonly players = inject(SessionPlayersStore);
 
   readonly pixelsPerQuarter = signal(96);
   readonly originTick = signal(0);
@@ -41,8 +43,47 @@ export class PianoRollStore {
 
   readonly pixelsPerTick = computed(() => this.pixelsPerQuarter() / Ppq);
 
+  /**
+   * Phase 11: the selected Session Player regions of one track (when no MIDI region is selected), as MIDI regions of
+   * their generated notes. The Piano Roll shows them read-only: Convert to MIDI makes them editable.
+   */
+  readonly generated = computed<readonly MidiRegion[]>(() => {
+    const selected = [...this.selection.regions()];
+    const midi = this.project.midiRegions();
+    if (selected.some(id => midi.has(id))) {
+      return [];
+    }
+    const regions = selected
+      .map(id => this.project.sessionPlayerRegions().get(id))
+      .filter(r => r !== undefined)
+      .filter((r, _, all) => r.trackId === all[0]?.trackId);
+    const notes = this.players.notes();
+    return regions
+      .map(r => ({
+        id: r.id,
+        trackId: r.trackId,
+        name: r.name,
+        startTick: r.startTick,
+        lengthTicks: r.lengthTicks,
+        playback: NeutralPlayback,
+        notation: DefaultRegionNotation,
+        notes: [...(notes.get(r.id) ?? [])],
+        controls: [],
+        muted: r.muted,
+        pitchSource: 'off' as const,
+        key: null
+      }))
+      .sort((a, b) => a.startTick - b.startTick);
+  });
+  /** The Piano Roll shows generated notes: nothing in it edits. */
+  readonly readOnly = computed(() => this.generated().length > 0);
+
   /** The regions shown, by start. */
   readonly regions = computed<readonly MidiRegion[]>(() => {
+    const generated = this.generated();
+    if (generated.length > 0) {
+      return generated;
+    }
     const midi = this.project.midiRegions();
     const selected = [...this.selection.regions()]
       .map(id => midi.get(id))

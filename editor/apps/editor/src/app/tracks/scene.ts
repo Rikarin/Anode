@@ -1,4 +1,13 @@
-import type { AudioRegion, KeyEvent, MidiRegion, PatternRegion, TakeFolder, Track } from '@anode/api-client';
+import type {
+  AudioRegion,
+  KeyEvent,
+  MidiRegion,
+  Note,
+  PatternRegion,
+  SessionPlayerRegion,
+  TakeFolder,
+  Track
+} from '@anode/api-client';
 import {
   createItems,
   createNoteMiniatures,
@@ -22,7 +31,8 @@ const Fallback = parseHexColor('#0090ff');
 export interface TracksScene {
   readonly scene: TimelineScene;
   /**
-   * Region id per item index: audio regions, MIDI regions, pattern regions, take folders (`tkf_…`), and takes in open
+   * Region id per item index: audio regions, MIDI regions, pattern regions, Session Player regions, take folders
+   * (`tkf_…`), and takes in open
    * folders as `folderId/takeId`. A part drawn inside an item (a comp segment) maps to that item's id.
    */
   readonly regionIds: readonly string[];
@@ -38,6 +48,9 @@ export interface SceneInput {
   midiRegions?: readonly MidiRegion[];
   /** Step Sequencer pattern regions, drawn as MIDI regions with their unrolled steps as notes. */
   patternRegions?: readonly PatternRegion[];
+  /** Session Player regions (Phase 11), drawn as MIDI regions with their generated notes (by region id) when known. */
+  sessionPlayerRegions?: readonly SessionPlayerRegion[];
+  sessionPlayerNotes?: ReadonlyMap<string, readonly Note[]>;
   /** The key track, for chord-degree rows' notes. */
   keys?: readonly KeyEvent[];
   takeFolders?: readonly TakeFolder[];
@@ -179,6 +192,27 @@ export function buildScene(input: SceneInput): TracksScene {
       name: region.name,
       notes: notes.map(note => ({
         start: note.startTick - region.startTick,
+        length: note.lengthTicks,
+        pitch: note.pitch
+      }))
+    });
+  }
+  for (const region of input.sessionPlayerRegions ?? []) {
+    const lane = lanes.get(region.trackId);
+    if (lane === undefined) {
+      continue;
+    }
+    drafts.push({
+      id: region.id,
+      whole: true,
+      lane,
+      start: region.startTick,
+      length: region.lengthTicks,
+      color: colors.get(region.trackId) ?? Fallback,
+      flags: flagsOf(region.id, region.trackId, region.muted) | ItemFlag.Midi,
+      name: region.name,
+      notes: (input.sessionPlayerNotes?.get(region.id) ?? []).map(note => ({
+        start: note.startTick,
         length: note.lengthTicks,
         pitch: note.pitch
       }))

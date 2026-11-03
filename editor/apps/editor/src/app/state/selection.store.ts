@@ -24,10 +24,13 @@ export class SelectionStore {
       const midi = this.project.midiRegions();
       const folders = this.project.takeFolders();
       const patterns = this.project.patternRegions();
+      const players = this.project.sessionPlayerRegions();
       const tracks = this.project.tracks();
       untracked(() => {
         const selected = this.regions();
-        const kept = [...selected].filter(id => regions.has(id) || midi.has(id) || folders.has(id) || patterns.has(id));
+        const kept = [...selected].filter(
+          id => regions.has(id) || midi.has(id) || folders.has(id) || patterns.has(id) || players.has(id)
+        );
         if (kept.length !== selected.size) {
           this.regions.set(new Set(kept));
         }
