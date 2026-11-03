@@ -288,7 +288,8 @@ the plan left latitude:
   values too), which B replaces with schema 10 and its migration; `Project.movie` is null (not stored yet). The model
   refuses the 7 commands, a scene marker kind, and imported formats, panners and automation (422, `Edits.Phase10.cs`);
   panner automation targets are refused as unknown until B. The identity property skips `RandomProjects.PendingPhase10`,
-  and random projects are built without them (`Buildable`), so they stay Phase 9's.
+  and random projects are built without them (`Buildable`), so they stay Phase 9's. (All of this is gone with workstream
+  B: schema 10, the commands and their generators, below.)
 - **Fixed on the way:** turning an instrument track into a Drum Machine Designer now clears its `staffStyleId` (a
   stack holds no MIDI, and a saved package dropped it), which made the package property fail for some seeds.
 
@@ -306,6 +307,47 @@ the plan left latitude:
   `listenInUrl` and `mediaUrl`; the `remote` route exists as a placeholder.
 - **D:** shapes in `Anode.Dsp/Spatial` and `Anode.Interchange/Adm` are fixed; the layout data is real and tested.
 - **E:** `ListenInFramer` uses `ListenIn.WriteHeader`; the tap's rate is the project's, resample to 48 kHz.
+
+### Server domain decisions (workstream B)
+
+- **Formats follow routing** (`Edits.Conform`, run by `Edits.Step` after any operation that upserts or removes a track,
+  or changes the master or the settings, so job edits conform too): the master is in and out in the project's format;
+  a track's output format is its destination's (the master's; the input format of the aux on its bus, stereo for a bus
+  without an aux; stereo for `output:N`). The **panner mode follows the output**: the stereo pan below surround, the
+  Surround Panner above it unless the strip is an object into the master (so `setSurroundFormat` to 7.1.4 puts every
+  strip into the master on the Surround Panner, and back to stereo puts them on the stereo pan, objects included; the
+  settings of both panners stay). `setPanner` refuses a mode its output does not allow. Packages conform on load.
+- **Schema 10**: `settings.surroundFormat`, strips' formats and panners, markers' kinds and the project's `movie`
+  (`ProjectFile.movie`, left out when none; a movie that fails `setMovie`'s checks reads as none).
+- **Panner automation** compiles to targets `surround`/`object` with the parameter as `ParameterId`; `surround:centre`
+  and `surround:lfe` are gains (as volume). Panner lanes record in touch/latch/write from `setPanner` without a mode.
+- **Monitoring** goes to the host on connect, on change and when the project's format changes; a down-mix no narrower
+  than the master is sent as none. **The HRTF set**: `Anode:HrtfPath`, else the first `*.anhrtf` in `hrtf/` beside the
+  Server (a release bundles it there), else the first in `engine/artifacts/hrtf/` (where D's conversion writes it in
+  development).
+- **Movie**: copied into `Movies/<name>[ n].<ext>` (a free name) when `copyIntoProject`, else referenced by its
+  absolute path; thumbnails are cached in `Movies/.thumbnails/<key>/<height>/<frame>.jpg`, the key a hash of the file's
+  path, size and modification time. The stream is ASP.NET's range processing. Without FFmpeg the media jobs answer 503.
+- **The tick ↔ movie mapping** is `Anode.Model.Time.MovieTime` (the editor mirrors it): movie time `m =
+  seconds(p) − seconds(startTick) + offsetSeconds` through the tempo map **at nominal speed** (Varispeed scales both),
+  frame `floor(m × rate)`; frame `f` plays from `seconds(startTick) + f / rate − offsetSeconds`. Scene cuts become
+  markers at their frames' ticks (cuts before the project start are left out); Import Audio from Movie places the region
+  at the first frame's tick, or at 0 with the file offset that plays there when the first frame is before the project
+  start; Export Audio to Movie bounces the movie's span (Varispeed off), pads the start that is before the project start
+  with silence, and down-mixes a surround bounce to stereo (D's `Downmixer`).
+- **ADM export** is one stem render (the existing bounce with `tracks`) of every track to the master: an ordinary
+  strip's stem is its post-fader signal as it reaches the master (in the master's format: a bed contribution), an
+  object's stem its post-fader signal **before the object renderer** (its input channels, mono or stereo). The bed is
+  the sum of the bed contributions, the objects their stems; both through the master's fader, not its inserts (the
+  file is the renderer's input). The bed and object files given to D's writer are plain 32-bit float WAVs in layout
+  order. **ADM import** brings each bed's and object's audio into `Audio Files` (up to 16 channels) and applies one
+  `importTracks`, preceded by `setSurroundFormat` to the first bed's format when the project is stereo or narrower.
+- **Listen-in**: one pump reads the tap every 10 ms and feeds each listener's framer; a socket's queue holds 1 s of
+  frames and drops the oldest. `latencyMs` is what waited in the ring, plus a frame, plus a poll. The no-token origin
+  check and the `access_token` query cover `/api/v1/remote/listen` as they do `/ws`.
+- **Discovery** is advertised once the Server listens (its first address's port), again when the project's name
+  changes, not when `Anode:Discovery` is false; the instance name is the machine's, the host its name with `.local`
+  for an address on every interface. **Pads**: command ids are checked for form only (the editor knows the commands).
 
 ## Workstreams
 

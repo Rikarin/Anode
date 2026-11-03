@@ -263,6 +263,18 @@ public static class UndoLabels {
             SetLiveLoopsCommand => "Change Live Loops",
             SetTrackActivationCommand => "Change Track Activation",
             LoadInsertFileCommand => "Load Impulse Response",
+            _ => Phase10(command)
+        };
+
+    static string Phase10(EditCommand command) =>
+        command switch {
+            SetSurroundFormatCommand => "Change Surround Format",
+            SetStripFormatCommand => "Change Channel Format",
+            SetPannerCommand => "Change Panner",
+            SetMovieCommand => "Import Movie",
+            SetMoviePositionCommand => "Move Movie",
+            RemoveMovieCommand => "Remove Movie",
+            AddSceneMarkersCommand => "Detect Scene Cuts",
             _ => "Edit"
         };
 
@@ -285,6 +297,15 @@ public static class UndoLabels {
                 SetSendCommand { Bus: null, PreFader: null } send =>
                     $"send|{send.TrackId}|{send.SendId}|{send.LevelDb.HasValue}{send.Pan.HasValue}",
                 SetAutomationCommand lane => $"automation|{lane.TrackId ?? "master"}|{lane.Target}",
+                // Phase 10: a puck or knob drag on a panner.
+                SetPannerCommand { Mode: null } panner => $"panner|{panner.TrackId}|"
+                    + string.Concat(
+                        new[] {
+                            panner.Angle, panner.Diversity, panner.SurroundElevation, panner.CentreLevelDb,
+                            panner.LfeLevelDb, panner.Spread, panner.Azimuth, panner.ObjectElevation, panner.Distance,
+                            panner.Size
+                        }.Select(static v => v.HasValue ? '1' : '0')
+                    ),
                 _ => null
             };
             if (mine is null) {

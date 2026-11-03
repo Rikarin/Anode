@@ -55,6 +55,7 @@ public sealed class EngineConnection(
     TransportStatus? transport;
     string? thru;
     List<InsertReading>? pendingReadings;
+    string? masterTap;
 
     public static string Version =>
         typeof(EngineConnection).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()
@@ -85,6 +86,12 @@ public sealed class EngineConnection(
     public FakeHost? InProcessHost { get; private set; }
 
     public bool IsConnected => Volatile.Read(ref current) is not null;
+
+    /// <summary>
+    ///     Phase 10: the connected host's master tap ring (its hello's <see cref="HelloMessage.MasterTapName" />), or null
+    ///     when no host is connected or it has none.
+    /// </summary>
+    public string? MasterTapName => Volatile.Read(ref masterTap);
 
     public EngineStatus Status() => Volatile.Read(ref status);
 
@@ -512,6 +519,7 @@ public sealed class EngineConnection(
 
         Volatile.Write(ref current, connection);
         device.Set(hello.SampleRate);
+        Volatile.Write(ref masterTap, hello.MasterTapName);
         Set(
             new(inProcess ? EngineState.InProcess : EngineState.Connected, hello.Version, hello.Backend, RateMismatch())
         );
@@ -524,6 +532,7 @@ public sealed class EngineConnection(
         } finally {
             Volatile.Write(ref current, null);
             Volatile.Write(ref transport, null);
+            Volatile.Write(ref masterTap, null);
             connection.Work.Writer.TryComplete();
             connection.CancelStates();
             connection.FailRenders("The engine connection was lost.");

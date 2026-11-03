@@ -8,6 +8,7 @@ using Anode.Server.Engine;
 using Anode.Server.Library;
 using Anode.Server.Projects;
 using Anode.Server.Realtime;
+using Anode.Server.Remote;
 using System.Text.Json.Serialization;
 
 // Anode.Server: the REST and WebSocket API. It owns the project and drives anode-host over a Unix domain socket
@@ -59,6 +60,9 @@ builder.Services.AddSingleton<LoopLibrary>();
 builder.Services.AddSingleton<LiveLoopsPlayer>();
 builder.Services.AddSingleton<EngineConnection>();
 builder.Services.AddSingleton<LoopActions>();
+// Phase 10 (docs/11-phase-10.md): monitoring follows every host from its first connection, so it starts first.
+builder.Services.AddSingleton<MonitoringService>();
+builder.Services.AddHostedService(static s => s.GetRequiredService<MonitoringService>());
 builder.Services.AddHostedService(static s => s.GetRequiredService<EngineConnection>());
 // Phase 8 (docs/09-phase-8.md): hardware control, OSC, sync and the Stem Splitter's models.
 builder.Services.AddSingleton<IControlProtocols, ControlProtocols>();
@@ -72,6 +76,14 @@ builder.Services.AddSingleton<INotation, EngineNotation>();
 builder.Services.AddSingleton<IScoreNotation, EngineScoreNotation>();
 builder.Services.AddSingleton<ScoreService>();
 builder.Services.AddSingleton<IInterchangeFormats, InterchangeFormats>();
+// Phase 10: the movie (FFmpeg), ADM BWF and the down-mix, discovery and listen-in.
+builder.Services.AddSingleton<IMovieMedia, FfmpegMovieMedia>();
+builder.Services.AddSingleton<ISpatialFiles, SpatialFiles>();
+builder.Services.AddSingleton<IListenInEncoders, OpusListenInEncoders>();
+builder.Services.AddSingleton<IMasterTapSource, HostMasterTap>();
+builder.Services.AddSingleton<ListenInService>();
+builder.Services.AddSingleton<DiscoveryService>();
+builder.Services.AddHostedService(static s => s.GetRequiredService<DiscoveryService>());
 
 var app = builder.Build();
 if (bool.TryParse(builder.Configuration["Anode:WatchStdin"], out var watchStdin) && watchStdin) {

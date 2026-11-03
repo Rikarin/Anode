@@ -102,6 +102,9 @@ public sealed record ProjectState(
             ScoreLayout
         );
 
+    /// <summary>The project's movie (docs/11-phase-10.md), or null when it has none.</summary>
+    public Movie? Movie { get; init; }
+
     /// <summary>The project's Note Pad.</summary>
     public string Notes { get; init; } = string.Empty;
 
@@ -249,8 +252,7 @@ public sealed record ProjectState(
             [..ArticulationSets.Values],
             [..LaneSets.Values],
             Score,
-            // The movie: Phase 10, workstream B (docs/11-phase-10.md).
-            null
+            Movie
         );
 
     /// <summary>Applies one delta operation (an edit's primitive step, also what clients apply).</summary>
@@ -319,6 +321,7 @@ public sealed record ProjectState(
             ScoreSetUpserted(var set) => this with { ScoreSets = ScoreSets.SetItem(set.Id, set) },
             ScoreSetRemoved(var id) => this with { ScoreSets = ScoreSets.Remove(id) },
             ScoreLayoutChanged(var layout) => this with { ScoreLayout = layout },
+            MovieChanged(var movie) => this with { Movie = movie },
             _ => throw new ArgumentException($"Unknown delta operation {op.GetType().Name}.", nameof(op))
         };
 
@@ -352,6 +355,7 @@ public sealed record ProjectState(
             AutomationLaneUpserted or AutomationLaneRemoved or GroupUpserted or GroupRemoved => InverseMixer(op),
             PatternRegionUpserted or PatternRegionRemoved => InversePattern(op),
             LiveLoopsChanged => new LiveLoopsChanged(LiveLoops),
+            MovieChanged => new MovieChanged(Movie),
             GrooveUpserted
                 or GrooveRemoved
                 or ArticulationSetUpserted

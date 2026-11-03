@@ -9,7 +9,8 @@ namespace Anode.Model.Compile;
 ///     linear gain, pan, mute and solo (a stack's and a VCA's folded in, <see cref="Stacks" />), the inserts in order
 ///     with their sidechains as engine track ids or buses, the sends at linear gain, and the output (0 the master, N bus
 ///     N, −N device output pair N), and an instrument or external MIDI track's MIDI FX slots (Phase 6). A VCA's solo
-///     solos its members.
+///     solos its members. Phase 10 (docs/11-phase-10.md): the input and output formats, and the panner unless it is the
+///     stereo pan (the master has none), its levels as linear gains.
 /// </summary>
 public static class Strips {
     /// <summary>
@@ -54,9 +55,37 @@ public static class Strips {
                         )
                     )
                 ]
-                : []
+                : [],
+            (EngineChannelFormat)strip.InputFormat,
+            (EngineChannelFormat)strip.OutputFormat,
+            track is null ? null : Panner(strip.Panner)
         );
     }
+
+    /// <summary>A panner in engine units (levels as gains); null for the stereo pan.</summary>
+    public static EnginePanner? Panner(Panner panner) =>
+        panner.Mode == PannerMode.Stereo
+            ? null
+            : new(
+                Mode(panner.Mode),
+                new(
+                    (float)panner.Surround.Angle,
+                    (float)panner.Surround.Diversity,
+                    (float)panner.Surround.Elevation,
+                    Units.DbToGain(panner.Surround.CentreLevelDb),
+                    Units.DbToGain(panner.Surround.LfeLevelDb),
+                    (float)panner.Surround.Spread
+                ),
+                new(
+                    (float)panner.Object.Azimuth,
+                    (float)panner.Object.Elevation,
+                    (float)panner.Object.Distance,
+                    (float)panner.Object.Size
+                )
+            );
+
+    static EnginePannerMode Mode(PannerMode mode) =>
+        mode == PannerMode.Object ? EnginePannerMode.Object : EnginePannerMode.Surround;
 
     /// <summary>An output as the engine numbers it: 0 the master, N bus N, −N device output pair N.</summary>
     public static int Output(string output) =>
@@ -72,9 +101,15 @@ public static class Strips {
         return new(insert.Id, insert.PluginId, insert.Bypassed, insert.Parameters, saved, track, bus, insert.File);
     }
 
-    /// <summary>Whether two engine strips differ in structure (inserts, sends, output), not just levels.</summary>
+    /// <summary>
+    ///     Whether two engine strips differ in structure (inserts, sends, output, formats, the panner's mode), not just
+    ///     levels (and panner settings).
+    /// </summary>
     public static bool StructureDiffers(EngineStrip a, EngineStrip b) =>
         a.Output != b.Output
+        || a.InputFormat != b.InputFormat
+        || a.OutputFormat != b.OutputFormat
+        || a.Panner?.Mode != b.Panner?.Mode
         || !Same(
             a.Inserts,
             b.Inserts,

@@ -17,7 +17,8 @@ namespace Anode.Model.Storage;
 ///     FX (empty) and the Live Loops grid; schema 7 the groove templates, articulation sets and Step Editor lane sets
 ///     (docs/08-phase-7.md), with the groove track in <c>settings</c> and files' versions; schema 8 the sync settings;
 ///     schema 9 the score content (docs/10-phase-9.md: staff styles, symbols, lyrics, chord symbols, score sets, layout),
-///     with tracks' staff styles and regions' notation in the track files.
+///     with tracks' staff styles and regions' notation in the track files; schema 10 (docs/11-phase-10.md) the
+///     project's surround format (in <c>settings</c>), strips' formats and panners, markers' kinds and the movie.
 /// </summary>
 public sealed record ProjectFile(
     int SchemaVersion,
@@ -38,7 +39,8 @@ public sealed record ProjectFile(
     IReadOnlyList<GrooveTemplate>? Grooves = null,
     IReadOnlyList<ArticulationSet>? ArticulationSets = null,
     IReadOnlyList<LaneSet>? LaneSets = null,
-    ProjectScore? Score = null
+    ProjectScore? Score = null,
+    Movie? Movie = null
 );
 
 /// <summary>
@@ -149,7 +151,8 @@ public static class ProjectPackage {
             [..state.Grooves.Values],
             [..state.ArticulationSets.Values],
             [..state.LaneSets.Values],
-            state.Score
+            state.Score,
+            state.Movie
         );
         AtomicRename.Write(
             Path.Combine(folder, ProjectFileName),
@@ -244,8 +247,9 @@ public static class ProjectPackage {
             TakeFolders = folders.ToImmutable(),
             PatternRegions = patterns.ToImmutable(),
             LiveLoops = liveLoops,
+            Movie = Movie(root.Movie),
             Markers = Keyed(
-                root.Markers?.Select(static m => m is { Text: null } ? m with { Text = string.Empty } : m).ToArray(),
+                root.Markers?.Select(Marker).ToArray(),
                 static m => m?.Id is not null && m.Name is not null,
                 static m => m.Id
             ),
@@ -272,7 +276,31 @@ public static class ProjectPackage {
                 ]
             )
         };
-        return WithScore(read, root.Score);
+        // Output formats and panner modes follow the routing (docs/11-phase-10.md), whatever the file says.
+        return Edits.Conformed(WithScore(read, root.Score));
+    }
+
+    /// <summary>A marker as read: its text (none: empty) and a kind there is (else a user's marker).</summary>
+    static Marker Marker(Marker? marker) {
+        if (marker is null) {
+            return marker!;
+        }
+
+        var kind = Enum.IsDefined(marker.Kind) ? marker.Kind : MarkerKind.Marker;
+        return marker with { Text = marker.Text ?? string.Empty, Kind = kind };
+    }
+
+    /// <summary>The movie as read: one the project could have been given (<see cref="Edits.CheckMovie" />), else none.</summary>
+    static Movie? Movie(Movie? movie) {
+        if (movie is null) {
+            return null;
+        }
+
+        try {
+            return Edits.CheckMovie(movie);
+        } catch (EditException) {
+            return null;
+        }
     }
 
     /// <summary>
@@ -923,12 +951,12 @@ public static class ProjectPackage {
 ///     refused rather than read wrongly.
 /// </remarks>
 public static class PackageMigrations {
-    public const int CurrentSchemaVersion = 9;
+    public const int CurrentSchemaVersion = 10;
     const string VersionField = "schemaVersion";
 
     /// <summary><c>Steps[n]</c> takes schema <c>n + 1</c> to <c>n + 2</c>; it gets the kind of file and its JSON.</summary>
     static readonly Func<string, JsonObject, JsonObject>[] Steps =
-        [ToSchema2, ToSchema3, ToSchema4, ToSchema5, ToSchema6, ToSchema7, ToSchema8, ToSchema9];
+        [ToSchema2, ToSchema3, ToSchema4, ToSchema5, ToSchema6, ToSchema7, ToSchema8, ToSchema9, ToSchema10];
 
     public static JsonObject Upgrade(JsonObject json, string kind) {
         var version = json[VersionField] is JsonValue v && v.TryGetValue<int>(out var n) ? n : 1;
@@ -943,7 +971,6 @@ public static class PackageMigrations {
         }
 
         json[VersionField] = CurrentSchemaVersion;
-        Phase10Fields.Fill(kind, json);
         return json;
     }
 
@@ -1152,16 +1179,24 @@ public static class PackageMigrations {
         Schema9.Fill(kind, json);
         return json;
     }
+
+    /// <summary>
+    ///     Schema 9 to 10 (Phase 10, surround and video; docs/11-phase-10.md): the project is stereo, every strip is
+    ///     stereo in and out with the default panner, every marker is a user's marker, and there is no movie (left out).
+    /// </summary>
+    static JsonObject ToSchema10(string kind, JsonObject json) {
+        Schema10.Fill(kind, json);
+        return json;
+    }
 }
 
 /// <summary>
-///     The Phase 10 fields (docs/11-phase-10.md) at their defaults where a file lacks them, so schema-9 packages read
-///     with the Phase 10 contracts: interim, until workstream B adds schema 10 and its migration from 9 (which replaces
-///     this, with the same defaults). The project is stereo (<c>settings.surroundFormat</c>), every strip (the master's
-///     and each track's) is stereo in and out with <see cref="Panner.Default" />, and every marker is of kind
-///     <c>marker</c>; there is no movie (not stored yet: the project answers null). Leaves fields that are present alone.
+///     The Phase 10 additions to a schema-9 file (docs/11-phase-10.md): the project is stereo
+///     (<c>settings.surroundFormat</c>), every strip (the master's and each track's) is stereo in and out with
+///     <see cref="Panner.Default" />, every marker is of kind <c>marker</c>, and there is no movie (left out). Leaves
+///     fields that are present alone.
 /// </summary>
-static class Phase10Fields {
+static class Schema10 {
     public static void Fill(string kind, JsonObject json) {
         if (kind == "project") {
             if (json["settings"] is JsonObject settings) {

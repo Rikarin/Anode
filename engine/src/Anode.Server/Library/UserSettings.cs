@@ -172,6 +172,111 @@ public sealed class UserSettings(IOptions<ServerOptions> options) {
     public void SaveOscSettings(OscSettings settings) =>
         Write("osc.json", settings, ContractsJsonContext.Default.OscSettings);
 
+    /// <summary>The longest speaker map: a channel per device output.</summary>
+    public const int MaxSpeakerMap = 256;
+
+    public const int MaxPadSets = 64;
+    public const int MaxPadsPerSet = 64;
+    public const int MaxPadIdLength = 64;
+
+    /// <summary>Phase 10 (docs/11-phase-10.md): monitoring (none: <see cref="MonitoringSettings.Default" />).</summary>
+    public MonitoringSettings Monitoring() =>
+        Read("monitoring.json", ContractsJsonContext.Default.MonitoringSettings) is { SpeakerMap: not null } m
+        && Valid(m)
+            ? m
+            : MonitoringSettings.Default;
+
+    /// <summary>
+    ///     Saves the monitoring settings: a known down-mix format (narrower than <paramref name="master" />, the open
+    ///     project's format, when there is one), speaker map entries 0…256 (0: not sent), at most 256 of them.
+    /// </summary>
+    public MonitoringSettings SaveMonitoring(MonitoringSettings? monitoring, ChannelFormat? master) {
+        if (monitoring?.SpeakerMap is null || !Valid(monitoring)) {
+            throw ProjectException.Unprocessable(
+                $"Monitoring has a known down-mix format and a speaker map of at most {MaxSpeakerMap} outputs 0…{MaxIoNumber}."
+            );
+        }
+
+        if (monitoring.DownmixTo is { } to
+            && master is { } format
+            && SpeakerLayouts.ChannelCount(to) >= SpeakerLayouts.ChannelCount(format)) {
+            throw ProjectException.Unprocessable(
+                $"A down-mix is to a format narrower than the master's ({SpeakerLayouts.Of(format).Name})."
+            );
+        }
+
+        var saved = monitoring with { SpeakerMap = [..monitoring.SpeakerMap] };
+        Write("monitoring.json", saved, ContractsJsonContext.Default.MonitoringSettings);
+        return saved;
+    }
+
+    static bool Valid(MonitoringSettings m) =>
+        (m.DownmixTo is not { } to || Enum.IsDefined(to))
+        && m.SpeakerMap.Count <= MaxSpeakerMap
+        && m.SpeakerMap.All(static o => o is >= 0 and <= MaxIoNumber);
+
+    /// <summary>Phase 10: the remote's key-command pad sets (none: <see cref="Contracts.RemotePads.Empty" />).</summary>
+    public RemotePads RemotePads() =>
+        Read("remote-pads.json", ContractsJsonContext.Default.RemotePads) is { Sets: not null } pads
+            ? pads
+            : Contracts.RemotePads.Empty;
+
+    /// <summary>
+    ///     Saves the pad sets: at most 64 of 64 pads, ids unique across sets and pads (1…64 characters), names and labels
+    ///     1…128 characters, command ids as key commands name them (1…128 characters; the editor knows the commands).
+    /// </summary>
+    public RemotePads SaveRemotePads(RemotePads? pads) {
+        if (pads?.Sets is not { Count: <= MaxPadSets } sets) {
+            throw ProjectException.Unprocessable($"Keep at most {MaxPadSets} pad sets.");
+        }
+
+        var ids = new HashSet<string>(StringComparer.Ordinal);
+        var clean = new List<PadSet>();
+        foreach (var set in sets) {
+            if (set?.Pads is not { Count: <= MaxPadsPerSet } list) {
+                throw ProjectException.Unprocessable($"A pad set has at most {MaxPadsPerSet} pads.");
+            }
+
+            List<KeyCommandPad> checkedPads = [
+                ..list.Select(Pad).Select(p => p with { Id = PadId(p.Id, ids), Label = PadLabel(p.Label, "pad label") })
+            ];
+            clean.Add(new(PadId(set.Id, ids), PadLabel(set.Name, "pad set name"), checkedPads));
+        }
+
+        var saved = new RemotePads(clean);
+        Write("remote-pads.json", saved, ContractsJsonContext.Default.RemotePads);
+        return saved;
+    }
+
+    /// <summary>A pad that runs a key command (1…128 characters), with a colour of at most 64.</summary>
+    static KeyCommandPad Pad(KeyCommandPad? pad) {
+        if (pad is null
+            || pad.CommandId is not { Length: > 0 and <= MaxCommandIdLength }
+            || string.IsNullOrWhiteSpace(pad.CommandId)) {
+            throw ProjectException.Unprocessable($"A pad runs a key command (1…{MaxCommandIdLength} characters).");
+        }
+
+        return pad.Color is { Length: > 64 }
+            ? throw ProjectException.Unprocessable("A pad's colour has at most 64 characters.")
+            : pad;
+    }
+
+    /// <summary>A pad's or set's id, unique among <paramref name="ids" />, 1…64 characters.</summary>
+    static string PadId(string? id, HashSet<string> ids) =>
+        id is { Length: > 0 and <= MaxPadIdLength } && !string.IsNullOrWhiteSpace(id) && ids.Add(id)
+            ? id
+            : throw ProjectException.Unprocessable(
+                $"Pad and set ids are unique, of 1…{MaxPadIdLength} characters ('{id}')."
+            );
+
+    /// <summary>A pad's label or a set's name, trimmed, 1…128 characters.</summary>
+    static string PadLabel(string? text, string what) {
+        var trimmed = (text ?? string.Empty).Trim();
+        return trimmed.Length is > 0 and <= Model.Editing.Edits.MaxNameLength
+            ? trimmed
+            : throw ProjectException.Unprocessable($"A {what} has 1…{Model.Editing.Edits.MaxNameLength} characters.");
+    }
+
     T? Read<T>(string name, JsonTypeInfo<T> type) where T : class {
         lock (gate) {
             try {

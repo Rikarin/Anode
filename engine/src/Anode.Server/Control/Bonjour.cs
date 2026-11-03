@@ -13,15 +13,23 @@ public static partial class Bonjour {
     const string LibSystem = "/usr/lib/libSystem.dylib";
 
     /// <summary>
-    ///     Advertises <paramref name="name" /> as a service of <paramref name="type" /> (<c>_osc._udp</c>) on
-    ///     <paramref name="port" /> in the local domain; null where Bonjour is unavailable or the registration fails
-    ///     (logged). Disposing the result withdraws it.
+    ///     Advertises <paramref name="name" /> as a service of <paramref name="type" /> (<c>_osc._udp</c>,
+    ///     <c>_anode._tcp</c>) on <paramref name="port" /> in the local domain, with the TXT record
+    ///     <paramref name="txt" /> (Phase 10; none when null); null where Bonjour is unavailable or the registration
+    ///     fails (logged). Disposing the result withdraws it.
     /// </summary>
-    public static IDisposable? Advertise(string name, string type, int port, ILogger logger) {
+    public static IDisposable? Advertise(
+        string name,
+        string type,
+        int port,
+        ILogger logger,
+        IReadOnlyList<KeyValuePair<string, string>>? txt = null
+    ) {
         if (!OperatingSystem.IsMacOS()) {
             return null;
         }
 
+        var record = Txt(txt ?? []);
         try {
             var error = DNSServiceRegister(
                 out var reference,
@@ -32,8 +40,8 @@ public static partial class Bonjour {
                 null,
                 null,
                 (ushort)IPAddress.HostToNetworkOrder((short)port),
-                0,
-                0,
+                (ushort)record.Length,
+                record,
                 0,
                 0
             );
@@ -60,13 +68,33 @@ public static partial class Bonjour {
         string? host,
         ushort port,
         ushort txtLength,
-        nint txtRecord,
+        byte[] txtRecord,
         nint callback,
         nint context
     );
 
     [LibraryImport(LibSystem)]
     private static partial void DNSServiceRefDeallocate(nint reference);
+
+    /// <summary>
+    ///     A TXT record (RFC 6763 §6): each <c>key=value</c> as a length byte and its UTF-8, at most 255 bytes each (longer
+    ///     values are cut), the record at most 8900 bytes; a lone zero byte when empty.
+    /// </summary>
+    public static byte[] Txt(IReadOnlyList<KeyValuePair<string, string>> entries) {
+        var bytes = new List<byte>();
+        foreach (var (key, value) in entries) {
+            var entry = System.Text.Encoding.UTF8.GetBytes($"{key}={value}");
+            var length = Math.Min(entry.Length, 255);
+            if (bytes.Count + 1 + length > 8900) {
+                break;
+            }
+
+            bytes.Add((byte)length);
+            bytes.AddRange(entry.AsSpan(0, length));
+        }
+
+        return bytes.Count == 0 ? [0] : [..bytes];
+    }
 
     sealed class Registration(nint reference) : IDisposable {
         nint handle = reference;

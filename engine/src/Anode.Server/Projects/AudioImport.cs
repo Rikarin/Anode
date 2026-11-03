@@ -20,7 +20,13 @@ public sealed class AudioImport(ProjectSession session) {
     ///     Copies a file from the server's own disk into the open project's <c>Audio Files</c> (checked first), without
     ///     adding it to the pool: which opening of the project it is for, where it now is, and its format.
     /// </summary>
-    public (long Session, string Path, WavInfo Info) Bring(string path) {
+    public (long Session, string Path, WavInfo Info) Bring(string path) => Bring(path, 2);
+
+    /// <summary>
+    ///     As <see cref="Bring(string)" />, taking files of up to <paramref name="maxChannels" /> channels (Phase 10: a
+    ///     surround bed or a movie's audio, up to 16).
+    /// </summary>
+    public (long Session, string Path, WavInfo Info) Bring(string path, int maxChannels) {
         var (sessionId, folder, rate) = session.Target();
         if (string.IsNullOrWhiteSpace(path)) {
             throw ProjectException.Unprocessable("Name the file to import.");
@@ -31,7 +37,7 @@ public sealed class AudioImport(ProjectSession session) {
             throw ProjectException.Unprocessable($"'{source}' does not exist.");
         }
 
-        var info = Check(source, rate);
+        var info = Check(source, rate, maxChannels);
         var audio = Path.Combine(folder, ProjectPackage.AudioFolder);
         Directory.CreateDirectory(audio);
         if (string.Equals(Path.GetDirectoryName(source), Path.GetFullPath(audio), StringComparison.Ordinal)) {
@@ -59,7 +65,7 @@ public sealed class AudioImport(ProjectSession session) {
                 await upload.CopyToAsync(target, cancellationToken).ConfigureAwait(false);
             }
 
-            var info = Check(temporary, rate);
+            var info = Check(temporary, rate, 2);
             var name = Path.GetFileNameWithoutExtension(Path.GetFileName(upload.FileName ?? string.Empty));
             return session.AddFile(sessionId, Claim(temporary, audio, name), info);
         } finally {
@@ -67,7 +73,7 @@ public sealed class AudioImport(ProjectSession session) {
         }
     }
 
-    static WavInfo Check(string path, int projectRate) {
+    static WavInfo Check(string path, int projectRate, int maxChannels) {
         WavInfo info;
         try {
             info = WavReader.Probe(path);
@@ -77,8 +83,12 @@ public sealed class AudioImport(ProjectSession session) {
             throw ProjectException.Unprocessable($"Could not read '{path}': {e.Message}");
         }
 
-        if (info.Channels is not (1 or 2)) {
-            throw ProjectException.Unprocessable($"The file has {info.Channels} channels; Anode takes mono or stereo.");
+        if (info.Channels < 1 || info.Channels > maxChannels) {
+            throw ProjectException.Unprocessable(
+                maxChannels == 2
+                    ? $"The file has {info.Channels} channels; Anode takes mono or stereo."
+                    : $"The file has {info.Channels} channels; Anode takes 1…{maxChannels}."
+            );
         }
 
         if (info.SampleRate != projectRate) {

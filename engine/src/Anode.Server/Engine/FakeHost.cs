@@ -86,6 +86,7 @@ public sealed partial class FakeHost : IAsyncDisposable {
         stopping = new();
         writing = new(1, 1);
         telemetry = TelemetryWriter.Create("an" + Convert.ToHexStringLower(Guid.NewGuid().ToByteArray()[..3]) + "t", 0);
+        CreateTap();
     }
 
     public int SampleRate { get; }
@@ -361,6 +362,7 @@ public sealed partial class FakeHost : IAsyncDisposable {
         }
 
         telemetry.Dispose();
+        tapWriter?.Dispose();
         stopping.Dispose();
         writing.Dispose();
     }
@@ -388,7 +390,7 @@ public sealed partial class FakeHost : IAsyncDisposable {
     IEnumerable<IpcMessage> Handle(IpcMessage message) {
         switch (message) {
             case HelloMessage:
-                yield return new HelloMessage(version, Backend, SampleRate, 256, 2, 2, TelemetryName);
+                yield return new HelloMessage(version, Backend, SampleRate, 256, 2, 2, TelemetryName, MasterTapName);
                 yield return new PluginCatalogMessage(Catalogue);
                 yield return new MidiPortsMessage(Ports);
                 break;
@@ -502,7 +504,7 @@ public sealed partial class FakeHost : IAsyncDisposable {
 
     /// <summary>The messages of the later phases (an error for one this host does not know): what they answer.</summary>
     IpcMessage[] HandleOther(IpcMessage message) {
-        var replies = HandlePhase7(message) ?? HandlePhase8(message);
+        var replies = HandlePhase7(message) ?? HandlePhase8(message) ?? HandlePhase10(message);
         if (message is SetChannelMessage) {
             HandleMixer(message);
         } else if (replies is null && !HandleMixer(message) && !HandleLiveLoops(message)) {
@@ -772,9 +774,10 @@ public sealed partial class FakeHost : IAsyncDisposable {
         CancellationToken token
     ) {
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-        using var writer = new WavWriter(path, 2, SampleRate, WavEncoding.Float32);
+        var channels = RenderChannels(render, sources);
+        using var writer = new WavWriter(path, channels, SampleRate, WavEncoding.Float32);
         var frames = Math.Max(0, render.EndSample - render.StartSample);
-        var block = new float[RenderBlock * 2];
+        var block = new float[RenderBlock * channels];
         var (left, right) = (new float[RenderBlock], new float[RenderBlock]);
         var audio = sources.Select(s => AudioOf(s.Track.Id)).ToArray();
         var tenth = Math.Max(1, frames / 10);
@@ -785,12 +788,8 @@ public sealed partial class FakeHost : IAsyncDisposable {
                 var n = (int)Math.Min(RenderBlock, frames - done);
                 var at = render.StartSample + done;
                 Mix(sources, audio, at, left.AsSpan(0, n), right.AsSpan(0, n));
-                for (var i = 0; i < n; i++) {
-                    block[2 * i] = left[i] * masterGain;
-                    block[2 * i + 1] = right[i] * masterGain;
-                }
-
-                writer.Write(block.AsSpan(0, n * 2));
+                Interleave(block, channels, left.AsSpan(0, n), right.AsSpan(0, n), masterGain);
+                writer.Write(block.AsSpan(0, n * channels));
                 done += n;
                 if (done / tenth > reported) {
                     reported = done / tenth;
@@ -1161,6 +1160,7 @@ public sealed partial class FakeHost : IAsyncDisposable {
         MeterEntry[] meters;
         MeterEntry masterMeter;
         lock (gate) {
+            WriteTap();
             var position = Position();
             header = new() {
                 PositionSamples = position,
