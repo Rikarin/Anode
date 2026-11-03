@@ -5,8 +5,8 @@ import { join, resolve } from 'node:path';
 /*
  * Helpers for the Phase 10 golden path (docs/11-phase-10.md): DNS-SD discovery, the media tools (FFmpeg and FFprobe
  * through workstream E's helper), the EBU ADM Renderer (`ear`, through workstream D's helper), and the WAV and signal
- * maths the checks need. The external tools are the INTEGRATOR's to provide (see each `INTEGRATOR` note); the
- * signal maths is plain TypeScript.
+ * maths the checks need. The external tools are the repository's scripts (`scripts/media-check.mjs`,
+ * `scripts/ear-check.py`) over the pinned FFmpeg and `ear`; the signal maths is plain TypeScript.
  */
 
 const Root = resolve(__dirname, '../../../../..');
@@ -39,13 +39,13 @@ function runFor(command: string, args: string[], ms: number): Promise<string> {
  * Finds the studio as a remote would: browses `_anode._tcp` and resolves the instance whose TXT `project` is
  * `projectName` (any, when null).
  *
- * INTEGRATOR: macOS uses `dns-sd -B` / `dns-sd -L` (the Phase 8 `DNSServiceRegister` path advertises it); Linux would
+ * macOS uses `dns-sd -B` / `dns-sd -L` (the Phase 8 `DNSServiceRegister` path advertises it); Linux would
  * use `avahi-browse -rpt _anode._tcp`, Windows `dns-sd.exe` from Bonjour. The parsing matches macOS's `dns-sd` output
  * of 2026 (`… Add … local. _anode._tcp. <name>` and `<name>._anode._tcp.local. can be reached at <host>:<port>`).
  */
 export async function browseAnode(projectName: string | null, ms = 4000): Promise<FoundService> {
   if (process.platform !== 'darwin') {
-    throw new Error('INTEGRATOR: DNS-SD browsing is implemented for macOS (dns-sd) only.');
+    throw new Error('DNS-SD browsing is implemented for macOS (dns-sd) only.');
   }
   const browse = await runFor('dns-sd', ['-B', '_anode._tcp', 'local.'], ms);
   const names = [...browse.matchAll(/\sAdd\s+\S+\s+\S+\s+local\.\s+_anode\._tcp\.\s+(.+)$/gm)].map(
@@ -57,10 +57,18 @@ export async function browseAnode(projectName: string | null, ms = 4000): Promis
     if (!at?.[1] || !at[2]) {
       continue;
     }
+    // The TXT record is the line after the address: key=value pairs split at unescaped spaces (dns-sd writes a space
+    // in a value as `\ ` and other bytes as `\DDD`).
+    const record =
+      lookup.split('\n')[lookup.split('\n').findIndex(line => line.includes('can be reached at')) + 1] ?? '';
     const txt: Record<string, string> = {};
-    for (const pair of lookup.matchAll(/(\w+)=(\S*)/g)) {
-      if (pair[1]) {
-        txt[pair[1]] = pair[2] ?? '';
+    for (const pair of record.trim().split(/(?<!\\) /)) {
+      const equals = pair.indexOf('=');
+      if (equals > 0) {
+        txt[pair.slice(0, equals)] = pair
+          .slice(equals + 1)
+          .replace(/\\(\d{3})/g, (_, code: string) => String.fromCharCode(Number(code)))
+          .replace(/\\(.)/g, '$1');
       }
     }
     if (projectName === null || txt['project'] === projectName) {
@@ -85,7 +93,7 @@ export interface TestMovie {
 }
 
 /**
- * INTEGRATOR: `ANODE_MEDIA_HELPER` (default `scripts/media-check.mjs`, run with node) wraps E's `Anode.Media`
+ * `ANODE_MEDIA_HELPER` (default `scripts/media-check.mjs`, run with node) wraps E's `Anode.Media`
  * (`MovieMedia.GenerateTestMovieAsync`) and the fetched `ffmpeg`/`ffprobe` (`scripts/fetch-ffmpeg.mjs`):
  * - `make-movie <out.mov> <seconds> <fps> <cut,cut,…>` writes the golden path's movie (a frame counter and timecode
  *   burned in, a 1 kHz beep of 50 ms at every whole second, scene cuts at the frames) and prints a {@link TestMovie};
@@ -95,8 +103,17 @@ export interface TestMovie {
  */
 const MediaHelper = process.env['ANODE_MEDIA_HELPER'] ?? join(Root, 'scripts/media-check.mjs');
 
+/** This environment without the dynamic loader's search variables (Homebrew's DYLD_LIBRARY_PATH would load GPL libraries). */
+function withoutLoader(): NodeJS.ProcessEnv {
+  return Object.fromEntries(
+    Object.entries(process.env).filter(
+      ([key]) => !key.startsWith('DYLD_') && key !== 'LD_LIBRARY_PATH' && key !== 'LD_PRELOAD'
+    )
+  );
+}
+
 function media(args: string[]): string {
-  return execFileSync('node', [MediaHelper, ...args], { encoding: 'utf8' });
+  return execFileSync('node', [MediaHelper, ...args], { encoding: 'utf8', env: withoutLoader() });
 }
 
 export function makeTestMovie(path: string, seconds: number, fps: number, cuts: readonly number[]): TestMovie {
@@ -119,7 +136,7 @@ export function videoMd5(movie: string): string {
 // ---- the EBU ADM Renderer (workstream D's opt-in tests' helper)
 
 /**
- * INTEGRATOR: `ANODE_EAR_HELPER` (default `scripts/ear-check.py`, run with `ANODE_EAR_PYTHON`, default python3, in the
+ * `ANODE_EAR_HELPER` (default `scripts/ear-check.py`, run with `ANODE_EAR_PYTHON`, default python3, in the
  * venv D's opt-in tests set up with `ear`):
  * - `validate <file.wav>`: exit 0 when `chna` and `axml` parse and validate per ITU-R BS.2076 (ear's own checks);
  * - `render <file.wav> <layout> <out.wav>`: `ear-render -s <layout>` (e.g. `4+7+0`), the speakers in BS.2051 order.
@@ -128,11 +145,11 @@ const EarHelper = process.env['ANODE_EAR_HELPER'] ?? join(Root, 'scripts/ear-che
 const EarPython = process.env['ANODE_EAR_PYTHON'] ?? 'python3';
 
 export function earValidate(path: string): void {
-  execFileSync(EarPython, [EarHelper, 'validate', path], { stdio: 'inherit' });
+  execFileSync(EarPython, ['-I', EarHelper, 'validate', path], { stdio: 'inherit', env: withoutLoader() });
 }
 
 export function earRender(path: string, layout: string, out: string): Wav {
-  execFileSync(EarPython, [EarHelper, 'render', path, layout, out], { stdio: 'inherit' });
+  execFileSync(EarPython, ['-I', EarHelper, 'render', path, layout, out], { stdio: 'inherit', env: withoutLoader() });
   return readWav(out);
 }
 
@@ -143,7 +160,43 @@ export interface Wav {
   channels: Float32Array[];
 }
 
-/** Reads PCM 16/24/32-bit and float 32-bit WAV (WAVE_FORMAT_EXTENSIBLE too; BW64/RF64 `ds64` is not needed here). */
+/**
+ * WAVE_FORMAT_EXTENSIBLE speaker bits and the ADM labels they stand for. A file stores its channels by bit; Anode's
+ * buffers, ADM and `ear` order them by layout (7.x: the sides, M±090, before the rears, M±135).
+ */
+const MaskLabels: [number, string][] = [
+  [0x1, 'M+030'],
+  [0x2, 'M-030'],
+  [0x4, 'M+000'],
+  [0x8, 'LFE1'],
+  [0x10, 'M+135'],
+  [0x20, 'M-135'],
+  [0x200, 'M+090'],
+  [0x400, 'M-090'],
+  [0x1000, 'U+045'],
+  [0x4000, 'U-045'],
+  [0x8000, 'U+135'],
+  [0x20000, 'U-135']
+];
+/** 7.1.4 and 7.1 in ADM order (the layouts the golden path reads). */
+const AdmOrders = [
+  ['M+030', 'M-030', 'M+000', 'LFE1', 'M+090', 'M-090', 'M+135', 'M-135', 'U+045', 'U-045', 'U+135', 'U-135'],
+  ['M+030', 'M-030', 'M+000', 'LFE1', 'M+090', 'M-090', 'M+135', 'M-135']
+];
+
+/** An extensible file's channels in ADM order when its mask is one of {@link AdmOrders}, else as stored. */
+function admOrder(channels: Float32Array[], mask: number): Float32Array[] {
+  const stored = MaskLabels.filter(([bit]) => (mask & bit) !== 0).map(([, label]) => label);
+  const order = AdmOrders.find(o => o.length === channels.length && o.every(l => stored.includes(l)));
+  return order && stored.length === channels.length
+    ? order.map(label => channels[stored.indexOf(label)] as Float32Array)
+    : channels;
+}
+
+/**
+ * Reads PCM 16/24/32-bit and float 32-bit WAV; a WAVE_FORMAT_EXTENSIBLE surround file's channels come back in ADM
+ * order (BW64/RF64 `ds64` is not needed here).
+ */
 export function readWav(path: string): Wav {
   const bytes = readFileSync(path);
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
@@ -152,6 +205,7 @@ export function readWav(path: string): Wav {
   let channelCount = 0;
   let sampleRate = 0;
   let bits = 0;
+  let mask = 0;
   while (offset + 8 <= bytes.length) {
     const id = bytes.toString('ascii', offset, offset + 4);
     const size = view.getUint32(offset + 4, true);
@@ -162,6 +216,7 @@ export function readWav(path: string): Wav {
       sampleRate = view.getUint32(body + 4, true);
       bits = view.getUint16(body + 14, true);
       if (format === 0xfffe) {
+        mask = view.getUint32(body + 20, true);
         format = view.getUint16(body + 24, true); // the sub-format GUID's first two bytes
       }
     } else if (id === 'data') {
@@ -184,7 +239,7 @@ export function readWav(path: string): Wav {
           }
         }
       }
-      return { sampleRate, channels };
+      return { sampleRate, channels: admOrder(channels, mask) };
     }
     offset = body + size + (size % 2);
   }
@@ -220,7 +275,30 @@ export function sine(hz: number, levelDb: number, seconds: number, sampleRate: n
   );
 }
 
+/** White noise (a fixed seed) at `levelDb` dBFS peak, for `seconds`. */
+export function noise(levelDb: number, seconds: number, sampleRate: number): Float32Array {
+  const amplitude = 10 ** (levelDb / 20);
+  let seed = 12345;
+  return Float32Array.from({ length: Math.round(seconds * sampleRate) }, () => {
+    seed = (Math.imul(seed, 1103515245) + 12345) >>> 0;
+    return amplitude * ((seed / 4294967296) * 2 - 1);
+  });
+}
+
 // ---- signal maths
+
+/** The peak amplitude of the `hz` component of `samples` (a single-bin DFT over whole periods). */
+export function amplitude(samples: Float32Array, hz: number, sampleRate: number): number {
+  const n = Math.floor(Math.floor((samples.length * hz) / sampleRate) * (sampleRate / hz));
+  let re = 0;
+  let im = 0;
+  for (let i = 0; i < n; i++) {
+    const phase = (2 * Math.PI * hz * i) / sampleRate;
+    re += (samples[i] ?? 0) * Math.cos(phase);
+    im += (samples[i] ?? 0) * Math.sin(phase);
+  }
+  return (2 * Math.hypot(re, im)) / Math.max(1, n);
+}
 
 export function rms(samples: Float32Array, from = 0, to = samples.length): number {
   let sum = 0;
