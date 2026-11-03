@@ -1,5 +1,6 @@
 import {
   aafRequest,
+  admRequest,
   exportFileName,
   exportProblems,
   midiImportRequest,
@@ -16,7 +17,8 @@ const Form: ExportForm = {
   embedMedia: true,
   trackIds: ['a', 'b'],
   format: 1,
-  regionId: null
+  regionId: null,
+  bitDepth: 24
 };
 
 describe('interchange dialogs', () => {
@@ -72,6 +74,16 @@ describe('interchange dialogs', () => {
       importTempo: false,
       importMarkers: true,
       merge: true
+    });
+  });
+
+  it('exports ADM BWF as a .wav of the whole mix (Phase 10)', () => {
+    expect(exportFileName('adm', { ...Form, fileName: 'Mix' })).toBe('Mix.wav');
+    expect(admRequest({ ...Form, fileName: ' Mix ', bitDepth: 32 })).toEqual({
+      fileName: 'Mix',
+      directory: null,
+      trackIds: null,
+      bitDepth: 32
     });
   });
 });

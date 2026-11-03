@@ -4,7 +4,7 @@ import { SystemStore } from '../state/system.store';
 import { ConnectionService } from './connection';
 import type { ServerTarget } from './desktop';
 import { EventStream } from './events';
-import { FAKE_SERVER } from './fake/fake-backend';
+import { FAKE_SERVER } from './fake/fake-token';
 
 /** Connects to the Server, loads what the shell shows, and opens the event stream. */
 @Injectable({ providedIn: 'root' })

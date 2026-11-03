@@ -62,7 +62,18 @@ export type AppCommand =
   | 'exportMusicXml'
   | 'exportAaf'
   | 'exportMidi'
-  | 'printScore';
+  | 'printScore'
+  // Phase 10 (docs/11-phase-10.md): ADM BWF, the project's surround format, the Movie menu.
+  | 'importAdm'
+  | 'exportAdm'
+  | 'surroundSettings'
+  | 'movieSettings'
+  | 'openMovie'
+  | 'removeMovie'
+  | 'importMovieAudio'
+  | 'exportMovieAudio'
+  | 'detectSceneCuts'
+  | 'movieWindow';
 
 /** Native file dialogs (apps/desktop/src/main.ts, `anode:dialog:*`); each resolves empty when cancelled. */
 export interface DesktopDialogs {
@@ -78,8 +89,11 @@ export interface DesktopDialogs {
   instrumentFile?(fileTypes: readonly string[]): Promise<string | null>;
   /** A content pack (`.anodepack`) to install in the Sound Library. */
   contentPack?(): Promise<string | null>;
-  /** A MusicXML (`.musicxml`, `.mxl`, `.xml`) or AAF file to import (Phase 9). */
-  importFile?(kind: 'musicxml' | 'aaf'): Promise<string | null>;
+  /**
+   * A MusicXML (`.musicxml`, `.mxl`, `.xml`) or AAF file to import (Phase 9); Phase 10: a movie (`.mov`, `.mp4`,
+   * `.m4v`) or an ADM BWF (`.wav`).
+   */
+  importFile?(kind: 'musicxml' | 'aaf' | 'movie' | 'adm'): Promise<string | null>;
 }
 
 /** What the desktop app prints to PDF: the page size and the file name it suggests. */

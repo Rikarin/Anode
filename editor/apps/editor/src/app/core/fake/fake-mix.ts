@@ -18,6 +18,7 @@ import {
 import { clampParameter, defaultParameters } from '../../instruments/parameters';
 import { BusCount, lowestFreeBus, parseRoute, wouldLoop } from '../../mixer/routing';
 import { TrackColors } from '../../state/track-colors';
+import { PannerRanges } from './fake-phase10';
 
 /** A command of one type. */
 type Command<T extends EditCommand['type']> = Extract<EditCommand, { type: T }>;
@@ -160,6 +161,11 @@ export function targetRange(
   }
   if (target === 'mute') {
     return { min: 0, max: 1 };
+  }
+  // Phase 10: the panners' parameters (docs/11-phase-10.md, `PannerTargets`), on tracks.
+  const panner = PannerRanges[target];
+  if (panner && track) {
+    return panner;
   }
   const insertMatch = /^insert:([^:]+):(.+)$/.exec(target);
   if (insertMatch?.[1] && insertMatch[2]) {

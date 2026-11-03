@@ -19,6 +19,7 @@ import {
   type CommandResult,
   type ControllerAssignments,
   type ControlSurface,
+  DefaultMonitoringSettings,
   DefaultPanner,
   DefaultRegionNotation,
   type DeltaOp,
@@ -39,6 +40,7 @@ import {
   type LaunchRequest,
   type LearnRequest,
   type LearnState,
+  ListenIn,
   type ListenInState,
   type LiveMidiEvent,
   type LiveRecordRequest,
@@ -142,6 +144,24 @@ import {
   type StoredPatch
 } from './fake-mix';
 import { renderScore } from './fake-notation';
+import {
+  admContent,
+  applyImportedTrack,
+  applyPhase10Command,
+  checkMonitoring,
+  checkPads,
+  DefaultRemotePads,
+  fakeDiscovery,
+  FakeListenInSocket,
+  frameImage,
+  isSurround as isSurroundFormat,
+  movieAudioContent,
+  probeMovie,
+  sceneCutFrames,
+  sceneTicks,
+  syncFormats,
+  thumbnailWidth
+} from './fake-phase10';
 import {
   applyMidiEffectCommand,
   applyPhase6Command,
@@ -353,6 +373,11 @@ export class FakeAnodeServer implements AnodeApi {
   private readonly stepChords = new StepChordCollector();
   /** Phase 7: the samples of each file version the Audio File Editor wrote, by file id and version. */
   private readonly fileVersions = new Map<string, Map<number, Float32Array[]>>();
+  /** Phase 10: the movie's cached thumbnails by height, the monitoring and pad settings, the listen-in streams. */
+  private readonly thumbnailCache = new Map<number, Set<number>>();
+  private monitoringSettings: MonitoringSettings = structuredClone(DefaultMonitoringSettings);
+  private padSets: RemotePads = structuredClone(DefaultRemotePads);
+  private readonly listenSockets = new Set<FakeListenInSocket>();
   /** Phase 8: controller assignments, Learn, control surfaces, OSC, the selection, Link and external sync. */
   private readonly control = new FakeControl(
     message => this.emit(message),
@@ -527,7 +552,8 @@ export class FakeAnodeServer implements AnodeApi {
 
       let after = before;
       for (const command of batch.commands) {
-        after = this.applyCommand(keepSavedValues(after, command), command);
+        // Output formats follow their destinations after every command (Phase 10).
+        after = syncFormats(this.applyCommand(keepSavedValues(after, command), command));
         this.notePerformance(command);
       }
       // Score content anchored to deleted notes or tracks goes with them (Phase 9).
@@ -1903,10 +1929,6 @@ export class FakeAnodeServer implements AnodeApi {
    * title and composer filled when empty.
    */
   private importTracks(project: Project, content: ImportedContent): Project {
-    if (content.tracks.some(t => t.inputFormat != null || t.panner != null || t.automation != null)) {
-      // Imported formats, panners and automation (an ADM import's): Phase 10, the editor workstream.
-      throw new ApiError(422, 'importTracks with Phase 10 fields: not in the fake Server yet.');
-    }
     let next = project;
     const tracks = new Map<string, string>();
     const notes = new Map<number, number>();
@@ -1948,6 +1970,8 @@ export class FakeAnodeServer implements AnodeApi {
         midiRegions: [...next.midiRegions, ...midiRegions],
         regions: [...next.regions, ...regions]
       };
+      // Phase 10: an ADM import's bed and objects (formats, panners, position automation).
+      next = applyImportedTrack(next, imported, track.id, { id: prefix => `${prefix}_${this.nextId++}` });
     }
     if (content.tempoEvents?.length) {
       next = this.applyCommand(next, { type: 'setTempoEvents', events: content.tempoEvents });
@@ -2010,78 +2034,268 @@ export class FakeAnodeServer implements AnodeApi {
     return next;
   }
 
-  // ---- Phase 10 (docs/11-phase-10.md): the movie, ADM BWF, monitoring and the remote, until the editor workstream (C)
-  // implements them.
+  // ---- Phase 10 (docs/11-phase-10.md): the movie, ADM BWF, monitoring and the remote
 
-  importMovie(_request: MovieImportRequest): Promise<Job> {
-    return this.phase10Pending('ImportMovie');
+  importMovie(request: MovieImportRequest): Promise<Job> {
+    return this.answer('ImportMovie', () => {
+      this.require();
+      // Probed when the request comes, as FFprobe would refuse a file it cannot read before the job starts.
+      const movie = probeMovie(request.path, request.copyIntoProject, request.startTick ?? 0);
+      return this.startJob(
+        'movieImport',
+        {
+          finish: () => {
+            const before = this.require();
+            this.commit(before, this.applyCommand(before, { type: 'setMovie', movie }), 'Open Movie');
+            this.thumbnailCache.clear();
+            return movie.inProject ? [`${projectFolder(before)}/${movie.path}`] : [];
+          }
+        },
+        1
+      );
+    });
   }
 
   movie(): Promise<Movie> {
-    return this.phase10Pending('GetMovie');
+    return this.answer('GetMovie', () => {
+      const movie = this.require().movie;
+      if (!movie) {
+        throw new ApiError(404, 'The project has no movie.');
+      }
+      return structuredClone(movie);
+    });
   }
 
   removeMovie(): Promise<CommandResult> {
-    return this.phase10Pending('RemoveMovie');
+    return this.answer('RemoveMovie', () => {
+      const before = this.require();
+      const result = this.commit(before, this.applyCommand(before, { type: 'removeMovie' }), 'Remove Movie');
+      this.thumbnailCache.clear();
+      return result;
+    });
   }
 
-  renderMovieThumbnails(_request: ThumbnailsRequest): Promise<Job> {
-    return this.phase10Pending('RenderMovieThumbnails');
+  renderMovieThumbnails(request: ThumbnailsRequest): Promise<Job> {
+    return this.answer('RenderMovieThumbnails', () => {
+      const movie = this.requireMovie();
+      const height = request.height;
+      if (!Number.isInteger(height) || height < 16 || height > 1080) {
+        throw new ApiError(422, 'Thumbnails are 16 to 1080 pixels high.');
+      }
+      if (
+        request.frames.length > 2000 ||
+        request.frames.some(f => !Number.isInteger(f) || f < 0 || f >= movie.frames)
+      ) {
+        throw new ApiError(422, `Thumbnails are of frames 0 to ${movie.frames - 1}, at most 2000 a request.`);
+      }
+      const frames = [...request.frames];
+      return this.startJob(
+        'thumbnails',
+        {
+          finish: () => {
+            const cached = this.thumbnailCache.get(height) ?? new Set<number>();
+            frames.forEach(f => cached.add(f));
+            this.thumbnailCache.set(height, cached);
+            return [];
+          }
+        },
+        frames.length > 200 ? 2 : 1
+      );
+    });
   }
 
-  movieThumbnails(_height?: number): Promise<MovieThumbnails> {
-    return this.phase10Pending('ListMovieThumbnails');
+  movieThumbnails(height = 64): Promise<MovieThumbnails> {
+    return this.answer('ListMovieThumbnails', () => {
+      const movie = this.requireMovie();
+      return {
+        width: thumbnailWidth(movie, height),
+        height,
+        frames: [...(this.thumbnailCache.get(height) ?? [])].sort((a, b) => a - b)
+      };
+    });
   }
 
-  detectMovieScenes(_request: SceneDetectRequest): Promise<Job> {
-    return this.phase10Pending('DetectMovieScenes');
+  /**
+   * `GET /project/movie/frames/{frame}?height=` as the fake answers it: an image URL of the frame (an SVG with the frame
+   * number and timecode; the real Server's is a JPEG). The editor's media URLs come here in fake mode.
+   */
+  movieFrameUrl(frame: number, height = 64): string {
+    const movie = this.requireMovie();
+    return frameImage(movie, Math.max(0, Math.min(movie.frames - 1, Math.round(frame))), height);
   }
 
-  importMovieAudio(_request: MovieAudioImportRequest): Promise<Job> {
-    return this.phase10Pending('ImportMovieAudio');
+  detectMovieScenes(request: SceneDetectRequest): Promise<Job> {
+    return this.answer('DetectMovieScenes', () => {
+      const movie = this.requireMovie();
+      const frames = sceneCutFrames(movie, request.threshold);
+      const replace = request.replaceExisting;
+      return this.startJob(
+        'sceneDetect',
+        {
+          finish: () => {
+            const before = this.require();
+            const ticks = sceneTicks(before, frames);
+            const command: EditCommand = { type: 'addSceneMarkers', ticks, replaceExisting: replace };
+            this.commit(before, this.applyCommand(before, command), 'Detect Scene Cuts');
+            return [];
+          },
+          stage: progress => `Frame ${Math.round(progress * movie.frames)} of ${movie.frames}`
+        },
+        2
+      );
+    });
   }
 
-  exportMovieAudio(_request: MovieAudioExportRequest): Promise<Job> {
-    return this.phase10Pending('ExportMovieAudio');
+  importMovieAudio(request: MovieAudioImportRequest): Promise<Job> {
+    return this.answer('ImportMovieAudio', () => {
+      const movie = this.requireMovie();
+      if (!movie.audio) {
+        throw new ApiError(422, `${movie.name} has no audio.`);
+      }
+      return this.startJob(
+        'movieAudioImport',
+        {
+          finish: () => {
+            const before = this.require();
+            const { file, content } = movieAudioContent(before, request.trackName, `aud_${this.nextId++}`);
+            const withFile: Project = { ...before, audioFiles: [...before.audioFiles, file] };
+            this.finishImport(content, 'Import Audio from Movie', withFile);
+            return [`${projectFolder(before)}/${file.path}`];
+          }
+        },
+        1
+      );
+    });
   }
 
-  exportAdm(_request: AdmExportRequest): Promise<Job> {
-    return this.phase10Pending('ExportAdm');
+  exportMovieAudio(request: MovieAudioExportRequest): Promise<Job> {
+    return this.answer('ExportMovieAudio', () => {
+      const project = this.require();
+      const movie = this.requireMovie();
+      const extension = (movie.path.split('.').pop() ?? 'mov').toLowerCase();
+      if (request.codec === 'pcm' && extension !== 'mov') {
+        throw new ApiError(422, `PCM audio goes in a MOV; this movie is an ${extension.toUpperCase()}.`);
+      }
+      const name = this.exportName(request.fileName, extension);
+      const directory = this.exportFolder(project, request.directory);
+      return this.startJob('movieAudioExport', { finish: () => [`${directory}/${name}`] }, 2);
+    });
   }
 
-  importAdm(_request: AdmImportRequest): Promise<Job> {
-    return this.phase10Pending('ImportAdm');
+  exportAdm(request: AdmExportRequest): Promise<Job> {
+    return this.answer('ExportAdm', () => {
+      const project = this.require();
+      if (!isSurroundFormat(project.settings.surroundFormat)) {
+        throw new ApiError(422, 'ADM BWF is for surround projects: set the project to a surround format first.');
+      }
+      if (![16, 24, 32].includes(request.bitDepth)) {
+        throw new ApiError(422, 'ADM BWF is 16, 24 or 32 bits.');
+      }
+      for (const id of request.trackIds ?? []) {
+        if (!project.tracks.some(t => t.id === id)) {
+          throw new ApiError(404, `No track ${id}.`);
+        }
+      }
+      const name = this.exportName(request.fileName, 'wav');
+      const directory = this.exportFolder(project, request.directory);
+      return this.startJob('admExport', { finish: () => [`${directory}/${name}`] }, 2);
+    });
+  }
+
+  importAdm(request: AdmImportRequest): Promise<Job> {
+    return this.answer('ImportAdm', () => {
+      this.require();
+      if (!/\.(wav|bwf)$/i.test(request.path)) {
+        throw new ApiError(422, `${request.path} is not an ADM BWF (.wav).`);
+      }
+      return this.startJob(
+        'admImport',
+        {
+          finish: () => {
+            const before = this.require();
+            const { files, content, format } = admContent(before, request.path, prefix => `${prefix}_${this.nextId++}`);
+            let base: Project = { ...before, audioFiles: [...before.audioFiles, ...files] };
+            // A stereo project takes the file's format, so its bed and objects have somewhere to go.
+            if (!isSurroundFormat(base.settings.surroundFormat)) {
+              base = this.applyCommand(base, { type: 'setSurroundFormat', format });
+            }
+            this.finishImport(content, 'Import ADM BWF', base);
+            return [];
+          }
+        },
+        1
+      );
+    });
   }
 
   monitoring(): Promise<MonitoringSettings> {
-    return this.phase10Pending('GetMonitoring');
+    return this.answer('GetMonitoring', () => structuredClone(this.monitoringSettings));
   }
 
-  setMonitoring(_settings: MonitoringSettings): Promise<MonitoringSettings> {
-    return this.phase10Pending('SetMonitoring');
+  setMonitoring(settings: MonitoringSettings): Promise<MonitoringSettings> {
+    return this.answer('SetMonitoring', () => {
+      this.monitoringSettings = checkMonitoring(settings);
+      return structuredClone(this.monitoringSettings);
+    });
   }
 
   discovery(): Promise<DiscoveryInfo> {
-    return this.phase10Pending('GetDiscovery');
+    return this.answer('GetDiscovery', () => fakeDiscovery(this.project));
   }
 
   remotePads(): Promise<RemotePads> {
-    return this.phase10Pending('GetRemotePads');
+    return this.answer('GetRemotePads', () => structuredClone(this.padSets));
   }
 
-  setRemotePads(_pads: RemotePads): Promise<RemotePads> {
-    return this.phase10Pending('SetRemotePads');
+  setRemotePads(pads: RemotePads): Promise<RemotePads> {
+    return this.answer('SetRemotePads', () => {
+      this.padSets = checkPads(pads);
+      return structuredClone(this.padSets);
+    });
   }
 
   listenInState(): Promise<ListenInState> {
-    return this.phase10Pending('GetListenIn');
+    return this.answer('GetListenIn', () => this.listenInStatus());
   }
 
-  /** A Phase 10 endpoint the fake Server does not answer yet (docs/11-phase-10.md): 422. */
-  private phase10Pending<T>(operation: string): Promise<T> {
-    return this.answer(operation, () => {
-      throw new ApiError(422, `${operation}: not in the fake Server yet.`);
-    });
+  /**
+   * The listen-in WebSocket (`/api/v1/remote/listen`) as the fake Server opens it: a socket-like stream of the fake
+   * master (a 1 kHz tone while playing) in the real framing, with PCM packets for the client's test decoder. A fifth
+   * listener is refused (503), as the Server's.
+   */
+  openListenIn(): FakeListenInSocket {
+    if (this.listenSockets.size >= ListenIn.maxListeners) {
+      throw new ApiError(503, `Listen-in has ${ListenIn.maxListeners} listeners already.`);
+    }
+    const socket = new FakeListenInSocket(
+      {
+        transport: () => {
+          const status = this.status();
+          return { sample: status.positionSamples, sampleRate: status.sampleRate, playing: status.state !== 'stopped' };
+        },
+        closed: closing => {
+          this.listenSockets.delete(closing);
+          this.emit({ type: 'listenIn', state: this.listenInStatus() });
+        }
+      },
+      this.realtime
+    );
+    this.listenSockets.add(socket);
+    setTimeout(() => this.emit({ type: 'listenIn', state: this.listenInStatus() }), 0);
+    return socket;
+  }
+
+  private listenInStatus(): ListenInState {
+    const listeners = this.listenSockets.size;
+    return { on: listeners > 0, listeners, latencyMs: listeners > 0 ? 20 : null };
+  }
+
+  private requireMovie(): Movie {
+    const movie = this.require().movie;
+    if (!movie) {
+      throw new ApiError(422, 'The project has no movie.');
+    }
+    return movie;
   }
 
   // ---- Phase 8 test hooks: what the host and the outside world would do
@@ -4053,10 +4267,6 @@ export class FakeAnodeServer implements AnodeApi {
       }
       case 'addMarker': {
         nonNegative(command.tick, 'A marker');
-        if ((command.kind ?? 'marker') !== 'marker') {
-          // Scene markers come from Detect Scene Cuts: Phase 10, the editor workstream (docs/11-phase-10.md).
-          throw new ApiError(422, 'addMarker with a scene kind: not in the fake Server yet.');
-        }
         const added = {
           id: `mrk_${this.nextId++}`,
           name: command.name || `Marker ${project.markers.length + 1}`,
@@ -4064,7 +4274,8 @@ export class FakeAnodeServer implements AnodeApi {
           lengthTicks: Math.max(0, Math.round(command.lengthTicks)),
           color: command.color ?? null,
           text: '',
-          kind: 'marker' as const
+          // Phase 10: a scene marker (Detect Scene Cuts makes them; one can be made or turned into one by hand).
+          kind: command.kind ?? 'marker'
         };
         return { ...project, markers: [...project.markers, added].sort((a, b) => a.tick - b.tick) };
       }
@@ -4073,16 +4284,14 @@ export class FakeAnodeServer implements AnodeApi {
         if (!m) {
           throw new ApiError(422, `No marker ${command.markerId}.`);
         }
-        if ((command.kind ?? 'marker') !== 'marker') {
-          throw new ApiError(422, 'setMarker with a scene kind: not in the fake Server yet.');
-        }
         const next = {
           ...m,
           name: command.name ?? m.name,
           tick: Math.round(command.tick ?? m.tick),
           lengthTicks: Math.round(command.lengthTicks ?? m.lengthTicks),
           color: command.color ?? m.color ?? null,
-          text: command.text ?? m.text
+          text: command.text ?? m.text,
+          kind: command.kind ?? m.kind
         };
         nonNegative(next.tick, 'A marker');
         nonNegative(next.lengthTicks, 'A marker length');
@@ -4345,8 +4554,11 @@ export class FakeAnodeServer implements AnodeApi {
       case 'setMoviePosition':
       case 'removeMovie':
       case 'addSceneMarkers':
-        // Surround formats, panners, the movie and scene markers: Phase 10, the editor workstream (docs/11-phase-10.md).
-        throw new ApiError(422, `${command.type}: not in the fake Server yet.`);
+        // Surround formats, panners, the movie and scene markers (Phase 10).
+        return applyPhase10Command(project, command, {
+          id: prefix => `${prefix}_${this.nextId++}`,
+          mix: this.mixContext()
+        });
       default:
         if (isPhase9Command(command)) {
           // Staff styles, region notation, score symbols, lyrics, chord symbols, score sets, layout and score edits
@@ -5297,6 +5509,10 @@ export function diff(before: Project, after: Project): DeltaOp[] {
     set => ops.push({ op: 'laneSetUpserted', set })
   );
   diffScore(before.score, after.score, ops);
+  // Phase 10: the movie (set, moved or removed).
+  if (!same(before.movie ?? null, after.movie ?? null)) {
+    ops.push({ op: 'movieChanged', movie: after.movie ?? null });
+  }
   const groupsAfter = new Map(after.groups.map(g => [g.number, g]));
   const groupsBefore = new Map(before.groups.map(g => [g.number, g]));
   for (const group of before.groups) {
