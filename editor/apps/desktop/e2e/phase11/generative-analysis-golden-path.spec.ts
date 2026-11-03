@@ -998,13 +998,20 @@ test.describe('Phase 11: generative and analysis', () => {
       expect(recorded.every(n => n.startTick % (Ppq / 4) === 0)).toBe(true);
       // A fader object (CC 7 to that track's volume) moved on screen changes the strip's volume.
       const before = must(state.tracks.find(t => t.id === keys.trackId)).strip.volumeDb;
+      const stripFader = window.getByRole('group', { name: /^Track \d+: Keys$/ }).getByRole('slider').first();
+      const shown = await stripFader.getAttribute('aria-valuetext');
       const fader = window.getByTestId('environment-node-Fader').getByRole('slider');
       await fader.focus();
       await window.keyboard.press('End');
       await expect
         .poll(async () => must((await project(window)).tracks.find(t => t.id === keys.trackId)).strip.volumeDb)
         .not.toBe(before);
-      measured('7 environment', `recorded ${recorded.length} notes an octave up on 16ths; the fader moved the volume`);
+      await expect(stripFader).not.toHaveAttribute('aria-valuetext', shown ?? '');
+      const moved = must((await project(window)).tracks.find(t => t.id === keys.trackId)).strip.volumeDb;
+      measured(
+        '7 environment',
+        `recorded ${recorded.length} notes (${[...new Set(recorded.map(n => n.pitch))].join(', ')}) on 16ths; the fader moved the strip ${before} → ${moved.toFixed(1)} dB`
+      );
 
       // ---- 8. Save, close and reopen: everything is intact; the Session Player regions regenerate identically
       const saved = await project(window);
