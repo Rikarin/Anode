@@ -8,5 +8,11 @@
   <ItemGroup>
     <!-- VideoFrameRate, MovieAudioCodec and the listen-in frame header (ListenIn). -->
     <ProjectReference Include="../Anode.Contracts/Anode.Contracts.csproj"/>
+    <!-- The listen-in stream's resampler (WindowedSinc). -->
+    <ProjectReference Include="../Anode.Dsp/Anode.Dsp.csproj"/>
+  </ItemGroup>
+  <ItemGroup>
+    <!-- Opus for listen-in: the managed port of libopus (BSD-3-Clause), docs/adr/0008-third-party-licensing.md. -->
+    <PackageReference Include="Concentus"/>
   </ItemGroup>
 </Project>
