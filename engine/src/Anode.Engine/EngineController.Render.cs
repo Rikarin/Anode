@@ -292,6 +292,7 @@ public sealed partial class EngineController {
                 while (Streamer.Pass()) { }
             }
 
+            AlignStreams();
             if (RenderPrimed(frames)) {
                 return;
             }
@@ -306,6 +307,23 @@ public sealed partial class EngineController {
             } else {
                 Thread.Sleep(1);
             }
+        }
+    }
+
+    /// <summary>
+    ///     As the stopped transport's callback does (<see cref="TrackFeed.Align" />): drops what can never play at the
+    ///     render's start, so the fills for it have room. The render's thread is the streams' consumer now (the device's
+    ///     callbacks are parked), and nothing else drops them: a render that began right after an edit changed a track's
+    ///     generation (its streams full of the previous fill) waited for room that never came.
+    /// </summary>
+    void AlignStreams() {
+        var root = Engine.Root;
+        var (clock, anchor) = Engine.RenderTransport;
+        for (var i = 0; i < root.Tracks.Length; i++) {
+            var identity = TrackFeed.Identity(anchor, root.Generations[i]);
+            var track = root.Tracks[i];
+            track.Stream.Align(clock, identity);
+            track.Crossfade?.Align(clock, identity);
         }
     }
 

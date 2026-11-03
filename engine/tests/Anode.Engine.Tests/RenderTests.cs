@@ -160,6 +160,32 @@ public sealed class RenderTests : IDisposable {
     }
 
     [Fact]
+    public async Task A_render_right_after_quick_edits_finds_room_for_its_fill_in_streams_full_of_earlier_ones() {
+        using var controller = new EngineController(new(Rate, 64), TestEffects.Registry());
+        EngineFile[] files = [new(0, mono, 1, Rate, Seconds * Rate)];
+        EngineTrack[] tracks = [new(1, -1, false, false, false, new(1f, 0f, false, false))];
+        using (var first = TestAudio.Segment([new(1, [], [TestAudio.Region(0, Seconds * Rate, 0)])], 1)) {
+            controller.LoadModel(TestAudio.Load(first, 1, true, tracks, files, dir));
+        }
+
+        // Stopped, with no callback to drop them, the disk thread queues a fill per edit (quick edits, as a panner's
+        // mode and its automation) until the stream's queue is full of fills that will never play.
+        for (var edit = 2; edit <= 8; edit++) {
+            while (controller.Streamer.Pass()) { }
+
+            using var next = TestAudio.Segment([new(1, [], [TestAudio.Region(0, Seconds * Rate, 0, edit * 100)])], edit);
+            controller.LoadModel(TestAudio.Load(next, edit, true, tracks, files, dir));
+        }
+
+        var path = Path.Combine(dir, "after-edit.wav");
+        var rendered = await controller.RenderAsync(new(9, 0, 12_000, path), null, Token);
+        var data = ReadFloat(rendered[0], out _);
+        for (var n = 0; n < 12_000; n++) {
+            Same(M(n + 800), data[2 * n], n, "left");
+        }
+    }
+
+    [Fact]
     public async Task A_cancelled_render_deletes_its_file_and_the_engine_plays_on() {
         using var controller = Controller();
         using var cancel = new CancellationTokenSource();
