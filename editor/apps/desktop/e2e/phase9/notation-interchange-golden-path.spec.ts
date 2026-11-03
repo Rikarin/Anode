@@ -268,7 +268,10 @@ async function clickNote(editor: Locator, noteId: number, modifiers: ('Shift' | 
 
 /** The centre of an element's first note head (an element id: `n{noteId}`, or `n{noteId}-2` for a tied segment). */
 async function headCentre(editor: Locator, elementId: string): Promise<{ x: number; y: number }> {
-  const box = await editor.locator(`[data-page] g.note[id="${elementId}"] .notehead use`).first().boundingBox();
+  const note = editor.locator(`[data-page] g.note[id="${elementId}"] .notehead use`).first();
+  // The score re-engraves after each entry (a lyric, a chord symbol): wait for the new page's note head.
+  await expect(note).toBeVisible();
+  const box = await note.boundingBox();
   if (!box) {
     throw new Error(`No note head ${elementId}`);
   }
