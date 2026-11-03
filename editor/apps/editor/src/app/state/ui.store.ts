@@ -8,7 +8,10 @@ export interface PluginWindow {
   chain?: 'inserts' | 'midiEffects';
 }
 
-/** The editors of the Editors pane (Phase 7: the Event List, the Step Editor and the Audio File Editor). */
+/**
+ * The editors of the Editors pane (Phase 7: the Event List, the Step Editor and the Audio File Editor; Phase 11: the
+ * Session Player Editor).
+ */
 export type EditorView =
   | 'pianoRoll'
   | 'score'
@@ -18,7 +21,8 @@ export type EditorView =
   | 'drumMachine'
   | 'eventList'
   | 'stepEditor'
-  | 'audioFile';
+  | 'audioFile'
+  | 'sessionPlayer';
 
 /** Phase 9's score windows: a score set's score, or one track's extracted part (the Score Editor in a window). */
 export interface ScoreWindow {
@@ -109,6 +113,10 @@ export class UiStore {
   readonly movieWindowOpen = signal(false);
   /** Phase 10: a Movie menu dialog; null: none. */
   readonly movieDialog = signal<MovieDialog | null>(null);
+  /** Phase 11: the Mastering Assistant window (the master's assistant, its analysis and settings). */
+  readonly masteringOpen = signal(false);
+  /** Phase 11: the MIDI Environment window (⌘0; ADR-0015). */
+  readonly environmentOpen = signal(false);
   /** The generic plugin editor windows, in the order they opened (the last is in front). */
   readonly pluginWindows = signal<readonly PluginWindow[]>([]);
 

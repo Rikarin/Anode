@@ -13,6 +13,7 @@ import { SelectionReporter } from './control/selection-reporter';
 import type { AppCommand } from './core/desktop';
 import { Notify } from './core/notify';
 import { Startup } from './core/startup';
+import { EnvironmentWindow } from './environment/environment-window';
 import { BounceDialog } from './export/bounce-dialog';
 import { BounceInPlaceDialog } from './functions/bounce-in-place-dialog';
 import { ProcessingDialog } from './functions/processing-dialog';
@@ -21,6 +22,7 @@ import { GrooveWindow } from './grooves/groove-window';
 import { InterchangeDialog } from './interchange/interchange-dialog';
 import { KeyCommandsEditor } from './keys/key-commands-editor';
 import { SoundLibraryDialog } from './loops/sound-library-dialog';
+import { MasteringWindow } from './mastering/mastering-window';
 import { GroupSettings } from './mixer/group-settings';
 import { IoLabelsDialog } from './mixer/io-labels-dialog';
 import { PluginWindowsHost } from './mixer/plugin-window';
@@ -105,6 +107,8 @@ const InterchangeCommands = {
     MovieWindow,
     MovieSettingsWindow,
     MovieDialogHost,
+    MasteringWindow,
+    EnvironmentWindow,
     XuiButtonImports,
     XuiInputImports,
     XuiNonIdealStateImports,
@@ -296,6 +300,18 @@ const InterchangeCommands = {
                 <an-movie-dialog />
               }
             }
+            <!-- Phase 11's MIDI Environment window (ADR-0015), loaded with @xui/node-graph when first opened. -->
+            @if (ui.environmentOpen()) {
+              @defer (on immediate) {
+                <an-environment-window />
+              }
+            }
+            <!-- Phase 11's Mastering Assistant window (docs/12-phase-11.md), loaded when first opened. -->
+            @if (ui.masteringOpen()) {
+              @defer (on immediate) {
+                <an-mastering-window />
+              }
+            }
           }
           <!-- Settings… (monitoring is the user's, not the project's). -->
           @if (ui.settingsOpen()) {
@@ -441,7 +457,8 @@ export class App {
       'score.sets': () => this.ui.scoreSetsOpen.set(true),
       'score.staffStyles': () => this.ui.staffStylesOpen.set(true),
       'score.layout': () => this.ui.scoreLayoutOpen.set(true),
-      'score.print': () => void this.printScore()
+      'score.print': () => void this.printScore(),
+      'view.environment': () => this.ui.environmentOpen.set(true)
     };
     for (let n = 1; n <= 9; n++) {
       actions[`screenset.recall${n}`] = () => void this.screensets.recall(n);
@@ -532,6 +549,16 @@ export class App {
       case 'surroundSettings':
         if (this.project.isOpen()) {
           this.ui.surroundSettingsOpen.set(true);
+        }
+        break;
+      case 'environment':
+        if (this.project.isOpen()) {
+          this.ui.environmentOpen.set(true);
+        }
+        break;
+      case 'masteringAssistant':
+        if (this.project.isOpen()) {
+          this.ui.masteringOpen.set(true);
         }
         break;
       case 'movieSettings':
