@@ -239,7 +239,7 @@ public sealed class ListenInService : IDisposable {
             }
         } catch (OperationCanceledException) {
             // the last listener left
-        } catch (Exception e) when (e is InvalidOperationException or ArgumentException or NotImplementedException) {
+        } catch (Exception e) when (e is InvalidOperationException or ArgumentException) {
             RemoteLog.ListenInFailed(logger, e.Message);
         } finally {
             reader?.Dispose();

@@ -56,13 +56,8 @@ public interface IMovieMedia {
 ///     for once.
 /// </summary>
 public sealed class FfmpegMovieMedia(IConfiguration configuration) : IMovieMedia {
-    readonly Lazy<FfmpegRunner?> runner = new(() => {
-            try {
-                return FfmpegTools.Locate(configuration["Anode:FfmpegDirectory"]) is { } tools ? new(tools) : null;
-            } catch (NotImplementedException) {
-                return null; // workstream E's stub, until it merges
-            }
-        }
+    readonly Lazy<FfmpegRunner?> runner = new(() =>
+        FfmpegTools.Locate(configuration["Anode:FfmpegDirectory"]) is { } tools ? new(tools) : null
     );
 
     public bool Available => runner.Value is not null;

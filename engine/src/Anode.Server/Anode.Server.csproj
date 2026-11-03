@@ -27,4 +27,9 @@
     <ProjectReference Include="../Anode.EngineHost/Anode.EngineHost.csproj"/>
     <ProjectReference Include="../Anode.Model/Anode.Model.csproj"/>
   </ItemGroup>
+  <ItemGroup>
+    <!-- Phase 10: binaural monitoring's HRTF set (workstream D's SADIE II conversion) with its licence and notice, in
+         hrtf/ beside the Server, where MonitoringService looks (and a release keeps them). -->
+    <None Include="../Anode.Dsp/Spatial/Hrtf/*" Link="hrtf/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" ExcludeFromSingleFile="true"/>
+  </ItemGroup>
 </Project>

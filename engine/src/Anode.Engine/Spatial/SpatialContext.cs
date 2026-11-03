@@ -6,8 +6,9 @@ namespace Anode.Engine.Spatial;
 ///     What a mixer plan's build needs of the spatial DSP (control thread): the factory, the rate, and the master's
 ///     object renderer and the listen-in tap's stereo down-mix, kept while the master's format stays.
 ///     <para>
-///         A piece of spatial DSP that cannot be made (workstream D's stubs throw until D merges) is logged and left out:
-///         a panned edge then carries its channels by label, objects are panned as beds, the tap takes the front pair.
+///         A piece of spatial DSP that cannot be made (a layout it refuses, an HRTF file that is missing or unreadable) is
+///         logged and left out: a panned edge then carries its channels by label, objects are panned as beds, the tap
+///         takes the front pair.
 ///     </para>
 /// </summary>
 public sealed class SpatialContext(ISpatialFactory factory, float sampleRate) {
@@ -67,8 +68,7 @@ public sealed class SpatialContext(ISpatialFactory factory, float sampleRate) {
     public T? Try<T>(Func<T> create, string what) where T : class {
         try {
             return create();
-        } catch (Exception e) when (e is NotImplementedException
-                                        or NotSupportedException
+        } catch (Exception e) when (e is NotSupportedException
                                         or InvalidOperationException
                                         or ArgumentException
                                         or IOException

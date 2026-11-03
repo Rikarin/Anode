@@ -54,3 +54,11 @@ for (const entry of readdirSync(out)) {
     rmSync(join(out, entry), { recursive: true, force: true });
   }
 }
+
+// Binaural monitoring's HRTF set travels in hrtf/ beside anode-server with its licence and notice (the Server's build
+// copies them from engine/src/Anode.Dsp/Spatial/Hrtf; Apache-2.0 asks for both to stay with it).
+for (const file of ['sadie2-d2-48k.anhrtf', 'LICENSE', 'NOTICE']) {
+  if (!existsSync(join(out, 'hrtf', file))) {
+    throw new Error(`The published engine has no hrtf/${file}.`);
+  }
+}

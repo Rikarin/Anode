@@ -1,3 +1,5 @@
+using Anode.Dsp.Spatial;
+using Anode.Engine.Spatial;
 using Anode.Ipc;
 using Anode.Ipc.Segments;
 using Anode.Ipc.Telemetry;
@@ -11,8 +13,9 @@ namespace Anode.Engine.Tests;
 /// <summary>
 ///     Phase 10's real-time promises (docs/11-phase-10.md, workstream A's tests): the listen-in tap's contents and
 ///     stamps, the surround meters in the telemetry, no allocation in the callback (or the telemetry) with a 7.1.4
-///     master, 32 objects and binaural monitoring, and that session's callback cost, recorded. Workstream D's DSP is
-///     doubled (<see cref="TestSpatial" />): the figures are the engine's own work plus the doubles' gain loops.
+///     master, 32 objects and binaural monitoring, and that session's callback cost, recorded: with workstream D's DSP
+///     (<see cref="DspSpatial" />, the shipped HRTF set) and with doubles (<see cref="TestSpatial" />: the engine's own
+///     work plus the doubles' gain loops).
 /// </summary>
 public sealed unsafe class SurroundSessionTests : IDisposable {
     const int Rate = 48_000;
@@ -182,7 +185,7 @@ public sealed unsafe class SurroundSessionTests : IDisposable {
     ///     automated, two with a send to a 5.1 bus), a 7.1.4 bed aux with a per-channel insert, the 5.1 aux into it, a
     ///     linked insert and a per-channel one on the master, binaural monitoring and the master tap on.
     /// </summary>
-    (EngineController Controller, OfflineDriver Driver, IDisposable Cleanup) Session(int block) {
+    (EngineController Controller, OfflineDriver Driver, IDisposable Cleanup) Session(int block, bool real = false) {
         const EngineChannelFormat f714 = EngineChannelFormat.Surround714;
         const EngineChannelFormat f51 = EngineChannelFormat.Surround51;
         var models = new List<TrackModel>();
@@ -226,7 +229,7 @@ public sealed unsafe class SurroundSessionTests : IDisposable {
         models.Add(new(101, [], []));
         var segment = TestAudio.Segment(models, 1);
         var controller = new EngineController(new(Rate, block), SpatialFixtures.Registry()) {
-            SpatialFactory = new TestSpatial { Record = false, BinauralLatency = 64 }
+            SpatialFactory = real ? DspSpatial.Instance : new TestSpatial { Record = false, BinauralLatency = 64 }
         };
         controller.LoadModel(
             TestAudio.Load(
@@ -242,7 +245,9 @@ public sealed unsafe class SurroundSessionTests : IDisposable {
             }
         );
         controller.SetMixer("all", false, 0);
-        controller.SetMonitoring(new(true, null, [0, 1], "set.anhrtf"));
+        controller.SetMonitoring(
+            new(true, null, [0, 1], real ? HrtfSet.Find(AppContext.BaseDirectory) ?? "missing.anhrtf" : "set.anhrtf")
+        );
         var tap = (byte*)NativeMemory.AlignedAlloc((nuint)MasterTapLayout.Size, 64);
         controller.Engine.MasterTap = new(tap, Rate);
         controller.SetMasterTap(true);
@@ -273,9 +278,11 @@ public sealed unsafe class SurroundSessionTests : IDisposable {
         return least;
     }
 
-    [Fact]
-    public void A_714_session_with_32_objects_and_binaural_monitoring_allocates_nothing_in_the_callback() {
-        var (controller, driver, cleanup) = Session(64);
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void A_714_session_with_32_objects_and_binaural_monitoring_allocates_nothing_in_the_callback(bool real) {
+        var (controller, driver, cleanup) = Session(64, real);
         using var _ = cleanup;
         var region = (byte*)NativeMemory.AlignedAlloc((nuint)TelemetryLayout.Size, 64);
         try {
@@ -304,14 +311,16 @@ public sealed unsafe class SurroundSessionTests : IDisposable {
         }
     }
 
-    [Fact]
-    public void Callback_cost_of_a_714_session_with_32_objects_and_binaural_monitoring() {
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Callback_cost_of_a_714_session_with_32_objects_and_binaural_monitoring(bool real) {
         var results = new List<string>();
         foreach (var block in new[] { 64, 256 }) {
             var best = double.MaxValue;
             var p99 = 0.0;
             for (var run = 0; run < 3; run++) {
-                var (_, driver, cleanup) = Session(block);
+                var (_, driver, cleanup) = Session(block, real);
                 using var _ = cleanup;
                 driver.PlayFrom(0);
                 var times = new List<double>();
@@ -346,7 +355,9 @@ public sealed unsafe class SurroundSessionTests : IDisposable {
             Assert.True(best < budget * 4, results[^1]);
         }
 
-        var message = "7.1.4 session, 32 objects, 8 beds, 2 auxes, binaural monitoring and the tap (spatial doubles): "
+        var message = "7.1.4 session, 32 objects, 8 beds, 2 auxes, binaural monitoring and the tap ("
+            + (real ? "workstream D's spatial DSP" : "spatial doubles")
+            + "): "
             + string.Join("; ", results);
         TestContext.Current.SendDiagnosticMessage(message);
         Console.WriteLine(message);

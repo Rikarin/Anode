@@ -1,3 +1,4 @@
+using Anode.Dsp.Spatial;
 using Anode.Contracts;
 using Anode.Ipc;
 using Anode.Server.Library;
@@ -15,8 +16,9 @@ namespace Anode.Server.Engine;
 ///     <para>
 ///         Where the HRTF set lives (workstream D converts SADIE II into Anode's <c>.anhrtf</c>): <c>Anode:HrtfPath</c>
 ///         when set; else the first <c>*.anhrtf</c> in the <c>hrtf</c> folder beside the Server (a release bundles it
-///         there, as the content folder); else, in development, the first in <c>engine/artifacts/hrtf</c> above the
-///         Server's folder (where D's conversion script writes it). None found: binaural is sent without a set, and
+///         there, as the content folder; the Server's build copies D's committed set, its <c>LICENSE</c> and <c>NOTICE</c>
+///         there too); else, in development, the committed set found from the Server's folder up
+///         (<see cref="HrtfSet.Find" />: <c>engine/src/Anode.Dsp/Spatial/Hrtf</c>). None found: binaural is sent without a set, and
 ///         the host falls back as it can.
 ///     </para>
 /// </remarks>
@@ -51,14 +53,9 @@ public sealed class MonitoringService(
                 return bundled;
             }
 
-            for (var folder = new DirectoryInfo(AppContext.BaseDirectory); folder is not null; folder = folder.Parent) {
-                if (First(Path.Combine(folder.FullName, "engine", "artifacts", "hrtf")) is { } artifact) {
-                    return artifact;
-                }
-
-                if (folder.Name == "engine" && First(Path.Combine(folder.FullName, "artifacts", "hrtf")) is { } dev) {
-                    return dev;
-                }
+            // Development without a build's copy: the committed set in the checkout (engine/src/Anode.Dsp/Spatial/Hrtf).
+            if (HrtfSet.Find(AppContext.BaseDirectory) is { } committed) {
+                return committed;
             }
 
             return null;
