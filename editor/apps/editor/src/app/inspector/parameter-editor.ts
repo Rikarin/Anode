@@ -3,7 +3,8 @@ import { ChangeDetectionStrategy, Component, computed, inject, input } from '@an
 import type { ParameterInfo, PluginInfo } from '@anode/api-client';
 import { AnChoice, AnKnob } from '@anode/audio-ui';
 import { LearnTarget, LearnTargets } from '../control/learn-menu';
-import { type PluginPanelHost, pluginPanel } from '../plugin-panels/plugin-panel';
+import { deferredPanel, pluginPanel, type PluginPanelHost } from '../plugin-panels/plugin-panel';
+import { T3Panel } from '../plugin-panels/t3-panel';
 import { InstrumentStore } from '../state/instrument.store';
 
 /**
@@ -79,11 +80,17 @@ export function isChoice(parameter: ParameterInfo): boolean {
 @Component({
   selector: 'an-parameter-editor',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [AnChoice, AnKnob, LearnTarget, NgComponentOutlet],
+  imports: [AnChoice, AnKnob, LearnTarget, NgComponentOutlet, T3Panel],
   host: { class: 'flex flex-col gap-3', role: 'group', '[attr.aria-label]': 'plugin().name + " parameters"' },
   template: `
     @if (panel(); as p) {
       <ng-container *ngComponentOutlet="p; inputs: { host: host() }" />
+    }
+    <!-- Phase 11: the T3 instruments' panels load when first shown. -->
+    @if (deferredPanel(); as kind) {
+      @defer (on immediate) {
+        <an-t3-panel [kind]="kind" [host]="host()" />
+      }
     }
     @for (group of groups(); track group.name) {
       <section class="flex flex-col gap-1" [attr.aria-label]="group.name">
@@ -134,6 +141,8 @@ export class ParameterEditor {
   protected readonly choice = isChoice;
   /** A custom panel for the instrument (drawbars, the FM algorithm…) when its parameters match one; else none. */
   protected readonly panel = computed(() => pluginPanel(this.plugin()));
+  /** Phase 11: a T3 instrument's panel (the physical model's object, Sample Alchemy's source), loaded when shown. */
+  protected readonly deferredPanel = computed(() => deferredPanel(this.plugin()));
   protected readonly host = computed<PluginPanelHost>(() => ({
     plugin: this.plugin(),
     value: id => this.instruments.value(this.trackId(), id),

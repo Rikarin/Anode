@@ -1,5 +1,5 @@
 import { Injectable, inject, signal } from '@angular/core';
-import { ApiError, type Insert } from '@anode/api-client';
+import { ApiError, type Insert, MasteringParameters } from '@anode/api-client';
 import { ANODE_API } from '../core/api';
 import { ConnectionService } from '../core/connection';
 import { EventStream } from '../core/events';
@@ -56,6 +56,11 @@ export class PluginWindows {
     if (insert.pluginId === 'anode.scripter' && trackId !== null) {
       // Scripter (Phase 7): its Script Editor, with the script's parameters as controls.
       this.ui.scriptEditor.set({ trackId, slotId: insert.id });
+      return;
+    }
+    if (insert.pluginId === MasteringParameters.pluginId && trackId === null) {
+      // The master's Mastering Assistant (Phase 11): its own window, with the analysis and the live loudness.
+      this.ui.masteringOpen.set(true);
       return;
     }
     if (strip?.midiEffects.some(i => i.id === insert.id)) {
