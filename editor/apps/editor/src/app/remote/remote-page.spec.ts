@@ -255,7 +255,13 @@ describe('listen-in on the remote', () => {
     await settle();
     await settle();
     expect(store.decoderName()).toBe('PCM (test)');
+    // The golden path's capture hook keeps what is heard, from the first frame with a transport position.
+    const hook = (globalThis as { anodeListenIn?: Pick<ListenInStore, 'startCapture' | 'capture'> }).anodeListenIn;
+    hook?.startCapture(0.05);
     sockets[0]?.pump(5);
+    const captured = hook?.capture();
+    expect(captured?.samples.length).toBe(2400);
+    expect(captured?.transportSample).toBeGreaterThanOrEqual(0);
     expect(store.status()).toBe('playing');
     (store.player as DirectPlayer).render(10);
     store.refresh();

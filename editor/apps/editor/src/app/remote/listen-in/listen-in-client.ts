@@ -48,6 +48,8 @@ export class ListenInClient {
   format: StreamFormat | null = null;
   decoderName: string | null = null;
   framesReceived = 0;
+  /** Sees every decoded frame (its transport sample and interleaved samples) before the player: the store's capture. */
+  tap: ((transportSample: number, samples: Float32Array) => void) | null = null;
   private socket: ListenInSocketLike | null = null;
   private decoder: ListenInDecoder | null = null;
   private player: ListenInPlayer | null = null;
@@ -172,6 +174,7 @@ export class ListenInClient {
     if (!meta || !this.player) {
       return;
     }
+    this.tap?.(meta.transportSample, samples);
     this.player.push({ sequence, samples, ...meta });
     if (this.status === 'buffering') {
       this.set('playing');

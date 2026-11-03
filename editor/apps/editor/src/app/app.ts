@@ -168,15 +168,48 @@ const InterchangeCommands = {
           <main class="relative min-h-0 flex-1 overflow-hidden">
             <router-outlet />
           </main>
-          <an-key-commands-editor />
-          <an-save-alternative />
+          <!-- Dialogs load when first opened, so the initial bundle carries none of them (Phase 10). -->
+          @if (ui.keyCommandsOpen()) {
+            @defer (on immediate) {
+              <an-key-commands-editor />
+            }
+          }
+          @if (ui.saveAlternativeOpen()) {
+            @defer (on immediate) {
+              <an-save-alternative />
+            }
+          }
           @if (project.isOpen()) {
-            <an-bounce-dialog />
-            <an-strip-silence-dialog />
-            <an-bounce-in-place-dialog />
-            <an-processing-dialog />
-            <an-io-labels-dialog />
-            <an-group-settings />
+            @if (ui.bounceOpen()) {
+              @defer (on immediate) {
+                <an-bounce-dialog />
+              }
+            }
+            @if (ui.stripSilenceOpen()) {
+              @defer (on immediate) {
+                <an-strip-silence-dialog />
+              }
+            }
+            @if (ui.bounceInPlaceOpen()) {
+              @defer (on immediate) {
+                <an-bounce-in-place-dialog />
+              }
+            }
+            @if (ui.processingOpen()) {
+              @defer (on immediate) {
+                <an-processing-dialog />
+              }
+            }
+            @if (ui.ioLabelsOpen()) {
+              @defer (on immediate) {
+                <an-io-labels-dialog />
+              }
+            }
+            @if (ui.groupSettings() !== null) {
+              @defer (on immediate) {
+                <an-group-settings />
+              }
+            }
             <an-plugin-windows />
             <!-- Phase 7's windows load when first opened (docs/08-phase-7.md; the initial bundle stays small). -->
             @if (ui.transformOpen()) {
@@ -282,7 +315,11 @@ const InterchangeCommands = {
             }
           }
           <an-learn-menu-host />
-          <an-sound-library-dialog />
+          @if (ui.soundLibraryOpen()) {
+            @defer (on immediate) {
+              <an-sound-library-dialog />
+            }
+          }
         }
       }
     }

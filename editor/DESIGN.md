@@ -400,3 +400,84 @@ and a track's Staff Style is a native select with a `bezel` "…" to the window.
 **Interchange dialogs** (File ▸ Import / Export): one `xui-dialog` in the Bounce window's manner (Save As, Where with
 Choose…, the format's options, "Writes …", the job's `well` progress bar); imports pick a file with Choose… (desktop)
 or a file input (browser).
+
+## Phase 10 patterns: surround, video and the remote
+
+No new tokens: Phase 10 is built from the knob, meter, LCD and bezel tokens. Its windows and dialogs load when first
+opened (`@defer`), the panners and touch controls come from `@anode/audio-ui/lazy`, and the remote is its own lazy
+route, so none of it is in the initial bundle.
+
+**Surround Panner** (`an-surround-panner`, audio-ui lazy). A circle on `fill-surface-inset` with a
+`stroke-hairline-strong` rim, a `stroke-knob-track` crosshair and an inner ring at 0.62. Speakers are dots: ear level
+`fill-foreground` on the rim, the upper layer smaller `fill-foreground-muted` inside, the LFE a small muted tag under
+the circle at the right; labels are short names (L R C LFE Ls … Ltf Rtr) in semibold `fill-foreground` outside the rim.
+The puck is a 14 px `knob-body` with a `ring-primary` ring; a `fill-primary/15` halo grows as diversity falls; a stereo
+input shows two `fill-primary/60` ghost pucks `spread` apart. Below it a `readout` line ("110° L, diversity 80 %") and
+`an-knob`s for Elevation (height layouts), Centre Level, LFE Level (−∞ at the floor) and Spread (stereo inputs).
+Angles are ADM's: 0° ahead, positive to the left. Compact (in a strip) it is 56 px with a `bezel` angle button that
+opens the full panner in an `an-floating-window`. Keys: ←/→ angle 5° (⇧ 1°), ↑/↓ diversity 5 %, Home front centre.
+
+**3D Object Panner** (`an-object-panner`). A top view like the Surround Panner's (azimuth and distance) and a side
+view as a `well` (front to the right, an arc and a horizon in `stroke-knob-track`; elevation −90…90), each a keyboard
+slider with a 10 px uppercase muted caption and a `readout` line, and a Size knob.
+
+**Multichannel meter** (`an-multichannel-meter`). The peak meter's `well` / `meter-segments` / `meter-gradient` bars,
+one per speaker in layout order, with 8 px semibold labels under them (none in a strip, where the bars are 2–5 px wide
+beside the fader) and one clip LED. It reads `TrackMeter.peaks` when the Server sends it, else L/R.
+
+**Surround strips.** A strip to a surround output has, in place of its pan knob: a `strip-slot` "input → output" format
+popup (audio tracks and auxes only; disabled with an `xuiTooltip` on `[attr.disabled]` elsewhere), the compact panner
+(or the object's top view), and a Bed/Obj `bezel-group` (`aria-pressed`, `text-lit`; disabled with a tooltip unless the
+strip goes to the master of a surround project). The meter is the multichannel meter.
+
+**Settings windows.** Project Settings ▸ Surround is a radiogroup of 44 px rows (a speaker diagram, the name in 13 px
+semibold, channels and BS.2051 name in muted `readout`; the selected row `bg-primary/25`). Settings ▸ Audio ▸
+Monitoring is a Speakers/Down-mix/Binaural `bezel-group` radiogroup with a muted note, a down-mix select, and a Speaker
+Map table of native selects under 10 px uppercase heads.
+
+**Movie window** (`video/movie-window.ts`, an `an-floating-window`): the title is the movie's name; the size is a
+`bezel-group` S/M/L radiogroup (`text-lit` when checked) in the title bar. The picture keeps the movie's aspect on
+`bg-surface-sunken`: a muted `<video>`, or the Server's frame image when there is no stream or the browser cannot play
+the codec (a muted `role="note"` says so). A small `lcd-glass` readout at the bottom left shows the frame (`readout`)
+and timecode (`text-lcd-muted`); outside the movie a `bg-background/70` veil says "Before the movie" or "After the
+movie". A footer of muted 10 px `readout`s shows rate, size and codec.
+
+**Movie track** (global track `movie`, 44 px, only with a movie): the movie's span as a `bg-surface-sunken` band with
+a `--hairline-strong` edge; 40 px thumbnails at the movie's aspect, one per thumbnail width (each frame once when zoomed
+in); pending ones are `bg-surface-inset` blocks; the name in 10 px semibold with a text shadow.
+
+**Scene markers**: marker-track tags with a dashed 2 px start edge in `--lit` (their colour when set) and an 11 px film
+glyph in `text-lit`; the Marker List shows the same glyph in place of the colour dot. "Make Scene Marker" / "Make
+Ordinary Marker" in the marker menu.
+
+**Movie Settings and the Movie dialogs**: Movie Settings is an `an-floating-window` with `Band`s (Position: start in
+bars and beats with Set to Playhead, offset in seconds or timecode with `aria-invalid`; Movie: a `dl` of the probe's
+facts). Open Movie…, Export Audio to Movie… and Detect Scene Cuts… are one `xui-dialog` in the interchange dialog's
+manner (the 7 rem label grid, segmented controls, the job's `well` progress bar, Stop while running). ADM BWF export
+and import are the interchange dialog's `adm` format (bit depth; a Server path in a browser, never an upload).
+
+**The remote** (`remote/remote-page.ts`, the lazy `remote` route) has no desktop shell. A `glass-bar` header shows a
+connection LED (`bg-meter-low` open, else `bg-meter-mid`), the project's name in 13 px semibold and the Server line in
+muted 11 px. Below it the remote control bar (`chrome-bar`): transport keys as 44 px `bezel`s (play
+`text-transport-play`, record `text-transport-record`, cycle `text-transport-cycle`, each with `aria-pressed`), an
+`lcd-glass` h-11 LCD (bars in 19 px semibold `readout` over clock time, tempo), and the Listen `bezel` (`text-lit` when
+on) with a `role="status"` line: the state in semibold, latency, buffer and the Server's delay in muted `readout`. The
+views are a `bezel-group` `role="tablist"` of 48 px tabs (the selected one `text-lit`): the last row on phones, the top
+in `md:landscape:`, where the track list becomes a column with a hairline edge. Touch rules: every target at least
+44 px (`min-h-11 min-w-11`), no hover-only affordances, the page `touch-action: manipulation`, and dragging controls
+`touch-none` with pointer capture.
+
+**Remote views.** The mixer: a `glass-bar` bank row (chevron `bezel`s, "Tracks 1–8 of N" in `readout`), then
+`strip-body` columns (`w-24`, `strip-selected` for the selected track) with the name in an inset box under a 4 px
+colour bar, `an-pan-knob`, `an-fader`, and M/S/R `state-toggle`s at `size-11`. Live Loops: scene launch `bezel`s over
+rows of `an-live-loops-cell` (h-14 w-20). Key-command pads: a 3/4/6-column grid of `bezel` pads (`min-h-20`, a 4 px top
+bar in the pad's colour, 13 px semibold label); a pad the remote cannot run is `disabled:opacity-35` with an
+`xuiTooltip` on `[attr.disabled]`; edit mode is a list of `bg-surface` rows with h-11 fields and selects. The Step
+Sequencer: a w-24 row name and `well` steps at `size-11`, `bg-primary` when on, a gap every four steps.
+
+**Touch keyboard** (`an-touch-keyboard`, audio-ui lazy): a `well` row of equal `key-white` keys, one per scale note
+from the root (the root's name underlined), `key-lit` while held. One note per pointer (multitouch chords); sliding
+plays the next key; velocity from where the touch lands (top 40, bottom 127). The keys are buttons named by note; Space
+or Return plays the focused key, arrows move between keys. **Drum pads** (`an-drum-pads`, audio-ui lazy): a 4 × 4
+`well` grid, the lowest note at the bottom left; each pad a `bezel` with a 4 px colour bar, the sound's name in 12 px
+semibold and the note in a 10 px `readout`, `key-lit` while held; each finger plays its own pad.

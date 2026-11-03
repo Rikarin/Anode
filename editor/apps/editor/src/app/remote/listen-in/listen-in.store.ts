@@ -56,6 +56,11 @@ export class ListenInStore {
       }
     });
     inject(DestroyRef).onDestroy(() => this.stop());
+    // The golden path's hook (apps/desktop/e2e/phase10): capture what the remote hears.
+    (globalThis as { anodeListenIn?: Pick<ListenInStore, 'startCapture' | 'capture'> }).anodeListenIn = {
+      startCapture: seconds => this.startCapture(seconds),
+      capture: () => this.capture()
+    };
   }
 
   readonly on = computed(() => this.status() !== 'off' && this.status() !== 'failed');
@@ -90,6 +95,7 @@ export class ListenInStore {
       now: () => performance.now()
     };
     const client = new ListenInClient(deps, () => this.sync());
+    client.tap = (transportSample, samples) => this.captureFrame(transportSample, samples);
     this.client = client;
     client.start();
     this.timer ??= setInterval(() => this.refresh(), StatsMs);
@@ -105,6 +111,50 @@ export class ListenInStore {
     this.status.set('off');
     this.stats.set(null);
     this.latencyMs.set(null);
+  }
+
+  // ---- capture (tests and the golden path): the decoded stream as heard, with the transport sample it started at
+
+  private captured: { left: Float32Array; length: number; transportSample: number } | null = null;
+
+  /**
+   * Starts keeping the next `seconds` of decoded audio (the left channel at the stream's 48 kHz), from the first frame
+   * that has a transport position. The Playwright golden path reads it through `window.anodeListenIn` to find the test
+   * tone's frequency, level and delay.
+   */
+  startCapture(seconds: number): void {
+    this.captured = {
+      left: new Float32Array(Math.round(seconds * ListenIn.sampleRate)),
+      length: 0,
+      transportSample: -1
+    };
+  }
+
+  /** What {@link startCapture} kept so far: the samples, and the project sample (transport) of the first. */
+  capture(): { samples: Float32Array; transportSample: number; sampleRate: number; projectSampleRate: number } | null {
+    const c = this.captured;
+    return c
+      ? {
+          samples: c.left.slice(0, c.length),
+          transportSample: c.transportSample,
+          sampleRate: ListenIn.sampleRate,
+          projectSampleRate: this.client?.format?.projectSampleRate ?? this.project.info()?.sampleRate ?? 48000
+        }
+      : null;
+  }
+
+  private captureFrame(transportSample: number, samples: Float32Array): void {
+    const c = this.captured;
+    if (!c || c.length >= c.left.length || (c.length === 0 && transportSample < 0)) {
+      return;
+    }
+    if (c.length === 0) {
+      c.transportSample = transportSample;
+    }
+    const channels = this.client?.format?.channels ?? 2;
+    for (let i = 0; i < samples.length && c.length < c.left.length; i += channels) {
+      c.left[c.length++] = samples[i] ?? 0;
+    }
   }
 
   /** The current player (tests drive a direct one). */
