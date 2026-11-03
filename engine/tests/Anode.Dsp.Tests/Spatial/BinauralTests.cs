@@ -8,10 +8,13 @@ namespace Anode.Dsp.Tests.Spatial;
 ///     known angles (the exit criterion: 90° left at least 6 dB louder in the left ear, the right ear 0.5–0.8 ms later).
 /// </summary>
 public sealed class BinauralTests {
-    static readonly Lazy<HrtfSet> Shipped = new(() => HrtfSet.Load(HrtfSet.Find(Ear.RepositoryRoot())!));
+    static readonly Lazy<HrtfSet> Shipped = new(static () => HrtfSet.Load(HrtfSet.Find(Ear.RepositoryRoot())!));
 
     /// <summary>A 7.1.4 render of an impulse in one speaker, or an object at a direction: the two ears' responses.</summary>
-    static (float[] Left, float[] Right) Impulse(float rate, Action<BinauralRenderer, bool, float[], float[], float[]> render) {
+    static (float[] Left, float[] Right) Impulse(
+        float rate,
+        Action<BinauralRenderer, bool, float[], float[], float[]> render
+    ) {
         const int block = 128;
         var renderer = new BinauralRenderer();
         renderer.Prepare(Shipped.Value, SpeakerLayout.Of(SpeakerFormat.Surround714), rate, block, 1);
@@ -155,7 +158,11 @@ public sealed class BinauralTests {
         }
 
         var between = Itd(set, 61);
-        Assert.InRange(between, Math.Min(Itd(set, 60), Itd(set, 62)) - 0.021, Math.Max(Itd(set, 60), Itd(set, 62)) + 0.021);
+        Assert.InRange(
+            between,
+            Math.Min(Itd(set, 60), Itd(set, 62)) - 0.021,
+            Math.Max(Itd(set, 60), Itd(set, 62)) + 0.021
+        );
         var halfway = Itd(set, 45);
         Assert.InRange(halfway, Itd(set, 30), Itd(set, 60));
     }
@@ -194,10 +201,11 @@ public sealed class BinauralTests {
         Assert.Equal(
             0,
             AllocationProbe.Measure(() => {
-                renderer.Process(new(speakers, 12, 256), left, right);
-                renderer.ProcessObject(0, input, azimuth += 5, 10, left, right);
-                renderer.ProcessObject(1, input, -azimuth, 0, left, right);
-            })
+                    renderer.Process(new(speakers, 12, 256), left, right);
+                    renderer.ProcessObject(0, input, azimuth += 5, 10, left, right);
+                    renderer.ProcessObject(1, input, -azimuth, 0, left, right);
+                }
+            )
         );
         Assert.Equal(0, renderer.LatencySamples);
     }

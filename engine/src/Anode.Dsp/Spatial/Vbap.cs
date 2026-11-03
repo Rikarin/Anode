@@ -1,3 +1,6 @@
+// The extent panner (Vbap.Spread, Vbap.Grid) is ported from the EBU ADM Renderer's ear/core/objectbased/extent.py:
+// Copyright (c) 2018-2019 EBU ADM Renderer Authors, BSD-3-Clause-Clear; the licence is in PointSourcePanner.cs.
+
 namespace Anode.Dsp.Spatial;
 
 /// <summary>
@@ -109,7 +112,10 @@ public sealed class Vbap {
         }
     }
 
-    /// <summary>The spread gains of a circular extent <paramref name="extent" /> degrees across around <paramref name="direction" />.</summary>
+    /// <summary>
+    ///     The spread gains of a circular extent <paramref name="extent" /> degrees across around
+    ///     <paramref name="direction" />.
+    /// </summary>
     void Spread(Vector3 direction, double extent, Span<double> gains) {
         var radius = extent / 2 * Math.PI / 180;
         var fade = FadeDegrees * Math.PI / 180;
@@ -247,7 +253,14 @@ public sealed class ObjectRenderer {
         pointCounts[index] = 0;
     }
 
-    void Ramp(PlanarBlock input, PlanarBlock output, ReadOnlySpan<float> from, ReadOnlySpan<float> to, int start, int end) {
+    void Ramp(
+        PlanarBlock input,
+        PlanarBlock output,
+        ReadOnlySpan<float> from,
+        ReadOnlySpan<float> to,
+        int start,
+        int end
+    ) {
         var length = end - start;
         var inverse = 1f / length;
         for (var c = 0; c < channels; c++) {

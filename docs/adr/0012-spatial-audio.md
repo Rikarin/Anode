@@ -31,6 +31,21 @@ stereo throughout.
 - **Verification:** the EBU ADM Renderer (`ear`) checks Anode's ADM files and renders them for comparison, in opt-in
   tests and the golden path.
 
+## Implementation notes (workstream D)
+
+- **Objects:** a port of BS.2127's point-source panner (`ear`'s `point_source.py`: extra layer speakers, polar virtual
+  speakers, convex-hull triplets, quads and virtual n-gons) and of its polar extent panner for size, so Anode's gains
+  equal `ear`'s (within 1e-4 on a grid; the golden path's render within 0.001 dB per speaker and second). Distance
+  changes the level only (+6 dB at most, inwards); BS.2127 widens the extent instead.
+- **HRTFs:** SADIE II subject D2 (KEMAR), Apache-2.0, 1982 directions of the 48 kHz set as a 2 MB `.anhrtf` committed
+  with its licence and notice (`scripts/build-hrtf.py` rebuilds it from the SOFA by checksum). Raw HRIRs with per-ear
+  delays for interpolation; no minimum-phase step.
+- **Binaural** uses the convolution reverb's zero-latency partitioned convolver per ear and speaker; objects can be
+  rendered directly with a cross-fade between two convolver pairs.
+- **ADM:** BS.2076-2 with sample-exact fractional times; BS.2094 common packs where they match Anode's layouts, Anode
+  packs of common channel formats otherwise; no `profileList` (`ear --strict` refuses elements it does not know).
+- Details and measurements: [docs/spatial/README.md](../spatial/README.md).
+
 ## Consequences
 
 - The engine's graph, metering and bounce become channel-count-aware; the stereo path must not get slower.

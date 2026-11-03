@@ -51,7 +51,10 @@ public sealed class EarPannerTests {
         var extent = ObjectPosition.ExtentDegrees(size);
         var input = JsonSerializer.Serialize(directions.Select(d => new[] { d.Azimuth, d.Elevation, extent }));
         using var result = JsonDocument.Parse(Ear.Run("ear-gains.py", input, system));
-        var names = result.RootElement.GetProperty("channels").EnumerateArray().Select(static n => n.GetString()!).ToArray();
+        var names = result.RootElement.GetProperty("channels")
+            .EnumerateArray()
+            .Select(static n => n.GetString()!)
+            .ToArray();
         var expected = result.RootElement.GetProperty("gains").EnumerateArray().ToArray();
         var gains = new float[layout.ChannelCount];
         for (var d = 0; d < directions.Count; d++) {

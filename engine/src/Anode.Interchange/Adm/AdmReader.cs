@@ -34,60 +34,72 @@ public static class AdmReader {
             throw new FormatException("The file has no chna and axml chunks: it is not ADM BWF.");
         }
 
-        var tracks = Chna(reader.Chunk("chna"));
-        XDocument document;
+        var adm = new Model(Axml(reader.Chunk("axml")), Chna(reader.Chunk("chna")), reader.SampleRate, reader.Frames);
+        var plan = adm.Plan(reader.Channels);
+        Directory.CreateDirectory(mediaFolder);
+        var files = plan.Select((item, i) => Path.Combine(mediaFolder, $"{i + 1:00} {Sanitise(item.Name)}.wav"))
+            .ToList();
+        Extract(reader, plan, files);
+        var beds = new List<AdmBed>();
+        var objects = new List<AdmObject>();
+        for (var i = 0; i < plan.Count; i++) {
+            var item = plan[i];
+            if (item.Bed is { } format) {
+                beds.Add(new(item.Name, format, files[i]));
+            } else {
+                objects.Add(new(item.Name, files[i], item.Tracks.Length, item.Blocks!));
+            }
+        }
+
+        return new(adm.Name ?? Path.GetFileNameWithoutExtension(path), reader.SampleRate, reader.Frames, beds, objects);
+    }
+
+    static XDocument Axml(byte[] body) {
         try {
             var settings = new XmlReaderSettings { DtdProcessing = DtdProcessing.Prohibit, XmlResolver = null };
-            using var xml = XmlReader.Create(new MemoryStream(reader.Chunk("axml")), settings);
-            document = XDocument.Load(xml);
+            using var xml = XmlReader.Create(new MemoryStream(body), settings);
+            return XDocument.Load(xml);
         } catch (XmlException e) {
             throw new FormatException("The axml chunk is not well-formed XML.", e);
         }
+    }
 
-        var adm = new Model(document, tracks, reader.SampleRate, reader.Frames);
-        var plan = adm.Plan(reader.Channels);
-        Directory.CreateDirectory(mediaFolder);
+    /// <summary>One pass over the file's audio: each item's tracks into its WAV, at the file's encoding.</summary>
+    static void Extract(Bw64Reader reader, List<Item> plan, List<string> files) {
         var encoding = (reader.BitsPerSample, reader.IsFloat) switch {
             (16, _) => WavEncoding.Pcm16,
             (24, _) => WavEncoding.Pcm24,
             (32, true) => WavEncoding.Float32,
             _ => WavEncoding.Pcm32
         };
-        var writers = new List<(WavWriter Writer, int[] Tracks, float[] Buffer)>();
-        var beds = new List<AdmBed>();
-        var objects = new List<AdmObject>();
+        var writers = new List<WavWriter>();
         try {
-            var index = 0;
-            foreach (var item in plan) {
-                var file = Path.Combine(mediaFolder, $"{++index:00} {Sanitise(item.Name)}.wav");
-                writers.Add((new(file, item.Tracks.Length, reader.SampleRate, encoding), item.Tracks, new float[Block * item.Tracks.Length]));
-                if (item.Bed is { } format) {
-                    beds.Add(new(item.Name, format, file));
-                } else {
-                    objects.Add(new(item.Name, file, item.Tracks.Length, item.Blocks!));
-                }
+            for (var i = 0; i < plan.Count; i++) {
+                writers.Add(new(files[i], plan[i].Tracks.Length, reader.SampleRate, encoding));
             }
 
+            var buffers = plan.Select(static item => new float[Block * item.Tracks.Length]).ToArray();
             var interleaved = new float[Block * reader.Channels];
             int frames;
             while ((frames = reader.Read(interleaved)) > 0) {
-                foreach (var (writer, channels, buffer) in writers) {
-                    for (var f = 0; f < frames; f++) {
-                        for (var c = 0; c < channels.Length; c++) {
-                            buffer[f * channels.Length + c] = channels[c] < 0 ? 0 : interleaved[f * reader.Channels + channels[c]];
-                        }
-                    }
-
-                    writer.Write(buffer.AsSpan(0, frames * channels.Length));
+                for (var i = 0; i < plan.Count; i++) {
+                    Gather(interleaved, reader.Channels, frames, plan[i].Tracks, buffers[i]);
+                    writers[i].Write(buffers[i].AsSpan(0, frames * plan[i].Tracks.Length));
                 }
             }
         } finally {
-            foreach (var (writer, _, _) in writers) {
+            foreach (var writer in writers) {
                 writer.Dispose();
             }
         }
+    }
 
-        return new(adm.Name ?? Path.GetFileNameWithoutExtension(path), reader.SampleRate, reader.Frames, beds, objects);
+    static void Gather(float[] interleaved, int width, int frames, int[] tracks, float[] buffer) {
+        for (var f = 0; f < frames; f++) {
+            for (var c = 0; c < tracks.Length; c++) {
+                buffer[f * tracks.Length + c] = tracks[c] < 0 ? 0 : interleaved[f * width + tracks[c]];
+            }
+        }
     }
 
     static string Sanitise(string name) {
@@ -114,7 +126,8 @@ public static class AdmReader {
             var uid = Encoding.ASCII.GetString(row.Slice(2, 12)).TrimEnd('\0', ' ');
             var trackFormat = Encoding.ASCII.GetString(row.Slice(14, 14)).TrimEnd('\0', ' ');
             var pack = Encoding.ASCII.GetString(row.Slice(28, 11)).TrimEnd('\0', ' ');
-            if (trackFormat.StartsWith("AC_", StringComparison.OrdinalIgnoreCase) && trackFormat.EndsWith("_00", StringComparison.Ordinal)) {
+            if (trackFormat.StartsWith("AC_", StringComparison.OrdinalIgnoreCase)
+                && trackFormat.EndsWith("_00", StringComparison.Ordinal)) {
                 trackFormat = trackFormat[..^3];
             }
 
@@ -144,10 +157,12 @@ public static class AdmReader {
             this.rate = rate;
             this.frames = frames;
             root = document.Descendants().FirstOrDefault(static e => e.Name.LocalName == "audioFormatExtended")
-                   ?? throw new FormatException("The axml chunk has no audioFormatExtended element.");
+                ?? throw new FormatException("The axml chunk has no audioFormatExtended element.");
             foreach (var element in root.Elements()) {
                 var id = element.Attributes()
-                    .FirstOrDefault(static a => a.Name.LocalName.EndsWith("ID", StringComparison.Ordinal) || a.Name.LocalName == "UID");
+                    .FirstOrDefault(static a =>
+                        a.Name.LocalName.EndsWith("ID", StringComparison.Ordinal) || a.Name.LocalName == "UID"
+                    );
                 if (id is not null) {
                     byId[id.Value] = element;
                 }
@@ -173,13 +188,17 @@ public static class AdmReader {
                 objectIds = [
                     ..Refs(programme, "audioContentIDRef")
                         .SelectMany(c => byId.TryGetValue(c, out var content)
-                            ? Refs(content, "audioObjectIDRef")
-                            : throw new FormatException($"audioContent {c} is not in the axml chunk."))
+                                ? Refs(content, "audioObjectIDRef")
+                                : throw new FormatException($"audioContent {c} is not in the axml chunk.")
+                        )
                 ];
             } else {
                 var all = Children(root, "audioObject").ToList();
-                var nested = all.SelectMany(static o => Refs(o, "audioObjectIDRef")).ToHashSet(StringComparer.OrdinalIgnoreCase);
-                objectIds = [..all.Select(o => Attribute(o, "audioObjectID")!).Where(id => !nested.Contains(id))];
+                var nested = all.SelectMany(static o => Refs(o, "audioObjectIDRef"))
+                    .ToHashSet(StringComparer.OrdinalIgnoreCase);
+                objectIds = [
+                    ..all.Select(static o => Attribute(o, "audioObjectID")!).Where(id => !nested.Contains(id))
+                ];
             }
 
             var items = new List<Item>();
@@ -216,8 +235,13 @@ public static class AdmReader {
             var name = Attribute(element, "audioObjectName") ?? id;
             var start = Attribute(element, "start") is { } s ? AdmDefinitions.Frames(s, rate) : 0;
             var resolved = uids.Select(u => Track(u, channels)).ToList();
-            var packs = resolved.Select(static r => r.Pack).Where(static p => p is not null).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
-            var pack = packs.Count > 0 ? packs[0]! : Refs(element, "audioPackFormatIDRef").FirstOrDefault()
+            var packs = resolved.Select(static r => r.Pack)
+                .Where(static p => p is not null)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            var pack = packs.Count > 0
+                ? packs[0]!
+                : Refs(element, "audioPackFormatIDRef").FirstOrDefault()
                 ?? throw new FormatException($"audioObject {id} has no pack format.");
             var type = PackType(pack);
             if (type == "0001") {
@@ -228,7 +252,7 @@ public static class AdmReader {
                 }
 
                 var channel = byId.GetValueOrDefault(resolved[0].Channel)
-                              ?? throw new FormatException($"Object '{name}''s channel format is not in the axml chunk.");
+                    ?? throw new FormatException($"Object '{name}''s channel format is not in the axml chunk.");
                 items.Add(new(name, [..resolved.Select(static r => r.Track)], null, Blocks(channel, start)));
             } else {
                 throw new FormatException($"audioObject {id}: pack type {type} (only DirectSpeakers and Objects).");
@@ -238,7 +262,7 @@ public static class AdmReader {
         /// <summary>A track UID's file track, channel format and pack.</summary>
         (int Track, string Channel, string? Pack) Track(string uid, int channels) {
             if (uid.Equals("ATU_00000000", StringComparison.OrdinalIgnoreCase)) {
-                return (-1, "", null);
+                return (-1, string.Empty, null);
             }
 
             string? trackFormat = null;
@@ -249,7 +273,8 @@ public static class AdmReader {
             }
 
             if (byId.TryGetValue(uid, out var element)) {
-                trackFormat ??= Refs(element, "audioTrackFormatIDRef").FirstOrDefault() ?? Refs(element, "audioChannelFormatIDRef").FirstOrDefault();
+                trackFormat ??= Refs(element, "audioTrackFormatIDRef").FirstOrDefault()
+                    ?? Refs(element, "audioChannelFormatIDRef").FirstOrDefault();
                 pack ??= Refs(element, "audioPackFormatIDRef").FirstOrDefault();
             }
 
@@ -319,60 +344,11 @@ public static class AdmReader {
             }
 
             return AdmDefinitions.LabelOfChannel(channel)
-                   ?? throw new FormatException($"Channel format {channel} has no speaker label Anode knows.");
+                ?? throw new FormatException($"Channel format {channel} has no speaker label Anode knows.");
         }
 
         List<AdmBlock> Blocks(XElement channel, long start) {
-            var blocks = new List<AdmBlock>();
-            foreach (var block in Children(channel, "audioBlockFormat")) {
-                var rtime = Attribute(block, "rtime") is { } r ? AdmDefinitions.Frames(r, rate) : 0;
-                var duration = Attribute(block, "duration") is { } d ? AdmDefinitions.Frames(d, rate) : -1;
-                if (Children(block, "cartesian").FirstOrDefault()?.Value.Trim() == "1") {
-                    throw new FormatException("Cartesian object positions are not supported.");
-                }
-
-                double? azimuth = null, elevation = null;
-                var distance = 1.0;
-                foreach (var position in Children(block, "position")) {
-                    var value = double.Parse(position.Value, NumberStyles.Float, CultureInfo.InvariantCulture);
-                    switch (Attribute(position, "coordinate")) {
-                        case "azimuth":
-                            azimuth = value;
-                            break;
-                        case "elevation":
-                            elevation = value;
-                            break;
-                        case "distance":
-                            distance = value;
-                            break;
-                        default:
-                            throw new FormatException("Cartesian object positions are not supported.");
-                    }
-                }
-
-                if (azimuth is null || elevation is null) {
-                    throw new FormatException("An object block has no polar position.");
-                }
-
-                double Number(string name) =>
-                    Children(block, name).FirstOrDefault() is { } e
-                        ? double.Parse(e.Value, NumberStyles.Float, CultureInfo.InvariantCulture)
-                        : 0;
-
-                var jump = Children(block, "jumpPosition").FirstOrDefault()?.Value.Trim() == "1";
-                blocks.Add(
-                    new(
-                        start + rtime,
-                        duration,
-                        azimuth.Value,
-                        elevation.Value,
-                        distance,
-                        Math.Clamp(Math.Max(Number("width"), Number("height")) / 360, 0, 1),
-                        !jump
-                    )
-                );
-            }
-
+            var blocks = Children(channel, "audioBlockFormat").Select(b => Block(b, start)).ToList();
             if (blocks.Count == 0) {
                 throw new FormatException("An object has no block formats.");
             }
@@ -388,10 +364,56 @@ public static class AdmReader {
             }
 
             if (blocks[0].StartFrame > 0) {
-                blocks.Insert(0, blocks[0] with { StartFrame = 0, DurationFrames = blocks[0].StartFrame, Interpolate = false });
+                blocks.Insert(
+                    0,
+                    blocks[0] with { StartFrame = 0, DurationFrames = blocks[0].StartFrame, Interpolate = false }
+                );
             }
 
             return blocks;
         }
+
+        AdmBlock Block(XElement block, long start) {
+            var rtime = Attribute(block, "rtime") is { } r ? AdmDefinitions.Frames(r, rate) : 0;
+            var duration = Attribute(block, "duration") is { } d ? AdmDefinitions.Frames(d, rate) : -1;
+            if (Children(block, "cartesian").FirstOrDefault()?.Value.Trim() == "1") {
+                throw new FormatException("Cartesian object positions are not supported.");
+            }
+
+            var (azimuth, elevation, distance) = Polar(block);
+            var jump = Children(block, "jumpPosition").FirstOrDefault()?.Value.Trim() == "1";
+            var size = Math.Max(Number(block, "width"), Number(block, "height")) / 360;
+            return new(start + rtime, duration, azimuth, elevation, distance, Math.Clamp(size, 0, 1), !jump);
+        }
+
+        static (double Azimuth, double Elevation, double Distance) Polar(XElement block) {
+            double? azimuth = null, elevation = null;
+            var distance = 1.0;
+            foreach (var position in Children(block, "position")) {
+                var value = double.Parse(position.Value, NumberStyles.Float, CultureInfo.InvariantCulture);
+                switch (Attribute(position, "coordinate")) {
+                    case "azimuth":
+                        azimuth = value;
+                        break;
+                    case "elevation":
+                        elevation = value;
+                        break;
+                    case "distance":
+                        distance = value;
+                        break;
+                    default:
+                        throw new FormatException("Cartesian object positions are not supported.");
+                }
+            }
+
+            return azimuth is { } a && elevation is { } e
+                ? (a, e, distance)
+                : throw new FormatException("An object block has no polar position.");
+        }
+
+        static double Number(XElement block, string name) =>
+            Children(block, name).FirstOrDefault() is { } e
+                ? double.Parse(e.Value, NumberStyles.Float, CultureInfo.InvariantCulture)
+                : 0;
     }
 }

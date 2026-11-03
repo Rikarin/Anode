@@ -167,12 +167,13 @@ public sealed class ObjectTests {
         Assert.Equal(
             0,
             AllocationProbe.Measure(() => {
-                step += 3;
-                for (var o = 0; o < ObjectRenderer.MaxObjects; o++) {
-                    renderer.SetPosition(o, new(o + step, o % 60, 1, o % 4 == 0 ? 0.2f : 0));
-                    renderer.Render(o, new(input, 1, 256), new(output, 12, 256));
+                    step += 3;
+                    for (var o = 0; o < ObjectRenderer.MaxObjects; o++) {
+                        renderer.SetPosition(o, new(o + step, o % 60, 1, o % 4 == 0 ? 0.2f : 0));
+                        renderer.Render(o, new(input, 1, 256), new(output, 12, 256));
+                    }
                 }
-            })
+            )
         );
     }
 }

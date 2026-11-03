@@ -41,12 +41,14 @@ static class Ear {
         }
 
         using var process = Process.Start(start)!;
-        var output = process.StandardOutput.ReadToEndAsync();
-        var error = process.StandardError.ReadToEndAsync();
+        var error = new System.Text.StringBuilder();
+        process.ErrorDataReceived += (_, e) => error.AppendLine(e.Data);
+        process.BeginErrorReadLine();
         process.StandardInput.Write(input);
         process.StandardInput.Close();
+        var output = process.StandardOutput.ReadToEnd();
         process.WaitForExit();
-        Assert.True(process.ExitCode == 0, error.Result);
-        return output.Result;
+        Assert.True(process.ExitCode == 0, $"{script} failed:\n{error}");
+        return output;
     }
 }

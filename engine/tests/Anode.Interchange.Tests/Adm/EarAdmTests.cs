@@ -1,10 +1,8 @@
 using Anode.Contracts;
 using Anode.Dsp.Spatial;
 using Anode.Interchange.Adm;
-using Anode.Model.Audio;
 using System.Diagnostics;
 using System.Globalization;
-using Xunit.Sdk;
 using SpeakerLayout = Anode.Dsp.Spatial.SpeakerLayout;
 
 namespace Anode.Interchange.Tests.Adm;
@@ -39,7 +37,9 @@ public sealed class EarAdmTests(ITestOutputHelper output) : IDisposable {
         var start = new ProcessStartInfo(Python()) {
             RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false
         };
-        foreach (var argument in new[] { "-I", "-m", "ear.cmdline.render_file", "--strict", "-s", system, input, output }) {
+        foreach (var argument in new[] {
+                     "-I", "-m", "ear.cmdline.render_file", "--strict", "-s", system, input, output
+                 }) {
             start.ArgumentList.Add(argument);
         }
 
@@ -111,7 +111,10 @@ public sealed class EarAdmTests(ITestOutputHelper output) : IDisposable {
                     renderer.Reset(o);
                 }
 
-                renderer.SetPosition(o, new((float)block.Azimuth, (float)block.Elevation, (float)block.Distance, (float)block.Size));
+                renderer.SetPosition(
+                    o,
+                    new((float)block.Azimuth, (float)block.Elevation, (float)block.Distance, (float)block.Size)
+                );
                 Array.Clear(output);
                 renderer.Render(o, new(input, signal.Length, frames), new(output, 12, frames));
                 for (var c = 0; c < 12; c++) {
@@ -157,7 +160,10 @@ public sealed class EarAdmTests(ITestOutputHelper output) : IDisposable {
                 var e = RmsDb(ear[c].AsSpan(second * AdmScenario.Rate, AdmScenario.Rate));
                 line.Add(string.Create(CultureInfo.InvariantCulture, $"{layout.Label(c)} {a:F2}/{e:F2}"));
                 worst = Math.Max(worst, Math.Abs(a - e));
-                Assert.True(Math.Abs(a - e) <= 1, $"second {second}, {layout.Label(c)}: Anode {a:F2} dB, ear {e:F2} dB");
+                Assert.True(
+                    Math.Abs(a - e) <= 1,
+                    $"second {second}, {layout.Label(c)}: Anode {a:F2} dB, ear {e:F2} dB"
+                );
             }
 
             output.WriteLine($"second {second}: {string.Join(", ", line)}");
@@ -168,6 +174,7 @@ public sealed class EarAdmTests(ITestOutputHelper output) : IDisposable {
         // The object's energy moves from L to the top rear right speaker.
         static int Loudest(float[][] channels, int start) =>
             Enumerable.Range(0, 12).MaxBy(c => RmsDb(channels[c].AsSpan(start, 4800)));
+
         Assert.Equal(0, Loudest(ear, 0));
         Assert.Equal(11, Loudest(ear, AdmScenario.Rate * seconds - 4800));
     }
@@ -176,7 +183,13 @@ public sealed class EarAdmTests(ITestOutputHelper output) : IDisposable {
     public void Ear_accepts_every_bed_layout_and_stereo_objects() {
         foreach (var layout in SpeakerLayouts.All) {
             var count = layout.ChannelCount;
-            var audio = scenario.Noise($"bed-{layout.Name}.wav", count, 4_800, [..Enumerable.Repeat(0.1f, count)], count);
+            var audio = scenario.Noise(
+                $"bed-{layout.Name}.wav",
+                count,
+                4_800,
+                [..Enumerable.Repeat(0.1f, count)],
+                count
+            );
             var pad = scenario.Noise($"pad-{layout.Name}.wav", 2, 4_800, [0.2f, 0.2f], 99);
             var path = scenario.PathOf($"adm-{layout.Name}.wav");
             AdmWriter.Write(
@@ -185,7 +198,14 @@ public sealed class EarAdmTests(ITestOutputHelper output) : IDisposable {
                     AdmScenario.Rate,
                     4_800,
                     [new("Bed", layout.Format, audio)],
-                    [new("Pad", pad, 2, [new(0, 2_400, 60, 20, 1, 0.3, false), new(2_400, 2_400, -60, 20, 1, 0.1, true)])]
+                    [
+                        new(
+                            "Pad",
+                            pad,
+                            2,
+                            [new(0, 2_400, 60, 20, 1, 0.3, false), new(2_400, 2_400, -60, 20, 1, 0.1, true)]
+                        )
+                    ]
                 ),
                 path
             );

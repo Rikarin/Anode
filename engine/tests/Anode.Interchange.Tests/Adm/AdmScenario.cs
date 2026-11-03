@@ -22,13 +22,27 @@ sealed class AdmScenario : IDisposable {
     public void Dispose() {
         try {
             Directory.Delete(Folder, true);
-        } catch (IOException) { } catch (UnauthorizedAccessException) { }
+        } catch (IOException) {
+            // A scratch folder left behind is the system temp folder's to clean.
+        } catch (UnauthorizedAccessException) {
+            // As above.
+        }
     }
 
-    public string PathOf(string name) => System.IO.Path.Combine(Folder, name);
+    public string PathOf(string name) => Path.Combine(Folder, name);
 
-    /// <summary>A WAV of independent noise per channel, channel c at <paramref name="levels" />[c] (RMS of the uniform noise × level).</summary>
-    public string Noise(string name, int channels, long frames, float[] levels, int seed, WavEncoding encoding = WavEncoding.Float32) {
+    /// <summary>
+    ///     A WAV of independent noise per channel, channel c at <paramref name="levels" />[c] (RMS of the uniform noise ×
+    ///     level).
+    /// </summary>
+    public string Noise(
+        string name,
+        int channels,
+        long frames,
+        float[] levels,
+        int seed,
+        WavEncoding encoding = WavEncoding.Float32
+    ) {
         var path = PathOf(name);
         using var writer = new WavWriter(path, channels, Rate, encoding);
         var random = new Random(seed);
@@ -63,5 +77,5 @@ sealed class AdmScenario : IDisposable {
     }
 
     public static string RepositoryRoot([CallerFilePath] string path = "") =>
-        System.IO.Path.GetFullPath(System.IO.Path.Combine(System.IO.Path.GetDirectoryName(path)!, "..", "..", "..", ".."));
+        Path.GetFullPath(Path.Combine(Path.GetDirectoryName(path)!, "..", "..", "..", ".."));
 }

@@ -16,8 +16,9 @@ namespace Anode.Dsp.Spatial;
 ///         </item>
 ///         <item>
 ///             An upper speaker goes to the nearest upper speaker(s) of the target by azimuth (a tie splits at −3 dB
-///             each); with no upper layer in the target it folds into the ear layer at −3 dB (Dolby's and the common
-///             practice for height down-mixes) as an ear-layer speaker at its azimuth, then the rules below.
+///             each); with no upper layer in the target it folds into the ear layer at −3 dB (the common convention;
+///             no ITU recommendation defines height down-mixes) as an ear-layer speaker at its azimuth, then the rules
+///             below.
 ///         </item>
 ///         <item>The centre without a centre in the target: the front pair at −3 dB each (BS.775); mono takes it at 1.</item>
 ///         <item>
@@ -165,7 +166,8 @@ public sealed class Downmixer {
         // 1/√k for the k speakers of one side and layer folding into the same target speaker.
         for (var o = 0; o < outputs; o++) {
             foreach (var group in Enumerable.Range(0, inputs)
-                         .SelectMany(i => routes[i].Where(r => r.Output == o && r.Share is not null).Select(r => (i, r)))
+                         .SelectMany(i => routes[i].Where(r => r.Output == o && r.Share is not null).Select(r => (i, r))
+                         )
                          .GroupBy(static x => x.r.Share)) {
                 var k = group.Select(static x => x.i).Distinct().Count();
                 foreach (var (i, r) in group) {

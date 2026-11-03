@@ -12,8 +12,10 @@ sealed class Bw64Reader : IDisposable {
     const int Block = 4096;
     readonly FileStream stream;
     readonly Dictionary<string, (long Offset, long Size)> chunks = new(StringComparer.Ordinal);
+    readonly Dictionary<string, long> sizes = new(StringComparer.Ordinal);
     byte[] buffer = [];
     long position;
+    long dataSize64 = -1;
 
     Bw64Reader(FileStream stream, bool lenient) {
         this.stream = stream;
@@ -56,6 +58,45 @@ sealed class Bw64Reader : IDisposable {
     }
 
     void ReadHeader(bool lenient) {
+        var large = ReadKind();
+        var length = stream.Length;
+        var at = 12L;
+        Span<byte> header = stackalloc byte[8];
+        var first = true;
+        while (at + 8 <= length) {
+            stream.Position = at;
+            stream.ReadExactly(header);
+            var id = Encoding.ASCII.GetString(header[..4]);
+            long size = BinaryPrimitives.ReadUInt32LittleEndian(header[4..]);
+            var body = at + 8;
+            if (first && large) {
+                ReadDs64(id, size);
+            }
+
+            first = false;
+            size = Resolve(id, size, body, large, lenient);
+            chunks.TryAdd(id, (body, size));
+            if (id == "fmt ") {
+                ReadFormat(size);
+            }
+
+            at = body + size + (size & 1);
+        }
+
+        if (!chunks.ContainsKey("fmt ")) {
+            throw new FormatException("The file has no format chunk.");
+        }
+
+        if (!chunks.TryGetValue("data", out var data)) {
+            throw new FormatException("The file has no data chunk.");
+        }
+
+        Frames = data.Size / BytesPerFrame;
+        stream.Position = data.Offset;
+    }
+
+    /// <summary>The RIFF header: whether the file is RF64 or BW64 (sizes in ds64).</summary>
+    bool ReadKind() {
         Span<byte> head = stackalloc byte[12];
         if (stream.Read(head) < 12) {
             throw new FormatException("The file is too short for a RIFF, RF64 or BW64 header.");
@@ -66,76 +107,45 @@ sealed class Bw64Reader : IDisposable {
             throw new FormatException("Not a RIFF/WAVE, RF64 or BW64 file.");
         }
 
-        var large = kind != "RIFF";
-        long dataSize64 = -1;
-        var table = new Dictionary<string, long>(StringComparer.Ordinal);
-        var length = stream.Length;
-        var at = 12L;
-        Span<byte> header = stackalloc byte[8];
+        return kind != "RIFF";
+    }
+
+    void ReadDs64(string id, long size) {
+        if (id != "ds64" || size < 28) {
+            throw new FormatException("An RF64 or BW64 file must start with a ds64 chunk.");
+        }
+
         Span<byte> ds64 = stackalloc byte[28];
+        stream.ReadExactly(ds64);
+        dataSize64 = BinaryPrimitives.ReadInt64LittleEndian(ds64[8..]);
+        var entries = BinaryPrimitives.ReadUInt32LittleEndian(ds64[24..]);
+        if (entries > 1000 || 28 + entries * 12L > size) {
+            throw new FormatException("The ds64 chunk's table is malformed.");
+        }
+
         Span<byte> entry = stackalloc byte[12];
-        var first = true;
-        while (at + 8 <= length) {
-            stream.Position = at;
-            stream.ReadExactly(header);
-            var id = Encoding.ASCII.GetString(header[..4]);
-            long size = BinaryPrimitives.ReadUInt32LittleEndian(header[4..]);
-            var body = at + 8;
-            if (first && large) {
-                if (id != "ds64" || size < 28) {
-                    throw new FormatException("An RF64 or BW64 file must start with a ds64 chunk.");
-                }
+        for (var e = 0; e < entries; e++) {
+            stream.ReadExactly(entry);
+            sizes[Encoding.ASCII.GetString(entry[..4])] = BinaryPrimitives.ReadInt64LittleEndian(entry[4..]);
+        }
+    }
 
-                stream.ReadExactly(ds64);
-                dataSize64 = BinaryPrimitives.ReadInt64LittleEndian(ds64[8..]);
-                var entries = BinaryPrimitives.ReadUInt32LittleEndian(ds64[24..]);
-                if (entries > 1000 || 28 + entries * 12L > size) {
-                    throw new FormatException("The ds64 chunk's table is malformed.");
-                }
-
-                for (var e = 0; e < entries; e++) {
-                    stream.ReadExactly(entry);
-                    table[Encoding.ASCII.GetString(entry[..4])] = BinaryPrimitives.ReadInt64LittleEndian(entry[4..]);
-                }
+    /// <summary>A chunk's real size: from ds64 when it says −1 in a large file, checked against the file's end.</summary>
+    long Resolve(string id, long size, long body, bool large, bool lenient) {
+        if (large && size == uint.MaxValue) {
+            size = id == "data" ? dataSize64 : sizes.GetValueOrDefault(id, -1);
+            if (size < 0) {
+                throw new FormatException($"The '{id}' chunk's size is not in the ds64 chunk.");
             }
-
-            first = false;
-            if (large && size == uint.MaxValue) {
-                size = id == "data" ? dataSize64 : table.GetValueOrDefault(id, -1);
-                if (size < 0) {
-                    throw new FormatException($"The '{id}' chunk's size is not in the ds64 chunk.");
-                }
-            }
-
-            if (body + size > length) {
-                if (!(lenient && id == "data")) {
-                    throw new FormatException($"The '{id}' chunk runs past the end of the file.");
-                }
-
-                size = length - body;
-            }
-
-            if (!chunks.ContainsKey(id)) {
-                chunks[id] = (body, size);
-            }
-
-            if (id == "fmt ") {
-                ReadFormat(size);
-            }
-
-            at = body + size + (size & 1);
         }
 
-        if (!chunks.TryGetValue("fmt ", out _)) {
-            throw new FormatException("The file has no format chunk.");
+        if (body + size <= stream.Length) {
+            return size;
         }
 
-        if (!chunks.TryGetValue("data", out var data)) {
-            throw new FormatException("The file has no data chunk.");
-        }
-
-        Frames = data.Size / BytesPerFrame;
-        stream.Position = data.Offset;
+        return lenient && id == "data"
+            ? stream.Length - body
+            : throw new FormatException($"The '{id}' chunk runs past the end of the file.");
     }
 
     void ReadFormat(long size) {
@@ -163,7 +173,9 @@ sealed class Bw64Reader : IDisposable {
 
         IsFloat = tag == 3;
         if (!(tag == 1 && BitsPerSample is 16 or 24 or 32 || tag == 3 && BitsPerSample == 32)) {
-            throw new FormatException($"Format {tag} with {BitsPerSample} bits is not supported (PCM 16/24/32, float 32).");
+            throw new FormatException(
+                $"Format {tag} with {BitsPerSample} bits is not supported (PCM 16/24/32, float 32)."
+            );
         }
     }
 

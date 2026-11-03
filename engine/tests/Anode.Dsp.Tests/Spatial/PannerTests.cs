@@ -29,21 +29,33 @@ public sealed class SurroundPannerTests {
     public void A_point_at_a_speaker_feeds_only_that_speaker() {
         // 5.1: L R C LFE Ls Rs.
         AssertGains([0, 0, 1, 0, 0, 0], Gains(SpeakerFormat.Surround51, SurroundPannerSettings.Default));
-        AssertGains([0, 0, 0, 0, 1, 0], Gains(SpeakerFormat.Surround51, SurroundPannerSettings.Default with { Angle = 110 }));
-        AssertGains([0, 1, 0, 0, 0, 0], Gains(SpeakerFormat.Surround51, SurroundPannerSettings.Default with { Angle = -30 }));
+        AssertGains(
+            [0, 0, 0, 0, 1, 0],
+            Gains(SpeakerFormat.Surround51, SurroundPannerSettings.Default with { Angle = 110 })
+        );
+        AssertGains(
+            [0, 1, 0, 0, 0, 0],
+            Gains(SpeakerFormat.Surround51, SurroundPannerSettings.Default with { Angle = -30 })
+        );
     }
 
     [Fact]
     public void Between_two_speakers_the_pan_is_constant_power() {
         // Halfway between L (30°) and Ls (110°): cos 45°, sin 45°.
-        AssertGains([Half, 0, 0, 0, Half, 0], Gains(SpeakerFormat.Surround51, SurroundPannerSettings.Default with { Angle = 70 }));
+        AssertGains(
+            [Half, 0, 0, 0, Half, 0],
+            Gains(SpeakerFormat.Surround51, SurroundPannerSettings.Default with { Angle = 70 })
+        );
         // A quarter of the way from C (0°) to L (30°): cos 22.5°, sin 22.5°.
         AssertGains(
             [MathF.Sin(MathF.PI / 8), 0, MathF.Cos(MathF.PI / 8), 0, 0, 0],
             Gains(SpeakerFormat.Surround51, SurroundPannerSettings.Default with { Angle = 7.5f })
         );
         // Behind, between Ls (110°) and Rs (−110°): straight back is halfway.
-        AssertGains([0, 0, 0, 0, Half, Half], Gains(SpeakerFormat.Surround51, SurroundPannerSettings.Default with { Angle = 180 }));
+        AssertGains(
+            [0, 0, 0, 0, Half, Half],
+            Gains(SpeakerFormat.Surround51, SurroundPannerSettings.Default with { Angle = 180 })
+        );
     }
 
     [Fact]
@@ -62,7 +74,10 @@ public sealed class SurroundPannerTests {
     [Fact]
     public void Diversity_zero_spreads_over_every_speaker() {
         var g = 1 / MathF.Sqrt(5);
-        AssertGains([g, g, g, 0, g, g], Gains(SpeakerFormat.Surround51, SurroundPannerSettings.Default with { Diversity = 0 }));
+        AssertGains(
+            [g, g, g, 0, g, g],
+            Gains(SpeakerFormat.Surround51, SurroundPannerSettings.Default with { Diversity = 0 })
+        );
         // Half way: power half the point's and half the spread's.
         var mixed = Gains(SpeakerFormat.Surround51, SurroundPannerSettings.Default with { Diversity = 0.5f });
         Assert.Equal(MathF.Sqrt(0.5f + 0.5f / 5), mixed[2], 5);
@@ -73,7 +88,10 @@ public sealed class SurroundPannerTests {
     public void Elevation_moves_into_the_upper_layer() {
         // 7.1.4: L R C LFE Lss Rss Lrs Rrs Ltf Rtf Ltr Rtr.
         var at45 = SurroundPannerSettings.Default with { Angle = 45 };
-        AssertGains([0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0], Gains(SpeakerFormat.Surround714, at45 with { Elevation = 30 }));
+        AssertGains(
+            [0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0],
+            Gains(SpeakerFormat.Surround714, at45 with { Elevation = 30 })
+        );
         // Half way up the layer: cos²/sin² of 45° between the ear layer's pair (L at 30°, Lss at 90°) and Ltf.
         var mid = Gains(SpeakerFormat.Surround714, at45 with { Elevation = 15 });
         Assert.Equal(Half, mid[8], 5);
@@ -93,11 +111,11 @@ public sealed class SurroundPannerTests {
     [Fact]
     public void A_stereo_input_spreads_its_channels_around_the_puck() {
         var settings = SurroundPannerSettings.Default with { Spread = 60 };
-        AssertGains([1, 0, 0, 0, 0, 0], Gains(SpeakerFormat.Surround51, settings, 2, 0));
+        AssertGains([1, 0, 0, 0, 0, 0], Gains(SpeakerFormat.Surround51, settings, 2));
         AssertGains([0, 1, 0, 0, 0, 0], Gains(SpeakerFormat.Surround51, settings, 2, 1));
         var behind = settings with { Angle = 180, Spread = 140 };
         AssertGains([0, 0, 0, 0, 1, 0], Gains(SpeakerFormat.Surround51, behind, 2, 1));
-        AssertGains([0, 0, 0, 0, 0, 1], Gains(SpeakerFormat.Surround51, behind, 2, 0));
+        AssertGains([0, 0, 0, 0, 0, 1], Gains(SpeakerFormat.Surround51, behind, 2));
     }
 
     [Fact]
@@ -116,7 +134,9 @@ public sealed class SurroundPannerTests {
                 );
                 foreach (var channel in new[] { 0, 1 }) {
                     var gains = Gains(format, settings, 2, channel);
-                    var power = Enumerable.Range(0, gains.Length).Where(c => c != layout.LfeIndex).Sum(c => gains[c] * gains[c]);
+                    var power = Enumerable.Range(0, gains.Length)
+                        .Where(c => c != layout.LfeIndex)
+                        .Sum(c => gains[c] * gains[c]);
                     Assert.Equal(1, power, 4);
                     Assert.All(gains, static g => Assert.True(g >= 0));
                 }
@@ -163,8 +183,7 @@ public sealed class SurroundPannerTests {
     }
 
     [Fact]
-    public void A_puck_at_the_left_side_of_7_1_4_puts_the_track_there_and_the_lfe_send_low_passed()
-    {
+    public void A_puck_at_the_left_side_of_7_1_4_puts_the_track_there_and_the_lfe_send_low_passed() {
         // The golden path's case: everything in the left side speaker (M+090), every other at least 20 dB down.
         var layout = SpeakerLayout.Of(SpeakerFormat.Surround714);
         var panner = new SurroundPanner();
@@ -196,7 +215,9 @@ public sealed class SurroundPannerTests {
         // The LFE: 40 Hz through (Butterworth at 120 Hz: −0.06 dB), 2 kHz down by 4 × 24 dB/octave.
         var lfe = layout.LfeIndex;
         Assert.Equal(sideRms, Support.Analysis.Rms(lowOut[lfe].AsSpan(4800)), 0.01);
-        Assert.True(Support.Analysis.Rms(highOut[lfe].AsSpan(4800)) < Support.Analysis.Rms(highOut[side].AsSpan(4800)) * 1e-3);
+        Assert.True(
+            Support.Analysis.Rms(highOut[lfe].AsSpan(4800)) < Support.Analysis.Rms(highOut[side].AsSpan(4800)) * 1e-3
+        );
     }
 
     static float[][] Render(SurroundPanner panner, SpeakerLayout layout, float[] signal, int block) {
@@ -229,9 +250,12 @@ public sealed class SurroundPannerTests {
         Assert.Equal(
             0,
             AllocationProbe.Measure(() => {
-                panner.Set(SurroundPannerSettings.Default with { Angle = angle += 7, LfeGain = 0.5f, Elevation = 20 });
-                panner.Process(new(input, 2, 256), new(output, 12, 256));
-            })
+                    panner.Set(
+                        SurroundPannerSettings.Default with { Angle = angle += 7, LfeGain = 0.5f, Elevation = 20 }
+                    );
+                    panner.Process(new(input, 2, 256), new(output, 12, 256));
+                }
+            )
         );
     }
 }

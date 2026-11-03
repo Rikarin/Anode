@@ -13,7 +13,8 @@ namespace Anode.Dsp.Spatial;
 ///     The file (<c>.anhrtf</c>, written by <c>scripts/build-hrtf.py</c>, little-endian): <c>ANHR</c>, version 1, the
 ///     sample rate, the taps per response, the direction count, the scale of the 16-bit samples, the length of a UTF-8
 ///     metadata text (source and licence) and the text; then per direction its azimuth, elevation and each ear's delay
-///     (samples: the peak of the response low-passed at 1.5 kHz); then per direction the left and right responses as 16-bit
+///     (samples: the peak of the response low-passed at 1.5 kHz); then per direction the left and right responses as
+///     16-bit
 ///     integers. Anode ships <see cref="DefaultFileName" />: SADIE II subject D2 (KEMAR), 48 kHz, Apache-2.0.
 /// </remarks>
 public sealed class HrtfSet {
@@ -70,8 +71,11 @@ public sealed class HrtfSet {
             throw new InvalidDataException($"{path}: HRTF file version {version} is not supported (1).");
         }
 
-        if (rate is < 8000 or > 384_000 || length is 0 or > 65_536 || count is 0 or > 100_000
-            || metadataLength > 1 << 20 || !float.IsFinite(scale)
+        if (rate is < 8000 or > 384_000
+            || length is 0 or > 65_536
+            || count is 0 or > 100_000
+            || metadataLength > 1 << 20
+            || !float.IsFinite(scale)
             || bytes.LongLength != HeaderBytes + metadataLength + count * 16L + count * 2L * length * 2) {
             throw new InvalidDataException($"{path}: the HRTF file's header does not match its size.");
         }
@@ -91,7 +95,10 @@ public sealed class HrtfSet {
         return new((int)rate, (int)length, metadata, table, responses);
     }
 
-    /// <summary>The set Anode ships, found from <paramref name="folder" /> or its parents' <c>engine/src/Anode.Dsp/Spatial/Hrtf</c> (tests, development).</summary>
+    /// <summary>
+    ///     The set Anode ships, found from <paramref name="folder" /> or its parents'
+    ///     <c>engine/src/Anode.Dsp/Spatial/Hrtf</c> (tests, development).
+    /// </summary>
     public static string? Find(string folder) {
         for (var dir = new DirectoryInfo(folder); dir is not null; dir = dir.Parent) {
             foreach (var candidate in new[] {
@@ -157,7 +164,12 @@ public sealed class HrtfSet {
         var exact = Math.Acos(Math.Clamp(cosines[0], -1, 1)) < 0.01 * Math.PI / 180;
         var total = 0.0;
         for (var k = 0; k < 3; k++) {
-            weights[k] = exact ? k == 0 ? 1 : 0 : 1 / Math.Max(1e-9, Math.Acos(Math.Clamp(cosines[k], -1, 1)));
+            if (exact) {
+                weights[k] = k == 0 ? 1 : 0;
+            } else {
+                weights[k] = 1 / Math.Max(1e-9, Math.Acos(Math.Clamp(cosines[k], -1, 1)));
+            }
+
             total += weights[k];
         }
 
@@ -212,7 +224,9 @@ public sealed class HrtfSet {
 
                 var u = (t - k) * cutoff;
                 var sinc = Math.Abs(u) < 1e-12 ? 1 : Math.Sin(Math.PI * u) / (Math.PI * u);
-                var w = Math.Abs(u) >= half ? 0 : 0.42 + 0.5 * Math.Cos(Math.PI * u / half) + 0.08 * Math.Cos(2 * Math.PI * u / half);
+                var w = Math.Abs(u) >= half
+                    ? 0
+                    : 0.42 + 0.5 * Math.Cos(Math.PI * u / half) + 0.08 * Math.Cos(2 * Math.PI * u / half);
                 sum += input[k] * sinc * w * cutoff;
             }
 
@@ -253,13 +267,15 @@ public sealed class HrtfSet {
 /// <summary>
 ///     Binaural monitoring (docs/11-phase-10.md, workstream D): each virtual speaker of a layout (and, optionally,
 ///     objects directly) convolved with its HRTF pair by uniformly partitioned FFT convolution, summed to two ears;
-///     the LFE goes to both ears unfiltered. Real-time safe after <see cref="Prepare(HrtfSet, SpeakerLayout, float, int)" />; its latency is reported for
+///     the LFE goes to both ears unfiltered. Real-time safe after
+///     <see cref="Prepare(HrtfSet, SpeakerLayout, float, int)" />; its latency is reported for
 ///     the monitoring path only (never in bounces).
 /// </summary>
 /// <remarks>
 ///     Each ear of each speaker is a <see cref="PartitionedConvolver" /> (partitions of <see cref="PartitionSize" />,
 ///     the first run directly), so there is no added latency at any block size; the HRIRs' own onset (about 1.5 ms for
-///     SADIE II's, roughly linear-phase) is acoustic delay, not reported. Objects (<see cref="ProcessObject" />) each run two convolver pairs
+///     SADIE II's, roughly linear-phase) is acoustic delay, not reported. Objects (<see cref="ProcessObject" />) each run
+///     two convolver pairs
 ///     and cross-fade over a block from the old direction's to the new one's when the direction moves by more than
 ///     <see cref="ObjectStepDegrees" />; their responses are interpolated between measured directions
 ///     (<see cref="HrtfSet.ImpulseResponses" />) on the audio thread, allocation-free.
@@ -384,8 +400,8 @@ public sealed class BinauralRenderer {
         if (!o.Loaded || Math.Acos(Math.Clamp(target.Dot(o.Direction), -1, 1)) > ObjectStepDegrees * Math.PI / 180) {
             var next = o.Loaded ? 1 - o.Active : o.Active;
             set!.ImpulseResponsesAt(azimuth, elevation, rate, responseLeft, responseRight, scratch);
-            o.Lefts[next].SetFilter(responseLeft);
-            o.Rights[next].SetFilter(responseRight);
+            o.Left(next).SetFilter(responseLeft);
+            o.Right(next).SetFilter(responseRight);
             fade = o.Loaded;
             o.Active = next;
             o.Direction = target;
@@ -396,10 +412,10 @@ public sealed class BinauralRenderer {
         var inverse = 1f / frames;
         for (var n = 0; n < frames; n++) {
             var s = input[n];
-            var l = o.Lefts[active].Tick(s);
-            var r = o.Rights[active].Tick(s);
-            var lo = o.Lefts[1 - active].Tick(s);
-            var ro = o.Rights[1 - active].Tick(s);
+            var l = o.Left(active).Tick(s);
+            var r = o.Right(active).Tick(s);
+            var lo = o.Left(1 - active).Tick(s);
+            var ro = o.Right(1 - active).Tick(s);
             if (fade) {
                 var g = (n + 1) * inverse;
                 left[n] += g * l + (1 - g) * lo;
@@ -420,8 +436,8 @@ public sealed class BinauralRenderer {
 
         foreach (var o in objects) {
             for (var k = 0; k < 2; k++) {
-                o.Lefts[k].Reset();
-                o.Rights[k].Reset();
+                o.Left(k).Reset();
+                o.Right(k).Reset();
             }
         }
     }
@@ -431,23 +447,27 @@ public sealed class BinauralRenderer {
         var o = objects[index];
         o.Loaded = false;
         for (var k = 0; k < 2; k++) {
-            o.Lefts[k].Reset();
-            o.Rights[k].Reset();
+            o.Left(k).Reset();
+            o.Right(k).Reset();
         }
     }
 
     sealed class ObjectState {
-        public readonly PartitionedConvolver[] Lefts = [new(), new()];
-        public readonly PartitionedConvolver[] Rights = [new(), new()];
+        readonly PartitionedConvolver[] lefts = [new(), new()];
+        readonly PartitionedConvolver[] rights = [new(), new()];
         public int Active;
         public bool Loaded;
         public Vector3 Direction;
 
         public ObjectState(int taps) {
             for (var k = 0; k < 2; k++) {
-                Lefts[k].Allocate(PartitionSize, taps);
-                Rights[k].Allocate(PartitionSize, taps);
+                lefts[k].Allocate(PartitionSize, taps);
+                rights[k].Allocate(PartitionSize, taps);
             }
         }
+
+        public PartitionedConvolver Left(int slot) => lefts[slot];
+
+        public PartitionedConvolver Right(int slot) => rights[slot];
     }
 }

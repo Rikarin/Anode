@@ -59,12 +59,8 @@ public sealed class DownmixTests {
             SpeakerFormat.Surround71,
             SpeakerFormat.Surround51,
             new[,] {
-                { 1, 0, 0, 0, 0, 0, 0, 0 },
-                { 0, 1, 0, 0, 0, 0, 0, 0 },
-                { 0, 0, 1, 0, 0, 0, 0, 0 },
-                { 0, 0, 0, 1, 0, 0, 0, 0 },
-                { 0, 0, 0, 0, Minus3, 0, Minus3, 0 },
-                { 0, 0, 0, 0, 0, Minus3, 0, Minus3 }
+                { 1, 0, 0, 0, 0, 0, 0, 0 }, { 0, 1, 0, 0, 0, 0, 0, 0 }, { 0, 0, 1, 0, 0, 0, 0, 0 },
+                { 0, 0, 0, 1, 0, 0, 0, 0 }, { 0, 0, 0, 0, Minus3, 0, Minus3, 0 }, { 0, 0, 0, 0, 0, Minus3, 0, Minus3 }
             }
         );
         // → stereo: then BS.775's −3 dB, so −6 dB each.
@@ -95,7 +91,10 @@ public sealed class DownmixTests {
         to71[0, 8] = to71[1, 9] = to71[6, 10] = to71[7, 11] = Minus3;
         AssertMatrix(SpeakerFormat.Surround714, SpeakerFormat.Surround71, to71);
         // → 7.1.2: top fronts and rears share the top middles.
-        var mixer = new Downmixer(SpeakerLayout.Of(SpeakerFormat.Surround714), SpeakerLayout.Of(SpeakerFormat.Surround712));
+        var mixer = new Downmixer(
+            SpeakerLayout.Of(SpeakerFormat.Surround714),
+            SpeakerLayout.Of(SpeakerFormat.Surround712)
+        );
         Assert.Equal((float)Minus3, mixer.Gain(8, 8), 5);
         Assert.Equal((float)Minus3, mixer.Gain(8, 10), 5);
         Assert.Equal(0, mixer.Gain(8, 9));
@@ -103,7 +102,10 @@ public sealed class DownmixTests {
 
     [Fact]
     public void Nine_one_six_to_seven_one_four_splits_the_top_middles() {
-        var mixer = new Downmixer(SpeakerLayout.Of(SpeakerFormat.Surround916), SpeakerLayout.Of(SpeakerFormat.Surround714));
+        var mixer = new Downmixer(
+            SpeakerLayout.Of(SpeakerFormat.Surround916),
+            SpeakerLayout.Of(SpeakerFormat.Surround714)
+        );
         // 9.1.6: … Lw Rw (8, 9) Ltf Rtf (10, 11) Ltm Rtm (12, 13) Ltr Rtr (14, 15).
         Assert.Equal((float)Minus3, mixer.Gain(8, 12), 5);
         Assert.Equal((float)Minus3, mixer.Gain(10, 12), 5);
@@ -121,7 +123,10 @@ public sealed class DownmixTests {
             new[,] { { 1, 0, Minus3, Minus3, Minus3, 0 }, { 0, 1, Minus3, Minus3, 0, Minus3 } },
             1
         );
-        var keep = new Downmixer(SpeakerLayout.Of(SpeakerFormat.Surround714), SpeakerLayout.Of(SpeakerFormat.Surround51));
+        var keep = new Downmixer(
+            SpeakerLayout.Of(SpeakerFormat.Surround714),
+            SpeakerLayout.Of(SpeakerFormat.Surround51)
+        );
         Assert.Equal(1, keep.Gain(3, 3));
     }
 

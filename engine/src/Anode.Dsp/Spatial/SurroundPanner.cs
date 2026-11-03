@@ -191,7 +191,8 @@ public sealed class SurroundPanner {
     void Compute() {
         Span<double> gains = stackalloc double[outputs];
         for (var i = 0; i < inputs; i++) {
-            var angle = inputs == 1 ? settings.Angle : settings.Angle + (i == 0 ? 0.5 : -0.5) * settings.Spread;
+            var side = i == 0 ? 0.5 : -0.5;
+            var angle = inputs == 1 ? settings.Angle : settings.Angle + side * settings.Spread;
             Pan(angle, gains);
             var row = target.AsSpan(i * outputs, outputs);
             for (var o = 0; o < outputs; o++) {

@@ -128,8 +128,14 @@ public sealed class AdmTests : IDisposable {
         Assert.Equal(13, BinaryPrimitives.ReadUInt16LittleEndian(bytes.AsSpan(chna.Offset)));
         Assert.Equal(13, BinaryPrimitives.ReadUInt16LittleEndian(bytes.AsSpan(chna.Offset + 2)));
         string Row(int i, int at, int length) => Encoding.ASCII.GetString(bytes, chna.Offset + 4 + 40 * i + at, length);
-        Assert.Equal(("ATU_00000001", "AT_00010001_01", "AP_00010017"), (Row(0, 2, 12), Row(0, 14, 14), Row(0, 28, 11)));
-        Assert.Equal(("ATU_0000000d", "AT_00031001_01", "AP_00031001"), (Row(12, 2, 12), Row(12, 14, 14), Row(12, 28, 11)));
+        Assert.Equal(
+            ("ATU_00000001", "AT_00010001_01", "AP_00010017"),
+            (Row(0, 2, 12), Row(0, 14, 14), Row(0, 28, 11))
+        );
+        Assert.Equal(
+            ("ATU_0000000d", "AT_00031001_01", "AP_00031001"),
+            (Row(12, 2, 12), Row(12, 14, 14), Row(12, 28, 11))
+        );
 
         var axml = XDocument.Parse(Encoding.UTF8.GetString(bytes, chunks[3].Offset, chunks[3].Size));
         XNamespace ns = "urn:ebu:metadata-schema:ebuCore_2017";
@@ -200,12 +206,18 @@ public sealed class AdmTests : IDisposable {
     [Fact]
     public void Sources_must_match_the_scene() {
         var scene = scenario.GoldenPath(4_800);
-        Assert.Throws<ArgumentException>(() => AdmWriter.Write(scene with { Frames = 4_801 }, scenario.PathOf("x.wav")));
-        Assert.Throws<ArgumentException>(() => AdmWriter.Write(scene with { SampleRate = 44_100 }, scenario.PathOf("x.wav")));
+        Assert.Throws<ArgumentException>(() => AdmWriter.Write(scene with { Frames = 4_801 }, scenario.PathOf("x.wav"))
+        );
         Assert.Throws<ArgumentException>(() => AdmWriter.Write(
-            scene with { Objects = [scene.Objects[0] with { Blocks = [new(10, 4_790, 0, 0, 1, 0, false)] }] },
-            scenario.PathOf("x.wav")
-        ));
+                scene with { SampleRate = 44_100 },
+                scenario.PathOf("x.wav")
+            )
+        );
+        Assert.Throws<ArgumentException>(() => AdmWriter.Write(
+                scene with { Objects = [scene.Objects[0] with { Blocks = [new(10, 4_790, 0, 0, 1, 0, false)] }] },
+                scenario.PathOf("x.wav")
+            )
+        );
         Assert.Throws<ArgumentOutOfRangeException>(() => AdmWriter.Write(scene, scenario.PathOf("x.wav"), 16));
     }
 
@@ -223,7 +235,7 @@ public sealed class AdmTests : IDisposable {
         }
 
         Refused("empty.wav", []);
-        Refused("text.wav", "not a wave file at all"u8.ToArray());
+        Refused("text.wav", [.."not a wave file at all"u8]);
         Refused("short.wav", bytes[..(bytes.Length / 2)]);
         var bw64 = (byte[])bytes.Clone();
         "BW64"u8.CopyTo(bw64);
@@ -263,6 +275,9 @@ public sealed class AdmTests : IDisposable {
         Assert.All(ramp, static b => Assert.True(b.DurationFrames <= 960));
         Assert.Equal(90, ramp[^1].Azimuth, 9);
         Assert.Equal(36, ramp[0].Azimuth, 9);
-        Assert.Equal((7_200L, 2_400L, false, 90.0), (blocks[^1].StartFrame, blocks[^1].DurationFrames, blocks[^1].Interpolate, blocks[^1].Azimuth));
+        Assert.Equal(
+            (7_200L, 2_400L, false, 90.0),
+            (blocks[^1].StartFrame, blocks[^1].DurationFrames, blocks[^1].Interpolate, blocks[^1].Azimuth)
+        );
     }
 }

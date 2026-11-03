@@ -13,7 +13,9 @@ static class AdmDefinitions {
     public const string LabelPrefix = "urn:itu:bs:2051:0:speaker:";
 
     /// <summary>BS.2094's DirectSpeakers channel formats by speaker label (Anode's <c>LFE1</c> is its <c>LFE</c>).</summary>
-    public static readonly IReadOnlyDictionary<string, string> ChannelByLabel = new Dictionary<string, string>(StringComparer.Ordinal) {
+    public static readonly IReadOnlyDictionary<string, string> ChannelByLabel = new Dictionary<string, string>(
+        StringComparer.Ordinal
+    ) {
         ["M+030"] = "AC_00010001",
         ["M-030"] = "AC_00010002",
         ["M+000"] = "AC_00010003",
@@ -40,15 +42,16 @@ static class AdmDefinitions {
     ///     BS.2094's pack formats whose channels are exactly a layout's, in its order (quad, 7.0, 7.1.2 and 9.1.6 have
     ///     none: Anode writes its own pack of the common channel formats).
     /// </summary>
-    public static readonly IReadOnlyDictionary<ChannelFormat, string> PackByFormat = new Dictionary<ChannelFormat, string> {
-        [ChannelFormat.Mono] = "AP_00010001",
-        [ChannelFormat.Stereo] = "AP_00010002",
-        [ChannelFormat.Lcr] = "AP_0001000a",
-        [ChannelFormat.Surround50] = "AP_0001000c",
-        [ChannelFormat.Surround51] = "AP_00010003",
-        [ChannelFormat.Surround71] = "AP_0001000f",
-        [ChannelFormat.Surround714] = "AP_00010017"
-    };
+    public static readonly IReadOnlyDictionary<ChannelFormat, string> PackByFormat =
+        new Dictionary<ChannelFormat, string> {
+            [ChannelFormat.Mono] = "AP_00010001",
+            [ChannelFormat.Stereo] = "AP_00010002",
+            [ChannelFormat.Lcr] = "AP_0001000a",
+            [ChannelFormat.Surround50] = "AP_0001000c",
+            [ChannelFormat.Surround51] = "AP_00010003",
+            [ChannelFormat.Surround71] = "AP_0001000f",
+            [ChannelFormat.Surround714] = "AP_00010017"
+        };
 
     /// <summary>The speaker label of a common channel format, or null.</summary>
     public static string? LabelOfChannel(string id) {
