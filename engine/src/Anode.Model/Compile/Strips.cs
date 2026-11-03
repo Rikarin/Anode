@@ -67,7 +67,7 @@ public static class Strips {
         panner.Mode == PannerMode.Stereo
             ? null
             : new(
-                panner.Mode == PannerMode.Object ? EnginePannerMode.Object : EnginePannerMode.Surround,
+                Mode(panner.Mode),
                 new(
                     (float)panner.Surround.Angle,
                     (float)panner.Surround.Diversity,
@@ -83,6 +83,9 @@ public static class Strips {
                     (float)panner.Object.Size
                 )
             );
+
+    static EnginePannerMode Mode(PannerMode mode) =>
+        mode == PannerMode.Object ? EnginePannerMode.Object : EnginePannerMode.Surround;
 
     /// <summary>An output as the engine numbers it: 0 the master, N bus N, −N device output pair N.</summary>
     public static int Output(string output) =>

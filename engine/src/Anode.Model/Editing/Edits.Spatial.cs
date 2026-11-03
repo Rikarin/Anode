@@ -38,7 +38,12 @@ public static partial class Edits {
         var track = TrackOf(state, c.TrackId ?? string.Empty);
         CheckFormat(c.InputFormat);
         CheckInputFormat(track.Kind, c.InputFormat);
-        return [new TrackUpserted(track with { Strip = track.Strip with { InputFormat = c.InputFormat } }, state.IndexOfTrack(track.Id))];
+        return [
+            new TrackUpserted(
+                track with { Strip = track.Strip with { InputFormat = c.InputFormat } },
+                state.IndexOfTrack(track.Id)
+            )
+        ];
     }
 
     /// <summary>Whether a track of <paramref name="kind" /> takes <paramref name="format" /> as its input format.</summary>
@@ -81,7 +86,9 @@ public static partial class Edits {
             CheckMode(state, track, mode);
         }
 
-        return [new TrackUpserted(track with { Strip = track.Strip with { Panner = panner } }, state.IndexOfTrack(track.Id))];
+        return [
+            new TrackUpserted(track with { Strip = track.Strip with { Panner = panner } }, state.IndexOfTrack(track.Id))
+        ];
     }
 
     /// <summary>Whether <paramref name="track" />'s strip may pan in <paramref name="mode" />.</summary>
@@ -89,7 +96,9 @@ public static partial class Edits {
         var surround = SpeakerLayouts.IsSurround(track.Strip.OutputFormat);
         switch (mode) {
             case PannerMode.Stereo when surround:
-                throw new EditException("A strip with a surround output pans with the Surround Panner or as an object.");
+                throw new EditException(
+                    "A strip with a surround output pans with the Surround Panner or as an object."
+                );
             case PannerMode.Surround when !surround:
                 throw new EditException("The Surround Panner needs a surround output.");
             case PannerMode.Object when track.Strip.Output != Routing.Master
@@ -203,30 +212,49 @@ public static partial class Edits {
         for (var i = 0; i < state.Tracks.Count; i++) {
             var track = state.Tracks[i];
             var strip = track.Strip;
-            var output = strip.Output == Routing.Master ? format
-                : Routing.BusOf(strip.Output) is { } bus ? BusFormat(bus)
-                : ChannelFormat.Stereo;
-            var mode = !SpeakerLayouts.IsSurround(output) ? PannerMode.Stereo
-                : strip.Panner.Mode == PannerMode.Object && strip.Output == Routing.Master ? PannerMode.Object
-                : PannerMode.Surround;
+            var output = DestinationFormat(state, strip.Output, ref buses);
+            var mode = ModeFor(strip, output);
             if (output != strip.OutputFormat || mode != strip.Panner.Mode) {
-                ops.Add(
-                    new TrackUpserted(
-                        track with { Strip = strip with { OutputFormat = output, Panner = strip.Panner with { Mode = mode } } },
-                        i
-                    )
-                );
+                var conformed = strip with { OutputFormat = output, Panner = strip.Panner with { Mode = mode } };
+                ops.Add(new TrackUpserted(track with { Strip = conformed }, i));
             }
         }
 
         return ops;
+    }
 
-        ChannelFormat BusFormat(int bus) {
-            buses ??= state.Tracks.Where(static t => t.Kind == TrackKind.Aux && t.InputBus > 0)
-                .GroupBy(static t => t.InputBus)
-                .ToDictionary(static g => g.Key, static g => g.First().Strip.InputFormat);
-            return buses.GetValueOrDefault(bus, ChannelFormat.Stereo);
+    /// <summary>
+    ///     The format of an output: the project's for the master, the aux's input format for a bus (stereo without an
+    ///     aux), stereo for a device output pair; <paramref name="buses" /> caches the buses' formats.
+    /// </summary>
+    static ChannelFormat DestinationFormat(
+        ProjectState state,
+        string output,
+        ref Dictionary<int, ChannelFormat>? buses
+    ) {
+        if (output == Routing.Master) {
+            return state.Settings.SurroundFormat;
         }
+
+        if (Routing.BusOf(output) is not { } bus) {
+            return ChannelFormat.Stereo;
+        }
+
+        buses ??= state.Tracks.Where(static t => t.Kind == TrackKind.Aux && t.InputBus > 0)
+            .GroupBy(static t => t.InputBus)
+            .ToDictionary(static g => g.Key, static g => g.First().Strip.InputFormat);
+        return buses.GetValueOrDefault(bus, ChannelFormat.Stereo);
+    }
+
+    /// <summary>The panner mode a strip has into an <paramref name="output" /> of that format.</summary>
+    static PannerMode ModeFor(ChannelStrip strip, ChannelFormat output) {
+        if (!SpeakerLayouts.IsSurround(output)) {
+            return PannerMode.Stereo;
+        }
+
+        return strip.Panner.Mode == PannerMode.Object && strip.Output == Routing.Master
+            ? PannerMode.Object
+            : PannerMode.Surround;
     }
 
     /// <summary><paramref name="state" /> with its strips agreeing with their destinations (<see cref="Conform" />).</summary>

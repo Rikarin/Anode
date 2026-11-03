@@ -102,23 +102,7 @@ public static partial class Edits {
             );
             var upserted = (TrackUpserted)added.Single(static o => o is TrackUpserted);
             var track = upserted.Track with { StaffStyleId = StyleId(source.StaffStyleId) };
-            // Phase 10: an ADM bed's or object's format and panner (the output format and a mode the output allows
-            // follow when the edit conforms, docs/11-phase-10.md).
-            if (source.InputFormat is { } format) {
-                CheckFormat(format);
-                CheckInputFormat(track.Kind, format);
-                track = track with { Strip = track.Strip with { InputFormat = format } };
-            }
-
-            if (source.Panner is not null) {
-                var panner = CheckPanner(source.Panner);
-                if (panner.Mode == PannerMode.Object && Objects(State) >= MaxObjects) {
-                    throw new EditException($"A project has at most {MaxObjects} objects.");
-                }
-
-                track = track with { Strip = track.Strip with { Panner = panner } };
-            }
-
+            track = Spatial(track, source);
             Add([..added.Select(o => o == upserted ? upserted with { Track = track } : o)]);
             tracks[provisional] = track.Id;
             foreach (var region in source.MidiRegions ?? []) {
@@ -129,6 +113,34 @@ public static partial class Edits {
                 Add([new RegionUpserted(ImportedAudio(State, region, track, ids, regions))]);
             }
 
+            ImportLanes(source, track, plugins);
+        }
+
+        /// <summary>
+        ///     Phase 10: an ADM bed's or object's format and panner on the new track (the output format and a mode the
+        ///     output allows follow when the edit conforms, docs/11-phase-10.md).
+        /// </summary>
+        Track Spatial(Track track, ImportedTrack source) {
+            if (source.InputFormat is { } format) {
+                CheckFormat(format);
+                CheckInputFormat(track.Kind, format);
+                track = track with { Strip = track.Strip with { InputFormat = format } };
+            }
+
+            if (source.Panner is null) {
+                return track;
+            }
+
+            var panner = CheckPanner(source.Panner);
+            if (panner.Mode == PannerMode.Object && Objects(State) >= MaxObjects) {
+                throw new EditException($"A project has at most {MaxObjects} objects.");
+            }
+
+            return track with { Strip = track.Strip with { Panner = panner } };
+        }
+
+        /// <summary>Phase 10: the imported track's lanes (an object's positions), each target once.</summary>
+        void ImportLanes(ImportedTrack source, Track track, PluginCatalog plugins) {
             var targets = new HashSet<string>(StringComparer.Ordinal);
             foreach (var lane in source.Automation ?? []) {
                 if (lane?.Target is not { } target || !targets.Add(target)) {
@@ -161,7 +173,13 @@ public static partial class Edits {
                 [
                     ..AddMarker(
                             State,
-                            new(marker.Name ?? string.Empty, marker.Tick, marker.LengthTicks, marker.Color, marker.Kind),
+                            new(
+                                marker.Name ?? string.Empty,
+                                marker.Tick,
+                                marker.LengthTicks,
+                                marker.Color,
+                                marker.Kind
+                            ),
                             ids
                         )
                         .Select(o => o is MarkerUpserted m ? new MarkerUpserted(m.Marker with { Text = text }) : o)

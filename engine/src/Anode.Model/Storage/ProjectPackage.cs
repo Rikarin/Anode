@@ -249,14 +249,7 @@ public static class ProjectPackage {
             LiveLoops = liveLoops,
             Movie = Movie(root.Movie),
             Markers = Keyed(
-                root.Markers?.Select(static m => m is null
-                            ? m!
-                            : m with {
-                                Text = m.Text ?? string.Empty,
-                                Kind = Enum.IsDefined(m.Kind) ? m.Kind : MarkerKind.Marker
-                            }
-                    )
-                    .ToArray(),
+                root.Markers?.Select(Marker).ToArray(),
                 static m => m?.Id is not null && m.Name is not null,
                 static m => m.Id
             ),
@@ -285,6 +278,16 @@ public static class ProjectPackage {
         };
         // Output formats and panner modes follow the routing (docs/11-phase-10.md), whatever the file says.
         return Edits.Conformed(WithScore(read, root.Score));
+    }
+
+    /// <summary>A marker as read: its text (none: empty) and a kind there is (else a user's marker).</summary>
+    static Marker Marker(Marker? marker) {
+        if (marker is null) {
+            return marker!;
+        }
+
+        var kind = Enum.IsDefined(marker.Kind) ? marker.Kind : MarkerKind.Marker;
+        return marker with { Text = marker.Text ?? string.Empty, Kind = kind };
     }
 
     /// <summary>The movie as read: one the project could have been given (<see cref="Edits.CheckMovie" />), else none.</summary>

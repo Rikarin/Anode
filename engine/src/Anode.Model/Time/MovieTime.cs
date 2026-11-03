@@ -34,7 +34,8 @@ public static class MovieTime {
     }
 
     /// <summary>The frame shown at project tick <paramref name="tick" />, or null when there is none.</summary>
-    public static long? FrameAtTick(TempoMap map, Movie movie, double tick) => FrameAt(movie, MovieSeconds(map, movie, tick));
+    public static long? FrameAtTick(TempoMap map, Movie movie, double tick) =>
+        FrameAt(movie, MovieSeconds(map, movie, tick));
 
     /// <summary>The movie time (seconds) frame <paramref name="frame" /> starts at.</summary>
     public static double SecondsOfFrame(Movie movie, long frame) =>
@@ -53,6 +54,7 @@ public static class MovieTime {
         var start = ProjectSeconds(map, movie, 0);
         var end = ProjectSeconds(map, movie, movie.DurationSeconds);
         var skip = start < 0 ? (long)Math.Round(-start * sampleRate) : 0;
-        return ((long)Math.Round(Math.Max(0, start) * sampleRate), (long)Math.Round(Math.Max(0, end) * sampleRate), skip);
+        return ((long)Math.Round(Math.Max(0, start) * sampleRate), (long)Math.Round(Math.Max(0, end) * sampleRate),
+            skip);
     }
 }

@@ -76,7 +76,7 @@ static class MediaApi {
             .WithSummary("The frames cached as thumbnails `height` pixels high (left out: 64), and their size.");
         movie.MapGet(
                 "/frames/{frame:long}",
-                static IResult (long frame, int? height, ProjectSession session) => {
+                static IResult(long frame, int? height, ProjectSession session) => {
                     if (session.View is not { State.Movie: { } m } view) {
                         return TypedResults.NotFound();
                     }
@@ -100,7 +100,10 @@ static class MediaApi {
             .WithSummary("Detect Scene Cuts: a sceneDetect job that adds scene markers at the cuts (one undo step).");
         movie.MapPost(
                 "/audio/import",
-                static Results<Accepted<Job>, NotFound, ProblemHttpResult>(MovieAudioImportRequest request, Jobs jobs) =>
+                static Results<Accepted<Job>, NotFound, ProblemHttpResult>(
+                    MovieAudioImportRequest request,
+                    Jobs jobs
+                ) =>
                     Accepted(jobs.ImportMovieAudio(request))
             )
             .WithName("ImportMovieAudio")
@@ -110,7 +113,10 @@ static class MediaApi {
             );
         movie.MapPost(
                 "/audio/export",
-                static Results<Accepted<Job>, NotFound, ProblemHttpResult>(MovieAudioExportRequest request, Jobs jobs) =>
+                static Results<Accepted<Job>, NotFound, ProblemHttpResult>(
+                    MovieAudioExportRequest request,
+                    Jobs jobs
+                ) =>
                     Accepted(jobs.ExportMovieAudio(request))
             )
             .WithName("ExportMovieAudio")

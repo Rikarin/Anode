@@ -237,45 +237,44 @@ public sealed class UserSettings(IOptions<ServerOptions> options) {
                 throw ProjectException.Unprocessable($"A pad set has at most {MaxPadsPerSet} pads.");
             }
 
-            var padsOfSet = new List<KeyCommandPad>();
-            foreach (var pad in list) {
-                if (pad is null
-                    || pad.CommandId is not { Length: > 0 and <= MaxCommandIdLength }
-                    || string.IsNullOrWhiteSpace(pad.CommandId)) {
-                    throw ProjectException.Unprocessable(
-                        $"A pad runs a key command (1…{MaxCommandIdLength} characters)."
-                    );
-                }
-
-                if (pad.Color is { Length: > 64 }) {
-                    throw ProjectException.Unprocessable("A pad's colour has at most 64 characters.");
-                }
-
-                padsOfSet.Add(pad with { Id = Id(pad.Id), Label = Label(pad.Label, "pad label") });
-            }
-
-            clean.Add(new(Id(set.Id), Label(set.Name, "pad set name"), padsOfSet));
+            List<KeyCommandPad> checkedPads = [
+                ..list.Select(Pad).Select(p => p with { Id = PadId(p.Id, ids), Label = PadLabel(p.Label, "pad label") })
+            ];
+            clean.Add(new(PadId(set.Id, ids), PadLabel(set.Name, "pad set name"), checkedPads));
         }
 
         var saved = new RemotePads(clean);
         Write("remote-pads.json", saved, ContractsJsonContext.Default.RemotePads);
         return saved;
+    }
 
-        string Id(string? id) =>
-            id is { Length: > 0 and <= MaxPadIdLength } && !string.IsNullOrWhiteSpace(id) && ids.Add(id)
-                ? id
-                : throw ProjectException.Unprocessable(
-                    $"Pad and set ids are unique, of 1…{MaxPadIdLength} characters ('{id}')."
-                );
-
-        static string Label(string? text, string what) {
-            var trimmed = (text ?? string.Empty).Trim();
-            return trimmed.Length is > 0 and <= Model.Editing.Edits.MaxNameLength
-                ? trimmed
-                : throw ProjectException.Unprocessable(
-                    $"A {what} has 1…{Model.Editing.Edits.MaxNameLength} characters."
-                );
+    /// <summary>A pad that runs a key command (1…128 characters), with a colour of at most 64.</summary>
+    static KeyCommandPad Pad(KeyCommandPad? pad) {
+        if (pad is null
+            || pad.CommandId is not { Length: > 0 and <= MaxCommandIdLength }
+            || string.IsNullOrWhiteSpace(pad.CommandId)) {
+            throw ProjectException.Unprocessable($"A pad runs a key command (1…{MaxCommandIdLength} characters).");
         }
+
+        return pad.Color is { Length: > 64 }
+            ? throw ProjectException.Unprocessable("A pad's colour has at most 64 characters.")
+            : pad;
+    }
+
+    /// <summary>A pad's or set's id, unique among <paramref name="ids" />, 1…64 characters.</summary>
+    static string PadId(string? id, HashSet<string> ids) =>
+        id is { Length: > 0 and <= MaxPadIdLength } && !string.IsNullOrWhiteSpace(id) && ids.Add(id)
+            ? id
+            : throw ProjectException.Unprocessable(
+                $"Pad and set ids are unique, of 1…{MaxPadIdLength} characters ('{id}')."
+            );
+
+    /// <summary>A pad's label or a set's name, trimmed, 1…128 characters.</summary>
+    static string PadLabel(string? text, string what) {
+        var trimmed = (text ?? string.Empty).Trim();
+        return trimmed.Length is > 0 and <= Model.Editing.Edits.MaxNameLength
+            ? trimmed
+            : throw ProjectException.Unprocessable($"A {what} has 1…{Model.Editing.Edits.MaxNameLength} characters.");
     }
 
     T? Read<T>(string name, JsonTypeInfo<T> type) where T : class {

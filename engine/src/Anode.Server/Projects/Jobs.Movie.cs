@@ -1,6 +1,6 @@
 using Anode.Contracts;
-using Anode.Model.Audio;
 using Anode.Model;
+using Anode.Model.Audio;
 using Anode.Model.Editing;
 using Anode.Model.Time;
 
@@ -59,7 +59,12 @@ public sealed partial class Jobs {
                         probe.VideoCodec,
                         probe.Audio
                     );
-                    session.ApplyJob(view.Session, "Import Movie", [], (job, _) => job.Apply(new SetMovieCommand(movie)));
+                    session.ApplyJob(
+                        view.Session,
+                        "Import Movie",
+                        [],
+                        (job, _) => job.Apply(new SetMovieCommand(movie))
+                    );
                     return [copied ?? path];
                 } catch {
                     if (copied is not null) {
@@ -129,7 +134,8 @@ public sealed partial class Jobs {
             async (_, token) => {
                 var folder = Movies.ThumbnailFolder(view.Folder, movie, height);
                 Directory.CreateDirectory(folder);
-                var missing = wanted.Where(f => !File.Exists(Movies.ThumbnailOf(view.Folder, movie, height, f))).ToArray();
+                var missing = wanted.Where(f => !File.Exists(Movies.ThumbnailOf(view.Folder, movie, height, f)))
+                    .ToArray();
                 if (missing.Length > 0) {
                     await media.ThumbnailsAsync(file, missing, height, folder, token).ConfigureAwait(false);
                 }
@@ -242,7 +248,7 @@ public sealed partial class Jobs {
     ///     project start, at 0 from the sample that plays there.
     /// </summary>
     public static ImportedContent MovieAudioContent(
-        Model.ProjectState state,
+        ProjectState state,
         string name,
         AudioFile file,
         ChannelFormat format
@@ -300,7 +306,9 @@ public sealed partial class Jobs {
         var extension = Path.GetExtension(file);
         var output = ExportPath(view, request?.FileName, request?.Directory, extension);
         if (string.Equals(Path.GetFullPath(output), Path.GetFullPath(file), StringComparison.Ordinal)) {
-            throw ProjectException.Unprocessable("Export Audio to Movie writes a new movie, not over the movie itself.");
+            throw ProjectException.Unprocessable(
+                "Export Audio to Movie writes a new movie, not over the movie itself."
+            );
         }
 
         if (!Enum.IsDefined(request!.Codec)) {
@@ -311,9 +319,10 @@ public sealed partial class Jobs {
             throw ProjectException.Unprocessable("Turn Varispeed off to export audio to the movie.");
         }
 
-        var codec = request.Codec == MovieAudioCodec.Pcm && !extension.Equals(".mov", StringComparison.OrdinalIgnoreCase)
-            ? MovieAudioCodec.Aac
-            : request.Codec;
+        var codec = request.Codec == MovieAudioCodec.Pcm
+            && !extension.Equals(".mov", StringComparison.OrdinalIgnoreCase)
+                ? MovieAudioCodec.Aac
+                : request.Codec;
         var (start, end, skip) = MovieTime.Span(state.TempoMap, movie, state.SampleRate);
         if (end <= start) {
             throw ProjectException.Unprocessable("The movie ends before the project starts.");
@@ -392,7 +401,10 @@ public sealed partial class Jobs {
         return stereo;
     }
 
-    /// <summary>A 32-bit float stereo WAV whose first sample is the movie's first frame: <paramref name="skip" /> of silence first.</summary>
+    /// <summary>
+    ///     A 32-bit float stereo WAV whose first sample is the movie's first frame: <paramref name="skip" /> of silence
+    ///     first.
+    /// </summary>
     static void WriteAligned(string path, float[][] stereo, int rate, long skip) {
         using var writer = new WavWriter(path, 2, rate, WavEncoding.Float32);
         var block = new float[8192];
@@ -420,7 +432,9 @@ public sealed partial class Jobs {
         var view = session.View ?? throw ProjectException.NoProject();
         var movie = view.State.Movie ?? throw ProjectException.NotFound("The project has no movie.");
         var file = Movies.FileOf(view.Folder, movie);
-        return File.Exists(file) ? (view, movie, file) : throw ProjectException.NotFound($"The movie '{file}' is missing.");
+        return File.Exists(file)
+            ? (view, movie, file)
+            : throw ProjectException.NotFound($"The movie '{file}' is missing.");
     }
 
     void RequireMedia() {

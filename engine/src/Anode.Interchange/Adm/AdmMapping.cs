@@ -2,7 +2,6 @@ using Anode.Contracts;
 using Anode.Model;
 using Anode.Model.Compile;
 using Anode.Model.Editing;
-using Anode.Model.Time;
 
 namespace Anode.Interchange.Adm;
 
@@ -53,12 +52,11 @@ public static class AdmMapping {
     }
 
     /// <summary>The object-mode tracks <paramref name="trackIds" /> names (null: every one), in track order.</summary>
-    public static IReadOnlyList<Track> ObjectTracks(ProjectState state, IReadOnlyList<string>? trackIds) =>
-        [
-            ..state.Tracks.Where(t => t.Strip.Panner.Mode == PannerMode.Object
-                && (trackIds is null || trackIds.Contains(t.Id, StringComparer.Ordinal))
-            )
-        ];
+    public static IReadOnlyList<Track> ObjectTracks(ProjectState state, IReadOnlyList<string>? trackIds) => [
+        ..state.Tracks.Where(t => t.Strip.Panner.Mode == PannerMode.Object
+            && (trackIds is null || trackIds.Contains(t.Id, StringComparer.Ordinal))
+        )
+    ];
 
     /// <summary>An object's channels: one for a mono input, else two (a stereo object).</summary>
     public static int ObjectChannels(Track track) => track.Strip.InputFormat == ChannelFormat.Mono ? 1 : 2;
@@ -85,12 +83,69 @@ public static class AdmMapping {
     ///     stretch where it stands still (jumping there), and interpolated blocks of at most 20 ms where it moves.
     /// </summary>
     public static IReadOnlyList<AdmBlock> Blocks(ProjectState state, Track track, long start, long end) {
-        var lanes = PositionTargets.Select(t => state.LaneOf(track.Id, t)?.Points).ToArray();
-        var constant = track.Strip.Panner.Object;
-        var map = state.PlaybackMap;
-        var rate = state.SampleRate;
-        double[] At(long sample, bool right) {
-            var tick = map.TickAt((double)sample / rate);
+        var positions = new Positions(state, track);
+        var blocks = new BlockList(start);
+        var edges = positions.Cuts(start, end);
+        var longest = Math.Max(1, (long)Math.Round(MaxMovingBlockSeconds * state.SampleRate));
+        for (var i = 0; i + 1 < edges.Length; i++) {
+            var (a, b) = (edges[i], edges[i + 1]);
+            var from = positions.At(a, true);
+            var to = positions.At(b, false);
+            if (Same(from, to) && Same(from, positions.At(a + (b - a) / 2, true))) {
+                blocks.Add(a, b - a, from, false);
+                continue;
+            }
+
+            var at = a;
+            if (blocks.Last is not { } last || !Same(last, from)) {
+                // A jump into a ramp: one frame there, then the ramp from it.
+                blocks.Add(a, 1, from, false);
+                at++;
+            }
+
+            Ramp(blocks, positions, at, b, to, longest);
+        }
+
+        return blocks.Blocks;
+    }
+
+    /// <summary>
+    ///     A ramp from <paramref name="at" /> to <paramref name="end" /> as interpolated blocks of at most
+    ///     <paramref name="longest" />.
+    /// </summary>
+    static void Ramp(BlockList blocks, Positions positions, long at, long end, double[] to, long longest) {
+        var pieces = (long)Math.Ceiling((double)(end - at) / longest);
+        for (var k = 0; k < pieces; k++) {
+            var s = at + (end - at) * k / pieces;
+            var e = at + (end - at) * (k + 1) / pieces;
+            blocks.Add(s, e - s, k == pieces - 1 ? to : positions.At(e, false), true);
+        }
+    }
+
+    static bool Same(double[] x, double[] y) => x.Zip(y).All(static p => Math.Abs(p.First - p.Second) < 1e-9);
+
+    /// <summary>An object's position (azimuth, elevation, distance, size) over samples, from its lanes or its panner.</summary>
+    sealed class Positions(ProjectState state, Track track) {
+        readonly IReadOnlyList<AutomationPoint>?[] lanes =
+            [..PositionTargets.Select(t => state.LaneOf(track.Id, t)?.Points)];
+
+        readonly ObjectPanner constant = track.Strip.Panner.Object;
+
+        /// <summary>The range's ends and the samples of the lanes' points inside it, in order.</summary>
+        public long[] Cuts(long start, long end) {
+            var cuts = new SortedSet<long> { start, end };
+            foreach (var point in lanes.SelectMany(static points => points ?? [])) {
+                var sample = state.PlaybackMap.SampleAt(point.Tick, state.SampleRate);
+                if (sample > start && sample < end) {
+                    cuts.Add(sample);
+                }
+            }
+
+            return [..cuts];
+        }
+
+        public double[] At(long sample, bool right) {
+            var tick = state.PlaybackMap.TickAt((double)sample / state.SampleRate);
             return [
                 Value(lanes[0], tick, right, constant.Azimuth),
                 Value(lanes[1], tick, right, constant.Elevation),
@@ -98,64 +153,28 @@ public static class AdmMapping {
                 Value(lanes[3], tick, right, constant.Size)
             ];
         }
+    }
 
-        // Where the lanes have points inside the range: the stretches between are each still or moving.
-        var cuts = new SortedSet<long> { start, end };
-        foreach (var points in lanes) {
-            foreach (var point in points ?? []) {
-                var sample = map.SampleAt(point.Tick, rate);
-                if (sample > start && sample < end) {
-                    cuts.Add(sample);
-                }
-            }
-        }
+    /// <summary>Blocks as they are made, from the range's start; the last position.</summary>
+    sealed class BlockList(long start) {
+        public List<AdmBlock> Blocks { get; } = [];
 
-        var blocks = new List<AdmBlock>();
-        var longest = Math.Max(1, (long)Math.Round(MaxMovingBlockSeconds * rate));
-        double[]? last = null;
-        var edges = cuts.ToArray();
-        for (var i = 0; i + 1 < edges.Length; i++) {
-            var (a, b) = (edges[i], edges[i + 1]);
-            var from = At(a, true);
-            var to = At(b, false);
-            var middle = At(a + (b - a) / 2, true);
-            if (Same(from, to) && Same(from, middle)) {
-                Add(a, b - a, from, false);
-                continue;
-            }
+        public double[]? Last { get; private set; }
 
-            var at = a;
-            if (last is null || !Same(last, from)) {
-                // A jump into a ramp: one frame there, then the ramp from it.
-                Add(a, 1, from, false);
-                at++;
-            }
-
-            var pieces = (long)Math.Ceiling((double)(b - at) / longest);
-            for (var k = 0; k < pieces; k++) {
-                var s = at + (b - at) * k / pieces;
-                var e = at + (b - at) * (k + 1) / pieces;
-                if (e > s) {
-                    Add(s, e - s, k == pieces - 1 ? to : At(e, false), true);
-                }
-            }
-        }
-
-        return blocks;
-
-        void Add(long from, long length, double[] p, bool interpolate) {
+        public void Add(long from, long length, double[] p, bool interpolate) {
             if (length <= 0) {
                 return;
             }
 
-            blocks.Add(new(from - start, length, p[0], p[1], p[2], p[3], interpolate));
-            last = p;
+            Blocks.Add(new(from - start, length, p[0], p[1], p[2], p[3], interpolate));
+            Last = p;
         }
-
-        static bool Same(double[] x, double[] y) => x.Zip(y).All(static p => Math.Abs(p.First - p.Second) < 1e-9);
     }
 
-    /// <summary>A lane's value at <paramref name="tick" /> (just after it when <paramref name="right" />; the constant without a lane).</summary>
+    /// <summary>
+    ///     A lane's value at <paramref name="tick" /> (just after it when <paramref name="right" />; the constant without
+    ///     a lane).
+    /// </summary>
     static double Value(IReadOnlyList<AutomationPoint>? points, double tick, bool right, double constant) {
         if (points is not { Count: > 0 }) {
             return constant;
@@ -221,7 +240,12 @@ public static class AdmMapping {
                 Mode = PannerMode.Object,
                 Object = first is null
                     ? ObjectPanner.Default
-                    : new(Clamp(first.Azimuth, -180, 180), Clamp(first.Elevation, -90, 90), Clamp(first.Distance, 0, 1), Clamp(first.Size, 0, 1))
+                    : new(
+                        Clamp(first.Azimuth, -180, 180),
+                        Clamp(first.Elevation, -90, 90),
+                        Clamp(first.Distance, 0, 1),
+                        Clamp(first.Size, 0, 1)
+                    )
             };
             tracks.Add(
                 new(
@@ -243,10 +267,12 @@ public static class AdmMapping {
 
     static string Named(string? name, string fallback) {
         var trimmed = (name ?? string.Empty).Trim();
-        return trimmed.Length == 0 ? fallback : trimmed.Length > Edits.MaxNameLength ? trimmed[..Edits.MaxNameLength] : trimmed;
+        return trimmed.Length == 0 ? fallback :
+            trimmed.Length > Edits.MaxNameLength ? trimmed[..Edits.MaxNameLength] : trimmed;
     }
 
-    static double Clamp(double value, double min, double max) => double.IsFinite(value) ? Math.Clamp(value, min, max) : 0;
+    static double Clamp(double value, double min, double max) =>
+        double.IsFinite(value) ? Math.Clamp(value, min, max) : 0;
 
     /// <summary>A region of the whole file at the project start.</summary>
     static AudioRegion Region(ProjectState state, IReadOnlyDictionary<string, string> fileIds, string path, int n) {
@@ -294,49 +320,62 @@ public static class AdmMapping {
             (PannerTargets.ObjectSize, static b => b.Size, 0, 1)
         ];
         foreach (var (target, get, min, max) in parameters) {
-            if (blocks.All(b => Math.Abs(get(b) - get(blocks[0])) < 1e-9)) {
-                continue;
-            }
-
-            var points = new List<AutomationPoint>();
-            double? previous = null;
-            foreach (var block in blocks) {
-                var value = Clamp(get(block), min, max);
-                var startTick = Tick(block.StartFrame);
-                var endTick = Tick(block.StartFrame + block.DurationFrames);
-                if (block.Interpolate && previous is { } from) {
-                    Point(startTick, from);
-                    Point(endTick, value);
-                } else {
-                    if (previous is { } held && Math.Abs(held - value) > 1e-9) {
-                        Point(startTick, held);
-                    }
-
-                    Point(startTick, value);
-                }
-
-                previous = value;
-            }
-
-            lanes.Add(new($"adm-lane-{n}-{lanes.Count}", "ignored", target, points));
-
-            void Point(long tick, double value) {
-                // At most two points on a tick (a jump); a repeat of the last one is dropped.
-                if (points.Count > 0 && points[^1].Tick == tick && Math.Abs(points[^1].Value - value) < 1e-9) {
-                    return;
-                }
-
-                if (points.Count > 1 && points[^1].Tick == tick && points[^2].Tick == tick) {
-                    points[^1] = new(tick, value, 0);
-                    return;
-                }
-
-                points.Add(new(tick, value, 0));
+            if (!blocks.All(b => Math.Abs(get(b) - get(blocks[0])) < 1e-9)) {
+                lanes.Add(
+                    new(
+                        $"adm-lane-{n}-{lanes.Count}",
+                        "ignored",
+                        target,
+                        LanePoints(blocks, b => Clamp(get(b), min, max), Tick)
+                    )
+                );
             }
         }
 
         return lanes.Count == 0 ? null : lanes;
 
         long Tick(long frame) => Math.Max(0, (long)Math.Round(map.TickAt((double)frame / sampleRate)));
+    }
+
+    /// <summary>One parameter of the blocks as points: a jump at a still block's start, a line over a moving one.</summary>
+    static List<AutomationPoint> LanePoints(
+        IReadOnlyList<AdmBlock> blocks,
+        Func<AdmBlock, double> value,
+        Func<long, long> tick
+    ) {
+        var points = new List<AutomationPoint>();
+        double? previous = null;
+        foreach (var block in blocks) {
+            var v = value(block);
+            var startTick = tick(block.StartFrame);
+            if (block.Interpolate && previous is { } from) {
+                AddPoint(points, startTick, from);
+                AddPoint(points, tick(block.StartFrame + block.DurationFrames), v);
+            } else {
+                if (previous is { } held && Math.Abs(held - v) > 1e-9) {
+                    AddPoint(points, startTick, held);
+                }
+
+                AddPoint(points, startTick, v);
+            }
+
+            previous = v;
+        }
+
+        return points;
+    }
+
+    /// <summary>Adds a point: at most two on a tick (a jump), a repeat of the last one dropped.</summary>
+    static void AddPoint(List<AutomationPoint> points, long tick, double value) {
+        if (points.Count > 0 && points[^1].Tick == tick && Math.Abs(points[^1].Value - value) < 1e-9) {
+            return;
+        }
+
+        if (points.Count > 1 && points[^1].Tick == tick && points[^2].Tick == tick) {
+            points[^1] = new(tick, value, 0);
+            return;
+        }
+
+        points.Add(new(tick, value, 0));
     }
 }

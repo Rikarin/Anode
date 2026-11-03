@@ -36,7 +36,10 @@ sealed class FakeMovieMedia : IMovieMedia {
     public ConcurrentQueue<string> Calls { get; } = new();
 
     /// <summary>The WAV the last remux was given, read back, and its other arguments.</summary>
-    public (float[][] Audio, int Rate, bool Replace, MovieAudioCodec Codec, string Output)? Remuxed { get; private set; }
+    public (float[][] Audio, int Rate, bool Replace, MovieAudioCodec Codec, string Output)? Remuxed {
+        get;
+        private set;
+    }
 
     public Task<MovieProbe> ProbeAsync(string moviePath, CancellationToken cancellation) {
         Calls.Enqueue($"probe {Path.GetFileName(moviePath)}");
@@ -127,7 +130,8 @@ sealed class FakeSpatialFiles : ISpatialFiles {
     public void WriteAdm(AdmScene scene, string path, int bitDepth) {
         Written = scene;
         WrittenBitDepth = bitDepth;
-        foreach (var source in scene.Beds.Select(static b => b.AudioPath).Concat(scene.Objects.Select(static o => o.AudioPath))) {
+        foreach (var source in scene.Beds.Select(static b => b.AudioPath)
+                     .Concat(scene.Objects.Select(static o => o.AudioPath))) {
             WrittenAudio[Path.GetFileName(source)] = BounceProcessor.Read(source).Channels;
         }
 
@@ -136,16 +140,16 @@ sealed class FakeSpatialFiles : ISpatialFiles {
 
     public AdmScene ReadAdm(string path, string mediaFolder) {
         var scene = ToRead ?? throw new FormatException("No chna chunk.");
+        return scene with {
+            Beds = [..scene.Beds.Select(b => b with { AudioPath = Copy(b.AudioPath) })],
+            Objects = [..scene.Objects.Select(o => o with { AudioPath = Copy(o.AudioPath) })]
+        };
+
         string Copy(string source) {
             var target = Path.Combine(mediaFolder, Path.GetFileName(source));
             File.Copy(source, target, true);
             return target;
         }
-
-        return scene with {
-            Beds = [..scene.Beds.Select(b => b with { AudioPath = Copy(b.AudioPath) })],
-            Objects = [..scene.Objects.Select(o => o with { AudioPath = Copy(o.AudioPath) })]
-        };
     }
 
     public float[,] StereoDownmix(ChannelFormat from) {

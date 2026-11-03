@@ -62,7 +62,8 @@ public sealed class HostMasterTap(EngineConnection engine) : IMasterTapSource {
 ///     Listen-in (docs/11-phase-10.md, docs/adr/0013-video-and-listen-in.md): the master, as the host's tap writes it,
 ///     encoded per listener and sent over <c>/api/v1/remote/listen</c>. At most <see cref="ListenIn.MaxListeners" />
 ///     sockets; the host writes the tap (<see cref="SetMasterTapMessage" />) while any is open, and again after it
-///     reconnects. One pump reads the ring every <see cref="PollInterval" /> and feeds each listener's encoder; each socket
+///     reconnects. One pump reads the ring every <see cref="PollInterval" /> and feeds each listener's encoder; each
+///     socket
 ///     sends its <see cref="ListenInFormat" />, then its frames from a short queue that drops the oldest when the socket
 ///     falls behind. <see cref="ListenInEvent" /> goes out when listening starts or stops, a listener comes or goes, or
 ///     the Server's delay moves by 10 ms or more.
@@ -230,42 +231,11 @@ public sealed class ListenInService : IDisposable {
                     reader?.Dispose();
                     key = tap.Key;
                     reader = tap.Open();
-                    if (reader is null) {
-                        continue;
-                    }
                 }
 
-                var behind = reader.Behind;
-                var read = reader.Read(audio, runs);
-                if (read == 0) {
-                    continue;
+                if (reader is not null) {
+                    Pump(reader, audio, runs, frame);
                 }
-
-                lock (gate) {
-                    foreach (var listener in listeners) {
-                        foreach (var run in runs) {
-                            listener.Encoder.Write(
-                                audio.AsSpan(run.Offset * 2, run.Frames * 2),
-                                run.TransportSample,
-                                run.Playing,
-                                run.Discontinuity
-                            );
-                        }
-
-                        int length;
-                        while ((length = listener.Encoder.Read(frame)) > 0) {
-                            listener.Post(frame.AsSpan(0, length).ToArray());
-                        }
-                    }
-                }
-
-                // The Server's own delay: what waited in the ring, the frame the encoder gathers, one poll.
-                var rate = Math.Max(1, reader.SampleRate);
-                Measured(
-                    behind * 1000.0 / rate
-                    + 1000.0 * ListenIn.FrameSamples / ListenIn.SampleRate
-                    + PollInterval.TotalMilliseconds
-                );
             }
         } catch (OperationCanceledException) {
             // the last listener left
@@ -274,6 +244,40 @@ public sealed class ListenInService : IDisposable {
         } finally {
             reader?.Dispose();
         }
+    }
+
+    /// <summary>Reads what the ring has and feeds every listener's encoder; queues the frames it makes.</summary>
+    void Pump(MasterTapReader reader, float[] audio, List<TapRun> runs, byte[] frame) {
+        var behind = reader.Behind;
+        if (reader.Read(audio, runs) == 0) {
+            return;
+        }
+
+        lock (gate) {
+            foreach (var listener in listeners) {
+                foreach (var run in runs) {
+                    listener.Encoder.Write(
+                        audio.AsSpan(run.Offset * 2, run.Frames * 2),
+                        run.TransportSample,
+                        run.Playing,
+                        run.Discontinuity
+                    );
+                }
+
+                int length;
+                while ((length = listener.Encoder.Read(frame)) > 0) {
+                    listener.Post([..frame.AsSpan(0, length)]);
+                }
+            }
+        }
+
+        // The Server's own delay: what waited in the ring, the frame the encoder gathers, one poll.
+        var rate = Math.Max(1, reader.SampleRate);
+        Measured(
+            behind * 1000.0 / rate
+            + 1000.0 * ListenIn.FrameSamples / ListenIn.SampleRate
+            + PollInterval.TotalMilliseconds
+        );
     }
 
     void Measured(double ms) {

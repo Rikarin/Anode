@@ -1,5 +1,4 @@
 using Anode.Contracts;
-using Anode.Interchange.Adm;
 using Anode.Ipc;
 using Anode.Model.Audio;
 using Anode.Server.Engine;
@@ -7,7 +6,6 @@ using Anode.Server.Projects;
 using Anode.Server.Remote;
 using Microsoft.Extensions.DependencyInjection;
 using System.Net;
-using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Net.WebSockets;
 using System.Text;
@@ -27,7 +25,6 @@ public sealed class Phase10ApiTests : IAsyncDisposable {
     readonly FakeMovieMedia movies = new();
     readonly FakeSpatialFiles spatial = new();
     readonly FakeEncoders encoders = new();
-    readonly FakeTap tap = new();
     ServerFixture? server;
     HttpClient? client;
 
@@ -37,7 +34,6 @@ public sealed class Phase10ApiTests : IAsyncDisposable {
             await server.DisposeAsync();
         }
 
-        tap.Dispose();
         Directory.Delete(media, true);
     }
 
@@ -47,6 +43,8 @@ public sealed class Phase10ApiTests : IAsyncDisposable {
 
     FakeHost Host => Server.Services.GetRequiredService<EngineConnection>().InProcessHost!;
 
+    FakeTap Tap => (FakeTap)Server.Services.GetRequiredService<IMasterTapSource>();
+
     async Task StartAsync(string? token = null, bool fakeTap = true) {
         server = new(
             token: token,
@@ -55,7 +53,7 @@ public sealed class Phase10ApiTests : IAsyncDisposable {
                 s.AddSingleton<ISpatialFiles>(spatial);
                 s.AddSingleton<IListenInEncoders>(encoders);
                 if (fakeTap) {
-                    s.AddSingleton<IMasterTapSource>(tap);
+                    s.AddSingleton<IMasterTapSource, FakeTap>();
                 }
             }
         );
@@ -69,7 +67,11 @@ public sealed class Phase10ApiTests : IAsyncDisposable {
         );
     }
 
-    async Task<Job> PostJobAsync<T>(string path, T request, System.Text.Json.Serialization.Metadata.JsonTypeInfo<T> type) {
+    async Task<Job> PostJobAsync<T>(
+        string path,
+        T request,
+        System.Text.Json.Serialization.Metadata.JsonTypeInfo<T> type
+    ) {
         var response = await Client.PostAsJsonAsync(path, request, type, Token);
         Assert.True(response.StatusCode == HttpStatusCode.Accepted, await response.Content.ReadAsStringAsync(Token));
         return (await response.Content.ReadFromJsonAsync(ContractsJsonContext.Default.Job, Token))!;
@@ -87,14 +89,17 @@ public sealed class Phase10ApiTests : IAsyncDisposable {
         return now;
     }
 
-    /// <summary>A project at 120 BPM (1920 ticks a second) with a movie of 10 s at 25 fps imported at <paramref name="startTick" />.</summary>
+    /// <summary>
+    ///     A project at 120 BPM (1920 ticks a second) with a movie of 10 s at 25 fps imported at
+    ///     <paramref name="startTick" />.
+    /// </summary>
     async Task<Project> WithMovieAsync(long startTick = 3840, bool copy = true) {
         await Client.CreateProjectAsync();
         var path = Path.Combine(media, "Picture.mov");
         await File.WriteAllBytesAsync(path, [..Enumerable.Range(0, 1000).Select(static i => (byte)i)], Token);
         await DoneAsync(
             "/api/v1/project/movie",
-            new MovieImportRequest(path, copy, startTick),
+            new(path, copy, startTick),
             ContractsJsonContext.Default.MovieImportRequest
         );
         return await Client.ProjectAsync();
@@ -148,36 +153,65 @@ public sealed class Phase10ApiTests : IAsyncDisposable {
             ContractsJsonContext.Default.MonitoringSettings,
             Token
         )).EnsureSuccessStatusCode();
-        await ServerFixture.Eventually(() => Task.FromResult(Host.Monitoring is { DownmixTo: EngineChannelFormat.Stereo }));
+        await ServerFixture.Eventually(() =>
+            Task.FromResult(Host.Monitoring is { DownmixTo: EngineChannelFormat.Stereo })
+        );
 
         // Back to a stereo master: the down-mix is not sent.
         await Client.EditAsync(new SetSurroundFormatCommand(ChannelFormat.Stereo));
         await ServerFixture.Eventually(() => Task.FromResult(Host.Monitoring is { DownmixTo: null, Binaural: false }));
         Assert.Equal(
             ChannelFormat.Stereo,
-            (await Client.GetFromJsonAsync("/api/v1/settings/monitoring", ContractsJsonContext.Default.MonitoringSettings, Token))!
+            (await Client.GetFromJsonAsync(
+                "/api/v1/settings/monitoring",
+                ContractsJsonContext.Default.MonitoringSettings,
+                Token
+            ))!
             .DownmixTo
         );
     }
 
     [Fact]
     public void Monitoring_messages_convert_the_map_and_drop_a_down_mix_no_narrower_than_the_master() {
-        var message = MonitoringService.Message(new(false, ChannelFormat.Surround51, [1, 0, 8]), ChannelFormat.Surround714, "x.anhrtf");
+        var message = MonitoringService.Message(
+            new(false, ChannelFormat.Surround51, [1, 0, 8]),
+            ChannelFormat.Surround714,
+            "x.anhrtf"
+        );
         Assert.Equal((EngineChannelFormat.Surround51, null), (message.DownmixTo, message.HrtfPath));
         Assert.Equal([0, -1, 7], message.SpeakerMap);
-        message = MonitoringService.Message(new(true, ChannelFormat.Surround51, []), ChannelFormat.Surround51, "x.anhrtf");
+        message = MonitoringService.Message(
+            new(true, ChannelFormat.Surround51, []),
+            ChannelFormat.Surround51,
+            "x.anhrtf"
+        );
         Assert.Equal((null, "x.anhrtf", true), (message.DownmixTo, message.HrtfPath, message.Binaural));
     }
 
     [Fact]
     public async Task Pad_sets_are_user_settings_with_unique_ids() {
         await StartAsync();
-        var empty = await Client.GetFromJsonAsync("/api/v1/remote/pads", ContractsJsonContext.Default.RemotePads, Token);
+        var empty = await Client.GetFromJsonAsync(
+            "/api/v1/remote/pads",
+            ContractsJsonContext.Default.RemotePads,
+            Token
+        );
         Assert.Empty(empty!.Sets);
         var pads = new RemotePads(
-            [new("set-1", " Edit ", [new("pad-1", "Undo", "edit.undo", "#ff0000"), new("pad-2", "Cycle", "transport.cycle")])]
+            [
+                new(
+                    "set-1",
+                    " Edit ",
+                    [new("pad-1", "Undo", "edit.undo", "#ff0000"), new("pad-2", "Cycle", "transport.cycle")]
+                )
+            ]
         );
-        var saved = await (await Client.PutAsJsonAsync("/api/v1/remote/pads", pads, ContractsJsonContext.Default.RemotePads, Token))
+        var saved = await (await Client.PutAsJsonAsync(
+                "/api/v1/remote/pads",
+                pads,
+                ContractsJsonContext.Default.RemotePads,
+                Token
+            ))
             .Content.ReadFromJsonAsync(ContractsJsonContext.Default.RemotePads, Token);
         Assert.Equal("Edit", saved!.Sets[0].Name);
         var read = await Client.GetFromJsonAsync("/api/v1/remote/pads", ContractsJsonContext.Default.RemotePads, Token);
@@ -194,7 +228,7 @@ public sealed class Phase10ApiTests : IAsyncDisposable {
         await ApiCalls.AssertProblemAsync(
             await Client.PutAsJsonAsync(
                 "/api/v1/remote/pads",
-                new RemotePads([new("set-2", "A", [new("pad", "Undo", "")])]),
+                new RemotePads([new("set-2", "A", [new("pad", "Undo", string.Empty)])]),
                 ContractsJsonContext.Default.RemotePads,
                 Token
             ),
@@ -205,11 +239,19 @@ public sealed class Phase10ApiTests : IAsyncDisposable {
     [Fact]
     public async Task Discovery_names_the_server_its_project_and_whether_pairing_is_needed() {
         await StartAsync("secret");
-        var info = await Client.GetFromJsonAsync("/api/v1/system/discovery", ContractsJsonContext.Default.DiscoveryInfo, Token);
+        var info = await Client.GetFromJsonAsync(
+            "/api/v1/system/discovery",
+            ContractsJsonContext.Default.DiscoveryInfo,
+            Token
+        );
         Assert.Equal((Environment.MachineName, null, true), (info!.Name, info.ProjectName, info.PairingRequired));
         Assert.Equal(EngineConnection.Version, info.Version);
         await Client.CreateProjectAsync("Score Cue");
-        info = await Client.GetFromJsonAsync("/api/v1/system/discovery", ContractsJsonContext.Default.DiscoveryInfo, Token);
+        info = await Client.GetFromJsonAsync(
+            "/api/v1/system/discovery",
+            ContractsJsonContext.Default.DiscoveryInfo,
+            Token
+        );
         Assert.Equal("Score Cue", info!.ProjectName);
         Assert.Equal(
             ["version=" + info.Version, "project=Score Cue", "pairing=1", "path=/api/v1"],
@@ -224,19 +266,26 @@ public sealed class Phase10ApiTests : IAsyncDisposable {
         var movie = project.Movie!;
         Assert.Equal(
             ("Movies/Picture.mov", "Picture", true, 3840L, 0.0, 25, 250L, "h264"),
-            (movie.Path, movie.Name, movie.InProject, movie.StartTick, movie.OffsetSeconds, movie.FrameRate.Numerator, movie.Frames, movie.Codec)
+            (movie.Path, movie.Name, movie.InProject, movie.StartTick, movie.OffsetSeconds, movie.FrameRate.Numerator,
+                movie.Frames, movie.Codec)
         );
         Assert.True(File.Exists(Path.Combine(project.Path, "Movies", "Picture.mov")));
-        Assert.Equal(movie, await Client.GetFromJsonAsync("/api/v1/project/movie", ContractsJsonContext.Default.Movie, Token));
+        Assert.Equal(
+            movie,
+            await Client.GetFromJsonAsync("/api/v1/project/movie", ContractsJsonContext.Default.Movie, Token)
+        );
 
         // The stream answers ranges.
         using var range = new HttpRequestMessage(HttpMethod.Get, "/api/v1/project/movie/stream");
-        range.Headers.Range = new RangeHeaderValue(10, 19);
+        range.Headers.Range = new(10, 19);
         var partial = await Client.SendAsync(range, Token);
         Assert.Equal(HttpStatusCode.PartialContent, partial.StatusCode);
         Assert.Equal("video/quicktime", partial.Content.Headers.ContentType?.MediaType);
         Assert.Equal("bytes 10-19/1000", partial.Content.Headers.ContentRange?.ToString());
-        Assert.Equal(Enumerable.Range(10, 10).Select(static i => (byte)i), await partial.Content.ReadAsByteArrayAsync(Token));
+        Assert.Equal(
+            Enumerable.Range(10, 10).Select(static i => (byte)i),
+            await partial.Content.ReadAsByteArrayAsync(Token)
+        );
         var whole = await Client.GetAsync("/api/v1/project/movie/stream", Token);
         Assert.Equal(HttpStatusCode.OK, whole.StatusCode);
         Assert.Equal(1000, (await whole.Content.ReadAsByteArrayAsync(Token)).Length);
@@ -246,8 +295,14 @@ public sealed class Phase10ApiTests : IAsyncDisposable {
         var removed = await Client.DeleteAsync("/api/v1/project/movie", Token);
         removed.EnsureSuccessStatusCode();
         Assert.Equal(HttpStatusCode.NotFound, (await Client.GetAsync("/api/v1/project/movie", Token)).StatusCode);
-        Assert.Equal(HttpStatusCode.NotFound, (await Client.GetAsync("/api/v1/project/movie/stream", Token)).StatusCode);
-        await ApiCalls.AssertProblemAsync(await Client.DeleteAsync("/api/v1/project/movie", Token), HttpStatusCode.UnprocessableEntity);
+        Assert.Equal(
+            HttpStatusCode.NotFound,
+            (await Client.GetAsync("/api/v1/project/movie/stream", Token)).StatusCode
+        );
+        await ApiCalls.AssertProblemAsync(
+            await Client.DeleteAsync("/api/v1/project/movie", Token),
+            HttpStatusCode.UnprocessableEntity
+        );
         await Client.PostResultAsync("/api/v1/project/undo");
         Assert.Equal(movie, (await Client.ProjectAsync()).Movie);
         Assert.True(File.Exists(Path.Combine(project.Path, "Movies", "Picture.mov")));
@@ -255,28 +310,36 @@ public sealed class Phase10ApiTests : IAsyncDisposable {
         // Referenced in place; a second copy gets its own name; not a movie; without FFmpeg.
         await DoneAsync(
             "/api/v1/project/movie",
-            new MovieImportRequest(Path.Combine(media, "Picture.mov"), false),
+            new(Path.Combine(media, "Picture.mov"), false),
             ContractsJsonContext.Default.MovieImportRequest
         );
         var referenced = (await Client.ProjectAsync()).Movie!;
-        Assert.Equal((Path.Combine(media, "Picture.mov"), false, 0L), (referenced.Path, referenced.InProject, referenced.StartTick));
+        Assert.Equal(
+            (Path.Combine(media, "Picture.mov"), false, 0L),
+            (referenced.Path, referenced.InProject, referenced.StartTick)
+        );
         await DoneAsync(
             "/api/v1/project/movie",
-            new MovieImportRequest(Path.Combine(media, "Picture.mov")),
+            new(Path.Combine(media, "Picture.mov")),
             ContractsJsonContext.Default.MovieImportRequest
         );
         Assert.Equal("Movies/Picture 2.mov", (await Client.ProjectAsync()).Movie!.Path);
         var text = Path.Combine(media, "notes.txt");
         await File.WriteAllTextAsync(text, "x", Token);
         await ApiCalls.AssertProblemAsync(
-            await Client.PostAsJsonAsync("/api/v1/project/movie", new MovieImportRequest(text), ContractsJsonContext.Default.MovieImportRequest, Token),
+            await Client.PostAsJsonAsync(
+                "/api/v1/project/movie",
+                new(text),
+                ContractsJsonContext.Default.MovieImportRequest,
+                Token
+            ),
             HttpStatusCode.UnprocessableEntity
         );
         movies.Available = false;
         await ApiCalls.AssertProblemAsync(
             await Client.PostAsJsonAsync(
                 "/api/v1/project/movie",
-                new MovieImportRequest(Path.Combine(media, "Picture.mov")),
+                new(Path.Combine(media, "Picture.mov")),
                 ContractsJsonContext.Default.MovieImportRequest,
                 Token
             ),
@@ -293,23 +356,53 @@ public sealed class Phase10ApiTests : IAsyncDisposable {
             new ThumbnailsRequest([10, 0, 10]),
             ContractsJsonContext.Default.ThumbnailsRequest
         );
-        var cached = await Client.GetFromJsonAsync("/api/v1/project/movie/thumbnails", ContractsJsonContext.Default.MovieThumbnails, Token);
+        var cached = await Client.GetFromJsonAsync(
+            "/api/v1/project/movie/thumbnails",
+            ContractsJsonContext.Default.MovieThumbnails,
+            Token
+        );
         Assert.Equal((114, 64), (cached!.Width, cached.Height));
         Assert.Equal([0L, 10], cached.Frames);
         var frame = await Client.GetAsync("/api/v1/project/movie/frames/10?height=64", Token);
         Assert.Equal(HttpStatusCode.OK, frame.StatusCode);
         Assert.Equal("image/jpeg", frame.Content.Headers.ContentType?.MediaType);
-        Assert.Equal(HttpStatusCode.NotFound, (await Client.GetAsync("/api/v1/project/movie/frames/11", Token)).StatusCode);
-        Assert.Empty((await Client.GetFromJsonAsync("/api/v1/project/movie/thumbnails?height=32", ContractsJsonContext.Default.MovieThumbnails, Token))!.Frames);
+        Assert.Equal(
+            HttpStatusCode.NotFound,
+            (await Client.GetAsync("/api/v1/project/movie/frames/11", Token)).StatusCode
+        );
+        Assert.Empty(
+            (await Client.GetFromJsonAsync(
+                "/api/v1/project/movie/thumbnails?height=32",
+                ContractsJsonContext.Default.MovieThumbnails,
+                Token
+            ))!.Frames
+        );
 
-        await DoneAsync("/api/v1/project/movie/thumbnails", new ThumbnailsRequest([10, 20]), ContractsJsonContext.Default.ThumbnailsRequest);
-        Assert.Equal(["thumbnails 0,10 64", "thumbnails 20 64"], movies.Calls.Where(static c => c.StartsWith("thumbnails", StringComparison.Ordinal)));
+        await DoneAsync(
+            "/api/v1/project/movie/thumbnails",
+            new ThumbnailsRequest([10, 20]),
+            ContractsJsonContext.Default.ThumbnailsRequest
+        );
+        Assert.Equal(
+            ["thumbnails 0,10 64", "thumbnails 20 64"],
+            movies.Calls.Where(static c => c.StartsWith("thumbnails", StringComparison.Ordinal))
+        );
         await ApiCalls.AssertProblemAsync(
-            await Client.PostAsJsonAsync("/api/v1/project/movie/thumbnails", new ThumbnailsRequest([250]), ContractsJsonContext.Default.ThumbnailsRequest, Token),
+            await Client.PostAsJsonAsync(
+                "/api/v1/project/movie/thumbnails",
+                new ThumbnailsRequest([250]),
+                ContractsJsonContext.Default.ThumbnailsRequest,
+                Token
+            ),
             HttpStatusCode.UnprocessableEntity
         );
         await ApiCalls.AssertProblemAsync(
-            await Client.PostAsJsonAsync("/api/v1/project/movie/thumbnails", new ThumbnailsRequest([1], 4), ContractsJsonContext.Default.ThumbnailsRequest, Token),
+            await Client.PostAsJsonAsync(
+                "/api/v1/project/movie/thumbnails",
+                new ThumbnailsRequest([1], 4),
+                ContractsJsonContext.Default.ThumbnailsRequest,
+                Token
+            ),
             HttpStatusCode.UnprocessableEntity
         );
     }
@@ -319,11 +412,18 @@ public sealed class Phase10ApiTests : IAsyncDisposable {
         await StartAsync();
         await WithMovieAsync();
         await Client.EditAsync(new AddMarkerCommand("Verse", 0));
-        await DoneAsync("/api/v1/project/movie/scenes", new SceneDetectRequest(0.3), ContractsJsonContext.Default.SceneDetectRequest);
+        await DoneAsync(
+            "/api/v1/project/movie/scenes",
+            new(0.3),
+            ContractsJsonContext.Default.SceneDetectRequest
+        );
         // Frames 50 and 125 at 25 fps are 2 s and 5 s into the movie, which starts at 2 s (tick 3840 at 120 BPM).
         var markers = (await Client.ProjectAsync()).Markers.OrderBy(static m => m.Tick).ToArray();
         Assert.Equal(
-            [("Verse", 0L, MarkerKind.Marker), ("Scene 1", 7680, MarkerKind.Scene), ("Scene 2", 13440, MarkerKind.Scene)],
+            [
+                ("Verse", 0L, MarkerKind.Marker), ("Scene 1", 7680, MarkerKind.Scene),
+                ("Scene 2", 13440, MarkerKind.Scene)
+            ],
             markers.Select(static m => (m.Name, m.Tick, m.Kind))
         );
         Assert.Contains("scenes 0.3", movies.Calls);
@@ -331,13 +431,23 @@ public sealed class Phase10ApiTests : IAsyncDisposable {
         // With the movie 3 s in at the project start: frame 100 (4 s) plays at 1 s; frame 25 (1 s) is before the start.
         await Client.EditAsync(new SetMoviePositionCommand(0, 3));
         movies.Cuts = [25, 100];
-        await DoneAsync("/api/v1/project/movie/scenes", new SceneDetectRequest(), ContractsJsonContext.Default.SceneDetectRequest);
+        await DoneAsync(
+            "/api/v1/project/movie/scenes",
+            new(),
+            ContractsJsonContext.Default.SceneDetectRequest
+        );
         Assert.Equal(
             [1920L],
-            (await Client.ProjectAsync()).Markers.Where(static m => m.Kind == MarkerKind.Scene).Select(static m => m.Tick)
+            (await Client.ProjectAsync()).Markers.Where(static m => m.Kind == MarkerKind.Scene)
+            .Select(static m => m.Tick)
         );
         await ApiCalls.AssertProblemAsync(
-            await Client.PostAsJsonAsync("/api/v1/project/movie/scenes", new SceneDetectRequest(0), ContractsJsonContext.Default.SceneDetectRequest, Token),
+            await Client.PostAsJsonAsync(
+                "/api/v1/project/movie/scenes",
+                new(0),
+                ContractsJsonContext.Default.SceneDetectRequest,
+                Token
+            ),
             HttpStatusCode.UnprocessableEntity
         );
     }
@@ -346,7 +456,11 @@ public sealed class Phase10ApiTests : IAsyncDisposable {
     public async Task Audio_from_the_movie_starts_at_its_first_frame_and_one_cut_off_by_the_project_start_skips_in() {
         await StartAsync();
         await WithMovieAsync();
-        await DoneAsync("/api/v1/project/movie/audio/import", new MovieAudioImportRequest(), ContractsJsonContext.Default.MovieAudioImportRequest);
+        await DoneAsync(
+            "/api/v1/project/movie/audio/import",
+            new(),
+            ContractsJsonContext.Default.MovieAudioImportRequest
+        );
         var project = await Client.ProjectAsync();
         var track = Assert.Single(project.Tracks);
         Assert.Equal(("Picture", ChannelFormat.Stereo), (track.Name, track.Strip.InputFormat));
@@ -357,7 +471,11 @@ public sealed class Phase10ApiTests : IAsyncDisposable {
         // The movie's first frame two seconds before the project start: the region starts at 0, 2 s into the file.
         await Client.EditAsync(new SetMoviePositionCommand(0, 2));
         movies.AudioChannels = 6;
-        await DoneAsync("/api/v1/project/movie/audio/import", new MovieAudioImportRequest("Dialogue"), ContractsJsonContext.Default.MovieAudioImportRequest);
+        await DoneAsync(
+            "/api/v1/project/movie/audio/import",
+            new("Dialogue"),
+            ContractsJsonContext.Default.MovieAudioImportRequest
+        );
         project = await Client.ProjectAsync();
         var dialogue = project.Tracks.Single(static t => t.Name == "Dialogue");
         Assert.Equal(ChannelFormat.Surround51, dialogue.Strip.InputFormat);
@@ -377,7 +495,7 @@ public sealed class Phase10ApiTests : IAsyncDisposable {
         await Client.EditAsync(new AddTrackCommand("Score"));
         var job = await DoneAsync(
             "/api/v1/project/movie/audio/export",
-            new MovieAudioExportRequest("With Score", Codec: MovieAudioCodec.Pcm),
+            new("With Score", Codec: MovieAudioCodec.Pcm),
             ContractsJsonContext.Default.MovieAudioExportRequest
         );
         var project = await Client.ProjectAsync();
@@ -394,7 +512,7 @@ public sealed class Phase10ApiTests : IAsyncDisposable {
         await Client.EditAsync(new SetMoviePositionCommand(0, 1.5));
         await DoneAsync(
             "/api/v1/project/movie/audio/export",
-            new MovieAudioExportRequest("Offset", Path.Combine(media, "out"), false),
+            new("Offset", Path.Combine(media, "out"), false),
             ContractsJsonContext.Default.MovieAudioExportRequest
         );
         (audio, _, replace, codec, var output) = movies.Remuxed!.Value;
@@ -409,7 +527,7 @@ public sealed class Phase10ApiTests : IAsyncDisposable {
         await ApiCalls.AssertProblemAsync(
             await Client.PostAsJsonAsync(
                 "/api/v1/project/movie/audio/export",
-                new MovieAudioExportRequest("Picture", Path.Combine(project.Path, "Movies")),
+                new("Picture", Path.Combine(project.Path, "Movies")),
                 ContractsJsonContext.Default.MovieAudioExportRequest,
                 Token
             ),
@@ -422,14 +540,30 @@ public sealed class Phase10ApiTests : IAsyncDisposable {
         await StartAsync();
         await Client.CreateProjectAsync();
         Assert.Equal(HttpStatusCode.NotFound, (await Client.GetAsync("/api/v1/project/movie", Token)).StatusCode);
-        Assert.Equal(HttpStatusCode.NotFound, (await Client.GetAsync("/api/v1/project/movie/thumbnails", Token)).StatusCode);
-        Assert.Equal(HttpStatusCode.NotFound, (await Client.GetAsync("/api/v1/project/movie/frames/0", Token)).StatusCode);
+        Assert.Equal(
+            HttpStatusCode.NotFound,
+            (await Client.GetAsync("/api/v1/project/movie/thumbnails", Token)).StatusCode
+        );
+        Assert.Equal(
+            HttpStatusCode.NotFound,
+            (await Client.GetAsync("/api/v1/project/movie/frames/0", Token)).StatusCode
+        );
         await ApiCalls.AssertProblemAsync(
-            await Client.PostAsJsonAsync("/api/v1/project/movie/scenes", new SceneDetectRequest(), ContractsJsonContext.Default.SceneDetectRequest, Token),
+            await Client.PostAsJsonAsync(
+                "/api/v1/project/movie/scenes",
+                new(),
+                ContractsJsonContext.Default.SceneDetectRequest,
+                Token
+            ),
             HttpStatusCode.NotFound
         );
         await ApiCalls.AssertProblemAsync(
-            await Client.PostAsJsonAsync("/api/v1/project/movie/audio/import", new MovieAudioImportRequest(), ContractsJsonContext.Default.MovieAudioImportRequest, Token),
+            await Client.PostAsJsonAsync(
+                "/api/v1/project/movie/audio/import",
+                new(),
+                ContractsJsonContext.Default.MovieAudioImportRequest,
+                Token
+            ),
             HttpStatusCode.NotFound
         );
     }
@@ -454,12 +588,15 @@ public sealed class Phase10ApiTests : IAsyncDisposable {
         );
         var job = await DoneAsync(
             "/api/v1/project/export/adm",
-            new AdmExportRequest("Mix", StartTick: 0, EndTick: 7680, BitDepth: 32),
+            new("Mix", StartTick: 0, EndTick: 7680, BitDepth: 32),
             ContractsJsonContext.Default.AdmExportRequest
         );
         Assert.Equal([Path.Combine(project.Path, "Exports", "Mix.wav")], job.Files);
         var scene = spatial.Written!;
-        Assert.Equal(("Song", 48_000, 192_000L, 32), (scene.Name, scene.SampleRate, scene.Frames, spatial.WrittenBitDepth));
+        Assert.Equal(
+            ("Song", 48_000, 192_000L, 32),
+            (scene.Name, scene.SampleRate, scene.Frames, spatial.WrittenBitDepth)
+        );
         var bed = Assert.Single(scene.Beds);
         Assert.Equal(ChannelFormat.Surround51, bed.Format);
         var item = Assert.Single(scene.Objects);
@@ -473,14 +610,21 @@ public sealed class Phase10ApiTests : IAsyncDisposable {
         Assert.Equal(6, bedAudio.Length);
         Assert.True(bedAudio[0].Max() > 0.1f);
         Assert.Equal(0f, bedAudio[2].Max());
-        var objectAudio = Assert.Single(spatial.WrittenAudio, static p => p.Key.StartsWith("object", StringComparison.Ordinal)).Value;
+        var objectAudio = Assert.Single(
+                spatial.WrittenAudio,
+                static p => p.Key.StartsWith("object", StringComparison.Ordinal)
+            )
+            .Value;
         Assert.Single(objectAudio);
         Assert.Equal(192_000, objectAudio[0].Length);
 
         // The automation as blocks: from 30° moving to −110° over the first second (20 ms blocks), then still.
         Assert.Equal(0, item.Blocks[0].StartFrame);
         Assert.Equal(192_000, item.Blocks.Sum(static b => b.DurationFrames));
-        Assert.All(item.Blocks.Zip(item.Blocks.Skip(1)), static p => Assert.Equal(p.First.StartFrame + p.First.DurationFrames, p.Second.StartFrame));
+        Assert.All(
+            item.Blocks.Zip(item.Blocks.Skip(1)),
+            static p => Assert.Equal(p.First.StartFrame + p.First.DurationFrames, p.Second.StartFrame)
+        );
         var moving = item.Blocks.Where(static b => b.Interpolate).ToArray();
         Assert.True(moving.Length >= 50);
         Assert.All(moving, static b => Assert.True(b.DurationFrames <= 960));
@@ -490,11 +634,21 @@ public sealed class Phase10ApiTests : IAsyncDisposable {
         Assert.Equal(48_000, item.Blocks[^1].StartFrame);
 
         await ApiCalls.AssertProblemAsync(
-            await Client.PostAsJsonAsync("/api/v1/project/export/adm", new AdmExportRequest("Mix", TrackIds: [strings]), ContractsJsonContext.Default.AdmExportRequest, Token),
+            await Client.PostAsJsonAsync(
+                "/api/v1/project/export/adm",
+                new AdmExportRequest("Mix", TrackIds: [strings]),
+                ContractsJsonContext.Default.AdmExportRequest,
+                Token
+            ),
             HttpStatusCode.UnprocessableEntity
         );
         await ApiCalls.AssertProblemAsync(
-            await Client.PostAsJsonAsync("/api/v1/project/export/adm", new AdmExportRequest("Mix", BitDepth: 16), ContractsJsonContext.Default.AdmExportRequest, Token),
+            await Client.PostAsJsonAsync(
+                "/api/v1/project/export/adm",
+                new("Mix", BitDepth: 16),
+                ContractsJsonContext.Default.AdmExportRequest,
+                Token
+            ),
             HttpStatusCode.UnprocessableEntity
         );
     }
@@ -520,20 +674,31 @@ public sealed class Phase10ApiTests : IAsyncDisposable {
             ]
         );
         var film = Path.Combine(media, "film.wav");
-        await File.WriteAllBytesAsync(film, "RIFF"u8.ToArray(), Token);
-        await DoneAsync("/api/v1/project/import/adm", new AdmImportRequest(film), ContractsJsonContext.Default.AdmImportRequest);
+        await File.WriteAllBytesAsync(film, [.."RIFF"u8], Token);
+        await DoneAsync(
+            "/api/v1/project/import/adm",
+            new(film),
+            ContractsJsonContext.Default.AdmImportRequest
+        );
         var project = await Client.ProjectAsync();
         Assert.Equal(ChannelFormat.Surround51, project.Settings.SurroundFormat);
-        var (main, item) = (project.Tracks.Single(static t => t.Name == "Main bed"), project.Tracks.Single(static t => t.Name == "Voice"));
+        var (main, item) = (project.Tracks.Single(static t => t.Name == "Main bed"),
+            project.Tracks.Single(static t => t.Name == "Voice"));
         Assert.Equal(
             (ChannelFormat.Surround51, ChannelFormat.Surround51, PannerMode.Surround),
             (main.Strip.InputFormat, main.Strip.OutputFormat, main.Strip.Panner.Mode)
         );
-        Assert.Equal((ChannelFormat.Mono, PannerMode.Object, 30.0), (item.Strip.InputFormat, item.Strip.Panner.Mode, item.Strip.Panner.Object.Azimuth));
+        Assert.Equal(
+            (ChannelFormat.Mono, PannerMode.Object, 30.0),
+            (item.Strip.InputFormat, item.Strip.Panner.Mode, item.Strip.Panner.Object.Azimuth)
+        );
         var lane = project.Automation.Single(l => l.TrackId == item.Id);
         Assert.Equal(PannerTargets.ObjectAzimuth, lane.Target);
         Assert.Equal([(0L, 30.0), (960, 30), (1920, -110)], lane.Points.Select(static p => (p.Tick, p.Value)));
-        Assert.Equal(6, project.AudioFiles.Single(f => f.Id == project.Regions.Single(r2 => r2.TrackId == main.Id).FileId).Channels);
+        Assert.Equal(
+            6,
+            project.AudioFiles.Single(f => f.Id == project.Regions.Single(r2 => r2.TrackId == main.Id).FileId).Channels
+        );
 
         await Client.PostResultAsync("/api/v1/project/undo");
         project = await Client.ProjectAsync();
@@ -541,9 +706,14 @@ public sealed class Phase10ApiTests : IAsyncDisposable {
         Assert.Empty(project.Tracks);
 
         spatial.ToRead = null;
-        var job = await PostJobAsync("/api/v1/project/import/adm", new AdmImportRequest(bed), ContractsJsonContext.Default.AdmImportRequest);
+        var job = await PostJobAsync(
+            "/api/v1/project/import/adm",
+            new(bed),
+            ContractsJsonContext.Default.AdmImportRequest
+        );
         await ServerFixture.Eventually(async () =>
-            (await Client.GetFromJsonAsync($"/api/v1/jobs/{job.Id}", ContractsJsonContext.Default.Job, Token))!.State == JobState.Failed
+            (await Client.GetFromJsonAsync($"/api/v1/jobs/{job.Id}", ContractsJsonContext.Default.Job, Token))!.State
+            == JobState.Failed
         );
     }
 
@@ -552,8 +722,11 @@ public sealed class Phase10ApiTests : IAsyncDisposable {
         await StartAsync();
         await using var events = await EventStream.ConnectAsync(Server);
         using var socket = await ConnectListenAsync();
-        var format = JsonSerializer.Deserialize(Encoding.UTF8.GetString(await ReceiveAsync(socket, WebSocketMessageType.Text)), ContractsJsonContext.Default.ListenInFormat);
-        Assert.Equal(new ListenInFormat(48_000, 2, 960, 128_000, 48_000), format);
+        var format = JsonSerializer.Deserialize(
+            Encoding.UTF8.GetString(await ReceiveAsync(socket, WebSocketMessageType.Text)),
+            ContractsJsonContext.Default.ListenInFormat
+        );
+        Assert.Equal(new(48_000, 2, 960, 128_000, 48_000), format);
         await ServerFixture.Eventually(() => Task.FromResult(Host.Tapping));
         await events.WaitAsync<ListenInEvent>(static e => e.State is { On: true, Listeners: 1 });
 
@@ -565,7 +738,7 @@ public sealed class Phase10ApiTests : IAsyncDisposable {
                 var block = new float[480 * 2];
                 Array.Fill(block, 0.5f);
                 while (!writing.IsCancellationRequested) {
-                    tap.Writer.Write(block, transport, true, false);
+                    Tap.Writer.Write(block, transport, true, false);
                     transport += 480;
                     await Task.Delay(5, CancellationToken.None);
                 }
@@ -575,7 +748,9 @@ public sealed class Phase10ApiTests : IAsyncDisposable {
         var frames = new List<(uint Sequence, long Transport, byte Flags, float Value)>();
         while (frames.Count < 3) {
             var frame = await ReceiveAsync(socket, WebSocketMessageType.Binary);
-            Assert.True(ListenIn.TryReadHeader(frame, out var sequence, out var transport, out var flags, out var packet));
+            Assert.True(
+                ListenIn.TryReadHeader(frame, out var sequence, out var transport, out var flags, out var packet)
+            );
             frames.Add((sequence, transport, flags, BitConverter.ToSingle(packet)));
         }
 
@@ -587,7 +762,11 @@ public sealed class Phase10ApiTests : IAsyncDisposable {
         Assert.True((frames[0].Flags & ListenIn.FlagDiscontinuity) != 0);
         Assert.Equal(frames[0].Transport + 960, frames[1].Transport);
         Assert.True(frames[0].Transport >= 48_000);
-        var state = await Client.GetFromJsonAsync("/api/v1/remote/listen/state", ContractsJsonContext.Default.ListenInState, Token);
+        var state = await Client.GetFromJsonAsync(
+            "/api/v1/remote/listen/state",
+            ContractsJsonContext.Default.ListenInState,
+            Token
+        );
         Assert.True(state is { On: true, Listeners: 1, LatencyMs: > 0 });
 
         await socket.CloseAsync(WebSocketCloseStatus.NormalClosure, null, Token);
@@ -605,12 +784,24 @@ public sealed class Phase10ApiTests : IAsyncDisposable {
 
         var refused = await Assert.ThrowsAnyAsync<Exception>(() => ConnectListenAsync());
         Assert.Contains("503", refused.Message, StringComparison.Ordinal);
-        Assert.Equal(4, (await Client.GetFromJsonAsync("/api/v1/remote/listen/state", ContractsJsonContext.Default.ListenInState, Token))!.Listeners);
+        Assert.Equal(
+            4,
+            (await Client.GetFromJsonAsync(
+                "/api/v1/remote/listen/state",
+                ContractsJsonContext.Default.ListenInState,
+                Token
+            ))!.Listeners
+        );
         Assert.Equal(1, Host.Received.OfType<SetMasterTapMessage>().Count(static m => m.Enabled));
 
         await sockets[0].CloseAsync(WebSocketCloseStatus.NormalClosure, null, Token);
         await ServerFixture.Eventually(async () =>
-            (await Client.GetFromJsonAsync("/api/v1/remote/listen/state", ContractsJsonContext.Default.ListenInState, Token))!.Listeners == 3
+            (await Client.GetFromJsonAsync(
+                "/api/v1/remote/listen/state",
+                ContractsJsonContext.Default.ListenInState,
+                Token
+            ))!.Listeners
+            == 3
         );
         sockets[0] = await ConnectListenAsync();
         Assert.True(Host.Tapping);
@@ -660,7 +851,8 @@ public sealed class Phase10ApiTests : IAsyncDisposable {
     }
 
     Task<WebSocket> ConnectListenAsync() =>
-        Server.Server.CreateWebSocketClient().ConnectAsync(new(Server.Server.BaseAddress, "/api/v1/remote/listen"), Token);
+        Server.Server.CreateWebSocketClient()
+            .ConnectAsync(new(Server.Server.BaseAddress, "/api/v1/remote/listen"), Token);
 
     static async Task<byte[]> ReceiveAsync(WebSocket socket, WebSocketMessageType type, int seconds = 5) {
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(Token);
@@ -669,7 +861,10 @@ public sealed class Phase10ApiTests : IAsyncDisposable {
         var length = 0;
         WebSocketReceiveResult result;
         do {
-            result = await socket.ReceiveAsync(new ArraySegment<byte>(buffer, length, buffer.Length - length), timeout.Token);
+            result = await socket.ReceiveAsync(
+                new(buffer, length, buffer.Length - length),
+                timeout.Token
+            );
             length += result.Count;
         } while (!result.EndOfMessage);
 

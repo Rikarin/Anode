@@ -97,7 +97,13 @@ public sealed partial class FakeHost {
     ///     A block of <paramref name="channels" />: left and right in the first two (their average for mono), silence in
     ///     the others.
     /// </summary>
-    static void Interleave(float[] block, int channels, ReadOnlySpan<float> left, ReadOnlySpan<float> right, float gain) {
+    static void Interleave(
+        float[] block,
+        int channels,
+        ReadOnlySpan<float> left,
+        ReadOnlySpan<float> right,
+        float gain
+    ) {
         for (var i = 0; i < left.Length; i++) {
             var frame = block.AsSpan(i * channels, channels);
             frame.Clear();
@@ -123,7 +129,7 @@ public sealed partial class FakeHost {
         }
 
         var frames = (int)Math.Min(
-            SampleRate / 4,
+            SampleRate / 4.0,
             System.Diagnostics.Stopwatch.GetElapsedTime(tapLastTimestamp, now).TotalSeconds * SampleRate
         );
         if (frames <= 0) {

@@ -65,7 +65,8 @@ public sealed class DiscoveryService(
         var addresses = server.Features.Get<IServerAddressesFeature>()?.Addresses ?? [];
         foreach (var address in addresses) {
             if (!Uri.TryCreate(
-                    address.Replace("*", "0.0.0.0", StringComparison.Ordinal).Replace("+", "0.0.0.0", StringComparison.Ordinal),
+                    address.Replace("*", "0.0.0.0", StringComparison.Ordinal)
+                        .Replace("+", "0.0.0.0", StringComparison.Ordinal),
                     UriKind.Absolute,
                     out var uri
                 )) {
@@ -73,7 +74,8 @@ public sealed class DiscoveryService(
             }
 
             var host = uri.Host;
-            if (IPAddress.TryParse(host.Trim('[', ']'), out var ip) && (ip.Equals(IPAddress.Any) || ip.Equals(IPAddress.IPv6Any))) {
+            if (IPAddress.TryParse(host.Trim('[', ']'), out var ip)
+                && (ip.Equals(IPAddress.Any) || ip.Equals(IPAddress.IPv6Any))) {
                 host = Dns.GetHostName();
                 if (!host.Contains('.', StringComparison.Ordinal)) {
                     host += ".local";

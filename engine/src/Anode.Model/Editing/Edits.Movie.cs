@@ -16,11 +16,20 @@ public static partial class Edits {
             throw new EditException("Name a movie.");
         }
 
-        if (movie.Path is not { Length: > 0 and <= MaxPathLength } || movie.Codec is not { Length: > 0 and <= MaxNameLength }) {
+        if (movie.Path is not { Length: > 0 and <= MaxPathLength }
+            || movie.Codec is not { Length: > 0 and <= MaxNameLength }) {
             throw new EditException($"A movie has a path of 1…{MaxPathLength} characters and a codec.");
         }
 
         var name = Name(movie.Name ?? string.Empty, "movie name");
+        CheckMovieTiming(movie);
+        CheckMoviePicture(movie);
+        CheckMoviePosition(movie.StartTick, movie.OffsetSeconds, movie.DurationSeconds);
+        return movie with { Name = name };
+    }
+
+    /// <summary>A movie's frame rate, duration and timecode start in their ranges.</summary>
+    static void CheckMovieTiming(Movie movie) {
         if (movie.FrameRate is not { Numerator: > 0 and <= 1_000_000, Denominator: > 0 and <= 1_000_000 } rate
             || rate.FramesPerSecond > 1000) {
             throw new EditException("A movie's frame rate is a positive fraction, at most 1000 frames per second.");
@@ -30,20 +39,24 @@ public static partial class Edits {
             throw new EditException($"A movie lasts more than 0 and at most {MaxMovieSeconds} seconds.");
         }
 
-        if (!double.IsFinite(movie.TimecodeStartSeconds) || movie.TimecodeStartSeconds is < 0 or > MaxStartOffsetSeconds) {
+        if (!double.IsFinite(movie.TimecodeStartSeconds)
+            || movie.TimecodeStartSeconds is < 0 or > MaxStartOffsetSeconds) {
             throw new EditException($"A movie's timecode start is 0…{MaxStartOffsetSeconds} seconds.");
         }
+    }
 
+    /// <summary>A movie's frame count and size, and its audio's, in their ranges.</summary>
+    static void CheckMoviePicture(Movie movie) {
         if (movie.Frames < 0 || movie.Width is <= 0 or > 16_384 || movie.Height is <= 0 or > 16_384) {
             throw new EditException("A movie has a frame count and a size of 1…16384 pixels.");
         }
 
-        if (movie.Audio is { } audio && (audio.Codec is not { Length: > 0 } || audio.Channels is <= 0 or > 64 || audio.SampleRate is <= 0 or > 768_000)) {
+        if (movie.Audio is { } audio
+            && (audio.Codec is not { Length: > 0 }
+                || audio.Channels is <= 0 or > 64
+                || audio.SampleRate is <= 0 or > 768_000)) {
             throw new EditException("A movie's audio has a codec, 1…64 channels and a sample rate.");
         }
-
-        CheckMoviePosition(movie.StartTick, movie.OffsetSeconds, movie.DurationSeconds);
-        return movie with { Name = name };
     }
 
     static void CheckMoviePosition(long startTick, double offsetSeconds, double duration) {
@@ -55,7 +68,9 @@ public static partial class Edits {
 
     static DeltaOp[] SetMoviePosition(ProjectState state, SetMoviePositionCommand c) {
         var movie = state.Movie ?? throw new EditException("The project has no movie.");
-        var moved = movie with { StartTick = c.StartTick ?? movie.StartTick, OffsetSeconds = c.OffsetSeconds ?? movie.OffsetSeconds };
+        var moved = movie with {
+            StartTick = c.StartTick ?? movie.StartTick, OffsetSeconds = c.OffsetSeconds ?? movie.OffsetSeconds
+        };
         CheckMoviePosition(moved.StartTick, moved.OffsetSeconds, moved.DurationSeconds);
         return [new MovieChanged(moved)];
     }
@@ -88,7 +103,11 @@ public static partial class Edits {
         }
 
         for (var i = 0; i < ticks.Length; i++) {
-            ops.Add(new MarkerUpserted(new(ids.Next(IdPrefix.Marker), $"Scene {i + 1}", ticks[i], 0, null, string.Empty, MarkerKind.Scene)));
+            ops.Add(
+                new MarkerUpserted(
+                    new(ids.Next(IdPrefix.Marker), $"Scene {i + 1}", ticks[i], 0, null, string.Empty, MarkerKind.Scene)
+                )
+            );
         }
 
         return ops;

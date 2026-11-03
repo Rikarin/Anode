@@ -36,111 +36,146 @@ public sealed partial class Jobs {
         var view = session.View ?? throw ProjectException.NoProject();
         var state = view.State;
         var path = ExportPath(view, request?.FileName, request?.Directory, ".wav");
-        if (request!.BitDepth is not (24 or 32)) {
-            throw ProjectException.Unprocessable($"An ADM BWF is 24-bit or 32-bit float, not {request.BitDepth}.");
-        }
-
-        if (request.TrackIds is { } chosen) {
-            foreach (var id in chosen) {
-                var track = state.FindTrack(id ?? string.Empty) ?? throw ProjectException.NotFound($"No track '{id}'.");
-                if (track.Strip.Panner.Mode != PannerMode.Object) {
-                    throw ProjectException.Unprocessable($"Track '{track.Name}' is not an object.");
-                }
-            }
-        }
-
+        CheckAdmExport(state, request!);
         (long Start, long End) range;
         try {
-            range = AdmMapping.Range(state, request.StartTick, request.EndTick);
+            range = AdmMapping.Range(state, request!.StartTick, request.EndTick);
         } catch (ArgumentException e) {
             throw ProjectException.Unprocessable(e.Message);
         }
 
-        var feeders = state.Tracks.Where(static t => Edits.HasAudioStrip(t.Kind) && t.Strip.Output == Routing.Master)
-            .ToArray();
-        var objects = AdmMapping.ObjectTracks(state, request.TrackIds);
-        return Enqueue(
-            JobKind.AdmExport,
-            async (entry, token) => {
-                var scratch = Path.Combine(view.Folder, $".adm-{entry.Job.Id}");
-                Directory.CreateDirectory(scratch);
-                try {
-                    var current = session.View is { } v && v.Session == view.Session
-                        ? v
-                        : throw ProjectException.Conflict("The project was closed.");
-                    var stems = Path.Combine(scratch, "stems");
-                    if (feeders.Length > 0) {
-                        var finished = await engine.RenderAsync(
-                                new(
-                                    entry.EngineId,
-                                    range.Start,
-                                    range.End,
-                                    stems,
-                                    [..feeders.Select(t => current.Ids.Track(t.Id))]
-                                ),
-                                f => Progress(entry, 0.7 * f),
-                                token
-                            )
-                            .ConfigureAwait(false);
-                        token.ThrowIfCancellationRequested();
-                        if (finished.Error is { } error) {
-                            throw ProjectException.Unprocessable($"The engine could not render: {error}");
-                        }
-                    }
-
-                    var gain = state.Master.Mute ? 0 : Units.DbToGain(state.Master.VolumeDb);
-                    var frames = range.End - range.Start;
-                    var format = state.Settings.SurroundFormat;
-                    var bed = new float[SpeakerLayouts.ChannelCount(format)][];
-                    for (var c = 0; c < bed.Length; c++) {
-                        bed[c] = new float[frames];
-                    }
-
-                    var objectPaths = new Dictionary<string, string>(StringComparer.Ordinal);
-                    foreach (var track in feeders) {
-                        token.ThrowIfCancellationRequested();
-                        var stem = Path.Combine(stems, $"{current.Ids.Track(track.Id)}.wav");
-                        var (audio, _) = BounceProcessor.Read(stem);
-                        if (track.Strip.Panner.Mode == PannerMode.Object) {
-                            if (objects.Any(o => o.Id == track.Id)) {
-                                var file = Path.Combine(scratch, $"object-{objectPaths.Count + 1}.wav");
-                                WriteFloat(file, ObjectAudio(audio, AdmMapping.ObjectChannels(track), frames), state.SampleRate, gain);
-                                objectPaths[track.Id] = file;
-                            }
-
-                            continue;
-                        }
-
-                        if (audio.Length != bed.Length) {
-                            throw ProjectException.Unprocessable(
-                                $"The engine rendered {audio.Length} channels of '{track.Name}' for a {SpeakerLayouts.Of(format).Name} bed."
-                            );
-                        }
-
-                        for (var c = 0; c < bed.Length; c++) {
-                            var source = audio[c];
-                            var target = bed[c];
-                            for (var i = 0; i < Math.Min(frames, source.Length); i++) {
-                                target[i] += source[i];
-                            }
-                        }
-                    }
-
-                    var bedPath = Path.Combine(scratch, "bed.wav");
-                    WriteFloat(bedPath, bed, state.SampleRate, gain);
-                    Progress(entry, 0.8);
-                    var scene = AdmMapping.ToScene(state, request, bedPath, objectPaths);
-                    Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-                    spatial.WriteAdm(scene, path, request.BitDepth);
-                    return [path];
-                } finally {
-                    RemoveScratch(scratch);
-                }
-            }
+        var plan = new AdmPlan(
+            view,
+            request,
+            path,
+            range.Start,
+            range.End,
+            [..state.Tracks.Where(static t => Edits.HasAudioStrip(t.Kind) && t.Strip.Output == Routing.Master)],
+            AdmMapping.ObjectTracks(state, request.TrackIds)
         );
+        return Enqueue(JobKind.AdmExport, (entry, token) => ExportAdmAsync(entry, plan, token));
     }
 
-    /// <summary>An object's channels from its stem: its first ones, a mono stem doubled for a stereo object; <paramref name="frames" /> long.</summary>
+    /// <summary>An export's bit depth and its tracks: objects of the project.</summary>
+    static void CheckAdmExport(ProjectState state, AdmExportRequest request) {
+        if (request.BitDepth is not (24 or 32)) {
+            throw ProjectException.Unprocessable($"An ADM BWF is 24-bit or 32-bit float, not {request.BitDepth}.");
+        }
+
+        foreach (var id in request.TrackIds ?? []) {
+            var track = state.FindTrack(id ?? string.Empty) ?? throw ProjectException.NotFound($"No track '{id}'.");
+            if (track.Strip.Panner.Mode != PannerMode.Object) {
+                throw ProjectException.Unprocessable($"Track '{track.Name}' is not an object.");
+            }
+        }
+    }
+
+    /// <summary>An ADM export as it was asked for: the project then, the range, the tracks to the master, the objects.</summary>
+    sealed record AdmPlan(
+        OpenProjectView View,
+        AdmExportRequest Request,
+        string Path,
+        long Start,
+        long End,
+        IReadOnlyList<Track> Feeders,
+        IReadOnlyList<Track> Objects
+    ) {
+        public ProjectState State => View.State;
+
+        public long Frames => End - Start;
+
+        /// <summary>The master's fader as a gain (0 when it is muted).</summary>
+        public float Gain => State.Master.Mute ? 0 : Units.DbToGain(State.Master.VolumeDb);
+    }
+
+    async Task<IReadOnlyList<string>> ExportAdmAsync(Entry entry, AdmPlan plan, CancellationToken token) {
+        var scratch = Path.Combine(plan.View.Folder, $".adm-{entry.Job.Id}");
+        Directory.CreateDirectory(scratch);
+        try {
+            var current = session.View is { } v && v.Session == plan.View.Session
+                ? v
+                : throw ProjectException.Conflict("The project was closed.");
+            var stems = Path.Combine(scratch, "stems");
+            if (plan.Feeders.Count > 0) {
+                var finished = await engine.RenderAsync(
+                        new(
+                            entry.EngineId,
+                            plan.Start,
+                            plan.End,
+                            stems,
+                            [..plan.Feeders.Select(t => current.Ids.Track(t.Id))]
+                        ),
+                        f => Progress(entry, 0.7 * f),
+                        token
+                    )
+                    .ConfigureAwait(false);
+                token.ThrowIfCancellationRequested();
+                if (finished.Error is { } error) {
+                    throw ProjectException.Unprocessable($"The engine could not render: {error}");
+                }
+            }
+
+            var bed = Silence(SpeakerLayouts.ChannelCount(plan.State.Settings.SurroundFormat), plan.Frames);
+            var objectPaths = new Dictionary<string, string>(StringComparer.Ordinal);
+            foreach (var track in plan.Feeders) {
+                token.ThrowIfCancellationRequested();
+                var (audio, _) = BounceProcessor.Read(Path.Combine(stems, $"{current.Ids.Track(track.Id)}.wav"));
+                if (track.Strip.Panner.Mode != PannerMode.Object) {
+                    AddToBed(bed, audio, track, plan);
+                } else if (plan.Objects.Any(o => o.Id == track.Id)) {
+                    var file = Path.Combine(scratch, $"object-{objectPaths.Count + 1}.wav");
+                    WriteFloat(
+                        file,
+                        ObjectAudio(audio, AdmMapping.ObjectChannels(track), plan.Frames),
+                        plan.State.SampleRate,
+                        plan.Gain
+                    );
+                    objectPaths[track.Id] = file;
+                }
+            }
+
+            var bedPath = Path.Combine(scratch, "bed.wav");
+            WriteFloat(bedPath, bed, plan.State.SampleRate, plan.Gain);
+            Progress(entry, 0.8);
+            var scene = AdmMapping.ToScene(plan.State, plan.Request, bedPath, objectPaths);
+            Directory.CreateDirectory(Path.GetDirectoryName(plan.Path)!);
+            spatial.WriteAdm(scene, plan.Path, plan.Request.BitDepth);
+            return [plan.Path];
+        } finally {
+            RemoveScratch(scratch);
+        }
+    }
+
+    static float[][] Silence(int channels, long frames) {
+        var audio = new float[channels][];
+        for (var c = 0; c < channels; c++) {
+            audio[c] = new float[frames];
+        }
+
+        return audio;
+    }
+
+    /// <summary>Adds a bed contribution's stem to the bed: it has the bed's channels.</summary>
+    static void AddToBed(float[][] bed, float[][] stem, Track track, AdmPlan plan) {
+        if (stem.Length != bed.Length) {
+            throw ProjectException.Unprocessable(
+                $"The engine rendered {stem.Length} channels of '{track.Name}' for a "
+                + $"{SpeakerLayouts.Of(plan.State.Settings.SurroundFormat).Name} bed."
+            );
+        }
+
+        for (var c = 0; c < bed.Length; c++) {
+            var (source, target) = (stem[c], bed[c]);
+            for (var i = 0; i < Math.Min(target.Length, source.Length); i++) {
+                target[i] += source[i];
+            }
+        }
+    }
+
+    /// <summary>
+    ///     An object's channels from its stem: its first ones, a mono stem doubled for a stereo object;
+    ///     <paramref name="frames" /> long.
+    /// </summary>
     static float[][] ObjectAudio(float[][] stem, int channels, long frames) {
         var audio = new float[channels][];
         for (var c = 0; c < channels; c++) {
@@ -184,13 +219,7 @@ public sealed partial class Jobs {
                     Directory.CreateDirectory(media);
                     var copied = new List<string>();
                     try {
-                        AdmScene scene;
-                        try {
-                            scene = spatial.ReadAdm(path, media);
-                        } catch (FormatException e) {
-                            throw ProjectException.Unprocessable($"'{path}' is not an ADM BWF Anode reads: {e.Message}");
-                        }
-
+                        var scene = ReadAdm(path, media);
                         Progress(entry, 0.4);
                         var sources = scene.Beds.Select(static b => b.AudioPath)
                             .Concat(scene.Objects.Select(static o => o.AudioPath))
@@ -212,31 +241,11 @@ public sealed partial class Jobs {
                             open.Session,
                             "Import ADM BWF",
                             files,
-                            (job, added) => {
-                                if (scene.Beds is [var first, ..]
-                                    && SpeakerLayouts.IsSurround(first.Format)
-                                    && !SpeakerLayouts.IsSurround(job.State.Settings.SurroundFormat)) {
-                                    job.Apply(new SetSurroundFormatCommand(first.Format));
-                                }
-
-                                job.Apply(
-                                    new ImportTracksCommand(
-                                        AdmMapping.ToContent(
-                                            scene,
-                                            job.State,
-                                            sources.Select((s, i) => (s, added[i].Id))
-                                                .ToDictionary(static p => p.s, static p => p.Id, StringComparer.Ordinal)
-                                        )
-                                    )
-                                );
-                            }
+                            (job, added) => ApplyAdm(job, scene, sources, added)
                         );
                         return [..files.Select(static f => f.Path)];
                     } catch {
-                        foreach (var file in copied) {
-                            TryDelete(file);
-                        }
-
+                        copied.ForEach(TryDelete);
                         throw;
                     } finally {
                         RemoveScratch(media);
@@ -245,5 +254,29 @@ public sealed partial class Jobs {
                 token
             )
         );
+    }
+
+    AdmScene ReadAdm(string path, string media) {
+        try {
+            return spatial.ReadAdm(path, media);
+        } catch (FormatException e) {
+            throw ProjectException.Unprocessable($"'{path}' is not an ADM BWF Anode reads: {e.Message}");
+        }
+    }
+
+    /// <summary>
+    ///     The import's edit: the first bed's surround format for a project narrower than surround, then the tracks
+    ///     (<paramref name="added" /> are the files of <paramref name="sources" />, in order).
+    /// </summary>
+    static void ApplyAdm(JobEdit job, AdmScene scene, string[] sources, IReadOnlyList<AudioFile> added) {
+        if (scene.Beds is [var first, ..]
+            && SpeakerLayouts.IsSurround(first.Format)
+            && !SpeakerLayouts.IsSurround(job.State.Settings.SurroundFormat)) {
+            job.Apply(new SetSurroundFormatCommand(first.Format));
+        }
+
+        var fileIds = sources.Select((s, i) => (s, added[i].Id))
+            .ToDictionary(static p => p.s, static p => p.Id, StringComparer.Ordinal);
+        job.Apply(new ImportTracksCommand(AdmMapping.ToContent(scene, job.State, fileIds)));
     }
 }

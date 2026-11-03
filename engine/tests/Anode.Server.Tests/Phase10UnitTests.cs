@@ -79,13 +79,22 @@ public sealed class Phase10UnitTests {
 
     [Fact]
     public async Task The_server_is_advertised_as_anode_tcp_with_its_TXT_keys() {
-        Assert.SkipUnless(OperatingSystem.IsMacOS() && File.Exists("/usr/bin/dns-sd"), "DNS-SD through mDNSResponder is macOS's.");
+        Assert.SkipUnless(
+            OperatingSystem.IsMacOS() && File.Exists("/usr/bin/dns-sd"),
+            "DNS-SD through mDNSResponder is macOS's."
+        );
         var name = $"Anode test {Guid.NewGuid():n}"[..24];
         using var listener = new TcpListener(IPAddress.Loopback, 0);
         listener.Start();
         var port = ((IPEndPoint)listener.LocalEndpoint).Port;
         var info = new DiscoveryInfo(name, "localhost", port, "Score Cue", true, "1.2.3");
-        using var advertised = Bonjour.Advertise(name, Discovery.ServiceType, port, NullLogger.Instance, DiscoveryService.Txt(info));
+        using var advertised = Bonjour.Advertise(
+            name,
+            Discovery.ServiceType,
+            port,
+            NullLogger.Instance,
+            DiscoveryService.Txt(info)
+        );
         Assert.NotNull(advertised);
 
         // dns-sd -L resolves the instance: its port and TXT record.

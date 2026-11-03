@@ -65,7 +65,9 @@ public sealed class MonitoringService(
 
             static string? First(string folder) =>
                 Directory.Exists(folder)
-                    ? Directory.EnumerateFiles(folder, "*" + HrtfExtension).Order(StringComparer.Ordinal).FirstOrDefault()
+                    ? Directory.EnumerateFiles(folder, "*" + HrtfExtension)
+                        .Order(StringComparer.Ordinal)
+                        .FirstOrDefault()
                     : null;
         }
     }

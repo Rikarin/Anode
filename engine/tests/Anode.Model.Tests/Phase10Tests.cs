@@ -83,13 +83,23 @@ public sealed class Phase10Tests : IDisposable {
 
     [Fact]
     public void An_aux_input_format_is_its_bus_format_and_routing_changes_follow_it() {
-        Apply(new SetSurroundFormatCommand(ChannelFormat.Surround51), new AddTrackCommand("Gtr"), new AddAuxCommand(3, "Verb"));
+        Apply(
+            new SetSurroundFormatCommand(ChannelFormat.Surround51),
+            new AddTrackCommand("Gtr"),
+            new AddAuxCommand(3, "Verb")
+        );
         var gtr = T("Gtr").Id;
         Apply(new SetOutputCommand(gtr, "bus:3"));
-        Assert.Equal((ChannelFormat.Stereo, PannerMode.Stereo), (T("Gtr").Strip.OutputFormat, T("Gtr").Strip.Panner.Mode));
+        Assert.Equal(
+            (ChannelFormat.Stereo, PannerMode.Stereo),
+            (T("Gtr").Strip.OutputFormat, T("Gtr").Strip.Panner.Mode)
+        );
 
         Apply(new SetStripFormatCommand(T("Verb").Id, ChannelFormat.Surround51));
-        Assert.Equal((ChannelFormat.Surround51, PannerMode.Surround), (T("Gtr").Strip.OutputFormat, T("Gtr").Strip.Panner.Mode));
+        Assert.Equal(
+            (ChannelFormat.Surround51, PannerMode.Surround),
+            (T("Gtr").Strip.OutputFormat, T("Gtr").Strip.Panner.Mode)
+        );
 
         Apply(new SetOutputCommand(gtr, "output:2"));
         Assert.Equal(ChannelFormat.Stereo, T("Gtr").Strip.OutputFormat);
@@ -150,7 +160,11 @@ public sealed class Phase10Tests : IDisposable {
 
     [Fact]
     public void Panners_are_checked_against_their_output_and_ranges() {
-        Apply(new AddTrackCommand("Gtr"), new AddTrackCommand("Synth", Kind: TrackKind.Instrument), new AddAuxCommand(4, "Bus"));
+        Apply(
+            new AddTrackCommand("Gtr"),
+            new AddTrackCommand("Synth", Kind: TrackKind.Instrument),
+            new AddAuxCommand(4, "Bus")
+        );
         var gtr = T("Gtr").Id;
         Refused(new SetPannerCommand(gtr, PannerMode.Surround), "surround output");
         Refused(new SetPannerCommand(gtr, PannerMode.Object), "surround project");
@@ -164,8 +178,11 @@ public sealed class Phase10Tests : IDisposable {
         Assert.Equal(PannerMode.Surround, T("Gtr").Strip.Panner.Mode);
         Refused(new SetPannerCommand(gtr, PannerMode.Object), "master");
 
-        Apply(new SetOutputCommand(gtr, "master"), new SetPannerCommand(gtr, PannerMode.Object, Azimuth: -135, ObjectElevation: 30));
-        Assert.Equal(new ObjectPanner(-135, 30, 1, 0), T("Gtr").Strip.Panner.Object);
+        Apply(
+            new SetOutputCommand(gtr, "master"),
+            new SetPannerCommand(gtr, PannerMode.Object, Azimuth: -135, ObjectElevation: 30)
+        );
+        Assert.Equal(new(-135, 30, 1, 0), T("Gtr").Strip.Panner.Object);
         // An object sent to a bus leaves object mode.
         Apply(new SetOutputCommand(gtr, "bus:4"));
         Assert.Equal(PannerMode.Surround, T("Gtr").Strip.Panner.Mode);
@@ -189,7 +206,10 @@ public sealed class Phase10Tests : IDisposable {
         var gtr = T("Gtr").Id;
         Apply(new SetAutomationCommand(PannerTargets.ObjectAzimuth, [new(0, 30, 0), new(3840, -110, 0)], gtr));
         Refused(new SetAutomationCommand(PannerTargets.SurroundLfe, [new(0, 3, 0)], gtr), "-144…0");
-        Refused(new SetAutomationCommand(PannerTargets.SurroundAngle, [new(0, 0, 0)], T("V").Id), "not an automation target");
+        Refused(
+            new SetAutomationCommand(PannerTargets.SurroundAngle, [new(0, 0, 0)], T("V").Id),
+            "not an automation target"
+        );
         Refused(new SetAutomationCommand(PannerTargets.SurroundAngle, [new(0, 0, 0)]), "not an automation target");
 
         var track = Edits.WithParameter(T("Gtr"), PannerTargets.SurroundDiversity, 2, RandomProjects.Plugins);
@@ -207,6 +227,13 @@ public sealed class Phase10Tests : IDisposable {
         EditCommand[] move = [new SetPannerCommand(gtr, Angle: 60, Diversity: 0.5)];
         Assert.True(AutomationPass.Records(move));
         Assert.False(AutomationPass.Records([new SetPannerCommand(gtr, PannerMode.Object)]));
+        // A drag is one undo step; a mode change is not a drag.
+        Assert.Equal("Change Panner", History.UndoLabels.For(new(move)));
+        Assert.Equal(
+            History.UndoLabels.CoalesceKey(new(move)),
+            History.UndoLabels.CoalesceKey(new([new SetPannerCommand(gtr, Angle: 70, Diversity: 0.4)]))
+        );
+        Assert.Null(History.UndoLabels.CoalesceKey(new([new SetPannerCommand(gtr, PannerMode.Surround)])));
         var after = Edits.Apply(state, move, ids).State;
         var ops = pass.Record(before, after, 960, ids);
         Assert.Equal(
@@ -256,7 +283,10 @@ public sealed class Phase10Tests : IDisposable {
         Apply(new AddMarkerCommand("Verse", 0));
         Apply(new AddSceneMarkersCommand([7680, 3840, 3840]));
         Assert.Equal(
-            [("Verse", 0L, MarkerKind.Marker), ("Scene 1", 3840, MarkerKind.Scene), ("Scene 2", 7680, MarkerKind.Scene)],
+            [
+                ("Verse", 0L, MarkerKind.Marker), ("Scene 1", 3840, MarkerKind.Scene),
+                ("Scene 2", 7680, MarkerKind.Scene)
+            ],
             state.Markers.Values.OrderBy(static m => m.Tick).Select(static m => (m.Name, m.Tick, m.Kind))
         );
         Apply(new AddSceneMarkersCommand([1920]));
@@ -315,7 +345,19 @@ public sealed class Phase10Tests : IDisposable {
 
         Refused(
             new ImportTracksCommand(
-                new([new("x", "X", TrackKind.Audio, null, [], [], Panner: objectPanner with { Object = new(0, 91, 1, 0) })])
+                new(
+                    [
+                        new(
+                            "x",
+                            "X",
+                            TrackKind.Audio,
+                            null,
+                            [],
+                            [],
+                            Panner: objectPanner with { Object = new(0, 91, 1, 0) }
+                        )
+                    ]
+                )
             ),
             "object elevation"
         );
@@ -436,21 +478,34 @@ public sealed class Phase10Tests : IDisposable {
         );
         var panner = strip.Panner!;
         Assert.Equal(EnginePannerMode.Surround, panner.Mode);
-        Assert.Equal((110f, 0.8f, 0f, 90f), (panner.Surround.Angle, panner.Surround.Diversity, panner.Surround.LfeGain, panner.Surround.Spread));
+        Assert.Equal(
+            (110f, 0.8f, 0f, 90f),
+            (panner.Surround.Angle, panner.Surround.Diversity, panner.Surround.LfeGain, panner.Surround.Spread)
+        );
         Assert.InRange(panner.Surround.CentreGain, 0.501f, 0.502f);
-        Assert.Equal(new EngineObjectPanner(0, 0, 1, 0), panner.Object);
+        Assert.Equal(new(0, 0, 1, 0), panner.Object);
         var master = Strips.Engine(state, null, engine);
-        Assert.Equal((EngineChannelFormat.Surround714, EngineChannelFormat.Surround714, null), (master.InputFormat, master.OutputFormat, master.Panner));
+        Assert.Equal(
+            (EngineChannelFormat.Surround714, EngineChannelFormat.Surround714, null),
+            (master.InputFormat, master.OutputFormat, master.Panner)
+        );
         Assert.True(Strips.StructureDiffers(strip, strip with { Panner = null }));
         Assert.True(Strips.StructureDiffers(strip, strip with { InputFormat = EngineChannelFormat.Stereo }));
-        Assert.False(Strips.StructureDiffers(strip, strip with { Panner = panner with { Surround = panner.Surround with { Angle = 0 } } }));
+        Assert.False(
+            Strips.StructureDiffers(
+                strip,
+                strip with { Panner = panner with { Surround = panner.Surround with { Angle = 0 } } }
+            )
+        );
 
         var targets = engine.AutomationTargets(state);
-        var lfe = targets.Single(t => t.Kind == "surround");
-        var azimuth = targets.Single(t => t.Kind == "object");
+        var lfe = targets.Single(static t => t.Kind == "surround");
+        var azimuth = targets.Single(static t => t.Kind == "object");
         Assert.Equal(("lfe", "azimuth"), (lfe.ParameterId, azimuth.ParameterId));
         var model = new ModelCompiler().Compile(state, engine);
-        var events = model.Tracks[0].Events.Where(e => e.Kind == Ipc.Segments.PlaybackEventKind.Automation).ToArray();
+        var events = model.Tracks[0]
+            .Events.Where(static e => e.Kind == Ipc.Segments.PlaybackEventKind.Automation)
+            .ToArray();
         var lfeEvents = events.Where(e => e.Target == lfe.Index).ToArray();
         Assert.Equal(0f, lfeEvents[0].Value);
         Assert.InRange(lfeEvents[^1].Value, 0.999f, 1.001f);

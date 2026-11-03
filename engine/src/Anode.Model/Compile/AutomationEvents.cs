@@ -271,8 +271,8 @@ public static class AutomationEvents {
 
         readonly double tolerance = target is "volume" or PannerTargets.SurroundCentre or PannerTargets.SurroundLfe
             || target.StartsWith("send:", StringComparison.Ordinal)
-            ? 0.01
-            : 1e-4 * Math.Max(1, curves.Max(static c => c.Magnitude));
+                ? 0.01
+                : 1e-4 * Math.Max(1, curves.Max(static c => c.Magnitude));
 
         long from;
         long to;
