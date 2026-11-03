@@ -424,7 +424,7 @@ test.describe('Phase 11: generative and analysis', () => {
         .toBe('chords');
       const chordBounce = await bounce(window, folder, 'Bass chords', 8 * Bar, [bass.trackId]);
       const followingChords = (await project(window)).chordTrack.chords;
-      for (const [bar, chord] of followingChords.toSorted((a, b) => a.tick - b.tick).entries()) {
+      for (const [bar, chord] of [...followingChords].sort((a, b) => a.tick - b.tick).entries()) {
         const tones = tonesOf(chord.root, chord.quality).add(pc(chord.bass ?? chord.root));
         const nearest = [0, -1, 1, -2, 2, -3, 3, -4, 4, -5, 5, -6, 6].map(d => 36 + d).find(p => tones.has(p % 12));
         const start = Math.round(((bar * Bar) / Ppq) * (Rate / 2));
@@ -463,7 +463,7 @@ test.describe('Phase 11: generative and analysis', () => {
       const drummer = must(state.tracks.find(t => t.kind === 'drummer'));
       // Pick a style in the Session Player Editor: two regions, one per section; one 8-bar region over both is generated.
       const drumRegions = state.sessionPlayerRegions.filter(r => r.trackId === drummer.id);
-      expect(drumRegions.toSorted((a, b) => a.startTick - b.startTick).map(r => r.name)).toEqual(['Verse', 'Chorus']);
+      expect([...drumRegions].sort((a, b) => a.startTick - b.startTick).map(r => r.name)).toEqual(['Verse', 'Chorus']);
       await commands(window, [
         { type: 'deleteRegions', regionIds: drumRegions.map(r => r.id) },
         { type: 'addSessionPlayerRegion', trackId: drummer.id, startTick: 0, lengthTicks: 8 * Bar, parameters: null }
@@ -772,7 +772,9 @@ test.describe('Phase 11: generative and analysis', () => {
         }
       ]);
       for (const damping of [60, 40]) {
-        await commands(window, [{ type: 'setParameter', trackId: struck.trackId, parameterId: 'damping', value: damping }]);
+        await commands(window, [
+          { type: 'setParameter', trackId: struck.trackId, parameterId: 'damping', value: damping }
+        ]);
         const out = await bounce(window, folder, `Struck ${damping}`, 6 * Bar, [struck.trackId]);
         decays.push(must(decayTime(out.channels[0] ?? new Float32Array(), Rate)));
       }
@@ -822,10 +824,7 @@ test.describe('Phase 11: generative and analysis', () => {
       for (const [mode, modeName] of ['additive', 'granular'].entries()) {
         await commands(window, [{ type: 'setParameter', trackId: alchemy.trackId, parameterId: 'mode', value: mode }]);
         const out = await bounce(window, folder, `Alchemy ${modeName}`, 2 * Bar, [alchemy.trackId]);
-        const cents = centsFrom(
-          pitchOf(out.channels[0] ?? new Float32Array(), Rate, Rate / 2, 2 * Rate, 300, 600),
-          67
-        );
+        const cents = centsFrom(pitchOf(out.channels[0] ?? new Float32Array(), Rate, Rate / 2, 2 * Rate, 300, 600), 67);
         expect(Math.abs(cents)).toBeLessThan(5);
         alchemyCents.push(`${modeName} ${cents.toFixed(2)}`);
       }
@@ -988,7 +987,11 @@ test.describe('Phase 11: generative and analysis', () => {
       });
       await transport(window, 'stop');
       await expect
-        .poll(async () => (await project(window)).midiRegions.some(r => r.trackId === keys.trackId && r.startTick >= 15 * Bar), { timeout: 30_000 })
+        .poll(
+          async () =>
+            (await project(window)).midiRegions.some(r => r.trackId === keys.trackId && r.startTick >= 15 * Bar),
+          { timeout: 30_000 }
+        )
         .toBe(true);
       state = await project(window);
       const recorded = state.midiRegions
@@ -998,7 +1001,10 @@ test.describe('Phase 11: generative and analysis', () => {
       expect(recorded.every(n => n.startTick % (Ppq / 4) === 0)).toBe(true);
       // A fader object (CC 7 to that track's volume) moved on screen changes the strip's volume.
       const before = must(state.tracks.find(t => t.id === keys.trackId)).strip.volumeDb;
-      const stripFader = window.getByRole('group', { name: /^Track \d+: Keys$/ }).getByRole('slider').first();
+      const stripFader = window
+        .getByRole('group', { name: /^Track \d+: Keys$/ })
+        .getByRole('slider')
+        .first();
       const shown = await stripFader.getAttribute('aria-valuetext');
       const fader = window.getByTestId('environment-node-Fader').getByRole('slider');
       await fader.focus();

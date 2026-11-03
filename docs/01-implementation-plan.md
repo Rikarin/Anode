@@ -689,4 +689,5 @@ shared package exists.
    [docs/08-phase-7.md](08-phase-7.md#status-2026-10-29). Phase 8 (control and sync) done on macOS: see
    [docs/09-phase-8.md](09-phase-8.md#status-2026-10-31). Phase 9 (notation and interchange) done on macOS: see
    [docs/10-phase-9.md](10-phase-9.md#status-2026-11-02). Phase 10 (remote, video, surround) done on macOS: see
-   [docs/11-phase-10.md](11-phase-10.md#status-2026-11-03).
+   [docs/11-phase-10.md](11-phase-10.md#status-2026-11-03). Phase 11 (generative and analysis) done on macOS: see
+   [docs/12-phase-11.md](12-phase-11.md#status-2026-11-04).

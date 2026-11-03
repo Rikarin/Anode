@@ -118,11 +118,21 @@ streams). Tests: Stretch ≤ 20 ¢ from 220 Hz up; Speed ≤ 0.5 ¢ off f·rate.
 | Speed | 1.25× | 0.000 | 0.000 | 0.000 |
 | Speed | 1.5× | 0.000 | 0.000 | 0.000 |
 
+A **constant** transposition, a region's own or a Pitch Source segment's, in Polyphonic and Monophonic, is not the
+stretcher's (Phase 11): `TransposingRenderer` stretches longer by the factor at no transposition and resamples with
+Speed's windowed sinc, so the factor is exact. The stretcher carries a partial's offset from its FFT bin across at the
+input's scale, so its own transposition lands up to about (factor − 1) × half a bin off, a matter of hertz, whatever the
+pitch (a 130.8 Hz sine 5 semitones down: +15 ¢; through the resampler: under 0.1 ¢). Test: within 5 ¢ from 110 Hz up,
+for every interval a chord can ask (−6…+5 semitones). The cents above are for pitch curves, which still go to the
+stretcher, and for `Pitch`, whose formant compensation needs it.
+
 ### Formants
 
 A synthesized vowel at 220 Hz (a glottal-like pulse train through resonators at 700, 1,220 and 2,600 Hz), shifted;
 the shift of its cepstrally smoothed long-term envelope over 300–3,500 Hz that best realigns it with the input's
-(0 = preserved). Test: Pitch within ±2.5 st, Polyphonic within 1.5 st of the shift.
+(0 = preserved). Test: Pitch within ±2.5 st, Polyphonic within 2.5 st of the shift (a constant transposition now
+resamples: the envelope moves exactly, the harmonics at this pitch only sample it coarsely). The Polyphonic column is
+the stretcher's, before Phase 11.
 
 | shift | Pitch (compensated) | Polyphonic |
 |---|---|---|

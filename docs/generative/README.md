@@ -42,7 +42,8 @@ the ride (or its bell, by the style's `timekeeper`) keeps time. A fill keeps the
 under it and, when its own notes would not outnumber every groove bar of its section (all their lanes' hits, ghosts
 included, and three for substitutions), grows a snare roll (then kicks, then the high tom) back from the bar's end.
 
-**Following a rhythm source:** in a groove bar where the source has onsets, the kicks are the onsets on the grid (the
+**Following a rhythm source:** in a fill bar where the source has onsets, only the kicks near them stay (a kick roll
+would otherwise break the following); in a groove bar where the source has onsets, the kicks are the onsets on the grid (the
 nearest step), the strongest positions first (half bars, beats, eighths, the rest), at most 2 + 6 × complexity, away
 from the backbeat snares. Every such kick is within half a step of an onset.
 
@@ -119,7 +120,7 @@ Made by the content builder (`engine/tools/Anode.ContentBuilder/SessionPlayerCon
 Drum Synth (the T1 synth with `--t1` or without it), as kit patches with a pad on every `DrumKitNotes` note (17), so a
 Drummer track is a multi-output Drum Machine Designer (a member track, and a strip, per pad): **Session Acoustic Kit**
 (`kit_drummer_acoustic`), **Session Electronic Kit** (`kit_drummer_electronic`), **Session Brushes Kit**
-(`kit_drummer_brushes`). The test pack carries the acoustic kit only. Pads are panned as a kit is seen from the
+(`kit_drummer_brushes`). The test pack carries all three, so a golden path's Drummer has its style's kit. Pads are panned as a kit is seen from the
 drummer's seat. Workstream E's physical model can replace the toms and cymbals once it is merged.
 
 ## Chord ID

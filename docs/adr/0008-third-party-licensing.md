@@ -27,6 +27,10 @@ Anode is **GPL-3.0-or-later**, as Cathode. Third-party code must be GPL-3-compat
 | AAF verification | pyaaf2 1.7.1, an independent reader in opt-in tests and the writer of the import fixtures (`scripts/setup-pyaaf2.py`); not shipped | MIT |
 | HRTFs (binaural monitoring) | SADIE II Database v2-2 (University of York), subject D2 (KEMAR), 48 kHz HRIRs, converted by `scripts/build-hrtf.py` into `engine/src/Anode.Dsp/Spatial/Hrtf/sadie2-d2-48k.anhrtf` (2 MB, committed with the licence and a `NOTICE` of the source and the changes) | Apache-2.0 (stated on the database's page and in the SOFA file's `License` attribute) |
 | Object panning reference | The EBU ADM Renderer's point-source and extent panners (ITU-R BS.2127), ported to C# in `Anode.Dsp/Spatial/PointSourcePanner.cs` and `Vbap.cs` (the algorithm, from BS.2127 and `ear` 2.1.0's `point_source.py` and `extent.py`) | BSD-3-Clause-Clear ("Copyright (c) 2018-2019 EBU ADM Renderer Authors", kept with the licence in the port's header) |
+| Session Player styles (`engine/src/Anode.Generative/Styles`) | Anode's own, written for it as data ([ADR-0014](0014-session-players-and-chord-id.md)); nothing transcribed from any product | GPL-3.0-or-later (ours) |
+| Drummer kits | Anode's own, rendered by the content builder from Anode's Drum Synth (or its T1 synth) into patches of Anode Essentials | GPL-3.0-or-later (ours) |
+| Tape sets (strings, flutes, choir) | Anode's own, rendered by the content builder from Anode's instruments through a tape model; no recordings from outside | GPL-3.0-or-later (ours) |
+| Environment's graph editor | `@xui/node-graph` 3.0.1 (npm), bundled in the editor's lazy Environment window ([ADR-0015](0015-environment.md)), as the other `@xui` packages | Apache-2.0 |
 | ADM verification | The EBU ADM Renderer (`ear`, pinned commit `5bb17b4`, 2.1.0), validating and rendering Anode's ADM BWF in opt-in tests (`scripts/setup-ear.py`); not shipped | BSD-3-Clause-Clear |
 
 **AAF's compound file:** Anode writes and reads [MS-CFB] itself ([docs/interchange/aaf.md](../interchange/aaf.md)).

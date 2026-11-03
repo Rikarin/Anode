@@ -509,3 +509,46 @@ with stub entry points and their calls in `Program.cs`, so neither workstream ed
    MIDI, the Mastering Assistant on a bounce.
 4. Run the Playwright golden path for the exit criterion.
 5. Fix the seams.
+
+### Integration decisions
+
+Settled when the five workstreams met (the contract changes are marked **contract**):
+- **T3 registered.** `Anode.Dsp.T3` and its flag are gone: the instruments are in `BuiltinInstruments`, saturation and
+  the assistant in `BuiltinEffects`, the two inserts in `BuiltinFormatEffects`, all in the contract lists (the format
+  inserts through `T3ContractTests`, their own path). `Tier3` and every `Pending` are gone. The assistant's and
+  saturation's goldens stay `T3GoldenRenderTests`' (they share a file name with `EffectGoldenRenderTests`, which leaves
+  them out). `MasteringInsertTests` keeps a double for "one chain per change" under its own id and adds the real class on
+  a master; the real Down Mixer and Binaural inserts are in `Phase11TwoProcessTests`.
+- **Channel link.** `MultiInsert` numbers the layout's speaker groups and holds, for the Compressor and Limiter, an
+  instance per group after the first; `Linked` reads `link` from the insert's own instance each block, so it can move
+  without a rebuild. By group, each group has its key, instance and gain.
+- **Binaural HRTF.** `monitoring.HrtfPath` is sent only while listening binaurally, so an insert had none otherwise. The
+  Server's `HrtfLocator` (split out of `MonitoringService`, same search) fills `EngineInsert.file` for `anode.binaural`.
+- **Mastering.** The assistant is in the host's catalogue, so `setInsertParameter` and automation name it as any insert.
+  The first-second settling meets the limit: −13.98 and −14.01 LUFS on the golden path's mix. The target is of what the
+  analysis measured (open, below).
+- **A constant transposition is exact** (replaces the stretcher's for Pitch Source and a region's transpose, in
+  Polyphonic and Monophonic). Signalsmith Stretch's own transposition left low tones up to 15 ¢ off (a sine at 130.8 Hz,
+  5 semitones down), over the 5 ¢ of step 2; it is a matter of the FFT's bins, in hertz. `TransposingRenderer` stretches
+  by the factor at no transposition and resamples with Speed's windowed sinc: 0.01 ¢ on the same tone. Pitch curves,
+  formants and gains still go to the stretcher ([docs/flex](flex/README.md)).
+- **Chords mode** (replaces B's "the root interval, then the nearest tone"): a note goes to its own nearest chord tone,
+  keeping its octave, as the Scope says; Root mode moves by the interval.
+- **Environment control** (**contract**): `EnvironmentControlMessage(moves: EngineControlMove(target, value)[])`, host to
+  Server, the latest of each target at most every 30 ms. `ControlService` takes each as a control's gesture (volume on
+  the fader law, as a surface's), so the model, the editor's strip and undo follow. `AutomationEvents.Address` is
+  `Describe`'s inverse. Telemetry's fader value stays what the Environment window shows.
+- **Rhythm following in fills.** A fill's kick rolls left the kick off a plain bass (0.36 of kicks on onsets at high
+  complexity): in a fill bar only kicks within 180 ticks of an onset stay.
+- **Content.** The test pack has all three Drummer kits: the first style is Brushes, whose kit it lacked, so a Drummer
+  fell back to Drum Synth pads. The e2e global setup builds the pack when it is missing or older than the content
+  builder. Packs stay under `engine/artifacts` (ignored); nothing generated is committed.
+- **Editor.** T3 ids, ranges and defaults in the fake are the host's; Sample Alchemy's panel takes its modes by name
+  (Additive first), its grain size and spray in milliseconds; the physical model's panel binds the pickup spread and
+  body (the host has no pickup levels). The fake's Convert to Pattern splits as the Server does. The XY pad keeps its
+  value until the region answers (a held key lost steps), and Regenerate goes through the edits' queue (the next edit
+  named a stale revision and got a 409).
+- **Golden path**: `generative-analysis-golden-path.spec.ts` is a test. Its Chord ID, Session Player Editor, Mastering
+  window, Environment window and physical-model panel steps run on the real Server. Bounces of a track are stems (a
+  `mix` ignores `trackIds`), so the mastering steps go through the master with the tone soloed. Its pitch tracker is YIN
+  with a spectral refinement.

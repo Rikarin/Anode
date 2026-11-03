@@ -135,7 +135,7 @@ describe('Session Players in the editor', () => {
     server.runJobs();
     await stable(fixture);
     expect(must(server.current).sessionPlayerRegions).toEqual([]);
-    expect(must(server.current).patternRegions).toHaveLength(1);
+    expect(must(server.current).patternRegions).toHaveLength(2); // eight bars: two patterns of four
   });
 
   it('shows a Session Player region’s notes read-only in the Piano Roll', async () => {

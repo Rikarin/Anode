@@ -425,7 +425,7 @@ describe('FakeAnodeServer, Phase 11', () => {
       });
       await server.convertSessionPlayer(region.id, { target: 'pattern' });
       server.runJobs();
-      const parts = project(server).patternRegions.toSorted((a, b) => a.startTick - b.startTick);
+      const parts = [...project(server).patternRegions].sort((a, b) => a.startTick - b.startTick);
       expect(parts.map(p => [p.startTick - region.startTick, p.lengthTicks])).toEqual([
         [0, 4 * 3840],
         [4 * 3840, 4 * 3840]

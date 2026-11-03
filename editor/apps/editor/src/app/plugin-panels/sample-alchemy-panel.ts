@@ -110,7 +110,7 @@ export function partialBars(count: number, spread: number): { x: number; height:
             class="stroke-knob-arc fill-none"
             stroke-width="0.8"
             vector-effect="non-scaling-stroke"
-            [attr.points]="envelope()"
+            [attr.points]="envelope"
           />
         }
       </svg>
@@ -187,16 +187,13 @@ export class SampleAlchemyPanel {
     partialBars(this.valueOf('partials', 32), this.valueOf('spread', 0) / 100)
   );
   /** The spectral envelope: the overview smoothed. */
-  protected readonly envelope = computed(() => {
-    const window = 6;
-    return this.overview
-      .map((_, i, all) => {
-        const part = all.slice(Math.max(0, i - window), i + window + 1);
-        const mean = part.reduce((a, b) => a + b, 0) / part.length;
-        return `${5 + (i * 90) / all.length},${Math.round((38 - mean * 34) * 10) / 10}`;
-      })
-      .join(' ');
-  });
+  protected readonly envelope = this.overview
+    .map((_, i, all) => {
+      const part = all.slice(Math.max(0, i - 6), i + 7);
+      const mean = part.reduce((a, b) => a + b, 0) / part.length;
+      return `${5 + (i * 90) / all.length},${Math.round((38 - mean * 34) * 10) / 10}`;
+    })
+    .join(' ');
   /** The mode's own controls. */
   protected readonly controls = computed(() => {
     const roles = this.roles();

@@ -455,7 +455,7 @@ export class SessionPlayerEditor {
     effect(() => {
       const draft = this.draft();
       const pad = this.region()?.parameters.pad;
-      if (draft && pad && draft.complexity === pad.complexity && draft.intensity === pad.intensity) {
+      if (draft && draft.complexity === pad?.complexity && draft.intensity === pad.intensity) {
         this.padSent = null;
         this.draft.set(null);
       }
