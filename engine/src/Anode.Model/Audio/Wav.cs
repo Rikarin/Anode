@@ -20,6 +20,12 @@ public sealed record WavInfo(int Channels, int SampleRate, WavEncoding Encoding,
         };
 
     public int BytesPerFrame => Channels * (BitDepth / 8);
+
+    /// <summary>
+    ///     A <c>WAVE_FORMAT_EXTENSIBLE</c> file's channel mask (0 for a plain file): its channels are stored in the
+    ///     mask's order (docs/11-phase-10.md, "Bounce").
+    /// </summary>
+    public uint ChannelMask { get; init; }
 }
 
 /// <summary>A file that is not a WAV Anode reads; the API answers 422.</summary>
@@ -136,7 +142,7 @@ public sealed class WavReader : IDisposable {
             throw new WavFormatException("Not a RIFF/WAVE file.");
         }
 
-        (int Channels, int Rate, WavEncoding Encoding)? format = null;
+        (int Channels, int Rate, WavEncoding Encoding, uint Mask)? format = null;
         Span<byte> chunk = stackalloc byte[8];
         var position = 12L;
         while (TryRead(stream, chunk)) {
@@ -163,7 +169,7 @@ public sealed class WavReader : IDisposable {
 
     static WavInfo DataInfo(
         Stream stream,
-        (int Channels, int Rate, WavEncoding Encoding)? format,
+        (int Channels, int Rate, WavEncoding Encoding, uint Mask)? format,
         long body,
         uint size
     ) {
@@ -174,11 +180,11 @@ public sealed class WavReader : IDisposable {
         // A writer that never finished (or streams) leaves the size 0 or 0xFFFFFFFF: take what is there.
         var available = stream.Length - body;
         var length = size is 0 or uint.MaxValue || size > available ? available : size;
-        var info = new WavInfo(f.Channels, f.Rate, f.Encoding, body, 0);
+        var info = new WavInfo(f.Channels, f.Rate, f.Encoding, body, 0) { ChannelMask = f.Mask };
         return info with { Frames = length / info.BytesPerFrame };
     }
 
-    static (int, int, WavEncoding) ReadFormat(Stream stream, uint size) {
+    static (int, int, WavEncoding, uint) ReadFormat(Stream stream, uint size) {
         if (size is < 16 or > 1024) {
             throw new WavFormatException("The WAV file's format chunk is malformed.");
         }
@@ -192,11 +198,13 @@ public sealed class WavReader : IDisposable {
         var channels = BinaryPrimitives.ReadUInt16LittleEndian(fmt[2..]);
         var rate = BinaryPrimitives.ReadUInt32LittleEndian(fmt[4..]);
         var bits = BinaryPrimitives.ReadUInt16LittleEndian(fmt[14..]);
+        uint mask = 0;
         if (tag == FormatExtensible) {
             if (size < 40) {
                 throw new WavFormatException("The WAV file's extensible format chunk is malformed.");
             }
 
+            mask = BinaryPrimitives.ReadUInt32LittleEndian(fmt[20..]);
             tag = BinaryPrimitives.ReadUInt16LittleEndian(fmt[24..]);
         }
 
@@ -213,7 +221,7 @@ public sealed class WavReader : IDisposable {
             (FormatFloat, _) => throw new WavFormatException($"{bits}-bit float is not supported (32 bits)."),
             _ => throw new WavFormatException($"WAV format {tag} is not supported (PCM or float).")
         };
-        return (channels, (int)rate, encoding);
+        return (channels, (int)rate, encoding, mask);
     }
 
     static bool TryRead(Stream stream, Span<byte> buffer) {

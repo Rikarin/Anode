@@ -1,5 +1,6 @@
 using Anode.Contracts;
 using Anode.Interchange.Adm;
+using Anode.Ipc;
 using Anode.Model;
 using Anode.Model.Audio;
 using Anode.Model.Editing;
@@ -12,15 +13,16 @@ namespace Anode.Server.Projects;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         <b>What an export bounces.</b> One render of stems (the engine's existing bounce, <c>tracks</c> set) of every
-///         track that outputs to the master: an ordinary strip's stem is its post-fader signal as it reaches the master
-///         (panned into the project's format: a bed contribution), an object's stem is its post-fader signal
-///         <i>before</i> the master's object renderer (its own mono or stereo channels). The bed is the sum of the bed
-///         contributions (aux returns included, the tracks feeding their buses through them), the objects their own
-///         stems; both through the master's fader (its volume, and silence when muted). The master's inserts are not in
-///         the file: ADM is the renderer's input, as Logic's ADM export of beds and objects; the export of a project with
-///         master inserts differs from its bounce by them. Tracks to a device output pair are not in the master and not
-///         in the file.
+///         <b>What an export bounces</b> (decided at integration, docs/11-phase-10.md): two renders through the host. The
+///         <b>bed</b> is workstream A's bed-only render of the master (<c>RenderMessage.BedOnly</c>): the master as a
+///         bounce has it (every bed contribution, aux returns included, through the master's inserts and fader) without
+///         its objects, in the project's format. The <b>objects</b> are a stem render of the object tracks asked for:
+///         each its post-fader signal <i>before</i> the master's object renderer (its own mono or stereo channels),
+///         through the master's fader (its volume, silence when muted) but not its inserts, which a renderer cannot
+///         apply to one object; so the objects of a project with master inserts are exported without them. Every source
+///         given to D's writer is a plain 32-bit float WAV in layout order (the host's extensible renders are read back
+///         into it by <see cref="BounceProcessor.ReadLayout" />) of exactly the scene's frames, at the project's rate.
+///         Tracks to a device output pair are not in the master and not in the file.
 ///     </para>
 ///     <para>
 ///         <b>Import.</b> D's reader extracts each bed's and object's audio; each is brought into <c>Audio Files</c> (at
@@ -50,7 +52,6 @@ public sealed partial class Jobs {
             path,
             range.Start,
             range.End,
-            [..state.Tracks.Where(static t => Edits.HasAudioStrip(t.Kind) && t.Strip.Output == Routing.Master)],
             AdmMapping.ObjectTracks(state, request.TrackIds)
         );
         return Enqueue(JobKind.AdmExport, (entry, token) => ExportAdmAsync(entry, plan, token));
@@ -70,14 +71,13 @@ public sealed partial class Jobs {
         }
     }
 
-    /// <summary>An ADM export as it was asked for: the project then, the range, the tracks to the master, the objects.</summary>
+    /// <summary>An ADM export as it was asked for: the project then, the range, the objects.</summary>
     sealed record AdmPlan(
         OpenProjectView View,
         AdmExportRequest Request,
         string Path,
         long Start,
         long End,
-        IReadOnlyList<Track> Feeders,
         IReadOnlyList<Track> Objects
     ) {
         public ProjectState State => View.State;
@@ -95,48 +95,58 @@ public sealed partial class Jobs {
             var current = session.View is { } v && v.Session == plan.View.Session
                 ? v
                 : throw ProjectException.Conflict("The project was closed.");
-            var stems = Path.Combine(scratch, "stems");
-            if (plan.Feeders.Count > 0) {
-                var finished = await engine.RenderAsync(
+            var rate = plan.State.SampleRate;
+            var format = plan.State.Settings.SurroundFormat;
+
+            // The bed: the master without its objects (workstream A's bed-only render), in the master's layout.
+            var bedRender = Path.Combine(scratch, "bed-render.wav");
+            var objectShare = plan.Objects.Count > 0 ? 0.4 : 0;
+            await RenderAsync(
+                    entry,
+                    new(entry.EngineId, plan.Start, plan.End, bedRender, BedOnly: true),
+                    0,
+                    0.8 - objectShare,
+                    token
+                )
+                .ConfigureAwait(false);
+            var (bed, _) = BounceProcessor.Read(bedRender);
+            if (bed.Length != SpeakerLayouts.ChannelCount(format)) {
+                throw ProjectException.Unprocessable(
+                    $"The engine rendered a bed of {bed.Length} channels for a {SpeakerLayouts.Of(format).Name} project."
+                );
+            }
+
+            var bedPath = Path.Combine(scratch, "bed.wav");
+            WriteFloat(bedPath, Exactly(bed, bed.Length, plan.Frames), rate, 1);
+
+            // The objects: their stems before the master's renderer, through the master's fader.
+            var objectPaths = new Dictionary<string, string>(StringComparer.Ordinal);
+            if (plan.Objects.Count > 0) {
+                var stems = Path.Combine(scratch, "stems");
+                await RenderAsync(
+                        entry,
                         new(
                             entry.EngineId,
                             plan.Start,
                             plan.End,
                             stems,
-                            [..plan.Feeders.Select(t => current.Ids.Track(t.Id))]
+                            [..plan.Objects.Select(t => current.Ids.Track(t.Id))]
                         ),
-                        f => Progress(entry, 0.7 * f),
+                        0.8 - objectShare,
+                        objectShare,
                         token
                     )
                     .ConfigureAwait(false);
-                token.ThrowIfCancellationRequested();
-                if (finished.Error is { } error) {
-                    throw ProjectException.Unprocessable($"The engine could not render: {error}");
-                }
-            }
-
-            var bed = Silence(SpeakerLayouts.ChannelCount(plan.State.Settings.SurroundFormat), plan.Frames);
-            var objectPaths = new Dictionary<string, string>(StringComparer.Ordinal);
-            foreach (var track in plan.Feeders) {
-                token.ThrowIfCancellationRequested();
-                var (audio, _) = BounceProcessor.Read(Path.Combine(stems, $"{current.Ids.Track(track.Id)}.wav"));
-                if (track.Strip.Panner.Mode != PannerMode.Object) {
-                    AddToBed(bed, audio, track, plan);
-                } else if (plan.Objects.Any(o => o.Id == track.Id)) {
+                foreach (var track in plan.Objects) {
+                    token.ThrowIfCancellationRequested();
+                    var (audio, _) = BounceProcessor.Read(Path.Combine(stems, $"{current.Ids.Track(track.Id)}.wav"));
                     var file = Path.Combine(scratch, $"object-{objectPaths.Count + 1}.wav");
-                    WriteFloat(
-                        file,
-                        ObjectAudio(audio, AdmMapping.ObjectChannels(track), plan.Frames),
-                        plan.State.SampleRate,
-                        plan.Gain
-                    );
+                    WriteFloat(file, Exactly(audio, AdmMapping.ObjectChannels(track), plan.Frames), rate, plan.Gain);
                     objectPaths[track.Id] = file;
                 }
             }
 
-            var bedPath = Path.Combine(scratch, "bed.wav");
-            WriteFloat(bedPath, bed, plan.State.SampleRate, plan.Gain);
-            Progress(entry, 0.8);
+            Progress(entry, 0.85);
             var scene = AdmMapping.ToScene(plan.State, plan.Request, bedPath, objectPaths);
             Directory.CreateDirectory(Path.GetDirectoryName(plan.Path)!);
             spatial.WriteAdm(scene, plan.Path, plan.Request.BitDepth);
@@ -146,37 +156,22 @@ public sealed partial class Jobs {
         }
     }
 
-    static float[][] Silence(int channels, long frames) {
-        var audio = new float[channels][];
-        for (var c = 0; c < channels; c++) {
-            audio[c] = new float[frames];
-        }
-
-        return audio;
-    }
-
-    /// <summary>Adds a bed contribution's stem to the bed: it has the bed's channels.</summary>
-    static void AddToBed(float[][] bed, float[][] stem, Track track, AdmPlan plan) {
-        if (stem.Length != bed.Length) {
-            throw ProjectException.Unprocessable(
-                $"The engine rendered {stem.Length} channels of '{track.Name}' for a "
-                + $"{SpeakerLayouts.Of(plan.State.Settings.SurroundFormat).Name} bed."
-            );
-        }
-
-        for (var c = 0; c < bed.Length; c++) {
-            var (source, target) = (stem[c], bed[c]);
-            for (var i = 0; i < Math.Min(target.Length, source.Length); i++) {
-                target[i] += source[i];
-            }
+    /// <summary>One render through the host for an export, its progress mapped onto [from, from + share].</summary>
+    async Task RenderAsync(Entry entry, RenderMessage message, double from, double share, CancellationToken token) {
+        var finished = await engine.RenderAsync(message, f => Progress(entry, from + share * f), token)
+            .ConfigureAwait(false);
+        token.ThrowIfCancellationRequested();
+        if (finished.Error is { } error) {
+            throw ProjectException.Unprocessable($"The engine could not render: {error}");
         }
     }
 
     /// <summary>
-    ///     An object's channels from its stem: its first ones, a mono stem doubled for a stereo object;
-    ///     <paramref name="frames" /> long.
+    ///     <paramref name="channels" /> channels of exactly <paramref name="frames" /> (the scene's length, which D's
+    ///     writer requires of every source): the render's first ones, cut or padded with silence, a mono stem doubled
+    ///     for a stereo object.
     /// </summary>
-    static float[][] ObjectAudio(float[][] stem, int channels, long frames) {
+    static float[][] Exactly(float[][] stem, int channels, long frames) {
         var audio = new float[channels][];
         for (var c = 0; c < channels; c++) {
             audio[c] = new float[frames];

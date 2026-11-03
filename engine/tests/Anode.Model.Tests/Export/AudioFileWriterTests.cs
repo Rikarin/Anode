@@ -209,4 +209,35 @@ public sealed class AudioFileWriterTests : IDisposable {
             }
         }
     }
+
+    [Theory]
+    [InlineData(32)]
+    [InlineData(24)]
+    public void A_surround_WAV_is_extensible_in_mask_order_and_reads_back_in_layout_order(int bits) {
+        var layout = Dsp.Spatial.SpeakerLayout.Of(Dsp.Spatial.SpeakerFormat.Surround714);
+        var path = Path.Combine(folder, $"714-{bits}.wav");
+        // Each channel a constant of its own: its index in the layout's (ADM) order.
+        var audio = Enumerable.Range(0, 12).Select(static c => Enumerable.Repeat((c + 1) / 16f, 64).ToArray()).ToArray();
+        BounceProcessor.Write(
+            path,
+            audio,
+            new(AudioFormat.Wav, bits, 48_000, DitherMode.None, NormalizeMode.Off, -14, -1),
+            layout: layout
+        );
+
+        var stored = ReadWav(path, out var info);
+        var (mask, order) = Dsp.Spatial.WaveChannels.Of(layout);
+        Assert.Equal(mask, info.ChannelMask);
+        // The file stores 7.1.4's rears (M±135, layout 6 and 7) before its sides (M±090, layout 4 and 5).
+        Assert.Equal([0, 1, 2, 3, 6, 7, 4, 5, 8, 9, 10, 11], order);
+        for (var k = 0; k < 12; k++) {
+            Assert.Equal((order[k] + 1) / 16f, stored[k][10], 4);
+        }
+
+        var (read, rate, readLayout) = BounceProcessor.ReadLayout(path);
+        Assert.Equal((48_000, layout), (rate, readLayout));
+        for (var c = 0; c < 12; c++) {
+            Assert.Equal((c + 1) / 16f, read[c][10], 4);
+        }
+    }
 }

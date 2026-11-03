@@ -1,3 +1,5 @@
+using Anode.Dsp.Spatial;
+using SpeakerLayout = Anode.Dsp.Spatial.SpeakerLayout;
 using Anode.Contracts;
 using Anode.Dsp.Resampling;
 
@@ -24,8 +26,19 @@ public sealed record BounceFormat(
 ///     (<see cref="Limiter" />) — then dithered to its word length (below 32 bits) and written as WAV or AIFF.
 /// </summary>
 public static class BounceProcessor {
-    /// <summary>A WAV file as planar floats, and its rate.</summary>
+    /// <summary>A WAV file as planar floats, and its rate (see <see cref="ReadLayout" /> for the channels' order).</summary>
     public static (float[][] Channels, int SampleRate) Read(string path) {
+        var (channels, rate, _) = ReadLayout(path);
+        return (channels, rate);
+    }
+
+    /// <summary>
+    ///     A WAV file as planar floats, its rate, and the speaker layout of a <c>WAVE_FORMAT_EXTENSIBLE</c> file whose
+    ///     mask is one of Anode's layouts (a surround render, docs/11-phase-10.md): its channels are then returned in the
+    ///     layout's (ADM) order, not the file's (the mask's, 7.x's rears before its sides). Any other file's channels
+    ///     come in file order, with no layout.
+    /// </summary>
+    public static (float[][] Channels, int SampleRate, SpeakerLayout? Layout) ReadLayout(string path) {
         using var reader = WavReader.Open(path);
         var info = reader.Info;
         var channels = new float[info.Channels][];
@@ -46,7 +59,19 @@ public static class BounceProcessor {
             at += frames;
         }
 
-        return (channels, info.SampleRate);
+        var layout = WaveChannels.LayoutOf(info.ChannelMask, info.Channels);
+        if (layout is not null) {
+            // File channel k holds layout channel order[k].
+            var order = WaveChannels.Of(layout).Order;
+            var planar = new float[channels.Length][];
+            for (var k = 0; k < order.Length; k++) {
+                planar[order[k]] = channels[k];
+            }
+
+            channels = planar;
+        }
+
+        return (channels, info.SampleRate, layout);
     }
 
     /// <summary>Rate conversion, then normalisation: the samples the file will hold, before dither.</summary>
@@ -82,16 +107,27 @@ public static class BounceProcessor {
     }
 
     /// <summary>Writes the file: dithered integers at 16 or 24 bits, floats at 32.</summary>
-    public static void Write(string path, float[][] audio, BounceFormat format, int seed = 0) {
+    /// <summary>
+    ///     Writes the processed samples; a WAV of a surround <paramref name="layout" /> (channels in its ADM order) is
+    ///     <c>WAVE_FORMAT_EXTENSIBLE</c> with the layout's mask (<see cref="AudioFileWriter" />).
+    /// </summary>
+    public static void Write(
+        string path,
+        float[][] audio,
+        BounceFormat format,
+        int seed = 0,
+        SpeakerLayout? layout = null
+    ) {
         if (format.BitDepth == 32) {
-            AudioFileWriter.WriteFloat(path, format.Format, format.SampleRate, audio);
+            AudioFileWriter.WriteFloat(path, format.Format, format.SampleRate, audio, layout);
         } else {
             AudioFileWriter.WriteInteger(
                 path,
                 format.Format,
                 format.SampleRate,
                 format.BitDepth,
-                Dither.Quantize(audio, format.BitDepth, format.Dither, seed)
+                Dither.Quantize(audio, format.BitDepth, format.Dither, seed),
+                layout
             );
         }
     }

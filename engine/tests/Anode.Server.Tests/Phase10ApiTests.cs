@@ -601,11 +601,13 @@ public sealed class Phase10ApiTests : IAsyncDisposable {
         Assert.Equal(ChannelFormat.Surround51, bed.Format);
         var item = Assert.Single(scene.Objects);
         Assert.Equal(("Bee", 1), (item.Name, item.Channels));
-        // The stems rendered: the tracks to the master, not the one to a device output.
-        var render = Host.Received.OfType<RenderMessage>().Last();
-        Assert.Equal(2, render.Tracks!.Count);
+        // Two renders: the master without its objects (the bed), then the objects' stems.
+        var renders = Host.Received.OfType<RenderMessage>().TakeLast(2).ToArray();
+        Assert.Equal((true, null), (renders[0].BedOnly, renders[0].Tracks));
+        Assert.Equal([1], renders[1].Tracks!);
 
-        // The bed: the strings' stem in 5.1 (the fake host's stems carry L and R); the object: Bee's mono signal.
+        // The bed: the master in 5.1 without Bee (the fake host's renders carry L and R), not the track to a device
+        // output; the object: Bee's mono signal.
         var bedAudio = spatial.WrittenAudio["bed.wav"];
         Assert.Equal(6, bedAudio.Length);
         Assert.True(bedAudio[0].Max() > 0.1f);

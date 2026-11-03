@@ -1,3 +1,5 @@
+using Anode.Dsp.Spatial;
+using SpeakerLayout = Anode.Dsp.Spatial.SpeakerLayout;
 using Anode.Contracts;
 using System.Buffers.Binary;
 
@@ -20,7 +22,14 @@ public static class AudioFileWriter {
     /// <summary>
     ///     Writes integer samples of <paramref name="bits" /> (16 or 24) bits; values outside the range are clipped.
     /// </summary>
-    public static void WriteInteger(string path, AudioFormat format, int sampleRate, int bits, int[][] channels) {
+    public static void WriteInteger(
+        string path,
+        AudioFormat format,
+        int sampleRate,
+        int bits,
+        int[][] channels,
+        SpeakerLayout? layout = null
+    ) {
         if (bits is not (16 or 24)) {
             throw new ArgumentOutOfRangeException(nameof(bits), bits, "Integer files have 16 or 24 bits.");
         }
@@ -33,17 +42,24 @@ public static class AudioFileWriter {
         }
 
         var bigEndian = format == AudioFormat.Aiff;
+        var mask = Mask(format, layout, channels.Length, ref channels);
         var data = Interleave(
             channels.Length,
             frames,
             bits / 8,
             (c, i, at) => WriteInt(at, channels[c][i], bits, bigEndian)
         );
-        Write(path, format, sampleRate, channels.Length, frames, bits, false, data);
+        Write(path, format, sampleRate, channels.Length, frames, bits, false, data, mask);
     }
 
     /// <summary>Writes 32-bit float samples.</summary>
-    public static void WriteFloat(string path, AudioFormat format, int sampleRate, float[][] channels) {
+    public static void WriteFloat(
+        string path,
+        AudioFormat format,
+        int sampleRate,
+        float[][] channels,
+        SpeakerLayout? layout = null
+    ) {
         var frames = Validate(sampleRate, channels.Length, channels.Length == 0 ? 0 : channels[0].Length);
         foreach (var channel in channels) {
             if (channel.Length != frames) {
@@ -51,6 +67,7 @@ public static class AudioFileWriter {
             }
         }
 
+        var mask = Mask(format, layout, channels.Length, ref channels);
         var data = format == AudioFormat.Aiff
             ? Interleave(
                 channels.Length,
@@ -64,7 +81,26 @@ public static class AudioFileWriter {
                 4,
                 (c, i, at) => BinaryPrimitives.WriteSingleLittleEndian(at, channels[c][i])
             );
-        Write(path, format, sampleRate, channels.Length, frames, 32, true, data);
+        Write(path, format, sampleRate, channels.Length, frames, 32, true, data, mask);
+    }
+
+    /// <summary>
+    ///     The channel mask of a WAV of more than two channels in <paramref name="layout" /> (0: a plain file), and the
+    ///     channels put in the mask's order (<see cref="WaveChannels" />), as the engine's renders store them.
+    /// </summary>
+    static uint Mask<T>(AudioFormat format, SpeakerLayout? layout, int count, ref T[][] channels) {
+        if (format != AudioFormat.Wav || layout is null || count <= 2 || layout.ChannelCount != count) {
+            return 0;
+        }
+
+        var (mask, order) = WaveChannels.Of(layout);
+        var stored = new T[count][];
+        for (var k = 0; k < count; k++) {
+            stored[k] = channels[order[k]];
+        }
+
+        channels = stored;
+        return mask;
     }
 
     /// <summary>
@@ -130,12 +166,13 @@ public static class AudioFileWriter {
         int frames,
         int bits,
         bool isFloat,
-        byte[] data
+        byte[] data,
+        uint mask
     ) {
         using var stream = new FileStream(path, FileMode.Create, FileAccess.Write, FileShare.None);
         var header = format == AudioFormat.Aiff
             ? AiffHeader(rate, channelCount, frames, bits, isFloat, data.Length)
-            : WavHeader(rate, channelCount, frames, bits, isFloat, data.Length);
+            : WavHeader(rate, channelCount, frames, bits, isFloat, data.Length, mask);
         stream.Write(header);
         stream.Write(data);
         if ((data.Length & 1) != 0) {
@@ -143,7 +180,11 @@ public static class AudioFileWriter {
         }
     }
 
-    static byte[] WavHeader(int rate, int channelCount, int frames, int bits, bool isFloat, int dataBytes) {
+    static byte[] WavHeader(int rate, int channelCount, int frames, int bits, bool isFloat, int dataBytes, uint mask) {
+        if (mask != 0) {
+            return ExtensibleHeader(rate, channelCount, frames, bits, isFloat, dataBytes, mask);
+        }
+
         var formatSize = isFloat ? 18 : 16;
         var factSize = isFloat ? 12 : 0;
         var header = new byte[12 + 8 + formatSize + factSize + 8];
@@ -170,6 +211,52 @@ public static class AudioFileWriter {
 
         "data"u8.CopyTo(at[next..]);
         BinaryPrimitives.WriteUInt32LittleEndian(at[(next + 4)..], (uint)dataBytes);
+        return header;
+    }
+
+    /// <summary>
+    ///     A <c>WAVE_FORMAT_EXTENSIBLE</c> header: a 40-byte format chunk (valid bits, the mask, the PCM or IEEE float
+    ///     sub-format GUID), a <c>fact</c> chunk, then the data's.
+    /// </summary>
+    static byte[] ExtensibleHeader(
+        int rate,
+        int channelCount,
+        int frames,
+        int bits,
+        bool isFloat,
+        int dataBytes,
+        uint mask
+    ) {
+        var header = new byte[12 + 8 + 40 + 12 + 8];
+        var at = header.AsSpan();
+        var padded = dataBytes + (dataBytes & 1);
+        "RIFF"u8.CopyTo(at);
+        BinaryPrimitives.WriteUInt32LittleEndian(at[4..], (uint)(header.Length - 8 + padded));
+        "WAVE"u8.CopyTo(at[8..]);
+        "fmt "u8.CopyTo(at[12..]);
+        BinaryPrimitives.WriteUInt32LittleEndian(at[16..], 40);
+        BinaryPrimitives.WriteUInt16LittleEndian(at[20..], 0xFFFE);
+        BinaryPrimitives.WriteUInt16LittleEndian(at[22..], (ushort)channelCount);
+        BinaryPrimitives.WriteUInt32LittleEndian(at[24..], (uint)rate);
+        BinaryPrimitives.WriteUInt32LittleEndian(at[28..], (uint)(rate * channelCount * bits / 8));
+        BinaryPrimitives.WriteUInt16LittleEndian(at[32..], (ushort)(channelCount * bits / 8));
+        BinaryPrimitives.WriteUInt16LittleEndian(at[34..], (ushort)bits);
+        BinaryPrimitives.WriteUInt16LittleEndian(at[36..], 22);
+        BinaryPrimitives.WriteUInt16LittleEndian(at[38..], (ushort)bits);
+        BinaryPrimitives.WriteUInt32LittleEndian(at[40..], mask);
+        // KSDATAFORMAT_SUBTYPE_PCM or _IEEE_FLOAT: {0000000x-0000-0010-8000-00AA00389B71}
+        BinaryPrimitives.WriteUInt16LittleEndian(at[44..], (ushort)(isFloat ? 3 : 1));
+        at[50] = 0x10;
+        at[52] = 0x80;
+        at[55] = 0xAA;
+        at[57] = 0x38;
+        at[58] = 0x9B;
+        at[59] = 0x71;
+        "fact"u8.CopyTo(at[60..]);
+        BinaryPrimitives.WriteUInt32LittleEndian(at[64..], 4);
+        BinaryPrimitives.WriteUInt32LittleEndian(at[68..], (uint)frames);
+        "data"u8.CopyTo(at[72..]);
+        BinaryPrimitives.WriteUInt32LittleEndian(at[76..], (uint)dataBytes);
         return header;
     }
 

@@ -340,10 +340,11 @@ public sealed partial class Jobs : IDisposable {
             for (var i = 0; i < sources.Count; i++) {
                 token.ThrowIfCancellationRequested();
                 var (source, name) = sources[i];
-                var (audio, rate) = BounceProcessor.Read(source);
+                // A surround render comes back extensible (mask order) and goes out extensible again.
+                var (audio, rate, layout) = BounceProcessor.ReadLayout(source);
                 var processed = BounceProcessor.Process(audio, rate, plan.Format);
                 var output = Path.Combine(plan.Directory, name + plan.Format.Extension);
-                BounceProcessor.Write(output, processed, plan.Format, i);
+                BounceProcessor.Write(output, processed, plan.Format, i, layout);
                 outputs.Add(output);
                 if (plan.Request.AddToProject) {
                     added.Add(AddToProject(plan, output, audio, rate, processed, scratch, name));
