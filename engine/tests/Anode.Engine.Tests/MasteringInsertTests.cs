@@ -8,12 +8,14 @@ using System.Runtime.InteropServices;
 namespace Anode.Engine.Tests;
 
 /// <summary>
-///     A Mastering Assistant as workstream E's will be seen by the engine (its id, <see cref="IMasteringChain" />): a
-///     gain of its chain's <c>ChainGainDb</c> (none without a chain), and fixed gain reductions to report.
+///     A Mastering Assistant as the engine sees one (<see cref="IMasteringChain" />): a gain of its chain's
+///     <c>ChainGainDb</c> (none without a chain), and fixed gain reductions to report; it counts the chains it is given.
 /// </summary>
 sealed class TestAssistant : IAudioEffect, IMasteringChain {
+    public const string Id = "test.mastering-assistant";
+
     public static readonly EffectDescriptor Info = new(
-        MasteringAssistant.Id,
+        Id,
         "Test Mastering Assistant",
         "Anode tests",
         "1.0",
@@ -100,14 +102,8 @@ public sealed unsafe class MasteringInsertTests : IDisposable {
     static EngineMasteringChain Chain(float gainDb) =>
         new([..Enumerable.Repeat(0f, MasteringBands.CentresHz.Count)], -18, 2, -20, gainDb);
 
-    static EngineStrip Master(EngineMasteringChain? chain) =>
-        new(
-            1f,
-            0f,
-            false,
-            false,
-            [new("ma", MasteringAssistant.Id, false, new Dictionary<string, double>(), Mastering: chain)]
-        );
+    static EngineStrip Master(EngineMasteringChain? chain, string pluginId = TestAssistant.Id) =>
+        new(1f, 0f, false, false, [new("ma", pluginId, false, new Dictionary<string, double>(), Mastering: chain)]);
 
     [Fact]
     public void The_assistant_gets_its_chain_once_per_change_and_reports_its_output_loudness_and_reductions() {
@@ -163,5 +159,33 @@ public sealed unsafe class MasteringInsertTests : IDisposable {
         // A master without an assistant has no entry.
         Assert.True(controller.SetChannel(-1, new(1f, 0f, false, false)));
         Assert.Equal(0, controller.Engine.MasteringReading().Active);
+    }
+
+    [Fact]
+    public void The_real_assistant_brings_the_master_to_its_target_and_reports_it() {
+        using var controller = new EngineController(new(Rate, Block), TestEffects.Registry());
+        using var segment = TestAudio.Segment([new(1, [], [TestAudio.Region(0, 4 * Rate, 0)])], 1);
+        controller.LoadModel(
+            TestAudio.Load(
+                segment,
+                1,
+                true,
+                [TestAudio.Track(1, true)],
+                [new(0, sine, 2, Rate, 4 * Rate)],
+                dir,
+                Master(Chain(0), MasteringAssistant.Id)
+            )
+        );
+        Assert.Equal(1, controller.Engine.MasteringReading().Active);
+        using var driver = new OfflineDriver(controller, Block);
+        driver.PlayFrom(0);
+        for (var i = 0; i < 3 * Rate / Block; i++) {
+            driver.Process();
+        }
+
+        var reading = controller.Engine.MasteringReading();
+        Assert.InRange(reading.ShortTermLufs, -14.5f, -13.5f); // −20 LUFS in, −14 LUFS by the default target
+        Assert.InRange(reading.TruePeakDbtp, -20f, -1f);
+        Assert.True(reading.LimiterReductionDb <= 0 && reading.CompressorReductionDb <= 0);
     }
 }

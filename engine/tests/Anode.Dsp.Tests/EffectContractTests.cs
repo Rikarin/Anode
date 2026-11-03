@@ -25,7 +25,9 @@ public sealed class EffectContractTests {
         // The T2 suite of docs/07-phase-6.md.
         "anode.space", "anode.linear-eq", "anode.multipressor", "anode.enveloper", "anode.exciter", "anode.subbass",
         "anode.delay-designer", "anode.pitch-shifter", "anode.pitch-correction", "anode.ensemble",
-        "anode.rotor-cabinet", "anode.phat-fx", "anode.step-fx", "anode.beat-breaker", "anode.remix-fx"
+        "anode.rotor-cabinet", "anode.phat-fx", "anode.step-fx", "anode.beat-breaker", "anode.remix-fx",
+        // The T3 effects of docs/12-phase-11.md; the format-changing inserts have their contract in T3ContractTests.
+        "anode.saturation", "anode.mastering-assistant"
     ];
 
     [Fact]

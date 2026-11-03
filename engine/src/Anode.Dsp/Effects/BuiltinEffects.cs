@@ -17,13 +17,10 @@ namespace Anode.Dsp.Effects;
 
 /// <summary>
 ///     Anode's own effects: the T1 suite of the plan's §7 (docs/05-phase-4.md, workstream D), then the T2 effects
-///     (docs/07-phase-6.md, workstream D), and while <see cref="T3.Ready" /> the T3 ones (docs/12-phase-11.md, workstream
-///     E): saturation and the Mastering Assistant. The engine lists <see cref="All" /> in its plugin catalogue.
+///     (docs/07-phase-6.md, workstream D), and the T3 ones (docs/12-phase-11.md, workstream E): saturation and the
+///     Mastering Assistant. The engine lists <see cref="All" /> in its plugin catalogue.
 /// </summary>
 public static class BuiltinEffects {
-    /// <summary>The T3 effects that are <see cref="IAudioEffect" />s (registered while <see cref="T3.Ready" />).</summary>
-    public static IReadOnlyList<EffectDescriptor> Tier3 { get; } = [Saturation.Info, MasteringAssistant.Info];
-
     public static IReadOnlyList<EffectDescriptor> All { get; } = [
         ChannelEq.Info,
         Compressor.Info,
@@ -61,7 +58,8 @@ public static class BuiltinEffects {
         StepFx.Info,
         BeatBreaker.Info,
         RemixFx.Info,
-        ..T3.Ready ? Tier3 : []
+        Saturation.Info,
+        MasteringAssistant.Info
     ];
 
     /// <summary>
@@ -109,28 +107,25 @@ public static class BuiltinEffects {
             StepFx.Id => new StepFx(),
             BeatBreaker.Id => new BeatBreaker(),
             RemixFx.Id => new RemixFx(),
-            Saturation.Id when T3.Ready => new Saturation(),
-            MasteringAssistant.Id when T3.Ready => new MasteringAssistant(),
+            Saturation.Id => new Saturation(),
+            MasteringAssistant.Id => new MasteringAssistant(),
             _ => null
         };
 }
 
 /// <summary>
 ///     Anode's inserts that change their strip's channel format (<see cref="IFormatEffect" />; docs/12-phase-11.md): the
-///     Down Mixer (<c>anode.down-mixer</c>) and Binaural Post-Processing (<c>anode.binaural</c>), while
-///     <see cref="T3.Ready" />. The engine lists <see cref="All" /> in its plugin catalogue and creates them by id.
+///     Down Mixer (<c>anode.down-mixer</c>) and Binaural Post-Processing (<c>anode.binaural</c>). The
+///     engine lists <see cref="All" /> in its plugin catalogue and creates them by id.
 /// </summary>
 public static class BuiltinFormatEffects {
-    /// <summary>The T3 format effects (registered while <see cref="T3.Ready" />).</summary>
-    public static IReadOnlyList<EffectDescriptor> Tier3 { get; } = [DownMixerInsert.Info, BinauralInsert.Info];
-
-    public static IReadOnlyList<EffectDescriptor> All { get; } = T3.Ready ? Tier3 : [];
+    public static IReadOnlyList<EffectDescriptor> All { get; } = [DownMixerInsert.Info, BinauralInsert.Info];
 
     /// <summary>A new, unprepared instance of format effect <paramref name="id" />, or null when there is none.</summary>
     public static IFormatEffect? Create(string id) =>
         id switch {
-            DownMixerInsert.Id when T3.Ready => new DownMixerInsert(),
-            BinauralInsert.Id when T3.Ready => new BinauralInsert(),
+            DownMixerInsert.Id => new DownMixerInsert(),
+            BinauralInsert.Id => new BinauralInsert(),
             _ => null
         };
 }

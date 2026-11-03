@@ -8,8 +8,10 @@ namespace Anode.Dsp.Tests.Spatial;
 ///     environment at <c>engine/artifacts/ear</c> (or <c>ANODE_EAR</c> names a python with it); tests skip without it.
 /// </summary>
 static class Ear {
-    public static string RepositoryRoot([CallerFilePath] string path = "") =>
-        Path.GetFullPath(Path.Combine(Path.GetDirectoryName(path)!, "..", "..", "..", ".."));
+    public static string RepositoryRoot() =>
+        Path.GetFullPath(Path.Combine(Path.GetDirectoryName(ThisFile())!, "..", "..", "..", ".."));
+
+    static string ThisFile([CallerFilePath] string path = "") => path;
 
     public static string Python() {
         var named = Environment.GetEnvironmentVariable("ANODE_EAR");

@@ -5,14 +5,17 @@ using Anode.Dsp.Instruments.Organ;
 using Anode.Dsp.Instruments.Piano;
 using Anode.Dsp.Instruments.Quick;
 using Anode.Dsp.Instruments.Sampler;
+using Anode.Dsp.Instruments.Alchemy;
+using Anode.Dsp.Instruments.Physical;
 using Anode.Dsp.Instruments.Synth;
+using Anode.Dsp.Instruments.Tape;
 using Anode.Dsp.Instruments.Wavetable;
 using Anode.Dsp.Tests.Support;
 using static Anode.Dsp.Tests.Support.Analysis;
 
 namespace Anode.Dsp.Tests;
 
-/// <summary>What the <see cref="IInstrument" /> contract asks of every built-in instrument (T1 and T2).</summary>
+/// <summary>What the <see cref="IInstrument" /> contract asks of every built-in instrument (T1, T2 and T3).</summary>
 public sealed class InstrumentContractTests : IDisposable {
     readonly string folder = Play.TempFolder();
 
@@ -20,7 +23,7 @@ public sealed class InstrumentContractTests : IDisposable {
 
     public static TheoryData<string> Ids => [
         AnodeSynth.Id, AnodeSampler.Id, DrumSynth.Id, FmSynth.Id, DrawbarOrgan.Id, ElectricPiano.Id, WavetableSynth.Id,
-        QuickSampler.Id
+        QuickSampler.Id, PhysicalModel.Id, TapeReplay.Id, SampleAlchemy.Id
     ];
 
     /// <summary>

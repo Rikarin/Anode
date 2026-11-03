@@ -18,6 +18,20 @@ namespace Anode.Server.Tests;
 ///     (the Drummer: a kick on beats 1 and 3, a snare on 2 and 4), on the rhythm source's onsets when there are any, and
 ///     its seed's lowest bit as an extra note; its hash is the SHA-256 of the input as JSON. Counts its generations.
 /// </summary>
+/// <summary>A style library that cannot be loaded: its catalogue answers 503, its generator fails.</summary>
+sealed class MissingSessionPlayers : ISessionPlayerLibrary {
+    static ProjectException Missing =>
+        new(503, "The Session Player style library is not available: missing.");
+
+    public SessionPlayerCatalog Catalog => throw Missing;
+
+    public GeneratedNotes Generate(GenerationInput input) => throw Missing;
+
+    public string Hash(GenerationInput input) => throw Missing;
+
+    public Pattern ToPattern(IReadOnlyList<Note> notes, long lengthTicks) => throw Missing;
+}
+
 sealed class FakeSessionPlayers : ISessionPlayerLibrary {
     int generated;
 

@@ -352,9 +352,13 @@ public sealed class FormatInsertTests : IDisposable {
         Assert.Contains(catalog, static p => p.Id == TestDownMixer.Id && !p.IsInstrument);
         Assert.True(rig.Controller.Plugins.IsFormatEffect(TestDownMixer.Id));
         Assert.False(rig.Controller.Plugins.IsFormatEffect(TestEffects.Gain));
-        // The T3 ones are registered once workstream E's are in (Anode.Dsp.T3.Ready).
-        Assert.Equal(Dsp.T3.Ready, BuiltinFormatEffects.All.Count == 2);
-        Assert.Equal(Dsp.T3.Ready, BuiltinEffects.All.Contains(Dsp.Mastering.MasteringAssistant.Info));
-        Assert.Equal(Dsp.T3.Ready, BuiltinInstruments.All.Contains(Dsp.Instruments.Physical.PhysicalModel.Info));
+        Assert.Equal(2, BuiltinFormatEffects.All.Count);
+        foreach (var effect in BuiltinFormatEffects.All) {
+            Assert.Contains(catalog, p => p.Id == effect.Id && !p.IsInstrument);
+            Assert.True(rig.Controller.Plugins.IsFormatEffect(effect.Id));
+        }
+
+        Assert.Contains(BuiltinEffects.All, static e => e.Id == Dsp.Mastering.MasteringAssistant.Id);
+        Assert.Contains(BuiltinInstruments.All, static i => i.Id == Dsp.Instruments.Physical.PhysicalModel.Id);
     }
 }

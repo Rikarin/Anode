@@ -1,5 +1,7 @@
 using Anode.Dsp.Effects;
+using Anode.Dsp.Effects.Drive;
 using Anode.Dsp.IO;
+using Anode.Dsp.Mastering;
 using Anode.Dsp.Tests.Support;
 using static Anode.Dsp.Tests.Support.Analysis;
 
@@ -15,7 +17,10 @@ public sealed class EffectGoldenRenderTests {
     const double ResidualDb = -90;
     const int Frames = 24_000;
 
-    public static TheoryData<string> Ids => [..BuiltinEffects.All.Select(static d => d.Id)];
+    /// <summary>Every built-in effect but the T3 ones, whose renders are <see cref="T3GoldenRenderTests" />'.</summary>
+    public static TheoryData<string> Ids => [
+        ..BuiltinEffects.All.Select(static d => d.Id).Where(static id => id is not (Saturation.Id or MasteringAssistant.Id))
+    ];
 
     static (float[] Left, float[] Right) Render(string id, int block = Play.Block) {
         using var effect = Fx.Create(id, EffectPresets.For(id));

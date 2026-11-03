@@ -42,15 +42,13 @@ public sealed class Phase11ApiTests : IAsyncDisposable {
 
     FakeHost Host => Server.Services.GetRequiredService<EngineConnection>().InProcessHost!;
 
-    async Task StartAsync(bool doubles = true) {
+    async Task StartAsync(ISessionPlayerLibrary? library = null) {
         server = new(
             configure: s => {
-                if (doubles) {
-                    s.AddSingleton<ISessionPlayerLibrary>(players);
-                    s.AddSingleton<IChordRecognition>(chords);
-                    s.AddSingleton<IMasteringAnalysis>(analysis);
-                    s.AddSingleton<IMasteringDesigner>(designer);
-                }
+                s.AddSingleton(library ?? players);
+                s.AddSingleton<IChordRecognition>(chords);
+                s.AddSingleton<IMasteringAnalysis>(analysis);
+                s.AddSingleton<IMasteringDesigner>(designer);
             }
         );
         client = server.CreateClient();
@@ -85,7 +83,7 @@ public sealed class Phase11ApiTests : IAsyncDisposable {
 
     [Fact]
     public async Task The_style_catalogue_comes_from_the_library_and_without_one_the_players_are_unavailable() {
-        await StartAsync(false);
+        await StartAsync(new MissingSessionPlayers());
         var response = await Client.GetAsync("/api/v1/library/session-players", Token);
         Assert.Contains(
             "not available",

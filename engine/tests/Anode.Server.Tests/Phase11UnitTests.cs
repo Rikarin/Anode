@@ -100,7 +100,7 @@ public sealed class Phase11UnitTests {
         };
         Assert.NotSame(first.Values.Single(), players.Played(reseeded).Values.Single());
         Assert.Equal(2, library.Generated);
-        Assert.Empty(new SessionPlayers(new BuiltinSessionPlayers(), NullLogger<SessionPlayers>.Instance).Played(view));
+        Assert.Empty(new SessionPlayers(new MissingSessionPlayers(), NullLogger<SessionPlayers>.Instance).Played(view));
     }
 
     [Fact]
