@@ -498,3 +498,51 @@ Settled when the five workstreams met (the contract changes are marked **contrac
   and `scripts/ear-check.py`, and the e2e global setup fetches FFmpeg (by checksum), makes the movie and sets up `ear`.
   The spec takes Ls as 7.1.4's side surround (`M+090`, Logic's Ls), where a point puck leaves every other speaker
   silent, and checks the LFE send on a 60 Hz component (a 1 kHz tone is 74 dB down after the 120 Hz low-pass).
+
+## Status (2026-11-03)
+
+**Exit criterion met on macOS.** The Playwright golden path `phase10/remote-video-surround-golden-path.spec.ts` passes
+on the real desktop app, Server and host with the null device, with all seven steps (`dns-sd` for discovery, the
+pinned LGPL FFmpeg through `scripts/media-check.mjs`, the EBU ADM Renderer through `scripts/ear-check.py`). All eleven
+e2e specs pass, twice in a row.
+
+| Step | Checked | Result |
+|---|---|---|
+| 1. Remote | `_anode._tcp` found at `<host>.local:<port>` with `project` and `path`; paired; a fader moved on the remote; DMD pads recorded from the remote | −2 dB on both sides; [36, 38, 36, 42] recorded |
+| 2. Listen-in | a 1 kHz tone through the WebAssembly decoder (LAN name, plain HTTP) and WebCodecs (127.0.0.1); no dropouts | 1000.00 Hz, −14.02 dBFS (−14.00 expected); 194–223 ms behind |
+| 3. Video | movie frame against the playhead on locates and while playing, with the movie at bar 1 and bar 2; scene markers; Import Audio from Movie; Export Audio to Movie | 0 frames off; markers at frames 50, 125, 200; import worst 0.021 ms; export 0 samples off, video packets MD5-identical |
+| 4. Surround 7.1.4 | Surround Panner at Ls (`M+090`) with an LFE send; an object from L to the top rear right; a stereo effect on a 7.1.4 bus; BS.775 down-mix | Ls −12.0 dB, every other speaker silent; LFE 60 Hz −12.0 dB; the object moves; −6.00 dB on every channel; C −3.01, Ls −6.02, Ltf −3.01 dB |
+| 5. Binaural | noise at 90° left | ILD 17.1 dB, ITD 0.729 ms |
+| 6. ADM BWF | `ear` validates the export and renders it; 43 speaker-seconds against Anode's render | worst 0.017 dB |
+| 7. Save and reopen | 13 tracks with formats and panners, 3 scene markers, the movie at tick 3840, 7.1.4 | intact |
+
+| Check | Result |
+|---|---|
+| Engine tests (`dotnet test --solution engine/Anode.slnx --max-parallel-test-modules 2`) | 2601 pass, 18 skipped (opt-in); two load-sensitive tests (#22) pass when rerun alone; the `ear` opt-in tests ran |
+| Stereo cost ([docs/spatial](spatial/README.md)) | a stereo project renders bit-identically to Phase 9, at the same callback cost |
+| 7.1.4 session (32 objects, 8 beds, 2 auxes, binaural, tap) | 64 frames: 101.8 µs mean (7.6 % of 1333 µs), p99 151.6 µs; 256 frames: 393.7 µs (7.4 %); allocation-free |
+| Spatial ([ADR-0012](adr/0012-spatial-audio.md)) | object gains equal `ear`'s within 1e-4; SADIE II D2 shipped beside the Server with its licence |
+| Media ([ADR-0013](adr/0013-video-and-listen-in.md), [docs/media](media/README.md)) | FFmpeg 9.0.2 LGPL pinned by checksum, run without loader variables; Concentus Opus |
+| Editor (`nx run-many -t typecheck lint test build`) | 6 projects pass; Storybook + axe pass; initial bundle 961.67 kB (budget 1 MB) |
+| e2e (`nx e2e desktop`) | remote, video and surround, notation and interchange, control and sync, MIDI editing, loops and performance, advanced audio, mixing, arranging, MIDI and Phase 1 golden paths, smoke; twice in a row |
+| Skala, Prettier, generated client | clean |
+
+**Contract changes and decisions at integration** (detailed in "Integration decisions" above):
+- `TrackMeter.Peaks` carries every channel's peak for meters wider than stereo.
+- `POST /remote/pads/run` runs desktop-only key commands from a remote; new users get `RemotePads.Default`.
+- `BounceRequest.monitoring` bounces what the monitoring sends the device.
+- The ADM bed is the bed-only master render, the objects stems of the object tracks; 24-bit by default.
+- Surround WAVs are extensible and read back in ADM order.
+- The movie is served as `video/mp4`, its frames rendered on demand, `access_token` accepted on both.
+- Turning network access on keeps the open project (refused with unsaved edits).
+
+**Open:**
+- FFmpeg is not bundled into the packaged app yet (only the HRTF set is); the macOS build is about 150 MB, a self-built
+  minimal LGPL build would be a few MB.
+- The remote's mixer has no surround or object panner.
+- A remote on plain HTTP plays listen-in through the deprecated `ScriptProcessorNode`; HTTPS on the LAN would bring
+  back the AudioWorklet and WebCodecs.
+- A mono track's stored strip input format says stereo (the engine and ADM use the real width).
+- REST `PUT /project/selection` does not move a remote's selection; notes on a DMD with no pad for them are dropped.
+- The golden path's DNS-SD helper is macOS-only.
+- Linux and Windows.
