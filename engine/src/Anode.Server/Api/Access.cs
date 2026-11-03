@@ -7,7 +7,7 @@ namespace Anode.Server.Api;
 /// <summary>
 ///     Who may call the API. With <see cref="ServerOptions.Token" /> set (the desktop app always sets one, and a Server
 ///     reachable beyond localhost must) every request needs <c>Authorization: Bearer &lt;token&gt;</c>, or
-///     <c>?access_token=</c> on the WebSocket, which browsers cannot give headers; any origin may then call, as a page
+///     <c>?access_token=</c> on the WebSockets (<c>/ws</c> and Phase 10's listen-in), which browsers cannot give headers; any origin may then call, as a page
 ///     cannot forge the token. Without a token (development) only loopback origins pass CORS, so an arbitrary web page
 ///     cannot drive the engine through the browser.
 /// </summary>
@@ -24,7 +24,7 @@ public static class Access {
         if (token is null) {
             // Browsers apply no CORS to WebSockets, so check the origin here: no foreign page may listen in.
             app.Use(static async (context, next) => {
-                    if (context.Request.Path.StartsWithSegments("/ws")
+                    if (IsSocket(context.Request)
                         && context.Request.Headers.Origin.ToString() is { Length: > 0 } origin
                         && !IsLoopbackOrigin(origin)) {
                         context.Response.StatusCode = StatusCodes.Status403Forbidden;
@@ -84,8 +84,15 @@ public static class Access {
             return header[7..].Trim();
         }
 
-        return request.Path.StartsWithSegments("/ws") ? request.Query["access_token"].ToString() : null;
+        return IsSocket(request) ? request.Query["access_token"].ToString() : null;
     }
+
+    /// <summary>The WebSockets, which take the token in the query and need the origin check: <c>/ws</c> and listen-in.</summary>
+    static bool IsSocket(HttpRequest request) =>
+        request.Path.StartsWithSegments("/ws") || request.Path.StartsWithSegments(ListenInPath);
+
+    /// <summary>The listen-in WebSocket (Phase 10, docs/11-phase-10.md).</summary>
+    public const string ListenInPath = "/api/v1/remote/listen";
 
     static void StripQueryToken(HttpRequest request) {
         if (!request.Query.ContainsKey("access_token")) {

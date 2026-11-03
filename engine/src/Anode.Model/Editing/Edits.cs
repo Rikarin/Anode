@@ -73,11 +73,6 @@ public static partial class Edits {
             }
 
             state = Step(state, ops, forward, inverse);
-            if (MayReformat(ops)) {
-                // Every strip's output format is its destination's (docs/11-phase-10.md): whatever changed the
-                // routing or a format, the strips that follow it come along in the same command.
-                state = Step(state, Conform(state), forward, inverse);
-            }
         }
 
         inverse.Reverse();
@@ -98,7 +93,9 @@ public static partial class Edits {
     /// <summary>
     ///     Applies delta operations, collecting them and their inverses (in application order; the caller reverses the
     ///     inverses once at the end). Operations that remove or move notes are followed by those that keep the score
-    ///     content attached (<see cref="Detached" />: a note's symbols and lyrics go with it, and come back on undo).
+    ///     content attached (<see cref="Detached" />: a note's symbols and lyrics go with it, and come back on undo), and
+    ///     those that change routing or formats by those that keep strips' output formats their destinations'
+    ///     (<see cref="Conform" />, Phase 10).
     /// </summary>
     public static ProjectState Step(
         ProjectState state,
@@ -107,13 +104,23 @@ public static partial class Edits {
         List<DeltaOp> inverse
     ) {
         var detach = false;
+        var reformat = false;
         foreach (var op in ops) {
             state = StepOne(state, op, forward, inverse);
             detach |= MayDetach(op);
+            reformat |= MayReformat(op);
         }
 
         if (detach) {
             foreach (var op in Detached(state)) {
+                state = StepOne(state, op, forward, inverse);
+            }
+        }
+
+        if (reformat) {
+            // Every strip's output format is its destination's (docs/11-phase-10.md): whatever changed the routing or
+            // a format, the strips that follow it come along in the same step.
+            foreach (var op in Conform(state)) {
                 state = StepOne(state, op, forward, inverse);
             }
         }

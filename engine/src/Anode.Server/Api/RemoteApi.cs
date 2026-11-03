@@ -1,4 +1,6 @@
 using Anode.Contracts;
+using Anode.Server.Library;
+using Anode.Server.Remote;
 using Microsoft.AspNetCore.Http.HttpResults;
 
 namespace Anode.Server.Api;
@@ -10,7 +12,10 @@ namespace Anode.Server.Api;
 /// </summary>
 static class RemoteApi {
     public static void Map(RouteGroupBuilder api) {
-        api.MapGet("/system/discovery", static Ok<DiscoveryInfo>() => throw Pending.Phase10("GetDiscovery"))
+        api.MapGet(
+                "/system/discovery",
+                static Ok<DiscoveryInfo>(DiscoveryService discovery) => TypedResults.Ok(discovery.Info())
+            )
             .WithName("GetDiscovery")
             .WithTags("System")
             .WithSummary(
@@ -19,17 +24,20 @@ static class RemoteApi {
             );
 
         var remote = api.MapGroup("/remote").WithTags("Remote").AddEndpointFilter<ProblemFilter>();
-        remote.MapGet("/pads", static Ok<RemotePads>() => throw Pending.Phase10("GetRemotePads"))
+        remote.MapGet("/pads", static Ok<RemotePads>(UserSettings settings) => TypedResults.Ok(settings.RemotePads()))
             .WithName("GetRemotePads")
             .WithSummary("The remote's key-command pad sets (user settings).");
         remote.MapPut(
                 "/pads",
-                static Results<Ok<RemotePads>, ProblemHttpResult>(RemotePads pads) =>
-                    throw Pending.Phase10("SetRemotePads")
+                static Results<Ok<RemotePads>, ProblemHttpResult>(RemotePads pads, UserSettings settings) =>
+                    TypedResults.Ok(settings.SaveRemotePads(pads))
             )
             .WithName("SetRemotePads")
             .WithSummary("Replaces the pad sets (ids unique, key command ids known; 422 otherwise).");
-        remote.MapGet("/listen/state", static Ok<ListenInState>() => throw Pending.Phase10("GetListenIn"))
+        remote.MapGet(
+                "/listen/state",
+                static Ok<ListenInState>(ListenInService listen) => TypedResults.Ok(listen.State())
+            )
             .WithName("GetListenIn")
             .WithSummary(
                 "Listen-in: whether the master is being encoded, the listeners (at most 4), the Server's delay."
@@ -37,12 +45,29 @@ static class RemoteApi {
 
         // The listen-in WebSocket: a ListenInFormat text message, then a binary message per Opus frame (ListenIn's
         // header and the packet). OpenAPI cannot describe it, as /ws.
-        remote.Map(
-                "/listen",
-                static IResult() => TypedResults.Problem(
-                    "Listen-in: not implemented yet (Phase 10).",
-                    statusCode: StatusCodes.Status501NotImplemented
-                )
+        api.Map(
+                "/remote/listen",
+                static async (HttpContext http, ListenInService listen) => {
+                    if (!http.WebSockets.IsWebSocketRequest) {
+                        return Results.BadRequest();
+                    }
+
+                    if (listen.TryJoin() is not { } listener) {
+                        return TypedResults.Problem(
+                            $"At most {ListenIn.MaxListeners} remotes listen in at once.",
+                            statusCode: StatusCodes.Status503ServiceUnavailable
+                        );
+                    }
+
+                    try {
+                        using var socket = await http.WebSockets.AcceptWebSocketAsync();
+                        await listen.ServeAsync(socket, listener, http.RequestAborted);
+                    } finally {
+                        listen.Leave(listener);
+                    }
+
+                    return Results.Empty;
+                }
             )
             .ExcludeFromDescription();
     }

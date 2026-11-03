@@ -1,4 +1,6 @@
 using Anode.Contracts;
+using Anode.Server.Engine;
+using Anode.Server.Projects;
 using Microsoft.AspNetCore.Http.HttpResults;
 
 namespace Anode.Server.Api;
@@ -13,24 +15,41 @@ static class MediaApi {
         var movie = api.MapGroup("/project/movie").WithTags("Movie").AddEndpointFilter<ProblemFilter>();
         movie.MapPost(
                 string.Empty,
-                static Results<Accepted<Job>, NotFound, ProblemHttpResult>(MovieImportRequest request) =>
-                    throw Pending.Phase10("ImportMovie")
+                static Results<Accepted<Job>, NotFound, ProblemHttpResult>(MovieImportRequest request, Jobs jobs) =>
+                    Accepted(jobs.ImportMovie(request))
             )
             .WithName("ImportMovie")
             .WithSummary(
                 "Imports a movie (MOV, MP4, M4V) from the server's disk, copied into the project or referenced: a "
                 + "movieImport job that probes it and sets it as the project's movie (one undo step)."
             );
-        movie.MapGet(string.Empty, static Results<Ok<Movie>, NotFound>() => throw Pending.Phase10("GetMovie"))
+        movie.MapGet(
+                string.Empty,
+                static Results<Ok<Movie>, NotFound>(ProjectSession session) =>
+                    session.View?.State.Movie is { } m ? TypedResults.Ok(m) : TypedResults.NotFound()
+            )
             .WithName("GetMovie")
             .WithSummary("The project's movie (as Project.movie); 404 when it has none.");
         movie.MapDelete(
                 string.Empty,
-                static Results<Ok<CommandResult>, NotFound, ProblemHttpResult>() => throw Pending.Phase10("RemoveMovie")
+                static Results<Ok<CommandResult>, NotFound, ProblemHttpResult>(ProjectSession session) =>
+                    TypedResults.Ok(session.Apply(new([new RemoveMovieCommand()]), null))
             )
             .WithName("RemoveMovie")
             .WithSummary("Remove Movie: applies removeMovie (one undo step); 404 when there is no project.");
-        movie.MapGet("/stream", static IResult() => throw Pending.Phase10("StreamMovie"))
+        movie.MapGet(
+                "/stream",
+                static IResult(ProjectSession session) => {
+                    if (session.View is not { State.Movie: { } m } view) {
+                        return TypedResults.NotFound();
+                    }
+
+                    var file = Movies.FileOf(view.Folder, m);
+                    return File.Exists(file)
+                        ? TypedResults.PhysicalFile(file, Movies.ContentType(file), enableRangeProcessing: true)
+                        : TypedResults.NotFound();
+                }
+            )
             .WithName("StreamMovie")
             .WithSummary(
                 "The movie file for the editor's and remotes' <video>, with HTTP range requests (206 Partial Content) and "
@@ -41,21 +60,30 @@ static class MediaApi {
             .Produces(StatusCodes.Status404NotFound);
         movie.MapPost(
                 "/thumbnails",
-                static Results<Accepted<Job>, NotFound, ProblemHttpResult>(ThumbnailsRequest request) =>
-                    throw Pending.Phase10("RenderMovieThumbnails")
+                static Results<Accepted<Job>, NotFound, ProblemHttpResult>(ThumbnailsRequest request, Jobs jobs) =>
+                    Accepted(jobs.RenderMovieThumbnails(request))
             )
             .WithName("RenderMovieThumbnails")
             .WithSummary("Renders movie frames as JPEG thumbnails into the movie's cache: a thumbnails job.");
         movie.MapGet(
                 "/thumbnails",
-                static Results<Ok<MovieThumbnails>, NotFound>(int? height) =>
-                    throw Pending.Phase10("ListMovieThumbnails")
+                static Results<Ok<MovieThumbnails>, NotFound>(int? height, ProjectSession session) =>
+                    session.View is { State.Movie: { } m } view
+                        ? TypedResults.Ok(Movies.Thumbnails(view.Folder, m, Movies.Height(height)))
+                        : TypedResults.NotFound()
             )
             .WithName("ListMovieThumbnails")
             .WithSummary("The frames cached as thumbnails `height` pixels high (left out: 64), and their size.");
         movie.MapGet(
                 "/frames/{frame:long}",
-                static IResult(long frame, int? height) => throw Pending.Phase10("GetMovieFrame")
+                static IResult (long frame, int? height, ProjectSession session) => {
+                    if (session.View is not { State.Movie: { } m } view) {
+                        return TypedResults.NotFound();
+                    }
+
+                    var file = Movies.ThumbnailOf(view.Folder, m, Movies.Height(height), frame);
+                    return File.Exists(file) ? TypedResults.PhysicalFile(file, "image/jpeg") : TypedResults.NotFound();
+                }
             )
             .WithName("GetMovieFrame")
             .WithSummary(
@@ -65,15 +93,15 @@ static class MediaApi {
             .Produces(StatusCodes.Status404NotFound);
         movie.MapPost(
                 "/scenes",
-                static Results<Accepted<Job>, NotFound, ProblemHttpResult>(SceneDetectRequest request) =>
-                    throw Pending.Phase10("DetectMovieScenes")
+                static Results<Accepted<Job>, NotFound, ProblemHttpResult>(SceneDetectRequest request, Jobs jobs) =>
+                    Accepted(jobs.DetectMovieScenes(request))
             )
             .WithName("DetectMovieScenes")
             .WithSummary("Detect Scene Cuts: a sceneDetect job that adds scene markers at the cuts (one undo step).");
         movie.MapPost(
                 "/audio/import",
-                static Results<Accepted<Job>, NotFound, ProblemHttpResult>(MovieAudioImportRequest request) =>
-                    throw Pending.Phase10("ImportMovieAudio")
+                static Results<Accepted<Job>, NotFound, ProblemHttpResult>(MovieAudioImportRequest request, Jobs jobs) =>
+                    Accepted(jobs.ImportMovieAudio(request))
             )
             .WithName("ImportMovieAudio")
             .WithSummary(
@@ -82,8 +110,8 @@ static class MediaApi {
             );
         movie.MapPost(
                 "/audio/export",
-                static Results<Accepted<Job>, NotFound, ProblemHttpResult>(MovieAudioExportRequest request) =>
-                    throw Pending.Phase10("ExportMovieAudio")
+                static Results<Accepted<Job>, NotFound, ProblemHttpResult>(MovieAudioExportRequest request, Jobs jobs) =>
+                    Accepted(jobs.ExportMovieAudio(request))
             )
             .WithName("ExportMovieAudio")
             .WithSummary(
@@ -94,15 +122,15 @@ static class MediaApi {
         var project = api.MapGroup("/project").WithTags("Surround").AddEndpointFilter<ProblemFilter>();
         project.MapPost(
                 "/export/adm",
-                static Results<Accepted<Job>, NotFound, ProblemHttpResult>(AdmExportRequest request) =>
-                    throw Pending.Phase10("ExportAdm")
+                static Results<Accepted<Job>, NotFound, ProblemHttpResult>(AdmExportRequest request, Jobs jobs) =>
+                    Accepted(jobs.ExportAdm(request))
             )
             .WithName("ExportAdm")
             .WithSummary("Exports the mix as ADM BWF (bed and objects, chna and axml): an admExport job.");
         project.MapPost(
                 "/import/adm",
-                static Results<Accepted<Job>, NotFound, ProblemHttpResult>(AdmImportRequest request) =>
-                    throw Pending.Phase10("ImportAdm")
+                static Results<Accepted<Job>, NotFound, ProblemHttpResult>(AdmImportRequest request, Jobs jobs) =>
+                    Accepted(jobs.ImportAdm(request))
             )
             .WithName("ImportAdm")
             .WithSummary(
@@ -111,13 +139,19 @@ static class MediaApi {
             );
 
         var settings = api.MapGroup("/settings").WithTags("Settings").AddEndpointFilter<ProblemFilter>();
-        settings.MapGet("/monitoring", static Ok<MonitoringSettings>() => throw Pending.Phase10("GetMonitoring"))
+        settings.MapGet(
+                "/monitoring",
+                static Ok<MonitoringSettings>(MonitoringService monitoring) => TypedResults.Ok(monitoring.Get())
+            )
             .WithName("GetMonitoring")
             .WithSummary("Monitoring: binaural, the down-mix and the speaker map (user settings, not the project).");
         settings.MapPut(
                 "/monitoring",
-                static Results<Ok<MonitoringSettings>, ProblemHttpResult>(MonitoringSettings monitoring) =>
-                    throw Pending.Phase10("SetMonitoring")
+                static Results<Ok<MonitoringSettings>, ProblemHttpResult>(
+                    MonitoringSettings monitoring,
+                    MonitoringService service
+                ) =>
+                    TypedResults.Ok(service.Set(monitoring))
             )
             .WithName("SetMonitoring")
             .WithSummary(
@@ -125,4 +159,6 @@ static class MediaApi {
                 + "the host follows at once."
             );
     }
+
+    static Accepted<Job> Accepted(Job job) => TypedResults.Accepted($"/api/v1/jobs/{job.Id}", job);
 }

@@ -38,6 +38,8 @@ public sealed partial class Jobs : IDisposable {
     readonly IStemModels models;
     readonly INotation notation;
     readonly IInterchangeFormats formats;
+    readonly IMovieMedia media;
+    readonly ISpatialFiles spatial;
     readonly TimeProvider time;
     readonly ILogger<Jobs> logger;
     readonly ConcurrentDictionary<string, Entry> jobs = new(StringComparer.Ordinal);
@@ -56,9 +58,13 @@ public sealed partial class Jobs : IDisposable {
         IStemModels models,
         INotation notation,
         IInterchangeFormats formats,
+        IMovieMedia media,
+        ISpatialFiles spatial,
         TimeProvider time,
         ILogger<Jobs> logger
     ) {
+        this.media = media;
+        this.spatial = spatial;
         this.notation = notation;
         this.formats = formats;
         this.analyses = analyses;

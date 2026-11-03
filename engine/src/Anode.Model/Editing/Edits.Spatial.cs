@@ -182,16 +182,8 @@ public static partial class Edits {
         };
     }
 
-    /// <summary>Whether operations may have changed what a strip's output format or panner mode follows.</summary>
-    static bool MayReformat(IReadOnlyList<DeltaOp> ops) {
-        foreach (var op in ops) {
-            if (op is TrackUpserted or TrackRemoved or MasterChanged or SettingsChanged) {
-                return true;
-            }
-        }
-
-        return false;
-    }
+    /// <summary>Whether an operation may have changed what a strip's output format or panner mode follows.</summary>
+    static bool MayReformat(DeltaOp op) => op is TrackUpserted or TrackRemoved or MasterChanged or SettingsChanged;
 
     /// <summary>
     ///     The operations that make <paramref name="state" />'s strips agree with their destinations (none when they do):
