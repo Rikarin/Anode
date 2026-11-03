@@ -1,5 +1,14 @@
 import { ChangeDetectionStrategy, Component, computed, inject, input, signal } from '@angular/core';
-import type { AutomationMode, ChannelStrip, Insert, InsertChain, PluginInfo, Send, Track } from '@anode/api-client';
+import {
+  type AutomationMode,
+  type ChannelStrip,
+  type Insert,
+  type InsertChain,
+  type PluginInfo,
+  type Send,
+  SpeakerLayouts,
+  type Track
+} from '@anode/api-client';
 import {
   AnAutomationMode,
   AnChannelStrip,
@@ -10,6 +19,7 @@ import {
   type MeterSource,
   type SlotMenuPoint
 } from '@anode/audio-ui';
+import { AnMultichannelMeter, type MultiMeterSource } from '@anode/audio-ui/lazy';
 import { XuiContextMenuImports } from '@xui/context-menu';
 import { XuiMenuImports } from '@xui/menu';
 import { XuiTooltipImports } from '@xui/tooltip';
@@ -37,6 +47,7 @@ import {
   outputRoute,
   routeName
 } from './routing';
+import { isSurround, StripPanner } from './strip-panner';
 
 /** What an insert slot's menu acts on: a filled slot's insert, or an empty slot at `index`. */
 interface SlotContext {
@@ -89,7 +100,9 @@ const BusPages = Array.from({ length: BusCount / 16 }, (_, page) => ({
     AnAutomationMode,
     AnChannelStrip,
     AnInsertSlot,
+    AnMultichannelMeter,
     AnSendKnob,
+    StripPanner,
     XuiContextMenuImports,
     XuiMenuImports,
     XuiTooltipImports
@@ -109,6 +122,8 @@ const BusPages = Array.from({ length: BusCount / 16 }, (_, page) => ({
       [selected]="selected()"
       [flow]="flow()"
       [meter]="meter()"
+      [customPan]="customPan()"
+      [customMeter]="multichannel()"
       [attr.data-strip]="trackId() ?? 'master'"
       [attr.data-learn-track]="trackId()"
       (volumeChange)="mixer.set(trackId(), 'volumeDb', $event)"
@@ -120,6 +135,26 @@ const BusPages = Array.from({ length: BusCount / 16 }, (_, page) => ({
       (click)="select()"
       (contextmenu)="stripMenu($event)"
     >
+      <!-- Phase 10: a surround strip's panner section and multichannel meter (projected into the channel strip). -->
+      @if (customPan()) {
+        @if (track(); as t) {
+          <an-strip-panner stripPan [track]="t" />
+        } @else {
+          <div stripPan class="h-12" aria-hidden="true"></div>
+        }
+      }
+      @if (multichannel()) {
+        <an-multichannel-meter
+          stripMeter
+          class="h-auto! pt-6 pb-2"
+          data-testid="multichannel-meter"
+          [label]="name() + ' level'"
+          [speakers]="speakerLabels()"
+          [source]="channelSource"
+          [labels]="false"
+          [barWidth]="barWidth()"
+        />
+      }
       @if (layout().input) {
         @if (kind() === 'aux') {
           <div class="strip-slot text-foreground justify-center font-semibold" [attr.title]="'Input: ' + inputName()">
@@ -727,6 +762,23 @@ export class MixerStrip {
   });
   private readonly meterSource: MeterSource = () => this.meters.level(this.trackId() ?? MasterMeter);
   protected readonly meter = computed(() => (this.kind() === 'vca' ? null : this.meterSource));
+  /** Phase 10: the strip outputs in surround (the master: the project's format). */
+  protected readonly surround = computed(() => this.kind() !== 'vca' && isSurround(this.strip().outputFormat));
+  /** The Surround Panner or the 3D Object Panner instead of the pan knob (the master shows neither). */
+  protected readonly customPan = computed(
+    () => this.surround() || (this.track() !== null && this.strip().panner.mode === 'object')
+  );
+  /** One meter bar per speaker of the output's layout. */
+  protected readonly multichannel = this.surround;
+  protected readonly speakerLabels = computed(() =>
+    SpeakerLayouts[this.strip().outputFormat].speakers.map(s => s.label)
+  );
+  /** Bars that fit beside the fader: 9.1.6's 16 at 2 px, 5.1's 6 at 5 px. */
+  protected readonly barWidth = computed(() =>
+    Math.max(2, Math.min(5, Math.floor(42 / this.speakerLabels().length) - 1))
+  );
+  protected readonly channelSource: MultiMeterSource = () =>
+    this.meters.channelLevels(this.trackId() ?? MasterMeter, this.speakerLabels().length);
 
   /** Picks the bus of a send (an existing one's, or a new send's). */
   protected sendPicker(send: Send | null): (bus: number) => void {

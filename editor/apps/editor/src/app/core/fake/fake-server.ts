@@ -83,6 +83,7 @@ import {
   type Screenset,
   type ScriptPreset,
   type ServerMessage,
+  SpeakerLayouts,
   type StaffStyle,
   type StemKind,
   type StemSplitRequest,
@@ -153,6 +154,7 @@ import {
   DefaultRemotePads,
   fakeDiscovery,
   FakeListenInSocket,
+  fakeSpeakerGains,
   frameImage,
   isSurround as isSurroundFormat,
   movieAudioContent,
@@ -3538,15 +3540,33 @@ export class FakeAnodeServer implements AnodeApi {
       levels.set(aux.id, audible(aux) ? Math.min(1.2, received * gainOf(aux)) : 0);
     }
     let masterLevel = 0;
-    const tracks = project.tracks.map(track => {
+    // Phase 10: per-speaker levels of surround strips and of a surround master (`TrackMeter.peaks`).
+    const masterChannels = SpeakerLayouts[project.master.outputFormat].speakers.length;
+    const masterPeaks = new Array<number>(masterChannels).fill(0);
+    const tracks: TrackMeter[] = project.tracks.map(track => {
       const level = track.kind === 'vca' ? 0 : (levels.get(track.id) ?? 0);
+      const surround = track.kind !== 'vca' && isSurroundFormat(track.strip.outputFormat);
+      const peaks = surround ? fakeSpeakerGains(track.strip).map(g => g * level) : null;
       if (track.strip.output === 'master' && track.kind !== 'vca') {
         masterLevel = Math.max(masterLevel, level);
+        peaks?.forEach((p, i) => {
+          if (i < masterChannels) {
+            masterPeaks[i] = Math.max(masterPeaks[i] ?? 0, p);
+          }
+        });
       }
       const pan = track.strip.pan;
+      if (peaks) {
+        return { trackId: track.id, peakLeft: peaks[0] ?? 0, peakRight: peaks[1] ?? 0, peaks };
+      }
       return { trackId: track.id, peakLeft: level * Math.min(1, 1 - pan), peakRight: level * Math.min(1, 1 + pan) };
     });
-    const master = masterLevel * 10 ** (project.master.volumeDb / 20) * (project.master.mute ? 0 : 1);
+    const masterGain = 10 ** (project.master.volumeDb / 20) * (project.master.mute ? 0 : 1);
+    const master = masterLevel * masterGain;
+    const surroundPeaks = masterChannels > 2 ? masterPeaks.map(p => p * masterGain) : null;
+    const masterMeter: TrackMeter = surroundPeaks
+      ? { trackId: '', peakLeft: surroundPeaks[0] ?? 0, peakRight: surroundPeaks[1] ?? 0, peaks: surroundPeaks }
+      : { trackId: '', peakLeft: master, peakRight: master * 0.97 };
     const readings: InsertReading[] = [];
     const read = (trackId: string | null, inserts: readonly Insert[], level: number) => {
       const db = level > 0 ? 20 * Math.log10(level) : -144;
@@ -3583,7 +3603,7 @@ export class FakeAnodeServer implements AnodeApi {
       read(track.id, track.strip.inserts, levels.get(track.id) ?? 0);
     }
     read(null, project.master.inserts, master);
-    return { tracks, master: { trackId: '', peakLeft: master, peakRight: master * 0.97 }, readings };
+    return { tracks, master: masterMeter, readings };
   }
 
   // ---- commands
@@ -5321,6 +5341,11 @@ function coalesceKey(commands: readonly EditCommand[]): string | undefined {
       f => only[f] !== undefined && only[f] !== null
     );
     return `${only.trackId}>${only.sendId}:${fields.join(',')}`;
+  }
+  // Phase 10: a panner drag is one undo step (the fields it moves).
+  if (only?.type === 'setPanner' && (only.mode === null || only.mode === undefined)) {
+    const fields = Object.keys(only).filter(f => f !== 'type' && f !== 'trackId');
+    return `${only.trackId}^panner:${fields.sort().join(',')}`;
   }
   if (only?.type !== 'setStrip') {
     return undefined;

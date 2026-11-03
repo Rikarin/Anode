@@ -19,6 +19,8 @@ export interface StereoLevel {
 @Injectable({ providedIn: 'root' })
 export class MeterBus {
   private readonly levels = new Map<string, StereoLevel>();
+  /** Phase 10: per-channel peaks of strips wider than stereo (`TrackMeter.peaks`), when the Server sends them. */
+  private readonly channels = new Map<string, number[]>();
   private readonly readings = new Map<string, number>();
   /** When the last frame arrived (performance.now()), so a meter can tell a stalled stream. */
   lastFrame = 0;
@@ -58,7 +60,25 @@ export class MeterBus {
     return this.levels.get(key) ?? Silence;
   }
 
+  /**
+   * The latest per-channel levels of a strip with `count` channels (a surround strip's multichannel meter): the
+   * Server's `peaks` when it sends them, else left and right on the first two channels.
+   */
+  channelLevels(key: string, count: number): readonly number[] {
+    const peaks = this.channels.get(key);
+    if (peaks && peaks.length >= count) {
+      return peaks;
+    }
+    const level = this.level(key);
+    return Array.from({ length: count }, (_, i) => peaks?.[i] ?? (i === 0 ? level.left : i === 1 ? level.right : 0));
+  }
+
   private set(key: string, meter: TrackMeter): void {
+    if (meter.peaks) {
+      this.channels.set(key, meter.peaks);
+    } else {
+      this.channels.delete(key);
+    }
     const level = this.levels.get(key);
     if (level) {
       level.left = meter.peakLeft;

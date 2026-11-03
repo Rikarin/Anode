@@ -1,4 +1,12 @@
-import type { ChannelStrip, IoLabels, PluginInfo, Track } from '@anode/api-client';
+import {
+  type ChannelStrip,
+  type IoLabels,
+  type Panner,
+  type PluginInfo,
+  type SpeakerLayout,
+  SpeakerLayouts,
+  type Track
+} from '@anode/api-client';
 import {
   MaxFaderDb,
   SilenceDb,
@@ -137,6 +145,10 @@ export function targetsOf(
     return [main[0] as AutomationTarget, main[2] as AutomationTarget];
   }
   const list = main;
+  // Phase 10: the panners' parameters (the Surround Panner on a surround output, the 3D Object Panner on an object).
+  if (track.kind !== undefined) {
+    list.push(...pannerTargets(strip));
+  }
   for (const send of track.strip.sends) {
     list.push({
       ...DbTarget,
@@ -179,6 +191,158 @@ export function targetsOf(
     list.push(smartControlTarget(control.id, control.name, control.value));
   }
   return list;
+}
+
+/** A panner parameter's description: its address, name, range, unit and how it reads. */
+interface PannerParameter {
+  target: string;
+  name: string;
+  min: number;
+  max: number;
+  unit: string;
+  current: (strip: ChannelStrip) => number;
+  format: (value: number) => string;
+}
+
+const degrees = (value: number) => `${Math.round(value)}°`;
+const percent = (value: number) => `${Math.round(value * 100)} %`;
+const level = (value: number) => (value <= -60 ? '−∞ dB' : formatDb(value));
+/** An angle as the panners read it: positive to the left (ADM). */
+const side = (value: number) => {
+  const a = Math.round(value);
+  return a === 0 || Math.abs(a) === 180 ? `${Math.abs(a)}°` : a > 0 ? `${a}° L` : `${-a}° R`;
+};
+
+const SurroundParameters: readonly PannerParameter[] = [
+  {
+    target: 'surround:angle',
+    name: 'Surround Angle',
+    min: -180,
+    max: 180,
+    unit: '°',
+    current: s => s.panner.surround.angle,
+    format: side
+  },
+  {
+    target: 'surround:diversity',
+    name: 'Surround Diversity',
+    min: 0,
+    max: 1,
+    unit: '',
+    current: s => s.panner.surround.diversity,
+    format: percent
+  },
+  {
+    target: 'surround:elevation',
+    name: 'Surround Elevation',
+    min: 0,
+    max: 90,
+    unit: '°',
+    current: s => s.panner.surround.elevation,
+    format: degrees
+  },
+  {
+    target: 'surround:centre',
+    name: 'Surround Centre Level',
+    min: -144,
+    max: 0,
+    unit: 'dB',
+    current: s => s.panner.surround.centreLevelDb,
+    format: level
+  },
+  {
+    target: 'surround:lfe',
+    name: 'Surround LFE Level',
+    min: -144,
+    max: 0,
+    unit: 'dB',
+    current: s => s.panner.surround.lfeLevelDb,
+    format: level
+  },
+  {
+    target: 'surround:spread',
+    name: 'Surround Spread',
+    min: 0,
+    max: 180,
+    unit: '°',
+    current: s => s.panner.surround.spread,
+    format: degrees
+  }
+];
+
+const ObjectParameters: readonly PannerParameter[] = [
+  {
+    target: 'object:azimuth',
+    name: 'Object Azimuth',
+    min: -180,
+    max: 180,
+    unit: '°',
+    current: s => s.panner.object.azimuth,
+    format: side
+  },
+  {
+    target: 'object:elevation',
+    name: 'Object Elevation',
+    min: -90,
+    max: 90,
+    unit: '°',
+    current: s => s.panner.object.elevation,
+    format: degrees
+  },
+  {
+    target: 'object:distance',
+    name: 'Object Distance',
+    min: 0,
+    max: 1,
+    unit: '',
+    current: s => s.panner.object.distance,
+    format: percent
+  },
+  {
+    target: 'object:size',
+    name: 'Object Size',
+    min: 0,
+    max: 1,
+    unit: '',
+    current: s => s.panner.object.size,
+    format: percent
+  }
+];
+
+/**
+ * A strip's panner targets (Phase 10, `PannerTargets`), under "Panner": the Surround Panner's when its output is
+ * surround, the 3D Object Panner's when it is an object. Levels draw on the fader's taper; the rest linearly.
+ */
+export function pannerTargets(strip: ChannelStrip): AutomationTarget[] {
+  // Tolerant of a strip from before Phase 10 (no formats or panner): no panner targets.
+  const layout = SpeakerLayouts[strip.outputFormat] as SpeakerLayout | undefined;
+  const mode = (strip.panner as Panner | undefined)?.mode ?? 'stereo';
+  const surround = (layout?.speakers.length ?? 2) > 2;
+  const list = [
+    ...(surround && mode !== 'object' ? SurroundParameters : []),
+    ...(mode === 'object' ? ObjectParameters : [])
+  ];
+  return list.map(p => {
+    const db = p.unit === 'dB';
+    return {
+      target: p.target,
+      name: p.name,
+      group: 'Panner',
+      min: p.min,
+      max: p.max,
+      default: p.current(strip),
+      unit: p.unit,
+      steps: 0,
+      stepped: false,
+      toNormal: db
+        ? (value: number) => faderPosition(Math.min(0, value))
+        : (value: number) => (Math.min(p.max, Math.max(p.min, value)) - p.min) / (p.max - p.min),
+      fromNormal: db
+        ? (normal: number) => Math.min(0, Math.round(faderDb(normal) * 10) / 10)
+        : (normal: number) => Math.round((p.min + Math.min(1, Math.max(0, normal)) * (p.max - p.min)) * 100) / 100,
+      format: p.format
+    };
+  });
 }
 
 /** A Smart Control's lane, `smartControl:{controlId}`: 0…1 shown as a percentage (a switch as off and on). */

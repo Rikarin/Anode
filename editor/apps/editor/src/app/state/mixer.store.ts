@@ -1,5 +1,6 @@
 import { Injectable, inject, signal } from '@angular/core';
 import type {
+  ChannelFormat,
   ChannelStrip,
   CommandResult,
   EditCommand,
@@ -8,6 +9,8 @@ import type {
   InsertChain,
   MixerGroup,
   MixerSettings,
+  Panner,
+  PannerMode,
   ParameterInfo,
   Send,
   Track
@@ -22,6 +25,38 @@ export type StripControl = 'volumeDb' | 'pan';
 
 const Labels: Record<StripControl, string> = { volumeDb: 'Volume', pan: 'Pan' };
 const Targets: Record<StripControl, string> = { volumeDb: 'volume', pan: 'pan' };
+
+/** A panner move: `setPanner`'s flat fields (docs/11-phase-10.md, "Commands"). */
+export type PannerChange = Omit<Extract<EditCommand, { type: 'setPanner' }>, 'type' | 'trackId' | 'mode'>;
+
+/** Each flat field's place in the stored panner, and its automation address. */
+export const PannerFields: Readonly<
+  Record<keyof PannerChange, { panner: 'surround' | 'object'; property: string; target: string }>
+> = {
+  angle: { panner: 'surround', property: 'angle', target: 'surround:angle' },
+  diversity: { panner: 'surround', property: 'diversity', target: 'surround:diversity' },
+  surroundElevation: { panner: 'surround', property: 'elevation', target: 'surround:elevation' },
+  centreLevelDb: { panner: 'surround', property: 'centreLevelDb', target: 'surround:centre' },
+  lfeLevelDb: { panner: 'surround', property: 'lfeLevelDb', target: 'surround:lfe' },
+  spread: { panner: 'surround', property: 'spread', target: 'surround:spread' },
+  azimuth: { panner: 'object', property: 'azimuth', target: 'object:azimuth' },
+  objectElevation: { panner: 'object', property: 'elevation', target: 'object:elevation' },
+  distance: { panner: 'object', property: 'distance', target: 'object:distance' },
+  size: { panner: 'object', property: 'size', target: 'object:size' }
+};
+
+/** A panner with flat changes applied. */
+export function withPannerChange(panner: Panner, change: PannerChange): Panner {
+  let next = panner;
+  for (const [field, value] of Object.entries(change) as [keyof PannerChange, number | null | undefined][]) {
+    if (value === null || value === undefined) {
+      continue;
+    }
+    const { panner: which, property } = PannerFields[field];
+    next = { ...next, [which]: { ...next[which], [property]: value } };
+  }
+  return next;
+}
 
 /** The strip key of the master in {@link MixerStore}'s methods. */
 export const Master = null;
@@ -84,6 +119,10 @@ export class MixerStore {
       this.parameterName(trackId, insertId, parameterId)
     );
   });
+  /** Panner moves (Phase 10), one coalesced `setPanner` stream per track; a gesture's fields accumulate. */
+  private readonly pannerCoalescer = new Coalescer<PannerChange>((trackId, change) =>
+    this.project.execute([{ type: 'setPanner', trackId, ...change }], 'Panner')
+  );
   /** Controls held now (a drag in progress), which show what they send instead of their automation. */
   private readonly held = signal<ReadonlySet<string>>(new Set());
   private readonly holdTimers = new Map<string, ReturnType<typeof setTimeout>>();
@@ -117,6 +156,58 @@ export class MixerStore {
   /** A control's gesture ended: it shows its automation again (touch). */
   release(trackId: string | null, control: StripControl): void {
     this.unhold(key(trackId, control));
+  }
+
+  // ---- panners (Phase 10, docs/11-phase-10.md)
+
+  /**
+   * The panner to show for a track: the stored one with the moves being sent, else (while playing and not held) its
+   * `surround:`/`object:` automation.
+   */
+  panner(trackId: string): Panner | undefined {
+    const stored = this.strip(trackId)?.panner;
+    if (!stored) {
+      return undefined;
+    }
+    const pending = this.pannerCoalescer.pending(trackId);
+    if (pending) {
+      return withPannerChange(stored, pending);
+    }
+    if (this.held().has(pannerKey(trackId))) {
+      return stored;
+    }
+    const automated: PannerChange = {};
+    for (const [field, { target }] of Object.entries(PannerFields) as [keyof PannerChange, { target: string }][]) {
+      const value = this.automation.playbackValue(trackId, target);
+      if (value !== undefined) {
+        automated[field] = value;
+      }
+    }
+    return Object.keys(automated).length ? withPannerChange(stored, automated) : stored;
+  }
+
+  /** Moves a panner during a drag: shown at once, sent coalesced (`setPanner` with only the fields that moved). */
+  setPanner(trackId: string, change: PannerChange): Promise<void> {
+    this.hold(pannerKey(trackId));
+    return this.pannerCoalescer.set(trackId, { ...this.pannerCoalescer.pending(trackId), ...change });
+  }
+
+  /** A panner gesture ended: it shows its automation again. */
+  releasePanner(trackId: string): void {
+    this.unhold(pannerKey(trackId));
+  }
+
+  /** The bed/object switch: the Surround Panner (a bed channel) or the 3D Object Panner (an object). */
+  setPannerMode(trackId: string, mode: PannerMode): Promise<unknown> {
+    return this.project.execute(
+      [{ type: 'setPanner', trackId, mode }],
+      mode === 'object' ? 'Object Mode' : mode === 'surround' ? 'Bed Mode' : 'Stereo Pan'
+    );
+  }
+
+  /** A strip's input format (audio tracks and auxes; an aux's is its bus's). */
+  setInputFormat(trackId: string, inputFormat: ChannelFormat): Promise<unknown> {
+    return this.project.execute([{ type: 'setStripFormat', trackId, inputFormat }], 'Input Format');
   }
 
   toggleMute(trackId: string | null): void {
@@ -424,6 +515,10 @@ export class MixerStore {
       });
     }
   }
+}
+
+function pannerKey(trackId: string): string {
+  return `${trackId}|panner`;
 }
 
 function key(trackId: string | null, control: StripControl): string {

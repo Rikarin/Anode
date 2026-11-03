@@ -798,3 +798,40 @@ export class FakeListenInSocket implements ListenInSocket {
     this.onclose?.(new CloseEvent('close', { code: 1000 }));
   }
 }
+
+// ---- meters: per-speaker levels of surround strips
+
+/** The angle between two directions, in degrees (0…180). */
+function separation(az1: number, el1: number, az2: number, el2: number): number {
+  const r = Math.PI / 180;
+  const cos = Math.sin(el1 * r) * Math.sin(el2 * r) + Math.cos(el1 * r) * Math.cos(el2 * r) * Math.cos((az1 - az2) * r);
+  return Math.acos(Math.max(-1, Math.min(1, cos))) / r;
+}
+
+/**
+ * A rough picture of where a strip's panner puts its signal in its output layout, for the fake meters (the engine's
+ * panners are D's): each speaker's gain falls with its angle from the puck or object, sharper as diversity rises (or
+ * size falls), normalised to the loudest; the LFE takes the LFE level; an input of the output's format passes through.
+ */
+export function fakeSpeakerGains(strip: ChannelStrip): number[] {
+  const speakers = SpeakerLayouts[strip.outputFormat].speakers;
+  if (strip.inputFormat === strip.outputFormat) {
+    return speakers.map(() => 1);
+  }
+  const { mode, surround, object } = strip.panner;
+  const target =
+    mode === 'object'
+      ? { azimuth: object.azimuth, elevation: object.elevation, focus: 1 - object.size }
+      : { azimuth: surround.angle, elevation: surround.elevation, focus: surround.diversity };
+  const sharpness = 1 + 12 * target.focus;
+  const gains = speakers.map(s => {
+    if (s.lfe) {
+      return mode === 'object' || surround.lfeLevelDb <= -144 ? 0 : 10 ** (surround.lfeLevelDb / 20);
+    }
+    const angle = separation(target.azimuth, target.elevation, s.azimuth, s.elevation);
+    const gain = Math.cos(((angle / 2) * Math.PI) / 180) ** sharpness;
+    return s.label === 'M+000' && mode !== 'object' ? gain * 10 ** (surround.centreLevelDb / 20) : gain;
+  });
+  const loudest = Math.max(1e-9, ...gains.filter((_, i) => !speakers[i]?.lfe));
+  return gains.map((g, i) => (speakers[i]?.lfe ? g : g / loudest));
+}
