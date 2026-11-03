@@ -108,8 +108,12 @@ public sealed class Phase8ApiTests : IAsyncDisposable {
 
         // MIDI Clock's tempo moves the host's transport only.
         await Client.EditAsync(new SetSyncSettingsCommand(SyncSource.MidiClock));
-        await Host.ReportSyncStateAsync(new(EngineSyncSource.MidiClock, true, 100.2, 0));
-        await ServerFixture.Eventually(async () => (await SyncAsync())?.ExternalTempo == 100.2);
+        // Reported until heard: a report can overtake the host's own answer to the settings above.
+        await ServerFixture.Eventually(async () => {
+                await Host.ReportSyncStateAsync(new(EngineSyncSource.MidiClock, true, 100.2, 0));
+                return (await SyncAsync())?.ExternalTempo == 100.2;
+            }
+        );
         Assert.Equal(120, (await Client.ProjectAsync()).Settings.Tempo);
 
         await Client.EditAsync(new SetSyncSettingsCommand(SyncSource.Link));

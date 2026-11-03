@@ -1,6 +1,8 @@
 using Anode.Contracts;
 using Anode.Dsp.Mastering;
 using Anode.Model.Audio;
+using Anode.Server.Engine;
+using Microsoft.Extensions.DependencyInjection;
 using System.Diagnostics;
 using System.Net.Http.Json;
 using System.Text;
@@ -80,6 +82,13 @@ public sealed class Phase11TwoProcessTests : IAsyncDisposable {
         events = await EventStream.ConnectAsync(server);
         await ServerFixture.Eventually(
             async () => (await server.SystemAsync(Client)).Engine.State == EngineState.Connected,
+            60
+        );
+        // The host's catalogue arrives after it connects: the T3 plugins are in it.
+        await ServerFixture.Eventually(
+            () => Task.FromResult(
+                server.Services.GetRequiredService<EngineCatalog>().ForEdits.Find("anode.binaural") is not null
+            ),
             60
         );
         await Client.CreateProjectAsync(name);
@@ -420,6 +429,12 @@ public sealed class Phase11TwoProcessTests : IAsyncDisposable {
         );
         await DoneAsync((await response.Content.ReadFromJsonAsync(ContractsJsonContext.Default.Job, Token))!);
         await Client.EditAsync(new SetMasteringCommand(Character: character));
+        // In the host's catalogue, its parameters are an insert's: edits and automation take them.
+        var assistant = (await Client.ProjectAsync()).Master.Inserts.Single();
+        await Client.EditAsync(
+            new SetInsertParameterCommand(assistant.Id, "width", 1),
+            new SetAutomationCommand($"insert:{assistant.Id}:ceilingDbtp", [new(0, -1, 0)])
+        );
         var master = await BounceAsync($"master {character}", 6 * Bar);
         var measured = MasteringAnalyzer.Analyse(master[0], master[1], Rate);
         Assert.InRange(measured.IntegratedLufs, -14.5, -13.5);
