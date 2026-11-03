@@ -27,18 +27,7 @@ static class DrumPlayer {
         foreach (var plan in plans) {
             var steps = plan.Steps(style);
             var bar = Bar(style, plan, steps, seed);
-            if (plan.Role == PhraseRole.Groove) {
-                Substitute(style, plan, steps, bar, seed);
-                Vary(style, switches, steps, bar);
-                if (onsets is not null) {
-                    Follow(style, plan, steps, bar, onsets);
-                }
-            } else if (plan.Role == PhraseRole.Fill) {
-                Fill(style, plan, steps, bar);
-                if (onsets is not null) {
-                    KeepKicksOnOnsets(style, plan, bar, onsets);
-                }
-            }
+            Vary(style, switches, plan, steps, bar, onsets, seed);
 
             // A crash on the one after a fill, and on a section's first beat where the grammar has it.
             if ((crashNext || plan.Bar.InSection == 0 && plan.Grammar.Allows("crashOnOne"))
@@ -249,6 +238,30 @@ static class DrumPlayer {
         }
     }
 
+    /// <summary>A bar's role's changes to its phrase: a groove's, or a fill's.</summary>
+    static void Vary(
+        Style style,
+        DrummerSwitches switches,
+        BarPlan plan,
+        int steps,
+        List<(int Step, int Note, char Mark)> bar,
+        IReadOnlyList<long>? onsets,
+        long seed
+    ) {
+        if (plan.Role == PhraseRole.Groove) {
+            Substitute(style, plan, steps, bar, seed);
+            Vary(style, switches, steps, bar);
+            if (onsets is not null) {
+                Follow(style, plan, steps, bar, onsets);
+            }
+        } else if (plan.Role == PhraseRole.Fill) {
+            Fill(style, plan, steps, bar);
+            if (onsets is not null) {
+                KeepKicksOnOnsets(style, plan, bar, onsets);
+            }
+        }
+    }
+
     /// <summary>
     ///     The kick follows the rhythm source: in a bar where it has onsets, the kicks are its onsets on the grid (the
     ///     strongest positions first, as many as the complexity allows), away from the backbeats.
@@ -311,7 +324,8 @@ static class DrumPlayer {
         var inBar = onsets.Where(o => o >= plan.Bar.Start && o < plan.Bar.End).ToArray();
         if (inBar.Length > 0) {
             bar.RemoveAll(h => h.Note == DrumKitNotes.Kick
-                && !inBar.Any(o => Math.Abs(plan.Bar.Start + h.Step * style.StepTicks - o) <= FillKickReach));
+                && !inBar.Any(o => Math.Abs(plan.Bar.Start + h.Step * style.StepTicks - o) <= FillKickReach)
+            );
         }
     }
 

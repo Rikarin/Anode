@@ -106,7 +106,12 @@ public sealed class MultiInsert : IDisposable {
     readonly int mask;
     int write;
 
-    public MultiInsert(SpeakerFormat format, MultichannelPolicy policy, IAudioEffect?[] extras, int linkParameter = -1) {
+    public MultiInsert(
+        SpeakerFormat format,
+        MultichannelPolicy policy,
+        IAudioEffect?[] extras,
+        int linkParameter = -1
+    ) {
         var layout = SpeakerLayout.Of(format);
         Format = format;
         Channels = layout.ChannelCount;

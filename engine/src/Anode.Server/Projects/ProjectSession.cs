@@ -1407,8 +1407,7 @@ public sealed partial class ProjectSession(
             Volatile.Write(
                 ref view,
                 new(o.Session, o.Folder, o.State, o.Ids, o.Revision, o.States, o.Analyses) {
-                    Mastering = mastering,
-                    HrtfPath = hrtfs.Path
+                    Mastering = mastering, HrtfPath = hrtfs.Path
                 }
             );
         } else {

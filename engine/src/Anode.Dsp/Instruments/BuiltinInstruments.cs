@@ -17,7 +17,8 @@ namespace Anode.Dsp.Instruments;
 ///     <c>anode.sampler</c> (SFZ and single samples). T2 (docs/07-phase-6.md, workstream E; docs/instruments/T2.md):
 ///     <c>anode.drum-synth</c>, <c>anode.fm</c>, <c>anode.organ</c>, <c>anode.electric-piano</c>,
 ///     <c>anode.wavetable</c> and <c>anode.quick-sampler</c>. T3 (docs/12-phase-11.md, workstream E):
-///     <c>anode.physical-model</c>, <c>anode.tape-replay</c> and <c>anode.sample-alchemy</c>. The engine lists <see cref="All" /> in its plugin catalogue.
+///     <c>anode.physical-model</c>, <c>anode.tape-replay</c> and <c>anode.sample-alchemy</c>. The engine lists
+///     <see cref="All" /> in its plugin catalogue.
 /// </summary>
 public static class BuiltinInstruments {
     /// <summary>The instrument a new instrument track gets.</summary>

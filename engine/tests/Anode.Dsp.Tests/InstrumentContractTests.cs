@@ -1,12 +1,12 @@
 using Anode.Dsp.Instruments;
+using Anode.Dsp.Instruments.Alchemy;
 using Anode.Dsp.Instruments.Drums;
 using Anode.Dsp.Instruments.Fm;
 using Anode.Dsp.Instruments.Organ;
+using Anode.Dsp.Instruments.Physical;
 using Anode.Dsp.Instruments.Piano;
 using Anode.Dsp.Instruments.Quick;
 using Anode.Dsp.Instruments.Sampler;
-using Anode.Dsp.Instruments.Alchemy;
-using Anode.Dsp.Instruments.Physical;
 using Anode.Dsp.Instruments.Synth;
 using Anode.Dsp.Instruments.Tape;
 using Anode.Dsp.Instruments.Wavetable;

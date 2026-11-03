@@ -48,7 +48,11 @@ public static class PitchFollow {
     ///     chord tone, keeping its octave (Chords).
     /// </summary>
     public static int Pitch(int pitch, int keyRoot, Chord chord, PitchSourceMode mode) =>
-        Math.Clamp(mode == PitchSourceMode.Chords ? NearestTone(pitch, chord) : pitch + Interval(keyRoot, chord), 0, 127);
+        Math.Clamp(
+            mode == PitchSourceMode.Chords ? NearestTone(pitch, chord) : pitch + Interval(keyRoot, chord),
+            0,
+            127
+        );
 
     /// <summary>The nearest pitch to <paramref name="pitch" /> that is a tone of <paramref name="chord" /> (a tie goes down).</summary>
     public static int NearestTone(int pitch, Chord chord) {

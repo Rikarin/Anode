@@ -8,7 +8,8 @@ namespace Anode.Dsp.Flex;
 /// </summary>
 /// <remarks>
 ///     The stretcher's own transposition carries a partial's offset from its FFT bin across at the input's scale, not the
-///     output's: a tone lands up to about (factor − 1) times half a bin off, 15 cents at 100 Hz (docs/flex/README.md, "Pitch
+///     output's: a tone lands up to about (factor − 1) times half a bin off, 15 cents at 100 Hz (docs/flex/README.md,
+///     "Pitch
 ///     of transposed tones"), which a chord-following region cannot have. Anything else (a pitch curve, formants, gain)
 ///     goes to the stretcher as before. Allocation-free after construction, but for a warp map longer than any before it.
 /// </remarks>
@@ -104,8 +105,7 @@ internal sealed class TransposingRenderer : IFlexRenderer {
 
         for (var i = 0; i < warpLength; i++) {
             warp[i] = new() {
-                Offset = (long)Math.Round(region.Warp[i].Offset * factor),
-                FileFrame = region.Warp[i].FileFrame
+                Offset = (long)Math.Round(region.Warp[i].Offset * factor), FileFrame = region.Warp[i].FileFrame
             };
         }
 

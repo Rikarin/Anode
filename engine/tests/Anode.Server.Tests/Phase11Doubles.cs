@@ -20,8 +20,7 @@ namespace Anode.Server.Tests;
 /// </summary>
 /// <summary>A style library that cannot be loaded: its catalogue answers 503, its generator fails.</summary>
 sealed class MissingSessionPlayers : ISessionPlayerLibrary {
-    static ProjectException Missing =>
-        new(503, "The Session Player style library is not available: missing.");
+    static ProjectException Missing => new(503, "The Session Player style library is not available: missing.");
 
     public SessionPlayerCatalog Catalog => throw Missing;
 

@@ -19,7 +19,8 @@ public sealed class EffectGoldenRenderTests {
 
     /// <summary>Every built-in effect but the T3 ones, whose renders are <see cref="T3GoldenRenderTests" />'.</summary>
     public static TheoryData<string> Ids => [
-        ..BuiltinEffects.All.Select(static d => d.Id).Where(static id => id is not (Saturation.Id or MasteringAssistant.Id))
+        ..BuiltinEffects.All.Select(static d => d.Id)
+            .Where(static id => id is not (Saturation.Id or MasteringAssistant.Id))
     ];
 
     static (float[] Left, float[] Right) Render(string id, int block = Play.Block) {

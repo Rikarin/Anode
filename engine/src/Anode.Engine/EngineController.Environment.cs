@@ -79,7 +79,9 @@ public sealed partial class EngineController {
             var now = System.Environment.TickCount64;
             if (movedTargets.Count > 0 && now - lastControlReport >= ControlReportMilliseconds) {
                 lastControlReport = now;
-                EnvironmentControl?.Invoke(new([..movedTargets.Select(static m => new EngineControlMove(m.Key, m.Value))]));
+                EnvironmentControl?.Invoke(
+                    new([..movedTargets.Select(static m => new EngineControlMove(m.Key, m.Value))])
+                );
                 movedTargets.Clear();
             }
         }

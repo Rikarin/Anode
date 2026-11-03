@@ -1004,7 +1004,7 @@ public sealed unsafe partial class AudioEngine {
         var frames = blockFrames;
         var byGroup = multi.LinkParameter >= 0
             && multi.GroupCount > 1
-            && (int)effect.GetParameter(multi.LinkParameter) == Dsp.Spatial.ChannelLink.ByGroup;
+            && (int)effect.GetParameter(multi.LinkParameter) == ChannelLink.ByGroup;
         var groups = byGroup ? multi.GroupCount : 1;
         for (var c = 0; c < width; c++) {
             multi.Write(c, Signal(c));
@@ -1012,22 +1012,7 @@ public sealed unsafe partial class AudioEngine {
 
         for (var g = 0; g < groups; g++) {
             var key = multi.Key.AsSpan(0, frames);
-            for (var i = 0; i < frames; i++) {
-                var loud = 0f;
-                for (var c = 0; c < width; c++) {
-                    if (byGroup && multi.SpeakerGroups[c] != g) {
-                        continue;
-                    }
-
-                    var v = Signal(c)[i];
-                    if (Math.Abs(v) > Math.Abs(loud)) {
-                        loud = v;
-                    }
-                }
-
-                key[i] = loud;
-            }
-
+            LoudestOf(multi, byGroup ? g : -1, width, key);
             multi.Write(width + g, key);
         }
 
@@ -1053,27 +1038,54 @@ public sealed unsafe partial class AudioEngine {
 
             var ratio = multi.Ratio.AsSpan(0, frames);
             multi.Read(width + g, latency, ratio); // the key as the effect's output lines up with it
-            var held = multi.LastRatios[g];
-            for (var i = 0; i < frames; i++) {
-                var k = ratio[i];
-                if (Math.Abs(k) > 1e-9f) {
-                    held = probe[i] / k;
-                }
+            Ratios(multi, g, probe, ratio);
+            ApplyRatio(multi, byGroup ? g : -1, width, latency, ratio);
+        }
+    }
 
-                ratio[i] = held;
+    /// <summary>Each frame's loudest sample of the channels of <paramref name="group" /> (−1: every channel).</summary>
+    void LoudestOf(MultiInsert multi, int group, int width, Span<float> key) {
+        key.Clear();
+        for (var c = 0; c < width; c++) {
+            if (group >= 0 && multi.SpeakerGroups[c] != group) {
+                continue;
             }
 
-            multi.LastRatios[g] = held;
-            for (var c = 0; c < width; c++) {
-                if (byGroup && multi.SpeakerGroups[c] != g) {
-                    continue;
+            var x = Signal(c);
+            for (var i = 0; i < key.Length; i++) {
+                if (Math.Abs(x[i]) > Math.Abs(key[i])) {
+                    key[i] = x[i];
                 }
+            }
+        }
+    }
 
-                var x = Signal(c);
-                multi.Read(c, latency, x);
-                for (var i = 0; i < frames; i++) {
-                    x[i] *= ratio[i];
-                }
+    /// <summary>The effect's output over its key, held while the key is silent, in place of the delayed key.</summary>
+    static void Ratios(MultiInsert multi, int group, ReadOnlySpan<float> output, Span<float> ratio) {
+        var held = multi.LastRatios[group];
+        for (var i = 0; i < ratio.Length; i++) {
+            var k = ratio[i];
+            if (Math.Abs(k) > 1e-9f) {
+                held = output[i] / k;
+            }
+
+            ratio[i] = held;
+        }
+
+        multi.LastRatios[group] = held;
+    }
+
+    /// <summary>The channels of <paramref name="group" /> (−1: every channel), delayed and scaled by the gain.</summary>
+    void ApplyRatio(MultiInsert multi, int group, int width, int latency, ReadOnlySpan<float> ratio) {
+        for (var c = 0; c < width; c++) {
+            if (group >= 0 && multi.SpeakerGroups[c] != group) {
+                continue;
+            }
+
+            var x = Signal(c);
+            multi.Read(c, latency, x);
+            for (var i = 0; i < x.Length; i++) {
+                x[i] *= ratio[i];
             }
         }
     }

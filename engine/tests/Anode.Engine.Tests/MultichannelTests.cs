@@ -326,7 +326,12 @@ public sealed class MultichannelTests : IDisposable {
             "c",
             Compressor.Id,
             new Dictionary<string, double> {
-                ["threshold"] = -40, ["ratio"] = 20, ["attack"] = 0.1, ["release"] = 5, ["autoGain"] = 0, ["link"] = link
+                ["threshold"] = -40,
+                ["ratio"] = 20,
+                ["attack"] = 0.1,
+                ["release"] = 5,
+                ["autoGain"] = 0,
+                ["link"] = link
             }
         );
         EngineTrack[] tracks = [

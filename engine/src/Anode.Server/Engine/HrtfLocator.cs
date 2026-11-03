@@ -28,8 +28,9 @@ public sealed class HrtfLocator(IConfiguration configuration) {
 
         var bundled = System.IO.Path.Combine(AppContext.BaseDirectory, "hrtf");
         if (Directory.Exists(bundled)
-            && Directory.EnumerateFiles(bundled, "*" + Extension).Order(StringComparer.Ordinal).FirstOrDefault() is
-                { } first) {
+            && Directory.EnumerateFiles(bundled, "*" + Extension)
+                .Order(StringComparer.Ordinal)
+                .FirstOrDefault() is { } first) {
             return first;
         }
 

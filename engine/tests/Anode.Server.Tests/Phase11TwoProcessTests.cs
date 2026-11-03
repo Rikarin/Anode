@@ -262,7 +262,10 @@ public sealed class Phase11TwoProcessTests : IAsyncDisposable {
         int[] intervals = [0, -3, 5, -5];
         var (track, region) = await InstrumentAsync("Bass", "anode.synth", 4);
         await Client.EditAsync(
-            new AddNotesCommand(region, [..intervals.Select(static (_, bar) => new NewNote(48, 100, 1, bar * Bar, Bar))]),
+            new AddNotesCommand(
+                region,
+                [..intervals.Select(static (_, bar) => new NewNote(48, 100, 1, bar * Bar, Bar))]
+            ),
             new SetRegionKeyCommand([region], c),
             new SetPitchSourceCommand([region], PitchSourceMode.Root)
         );
@@ -311,11 +314,19 @@ public sealed class Phase11TwoProcessTests : IAsyncDisposable {
             new AddEnvironmentObjectCommand(EnvironmentObjectKind.Arpeggiator, 200, 0),
             new AddEnvironmentObjectCommand(EnvironmentObjectKind.TrackInput, 300, 0, TrackId: track),
             new AddEnvironmentObjectCommand(EnvironmentObjectKind.Monitor, 200, 100),
-            new AddEnvironmentObjectCommand(EnvironmentObjectKind.Fader, 0, 200, Parameters: new Dictionary<string, double> {
-                    ["message"] = 0, ["number"] = 7
-                }
+            new AddEnvironmentObjectCommand(
+                EnvironmentObjectKind.Fader,
+                0,
+                200,
+                Parameters: new Dictionary<string, double> { ["message"] = 0, ["number"] = 7 }
             ),
-            new AddEnvironmentObjectCommand(EnvironmentObjectKind.ControlTarget, 100, 200, TrackId: track, Address: "volume")
+            new AddEnvironmentObjectCommand(
+                EnvironmentObjectKind.ControlTarget,
+                100,
+                200,
+                TrackId: track,
+                Address: "volume"
+            )
         );
         var environment = (await Client.ProjectAsync()).Environment;
         string O(EnvironmentObjectKind kind) => environment.Objects.Single(o => o.Kind == kind).Id;
@@ -326,14 +337,25 @@ public sealed class Phase11TwoProcessTests : IAsyncDisposable {
                 O(EnvironmentObjectKind.Transformer),
                 0
             ),
-            new ConnectEnvironmentCommand(O(EnvironmentObjectKind.Transformer), 0, O(EnvironmentObjectKind.Arpeggiator), 0),
-            new ConnectEnvironmentCommand(O(EnvironmentObjectKind.Arpeggiator), 0, O(EnvironmentObjectKind.TrackInput), 0),
+            new ConnectEnvironmentCommand(
+                O(EnvironmentObjectKind.Transformer),
+                0,
+                O(EnvironmentObjectKind.Arpeggiator),
+                0
+            ),
+            new ConnectEnvironmentCommand(
+                O(EnvironmentObjectKind.Arpeggiator),
+                0,
+                O(EnvironmentObjectKind.TrackInput),
+                0
+            ),
             new ConnectEnvironmentCommand(O(EnvironmentObjectKind.Transformer), 0, O(EnvironmentObjectKind.Monitor), 0),
             new ConnectEnvironmentCommand(O(EnvironmentObjectKind.Fader), 0, O(EnvironmentObjectKind.ControlTarget), 0),
             new SetTrackCommand(track, RecordArmed: true)
         );
         await Client.TransportAsync(TransportCommand.Locate, 4 * Bar);
         await Client.TransportAsync(TransportCommand.Record);
+
         async Task LiveAsync(int status, int velocity) {
             (await Client.PostAsJsonAsync(
                 "/api/v1/midi/live",
@@ -344,9 +366,8 @@ public sealed class Phase11TwoProcessTests : IAsyncDisposable {
         }
 
         await LiveAsync(0x90, 100);
-        var monitored = await events!.WaitAsync<EnvironmentMonitorEvent>(
-            e => e.ObjectId == O(EnvironmentObjectKind.Monitor) && e.Events.Count >= 3,
-            10
+        var monitored = await events!.WaitAsync<EnvironmentMonitorEvent>(e =>
+            e.ObjectId == O(EnvironmentObjectKind.Monitor) && e.Events.Count >= 3
         );
         Assert.Equal([72, 76, 79], monitored.Events.Select(static e => e.Data1).Take(3).Order());
         await Task.Delay(1500, Token);
