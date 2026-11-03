@@ -16,6 +16,14 @@ import {
 } from '@anode/api-client';
 import { FakeAnodeServer } from './fake-server';
 
+/** A value the test needs to be there. */
+function must<T>(value: T | null | undefined): T {
+  if (value === null || value === undefined) {
+    throw new Error('Expected a value.');
+  }
+  return value;
+}
+
 const Ppq = 960;
 const Bar = 4 * Ppq;
 
@@ -105,7 +113,7 @@ describe('FakeAnodeServer, Phase 11', () => {
       expect(project(server).chordTrack.chords.map(c => c.quality)).toEqual(['', 'm7', 'maj7']);
       await run(server, { type: 'addChords', chords: [{ tick: Bar, root: name('a'), quality: 'm', bass: null }] });
       expect(project(server).chordTrack.chords.map(c => c.quality)).toEqual(['', 'm', 'maj7']);
-      const first = project(server).chordTrack.chords[0]!;
+      const first = must(project(server).chordTrack.chords[0]);
       await run(server, { type: 'editChords', chords: [{ ...first, quality: '7', bass: name('e') }] });
       expect(project(server).chordTrack.chords[0]).toMatchObject({ quality: '7', bass: name('e') });
       await server.undo();
@@ -145,9 +153,9 @@ describe('FakeAnodeServer, Phase 11', () => {
   describe('Chord ID', () => {
     async function progressionRegion(server: FakeAnodeServer) {
       await run(server, { type: 'addTrack', kind: 'instrument', stereo: true, name: 'Keys' });
-      const trackId = project(server).tracks[0]!.id;
+      const trackId = must(project(server).tracks[0]).id;
       await run(server, { type: 'addMidiRegion', trackId, startTick: 0, lengthTicks: 8 * Bar });
-      const regionId = project(server).midiRegions[0]!.id;
+      const regionId = must(project(server).midiRegions[0]).id;
       await run(server, {
         type: 'addNotes',
         regionId,
@@ -203,9 +211,9 @@ describe('FakeAnodeServer, Phase 11', () => {
     it('sets a MIDI region to follow, refuses Chords on audio, and sets and clears keys', async () => {
       const server = await song();
       await run(server, { type: 'addTrack', kind: 'instrument', stereo: true });
-      const trackId = project(server).tracks[0]!.id;
+      const trackId = must(project(server).tracks[0]).id;
       await run(server, { type: 'addMidiRegion', trackId, startTick: 0, lengthTicks: Bar });
-      const regionId = project(server).midiRegions[0]!.id;
+      const regionId = must(project(server).midiRegions[0]).id;
       await run(server, { type: 'setPitchSource', regionIds: [regionId], mode: 'chords' });
       expect(project(server).midiRegions[0]?.pitchSource).toBe('chords');
       await run(server, { type: 'setRegionKey', regionIds: [regionId], key: { tonic: name('e', -1), mode: 'minor' } });
@@ -213,10 +221,10 @@ describe('FakeAnodeServer, Phase 11', () => {
       await run(server, { type: 'setRegionKey', regionIds: [regionId], key: null });
       expect(project(server).midiRegions[0]?.key).toBeNull();
       await run(server, { type: 'addTrack', kind: 'audio', stereo: true });
-      const audioTrack = project(server).tracks.find(t => t.kind === 'audio')!;
+      const audioTrack = must(project(server).tracks.find(t => t.kind === 'audio'));
       const file = await server.importAudioFile('/Users/me/Music/bass.wav');
       await run(server, { type: 'addRegion', trackId: audioTrack.id, fileId: file.id, startTick: 0 });
-      const audioRegion = project(server).regions[0]!;
+      const audioRegion = must(project(server).regions[0]);
       await run(server, { type: 'setPitchSource', regionIds: [audioRegion.id], mode: 'root' });
       expect(project(server).regions[0]?.pitchSource).toBe('root');
       expect(
@@ -257,20 +265,20 @@ describe('FakeAnodeServer, Phase 11', () => {
         ['Verse', 0, 4 * Bar],
         ['Chorus', 4 * Bar, 4 * Bar]
       ]);
-      expect(regions[1]!.parameters.pad.intensity).toBeGreaterThan(regions[0]!.parameters.pad.intensity);
+      expect(must(regions[1]).parameters.pad.intensity).toBeGreaterThan(must(regions[0]).parameters.pad.intensity);
       expect(new Set(regions.map(r => r.seed)).size).toBe(2);
       // An 8-bar region over two sections holds a fill at the first section's last bar.
       await run(server, { type: 'deleteRegions', regionIds: regions.map(r => r.id) });
       await run(server, {
         type: 'addSessionPlayerRegion',
-        trackId: drummer!.id,
+        trackId: must(drummer).id,
         startTick: 0,
         lengthTicks: 8 * Bar,
         parameters: null
       });
-      const region = project(server).sessionPlayerRegions[0]!;
+      const region = must(project(server).sessionPlayerRegions[0]);
       const counts = perBar(await notesOf(server, region.id), 8);
-      expect(counts[3]).toBeGreaterThan(Math.max(counts[0]!, counts[1]!, counts[2]!));
+      expect(counts[3]).toBeGreaterThan(Math.max(must(counts[0]), must(counts[1]), must(counts[2])));
       const fill = (await notesOf(server, region.id)).filter(n => n.startTick >= 3.5 * Bar && n.startTick < 4 * Bar);
       expect(fill.some(n => DrumKitNotes.toms.includes(n.pitch))).toBe(true);
     });
@@ -288,10 +296,10 @@ describe('FakeAnodeServer, Phase 11', () => {
           bass: null,
           keys: null
         });
-        hits.push(perBar(await notesOf(server, region.id), 8)[0]!);
+        hits.push(must(perBar(await notesOf(server, region.id), 8)[0]));
       }
-      expect(hits[0]).toBeLessThan(hits[1]!);
-      expect(hits[1]).toBeLessThan(hits[2]!);
+      expect(hits[0]).toBeLessThan(must(hits[1]));
+      expect(hits[1]).toBeLessThan(must(hits[2]));
       const loudness: number[] = [];
       for (const intensity of [0.1, 0.5, 0.9]) {
         await run(server, {
@@ -305,8 +313,8 @@ describe('FakeAnodeServer, Phase 11', () => {
         const notes = await notesOf(server, region.id);
         loudness.push(notes.reduce((sum, n) => sum + n.velocity, 0) / notes.length);
       }
-      expect(loudness[0]).toBeLessThan(loudness[1]!);
-      expect(loudness[1]).toBeLessThan(loudness[2]!);
+      expect(loudness[0]).toBeLessThan(must(loudness[1]));
+      expect(loudness[1]).toBeLessThan(must(loudness[2]));
       const before = await server.sessionPlayerNotes(region.id);
       expect(await server.sessionPlayerNotes(region.id)).toEqual(before);
       await server.regenerateSessionPlayer(region.id, {});
@@ -320,8 +328,9 @@ describe('FakeAnodeServer, Phase 11', () => {
     it('applies a preset first and clears it on any other change; refuses another player’s switches', async () => {
       const server = await song();
       const { region } = await player(server, 'bass');
-      const preset = (await server.sessionPlayerCatalog()).styles.find(s => s.id === region.parameters.styleId)!
-        .presets[2]!;
+      const preset = must(
+        must((await server.sessionPlayerCatalog()).styles.find(s => s.id === region.parameters.styleId)).presets[2]
+      );
       await run(server, {
         type: 'setSessionPlayerRegion',
         regionId: region.id,
@@ -372,13 +381,15 @@ describe('FakeAnodeServer, Phase 11', () => {
         const down = notes.find(n => Math.abs(n.startTick - chord.tick) <= Ppq / 8);
         expect(down && down.pitch % 12).toBe(pitchClass(chord.bass ?? chord.root));
       }
-      const range = bass.region.parameters.bass!;
+      const range = must(bass.region.parameters.bass);
       expect(notes.every(n => n.pitch >= range.lowNote && n.pitch <= range.highNote)).toBe(true);
       const keys = await player(server, 'keyboard');
       const voiced = await notesOf(server, keys.region.id);
       for (const { chord } of Progression) {
         const tones = new Set(
-          ChordQualities.find(q => q.quality === chord.quality)!.intervals.map(i => (pitchClass(chord.root) + i) % 12)
+          must(ChordQualities.find(q => q.quality === chord.quality)).intervals.map(
+            i => (pitchClass(chord.root) + i) % 12
+          )
         );
         const at = voiced.filter(n => n.startTick >= chord.tick && n.startTick < chord.tick + Bar);
         expect(at.length).toBeGreaterThan(0);

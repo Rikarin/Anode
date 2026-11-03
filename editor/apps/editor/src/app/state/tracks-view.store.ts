@@ -28,10 +28,11 @@ export const MinLaneHeight = 36;
 export const MaxLaneHeight = 160;
 
 /** The global tracks Logic shows above the tracks, in its order (Phase 10 adds the movie track). */
-export type GlobalLane = 'marker' | 'arrangement' | 'movie' | 'tempo' | 'beatMapping' | 'signature' | 'key';
+export type GlobalLane = 'marker' | 'arrangement' | 'chord' | 'movie' | 'tempo' | 'beatMapping' | 'signature' | 'key';
 export const GlobalLanes: readonly GlobalLane[] = [
   'arrangement',
   'marker',
+  'chord',
   'movie',
   'tempo',
   'beatMapping',

@@ -585,6 +585,11 @@ export class ProjectStore {
             maps.patternRegions.delete(id);
           }
         }
+        if ([...this.sessionPlayerRegions().values()].some(r => r.trackId === op.id)) {
+          this.sessionPlayerRegions.update(
+            regions => new Map([...regions].filter(([, region]) => region.trackId !== op.id))
+          );
+        }
         break;
       case 'regionUpserted':
         maps.regions.set(op.region.id, op.region);

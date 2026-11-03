@@ -49,6 +49,14 @@ function refuse(message: string): never {
   throw new ApiError(422, message);
 }
 
+/** A value the fake's own tables always hold (an index into them, a default). */
+function must<T>(value: T | null | undefined): T {
+  if (value === null || value === undefined) {
+    throw new Error('The fake Server is missing a value it builds itself.');
+  }
+  return value;
+}
+
 function inRange(value: number, min: number, max: number, label: string): number {
   if (!Number.isFinite(value) || value < min || value > max) {
     refuse(`${label} is ${min} to ${max}.`);
@@ -182,8 +190,8 @@ export function applyChordId(project: Project, result: ChordIdResult, id: () => 
 
 function setRegionKey(project: Project, ids: readonly string[], key: RegionKey | null): Project {
   const checked = key ? { tonic: checkPitchName(key.tonic, 'A key'), mode: key.mode } : null;
-  if (checked && checked.mode !== 'major' && checked.mode !== 'minor') {
-    refuse(`${String(checked.mode)} is not a key mode.`);
+  if (checked && !(['major', 'minor'] as const).some(mode => mode === checked.mode)) {
+    refuse('A key is major or minor.');
   }
   const wanted = new Set(ids);
   for (const id of ids) {
@@ -364,7 +372,7 @@ function findStyle(catalog: SessionPlayerCatalog, id: string): SessionPlayerStyl
 
 /** A section kind's defaults in a style. */
 function sectionDefaults(style: SessionPlayerStyle, kind: SectionKind): SessionPlayerParameters {
-  return structuredClone(style.sections.find(s => s.kind === kind)?.parameters ?? style.sections[0]!.parameters);
+  return structuredClone(style.sections.find(s => s.kind === kind)?.parameters ?? must(style.sections[0]).parameters);
 }
 
 // ---- Session Player tracks and regions
@@ -540,7 +548,7 @@ function addSessionPlayerTrack(
 ): Project {
   const player = command.player;
   if (!(player in PlayerTrackKinds)) {
-    refuse(`${String(player)} is not a Session Player.`);
+    refuse(`${player} is not a Session Player.`);
   }
   const style = command.styleId
     ? findStyle(ctx.catalog, command.styleId)
@@ -891,6 +899,13 @@ function fillBars(project: Project, region: SessionPlayerRegion, bars: readonly 
   return fills;
 }
 
+/** The kick's sixteenths at each level of complexity. */
+const KickSteps: readonly [readonly number[], readonly number[], readonly number[]] = [
+  [0, 8],
+  [0, 8, 10],
+  [0, 3, 8, 10, 14]
+];
+
 function drumNote(piece: DrumPiece, variation: number): number {
   const notes = DrumKitNotes[piece];
   return notes[Math.min(notes.length - 1, variation)] ?? notes[0] ?? 36;
@@ -909,7 +924,7 @@ function rhythmOnsets(project: Project, region: SessionPlayerRegion, trackId: st
 
 function drums(project: Project, region: SessionPlayerRegion, bars: number[], rng: () => number): Generated[] {
   const p = region.parameters;
-  const switches = p.drums ?? defaultSwitches('drummer').drums!;
+  const switches = p.drums ?? must(defaultSwitches('drummer').drums);
   const on = new Map(switches.pieces.map(s => [s.piece, s]));
   const meter = new MeterMap(project.settings.signatures);
   const busy = level(p.pad.complexity);
@@ -935,14 +950,8 @@ function drums(project: Project, region: SessionPlayerRegion, bars: number[], rn
     const step = barTicks / 16;
     const fill = fills.has(bar);
     const fillFrom = fill ? 16 - Math.min(12, 4 + Math.round(p.fillAmount * 8)) : 16;
-    const kicks = electronic
-      ? [0, 4, 8, 12]
-      : [
-          [0, 8],
-          [0, 8, 10],
-          [0, 3, 8, 10, 14]
-        ][busy]!;
-    const extra = rng() < 0.5 ? [2, 6, 11, 13][Math.floor(rng() * 4)]! : -1;
+    const kicks = electronic ? [0, 4, 8, 12] : KickSteps[busy];
+    const extra = rng() < 0.5 ? must([2, 6, 11, 13][Math.floor(rng() * 4)]) : -1;
     const kickSteps = follow
       ? follow.filter(t => t >= bar && t < bar + barTicks).map(t => Math.round((t - bar) / step))
       : [...kicks, ...(extra >= 0 && !kicks.includes(extra) ? [extra] : [])];
@@ -974,7 +983,7 @@ function drums(project: Project, region: SessionPlayerRegion, bars: number[], rn
         // Ghost notes.
         notes.push({ pitch: drumNote('snare', 0), velocity: 28, channel: 1, startTick: tick, lengthTicks: Ppq / 8 });
       }
-      if (s % [4, 2, 1][busy]! === 0) {
+      if (s % must([4, 2, 1][busy]) === 0) {
         hit('hiHat', tick, s % 4 === 0 ? 6 : -6);
       }
       if ((s === 4 || s === 12) && on.get('percussion')?.on) {
@@ -982,7 +991,7 @@ function drums(project: Project, region: SessionPlayerRegion, bars: number[], rn
       }
     }
     // A crash on the downbeat after a fill.
-    if (index > 0 && fills.has(bars[index - 1]!)) {
+    if (index > 0 && fills.has(must(bars[index - 1]))) {
       hit('cymbals', bar, 10);
     }
   }
@@ -991,10 +1000,10 @@ function drums(project: Project, region: SessionPlayerRegion, bars: number[], rn
 
 function bass(project: Project, region: SessionPlayerRegion, rng: () => number): Generated[] {
   const p = region.parameters;
-  const range = p.bass ?? defaultSwitches('bass').bass!;
+  const range = p.bass ?? must(defaultSwitches('bass').bass);
   const meter = new MeterMap(project.settings.signatures);
   const end = region.startTick + region.lengthTicks;
-  const every = [2 * Ppq, Ppq, Ppq / 2][level(p.pad.complexity)]!;
+  const every = must([2 * Ppq, Ppq, Ppq / 2][level(p.pad.complexity)]);
   const changes = p.followChords
     ? project.chordTrack.chords.map(c => c.tick).filter(t => t > region.startTick && t < end)
     : [];
@@ -1013,7 +1022,7 @@ function bass(project: Project, region: SessionPlayerRegion, rng: () => number):
     const chord = chordAt(project, tick, p.followChords);
     const fifth = chord.tones[2] ?? chord.tones[1] ?? chord.root;
     // The chord's root (or slash bass) on its downbeat, then root, fifth and octave.
-    const pc = inChord === 0 ? chord.bass : [chord.root, fifth, chord.root, chord.root][inChord % 4]!;
+    const pc = inChord === 0 ? chord.bass : must([chord.root, fifth, chord.root, chord.root][inChord % 4]);
     let pitch = noteAbove(pc, range.lowNote);
     if (inChord % 4 === 3 && pitch + 12 <= range.highNote && rng() < 0.7) {
       pitch += 12;
@@ -1032,7 +1041,8 @@ function bass(project: Project, region: SessionPlayerRegion, rng: () => number):
 
 /** A voicing of a chord in a range, as close as can be to the previous one (voice leading). */
 function voice(chord: ChordTones, voicing: KeysSwitches['voicing'], low: number, high: number, previous: number[]) {
-  const tones = voicing === 'shell' ? [chord.root, chord.tones[1]!, chord.tones[3] ?? chord.tones[2]!] : chord.tones;
+  const tones =
+    voicing === 'shell' ? [chord.root, must(chord.tones[1]), chord.tones[3] ?? must(chord.tones[2])] : chord.tones;
   const centre = previous.length ? previous.reduce((a, b) => a + b, 0) / previous.length : (low + high) / 2;
   let best: number[] = [];
   let cost = Infinity;
@@ -1044,13 +1054,13 @@ function voice(chord: ChordTones, voicing: KeysSwitches['voicing'], low: number,
       at = noteAbove(pc, stacked.length ? at + 1 : at);
       stacked.push(at);
     }
-    const spread = voicing === 'spread' && stacked.length > 2 ? [stacked[0]! - 12, ...stacked.slice(1)] : stacked;
-    if (spread[0]! < low - 12 || spread.at(-1)! > high) {
+    const spread = voicing === 'spread' && stacked.length > 2 ? [must(stacked[0]) - 12, ...stacked.slice(1)] : stacked;
+    if (must(spread[0]) < low - 12 || must(spread.at(-1)) > high) {
       continue;
     }
     const mean = spread.reduce((a, b) => a + b, 0) / spread.length;
     const moves = previous.length
-      ? spread.reduce((sum, n, i) => sum + Math.abs(n - (previous[i] ?? previous.at(-1)!)), 0)
+      ? spread.reduce((sum, n, i) => sum + Math.abs(n - (previous[i] ?? must(previous.at(-1)))), 0)
       : Math.abs(mean - centre);
     if (moves < cost) {
       cost = moves;
@@ -1062,10 +1072,10 @@ function voice(chord: ChordTones, voicing: KeysSwitches['voicing'], low: number,
 
 function keys(project: Project, region: SessionPlayerRegion, rng: () => number): Generated[] {
   const p = region.parameters;
-  const k = p.keys ?? defaultSwitches('keyboard').keys!;
+  const k = p.keys ?? must(defaultSwitches('keyboard').keys);
   const end = region.startTick + region.lengthTicks;
-  const rhythm = k.rhythmId ?? ['sustain', 'sustain', 'pulse'][level(p.pad.complexity)]!;
-  const every = rhythm === 'sustain' ? [4 * Ppq, 2 * Ppq, Ppq][level(p.pad.complexity)]! : Ppq / 2;
+  const rhythm = k.rhythmId ?? must(['sustain', 'sustain', 'pulse'][level(p.pad.complexity)]);
+  const every = rhythm === 'sustain' ? must([4 * Ppq, 2 * Ppq, Ppq][level(p.pad.complexity)]) : Ppq / 2;
   const changes = p.followChords
     ? project.chordTrack.chords.map(c => c.tick).filter(t => t > region.startTick && t < end)
     : [];
@@ -1073,15 +1083,15 @@ function keys(project: Project, region: SessionPlayerRegion, rng: () => number):
   const notes: Generated[] = [];
   let previous: number[] = [];
   for (let s = 0; s < segments.length - 1; s++) {
-    const from = segments[s]!;
-    const to = segments[s + 1]!;
+    const from = must(segments[s]);
+    const to = must(segments[s + 1]);
     const chord = chordAt(project, from, p.followChords);
     const voices = voice(chord, k.voicing, k.lowNote, k.highNote, previous);
     previous = voices;
     for (let t = from, n = 0; t < to; t += every, n++) {
       const length = Math.max(30, Math.round((Math.min(to, t + every) - t) * 0.9));
       const at = t - region.startTick;
-      const played = rhythm === 'arpeggio' ? [voices[n % voices.length]!] : voices;
+      const played = rhythm === 'arpeggio' ? [must(voices[n % voices.length])] : voices;
       for (const pitch of played) {
         notes.push({
           pitch,
@@ -1222,7 +1232,7 @@ const Spellings: readonly PitchName[] = [
 ];
 
 export function spell(pc: number): PitchName {
-  return { ...Spellings[((pc % 12) + 12) % 12]! };
+  return { ...must(Spellings[((pc % 12) + 12) % 12]) };
 }
 
 /** A note Chord ID hears, in project ticks. */
@@ -1242,7 +1252,7 @@ function bestChord(weights: readonly number[], bass: number): { root: number; qu
       const tones = new Set(intervals.map(i => (root + i) % 12));
       let score = 0;
       for (let pc = 0; pc < 12; pc++) {
-        score += tones.has(pc) ? weights[pc]! : -1.2 * weights[pc]!;
+        score += tones.has(pc) ? must(weights[pc]) : -1.2 * must(weights[pc]);
       }
       // Missing tones cost a little; the bass on the root, or a smaller chord, wins ties.
       score -= [...tones].filter(pc => weights[pc] === 0).length * 0.3 * (total / 4);
@@ -1263,16 +1273,16 @@ const MinorProfile = [6.33, 2.68, 3.52, 5.38, 2.6, 3.53, 2.54, 4.75, 3.98, 2.69,
 export function detectKey(weights: readonly number[]): { key: RegionKey; confidence: number } {
   const correlate = (profile: readonly number[], tonic: number) => {
     const xs = weights;
-    const ys = Array.from({ length: 12 }, (_, pc) => profile[(pc - tonic + 12) % 12]!);
+    const ys = Array.from({ length: 12 }, (_, pc) => must(profile[(pc - tonic + 12) % 12]));
     const mx = xs.reduce((a, b) => a + b, 0) / 12;
     const my = ys.reduce((a, b) => a + b, 0) / 12;
     let num = 0;
     let dx = 0;
     let dy = 0;
     for (let i = 0; i < 12; i++) {
-      num += (xs[i]! - mx) * (ys[i]! - my);
-      dx += (xs[i]! - mx) ** 2;
-      dy += (ys[i]! - my) ** 2;
+      num += (must(xs[i]) - mx) * (must(ys[i]) - my);
+      dx += (must(xs[i]) - mx) ** 2;
+      dy += (must(ys[i]) - my) ** 2;
     }
     return dx && dy ? num / Math.sqrt(dx * dy) : 0;
   };
@@ -1294,7 +1304,7 @@ export function detectKey(weights: readonly number[]): { key: RegionKey; confide
 function histogram(notes: readonly Heard[]): number[] {
   const weights = new Array<number>(12).fill(0);
   for (const n of notes) {
-    weights[n.pitch % 12]! += n.lengthTicks * n.velocity;
+    weights[n.pitch % 12] = must(weights[n.pitch % 12]) + n.lengthTicks * n.velocity;
   }
   return weights;
 }
@@ -1322,7 +1332,7 @@ function audioNotes(project: Project, region: AudioRegion, span: { start: number
   for (let bar = Math.round(meter.barAt(span.start)), i = 0; meter.barStart(bar) < span.end; bar++, i++) {
     const start = Math.max(region.startTick, meter.barStart(bar));
     const length = meter.barStart(bar + 1) - start;
-    for (const pitch of progression[i % 4]!) {
+    for (const pitch of must(progression[i % 4])) {
       heard.push({ startTick: start, lengthTicks: length, pitch, velocity: 90 });
     }
   }
@@ -1348,13 +1358,13 @@ export function fakeChordId(project: Project, request: ChordIdRequest): ChordIdR
     if (!midi && !audio) {
       refuse(`No MIDI or audio region ${id}.`);
     }
-    const start = midi?.startTick ?? audio!.startTick;
-    const length = midi?.lengthTicks ?? lengthOfAudio(project, audio!);
+    const start = midi?.startTick ?? must(audio).startTick;
+    const length = midi?.lengthTicks ?? lengthOfAudio(project, must(audio));
     from = Math.min(from, start);
     to = Math.max(to, start + length);
     const heard = midi
       ? midi.notes.map(n => ({ ...n, startTick: midi.startTick + n.startTick }))
-      : audioNotes(project, audio!, { start, end: start + length });
+      : audioNotes(project, must(audio), { start, end: start + length });
     notes.push(...heard);
     if (request.detectKeys) {
       const detected = detectKey(histogram(heard));
@@ -1368,7 +1378,7 @@ export function fakeChordId(project: Project, request: ChordIdRequest): ChordIdR
   }
   const meter = new MeterMap(project.settings.signatures);
   const chords: DetectedChord[] = [];
-  let held: { root: number; quality: string; bass: number } | null = null;
+  let held = null as { root: number; quality: string; bass: number } | null;
   for (let tick = startTick; tick < endTick;) {
     const step = Math.round(request.resolutionTicks ?? meter.beatTicksAt(tick));
     const end = Math.min(endTick, tick + step);
@@ -1377,7 +1387,7 @@ export function fakeChordId(project: Project, request: ChordIdRequest): ChordIdR
     for (const n of notes) {
       const overlap = Math.min(end, n.startTick + n.lengthTicks) - Math.max(tick, n.startTick);
       if (overlap > 0) {
-        weights[n.pitch % 12]! += overlap * n.velocity;
+        weights[n.pitch % 12] = must(weights[n.pitch % 12]) + overlap * n.velocity;
         lowest = Math.min(lowest, n.pitch);
       }
     }
@@ -1386,7 +1396,7 @@ export function fakeChordId(project: Project, request: ChordIdRequest): ChordIdR
       const bass = lowest % 12;
       const best = bestChord(weights, bass);
       const keep = held ? scoreOf(weights, held.root, held.quality, bass) : -Infinity;
-      if (last && held && held.bass === bass && keep >= best.score - 0.15) {
+      if (last && held?.bass === bass && keep >= best.score - 0.15) {
         last.lengthTicks = end - last.tick;
       } else {
         held = { root: best.root, quality: best.quality, bass };
@@ -1412,7 +1422,7 @@ function scoreOf(weights: readonly number[], root: number, quality: string, bass
   const tones = new Set((ChordQualities.find(q => q.quality === quality)?.intervals ?? []).map(i => (root + i) % 12));
   let score = 0;
   for (let pc = 0; pc < 12; pc++) {
-    score += tones.has(pc) ? weights[pc]! : -1.2 * weights[pc]!;
+    score += tones.has(pc) ? must(weights[pc]) : -1.2 * must(weights[pc]);
   }
   score -= [...tones].filter(pc => weights[pc] === 0).length * 0.3 * (total / 4);
   score += bass === root ? total * 0.05 : 0;

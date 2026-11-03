@@ -22,6 +22,7 @@ import { provideIcons } from '@ng-icons/core';
 import {
   matAcUnitRound,
   matAddRound,
+  matAlbumRound,
   matCallSplitRound,
   matChevronRightRound,
   matExpandMoreRound,
@@ -30,6 +31,7 @@ import {
   matHourglassEmptyRound,
   matLayersRound,
   matMoreHorizRound,
+  matMusicNoteRound,
   matPianoRound,
   matSettingsInputComponentRound,
   matStarRound,
@@ -81,6 +83,7 @@ import { UiStore } from '../state/ui.store';
     provideIcons({
       matAcUnitRound,
       matAddRound,
+      matAlbumRound,
       matCallSplitRound,
       matChevronRightRound,
       matExpandMoreRound,
@@ -89,6 +92,7 @@ import { UiStore } from '../state/ui.store';
       matHourglassEmptyRound,
       matLayersRound,
       matMoreHorizRound,
+      matMusicNoteRound,
       matPianoRound,
       matSettingsInputComponentRound,
       matStarRound,
@@ -563,9 +567,9 @@ export class TrackHeader {
         aux: 'matCallSplitRound',
         vca: 'matTuneRound',
         stack: 'matFolderRound',
-        // Session Player tracks (Phase 11): the editor workstream gives them their own icons.
-        drummer: 'matPianoRound',
-        bassPlayer: 'matPianoRound',
+        // Session Player tracks (Phase 11), as New Tracks shows them.
+        drummer: 'matAlbumRound',
+        bassPlayer: 'matMusicNoteRound',
         keyboardPlayer: 'matPianoRound'
       })[this.track().kind]
   );
@@ -577,7 +581,9 @@ export class TrackHeader {
         ? 'External MIDI track'
         : track.kind === 'stack'
           ? 'Track stack'
-          : `Software instrument: ${track.instrument?.name ?? 'none'}`;
+          : track.kind === 'drummer'
+            ? 'Drummer'
+            : `${track.kind === 'bassPlayer' ? 'Bass Player' : track.kind === 'keyboardPlayer' ? 'Keyboard Player' : 'Software instrument'}: ${track.instrument?.name ?? 'none'}`;
   });
 
   constructor() {

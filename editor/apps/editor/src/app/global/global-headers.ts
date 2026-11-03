@@ -88,6 +88,7 @@ export class GlobalHeaders {
   protected readonly names: Record<GlobalLane, string> = {
     arrangement: 'Arrangement',
     marker: 'Marker',
+    chord: 'Chord',
     movie: 'Movie',
     tempo: 'Tempo',
     beatMapping: 'Beat Mapping',

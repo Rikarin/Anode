@@ -4074,6 +4074,13 @@ export class FakeAnodeServer implements AnodeApi {
             ...project,
             patternRegions: project.patternRegions.filter(r => r.trackId !== command.trackId),
             sessionPlayerRegions: project.sessionPlayerRegions.filter(r => r.trackId !== command.trackId),
+            // Environment objects that named it name nothing now.
+            environment: {
+              ...project.environment,
+              objects: project.environment.objects.map(o =>
+                o.trackId === command.trackId ? { ...o, trackId: null } : o
+              )
+            },
             liveLoops: {
               ...project.liveLoops,
               cells: project.liveLoops.cells.filter(c => c.trackId !== command.trackId)

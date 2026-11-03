@@ -2,6 +2,7 @@ export * from './lib/automation-lane';
 export * from './lib/automation-mode';
 export * from './lib/channel-strip';
 export * from './lib/choice';
+export * from './lib/chord-symbols';
 export * from './lib/drawbar';
 export * from './lib/fade-curve';
 export * from './lib/fader';

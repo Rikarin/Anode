@@ -7,6 +7,7 @@ import { type QuantizeChoice, quantizeChoices, regionQuantizeCommand } from '../
 import { gridLabel, QuantizeGrids } from '../midi/midi-math';
 import { ProjectStore } from '../state/project.store';
 import { UiStore } from '../state/ui.store';
+import { PitchSourceFields } from './pitch-source-fields';
 
 type PlaybackField = 'transpose' | 'velocity' | 'quantizeStrength' | 'swing';
 
@@ -25,7 +26,7 @@ const Labels: Record<PlaybackField, string> = {
 @Component({
   selector: 'an-region-inspector',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [AnKnob, XuiNumericInputImports, XuiSelectImports],
+  imports: [AnKnob, PitchSourceFields, XuiNumericInputImports, XuiSelectImports],
   host: { class: 'flex flex-col gap-2', role: 'group', '[attr.aria-label]': '"Region: " + region().name' },
   template: `
     <h3
@@ -77,6 +78,11 @@ const Labels: Record<PlaybackField, string> = {
       >
         Make Groove Template…
       </button>
+      <an-pitch-source-fields
+        [regionId]="region().id"
+        [mode]="region().pitchSource"
+        [regionKey]="region().key ?? null"
+      />
     </div>
     <div class="flex justify-around">
       <an-knob

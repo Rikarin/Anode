@@ -1,10 +1,11 @@
 import { CdkContextMenuTrigger } from '@angular/cdk/menu';
 import { ChangeDetectionStrategy, Component, computed, DestroyRef, inject, viewChild } from '@angular/core';
-import type { AutomationMode, EditCommand, TrackKind } from '@anode/api-client';
+import type { AutomationMode, EditCommand, SessionPlayerKind, TrackKind } from '@anode/api-client';
 import { RULER_HEIGHT } from '@anode/timeline';
 import { provideIcons } from '@ng-icons/core';
 import {
   matAddRound,
+  matAlbumRound,
   matAppsRound,
   matAutoFixNormalRound,
   matContentCutRound,
@@ -18,6 +19,7 @@ import {
   matHourglassEmptyRound,
   matJoinFullRound,
   matLayersRound,
+  matMusicNoteRound,
   matNearMeRound,
   matPianoRound,
   matPublicRound,
@@ -39,7 +41,9 @@ import { XuiTooltipImports } from '@xui/tooltip';
 import { AutomationHeader } from '../automation/automation-header';
 import { AutomationLanes } from '../automation/automation-lanes';
 import { AutomationStore } from '../automation/automation.store';
+import { ANODE_API } from '../core/api';
 import { ConnectionService } from '../core/connection';
+import { Notify } from '../core/notify';
 import { DrumMachineStore } from '../drum-machine/drum-machine.store';
 import { GlobalHeaders } from '../global/global-headers';
 import { GlobalTracks } from '../global/global-lanes';
@@ -52,6 +56,7 @@ import { KeyCommandsStore } from '../state/key-commands.store';
 import { LanesStore } from '../state/lanes.store';
 import { ProjectStore } from '../state/project.store';
 import { SelectionStore } from '../state/selection.store';
+import { SessionPlayersStore } from '../state/session-players.store';
 import { type GlobalLane, Tools, TracksViewStore, visibleGlobalLanes } from '../state/tracks-view.store';
 import { TransportStore } from '../state/transport.store';
 import { UiStore } from '../state/ui.store';
@@ -74,6 +79,13 @@ import { TrackHeader } from './track-header';
  * lane height ({@link TracksViewStore}). A right-click opens the tool menu, or the take folder's or the regions'
  * menu; T opens the tool menu where the pointer is.
  */
+/** New Tracks' Session Players (Phase 11). */
+const Players: readonly { player: SessionPlayerKind; label: string; icon: string }[] = [
+  { player: 'drummer', label: 'Drummer', icon: 'matAlbumRound' },
+  { player: 'bass', label: 'Bass Player', icon: 'matMusicNoteRound' },
+  { player: 'keyboard', label: 'Keyboard Player', icon: 'matPianoRound' }
+];
+
 @Component({
   selector: 'an-tracks-area',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -96,6 +108,7 @@ import { TrackHeader } from './track-header';
   providers: [
     provideIcons({
       matAddRound,
+      matAlbumRound,
       matAppsRound,
       matAutoFixNormalRound,
       matContentCutRound,
@@ -109,6 +122,7 @@ import { TrackHeader } from './track-header';
       matHourglassEmptyRound,
       matJoinFullRound,
       matLayersRound,
+      matMusicNoteRound,
       matNearMeRound,
       matPianoRound,
       matPublicRound,
@@ -195,6 +209,19 @@ import { TrackHeader } from './track-header';
           >
             Drum Machine Designer
           </button>
+          <xui-menu-divider />
+          <!-- Phase 11: Session Players, each with a region per arrangement section. -->
+          @for (player of players; track player.player) {
+            <button
+              xuiMenuItem
+              type="button"
+              [icon]="player.icon"
+              [attr.data-testid]="'add-' + player.player"
+              (click)="addPlayer(player.player)"
+            >
+              {{ player.label }}
+            </button>
+          }
           <xui-menu-divider />
           <button
             xuiMenuItem
@@ -504,6 +531,39 @@ import { TrackHeader } from './track-header';
                 Convert to MIDI Region
               </button>
             }
+            @if (menuPlayers().length > 0) {
+              <button
+                xuiMenuItem
+                type="button"
+                data-testid="regenerate-session-player"
+                (click)="sessionPlayers.regenerate(menuPlayers())"
+              >
+                Regenerate
+              </button>
+              <button
+                xuiMenuItem
+                type="button"
+                data-testid="convert-session-player-midi"
+                (click)="sessionPlayers.convert(menuPlayers(), 'midi')"
+              >
+                Convert to MIDI Region
+              </button>
+              @if (menuDrummers()) {
+                <button
+                  xuiMenuItem
+                  type="button"
+                  data-testid="convert-session-player-pattern"
+                  (click)="sessionPlayers.convert(menuPlayers(), 'pattern')"
+                >
+                  Convert to Pattern Region
+                </button>
+              }
+            }
+            @if (menuChordSources().length > 0) {
+              <button xuiMenuItem type="button" data-testid="chord-id" (click)="chordId()">
+                Chord ID: Write to Chord Track
+              </button>
+            }
             <xui-menu-divider />
             <button xuiMenuItem type="button" (click)="ui.stripSilenceOpen.set(true)">
               Strip Silence… ({{ keyOf('region.stripSilence') }})
@@ -590,6 +650,10 @@ export class TracksArea {
   protected readonly flex = inject(FlexStore);
   private readonly stepSequencer = inject(StepSequencerStore);
   protected readonly drumMachines = inject(DrumMachineStore);
+  protected readonly sessionPlayers = inject(SessionPlayersStore);
+  private readonly api = inject(ANODE_API);
+  private readonly notify = inject(Notify);
+  protected readonly players = Players;
   protected readonly timeline = viewChild.required(Timeline);
   private readonly menuTrigger = viewChild(CdkContextMenuTrigger);
   private readonly globalLanes = viewChild<GlobalTracks>('global');
@@ -622,6 +686,25 @@ export class TracksArea {
   protected readonly menuPatterns = computed(() => {
     const target = this.timeline().menuTarget();
     return target.kind === 'regions' ? target.ids.filter(id => this.project.patternRegions().has(id)) : [];
+  });
+  /** The menu's Session Player regions (Regenerate, Convert). */
+  protected readonly menuPlayers = computed(() => {
+    const target = this.timeline().menuTarget();
+    return target.kind === 'regions' ? target.ids.filter(id => this.project.sessionPlayerRegions().has(id)) : [];
+  });
+  /** Every one of them is a Drummer's (Convert to Pattern). */
+  protected readonly menuDrummers = computed(() =>
+    this.menuPlayers().every(id => {
+      const region = this.project.sessionPlayerRegions().get(id);
+      return this.project.track(region?.trackId ?? '')?.kind === 'drummer';
+    })
+  );
+  /** The menu's MIDI and audio regions, which Chord ID reads (Phase 11). */
+  protected readonly menuChordSources = computed(() => {
+    const target = this.timeline().menuTarget();
+    return target.kind === 'regions'
+      ? target.ids.filter(id => this.project.midiRegions().has(id) || this.project.regions().has(id))
+      : [];
   });
   /** The region menu is on MIDI regions (MIDI Transform applies). */
   protected readonly menuMidi = computed(() => {
@@ -857,6 +940,33 @@ export class TracksArea {
     void this.stepSequencer.newRegion(trackId, target.kind === 'tools' ? target.tick : undefined);
   }
 
+  /** Chord ID on the menu's MIDI and audio regions: a job writing the chord track over them and their keys. */
+  protected async chordId(): Promise<void> {
+    const regionIds = this.menuChordSources();
+    const job = await this.notify.run(
+      () => this.api.detectChords({ regionIds, write: 'replace', detectKeys: true }),
+      'Could not detect the chords'
+    );
+    if (job) {
+      this.jobs.update(job);
+      // The chord track shows what Chord ID writes.
+      this.view.globalTracks.set(true);
+      if (!this.view.globalLanes().has('chord')) {
+        this.view.toggleGlobalLane('chord');
+      }
+    }
+  }
+
+  /** New Tracks' Session Players: a Drummer, Bass Player or Keyboard Player with a region per section. */
+  protected addPlayer(player: SessionPlayerKind): void {
+    const selected = this.selection.track();
+    const index = selected ? this.project.trackIds().indexOf(selected) + 1 : null;
+    void this.project.execute(
+      [{ type: 'addSessionPlayerTrack', player, regions: true, ...(index ? { index } : {}) }],
+      `New ${this.players.find(p => p.player === player)?.label ?? 'Session Player'} Track`
+    );
+  }
+
   /** Converts the selected pattern regions to MIDI regions of the notes they play. */
   protected convertPatterns(): void {
     const commands: EditCommand[] = this.menuPatterns().map(regionId => ({ type: 'convertPatternToMidi', regionId }));
@@ -869,6 +979,7 @@ export class TracksArea {
       midiRegions: this.project.midiRegions(),
       takeFolders: this.project.takeFolders(),
       patternRegions: this.project.patternRegions(),
+      sessionPlayerRegions: this.project.sessionPlayerRegions(),
       endOf: r => this.project.regionEnd(r),
       frames: () => 0,
       fileFrames: () => 0
@@ -911,7 +1022,8 @@ export class TracksArea {
       ...this.project.regions().keys(),
       ...this.project.midiRegions().keys(),
       ...this.project.takeFolders().keys(),
-      ...this.project.patternRegions().keys()
+      ...this.project.patternRegions().keys(),
+      ...this.project.sessionPlayerRegions().keys()
     ]);
   }
 

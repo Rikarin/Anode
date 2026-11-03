@@ -22,6 +22,7 @@ import { parseSignature, TransportStore } from '../state/transport.store';
 import { snapBy } from '../tracks/snap';
 import { MovieLane } from '../video/movie-lane';
 import { BeatMappingLane } from './beat-mapping-lane';
+import { ChordTrackLane } from './chord-track';
 import {
   addKey,
   addSignature,
@@ -73,7 +74,15 @@ interface Field {
 @Component({
   selector: 'an-global-lanes',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [BeatMappingLane, MovieLane, XuiContextMenuImports, XuiIconImports, XuiInputImports, XuiMenuImports],
+  imports: [
+    BeatMappingLane,
+    ChordTrackLane,
+    MovieLane,
+    XuiContextMenuImports,
+    XuiIconImports,
+    XuiInputImports,
+    XuiMenuImports
+  ],
   providers: [provideIcons({ matMovieRound })],
   host: {
     class: 'border-hairline bg-surface/85 block overflow-hidden border-b select-none',
@@ -192,6 +201,12 @@ interface Field {
               ></button>
             }
           }
+          @case ('chord') {
+            <!-- Phase 11: the chord track, loaded when first shown (its editor and symbol parsing with it). -->
+            @defer (on immediate) {
+              <an-chord-track [originTick]="view.originTick()" [pixelsPerTick]="ppt()" />
+            }
+          }
           @case ('beatMapping') {
             <an-beat-mapping-lane />
           }
@@ -297,7 +312,7 @@ interface Field {
 export class GlobalTracks {
   private readonly project = inject(ProjectStore);
   private readonly smartTempo = inject(SmartTempoStore);
-  private readonly view = inject(TracksViewStore);
+  protected readonly view = inject(TracksViewStore);
   private readonly transport = inject(TransportStore);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   private readonly fieldInput = viewChild<ElementRef<HTMLInputElement>>('fieldInput');
@@ -309,6 +324,7 @@ export class GlobalTracks {
   protected readonly laneNames: Record<GlobalLane, string> = {
     arrangement: 'Arrangement',
     marker: 'Marker',
+    chord: 'Chord',
     movie: 'Movie',
     tempo: 'Tempo',
     beatMapping: 'Beat Mapping',
@@ -503,7 +519,8 @@ export class GlobalTracks {
     switch (lane) {
       case 'beatMapping':
       case 'movie':
-        return; // beats are mapped by dragging; the movie track locates (its own double-click)
+      case 'chord':
+        return; // beats are mapped by dragging; the movie and chord tracks handle their own double-clicks
       case 'arrangement':
         this.addSection(tick);
         return;
@@ -572,6 +589,7 @@ export class GlobalTracks {
     return {
       arrangement: 'Section name',
       marker: 'Marker name',
+      chord: 'Chord',
       movie: 'Movie',
       tempo: 'Tempo',
       beatMapping: 'Beat',

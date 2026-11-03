@@ -213,6 +213,7 @@ export function nextSection(
 export const GlobalLaneHeights = {
   arrangement: 24,
   marker: 22,
+  chord: 36,
   movie: 44,
   tempo: 64,
   beatMapping: 40,

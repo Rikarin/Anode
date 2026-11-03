@@ -270,7 +270,7 @@ export class PianoRollGrid {
   }
 
   protected down(event: PointerEvent): void {
-    if (event.button !== 0 || !this.drawn) {
+    if (event.button !== 0 || !this.drawn || this.store.readOnly()) {
       return;
     }
 
@@ -617,6 +617,9 @@ export class PianoRollGrid {
 
   /** A double-click on an empty spot draws a note there, as the pencil does. */
   protected doubleClick(event: MouseEvent): void {
+    if (this.store.readOnly()) {
+      return;
+    }
     const { x, y } = this.local(event);
     if (y <= RULER_HEIGHT || !this.drawn || this.store.tool() !== 'pointer') {
       return;
