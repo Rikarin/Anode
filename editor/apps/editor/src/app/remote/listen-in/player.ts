@@ -112,6 +112,8 @@ export class WorkletPlayer implements ListenInPlayer {
  * same {@link JitterBuffer}, pulled on the main thread in blocks of {@link ScriptBlock} frames (about 11 ms more
  * latency than the worklet's 128).
  */
+/* eslint-disable @typescript-eslint/no-deprecated -- ScriptProcessorNode is deprecated for AudioWorklet, which is
+   what a page without a secure context lacks: it is the only player there. */
 export class ScriptPlayer implements ListenInPlayer {
   private readonly buffer: JitterBuffer;
   private readonly node: ScriptProcessorNode;
@@ -149,13 +151,15 @@ export class ScriptPlayer implements ListenInPlayer {
     void this.context.close();
   }
 }
+/* eslint-enable @typescript-eslint/no-deprecated */
 
 /** The script player's block (frames at 48 kHz). */
 export const ScriptBlock = 512;
 
 /** The player for a context: the AudioWorklet where the browser has one (a secure context), else the script player. */
 export function createPlayer(context: AudioContext, options: Partial<JitterOptions>): Promise<ListenInPlayer> {
-  return 'audioWorklet' in context && context.audioWorklet
+  // The type says every context has one; outside a secure context it is undefined.
+  return (context as { audioWorklet?: AudioWorklet }).audioWorklet
     ? WorkletPlayer.create(context, options)
     : Promise.resolve(new ScriptPlayer(context, options));
 }

@@ -179,6 +179,7 @@ export class WebGL2Renderer implements TimelineRenderer {
   private dpr = 1;
 
   constructor(private readonly canvas: RenderTarget) {
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion -- the unit-test build's DOM types do not narrow a union canvas's getContext
     const gl = canvas.getContext('webgl2', {
       alpha: false,
       antialias: false,
@@ -186,7 +187,6 @@ export class WebGL2Renderer implements TimelineRenderer {
       stencil: false,
       premultipliedAlpha: false,
       powerPreference: 'high-performance'
-      // A union's getContext overloads do not narrow (HTMLCanvasElement | OffscreenCanvas): 'webgl2' is WebGL2.
     }) as WebGL2RenderingContext | null;
     if (!gl) {
       throw new RendererUnavailableError('webgl2', 'This canvas has no WebGL2 context.');
