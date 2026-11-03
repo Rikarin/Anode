@@ -50,28 +50,32 @@ public sealed record RemotePads(IReadOnlyList<PadSet> Sets) {
     ///     A new user's (decided at integration; the editor's fake Server has the same, <c>DefaultRemotePads</c>): Logic
     ///     Remote's transport and editing pads, by the editor's key command ids (<c>keys/key-commands.ts</c>).
     /// </summary>
-    public static RemotePads Default { get; } = new([
-        new(
-            "transport",
-            "Transport",
-            [
-                new("p1", "Play", "transport.play", "#3fae4a"), new("p2", "Record", "transport.record", "#e5483a"),
-                new("p3", "Cycle", "transport.cycle", "#e6b422"), new("p4", "Go to Start", "transport.goToStart"),
-                new("p5", "Metronome", "transport.metronome"), new("p6", "Capture Recording", "transport.flashback"),
-                new("p7", "Undo", "edit.undo"), new("p8", "Redo", "edit.redo"), new("p9", "Save", "project.save")
-            ]
-        ),
-        new(
-            "editing",
-            "Editing",
-            [
-                new("e1", "Create Marker", "track.marker", "#3b82c4"), new("e2", "Split at Playhead", "region.split"),
-                new("e3", "Join", "region.join"), new("e4", "Mute Regions", "region.mute"),
-                new("e5", "Automation Read", "automation.read"), new("e6", "Automation Touch", "automation.touch"),
-                new("e7", "Automation Latch", "automation.latch"), new("e8", "Live Loops", "view.liveLoops")
-            ]
-        )
-    ]);
+    public static RemotePads Default { get; } = new(
+        [
+            new(
+                "transport",
+                "Transport",
+                [
+                    new("p1", "Play", "transport.play", "#3fae4a"), new("p2", "Record", "transport.record", "#e5483a"),
+                    new("p3", "Cycle", "transport.cycle", "#e6b422"), new("p4", "Go to Start", "transport.goToStart"),
+                    new("p5", "Metronome", "transport.metronome"),
+                    new("p6", "Capture Recording", "transport.flashback"),
+                    new("p7", "Undo", "edit.undo"), new("p8", "Redo", "edit.redo"), new("p9", "Save", "project.save")
+                ]
+            ),
+            new(
+                "editing",
+                "Editing",
+                [
+                    new("e1", "Create Marker", "track.marker", "#3b82c4"),
+                    new("e2", "Split at Playhead", "region.split"),
+                    new("e3", "Join", "region.join"), new("e4", "Mute Regions", "region.mute"),
+                    new("e5", "Automation Read", "automation.read"), new("e6", "Automation Touch", "automation.touch"),
+                    new("e7", "Automation Latch", "automation.latch"), new("e8", "Live Loops", "view.liveLoops")
+                ]
+            )
+        ]
+    );
 }
 
 /// <summary>

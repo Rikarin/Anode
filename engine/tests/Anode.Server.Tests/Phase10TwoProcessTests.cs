@@ -128,7 +128,7 @@ public sealed class Phase10TwoProcessTests : IAsyncDisposable {
     ) {
         var response = await Client.PostAsJsonAsync(
             "/api/v1/project/bounce",
-            new BounceRequest(
+            new(
                 name,
                 media,
                 0,
@@ -215,8 +215,8 @@ public sealed class Phase10TwoProcessTests : IAsyncDisposable {
         // The object from L (30°, 0°) to the top rear right (−135°, 30°) over 4 s.
         await Client.EditAsync(new SetStripCommand(bed, Mute: true), new SetStripCommand(bee, Mute: false));
         var (moving, _) = await BounceAsync("object", 2 * Bar);
-        var first = moving.Select(c => Rms(c.AsSpan(0, Rate / 10))).ToArray();
-        var last = moving.Select(c => Rms(c.AsSpan(4 * Rate - Rate / 10, Rate / 10))).ToArray();
+        var first = moving.Select(static c => Rms(c.AsSpan(0, Rate / 10))).ToArray();
+        var last = moving.Select(static c => Rms(c.AsSpan(4 * Rate - Rate / 10, Rate / 10))).ToArray();
         Assert.Equal(0, Array.IndexOf(first, first.Max()));
         Assert.Equal(11, Array.IndexOf(last, last.Max()));
         Assert.True(Db(first[0]) - Db(first[11]) > 20);
@@ -228,7 +228,7 @@ public sealed class Phase10TwoProcessTests : IAsyncDisposable {
         await StartAsync();
         await Client.CreateProjectAsync("Monitoring");
         await Client.EditAsync(new SetSurroundFormatCommand(ChannelFormat.Surround714), new AddAuxCommand(5, "Bus"));
-        var aux = (await Client.ProjectAsync()).Tracks.Single(t => t.Name == "Bus").Id;
+        var aux = (await Client.ProjectAsync()).Tracks.Single(static t => t.Name == "Bus").Id;
         await Client.EditAsync(new SetStripFormatCommand(aux, ChannelFormat.Surround714));
         var centre = await TrackAsync("Centre", await ToneAsync("500", 6, (500, -12)));
         var side = await TrackAsync("Side", await ToneAsync("1k", 6, (1000, -12)));
@@ -297,7 +297,10 @@ public sealed class Phase10TwoProcessTests : IAsyncDisposable {
         Assert.Equal(Dsp.Spatial.SpeakerFormat.Surround714, layout?.Format);
     }
 
-    /// <summary>The lag of <paramref name="b" /> behind <paramref name="a" /> (samples) by cross-correlation of a 1 kHz tone, within one period.</summary>
+    /// <summary>
+    ///     The lag of <paramref name="b" /> behind <paramref name="a" /> (samples) by cross-correlation of a 1 kHz tone,
+    ///     within one period.
+    /// </summary>
     static double Lag(ReadOnlySpan<float> a, ReadOnlySpan<float> b, int max) {
         var best = 0;
         var bestScore = double.MinValue;
@@ -326,11 +329,11 @@ public sealed class Phase10TwoProcessTests : IAsyncDisposable {
             new SetStripFormatCommand(bee, ChannelFormat.Mono),
             new SetPannerCommand(bed, Angle: 135, Diversity: 1),
             new SetPannerCommand(bee, PannerMode.Object, Azimuth: -90, ObjectElevation: 0, Distance: 1),
-            new SetStripCommand(TrackId: null, VolumeDb: -6) // the master's fader: on the bed and the objects
+            new SetStripCommand(null, -6) // the master's fader: on the bed and the objects
         );
         var response = await Client.PostAsJsonAsync(
             "/api/v1/project/export/adm",
-            new AdmExportRequest("Mix", media, null, 0, Bar),
+            new("Mix", media, null, 0, Bar),
             ContractsJsonContext.Default.AdmExportRequest,
             Token
         );
@@ -348,7 +351,7 @@ public sealed class Phase10TwoProcessTests : IAsyncDisposable {
             var (objectAudio, _) = BounceProcessor.Read(Assert.Single(scene.Objects).AudioPath);
             Assert.Equal(12, bedAudio.Length);
             Assert.Single(objectAudio);
-            Assert.All(bedAudio.Append(objectAudio[0]), c => Assert.Equal(2 * Rate, c.Length));
+            Assert.All(bedAudio.Append(objectAudio[0]), static c => Assert.Equal(2 * Rate, c.Length));
             // The bed: the bed track at Lrs (M+135, channel 6) through the master's −6 dB; no object in it.
             Assert.InRange(Db(Amplitude(Middle(bedAudio[6]), 500)), -18.2, -17.8);
             Assert.True(Db(Amplitude(Middle(bedAudio[5]), 1000)) < -80);
@@ -401,7 +404,11 @@ public sealed class Phase10TwoProcessTests : IAsyncDisposable {
         await Client.TransportAsync(TransportCommand.Stop);
         Assert.True(firstTransport >= 0 && decoded.Count >= 2 * Rate, "no playing frames");
         var steady = decoded.Skip(Rate / 4).Take(Rate).ToArray();
-        Assert.InRange(Db(Amplitude(steady, 1000)), -13, -11); // a mono track's −12 dBFS tone, panned centre (−3 dB + 3 dB law)
+        Assert.InRange(
+            Db(Amplitude(steady, 1000)),
+            -13,
+            -11
+        ); // a mono track's −12 dBFS tone, panned centre (−3 dB + 3 dB law)
         Assert.True(Db(Amplitude(steady, 998)) < Db(Amplitude(steady, 1000)));
         var state = await Client.GetFromJsonAsync(
             "/api/v1/remote/listen/state",

@@ -217,7 +217,9 @@ public sealed class AudioFileWriterTests : IDisposable {
         var layout = Dsp.Spatial.SpeakerLayout.Of(Dsp.Spatial.SpeakerFormat.Surround714);
         var path = Path.Combine(folder, $"714-{bits}.wav");
         // Each channel a constant of its own: its index in the layout's (ADM) order.
-        var audio = Enumerable.Range(0, 12).Select(static c => Enumerable.Repeat((c + 1) / 16f, 64).ToArray()).ToArray();
+        var audio = Enumerable.Range(0, 12)
+            .Select(static c => Enumerable.Repeat((c + 1) / 16f, 64).ToArray())
+            .ToArray();
         BounceProcessor.Write(
             path,
             audio,

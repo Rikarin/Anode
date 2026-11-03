@@ -243,7 +243,7 @@ public sealed class Phase10ApiTests : IAsyncDisposable {
         await using var events = await EventStream.ConnectAsync(Server);
         var run = await Client.PostAsJsonAsync(
             "/api/v1/remote/pads/run",
-            new RunKeyCommandRequest("view.mixer"),
+            new("view.mixer"),
             ContractsJsonContext.Default.RunKeyCommandRequest,
             Token
         );
@@ -252,7 +252,7 @@ public sealed class Phase10ApiTests : IAsyncDisposable {
         await ApiCalls.AssertProblemAsync(
             await Client.PostAsJsonAsync(
                 "/api/v1/remote/pads/run",
-                new RunKeyCommandRequest(" "),
+                new(" "),
                 ContractsJsonContext.Default.RunKeyCommandRequest,
                 Token
             ),

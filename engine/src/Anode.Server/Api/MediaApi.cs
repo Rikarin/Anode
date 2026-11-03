@@ -76,7 +76,7 @@ static class MediaApi {
             .WithSummary("The frames cached as thumbnails `height` pixels high (left out: 64), and their size.");
         movie.MapGet(
                 "/frames/{frame:long}",
-                static async Task<IResult> (long frame, int? height, Jobs jobs, HttpContext http) => {
+                static async Task<IResult>(long frame, int? height, Jobs jobs, HttpContext http) => {
                     try {
                         var file = await jobs.MovieFrameAsync(frame, Movies.Height(height), http.RequestAborted);
                         return TypedResults.PhysicalFile(file, "image/jpeg");

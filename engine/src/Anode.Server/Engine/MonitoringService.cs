@@ -1,5 +1,5 @@
-using Anode.Dsp.Spatial;
 using Anode.Contracts;
+using Anode.Dsp.Spatial;
 using Anode.Ipc;
 using Anode.Server.Library;
 using Anode.Server.Projects;
@@ -18,7 +18,8 @@ namespace Anode.Server.Engine;
 ///         when set; else the first <c>*.anhrtf</c> in the <c>hrtf</c> folder beside the Server (a release bundles it
 ///         there, as the content folder; the Server's build copies D's committed set, its <c>LICENSE</c> and <c>NOTICE</c>
 ///         there too); else, in development, the committed set found from the Server's folder up
-///         (<see cref="HrtfSet.Find" />: <c>engine/src/Anode.Dsp/Spatial/Hrtf</c>). None found: binaural is sent without a set, and
+///         (<see cref="HrtfSet.Find" />: <c>engine/src/Anode.Dsp/Spatial/Hrtf</c>). None found: binaural is sent without a
+///         set, and
 ///         the host falls back as it can.
 ///     </para>
 /// </remarks>

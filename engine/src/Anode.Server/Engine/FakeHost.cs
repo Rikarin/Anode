@@ -736,11 +736,13 @@ public sealed partial class FakeHost : IAsyncDisposable {
             var soloed = tracks.Values.Any(static t => t.Strip.Solo);
             if (render.Tracks is null) {
                 // A bed-only render (Phase 10's ADM bed) leaves the objects out.
-                return ([(render.Path, [
+                return ([
+                    (render.Path, [
                         ..tracks.Values.Where(t => !render.BedOnly || t.Strip.Panner?.Mode != EnginePannerMode.Object)
                             .OrderBy(static t => t.Id)
                             .Select(t => (t, Gain(t)))
-                    ])],
+                    ])
+                ],
                     master.Mute ? 0 : master.Gain);
             }
 

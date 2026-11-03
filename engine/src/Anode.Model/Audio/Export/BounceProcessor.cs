@@ -1,7 +1,7 @@
-using Anode.Dsp.Spatial;
-using SpeakerLayout = Anode.Dsp.Spatial.SpeakerLayout;
 using Anode.Contracts;
 using Anode.Dsp.Resampling;
+using Anode.Dsp.Spatial;
+using SpeakerLayout = Anode.Dsp.Spatial.SpeakerLayout;
 
 namespace Anode.Model.Audio;
 
