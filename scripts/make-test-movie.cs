@@ -5,7 +5,9 @@
 // H.264 (h264_videotoolbox on macOS, else libopenh264) with 48 kHz AAC in MOV — through the pinned LGPL FFmpeg
 // (node scripts/fetch-ffmpeg.mjs first, or ANODE_FFMPEG). Then prints what FFprobe reads back.
 //
-//   dotnet run scripts/make-test-movie.cs -- [<output.mov>] [<seconds>]
+//   dotnet run scripts/make-test-movie.cs -- [<output.mov>] [<seconds>] [<fps>] [<cut,cut,…>]
+//
+// (The Phase 10 golden path's movie, through scripts/media-check.mjs: 12 s at 25 fps with cuts at 50, 125 and 200.)
 //
 // Default output: engine/artifacts/media/test-movie.mov (generated, never committed).
 #:project ../engine/src/Anode.Media/Anode.Media.csproj
@@ -24,8 +26,17 @@ if (tools is null) {
 
 Directory.CreateDirectory(Path.GetDirectoryName(output)!);
 var runner = new FfmpegRunner(tools);
-var cuts = new List<long> { 40, 100 }.Where(f => f < seconds * 25).ToList();
-await MovieMedia.GenerateTestMovieAsync(runner, output, new(seconds, cuts, TimecodeStartSeconds: 10));
+var fps = args.Length > 2 ? int.Parse(args[2], System.Globalization.CultureInfo.InvariantCulture) : 25;
+var cuts = (args.Length > 3
+        ? args[3].Split(',', StringSplitOptions.RemoveEmptyEntries).Select(c => long.Parse(c, System.Globalization.CultureInfo.InvariantCulture))
+        : [40L, 100L])
+    .Where(f => f < seconds * fps)
+    .ToList();
+await MovieMedia.GenerateTestMovieAsync(
+    runner,
+    output,
+    new(seconds, cuts, new(fps, 1), TimecodeStartSeconds: 10)
+);
 var probe = await MovieMedia.ProbeAsync(runner, output);
 Console.WriteLine($"{output}: {probe}");
 return 0;

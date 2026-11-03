@@ -5751,7 +5751,8 @@
           "loudnessLufs",
           "peakCeilingDb",
           "realtime",
-          "addToProject"
+          "addToProject",
+          "monitoring"
         ],
         "type": "object",
         "properties": {
@@ -5828,9 +5829,13 @@
           "addToProject": {
             "type": "boolean",
             "default": false
+          },
+          "monitoring": {
+            "type": "boolean",
+            "default": false
           }
         },
-        "description": "Bounce (export): the range (ticks; left out: the cycle when it is on, else the project start to its end), the\nsource, and the file: format, bit depth (16, 24, or 32 for float), sample rate (left out: the project\u0027s), dither\n(applied below 32 bits), normalisation. \u0060realtime\u0060 plays the bounce through the device instead of rendering\noffline; \u0060addToProject\u0060 adds the result to the project\u0027s audio files."
+        "description": "Bounce (export): the range (ticks; left out: the cycle when it is on, else the project start to its end), the\nsource, and the file: format, bit depth (16, 24, or 32 for float), sample rate (left out: the project\u0027s), dither\n(applied below 32 bits), normalisation. \u0060realtime\u0060 plays the bounce through the device instead of rendering\noffline; \u0060addToProject\u0060 adds the result to the project\u0027s audio files. Phase 10: a surround mix is one\nWAVE_FORMAT_EXTENSIBLE file in the master\u0027s format; \u0060monitoring\u0060 (a mix only) bounces what the monitoring\nsends the device instead (the binaural render or the down-mix, before the speaker map), as ADR-0012 allows a\nbounce that asks for it."
       },
       "BounceSource": {
         "enum": [

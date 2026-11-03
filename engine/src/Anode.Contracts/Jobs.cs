@@ -165,7 +165,10 @@ public enum NormalizeMode {
 ///     Bounce (export): the range (ticks; left out: the cycle when it is on, else the project start to its end), the
 ///     source, and the file: format, bit depth (16, 24, or 32 for float), sample rate (left out: the project's), dither
 ///     (applied below 32 bits), normalisation. <c>realtime</c> plays the bounce through the device instead of rendering
-///     offline; <c>addToProject</c> adds the result to the project's audio files.
+///     offline; <c>addToProject</c> adds the result to the project's audio files. Phase 10: a surround mix is one
+///     WAVE_FORMAT_EXTENSIBLE file in the master's format; <c>monitoring</c> (a mix only) bounces what the monitoring
+///     sends the device instead (the binaural render or the down-mix, before the speaker map), as ADR-0012 allows a
+///     bounce that asks for it.
 /// </summary>
 public sealed record BounceRequest(
     string FileName,
@@ -182,7 +185,8 @@ public sealed record BounceRequest(
     double LoudnessLufs = -14,
     double PeakCeilingDb = -1,
     bool Realtime = false,
-    bool AddToProject = false
+    bool AddToProject = false,
+    bool Monitoring = false
 );
 
 [JsonConverter(typeof(JsonStringEnumConverter<BounceInPlaceDestination>))]

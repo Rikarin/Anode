@@ -131,7 +131,8 @@ export function bounceRequest(form: BounceForm, bars: BarMap): BounceRequest {
     loudnessLufs: form.loudnessLufs,
     peakCeilingDb: form.peakCeilingDb,
     realtime: form.realtime,
-    addToProject: form.addToProject
+    addToProject: form.addToProject,
+    monitoring: false
   };
 }
 

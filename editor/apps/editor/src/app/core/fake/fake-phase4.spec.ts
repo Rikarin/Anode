@@ -490,6 +490,7 @@ function bounceRequest(request: Partial<Parameters<FakeAnodeServer['bounce']>[0]
     peakCeilingDb: -1,
     realtime: false,
     addToProject: false,
+    monitoring: false,
     ...request
   };
 }

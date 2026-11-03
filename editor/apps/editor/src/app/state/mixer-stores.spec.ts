@@ -189,7 +189,8 @@ describe('JobsStore', () => {
       loudnessLufs: -14,
       peakCeilingDb: -1,
       realtime: false,
-      addToProject: false
+      addToProject: false,
+      monitoring: false
     });
     expect(job?.state).toMatch(/queued|running/);
     expect(jobs.active()).toHaveLength(1);
@@ -226,7 +227,8 @@ describe('JobsStore', () => {
       loudnessLufs: -14,
       peakCeilingDb: -1,
       realtime: true,
-      addToProject: false
+      addToProject: false,
+      monitoring: false
     });
     await jobs.cancel(job?.id ?? '');
     expect(jobs.jobs().get(job?.id ?? '')?.state).toBe('cancelled');

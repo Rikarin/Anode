@@ -144,7 +144,11 @@ public sealed partial class Jobs : IDisposable {
             throw ProjectException.Unprocessable("A file name has 1…128 characters and no path separators.");
         }
 
-        if (request!.BitDepth is not (16 or 24 or 32)) {
+        if (request!.Monitoring && request.Source != BounceSource.Mix) {
+            throw ProjectException.Unprocessable("Only a mix bounces the monitoring.");
+        }
+
+        if (request.BitDepth is not (16 or 24 or 32)) {
             throw ProjectException.Unprocessable($"A bounce is 16, 24 or 32-bit (float), not {request.BitDepth}.");
         }
 
@@ -318,7 +322,16 @@ public sealed partial class Jobs : IDisposable {
                 : null;
             var target = tracks is null ? Path.Combine(scratch, "mix.wav") : scratch;
             var finished = await engine.RenderAsync(
-                    new(entry.EngineId, plan.Start, plan.End, target, tracks, false, plan.Request.Realtime),
+                    new(
+                        entry.EngineId,
+                        plan.Start,
+                        plan.End,
+                        target,
+                        tracks,
+                        false,
+                        plan.Request.Realtime,
+                        Monitoring: tracks is null && plan.Request.Monitoring
+                    ),
                     f => Progress(entry, 0.8 * f),
                     token
                 )
