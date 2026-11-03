@@ -38,7 +38,7 @@ public static class AdmMapping {
         var objects = new List<AdmObject>();
         foreach (var track in ObjectTracks(state, request.TrackIds)) {
             if (objectPaths.TryGetValue(track.Id, out var path)) {
-                objects.Add(new(track.Name, path, ObjectChannels(track), Blocks(state, track, start, end)));
+                objects.Add(new(track.Name, path, ObjectChannels(path), Blocks(state, track, start, end)));
             }
         }
 
@@ -58,8 +58,12 @@ public static class AdmMapping {
         )
     ];
 
-    /// <summary>An object's channels: one for a mono input, else two (a stereo object).</summary>
-    public static int ObjectChannels(Track track) => track.Strip.InputFormat == ChannelFormat.Mono ? 1 : 2;
+    /// <summary>
+    ///     An object's channels: its audio file's (one or two), as the engine rendered the object's stem. The engine's width
+    ///     for a track is its own (a mono audio track without inserts is one channel, whatever its strip's stored input
+    ///     format, which new tracks have as stereo), so the file, not the strip, says whether the object is mono or stereo.
+    /// </summary>
+    public static int ObjectChannels(string audioPath) => Math.Clamp(Model.Audio.WavReader.Probe(audioPath).Channels, 1, 2);
 
     /// <summary>
     ///     The samples a range covers (as a bounce's): the ticks given, else the cycle when it is on, else the project;

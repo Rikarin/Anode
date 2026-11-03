@@ -140,7 +140,8 @@ public sealed partial class Jobs {
                     token.ThrowIfCancellationRequested();
                     var (audio, _) = BounceProcessor.Read(Path.Combine(stems, $"{current.Ids.Track(track.Id)}.wav"));
                     var file = Path.Combine(scratch, $"object-{objectPaths.Count + 1}.wav");
-                    WriteFloat(file, Exactly(audio, AdmMapping.ObjectChannels(track), plan.Frames), rate, plan.Gain);
+                    // As the engine rendered it: one or two channels (the stem's), not the strip's stored input format.
+                    WriteFloat(file, Exactly(audio, Math.Clamp(audio.Length, 1, 2), plan.Frames), rate, plan.Gain);
                     objectPaths[track.Id] = file;
                 }
             }
