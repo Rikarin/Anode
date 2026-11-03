@@ -1,0 +1,46 @@
+// Pop bass written for Anode: long roots that open into melodic lines through the chord's tones.
+{
+  "format": 1,
+  "id": "bass-pop",
+  "name": "Pop, Melodic Roots",
+  "player": "bass",
+  "genre": "Pop",
+  "description": "A melodic pop bass: long roots at the bottom of the pad, lines through the fifth, third and octave higher up, a pickup into the change.",
+  "humanise": { "timingTicks": 6, "velocity": 5 },
+  "defaults": {
+    "complexity": 0.4, "intensity": 0.5, "fillAmount": 0.3, "fillAtSectionEnds": true, "swing": 0, "feel": 0, "followChords": true,
+    "bass": { "lowNote": 31, "highNote": 62, "slides": false, "deadNotes": false }
+  },
+  "presets": [
+    { "id": "melodic", "name": "Melodic", "parameters": {} },
+    { "id": "whole-notes", "name": "Whole Notes", "parameters": { "complexity": 0.05, "intensity": 0.4, "fillAmount": 0 } },
+    { "id": "lively", "name": "Lively", "parameters": { "complexity": 0.8, "intensity": 0.7 } }
+  ],
+  "sections": {
+    "intro": { "complexity": 0.2, "intensity": 0.35 },
+    "verse": { "complexity": 0.4, "intensity": 0.45 },
+    "chorus": { "complexity": 0.6, "intensity": 0.7 },
+    "bridge": { "complexity": 0.35, "intensity": 0.45 },
+    "outro": { "complexity": 0.35, "intensity": 0.5 }
+  },
+  "grammar": {
+    "intro": { "form": "A", "complexity": -0.2, "intensity": -0.15 },
+    "verse": { "form": "AAAB", "substitutions": ["approachNotes"] },
+    "chorus": { "form": "AB", "complexity": 0.1, "intensity": 0.2, "substitutions": ["approachNotes", "octaveDoubling"] },
+    "bridge": { "form": "AB" },
+    "outro": { "form": "AAAB", "last": "ending" }
+  },
+  "phrases": [
+    { "id": "whole", "role": "groove", "complexity": 0.0, "intensity": 0.3, "lanes": { "bass": "R! - - - | - - - - | - - - - | 5 - - -" } },
+    { "id": "whole-soft", "role": "groove", "complexity": 0.5, "intensity": 0.1, "lanes": { "bass": "R? - - - | - - - - | 5? - - - | - - - -" } },
+    { "id": "dotted", "role": "groove", "complexity": 0.25, "intensity": 0.4, "lanes": { "bass": "R! - - - | - - R . | . . 5 - | - - - ." } },
+    { "id": "melodic", "role": "groove", "complexity": 0.5, "intensity": 0.5, "lanes": { "bass": "R! - - . | . . R . | 5 - - . | 3 - 5 ." } },
+    { "id": "moving", "role": "groove", "complexity": 0.75, "intensity": 0.6, "lanes": { "bass": "R! - . R | . . 5 . | 8 - . 5 | . 3 A ." } },
+    { "id": "moving-loud", "role": "groove", "complexity": 0.7, "intensity": 0.95, "lanes": { "bass": "R! - . R! | . . 5 . | 8! - . 5 | . 8 A ." } },
+    { "id": "lively", "role": "groove", "complexity": 1.0, "intensity": 0.75, "lanes": { "bass": "R! . R 5 | . R 8 . | 7 . 5 . | 3 . A ." } },
+    { "id": "hold", "role": "ending", "complexity": 0.5, "intensity": 0.5, "lanes": { "bass": "R! - - - | - - - - | - - - - | - - - -" } },
+    { "id": "pickup", "role": "fill", "complexity": 0.3, "intensity": 0.5, "from": 12, "lanes": { "bass": ". . . . | . . . . | . . . . | 5 . 3 A" } },
+    { "id": "climb", "role": "fill", "complexity": 0.6, "intensity": 0.6, "from": 8, "lanes": { "bass": ". . . . | . . . . | R . 2 . | 3 . A ." } },
+    { "id": "arch", "role": "fill", "complexity": 0.85, "intensity": 0.7, "lanes": { "bass": "R . 3 . | 5 . 8 . | 7 . 5 . | 3 . A ." } }
+  ]
+}

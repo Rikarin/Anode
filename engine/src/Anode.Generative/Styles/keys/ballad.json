@@ -1,0 +1,50 @@
+// Ballad piano written for Anode: spread voicings broken into flowing arpeggios, octaves in the left hand.
+{
+  "format": 1,
+  "id": "keys-ballad",
+  "name": "Ballad, Flowing Arpeggios",
+  "player": "keyboard",
+  "genre": "Ballad",
+  "description": "A ballad piano: spread chords broken into eighth-note arpeggios that grow into sixteenths and block chords up the pad, octaves underneath.",
+  "humanise": { "timingTicks": 10, "velocity": 8 },
+  "defaults": {
+    "complexity": 0.4, "intensity": 0.4, "fillAmount": 0.2, "fillAtSectionEnds": true, "swing": 0, "feel": -0.1, "followChords": true,
+    "keys": { "voicing": "spread", "lowNote": 48, "highNote": 84, "leftHand": "octaves" }
+  },
+  "rhythms": [
+    { "id": "arpeggio", "name": "Arpeggio", "rh": "1 . 2 . | 3 . 4 . | 3 . 2 . | 3 . 4 ." },
+    { "id": "block", "name": "Block", "rh": "C - - - | C - - - | C - - - | C - - -" },
+    { "id": "halves", "name": "Halves", "rh": "C - - - | - - - - | C - - - | - - - -", "lh": "R - - - | - - - - | R - - - | - - - -" }
+  ],
+  "presets": [
+    { "id": "flowing", "name": "Flowing", "parameters": {} },
+    { "id": "hymn", "name": "Hymn", "parameters": { "complexity": 0.2, "intensity": 0.35, "keys": { "voicing": "close", "rhythmId": "halves" } } },
+    { "id": "swelling", "name": "Swelling", "parameters": { "complexity": 0.7, "intensity": 0.75 } }
+  ],
+  "sections": {
+    "intro": { "complexity": 0.25, "intensity": 0.25 },
+    "verse": { "complexity": 0.4, "intensity": 0.35 },
+    "chorus": { "complexity": 0.6, "intensity": 0.6 },
+    "bridge": { "complexity": 0.5, "intensity": 0.45 },
+    "outro": { "complexity": 0.3, "intensity": 0.35 }
+  },
+  "grammar": {
+    "intro": { "form": "A", "complexity": -0.1, "intensity": -0.1 },
+    "verse": { "form": "AAAB", "substitutions": ["passingNotes"] },
+    "chorus": { "form": "AB", "complexity": 0.1, "intensity": 0.15, "substitutions": ["octaveDoubling", "passingNotes"] },
+    "bridge": { "form": "AB", "substitutions": ["passingNotes"] },
+    "outro": { "form": "AAAB", "intensity": -0.1, "last": "ending" }
+  },
+  "phrases": [
+    { "id": "held", "role": "groove", "complexity": 0.0, "intensity": 0.3, "lanes": { "rh": "C - - - | - - - - | - - - - | - - - -", "lh": "R - - - | - - - - | - - - - | - - - -" } },
+    { "id": "quarter-arp", "role": "groove", "complexity": 0.25, "intensity": 0.2, "lanes": { "rh": "1 - - - | 2 - - - | 3 - - - | 4 - - -", "lh": "R - - - | - - - - | - - - - | - - - -" } },
+    { "id": "eighth-arp", "role": "groove", "complexity": 0.5, "intensity": 0.35, "lanes": { "rh": "1 . 2 . | 3 . 4 . | 3 . 2 . | 3 . 4 .", "lh": "R - - - | - - - - | - - - - | - - - -" } },
+    { "id": "eighth-arp-loud", "role": "groove", "complexity": 0.5, "intensity": 0.9, "lanes": { "rh": "C - 2 . | 3 . 4 . | C - 2 . | 3 . 4 .", "lh": "R! - - - | - - - - | R - - - | - - - -" } },
+    { "id": "rocking", "role": "groove", "complexity": 0.75, "intensity": 0.5, "lanes": { "rh": "1 . 3 . | 2 . 4 . | 1 . 3 . | 2 . 4 .", "lh": "R - - - | - - - - | 5 - - - | - - - -" } },
+    { "id": "sixteenth-arp", "role": "groove", "complexity": 1.0, "intensity": 0.6, "lanes": { "rh": "1 2 3 4 | 3 2 1 2 | 3 4 3 2 | 1 2 3 4", "lh": "R - - - | - - - - | 5 - - - | - - - -" } },
+    { "id": "two-bar-arp", "role": "groove", "complexity": 0.6, "intensity": 0.4, "bars": 2, "lanes": { "rh": "1 . 2 . | 3 . 4 . | 3 . 2 . | 1 . . . | 1 . 3 . | 4 . 3 . | 2 . 4 . | 3 . . .", "lh": "R - - - | - - - - | - - - - | - - - - | R - - - | - - - - | 5 - - - | - - - -" } },
+    { "id": "rolled-end", "role": "ending", "complexity": 0.5, "intensity": 0.5, "lanes": { "rh": "1 2 3 4 | - - - - | - - - - | - - - -", "lh": "R - - - | - - - - | - - - - | - - - -" } },
+    { "id": "turn", "role": "fill", "complexity": 0.3, "intensity": 0.4, "from": 12, "lanes": { "rh": ". . . . | . . . . | . . . . | 4 3 2 1", "lh": ". . . . | . . . . | . . . . | 5 - - -" } },
+    { "id": "rise", "role": "fill", "complexity": 0.65, "intensity": 0.55, "from": 8, "lanes": { "rh": ". . . . | . . . . | 1 2 3 4 | C - - -", "lh": ". . . . | . . . . | R - - - | 5 - - -" } }
+  ]
+}
