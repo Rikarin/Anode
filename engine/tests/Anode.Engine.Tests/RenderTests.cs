@@ -173,7 +173,10 @@ public sealed class RenderTests : IDisposable {
         for (var edit = 2; edit <= 8; edit++) {
             while (controller.Streamer.Pass()) { }
 
-            using var next = TestAudio.Segment([new(1, [], [TestAudio.Region(0, Seconds * Rate, 0, edit * 100)])], edit);
+            using var next = TestAudio.Segment(
+                [new(1, [], [TestAudio.Region(0, Seconds * Rate, 0, edit * 100)])],
+                edit
+            );
             controller.LoadModel(TestAudio.Load(next, edit, true, tracks, files, dir));
         }
 

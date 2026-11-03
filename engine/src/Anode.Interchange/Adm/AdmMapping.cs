@@ -63,7 +63,8 @@ public static class AdmMapping {
     ///     for a track is its own (a mono audio track without inserts is one channel, whatever its strip's stored input
     ///     format, which new tracks have as stereo), so the file, not the strip, says whether the object is mono or stereo.
     /// </summary>
-    public static int ObjectChannels(string audioPath) => Math.Clamp(Model.Audio.WavReader.Probe(audioPath).Channels, 1, 2);
+    public static int ObjectChannels(string audioPath) =>
+        Math.Clamp(Model.Audio.WavReader.Probe(audioPath).Channels, 1, 2);
 
     /// <summary>
     ///     The samples a range covers (as a bounce's): the ticks given, else the cycle when it is on, else the project;
