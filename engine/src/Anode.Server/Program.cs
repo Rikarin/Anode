@@ -1,5 +1,6 @@
 using Anode.Contracts;
 using Anode.EngineHost;
+using Anode.Model.Compile;
 using Anode.Model.Editing;
 using Anode.Server;
 using Anode.Server.Api;
@@ -84,6 +85,14 @@ builder.Services.AddSingleton<IMasterTapSource, HostMasterTap>();
 builder.Services.AddSingleton<ListenInService>();
 builder.Services.AddSingleton<DiscoveryService>();
 builder.Services.AddHostedService(static s => s.GetRequiredService<DiscoveryService>());
+// Phase 11 (docs/12-phase-11.md): Session Players (workstream D's generator and styles), Chord ID (D's recognisers),
+// the Mastering Assistant's analysis and chain (workstream E's).
+builder.Services.AddSingleton<ISessionPlayerLibrary, BuiltinSessionPlayers>();
+builder.Services.AddSingleton<SessionPlayers>();
+builder.Services.AddSingleton<IChordRecognition, DspChordRecognition>();
+builder.Services.AddSingleton<IMasteringAnalysis, DspMasteringAnalysis>();
+builder.Services.AddSingleton<IMasteringDesigner>(static _ => DspMasteringDesigner.Instance);
+builder.Services.AddSingleton(static s => new MasteringChains(s.GetRequiredService<IMasteringDesigner>()));
 
 var app = builder.Build();
 if (bool.TryParse(builder.Configuration["Anode:WatchStdin"], out var watchStdin) && watchStdin) {

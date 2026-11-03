@@ -40,6 +40,10 @@ public sealed partial class Jobs : IDisposable {
     readonly IInterchangeFormats formats;
     readonly IMovieMedia media;
     readonly ISpatialFiles spatial;
+    readonly IChordRecognition recognition;
+    readonly IMasteringAnalysis mastering;
+    readonly SessionPlayers players;
+    readonly ISessionPlayerLibrary library;
     readonly TimeProvider time;
     readonly ILogger<Jobs> logger;
     readonly ConcurrentDictionary<string, Entry> jobs = new(StringComparer.Ordinal);
@@ -60,9 +64,17 @@ public sealed partial class Jobs : IDisposable {
         IInterchangeFormats formats,
         IMovieMedia media,
         ISpatialFiles spatial,
+        IChordRecognition recognition,
+        IMasteringAnalysis mastering,
+        SessionPlayers players,
+        ISessionPlayerLibrary library,
         TimeProvider time,
         ILogger<Jobs> logger
     ) {
+        this.recognition = recognition;
+        this.mastering = mastering;
+        this.players = players;
+        this.library = library;
         this.media = media;
         this.spatial = spatial;
         this.notation = notation;
@@ -221,7 +233,10 @@ public sealed partial class Jobs : IDisposable {
         );
     }
 
-    /// <summary>Where a track's last region (audio, MIDI or take folder) ends, in samples, or null when it has none.</summary>
+    /// <summary>
+    ///     Where a track's last region (audio, MIDI, take folder or Session Player) ends, in samples, or null when it has
+    ///     none.
+    /// </summary>
     static long? LastSample(ProjectState state, string trackId) {
         var map = state.PlaybackMap;
         var ends = state.RegionsOf(trackId)
@@ -231,6 +246,10 @@ public sealed partial class Jobs : IDisposable {
             )
             .Concat(
                 state.TakeFoldersOf(trackId).Select(f => map.SampleAt(f.StartTick + f.LengthTicks, state.SampleRate))
+            )
+            .Concat(
+                state.SessionPlayerRegionsOf(trackId)
+                    .Select(r => map.SampleAt(r.StartTick + r.LengthTicks, state.SampleRate))
             )
             .ToArray();
         return ends.Length == 0 ? null : ends.Max();

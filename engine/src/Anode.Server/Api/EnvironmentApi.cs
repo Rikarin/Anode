@@ -1,4 +1,6 @@
 using Anode.Contracts;
+using Anode.Server.Engine;
+using Anode.Server.Projects;
 using Microsoft.AspNetCore.Http.HttpResults;
 
 namespace Anode.Server.Api;
@@ -14,7 +16,8 @@ static class EnvironmentApi {
             .AddEndpointFilter<ProblemFilter>();
         environment.MapGet(
                 string.Empty,
-                static Results<Ok<MidiEnvironment>, NotFound>() => throw Pending.Phase11("GetEnvironment")
+                static Results<Ok<MidiEnvironment>, NotFound>(ProjectSession session) =>
+                    session.View is { } view ? TypedResults.Ok(view.State.Environment) : TypedResults.NotFound()
             )
             .WithName("GetEnvironment")
             .WithSummary(
@@ -24,9 +27,12 @@ static class EnvironmentApi {
                 "/objects/{objectId}/input",
                 static Results<NoContent, NotFound, ProblemHttpResult>(
                     string objectId,
-                    EnvironmentInputRequest request
-                ) =>
-                    throw Pending.Phase11("EnvironmentInput")
+                    EnvironmentInputRequest request,
+                    EngineConnection engine
+                ) => {
+                    engine.EnvironmentInput(objectId, request);
+                    return TypedResults.NoContent();
+                }
             )
             .WithName("EnvironmentInput")
             .WithSummary(

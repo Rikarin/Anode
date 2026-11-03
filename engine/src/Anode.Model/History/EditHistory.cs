@@ -275,13 +275,44 @@ public static class UndoLabels {
             SetMoviePositionCommand => "Move Movie",
             RemoveMovieCommand => "Remove Movie",
             AddSceneMarkersCommand => "Detect Scene Cuts",
+            _ => Phase11(command)
+        };
+
+    static string Phase11(EditCommand command) =>
+        command switch {
+            AddChordsCommand => "Add Chords",
+            EditChordsCommand => "Change Chords",
+            DeleteChordsCommand => "Delete Chords",
+            SetScalesCommand => "Change Scale",
+            ApplyChordIdCommand => "Chord ID",
+            SetPitchSourceCommand => "Change Pitch Source",
+            SetRegionKeyCommand => "Change Region Key",
+            AddSessionPlayerTrackCommand => "Add Session Player Track",
+            AddSessionPlayerRegionCommand => "Create Session Player Region",
+            SetSessionPlayerRegionCommand => "Change Session Player Region",
+            RegenerateSessionPlayerCommand => "Regenerate",
+            ConvertSessionPlayerRegionsCommand { Regions: [{ Target: SessionPlayerConvertTarget.Pattern }, ..] } =>
+                "Convert to Pattern",
+            ConvertSessionPlayerRegionsCommand => "Convert to MIDI",
+            SetMasteringCommand => "Change Mastering Assistant",
+            SetMasteringAnalysisCommand => "Analyse Mastering",
+            AddEnvironmentLayerCommand => "Create Layer",
+            SetEnvironmentLayerCommand => "Change Layer",
+            RemoveEnvironmentLayerCommand => "Delete Layer",
+            AddEnvironmentObjectCommand => "Create Object",
+            SetEnvironmentObjectCommand => "Change Object",
+            RemoveEnvironmentObjectsCommand => "Delete Objects",
+            ConnectEnvironmentCommand => "Connect Cable",
+            DisconnectEnvironmentCommand => "Delete Cables",
             _ => "Edit"
         };
 
     /// <summary>
     ///     The control a batch of only <c>setStrip</c> commands moves (the strip and the fields it sets), or of only
     ///     <c>setParameter</c>, <c>setInsertParameter</c>, send level or pan, or <c>setAutomation</c> commands on one
-    ///     target, or null for any other batch: two batches with the same key within the window are one undo step.
+    ///     target (Phase 11: an XY pad's or another Session Player knob's drag, a Mastering Assistant knob's, an
+    ///     Environment object's move), or null for any other batch: two batches with the same key within the window are
+    ///     one undo step.
     /// </summary>
     public static string? CoalesceKey(CommandBatch batch) {
         string? key = null;
@@ -306,6 +337,27 @@ public static class UndoLabels {
                             panner.Size
                         }.Select(static v => v.HasValue ? '1' : '0')
                     ),
+                // Phase 11: an XY pad drag, a Mastering Assistant knob, an Environment object dragged on its canvas.
+                SetSessionPlayerRegionCommand {
+                    StartTick: null, LengthTicks: null, Name: null, Muted: null, StyleId: null, PresetId: null,
+                    FillAtSectionEnds: null, FollowChords: null, Drums: null, Bass: null, Keys: null
+                } region => $"player|{region.RegionId}|"
+                    + string.Concat(
+                        new[] { region.Complexity, region.Intensity, region.FillAmount, region.Swing, region.Feel }.Select(
+                            static v => v.HasValue ? '1' : '0'
+                        )
+                    ),
+                SetMasteringCommand { Character: null, MatchedBypass: null } mastering =>
+                    $"mastering|{mastering.InsertId}|"
+                    + string.Concat(
+                        new[] {
+                            mastering.TargetLufs, mastering.CeilingDbtp, mastering.Eq, mastering.Dynamics, mastering.Width
+                        }.Select(static v => v.HasValue ? '1' : '0')
+                    ),
+                SetEnvironmentObjectCommand {
+                    Name: null, LayerId: null, Port: null, TrackId: null, Address: null, Conditions: null,
+                    Operations: null, Taps: null, Chord: null, Parameters: null
+                } move => $"object|{move.ObjectId}|{move.X.HasValue}{move.Y.HasValue}",
                 _ => null
             };
             if (mine is null) {
