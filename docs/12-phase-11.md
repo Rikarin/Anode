@@ -567,7 +567,7 @@ row.
 | 2. Pitch Source | MIDI Root and Chords on each bar; audio within 5 ¢ | both; audio worst 0.01 ¢ |
 | 3. Drummer | hits and velocity rise; fill; same seed same notes; Regenerate differs; ≥ 75 % kicks on bass onsets; kick on its strip; converts | hits a bar 8 < 15 < 28; velocity 51.9 < 67.2 < 81.2; all hold; MIDI 193 notes; 2 pattern regions, 221 of 221 hits |
 | 4. Players | bass root on each change, in range; keys chord tones, passing < 10 %, voices ≤ a fifth | hold; worst voice 3 semitones |
-| 5. Mastering | −14 LUFS ± 0.5; ≤ −1.0 dBTP | Clean −14.06 LUFS, −2.40 dBTP; Valve −14.09 LUFS, −2.41 dBTP |
+| 5. Mastering | −14 LUFS ± 0.5; ≤ −1.0 dBTP | Clean −14.06 LUFS, −2.40 dBTP; Valve −14.09 LUFS, −2.41 dBTP (the eight-bar song; with step 3's drums-only pattern copy left after it, −15.8 LUFS, see Open) |
 | 5. Valve's evens | ≥ 6 dB over Clean's | −37.0 dB against −109.9 dB |
 | 5. Matched bypass | within 1 LU of processed | −14.03 against −14.09 LUFS |
 | 6. Physical model | C2–C6 within 5 ¢; −60 dB time ≥ 1.5× | hold; 0.50 s at 60 % damping, 1.60 s at 40 % (3.2×) |
@@ -581,7 +581,7 @@ row.
 
 | Check | Result |
 |---|---|
-| Engine tests (`dotnet test --solution engine/Anode.slnx --max-parallel-test-modules 2`) | 3013 pass, 22 skipped (opt-in) of 3035; `The_disk_thread_cost_of_64_warped_stereo_tracks` (#22) failed in earlier full runs under load and passes alone |
+| Engine tests (`dotnet test --solution engine/Anode.slnx --max-parallel-test-modules 2`) | 3013 pass, 22 skipped (opt-in) of 3035; `The_disk_thread_cost_of_64_warped_stereo_tracks` (#22) fails in full runs under load and passes alone (three of three, and with its module); one Model test failed once in a full run, unnamed, and four runs of that module passed |
 | Two-process (`Phase11TwoProcessTests`) | Session Players through a real kit, Pitch Source, the Environment on live MIDI, the assistant (Clean, Valve), the format inserts |
 | Editor (`nx run-many -t typecheck lint test build`) | 6 projects pass; Storybook + axe pass; initial bundle 982.34 kB (budget 1 MB) |
 | e2e (`nx e2e desktop`) | 12 specs, 6.3 and 6.2 minutes, twice in a row |
@@ -607,4 +607,15 @@ row.
 - A pattern's grid keeps one hit of a drum per step: Convert to Pattern of a triplet feel can lose one of two close hits.
 - The fake Server's Environment fader does not move a strip (its control targets drive nothing).
 - A bounce moves the Tracks area's scroll with its position.
+- Environment control targets on a panner's parameters do nothing.
+- Regenerate's fix for the stale revision has no test of its own; the golden path covers it.
+- Session Player regions can't be trimmed or split; the Environment's viewport isn't stored; Sample Alchemy's source
+  view is synthetic.
+- A Drummer's rhythm source from audio uses onsets only from files already analysed; Chord ID over MIDI and audio
+  together concatenates them instead of fusing them; Live Loops cells and SMF and MusicXML export don't follow the chord
+  track; a master edit during a Mastering analysis isn't noticed.
+- Keys' voice-leading guarantee needs a range of at least two octaves; kits are Drum Synth only (the physical model's
+  toms and cymbals were not done).
+- Anode Essentials with the phase's sets (about 46 MB) was not rebuilt or measured; T3 CPU figures want a rerun on a
+  quiet machine.
 - Linux and Windows.
