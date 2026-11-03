@@ -62,6 +62,16 @@ public sealed class PackBuilder(PackSpec spec, string staging) {
         return Path.GetRelativePath(staging, path).Replace('\\', '/');
     }
 
+    /// <summary>
+    ///     Any other file of the pack (a tape set, a patch), at <paramref name="folder" />/<paramref name="name" />; its
+    ///     path relative to the pack.
+    /// </summary>
+    public string Asset(string folder, string name, byte[] contents) {
+        var path = File(folder, name);
+        System.IO.File.WriteAllBytes(path, contents);
+        return Path.GetRelativePath(staging, path).Replace('\\', '/');
+    }
+
     /// <summary>Writes a stereo 24-bit WAV.</summary>
     public static void Wav(string path, float[] left, float[] right, int rate) {
         using var writer = new WavWriter(path, 2, rate, WavEncoding.Pcm24);
