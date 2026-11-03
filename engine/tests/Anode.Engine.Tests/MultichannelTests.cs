@@ -1,3 +1,4 @@
+using Anode.Dsp.Effects.Dynamics;
 using Anode.Dsp.Spatial;
 using Anode.Engine.Spatial;
 using Anode.Ipc;
@@ -313,6 +314,50 @@ public sealed class MultichannelTests : IDisposable {
             Near(M(f - 100), o[2][f], f, "the track it waits for");
             Near(M(f - 100), o[7][f], f, "through the latent surround aux (a front-pair insert's other channels)");
             Near(0, o[3][f], f, "silent channel");
+        }
+    }
+
+    [Theory]
+    [InlineData(ChannelLink.All, true)]
+    [InlineData(ChannelLink.ByGroup, false)]
+    public void The_compressor_s_channel_link_chooses_which_channels_a_loud_one_ducks(int link, bool ducked) {
+        const EngineChannelFormat f51 = EngineChannelFormat.Surround51;
+        var compressor = TestEffects.Insert(
+            "c",
+            Compressor.Id,
+            new Dictionary<string, double> {
+                ["threshold"] = -40, ["ratio"] = 20, ["attack"] = 0.1, ["release"] = 5, ["autoGain"] = 0, ["link"] = link
+            }
+        );
+        EngineTrack[] tracks = [
+            TestAudio.Track(1, false, Strip(1.8f, 1, outputFormat: f51, panner: Surround(0))), // loud, in L
+            TestAudio.Track(2, false, Strip(0.02f, 1, outputFormat: f51, panner: Surround(4))), // quiet, in Ls
+            TestAudio.Track(10, true, Strip(1f, 0, f51, f51, inserts: [compressor])) with { InputBus = 1 }
+        ];
+        using var rig = new Rig(
+            dir,
+            64,
+            [Model(1, 0), Model(2, 2), new(10, [], [])],
+            tracks,
+            Files,
+            Strip(input: f51, outputFormat: f51),
+            6
+        );
+        rig.Controller.SetMixer("off", false, 0);
+        var o = rig.Render(24_000);
+        // The surround channel's level over the last half of the render, against its dry level.
+        double energy = 0, dry = 0;
+        for (var f = 12_000; f < 24_000; f++) {
+            energy += o[4][f] * o[4][f];
+            var q = Q(f) * 0.02f;
+            dry += q * q;
+        }
+
+        var db = 10 * Math.Log10(energy / dry);
+        if (ducked) {
+            Assert.True(db < -6, $"{db:F1} dB");
+        } else {
+            Assert.True(Math.Abs(db) < 1.5, $"{db:F1} dB");
         }
     }
 

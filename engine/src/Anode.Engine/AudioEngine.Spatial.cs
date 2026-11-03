@@ -989,7 +989,8 @@ public sealed unsafe partial class AudioEngine {
 
     /// <summary>
     ///     A linked dynamics insert: the effect processes the key (each frame's loudest sample of any channel) and the
-    ///     gain it gave the key, its latency later, applies to every channel delayed by that latency.
+    ///     gain it gave the key, its latency later, applies to every channel delayed by that latency. Linked by speaker
+    ///     group (<see cref="Dsp.Spatial.ChannelLink" />), each group has its own instance, key and gain.
     /// </summary>
     void Linked(
         IAudioEffect effect,
@@ -1001,49 +1002,78 @@ public sealed unsafe partial class AudioEngine {
         ReadOnlySpan<float> sideR
     ) {
         var frames = blockFrames;
-        var key = multi.Key.AsSpan(0, frames);
-        for (var i = 0; i < frames; i++) {
-            var loud = 0f;
-            for (var c = 0; c < width; c++) {
-                var v = Signal(c)[i];
-                if (Math.Abs(v) > Math.Abs(loud)) {
-                    loud = v;
-                }
-            }
-
-            key[i] = loud;
-        }
-
-        var probe = multi.Probe.AsSpan(0, frames);
-        var probeRight = multi.ProbeRight.AsSpan(0, frames);
-        key.CopyTo(probe);
-        key.CopyTo(probeRight);
-        Process(effect, bindings, last, probe, probeRight, sideL, sideR);
-        var latency = Math.Clamp(effect.LatencySamples, 0, MultiInsert.MaxLatency);
+        var byGroup = multi.LinkParameter >= 0
+            && multi.GroupCount > 1
+            && (int)effect.GetParameter(multi.LinkParameter) == Dsp.Spatial.ChannelLink.ByGroup;
+        var groups = byGroup ? multi.GroupCount : 1;
         for (var c = 0; c < width; c++) {
             multi.Write(c, Signal(c));
         }
 
-        multi.Write(width, key);
-        multi.Advance(frames);
-        var ratio = multi.Ratio.AsSpan(0, frames);
-        multi.Read(width, latency, ratio); // the key as the effect's output lines up with it
-        var held = multi.LastRatio;
-        for (var i = 0; i < frames; i++) {
-            var k = ratio[i];
-            if (Math.Abs(k) > 1e-9f) {
-                held = probe[i] / k;
+        for (var g = 0; g < groups; g++) {
+            var key = multi.Key.AsSpan(0, frames);
+            for (var i = 0; i < frames; i++) {
+                var loud = 0f;
+                for (var c = 0; c < width; c++) {
+                    if (byGroup && multi.SpeakerGroups[c] != g) {
+                        continue;
+                    }
+
+                    var v = Signal(c)[i];
+                    if (Math.Abs(v) > Math.Abs(loud)) {
+                        loud = v;
+                    }
+                }
+
+                key[i] = loud;
             }
 
-            ratio[i] = held;
+            multi.Write(width + g, key);
         }
 
-        multi.LastRatio = held;
-        for (var c = 0; c < width; c++) {
-            var x = Signal(c);
-            multi.Read(c, latency, x);
+        multi.Advance(frames);
+        if (byGroup) {
+            Mirror(multi, bindings, last);
+        }
+
+        var latency = Math.Clamp(effect.LatencySamples, 0, MultiInsert.MaxLatency);
+        for (var g = 0; g < groups; g++) {
+            var key = multi.Key.AsSpan(0, frames);
+            multi.Read(width + g, 0, key);
+            var probe = multi.Probe.AsSpan(0, frames);
+            var probeRight = multi.ProbeRight.AsSpan(0, frames);
+            key.CopyTo(probe);
+            key.CopyTo(probeRight);
+            if (g == 0) {
+                Process(effect, bindings, last, probe, probeRight, sideL, sideR);
+            } else if (multi.Extras[g - 1] is { } instance) {
+                instance.SetTransport(Piece(0, frames));
+                instance.Process(probe, probeRight, sideL, sideR);
+            }
+
+            var ratio = multi.Ratio.AsSpan(0, frames);
+            multi.Read(width + g, latency, ratio); // the key as the effect's output lines up with it
+            var held = multi.LastRatios[g];
             for (var i = 0; i < frames; i++) {
-                x[i] *= ratio[i];
+                var k = ratio[i];
+                if (Math.Abs(k) > 1e-9f) {
+                    held = probe[i] / k;
+                }
+
+                ratio[i] = held;
+            }
+
+            multi.LastRatios[g] = held;
+            for (var c = 0; c < width; c++) {
+                if (byGroup && multi.SpeakerGroups[c] != g) {
+                    continue;
+                }
+
+                var x = Signal(c);
+                multi.Read(c, latency, x);
+                for (var i = 0; i < frames; i++) {
+                    x[i] *= ratio[i];
+                }
             }
         }
     }

@@ -150,13 +150,18 @@ public sealed partial class EngineController {
         }
 
         var policy = MultichannelEffects.PolicyOf(slot.PluginId);
-        var pairs = Formats.Pairs(SpeakerLayout.Of(format)).Length;
-        var extras = new IAudioEffect?[policy == MultichannelPolicy.PerChannel ? pairs - 1 : 0];
+        var layout = SpeakerLayout.Of(format);
+        var link = policy == MultichannelPolicy.Linked ? MultichannelEffects.LinkParameterOf(slot.PluginId) : -1;
+        var extras = new IAudioEffect?[
+            policy == MultichannelPolicy.PerChannel ? Formats.Pairs(layout).Length - 1
+            : link >= 0 ? ChannelLink.Groups(layout, ChannelLink.ByGroup).Distinct().Count() - 1
+            : 0
+        ];
         for (var p = 0; p < extras.Length; p++) {
             extras[p] = BuildExtra(slot, trackId, state);
         }
 
-        slot.Multi = new(format, policy, extras);
+        slot.Multi = new(format, policy, extras, link);
         if (old is not null) {
             replaced.Add(old);
         }
