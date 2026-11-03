@@ -54,6 +54,7 @@ import {
   type LoopSearchRequest,
   type LoopSearchResult,
   type MasteringAnalysisRequest,
+  MasteringParameters,
   type MasteringSettings,
   type MasteringState,
   type MidiDevices,
@@ -61,6 +62,7 @@ import {
   type MidiExportRequest,
   type MidiImportRequest,
   type MidiRegion,
+  type MonitoredEvent,
   type MonitoringSettings,
   type Movie,
   type MovieAudioExportRequest,
@@ -118,6 +120,7 @@ import {
 import { faderDb } from '@anode/audio-ui';
 import { MeterMap } from '@anode/timeline';
 import { searchLoops } from '../../audio-file-editor/audio-edit-math';
+import { flowFrom, MonitorEvents } from '../../environment/environment-model';
 import { clampParameter, defaultParameters } from '../../instruments/parameters';
 import { type CellChange, Launcher } from '../../live-loops/launcher';
 import { grooveTarget } from '../../midi-edit/groove';
@@ -145,9 +148,17 @@ import {
   tempoOf
 } from './fake-arrange';
 import { fakePeaks, hash, readWavHeader } from './fake-audio';
+import { applyEnvironmentCommand } from './fake-environment';
 import { fakeFileExists, FakeHome, fileKind, listFakeFolder } from './fake-files';
 import { adaptTempo, applyFlexCommand, fakeAnalysis, type FlexContext, timingOf } from './fake-flex';
 import { type FakeLoop, FakeLoopLibrary, keyInterval } from './fake-loops';
+import {
+  applyMasteringCommand,
+  fakeMasteringAnalysis,
+  fakeMasteringReading,
+  findAssistant,
+  settingsOf
+} from './fake-mastering';
 import {
   applyMixCommand,
   applyStrip,
@@ -177,6 +188,18 @@ import {
   syncFormats,
   thumbnailWidth
 } from './fake-phase10';
+import {
+  applyPhase11Command,
+  copySessionPlayerRegions,
+  deleteSessionPlayerRegions,
+  fakeChordId,
+  FakeSessionPlayerCatalog,
+  generateSessionPlayerNotes,
+  isSessionPlayerRegionId,
+  moveSessionPlayerRegion,
+  notesToPattern,
+  type Phase11Context
+} from './fake-phase11';
 import {
   applyMidiEffectCommand,
   applyPhase6Command,
@@ -227,6 +250,7 @@ import {
   withExtension
 } from './fake-phase9';
 import { CrashyPluginId, FakeCatalogue, FakeEffects, FakeMidiDevices } from './fake-plugins';
+import { FakeT3Effects, FakeT3Instruments } from './fake-plugins-phase11';
 import { FakeMidiEffects, FakeT2Effects, FakeT2Instruments, RemixFxId, withMacros } from './fake-plugins-phase6';
 import { FakeScriptPresets } from './fake-scripts';
 import { FactoryStaffStyles } from './fake-staff-styles';
@@ -312,7 +336,15 @@ export class FakeAnodeServer implements AnodeApi {
 
   /** Built-in instruments and effects first, then third-party plugins, as the host lists them. */
   private readonly catalogue: PluginInfo[] = structuredClone(
-    [...FakeCatalogue, ...FakeT2Instruments, ...FakeEffects, ...FakeT2Effects, ...FakeMidiEffects]
+    [
+      ...FakeCatalogue,
+      ...FakeT2Instruments,
+      ...FakeT3Instruments,
+      ...FakeEffects,
+      ...FakeT2Effects,
+      ...FakeT3Effects,
+      ...FakeMidiEffects
+    ]
       .map(withMacros)
       .sort((a, b) => Number(a.format !== 'builtin') - Number(b.format !== 'builtin'))
   );
@@ -2288,51 +2320,235 @@ export class FakeAnodeServer implements AnodeApi {
     return this.answer('GetListenIn', () => this.listenInStatus());
   }
 
-  // ---- Phase 11 (docs/12-phase-11.md): the chord track and Chord ID, Session Players, the Mastering Assistant and the
-  // Environment, until the editor workstream (C) implements them (with a fake generator and a fake Chord ID).
+  // ---- Phase 11 (docs/12-phase-11.md): the chord track and Chord ID, Session Players (a fake generator of fixed
+  // patterns and a fake Chord ID, fake-phase11.ts), the Mastering Assistant and the Environment.
 
   chordTrack(): Promise<ChordTrack> {
-    return this.phase11Pending('GetChordTrack');
+    return this.answer('GetChordTrack', () => structuredClone(this.require().chordTrack));
   }
 
-  detectChords(_request: ChordIdRequest): Promise<Job> {
-    return this.phase11Pending('DetectChords');
+  detectChords(request: ChordIdRequest): Promise<Job> {
+    return this.answer('DetectChords', () => {
+      // Refused at once when a region is missing; the analysis runs as the job.
+      fakeChordId(this.require(), request);
+      const copy = structuredClone(request);
+      return this.startJob(
+        'chordId',
+        {
+          finish: () => {
+            const before = this.require();
+            const result = fakeChordId(before, copy);
+            this.commit(before, this.applyCommand(before, { type: 'applyChordId', result }), 'Chord ID');
+            return [];
+          }
+        },
+        1
+      );
+    });
   }
 
   sessionPlayerCatalog(): Promise<SessionPlayerCatalog> {
-    return this.phase11Pending('GetSessionPlayerCatalog');
+    return this.answer('GetSessionPlayerCatalog', () => structuredClone(FakeSessionPlayerCatalog));
   }
 
-  sessionPlayerNotes(_regionId: string): Promise<SessionPlayerNotes> {
-    return this.phase11Pending('GetSessionPlayerNotes');
+  sessionPlayerNotes(regionId: string): Promise<SessionPlayerNotes> {
+    return this.answer('GetSessionPlayerNotes', () => {
+      const project = this.require();
+      const region = project.sessionPlayerRegions.find(r => r.id === regionId);
+      if (!region) {
+        throw new ApiError(404, `No Session Player region ${regionId}.`);
+      }
+      return { regionId, ...generateSessionPlayerNotes(project, region, FakeSessionPlayerCatalog) };
+    });
   }
 
-  regenerateSessionPlayer(_regionId: string, _request: RegenerateRequest): Promise<CommandResult> {
-    return this.phase11Pending('RegenerateSessionPlayer');
+  regenerateSessionPlayer(regionId: string, request: RegenerateRequest): Promise<CommandResult> {
+    return this.answer('RegenerateSessionPlayer', () => {
+      const before = this.require();
+      const command: EditCommand = {
+        type: 'regenerateSessionPlayer',
+        regionIds: [regionId],
+        seed: request.seed ?? null
+      };
+      return this.commit(before, this.applyCommand(before, command), 'Regenerate');
+    });
   }
 
-  convertSessionPlayer(_regionId: string, _request: SessionPlayerConvertRequest): Promise<Job> {
-    return this.phase11Pending('ConvertSessionPlayer');
+  convertSessionPlayer(regionId: string, request: SessionPlayerConvertRequest): Promise<Job> {
+    return this.answer('ConvertSessionPlayer', () => {
+      const project = this.require();
+      const ids = request.regionIds?.length ? request.regionIds : [regionId];
+      for (const id of ids) {
+        if (!project.sessionPlayerRegions.some(r => r.id === id)) {
+          throw new ApiError(404, `No Session Player region ${id}.`);
+        }
+      }
+      const target = request.target;
+      return this.startJob(
+        'sessionPlayerConvert',
+        {
+          finish: () => {
+            const before = this.require();
+            const regions = ids.map(id => {
+              const region = before.sessionPlayerRegions.find(r => r.id === id);
+              if (!region) {
+                throw new ApiError(404, `No Session Player region ${id}.`);
+              }
+              const { notes } = generateSessionPlayerNotes(before, region, FakeSessionPlayerCatalog);
+              return {
+                regionId: id,
+                target,
+                notes: notes.map(({ id: _id, ...note }) => note),
+                pattern:
+                  target === 'pattern' ? notesToPattern(notes, region.lengthTicks, () => `row_${this.nextId++}`) : null
+              };
+            });
+            const command: EditCommand = { type: 'convertSessionPlayerRegions', regions };
+            this.commit(
+              before,
+              this.applyCommand(before, command),
+              target === 'pattern' ? 'Convert to Pattern Region' : 'Convert to MIDI Region'
+            );
+            return [];
+          }
+        },
+        1
+      );
+    });
   }
 
   mastering(): Promise<MasteringState> {
-    return this.phase11Pending('GetMastering');
+    return this.answer('GetMastering', () => {
+      const insert = findAssistant(this.require());
+      if (!insert) {
+        throw new ApiError(404, 'The master has no Mastering Assistant.');
+      }
+      return { insertId: insert.id, settings: settingsOf(insert), analysis: structuredClone(insert.mastering ?? null) };
+    });
   }
 
-  setMastering(_settings: MasteringSettings): Promise<CommandResult> {
-    return this.phase11Pending('SetMastering');
+  setMastering(settings: MasteringSettings): Promise<CommandResult> {
+    return this.answer('SetMastering', () => {
+      const before = this.require();
+      const command: EditCommand = { type: 'setMastering', ...settings };
+      return this.commit(before, this.applyCommand(before, command), 'Mastering Assistant');
+    });
   }
 
-  analyseMastering(_request: MasteringAnalysisRequest): Promise<Job> {
-    return this.phase11Pending('AnalyseMastering');
+  /**
+   * Analyse: puts an assistant last on the master first when asked and there is none (its own undo step), then a
+   * `masteringAnalysis` job whose result goes into the assistant (`setMasteringAnalysis`).
+   */
+  analyseMastering(request: MasteringAnalysisRequest): Promise<Job> {
+    return this.answer('AnalyseMastering', () => {
+      let project = this.require();
+      if (!findAssistant(project)) {
+        if (!request.add) {
+          throw new ApiError(404, 'The master has no Mastering Assistant.');
+        }
+        const add: EditCommand = { type: 'addInsert', pluginId: MasteringParameters.pluginId };
+        this.commit(project, this.applyCommand(project, add), 'Add Mastering Assistant');
+        project = this.require();
+      }
+      const { endTick, cycle } = project.settings;
+      const startTick = Math.max(0, Math.round(request.startTick ?? 0));
+      const end = Math.round(request.endTick ?? (cycle.enabled ? cycle.endTick : endTick));
+      if (!(end > startTick)) {
+        throw new ApiError(422, 'Analyse needs a range.');
+      }
+      return this.startJob(
+        'masteringAnalysis',
+        {
+          finish: () => {
+            const before = this.require();
+            const insert = findAssistant(before);
+            if (!insert) {
+              throw new Error('The Mastering Assistant was removed.');
+            }
+            const revision = (insert.mastering?.revision ?? 0) + 1;
+            const analysis = fakeMasteringAnalysis(before, settingsOf(insert), startTick, end, revision);
+            const command: EditCommand = { type: 'setMasteringAnalysis', insertId: insert.id, analysis };
+            this.commit(before, this.applyCommand(before, command), 'Mastering Analysis');
+            return [];
+          },
+          stage: progress => (progress < 0.8 ? 'Rendering the master' : 'Analysing')
+        },
+        2
+      );
+    });
   }
 
   environment(): Promise<MidiEnvironment> {
-    return this.phase11Pending('GetEnvironment');
+    return this.answer('GetEnvironment', () => structuredClone(this.require().environment));
   }
 
-  environmentInput(_objectId: string, _request: EnvironmentInputRequest): Promise<void> {
-    return this.phase11Pending('EnvironmentInput');
+  /**
+   * Live MIDI into an on-screen keyboard or fader (Phase 11): the events flow through the Environment as the host would
+   * run it, without time (environment/environment-model.ts, `flowFrom`). Monitors they pass report their last events
+   * and faders their values (`environmentMonitor`, `environmentFader`, as the host's telemetry would); what reaches the
+   * sequencer input plays on the record-enabled (else the selected) track and what reaches a track input on its track,
+   * both recorded as live MIDI is.
+   */
+  environmentInput(objectId: string, request: EnvironmentInputRequest): Promise<void> {
+    return this.answer('EnvironmentInput', () => {
+      const project = this.require();
+      const object = project.environment.objects.find(o => o.id === objectId);
+      if (!object) {
+        throw new ApiError(404, `No Environment object ${objectId}.`);
+      }
+      if (object.kind !== 'keyboard' && object.kind !== 'fader') {
+        throw new ApiError(422, `${object.name} is not a keyboard or a fader: live MIDI enters at those only.`);
+      }
+      for (const event of request.events) {
+        if (event.status < 0x80 || event.status > 0xef || event.data1 < 0 || event.data1 > 127) {
+          throw new ApiError(422, 'Live MIDI takes channel messages (status 0x80…0xEF, data 0…127).');
+        }
+      }
+      const flow = flowFrom(project.environment, objectId, request.events);
+      const sample =
+        this.transportState === 'stopped'
+          ? -1
+          : Math.round(tempoOf(project).secondsAt(this.positionTick) * project.sampleRate);
+      for (const [id, events] of flow.monitors) {
+        const seen = [...(this.monitored.get(id) ?? []), ...events.map(e => ({ ...e, sample }))].slice(-MonitorEvents);
+        this.monitored.set(id, seen);
+        this.emit({ type: 'environmentMonitor', objectId: id, events: structuredClone(seen) });
+      }
+      for (const [id, value] of flow.faders) {
+        this.emit({ type: 'environmentFader', objectId: id, value });
+      }
+      if (flow.sequencer.length) {
+        const target =
+          project.tracks.find(t => t.recordArmed && t.kind !== 'audio' && t.kind !== 'aux' && t.kind !== 'vca') ??
+          project.tracks.find(t => t.id === this.thru);
+        if (target) {
+          this.environmentPlay(target.id, flow.sequencer);
+        }
+      }
+      for (const [trackId, events] of flow.tracks) {
+        this.environmentPlay(trackId, events);
+      }
+    });
+  }
+
+  /** Each Environment monitor's last events (`MonitoredEvent`s, oldest first). */
+  private readonly monitored = new Map<string, MonitoredEvent[]>();
+
+  /** Events the Environment sends to a track: live MIDI on it, recorded while it records. */
+  private environmentPlay(trackId: string, events: LiveMidiEvent[]): void {
+    const track = this.project?.tracks.find(t => t.id === trackId);
+    if (!track) {
+      return;
+    }
+    this.liveMidi.push({ trackId, events: structuredClone(events) });
+    if (this.transportState === 'recording' && track.recordArmed) {
+      this.advance();
+      this.capture(trackId, events);
+    }
+    this.emit({
+      type: 'midiActivity',
+      events: events.map(e => ({ trackId, device: null, status: e.status, data1: e.data1, data2: e.data2 }))
+    });
   }
 
   /** A Phase 11 endpoint the fake Server does not answer yet (docs/12-phase-11.md): 422. */
@@ -3190,6 +3406,11 @@ export class FakeAnodeServer implements AnodeApi {
     this.emitCells(this.launcher.advance(tick));
     this.emitTransport();
     this.emit({ type: 'meters', ...this.meters() });
+    // Phase 11: the Mastering Assistant's live loudness and gain reduction.
+    const mastering = fakeMasteringReading(this.project, this.positionTick);
+    if (mastering) {
+      this.emit({ type: 'mastering', ...mastering });
+    }
   }
 
   private start(state: 'playing' | 'recording', tick?: number | null): void {
@@ -3780,8 +4001,16 @@ export class FakeAnodeServer implements AnodeApi {
         const count = project.tracks.length;
         const kind = command.kind ?? 'audio';
         if (kind === 'drummer' || kind === 'bassPlayer' || kind === 'keyboardPlayer') {
-          // Session Player tracks come from addSessionPlayerTrack: Phase 11, the editor workstream (docs/12-phase-11.md).
-          throw new ApiError(422, `addTrack of kind ${kind}: not in the fake Server yet.`);
+          // A Session Player track without regions, as New Tracks' Session Player makes it (Phase 11).
+          const player = kind === 'drummer' ? 'drummer' : kind === 'bassPlayer' ? 'bass' : 'keyboard';
+          return this.applyCommand(project, {
+            type: 'addSessionPlayerTrack',
+            player,
+            name: command.name ?? null,
+            index: command.index ?? null,
+            pluginId: command.pluginId ?? null,
+            regions: false
+          });
         }
         const instrument = kind === 'instrument' ? plugin(command.pluginId ?? 'anode.synth') : null;
         const sameKind = project.tracks.filter(t => t.kind === kind).length;
@@ -3844,6 +4073,7 @@ export class FakeAnodeServer implements AnodeApi {
           {
             ...project,
             patternRegions: project.patternRegions.filter(r => r.trackId !== command.trackId),
+            sessionPlayerRegions: project.sessionPlayerRegions.filter(r => r.trackId !== command.trackId),
             liveLoops: {
               ...project.liveLoops,
               cells: project.liveLoops.cells.filter(c => c.trackId !== command.trackId)
@@ -3938,6 +4168,9 @@ export class FakeAnodeServer implements AnodeApi {
       case 'moveRegion': {
         if (isPatternRegionId(command.regionId)) {
           return movePatternRegion(project, command);
+        }
+        if (isSessionPlayerRegionId(command.regionId)) {
+          return moveSessionPlayerRegion(project, command);
         }
         nonNegative(command.startTick, 'A region start');
         if (command.regionId.startsWith('tkf_')) {
@@ -4042,6 +4275,11 @@ export class FakeAnodeServer implements AnodeApi {
         });
       }
       case 'deleteRegions':
+        if (command.regionIds.some(isSessionPlayerRegionId)) {
+          const without = deleteSessionPlayerRegions(project, command.regionIds.filter(isSessionPlayerRegionId));
+          const rest = command.regionIds.filter(r => !isSessionPlayerRegionId(r));
+          return rest.length ? this.applyCommand(without, { ...command, regionIds: rest }) : without;
+        }
         if (command.regionIds.some(isPatternRegionId)) {
           const without = deletePatternRegions(project, command.regionIds.filter(isPatternRegionId));
           const rest = command.regionIds.filter(r => !isPatternRegionId(r));
@@ -4609,11 +4847,15 @@ export class FakeAnodeServer implements AnodeApi {
         return joinRegions(project, command.regionIds);
       case 'copyRegions': {
         const patterns = command.regionIds.filter(isPatternRegionId);
-        const rest = command.regionIds.filter(r => !isPatternRegionId(r));
+        const players = command.regionIds.filter(isSessionPlayerRegionId);
+        const rest = command.regionIds.filter(r => !isPatternRegionId(r) && !isSessionPlayerRegionId(r));
         const offset = Math.round(command.offsetTicks);
-        const copied = patterns.length
+        const withPatterns = patterns.length
           ? copyPatternRegions(project, patterns, offset, command.trackId, { id })
           : project;
+        const copied = players.length
+          ? copySessionPlayerRegions(withPatterns, players, offset, command.trackId, id)
+          : withPatterns;
         return rest.length ? copyRegions(copied, rest, offset, command.trackId, id) : copied;
       }
       case 'addInsert':
@@ -4685,8 +4927,12 @@ export class FakeAnodeServer implements AnodeApi {
       case 'setSessionPlayerRegion':
       case 'regenerateSessionPlayer':
       case 'convertSessionPlayerRegions':
+        // The chord track, Pitch Source and Session Players (Phase 11).
+        return applyPhase11Command(project, command, this.phase11Context());
       case 'setMastering':
       case 'setMasteringAnalysis':
+        // The Mastering Assistant (Phase 11): its settings are its insert's parameters.
+        return applyMasteringCommand(project, command, this.mixContext());
       case 'addEnvironmentLayer':
       case 'setEnvironmentLayer':
       case 'removeEnvironmentLayer':
@@ -4695,9 +4941,8 @@ export class FakeAnodeServer implements AnodeApi {
       case 'removeEnvironmentObjects':
       case 'connectEnvironment':
       case 'disconnectEnvironment':
-        // The chord track, Pitch Source, Session Players, the Mastering Assistant and the Environment: Phase 11, the
-        // editor workstream (docs/12-phase-11.md).
-        throw new ApiError(422, `${command.type}: not in the fake Server yet.`);
+        // The MIDI Environment (Phase 11, ADR-0015).
+        return applyEnvironmentCommand(project, command, { id: prefix => `${prefix}_${this.nextId++}` });
       default:
         if (isPhase9Command(command)) {
           // Staff styles, region notation, score symbols, lyrics, chord symbols, score sets, layout and score edits
@@ -4719,6 +4964,18 @@ export class FakeAnodeServer implements AnodeApi {
         // Flex, Smart Tempo, Varispeed and track alternatives (Phase 5).
         return applyFlexCommand(project, command, this.flexContext()) ?? project;
     }
+  }
+
+  /** What the Phase 11 commands need: ids, note ids, seeds, the style library, and the other commands. */
+  private phase11Context(): Phase11Context {
+    return {
+      id: prefix => `${prefix}_${this.nextId++}`,
+      noteId: () => this.nextId++,
+      seed: () => (hash(`seed${this.nextId++}`) % 2_147_483_647) + 1,
+      catalog: FakeSessionPlayerCatalog,
+      apply: (project, command) => this.applyCommand(project, command),
+      hasKit: id => this.installedKits().some(k => k.info.id === id)
+    };
   }
 
   /** What the Phase 6 commands need: ids, note ids, the catalogue, the kits, mixing (automation recording). */
@@ -5663,6 +5920,20 @@ export function diff(before: Project, after: Project): DeltaOp[] {
   // Phase 10: the movie (set, moved or removed).
   if (!same(before.movie ?? null, after.movie ?? null)) {
     ops.push({ op: 'movieChanged', movie: after.movie ?? null });
+  }
+  // Phase 11: the chord track, Session Player regions and the Environment (the whole document).
+  if (!same(before.chordTrack, after.chordTrack)) {
+    ops.push({ op: 'chordTrackChanged', chordTrack: after.chordTrack });
+  }
+  diffList(
+    before.sessionPlayerRegions,
+    after.sessionPlayerRegions,
+    same,
+    id => ops.push({ op: 'sessionPlayerRegionRemoved', id }),
+    region => ops.push({ op: 'sessionPlayerRegionUpserted', region })
+  );
+  if (!same(before.environment, after.environment)) {
+    ops.push({ op: 'environmentChanged', environment: after.environment });
   }
   const groupsAfter = new Map(after.groups.map(g => [g.number, g]));
   const groupsBefore = new Map(before.groups.map(g => [g.number, g]));
