@@ -14,6 +14,7 @@ import {
   rootInterval,
   sectionKind
 } from '@anode/api-client';
+import { sessionPlayerEdit } from '../../state/session-players.store';
 import { FakeAnodeServer } from './fake-server';
 
 /** A value the test needs to be there. */
@@ -413,6 +414,23 @@ describe('FakeAnodeServer, Phase 11', () => {
       server.runJobs();
       const pattern = project(server).patternRegions[0];
       expect(pattern?.pattern.rows.map(r => r.note).sort()).toEqual([...new Set(notes.map(n => n.pitch))].sort());
+    });
+
+    it('splits a Drummer region longer than a pattern row into pattern regions of 64 steps, as the Server does', async () => {
+      const server = await song();
+      const { region } = await player(server, 'drummer');
+      await server.applyCommands({
+        commands: [{ ...sessionPlayerEdit(region.id, { lengthTicks: 8 * 3840 }) }],
+        label: 'Long'
+      });
+      await server.convertSessionPlayer(region.id, { target: 'pattern' });
+      server.runJobs();
+      const parts = project(server).patternRegions.toSorted((a, b) => a.startTick - b.startTick);
+      expect(parts.map(p => [p.startTick - region.startTick, p.lengthTicks])).toEqual([
+        [0, 4 * 3840],
+        [4 * 3840, 4 * 3840]
+      ]);
+      expect(parts[0]?.pattern.rows.every(r => r.length === 64)).toBe(true);
     });
 
     it('moves, copies and deletes Session Player regions; removing the track removes them', async () => {

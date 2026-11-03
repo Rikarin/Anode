@@ -678,16 +678,11 @@ function convertRegions(project: Project, command: Command<'convertSessionPlayer
       if (player !== 'drummer' || !converted.pattern) {
         refuse('Only a Drummer region converts to a pattern.');
       }
-      const pattern: PatternRegion = {
-        id: ctx.id('pat'),
-        trackId: region.trackId,
-        name: region.name,
-        startTick: region.startTick,
-        lengthTicks: region.lengthTicks,
-        muted: region.muted,
-        pattern: structuredClone(converted.pattern)
+      next = {
+        ...next,
+        sessionPlayerRegions: rest,
+        patternRegions: [...next.patternRegions, ...patternRegions(region, converted.pattern, ctx)]
       };
-      next = { ...next, sessionPlayerRegions: rest, patternRegions: [...next.patternRegions, pattern] };
     } else {
       const midi: MidiRegion = {
         id: ctx.id('mid'),
@@ -1190,14 +1185,51 @@ export function generateSessionPlayerNotes(
   return { hash: generationHash(input), notes };
 }
 
-/** A Drummer's notes as a pattern (`SessionPlayerGenerator.ToPattern`): a row per drum note on 16ths, 64 steps at most. */
+/**
+ * A converted Drummer region's pattern regions (the Server's `PatternRegions`): one when its rows fit a pattern, else
+ * consecutive regions of `MaxRowLength` steps (4 bars of 16ths in 4/4; the last what is left), each with its part of
+ * every row.
+ */
+function patternRegions(region: SessionPlayerRegion, pattern: Pattern, ctx: Phase11Context): PatternRegion[] {
+  const part = (startTick: number, lengthTicks: number, rows: Pattern['rows']): PatternRegion => ({
+    id: ctx.id('pat'),
+    trackId: region.trackId,
+    name: region.name,
+    startTick,
+    lengthTicks,
+    muted: region.muted,
+    pattern: { ...structuredClone(pattern), rows: structuredClone(rows) }
+  });
+  if (pattern.rows.every(row => row.length <= MaxRowLength)) {
+    return [part(region.startTick, region.lengthTicks, pattern.rows)];
+  }
+  const parts: PatternRegion[] = [];
+  const longest = Math.max(...pattern.rows.map(row => row.steps.length));
+  const end = region.startTick + region.lengthTicks;
+  for (let from = 0; from < longest; from += MaxRowLength) {
+    const start = region.startTick + from * pattern.stepTicks;
+    if (end <= start) {
+      break;
+    }
+    const rows = pattern.rows.map(row => {
+      const steps = row.steps.slice(from, from + MaxRowLength);
+      return steps.length > 0
+        ? { ...row, length: steps.length, steps }
+        : { ...row, length: 1, steps: [{ ...must(row.steps.at(-1)), on: false }] };
+    });
+    parts.push(part(start, Math.min(MaxRowLength * pattern.stepTicks, end - start), rows));
+  }
+  return parts;
+}
+
+/** A Drummer's notes as a pattern (`SessionPlayerGenerator.ToPattern`): a row per drum note on 16ths, the region long. */
 export function notesToPattern(
   notes: readonly Note[],
   lengthTicks: number,
   id: () => string,
   stepTicks = 240
 ): Pattern {
-  const length = Math.max(1, Math.min(MaxRowLength, Math.round(lengthTicks / stepTicks)));
+  const length = Math.max(1, Math.ceil(lengthTicks / stepTicks));
   const pitches = [...new Set(notes.map(n => n.pitch))].sort((a, b) => a - b);
   const rows = pitches.map(pitch => {
     const row = defaultRow(id(), 'pad', pitch, `Note ${pitch}`, length);

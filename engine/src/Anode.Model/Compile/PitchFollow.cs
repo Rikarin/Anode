@@ -43,15 +43,12 @@ public static class PitchFollow {
         return region with { Notes = notes };
     }
 
-    /// <summary>A note's pitch over <paramref name="chord" />: moved by its interval, then (Chords) to its nearest tone.</summary>
-    public static int Pitch(int pitch, int keyRoot, Chord chord, PitchSourceMode mode) {
-        var moved = pitch + Interval(keyRoot, chord);
-        if (mode == PitchSourceMode.Chords) {
-            moved = NearestTone(moved, chord);
-        }
-
-        return Math.Clamp(moved, 0, 127);
-    }
+    /// <summary>
+    ///     A note's pitch over <paramref name="chord" />: moved by the chord's root interval (Root), or to its own nearest
+    ///     chord tone, keeping its octave (Chords).
+    /// </summary>
+    public static int Pitch(int pitch, int keyRoot, Chord chord, PitchSourceMode mode) =>
+        Math.Clamp(mode == PitchSourceMode.Chords ? NearestTone(pitch, chord) : pitch + Interval(keyRoot, chord), 0, 127);
 
     /// <summary>The nearest pitch to <paramref name="pitch" /> that is a tone of <paramref name="chord" /> (a tie goes down).</summary>
     public static int NearestTone(int pitch, Chord chord) {

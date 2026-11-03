@@ -52,7 +52,7 @@ public sealed class Phase11CompilerTests {
     [Theory]
     [InlineData(PitchSourceMode.Off, new[] { 52, 52, 52, 52 })]
     [InlineData(PitchSourceMode.Root, new[] { 52, 49, 57, 47 })]
-    [InlineData(PitchSourceMode.Chords, new[] { 52, 48, 57, 47 })]
+    [InlineData(PitchSourceMode.Chords, new[] { 52, 52, 53, 50 })]
     public void A_MIDI_region_follows_each_bar_s_chord(PitchSourceMode mode, int[] expected) {
         Apply(new AddTrackCommand(Kind: TrackKind.Instrument));
         var track = state.Tracks[0].Id;

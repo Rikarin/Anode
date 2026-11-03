@@ -85,6 +85,7 @@ interface ProjectShape {
     kind: string;
     parentId: string | null;
     drumMachine: { pads: { note: number; trackId: string }[] } | null;
+    instrument: { parameters: Record<string, number> } | null;
     strip: { volumeDb: number; inserts: { id: string; pluginId: string; parameters: Record<string, number> }[] };
   }[];
   master: { inserts: { id: string; pluginId: string; mastering?: unknown }[] };
@@ -96,7 +97,13 @@ interface ProjectShape {
     pitchSource: string;
     key: unknown;
   }[];
-  patternRegions: { id: string; trackId: string; pattern: { rows: { note: number }[] } }[];
+  patternRegions: {
+    id: string;
+    trackId: string;
+    startTick: number;
+    lengthTicks: number;
+    pattern: { stepTicks: number; rows: { note: number; steps: { on: boolean; offset: number }[] }[] };
+  }[];
   regions: { id: string; trackId: string; startTick: number; fileId: string; pitchSource: string }[];
   arrangement: { id: string; name: string; startTick: number; lengthTicks: number }[];
   chordTrack: {
@@ -132,6 +139,8 @@ async function commands(window: Page, list: unknown[], label = 'Test'): Promise<
 }
 const transport = (window: Page, command: 'play' | 'stop' | 'record' | 'locate', tick?: number) =>
   api<{ state: string; positionTick: number }>(window, 'POST', '/transport', { command, tick });
+const instrumentOf = async (window: Page, trackId: string) =>
+  (await project(window)).tracks.find(t => t.id === trackId)?.instrument;
 const notesOf = async (window: Page, regionId: string) =>
   (await api<{ hash: string; notes: NoteShape[] }>(window, 'GET', `/project/regions/${regionId}/session-player`)).notes;
 
@@ -413,6 +422,15 @@ test.describe('Phase 11: generative and analysis', () => {
       await expect
         .poll(async () => (await project(window)).midiRegions.find(r => r.id === bass.regionId)?.pitchSource)
         .toBe('chords');
+      const chordBounce = await bounce(window, folder, 'Bass chords', 8 * Bar, [bass.trackId]);
+      const followingChords = (await project(window)).chordTrack.chords;
+      for (const [bar, chord] of followingChords.toSorted((a, b) => a.tick - b.tick).entries()) {
+        const tones = tonesOf(chord.root, chord.quality).add(pc(chord.bass ?? chord.root));
+        const nearest = [0, -1, 1, -2, 2, -3, 3, -4, 4, -5, 5, -6, 6].map(d => 36 + d).find(p => tones.has(p % 12));
+        const start = Math.round(((bar * Bar) / Ppq) * (Rate / 2));
+        const hz = pitchOf(chordBounce.channels[0] ?? new Float32Array(), Rate, start + 12000, start + 22000);
+        expect(Math.abs(centsFrom(hz, must(nearest)))).toBeLessThan(25);
+      }
       // An audio region in C following the chord track: its pitch moves by the root interval within 5 cents.
       const tone = join(folder, 'C tone.wav');
       writeWav(tone, sine(130.8128, -12, 16, Rate), Rate);
@@ -540,6 +558,7 @@ test.describe('Phase 11: generative and analysis', () => {
       const copy = must(
         (await project(window)).sessionPlayerRegions.find(r => r.trackId === drummer.id && r.startTick === 8 * Bar)
       );
+      const copyNotes = await notesOf(window, copy.id);
       await window.getByTestId('session-player-convert-midi').click();
       await expect.poll(async () => (await project(window)).midiRegions.some(r => r.trackId === drummer.id)).toBe(true);
       const converted = must((await project(window)).midiRegions.find(r => r.trackId === drummer.id));
@@ -551,11 +570,33 @@ test.describe('Phase 11: generative and analysis', () => {
         await api<JobShape>(window, 'POST', `/project/regions/${copy.id}/session-player/convert`, { target: 'pattern' })
       );
       await expect
-        .poll(async () => (await project(window)).patternRegions.some(r => r.trackId === drummer.id))
-        .toBe(true);
+        .poll(async () => (await project(window)).patternRegions.filter(r => r.trackId === drummer.id).length)
+        .toBe(2);
+      // Eight bars of 16ths make two four-bar pattern regions; their steps are the generated notes, in place.
+      const hit = (pitch: number, tick: number) => `${pitch}@${tick}`;
+      const stepped = (await project(window)).patternRegions
+        .filter(r => r.trackId === drummer.id)
+        .flatMap(r =>
+          r.pattern.rows.flatMap(row =>
+            row.steps.flatMap((step, s) =>
+              step.on
+                ? [
+                    hit(
+                      row.note,
+                      r.startTick - 8 * Bar + s * r.pattern.stepTicks + Math.round(step.offset * r.pattern.stepTicks)
+                    )
+                  ]
+                : []
+            )
+          )
+        );
+      const generatedHits = new Set(copyNotes.map(n => hit(n.pitch, n.startTick)));
+      expect(stepped.every(h => generatedHits.has(h))).toBe(true);
+      // Two hits of one drum in a step are one step: the louder (the pattern's grid is the limit).
+      expect(stepped.length).toBeGreaterThanOrEqual(0.95 * generatedHits.size);
       measured(
         '3 drummer',
-        'fill at the section end, deterministic, regenerates, follows the bass, multi-output, converts'
+        `fill at the section end, deterministic, regenerates, follows the bass, multi-output; converts to MIDI (${converted.notes.length} notes) and to 2 pattern regions (${stepped.length} of ${generatedHits.size} hits)`
       );
 
       // ---- 4. Bass and Keyboard Players following the chord track
@@ -585,6 +626,7 @@ test.describe('Phase 11: generative and analysis', () => {
         }
       }
       let worstVoice = 0;
+      let voiceMoves = 0;
       for (const region of state.sessionPlayerRegions.filter(
         r => state.tracks.find(t => t.id === r.trackId)?.kind === 'keyboardPlayer'
       )) {
@@ -598,41 +640,49 @@ test.describe('Phase 11: generative and analysis', () => {
           const tones = tonesOf(chord.root, chord.quality).add(pc(chord.bass ?? chord.root)); // the slash bass counts
           passing += voiced.filter(n => !tones.has(n.pitch % 12)).length;
         }
-        // Voice leading: the right hand's whole voicings (its notes struck together, as many as most strikes have) of
-        // neighbouring chords; no voice moves by more than a fifth.
+        // Voice leading: each chord's voicing is the right hand's chord tones while it lasts, struck together or (this
+        // style) arpeggiated; of voicings of the same size on neighbouring chords, no voice moves by more than a fifth.
         const range = region.parameters['keys'] as { lowNote: number };
-        const strikes = new Map<number, number[]>();
-        for (const n of generated.filter(g => g.pitch >= range.lowNote)) {
-          strikes.set(n.startTick, [...(strikes.get(n.startTick) ?? []), n.pitch]);
-        }
-        const whole = [...strikes.entries()].filter(([, pitches]) => pitches.length >= 3);
-        const sizes = whole.map(([, pitches]) => pitches.length);
-        const size = sizes.toSorted((x, y) => sizes.filter(v => v === y).length - sizes.filter(v => v === x).length)[0];
-        const voicings = whole
-          .filter(([, pitches]) => pitches.length === size)
-          .toSorted(([x], [y]) => x - y)
-          .map(([tick, pitches]) => ({
-            chord: chords.findLastIndex(c => c.tick <= region.startTick + tick + Ppq / 16),
-            pitches: pitches.toSorted((x, y) => x - y)
-          }));
+        const voicings = chords.map((chord, i) => {
+          const end = chords[i + 1]?.tick ?? chord.tick + Bar;
+          const tones = tonesOf(chord.root, chord.quality).add(pc(chord.bass ?? chord.root));
+          const heard = generated
+            .filter(n => n.pitch >= range.lowNote && tones.has(n.pitch % 12))
+            .filter(n => region.startTick + n.startTick >= chord.tick && region.startTick + n.startTick < end)
+            .map(n => n.pitch);
+          return [...new Set(heard)].sort((x, y) => x - y);
+        });
         for (const [k, voicing] of voicings.entries()) {
           const before = voicings[k - 1];
-          if (before && voicing.chord === before.chord + 1) {
-            voicing.pitches.forEach((p, v) => {
-              worstVoice = Math.max(worstVoice, Math.abs(p - must(before.pitches[v])));
+          if (before?.length && before.length === voicing.length) {
+            voiceMoves++;
+            voicing.forEach((p, v) => {
+              worstVoice = Math.max(worstVoice, Math.abs(p - must(before[v])));
             });
           }
         }
         expect(passing / Math.max(1, generated.length)).toBeLessThan(0.1);
       }
+      expect(voiceMoves).toBeGreaterThan(0);
       expect(worstVoice).toBeLessThanOrEqual(7);
-      measured('4 players', `bass roots on every chord change, in range; keys chord tones, worst voice move ${worstVoice}`);
+      measured(
+        '4 players',
+        `bass roots on every chord change, in range; keys chord tones, worst voice move ${worstVoice} semitones of ${voiceMoves} chord changes`
+      );
 
       // ---- 5. Mastering Assistant: analyse; Clean and Valve at −14 LUFS within 0.5 LU, true peak ≤ −1 dBTP
+      // The song is its eight bars: the pattern conversion's copy after them goes, or the analysis would hear it too.
+      await commands(window, [
+        {
+          type: 'deleteRegions',
+          regionIds: (await project(window)).patternRegions.filter(r => r.trackId === drummer.id).map(r => r.id)
+        }
+      ]);
       await menu(app, 'masteringAssistant');
       await window.getByTestId('mastering-analyse').click();
       await expect(window.getByTestId('mastering-analysis')).toBeVisible({ timeout: 180_000 });
       const songEnd = 8 * Bar;
+      let processed = 0;
       for (const character of ['clean', 'valve']) {
         await window.getByTestId(`mastering-character-${character}`).click();
         const master = await bounce(window, folder, `Master ${character}`, songEnd);
@@ -640,6 +690,7 @@ test.describe('Phase 11: generative and analysis', () => {
         const peak = truePeakDbtp(master.channels);
         expect(Math.abs(lufs + 14)).toBeLessThanOrEqual(0.5);
         expect(peak).toBeLessThanOrEqual(-1);
+        processed = lufs;
         measured('5 mastering', `${character}: ${lufs.toFixed(2)} LUFS, ${peak.toFixed(2)} dBTP`);
       }
       // Valve's even harmonics on a test tone exceed Clean's by at least 6 dB.
@@ -664,12 +715,15 @@ test.describe('Phase 11: generative and analysis', () => {
       // The level-matched bypass is within 1 LU of the processed loudness.
       await window.getByTestId('mastering-bypass').click();
       const bypassed = await bounce(window, folder, 'Master bypassed', songEnd);
-      expect(Math.abs(integratedLufs(bypassed.channels, bypassed.sampleRate) + 14)).toBeLessThanOrEqual(1);
+      const bypassedLufs = integratedLufs(bypassed.channels, bypassed.sampleRate);
+      expect(Math.abs(bypassedLufs - processed)).toBeLessThanOrEqual(1);
       await window.getByTestId('mastering-bypass').click();
       measured(
         '5 mastering',
-        `even harmonics: Valve ${evens['valve']?.toFixed(1)} dB, Clean ${evens['clean']?.toFixed(1)} dB`
+        `even harmonics: Valve ${evens['valve']?.toFixed(1)} dB, Clean ${evens['clean']?.toFixed(1)} dB; bypass ${bypassedLufs.toFixed(2)} LUFS against ${processed.toFixed(2)}`
       );
+
+      await window.getByTestId('mastering-window-close').click();
 
       // ---- 6. T3 instruments and effects
       const model = await instrumentTrack(window, 'Model', 'anode.physical-model', 2);
@@ -698,6 +752,14 @@ test.describe('Phase 11: generative and analysis', () => {
           }
         ]);
       }
+      // The custom panel binds the host's parameters: a pickup moved on the drawing moves pickup1Position.
+      await selectRegion(window, 'Model');
+      const pickup = window.getByTestId('physical-model-panel').getByRole('slider', { name: 'Pickup A position' });
+      await pickup.focus();
+      await window.keyboard.press('ArrowRight');
+      await expect
+        .poll(async () => (await instrumentOf(window, model.trackId))?.parameters['pickup1Position'])
+        .toBeCloseTo(21, 3);
       // Lower damping, longer decay (the −60 dB time at least 1.5×): a struck string, the damping its own parameter.
       const decays: number[] = [];
       const struck = await instrumentTrack(window, 'Struck', 'anode.physical-model', 6);
