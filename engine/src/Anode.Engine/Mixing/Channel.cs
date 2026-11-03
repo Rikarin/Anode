@@ -1,7 +1,10 @@
 using Anode.Dsp.Effects;
 using Anode.Dsp.Instruments;
 using Anode.Dsp.MidiEffects;
+using Anode.Dsp.Spatial;
 using Anode.Engine.Midi;
+using Anode.Engine.Spatial;
+using Anode.Ipc;
 
 namespace Anode.Engine.Mixing;
 
@@ -75,7 +78,18 @@ public sealed class InsertSlot : IDisposable {
         return Parameters.TryEnqueue(new(index, (float)value));
     }
 
-    /// <summary>Audio thread: applies the queued changes.</summary>
+    /// <summary>
+    ///     The extra instances and delays the insert needs on a multichannel strip (Phase 10), or null on a mono or
+    ///     stereo one. Swapped whole by the control thread before a plan that needs it is published.
+    /// </summary>
+    public MultiInsert? Multi {
+        get => Volatile.Read(ref multi);
+        set => Volatile.Write(ref multi, value);
+    }
+
+    MultiInsert? multi;
+
+    /// <summary>Audio thread: applies the queued changes (to the extra instances of a multichannel strip too).</summary>
     public void ApplyParameters() {
         if (Effect is null) {
             while (Parameters.TryDequeue(out _)) { }
@@ -83,12 +97,21 @@ public sealed class InsertSlot : IDisposable {
             return;
         }
 
+        var extras = multi?.Extras;
         while (Parameters.TryDequeue(out var change)) {
             Effect.SetParameter(change.Index, change.Value);
+            if (extras is not null) {
+                foreach (var extra in extras) {
+                    extra?.SetParameter(change.Index, change.Value);
+                }
+            }
         }
     }
 
-    public void Dispose() => Effect?.Dispose();
+    public void Dispose() {
+        Effect?.Dispose();
+        multi?.Dispose();
+    }
 }
 
 /// <summary>
@@ -301,6 +324,12 @@ public sealed class SendSlot(string id) {
     /// <summary>Audio thread: the gains it last applied.</summary>
     internal EdgeGain Edge;
 
+    /// <summary>
+    ///     Control thread (Phase 10): the Surround Panner a send to a surround bus pans through (the strip's surround
+    ///     settings), kept while its bus's format and its input width stay.
+    /// </summary>
+    internal PannerCache Panner;
+
     /// <summary>Control thread.</summary>
     public void Set(float level, float panning) {
         Volatile.Write(ref gain, float.IsFinite(level) ? Math.Max(0f, level) : 0f);
@@ -315,12 +344,24 @@ public sealed record ChannelSend(SendSlot Slot, int Bus, bool PreFader);
 ///     A channel's structure (<c>setChannel</c>): inserts in order, sends and output (0: the master, 1…64: a bus, −N:
 ///     the device's output pair N), and its MIDI FX slots in order (Phase 6). Immutable once published; a change makes
 ///     a new one that keeps the instances.
+///     <para>
+///         Phase 10 (docs/11-phase-10.md): the strip's input and output formats and its panner's mode. An aux's input
+///         format is its bus's (every summing point carries the format of the strip that reads it: the master's input,
+///         an aux's); a track's own signal is its source's channels (mono or stereo) whatever its input format says.
+///     </para>
 /// </summary>
 public sealed record ChannelConfig(ChannelInsert[] Inserts, ChannelSend[] Sends, int Output) {
     public static readonly ChannelConfig Empty = new([], [], 0);
 
     /// <summary>The MIDI FX slots, run in order on the track's MIDI before its instrument.</summary>
     public ChannelMidiEffect[] MidiEffects { get; init; } = [];
+
+    public SpeakerFormat InputFormat { get; init; } = SpeakerFormat.Stereo;
+
+    /// <summary>As the server keeps it (its destination's); the engine follows the destination's own format.</summary>
+    public SpeakerFormat OutputFormat { get; init; } = SpeakerFormat.Stereo;
+
+    public EnginePannerMode PannerMode { get; init; } = EnginePannerMode.Stereo;
 }
 
 /// <summary>The left and right gains an edge (an output or a send) last applied, so a change ramps over a block.</summary>
@@ -328,6 +369,26 @@ internal struct EdgeGain {
     internal float Left;
     internal float Right;
     internal bool Set;
+}
+
+/// <summary>A prepared Surround Panner kept for an edge while its output format and input width stay (control thread).</summary>
+internal struct PannerCache {
+    ISurroundPanner? panner;
+    SpeakerFormat format;
+    int inputs;
+
+    /// <summary>The panner for <paramref name="output" /> and <paramref name="inputChannels" />: the kept one, or a new one prepared.</summary>
+    internal ISurroundPanner Get(SpeakerFormat output, int inputChannels, SpatialContext spatial) {
+        if (panner is null || format != output || inputs != inputChannels) {
+            var next = spatial.Factory.CreateSurroundPanner();
+            next.Prepare(SpeakerLayout.Of(output), inputChannels, spatial.SampleRate, AudioEngine.MaxFrames);
+            panner = next;
+            format = output;
+            inputs = inputChannels;
+        }
+
+        return panner;
+    }
 }
 
 /// <summary>
@@ -367,6 +428,12 @@ public sealed class ChannelState {
 
     /// <summary>Audio thread: the output's gain ramp.</summary>
     internal EdgeGain Output;
+
+    /// <summary>Audio thread (Phase 10): the fader's gain ramp of an output with no stereo pan (surround, object, mono).</summary>
+    internal EdgeGain Fader;
+
+    /// <summary>Control thread (Phase 10): the Surround Panner of a surround output.</summary>
+    internal PannerCache OutputPanner;
 
     // Audio thread, per block: the latency the delay compensation aligns on, whether it is on an armed or monitored
     // path, and whether it sounds under the solos.

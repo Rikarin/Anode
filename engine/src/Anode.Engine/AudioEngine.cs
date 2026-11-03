@@ -292,7 +292,15 @@ public sealed unsafe partial class AudioEngine : IAudioProcessor {
         );
         var click = clicks.AsSpan(0, frames);
         RenderClicks(model, countIn, position, click);
-        WriteOutputs(outputs, outputChannels, offset, outLeft, outRight, click);
+        if (Volatile.Read(ref offline) == 0) {
+            TapMaster(outLeft, outRight, position, rolling);
+        }
+
+        if (model.Mix.MasterMulti || Volatile.Read(ref monitor) is not null || blockCapture is { MonitoringRender: true }) {
+            MonitorOutputs(outputs, outputChannels, offset, outLeft, outRight, click);
+        } else {
+            WriteOutputs(outputs, outputChannels, offset, outLeft, outRight, click);
+        }
 
         if (countIn) {
             countInRemaining -= frames;

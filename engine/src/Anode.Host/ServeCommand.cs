@@ -28,6 +28,9 @@ static class ServeCommand {
         var rate = options.Int("rate", 48_000);
         var buffer = options.Int("buffer", 64);
         var inputs = Math.Clamp(options.Int("inputs", options.Flag("null-audio") ? 16 : 64), 0, 64);
+        // The null device's outputs (Phase 10: enough for a speaker map of a 9.1.6 master); a real device opens all of
+        // its own (cth_audio, up to 64).
+        var outputs = Math.Clamp(options.Int("outputs", 16), 1, 64);
 
         using var stop = new CancellationTokenSource();
         using var sigint = PosixSignalRegistration.Create(PosixSignal.SIGINT, Stop);
@@ -45,7 +48,7 @@ static class ServeCommand {
 
         IAudioDevice device;
         if (options.Flag("null-audio")) {
-            device = new NullAudioDevice(rate, buffer, inputs, 2, options.Flag("input-tone")) {
+            device = new NullAudioDevice(rate, buffer, inputs, outputs, options.Flag("input-tone")) {
                 // Testing aid: the null device reports itself lost after this many milliseconds.
                 LoseAfter = options.Text("lose-device-after") is null
                     ? null

@@ -117,7 +117,7 @@ public sealed partial class HostProcessTests : IDisposable {
 
         var hello = Assert.IsType<HelloMessage>(await Request(new HelloMessage("test")));
         Assert.Equal(
-            ("null", Rate, 64, 16, 2),
+            ("null", Rate, 64, 16, 16),
             (hello.Backend, hello.SampleRate, hello.BufferFrames, hello.InputChannels, hello.OutputChannels)
         );
         using var region = SharedSegment.Open(hello.TelemetryName!, TelemetryLayout.Size);

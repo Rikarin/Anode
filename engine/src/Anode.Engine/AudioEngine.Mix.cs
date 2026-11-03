@@ -174,6 +174,10 @@ public sealed unsafe partial class AudioEngine {
             destRight[d].AsSpan(0, frames).Clear();
         }
 
+        if (plan.Multichannel) {
+            ClearExtras(plan, frames);
+        }
+
         Latencies(plan);
         FollowTempo(plan);
         // Tracks with sandboxed inserts first hand their first sandboxed block over (ISplitProcessing), so their
@@ -194,23 +198,38 @@ public sealed unsafe partial class AudioEngine {
                     split.End(l, r); // on a miss the block stays dry
                 }
 
-                Channel(node, l, r, ch.PrefetchStereo, default, default, ch.Resume);
+                if (node.Multi) {
+                    ChannelMulti(node, ch.WorkLeft!, ch.WorkRight!, ch.PrefetchStereo ? 2 : 1, ch.Resume);
+                } else {
+                    Channel(node, l, r, ch.PrefetchStereo, default, default, ch.Resume);
+                }
+
                 continue;
             }
 
             var left = trackLeft.AsSpan(0, frames);
             var right = trackRight.AsSpan(0, frames);
+            if (node.Multi) {
+                ChannelMulti(node, trackLeft, trackRight, SourceMulti(node, left, right));
+                continue;
+            }
+
             var stereo = Source(node, left, right);
             Channel(node, left, right, stereo, default, default);
         }
 
         // The master: everything routed to it (and the preview), its inserts, then its fader.
-        var sumLeft = trackLeft.AsSpan(0, frames);
-        var sumRight = trackRight.AsSpan(0, frames);
-        destLeft[0].AsSpan(0, frames).CopyTo(sumLeft);
-        destRight[0].AsSpan(0, frames).CopyTo(sumRight);
-        MixPreview(sumLeft, sumRight);
-        Channel(plan.Master, sumLeft, sumRight, true, outLeft, outRight);
+        if (plan.MasterMulti) {
+            MasterMulti(plan, outLeft, outRight);
+        } else {
+            var sumLeft = trackLeft.AsSpan(0, frames);
+            var sumRight = trackRight.AsSpan(0, frames);
+            destLeft[0].AsSpan(0, frames).CopyTo(sumLeft);
+            destRight[0].AsSpan(0, frames).CopyTo(sumRight);
+            MixPreview(sumLeft, sumRight);
+            Channel(plan.Master, sumLeft, sumRight, true, outLeft, outRight);
+        }
+
         WritePairs(plan, outputs, outputChannels);
         SnapshotBuses(plan);
     }
@@ -548,16 +567,7 @@ public sealed unsafe partial class AudioEngine {
         var ch = node.Channel;
         stereo = Inserts(node, left, right, stereo, firstInsert);
         var source = stereo ? right : left;
-        if (blockCapture is { Kind: RenderKind.Freeze } freeze
-            && node.Track is { } frozen
-            && freeze.Tracks.TryGetValue(frozen.Id, out var target)) {
-            if (freeze.IncludeVolumePan) {
-                CaptureFaded(node, target, left, source, stereo);
-            } else {
-                target.Write(left, source, ch.ChainLatency);
-            }
-        }
-
+        CaptureFreeze(node, left, source, stereo);
         var line = ch.Delay;
         line?.Write(left, source);
         var tapped = -1;
@@ -584,6 +594,19 @@ public sealed unsafe partial class AudioEngine {
                     destLeft[destination].AsSpan(0, blockFrames),
                     destRight[destination].AsSpan(0, blockFrames)
                 );
+            }
+        }
+    }
+
+    /// <summary>A freeze or bounce in place of this channel, when one renders: its signal before (or through) its fader.</summary>
+    void CaptureFreeze(MixNode node, Span<float> left, Span<float> source, bool stereo) {
+        if (blockCapture is { Kind: RenderKind.Freeze } freeze
+            && node.Track is { } frozen
+            && freeze.Tracks.TryGetValue(frozen.Id, out var target)) {
+            if (freeze.IncludeVolumePan) {
+                CaptureFaded(node, target, left, source, stereo);
+            } else {
+                target.Write(left, source, node.Channel.ChainLatency);
             }
         }
     }
@@ -653,7 +676,9 @@ public sealed unsafe partial class AudioEngine {
         outRight.Clear();
         var (peakL, peakR) = AccumulateMetered(srcL, srcR, outLeft, outRight);
         ch.Strip.Meter(peakL, peakR);
-        blockCapture?.Master?.Write(outLeft, outRight, ch.Latency + masterOutputDelay);
+        if (blockCapture is { MonitoringRender: false, Master: { } master }) {
+            master.Write(outLeft, outRight, ch.Latency + masterOutputDelay);
+        }
     }
 
     /// <summary>A track's fader and pan into its destination (and its stem, when one is rendered).</summary>
@@ -1127,6 +1152,7 @@ public sealed unsafe partial class AudioEngine {
 
         Array.Clear(snapshotFrames);
         tempoPlan = null; // the tempo is set again
+        ResetSpatial(model);
     }
 
     static void ResetNode(MixNode node) {

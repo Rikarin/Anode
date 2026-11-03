@@ -27,13 +27,17 @@ public sealed class RenderTarget : IDisposable {
     long remaining;
     long dropped;
 
-    public RenderTarget(int trackId, string path, long frames, int ringFrames) {
+    public RenderTarget(int trackId, string path, long frames, int ringFrames, int channels = 2) {
         TrackId = trackId;
         Path = path;
         remaining = frames;
         Frames = frames;
-        Ring = new(ringFrames * 2);
+        Channels = Math.Max(1, channels);
+        Ring = new(ringFrames * Channels);
     }
+
+    /// <summary>The file's channels (Phase 10: a surround master's or stem's; 2 before).</summary>
+    public int Channels { get; }
 
     /// <summary>The engine track (−1: the master).</summary>
     public int TrackId { get; }
@@ -90,6 +94,46 @@ public sealed class RenderTarget : IDisposable {
         Volatile.Write(ref remaining, remaining - count);
     }
 
+    /// <summary>
+    ///     Audio thread (Phase 10): captures a planar block of <paramref name="channels" /> channels (channel c's
+    ///     <paramref name="frames" /> at <c>c × frames</c>) into the file's <see cref="Channels" /> (missing ones silent),
+    ///     as <see cref="Write" /> does.
+    /// </summary>
+    public void WritePlanar(ReadOnlySpan<float> planar, int channels, int frames, int latency) {
+        if (skip < 0) {
+            skip = Math.Max(0, latency);
+        }
+
+        var from = (int)Math.Min(skip, frames);
+        skip -= from;
+        var count = (int)Math.Min(frames - from, remaining);
+        if (count <= 0) {
+            return;
+        }
+
+        var width = Channels;
+        var fit = Math.Min(count, Ring.Free / width);
+        Ring.WriteRegions(fit * width, out var first, out var second);
+        for (var i = 0; i < fit; i++) {
+            for (var c = 0; c < width; c++) {
+                var v = c < channels ? planar[c * frames + from + i] : 0f;
+                var at = width * i + c;
+                if (at < first.Length) {
+                    first[at] = v;
+                } else {
+                    second[at - first.Length] = v;
+                }
+            }
+        }
+
+        Ring.CommitWrite(fit * width);
+        if (fit < count) {
+            Volatile.Write(ref dropped, dropped + count - fit);
+        }
+
+        Volatile.Write(ref remaining, remaining - count);
+    }
+
     public void Dispose() => Ring.Dispose();
 }
 
@@ -113,6 +157,12 @@ public sealed class RenderCapture(RenderKind kind, RenderTarget? master, Diction
 
     /// <summary>A freeze render skips the captured tracks' inserts (and their latency) while it runs.</summary>
     public bool BypassInserts { get; init; }
+
+    /// <summary>A master render of what the monitoring sends to the device (Phase 10; never otherwise).</summary>
+    public bool MonitoringRender { get; init; }
+
+    /// <summary>A master render without the objects (Phase 10: the bed of an ADM export).</summary>
+    public bool BedOnly { get; init; }
 
     /// <summary>Every target has its frames.</summary>
     public bool Complete {

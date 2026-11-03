@@ -81,6 +81,7 @@ public sealed partial class EngineController : IDisposable {
     public EngineController(EngineOptions options, PluginRegistry? plugins = null, IMidiBackend? midi = null) {
         Options = options;
         Engine = new(options.SampleRate) {
+            Spatial = new(Spatial.DspSpatial.Instance, options.SampleRate),
             OutputLatency = options.OutputLatency,
             MidiRecordShift = options.BufferFrames + options.OutputLatency,
             RecordLatency = Math.Max(0, options.RoundTripLatency)
@@ -434,17 +435,21 @@ public sealed partial class EngineController : IDisposable {
     /// <summary>Control thread: a strip changed; <paramref name="trackId" /> −1 is the master. False for an unknown track.</summary>
     public bool SetStrip(int trackId, EngineStrip strip) {
         lock (gate) {
-            if (trackId == -1) {
-                SetFader(-1, Engine.Master, strip);
-                return true;
+            var channel = trackId == -1 ? Engine.MasterChannel : Find(Engine.Root, trackId)?.Channel;
+            if (channel is null) {
+                return false;
             }
 
-            var track = Find(Engine.Root, trackId);
-            if (track is not null) {
-                SetFader(trackId, track.Strip, strip);
+            SetFader(trackId, channel.Strip, strip);
+            var replaced = new List<IDisposable>();
+            if (ApplyFormats(channel, trackId, strip, replaced)) {
+                PublishPlan(); // Phase 10: a format or panner mode is structure
+                foreach (var old in replaced) {
+                    old.Dispose();
+                }
             }
 
-            return track is not null;
+            return true;
         }
     }
 
@@ -941,6 +946,7 @@ public sealed partial class EngineController : IDisposable {
         }
 
         var (previous, grace) = Engine.Publish(next);
+        ApplyMonitoring(); // a master of another format monitors through another down-mix or binaural layout
         var diskGrace = Streamer.Grace;
         Streamer.Wake();
         var spin = new SpinWait();

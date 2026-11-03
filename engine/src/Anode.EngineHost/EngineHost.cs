@@ -19,7 +19,9 @@ namespace Anode.EngineHost;
 /// </summary>
 public sealed class EngineHost : IDisposable {
     readonly SharedSegment? sharedTelemetry;
+    readonly SharedSegment? sharedTap;
     readonly unsafe byte* localTelemetry;
+    readonly unsafe byte* localTap;
     readonly TelemetryWriter telemetry;
     Timer? readings;
     Timer? syncTimer;
@@ -111,6 +113,27 @@ public sealed class EngineHost : IDisposable {
 
         TelemetryRegion = region;
         telemetry = new(Controller.Engine, region, () => device.Overloads);
+
+        // Phase 10: the master tap ring for listen-in (segment format 5), created with the telemetry region.
+        string? tapName = null;
+        byte* tap;
+        if (sharedTelemetry) {
+            sharedTap = SharedSegment.Create(
+                SegmentWriter.DefaultBackend,
+                SharedSegment.DefaultDirectory(),
+                $"an-tp-{Environment.ProcessId}",
+                Random.Shared.Next(1 << 16),
+                MasterTapLayout.Size
+            );
+            tap = sharedTap.Pointer;
+            tapName = sharedTap.Name;
+        } else {
+            localTap = (byte*)NativeMemory.AlignedAlloc((nuint)MasterTapLayout.Size, 64);
+            tap = localTap;
+        }
+
+        MasterTapRegion = tap;
+        Controller.Engine.MasterTap = new(tap, device.SampleRate);
         Hello = new(
             version,
             device.Backend,
@@ -118,9 +141,13 @@ public sealed class EngineHost : IDisposable {
             device.BufferFrames,
             device.InputChannels,
             device.OutputChannels,
-            telemetryName
+            telemetryName,
+            tapName
         );
     }
+
+    /// <summary>The master tap ring (<see cref="MasterTapLayout.Size" /> bytes, <see cref="MasterTapHeader" />).</summary>
+    public unsafe byte* MasterTapRegion { get; }
 
     public IAudioDevice Device { get; }
 
@@ -457,6 +484,24 @@ public sealed class EngineHost : IDisposable {
                 reply = PushSyncState(true);
                 return true;
             default:
+                return Phase10(message, out reply);
+        }
+    }
+
+    /// <summary>
+    ///     The Phase 10 messages: monitoring (an error when its HRTF file cannot be used; the previous monitoring stays)
+    ///     and the master tap. False when <paramref name="message" /> is neither.
+    /// </summary>
+    bool Phase10(IpcMessage message, out IpcMessage? reply) {
+        reply = null;
+        switch (message) {
+            case SetMonitoringMessage monitoring:
+                Controller.SetMonitoring(monitoring);
+                return true;
+            case SetMasterTapMessage tap:
+                Controller.SetMasterTap(tap.Enabled);
+                return true;
+            default:
                 return false;
         }
     }
@@ -594,6 +639,8 @@ public sealed class EngineHost : IDisposable {
             SendMidiMessage => "sendMidi",
             SetSyncMessage => "setSync",
             SyncStateMessage => "syncState",
+            SetMonitoringMessage => "setMonitoring",
+            SetMasterTapMessage => "setMasterTap",
             _ => message.GetType().Name
         };
 
@@ -615,8 +662,13 @@ public sealed class EngineHost : IDisposable {
         (factory as IDisposable)?.Dispose();
         Device.Dispose();
         sharedTelemetry?.Dispose();
+        sharedTap?.Dispose();
         if (localTelemetry is not null) {
             NativeMemory.AlignedFree(localTelemetry);
+        }
+
+        if (localTap is not null) {
+            NativeMemory.AlignedFree(localTap);
         }
     }
 }
