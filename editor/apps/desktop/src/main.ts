@@ -363,16 +363,57 @@ function handleIpc(): void {
   ipcMain.handle('anode:network:status', () => networkStatus(settings.network, sidecars?.networkError ?? null));
   ipcMain.handle('anode:network:apply', async (_event, network: unknown) => {
     const next = await validNetwork(network);
+    if (sidecars && settings.target.mode === 'local') {
+      await openProject(await connection()); // refuses before anything changes when there are unsaved edits
+    }
     settings = { ...settings, network: next };
     saveSettings(settings);
-    // The Server restarts with the new listeners and token; the window reloads to take the token.
+    // The Server restarts with the new listeners and token; the window reloads to take the token. The open project
+    // goes with the old Server, so it must be saved (refused otherwise) and is opened again on the new one.
     if (sidecars && settings.target.mode === 'local') {
+      const open = await openProject(await connection());
       await sidecars.applyNetwork(settings.network);
+      if (open) {
+        await request(await connection(), 'POST', '/api/v1/projects/open', { path: open });
+      }
       window?.reload();
     }
 
     return networkStatus(settings.network, sidecars?.networkError ?? null);
   });
+}
+
+/**
+ * The path of the project the local Server has open, or null; throws when it has unsaved edits (the Server is about to
+ * restart, and they would be lost).
+ */
+async function openProject(server: Connection): Promise<string | null> {
+  const response = await fetch(`${server.baseUrl}/api/v1/project`, {
+    headers: server.token ? { Authorization: `Bearer ${server.token}` } : {}
+  });
+  if (!response.ok) {
+    return null; // none open
+  }
+  const project = (await response.json()) as { path: string; dirty: boolean };
+  if (project.dirty) {
+    throw new Error('Save the project first: turning network access on or off restarts the Server.');
+  }
+  return project.path;
+}
+
+/** A JSON request to the local Server; throws with its answer when it fails. */
+async function request(server: Connection, method: string, path: string, body: unknown): Promise<void> {
+  const response = await fetch(`${server.baseUrl}${path}`, {
+    method,
+    headers: {
+      'Content-Type': 'application/json',
+      ...(server.token ? { Authorization: `Bearer ${server.token}` } : {})
+    },
+    body: JSON.stringify(body)
+  });
+  if (!response.ok) {
+    throw new Error(`${method} ${path}: ${response.status} ${await response.text()}`);
+  }
 }
 
 /**

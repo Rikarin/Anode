@@ -58,34 +58,53 @@ public sealed class DiscoveryService(
     }
 
     /// <summary>
-    ///     The host and port remotes reach this Server on: the first listening address, its host name (with
-    ///     <c>.local</c>) for an address on every interface; port 0 when it does not listen on a port.
+    ///     The host and port remotes reach this Server on: the first listening address a remote can reach (not loopback:
+    ///     the desktop app's Server listens on a loopback port for its own editor and on the network port for remotes),
+    ///     else the first; its host name (with <c>.local</c>) for an address on every interface; port 0 when it does not
+    ///     listen on a port.
     /// </summary>
     (string Host, int Port) Address() {
         var addresses = server.Features.Get<IServerAddressesFeature>()?.Addresses ?? [];
+        (string Host, int Port)? first = null;
         foreach (var address in addresses) {
-            if (!Uri.TryCreate(
-                    address.Replace("*", "0.0.0.0", StringComparison.Ordinal)
-                        .Replace("+", "0.0.0.0", StringComparison.Ordinal),
-                    UriKind.Absolute,
-                    out var uri
-                )) {
+            if (Reach(address) is not var (host, port, loopback)) {
                 continue;
             }
 
-            var host = uri.Host;
-            if (IPAddress.TryParse(host.Trim('[', ']'), out var ip)
-                && (ip.Equals(IPAddress.Any) || ip.Equals(IPAddress.IPv6Any))) {
-                host = Dns.GetHostName();
-                if (!host.Contains('.', StringComparison.Ordinal)) {
-                    host += ".local";
-                }
+            if (!loopback) {
+                return (host, port);
             }
 
-            return (host, uri.Port);
+            first ??= (host, port);
         }
 
-        return ("localhost", 0);
+        return first ?? ("localhost", 0);
+    }
+
+    /// <summary>
+    ///     A listening address as remotes would use it: its host (this machine's name with <c>.local</c> for every
+    ///     interface), port, and whether it is loopback; null when it is not a URL.
+    /// </summary>
+    static (string Host, int Port, bool Loopback)? Reach(string address) {
+        if (!Uri.TryCreate(
+                address.Replace("*", "0.0.0.0", StringComparison.Ordinal)
+                    .Replace("+", "0.0.0.0", StringComparison.Ordinal),
+                UriKind.Absolute,
+                out var uri
+            )) {
+            return null;
+        }
+
+        var host = uri.Host;
+        var ip = IPAddress.TryParse(host.Trim('[', ']'), out var parsed) ? parsed : null;
+        if (ip is not null && (ip.Equals(IPAddress.Any) || ip.Equals(IPAddress.IPv6Any))) {
+            host = Dns.GetHostName();
+            if (!host.Contains('.', StringComparison.Ordinal)) {
+                host += ".local";
+            }
+        }
+
+        return (host, uri.Port, host == "localhost" || (ip is not null && IPAddress.IsLoopback(ip)));
     }
 
     public Task StartAsync(CancellationToken cancellationToken) {
