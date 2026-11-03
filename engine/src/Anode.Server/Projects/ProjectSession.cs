@@ -55,6 +55,9 @@ public sealed record OpenProjectView(
     /// </summary>
     public MasteringChains? Mastering { get; init; }
 
+    /// <summary>Phase 11: the HRTF set a Binaural Post-Processing insert renders with (null: none, the insert fails).</summary>
+    public string? HrtfPath { get; init; }
+
     /// <summary>An insert's Mastering Assistant chain, or null.</summary>
     public EngineMasteringChain? ChainOf(Insert insert) => Mastering?.Of(insert);
 }
@@ -81,6 +84,7 @@ public sealed partial class ProjectSession(
     IScoreNotation notation,
     ISessionPlayerLibrary players,
     MasteringChains mastering,
+    HrtfLocator hrtfs,
     TimeProvider time,
     ILogger<ProjectSession> logger
 ) {
@@ -1402,7 +1406,10 @@ public sealed partial class ProjectSession(
             o.Ids = o.Ids.With(o.State);
             Volatile.Write(
                 ref view,
-                new(o.Session, o.Folder, o.State, o.Ids, o.Revision, o.States, o.Analyses) { Mastering = mastering }
+                new(o.Session, o.Folder, o.State, o.Ids, o.Revision, o.States, o.Analyses) {
+                    Mastering = mastering,
+                    HrtfPath = hrtfs.Path
+                }
             );
         } else {
             Volatile.Write(ref view, null);

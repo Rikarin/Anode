@@ -53,6 +53,7 @@ builder.Services.AddSingleton<IAudioAnalyzer, DspAudioAnalyzer>();
 builder.Services.AddSingleton<IAudioEditor, DspAudioEditor>();
 builder.Services.AddSingleton<MidiEditLibraries>();
 builder.Services.AddSingleton<FileAnalyses>();
+builder.Services.AddSingleton<HrtfLocator>();
 builder.Services.AddSingleton<ProjectSession>();
 builder.Services.AddSingleton<Jobs>();
 builder.Services.AddSingleton<AudioImport>();

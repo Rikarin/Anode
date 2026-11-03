@@ -1,4 +1,5 @@
 using Anode.Contracts;
+using Anode.Dsp.Effects.Surround;
 using Anode.Ipc;
 using Anode.Ipc.Segments;
 using Anode.Model;
@@ -583,14 +584,19 @@ public sealed class HostSync(HostLink link, SegmentPool pool, ILogger logger, Se
             view
         );
 
-    /// <summary>A strip with its inserts' files as absolute paths (the model keeps the project's relative).</summary>
+    /// <summary>
+    ///     A strip with its inserts' files as absolute paths (the model keeps the project's relative), and a Binaural
+    ///     Post-Processing insert's the HRTF set.
+    /// </summary>
     static EngineStrip Files(EngineStrip strip, OpenProjectView view) =>
-        strip.Inserts is { } inserts && inserts.Any(static i => i.File is not null)
+        strip.Inserts is { } inserts && inserts.Any(static i => i.File is not null || i.PluginId == BinauralInsert.Id)
             ? strip with {
                 Inserts = [
                     ..inserts.Select(i => i.File is { } file
                             ? i with { File = Path.GetFullPath(Path.Combine(view.Folder, file)) }
-                            : i
+                            : i.PluginId == BinauralInsert.Id
+                                ? i with { File = view.HrtfPath }
+                                : i
                     )
                 ]
             }
