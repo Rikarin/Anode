@@ -38,6 +38,23 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/api/v1/system/discovery': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** This Server as remotes find it: name, host and port, the open project, whether pairing is needed (what the _anode._tcp advertisement carries). */
+    get: operations['GetDiscovery'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/api/v1/projects/recent': {
     parameters: {
       query?: never;
@@ -1533,6 +1550,215 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/api/v1/project/movie': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** The project's movie (as Project.movie); 404 when it has none. */
+    get: operations['GetMovie'];
+    put?: never;
+    /** Imports a movie (MOV, MP4, M4V) from the server's disk, copied into the project or referenced: a movieImport job that probes it and sets it as the project's movie (one undo step). */
+    post: operations['ImportMovie'];
+    /** Remove Movie: applies removeMovie (one undo step); 404 when there is no project. */
+    delete: operations['RemoveMovie'];
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/project/movie/stream': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** The movie file for the editor's and remotes' <video>, with HTTP range requests (206 Partial Content) and its media type; 404 without a movie. */
+    get: operations['StreamMovie'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/project/movie/thumbnails': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** The frames cached as thumbnails `height` pixels high (left out: 64), and their size. */
+    get: operations['ListMovieThumbnails'];
+    put?: never;
+    /** Renders movie frames as JPEG thumbnails into the movie's cache: a thumbnails job. */
+    post: operations['RenderMovieThumbnails'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/project/movie/frames/{frame}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** A cached thumbnail as JPEG (`height` left out: 64); 404 when it is not rendered (RenderMovieThumbnails). */
+    get: operations['GetMovieFrame'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/project/movie/scenes': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Detect Scene Cuts: a sceneDetect job that adds scene markers at the cuts (one undo step). */
+    post: operations['DetectMovieScenes'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/project/movie/audio/import': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Import Audio from Movie: a movieAudioImport job that adds an audio track with the movie's audio at its first frame (one undo step). */
+    post: operations['ImportMovieAudio'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/project/movie/audio/export': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Export Audio to Movie: a movieAudioExport job that bounces the movie's span and writes a new movie with the video stream copied and the bounce as its audio. */
+    post: operations['ExportMovieAudio'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/project/export/adm': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Exports the mix as ADM BWF (bed and objects, chna and axml): an admExport job. */
+    post: operations['ExportAdm'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/project/import/adm': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Imports an ADM BWF from the server's disk as bed and object tracks: an admImport job, one undo step when it finishes. */
+    post: operations['ImportAdm'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/settings/monitoring': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Monitoring: binaural, the down-mix and the speaker map (user settings, not the project). */
+    get: operations['GetMonitoring'];
+    /** Replaces the monitoring settings (outputs 0…256, a down-mix narrower than the master; 422 otherwise); the host follows at once. */
+    put: operations['SetMonitoring'];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/remote/pads': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** The remote's key-command pad sets (user settings). */
+    get: operations['GetRemotePads'];
+    /** Replaces the pad sets (ids unique, key command ids known; 422 otherwise). */
+    put: operations['SetRemotePads'];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/remote/listen/state': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Listen-in: whether the master is being encoded, the listeners (at most 4), the Server's delay. */
+    get: operations['GetListenIn'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1594,6 +1820,38 @@ export interface components {
       scale?: null | components['schemas']['LoopScale'];
       /** @default false */
       oneShot: boolean;
+    };
+    /**
+     * @description ADM BWF export (`POST /project/export/adm`, job `admExport`): the master's mix as BW64 with
+     *     `chna` and `axml` (`ds64` above 4 GB) per the EBU ADM production profile: the bed (everything not
+     *     an object, in the project's format) as `DirectSpeakers`, and each object-mode track among
+     *     `trackIds` (null: every one) as `Objects` with an `audioBlockFormat` per automation change (with
+     *     interpolation) or per 20 ms at most. Range as a bounce's (null: the cycle when on, else the project); 24-bit or
+     *     32-bit float at the project's rate. `.wav` added when missing.
+     */
+    AdmExportRequest: {
+      fileName: string;
+      directory?: null | string;
+      trackIds?: null | string[];
+      /** Format: int64 */
+      startTick?: null | number;
+      /** Format: int64 */
+      endTick?: null | number;
+      /**
+       * Format: int32
+       * @default 24
+       */
+      bitDepth: number;
+    };
+    /**
+     * @description ADM BWF import (`POST /project/import/adm`, job `admImport`): a BW64/RF64/WAV file with `chna` and
+     *     `axml` on the server's disk. Each bed becomes an audio track whose input format is the bed's (passed
+     *     straight through to the master) and each object a mono or stereo track in object mode with its positions as
+     *     automation, through an
+     *     `importTracks` command (one undo step); the media are copied into the project.
+     */
+    AdmImportRequest: {
+      path: string;
     };
     /**
      * @description A section of the song on the arrangement track (Intro, Verse, Chorus). Sections do not overlap; moving or copying
@@ -1769,7 +2027,12 @@ export interface components {
      *     `pan` (−1…1), `mute` (0/1), `send:{sendId}` (dB), `insert:{insertId}:{parameterId}` or
      *     `instrument:{parameterId}` (the parameter's unit). Phase 6 adds `midiEffect:{slotId}:{parameterId}` (a
      *     MIDI FX slot's parameter) and `smartControl:{controlId}` (0…1; it compiles to automation of every
-     *     parameter the control maps). Points are sorted by tick.
+     *     parameter the control maps). Phase 10 (docs/11-phase-10.md) adds the panners' parameters
+     *     (PannerTargets): `surround:angle` (degrees), `surround:diversity` (0…1),
+     *     `surround:elevation` (degrees), `surround:centre` and `surround:lfe` (dB),
+     *     `surround:spread` (degrees), `object:azimuth` and `object:elevation` (degrees),
+     *     `object:distance` and `object:size` (0…1); they play whatever the strip's panner mode (only the mode's
+     *     panner sounds). Points are sorted by tick.
      */
     AutomationLane: {
       id: string;
@@ -1915,13 +2178,39 @@ export interface components {
     /** @enum {unknown} */
     CellPlayMode: 'loop' | 'oneShot' | 'retrigger';
     /**
+     * @description A channel format: an ordered speaker layout (SpeakerLayouts). The engine's buffers carry a strip's
+     *     channels in its layout's order. Ambisonics are out of scope.
+     * @enum {unknown}
+     */
+    ChannelFormat:
+      | 'mono'
+      | 'stereo'
+      | 'lcr'
+      | 'quad'
+      | 'surround50'
+      | 'surround51'
+      | 'surround70'
+      | 'surround71'
+      | 'surround712'
+      | 'surround714'
+      | 'surround916';
+    /**
      * @description A channel strip: volume in dB (−∞ as −144), pan −1 (left) … 1 (right), mute and solo; its insert effects in
-     *     order; its sends to buses; where it goes (`output`: `master`, `bus:N` for bus 1…64, or
-     *     `output:N` for the device's stereo output pair N); the mixer groups it belongs to (1…32); and the VCA track
-     *     that offsets its volume, if any. The master strip uses only volume, pan, mute and its inserts. Phase 6:
-     *     `midiEffects` are its MIDI FX slots (instrument and external MIDI tracks only; empty elsewhere), in the
-     *     same shape as inserts: they run in slot order on the block's MIDI (regions, live and step input) before the
-     *     instrument; bypassed slots pass it through.
+     *                     order; its sends to buses; where it goes (`output`: `master`, `bus:N` for bus 1…64, or
+     *                     `output:N` for the device's stereo output pair N); the mixer groups it belongs to (1…32); and the VCA track
+     *                     that offsets its volume, if any. The master strip uses only volume, pan, mute and its inserts. Phase 6:
+     *                     `midiEffects` are its MIDI FX slots (instrument and external MIDI tracks only; empty elsewhere), in the
+     *                     same shape as inserts: they run in slot order on the block's MIDI (regions, live and step input) before the
+     *                     instrument; bypassed slots pass it through.
+     *                     Phase 10 (docs/11-phase-10.md): inputFormat is the format of the signal the strip processes before its
+     *     panner (an audio track's recording and regions, an instrument's output, an aux's bus: an aux's input format
+     *     is its bus's format); outputFormat is its destination's format, kept by the server (the master's is
+     *     the project's surroundFormat, a bus's its aux's input format, a device output pair stereo; the
+     *     master's input and output are the project's). panner maps the input channels to the output: stereo
+     *     pan (pan) for a stereo output, the Surround Panner, or an object (PannerMode); an input
+     *     of the output's format passes straight through. Sends to a multichannel bus are panned by the strip's panner
+     *     (their pan applies to stereo buses only). Every strip of a project from before Phase 10 is stereo in
+     *     and out with the stereo panner.
      */
     ChannelStrip: {
       /** Format: double */
@@ -1936,6 +2225,9 @@ export interface components {
       groups: number[];
       vcaId?: null | string;
       midiEffects: components['schemas']['Insert'][];
+      inputFormat: components['schemas']['ChannelFormat'];
+      outputFormat: components['schemas']['ChannelFormat'];
+      panner: components['schemas']['Panner'];
     };
     /**
      * @description A chord symbol on a track at project tick `tick`: its root, its quality as written after the root ("" major,
@@ -2194,7 +2486,8 @@ export interface components {
       | components['schemas']['DeltaOpChordSymbolRemoved']
       | components['schemas']['DeltaOpScoreSetUpserted']
       | components['schemas']['DeltaOpScoreSetRemoved']
-      | components['schemas']['DeltaOpScoreLayoutChanged'];
+      | components['schemas']['DeltaOpScoreLayoutChanged']
+      | components['schemas']['DeltaOpMovieChanged'];
     DeltaOpArticulationSetRemoved: {
       /** @enum {string} */
       op: 'articulationSetRemoved';
@@ -2307,6 +2600,15 @@ export interface components {
       /** @enum {string} */
       op: 'midiRegionUpserted';
       region: components['schemas']['MidiRegion'];
+    };
+    /**
+     * @description Phase 10 (docs/11-phase-10.md): the project's movie was set, moved or removed (null). Formats and panners come as
+     *     `trackUpserted`, `masterChanged` and `settingsChanged`; scene markers as `markerUpserted`.
+     */
+    DeltaOpMovieChanged: {
+      /** @enum {string} */
+      op: 'movieChanged';
+      movie: null | components['schemas']['Movie'];
     };
     /** @description The project notes changed. */
     DeltaOpNotesChanged: {
@@ -2427,6 +2729,20 @@ export interface components {
       path: string;
       parent?: null | string;
       entries: components['schemas']['FileEntry'][];
+    };
+    /**
+     * @description What a remote needs to find and pair with this Server (`GET /system/discovery`, and what DNS-SD
+     *     advertises): the Server's name (the machine's), the host name or address and port remotes reach it on, the open
+     *     project's name, whether pairing (the token, by QR code) is needed, and the Server's version.
+     */
+    DiscoveryInfo: {
+      name: string;
+      host: string;
+      /** Format: int32 */
+      port: number;
+      projectName?: null | string;
+      pairingRequired: boolean;
+      version: string;
     };
     /**
      * @default tpdf
@@ -2613,7 +2929,14 @@ export interface components {
       | components['schemas']['EditCommandSetScoreLayoutCommand']
       | components['schemas']['EditCommandMoveScoreNotesCommand']
       | components['schemas']['EditCommandAddScoreNoteCommand']
-      | components['schemas']['EditCommandImportTracksCommand'];
+      | components['schemas']['EditCommandImportTracksCommand']
+      | components['schemas']['EditCommandSetSurroundFormatCommand']
+      | components['schemas']['EditCommandSetStripFormatCommand']
+      | components['schemas']['EditCommandSetPannerCommand']
+      | components['schemas']['EditCommandSetMovieCommand']
+      | components['schemas']['EditCommandSetMoviePositionCommand']
+      | components['schemas']['EditCommandRemoveMovieCommand']
+      | components['schemas']['EditCommandAddSceneMarkersCommand'];
     /**
      * @description Sets the project's tempo events from an audio region's file tempo (analysed now if need be) over the region's
      *     range, and makes the region play unwarped there.
@@ -2670,6 +2993,7 @@ export interface components {
       index?: null | number;
       chain?: null | components['schemas']['InsertChain'];
     };
+    /** @description Adds a marker; `kind` (Phase 10) is `marker` unless given. */
     EditCommandAddMarkerCommand: {
       /** @enum {string} */
       type: 'addMarker';
@@ -2682,6 +3006,7 @@ export interface components {
        */
       lengthTicks: number;
       color?: null | string;
+      kind?: null | components['schemas']['MarkerKind'];
     };
     /** @description Adds an empty MIDI region to an instrument or external MIDI track. */
     EditCommandAddMidiRegionCommand: {
@@ -2736,6 +3061,18 @@ export interface components {
       name?: null | string;
       /** Format: int32 */
       index?: null | number;
+    };
+    /**
+     * @description Phase 10, Detect Scene Cuts' result: adds a `scene` marker at each tick (named `Scene 1`, `Scene 2`,
+     *     … in time order, no length, no colour), first removing the scene markers when `replaceExisting`. The
+     *     `sceneDetect` job applies it; clients do not send it.
+     */
+    EditCommandAddSceneMarkersCommand: {
+      /** @enum {string} */
+      type: 'addSceneMarkers';
+      ticks: number[];
+      /** @default true */
+      replaceExisting: boolean;
     };
     /**
      * @description Phase 9, a score edit: inserts a note from the Part box at project tick `tick` (a display position) lasting
@@ -3278,6 +3615,11 @@ export interface components {
       trackId?: null | string;
       chain?: null | components['schemas']['InsertChain'];
     };
+    /** @description Phase 10, Remove Movie: the project no longer has a movie (a copied file stays in `Movies/`). */
+    EditCommandRemoveMovieCommand: {
+      /** @enum {string} */
+      type: 'removeMovie';
+    };
     /** @description Removes a scene and its cells. */
     EditCommandRemoveSceneCommand: {
       /** @enum {string} */
@@ -3561,6 +3903,7 @@ export interface components {
       verse: number;
       syllables: components['schemas']['LyricChange'][];
     };
+    /** @description Changes a marker; left-out properties stay. `kind` (Phase 10) turns a scene marker into a marker or back. */
     EditCommandSetMarkerCommand: {
       /** @enum {string} */
       type: 'setMarker';
@@ -3572,6 +3915,7 @@ export interface components {
       lengthTicks?: null | number;
       color?: null | string;
       text?: null | string;
+      kind?: null | components['schemas']['MarkerKind'];
     };
     /** @description Phase 7: a track's "match groove track": its quantise follows the groove track. */
     EditCommandSetMatchGrooveCommand: {
@@ -3630,12 +3974,69 @@ export interface components {
       /** Format: double */
       lowLatencyLimitMs?: null | number;
     };
+    /**
+     * @description Phase 10, a movie import's result: sets the project's movie (replacing one it has). The `movieImport` job
+     *     applies it after probing and copying the file; clients do not send it. Undo restores the previous movie (or none);
+     *     the file stays.
+     */
+    EditCommandSetMovieCommand: {
+      /** @enum {string} */
+      type: 'setMovie';
+      movie: components['schemas']['Movie'];
+    };
+    /**
+     * @description Phase 10: moves the movie (Logic's movie start and offset): its frame at `offsetSeconds` (0 or more, less
+     *     than its duration) plays at `startTick` (0 or more); left-out properties stay. 422 without a movie.
+     */
+    EditCommandSetMoviePositionCommand: {
+      /** @enum {string} */
+      type: 'setMoviePosition';
+      /** Format: int64 */
+      startTick?: null | number;
+      /** Format: double */
+      offsetSeconds?: null | number;
+    };
     /** @description Routes a track to `master`, `bus:N` or `output:N`; a route that would make a loop is refused. */
     EditCommandSetOutputCommand: {
       /** @enum {string} */
       type: 'setOutput';
       trackId: string;
       output: string;
+    };
+    /**
+     * @description Phase 10: changes a track strip's panner (`ChannelStrip.panner`); left-out properties stay. `mode``surround` needs a surround output, `object` a strip that outputs to the master of a surround project
+     *     (a project has at most 118 objects). The Surround Panner's `angle`, `diversity`,
+     *     `surroundElevation`, `centreLevelDb`, `lfeLevelDb` and `spread`, and the Object Panner's
+     *     `azimuth`, `objectElevation`, `distance` and `size`, in SurroundPanner's and
+     *     ObjectPanner's units and ranges (angles −180…180, levels −144…0 dB). During playback a track in
+     *     touch, latch or write records the change into its `surround:…` or `object:…` lanes, as
+     *     `setStrip` records pan (and a batch coalesces as a drag does).
+     */
+    EditCommandSetPannerCommand: {
+      /** @enum {string} */
+      type: 'setPanner';
+      trackId: string;
+      mode?: null | components['schemas']['PannerMode'];
+      /** Format: double */
+      angle?: null | number;
+      /** Format: double */
+      diversity?: null | number;
+      /** Format: double */
+      surroundElevation?: null | number;
+      /** Format: double */
+      centreLevelDb?: null | number;
+      /** Format: double */
+      lfeLevelDb?: null | number;
+      /** Format: double */
+      spread?: null | number;
+      /** Format: double */
+      azimuth?: null | number;
+      /** Format: double */
+      objectElevation?: null | number;
+      /** Format: double */
+      distance?: null | number;
+      /** Format: double */
+      size?: null | number;
     };
     /**
      * @description Sets one parameter of a track's instrument. Consecutive batches on the same parameter within 1 s coalesce into
@@ -3894,6 +4295,28 @@ export interface components {
       pan?: null | number;
       mute?: null | boolean;
       solo?: null | boolean;
+    };
+    /**
+     * @description Phase 10: sets a track strip's input format (mono or stereo for instrument tracks; any for audio and aux
+     *     tracks). An aux's input format is its bus's format: the output formats of the strips that output or send to that
+     *     bus follow (every aux on one bus has the same input format). The output format is never set directly: it is
+     *     the destination's.
+     */
+    EditCommandSetStripFormatCommand: {
+      /** @enum {string} */
+      type: 'setStripFormat';
+      trackId: string;
+      inputFormat: components['schemas']['ChannelFormat'];
+    };
+    /**
+     * @description Phase 10 (docs/11-phase-10.md): sets the project's channel format (`settings.surroundFormat`). The master's
+     *     input and output formats follow, and the output format of every strip that feeds the master; strips in object
+     *     mode return to the Surround Panner when the format is stereo or narrower (objects need a surround master).
+     */
+    EditCommandSetSurroundFormatCommand: {
+      /** @enum {string} */
+      type: 'setSurroundFormat';
+      format: components['schemas']['ChannelFormat'];
     };
     /**
      * @description Phase 8: changes the project's synchronisation (`ProjectSettings.sync`); left-out properties stay.
@@ -4255,7 +4678,9 @@ export interface components {
      *     controller ids too), are provisional: unique within the ImportedContent, replaced by the model.
      *     `kind` is `instrument` (MIDI regions, the default synth) or `audio` (audio regions, whose
      *     `fileId` is a file of the project: the job adds the media first). `staffStyleId` is a factory style or
-     *     one of the content's score staff styles (null: the default).
+     *     one of the content's score staff styles (null: the default). Phase 10 (docs/11-phase-10.md): `inputFormat`
+     *     and `panner` set its strip's (null: stereo, the default panner; an ADM import's beds and objects), and
+     *     `automation` are its lanes (provisional ids, their `trackId` ignored; an object's positions).
      */
     ImportedTrack: {
       id: string;
@@ -4264,6 +4689,9 @@ export interface components {
       staffStyleId?: null | string;
       midiRegions: components['schemas']['MidiRegion'][];
       regions: components['schemas']['AudioRegion'][];
+      inputFormat?: null | components['schemas']['ChannelFormat'];
+      panner: null | components['schemas']['Panner'];
+      automation?: null | components['schemas']['AutomationLane'][];
     };
     /** @description Import an audio file the server can read from its own disk (the desktop app, a headless box's library). */
     ImportFileRequest: {
@@ -4355,9 +4783,23 @@ export interface components {
       | 'aafExport'
       | 'aafImport'
       | 'midiExport'
-      | 'midiImport';
+      | 'midiImport'
+      | 'admExport'
+      | 'admImport'
+      | 'movieImport'
+      | 'movieAudioImport'
+      | 'movieAudioExport'
+      | 'sceneDetect'
+      | 'thumbnails';
     /** @enum {unknown} */
     JobState: 'queued' | 'running' | 'done' | 'failed' | 'cancelled';
+    /** @description A key-command pad on the remote: its label, the key command it runs (a `KeyCommandSet` id), and a colour. */
+    KeyCommandPad: {
+      id: string;
+      label: string;
+      commandId: string;
+      color?: null | string;
+    };
     /** @description Key bindings by command id (`transport.play`); each binding like `Space` or `Meta+Shift+Z`. */
     KeyCommandSet: {
       bindings: {
@@ -4430,6 +4872,19 @@ export interface components {
       zoneId?: null | string;
       modeId?: null | string;
       last: null | components['schemas']['ControlMessage'];
+    };
+    /**
+     * @description Listen-in (`GET /remote/listen/state`, the `listenIn` event): `on` while the master is being
+     *     encoded (at least one listener), the number of listeners (at most int ListenIn.MaxListeners), and the
+     *     Server's own delay from the host's ring to the socket in milliseconds (null while off); a remote adds its jitter
+     *     buffer and output to show its latency, measured from the frames' transport positions.
+     */
+    ListenInState: {
+      on: boolean;
+      /** Format: int32 */
+      listeners: number;
+      /** Format: double */
+      latencyMs?: null | number;
     };
     /**
      * @description The Live Loops grid (docs/07-phase-6.md): its scenes in order, its cells, the launch quantise, and whether the
@@ -4558,7 +5013,10 @@ export interface components {
       syllabic: components['schemas']['Syllabic'];
       extender: boolean;
     };
-    /** @description A marker: a named position, with an optional length, colour and text (Logic's Marker List). */
+    /**
+     * @description A marker: a named position, with an optional length, colour and text (Logic's Marker List). `kind` (Phase 10,
+     *     docs/11-phase-10.md) tells a scene marker (Detect Scene Cuts) from the user's.
+     */
     Marker: {
       id: string;
       name: string;
@@ -4568,7 +5026,13 @@ export interface components {
       lengthTicks: number;
       color?: null | string;
       text: string;
+      kind: components['schemas']['MarkerKind'];
     };
+    /**
+     * @description What a marker is: one the user made, or one Detect Scene Cuts made (an ordinary, editable marker).
+     * @enum {unknown}
+     */
+    MarkerKind: 'marker' | 'scene';
     /** @description The click: on or off, a one-bar count-in before recording, and its level in dB. */
     MetronomeSettings: {
       enabled: boolean;
@@ -4687,6 +5151,110 @@ export interface components {
       lowLatency: boolean;
       /** Format: double */
       lowLatencyLimitMs: number;
+    };
+    /**
+     * @description Monitoring (`GET/PUT /settings/monitoring`), stored in the user settings, not the project: the speaker map is
+     *     the machine's and binaural listening the listener's. It happens after the master and before the device, and never
+     *     changes bounces or ADM exports. `binaural` renders the master's speakers (and objects) through HRTFs to
+     *     outputs 1–2; otherwise `downmixTo` (a format smaller than the master's; null: none) down-mixes per ITU-R
+     *     BS.775 and sends its channels through the map. `speakerMap[i]` is the 1-based device output of channel i of
+     *     what is sent (0: not sent); an empty or short map sends channel i to output i + 1.
+     */
+    MonitoringSettings: {
+      binaural: boolean;
+      downmixTo?: null | components['schemas']['ChannelFormat'];
+      speakerMap: number[];
+    };
+    /**
+     * @description The project's movie (`Project.movie`; null: none). `path` is relative to the project folder when the
+     *     file was copied into it (`inProject`, under `Movies/`), else absolute (a reference). `startTick`
+     *     is where its frame at `offsetSeconds` plays (offset 0: its first frame there); `frameRate`,
+     *     `timecodeStartSeconds` (the timecode of its first frame, in seconds; 0 when it has none), duration, frame
+     *     count, size, and video codec (FFprobe's name: `h264`, `hevc`, `prores`) come from the probe, as
+     *     does `audio` (null: no audio stream).
+     */
+    Movie: {
+      path: string;
+      name: string;
+      inProject: boolean;
+      /** Format: int64 */
+      startTick: number;
+      /** Format: double */
+      offsetSeconds: number;
+      frameRate: components['schemas']['VideoFrameRate'];
+      /** Format: double */
+      timecodeStartSeconds: number;
+      /** Format: double */
+      durationSeconds: number;
+      /** Format: int64 */
+      frames: number;
+      /** Format: int32 */
+      width: number;
+      /** Format: int32 */
+      height: number;
+      codec: string;
+      audio: null | components['schemas']['MovieAudio'];
+    };
+    /** @description A movie's first audio stream, as FFprobe reports it. */
+    MovieAudio: {
+      codec: string;
+      /** Format: int32 */
+      channels: number;
+      /** Format: int32 */
+      sampleRate: number;
+    };
+    /**
+     * @description The audio codec Export Audio to Movie writes.
+     * @default aac
+     * @enum {unknown}
+     */
+    MovieAudioCodec: 'aac' | 'pcm';
+    /**
+     * @description Export Audio to Movie (`POST /project/movie/audio/export`, job `movieAudioExport`): bounces the master
+     *     (stereo, or the stereo down-mix of a surround master) over the movie's span, aligned to its frames, and writes a
+     *     new movie `fileName` in `directory` (default `&lt;project&gt;/Exports`; the movie's extension
+     *     added when missing) with the video stream copied and the bounce replacing the audio (`replace`) or added as
+     *     another audio track. The movie itself is not changed.
+     */
+    MovieAudioExportRequest: {
+      fileName: string;
+      directory?: null | string;
+      /** @default true */
+      replace: boolean;
+      codec: components['schemas']['MovieAudioCodec'];
+    };
+    /**
+     * @description Import Audio from Movie (`POST /project/movie/audio/import`, job `movieAudioImport`): the movie's
+     *     first audio stream extracted at the project's sample rate into `Audio Files`, then, through
+     *     `importTracks` (one undo step), a new audio track (`trackName`, null: the movie's name) with a region
+     *     at the movie's first frame.
+     */
+    MovieAudioImportRequest: {
+      trackName?: null | string;
+    };
+    /**
+     * @description Movie import (`POST /project/movie`, job `movieImport`): a MOV, MP4 or M4V on the server's disk, probed
+     *     by FFprobe, copied into the project's `Movies/` when `copyIntoProject` (else referenced where it is),
+     *     placed at `startTick` (null: the project start) with offset 0; then `setMovie` (one undo step; undo
+     *     leaves a copied file). It replaces a movie the project has.
+     */
+    MovieImportRequest: {
+      path: string;
+      /** @default true */
+      copyIntoProject: boolean;
+      /** Format: int64 */
+      startTick?: null | number;
+    };
+    /**
+     * @description The movie frames cached as thumbnails at `height` (`GET /project/movie/thumbnails?height=`): their
+     *     size and the frame numbers available, ascending.
+     */
+    MovieThumbnails: {
+      /** Format: int32 */
+      width: number;
+      /** Format: int32 */
+      height: number;
+      frames: number[];
     };
     /**
      * @description An MTC frame rate.
@@ -4836,6 +5404,21 @@ export interface components {
       | 'thirtySecond'
       | 'sixtyFourth'
       | 'hundredTwentyEighth';
+    /**
+     * @description The 3D Object Panner: an object's position, polar as ADM's (`audioBlockFormat` of type Objects):
+     *     `azimuth` and `elevation` in degrees, `distance` 0…1 (1: on the speakers' sphere), and
+     *     `size` 0…1 (its spread over neighbouring speakers; ADM width, height and depth together).
+     */
+    ObjectPanner: {
+      /** Format: double */
+      azimuth: number;
+      /** Format: double */
+      elevation: number;
+      /** Format: double */
+      distance: number;
+      /** Format: double */
+      size: number;
+    };
     OpenProjectRequest: {
       path: string;
     };
@@ -4880,6 +5463,29 @@ export interface components {
       size: number;
       installed: boolean;
     };
+    /** @description A page of key-command pads (the remote shows one set at a time). */
+    PadSet: {
+      id: string;
+      name: string;
+      pads: components['schemas']['KeyCommandPad'][];
+    };
+    /**
+     * @description A strip's panner (`ChannelStrip.panner`): the mode that applies, and both panners' settings, which stay when
+     *     the mode changes. Automation addresses (`AutomationLane.target`): `surround:angle`,
+     *     `surround:diversity`, `surround:elevation`, `surround:centre` (dB), `surround:lfe` (dB),
+     *     `surround:spread`, `object:azimuth`, `object:elevation`, `object:distance`,
+     *     `object:size`, in the units above; the same strings are Smart Control mapping targets.
+     */
+    Panner: {
+      mode: components['schemas']['PannerMode'];
+      surround: components['schemas']['SurroundPanner'];
+      object: components['schemas']['ObjectPanner'];
+    };
+    /**
+     * @description How a strip's panner maps its input channels to its output format.
+     * @enum {unknown}
+     */
+    PannerMode: 'stereo' | 'surround' | 'object';
     /**
      * @description A plugin parameter. `steps` &gt; 0 makes it discrete (`steps` + 1 values from `min` to
      *     `max`), with `valueNames` naming them when it is a choice. `macro` (Phase 6) is its macro hint:
@@ -5125,7 +5731,8 @@ export interface components {
      *     are the Step Sequencer's regions; `liveLoops` is the Live Loops grid. Phase 7 (docs/08-phase-7.md):
      *     `grooves` are the project's groove templates, `articulationSets` its articulation sets and
      *     `laneSets` its Step Editor lane sets. Phase 9 (docs/10-phase-9.md): `score` is its stored score content
-     *     (staff styles, symbols, lyrics, chord symbols, score sets, layout).
+     *     (staff styles, symbols, lyrics, chord symbols, score sets, layout). Phase 10 (docs/11-phase-10.md): `movie`
+     *     is its movie (null: none).
      */
     Project: {
       id: string;
@@ -5154,6 +5761,7 @@ export interface components {
       articulationSets: components['schemas']['ArticulationSet'][];
       laneSets: components['schemas']['LaneSet'][];
       score: components['schemas']['ProjectScore'];
+      movie: null | components['schemas']['Movie'];
     };
     /** @description A saved alternative of the open project (Logic's project alternatives); one is current. */
     ProjectAlternative: {
@@ -5199,6 +5807,8 @@ export interface components {
      *     `varispeed` (Phase 5): the project tempo mode and Varispeed. `grooveTrackId` (Phase 7) is the groove
      *     track (null: none): tracks whose `matchGroove` is on quantise to the groove of its first region. `sync`
      *     (Phase 8, docs/09-phase-8.md) is the project's synchronisation: MIDI Clock, MTC and Link.
+     *     `surroundFormat` (Phase 10, docs/11-phase-10.md) is the project's channel format: the master's, and what
+     *     strips feeding the master output (stereo: as before Phase 10).
      */
     ProjectSettings: {
       /** Format: double */
@@ -5218,6 +5828,7 @@ export interface components {
       varispeed: components['schemas']['VarispeedSettings'];
       grooveTrackId?: null | string;
       sync: components['schemas']['SyncSettings'];
+      surroundFormat: components['schemas']['ChannelFormat'];
     };
     /** @description A project in the recent list. */
     ProjectSummary: {
@@ -5286,6 +5897,13 @@ export interface components {
       swing: number;
       grooveId?: null | string;
     };
+    /**
+     * @description The remote's key-command pad sets (`GET/PUT /remote/pads`), in the user settings; ids unique across sets
+     *     and pads.
+     */
+    RemotePads: {
+      sets: components['schemas']['PadSet'][];
+    };
     /** @description The surfaces' new order (`PUT /control/surfaces/order`): every surface id, once, left to right. */
     ReorderSurfacesRequest: {
       ids: string[];
@@ -5319,6 +5937,21 @@ export interface components {
     Scene: {
       id: string;
       name: string;
+    };
+    /**
+     * @description Detect Scene Cuts (`POST /project/movie/scenes`, job `sceneDetect`): FFmpeg's scene score above
+     *     `threshold` (0…1) marks a cut; the job applies `addSceneMarkers` with the cuts' ticks (the first frame
+     *     of each new scene, through the mapping above), replacing the existing scene markers when
+     *     `replaceExisting`.
+     */
+    SceneDetectRequest: {
+      /**
+       * Format: double
+       * @default 0.4
+       */
+      threshold: number;
+      /** @default true */
+      replaceExisting: boolean;
     };
     /**
      * @description `GET /project/score`'s answer: the view and its MEI 5 text for Verovio, whose `xml:id`s are the
@@ -5827,6 +6460,28 @@ export interface components {
       bankOffset: number;
     };
     /**
+     * @description The Surround Panner (2D, as Logic's): `angle` where the puck points (degrees, ADM azimuth); `diversity`
+     *     0…1, how far it is from the centre of the circle (0: every speaker equally, 1: a point source between the two
+     *     speakers at the angle); `elevation` 0…90 for formats with height (0 elsewhere); `centreLevelDb`
+     *     −144…0, how much of the front image the centre speaker takes (−144: a phantom centre); `lfeLevelDb` −144…0,
+     *     the low-passed send to the LFE (−144: none); `spread` 0…180, the angle between a stereo input's two channels
+     *     around the puck (a mono input ignores it).
+     */
+    SurroundPanner: {
+      /** Format: double */
+      angle: number;
+      /** Format: double */
+      diversity: number;
+      /** Format: double */
+      elevation: number;
+      /** Format: double */
+      centreLevelDb: number;
+      /** Format: double */
+      lfeLevelDb: number;
+      /** Format: double */
+      spread: number;
+    };
+    /**
      * @description A syllable's place in its word (MusicXML's and MEI's).
      * @enum {unknown}
      */
@@ -5920,6 +6575,19 @@ export interface components {
        * @default 0
        */
       shape: number;
+    };
+    /**
+     * @description Thumbnails (`POST /project/movie/thumbnails`, job `thumbnails`): renders `frames` (movie frame
+     *     numbers) as JPEGs `height` pixels high (the width keeps the aspect), cached per movie; then each is
+     *     `GET /project/movie/frames/{frame}?height=`.
+     */
+    ThumbnailsRequest: {
+      frames: number[];
+      /**
+       * Format: int32
+       * @default 64
+       */
+      height: number;
     };
     TimeSignature: {
       /** Format: int32 */
@@ -6133,6 +6801,13 @@ export interface components {
       /** Format: double */
       speed: number;
     };
+    /** @description A video frame rate as a fraction: 24000/1001 (23.976), 25/1, 30000/1001 (29.97), … */
+    VideoFrameRate: {
+      /** Format: int32 */
+      numerator: number;
+      /** Format: int32 */
+      denominator: number;
+    };
   };
   responses: never;
   parameters: never;
@@ -6197,6 +6872,35 @@ export interface operations {
           [name: string]: unknown;
         };
         content?: never;
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  GetDiscovery: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['DiscoveryInfo'];
+        };
       };
       /** @description Internal Server Error */
       500: {
@@ -9890,6 +10594,628 @@ export interface operations {
           [name: string]: unknown;
         };
         content?: never;
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  GetMovie: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Movie'];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  ImportMovie: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['MovieImportRequest'];
+      };
+    };
+    responses: {
+      /** @description Accepted */
+      202: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Job'];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  RemoveMovie: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['CommandResult'];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  StreamMovie: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Partial Content */
+      206: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  ListMovieThumbnails: {
+    parameters: {
+      query?: {
+        height?: number;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['MovieThumbnails'];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  RenderMovieThumbnails: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['ThumbnailsRequest'];
+      };
+    };
+    responses: {
+      /** @description Accepted */
+      202: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Job'];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  GetMovieFrame: {
+    parameters: {
+      query?: {
+        height?: number;
+      };
+      header?: never;
+      path: {
+        frame: number;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  DetectMovieScenes: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['SceneDetectRequest'];
+      };
+    };
+    responses: {
+      /** @description Accepted */
+      202: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Job'];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  ImportMovieAudio: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['MovieAudioImportRequest'];
+      };
+    };
+    responses: {
+      /** @description Accepted */
+      202: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Job'];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  ExportMovieAudio: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['MovieAudioExportRequest'];
+      };
+    };
+    responses: {
+      /** @description Accepted */
+      202: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Job'];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  ExportAdm: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['AdmExportRequest'];
+      };
+    };
+    responses: {
+      /** @description Accepted */
+      202: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Job'];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  ImportAdm: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['AdmImportRequest'];
+      };
+    };
+    responses: {
+      /** @description Accepted */
+      202: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Job'];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  GetMonitoring: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['MonitoringSettings'];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  SetMonitoring: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['MonitoringSettings'];
+      };
+    };
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['MonitoringSettings'];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  GetRemotePads: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['RemotePads'];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  SetRemotePads: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['RemotePads'];
+      };
+    };
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['RemotePads'];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  GetListenIn: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ListenInState'];
+        };
       };
       /** @description Internal Server Error */
       500: {

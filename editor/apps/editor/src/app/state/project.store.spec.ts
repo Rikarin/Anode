@@ -1,5 +1,12 @@
 import { TestBed } from '@angular/core/testing';
-import { type AudioRegion, EmptyProjectScore, type Project, type ProjectDelta, type Track } from '@anode/api-client';
+import {
+  type AudioRegion,
+  DefaultPanner,
+  EmptyProjectScore,
+  type Project,
+  type ProjectDelta,
+  type Track
+} from '@anode/api-client';
 import { EventStream } from '../core/events';
 import { setUpFakeServer, settle } from '../core/fake/testing';
 import { Notify } from '../core/notify';
@@ -24,7 +31,10 @@ function track(id: string, name = id): Track {
       output: 'master',
       groups: [],
       vcaId: null,
-      midiEffects: []
+      midiEffects: [],
+      inputFormat: 'stereo',
+      outputFormat: 'stereo',
+      panner: DefaultPanner
     },
     instrument: null,
     midiInput: { device: null, channel: 0 },
@@ -91,7 +101,8 @@ function snapshot(revision = 3): Project {
       mixer: { pdc: 'all', lowLatency: false, lowLatencyLimitMs: 10 },
       smartTempo: { mode: 'keep', defaultFollow: 'off', analyzeImports: true },
       varispeed: { enabled: false, mode: 'speedOnly', speed: 1 },
-      sync: { source: 'internal', destinations: [], frameRate: 'fps25', startOffsetSeconds: 0, linkStartStop: false }
+      sync: { source: 'internal', destinations: [], frameRate: 'fps25', startOffsetSeconds: 0, linkStartStop: false },
+      surroundFormat: 'stereo'
     },
     master: {
       volumeDb: 0,
@@ -103,7 +114,10 @@ function snapshot(revision = 3): Project {
       output: 'master',
       groups: [],
       vcaId: null,
-      midiEffects: []
+      midiEffects: [],
+      inputFormat: 'stereo',
+      outputFormat: 'stereo',
+      panner: DefaultPanner
     },
     tracks: [track('trk_1'), track('trk_2')],
     regions: [region('rgn_1', 'trk_1')],
@@ -132,7 +146,8 @@ function snapshot(revision = 3): Project {
     grooves: [],
     articulationSets: [],
     laneSets: [],
-    score: structuredClone(EmptyProjectScore)
+    score: structuredClone(EmptyProjectScore),
+    movie: null
   };
 }
 
@@ -175,7 +190,10 @@ describe('ProjectStore deltas', () => {
             output: 'master',
             groups: [],
             vcaId: null,
-            midiEffects: []
+            midiEffects: [],
+            inputFormat: 'stereo',
+            outputFormat: 'stereo',
+            panner: DefaultPanner
           }
         },
         { op: 'projectRenamed', name: 'Renamed' }
@@ -207,6 +225,29 @@ describe('ProjectStore deltas', () => {
     expect(store.score().symbols.map(s => s.id)).toEqual(['sym_2']);
     expect(store.score().sets.map(s => s.name)).toEqual(['All']);
     expect(store.score().layout.title).toBe('Song');
+  });
+
+  it('applies the movie delta (Phase 10)', () => {
+    expect(store.movie()).toBeNull();
+    const movie = {
+      path: 'Movies/Picture.mov',
+      name: 'Picture',
+      inProject: true,
+      startTick: 3840,
+      offsetSeconds: 0,
+      frameRate: { numerator: 25, denominator: 1 },
+      timecodeStartSeconds: 3600,
+      durationSeconds: 60,
+      frames: 1500,
+      width: 1920,
+      height: 1080,
+      codec: 'h264',
+      audio: null
+    };
+    store.apply(delta(4, [{ op: 'movieChanged', movie }]));
+    expect(store.movie()?.startTick).toBe(3840);
+    store.apply(delta(5, [{ op: 'movieChanged', movie: null }]));
+    expect(store.movie()).toBeNull();
   });
 
   it('moves a track when its index changes', () => {

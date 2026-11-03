@@ -221,8 +221,10 @@ public struct SegmentHeader {
 
     // 2: playlist entries carry fade curves and may overlap as crossfades. 3: entries carry warp and pitch ranges and
     // an algorithm; the warp and pitch arrays (docs/06-phase-5.md). 4: the tempo points and the cell table
-    // (docs/07-phase-6.md).
-    public const ushort CurrentFormat = 4;
+    // (docs/07-phase-6.md). 5: the master tap ring joins the shared memory (MasterTapHeader, docs/11-phase-10.md), and
+    // the model's strips carry channel formats and panners; a playback segment's layout is format 4's, bumped so a
+    // host and server of different phases refuse each other's segments.
+    public const ushort CurrentFormat = 5;
     public const int FlagChecksum = 1;
 
     public uint Magic;

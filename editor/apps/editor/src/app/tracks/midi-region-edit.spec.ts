@@ -1,4 +1,4 @@
-import { DefaultRegionNotation, type MidiRegion, type Track } from '@anode/api-client';
+import { DefaultPanner, DefaultRegionNotation, type MidiRegion, type Track } from '@anode/api-client';
 import { ItemFlag } from '@anode/timeline';
 import { NeutralPlayback } from '../midi/midi-math';
 import { moveCommands, newMidiRegion, splitSpan, trimMidiEnd, trimMidiStart } from './region-edit';
@@ -67,7 +67,10 @@ describe('MIDI region edits in the Tracks area', () => {
         output: 'master',
         groups: [],
         vcaId: null,
-        midiEffects: []
+        midiEffects: [],
+        inputFormat: 'stereo',
+        outputFormat: 'stereo',
+        panner: DefaultPanner
       },
       instrument: null,
       midiInput: { device: null, channel: 0 },

@@ -111,7 +111,8 @@ public static class SmfImport {
                 m.Tick,
                 0,
                 null,
-                string.Empty
+                string.Empty,
+                MarkerKind.Marker
             )
         )
     ];

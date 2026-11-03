@@ -78,6 +78,37 @@
         }
       }
     },
+    "/api/v1/system/discovery": {
+      "get": {
+        "tags": [
+          "System"
+        ],
+        "summary": "This Server as remotes find it: name, host and port, the open project, whether pairing is needed (what the _anode._tcp advertisement carries).",
+        "operationId": "GetDiscovery",
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DiscoveryInfo"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/projects/recent": {
       "get": {
         "tags": [
@@ -4255,6 +4286,667 @@
           }
         }
       }
+    },
+    "/api/v1/project/movie": {
+      "post": {
+        "tags": [
+          "Movie"
+        ],
+        "summary": "Imports a movie (MOV, MP4, M4V) from the server\u0027s disk, copied into the project or referenced: a movieImport job that probes it and sets it as the project\u0027s movie (one undo step).",
+        "operationId": "ImportMovie",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MovieImportRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Job"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Movie"
+        ],
+        "summary": "The project\u0027s movie (as Project.movie); 404 when it has none.",
+        "operationId": "GetMovie",
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Movie"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Movie"
+        ],
+        "summary": "Remove Movie: applies removeMovie (one undo step); 404 when there is no project.",
+        "operationId": "RemoveMovie",
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommandResult"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/api/v1/project/movie/stream": {
+      "get": {
+        "tags": [
+          "Movie"
+        ],
+        "summary": "The movie file for the editor\u0027s and remotes\u0027 \u003Cvideo\u003E, with HTTP range requests (206 Partial Content) and its media type; 404 without a movie.",
+        "operationId": "StreamMovie",
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK"
+          },
+          "206": {
+            "description": "Partial Content"
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/api/v1/project/movie/thumbnails": {
+      "post": {
+        "tags": [
+          "Movie"
+        ],
+        "summary": "Renders movie frames as JPEG thumbnails into the movie\u0027s cache: a thumbnails job.",
+        "operationId": "RenderMovieThumbnails",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ThumbnailsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Job"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Movie"
+        ],
+        "summary": "The frames cached as thumbnails \u0060height\u0060 pixels high (left out: 64), and their size.",
+        "operationId": "ListMovieThumbnails",
+        "parameters": [
+          {
+            "name": "height",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MovieThumbnails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/api/v1/project/movie/frames/{frame}": {
+      "get": {
+        "tags": [
+          "Movie"
+        ],
+        "summary": "A cached thumbnail as JPEG (\u0060height\u0060 left out: 64); 404 when it is not rendered (RenderMovieThumbnails).",
+        "operationId": "GetMovieFrame",
+        "parameters": [
+          {
+            "name": "frame",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "height",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK"
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/api/v1/project/movie/scenes": {
+      "post": {
+        "tags": [
+          "Movie"
+        ],
+        "summary": "Detect Scene Cuts: a sceneDetect job that adds scene markers at the cuts (one undo step).",
+        "operationId": "DetectMovieScenes",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SceneDetectRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Job"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/api/v1/project/movie/audio/import": {
+      "post": {
+        "tags": [
+          "Movie"
+        ],
+        "summary": "Import Audio from Movie: a movieAudioImport job that adds an audio track with the movie\u0027s audio at its first frame (one undo step).",
+        "operationId": "ImportMovieAudio",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MovieAudioImportRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Job"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/api/v1/project/movie/audio/export": {
+      "post": {
+        "tags": [
+          "Movie"
+        ],
+        "summary": "Export Audio to Movie: a movieAudioExport job that bounces the movie\u0027s span and writes a new movie with the video stream copied and the bounce as its audio.",
+        "operationId": "ExportMovieAudio",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MovieAudioExportRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Job"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/api/v1/project/export/adm": {
+      "post": {
+        "tags": [
+          "Surround"
+        ],
+        "summary": "Exports the mix as ADM BWF (bed and objects, chna and axml): an admExport job.",
+        "operationId": "ExportAdm",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdmExportRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Job"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/api/v1/project/import/adm": {
+      "post": {
+        "tags": [
+          "Surround"
+        ],
+        "summary": "Imports an ADM BWF from the server\u0027s disk as bed and object tracks: an admImport job, one undo step when it finishes.",
+        "operationId": "ImportAdm",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdmImportRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Job"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/api/v1/settings/monitoring": {
+      "get": {
+        "tags": [
+          "Settings"
+        ],
+        "summary": "Monitoring: binaural, the down-mix and the speaker map (user settings, not the project).",
+        "operationId": "GetMonitoring",
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MonitoringSettings"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Settings"
+        ],
+        "summary": "Replaces the monitoring settings (outputs 0\u2026256, a down-mix narrower than the master; 422 otherwise); the host follows at once.",
+        "operationId": "SetMonitoring",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MonitoringSettings"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MonitoringSettings"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/remote/pads": {
+      "get": {
+        "tags": [
+          "Remote"
+        ],
+        "summary": "The remote\u0027s key-command pad sets (user settings).",
+        "operationId": "GetRemotePads",
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemotePads"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Remote"
+        ],
+        "summary": "Replaces the pad sets (ids unique, key command ids known; 422 otherwise).",
+        "operationId": "SetRemotePads",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RemotePads"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemotePads"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/remote/listen/state": {
+      "get": {
+        "tags": [
+          "Remote"
+        ],
+        "summary": "Listen-in: whether the master is being encoded, the listeners (at most 4), the Server\u0027s delay.",
+        "operationId": "GetListenIn",
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListenInState"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -4407,6 +5099,65 @@
           }
         },
         "description": "\u0022Add to Loop Library\u0022: saves an audio, MIDI or pattern region as a user loop (its file copied into the library,\nwith a sidecar), at the project\u0027s tempo, with the given key (a tonic 0\u202611; null: none), scale (null: neither)\nand tags; as a one-shot (no tempo) when \u0060oneShot\u0060."
+      },
+      "AdmExportRequest": {
+        "required": [
+          "fileName",
+          "bitDepth"
+        ],
+        "type": "object",
+        "properties": {
+          "fileName": {
+            "type": "string"
+          },
+          "directory": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "trackIds": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "type": "string"
+            }
+          },
+          "startTick": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int64"
+          },
+          "endTick": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int64"
+          },
+          "bitDepth": {
+            "type": "integer",
+            "format": "int32",
+            "default": 24
+          }
+        },
+        "description": "ADM BWF export (\u0060POST /project/export/adm\u0060, job \u0060admExport\u0060): the master\u0027s mix as BW64 with\n\u0060chna\u0060 and \u0060axml\u0060 (\u0060ds64\u0060 above 4 GB) per the EBU ADM production profile: the bed (everything not\nan object, in the project\u0027s format) as \u0060DirectSpeakers\u0060, and each object-mode track among\n\u0060trackIds\u0060 (null: every one) as \u0060Objects\u0060 with an \u0060audioBlockFormat\u0060 per automation change (with\ninterpolation) or per 20 ms at most. Range as a bounce\u0027s (null: the cycle when on, else the project); 24-bit or\n32-bit float at the project\u0027s rate. \u0060.wav\u0060 added when missing."
+      },
+      "AdmImportRequest": {
+        "required": [
+          "path"
+        ],
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string"
+          }
+        },
+        "description": "ADM BWF import (\u0060POST /project/import/adm\u0060, job \u0060admImport\u0060): a BW64/RF64/WAV file with \u0060chna\u0060 and\n\u0060axml\u0060 on the server\u0027s disk. Each bed becomes an audio track whose input format is the bed\u0027s (passed\nstraight through to the master) and each object a mono or stereo track in object mode with its positions as\nautomation, through an\n\u0060importTracks\u0060 command (one undo step); the media are copied into the project."
       },
       "ArrangementMarker": {
         "required": [
@@ -4814,7 +5565,7 @@
             }
           }
         },
-        "description": "Track automation of one parameter. \u0060trackId\u0060 null is the master strip. \u0060target\u0060 is \u0060volume\u0060 (dB),\n\u0060pan\u0060 (\u22121\u20261), \u0060mute\u0060 (0/1), \u0060send:{sendId}\u0060 (dB), \u0060insert:{insertId}:{parameterId}\u0060 or\n\u0060instrument:{parameterId}\u0060 (the parameter\u0027s unit). Phase 6 adds \u0060midiEffect:{slotId}:{parameterId}\u0060 (a\nMIDI FX slot\u0027s parameter) and \u0060smartControl:{controlId}\u0060 (0\u20261; it compiles to automation of every\nparameter the control maps). Points are sorted by tick."
+        "description": "Track automation of one parameter. \u0060trackId\u0060 null is the master strip. \u0060target\u0060 is \u0060volume\u0060 (dB),\n\u0060pan\u0060 (\u22121\u20261), \u0060mute\u0060 (0/1), \u0060send:{sendId}\u0060 (dB), \u0060insert:{insertId}:{parameterId}\u0060 or\n\u0060instrument:{parameterId}\u0060 (the parameter\u0027s unit). Phase 6 adds \u0060midiEffect:{slotId}:{parameterId}\u0060 (a\nMIDI FX slot\u0027s parameter) and \u0060smartControl:{controlId}\u0060 (0\u20261; it compiles to automation of every\nparameter the control maps). Phase 10 (docs/11-phase-10.md) adds the panners\u0027 parameters\n(PannerTargets): \u0060surround:angle\u0060 (degrees), \u0060surround:diversity\u0060 (0\u20261),\n\u0060surround:elevation\u0060 (degrees), \u0060surround:centre\u0060 and \u0060surround:lfe\u0060 (dB),\n\u0060surround:spread\u0060 (degrees), \u0060object:azimuth\u0060 and \u0060object:elevation\u0060 (degrees),\n\u0060object:distance\u0060 and \u0060object:size\u0060 (0\u20261); they play whatever the strip\u0027s panner mode (only the mode\u0027s\npanner sounds). Points are sorted by tick."
       },
       "AutomationMode": {
         "enum": [
@@ -5168,6 +5919,22 @@
           "retrigger"
         ]
       },
+      "ChannelFormat": {
+        "enum": [
+          "mono",
+          "stereo",
+          "lcr",
+          "quad",
+          "surround50",
+          "surround51",
+          "surround70",
+          "surround71",
+          "surround712",
+          "surround714",
+          "surround916"
+        ],
+        "description": "A channel format: an ordered speaker layout (SpeakerLayouts). The engine\u0027s buffers carry a strip\u0027s\nchannels in its layout\u0027s order. Ambisonics are out of scope."
+      },
       "ChannelStrip": {
         "required": [
           "volumeDb",
@@ -5178,7 +5945,10 @@
           "sends",
           "output",
           "groups",
-          "midiEffects"
+          "midiEffects",
+          "inputFormat",
+          "outputFormat",
+          "panner"
         ],
         "type": "object",
         "properties": {
@@ -5229,9 +5999,18 @@
             "items": {
               "$ref": "#/components/schemas/Insert"
             }
+          },
+          "inputFormat": {
+            "$ref": "#/components/schemas/ChannelFormat"
+          },
+          "outputFormat": {
+            "$ref": "#/components/schemas/ChannelFormat"
+          },
+          "panner": {
+            "$ref": "#/components/schemas/Panner"
           }
         },
-        "description": "A channel strip: volume in dB (\u2212\u221E as \u2212144), pan \u22121 (left) \u2026 1 (right), mute and solo; its insert effects in\norder; its sends to buses; where it goes (\u0060output\u0060: \u0060master\u0060, \u0060bus:N\u0060 for bus 1\u202664, or\n\u0060output:N\u0060 for the device\u0027s stereo output pair N); the mixer groups it belongs to (1\u202632); and the VCA track\nthat offsets its volume, if any. The master strip uses only volume, pan, mute and its inserts. Phase 6:\n\u0060midiEffects\u0060 are its MIDI FX slots (instrument and external MIDI tracks only; empty elsewhere), in the\nsame shape as inserts: they run in slot order on the block\u0027s MIDI (regions, live and step input) before the\ninstrument; bypassed slots pass it through."
+        "description": "                A channel strip: volume in dB (\u2212\u221E as \u2212144), pan \u22121 (left) \u2026 1 (right), mute and solo; its insert effects in\n                order; its sends to buses; where it goes (\u0060output\u0060: \u0060master\u0060, \u0060bus:N\u0060 for bus 1\u202664, or\n                \u0060output:N\u0060 for the device\u0027s stereo output pair N); the mixer groups it belongs to (1\u202632); and the VCA track\n                that offsets its volume, if any. The master strip uses only volume, pan, mute and its inserts. Phase 6:\n                \u0060midiEffects\u0060 are its MIDI FX slots (instrument and external MIDI tracks only; empty elsewhere), in the\n                same shape as inserts: they run in slot order on the block\u0027s MIDI (regions, live and step input) before the\n                instrument; bypassed slots pass it through.\n                Phase 10 (docs/11-phase-10.md): inputFormat is the format of the signal the strip processes before its\npanner (an audio track\u0027s recording and regions, an instrument\u0027s output, an aux\u0027s bus: an aux\u0027s input format\nis its bus\u0027s format); outputFormat is its destination\u0027s format, kept by the server (the master\u0027s is\nthe project\u0027s surroundFormat, a bus\u0027s its aux\u0027s input format, a device output pair stereo; the\nmaster\u0027s input and output are the project\u0027s). panner maps the input channels to the output: stereo\npan (pan) for a stereo output, the Surround Panner, or an object (PannerMode); an input\nof the output\u0027s format passes straight through. Sends to a multichannel bus are panned by the strip\u0027s panner\n(their pan applies to stereo buses only). Every strip of a project from before Phase 10 is stereo in\nand out with the stereo panner."
       },
       "ChordSymbol": {
         "required": [
@@ -5942,6 +6721,9 @@
           },
           {
             "$ref": "#/components/schemas/DeltaOpScoreLayoutChanged"
+          },
+          {
+            "$ref": "#/components/schemas/DeltaOpMovieChanged"
           }
         ],
         "discriminator": {
@@ -5987,7 +6769,8 @@
             "chordSymbolRemoved": "#/components/schemas/DeltaOpChordSymbolRemoved",
             "scoreSetUpserted": "#/components/schemas/DeltaOpScoreSetUpserted",
             "scoreSetRemoved": "#/components/schemas/DeltaOpScoreSetRemoved",
-            "scoreLayoutChanged": "#/components/schemas/DeltaOpScoreLayoutChanged"
+            "scoreLayoutChanged": "#/components/schemas/DeltaOpScoreLayoutChanged",
+            "movieChanged": "#/components/schemas/DeltaOpMovieChanged"
           }
         }
       },
@@ -6355,6 +7138,31 @@
           }
         },
         "description": "A MIDI region was added or changed (its notes included)."
+      },
+      "DeltaOpMovieChanged": {
+        "required": [
+          "movie",
+          "op"
+        ],
+        "properties": {
+          "op": {
+            "enum": [
+              "movieChanged"
+            ],
+            "type": "string"
+          },
+          "movie": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/Movie"
+              }
+            ]
+          }
+        },
+        "description": "Phase 10 (docs/11-phase-10.md): the project\u0027s movie was set, moved or removed (null). Formats and panners come as\n\u0060trackUpserted\u0060, \u0060masterChanged\u0060 and \u0060settingsChanged\u0060; scene markers as \u0060markerUpserted\u0060."
       },
       "DeltaOpNotesChanged": {
         "required": [
@@ -6732,6 +7540,41 @@
           }
         },
         "description": "A folder\u0027s entries, folders first; \u0060parent\u0060 is null at a root."
+      },
+      "DiscoveryInfo": {
+        "required": [
+          "name",
+          "host",
+          "port",
+          "pairingRequired",
+          "version"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "host": {
+            "type": "string"
+          },
+          "port": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "projectName": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "pairingRequired": {
+            "type": "boolean"
+          },
+          "version": {
+            "type": "string"
+          }
+        },
+        "description": "What a remote needs to find and pair with this Server (\u0060GET /system/discovery\u0060, and what DNS-SD\nadvertises): the Server\u0027s name (the machine\u0027s), the host name or address and port remotes reach it on, the open\nproject\u0027s name, whether pairing (the token, by QR code) is needed, and the Server\u0027s version."
       },
       "DitherMode": {
         "enum": [
@@ -7249,6 +8092,27 @@
           },
           {
             "$ref": "#/components/schemas/EditCommandImportTracksCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandSetSurroundFormatCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandSetStripFormatCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandSetPannerCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandSetMovieCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandSetMoviePositionCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandRemoveMovieCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandAddSceneMarkersCommand"
           }
         ],
         "description": "An edit of the open project (docs/adr/0004-state-ownership.md). A batch of them is applied atomically as one\nundo step. Optional properties left out are left unchanged.",
@@ -7401,7 +8265,14 @@
             "setScoreLayout": "#/components/schemas/EditCommandSetScoreLayoutCommand",
             "moveScoreNotes": "#/components/schemas/EditCommandMoveScoreNotesCommand",
             "addScoreNote": "#/components/schemas/EditCommandAddScoreNoteCommand",
-            "importTracks": "#/components/schemas/EditCommandImportTracksCommand"
+            "importTracks": "#/components/schemas/EditCommandImportTracksCommand",
+            "setSurroundFormat": "#/components/schemas/EditCommandSetSurroundFormatCommand",
+            "setStripFormat": "#/components/schemas/EditCommandSetStripFormatCommand",
+            "setPanner": "#/components/schemas/EditCommandSetPannerCommand",
+            "setMovie": "#/components/schemas/EditCommandSetMovieCommand",
+            "setMoviePosition": "#/components/schemas/EditCommandSetMoviePositionCommand",
+            "removeMovie": "#/components/schemas/EditCommandRemoveMovieCommand",
+            "addSceneMarkers": "#/components/schemas/EditCommandAddSceneMarkersCommand"
           }
         }
       },
@@ -7603,8 +8474,19 @@
               "null",
               "string"
             ]
+          },
+          "kind": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/MarkerKind"
+              }
+            ]
           }
-        }
+        },
+        "description": "Adds a marker; \u0060kind\u0060 (Phase 10) is \u0060marker\u0060 unless given."
       },
       "EditCommandAddMidiRegionCommand": {
         "required": [
@@ -7778,6 +8660,33 @@
           }
         },
         "description": "Adds an empty scene to the Live Loops grid at \u0060index\u0060 (the end when left out)."
+      },
+      "EditCommandAddSceneMarkersCommand": {
+        "required": [
+          "ticks",
+          "type",
+          "replaceExisting"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "addSceneMarkers"
+            ],
+            "type": "string"
+          },
+          "ticks": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          "replaceExisting": {
+            "type": "boolean",
+            "default": true
+          }
+        },
+        "description": "Phase 10, Detect Scene Cuts\u0027 result: adds a \u0060scene\u0060 marker at each tick (named \u0060Scene 1\u0060, \u0060Scene 2\u0060,\n\u2026 in time order, no length, no colour), first removing the scene markers when \u0060replaceExisting\u0060. The\n\u0060sceneDetect\u0060 job applies it; clients do not send it."
       },
       "EditCommandAddScoreNoteCommand": {
         "required": [
@@ -9266,6 +10175,20 @@
           }
         }
       },
+      "EditCommandRemoveMovieCommand": {
+        "required": [
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "removeMovie"
+            ],
+            "type": "string"
+          }
+        },
+        "description": "Phase 10, Remove Movie: the project no longer has a movie (a copied file stays in \u0060Movies/\u0060)."
+      },
       "EditCommandRemoveSceneCommand": {
         "required": [
           "sceneId",
@@ -10189,8 +11112,19 @@
               "null",
               "string"
             ]
+          },
+          "kind": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/MarkerKind"
+              }
+            ]
           }
-        }
+        },
+        "description": "Changes a marker; left-out properties stay. \u0060kind\u0060 (Phase 10) turns a scene marker into a marker or back."
       },
       "EditCommandSetMatchGrooveCommand": {
         "required": [
@@ -10409,6 +11343,52 @@
           }
         }
       },
+      "EditCommandSetMovieCommand": {
+        "required": [
+          "movie",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "setMovie"
+            ],
+            "type": "string"
+          },
+          "movie": {
+            "$ref": "#/components/schemas/Movie"
+          }
+        },
+        "description": "Phase 10, a movie import\u0027s result: sets the project\u0027s movie (replacing one it has). The \u0060movieImport\u0060 job\napplies it after probing and copying the file; clients do not send it. Undo restores the previous movie (or none);\nthe file stays."
+      },
+      "EditCommandSetMoviePositionCommand": {
+        "required": [
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "setMoviePosition"
+            ],
+            "type": "string"
+          },
+          "startTick": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int64"
+          },
+          "offsetSeconds": {
+            "type": [
+              "null",
+              "number"
+            ],
+            "format": "double"
+          }
+        },
+        "description": "Phase 10: moves the movie (Logic\u0027s movie start and offset): its frame at \u0060offsetSeconds\u0060 (0 or more, less\nthan its duration) plays at \u0060startTick\u0060 (0 or more); left-out properties stay. 422 without a movie."
+      },
       "EditCommandSetOutputCommand": {
         "required": [
           "trackId",
@@ -10430,6 +11410,104 @@
           }
         },
         "description": "Routes a track to \u0060master\u0060, \u0060bus:N\u0060 or \u0060output:N\u0060; a route that would make a loop is refused."
+      },
+      "EditCommandSetPannerCommand": {
+        "required": [
+          "trackId",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "setPanner"
+            ],
+            "type": "string"
+          },
+          "trackId": {
+            "type": "string"
+          },
+          "mode": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PannerMode"
+              }
+            ]
+          },
+          "angle": {
+            "type": [
+              "null",
+              "number"
+            ],
+            "format": "double"
+          },
+          "diversity": {
+            "type": [
+              "null",
+              "number"
+            ],
+            "format": "double"
+          },
+          "surroundElevation": {
+            "type": [
+              "null",
+              "number"
+            ],
+            "format": "double"
+          },
+          "centreLevelDb": {
+            "type": [
+              "null",
+              "number"
+            ],
+            "format": "double"
+          },
+          "lfeLevelDb": {
+            "type": [
+              "null",
+              "number"
+            ],
+            "format": "double"
+          },
+          "spread": {
+            "type": [
+              "null",
+              "number"
+            ],
+            "format": "double"
+          },
+          "azimuth": {
+            "type": [
+              "null",
+              "number"
+            ],
+            "format": "double"
+          },
+          "objectElevation": {
+            "type": [
+              "null",
+              "number"
+            ],
+            "format": "double"
+          },
+          "distance": {
+            "type": [
+              "null",
+              "number"
+            ],
+            "format": "double"
+          },
+          "size": {
+            "type": [
+              "null",
+              "number"
+            ],
+            "format": "double"
+          }
+        },
+        "description": "Phase 10: changes a track strip\u0027s panner (\u0060ChannelStrip.panner\u0060); left-out properties stay. \u0060mode\u0060\u0060surround\u0060 needs a surround output, \u0060object\u0060 a strip that outputs to the master of a surround project\n(a project has at most 118 objects). The Surround Panner\u0027s \u0060angle\u0060, \u0060diversity\u0060,\n\u0060surroundElevation\u0060, \u0060centreLevelDb\u0060, \u0060lfeLevelDb\u0060 and \u0060spread\u0060, and the Object Panner\u0027s\n\u0060azimuth\u0060, \u0060objectElevation\u0060, \u0060distance\u0060 and \u0060size\u0060, in SurroundPanner\u0027s and\nObjectPanner\u0027s units and ranges (angles \u2212180\u2026180, levels \u2212144\u20260 dB). During playback a track in\ntouch, latch or write records the change into its \u0060surround:\u2026\u0060 or \u0060object:\u2026\u0060 lanes, as\n\u0060setStrip\u0060 records pan (and a batch coalesces as a drag does)."
       },
       "EditCommandSetParameterCommand": {
         "required": [
@@ -11206,6 +12284,46 @@
           }
         },
         "description": "Changes a track\u0027s volume, pan, mute or solo, or the master\u0027s when \u0060trackId\u0060 is left out. Members of the\ntrack\u0027s enabled mixer groups that link the property follow it (volume keeps their offsets). During playback, a\ntrack whose automation mode is touch, latch or write records the change into its lane (and the batch coalesces as\na drag does)."
+      },
+      "EditCommandSetStripFormatCommand": {
+        "required": [
+          "trackId",
+          "inputFormat",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "setStripFormat"
+            ],
+            "type": "string"
+          },
+          "trackId": {
+            "type": "string"
+          },
+          "inputFormat": {
+            "$ref": "#/components/schemas/ChannelFormat"
+          }
+        },
+        "description": "Phase 10: sets a track strip\u0027s input format (mono or stereo for instrument tracks; any for audio and aux\ntracks). An aux\u0027s input format is its bus\u0027s format: the output formats of the strips that output or send to that\nbus follow (every aux on one bus has the same input format). The output format is never set directly: it is\nthe destination\u0027s."
+      },
+      "EditCommandSetSurroundFormatCommand": {
+        "required": [
+          "format",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "setSurroundFormat"
+            ],
+            "type": "string"
+          },
+          "format": {
+            "$ref": "#/components/schemas/ChannelFormat"
+          }
+        },
+        "description": "Phase 10 (docs/11-phase-10.md): sets the project\u0027s channel format (\u0060settings.surroundFormat\u0060). The master\u0027s\ninput and output formats follow, and the output format of every strip that feeds the master; strips in object\nmode return to the Surround Panner when the format is stereo or narrower (objects need a surround master)."
       },
       "EditCommandSetSyncSettingsCommand": {
         "required": [
@@ -12300,6 +13418,7 @@
           "id",
           "name",
           "kind",
+          "panner",
           "midiRegions",
           "regions"
         ],
@@ -12331,9 +13450,38 @@
             "items": {
               "$ref": "#/components/schemas/AudioRegion"
             }
+          },
+          "inputFormat": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ChannelFormat"
+              }
+            ]
+          },
+          "panner": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/Panner"
+              }
+            ]
+          },
+          "automation": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/AutomationLane"
+            }
           }
         },
-        "description": "A track an import adds. Its \u0060id\u0060, and every id in its regions (their \u0060trackId\u0060 is ignored; note and\ncontroller ids too), are provisional: unique within the ImportedContent, replaced by the model.\n\u0060kind\u0060 is \u0060instrument\u0060 (MIDI regions, the default synth) or \u0060audio\u0060 (audio regions, whose\n\u0060fileId\u0060 is a file of the project: the job adds the media first). \u0060staffStyleId\u0060 is a factory style or\none of the content\u0027s score staff styles (null: the default)."
+        "description": "A track an import adds. Its \u0060id\u0060, and every id in its regions (their \u0060trackId\u0060 is ignored; note and\ncontroller ids too), are provisional: unique within the ImportedContent, replaced by the model.\n\u0060kind\u0060 is \u0060instrument\u0060 (MIDI regions, the default synth) or \u0060audio\u0060 (audio regions, whose\n\u0060fileId\u0060 is a file of the project: the job adds the media first). \u0060staffStyleId\u0060 is a factory style or\none of the content\u0027s score staff styles (null: the default). Phase 10 (docs/11-phase-10.md): \u0060inputFormat\u0060\nand \u0060panner\u0060 set its strip\u0027s (null: stereo, the default panner; an ADM import\u0027s beds and objects), and\n\u0060automation\u0060 are its lanes (provisional ids, their \u0060trackId\u0060 ignored; an object\u0027s positions)."
       },
       "ImportFileRequest": {
         "required": [
@@ -12572,7 +13720,14 @@
           "aafExport",
           "aafImport",
           "midiExport",
-          "midiImport"
+          "midiImport",
+          "admExport",
+          "admImport",
+          "movieImport",
+          "movieAudioImport",
+          "movieAudioExport",
+          "sceneDetect",
+          "thumbnails"
         ]
       },
       "JobState": {
@@ -12583,6 +13738,32 @@
           "failed",
           "cancelled"
         ]
+      },
+      "KeyCommandPad": {
+        "required": [
+          "id",
+          "label",
+          "commandId"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "commandId": {
+            "type": "string"
+          },
+          "color": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        },
+        "description": "A key-command pad on the remote: its label, the key command it runs (a \u0060KeyCommandSet\u0060 id), and a colour."
       },
       "KeyCommandSet": {
         "required": [
@@ -12803,6 +13984,30 @@
           }
         },
         "description": "Learn mode: while \u0060on\u0060, the next control moved is assigned to \u0060target\u0060 (when set) in mode\n\u0060modeId\u0060 of zone \u0060zoneId\u0060 (null: the first zone\u0027s active mode, made when there is none), replacing an\nassignment of the same input there. Messages still play their tracks while learning. \u0060last\u0060 is the last\nmessage received while learning."
+      },
+      "ListenInState": {
+        "required": [
+          "on",
+          "listeners"
+        ],
+        "type": "object",
+        "properties": {
+          "on": {
+            "type": "boolean"
+          },
+          "listeners": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "latencyMs": {
+            "type": [
+              "null",
+              "number"
+            ],
+            "format": "double"
+          }
+        },
+        "description": "Listen-in (\u0060GET /remote/listen/state\u0060, the \u0060listenIn\u0060 event): \u0060on\u0060 while the master is being\nencoded (at least one listener), the number of listeners (at most int ListenIn.MaxListeners), and the\nServer\u0027s own delay from the host\u0027s ring to the socket in milliseconds (null while off); a remote adds its jitter\nbuffer and output to show its latency, measured from the frames\u0027 transport positions."
       },
       "LiveLoopsGrid": {
         "required": [
@@ -13140,7 +14345,8 @@
           "name",
           "tick",
           "lengthTicks",
-          "text"
+          "text",
+          "kind"
         ],
         "type": "object",
         "properties": {
@@ -13166,9 +14372,19 @@
           },
           "text": {
             "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/MarkerKind"
           }
         },
-        "description": "A marker: a named position, with an optional length, colour and text (Logic\u0027s Marker List)."
+        "description": "A marker: a named position, with an optional length, colour and text (Logic\u0027s Marker List). \u0060kind\u0060 (Phase 10,\ndocs/11-phase-10.md) tells a scene marker (Detect Scene Cuts) from the user\u0027s."
+      },
+      "MarkerKind": {
+        "enum": [
+          "marker",
+          "scene"
+        ],
+        "description": "What a marker is: one the user made, or one Detect Scene Cuts made (an ordinary, editable marker)."
       },
       "MetronomeSettings": {
         "required": [
@@ -13472,6 +14688,229 @@
           }
         },
         "description": "Plugin delay compensation, and low-latency mode: while it is on, plugins on the path of record-armed or\nmonitored tracks whose latency exceeds \u0060lowLatencyLimitMs\u0060 are bypassed."
+      },
+      "MonitoringSettings": {
+        "required": [
+          "binaural",
+          "speakerMap"
+        ],
+        "type": "object",
+        "properties": {
+          "binaural": {
+            "type": "boolean"
+          },
+          "downmixTo": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ChannelFormat"
+              }
+            ]
+          },
+          "speakerMap": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        },
+        "description": "Monitoring (\u0060GET/PUT /settings/monitoring\u0060), stored in the user settings, not the project: the speaker map is\nthe machine\u0027s and binaural listening the listener\u0027s. It happens after the master and before the device, and never\nchanges bounces or ADM exports. \u0060binaural\u0060 renders the master\u0027s speakers (and objects) through HRTFs to\noutputs 1\u20132; otherwise \u0060downmixTo\u0060 (a format smaller than the master\u0027s; null: none) down-mixes per ITU-R\nBS.775 and sends its channels through the map. \u0060speakerMap[i]\u0060 is the 1-based device output of channel i of\nwhat is sent (0: not sent); an empty or short map sends channel i to output i \u002B 1."
+      },
+      "Movie": {
+        "required": [
+          "path",
+          "name",
+          "inProject",
+          "startTick",
+          "offsetSeconds",
+          "frameRate",
+          "timecodeStartSeconds",
+          "durationSeconds",
+          "frames",
+          "width",
+          "height",
+          "codec",
+          "audio"
+        ],
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "inProject": {
+            "type": "boolean"
+          },
+          "startTick": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "offsetSeconds": {
+            "type": "number",
+            "format": "double"
+          },
+          "frameRate": {
+            "$ref": "#/components/schemas/VideoFrameRate"
+          },
+          "timecodeStartSeconds": {
+            "type": "number",
+            "format": "double"
+          },
+          "durationSeconds": {
+            "type": "number",
+            "format": "double"
+          },
+          "frames": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "width": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "height": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "codec": {
+            "type": "string"
+          },
+          "audio": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/MovieAudio"
+              }
+            ]
+          }
+        },
+        "description": "The project\u0027s movie (\u0060Project.movie\u0060; null: none). \u0060path\u0060 is relative to the project folder when the\nfile was copied into it (\u0060inProject\u0060, under \u0060Movies/\u0060), else absolute (a reference). \u0060startTick\u0060\nis where its frame at \u0060offsetSeconds\u0060 plays (offset 0: its first frame there); \u0060frameRate\u0060,\n\u0060timecodeStartSeconds\u0060 (the timecode of its first frame, in seconds; 0 when it has none), duration, frame\ncount, size, and video codec (FFprobe\u0027s name: \u0060h264\u0060, \u0060hevc\u0060, \u0060prores\u0060) come from the probe, as\ndoes \u0060audio\u0060 (null: no audio stream)."
+      },
+      "MovieAudio": {
+        "required": [
+          "codec",
+          "channels",
+          "sampleRate"
+        ],
+        "type": "object",
+        "properties": {
+          "codec": {
+            "type": "string"
+          },
+          "channels": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "sampleRate": {
+            "type": "integer",
+            "format": "int32"
+          }
+        },
+        "description": "A movie\u0027s first audio stream, as FFprobe reports it."
+      },
+      "MovieAudioCodec": {
+        "enum": [
+          "aac",
+          "pcm"
+        ],
+        "description": "The audio codec Export Audio to Movie writes.",
+        "default": "aac"
+      },
+      "MovieAudioExportRequest": {
+        "required": [
+          "fileName",
+          "replace",
+          "codec"
+        ],
+        "type": "object",
+        "properties": {
+          "fileName": {
+            "type": "string"
+          },
+          "directory": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "replace": {
+            "type": "boolean",
+            "default": true
+          },
+          "codec": {
+            "$ref": "#/components/schemas/MovieAudioCodec"
+          }
+        },
+        "description": "Export Audio to Movie (\u0060POST /project/movie/audio/export\u0060, job \u0060movieAudioExport\u0060): bounces the master\n(stereo, or the stereo down-mix of a surround master) over the movie\u0027s span, aligned to its frames, and writes a\nnew movie \u0060fileName\u0060 in \u0060directory\u0060 (default \u0060\u0026lt;project\u0026gt;/Exports\u0060; the movie\u0027s extension\nadded when missing) with the video stream copied and the bounce replacing the audio (\u0060replace\u0060) or added as\nanother audio track. The movie itself is not changed."
+      },
+      "MovieAudioImportRequest": {
+        "type": "object",
+        "properties": {
+          "trackName": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        },
+        "description": "Import Audio from Movie (\u0060POST /project/movie/audio/import\u0060, job \u0060movieAudioImport\u0060): the movie\u0027s\nfirst audio stream extracted at the project\u0027s sample rate into \u0060Audio Files\u0060, then, through\n\u0060importTracks\u0060 (one undo step), a new audio track (\u0060trackName\u0060, null: the movie\u0027s name) with a region\nat the movie\u0027s first frame."
+      },
+      "MovieImportRequest": {
+        "required": [
+          "path",
+          "copyIntoProject"
+        ],
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "copyIntoProject": {
+            "type": "boolean",
+            "default": true
+          },
+          "startTick": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int64"
+          }
+        },
+        "description": "Movie import (\u0060POST /project/movie\u0060, job \u0060movieImport\u0060): a MOV, MP4 or M4V on the server\u0027s disk, probed\nby FFprobe, copied into the project\u0027s \u0060Movies/\u0060 when \u0060copyIntoProject\u0060 (else referenced where it is),\nplaced at \u0060startTick\u0060 (null: the project start) with offset 0; then \u0060setMovie\u0060 (one undo step; undo\nleaves a copied file). It replaces a movie the project has."
+      },
+      "MovieThumbnails": {
+        "required": [
+          "width",
+          "height",
+          "frames"
+        ],
+        "type": "object",
+        "properties": {
+          "width": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "height": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "frames": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        },
+        "description": "The movie frames cached as thumbnails at \u0060height\u0060 (\u0060GET /project/movie/thumbnails?height=\u0060): their\nsize and the frame numbers available, ascending."
       },
       "MtcFrameRate": {
         "enum": [
@@ -13840,6 +15279,34 @@
         ],
         "description": "A note value (the undotted, untupled duration)."
       },
+      "ObjectPanner": {
+        "required": [
+          "azimuth",
+          "elevation",
+          "distance",
+          "size"
+        ],
+        "type": "object",
+        "properties": {
+          "azimuth": {
+            "type": "number",
+            "format": "double"
+          },
+          "elevation": {
+            "type": "number",
+            "format": "double"
+          },
+          "distance": {
+            "type": "number",
+            "format": "double"
+          },
+          "size": {
+            "type": "number",
+            "format": "double"
+          }
+        },
+        "description": "The 3D Object Panner: an object\u0027s position, polar as ADM\u0027s (\u0060audioBlockFormat\u0060 of type Objects):\n\u0060azimuth\u0060 and \u0060elevation\u0060 in degrees, \u0060distance\u0060 0\u20261 (1: on the speakers\u0027 sphere), and\n\u0060size\u0060 0\u20261 (its spread over neighbouring speakers; ADM width, height and depth together)."
+      },
       "OpenProjectRequest": {
         "required": [
           "path"
@@ -13959,6 +15426,57 @@
           }
         },
         "description": "A content pack (\u0060.anodepack\u0060: a zip of loops, patches, kits and IRs with a \u0060pack.json\u0060 manifest),\ninstalled under \u0060\u0026lt;DataDirectory\u0026gt;/Library/Packs/\u0026lt;id\u0026gt;/\u0060. \u0060size\u0060 is in bytes."
+      },
+      "PadSet": {
+        "required": [
+          "id",
+          "name",
+          "pads"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "pads": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/KeyCommandPad"
+            }
+          }
+        },
+        "description": "A page of key-command pads (the remote shows one set at a time)."
+      },
+      "Panner": {
+        "required": [
+          "mode",
+          "surround",
+          "object"
+        ],
+        "type": "object",
+        "properties": {
+          "mode": {
+            "$ref": "#/components/schemas/PannerMode"
+          },
+          "surround": {
+            "$ref": "#/components/schemas/SurroundPanner"
+          },
+          "object": {
+            "$ref": "#/components/schemas/ObjectPanner"
+          }
+        },
+        "description": "A strip\u0027s panner (\u0060ChannelStrip.panner\u0060): the mode that applies, and both panners\u0027 settings, which stay when\nthe mode changes. Automation addresses (\u0060AutomationLane.target\u0060): \u0060surround:angle\u0060,\n\u0060surround:diversity\u0060, \u0060surround:elevation\u0060, \u0060surround:centre\u0060 (dB), \u0060surround:lfe\u0060 (dB),\n\u0060surround:spread\u0060, \u0060object:azimuth\u0060, \u0060object:elevation\u0060, \u0060object:distance\u0060,\n\u0060object:size\u0060, in the units above; the same strings are Smart Control mapping targets."
+      },
+      "PannerMode": {
+        "enum": [
+          "stereo",
+          "surround",
+          "object"
+        ],
+        "description": "How a strip\u0027s panner maps its input channels to its output format."
       },
       "ParameterInfo": {
         "required": [
@@ -14597,7 +16115,8 @@
           "grooves",
           "articulationSets",
           "laneSets",
-          "score"
+          "score",
+          "movie"
         ],
         "type": "object",
         "properties": {
@@ -14713,9 +16232,19 @@
           },
           "score": {
             "$ref": "#/components/schemas/ProjectScore"
+          },
+          "movie": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/Movie"
+              }
+            ]
           }
         },
-        "description": "The open project (docs/01-implementation-plan.md \u00A75). Musical positions are ticks at 960 PPQ; audio offsets,\nlengths and fades are frames at the project\u0027s \u0060sampleRate\u0060. \u0060revision\u0060 grows with every edit and is\nthe ETag; \u0060dirty\u0060 says whether it has unsaved edits. Phase 6 (docs/07-phase-6.md): \u0060patternRegions\u0060\nare the Step Sequencer\u0027s regions; \u0060liveLoops\u0060 is the Live Loops grid. Phase 7 (docs/08-phase-7.md):\n\u0060grooves\u0060 are the project\u0027s groove templates, \u0060articulationSets\u0060 its articulation sets and\n\u0060laneSets\u0060 its Step Editor lane sets. Phase 9 (docs/10-phase-9.md): \u0060score\u0060 is its stored score content\n(staff styles, symbols, lyrics, chord symbols, score sets, layout)."
+        "description": "The open project (docs/01-implementation-plan.md \u00A75). Musical positions are ticks at 960 PPQ; audio offsets,\nlengths and fades are frames at the project\u0027s \u0060sampleRate\u0060. \u0060revision\u0060 grows with every edit and is\nthe ETag; \u0060dirty\u0060 says whether it has unsaved edits. Phase 6 (docs/07-phase-6.md): \u0060patternRegions\u0060\nare the Step Sequencer\u0027s regions; \u0060liveLoops\u0060 is the Live Loops grid. Phase 7 (docs/08-phase-7.md):\n\u0060grooves\u0060 are the project\u0027s groove templates, \u0060articulationSets\u0060 its articulation sets and\n\u0060laneSets\u0060 its Step Editor lane sets. Phase 9 (docs/10-phase-9.md): \u0060score\u0060 is its stored score content\n(staff styles, symbols, lyrics, chord symbols, score sets, layout). Phase 10 (docs/11-phase-10.md): \u0060movie\u0060\nis its movie (null: none)."
       },
       "ProjectAlternative": {
         "required": [
@@ -14841,7 +16370,8 @@
           "mixer",
           "smartTempo",
           "varispeed",
-          "sync"
+          "sync",
+          "surroundFormat"
         ],
         "type": "object",
         "properties": {
@@ -14903,9 +16433,12 @@
           },
           "sync": {
             "$ref": "#/components/schemas/SyncSettings"
+          },
+          "surroundFormat": {
+            "$ref": "#/components/schemas/ChannelFormat"
           }
         },
-        "description": "Global settings. \u0060tempo\u0060 and \u0060signature\u0060 are the values at the project start (the first of\n\u0060tempoEvents\u0060 and \u0060signatures\u0060, which are the global tempo and signature tracks).\n\u0060endTick\u0060 is the project end marker. \u0060mergeMidiRecording\u0060: a MIDI recording over an\nexisting MIDI region adds its notes to that region instead of making a new one. \u0060smartTempo\u0060 and\n\u0060varispeed\u0060 (Phase 5): the project tempo mode and Varispeed. \u0060grooveTrackId\u0060 (Phase 7) is the groove\ntrack (null: none): tracks whose \u0060matchGroove\u0060 is on quantise to the groove of its first region. \u0060sync\u0060\n(Phase 8, docs/09-phase-8.md) is the project\u0027s synchronisation: MIDI Clock, MTC and Link."
+        "description": "Global settings. \u0060tempo\u0060 and \u0060signature\u0060 are the values at the project start (the first of\n\u0060tempoEvents\u0060 and \u0060signatures\u0060, which are the global tempo and signature tracks).\n\u0060endTick\u0060 is the project end marker. \u0060mergeMidiRecording\u0060: a MIDI recording over an\nexisting MIDI region adds its notes to that region instead of making a new one. \u0060smartTempo\u0060 and\n\u0060varispeed\u0060 (Phase 5): the project tempo mode and Varispeed. \u0060grooveTrackId\u0060 (Phase 7) is the groove\ntrack (null: none): tracks whose \u0060matchGroove\u0060 is on quantise to the groove of its first region. \u0060sync\u0060\n(Phase 8, docs/09-phase-8.md) is the project\u0027s synchronisation: MIDI Clock, MTC and Link.\n\u0060surroundFormat\u0060 (Phase 10, docs/11-phase-10.md) is the project\u0027s channel format: the master\u0027s, and what\nstrips feeding the master output (stereo: as before Phase 10)."
       },
       "ProjectSummary": {
         "required": [
@@ -15044,6 +16577,21 @@
         },
         "description": "How a MIDI region plays, without changing its notes (Logic\u0027s Region inspector): transpose in semitones,\nvelocity offset (\u2212127\u2026127), quantise grid in ticks (0: off) with strength (0\u20261, 1 = all the way) and swing\n(0\u20261, 0 = straight; delays every second grid step by up to half a step). \u0060grooveId\u0060 (Phase 7): it\nquantises to that groove template of the project instead of the grid (\u0060quantizeTicks\u0060 and \u0060swing\u0060\nthen unused; null: the grid)."
       },
+      "RemotePads": {
+        "required": [
+          "sets"
+        ],
+        "type": "object",
+        "properties": {
+          "sets": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PadSet"
+            }
+          }
+        },
+        "description": "The remote\u0027s key-command pad sets (\u0060GET/PUT /remote/pads\u0060), in the user settings; ids unique across sets\nand pads."
+      },
       "ReorderSurfacesRequest": {
         "required": [
           "ids"
@@ -15160,6 +16708,25 @@
           }
         },
         "description": "A row of the Live Loops grid."
+      },
+      "SceneDetectRequest": {
+        "required": [
+          "threshold",
+          "replaceExisting"
+        ],
+        "type": "object",
+        "properties": {
+          "threshold": {
+            "type": "number",
+            "format": "double",
+            "default": 0.4
+          },
+          "replaceExisting": {
+            "type": "boolean",
+            "default": true
+          }
+        },
+        "description": "Detect Scene Cuts (\u0060POST /project/movie/scenes\u0060, job \u0060sceneDetect\u0060): FFmpeg\u0027s scene score above\n\u0060threshold\u0060 (0\u20261) marks a cut; the job applies \u0060addSceneMarkers\u0060 with the cuts\u0027 ticks (the first frame\nof each new scene, through the mapping above), replacing the existing scene markers when\n\u0060replaceExisting\u0060."
       },
       "ScoreDocument": {
         "required": [
@@ -16426,6 +17993,44 @@
         },
         "description": "A surface\u0027s live state: whether it answers (Mackie Control\u0027s handshake or any input; HUI\u0027s ping) and the index of\nthe track on its first strip."
       },
+      "SurroundPanner": {
+        "required": [
+          "angle",
+          "diversity",
+          "elevation",
+          "centreLevelDb",
+          "lfeLevelDb",
+          "spread"
+        ],
+        "type": "object",
+        "properties": {
+          "angle": {
+            "type": "number",
+            "format": "double"
+          },
+          "diversity": {
+            "type": "number",
+            "format": "double"
+          },
+          "elevation": {
+            "type": "number",
+            "format": "double"
+          },
+          "centreLevelDb": {
+            "type": "number",
+            "format": "double"
+          },
+          "lfeLevelDb": {
+            "type": "number",
+            "format": "double"
+          },
+          "spread": {
+            "type": "number",
+            "format": "double"
+          }
+        },
+        "description": "The Surround Panner (2D, as Logic\u0027s): \u0060angle\u0060 where the puck points (degrees, ADM azimuth); \u0060diversity\u0060\n0\u20261, how far it is from the centre of the circle (0: every speaker equally, 1: a point source between the two\nspeakers at the angle); \u0060elevation\u0060 0\u202690 for formats with height (0 elsewhere); \u0060centreLevelDb\u0060\n\u2212144\u20260, how much of the front image the centre speaker takes (\u2212144: a phantom centre); \u0060lfeLevelDb\u0060 \u2212144\u20260,\nthe low-passed send to the LFE (\u2212144: none); \u0060spread\u0060 0\u2026180, the angle between a stereo input\u0027s two channels\naround the puck (a mono input ignores it)."
+      },
       "Syllabic": {
         "enum": [
           "single",
@@ -16653,6 +18258,28 @@
           }
         },
         "description": "A point of the tempo track. The first is at tick 0. A ramp\u0027s tempo at fraction x (0\u20261) of the way to the next\nevent is bpm\u2080 \u002B (bpm\u2081 \u2212 bpm\u2080)\u00B7x^(2^(\u22122\u00B7\u0060shape\u0060)), the fade formula: \u0060shape\u0060 \u22121\u20261, 0 the linear ramp."
+      },
+      "ThumbnailsRequest": {
+        "required": [
+          "frames",
+          "height"
+        ],
+        "type": "object",
+        "properties": {
+          "frames": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          "height": {
+            "type": "integer",
+            "format": "int32",
+            "default": 64
+          }
+        },
+        "description": "Thumbnails (\u0060POST /project/movie/thumbnails\u0060, job \u0060thumbnails\u0060): renders \u0060frames\u0060 (movie frame\nnumbers) as JPEGs \u0060height\u0060 pixels high (the width keeps the aspect), cached per movie; then each is\n\u0060GET /project/movie/frames/{frame}?height=\u0060."
       },
       "TimeSignature": {
         "required": [
@@ -17172,6 +18799,24 @@
           }
         },
         "description": "Varispeed: while enabled, the whole project plays at \u0060speed\u0060 (0.5\u20261.5) of its tempo; the server compiles it\n(every position scaled by 1/speed), and the transport reports compiled samples."
+      },
+      "VideoFrameRate": {
+        "required": [
+          "numerator",
+          "denominator"
+        ],
+        "type": "object",
+        "properties": {
+          "numerator": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "denominator": {
+            "type": "integer",
+            "format": "int32"
+          }
+        },
+        "description": "A video frame rate as a fraction: 24000/1001 (23.976), 25/1, 30000/1001 (29.97), \u2026"
       }
     }
   },
@@ -17214,6 +18859,15 @@
     },
     {
       "name": "Interchange"
+    },
+    {
+      "name": "Movie"
+    },
+    {
+      "name": "Surround"
+    },
+    {
+      "name": "Remote"
     }
   ]
 }

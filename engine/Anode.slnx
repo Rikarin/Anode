@@ -15,6 +15,7 @@
     <Project Path="src/Anode.Host/Anode.Host.csproj"/>
     <Project Path="src/Anode.Interchange/Anode.Interchange.csproj"/>
     <Project Path="src/Anode.Ipc/Anode.Ipc.csproj"/>
+    <Project Path="src/Anode.Media/Anode.Media.csproj"/>
     <Project Path="src/Anode.Model/Anode.Model.csproj"/>
     <Project Path="src/Anode.Notation/Anode.Notation.csproj"/>
     <Project Path="src/Anode.PluginSandbox/Anode.PluginSandbox.csproj"/>
@@ -27,6 +28,7 @@
     <Project Path="tests/Anode.Dsp.Tests/Anode.Dsp.Tests.csproj"/>
     <Project Path="tests/Anode.Engine.Tests/Anode.Engine.Tests.csproj"/>
     <Project Path="tests/Anode.Interchange.Tests/Anode.Interchange.Tests.csproj"/>
+    <Project Path="tests/Anode.Media.Tests/Anode.Media.Tests.csproj"/>
     <Project Path="tests/Anode.Model.Tests/Anode.Model.Tests.csproj"/>
     <Project Path="tests/Anode.Notation.Tests/Anode.Notation.Tests.csproj"/>
     <Project Path="tests/Anode.Plugins.Tests/Anode.Plugins.Tests.csproj"/>

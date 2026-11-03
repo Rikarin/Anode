@@ -61,11 +61,15 @@ namespace Anode.Ipc;
 [JsonDerivedType(typeof(SendMidiMessage), "sendMidi")]
 [JsonDerivedType(typeof(SetSyncMessage), "setSync")]
 [JsonDerivedType(typeof(SyncStateMessage), "syncState")]
+[JsonDerivedType(typeof(SetMonitoringMessage), "setMonitoring")]
+[JsonDerivedType(typeof(SetMasterTapMessage), "setMasterTap")]
 public abstract record IpcMessage;
 
 /// <summary>
 ///     The first message each side sends. The server's carries only its version; the host answers with its own, its
-///     audio backend, the device it runs (rate, buffer, channels) and the name of its telemetry region.
+///     audio backend, the device it runs (rate, buffer, channels), the name of its telemetry region and (Phase 10) the
+///     name of its master tap ring (<see cref="Segments.MasterTapHeader" />, created with the telemetry region, written
+///     while <see cref="SetMasterTapMessage" /> has it on).
 /// </summary>
 public sealed record HelloMessage(
     string Version,
@@ -74,7 +78,8 @@ public sealed record HelloMessage(
     int BufferFrames = 0,
     int InputChannels = 0,
     int OutputChannels = 0,
-    string? TelemetryName = null
+    string? TelemetryName = null,
+    string? MasterTapName = null
 ) : IpcMessage;
 
 public sealed record PingMessage(long Id) : IpcMessage;
@@ -97,6 +102,13 @@ public sealed record EngineFile(int Id, string Path, int Channels, int SampleRat
 ///     runs them on the track's block MIDI (regions, live and step input) before the instrument, a bypassed slot
 ///     passing it through; <see cref="SetChannelMessage" /> keeps the instances whose id and plugin are unchanged, as
 ///     for inserts.
+///     <para>
+///         Phase 10 (docs/11-phase-10.md): <paramref name="InputFormat" /> and <paramref name="OutputFormat" /> are the
+///         strip's channel formats (the contract's <c>ChannelStrip.inputFormat</c> and <c>outputFormat</c>; the
+///         master's are the project's format, which every bus feeding it has as output) and <paramref name="Panner" />
+///         maps one to the other (null: the stereo pan, as before). The engine's buffers carry a strip's channels in its
+///         format's layout order (<c>Anode.Dsp.Spatial.SpeakerLayout</c>); a stereo strip costs what it did.
+///     </para>
 /// </summary>
 public sealed record EngineStrip(
     float Gain,
@@ -106,8 +118,84 @@ public sealed record EngineStrip(
     IReadOnlyList<EngineInsert>? Inserts = null,
     IReadOnlyList<EngineSend>? Sends = null,
     int Output = 0,
-    IReadOnlyList<EngineInsert>? MidiEffects = null
+    IReadOnlyList<EngineInsert>? MidiEffects = null,
+    EngineChannelFormat InputFormat = EngineChannelFormat.Stereo,
+    EngineChannelFormat OutputFormat = EngineChannelFormat.Stereo,
+    EnginePanner? Panner = null
 );
+
+/// <summary>The contract's <c>ChannelFormat</c>, in its order (and <c>Anode.Dsp.Spatial.SpeakerFormat</c>'s).</summary>
+[JsonConverter(typeof(JsonStringEnumConverter<EngineChannelFormat>))]
+public enum EngineChannelFormat {
+    [JsonStringEnumMemberName("mono")]
+    Mono,
+
+    [JsonStringEnumMemberName("stereo")]
+    Stereo,
+
+    [JsonStringEnumMemberName("lcr")]
+    Lcr,
+
+    [JsonStringEnumMemberName("quad")]
+    Quad,
+
+    [JsonStringEnumMemberName("surround50")]
+    Surround50,
+
+    [JsonStringEnumMemberName("surround51")]
+    Surround51,
+
+    [JsonStringEnumMemberName("surround70")]
+    Surround70,
+
+    [JsonStringEnumMemberName("surround71")]
+    Surround71,
+
+    [JsonStringEnumMemberName("surround712")]
+    Surround712,
+
+    [JsonStringEnumMemberName("surround714")]
+    Surround714,
+
+    [JsonStringEnumMemberName("surround916")]
+    Surround916
+}
+
+/// <summary>The contract's <c>PannerMode</c>.</summary>
+[JsonConverter(typeof(JsonStringEnumConverter<EnginePannerMode>))]
+public enum EnginePannerMode {
+    [JsonStringEnumMemberName("stereo")]
+    Stereo,
+
+    [JsonStringEnumMemberName("surround")]
+    Surround,
+
+    /// <summary>The strip's post-fader signal is an object the master renders; it adds nothing to the bed.</summary>
+    [JsonStringEnumMemberName("object")]
+    Object
+}
+
+/// <summary>
+///     The Surround Panner in engine units: angle, elevation and spread in degrees, diversity 0…1, the centre and LFE
+///     levels as linear gains (the contract's dB folded).
+/// </summary>
+public sealed record EngineSurroundPanner(
+    float Angle,
+    float Diversity,
+    float Elevation,
+    float CentreGain,
+    float LfeGain,
+    float Spread
+);
+
+/// <summary>An object's position: azimuth and elevation in degrees, distance and size 0…1.</summary>
+public sealed record EngineObjectPanner(float Azimuth, float Elevation, float Distance, float Size);
+
+/// <summary>
+///     A strip's panner: the mode, and the settings of the Surround and Object Panners (both sent, the mode's
+///     applies).
+/// </summary>
+public sealed record EnginePanner(EnginePannerMode Mode, EngineSurroundPanner Surround, EngineObjectPanner Object);
 
 /// <summary>
 ///     An insert effect: the plugin, bypass, parameter values by id, saved opaque state (base64), and its sidechain
@@ -211,8 +299,12 @@ public sealed record LoadModelMessage(
 ///     send <paramref name="Id" />), <c>insert</c> (parameter <paramref name="ParameterId" /> of insert
 ///     <paramref name="Id" />), <c>midiEffect</c> (parameter <paramref name="ParameterId" /> of MIDI FX slot
 ///     <paramref name="Id" />, Phase 6) or <c>instrument</c> (its parameter); on engine track
-///     <paramref name="TrackId" /> (−1: the master). Sent with every model; indices are stable while the project is
-///     open. (Smart Control automation reaches the engine as automation of the parameters it maps.)
+///     <paramref name="TrackId" /> (−1: the master). Phase 10: <c>surround</c> (<paramref name="ParameterId" />
+///     <c>angle</c>, <c>diversity</c>, <c>elevation</c>, <c>centre</c>, <c>lfe</c> or <c>spread</c>) and <c>object</c>
+///     (<c>azimuth</c>, <c>elevation</c>, <c>distance</c> or <c>size</c>) drive the strip's panners, in the units of
+///     <see cref="EngineSurroundPanner" /> and <see cref="EngineObjectPanner" /> (the server folds dB into gains).
+///     Sent with every model; indices are stable while the project is open. (Smart Control automation reaches the
+///     engine as automation of the parameters it maps.)
 /// </summary>
 public sealed record EngineAutomationTarget(
     int Index,
@@ -734,3 +826,26 @@ public sealed record SetSyncMessage(
 /// </summary>
 public sealed record SyncStateMessage(EngineSyncSource Source, bool Locked, double? ExternalTempo, int LinkPeers)
     : IpcMessage;
+
+/// <summary>
+///     Server → host (Phase 10, docs/11-phase-10.md): monitoring (the user settings' <c>MonitoringSettings</c>), sent on
+///     every connection and on every change, and when the project's format changes. It happens after the master and
+///     before the device, never in renders: with <paramref name="Binaural" /> the master's channels (and objects) are
+///     rendered through the HRTF set <paramref name="HrtfPath" /> (Anode's compact file) to outputs 1–2; otherwise
+///     with <paramref name="DownmixTo" /> they are down-mixed to that format (null: sent as they are). Channel i of what
+///     is sent goes to 0-based device output <paramref name="SpeakerMap" />[i] (−1: not sent; past the map's end:
+///     output i). The host prepares the renderer off the audio thread and swaps it in.
+/// </summary>
+public sealed record SetMonitoringMessage(
+    bool Binaural,
+    EngineChannelFormat? DownmixTo,
+    IReadOnlyList<int> SpeakerMap,
+    string? HrtfPath = null
+) : IpcMessage;
+
+/// <summary>
+///     Server → host (Phase 10): whether the audio callback writes the master tap ring (the hello's
+///     <c>MasterTapName</c>, <see cref="Segments.MasterTapHeader" />): on while someone listens in. The tap is the
+///     master after its inserts and fader (its stereo down-mix for a surround master), never the monitoring render.
+/// </summary>
+public sealed record SetMasterTapMessage(bool Enabled) : IpcMessage;

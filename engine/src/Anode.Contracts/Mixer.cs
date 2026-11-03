@@ -76,7 +76,12 @@ public sealed record AutomationPoint(long Tick, double Value, double Curve);
 ///     <c>pan</c> (−1…1), <c>mute</c> (0/1), <c>send:{sendId}</c> (dB), <c>insert:{insertId}:{parameterId}</c> or
 ///     <c>instrument:{parameterId}</c> (the parameter's unit). Phase 6 adds <c>midiEffect:{slotId}:{parameterId}</c> (a
 ///     MIDI FX slot's parameter) and <c>smartControl:{controlId}</c> (0…1; it compiles to automation of every
-///     parameter the control maps). Points are sorted by tick.
+///     parameter the control maps). Phase 10 (docs/11-phase-10.md) adds the panners' parameters
+///     (<see cref="PannerTargets" />): <c>surround:angle</c> (degrees), <c>surround:diversity</c> (0…1),
+///     <c>surround:elevation</c> (degrees), <c>surround:centre</c> and <c>surround:lfe</c> (dB),
+///     <c>surround:spread</c> (degrees), <c>object:azimuth</c> and <c>object:elevation</c> (degrees),
+///     <c>object:distance</c> and <c>object:size</c> (0…1); they play whatever the strip's panner mode (only the mode's
+///     panner sounds). Points are sorted by tick.
 /// </summary>
 public sealed record AutomationLane(string Id, string? TrackId, string Target, IReadOnlyList<AutomationPoint> Points);
 

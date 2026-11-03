@@ -1,0 +1,5 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <ProjectReference Include="../../src/Anode.Media/Anode.Media.csproj"/>
+  </ItemGroup>
+</Project>

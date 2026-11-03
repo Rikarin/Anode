@@ -8,6 +8,7 @@ import {
   type AutomationLane,
   type ChannelStrip,
   type CommandResult,
+  DefaultPanner,
   type DeltaOp,
   type EditCommand,
   EmptyProjectScore,
@@ -17,6 +18,7 @@ import {
   type Marker,
   type MidiRegion,
   type MixerGroup,
+  type Movie,
   type PatternRegion,
   type Project,
   type ProjectDelta,
@@ -60,7 +62,8 @@ export const DefaultSettings: ProjectSettings = {
   mixer: { pdc: 'all', lowLatency: false, lowLatencyLimitMs: 10 },
   smartTempo: { mode: 'keep', defaultFollow: 'off', analyzeImports: true },
   varispeed: { enabled: false, mode: 'speedOnly', speed: 1 },
-  sync: { source: 'internal', destinations: [], frameRate: 'fps25', startOffsetSeconds: 0, linkStartStop: false }
+  sync: { source: 'internal', destinations: [], frameRate: 'fps25', startOffsetSeconds: 0, linkStartStop: false },
+  surroundFormat: 'stereo'
 };
 
 const SilentStrip: ChannelStrip = {
@@ -73,7 +76,10 @@ const SilentStrip: ChannelStrip = {
   output: 'master',
   groups: [],
   vcaId: null,
-  midiEffects: []
+  midiEffects: [],
+  inputFormat: 'stereo',
+  outputFormat: 'stereo',
+  panner: DefaultPanner
 };
 
 /** A new project's Live Loops grid: empty, launching on the bar, hidden. */
@@ -143,6 +149,8 @@ export class ProjectStore {
   readonly laneSets = signal<ReadonlyMap<string, LaneSet>>(new Map());
   /** The stored score content: staff styles, symbols, lyrics, chord symbols, score sets and layout (Phase 9). */
   readonly score = signal<ProjectScore>(EmptyProjectScore);
+  /** The project's movie (Phase 10); null: none. */
+  readonly movie = signal<Movie | null>(null);
   /** A project is being opened, created or refetched. */
   readonly loading = signal(false);
 
@@ -234,6 +242,8 @@ export class ProjectStore {
     this.articulationSets.set(new Map(project.articulationSets.map(a => [a.id, a])));
     this.laneSets.set(new Map(project.laneSets.map(l => [l.id, l])));
     this.score.set(project.score);
+    // A real Server leaves a null movie out (WhenWritingNull).
+    this.movie.set(project.movie ?? null);
   }
 
   /** No project open. */
@@ -262,6 +272,7 @@ export class ProjectStore {
     this.articulationSets.set(new Map());
     this.laneSets.set(new Map());
     this.score.set(EmptyProjectScore);
+    this.movie.set(null);
   }
 
   /** Fetches the open project (or learns that none is), replacing what the store has. Concurrent calls share one. */
@@ -710,6 +721,10 @@ export class ProjectStore {
         this.score.update(score => ({ ...score, layout }));
         break;
       }
+      // The movie (Phase 10): set, moved or removed.
+      case 'movieChanged':
+        this.movie.set(op.movie ?? null);
+        break;
     }
   }
 

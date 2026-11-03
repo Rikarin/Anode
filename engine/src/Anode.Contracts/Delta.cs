@@ -50,6 +50,7 @@ public sealed record ProjectDelta(long Revision, IReadOnlyList<DeltaOp> Ops);
 [JsonDerivedType(typeof(ScoreSetUpserted), "scoreSetUpserted")]
 [JsonDerivedType(typeof(ScoreSetRemoved), "scoreSetRemoved")]
 [JsonDerivedType(typeof(ScoreLayoutChanged), "scoreLayoutChanged")]
+[JsonDerivedType(typeof(MovieChanged), "movieChanged")]
 public abstract record DeltaOp;
 
 /// <summary>A track was added or changed; <c>index</c> is its position in the track list.</summary>
@@ -152,3 +153,9 @@ public sealed record ScoreSetRemoved(string Id) : DeltaOp;
 
 /// <summary>Phase 9: the score layout changed.</summary>
 public sealed record ScoreLayoutChanged(ScoreLayout Layout) : DeltaOp;
+
+/// <summary>
+///     Phase 10 (docs/11-phase-10.md): the project's movie was set, moved or removed (null). Formats and panners come as
+///     <c>trackUpserted</c>, <c>masterChanged</c> and <c>settingsChanged</c>; scene markers as <c>markerUpserted</c>.
+/// </summary>
+public sealed record MovieChanged(Movie? Movie) : DeltaOp;

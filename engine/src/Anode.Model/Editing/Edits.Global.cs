@@ -142,7 +142,8 @@ public static partial class Edits {
             c.Tick,
             c.LengthTicks,
             c.Color is null ? null : Color(c.Color),
-            string.Empty
+            string.Empty,
+            c.Kind ?? MarkerKind.Marker
         );
         return [new MarkerUpserted(marker)];
     }

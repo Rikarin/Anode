@@ -1,4 +1,4 @@
-import type { Send, Track } from '@anode/api-client';
+import { DefaultPanner, type Send, type Track } from '@anode/api-client';
 import { effectMenu, pluginLabel } from './plugin-menu';
 import {
   busChoices,
@@ -30,7 +30,10 @@ function track(id: string, extra: Partial<Track> = {}, output = 'master', sends:
       output,
       groups: [],
       vcaId: null,
-      midiEffects: []
+      midiEffects: [],
+      inputFormat: 'stereo',
+      outputFormat: 'stereo',
+      panner: DefaultPanner
     },
     instrument: null,
     midiInput: { device: null, channel: 0 },

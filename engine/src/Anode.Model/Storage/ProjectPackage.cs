@@ -478,9 +478,13 @@ public static class ProjectPackage {
                 && Enum.IsDefined(varispeed.Mode)
                     ? varispeed
                     : ProjectDefaults.Varispeed,
-            GrooveTrackId = GrooveTrack(settings.GrooveTrackId, tracks)
+            GrooveTrackId = GrooveTrack(settings.GrooveTrackId, tracks),
+            SurroundFormat = Known(settings.SurroundFormat)
         };
     }
+
+    /// <summary>A channel format as read: one there is, else stereo (Phase 10).</summary>
+    static ChannelFormat Known(ChannelFormat format) => Enum.IsDefined(format) ? format : ChannelFormat.Stereo;
 
     /// <summary>The groove track as read: a track of the project with regions to take a groove from, or none.</summary>
     static string? GrooveTrack(string? id, ImmutableList<Track>.Builder tracks) =>
@@ -779,6 +783,11 @@ public static class ProjectPackage {
             Sends = full && track is not null ? [..sends] : [],
             Output = Routing.Normalise(strip.Output) ?? Routing.Master,
             Groups = strip.Groups ?? [],
+            InputFormat = Known(strip.InputFormat),
+            OutputFormat = Known(strip.OutputFormat),
+            Panner = strip.Panner is { Surround: not null, Object: not null } panner && Enum.IsDefined(panner.Mode)
+                ? panner
+                : Panner.Default,
             MidiEffects = track is not null && Edits.IsMidiKind(track.Kind)
                 ? [
                     ..(strip.MidiEffects ?? []).Where(static i => i?.Id is not null && i.PluginId is not null)
@@ -934,6 +943,7 @@ public static class PackageMigrations {
         }
 
         json[VersionField] = CurrentSchemaVersion;
+        Phase10Fields.Fill(kind, json);
         return json;
     }
 
@@ -1141,6 +1151,38 @@ public static class PackageMigrations {
     static JsonObject ToSchema9(string kind, JsonObject json) {
         Schema9.Fill(kind, json);
         return json;
+    }
+}
+
+/// <summary>
+///     The Phase 10 fields (docs/11-phase-10.md) at their defaults where a file lacks them, so schema-9 packages read
+///     with the Phase 10 contracts: interim, until workstream B adds schema 10 and its migration from 9 (which replaces
+///     this, with the same defaults). The project is stereo (<c>settings.surroundFormat</c>), every strip (the master's
+///     and each track's) is stereo in and out with <see cref="Panner.Default" />, and every marker is of kind
+///     <c>marker</c>; there is no movie (not stored yet: the project answers null). Leaves fields that are present alone.
+/// </summary>
+static class Phase10Fields {
+    public static void Fill(string kind, JsonObject json) {
+        if (kind == "project") {
+            if (json["settings"] is JsonObject settings) {
+                settings["surroundFormat"] ??= "stereo";
+            }
+
+            Strip(json["master"] as JsonObject);
+            foreach (var marker in (json["markers"] as JsonArray ?? []).OfType<JsonObject>()) {
+                marker["kind"] ??= "marker";
+            }
+        } else if (kind == "track") {
+            Strip(json["track"]?["strip"] as JsonObject);
+        }
+    }
+
+    static void Strip(JsonObject? strip) {
+        if (strip is not null) {
+            strip["inputFormat"] ??= "stereo";
+            strip["outputFormat"] ??= "stereo";
+            strip["panner"] ??= JsonSerializer.SerializeToNode(Panner.Default, PackageJsonContext.Default.Panner);
+        }
     }
 }
 

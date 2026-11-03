@@ -3,6 +3,7 @@ import {
   type AutomationLane,
   type AutomationPoint,
   type ChannelStrip,
+  DefaultPanner,
   type EditCommand,
   type GroupProperties,
   type Insert,
@@ -314,7 +315,10 @@ function newTrack(project: Project, kind: 'aux' | 'vca', name: string, inputBus:
       output: 'master',
       groups: [],
       vcaId: null,
-      midiEffects: []
+      midiEffects: [],
+      inputFormat: 'stereo',
+      outputFormat: 'stereo',
+      panner: structuredClone(DefaultPanner)
     },
     instrument: null,
     midiInput: { device: null, channel: 0 },

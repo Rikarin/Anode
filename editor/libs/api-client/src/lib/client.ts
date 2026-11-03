@@ -108,3 +108,29 @@ export function eventsUrl(connection: Connection): string {
 
   return url.toString();
 }
+
+/**
+ * The listen-in WebSocket's URL (Phase 10, `/api/v1/remote/listen`; `ListenIn` in models.ts says what it sends), the
+ * token as a query parameter as for {@link eventsUrl}.
+ */
+export function listenInUrl(connection: Connection): string {
+  const url = new URL(mediaUrl(connection, '/api/v1/remote/listen'));
+  url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
+  return url.toString();
+}
+
+/**
+ * The URL of a Server resource an element loads itself (Phase 10: the movie for `<video src>`, a thumbnail for
+ * `<img src>`), which cannot send headers: the token as a query parameter, with `query`'s parameters.
+ */
+export function mediaUrl(connection: Connection, path: string, query: Record<string, string | number> = {}): string {
+  const url = new URL(path, connection.baseUrl);
+  for (const [key, value] of Object.entries(query)) {
+    url.searchParams.set(key, String(value));
+  }
+  if (connection.token) {
+    url.searchParams.set('access_token', connection.token);
+  }
+
+  return url.toString();
+}

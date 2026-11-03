@@ -79,6 +79,8 @@ public static partial class Edits {
                 Instrument = null,
                 DrumMachine = new([]),
                 SmartControls = null,
+                // A stack holds no MIDI, so it has no staff style (as a saved package reads it).
+                StaffStyleId = null,
                 Strip = ProjectDefaults.Strip with {
                     VolumeDb = strip.VolumeDb,
                     Pan = strip.Pan,

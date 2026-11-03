@@ -80,7 +80,9 @@ public sealed record MidiImportRequest(
 ///     controller ids too), are provisional: unique within the <see cref="ImportedContent" />, replaced by the model.
 ///     <c>kind</c> is <c>instrument</c> (MIDI regions, the default synth) or <c>audio</c> (audio regions, whose
 ///     <c>fileId</c> is a file of the project: the job adds the media first). <c>staffStyleId</c> is a factory style or
-///     one of the content's score staff styles (null: the default).
+///     one of the content's score staff styles (null: the default). Phase 10 (docs/11-phase-10.md): <c>inputFormat</c>
+///     and <c>panner</c> set its strip's (null: stereo, the default panner; an ADM import's beds and objects), and
+///     <c>automation</c> are its lanes (provisional ids, their <c>trackId</c> ignored; an object's positions).
 /// </summary>
 public sealed record ImportedTrack(
     string Id,
@@ -88,7 +90,10 @@ public sealed record ImportedTrack(
     TrackKind Kind,
     string? StaffStyleId,
     IReadOnlyList<MidiRegion> MidiRegions,
-    IReadOnlyList<AudioRegion> Regions
+    IReadOnlyList<AudioRegion> Regions,
+    ChannelFormat? InputFormat = null,
+    Panner? Panner = null,
+    IReadOnlyList<AutomationLane>? Automation = null
 );
 
 /// <summary>

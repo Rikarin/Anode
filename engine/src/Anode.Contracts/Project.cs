@@ -12,7 +12,8 @@ public sealed record ProjectSummary(string Id, string Name, string Path, DateTim
 ///     are the Step Sequencer's regions; <c>liveLoops</c> is the Live Loops grid. Phase 7 (docs/08-phase-7.md):
 ///     <c>grooves</c> are the project's groove templates, <c>articulationSets</c> its articulation sets and
 ///     <c>laneSets</c> its Step Editor lane sets. Phase 9 (docs/10-phase-9.md): <c>score</c> is its stored score content
-///     (staff styles, symbols, lyrics, chord symbols, score sets, layout).
+///     (staff styles, symbols, lyrics, chord symbols, score sets, layout). Phase 10 (docs/11-phase-10.md): <c>movie</c>
+///     is its movie (null: none).
 /// </summary>
 public sealed record Project(
     string Id,
@@ -38,7 +39,8 @@ public sealed record Project(
     IReadOnlyList<GrooveTemplate> Grooves,
     IReadOnlyList<ArticulationSet> ArticulationSets,
     IReadOnlyList<LaneSet> LaneSets,
-    ProjectScore Score
+    ProjectScore Score,
+    Movie? Movie
 );
 
 /// <summary>
@@ -49,6 +51,8 @@ public sealed record Project(
 ///     <c>varispeed</c> (Phase 5): the project tempo mode and Varispeed. <c>grooveTrackId</c> (Phase 7) is the groove
 ///     track (null: none): tracks whose <c>matchGroove</c> is on quantise to the groove of its first region. <c>sync</c>
 ///     (Phase 8, docs/09-phase-8.md) is the project's synchronisation: MIDI Clock, MTC and Link.
+///     <c>surroundFormat</c> (Phase 10, docs/11-phase-10.md) is the project's channel format: the master's, and what
+///     strips feeding the master output (stereo: as before Phase 10).
 /// </summary>
 public sealed record ProjectSettings(
     double Tempo,
@@ -65,7 +69,8 @@ public sealed record ProjectSettings(
     SmartTempoSettings SmartTempo,
     VarispeedSettings Varispeed,
     string? GrooveTrackId,
-    SyncSettings Sync
+    SyncSettings Sync,
+    ChannelFormat SurroundFormat
 );
 
 public sealed record TimeSignature(int Numerator, int Denominator);
@@ -158,6 +163,17 @@ public sealed record TrackInput(int Channel, bool Stereo);
 ///     <c>midiEffects</c> are its MIDI FX slots (instrument and external MIDI tracks only; empty elsewhere), in the
 ///     same shape as inserts: they run in slot order on the block's MIDI (regions, live and step input) before the
 ///     instrument; bypassed slots pass it through.
+///     <para>
+///         Phase 10 (docs/11-phase-10.md): <c>inputFormat</c> is the format of the signal the strip processes before its
+///         panner (an audio track's recording and regions, an instrument's output, an aux's bus: an aux's input format
+///         is its bus's format); <c>outputFormat</c> is its destination's format, kept by the server (the master's is
+///         the project's <c>surroundFormat</c>, a bus's its aux's input format, a device output pair stereo; the
+///         master's input and output are the project's). <c>panner</c> maps the input channels to the output: stereo
+///         pan (<c>pan</c>) for a stereo output, the Surround Panner, or an object (<see cref="PannerMode" />); an input
+///         of the output's format passes straight through. Sends to a multichannel bus are panned by the strip's panner
+///         (their <c>pan</c> applies to stereo buses only). Every strip of a project from before Phase 10 is stereo in
+///         and out with the stereo panner.
+///     </para>
 /// </summary>
 public sealed record ChannelStrip(
     double VolumeDb,
@@ -169,7 +185,10 @@ public sealed record ChannelStrip(
     string Output,
     IReadOnlyList<int> Groups,
     string? VcaId,
-    IReadOnlyList<Insert> MidiEffects
+    IReadOnlyList<Insert> MidiEffects,
+    ChannelFormat InputFormat,
+    ChannelFormat OutputFormat,
+    Panner Panner
 );
 
 /// <summary>

@@ -313,6 +313,210 @@ export const EmptyProjectScore: ProjectScore = {
   layout: DefaultScoreLayout
 };
 
+// ---- Phase 10 (docs/11-phase-10.md): surround, video, remote
+
+export type ChannelFormat = Schemas['ChannelFormat'];
+export type PannerMode = Schemas['PannerMode'];
+export type SurroundPanner = Schemas['SurroundPanner'];
+export type ObjectPanner = Schemas['ObjectPanner'];
+export type Panner = Schemas['Panner'];
+export type MonitoringSettings = Schemas['MonitoringSettings'];
+export type AdmExportRequest = Schemas['AdmExportRequest'];
+export type AdmImportRequest = Schemas['AdmImportRequest'];
+export type VideoFrameRate = Schemas['VideoFrameRate'];
+export type MovieAudio = Schemas['MovieAudio'];
+export type Movie = Schemas['Movie'];
+export type MarkerKind = Schemas['MarkerKind'];
+export type MovieImportRequest = Schemas['MovieImportRequest'];
+export type ThumbnailsRequest = Schemas['ThumbnailsRequest'];
+export type MovieThumbnails = Schemas['MovieThumbnails'];
+export type SceneDetectRequest = Schemas['SceneDetectRequest'];
+export type MovieAudioImportRequest = Schemas['MovieAudioImportRequest'];
+export type MovieAudioCodec = Schemas['MovieAudioCodec'];
+export type MovieAudioExportRequest = Schemas['MovieAudioExportRequest'];
+export type DiscoveryInfo = Schemas['DiscoveryInfo'];
+export type KeyCommandPad = Schemas['KeyCommandPad'];
+export type PadSet = Schemas['PadSet'];
+export type RemotePads = Schemas['RemotePads'];
+export type ListenInState = Schemas['ListenInState'];
+
+/**
+ * A speaker of a layout (engine/src/Anode.Contracts/Spatial.cs, `Speaker`): its ADM label and nominal position in
+ * degrees (azimuth positive to the left, elevation positive up); `lfe` marks the LFE channel.
+ */
+export interface Speaker {
+  label: string;
+  azimuth: number;
+  elevation: number;
+  lfe: boolean;
+}
+
+/** A channel format's speakers in buffer order (`SpeakerLayout`): display name, BS.2051 system name (or null). */
+export interface SpeakerLayout {
+  format: ChannelFormat;
+  name: string;
+  ituName: string | null;
+  speakers: readonly Speaker[];
+}
+
+function speaker(label: string, azimuth: number, elevation = 0, lfe = false): Speaker {
+  return { label, azimuth, elevation, lfe };
+}
+
+const L = speaker('M+030', 30);
+const R = speaker('M-030', -30);
+const C = speaker('M+000', 0);
+const Lfe = speaker('LFE1', 45, -30, true);
+const Ls = speaker('M+110', 110);
+const Rs = speaker('M-110', -110);
+const Lss = speaker('M+090', 90);
+const Rss = speaker('M-090', -90);
+const Lrs = speaker('M+135', 135);
+const Rrs = speaker('M-135', -135);
+const Lw = speaker('M+060', 60);
+const Rw = speaker('M-060', -60);
+const Ltf = speaker('U+045', 45, 30);
+const Rtf = speaker('U-045', -45, 30);
+const Ltm = speaker('U+090', 90, 30);
+const Rtm = speaker('U-090', -90, 30);
+const Ltr = speaker('U+135', 135, 30);
+const Rtr = speaker('U-135', -135, 30);
+
+/**
+ * Every channel format's layout (engine/src/Anode.Contracts/Spatial.cs, `SpeakerLayouts`, ITU-R BS.2051 positions),
+ * keyed by format; channels in the ADM/SMPTE order (L, R, C, LFE, sides before rears, wides, the upper layer).
+ */
+export const SpeakerLayouts: Readonly<Record<ChannelFormat, SpeakerLayout>> = {
+  mono: { format: 'mono', name: '1.0', ituName: null, speakers: [C] },
+  stereo: { format: 'stereo', name: '2.0', ituName: '0+2+0', speakers: [L, R] },
+  lcr: { format: 'lcr', name: '3.0', ituName: null, speakers: [L, R, C] },
+  quad: {
+    format: 'quad',
+    name: '4.0',
+    ituName: null,
+    speakers: [speaker('M+045', 45), speaker('M-045', -45), Lrs, Rrs]
+  },
+  surround50: { format: 'surround50', name: '5.0', ituName: null, speakers: [L, R, C, Ls, Rs] },
+  surround51: { format: 'surround51', name: '5.1', ituName: '0+5+0', speakers: [L, R, C, Lfe, Ls, Rs] },
+  surround70: { format: 'surround70', name: '7.0', ituName: null, speakers: [L, R, C, Lss, Rss, Lrs, Rrs] },
+  surround71: { format: 'surround71', name: '7.1', ituName: '0+7+0', speakers: [L, R, C, Lfe, Lss, Rss, Lrs, Rrs] },
+  surround712: {
+    format: 'surround712',
+    name: '7.1.2',
+    ituName: null,
+    speakers: [L, R, C, Lfe, Lss, Rss, Lrs, Rrs, Ltm, Rtm]
+  },
+  surround714: {
+    format: 'surround714',
+    name: '7.1.4',
+    ituName: '4+7+0',
+    speakers: [L, R, C, Lfe, Lss, Rss, Lrs, Rrs, Ltf, Rtf, Ltr, Rtr]
+  },
+  surround916: {
+    format: 'surround916',
+    name: '9.1.6',
+    ituName: null,
+    speakers: [L, R, C, Lfe, Lss, Rss, Lrs, Rrs, Lw, Rw, Ltf, Rtf, Ltm, Rtm, Ltr, Rtr]
+  }
+};
+
+/** A new strip's Surround Panner (`SurroundPanner.Default`): front centre as a point, no LFE, a stereo input at ±30°. */
+export const DefaultSurroundPanner: SurroundPanner = {
+  angle: 0,
+  diversity: 1,
+  elevation: 0,
+  centreLevelDb: 0,
+  lfeLevelDb: -144,
+  spread: 60
+};
+
+/** A new strip's 3D Object Panner (`ObjectPanner.Default`): straight ahead, at ear height, on the sphere, a point. */
+export const DefaultObjectPanner: ObjectPanner = { azimuth: 0, elevation: 0, distance: 1, size: 0 };
+
+/** A new strip's panner (`Panner.Default`): stereo pan, the other panners at their defaults. */
+export const DefaultPanner: Panner = {
+  mode: 'stereo',
+  surround: DefaultSurroundPanner,
+  object: DefaultObjectPanner
+};
+
+/** The panners' automation and Smart Control addresses (`PannerTargets`). */
+export const PannerTargets = {
+  surroundAngle: 'surround:angle',
+  surroundDiversity: 'surround:diversity',
+  surroundElevation: 'surround:elevation',
+  surroundCentre: 'surround:centre',
+  surroundLfe: 'surround:lfe',
+  surroundSpread: 'surround:spread',
+  objectAzimuth: 'object:azimuth',
+  objectElevation: 'object:elevation',
+  objectDistance: 'object:distance',
+  objectSize: 'object:size'
+} as const;
+
+/** A new user's monitoring (`MonitoringSettings.Default`): speakers, no down-mix, channel i to output i + 1. */
+export const DefaultMonitoringSettings: MonitoringSettings = { binaural: false, downmixTo: null, speakerMap: [] };
+
+/** The DNS-SD advertisement (`Discovery`): service type and TXT keys. */
+export const Discovery = {
+  serviceType: '_anode._tcp',
+  txtVersion: 'version',
+  txtProject: 'project',
+  txtPairing: 'pairing',
+  txtPath: 'path'
+} as const;
+
+/**
+ * The listen-in WebSocket's frames (`ListenIn`): after a `ListenInFormat` text message, one binary message per Opus
+ * frame: a 16-byte little-endian header (uint32 sequence at 0, int64 transport sample at 4 (−1 stopped), uint16 packet
+ * length at 12, uint8 flags at 14), then the packet. At most four listeners.
+ */
+export const ListenIn = {
+  maxListeners: 4,
+  sampleRate: 48_000,
+  channels: 2,
+  frameSamples: 960,
+  bitrate: 128_000,
+  headerBytes: 16,
+  flagPlaying: 1,
+  flagDiscontinuity: 2
+} as const;
+
+/** The first (text) message on the listen-in socket (`ListenInFormat`; not in the OpenAPI document). */
+export interface ListenInFormat {
+  sampleRate: number;
+  channels: number;
+  frameSamples: number;
+  bitrate: number;
+  projectSampleRate: number;
+}
+
+/** A listen-in frame's header and packet, as {@link readListenInFrame} reads it. */
+export interface ListenInFrame {
+  sequence: number;
+  transportSample: number;
+  flags: number;
+  packet: Uint8Array;
+}
+
+/** Reads a listen-in binary message (`ListenIn.TryReadHeader`); null when it is too short for its header and packet. */
+export function readListenInFrame(message: ArrayBuffer): ListenInFrame | null {
+  if (message.byteLength < ListenIn.headerBytes) {
+    return null;
+  }
+  const view = new DataView(message);
+  const length = view.getUint16(12, true);
+  if (message.byteLength < ListenIn.headerBytes + length) {
+    return null;
+  }
+  return {
+    sequence: view.getUint32(0, true),
+    transportSample: Number(view.getBigInt64(4, true)),
+    flags: view.getUint8(14),
+    packet: new Uint8Array(message, ListenIn.headerBytes, length)
+  };
+}
+
 /** Anode's virtual MIDI ports' fixed ids (engine/src/Anode.Contracts/Control.cs, `VirtualMidiPorts`; macOS only). */
 export const VirtualMidiPorts = { inputId: 'anode:in', outputId: 'anode:out' } as const;
 
@@ -365,7 +569,8 @@ export interface MidiActivity {
  * made, if any; `sync` the sync state when it changes (at most 10 a second); `surfaces` every control surface's status
  * when one connects, disconnects or banks; `selection` the selected track when hardware or OSC changed it (the editor
  * follows; not sent for its own `PUT /project/selection`); `keyCommand` a key command a controller or OSC asked for
- * that the Server does not run itself (the editor runs it).
+ * that the Server does not run itself (the editor runs it). Phase 10: `listenIn` the listen-in state when it starts or
+ * stops, a listener comes or goes, or the Server's delay changes.
  */
 export type ServerMessage =
   | { type: 'connected'; version: string }
@@ -391,4 +596,5 @@ export type ServerMessage =
   | { type: 'sync'; state: SyncState }
   | { type: 'surfaces'; surfaces: SurfaceStatus[] }
   | { type: 'selection'; trackId: string | null }
-  | { type: 'keyCommand'; id: string };
+  | { type: 'keyCommand'; id: string }
+  | { type: 'listenIn'; state: ListenInState };

@@ -1,4 +1,5 @@
-import { ApiError, createAnodeClient, eventsUrl, unwrap } from './client';
+import { ApiError, createAnodeClient, eventsUrl, listenInUrl, mediaUrl, unwrap } from './client';
+import { ListenIn, readListenInFrame } from './models';
 
 describe('api-client', () => {
   it('sends the bearer token on every request', async () => {
@@ -74,5 +75,32 @@ describe('api-client', () => {
       'wss://studio.local:5190/ws?access_token=a+b'
     );
     expect(eventsUrl({ baseUrl: 'http://127.0.0.1:5190', token: null })).toBe('ws://127.0.0.1:5190/ws');
+  });
+
+  it('builds the listen-in and media URLs with the token as a query parameter (Phase 10)', () => {
+    expect(listenInUrl({ baseUrl: 'https://studio.local:5190', token: 't' })).toBe(
+      'wss://studio.local:5190/api/v1/remote/listen?access_token=t'
+    );
+    expect(
+      mediaUrl({ baseUrl: 'http://127.0.0.1:5190', token: null }, '/api/v1/project/movie/frames/12', { height: 64 })
+    ).toBe('http://127.0.0.1:5190/api/v1/project/movie/frames/12?height=64');
+  });
+
+  it('reads a listen-in frame as the engine writes it (Phase 10, ListenIn)', () => {
+    const message = new ArrayBuffer(ListenIn.headerBytes + 3);
+    const view = new DataView(message);
+    view.setUint32(0, 7, true);
+    view.setBigInt64(4, 123_456_789_012n, true);
+    view.setUint16(12, 3, true);
+    view.setUint8(14, ListenIn.flagPlaying);
+    new Uint8Array(message, ListenIn.headerBytes).fill(9);
+    const frame = readListenInFrame(message);
+    expect(frame && { ...frame, packet: [...frame.packet] }).toEqual({
+      sequence: 7,
+      transportSample: 123_456_789_012,
+      flags: ListenIn.flagPlaying,
+      packet: [9, 9, 9]
+    });
+    expect(readListenInFrame(message.slice(0, ListenIn.headerBytes + 2))).toBeNull();
   });
 });

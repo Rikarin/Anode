@@ -64,7 +64,9 @@ sealed class TestProject {
     }
 
     public TestProject Marker(string id, string name, long tick) {
-        State = State with { Markers = State.Markers.SetItem(id, new(id, name, tick, 0, null, string.Empty)) };
+        State = State with {
+            Markers = State.Markers.SetItem(id, new(id, name, tick, 0, null, string.Empty, MarkerKind.Marker))
+        };
         return this;
     }
 

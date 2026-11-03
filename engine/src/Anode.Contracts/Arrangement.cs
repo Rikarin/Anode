@@ -34,8 +34,19 @@ public enum KeyMode {
 /// <summary>A key change; <c>tonic</c> is a pitch class 0 (C) … 11 (B). The first is at tick 0.</summary>
 public sealed record KeyEvent(long Tick, int Tonic, KeyMode Mode);
 
-/// <summary>A marker: a named position, with an optional length, colour and text (Logic's Marker List).</summary>
-public sealed record Marker(string Id, string Name, long Tick, long LengthTicks, string? Color, string Text);
+/// <summary>
+///     A marker: a named position, with an optional length, colour and text (Logic's Marker List). <c>kind</c> (Phase 10,
+///     docs/11-phase-10.md) tells a scene marker (Detect Scene Cuts) from the user's.
+/// </summary>
+public sealed record Marker(
+    string Id,
+    string Name,
+    long Tick,
+    long LengthTicks,
+    string? Color,
+    string Text,
+    MarkerKind Kind
+);
 
 /// <summary>
 ///     A section of the song on the arrangement track (Intro, Verse, Chorus). Sections do not overlap; moving or copying

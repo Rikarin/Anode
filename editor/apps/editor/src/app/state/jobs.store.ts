@@ -32,7 +32,14 @@ const JobNames: Record<JobKind, string> = {
   aafExport: 'AAF export',
   aafImport: 'AAF import',
   midiExport: 'MIDI file export',
-  midiImport: 'MIDI file import'
+  midiImport: 'MIDI file import',
+  admExport: 'ADM BWF export',
+  admImport: 'ADM BWF import',
+  movieImport: 'Movie import',
+  movieAudioImport: 'Import audio from movie',
+  movieAudioExport: 'Export audio to movie',
+  sceneDetect: 'Scene cut detection',
+  thumbnails: 'Movie thumbnails'
 };
 
 /** A file's name from its absolute path. */

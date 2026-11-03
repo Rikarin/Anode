@@ -136,6 +136,8 @@ public static partial class Edits {
         IScoreNotation? notation = null
     ) =>
         command switch {
+            // Scene markers and imported formats, panners and automation: Phase 10, workstream B (docs/11-phase-10.md).
+            _ when UsesPhase10Fields(command) => throw Phase10Pending($"{command.GetType().Name} with Phase 10 fields"),
             AddTrackCommand c => AddTrack(state, c, ids, plugins),
             RemoveTrackCommand c => RemoveTrack(state, c),
             MoveTrackCommand c => MoveTrack(state, c),
@@ -221,6 +223,7 @@ public static partial class Edits {
                 ?? Phase7Ops(state, command, ids, analysis ?? NoAnalysis.Instance)
                 ?? Phase8Ops(state, command, ids, plugins)
                 ?? Phase9Ops(state, command, ids, plugins, notation ?? NoScoreNotation.Instance)
+                ?? Phase10Ops(command)
                 ?? throw new EditException($"Unknown command {command.GetType().Name}.")
         };
 

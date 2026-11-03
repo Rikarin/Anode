@@ -5,6 +5,8 @@ import {
   type AddLoopRequest,
   type AddSurfaceRequest,
   type AddToLoopLibraryRequest,
+  type AdmExportRequest,
+  type AdmImportRequest,
   ApiError,
   type ArticulationSet,
   type AudioEditOperation,
@@ -17,6 +19,7 @@ import {
   type ControllerAssignments,
   type ControlSurface,
   type DirectoryListing,
+  type DiscoveryInfo,
   type FileAnalysis,
   type GrooveTemplate,
   type IoLabels,
@@ -25,6 +28,7 @@ import {
   type LaunchRequest,
   type LearnRequest,
   type LearnState,
+  type ListenInState,
   type LiveMidiEvent,
   type LiveRecordRequest,
   type LoopInfo,
@@ -36,6 +40,12 @@ import {
   type MidiDevices,
   type MidiExportRequest,
   type MidiImportRequest,
+  type MonitoringSettings,
+  type Movie,
+  type MovieAudioExportRequest,
+  type MovieAudioImportRequest,
+  type MovieImportRequest,
+  type MovieThumbnails,
   type MusicXmlExportRequest,
   type MusicXmlImportRequest,
   type OscSettings,
@@ -50,8 +60,10 @@ import {
   type ProjectAlternative,
   type ProjectBackup,
   type ProjectSummary,
+  type RemotePads,
   type SampleRange,
   type SavePatchRequest,
+  type SceneDetectRequest,
   type ScoreDocument,
   type ScoreViewMode,
   type Screenset,
@@ -64,6 +76,7 @@ import {
   type SurfaceStatus,
   type SyncState,
   type SystemInfo,
+  type ThumbnailsRequest,
   type TransformSet,
   type TransportRequest,
   type TransportStatus,
@@ -305,6 +318,37 @@ export interface AnodeApi {
   importMidi(request: MidiImportRequest): Promise<Job>;
   /** Imports an uploaded Standard MIDI File with options. */
   uploadMidi(file: File, options?: MidiImportOptions): Promise<Job>;
+  // ---- Phase 10 (docs/11-phase-10.md)
+  /** Imports a movie from the Server's disk (copied in or referenced): a `movieImport` job; `setMovie` when done. */
+  importMovie(request: MovieImportRequest): Promise<Job>;
+  /** The project's movie (as `Project.movie`); 404 without one. */
+  movie(): Promise<Movie>;
+  /** Remove Movie (`removeMovie`, one undo step). */
+  removeMovie(): Promise<CommandResult>;
+  /** Renders movie frames as JPEG thumbnails into the movie's cache: a `thumbnails` job. */
+  renderMovieThumbnails(request: ThumbnailsRequest): Promise<Job>;
+  /** The frames cached as thumbnails at `height` (default 64); each is `GET /project/movie/frames/{frame}`. */
+  movieThumbnails(height?: number): Promise<MovieThumbnails>;
+  /** Detect Scene Cuts: a `sceneDetect` job that adds scene markers. */
+  detectMovieScenes(request: SceneDetectRequest): Promise<Job>;
+  /** Import Audio from Movie: a `movieAudioImport` job, a new audio track when done. */
+  importMovieAudio(request: MovieAudioImportRequest): Promise<Job>;
+  /** Export Audio to Movie: a `movieAudioExport` job writing a new movie. */
+  exportMovieAudio(request: MovieAudioExportRequest): Promise<Job>;
+  /** Exports the mix as ADM BWF (bed and objects): an `admExport` job. */
+  exportAdm(request: AdmExportRequest): Promise<Job>;
+  /** Imports an ADM BWF from the Server's disk as bed and object tracks: an `admImport` job. */
+  importAdm(request: AdmImportRequest): Promise<Job>;
+  /** Monitoring: binaural, down-mix, speaker map (user settings). */
+  monitoring(): Promise<MonitoringSettings>;
+  setMonitoring(settings: MonitoringSettings): Promise<MonitoringSettings>;
+  /** This Server as remotes find it (what the `_anode._tcp` advertisement carries). */
+  discovery(): Promise<DiscoveryInfo>;
+  /** The remote's key-command pad sets (user settings). */
+  remotePads(): Promise<RemotePads>;
+  setRemotePads(pads: RemotePads): Promise<RemotePads>;
+  /** Listen-in's state; the stream itself is the WebSocket at `listenInUrl` (`@anode/api-client`). */
+  listenInState(): Promise<ListenInState>;
 }
 
 export const ANODE_API = new InjectionToken<AnodeApi>('AnodeApi', {
@@ -833,6 +877,74 @@ export class HttpAnodeApi implements AnodeApi {
         bodySerializer: body => upload(body.file, file.name)
       })
     );
+  }
+
+  async importMovie(request: MovieImportRequest): Promise<Job> {
+    return unwrap(await this.client.POST('/api/v1/project/movie', { body: request }));
+  }
+
+  async movie(): Promise<Movie> {
+    return unwrap(await this.client.GET('/api/v1/project/movie'));
+  }
+
+  async removeMovie(): Promise<CommandResult> {
+    return unwrap(await this.client.DELETE('/api/v1/project/movie'));
+  }
+
+  async renderMovieThumbnails(request: ThumbnailsRequest): Promise<Job> {
+    return unwrap(await this.client.POST('/api/v1/project/movie/thumbnails', { body: request }));
+  }
+
+  async movieThumbnails(height?: number): Promise<MovieThumbnails> {
+    return unwrap(
+      await this.client.GET('/api/v1/project/movie/thumbnails', {
+        params: { query: height === undefined ? {} : { height } }
+      })
+    );
+  }
+
+  async detectMovieScenes(request: SceneDetectRequest): Promise<Job> {
+    return unwrap(await this.client.POST('/api/v1/project/movie/scenes', { body: request }));
+  }
+
+  async importMovieAudio(request: MovieAudioImportRequest): Promise<Job> {
+    return unwrap(await this.client.POST('/api/v1/project/movie/audio/import', { body: request }));
+  }
+
+  async exportMovieAudio(request: MovieAudioExportRequest): Promise<Job> {
+    return unwrap(await this.client.POST('/api/v1/project/movie/audio/export', { body: request }));
+  }
+
+  async exportAdm(request: AdmExportRequest): Promise<Job> {
+    return unwrap(await this.client.POST('/api/v1/project/export/adm', { body: request }));
+  }
+
+  async importAdm(request: AdmImportRequest): Promise<Job> {
+    return unwrap(await this.client.POST('/api/v1/project/import/adm', { body: request }));
+  }
+
+  async monitoring(): Promise<MonitoringSettings> {
+    return unwrap(await this.client.GET('/api/v1/settings/monitoring'));
+  }
+
+  async setMonitoring(settings: MonitoringSettings): Promise<MonitoringSettings> {
+    return unwrap(await this.client.PUT('/api/v1/settings/monitoring', { body: settings }));
+  }
+
+  async discovery(): Promise<DiscoveryInfo> {
+    return unwrap(await this.client.GET('/api/v1/system/discovery'));
+  }
+
+  async remotePads(): Promise<RemotePads> {
+    return unwrap(await this.client.GET('/api/v1/remote/pads'));
+  }
+
+  async setRemotePads(pads: RemotePads): Promise<RemotePads> {
+    return unwrap(await this.client.PUT('/api/v1/remote/pads', { body: pads }));
+  }
+
+  async listenInState(): Promise<ListenInState> {
+    return unwrap(await this.client.GET('/api/v1/remote/listen/state'));
   }
 }
 

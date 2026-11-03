@@ -18,7 +18,22 @@ public static class ProjectDefaults {
         "#4f8ff7", "#3fbf7f", "#f2b33d", "#e5604d", "#a46be8", "#3fc4d0", "#e879b7", "#9fbf3f"
     ];
 
-    public static ChannelStrip Strip { get; } = new(0, 0, false, false, [], [], "master", [], null, []);
+    /// <summary>A new strip: at 0 dB, centred, to the master, stereo in and out with the stereo panner (Phase 10).</summary>
+    public static ChannelStrip Strip { get; } = new(
+        0,
+        0,
+        false,
+        false,
+        [],
+        [],
+        "master",
+        [],
+        null,
+        [],
+        ChannelFormat.Stereo,
+        ChannelFormat.Stereo,
+        Panner.Default
+    );
 
     /// <summary>Delay compensation everywhere; low-latency mode off, at 10 ms.</summary>
     public static MixerSettings Mixer { get; } = new(PdcMode.All, false, 10);
@@ -75,7 +90,8 @@ public static class ProjectDefaults {
                 SmartTempo,
                 Varispeed,
                 null,
-                SyncSettings.Default
+                SyncSettings.Default,
+                ChannelFormat.Stereo
             ),
             Strip,
             [],

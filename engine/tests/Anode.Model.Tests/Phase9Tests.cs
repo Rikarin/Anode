@@ -327,7 +327,7 @@ public sealed class Phase9Tests {
             [new(0, 90, TempoCurve.Step)],
             [new(0, 3, 4)],
             [new(0, 2, KeyMode.Major)],
-            [new("m", "A", 3840, 0, null, "Letter A")],
+            [new("m", "A", 3840, 0, null, "Letter A", MarkerKind.Marker)],
             new(
                 [new("style-a", "Violin", [new(Clef.Treble, 0, null, 2)], null, 0, 0, false)],
                 [

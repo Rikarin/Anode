@@ -322,7 +322,7 @@ static class RandomProjects {
                     random,
                     [typeof(SetPitchNotesCommand), typeof(NewTrackAlternativeCommand), typeof(SetRegionFlexCommand)]
                 ),
-                _ => Pick(random, CommandTypes)
+                _ => Pick(random, Buildable)
             };
             var command = i is >= 4 and < 7 && FirstAudioTrack(state) is { } audio && state.Files.Count > 0
                 ? AddRegion(audio, Pick(random, [..state.Files.Values]), random)
@@ -469,6 +469,26 @@ static class RandomProjects {
 
         return (state, ids, random);
     }
+
+    /// <summary>
+    ///     Phase 10 commands (docs/11-phase-10.md) the model rejects until workstream B implements them; the identity
+    ///     property skips them.
+    /// </summary>
+    public static readonly IReadOnlySet<string> PendingPhase10 = new HashSet<string>(StringComparer.Ordinal) {
+        nameof(SetSurroundFormatCommand),
+        nameof(SetStripFormatCommand),
+        nameof(SetPannerCommand),
+        nameof(SetMovieCommand),
+        nameof(SetMoviePositionCommand),
+        nameof(RemoveMovieCommand),
+        nameof(AddSceneMarkersCommand)
+    };
+
+    /// <summary>
+    ///     The command types random projects are built from: every one but those the model refuses outright (Phase 10,
+    ///     until workstream B), so the projects stay those of Phase 9 and the other properties keep their odds.
+    /// </summary>
+    static Type[] Buildable { get; } = [..CommandTypes.Where(static t => !PendingPhase10.Contains(t.Name))];
 
     /// <summary>The parameters the host reports for every random script.</summary>
     public static IReadOnlyList<ParameterInfo> ScriptParameters { get; } = [
@@ -1304,6 +1324,35 @@ static class RandomProjects {
                 )
                 : null,
             nameof(ImportTracksCommand) => new ImportTracksCommand(Imported(s, r)),
+            // Phase 10 commands (docs/11-phase-10.md): placeholders until the model implements them (workstream B
+            // replaces these with generators that make commands that apply, and removes PendingPhase10).
+            nameof(SetSurroundFormatCommand) => new SetSurroundFormatCommand(Pick(r, Enum.GetValues<ChannelFormat>())),
+            nameof(SetStripFormatCommand) => Track() is { } id
+                ? new SetStripFormatCommand(
+                    id,
+                    Pick(r, [ChannelFormat.Mono, ChannelFormat.Stereo, ChannelFormat.Surround51])
+                )
+                : null,
+            nameof(SetPannerCommand) => Track() is { } id
+                ? new SetPannerCommand(
+                    id,
+                    r.Next(2) == 0 ? Pick(r, Enum.GetValues<PannerMode>()) : null,
+                    r.Next(2) == 0 ? r.Next(-180, 181) : null,
+                    r.Next(2) == 0 ? r.Next(0, 11) / 10.0 : null,
+                    Azimuth: r.Next(2) == 0 ? r.Next(-180, 181) : null,
+                    ObjectElevation: r.Next(2) == 0 ? r.Next(0, 91) : null
+                )
+                : null,
+            nameof(SetMovieCommand) => new SetMovieCommand(Movie(r)),
+            nameof(SetMoviePositionCommand) => new SetMoviePositionCommand(
+                r.Next(2) == 0 ? r.Next(0, 16) * 960L : null,
+                r.Next(2) == 0 ? r.Next(0, 10) / 2.0 : null
+            ),
+            nameof(RemoveMovieCommand) => new RemoveMovieCommand(),
+            nameof(AddSceneMarkersCommand) => new AddSceneMarkersCommand(
+                [..Enumerable.Range(1, r.Next(1, 4)).Select(i => i * 3840L + r.Next(0, 960))],
+                r.Next(2) == 0
+            ),
             _ => throw new InvalidOperationException($"No generator for {type.Name}.")
         };
         string? Track() => tracks.Count == 0 ? null : Pick(r, tracks).Id;
@@ -1990,10 +2039,28 @@ static class RandomProjects {
             timed ? [new(0, 100 + r.Next(40), TempoCurve.Step), new(7680, 90, TempoCurve.Step)] : null,
             timed ? [new(0, 3, 4), new(5760, 4, 4)] : null,
             timed ? [new(0, r.Next(12), KeyMode.Minor)] : null,
-            r.Next(2) == 0 ? [new("m1", "Imported marker", 1920, 0, null, "From the file")] : null,
+            r.Next(2) == 0 ? [new("m1", "Imported marker", 1920, 0, null, "From the file", MarkerKind.Marker)] : null,
             score
         );
     }
+
+    /// <summary>A movie as the import's probe would describe it (Phase 10 placeholder).</summary>
+    static Movie Movie(Random r) =>
+        new(
+            "Movies/Picture.mov",
+            "Picture",
+            true,
+            r.Next(0, 8) * 3840L,
+            0,
+            Pick(r, [new VideoFrameRate(24000, 1001), new VideoFrameRate(25, 1), new VideoFrameRate(30000, 1001)]),
+            3600,
+            60,
+            1500,
+            1920,
+            1080,
+            "h264",
+            r.Next(2) == 0 ? null : new MovieAudio("aac", 2, 48_000)
+        );
 
     /// <summary>A random non-empty selection of <paramref name="items" />.</summary>
     static IEnumerable<T> Some<T>(IReadOnlyList<T> items, Random r) {

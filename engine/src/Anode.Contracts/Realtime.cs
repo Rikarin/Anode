@@ -28,6 +28,7 @@ namespace Anode.Contracts;
 [JsonDerivedType(typeof(SurfacesEvent), "surfaces")]
 [JsonDerivedType(typeof(SelectionEvent), "selection")]
 [JsonDerivedType(typeof(KeyCommandEvent), "keyCommand")]
+[JsonDerivedType(typeof(ListenInEvent), "listenIn")]
 public abstract record RealtimeEvent;
 
 /// <summary>The socket is open; the client fetches the state it needs now.</summary>
@@ -141,3 +142,9 @@ public sealed record SelectionEvent(string? TrackId) : RealtimeEvent;
 ///     the editor's selection); the editor runs it as if its key were pressed.
 /// </summary>
 public sealed record KeyCommandEvent(string Id) : RealtimeEvent;
+
+/// <summary>
+///     Phase 10 (docs/11-phase-10.md): listen-in started or stopped, a listener came or went, or the Server's delay
+///     changed by 10 ms or more.
+/// </summary>
+public sealed record ListenInEvent(ListenInState State) : RealtimeEvent;

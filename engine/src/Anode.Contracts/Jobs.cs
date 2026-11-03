@@ -51,7 +51,38 @@ public enum JobKind {
 
     /// <summary>Phase 9: Standard MIDI File import with options (<c>MidiImportRequest</c>); applies <c>importTracks</c>.</summary>
     [JsonStringEnumMemberName("midiImport")]
-    MidiImport
+    MidiImport,
+
+    /// <summary>Phase 10: ADM BWF export (<c>AdmExportRequest</c>, docs/11-phase-10.md).</summary>
+    [JsonStringEnumMemberName("admExport")]
+    AdmExport,
+
+    /// <summary>Phase 10: ADM BWF import (<c>AdmImportRequest</c>); copies the media, then applies <c>importTracks</c>.</summary>
+    [JsonStringEnumMemberName("admImport")]
+    AdmImport,
+
+    /// <summary>
+    ///     Phase 10: movie import (<c>MovieImportRequest</c>); probes, copies or references it, then applies
+    ///     <c>setMovie</c>.
+    /// </summary>
+    [JsonStringEnumMemberName("movieImport")]
+    MovieImport,
+
+    /// <summary>Phase 10: Import Audio from Movie (<c>MovieAudioImportRequest</c>); applies <c>importTracks</c>.</summary>
+    [JsonStringEnumMemberName("movieAudioImport")]
+    MovieAudioImport,
+
+    /// <summary>Phase 10: Export Audio to Movie (<c>MovieAudioExportRequest</c>); its file is the new movie.</summary>
+    [JsonStringEnumMemberName("movieAudioExport")]
+    MovieAudioExport,
+
+    /// <summary>Phase 10: Detect Scene Cuts (<c>SceneDetectRequest</c>); applies <c>addSceneMarkers</c>.</summary>
+    [JsonStringEnumMemberName("sceneDetect")]
+    SceneDetect,
+
+    /// <summary>Phase 10: movie thumbnails (<c>ThumbnailsRequest</c>); its files are the JPEGs, cached per movie.</summary>
+    [JsonStringEnumMemberName("thumbnails")]
+    Thumbnails
 }
 
 [JsonConverter(typeof(JsonStringEnumConverter<JobState>))]

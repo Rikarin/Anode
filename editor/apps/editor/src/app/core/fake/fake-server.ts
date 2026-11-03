@@ -4,6 +4,8 @@ import {
   type AddLoopRequest,
   type AddSurfaceRequest,
   type AddToLoopLibraryRequest,
+  type AdmExportRequest,
+  type AdmImportRequest,
   ApiError,
   type ArticulationSet,
   type AudioEditOperation,
@@ -17,9 +19,11 @@ import {
   type CommandResult,
   type ControllerAssignments,
   type ControlSurface,
+  DefaultPanner,
   DefaultRegionNotation,
   type DeltaOp,
   type DirectoryListing,
+  type DiscoveryInfo,
   type EditCommand,
   EmptyProjectScore,
   type FileAnalysis,
@@ -35,6 +39,7 @@ import {
   type LaunchRequest,
   type LearnRequest,
   type LearnState,
+  type ListenInState,
   type LiveMidiEvent,
   type LiveRecordRequest,
   type LoopInfo,
@@ -45,6 +50,12 @@ import {
   type MidiExportRequest,
   type MidiImportRequest,
   type MidiRegion,
+  type MonitoringSettings,
+  type Movie,
+  type MovieAudioExportRequest,
+  type MovieAudioImportRequest,
+  type MovieImportRequest,
+  type MovieThumbnails,
   type MusicXmlExportRequest,
   type MusicXmlImportRequest,
   type Note,
@@ -62,8 +73,10 @@ import {
   type ProjectBackup,
   type ProjectDelta,
   type ProjectSummary,
+  type RemotePads,
   type SampleRange,
   type SavePatchRequest,
+  type SceneDetectRequest,
   type ScoreDocument,
   type Screenset,
   type ScriptPreset,
@@ -78,6 +91,7 @@ import {
   type SyncState,
   type SystemInfo,
   type TakeFolder,
+  type ThumbnailsRequest,
   type Track,
   type TrackMeter,
   type TransformSet,
@@ -421,7 +435,8 @@ export class FakeAnodeServer implements AnodeApi {
             frameRate: 'fps25',
             startOffsetSeconds: 0,
             linkStartStop: false
-          }
+          },
+          surroundFormat: 'stereo'
         },
         master: strip(),
         tracks: [],
@@ -439,7 +454,8 @@ export class FakeAnodeServer implements AnodeApi {
         grooves: [],
         articulationSets: [],
         laneSets: [],
-        score: structuredClone(EmptyProjectScore)
+        score: structuredClone(EmptyProjectScore),
+        movie: null
       };
       this.disk.set(path, structuredClone(project));
       this.open(project);
@@ -1828,17 +1844,19 @@ export class FakeAnodeServer implements AnodeApi {
           name: 'Drums',
           kind: 'audio',
           midiRegions: [],
-          regions: [clip('a1', 't1', drums, 0, 0, rate * 4), clip('a2', 't1', drums, 7 * Ppq, rate * 2, rate * 4)]
+          regions: [clip('a1', 't1', drums, 0, 0, rate * 4), clip('a2', 't1', drums, 7 * Ppq, rate * 2, rate * 4)],
+          panner: null
         },
         {
           id: 't2',
           name: 'Bass',
           kind: 'audio',
           midiRegions: [],
-          regions: [clip('a3', 't2', bass, 4 * Ppq, 0, rate * 6)]
+          regions: [clip('a3', 't2', bass, 4 * Ppq, 0, rate * 6)],
+          panner: null
         }
       ],
-      markers: [{ id: 'm1', name: 'Verse', tick: 0, lengthTicks: 0, color: null, text: '' }],
+      markers: [{ id: 'm1', name: 'Verse', tick: 0, lengthTicks: 0, color: null, text: '', kind: 'marker' }],
       score: null
     };
     return this.finishImport(content, 'Import AAF', withFiles);
@@ -1854,7 +1872,8 @@ export class FakeAnodeServer implements AnodeApi {
       name: t.name,
       kind: t.kind,
       midiRegions: read.midiRegions.filter(r => r.trackId === t.id),
-      regions: []
+      regions: [],
+      panner: null
     }));
     const first = tracks[0];
     if (options.merge && first && tracks.length > 1) {
@@ -1871,7 +1890,7 @@ export class FakeAnodeServer implements AnodeApi {
       tempoEvents: options.importTempo ? read.settings.tempoEvents : null,
       signatures: options.importTempo ? read.settings.signatures : null,
       markers: options.importMarkers
-        ? [{ id: 'm1', name: baseName(path), tick: 0, lengthTicks: 0, color: null, text: '' }]
+        ? [{ id: 'm1', name: baseName(path), tick: 0, lengthTicks: 0, color: null, text: '', kind: 'marker' as const }]
         : null,
       score: null
     };
@@ -1884,6 +1903,10 @@ export class FakeAnodeServer implements AnodeApi {
    * title and composer filled when empty.
    */
   private importTracks(project: Project, content: ImportedContent): Project {
+    if (content.tracks.some(t => t.inputFormat != null || t.panner != null || t.automation != null)) {
+      // Imported formats, panners and automation (an ADM import's): Phase 10, the editor workstream.
+      throw new ApiError(422, 'importTracks with Phase 10 fields: not in the fake Server yet.');
+    }
     let next = project;
     const tracks = new Map<string, string>();
     const notes = new Map<number, number>();
@@ -1985,6 +2008,80 @@ export class FakeAnodeServer implements AnodeApi {
       };
     }
     return next;
+  }
+
+  // ---- Phase 10 (docs/11-phase-10.md): the movie, ADM BWF, monitoring and the remote, until the editor workstream (C)
+  // implements them.
+
+  importMovie(_request: MovieImportRequest): Promise<Job> {
+    return this.phase10Pending('ImportMovie');
+  }
+
+  movie(): Promise<Movie> {
+    return this.phase10Pending('GetMovie');
+  }
+
+  removeMovie(): Promise<CommandResult> {
+    return this.phase10Pending('RemoveMovie');
+  }
+
+  renderMovieThumbnails(_request: ThumbnailsRequest): Promise<Job> {
+    return this.phase10Pending('RenderMovieThumbnails');
+  }
+
+  movieThumbnails(_height?: number): Promise<MovieThumbnails> {
+    return this.phase10Pending('ListMovieThumbnails');
+  }
+
+  detectMovieScenes(_request: SceneDetectRequest): Promise<Job> {
+    return this.phase10Pending('DetectMovieScenes');
+  }
+
+  importMovieAudio(_request: MovieAudioImportRequest): Promise<Job> {
+    return this.phase10Pending('ImportMovieAudio');
+  }
+
+  exportMovieAudio(_request: MovieAudioExportRequest): Promise<Job> {
+    return this.phase10Pending('ExportMovieAudio');
+  }
+
+  exportAdm(_request: AdmExportRequest): Promise<Job> {
+    return this.phase10Pending('ExportAdm');
+  }
+
+  importAdm(_request: AdmImportRequest): Promise<Job> {
+    return this.phase10Pending('ImportAdm');
+  }
+
+  monitoring(): Promise<MonitoringSettings> {
+    return this.phase10Pending('GetMonitoring');
+  }
+
+  setMonitoring(_settings: MonitoringSettings): Promise<MonitoringSettings> {
+    return this.phase10Pending('SetMonitoring');
+  }
+
+  discovery(): Promise<DiscoveryInfo> {
+    return this.phase10Pending('GetDiscovery');
+  }
+
+  remotePads(): Promise<RemotePads> {
+    return this.phase10Pending('GetRemotePads');
+  }
+
+  setRemotePads(_pads: RemotePads): Promise<RemotePads> {
+    return this.phase10Pending('SetRemotePads');
+  }
+
+  listenInState(): Promise<ListenInState> {
+    return this.phase10Pending('GetListenIn');
+  }
+
+  /** A Phase 10 endpoint the fake Server does not answer yet (docs/11-phase-10.md): 422. */
+  private phase10Pending<T>(operation: string): Promise<T> {
+    return this.answer(operation, () => {
+      throw new ApiError(422, `${operation}: not in the fake Server yet.`);
+    });
   }
 
   // ---- Phase 8 test hooks: what the host and the outside world would do
@@ -3956,13 +4053,18 @@ export class FakeAnodeServer implements AnodeApi {
       }
       case 'addMarker': {
         nonNegative(command.tick, 'A marker');
+        if ((command.kind ?? 'marker') !== 'marker') {
+          // Scene markers come from Detect Scene Cuts: Phase 10, the editor workstream (docs/11-phase-10.md).
+          throw new ApiError(422, 'addMarker with a scene kind: not in the fake Server yet.');
+        }
         const added = {
           id: `mrk_${this.nextId++}`,
           name: command.name || `Marker ${project.markers.length + 1}`,
           tick: Math.round(command.tick),
           lengthTicks: Math.max(0, Math.round(command.lengthTicks)),
           color: command.color ?? null,
-          text: ''
+          text: '',
+          kind: 'marker' as const
         };
         return { ...project, markers: [...project.markers, added].sort((a, b) => a.tick - b.tick) };
       }
@@ -3970,6 +4072,9 @@ export class FakeAnodeServer implements AnodeApi {
         const m = project.markers.find(x => x.id === command.markerId);
         if (!m) {
           throw new ApiError(422, `No marker ${command.markerId}.`);
+        }
+        if ((command.kind ?? 'marker') !== 'marker') {
+          throw new ApiError(422, 'setMarker with a scene kind: not in the fake Server yet.');
         }
         const next = {
           ...m,
@@ -4233,6 +4338,15 @@ export class FakeAnodeServer implements AnodeApi {
       case 'importTracks':
         // The interchange imports' result (Phase 9), applied by their jobs.
         return this.importTracks(project, command.content);
+      case 'setSurroundFormat':
+      case 'setStripFormat':
+      case 'setPanner':
+      case 'setMovie':
+      case 'setMoviePosition':
+      case 'removeMovie':
+      case 'addSceneMarkers':
+        // Surround formats, panners, the movie and scene markers: Phase 10, the editor workstream (docs/11-phase-10.md).
+        throw new ApiError(422, `${command.type}: not in the fake Server yet.`);
       default:
         if (isPhase9Command(command)) {
           // Staff styles, region notation, score symbols, lyrics, chord symbols, score sets, layout and score edits
@@ -4643,7 +4757,8 @@ export class FakeAnodeServer implements AnodeApi {
         mixer: { pdc: 'all', lowLatency: false, lowLatencyLimitMs: 10 },
         smartTempo: { mode: 'keep', defaultFollow: 'off', analyzeImports: true },
         varispeed: { enabled: false, mode: 'speedOnly', speed: 1 },
-        sync: { source: 'internal', destinations: [], frameRate: 'fps25', startOffsetSeconds: 0, linkStartStop: false }
+        sync: { source: 'internal', destinations: [], frameRate: 'fps25', startOffsetSeconds: 0, linkStartStop: false },
+        surroundFormat: 'stereo'
       },
       master: strip(),
       tracks: [],
@@ -4661,7 +4776,8 @@ export class FakeAnodeServer implements AnodeApi {
       grooves: [],
       articulationSets: [],
       laneSets: [],
-      score: structuredClone(EmptyProjectScore)
+      score: structuredClone(EmptyProjectScore),
+      movie: null
     };
     let project = base;
     for (const name of ['Drums', 'Bass', 'Guitar', 'Vocals']) {
@@ -4962,7 +5078,10 @@ function strip(): ChannelStrip {
     output: 'master',
     groups: [],
     vcaId: null,
-    midiEffects: []
+    midiEffects: [],
+    inputFormat: 'stereo',
+    outputFormat: 'stereo',
+    panner: structuredClone(DefaultPanner)
   };
 }
 

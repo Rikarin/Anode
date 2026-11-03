@@ -22,6 +22,8 @@ public static class AnodeApi {
         ControlApi.Map(api);
         ScoreApi.Map(api);
         InterchangeApi.Map(api);
+        MediaApi.Map(api);
+        RemoteApi.Map(api);
         RealtimeApi.Map(app);
     }
 }

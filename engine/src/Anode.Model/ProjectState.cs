@@ -248,7 +248,9 @@ public sealed record ProjectState(
             [..Grooves.Values],
             [..ArticulationSets.Values],
             [..LaneSets.Values],
-            Score
+            Score,
+            // The movie: Phase 10, workstream B (docs/11-phase-10.md).
+            null
         );
 
     /// <summary>Applies one delta operation (an edit's primitive step, also what clients apply).</summary>

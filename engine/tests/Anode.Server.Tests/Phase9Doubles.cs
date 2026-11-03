@@ -249,7 +249,9 @@ sealed class FakeFormats : IInterchangeFormats {
                     ]
                 )
             ],
-            Markers: [new("M1", composition.Markers[0].Name, 3840, 0, null, composition.Markers[0].Comment)]
+            Markers: [
+                new("M1", composition.Markers[0].Name, 3840, 0, null, composition.Markers[0].Comment, MarkerKind.Marker)
+            ]
         );
     }
 

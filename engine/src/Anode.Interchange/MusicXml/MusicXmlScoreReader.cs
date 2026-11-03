@@ -49,7 +49,7 @@ sealed class MusicXmlScoreReader {
 
     public void AddMarker(long tick, string text) {
         if (!Markers.Exists(m => m.Tick == tick && m.Name == text)) {
-            Markers.Add(new(Ids.Next(IdPrefix.Marker), text, tick, 0, null, string.Empty));
+            Markers.Add(new(Ids.Next(IdPrefix.Marker), text, tick, 0, null, string.Empty, MarkerKind.Marker));
         }
     }
 

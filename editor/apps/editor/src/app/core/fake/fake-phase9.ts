@@ -714,7 +714,8 @@ export function musicXmlContent(path: string): ImportedContent {
             Array.from({ length: 8 }, (_, i) => note(p * 100 + i + 1, base + ((i * 2) % 7), i * 2 * Ppq, 2 * Ppq))
           )
         ],
-        regions: []
+        regions: [],
+        panner: null
       })),
       signatures: [
         { tick: 0, numerator: 4, denominator: 4 },
@@ -736,7 +737,8 @@ export function musicXmlContent(path: string): ImportedContent {
         kind: 'instrument',
         staffStyleId: 'factory.piano',
         midiRegions: [region('r1', 't1', name || 'Piano', 2, notes)],
-        regions: []
+        regions: [],
+        panner: null
       }
     ],
     score: {

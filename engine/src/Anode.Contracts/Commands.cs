@@ -154,6 +154,13 @@ namespace Anode.Contracts;
 [JsonDerivedType(typeof(MoveScoreNotesCommand), "moveScoreNotes")]
 [JsonDerivedType(typeof(AddScoreNoteCommand), "addScoreNote")]
 [JsonDerivedType(typeof(ImportTracksCommand), "importTracks")]
+[JsonDerivedType(typeof(SetSurroundFormatCommand), "setSurroundFormat")]
+[JsonDerivedType(typeof(SetStripFormatCommand), "setStripFormat")]
+[JsonDerivedType(typeof(SetPannerCommand), "setPanner")]
+[JsonDerivedType(typeof(SetMovieCommand), "setMovie")]
+[JsonDerivedType(typeof(SetMoviePositionCommand), "setMoviePosition")]
+[JsonDerivedType(typeof(RemoveMovieCommand), "removeMovie")]
+[JsonDerivedType(typeof(AddSceneMarkersCommand), "addSceneMarkers")]
 public abstract record EditCommand;
 
 /// <summary>
@@ -342,15 +349,24 @@ public sealed record SetSignaturesCommand(IReadOnlyList<SignatureEvent> Events) 
 /// <summary>Replaces the key track; the first event at tick 0.</summary>
 public sealed record SetKeysCommand(IReadOnlyList<KeyEvent> Events) : EditCommand;
 
-public sealed record AddMarkerCommand(string Name, long Tick, long LengthTicks = 0, string? Color = null) : EditCommand;
+/// <summary>Adds a marker; <c>kind</c> (Phase 10) is <c>marker</c> unless given.</summary>
+public sealed record AddMarkerCommand(
+    string Name,
+    long Tick,
+    long LengthTicks = 0,
+    string? Color = null,
+    MarkerKind? Kind = null
+) : EditCommand;
 
+/// <summary>Changes a marker; left-out properties stay. <c>kind</c> (Phase 10) turns a scene marker into a marker or back.</summary>
 public sealed record SetMarkerCommand(
     string MarkerId,
     string? Name = null,
     long? Tick = null,
     long? LengthTicks = null,
     string? Color = null,
-    string? Text = null
+    string? Text = null,
+    MarkerKind? Kind = null
 ) : EditCommand;
 
 public sealed record DeleteMarkersCommand(IReadOnlyList<string> MarkerIds) : EditCommand;
@@ -1091,3 +1107,66 @@ public sealed record AddScoreNoteCommand(
 ///     project (undo leaves the files); clients do not send it.
 /// </summary>
 public sealed record ImportTracksCommand(ImportedContent Content) : EditCommand;
+
+/// <summary>
+///     Phase 10 (docs/11-phase-10.md): sets the project's channel format (<c>settings.surroundFormat</c>). The master's
+///     input and output formats follow, and the output format of every strip that feeds the master; strips in object
+///     mode return to the Surround Panner when the format is stereo or narrower (objects need a surround master).
+/// </summary>
+public sealed record SetSurroundFormatCommand(ChannelFormat Format) : EditCommand;
+
+/// <summary>
+///     Phase 10: sets a track strip's input format (mono or stereo for instrument tracks; any for audio and aux
+///     tracks). An aux's input format is its bus's format: the output formats of the strips that output or send to that
+///     bus follow (every aux on one bus has the same input format). The output format is never set directly: it is
+///     the destination's.
+/// </summary>
+public sealed record SetStripFormatCommand(string TrackId, ChannelFormat InputFormat) : EditCommand;
+
+/// <summary>
+///     Phase 10: changes a track strip's panner (<c>ChannelStrip.panner</c>); left-out properties stay. <c>mode</c>
+///     <c>surround</c> needs a surround output, <c>object</c> a strip that outputs to the master of a surround project
+///     (a project has at most 118 objects). The Surround Panner's <c>angle</c>, <c>diversity</c>,
+///     <c>surroundElevation</c>, <c>centreLevelDb</c>, <c>lfeLevelDb</c> and <c>spread</c>, and the Object Panner's
+///     <c>azimuth</c>, <c>objectElevation</c>, <c>distance</c> and <c>size</c>, in <see cref="SurroundPanner" />'s and
+///     <see cref="ObjectPanner" />'s units and ranges (angles −180…180, levels −144…0 dB). During playback a track in
+///     touch, latch or write records the change into its <c>surround:…</c> or <c>object:…</c> lanes, as
+///     <c>setStrip</c> records pan (and a batch coalesces as a drag does).
+/// </summary>
+public sealed record SetPannerCommand(
+    string TrackId,
+    PannerMode? Mode = null,
+    double? Angle = null,
+    double? Diversity = null,
+    double? SurroundElevation = null,
+    double? CentreLevelDb = null,
+    double? LfeLevelDb = null,
+    double? Spread = null,
+    double? Azimuth = null,
+    double? ObjectElevation = null,
+    double? Distance = null,
+    double? Size = null
+) : EditCommand;
+
+/// <summary>
+///     Phase 10, a movie import's result: sets the project's movie (replacing one it has). The <c>movieImport</c> job
+///     applies it after probing and copying the file; clients do not send it. Undo restores the previous movie (or none);
+///     the file stays.
+/// </summary>
+public sealed record SetMovieCommand(Movie Movie) : EditCommand;
+
+/// <summary>
+///     Phase 10: moves the movie (Logic's movie start and offset): its frame at <c>offsetSeconds</c> (0 or more, less
+///     than its duration) plays at <c>startTick</c> (0 or more); left-out properties stay. 422 without a movie.
+/// </summary>
+public sealed record SetMoviePositionCommand(long? StartTick = null, double? OffsetSeconds = null) : EditCommand;
+
+/// <summary>Phase 10, Remove Movie: the project no longer has a movie (a copied file stays in <c>Movies/</c>).</summary>
+public sealed record RemoveMovieCommand : EditCommand;
+
+/// <summary>
+///     Phase 10, Detect Scene Cuts' result: adds a <c>scene</c> marker at each tick (named <c>Scene 1</c>, <c>Scene 2</c>,
+///     … in time order, no length, no colour), first removing the scene markers when <c>replaceExisting</c>. The
+///     <c>sceneDetect</c> job applies it; clients do not send it.
+/// </summary>
+public sealed record AddSceneMarkersCommand(IReadOnlyList<long> Ticks, bool ReplaceExisting = true) : EditCommand;

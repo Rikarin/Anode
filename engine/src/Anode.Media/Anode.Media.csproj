@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <Description>Media (docs/11-phase-10.md, docs/adr/0013-video-and-listen-in.md): the FFmpeg and FFprobe runner (an LGPL build, run as separate processes: probe, audio extraction, thumbnails, scene detection, remux, the test movie), and listen-in's Opus encoder and stream framing. Referenced by the server only: the engine host never runs FFmpeg or encodes Opus.</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="Anode.Media.Tests"/>
+  </ItemGroup>
+  <ItemGroup>
+    <!-- VideoFrameRate, MovieAudioCodec and the listen-in frame header (ListenIn). -->
+    <ProjectReference Include="../Anode.Contracts/Anode.Contracts.csproj"/>
+  </ItemGroup>
+</Project>

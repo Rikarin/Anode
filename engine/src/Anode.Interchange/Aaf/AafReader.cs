@@ -151,7 +151,7 @@ public static class AafReader {
         public Marker Marker(AafMarker marker, string id) {
             var tick = map.TickAtSample(Scaled(marker.Position), rate);
             var end = map.TickAtSample(Scaled(marker.Position + marker.Length), rate);
-            return new(id, marker.Name, tick, Math.Max(0, end - tick), null, marker.Comment);
+            return new(id, marker.Name, tick, Math.Max(0, end - tick), null, marker.Comment, MarkerKind.Marker);
         }
 
         long TickAtOrBefore(long sample) {

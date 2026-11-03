@@ -137,6 +137,176 @@ report. A REST change means regenerating `engine/src/Anode.Server/openapi.json`
 - **Remote MIDI:** the touch keyboard and pads send live MIDI through the existing `/midi/live` path, so recording,
   step input and MIDI FX behave as with a keyboard.
 
+### Contract notes
+
+Where the committed code differs from, or adds to, the shapes planned for this commit, and the shapes chosen where
+the plan left latitude:
+- **Formats** (`Spatial.cs`): `ChannelFormat` (`mono | stereo | lcr | quad | surround50 | surround51 | surround70 |
+  surround71 | surround712 | surround714 | surround916`). `SpeakerLabels` (constants: `Left` `M+030`, `Right`
+  `M-030`, `Centre` `M+000`, `Lfe` `LFE1`, `LeftSurround`/`RightSurround` `M±110`, `LeftSide`/`RightSide` `M±090`,
+  `LeftRear`/`RightRear` `M±135`, `LeftWide`/`RightWide` `M±060`, `LeftFrontQuad`/`RightFrontQuad` `M±045`,
+  `TopFrontLeft`/`Right` `U±045`, `TopMiddleLeft`/`Right` `U±090`, `TopRearLeft`/`Right` `U±135`).
+  `Speaker(label, azimuth, elevation, lfe = false)` and `SpeakerLayout(format, name, ituName?, speakers)` (with
+  `ChannelCount`, `HasHeight`, `HasLfe`, `IndexOf(label)`, not serialised); `SpeakerLayouts.All`, `Of(format)`,
+  `ChannelCount(format)`, `IsSurround(format)` (wider than stereo). Degrees in the ADM convention: azimuth 0 ahead,
+  **positive to the left**, −180…180; elevation positive up. **Channel order is the ADM/SMPTE order**: L, R, C, LFE,
+  then sides before rears, wides, the upper layer front to back (7.1.4: `M+030 M-030 M+000 LFE1 M+090 M-090 M+135
+  M-135 U+045 U-045 U+135 U-135`); a WAVE_FORMAT_EXTENSIBLE file orders by its channel mask (rears before sides in
+  7.x), so A's writer and reader reorder. Positions: BS.2051 where it defines the system (stereo 0+2+0, 5.1 0+5+0, 7.1
+  0+7+0, 7.1.4 4+7+0 with the upper layer at 30°, LFE nominally at 45°, −30°); **not BS.2051**: mono, LCR, quad
+  (±45°, ±135°), 5.0, 7.0 (the 5.1/7.1 without LFE), **7.1.2** (top middle `U±090`) and **9.1.6** (7.1, wides
+  `M±060`, then `U±045 U±090 U±135`) — `ituName` null, and `ear` cannot render 7.1.2 or 9.1.6 as speaker layouts.
+- **Strips:** `ChannelStrip` gains `inputFormat`, `outputFormat` and `panner` (all required). **Decided:** the output
+  format is **stored, kept equal to the destination's** by the server (the master's is the project's
+  `settings.surroundFormat`; a bus's is the input format of the aux(es) on it, every aux on a bus having the same;
+  `output:N` is stereo); it is never set directly. The master's input and output are the project's format. An input
+  of the output's format passes straight through (beds). Sends to a multichannel bus are panned by the strip's panner
+  (`Send.pan` applies to stereo buses only). `ProjectSettings.surroundFormat` (required) is the project's format.
+- **Panners:** `PannerMode` (`stereo | surround | object`); `SurroundPanner(angle, diversity, elevation,
+  centreLevelDb, lfeLevelDb, spread)` — **levels in dB** (−144…0) rather than the brief's bare "CentreLevel,
+  LfeLevel", `spread` in degrees (0…180, a stereo input's two channels around the puck), `diversity` 0…1 (0 every
+  speaker, 1 a point); `Default` (0, 1, 0, 0, −144, 60): front centre as a point, no LFE. `ObjectPanner(azimuth,
+  elevation, distance, size)` (distance and size 0…1; `Default` (0, 0, 1, 0)). `Panner(mode, surround, object)` —
+  **both panners' settings are always present** (they survive mode switches); `Panner.Default` (stereo).
+  Automation and Smart Control addresses (`PannerTargets`, documented on `AutomationLane`): `surround:angle`,
+  `surround:diversity`, `surround:elevation`, `surround:centre` (dB), `surround:lfe` (dB), `surround:spread`,
+  `object:azimuth`, `object:elevation`, `object:distance`, `object:size` (`centre` and `spread` added to the brief's).
+  Object mode requires the master as output in a surround project; at most 118 objects.
+- **Monitoring** is **user settings** (`MonitoringSettings(binaural, downmixTo?, speakerMap)`, `Default` off, none,
+  `[]`), `GET/PUT /settings/monitoring`, so **no monitoring command**. `speakerMap[i]` is the **1-based** device output
+  of channel i of what is sent (0 not sent; empty or short: channel i → output i + 1); binaural goes to outputs 1–2.
+- **Video** (`Video.cs`): `VideoFrameRate(numerator, denominator)` (`FramesPerSecond` not serialised);
+  `MovieAudio(codec, channels, sampleRate)`; **`Movie(path, name, inProject, startTick, offsetSeconds, frameRate,
+  timecodeStartSeconds, durationSeconds, frames, width, height, codec, audio?)`** — a **path** (relative under
+  `Movies/` when copied in, `inProject`; absolute when referenced) rather than a file id (movies are not
+  `AudioFile`s); `audio` null replaces the brief's `HasAudio`; the timecode start is in **seconds**, as
+  `SyncSettings.startOffsetSeconds`. Mapping: at project position p the movie shows movie time `seconds(p) −
+  seconds(startTick) + offsetSeconds`, frame `floor(m × rate)`. `Project.movie` (required, nullable: a real Server
+  leaves it out when null, the editor reads `movie ?? null`). `MarkerKind` (`marker | scene`); `Marker.kind`
+  required. Thumbnails: `ThumbnailsRequest(frames, height = 64)` (movie frame numbers) → a `thumbnails` job;
+  `MovieThumbnails(width, height, frames)` lists what is cached at a height; each frame is a JPEG at
+  `GET /project/movie/frames/{frame}?height=`.
+- **Jobs** (`JobKind`): `admExport | admImport | movieImport | movieAudioImport | movieAudioExport | sceneDetect |
+  thumbnails`. Requests: `AdmExportRequest(fileName, directory?, trackIds?, startTick?, endTick?, bitDepth = 24)` (range
+  and bit depth added; in `Spatial.cs`), `AdmImportRequest(path)`, `MovieImportRequest(path, copyIntoProject = true,
+  startTick?)`, `MovieAudioImportRequest(trackName?)`, `MovieAudioExportRequest(fileName, directory?, replace = true,
+  codec: MovieAudioCodec = aac)` (`MovieAudioCodec`: `aac | pcm`, PCM in MOV only), `SceneDetectRequest(threshold =
+  0.4, replaceExisting = true)`, `ThumbnailsRequest`. Results applied by jobs: `movieImport` → `setMovie`;
+  `sceneDetect` → `addSceneMarkers`; **`movieAudioImport` and `admImport` → `importTracks`** (Phase 9's command,
+  reused), for which `ImportedTrack` gains `inputFormat?`, `panner?` and `automation?` (provisional lane ids; an
+  object's positions). `panner` is required-nullable in the generated client (send `null`), as `ImportedContent.score`.
+  No upload variants (movies and ADM files are large; a browser on the network does not import them).
+- **Commands** (7): `setSurroundFormat(format)`, `setStripFormat(trackId, inputFormat)`, **`setPanner(trackId, mode?,
+  angle?, diversity?, surroundElevation?, centreLevelDb?, lfeLevelDb?, spread?, azimuth?, objectElevation?, distance?,
+  size?)`** — flat optional fields rather than nested panners (a nested record is required-nullable in the client; a
+  puck drag sends two numbers; touch/latch/write record into the lanes as `setStrip` records pan), `setMovie(movie)`
+  (jobs only), `setMoviePosition(startTick?, offsetSeconds?)`, `removeMovie`, `addSceneMarkers(ticks,
+  replaceExisting = true)` (jobs only; markers `Scene 1`, … in time order). `addMarker` and `setMarker` gain
+  `kind?`. Delta: **`movieChanged(movie?)`**; formats and panners come as `trackUpserted`, `masterChanged`,
+  `settingsChanged`, scene markers as `markerUpserted`. The editor's `ProjectStore` keeps `movie`.
+- **Remote** (`Remote.cs`): `Discovery` (`ServiceType` `_anode._tcp`, TXT keys `version`, `project`, `pairing` (1/0),
+  `path` (`/api/v1`)); `DiscoveryInfo(name, host, port, projectName?, pairingRequired, version)` (`version` added);
+  `KeyCommandPad(id, label, commandId, color?)`, `PadSet(id, name, pads)`, **`RemotePads(sets)`** (`Empty`; user
+  settings); `ListenInState(on, listeners, latencyMs?)` (`latencyMs` is the Server's own ring-to-socket delay; a
+  remote adds its buffer). **Listen-in frames** (`ListenIn`, implemented in Contracts and mirrored in `models.ts` as
+  `ListenIn` and `readListenInFrame`): the socket's first message is text, `ListenInFormat(sampleRate, channels,
+  frameSamples, bitrate, projectSampleRate)`; then one binary message per Opus frame: a **16-byte little-endian
+  header** — `uint32` sequence at 0, `int64` transport sample at 4 (the project sample of the frame's first sample, −1
+  stopped), `uint16` packet length at 12, `uint8` flags at 14 (`FlagPlaying` 1, `FlagDiscontinuity` 2), 0 at 15 —
+  then the packet. `MaxListeners` 4 (a fifth socket: 503). `WriteHeader` and `TryReadHeader` are real.
+- **Realtime:** `listenIn` (`ListenInEvent(state)`), in `models.ts`'s `ServerMessage`.
+- **REST** (`MediaApi.cs`, `RemoteApi.cs`, `Pending.Phase10`, a new `Pending.cs`): `ImportMovie` (`POST
+  /project/movie`), `GetMovie` (`GET`), `RemoveMovie` (`DELETE`, answers `CommandResult`), `StreamMovie` (`GET
+  /project/movie/stream`, range requests), `RenderMovieThumbnails` (`POST /project/movie/thumbnails`),
+  `ListMovieThumbnails` (`GET /project/movie/thumbnails?height=`), `GetMovieFrame` (`GET
+  /project/movie/frames/{frame}?height=`, JPEG), `DetectMovieScenes` (`POST /project/movie/scenes`), `ImportMovieAudio`
+  and `ExportMovieAudio` (`POST /project/movie/audio/import|export`), `ExportAdm` and `ImportAdm` (`POST
+  /project/export/adm`, `/project/import/adm`), `GetMonitoring`/`SetMonitoring` (`/settings/monitoring`),
+  `GetDiscovery` (`GET /system/discovery`), `GetRemotePads`/`SetRemotePads` (`/remote/pads`), `GetListenIn` (`GET
+  /remote/listen/state`, added). The listen-in WebSocket is **`/api/v1/remote/listen`**, mapped in `RemoteApi` and
+  excluded from OpenAPI as `/ws` is; the stub answers 501. The editor's `AnodeApi`: `importMovie`, `movie`,
+  `removeMovie`, `renderMovieThumbnails`, `movieThumbnails(height?)`, `detectMovieScenes`, `importMovieAudio`,
+  `exportMovieAudio`, `exportAdm`, `importAdm`, `monitoring`, `setMonitoring`, `discovery`, `remotePads`,
+  `setRemotePads`, `listenInState`; URLs that elements load themselves are `@anode/api-client`'s **`mediaUrl(connection,
+  path, query?)`** and **`listenInUrl(connection)`** (the token as `access_token`), not `AnodeApi` methods.
+- **IPC** (`IpcMessage.cs`): `EngineStrip` gains `inputFormat`, `outputFormat` (`EngineChannelFormat`, the contract's
+  names and order) and `panner?` (`EnginePanner(mode: EnginePannerMode, surround: EngineSurroundPanner(angle,
+  diversity, elevation, centreGain, lfeGain, spread), object: EngineObjectPanner(azimuth, elevation, distance,
+  size))`, **levels as linear gains**; null: the stereo pan). Automation target kinds `surround` and `object` with
+  `parameterId` `angle | diversity | elevation | centre | lfe | spread` and `azimuth | elevation | distance | size`.
+  **`SetMonitoringMessage(binaural, downmixTo?, speakerMap, hrtfPath?)`** — the IPC map is **0-based** (−1 not sent),
+  unlike the contract's 1-based one, and carries the HRTF file. The master tap: **`HelloMessage.masterTapName`** (the
+  host creates the ring with its telemetry region) and **`SetMasterTapMessage(enabled)`**; the tap is the master after
+  its inserts and fader (its stereo down-mix when surround), never the monitoring render.
+- **Segment format 5** (`Segments/MasterTap.cs`): `MasterTapHeader` (magic `ANTP`, format 5, header size, sample
+  rate (the device's; the server resamples to 48 kHz), channels 2, `CapacityFrames` 2^16 and `StampCapacity` 2^11
+  (powers of two), `WriteFrame` and `StampCount` (monotonic, release-stored: stamp count first, then write frame),
+  the offsets and total length), then the sample ring (interleaved stereo float, frame n at `n & (capacity − 1)`) and
+  the stamp ring (`TapStamp(frame, transportSample, flags)`, 24 bytes, one per block; flags playing 1, discontinuity
+  2), each 64-byte aligned (`MasterTapLayout.Offsets`, `Size`). Single writer that never waits; a reader more than
+  the capacity behind skips to `WriteFrame − capacity/2` and marks a discontinuity. `SegmentHeader.CurrentFormat` is
+  5: the playback segment's layout is format 4's, bumped so a host and server of different phases refuse each other's
+  segments.
+- **Stubs that throw:**
+  - `Anode.Dsp/Spatial` (`Pending.WorkstreamD()`): `SpeakerFormat` (the contract's members) and `SpeakerLayout`
+    (`Of(format)`, `ChannelCount`, `LfeIndex`, `Azimuths`, `Elevations`, `HasHeight`, `Label(c)`) are **real** data,
+    with a test that they agree with `SpeakerLayouts` and `EngineChannelFormat` (the host references neither
+    Contracts nor the DSP's twin); `PlanarBlock(samples, channels, frames)` (planar: channel c at `[c × frames, (c+1) ×
+    frames)`) is real. Stubs: `SurroundPanner` (`Prepare(output, inputChannels, sampleRate, maxFrames)`,
+    `Set(in SurroundPannerSettings)`, `Gains(inputChannel, gains)`, `Process(input, output)` adding, `Reset`);
+    `Vbap(layout)` (`Gains(in ObjectPosition, gains)`); `ObjectRenderer` (`MaxObjects` 118, `Prepare(layout,
+    maxObjects, sampleRate, maxFrames)`, `SetPosition(index, position, frame = 0)`, `Render(index, input, output)`,
+    `Reset(index)`); `Downmixer(from, to)` (`Gain(output, input)`, `Process`); `HrtfSet.Load(path)` (Anode's
+    `.anhrtf`; `SampleRate`, `Length`, `DirectionCount`, `ImpulseResponses(az, el, left, right)`);
+    `BinauralRenderer` (`Prepare(hrtfs, layout, sampleRate, maxFrames)`, `LatencySamples`, `Process(speakers, left,
+    right)`, `Reset`). Everything allocates in `Prepare` or a constructor, off the audio thread.
+  - `Anode.Interchange/Adm`: `AdmScene(name, sampleRate, frames, beds, objects)`, `AdmBed(name, format, audioPath)`,
+    `AdmObject(name, audioPath, channels, blocks)`, `AdmBlock(startFrame, durationFrames, azimuth, elevation, distance,
+    size, interpolate)`; `AdmWriter.Write(scene, path, bitDepth = 24)` and `AdmReader.Read(path, mediaFolder)` (D);
+    **`AdmMapping.ToScene(state, request, bedPath, objectPaths)` and `ToContent(scene, state, fileIds)` (B)**, as
+    Phase 9's SMF mapping.
+  - **`Anode.Media`** (new, server only; references Contracts): `Ffmpeg/FfmpegTools(ffmpegPath, ffprobePath)`
+    (`Locate(directory?)`), `FfmpegRunner(tools)` (`RunFfmpegAsync(arguments, timeout, durationSeconds?, progress?,
+    cancellation)`, `RunFfprobeAsync`), `FfmpegResult`, `FfmpegException`; `MovieMedia.ProbeAsync` →
+    `MovieProbe(videoCodec, width, height, frameRate, frames, timecodeStartSeconds, durationSeconds, audio?)`,
+    `ExtractAudioAsync`,
+    `ThumbnailsAsync`, `DetectScenesAsync` (frame numbers), `RemuxAsync`, `GenerateTestMovieAsync(runner, path,
+    TestMovieSpec(durationSeconds, sceneCutFrames, frameRate?, width, height, timecodeStartSeconds, beepHz, beepSeconds,
+    audioSampleRate))`; `Opus/OpusEncoder(bitrate)` (`MaxPacketBytes` 1275, `Encode(interleaved, packet)`),
+    `OpusDecoder` (tests), and **`ListenInFramer(projectSampleRate)`** (the brief's "stream framing": `Format`,
+    `Write(interleaved, transportSample, playing, discontinuity)`, `Read(frame)`; not `…Stream`, which the analyzers
+    reserve). `Anode.Media.Tests` holds one placeholder test; the host does not reference `Anode.Media`.
+- **Editor:** the fake Server starts projects stereo (strips stereo in and out with `DefaultPanner`, markers of kind
+  `marker`, `movie: null`), and answers the 7 commands, a scene `kind` on `addMarker`/`setMarker`, `importTracks` with
+  formats, panners or automation, and the 16 new endpoints 422 (`fake-phase10.spec.ts`). `models.ts` mirrors every new
+  schema and, as values, `SpeakerLayouts` (with `Speaker` and `SpeakerLayout` interfaces, keyed by format),
+  `DefaultSurroundPanner`, `DefaultObjectPanner`, `DefaultPanner`, `PannerTargets`, `DefaultMonitoringSettings`,
+  `Discovery`, `ListenIn`, `ListenInFormat` and `readListenInFrame`. The **`remote` route** is a lazily loaded
+  placeholder (`remote/remote-page.ts`, `RemotePage`).
+- **Interim:** schema-9 packages read through **`Phase10Fields.Fill`** (`settings.surroundFormat` stereo, every
+  strip's formats stereo with `Panner.Default`, every marker of kind `marker`; the package's normalisers default bad
+  values too), which B replaces with schema 10 and its migration; `Project.movie` is null (not stored yet). The model
+  refuses the 7 commands, a scene marker kind, and imported formats, panners and automation (422, `Edits.Phase10.cs`);
+  panner automation targets are refused as unknown until B. The identity property skips `RandomProjects.PendingPhase10`,
+  and random projects are built without them (`Buildable`), so they stay Phase 9's.
+- **Fixed on the way:** turning an instrument track into a Drum Machine Designer now clears its `staffStyleId` (a
+  stack holds no MIDI, and a saved package dropped it), which made the package property fail for some seeds.
+
+### What each workstream must know
+
+- **A:** formats arrive in `EngineStrip` (`EngineChannelFormat`) and `SetMonitoringMessage`; use
+  `Anode.Dsp.Spatial.SpeakerLayout` for channel order; reorder for WAVE_FORMAT_EXTENSIBLE; the IPC speaker map is
+  0-based; announce the tap in the hello and write it only while `SetMasterTapMessage` has it on; a DMD conversion
+  resets the stack's strip to `ProjectDefaults.Strip` (stereo) in the model.
+- **B:** replace `Phase10Fields`, `Edits.Phase10.cs`, `PendingPhase10` and the generators; keep output formats equal
+  to destinations; the 1-based contract speaker map becomes the 0-based IPC one; extend the no-token origin check in
+  `Access` (now `/ws` only) to `/api/v1/remote/listen`; `AdmMapping` is yours; `ImportedTrack`'s new fields need the
+  model's `importTracks`.
+- **C:** `setPanner` is flat; `movie` may be absent from a real Server's JSON; listen-in and media URLs come from
+  `listenInUrl` and `mediaUrl`; the `remote` route exists as a placeholder.
+- **D:** shapes in `Anode.Dsp/Spatial` and `Anode.Interchange/Adm` are fixed; the layout data is real and tested.
+- **E:** `ListenInFramer` uses `ListenIn.WriteHeader`; the tap's rate is the project's, resample to 48 kHz.
+
 ## Workstreams
 
 Five, in parallel, each on its own branch; they meet only at the contracts above.

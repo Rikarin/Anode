@@ -3,6 +3,7 @@ import {
   type Cell,
   type CellContent,
   type ChannelStrip,
+  DefaultPanner,
   DefaultRegionNotation,
   type DrumPad,
   type EditCommand,
@@ -143,7 +144,10 @@ export function blankTrack(id: string, name: string, kind: Track['kind'], color:
       output: 'master',
       groups: [],
       vcaId: null,
-      midiEffects: []
+      midiEffects: [],
+      inputFormat: 'stereo',
+      outputFormat: 'stereo',
+      panner: structuredClone(DefaultPanner)
     },
     instrument: null,
     midiInput: { device: null, channel: 0 },
