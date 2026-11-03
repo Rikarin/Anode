@@ -13,7 +13,9 @@ namespace Anode.Contracts;
 ///     server stores it here): <c>parameters</c> holds their values, and they automate
 ///     (<c>midiEffect:{slotId}:{parameterId}</c>) and map to Smart Controls as any parameter (null: the plugin's
 ///     catalogue list applies). <c>source</c> is a Scripter slot's script (<c>setScript</c>; null on every other
-///     slot).
+///     slot). <c>mastering</c> (Phase 11, docs/12-phase-11.md) is a Mastering Assistant's analysis (null on every other
+///     insert, and on an assistant not analysed yet); its settings are its parameters
+///     (<see cref="MasteringParameters" />).
 /// </summary>
 public sealed record Insert(
     string Id,
@@ -24,7 +26,8 @@ public sealed record Insert(
     string? Sidechain,
     string? File = null,
     IReadOnlyList<ParameterInfo>? RuntimeParameters = null,
-    string? Source = null
+    string? Source = null,
+    MasteringAnalysis? Mastering = null
 );
 
 /// <summary>A send from a channel strip to bus 1…64, at <c>levelDb</c>, before or after the fader.</summary>

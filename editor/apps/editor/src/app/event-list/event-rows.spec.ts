@@ -35,7 +35,9 @@ function region(): MidiRegion {
       { id: 12, kind: 'pitchBend', channel: 2, number: 0, value: -4096, tick: 960 },
       { id: 13, kind: 'channelPressure', channel: 1, number: 0, value: 30, tick: 1440 },
       { id: 14, kind: 'polyPressure', channel: 1, number: 62, value: 40, tick: 1440 }
-    ]
+    ],
+    pitchSource: 'off',
+    key: null
   };
 }
 

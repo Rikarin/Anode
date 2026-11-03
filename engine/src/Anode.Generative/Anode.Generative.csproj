@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <Description>Session Players (docs/12-phase-11.md, docs/adr/0014-session-players-and-chord-id.md): the rule-based generator (phrase banks, the variation grammar, fills, swing, feel and humanisation, drums following a rhythm source, bass and keys on the chord track with voice leading) and the style library and its loader. A pure function on the server: the same inputs give the same notes on every machine. Referenced by the server only: the engine host plays the generated notes as MIDI.</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- The style library (workstream D): phrase banks, grammar and presets as JSON. -->
+    <EmbeddedResource Include="Styles/**/*.json"/>
+  </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="Anode.Generative.Tests"/>
+  </ItemGroup>
+  <ItemGroup>
+    <!-- SessionPlayerParameters, ChordTrack, ArrangementMarker, Note and the catalogue's records. -->
+    <ProjectReference Include="../Anode.Contracts/Anode.Contracts.csproj"/>
+  </ItemGroup>
+</Project>

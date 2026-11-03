@@ -517,6 +517,253 @@ export function readListenInFrame(message: ArrayBuffer): ListenInFrame | null {
   };
 }
 
+// ---- Phase 11 (docs/12-phase-11.md): the chord track, Session Players, the Mastering Assistant, the Environment
+
+export type NewChord = Schemas['NewChord'];
+export type Chord = Schemas['Chord'];
+export type ScaleKind = Schemas['ScaleKind'];
+export type ScaleChange = Schemas['ScaleChange'];
+export type ChordTrack = Schemas['ChordTrack'];
+export type PitchSourceMode = Schemas['PitchSourceMode'];
+export type RegionKey = Schemas['RegionKey'];
+export type ChordIdWrite = Schemas['ChordIdWrite'];
+export type ChordIdRequest = Schemas['ChordIdRequest'];
+export type DetectedChord = Schemas['DetectedChord'];
+export type DetectedKey = Schemas['DetectedKey'];
+export type ChordIdResult = Schemas['ChordIdResult'];
+export type SessionPlayerKind = Schemas['SessionPlayerKind'];
+export type SectionKind = Schemas['SectionKind'];
+export type SessionPlayerPad = Schemas['SessionPlayerPad'];
+export type DrumPiece = Schemas['DrumPiece'];
+export type DrumPieceSetting = Schemas['DrumPieceSetting'];
+export type DrummerSwitches = Schemas['DrummerSwitches'];
+export type BassSwitches = Schemas['BassSwitches'];
+export type KeysVoicing = Schemas['KeysVoicing'];
+export type KeysLeftHand = Schemas['KeysLeftHand'];
+export type KeysSwitches = Schemas['KeysSwitches'];
+export type SessionPlayerParameters = Schemas['SessionPlayerParameters'];
+export type SessionPlayerRegion = Schemas['SessionPlayerRegion'];
+export type SessionPlayerPreset = Schemas['SessionPlayerPreset'];
+export type SessionPlayerRhythm = Schemas['SessionPlayerRhythm'];
+export type SessionPlayerStyle = Schemas['SessionPlayerStyle'];
+export type SectionDefaults = Schemas['SectionDefaults'];
+export type SessionPlayerCatalog = Schemas['SessionPlayerCatalog'];
+export type SessionPlayerNotes = Schemas['SessionPlayerNotes'];
+export type RegenerateRequest = Schemas['RegenerateRequest'];
+export type SessionPlayerConvertTarget = Schemas['SessionPlayerConvertTarget'];
+export type SessionPlayerConvertRequest = Schemas['SessionPlayerConvertRequest'];
+export type ConvertedSessionPlayerRegion = Schemas['ConvertedSessionPlayerRegion'];
+export type MasteringCharacter = Schemas['MasteringCharacter'];
+export type MasteringAnalysis = Schemas['MasteringAnalysis'];
+export type MasteringSettings = Schemas['MasteringSettings'];
+export type MasteringState = Schemas['MasteringState'];
+export type MasteringAnalysisRequest = Schemas['MasteringAnalysisRequest'];
+export type EnvironmentObjectKind = Schemas['EnvironmentObjectKind'];
+export type EnvironmentLayer = Schemas['EnvironmentLayer'];
+export type DelayTap = Schemas['DelayTap'];
+export type EnvironmentObject = Schemas['EnvironmentObject'];
+export type EnvironmentCable = Schemas['EnvironmentCable'];
+export type MidiEnvironment = Schemas['MidiEnvironment'];
+export type EnvironmentInputRequest = Schemas['EnvironmentInputRequest'];
+
+/**
+ * The chord qualities (engine/src/Anode.Contracts/Chords.cs, `ChordQualities`): as written after a chord's root, in
+ * the order of Chord ID's templates and the quality menu, with their intervals above the root.
+ */
+export const ChordQualities: readonly { quality: string; intervals: readonly number[] }[] = [
+  { quality: '', intervals: [0, 4, 7] },
+  { quality: 'm', intervals: [0, 3, 7] },
+  { quality: '7', intervals: [0, 4, 7, 10] },
+  { quality: 'maj7', intervals: [0, 4, 7, 11] },
+  { quality: 'm7', intervals: [0, 3, 7, 10] },
+  { quality: 'dim', intervals: [0, 3, 6] },
+  { quality: 'm7b5', intervals: [0, 3, 6, 10] },
+  { quality: 'aug', intervals: [0, 4, 8] },
+  { quality: 'sus2', intervals: [0, 2, 7] },
+  { quality: 'sus4', intervals: [0, 5, 7] },
+  { quality: '6', intervals: [0, 4, 7, 9] },
+  { quality: 'm6', intervals: [0, 3, 7, 9] },
+  { quality: '9', intervals: [0, 4, 7, 10, 14] }
+];
+
+/** A project's chord track before anything is on it (`ChordTrack.Empty`). */
+export const EmptyChordTrack: ChordTrack = { chords: [], scales: [] };
+
+const StepClasses: Readonly<Record<PitchName['step'], number>> = { c: 0, d: 2, e: 4, f: 5, g: 7, a: 9, b: 11 };
+
+/** A spelled pitch's class, 0 (C) … 11 (B) (`PitchSources.PitchClass`). */
+export function pitchClass(pitch: PitchName): number {
+  return (((StepClasses[pitch.step] + pitch.alter) % 12) + 12) % 12;
+}
+
+/** The shortest transposition between pitch classes, −6…+5 (`PitchSources.RootInterval`): Pitch Source's Root mode. */
+export function rootInterval(from: number, to: number): number {
+  const up = (((to - from) % 12) + 12) % 12;
+  return up >= 6 ? up - 12 : up;
+}
+
+const SectionPrefixes: readonly (readonly [string, SectionKind])[] = [
+  ['intro', 'intro'],
+  ['verse', 'verse'],
+  ['pre-chorus', 'chorus'],
+  ['chorus', 'chorus'],
+  ['hook', 'chorus'],
+  ['bridge', 'bridge'],
+  ['middle', 'bridge'],
+  ['break', 'bridge'],
+  ['outro', 'outro'],
+  ['ending', 'outro'],
+  ['end', 'outro']
+];
+
+/** An arrangement section's kind by its name (`SectionKinds.Of`): what a Session Player region over it defaults to. */
+export function sectionKind(name: string | null | undefined): SectionKind {
+  const lower = (name ?? '').trim().toLowerCase();
+  return SectionPrefixes.find(([prefix]) => lower.startsWith(prefix))?.[1] ?? 'verse';
+}
+
+/** The Drummer's notes per kit piece (`DrumKitNotes`, General MIDI percussion), the main one first. */
+export const DrumKitNotes: Readonly<Record<DrumPiece, readonly number[]>> = {
+  kick: [36],
+  snare: [38, 37],
+  hiHat: [42, 44, 46],
+  toms: [50, 47, 45, 41],
+  cymbals: [49, 51, 53],
+  percussion: [39, 54, 56, 82]
+};
+
+/** The Mastering Assistant insert's plugin id and parameter ids (`MasteringParameters`). */
+export const MasteringParameters = {
+  pluginId: 'anode.mastering-assistant',
+  character: 'character',
+  targetLufs: 'targetLufs',
+  ceilingDbtp: 'ceilingDbtp',
+  eq: 'eq',
+  dynamics: 'dynamics',
+  width: 'width',
+  matchedBypass: 'matchedBypass'
+} as const;
+
+/** The analysis' spectrum bands (`MasteringBands`): ISO 266 third-octave centres, 25 Hz … 20 kHz. */
+export const MasteringBands: readonly number[] = [
+  25, 31.5, 40, 50, 63, 80, 100, 125, 160, 200, 250, 315, 400, 500, 630, 800, 1000, 1250, 1600, 2000, 2500, 3150, 4000,
+  5000, 6300, 8000, 10000, 12500, 16000, 20000
+];
+
+/** A new Mastering Assistant's settings (`MasteringSettings.Default`): Clean, −14 LUFS, −1 dBTP, full strength. */
+export const DefaultMasteringSettings: MasteringSettings = {
+  character: 'clean',
+  targetLufs: -14,
+  ceilingDbtp: -1,
+  eq: 1,
+  dynamics: 1,
+  width: 1,
+  matchedBypass: false
+};
+
+/** A numeric parameter of an Environment object kind (`EnvironmentParameter`). */
+export interface EnvironmentParameter {
+  id: string;
+  name: string;
+  min: number;
+  max: number;
+  default: number;
+}
+
+/** An Environment object kind's name, inlets, outlets and parameters (`EnvironmentObjectKindInfo`). */
+export interface EnvironmentObjectKindInfo {
+  kind: EnvironmentObjectKind;
+  name: string;
+  inlets: readonly string[];
+  outlets: readonly string[];
+  parameters: readonly EnvironmentParameter[];
+}
+
+const EnvironmentChannel: EnvironmentParameter = { id: 'channel', name: 'Channel', min: 1, max: 16, default: 1 };
+
+function environmentKind(
+  kind: EnvironmentObjectKind,
+  name: string,
+  inlets: readonly string[],
+  outlets: readonly string[],
+  parameters: readonly EnvironmentParameter[] = []
+): EnvironmentObjectKindInfo {
+  return { kind, name, inlets, outlets, parameters };
+}
+
+/**
+ * The Environment's object kinds (engine/src/Anode.Contracts/Environment.cs, `EnvironmentObjectKinds`), keyed by kind:
+ * inlets and outlets in index order (cables name them by index), and the numeric parameters (the arpeggiator's and
+ * chord memoriser's are their MIDI FX's, from the plugin catalogue).
+ */
+export const EnvironmentObjectKinds: Readonly<Record<EnvironmentObjectKind, EnvironmentObjectKindInfo>> = {
+  physicalInput: environmentKind('physicalInput', 'Physical Input', [], ['Out']),
+  sequencerInput: environmentKind('sequencerInput', 'Sequencer Input', ['In'], []),
+  keyboard: environmentKind(
+    'keyboard',
+    'Keyboard',
+    [],
+    ['Out'],
+    [EnvironmentChannel, { id: 'velocity', name: 'Velocity', min: 1, max: 127, default: 100 }]
+  ),
+  monitor: environmentKind('monitor', 'Monitor', ['In'], ['Out']),
+  fader: environmentKind(
+    'fader',
+    'Fader',
+    ['In'],
+    ['Out'],
+    [
+      { id: 'message', name: 'Message', min: 0, max: 3, default: 0 },
+      EnvironmentChannel,
+      { id: 'number', name: 'Number', min: 0, max: 127, default: 7 },
+      { id: 'min', name: 'Minimum', min: 0, max: 127, default: 0 },
+      { id: 'max', name: 'Maximum', min: 0, max: 127, default: 127 },
+      { id: 'value', name: 'Value', min: 0, max: 127, default: 0 }
+    ]
+  ),
+  transformer: environmentKind('transformer', 'Transformer', ['In'], ['Matched', 'Unmatched']),
+  delayLine: environmentKind(
+    'delayLine',
+    'Delay Line',
+    ['In'],
+    ['Out'],
+    [{ id: 'dry', name: 'Original', min: 0, max: 1, default: 1 }]
+  ),
+  arpeggiator: environmentKind('arpeggiator', 'Arpeggiator', ['In'], ['Out']),
+  chordMemorizer: environmentKind('chordMemorizer', 'Chord Memorizer', ['In'], ['Out']),
+  channelSplitter: environmentKind(
+    'channelSplitter',
+    'Channel Splitter',
+    ['In'],
+    [...Array.from({ length: 16 }, (_, c) => `Channel ${c + 1}`), 'Other']
+  ),
+  midiPort: environmentKind('midiPort', 'MIDI Port', ['In'], []),
+  trackInput: environmentKind('trackInput', 'Track Input', ['In'], []),
+  controlTarget: environmentKind('controlTarget', 'Control Target', ['In'], [])
+};
+
+/** A project's Environment before anything is in it (`MidiEnvironment.Empty`): physical input to sequencer input. */
+export const EmptyEnvironment: MidiEnvironment = { layers: [], objects: [], cables: [] };
+
+/** An event an Environment monitor saw (`MonitoredEvent`; only on `/ws`): its bytes and project sample (−1 stopped). */
+export interface MonitoredEvent {
+  status: number;
+  data1: number;
+  data2: number;
+  sample: number;
+}
+
+/** The master's Mastering Assistant's live readings (`MasteringEvent`; only on `/ws`). */
+export interface MasteringReading {
+  insertId: string;
+  momentaryLufs: number;
+  shortTermLufs: number;
+  integratedLufs: number;
+  truePeakDbtp: number;
+  compressorReductionDb: number;
+  limiterReductionDb: number;
+}
+
 /** Anode's virtual MIDI ports' fixed ids (engine/src/Anode.Contracts/Control.cs, `VirtualMidiPorts`; macOS only). */
 export const VirtualMidiPorts = { inputId: 'anode:in', outputId: 'anode:out' } as const;
 
@@ -577,7 +824,9 @@ export interface MidiActivity {
  * when one connects, disconnects or banks; `selection` the selected track when hardware or OSC changed it (the editor
  * follows; not sent for its own `PUT /project/selection`); `keyCommand` a key command a controller or OSC asked for
  * that the Server does not run itself (the editor runs it). Phase 10: `listenIn` the listen-in state when it starts or
- * stops, a listener comes or goes, or the Server's delay changes.
+ * stops, a listener comes or goes, or the Server's delay changes. Phase 11: `environmentMonitor` an Environment
+ * monitor's last events and `environmentFader` a fader's value (at the meter rate, from the host's telemetry);
+ * `mastering` the master's Mastering Assistant's live loudness and gain reduction while playing.
  */
 export type ServerMessage =
   | { type: 'connected'; version: string }
@@ -604,4 +853,7 @@ export type ServerMessage =
   | { type: 'surfaces'; surfaces: SurfaceStatus[] }
   | { type: 'selection'; trackId: string | null }
   | { type: 'keyCommand'; id: string }
-  | { type: 'listenIn'; state: ListenInState };
+  | { type: 'listenIn'; state: ListenInState }
+  | { type: 'environmentMonitor'; objectId: string; events: MonitoredEvent[] }
+  | { type: 'environmentFader'; objectId: string; value: number }
+  | ({ type: 'mastering' } & MasteringReading);

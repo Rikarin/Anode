@@ -327,7 +327,9 @@ public static partial class Edits {
                     Sorted(notes),
                     [],
                     false,
-                    ProjectDefaults.Notation
+                    ProjectDefaults.Notation,
+                    PitchSourceMode.Off,
+                    null
                 )
             )
         );

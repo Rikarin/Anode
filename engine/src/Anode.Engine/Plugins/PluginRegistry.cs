@@ -320,19 +320,24 @@ public sealed class PluginRegistry {
     /// </summary>
     public static IReadOnlyList<string> ClapFolders() {
         var folders = new List<string>();
-        if (Environment.GetEnvironmentVariable("CLAP_PATH") is { Length: > 0 } path) {
+        if (System.Environment.GetEnvironmentVariable("CLAP_PATH") is { Length: > 0 } path) {
             folders.AddRange(path.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries));
         }
 
-        var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        var home = System.Environment.GetFolderPath(System.Environment.SpecialFolder.UserProfile);
         if (OperatingSystem.IsMacOS()) {
             folders.Add(Path.Combine(home, "Library", "Audio", "Plug-Ins", "CLAP"));
             folders.Add("/Library/Audio/Plug-Ins/CLAP");
         } else if (OperatingSystem.IsWindows()) {
-            folders.Add(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonProgramFiles), "CLAP"));
             folders.Add(
                 Path.Combine(
-                    Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                    System.Environment.GetFolderPath(System.Environment.SpecialFolder.CommonProgramFiles),
+                    "CLAP"
+                )
+            );
+            folders.Add(
+                Path.Combine(
+                    System.Environment.GetFolderPath(System.Environment.SpecialFolder.LocalApplicationData),
                     "Programs",
                     "Common",
                     "CLAP"

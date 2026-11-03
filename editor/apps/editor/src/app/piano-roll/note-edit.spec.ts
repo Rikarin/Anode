@@ -43,7 +43,9 @@ function region(
       articulationId: 0
     })),
     controls: [],
-    muted: false
+    muted: false,
+    pitchSource: 'off',
+    key: null
   };
 }
 

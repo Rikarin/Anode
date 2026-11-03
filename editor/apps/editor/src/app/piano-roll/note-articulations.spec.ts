@@ -29,7 +29,9 @@ const region: MidiRegion = {
     { id: 3, pitch: 67, velocity: 80, channel: 1, startTick: 960, lengthTicks: 240, articulationId: 1 }
   ],
   controls: [],
-  muted: false
+  muted: false,
+  pitchSource: 'off',
+  key: null
 };
 
 const articulations = [

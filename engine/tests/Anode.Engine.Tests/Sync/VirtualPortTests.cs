@@ -16,7 +16,7 @@ public sealed class VirtualPortTests {
     [Fact]
     public async Task A_loopback_through_virtual_ports_carries_short_messages_and_sysex_both_ways() {
         Assert.SkipUnless(ProbeProcess.Supported, "no CoreMIDI here");
-        var prefix = $"vt{Environment.ProcessId}x{Random.Shared.Next(1000)}";
+        var prefix = $"vt{System.Environment.ProcessId}x{Random.Shared.Next(1000)}";
         using var midi = new NativeMidiBackend();
         Assert.Equal(0, midi.OpenVirtual("Virtual Test In", $"{prefix}:in", true));
         Assert.Equal(0, midi.OpenVirtual("Virtual Test Out", $"{prefix}:out", false));

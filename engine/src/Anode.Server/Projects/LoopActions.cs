@@ -99,7 +99,9 @@ public sealed class LoopActions(
                             transposed,
                             controls,
                             false,
-                            ProjectDefaults.Notation
+                            ProjectDefaults.Notation,
+                            PitchSourceMode.Off,
+                            null
                         )
                     ),
                     loop.Name
@@ -209,7 +211,9 @@ public sealed class LoopActions(
                         [],
                         follows ? interval : 0,
                         0,
-                        []
+                        [],
+                        PitchSourceMode.Off,
+                        null
                     );
                     return new SetCellCommand(trackId(), scene, new(region), loop.Name);
                 }

@@ -38,6 +38,8 @@ function region(change: Partial<AudioRegion> = {}): AudioRegion {
     transpose: 0,
     fineTune: 0,
     pitchNotes: [],
+    pitchSource: 'off',
+    key: null,
     ...change
   };
 }

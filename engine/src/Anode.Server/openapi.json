@@ -4981,6 +4981,468 @@
           }
         }
       }
+    },
+    "/api/v1/project/chords": {
+      "get": {
+        "tags": [
+          "Chords"
+        ],
+        "summary": "The chord track (as Project.chordTrack): chords, key and scale changes; 404 without a project.",
+        "operationId": "GetChordTrack",
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChordTrack"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/api/v1/project/chords/detect": {
+      "post": {
+        "tags": [
+          "Chords"
+        ],
+        "summary": "Chord ID over MIDI and audio regions: a chordId job that writes the chord track (replace or merge over the range) and the regions\u0027 detected keys, one undo step.",
+        "operationId": "DetectChords",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChordIdRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Job"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/api/v1/library/session-players": {
+      "get": {
+        "tags": [
+          "Session Players"
+        ],
+        "summary": "The style library\u0027s catalogue: its version and every Drummer, Bass and Keyboard Player style.",
+        "operationId": "GetSessionPlayerCatalog",
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionPlayerCatalog"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/project/regions/{regionId}/session-player": {
+      "get": {
+        "tags": [
+          "Session Players"
+        ],
+        "summary": "A Session Player region\u0027s generated notes (relative to its start) and their input hash, for the editor to draw; 404 when it is not a Session Player region.",
+        "operationId": "GetSessionPlayerNotes",
+        "parameters": [
+          {
+            "name": "regionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionPlayerNotes"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/api/v1/project/regions/{regionId}/session-player/regenerate": {
+      "post": {
+        "tags": [
+          "Session Players"
+        ],
+        "summary": "Regenerate: applies regenerateSessionPlayer to the region (a new seed; one undo step).",
+        "operationId": "RegenerateSessionPlayer",
+        "parameters": [
+          {
+            "name": "regionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegenerateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommandResult"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/api/v1/project/regions/{regionId}/session-player/convert": {
+      "post": {
+        "tags": [
+          "Session Players"
+        ],
+        "summary": "Convert to MIDI (or, from a Drummer, to a pattern): a sessionPlayerConvert job that replaces the regions by regions of their generated notes, one undo step.",
+        "operationId": "ConvertSessionPlayer",
+        "parameters": [
+          {
+            "name": "regionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SessionPlayerConvertRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Job"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/api/v1/project/mastering": {
+      "get": {
+        "tags": [
+          "Mastering"
+        ],
+        "summary": "The master\u0027s Mastering Assistant: its insert, settings and analysis; 404 when the master has none.",
+        "operationId": "GetMastering",
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MasteringState"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Mastering"
+        ],
+        "summary": "Replaces the assistant\u0027s settings: applies setMastering (one undo step); 404 without one.",
+        "operationId": "SetMastering",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MasteringSettings"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommandResult"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/api/v1/project/mastering/analyse": {
+      "post": {
+        "tags": [
+          "Mastering"
+        ],
+        "summary": "Analyse: a masteringAnalysis job that renders the master before the assistant offline (adding one last when asked), analyses it and stores the analysis in it (one undo step).",
+        "operationId": "AnalyseMastering",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MasteringAnalysisRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Job"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/api/v1/project/environment": {
+      "get": {
+        "tags": [
+          "Environment"
+        ],
+        "summary": "The Environment (as Project.environment): layers, objects and cables; empty is the default input path.",
+        "operationId": "GetEnvironment",
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MidiEnvironment"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/api/v1/project/environment/objects/{objectId}/input": {
+      "post": {
+        "tags": [
+          "Environment"
+        ],
+        "summary": "Live MIDI into an on-screen object (a keyboard plays it, a fader moves), as if it came from a device; 404 for an object that is not a keyboard or fader.",
+        "operationId": "EnvironmentInput",
+        "parameters": [
+          {
+            "name": "objectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EnvironmentInputRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "No Content"
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -5495,7 +5957,9 @@
           "flexMarkers",
           "transpose",
           "fineTune",
-          "pitchNotes"
+          "pitchNotes",
+          "pitchSource",
+          "key"
         ],
         "type": "object",
         "properties": {
@@ -5568,6 +6032,19 @@
             "items": {
               "$ref": "#/components/schemas/PitchNote"
             }
+          },
+          "pitchSource": {
+            "$ref": "#/components/schemas/PitchSourceMode"
+          },
+          "key": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/RegionKey"
+              }
+            ]
           }
         },
         "description": "A region of an audio file on a track: it starts at \u0060startTick\u0060 and plays \u0060length\u0060 frames of the file\nfrom \u0060fileOffset\u0060, at \u0060gainDb\u0060, with fades of \u0060fadeIn\u0060 and \u0060fadeOut\u0060 frames whose curves run\nfrom \u22121 (slow start, exponential-looking) through 0 (linear) to 1 (fast start, logarithmic-looking): a fade-in\u0027s\ngain at position x (0\u20261) is x^(2^(\u22122c)), a fade-out the mirror. A muted region\ndoes not play. Two regions on a track may overlap only as a crossfade: where the earlier fades out and the later\nfades in."
@@ -5640,6 +6117,32 @@
           "final"
         ],
         "description": "A measure\u0027s closing barline."
+      },
+      "BassSwitches": {
+        "required": [
+          "lowNote",
+          "highNote",
+          "slides",
+          "deadNotes"
+        ],
+        "type": "object",
+        "properties": {
+          "lowNote": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "highNote": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "slides": {
+            "type": "boolean"
+          },
+          "deadNotes": {
+            "type": "boolean"
+          }
+        },
+        "description": "The Bass Player\u0027s switches: its range (MIDI notes \u0060lowNote\u0060 \u2026 \u0060highNote\u0060, at least an octave apart,\nwithin 24\u202672), and whether it plays slides and dead notes."
       },
       "BeatMapping": {
         "required": [
@@ -6051,6 +6554,131 @@
         },
         "description": "                A channel strip: volume in dB (\u2212\u221E as \u2212144), pan \u22121 (left) \u2026 1 (right), mute and solo; its insert effects in\n                order; its sends to buses; where it goes (\u0060output\u0060: \u0060master\u0060, \u0060bus:N\u0060 for bus 1\u202664, or\n                \u0060output:N\u0060 for the device\u0027s stereo output pair N); the mixer groups it belongs to (1\u202632); and the VCA track\n                that offsets its volume, if any. The master strip uses only volume, pan, mute and its inserts. Phase 6:\n                \u0060midiEffects\u0060 are its MIDI FX slots (instrument and external MIDI tracks only; empty elsewhere), in the\n                same shape as inserts: they run in slot order on the block\u0027s MIDI (regions, live and step input) before the\n                instrument; bypassed slots pass it through.\n                Phase 10 (docs/11-phase-10.md): inputFormat is the format of the signal the strip processes before its\npanner (an audio track\u0027s recording and regions, an instrument\u0027s output, an aux\u0027s bus: an aux\u0027s input format\nis its bus\u0027s format); outputFormat is its destination\u0027s format, kept by the server (the master\u0027s is\nthe project\u0027s surroundFormat, a bus\u0027s its aux\u0027s input format, a device output pair stereo; the\nmaster\u0027s input and output are the project\u0027s). panner maps the input channels to the output: stereo\npan (pan) for a stereo output, the Surround Panner, or an object (PannerMode); an input\nof the output\u0027s format passes straight through. Sends to a multichannel bus are panned by the strip\u0027s panner\n(their pan applies to stereo buses only). Every strip of a project from before Phase 10 is stereo in\nand out with the stereo panner."
       },
+      "Chord": {
+        "required": [
+          "id",
+          "tick",
+          "root",
+          "quality",
+          "bass"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "tick": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "root": {
+            "$ref": "#/components/schemas/PitchName"
+          },
+          "quality": {
+            "type": "string"
+          },
+          "bass": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PitchName"
+              }
+            ]
+          }
+        },
+        "description": "A chord of the chord track at project tick \u0060tick\u0060 (it holds until the next chord): its root, its quality\n(ChordQualities) and an optional slash bass (\u0022G/B\u0022). Chords are in tick order, at most one per tick."
+      },
+      "ChordIdRequest": {
+        "required": [
+          "regionIds",
+          "write",
+          "detectKeys"
+        ],
+        "type": "object",
+        "properties": {
+          "regionIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "startTick": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int64"
+          },
+          "endTick": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int64"
+          },
+          "write": {
+            "$ref": "#/components/schemas/ChordIdWrite"
+          },
+          "detectKeys": {
+            "type": "boolean",
+            "default": true
+          },
+          "resolutionTicks": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int64"
+          }
+        },
+        "description": "Chord ID (\u0060POST /project/chords/detect\u0060, job \u0060chordId\u0060): over MIDI regions (template matching per\nbeat, smoothed) and audio regions (a harmonic chromagram, beat-synchronous, the same templates and an HMM), every\nregion of \u0060regionIds\u0060 together, between \u0060startTick\u0060 and \u0060endTick\u0060 (left out: the regions\u0027 span).\nThe job writes the chord track by \u0060write\u0060 and, when \u0060detectKeys\u0060, each region\u0027s detected key, in one undo\nstep (\u0060applyChordId\u0060). \u0060resolutionTicks\u0060 is the shortest chord it reports (left out: a beat)."
+      },
+      "ChordIdResult": {
+        "required": [
+          "startTick",
+          "endTick",
+          "write",
+          "chords",
+          "keys"
+        ],
+        "type": "object",
+        "properties": {
+          "startTick": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "endTick": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "write": {
+            "$ref": "#/components/schemas/ChordIdWrite"
+          },
+          "chords": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DetectedChord"
+            }
+          },
+          "keys": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DetectedKey"
+            }
+          }
+        },
+        "description": "What a Chord ID job found over \u0060startTick\u0060\u2026\u0060endTick\u0060 (the range it analysed), and how it writes it:\n\u0060applyChordId\u0060\u0027s content."
+      },
+      "ChordIdWrite": {
+        "enum": [
+          "replace",
+          "merge",
+          "none"
+        ],
+        "description": "How Chord ID writes what it found into the chord track over its range."
+      },
       "ChordSymbol": {
         "required": [
           "id",
@@ -6094,6 +6722,28 @@
           }
         },
         "description": "A chord symbol on a track at project tick \u0060tick\u0060: its root, its quality as written after the root (\u0022\u0022 major,\n\u0022m\u0022, \u00227\u0022, \u0022maj7\u0022, \u0022m7\u0022, \u0022dim\u0022, \u0022m7b5\u0022, \u0022aug\u0022, \u0022sus4\u0022, \u00226\u0022, \u00229\u0022\u2026; MusicXML\u0027s \u0060kind\u0060 is derived from it),\nan optional bass (\u0022C/E\u0022), and whether a chord grid (guitar diagram) is drawn with it."
+      },
+      "ChordTrack": {
+        "required": [
+          "chords",
+          "scales"
+        ],
+        "type": "object",
+        "properties": {
+          "chords": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Chord"
+            }
+          },
+          "scales": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ScaleChange"
+            }
+          }
+        },
+        "description": "The chord track (\u0060Project.chordTrack\u0060): a global track of chords and of key and scale changes, shown with\nthe other global tracks. Session Players and Pitch Source follow it; Chord ID writes it. Empty in every project\nfrom before Phase 11."
       },
       "Clef": {
         "enum": [
@@ -6570,6 +7220,40 @@
         },
         "description": "A zone (usually one controller): its modes, of which \u0060activeModeId\u0060 is live (only its assignments match\ninput); a zoneMode target switches it."
       },
+      "ConvertedSessionPlayerRegion": {
+        "required": [
+          "regionId",
+          "target",
+          "notes",
+          "pattern"
+        ],
+        "type": "object",
+        "properties": {
+          "regionId": {
+            "type": "string"
+          },
+          "target": {
+            "$ref": "#/components/schemas/SessionPlayerConvertTarget"
+          },
+          "notes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/NewNote"
+            }
+          },
+          "pattern": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/Pattern"
+              }
+            ]
+          }
+        },
+        "description": "A converted region: the Session Player region it replaces and the notes (or the pattern) it holds."
+      },
       "CreateAlternativeRequest": {
         "required": [
           "name"
@@ -6631,6 +7315,29 @@
           "takeFolder",
           "regions"
         ]
+      },
+      "DelayTap": {
+        "required": [
+          "delayTicks",
+          "transpose",
+          "velocity"
+        ],
+        "type": "object",
+        "properties": {
+          "delayTicks": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "transpose": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "velocity": {
+            "type": "integer",
+            "format": "int32"
+          }
+        },
+        "description": "A delay line\u0027s tap: \u0060delayTicks\u0060 after the event (1\u20263840), transposed, its velocity offset (\u2212127\u2026127)."
       },
       "DeltaOp": {
         "required": [
@@ -6763,6 +7470,18 @@
           },
           {
             "$ref": "#/components/schemas/DeltaOpMovieChanged"
+          },
+          {
+            "$ref": "#/components/schemas/DeltaOpChordTrackChanged"
+          },
+          {
+            "$ref": "#/components/schemas/DeltaOpSessionPlayerRegionUpserted"
+          },
+          {
+            "$ref": "#/components/schemas/DeltaOpSessionPlayerRegionRemoved"
+          },
+          {
+            "$ref": "#/components/schemas/DeltaOpEnvironmentChanged"
           }
         ],
         "discriminator": {
@@ -6809,7 +7528,11 @@
             "scoreSetUpserted": "#/components/schemas/DeltaOpScoreSetUpserted",
             "scoreSetRemoved": "#/components/schemas/DeltaOpScoreSetRemoved",
             "scoreLayoutChanged": "#/components/schemas/DeltaOpScoreLayoutChanged",
-            "movieChanged": "#/components/schemas/DeltaOpMovieChanged"
+            "movieChanged": "#/components/schemas/DeltaOpMovieChanged",
+            "chordTrackChanged": "#/components/schemas/DeltaOpChordTrackChanged",
+            "sessionPlayerRegionUpserted": "#/components/schemas/DeltaOpSessionPlayerRegionUpserted",
+            "sessionPlayerRegionRemoved": "#/components/schemas/DeltaOpSessionPlayerRegionRemoved",
+            "environmentChanged": "#/components/schemas/DeltaOpEnvironmentChanged"
           }
         }
       },
@@ -6933,6 +7656,42 @@
           }
         },
         "description": "Phase 9: a chord symbol was added or changed."
+      },
+      "DeltaOpChordTrackChanged": {
+        "required": [
+          "chordTrack",
+          "op"
+        ],
+        "properties": {
+          "op": {
+            "enum": [
+              "chordTrackChanged"
+            ],
+            "type": "string"
+          },
+          "chordTrack": {
+            "$ref": "#/components/schemas/ChordTrack"
+          }
+        },
+        "description": "Phase 11 (docs/12-phase-11.md): the chord track changed (the whole track: chords, key and scale changes). Regions\u0027\nPitch Source and keys come as \u0060regionUpserted\u0060 and \u0060midiRegionUpserted\u0060, a Mastering Assistant\u0027s\nsettings and analysis as \u0060masterChanged\u0060."
+      },
+      "DeltaOpEnvironmentChanged": {
+        "required": [
+          "environment",
+          "op"
+        ],
+        "properties": {
+          "op": {
+            "enum": [
+              "environmentChanged"
+            ],
+            "type": "string"
+          },
+          "environment": {
+            "$ref": "#/components/schemas/MidiEnvironment"
+          }
+        },
+        "description": "Phase 11: the Environment changed (the whole document: layers, objects and cables)."
       },
       "DeltaOpGrooveRemoved": {
         "required": [
@@ -7429,6 +8188,41 @@
           }
         }
       },
+      "DeltaOpSessionPlayerRegionRemoved": {
+        "required": [
+          "id",
+          "op"
+        ],
+        "properties": {
+          "op": {
+            "enum": [
+              "sessionPlayerRegionRemoved"
+            ],
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          }
+        }
+      },
+      "DeltaOpSessionPlayerRegionUpserted": {
+        "required": [
+          "region",
+          "op"
+        ],
+        "properties": {
+          "op": {
+            "enum": [
+              "sessionPlayerRegionUpserted"
+            ],
+            "type": "string"
+          },
+          "region": {
+            "$ref": "#/components/schemas/SessionPlayerRegion"
+          }
+        },
+        "description": "Phase 11: a Session Player region was added or changed (its parameters and seed included; clients refetch its\nnotes, \u0060GET /project/regions/{id}/session-player\u0060, after this, or after the chord track, the sections or its\nrhythm source\u0027s regions change over its range)."
+      },
       "DeltaOpSettingsChanged": {
         "required": [
           "settings",
@@ -7555,6 +8349,69 @@
         },
         "description": "A track was added or changed; \u0060index\u0060 is its position in the track list."
       },
+      "DetectedChord": {
+        "required": [
+          "tick",
+          "lengthTicks",
+          "root",
+          "quality",
+          "bass",
+          "confidence"
+        ],
+        "type": "object",
+        "properties": {
+          "tick": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "lengthTicks": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "root": {
+            "$ref": "#/components/schemas/PitchName"
+          },
+          "quality": {
+            "type": "string"
+          },
+          "bass": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PitchName"
+              }
+            ]
+          },
+          "confidence": {
+            "type": "number",
+            "format": "double"
+          }
+        },
+        "description": "A chord Chord ID found: from \u0060tick\u0060 for \u0060lengthTicks\u0060, with a confidence 0\u20261."
+      },
+      "DetectedKey": {
+        "required": [
+          "regionId",
+          "key",
+          "confidence"
+        ],
+        "type": "object",
+        "properties": {
+          "regionId": {
+            "type": "string"
+          },
+          "key": {
+            "$ref": "#/components/schemas/RegionKey"
+          },
+          "confidence": {
+            "type": "number",
+            "format": "double"
+          }
+        },
+        "description": "A region\u0027s key Chord ID found, with a confidence 0\u20261."
+      },
       "DirectoryListing": {
         "required": [
           "path",
@@ -7664,6 +8521,27 @@
         },
         "description": "A percussion staff\u0027s mapping of a MIDI pitch to a staff position (diatonic steps above the bottom line: 0 the\nbottom line, 8 the top), a notehead and the instrument\u0027s name (for MusicXML and the staff style editor)."
       },
+      "DrummerSwitches": {
+        "required": [
+          "pieces"
+        ],
+        "type": "object",
+        "properties": {
+          "pieces": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DrumPieceSetting"
+            }
+          },
+          "rhythmSourceTrackId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        },
+        "description": "The Drummer\u0027s switches: every kit piece (DrumPiece, each once, in that order), and the rhythm\nsource to follow (Logic\u0027s Follow: a track whose notes, or audio onsets, the kick and snare lean towards; null:\nnone)."
+      },
       "DrumPad": {
         "required": [
           "note",
@@ -7684,6 +8562,38 @@
           }
         },
         "description": "A pad of a Drum Machine Designer: note \u0060note\u0060 (0\u2026127) plays sub-track \u0060trackId\u0060."
+      },
+      "DrumPiece": {
+        "enum": [
+          "kick",
+          "snare",
+          "hiHat",
+          "toms",
+          "cymbals",
+          "percussion"
+        ],
+        "description": "A Drummer kit piece, switched on or off and given a pattern variation."
+      },
+      "DrumPieceSetting": {
+        "required": [
+          "piece",
+          "on",
+          "variation"
+        ],
+        "type": "object",
+        "properties": {
+          "piece": {
+            "$ref": "#/components/schemas/DrumPiece"
+          },
+          "on": {
+            "type": "boolean"
+          },
+          "variation": {
+            "type": "integer",
+            "format": "int32"
+          }
+        },
+        "description": "A kit piece\u0027s switch: on or off, and its pattern variation (0 the style\u0027s default \u2026 3)."
       },
       "EditCommand": {
         "required": [
@@ -8152,6 +9062,72 @@
           },
           {
             "$ref": "#/components/schemas/EditCommandAddSceneMarkersCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandAddChordsCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandEditChordsCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandDeleteChordsCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandSetScalesCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandApplyChordIdCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandSetPitchSourceCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandSetRegionKeyCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandAddSessionPlayerTrackCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandAddSessionPlayerRegionCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandSetSessionPlayerRegionCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandRegenerateSessionPlayerCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandConvertSessionPlayerRegionsCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandSetMasteringCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandSetMasteringAnalysisCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandAddEnvironmentLayerCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandSetEnvironmentLayerCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandRemoveEnvironmentLayerCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandAddEnvironmentObjectCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandSetEnvironmentObjectCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandRemoveEnvironmentObjectsCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandConnectEnvironmentCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandDisconnectEnvironmentCommand"
           }
         ],
         "description": "An edit of the open project (docs/adr/0004-state-ownership.md). A batch of them is applied atomically as one\nundo step. Optional properties left out are left unchanged.",
@@ -8311,7 +9287,29 @@
             "setMovie": "#/components/schemas/EditCommandSetMovieCommand",
             "setMoviePosition": "#/components/schemas/EditCommandSetMoviePositionCommand",
             "removeMovie": "#/components/schemas/EditCommandRemoveMovieCommand",
-            "addSceneMarkers": "#/components/schemas/EditCommandAddSceneMarkersCommand"
+            "addSceneMarkers": "#/components/schemas/EditCommandAddSceneMarkersCommand",
+            "addChords": "#/components/schemas/EditCommandAddChordsCommand",
+            "editChords": "#/components/schemas/EditCommandEditChordsCommand",
+            "deleteChords": "#/components/schemas/EditCommandDeleteChordsCommand",
+            "setScales": "#/components/schemas/EditCommandSetScalesCommand",
+            "applyChordId": "#/components/schemas/EditCommandApplyChordIdCommand",
+            "setPitchSource": "#/components/schemas/EditCommandSetPitchSourceCommand",
+            "setRegionKey": "#/components/schemas/EditCommandSetRegionKeyCommand",
+            "addSessionPlayerTrack": "#/components/schemas/EditCommandAddSessionPlayerTrackCommand",
+            "addSessionPlayerRegion": "#/components/schemas/EditCommandAddSessionPlayerRegionCommand",
+            "setSessionPlayerRegion": "#/components/schemas/EditCommandSetSessionPlayerRegionCommand",
+            "regenerateSessionPlayer": "#/components/schemas/EditCommandRegenerateSessionPlayerCommand",
+            "convertSessionPlayerRegions": "#/components/schemas/EditCommandConvertSessionPlayerRegionsCommand",
+            "setMastering": "#/components/schemas/EditCommandSetMasteringCommand",
+            "setMasteringAnalysis": "#/components/schemas/EditCommandSetMasteringAnalysisCommand",
+            "addEnvironmentLayer": "#/components/schemas/EditCommandAddEnvironmentLayerCommand",
+            "setEnvironmentLayer": "#/components/schemas/EditCommandSetEnvironmentLayerCommand",
+            "removeEnvironmentLayer": "#/components/schemas/EditCommandRemoveEnvironmentLayerCommand",
+            "addEnvironmentObject": "#/components/schemas/EditCommandAddEnvironmentObjectCommand",
+            "setEnvironmentObject": "#/components/schemas/EditCommandSetEnvironmentObjectCommand",
+            "removeEnvironmentObjects": "#/components/schemas/EditCommandRemoveEnvironmentObjectsCommand",
+            "connectEnvironment": "#/components/schemas/EditCommandConnectEnvironmentCommand",
+            "disconnectEnvironment": "#/components/schemas/EditCommandDisconnectEnvironmentCommand"
           }
         }
       },
@@ -8359,6 +9357,27 @@
           }
         },
         "description": "Adds an aux track listening to bus \u0060bus\u0060 (the lowest unused bus when left out)."
+      },
+      "EditCommandAddChordsCommand": {
+        "required": [
+          "chords",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "addChords"
+            ],
+            "type": "string"
+          },
+          "chords": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/NewChord"
+            }
+          }
+        },
+        "description": "Phase 11 (docs/12-phase-11.md): adds chords to the chord track (ticks of 0 or more, alterations \u22122\u20262, a quality of\nChordQualities); a chord at the tick of an existing one replaces it."
       },
       "EditCommandAddChordSymbolsCommand": {
         "required": [
@@ -8440,6 +9459,131 @@
           }
         },
         "description": "Adds a pad on note \u0060note\u0060 (0\u2026127, free on this DMD) to a DMD track: a new member instrument track playing\n\u0060pluginId\u0060 (left out: the Drum Synth, \u0060anode.drum-synth\u0060), named \u0060name\u0060."
+      },
+      "EditCommandAddEnvironmentLayerCommand": {
+        "required": [
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "addEnvironmentLayer"
+            ],
+            "type": "string"
+          },
+          "name": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        },
+        "description": "Phase 11, the Environment: adds a layer at the end (named \u0060Layer N\u0060 when left out)."
+      },
+      "EditCommandAddEnvironmentObjectCommand": {
+        "required": [
+          "kind",
+          "x",
+          "y",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "addEnvironmentObject"
+            ],
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/EnvironmentObjectKind"
+          },
+          "x": {
+            "type": "number",
+            "format": "double"
+          },
+          "y": {
+            "type": "number",
+            "format": "double"
+          },
+          "layerId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "name": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "parameters": {
+            "type": [
+              "null",
+              "object"
+            ],
+            "additionalProperties": {
+              "type": "number",
+              "format": "double"
+            }
+          },
+          "port": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "trackId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "address": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "conditions": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/TransformCondition"
+            }
+          },
+          "operations": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/TransformOperation"
+            }
+          },
+          "taps": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/DelayTap"
+            }
+          },
+          "chord": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        },
+        "description": "Phase 11: adds an object of \u0060kind\u0060 to layer \u0060layerId\u0060 (left out: the first layer, made as\n\u0060Layer 1\u0060 when there is none) at \u0060x\u0060, \u0060y\u0060, named \u0060name\u0060 (left out: the kind\u0027s), with\n\u0060parameters\u0060 (missing ones at their defaults) and the kind\u0027s other settings\n(EnvironmentObject)."
       },
       "EditCommandAddInsertCommand": {
         "required": [
@@ -8880,6 +10024,120 @@
         },
         "description": "Adds a send to bus 1\u202664 (post-fader at \u2212\u221E dB unless told otherwise, as Logic does)."
       },
+      "EditCommandAddSessionPlayerRegionCommand": {
+        "required": [
+          "trackId",
+          "startTick",
+          "type",
+          "parameters"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "addSessionPlayerRegion"
+            ],
+            "type": "string"
+          },
+          "trackId": {
+            "type": "string"
+          },
+          "startTick": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "lengthTicks": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int64"
+          },
+          "parameters": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SessionPlayerParameters"
+              }
+            ]
+          },
+          "name": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "seed": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int64"
+          }
+        },
+        "description": "Phase 11: adds a Session Player region to a Session Player track at \u0060startTick\u0060, \u0060lengthTicks\u0060 long\n(left out: to the end of the section it starts in, else 8 bars), with \u0060parameters\u0060 (left out: the track\u0027s\nstyle\u0027s defaults for the section kind there) and \u0060seed\u0060 (left out: drawn)."
+      },
+      "EditCommandAddSessionPlayerTrackCommand": {
+        "required": [
+          "player",
+          "type",
+          "regions"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "addSessionPlayerTrack"
+            ],
+            "type": "string"
+          },
+          "player": {
+            "$ref": "#/components/schemas/SessionPlayerKind"
+          },
+          "styleId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "presetId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "kitPatchId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "pluginId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "name": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "index": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int32"
+          },
+          "regions": {
+            "type": "boolean",
+            "default": true
+          }
+        },
+        "description": "Phase 11, New Tracks\u0027 Session Player: adds a \u0060drummer\u0060, \u0060bassPlayer\u0060 or \u0060keyboardPlayer\u0060 track at\n\u0060index\u0060 (the end when left out) playing style \u0060styleId\u0060 (left out: the player\u0027s first) with preset\n\u0060presetId\u0060 (left out: the style\u0027s first). A Drummer gets kit patch \u0060kitPatchId\u0060 (left out: the style\u0027s);\na Bass or Keyboard Player instrument \u0060pluginId\u0060 (left out: the style\u0027s patch, else the default synth). With\n\u0060regions\u0060, it gets a Session Player region per arrangement section (each with its section kind\u0027s defaults\nand a seed of its own), or, without sections, one of 8 bars from the project start."
+      },
       "EditCommandAddStemsCommand": {
         "required": [
           "regionId",
@@ -8975,6 +10233,24 @@
             ]
           }
         }
+      },
+      "EditCommandApplyChordIdCommand": {
+        "required": [
+          "result",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "applyChordId"
+            ],
+            "type": "string"
+          },
+          "result": {
+            "$ref": "#/components/schemas/ChordIdResult"
+          }
+        },
+        "description": "Phase 11, Chord ID\u0027s result: writes the detected chords into the chord track over the result\u0027s range by its\n\u0060write\u0060 and sets each detected region key, in one undo step. The \u0060chordId\u0060 job applies it; clients do\nnot send it."
       },
       "EditCommandApplyPatchCommand": {
         "required": [
@@ -9113,6 +10389,38 @@
         },
         "description": "Compare: on, the controls show (and their parameters take) their saved values; off, the edited ones again. The\nserver applies it without an undo step (its delta still reaches every client)."
       },
+      "EditCommandConnectEnvironmentCommand": {
+        "required": [
+          "fromObjectId",
+          "outlet",
+          "toObjectId",
+          "inlet",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "connectEnvironment"
+            ],
+            "type": "string"
+          },
+          "fromObjectId": {
+            "type": "string"
+          },
+          "outlet": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "toObjectId": {
+            "type": "string"
+          },
+          "inlet": {
+            "type": "integer",
+            "format": "int32"
+          }
+        },
+        "description": "Phase 11: a cable from outlet \u0060outlet\u0060 of one object to inlet \u0060inlet\u0060 of another (both existing on their\nkinds; 422 for a cable that exists, or one that would close a cycle)."
+      },
       "EditCommandConvertPatternToMidiCommand": {
         "required": [
           "regionId",
@@ -9130,6 +10438,27 @@
           }
         },
         "description": "Replaces a pattern region with a MIDI region of exactly the notes it plays over its length (one pass of the\nregion), at the same place, with its name and mute."
+      },
+      "EditCommandConvertSessionPlayerRegionsCommand": {
+        "required": [
+          "regions",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "convertSessionPlayerRegions"
+            ],
+            "type": "string"
+          },
+          "regions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ConvertedSessionPlayerRegion"
+            }
+          }
+        },
+        "description": "Phase 11, Convert\u0027s result: replaces each Session Player region by a MIDI region of its notes (or, from a\nDrummer, a pattern region of its pattern) at the same place, with its name and mute, in one undo step. The\n\u0060sessionPlayerConvert\u0060 job applies it; clients do not send it."
       },
       "EditCommandCopyRegionsCommand": {
         "required": [
@@ -9253,6 +10582,26 @@
             "type": "string"
           },
           "cellIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "EditCommandDeleteChordsCommand": {
+        "required": [
+          "chordIds",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "deleteChords"
+            ],
+            "type": "string"
+          },
+          "chordIds": {
             "type": "array",
             "items": {
               "type": "string"
@@ -9548,6 +10897,47 @@
           }
         },
         "description": "Deletes a track alternative with its content; deleting the active one selects another first."
+      },
+      "EditCommandDisconnectEnvironmentCommand": {
+        "required": [
+          "cableIds",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "disconnectEnvironment"
+            ],
+            "type": "string"
+          },
+          "cableIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "EditCommandEditChordsCommand": {
+        "required": [
+          "chords",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "editChords"
+            ],
+            "type": "string"
+          },
+          "chords": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Chord"
+            }
+          }
+        },
+        "description": "Phase 11: replaces chord track chords by id (moving, re-rooting, a new quality or bass, or none)."
       },
       "EditCommandEditChordSymbolsCommand": {
         "required": [
@@ -10158,6 +11548,34 @@
         },
         "description": "Moves note starts towards the grid (destructive; \u0060noteIds\u0060 left out: every note of the region), with the\nsame strength and swing meaning as RegionPlayback. Phase 7: with \u0060grooveId\u0060 (a groove\ntemplate of the project), towards the template\u0027s positions instead (\u0060gridTicks\u0060 and \u0060swing\u0060 unused),\nand with \u0060grooveVelocity\u0060 true the velocities follow its scales by the same strength. On a track whose\n\u0060matchGroove\u0060 is on, a quantise without \u0060grooveId\u0060 uses the groove track\u0027s groove, extracted from its\nfirst region at the time of the quantise."
       },
+      "EditCommandRegenerateSessionPlayerCommand": {
+        "required": [
+          "regionIds",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "regenerateSessionPlayer"
+            ],
+            "type": "string"
+          },
+          "regionIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "seed": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int64"
+          }
+        },
+        "description": "Phase 11, Regenerate: gives Session Player regions a new seed (left out: each one drawn)."
+      },
       "EditCommandRemoveDrumPadCommand": {
         "required": [
           "trackId",
@@ -10180,6 +11598,45 @@
           }
         },
         "description": "Removes the pad on note \u0060note\u0060 of a DMD track, with its track."
+      },
+      "EditCommandRemoveEnvironmentLayerCommand": {
+        "required": [
+          "layerId",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "removeEnvironmentLayer"
+            ],
+            "type": "string"
+          },
+          "layerId": {
+            "type": "string"
+          }
+        },
+        "description": "Phase 11: removes a layer, its objects and every cable to or from them."
+      },
+      "EditCommandRemoveEnvironmentObjectsCommand": {
+        "required": [
+          "objectIds",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "removeEnvironmentObjects"
+            ],
+            "type": "string"
+          },
+          "objectIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "description": "Phase 11: removes Environment objects and every cable to or from them."
       },
       "EditCommandRemoveInsertCommand": {
         "required": [
@@ -10718,6 +12175,146 @@
         },
         "description": "Changes the pad on note \u0060note\u0060 of a DMD track: renames it (and its track), gives its track another\ninstrument (\u0060pluginId\u0060, parameters at their defaults), or moves it to free note \u0060toNote\u0060. Its channel\nstrip is edited through the pad track\u0027s own strip and insert commands."
       },
+      "EditCommandSetEnvironmentLayerCommand": {
+        "required": [
+          "layerId",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "setEnvironmentLayer"
+            ],
+            "type": "string"
+          },
+          "layerId": {
+            "type": "string"
+          },
+          "name": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "index": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int32"
+          }
+        },
+        "description": "Phase 11: renames a layer or moves it to \u0060index\u0060 among the layers."
+      },
+      "EditCommandSetEnvironmentObjectCommand": {
+        "required": [
+          "objectId",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "setEnvironmentObject"
+            ],
+            "type": "string"
+          },
+          "objectId": {
+            "type": "string"
+          },
+          "name": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "layerId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "x": {
+            "type": [
+              "null",
+              "number"
+            ],
+            "format": "double"
+          },
+          "y": {
+            "type": [
+              "null",
+              "number"
+            ],
+            "format": "double"
+          },
+          "parameters": {
+            "type": [
+              "null",
+              "object"
+            ],
+            "additionalProperties": {
+              "type": "number",
+              "format": "double"
+            }
+          },
+          "port": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "trackId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "address": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "conditions": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/TransformCondition"
+            }
+          },
+          "operations": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/TransformOperation"
+            }
+          },
+          "taps": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/DelayTap"
+            }
+          },
+          "chord": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        },
+        "description": "Phase 11: changes an Environment object (moving it on its canvas or to another layer, renaming it, its settings);\nleft-out properties stay. \u0060parameters\u0060 are merged into its own; an empty \u0060port\u0060, \u0060trackId\u0060 or\n\u0060address\u0060 clears it; \u0060conditions\u0060, \u0060operations\u0060, \u0060taps\u0060 and \u0060chord\u0060 replace its own (an\nempty \u0060chord\u0060 clears it)."
+      },
       "EditCommandSetFileTempoCommand": {
         "required": [
           "fileId",
@@ -11164,6 +12761,99 @@
           }
         },
         "description": "Changes a marker; left-out properties stay. \u0060kind\u0060 (Phase 10) turns a scene marker into a marker or back."
+      },
+      "EditCommandSetMasteringAnalysisCommand": {
+        "required": [
+          "insertId",
+          "analysis",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "setMasteringAnalysis"
+            ],
+            "type": "string"
+          },
+          "insertId": {
+            "type": "string"
+          },
+          "analysis": {
+            "$ref": "#/components/schemas/MasteringAnalysis"
+          }
+        },
+        "description": "Phase 11, a Mastering analysis\u0027 result: stores it in the master\u0027s assistant \u0060insertId\u0060\n(\u0060Insert.mastering\u0060). The \u0060masteringAnalysis\u0060 job applies it; clients do not send it."
+      },
+      "EditCommandSetMasteringCommand": {
+        "required": [
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "setMastering"
+            ],
+            "type": "string"
+          },
+          "insertId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "character": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/MasteringCharacter"
+              }
+            ]
+          },
+          "targetLufs": {
+            "type": [
+              "null",
+              "number"
+            ],
+            "format": "double"
+          },
+          "ceilingDbtp": {
+            "type": [
+              "null",
+              "number"
+            ],
+            "format": "double"
+          },
+          "eq": {
+            "type": [
+              "null",
+              "number"
+            ],
+            "format": "double"
+          },
+          "dynamics": {
+            "type": [
+              "null",
+              "number"
+            ],
+            "format": "double"
+          },
+          "width": {
+            "type": [
+              "null",
+              "number"
+            ],
+            "format": "double"
+          },
+          "matchedBypass": {
+            "type": [
+              "null",
+              "boolean"
+            ]
+          }
+        },
+        "description": "Phase 11: changes the master\u0027s Mastering Assistant\u0027s settings (its parameters, MasteringParameters,\nin their ranges); left-out properties stay. \u0060insertId\u0060 left out: the master\u0027s (last) assistant; 422 when it\nhas none. During playback a master in touch, latch or write records the change as \u0060setInsertParameter\u0060 does."
       },
       "EditCommandSetMatchGrooveCommand": {
         "required": [
@@ -11666,6 +13356,31 @@
         },
         "description": "Replaces an audio region\u0027s Flex Pitch notes (edits, splits and joins); notes need Flex or Follow, as a\ntranspose does."
       },
+      "EditCommandSetPitchSourceCommand": {
+        "required": [
+          "regionIds",
+          "mode",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "setPitchSource"
+            ],
+            "type": "string"
+          },
+          "regionIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "mode": {
+            "$ref": "#/components/schemas/PitchSourceMode"
+          }
+        },
+        "description": "Phase 11: sets how MIDI and audio regions follow the chord track; \u0060chords\u0060 only on MIDI regions (an audio\nregion among them: 422). \u0060root\u0060 on an audio region needs nothing more: its pitch shift follows."
+      },
       "EditCommandSetProjectNotesCommand": {
         "required": [
           "text",
@@ -11838,6 +13553,38 @@
         },
         "description": "Sets an audio region\u0027s Flex \u0026amp; Follow, transpose (semitones) or fine tune (cents). A transpose or fine tune\nneeds Flex or Follow (the track\u0027s flex on, or a \u0060follow\u0060 other than \u0060off\u0060), else 422."
       },
+      "EditCommandSetRegionKeyCommand": {
+        "required": [
+          "regionIds",
+          "key",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "setRegionKey"
+            ],
+            "type": "string"
+          },
+          "regionIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "key": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/RegionKey"
+              }
+            ]
+          }
+        },
+        "description": "Phase 11: sets (or with null clears) MIDI and audio regions\u0027 own key."
+      },
       "EditCommandSetRegionNotationCommand": {
         "required": [
           "regionIds",
@@ -11897,6 +13644,27 @@
           }
         },
         "description": "Phase 9: changes the score settings (RegionNotation) of MIDI regions; left-out properties stay.\nGrids are 0 or divide a whole note (3840 ticks); \u0060maxDots\u0060 0\u20263."
+      },
+      "EditCommandSetScalesCommand": {
+        "required": [
+          "scales",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "setScales"
+            ],
+            "type": "string"
+          },
+          "scales": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ScaleChange"
+            }
+          }
+        },
+        "description": "Phase 11: replaces the chord track\u0027s key and scale changes (ticks of 0 or more, each once)."
       },
       "EditCommandSetSceneCommand": {
         "required": [
@@ -12076,6 +13844,142 @@
           }
         },
         "description": "Changes a send; coalesces and records automation like \u0060setStrip\u0060."
+      },
+      "EditCommandSetSessionPlayerRegionCommand": {
+        "required": [
+          "regionId",
+          "type",
+          "drums",
+          "bass",
+          "keys"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "setSessionPlayerRegion"
+            ],
+            "type": "string"
+          },
+          "regionId": {
+            "type": "string"
+          },
+          "startTick": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int64"
+          },
+          "lengthTicks": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int64"
+          },
+          "name": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "muted": {
+            "type": [
+              "null",
+              "boolean"
+            ]
+          },
+          "styleId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "presetId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "complexity": {
+            "type": [
+              "null",
+              "number"
+            ],
+            "format": "double"
+          },
+          "intensity": {
+            "type": [
+              "null",
+              "number"
+            ],
+            "format": "double"
+          },
+          "fillAmount": {
+            "type": [
+              "null",
+              "number"
+            ],
+            "format": "double"
+          },
+          "fillAtSectionEnds": {
+            "type": [
+              "null",
+              "boolean"
+            ]
+          },
+          "swing": {
+            "type": [
+              "null",
+              "number"
+            ],
+            "format": "double"
+          },
+          "feel": {
+            "type": [
+              "null",
+              "number"
+            ],
+            "format": "double"
+          },
+          "followChords": {
+            "type": [
+              "null",
+              "boolean"
+            ]
+          },
+          "drums": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/DrummerSwitches"
+              }
+            ]
+          },
+          "bass": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/BassSwitches"
+              }
+            ]
+          },
+          "keys": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/KeysSwitches"
+              }
+            ]
+          }
+        },
+        "description": "Phase 11, the Session Player Editor: changes a Session Player region; left-out properties stay. \u0060presetId\u0060\napplies that preset of the region\u0027s style first (then the other properties given); \u0060styleId\u0060 a style of\nthe track\u0027s player (its first preset\u0027s parameters unless \u0060presetId\u0060 names another); any other parameter\nchange clears the region\u0027s \u0060presetId\u0060. The XY pad is \u0060complexity\u0060 and \u0060intensity\u0060 (0\u20261);\n\u0060feel\u0060 is \u22121\u20261, the others 0\u20261; the switches (\u0060drums\u0060, \u0060bass\u0060 or \u0060keys\u0060, the track\u0027s\nplayer\u0027s) replace the region\u0027s. The region keeps its seed: the same inputs give the same notes."
       },
       "EditCommandSetSignatureCommand": {
         "required": [
@@ -13022,6 +14926,182 @@
         },
         "description": "The server\u0027s link to the engine host: whether it is reachable (\u0060state\u0060), the host\u0027s version and audio\nbackend (\u0060coreaudio\u0060, \u0060wasapi\u0060, \u0060alsa\u0060, \u0060null\u0060) from its hello while connected, and why the\nlink is down when it is (\u0060message\u0060)."
       },
+      "EnvironmentCable": {
+        "required": [
+          "id",
+          "fromObjectId",
+          "outlet",
+          "toObjectId",
+          "inlet"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "fromObjectId": {
+            "type": "string"
+          },
+          "outlet": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "toObjectId": {
+            "type": "string"
+          },
+          "inlet": {
+            "type": "integer",
+            "format": "int32"
+          }
+        },
+        "description": "A cable from outlet \u0060outlet\u0060 of an object to inlet \u0060inlet\u0060 of another (0-based, as the kind lists\nthem). An outlet may feed several cables (each gets every event) and an inlet take several; a cable may cross\nlayers. The graph has no cycles."
+      },
+      "EnvironmentInputRequest": {
+        "required": [
+          "events"
+        ],
+        "type": "object",
+        "properties": {
+          "events": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LiveMidiEvent"
+            }
+          }
+        },
+        "description": "Live MIDI into an on-screen object (\u0060POST /project/environment/objects/{id}/input\u0060): a keyboard plays it, a\nfader takes it as a move (the editor sends a control change of the fader\u0027s value)."
+      },
+      "EnvironmentLayer": {
+        "required": [
+          "id",
+          "name"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "description": "A layer of the Environment: one canvas of the window (Logic\u0027s layers). Objects belong to one layer."
+      },
+      "EnvironmentObject": {
+        "required": [
+          "id",
+          "layerId",
+          "kind",
+          "name",
+          "x",
+          "y",
+          "parameters"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "layerId": {
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/EnvironmentObjectKind"
+          },
+          "name": {
+            "type": "string"
+          },
+          "x": {
+            "type": "number",
+            "format": "double"
+          },
+          "y": {
+            "type": "number",
+            "format": "double"
+          },
+          "parameters": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "number",
+              "format": "double"
+            }
+          },
+          "port": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "trackId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "address": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "conditions": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/TransformCondition"
+            }
+          },
+          "operations": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/TransformOperation"
+            }
+          },
+          "taps": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/DelayTap"
+            }
+          },
+          "chord": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        },
+        "description": "An Environment object: its kind, name, layer and position on the layer\u0027s canvas (pixels at zoom 1). Its numeric\nsettings are \u0060parameters\u0060 (ids by kind, EnvironmentObjectKinds; missing ones at their\ndefaults). \u0060port\u0060 (physical input: a device; MIDI port: an output), \u0060trackId\u0060 (track input; control\ntarget, null for the master), \u0060address\u0060 (control target), \u0060conditions\u0060 and \u0060operations\u0060\n(transformer), \u0060taps\u0060 (delay line) and \u0060chord\u0060 (chord memoriser) are used by the kinds that say so and\nnull on the others."
+      },
+      "EnvironmentObjectKind": {
+        "enum": [
+          "physicalInput",
+          "sequencerInput",
+          "keyboard",
+          "monitor",
+          "fader",
+          "transformer",
+          "delayLine",
+          "arpeggiator",
+          "chordMemorizer",
+          "channelSplitter",
+          "midiPort",
+          "trackInput",
+          "controlTarget"
+        ],
+        "description": "The Environment\u0027s object kinds (ADR-0015\u0027s fixed set). Their inlets and outlets:\nEnvironmentObjectKinds."
+      },
       "FileAnalysis": {
         "required": [
           "fileId",
@@ -13540,7 +15620,8 @@
           "pluginId",
           "name",
           "bypassed",
-          "parameters"
+          "parameters",
+          "mastering"
         ],
         "type": "object",
         "properties": {
@@ -13589,9 +15670,19 @@
               "null",
               "string"
             ]
+          },
+          "mastering": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/MasteringAnalysis"
+              }
+            ]
           }
         },
-        "description": "An insert effect on a channel strip: the plugin, whether it is bypassed, its parameter values by parameter id\n(all of them), and its sidechain source (a track id or \u0060bus:N\u0060; null: none). A plugin\u0027s opaque state lives in\nthe project\u0027s \u0060Plugin States\u0060 folder. A MIDI FX slot (\u0060ChannelStrip.midiEffects\u0060) has the same shape,\nnever a sidechain. Phase 6: \u0060file\u0060 is the file the effect loads (an impulse response for\n\u0060anode.space\u0060; \u0060loadInsertFile\u0060), relative to the project when it is inside it (null: none).\nPhase 7 (docs/08-phase-7.md): \u0060runtimeParameters\u0060 is the parameter list of a slot whose plugin defines its\nparameters at run time (Scripter\u0027s \u0060PluginParameters\u0060; the host reports it after each compile, and the\nserver stores it here): \u0060parameters\u0060 holds their values, and they automate\n(\u0060midiEffect:{slotId}:{parameterId}\u0060) and map to Smart Controls as any parameter (null: the plugin\u0027s\ncatalogue list applies). \u0060source\u0060 is a Scripter slot\u0027s script (\u0060setScript\u0060; null on every other\nslot)."
+        "description": "An insert effect on a channel strip: the plugin, whether it is bypassed, its parameter values by parameter id\n(all of them), and its sidechain source (a track id or \u0060bus:N\u0060; null: none). A plugin\u0027s opaque state lives in\nthe project\u0027s \u0060Plugin States\u0060 folder. A MIDI FX slot (\u0060ChannelStrip.midiEffects\u0060) has the same shape,\nnever a sidechain. Phase 6: \u0060file\u0060 is the file the effect loads (an impulse response for\n\u0060anode.space\u0060; \u0060loadInsertFile\u0060), relative to the project when it is inside it (null: none).\nPhase 7 (docs/08-phase-7.md): \u0060runtimeParameters\u0060 is the parameter list of a slot whose plugin defines its\nparameters at run time (Scripter\u0027s \u0060PluginParameters\u0060; the host reports it after each compile, and the\nserver stores it here): \u0060parameters\u0060 holds their values, and they automate\n(\u0060midiEffect:{slotId}:{parameterId}\u0060) and map to Smart Controls as any parameter (null: the plugin\u0027s\ncatalogue list applies). \u0060source\u0060 is a Scripter slot\u0027s script (\u0060setScript\u0060; null on every other\nslot). \u0060mastering\u0060 (Phase 11, docs/12-phase-11.md) is a Mastering Assistant\u0027s analysis (null on every other\ninsert, and on an assistant not analysed yet); its settings are its parameters\n(MasteringParameters)."
       },
       "InsertChain": {
         "enum": [
@@ -13766,7 +15857,10 @@
           "movieAudioImport",
           "movieAudioExport",
           "sceneDetect",
-          "thumbnails"
+          "thumbnails",
+          "chordId",
+          "masteringAnalysis",
+          "sessionPlayerConvert"
         ]
       },
       "JobState": {
@@ -13849,6 +15943,55 @@
           "major",
           "minor"
         ]
+      },
+      "KeysLeftHand": {
+        "enum": [
+          "off",
+          "root",
+          "octaves",
+          "rootFifth"
+        ],
+        "description": "What the Keyboard Player\u0027s left hand plays below the voicing."
+      },
+      "KeysSwitches": {
+        "required": [
+          "voicing",
+          "lowNote",
+          "highNote",
+          "leftHand"
+        ],
+        "type": "object",
+        "properties": {
+          "voicing": {
+            "$ref": "#/components/schemas/KeysVoicing"
+          },
+          "lowNote": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "highNote": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "leftHand": {
+            "$ref": "#/components/schemas/KeysLeftHand"
+          },
+          "rhythmId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        },
+        "description": "The Keyboard Player\u0027s switches: the voicing, the right hand\u0027s range (MIDI notes \u0060lowNote\u0060 \u2026\n\u0060highNote\u0060, at least an octave apart, within 36\u202696), the left-hand part, and the rhythm pattern (one of the\nstyle\u0027s \u0060rhythms\u0060; null: the style\u0027s phrases\u0027 own)."
+      },
+      "KeysVoicing": {
+        "enum": [
+          "close",
+          "spread",
+          "shell"
+        ],
+        "description": "How the Keyboard Player voices a chord."
       },
       "Lane": {
         "required": [
@@ -14425,6 +16568,179 @@
         ],
         "description": "What a marker is: one the user made, or one Detect Scene Cuts made (an ordinary, editable marker)."
       },
+      "MasteringAnalysis": {
+        "required": [
+          "startTick",
+          "endTick",
+          "revision",
+          "integratedLufs",
+          "maxShortTermLufs",
+          "loudnessRange",
+          "truePeakDbtp",
+          "crestFactorDb",
+          "width",
+          "spectrumDb",
+          "curveDb"
+        ],
+        "type": "object",
+        "properties": {
+          "startTick": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "endTick": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "revision": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "integratedLufs": {
+            "type": "number",
+            "format": "double"
+          },
+          "maxShortTermLufs": {
+            "type": "number",
+            "format": "double"
+          },
+          "loudnessRange": {
+            "type": "number",
+            "format": "double"
+          },
+          "truePeakDbtp": {
+            "type": "number",
+            "format": "double"
+          },
+          "crestFactorDb": {
+            "type": "number",
+            "format": "double"
+          },
+          "width": {
+            "type": "number",
+            "format": "double"
+          },
+          "spectrumDb": {
+            "type": "array",
+            "items": {
+              "type": "number",
+              "format": "double"
+            }
+          },
+          "curveDb": {
+            "type": "array",
+            "items": {
+              "type": "number",
+              "format": "double"
+            }
+          }
+        },
+        "description": "What the analysis found over \u0060startTick\u0060\u2026\u0060endTick\u0060 of the master before the assistant: integrated\nloudness (BS.1770, LUFS), the loudest short-term loudness, the loudness range (LU), true peak (dBTP, 4\u00D7\noversampled), crest factor (peak to RMS, dB), stereo width (0 mono \u2026 1 uncorrelated; the side-to-mid energy\nratio, clamped), the smoothed spectrum per band of MasteringBands (dB, relative to its mean), and\nthe character\u0027s reference curve it was matched against (the same bands, dB). \u0060revision\u0060 is the project\nrevision it rendered."
+      },
+      "MasteringAnalysisRequest": {
+        "required": [
+          "add"
+        ],
+        "type": "object",
+        "properties": {
+          "startTick": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int64"
+          },
+          "endTick": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int64"
+          },
+          "add": {
+            "type": "boolean",
+            "default": true
+          }
+        },
+        "description": "Analyse (\u0060POST /project/mastering/analyse\u0060, job \u0060masteringAnalysis\u0060): renders the master before the\nassistant offline over \u0060startTick\u0060\u2026\u0060endTick\u0060 (left out: the cycle when it is on, else the whole song),\nanalyses it, and stores the analysis in the assistant (one undo step, \u0060setMasteringAnalysis\u0060). Without an\nassistant on the master, \u0060add\u0060 adds one last first (else 404)."
+      },
+      "MasteringCharacter": {
+        "enum": [
+          "clean",
+          "valve",
+          "punch",
+          "transparent",
+          null
+        ]
+      },
+      "MasteringSettings": {
+        "required": [
+          "character",
+          "targetLufs",
+          "ceilingDbtp",
+          "eq",
+          "dynamics",
+          "width",
+          "matchedBypass"
+        ],
+        "type": "object",
+        "properties": {
+          "character": {
+            "$ref": "#/components/schemas/MasteringCharacter"
+          },
+          "targetLufs": {
+            "type": "number",
+            "format": "double"
+          },
+          "ceilingDbtp": {
+            "type": "number",
+            "format": "double"
+          },
+          "eq": {
+            "type": "number",
+            "format": "double"
+          },
+          "dynamics": {
+            "type": "number",
+            "format": "double"
+          },
+          "width": {
+            "type": "number",
+            "format": "double"
+          },
+          "matchedBypass": {
+            "type": "boolean"
+          }
+        },
+        "description": "The Mastering Assistant\u0027s settings, as its parameters hold them (MasteringParameters)."
+      },
+      "MasteringState": {
+        "required": [
+          "insertId",
+          "settings",
+          "analysis"
+        ],
+        "type": "object",
+        "properties": {
+          "insertId": {
+            "type": "string"
+          },
+          "settings": {
+            "$ref": "#/components/schemas/MasteringSettings"
+          },
+          "analysis": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/MasteringAnalysis"
+              }
+            ]
+          }
+        },
+        "description": "The master\u0027s Mastering Assistant (\u0060GET /project/mastering\u0060): its insert, settings and analysis (null: not\nanalysed yet; it then passes the audio through its limiter only)."
+      },
       "MetronomeSettings": {
         "required": [
           "enabled",
@@ -14466,6 +16782,35 @@
             }
           }
         }
+      },
+      "MidiEnvironment": {
+        "required": [
+          "layers",
+          "objects",
+          "cables"
+        ],
+        "type": "object",
+        "properties": {
+          "layers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EnvironmentLayer"
+            }
+          },
+          "objects": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EnvironmentObject"
+            }
+          },
+          "cables": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EnvironmentCable"
+            }
+          }
+        },
+        "description": "The project\u0027s Environment (\u0060Project.environment\u0060): its layers, objects and cables. MidiEnvironment MidiEnvironment.Empty\n(no objects) is the default input path, physical input to sequencer input."
       },
       "MidiExportRequest": {
         "required": [
@@ -14596,7 +16941,9 @@
           "notes",
           "controls",
           "muted",
-          "notation"
+          "notation",
+          "pitchSource",
+          "key"
         ],
         "type": "object",
         "properties": {
@@ -14637,9 +16984,22 @@
           },
           "notation": {
             "$ref": "#/components/schemas/RegionNotation"
+          },
+          "pitchSource": {
+            "$ref": "#/components/schemas/PitchSourceMode"
+          },
+          "key": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/RegionKey"
+              }
+            ]
           }
         },
-        "description": "A MIDI region: it starts at \u0060startTick\u0060 and lasts \u0060lengthTicks\u0060; its notes and controller events are\npositioned relative to its start (ticks at 960 PPQ). Events past the end do not play; a note that crosses the end\nis cut there. \u0060playback\u0060 holds the non-destructive region parameters. \u0060notation\u0060 (Phase 9,\ndocs/10-phase-9.md) holds its score settings: display quantise and interpretation."
+        "description": "A MIDI region: it starts at \u0060startTick\u0060 and lasts \u0060lengthTicks\u0060; its notes and controller events are\npositioned relative to its start (ticks at 960 PPQ). Events past the end do not play; a note that crosses the end\nis cut there. \u0060playback\u0060 holds the non-destructive region parameters. \u0060notation\u0060 (Phase 9,\ndocs/10-phase-9.md) holds its score settings: display quantise and interpretation. \u0060pitchSource\u0060 and\n\u0060key\u0060 (Phase 11, docs/12-phase-11.md): how it follows the chord track (applied at compile time; its notes\nstay as they are) and its own key (null: the project\u0027s at its start)."
       },
       "MidiSyncDestination": {
         "required": [
@@ -15006,6 +17366,38 @@
           }
         },
         "description": "MusicXML import (\u0060POST /project/import/musicxml\u0060, job \u0060musicXmlImport\u0060): a \u0060.musicxml\u0060,\n\u0060.xml\u0060 or \u0060.mxl\u0060 on the server\u0027s disk. Each part becomes an instrument track with a MIDI region, a\nstaff style for its clefs and transposition, and its symbols, lyrics and chord symbols; into an empty project\n(no tracks) its tempo, meter and key changes replace the project\u0027s."
+      },
+      "NewChord": {
+        "required": [
+          "tick",
+          "root",
+          "quality",
+          "bass"
+        ],
+        "type": "object",
+        "properties": {
+          "tick": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "root": {
+            "$ref": "#/components/schemas/PitchName"
+          },
+          "quality": {
+            "type": "string"
+          },
+          "bass": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PitchName"
+              }
+            ]
+          }
+        },
+        "description": "A chord to add to the chord track (Chord without its id)."
       },
       "NewChordSymbol": {
         "required": [
@@ -15892,6 +18284,14 @@
         },
         "description": "A stable voiced run of a file\u0027s pitch curve, in file frames, at \u0060cents\u0060 (MIDI cents)."
       },
+      "PitchSourceMode": {
+        "enum": [
+          "off",
+          "root",
+          "chords"
+        ],
+        "description": "How a region follows the chord track (\u0060pitchSource\u0060 on MIDI and audio regions)."
+      },
       "PitchStep": {
         "enum": [
           "c",
@@ -16155,7 +18555,10 @@
           "articulationSets",
           "laneSets",
           "score",
-          "movie"
+          "movie",
+          "chordTrack",
+          "sessionPlayerRegions",
+          "environment"
         ],
         "type": "object",
         "properties": {
@@ -16281,9 +18684,21 @@
                 "$ref": "#/components/schemas/Movie"
               }
             ]
+          },
+          "chordTrack": {
+            "$ref": "#/components/schemas/ChordTrack"
+          },
+          "sessionPlayerRegions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SessionPlayerRegion"
+            }
+          },
+          "environment": {
+            "$ref": "#/components/schemas/MidiEnvironment"
           }
         },
-        "description": "The open project (docs/01-implementation-plan.md \u00A75). Musical positions are ticks at 960 PPQ; audio offsets,\nlengths and fades are frames at the project\u0027s \u0060sampleRate\u0060. \u0060revision\u0060 grows with every edit and is\nthe ETag; \u0060dirty\u0060 says whether it has unsaved edits. Phase 6 (docs/07-phase-6.md): \u0060patternRegions\u0060\nare the Step Sequencer\u0027s regions; \u0060liveLoops\u0060 is the Live Loops grid. Phase 7 (docs/08-phase-7.md):\n\u0060grooves\u0060 are the project\u0027s groove templates, \u0060articulationSets\u0060 its articulation sets and\n\u0060laneSets\u0060 its Step Editor lane sets. Phase 9 (docs/10-phase-9.md): \u0060score\u0060 is its stored score content\n(staff styles, symbols, lyrics, chord symbols, score sets, layout). Phase 10 (docs/11-phase-10.md): \u0060movie\u0060\nis its movie (null: none)."
+        "description": "The open project (docs/01-implementation-plan.md \u00A75). Musical positions are ticks at 960 PPQ; audio offsets,\nlengths and fades are frames at the project\u0027s \u0060sampleRate\u0060. \u0060revision\u0060 grows with every edit and is\nthe ETag; \u0060dirty\u0060 says whether it has unsaved edits. Phase 6 (docs/07-phase-6.md): \u0060patternRegions\u0060\nare the Step Sequencer\u0027s regions; \u0060liveLoops\u0060 is the Live Loops grid. Phase 7 (docs/08-phase-7.md):\n\u0060grooves\u0060 are the project\u0027s groove templates, \u0060articulationSets\u0060 its articulation sets and\n\u0060laneSets\u0060 its Step Editor lane sets. Phase 9 (docs/10-phase-9.md): \u0060score\u0060 is its stored score content\n(staff styles, symbols, lyrics, chord symbols, score sets, layout). Phase 10 (docs/11-phase-10.md): \u0060movie\u0060\nis its movie (null: none). Phase 11 (docs/12-phase-11.md): \u0060chordTrack\u0060 is its chord track (chords, key and\nscale changes), \u0060sessionPlayerRegions\u0060 the Session Player regions of its Drummer, Bass Player and Keyboard\nPlayer tracks, and \u0060environment\u0060 its MIDI Environment (empty: physical input to sequencer input)."
       },
       "ProjectAlternative": {
         "required": [
@@ -16542,6 +18957,35 @@
         },
         "description": "How recording works: cycle recording mode; replace mode (a recording removes what it covers on its track); and\nautopunch, which records only between \u0060punchInTick\u0060 and \u0060punchOutTick\u0060 while playback continues around\nthem."
       },
+      "RegenerateRequest": {
+        "type": "object",
+        "properties": {
+          "seed": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int64"
+          }
+        },
+        "description": "Regenerate (\u0060POST /project/regions/{id}/session-player/regenerate\u0060): a new seed (left out: drawn)."
+      },
+      "RegionKey": {
+        "required": [
+          "tonic",
+          "mode"
+        ],
+        "type": "object",
+        "properties": {
+          "tonic": {
+            "$ref": "#/components/schemas/PitchName"
+          },
+          "mode": {
+            "$ref": "#/components/schemas/KeyMode"
+          }
+        },
+        "description": "A region\u0027s own key (\u0060key\u0060 on MIDI and audio regions; null: the project\u0027s at the region\u0027s start)."
+      },
       "RegionNotation": {
         "required": [
           "displayQuantizeTicks",
@@ -16743,6 +19187,41 @@
             "type": "string"
           }
         }
+      },
+      "ScaleChange": {
+        "required": [
+          "tick",
+          "tonic",
+          "scale"
+        ],
+        "type": "object",
+        "properties": {
+          "tick": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "tonic": {
+            "$ref": "#/components/schemas/PitchName"
+          },
+          "scale": {
+            "$ref": "#/components/schemas/ScaleKind"
+          }
+        },
+        "description": "A key and scale change of the chord track at \u0060tick\u0060 (it holds until the next): the scale the players take\npassing and approach notes from, and Chord ID\u0027s key prior. Before the first (or with none) the chord track\u0027s key\nis the project\u0027s key track (\u0060settings.keys\u0060), a major key read as \u0060major\u0060, a minor one as \u0060minor\u0060."
+      },
+      "ScaleKind": {
+        "enum": [
+          "major",
+          "minor",
+          "harmonicMinor",
+          "melodicMinor",
+          "dorian",
+          "phrygian",
+          "lydian",
+          "mixolydian",
+          "locrian"
+        ],
+        "description": "A scale of the chord track (its key and scale changes; Logic\u0027s)."
       },
       "Scene": {
         "required": [
@@ -17552,6 +20031,32 @@
         },
         "description": "A Scripter factory script (Phase 7, \u0060GET /library/scripts\u0060): its stable id (\u0060factory.\u2026\u0060), name, a\nline about what it does, and its source, which the Script Editor loads as a slot\u0027s script."
       },
+      "SectionDefaults": {
+        "required": [
+          "kind",
+          "parameters"
+        ],
+        "type": "object",
+        "properties": {
+          "kind": {
+            "$ref": "#/components/schemas/SectionKind"
+          },
+          "parameters": {
+            "$ref": "#/components/schemas/SessionPlayerParameters"
+          }
+        },
+        "description": "A style\u0027s default parameters for a region over a section of kind \u0060kind\u0060."
+      },
+      "SectionKind": {
+        "enum": [
+          "intro",
+          "verse",
+          "chorus",
+          "bridge",
+          "outro"
+        ],
+        "description": "What an arrangement section is to the players: their default parameters and variation grammar per kind."
+      },
       "SelectionRequest": {
         "type": "object",
         "properties": {
@@ -17594,6 +20099,318 @@
           }
         },
         "description": "A send from a channel strip to bus 1\u202664, at \u0060levelDb\u0060, before or after the fader."
+      },
+      "SessionPlayerCatalog": {
+        "required": [
+          "version",
+          "styles"
+        ],
+        "type": "object",
+        "properties": {
+          "version": {
+            "type": "string"
+          },
+          "styles": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SessionPlayerStyle"
+            }
+          }
+        },
+        "description": "The style library\u0027s catalogue (\u0060GET /library/session-players\u0060): its version (part of every region\u0027s\ngeneration input, so a new library regenerates the regions) and its styles."
+      },
+      "SessionPlayerConvertRequest": {
+        "required": [
+          "target"
+        ],
+        "type": "object",
+        "properties": {
+          "target": {
+            "$ref": "#/components/schemas/SessionPlayerConvertTarget"
+          },
+          "regionIds": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "description": "Convert to MIDI or to a pattern (\u0060POST /project/regions/{id}/session-player/convert\u0060, job\n\u0060sessionPlayerConvert\u0060): the region (and \u0060regionIds\u0060, the others selected with it) replaced in one undo\nstep (\u0060convertSessionPlayerRegions\u0060) by a region of the generated notes, at the same place, with its name\nand mute."
+      },
+      "SessionPlayerConvertTarget": {
+        "enum": [
+          "midi",
+          "pattern"
+        ],
+        "description": "What Convert turns Session Player regions into."
+      },
+      "SessionPlayerKind": {
+        "enum": [
+          "drummer",
+          "bass",
+          "keyboard"
+        ],
+        "description": "Which player a Session Player track or style is for."
+      },
+      "SessionPlayerNotes": {
+        "required": [
+          "regionId",
+          "hash",
+          "notes"
+        ],
+        "type": "object",
+        "properties": {
+          "regionId": {
+            "type": "string"
+          },
+          "hash": {
+            "type": "string"
+          },
+          "notes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Note"
+            }
+          }
+        },
+        "description": "A Session Player region\u0027s generated notes (\u0060GET /project/regions/{id}/session-player\u0060), positioned relative\nto the region\u0027s start as a MIDI region\u0027s, for the editor to draw (read-only in the piano roll); \u0060hash\u0060 is\nthe generation input\u0027s hash (the server\u0027s cache key; equal hashes, equal notes)."
+      },
+      "SessionPlayerPad": {
+        "required": [
+          "complexity",
+          "intensity"
+        ],
+        "type": "object",
+        "properties": {
+          "complexity": {
+            "type": "number",
+            "format": "double"
+          },
+          "intensity": {
+            "type": "number",
+            "format": "double"
+          }
+        },
+        "description": "The XY pad: \u0060complexity\u0060 (x, 0 simple \u2026 1 busy) and \u0060intensity\u0060 (y, 0 soft \u2026 1 loud); phrases are\npicked and morphed at that point of the style\u0027s phrase space."
+      },
+      "SessionPlayerParameters": {
+        "required": [
+          "styleId",
+          "pad",
+          "fillAmount",
+          "fillAtSectionEnds",
+          "swing",
+          "feel",
+          "followChords",
+          "drums",
+          "bass",
+          "keys"
+        ],
+        "type": "object",
+        "properties": {
+          "styleId": {
+            "type": "string"
+          },
+          "presetId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "pad": {
+            "$ref": "#/components/schemas/SessionPlayerPad"
+          },
+          "fillAmount": {
+            "type": "number",
+            "format": "double"
+          },
+          "fillAtSectionEnds": {
+            "type": "boolean"
+          },
+          "swing": {
+            "type": "number",
+            "format": "double"
+          },
+          "feel": {
+            "type": "number",
+            "format": "double"
+          },
+          "followChords": {
+            "type": "boolean"
+          },
+          "drums": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/DrummerSwitches"
+              }
+            ]
+          },
+          "bass": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/BassSwitches"
+              }
+            ]
+          },
+          "keys": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/KeysSwitches"
+              }
+            ]
+          }
+        },
+        "description": "A Session Player region\u0027s parameters: the style (SessionPlayerStyle, of the track\u0027s player) and the\npreset they came from (null: edited since, or none); the XY pad; fills (\u0060fillAmount\u0060 0\u20261, and a fill in a\nsection\u0027s last bar when \u0060fillAtSectionEnds\u0060); \u0060swing\u0060 0\u20261 (on the style\u0027s grid); \u0060feel\u0060 \u22121 (lay\nback) \u2026 1 (push), a fraction of a 32nd; whether it follows the chord track (bass and keys: off plays the region\u0027s\nkey\u0027s tonic chord); and the switches of its player (the others null)."
+      },
+      "SessionPlayerPreset": {
+        "required": [
+          "id",
+          "name",
+          "parameters"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "parameters": {
+            "$ref": "#/components/schemas/SessionPlayerParameters"
+          }
+        },
+        "description": "A preset of a style: named parameters (the region\u0027s \u0060styleId\u0060 is the style\u0027s; switches of the style\u0027s player\nonly)."
+      },
+      "SessionPlayerRegion": {
+        "required": [
+          "id",
+          "trackId",
+          "name",
+          "startTick",
+          "lengthTicks",
+          "muted",
+          "parameters",
+          "seed"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "trackId": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "startTick": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "lengthTicks": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "muted": {
+            "type": "boolean"
+          },
+          "parameters": {
+            "$ref": "#/components/schemas/SessionPlayerParameters"
+          },
+          "seed": {
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "description": "A Session Player region on a \u0060drummer\u0060, \u0060bassPlayer\u0060 or \u0060keyboardPlayer\u0060 track (the project\u0027s\n\u0060sessionPlayerRegions\u0060, beside its MIDI and pattern regions): it plays from \u0060startTick\u0060 for\n\u0060lengthTicks\u0060 the notes the generator makes from its parameters and \u0060seed\u0060. Regenerate draws a new\nseed. \u0060moveRegion\u0060, \u0060copyRegions\u0060 and \u0060deleteRegions\u0060 take Session Player regions too."
+      },
+      "SessionPlayerRhythm": {
+        "required": [
+          "id",
+          "name"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "description": "A Keyboard Player rhythm pattern a style offers (\u0060KeysSwitches.rhythmId\u0060)."
+      },
+      "SessionPlayerStyle": {
+        "required": [
+          "id",
+          "name",
+          "player",
+          "genre",
+          "description",
+          "synthPlayer",
+          "rhythms",
+          "presets",
+          "sections"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "player": {
+            "$ref": "#/components/schemas/SessionPlayerKind"
+          },
+          "genre": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "synthPlayer": {
+            "type": "boolean"
+          },
+          "kitPatchId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "rhythms": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SessionPlayerRhythm"
+            }
+          },
+          "presets": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SessionPlayerPreset"
+            }
+          },
+          "sections": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SectionDefaults"
+            }
+          }
+        },
+        "description": "A style of the style library: its player, a generic, descriptive name (a genre and a feel, never a person\u0027s or a\nproduct preset\u0027s: ADR-0014), its genre, whether it is a Synth Player style (Keyboard Player styles that play a\nsynth patch), the kit patch a new Drummer track of it gets (null: not a drum style), its rhythms (Keyboard\nPlayer), its presets (the first is the default) and its default parameters per section kind (a region\u0027s defaults:\nevery SectionKind, each once)."
       },
       "SignatureEvent": {
         "required": [
@@ -18568,7 +21385,10 @@
           "midi",
           "stack",
           "aux",
-          "vca"
+          "vca",
+          "drummer",
+          "bassPlayer",
+          "keyboardPlayer"
         ]
       },
       "TrackSwitchAction": {
@@ -18919,6 +21739,18 @@
     },
     {
       "name": "Remote"
+    },
+    {
+      "name": "Chords"
+    },
+    {
+      "name": "Session Players"
+    },
+    {
+      "name": "Mastering"
+    },
+    {
+      "name": "Environment"
     }
   ]
 }

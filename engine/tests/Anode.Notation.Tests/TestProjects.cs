@@ -38,7 +38,9 @@ sealed class TestProject {
             Edits.Sorted(notes),
             [],
             false,
-            notation ?? RegionNotation.Default
+            notation ?? RegionNotation.Default,
+            PitchSourceMode.Off,
+            null
         );
         State = State with { MidiRegions = State.MidiRegions.SetItem(id, region) };
         return id;

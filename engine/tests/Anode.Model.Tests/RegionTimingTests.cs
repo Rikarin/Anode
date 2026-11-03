@@ -45,7 +45,9 @@ public sealed class RegionTimingTests {
             markers ?? [],
             0,
             0,
-            []
+            [],
+            PitchSourceMode.Off,
+            null
         );
 
     static RegionTiming Timing(

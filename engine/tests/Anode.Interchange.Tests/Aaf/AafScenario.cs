@@ -95,7 +95,9 @@ sealed class AafScenario : IDisposable {
             [],
             0,
             0,
-            []
+            [],
+            PitchSourceMode.Off,
+            null
         );
 
     /// <summary>A WAV file of a ramp per channel (distinct values, so offsets show), at <paramref name="peak" />.</summary>

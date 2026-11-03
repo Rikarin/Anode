@@ -86,7 +86,7 @@ public sealed partial class HostProcessTests {
     [Fact]
     public async Task Routes_control_midi_sends_feedback_and_syncs_through_the_virtual_ports() {
         Assert.SkipUnless(ProbeProcess.Supported, "no CoreMIDI here");
-        var prefix = $"h{Environment.ProcessId}x{Random.Shared.Next(1000)}";
+        var prefix = $"h{System.Environment.ProcessId}x{Random.Shared.Next(1000)}";
         await StartAsync("--midi-port-prefix", prefix);
         using var socket = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
         await socket.ConnectAsync(new UnixDomainSocketEndPoint(socketPath), Token);

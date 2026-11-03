@@ -1192,7 +1192,9 @@ public sealed partial class ProjectSession(
                 [],
                 [],
                 false,
-                ProjectDefaults.Notation
+                ProjectDefaults.Notation,
+                PitchSourceMode.Off,
+                null
             );
         } else if (roundedEnd > target.StartTick + target.LengthTicks) {
             target = target with { LengthTicks = roundedEnd - target.StartTick };

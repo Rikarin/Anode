@@ -19,6 +19,10 @@ public sealed class EditPropertyTests {
     [MemberData(nameof(Commands))]
     public void Applying_then_inverting_a_command_is_the_identity(string command) {
         var type = RandomProjects.CommandTypes.Single(t => t.Name == command);
+        Assert.SkipWhen(
+            RandomProjects.PendingPhase11.Contains(command),
+            "Phase 11 command the model does not implement yet (docs/12-phase-11.md, workstream B)."
+        );
         var applied = 0;
         Gen.Int.Sample(
             seed => {

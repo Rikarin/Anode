@@ -14,12 +14,15 @@ import {
   type Bookmarks,
   type BounceInPlaceRequest,
   type BounceRequest,
+  type ChordIdRequest,
+  type ChordTrack,
   type CommandBatch,
   type CommandResult,
   type ControllerAssignments,
   type ControlSurface,
   type DirectoryListing,
   type DiscoveryInfo,
+  type EnvironmentInputRequest,
   type FileAnalysis,
   type GrooveTemplate,
   type IoLabels,
@@ -37,7 +40,11 @@ import {
   type LoopScale,
   type LoopSearchRequest,
   type LoopSearchResult,
+  type MasteringAnalysisRequest,
+  type MasteringSettings,
+  type MasteringState,
   type MidiDevices,
+  type MidiEnvironment,
   type MidiExportRequest,
   type MidiImportRequest,
   type MonitoringSettings,
@@ -60,6 +67,7 @@ import {
   type ProjectAlternative,
   type ProjectBackup,
   type ProjectSummary,
+  type RegenerateRequest,
   type RemotePads,
   type SampleRange,
   type SavePatchRequest,
@@ -68,6 +76,9 @@ import {
   type ScoreViewMode,
   type Screenset,
   type ScriptPreset,
+  type SessionPlayerCatalog,
+  type SessionPlayerConvertRequest,
+  type SessionPlayerNotes,
   type StaffStyle,
   type StemSplitRequest,
   type StepInputRequest,
@@ -351,6 +362,29 @@ export interface AnodeApi {
   runRemoteKeyCommand(commandId: string): Promise<void>;
   /** Listen-in's state; the stream itself is the WebSocket at `listenInUrl` (`@anode/api-client`). */
   listenInState(): Promise<ListenInState>;
+  // ---- Phase 11 (docs/12-phase-11.md)
+  /** The chord track (as `Project.chordTrack`). */
+  chordTrack(): Promise<ChordTrack>;
+  /** Chord ID over MIDI and audio regions: a `chordId` job writing the chord track and the regions' keys. */
+  detectChords(request: ChordIdRequest): Promise<Job>;
+  /** The Session Players' style library: its version and styles with their presets. */
+  sessionPlayerCatalog(): Promise<SessionPlayerCatalog>;
+  /** A Session Player region's generated notes (relative to its start), read-only in the piano roll. */
+  sessionPlayerNotes(regionId: string): Promise<SessionPlayerNotes>;
+  /** Regenerate: a new seed for the region (`regenerateSessionPlayer`, one undo step). */
+  regenerateSessionPlayer(regionId: string, request: RegenerateRequest): Promise<CommandResult>;
+  /** Convert to MIDI or to a pattern: a `sessionPlayerConvert` job. */
+  convertSessionPlayer(regionId: string, request: SessionPlayerConvertRequest): Promise<Job>;
+  /** The master's Mastering Assistant: insert, settings and analysis; 404 without one. */
+  mastering(): Promise<MasteringState>;
+  /** Replaces the assistant's settings (`setMastering`, one undo step). */
+  setMastering(settings: MasteringSettings): Promise<CommandResult>;
+  /** Analyse: a `masteringAnalysis` job over an offline render of the master before the assistant. */
+  analyseMastering(request: MasteringAnalysisRequest): Promise<Job>;
+  /** The Environment (as `Project.environment`). */
+  environment(): Promise<MidiEnvironment>;
+  /** Live MIDI into an on-screen Environment object (a keyboard plays it, a fader moves). */
+  environmentInput(objectId: string, request: EnvironmentInputRequest): Promise<void>;
 }
 
 export const ANODE_API = new InjectionToken<AnodeApi>('AnodeApi', {
@@ -951,6 +985,67 @@ export class HttpAnodeApi implements AnodeApi {
 
   async listenInState(): Promise<ListenInState> {
     return unwrap(await this.client.GET('/api/v1/remote/listen/state'));
+  }
+
+  async chordTrack(): Promise<ChordTrack> {
+    return unwrap(await this.client.GET('/api/v1/project/chords'));
+  }
+
+  async detectChords(request: ChordIdRequest): Promise<Job> {
+    return unwrap(await this.client.POST('/api/v1/project/chords/detect', { body: request }));
+  }
+
+  async sessionPlayerCatalog(): Promise<SessionPlayerCatalog> {
+    return unwrap(await this.client.GET('/api/v1/library/session-players'));
+  }
+
+  async sessionPlayerNotes(regionId: string): Promise<SessionPlayerNotes> {
+    return unwrap(
+      await this.client.GET('/api/v1/project/regions/{regionId}/session-player', { params: { path: { regionId } } })
+    );
+  }
+
+  async regenerateSessionPlayer(regionId: string, request: RegenerateRequest): Promise<CommandResult> {
+    return unwrap(
+      await this.client.POST('/api/v1/project/regions/{regionId}/session-player/regenerate', {
+        params: { path: { regionId } },
+        body: request
+      })
+    );
+  }
+
+  async convertSessionPlayer(regionId: string, request: SessionPlayerConvertRequest): Promise<Job> {
+    return unwrap(
+      await this.client.POST('/api/v1/project/regions/{regionId}/session-player/convert', {
+        params: { path: { regionId } },
+        body: request
+      })
+    );
+  }
+
+  async mastering(): Promise<MasteringState> {
+    return unwrap(await this.client.GET('/api/v1/project/mastering'));
+  }
+
+  async setMastering(settings: MasteringSettings): Promise<CommandResult> {
+    return unwrap(await this.client.PUT('/api/v1/project/mastering', { body: settings }));
+  }
+
+  async analyseMastering(request: MasteringAnalysisRequest): Promise<Job> {
+    return unwrap(await this.client.POST('/api/v1/project/mastering/analyse', { body: request }));
+  }
+
+  async environment(): Promise<MidiEnvironment> {
+    return unwrap(await this.client.GET('/api/v1/project/environment'));
+  }
+
+  async environmentInput(objectId: string, request: EnvironmentInputRequest): Promise<void> {
+    unwrap(
+      await this.client.POST('/api/v1/project/environment/objects/{objectId}/input', {
+        params: { path: { objectId } },
+        body: request
+      })
+    );
   }
 }
 

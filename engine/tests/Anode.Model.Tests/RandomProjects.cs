@@ -322,7 +322,7 @@ static class RandomProjects {
                     random,
                     [typeof(SetPitchNotesCommand), typeof(NewTrackAlternativeCommand), typeof(SetRegionFlexCommand)]
                 ),
-                _ => Pick(random, CommandTypes)
+                _ => Pick(random, Buildable)
             };
             var command = i is >= 4 and < 7 && FirstAudioTrack(state) is { } audio && state.Files.Count > 0
                 ? AddRegion(audio, Pick(random, [..state.Files.Values]), random)
@@ -516,6 +516,41 @@ static class RandomProjects {
 
         return (state, ids, random);
     }
+
+    /// <summary>
+    ///     Phase 11 commands (docs/12-phase-11.md) the model rejects until workstream B implements them; the identity
+    ///     property skips them.
+    /// </summary>
+    public static readonly IReadOnlySet<string> PendingPhase11 = new HashSet<string>(StringComparer.Ordinal) {
+        nameof(AddChordsCommand),
+        nameof(EditChordsCommand),
+        nameof(DeleteChordsCommand),
+        nameof(SetScalesCommand),
+        nameof(ApplyChordIdCommand),
+        nameof(SetPitchSourceCommand),
+        nameof(SetRegionKeyCommand),
+        nameof(AddSessionPlayerTrackCommand),
+        nameof(AddSessionPlayerRegionCommand),
+        nameof(SetSessionPlayerRegionCommand),
+        nameof(RegenerateSessionPlayerCommand),
+        nameof(ConvertSessionPlayerRegionsCommand),
+        nameof(SetMasteringCommand),
+        nameof(SetMasteringAnalysisCommand),
+        nameof(AddEnvironmentLayerCommand),
+        nameof(SetEnvironmentLayerCommand),
+        nameof(RemoveEnvironmentLayerCommand),
+        nameof(AddEnvironmentObjectCommand),
+        nameof(SetEnvironmentObjectCommand),
+        nameof(RemoveEnvironmentObjectsCommand),
+        nameof(ConnectEnvironmentCommand),
+        nameof(DisconnectEnvironmentCommand)
+    };
+
+    /// <summary>
+    ///     The command types random projects are built from: every one but those the model refuses outright (Phase 11,
+    ///     until workstream B), so the projects stay those of Phase 10 and the other properties keep their odds.
+    /// </summary>
+    static Type[] Buildable { get; } = [..CommandTypes.Where(static t => !PendingPhase11.Contains(t.Name))];
 
     /// <summary>The parameters the host reports for every random script.</summary>
     public static IReadOnlyList<ParameterInfo> ScriptParameters { get; } = [
@@ -1389,6 +1424,91 @@ static class RandomProjects {
                 [..Enumerable.Range(1, r.Next(1, 4)).Select(i => i * 3840L + r.Next(0, 960))],
                 r.Next(2) == 0
             ),
+            // Phase 11 commands (docs/12-phase-11.md): placeholders until the model implements them (workstream B
+            // replaces these with generators that make commands that apply, and removes PendingPhase11).
+            nameof(AddChordsCommand) => new AddChordsCommand(
+                [
+                    new(
+                        r.Next(0, 8) * 3840L,
+                        new(Pick(r, Enum.GetValues<PitchStep>()), r.Next(-1, 2)),
+                        Pick(r, ChordQualities.All)
+                    )
+                ]
+            ),
+            nameof(EditChordsCommand) => new EditChordsCommand(
+                [new("chd_1", r.Next(0, 8) * 3840L, new(PitchStep.G, 0), ChordQualities.Seventh, new(PitchStep.B, 0))]
+            ),
+            nameof(DeleteChordsCommand) => new DeleteChordsCommand(["chd_1"]),
+            nameof(SetScalesCommand) => new SetScalesCommand(
+                [new(0, new(PitchStep.C, 0), Pick(r, Enum.GetValues<ScaleKind>()))]
+            ),
+            nameof(ApplyChordIdCommand) => new ApplyChordIdCommand(
+                new(
+                    0,
+                    7680,
+                    ChordIdWrite.Replace,
+                    [new(0, 3840, new(PitchStep.A, 0), ChordQualities.Minor, null, 0.9)],
+                    []
+                )
+            ),
+            nameof(SetPitchSourceCommand) => new SetPitchSourceCommand(
+                [midiRegions.Length > 0 ? Pick(r, midiRegions).Id : "mrg_1"],
+                Pick(r, Enum.GetValues<PitchSourceMode>())
+            ),
+            nameof(SetRegionKeyCommand) => new SetRegionKeyCommand(
+                [midiRegions.Length > 0 ? Pick(r, midiRegions).Id : "mrg_1"],
+                r.Next(2) == 0 ? null : new(new(PitchStep.D, 0), KeyMode.Minor)
+            ),
+            nameof(AddSessionPlayerTrackCommand) => new AddSessionPlayerTrackCommand(
+                Pick(r, Enum.GetValues<SessionPlayerKind>())
+            ),
+            nameof(AddSessionPlayerRegionCommand) => new AddSessionPlayerRegionCommand(
+                Track() ?? "trk_1",
+                r.Next(0, 8) * 3840L
+            ),
+            nameof(SetSessionPlayerRegionCommand) => new SetSessionPlayerRegionCommand(
+                "spr_1",
+                Complexity: r.Next(0, 11) / 10.0,
+                Intensity: r.Next(0, 11) / 10.0
+            ),
+            nameof(RegenerateSessionPlayerCommand) => new RegenerateSessionPlayerCommand(["spr_1"], r.Next()),
+            nameof(ConvertSessionPlayerRegionsCommand) => new ConvertSessionPlayerRegionsCommand(
+                [new("spr_1", SessionPlayerConvertTarget.Midi, [new(36, 100, 1, 0, 240)], null)]
+            ),
+            nameof(SetMasteringCommand) => new SetMasteringCommand(
+                Character: Pick(r, Enum.GetValues<MasteringCharacter>()),
+                TargetLufs: -r.Next(9, 17)
+            ),
+            nameof(SetMasteringAnalysisCommand) => new SetMasteringAnalysisCommand(
+                "ins_1",
+                new(
+                    0,
+                    7680,
+                    1,
+                    -18,
+                    -15,
+                    5,
+                    -2,
+                    12,
+                    0.4,
+                    [..MasteringBands.CentresHz.Select(static _ => 0.0)],
+                    [
+                        ..MasteringBands.CentresHz.Select(static _ => 0.0)
+                    ]
+                )
+            ),
+            nameof(AddEnvironmentLayerCommand) => new AddEnvironmentLayerCommand(MaybeText("Layer")),
+            nameof(SetEnvironmentLayerCommand) => new SetEnvironmentLayerCommand("env_1", "Renamed"),
+            nameof(RemoveEnvironmentLayerCommand) => new RemoveEnvironmentLayerCommand("env_1"),
+            nameof(AddEnvironmentObjectCommand) => new AddEnvironmentObjectCommand(
+                Pick(r, Enum.GetValues<EnvironmentObjectKind>()),
+                r.Next(0, 800),
+                r.Next(0, 600)
+            ),
+            nameof(SetEnvironmentObjectCommand) => new SetEnvironmentObjectCommand("eob_1", X: r.Next(0, 800)),
+            nameof(RemoveEnvironmentObjectsCommand) => new RemoveEnvironmentObjectsCommand(["eob_1"]),
+            nameof(ConnectEnvironmentCommand) => new ConnectEnvironmentCommand("eob_1", 0, "eob_2", 0),
+            nameof(DisconnectEnvironmentCommand) => new DisconnectEnvironmentCommand(["ecb_1"]),
             _ => throw new InvalidOperationException($"No generator for {type.Name}.")
         };
         string? Track() => tracks.Count == 0 ? null : Pick(r, tracks).Id;
@@ -1864,7 +1984,9 @@ static class RandomProjects {
                         [],
                         r.Next(-6, 6),
                         0,
-                        []
+                        [],
+                        PitchSourceMode.Off,
+                        null
                     )
                 );
             } else if (r.Next(2) == 0) {
@@ -1891,7 +2013,9 @@ static class RandomProjects {
                         ],
                         [],
                         false,
-                        ProjectDefaults.Notation
+                        ProjectDefaults.Notation,
+                        PitchSourceMode.Off,
+                        null
                     )
                 );
             } else {
@@ -2024,7 +2148,9 @@ static class RandomProjects {
                             new(8, ControlKind.ProgramChange, 1, 0, 5, 0)
                         ],
                         false,
-                        ProjectDefaults.Notation
+                        ProjectDefaults.Notation,
+                        PitchSourceMode.Off,
+                        null
                     )
                 ],
                 []
@@ -2058,7 +2184,9 @@ static class RandomProjects {
                             [],
                             0,
                             0,
-                            []
+                            [],
+                            PitchSourceMode.Off,
+                            null
                         )
                     ],
                     // Phase 10: an ADM import's object (or a bed in the project's format).

@@ -15,7 +15,7 @@ namespace Anode.Engine.Recording;
 /// </remarks>
 public sealed unsafe class FlashbackBuffer : IDisposable {
     const int TouchAheadSeconds = 2;
-    static readonly int PageFloats = Math.Max(4096, Environment.SystemPageSize) / sizeof(float);
+    static readonly int PageFloats = Math.Max(4096, System.Environment.SystemPageSize) / sizeof(float);
 
     float* data;
     long runStart = -1; // the clock the current run of writes started at (−1: none yet)

@@ -10,7 +10,10 @@ const KindNames: Record<Track['kind'], string> = {
   midi: 'MIDI',
   aux: 'Aux',
   vca: 'VCA',
-  stack: 'Stack'
+  stack: 'Stack',
+  drummer: 'Drummer',
+  bassPlayer: 'Bass Player',
+  keyboardPlayer: 'Keyboard Player'
 };
 
 /**

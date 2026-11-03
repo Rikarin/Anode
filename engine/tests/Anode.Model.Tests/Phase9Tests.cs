@@ -317,7 +317,9 @@ public sealed class Phase9Tests {
                             [new(1, 67, 90, 1, 0, 960, 0), new(2, 69, 90, 1, 960, 960, 0)],
                             [new(3, ControlKind.ProgramChange, 1, 0, 40, 0)],
                             false,
-                            RegionNotation.Default with { DisplayQuantizeTicks = 240 }
+                            RegionNotation.Default with { DisplayQuantizeTicks = 240 },
+                            PitchSourceMode.Off,
+                            null
                         )
                     ],
                     []

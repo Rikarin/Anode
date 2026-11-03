@@ -562,7 +562,11 @@ export class TrackHeader {
         midi: 'matSettingsInputComponentRound',
         aux: 'matCallSplitRound',
         vca: 'matTuneRound',
-        stack: 'matFolderRound'
+        stack: 'matFolderRound',
+        // Session Player tracks (Phase 11): the editor workstream gives them their own icons.
+        drummer: 'matPianoRound',
+        bassPlayer: 'matPianoRound',
+        keyboardPlayer: 'matPianoRound'
       })[this.track().kind]
   );
   protected readonly kindTitle = computed(() => {

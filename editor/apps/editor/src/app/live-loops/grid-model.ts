@@ -164,7 +164,9 @@ export function midiContent(track: Track, lengthTicks: number): CellContent {
     notation: { ...DefaultRegionNotation },
     notes: [],
     controls: [],
-    muted: false
+    muted: false,
+    pitchSource: 'off',
+    key: null
   };
   return { audio: null, midi: region, pattern: null };
 }

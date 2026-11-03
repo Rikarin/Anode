@@ -1,6 +1,6 @@
 import { NgTemplateOutlet } from '@angular/common';
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
-import type { PatchInfo } from '@anode/api-client';
+import type { PatchInfo, TrackKind } from '@anode/api-client';
 import { provideIcons } from '@ng-icons/core';
 import { matAppsRound, matDeleteOutlineRound, matTuneRound } from '@ng-icons/material-icons/round';
 import { XuiButtonImports } from '@xui/button';
@@ -163,9 +163,19 @@ export class LibraryPane {
   });
   protected readonly kindName = computed(
     () =>
-      ({ audio: 'audio', instrument: 'instrument', midi: 'MIDI', aux: 'aux', vca: 'VCA', stack: 'stack' })[
-        this.track()?.kind ?? 'audio'
-      ]
+      (
+        ({
+          audio: 'audio',
+          instrument: 'instrument',
+          midi: 'MIDI',
+          aux: 'aux',
+          vca: 'VCA',
+          stack: 'stack',
+          drummer: 'Drummer',
+          bassPlayer: 'Bass Player',
+          keyboardPlayer: 'Keyboard Player'
+        }) satisfies Record<TrackKind, string>
+      )[this.track()?.kind ?? 'audio']
   );
   protected readonly suggestedCategory = computed(() => (this.track()?.kind === 'instrument' ? 'Keys' : 'Vocals'));
 

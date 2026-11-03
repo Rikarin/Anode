@@ -2,6 +2,8 @@ import { TestBed } from '@angular/core/testing';
 import {
   type AudioRegion,
   DefaultPanner,
+  EmptyChordTrack,
+  EmptyEnvironment,
   EmptyProjectScore,
   type Project,
   type ProjectDelta,
@@ -75,7 +77,9 @@ function region(id: string, trackId: string, startTick = 0): AudioRegion {
     flexMarkers: [],
     transpose: 0,
     fineTune: 0,
-    pitchNotes: []
+    pitchNotes: [],
+    pitchSource: 'off',
+    key: null
   };
 }
 
@@ -147,7 +151,10 @@ function snapshot(revision = 3): Project {
     articulationSets: [],
     laneSets: [],
     score: structuredClone(EmptyProjectScore),
-    movie: null
+    movie: null,
+    chordTrack: structuredClone(EmptyChordTrack),
+    sessionPlayerRegions: [],
+    environment: structuredClone(EmptyEnvironment)
   };
 }
 

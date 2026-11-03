@@ -436,7 +436,9 @@ export function flattenTakeFolder(project: Project, folderId: string, id: IdMake
         flexMarkers: [],
         transpose: 0,
         fineTune: 0,
-        pitchNotes: []
+        pitchNotes: [],
+        pitchSource: 'off',
+        key: null
       }
     ];
   });

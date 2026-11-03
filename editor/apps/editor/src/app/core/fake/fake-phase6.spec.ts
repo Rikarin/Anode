@@ -341,7 +341,9 @@ describe('FakeAnodeServer, Phase 6', () => {
         notation: { ...DefaultRegionNotation },
         notes: [{ id: 1, pitch: 60, velocity: 100, channel: 1, startTick: 0, lengthTicks: 480, articulationId: 0 }],
         controls: [],
-        muted: false
+        muted: false,
+        pitchSource: 'off' as const,
+        key: null
       };
       await run(server, {
         type: 'setCell',

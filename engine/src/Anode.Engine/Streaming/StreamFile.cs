@@ -8,7 +8,7 @@ namespace Anode.Engine.Streaming;
 ///     S2), read with positional reads widened to page boundaries, and decoded to float.
 /// </summary>
 public sealed class StreamFile : IDisposable {
-    static readonly int Page = Math.Max(4096, Environment.SystemPageSize);
+    static readonly int Page = Math.Max(4096, System.Environment.SystemPageSize);
 
     readonly SafeFileHandle handle;
     readonly long fileLength;

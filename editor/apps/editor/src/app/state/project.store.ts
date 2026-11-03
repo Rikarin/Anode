@@ -7,15 +7,19 @@ import {
   type AudioRegion,
   type AutomationLane,
   type ChannelStrip,
+  type ChordTrack,
   type CommandResult,
   DefaultPanner,
   type DeltaOp,
   type EditCommand,
+  EmptyChordTrack,
+  EmptyEnvironment,
   EmptyProjectScore,
   type GrooveTemplate,
   type LaneSet,
   type LiveLoopsGrid,
   type Marker,
+  type MidiEnvironment,
   type MidiRegion,
   type MixerGroup,
   type Movie,
@@ -24,6 +28,7 @@ import {
   type ProjectDelta,
   type ProjectScore,
   type ProjectSettings,
+  type SessionPlayerRegion,
   type TakeFolder,
   type Track
 } from '@anode/api-client';
@@ -151,6 +156,12 @@ export class ProjectStore {
   readonly score = signal<ProjectScore>(EmptyProjectScore);
   /** The project's movie (Phase 10); null: none. */
   readonly movie = signal<Movie | null>(null);
+  /** The chord track: chords, key and scale changes (Phase 11). */
+  readonly chordTrack = signal<ChordTrack>(EmptyChordTrack);
+  /** Session Player regions (`spr_…`) by id (Phase 11): Drummer, Bass Player and Keyboard Player regions. */
+  readonly sessionPlayerRegions = signal<ReadonlyMap<string, SessionPlayerRegion>>(new Map());
+  /** The MIDI Environment (Phase 11); empty: physical input to sequencer input. */
+  readonly environment = signal<MidiEnvironment>(EmptyEnvironment);
   /** A project is being opened, created or refetched. */
   readonly loading = signal(false);
 
@@ -244,6 +255,9 @@ export class ProjectStore {
     this.score.set(project.score);
     // A real Server leaves a null movie out (WhenWritingNull).
     this.movie.set(project.movie ?? null);
+    this.chordTrack.set(project.chordTrack);
+    this.sessionPlayerRegions.set(new Map(project.sessionPlayerRegions.map(r => [r.id, r])));
+    this.environment.set(project.environment);
   }
 
   /** No project open. */
@@ -273,6 +287,9 @@ export class ProjectStore {
     this.laneSets.set(new Map());
     this.score.set(EmptyProjectScore);
     this.movie.set(null);
+    this.chordTrack.set(EmptyChordTrack);
+    this.sessionPlayerRegions.set(new Map());
+    this.environment.set(EmptyEnvironment);
   }
 
   /** Fetches the open project (or learns that none is), replacing what the store has. Concurrent calls share one. */
@@ -724,6 +741,27 @@ export class ProjectStore {
       // The movie (Phase 10): set, moved or removed.
       case 'movieChanged':
         this.movie.set(op.movie ?? null);
+        break;
+      // The chord track, Session Player regions and the Environment (Phase 11).
+      case 'chordTrackChanged':
+        this.chordTrack.set(op.chordTrack);
+        break;
+      case 'sessionPlayerRegionUpserted': {
+        const region = op.region;
+        this.sessionPlayerRegions.update(regions => new Map(regions).set(region.id, region));
+        break;
+      }
+      case 'sessionPlayerRegionRemoved': {
+        const id = op.id;
+        this.sessionPlayerRegions.update(regions => {
+          const next = new Map(regions);
+          next.delete(id);
+          return next;
+        });
+        break;
+      }
+      case 'environmentChanged':
+        this.environment.set(op.environment);
         break;
     }
   }

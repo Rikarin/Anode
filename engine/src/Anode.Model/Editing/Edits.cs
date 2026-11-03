@@ -148,6 +148,8 @@ public static partial class Edits {
         IScoreNotation? notation = null
     ) =>
         command switch {
+            // Session Player track kinds: Phase 11, workstream B (docs/12-phase-11.md).
+            _ when UsesPhase11Fields(command) => throw Phase11Pending($"{command.GetType().Name} with Phase 11 fields"),
             AddTrackCommand c => AddTrack(state, c, ids, plugins),
             RemoveTrackCommand c => RemoveTrack(state, c),
             MoveTrackCommand c => MoveTrack(state, c),
@@ -234,6 +236,7 @@ public static partial class Edits {
                 ?? Phase8Ops(state, command, ids, plugins)
                 ?? Phase9Ops(state, command, ids, plugins, notation ?? NoScoreNotation.Instance)
                 ?? Phase10Ops(state, command, ids)
+                ?? Phase11Ops(command)
                 ?? throw new EditException($"Unknown command {command.GetType().Name}.")
         };
 
@@ -560,7 +563,9 @@ public static partial class Edits {
             [],
             0,
             0,
-            []
+            [],
+            PitchSourceMode.Off,
+            null
         );
         if (!adapt) {
             return [new RegionUpserted(region)];

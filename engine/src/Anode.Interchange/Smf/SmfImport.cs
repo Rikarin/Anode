@@ -82,7 +82,9 @@ public static class SmfImport {
             Edits.Sorted(notes),
             Edits.Sorted(controls),
             false,
-            ProjectDefaults.Notation
+            ProjectDefaults.Notation,
+            PitchSourceMode.Off,
+            null
         );
     }
 

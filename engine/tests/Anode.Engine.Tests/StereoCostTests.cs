@@ -108,8 +108,8 @@ public sealed class StereoCostTests : IDisposable {
             + $"mean, {full.P99:0.0} µs p99";
         TestContext.Current.SendDiagnosticMessage(message);
         Console.WriteLine(message);
-        if (Environment.GetEnvironmentVariable("ANODE_MEASURE_LOG") is { Length: > 0 } log) {
-            File.AppendAllText(log, message + Environment.NewLine);
+        if (System.Environment.GetEnvironmentVariable("ANODE_MEASURE_LOG") is { Length: > 0 } log) {
+            File.AppendAllText(log, message + System.Environment.NewLine);
         }
 
         Assert.True(full.Mean < budget * 4, message);

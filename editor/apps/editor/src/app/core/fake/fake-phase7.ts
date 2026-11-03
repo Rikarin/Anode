@@ -471,7 +471,9 @@ function stepNotes(project: Project, command: Command<'stepNotes'>, ctx: Phase7C
       notation: { ...DefaultRegionNotation },
       notes: [],
       controls: [],
-      muted: false
+      muted: false,
+      pitchSource: 'off',
+      key: null
     };
     next = { ...next, midiRegions: [...next.midiRegions, region] };
   }

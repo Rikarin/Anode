@@ -87,7 +87,9 @@ sealed class MusicXmlScoreReader {
                 result.Notes,
                 [],
                 false,
-                RegionNotation.Default
+                RegionNotation.Default,
+                PitchSourceMode.Off,
+                null
             );
             tracks.Add(new(trackId, name, TrackKind.Instrument, Style(result, name), [region], []));
         }

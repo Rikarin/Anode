@@ -345,7 +345,8 @@ function newSlot(plugin: PluginInfo, ctx: Phase6Context): Insert {
     name: plugin.name,
     bypassed: false,
     parameters: defaultParameters(plugin),
-    sidechain: null
+    sidechain: null,
+    mastering: null
   };
 }
 
@@ -993,7 +994,8 @@ function applyLiveLoopsCommand(project: Project, command: EditCommand, ctx: Phas
                   name: remix.name,
                   bypassed: false,
                   parameters: defaultParameters(remix),
-                  sidechain: null
+                  sidechain: null,
+                  mastering: null
                 }
               ]
             }
@@ -1084,7 +1086,9 @@ export function applyPhase6Command(project: Project, command: EditCommand, ctx: 
         notation: { ...DefaultRegionNotation },
         notes: patternNotes(project, region, region.startTick, ctx),
         controls: [],
-        muted: region.muted
+        muted: region.muted,
+        pitchSource: 'off',
+        key: null
       };
       return {
         ...project,

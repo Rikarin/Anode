@@ -51,6 +51,10 @@ public sealed record ProjectDelta(long Revision, IReadOnlyList<DeltaOp> Ops);
 [JsonDerivedType(typeof(ScoreSetRemoved), "scoreSetRemoved")]
 [JsonDerivedType(typeof(ScoreLayoutChanged), "scoreLayoutChanged")]
 [JsonDerivedType(typeof(MovieChanged), "movieChanged")]
+[JsonDerivedType(typeof(ChordTrackChanged), "chordTrackChanged")]
+[JsonDerivedType(typeof(SessionPlayerRegionUpserted), "sessionPlayerRegionUpserted")]
+[JsonDerivedType(typeof(SessionPlayerRegionRemoved), "sessionPlayerRegionRemoved")]
+[JsonDerivedType(typeof(EnvironmentChanged), "environmentChanged")]
 public abstract record DeltaOp;
 
 /// <summary>A track was added or changed; <c>index</c> is its position in the track list.</summary>
@@ -159,3 +163,22 @@ public sealed record ScoreLayoutChanged(ScoreLayout Layout) : DeltaOp;
 ///     <c>trackUpserted</c>, <c>masterChanged</c> and <c>settingsChanged</c>; scene markers as <c>markerUpserted</c>.
 /// </summary>
 public sealed record MovieChanged(Movie? Movie) : DeltaOp;
+
+/// <summary>
+///     Phase 11 (docs/12-phase-11.md): the chord track changed (the whole track: chords, key and scale changes). Regions'
+///     Pitch Source and keys come as <c>regionUpserted</c> and <c>midiRegionUpserted</c>, a Mastering Assistant's
+///     settings and analysis as <c>masterChanged</c>.
+/// </summary>
+public sealed record ChordTrackChanged(ChordTrack ChordTrack) : DeltaOp;
+
+/// <summary>
+///     Phase 11: a Session Player region was added or changed (its parameters and seed included; clients refetch its
+///     notes, <c>GET /project/regions/{id}/session-player</c>, after this, or after the chord track, the sections or its
+///     rhythm source's regions change over its range).
+/// </summary>
+public sealed record SessionPlayerRegionUpserted(SessionPlayerRegion Region) : DeltaOp;
+
+public sealed record SessionPlayerRegionRemoved(string Id) : DeltaOp;
+
+/// <summary>Phase 11: the Environment changed (the whole document: layers, objects and cables).</summary>
+public sealed record EnvironmentChanged(MidiEnvironment Environment) : DeltaOp;

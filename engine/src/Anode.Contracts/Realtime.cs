@@ -29,6 +29,9 @@ namespace Anode.Contracts;
 [JsonDerivedType(typeof(SelectionEvent), "selection")]
 [JsonDerivedType(typeof(KeyCommandEvent), "keyCommand")]
 [JsonDerivedType(typeof(ListenInEvent), "listenIn")]
+[JsonDerivedType(typeof(EnvironmentMonitorEvent), "environmentMonitor")]
+[JsonDerivedType(typeof(EnvironmentFaderEvent), "environmentFader")]
+[JsonDerivedType(typeof(MasteringEvent), "mastering")]
 public abstract record RealtimeEvent;
 
 /// <summary>The socket is open; the client fetches the state it needs now.</summary>
@@ -159,3 +162,27 @@ public sealed record KeyCommandEvent(string Id) : RealtimeEvent;
 ///     changed by 10 ms or more.
 /// </summary>
 public sealed record ListenInEvent(ListenInState State) : RealtimeEvent;
+
+/// <summary>
+///     Phase 11 (docs/12-phase-11.md): an Environment monitor's last events (oldest first, at most 8), at the meter rate
+///     while it sees events (from the host's telemetry, never per event).
+/// </summary>
+public sealed record EnvironmentMonitorEvent(string ObjectId, IReadOnlyList<MonitoredEvent> Events) : RealtimeEvent;
+
+/// <summary>Phase 11: an Environment fader's value (0…127) changed (an event moved it), at most at the meter rate.</summary>
+public sealed record EnvironmentFaderEvent(string ObjectId, double Value) : RealtimeEvent;
+
+/// <summary>
+///     Phase 11: the master's Mastering Assistant, at the meter rate while the transport plays: its output's momentary,
+///     short-term and integrated loudness (LUFS, since play started; −144 in silence), true peak (dBTP, since play
+///     started) and the gain reduction of its compressor and limiter (dB, 0 or less).
+/// </summary>
+public sealed record MasteringEvent(
+    string InsertId,
+    double MomentaryLufs,
+    double ShortTermLufs,
+    double IntegratedLufs,
+    double TruePeakDbtp,
+    double CompressorReductionDb,
+    double LimiterReductionDb
+) : RealtimeEvent;

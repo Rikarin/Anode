@@ -47,7 +47,9 @@ function region(start = 0): MidiRegion {
       { id: start + 100, kind: 'controlChange', channel: 2, number: 74, value: 10, tick: 0 },
       { id: start + 101, kind: 'controlChange', channel: 2, number: 74, value: 20, tick: 250 },
       { id: start + 102, kind: 'controlChange', channel: 2, number: 1, value: 30, tick: 0 }
-    ]
+    ],
+    pitchSource: 'off',
+    key: null
   };
 }
 

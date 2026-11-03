@@ -19,9 +19,9 @@ public sealed class LinkTests : IDisposable {
     public void Dispose() => Directory.Delete(dir, true);
 
     static bool WaitFor(Func<bool> condition, int milliseconds = 10_000) {
-        var deadline = Environment.TickCount64 + milliseconds;
+        var deadline = System.Environment.TickCount64 + milliseconds;
         while (!condition()) {
-            if (Environment.TickCount64 > deadline) {
+            if (System.Environment.TickCount64 > deadline) {
                 return false;
             }
 

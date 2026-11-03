@@ -39,7 +39,10 @@ const JobNames: Record<JobKind, string> = {
   movieAudioImport: 'Import audio from movie',
   movieAudioExport: 'Export audio to movie',
   sceneDetect: 'Scene cut detection',
-  thumbnails: 'Movie thumbnails'
+  thumbnails: 'Movie thumbnails',
+  chordId: 'Chord ID',
+  masteringAnalysis: 'Mastering analysis',
+  sessionPlayerConvert: 'Session Player conversion'
 };
 
 /** A file's name from its absolute path. */

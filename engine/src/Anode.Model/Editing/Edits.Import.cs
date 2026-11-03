@@ -72,7 +72,9 @@ public static partial class Edits {
                 Sorted(notes),
                 Sorted(controls),
                 false,
-                ProjectDefaults.Notation
+                ProjectDefaults.Notation,
+                PitchSourceMode.Off,
+                null
             );
             state = Step(state, [new MidiRegionUpserted(region)], forward, inverse);
         }

@@ -148,6 +148,221 @@ report. A REST change means regenerating `engine/src/Anode.Server/openapi.json`
 - **Package schema 11:** the chord track, regions' Pitch Source and keys, Session Player tracks and regions, the
   Environment, the Mastering Assistant's analysis in its insert state.
 
+### Contract notes
+
+Where the committed code differs from, or adds to, the shapes planned for this commit, and the shapes chosen where
+the plan left latitude:
+- **Chord track** (`Chords.cs`): `Chord(id, tick, root, quality, bass?)` with `root` and `bass` as the score's
+  `PitchName` (spelled) and `quality` in the score's `ChordSymbol.quality` vocabulary. **`ChordQualities`** names it
+  (`""` major, `m`, `7`, `maj7`, `m7`, `dim`, `m7b5`, `aug`, `sus2`, `sus4`, `6`, `m6`, `9`: ADR-0014's templates, in
+  that order), with `All`, `IsKnown` and `Intervals(quality)` (real data). **Key and scale changes** are
+  `ScaleChange(tick, tonic, scale)` (no id: tick-keyed, as `KeyEvent`), `ScaleKind` (`major | minor | harmonicMinor |
+  melodicMinor | dorian | phrygian | lydian | mixolydian | locrian`); **decided:** they are the chord track's own, and
+  before the first (or with none) the chord track's key is the project's key track (`settings.keys`, major as `major`,
+  minor as `minor`), which stays the key signature track. `ChordTrack(chords, scales)` (`Empty`); `Project.chordTrack`
+  (required).
+- **Pitch Source and region keys:** the model has no common `Region` type, so **`pitchSource: PitchSourceMode` (`off |
+  root | chords`) and `key: RegionKey?` are on both `MidiRegion` and `AudioRegion`** (required; `chords` is MIDI only).
+  `RegionKey(tonic: PitchName, mode: KeyMode)` (spelled, as the chords). `PitchSources.PitchClass(pitch)` and
+  `RootInterval(from, to)` (−6…+5, **a tritone goes down**) are real and mirrored in `models.ts` (`pitchClass`,
+  `rootInterval`). Every existing constructor passes `off`/null; a package without the fields reads as `off`/null (the
+  enum's default and a missing nullable), so no interim filler is needed. `RegionTimingVectors.json` is regenerated (it
+  serialises regions).
+- **Chord ID:** `ChordIdRequest(regionIds, startTick?, endTick?, write = replace, detectKeys = true, resolutionTicks?)`
+  (MIDI and audio regions together; left-out range: the regions' span; resolution: a beat). `ChordIdWrite` adds
+  **`none`** (keys only) to replace and merge; **merge** adds detected chords only where the chord track has none within
+  a beat. The job's result is `ChordIdResult(startTick, endTick, write, chords: DetectedChord(tick, lengthTicks, root,
+  quality, bass?, confidence)[], keys: DetectedKey(regionId, key, confidence)[])`, applied by **`applyChordId`** (jobs
+  only, one undo step).
+- **Session Players** (`SessionPlayers.cs`): `SessionPlayerKind` (`drummer | bass | keyboard`). Track kinds `drummer`,
+  `bassPlayer`, `keyboardPlayer`; **decided:** a Drummer track *is* a Drum Machine Designer (`drumMachine` is its kit,
+  its pads member instrument tracks: multi-output), Bass and Keyboard Player tracks are instrument tracks
+  (`instrument`). **The region kind is its own record and list**, `SessionPlayerRegion(id, trackId, name, startTick,
+  lengthTicks, muted, parameters, seed)` in `Project.sessionPlayerRegions`, beside MIDI and pattern regions (there is no
+  region-kind enum to add `sessionPlayer` to); deltas `sessionPlayerRegionUpserted`/`sessionPlayerRegionRemoved`. **The
+  seed is the region's, not a parameter** (presets carry no seed). `SessionPlayerParameters(styleId, presetId?, pad,
+  fillAmount, fillAtSectionEnds, swing, feel, followChords, drums?, bass?, keys?)`: the XY pad is
+  `SessionPlayerPad(complexity, intensity)` (0…1), `feel` −1 (lay back) … 1 (push) as a fraction of a 32nd,
+  `followChords` (bass and keys; off plays the region's key's tonic chord), and the switches of the region's player
+  only: `DrummerSwitches(pieces: DrumPieceSetting(piece, on, variation 0…3)[], rhythmSourceTrackId?)` over `DrumPiece`
+  (`kick | snare | hiHat | toms | cymbals | percussion`, each once) — **the rhythm source to follow is a Drummer switch,
+  per region**; `BassSwitches(lowNote, highNote, slides, deadNotes)` (the range as MIDI notes, at least an octave,
+  24…72); `KeysSwitches(voicing: close | spread | shell, lowNote, highNote, leftHand: off | root | octaves | rootFifth,
+  rhythmId?)` (36…96). **`DrumKitNotes`**: the Drummer plays General MIDI percussion notes (kick 36, snare 38, side
+  stick 37, clap 39, hats 42/44/46, toms 50/47/45/41, crash 49, ride 51, bell 53, tambourine 54, cowbell 56, shaker 82)
+  and its kits' pads sit on them (`Of(piece)`, the main note first).
+- **Section kinds:** `SectionKind` (`intro | verse | chorus | bridge | outro`). **Decided: arrangement sections keep no
+  stored kind**; `SectionKinds.Of(name)` derives it from the name's start, ignoring case (`pre-chorus` and `hook` are
+  choruses, `middle` and `break` bridges, `ending` and `end` outros; anything else, and no section, a verse), mirrored
+  as `sectionKind` in `models.ts`.
+- **Catalogue:** `SessionPlayerCatalog(version, styles)` (`GET /library/session-players`); `SessionPlayerStyle(id, name,
+  player, genre, description, synthPlayer, kitPatchId?, rhythms: SessionPlayerRhythm(id, name)[], presets:
+  SessionPlayerPreset(id, name, parameters)[], sections: SectionDefaults(kind, parameters)[])` — a style holds its
+  defaults per section kind (every kind once) and the kit patch a new Drummer gets; kits are pack kit patches (the
+  content builder's), not catalogue entries. The library's `version` is part of every generation input.
+- **Generated notes** (added): `GET /project/regions/{regionId}/session-player` answers `SessionPlayerNotes(regionId,
+  hash, notes)` (relative to the region's start, as a MIDI region's; `hash` the cache key) for the editor's read-only
+  drawing; refetched after `sessionPlayerRegionUpserted`, or a chord, section or rhythm source change over the region.
+  Regenerate is `POST …/session-player/regenerate` (`RegenerateRequest(seed?)` → `CommandResult`); Convert `POST
+  …/session-player/convert` (`SessionPlayerConvertRequest(target: midi | pattern, regionIds?)` → a job, applying
+  **`convertSessionPlayerRegions`** with `ConvertedSessionPlayerRegion(regionId, target, notes: NewNote[], pattern?)`).
+- **Mastering Assistant** (`Mastering.cs`): plugin `anode.mastering-assistant`. **Decided: its settings are its insert
+  parameters** (`MasteringParameters`: `character` 0…3 as `MasteringCharacter` `clean | valve | punch | transparent`,
+  `targetLufs` −24…−6 (−14), `ceilingDbtp` −3…0 (−1), `eq` and `dynamics` 0…1 (1, the analysis' correction's strength),
+  `width` 0…2 (1), `matchedBypass` 0/1), so they automate and bounce as any insert's; **its analysis is
+  `Insert.mastering: MasteringAnalysis?`** (a new optional field; null on every other insert):
+  `MasteringAnalysis(startTick, endTick, revision, integratedLufs, maxShortTermLufs, loudnessRange, truePeakDbtp,
+  crestFactorDb, width (0…1), spectrumDb[], curveDb[])` over **`MasteringBands`**: 30 ISO 266 third-octave centres, 25
+  Hz … 20 kHz. The typed view is `MasteringSettings` (`Default`) and `MasteringState(insertId, settings, analysis?)`
+  (`GET /project/mastering`); `PUT /project/mastering` (added) takes `MasteringSettings` and applies `setMastering`.
+  `MasteringAnalysisRequest(startTick?, endTick?, add = true)` (`add`: put one last on the master first when there is
+  none). The chain is not stored: it follows from the analysis and settings (E's `MasteringChainDesigner`).
+- **Environment** (`Environment.cs`): the document is **`MidiEnvironment(layers, objects, cables)`** (`Empty`), named so
+  to avoid `System.Environment`; `Project.environment` (required). `EnvironmentLayer(id, name)`; `EnvironmentObject(id,
+  layerId, kind, name, x, y, parameters, port?, trackId?, address?, conditions?, operations?, taps?, chord?)` — numeric
+  settings in `parameters` by id, the rest typed: `port` (physical input: one device, null every input; MIDI port: the
+  output), `trackId` (track input; control target, null the master), `address` (control target, an automation address
+  such as `volume` or `insert:{id}:{param}`), `conditions`/`operations` (transformer: **Phase 7's `TransformCondition`
+  and `TransformOperation` reused**, on `status` (conditions only), `channel`, `pitch` = data 1, `velocity` = data 2,
+  not the position, length or time-based ones), `taps` (`DelayTap(delayTicks 1…3840, transpose, velocity)`, at most 16)
+  and `chord` (chord memoriser: semitones from the key; null its Chord parameter's). `EnvironmentCable(id, fromObjectId,
+  outlet, toObjectId, inlet)` (indices; fan-out and merge allowed, cables cross layers, no cycles). **Object kinds**
+  (`EnvironmentObjectKind`, ADR-0015's thirteen; `EnvironmentObjectKinds.All`/`Of`, real data mirrored in `models.ts`):
+
+  | Kind | Inlets | Outlets | Parameters |
+  |---|---|---|---|
+  | `physicalInput` (at most one without a port) | — | Out | — |
+  | `sequencerInput` (at most one) | In | — | — |
+  | `keyboard` | — | Out | `channel`, `velocity` |
+  | `monitor` | In | Out | — |
+  | `fader` | In | Out | `message` (0 CC, 1 note, 2 program, 3 pitch bend), `channel`, `number`, `min`, `max`, `value` |
+  | `transformer` | In | Matched, Unmatched | — (conditions, operations) |
+  | `delayLine` | In | Out | `dry` (taps) |
+  | `arpeggiator` | In | Out | `anode.arpeggiator`'s |
+  | `chordMemorizer` | In | Out | `anode.chord-trigger`'s (chord) |
+  | `channelSplitter` | In | Channel 1 … Channel 16, Other | — |
+  | `midiPort` | In | — | — (port) |
+  | `trackInput` | In | — | — (trackId) |
+  | `controlTarget` | In | — | — (trackId, address) |
+
+  Live MIDI into an on-screen object: `EnvironmentInputRequest(events: LiveMidiEvent[])` (`POST
+  /project/environment/objects/{objectId}/input`, 204; keyboards and faders only).
+- **Jobs** (`JobKind`): `chordId`, `masteringAnalysis`, `sessionPlayerConvert`.
+- **Commands** (22): chord track `addChords(chords: NewChord(tick, root, quality, bass?)[])`, `editChords(chords)`,
+  `deleteChords(chordIds)`, `setScales(scales)`, `applyChordId(result)` (jobs only); Pitch Source
+  `setPitchSource(regionIds, mode)`, `setRegionKey(regionIds, key?)` (null clears); Session Players
+  `addSessionPlayerTrack(player, styleId?, presetId?, kitPatchId?, pluginId?, name?, index?, regions = true)` (with
+  `regions`, a region per arrangement section with its kind's defaults and its own seed, else 8 bars from the start),
+  `addSessionPlayerRegion(trackId, startTick, lengthTicks?, parameters?, name?, seed?)`,
+  **`setSessionPlayerRegion(regionId, startTick?, lengthTicks?, name?, muted?, styleId?, presetId?, complexity?,
+  intensity?, fillAmount?, fillAtSectionEnds?, swing?, feel?, followChords?, drums?, bass?, keys?)`** — flat scalars (an
+  XY drag sends two numbers, as `setPanner`), whole switch records (required-nullable in the generated client: send
+  `null` for the ones not changed); a preset applies first, any other parameter change clears `presetId`, the seed stays
+  — `regenerateSessionPlayer(regionIds, seed?)`, `convertSessionPlayerRegions(regions)` (jobs only); Mastering
+  `setMastering(insertId?, character?, targetLufs?, ceilingDbtp?, eq?, dynamics?, width?, matchedBypass?)`,
+  `setMasteringAnalysis(insertId, analysis)` (jobs only); Environment `addEnvironmentLayer(name?)`,
+  `setEnvironmentLayer(layerId, name?, index?)`, `removeEnvironmentLayer(layerId)` (its objects and their cables),
+  `addEnvironmentObject(kind, x, y, layerId?, name?, parameters?, port?, trackId?, address?, conditions?, operations?,
+  taps?, chord?)` (no layer: the first, made as `Layer 1` when none), `setEnvironmentObject(objectId, …)` (parameters
+  merged; an empty `port`, `trackId` or `address` clears it, an empty `chord` too),
+  `removeEnvironmentObjects(objectIds)`, `connectEnvironment(fromObjectId, outlet, toObjectId, inlet)` (422 for a
+  duplicate or a cycle), `disconnectEnvironment(cableIds)`. `moveRegion`, `copyRegions` and `deleteRegions` take Session
+  Player regions (documented on the region; B implements). Deltas: `chordTrackChanged(chordTrack)`, the two Session
+  Player region ones, `environmentChanged(environment)` (the whole document); Pitch Source and keys come as
+  `regionUpserted`/ `midiRegionUpserted`, mastering as `masterChanged`.
+- **Realtime:** `environmentMonitor` (`EnvironmentMonitorEvent(objectId, events: MonitoredEvent(status, data1, data2,
+  sample)[]`, at most 8, oldest first), `environmentFader` (`EnvironmentFaderEvent(objectId, value)` 0…127) and
+  `mastering` (`MasteringEvent(insertId, momentaryLufs, shortTermLufs, integratedLufs, truePeakDbtp,
+  compressorReductionDb, limiterReductionDb)` — **two gain reductions**, the compressor's and the limiter's), at the
+  meter rate; `models.ts` adds them to `ServerMessage` (with `MonitoredEvent` and `MasteringReading`).
+- **REST** (`GenerativeApi.cs`, `EnvironmentApi.cs`, `Pending.Phase11`): `GetChordTrack` (`GET /project/chords`),
+  `DetectChords` (`POST /project/chords/detect`), `GetSessionPlayerCatalog` (`GET /library/session-players`),
+  `GetSessionPlayerNotes`, `RegenerateSessionPlayer`, `ConvertSessionPlayer`
+  (`/project/regions/{regionId}/session-player`, `…/regenerate`, `…/convert`), `GetMastering`, `SetMastering`
+  (`GET`/`PUT /project/mastering`), `AnalyseMastering` (`POST /project/mastering/analyse`), `GetEnvironment` (`GET
+  /project/environment`), `EnvironmentInput` (`POST /project/environment/objects/{objectId}/input`). The editor's
+  `AnodeApi`: `chordTrack`, `detectChords`, `sessionPlayerCatalog`, `sessionPlayerNotes`, `regenerateSessionPlayer`,
+  `convertSessionPlayer`, `mastering`, `setMastering`, `analyseMastering`, `environment`, `environmentInput`.
+- **IPC** (`IpcMessage.cs`): `LoadModelMessage.environment: EngineEnvironment?` (a whole model's; null the default path;
+  a per-track segment leaves it), **`SetEnvironmentMessage(environment?)`** and, added for live MIDI into an on-screen
+  object, **`EnvironmentMidiMessage(objectIndex, events)`**. `EngineEnvironment(objects)` is flat and ordered so every
+  route goes forward: `EngineEnvironmentObject(index, kind: EngineEnvironmentKind, parameters, routes:
+  EngineEnvironmentRoute(outlet, to, inlet)[], port?, trackId = −1, control: EngineAutomationTarget?, conditions?,
+  operations?: EngineTransformRule(field, op, a, b)[] (contract names), taps?: EngineDelayTap(delayTicks, transpose,
+  velocity)[], chord?, telemetrySlot = −1)`; no layers, no contract ids. The Mastering Assistant's chain:
+  **`EngineInsert.mastering: EngineMasteringChain(eqGainsDb[30], compressorThresholdDb, compressorRatio, loudnessLufs,
+  chainGainDb)`** — what the analysis sets, at full strength; the insert's parameters scale and steer it live, and the
+  limiter's input gain is `targetLufs − loudnessLufs − chainGainDb` (at the current strengths).
+- **Telemetry** (`TelemetryLayout.cs`): `TelemetryHeader.EnvironmentDropped` (appended); after the channel meters,
+  `MaxMonitors` (32) **`EnvironmentMonitorEntry`** (`Object` = index + 1, 0 free, as a new region is zeroed; `Count`
+  monotonic; an 8-event ring, event n at `n % 8`, each as its sample and `status | data1 << 8 | data2 << 16`),
+  `MaxFaders` (64) **`EnvironmentFaderEntry`** (`Object`, `Value`), then one **`MasteringEntry`** (`Active`, the three
+  loudnesses, true peak, the two reductions): `MonitorsOffset`, `FadersOffset`, `MasteringOffset`, `Size`.
+- **Stubs that throw** (through `Pending.Workstream…()`, as earlier phases' are):
+  - **`Anode.Generative`** (new, server only; references Contracts; `Styles/**/*.json` embedded):
+    `GenerationInput(player, parameters, seed, startTick, lengthTicks, chords, sections, signatures, keys,
+    rhythmOnsets?)` — **the rhythm source as onset ticks** (MIDI note starts or audio transients, gathered by B);
+    `GeneratedNotes(hash, notes)`; `SessionPlayerGenerator(library)` with `Generate(input)`, `Hash(input)` (lowercase
+    hex SHA-256 with the library's version), `static ToPattern(notes, lengthTicks, stepTicks = 240)` and the real
+    `static PlayerOf(trackKind)`; `StyleLibrary` (`Builtin()`, `Load(folder)`, `Version`, `Catalog`).
+    `Anode.Generative.Tests` holds one placeholder test (`PlayerOf`).
+  - **`Anode.Dsp/Analysis/Chords`**: `ChordTemplates` (real: qualities and intervals, tested equal to the contract's);
+    `ChordNote(startTick, lengthTicks, pitch, velocity)`, `RecognisedChord(start, end, root, quality index, bass,
+    confidence)`, `DetectedMusicalKey(tonic, minor, confidence)`; `MidiChordRecognizer.Recognise(notes, beats,
+    resolutionTicks, key?)`, `AudioChordRecognizer.Recognise(mono, sampleRate, beats, key?)` (frames),
+    `KeyDetector.FromNotes`, `FromAudio`.
+  - **T3 instruments** (`IInstrument`, descriptor real, parameters empty for E to fill): `anode.physical-model`
+    (`Instruments/Physical/PhysicalModel`), `anode.tape-replay` (`Instruments/Tape/TapeReplay`, loads `.antape` tape
+    sets), `anode.sample-alchemy` (`Instruments/Alchemy/SampleAlchemy`, loads `.wav`, `.aif`, `.aiff`; the brief's name
+    kept). **Effects:** `anode.saturation` (`Effects/Drive/Saturation`, an `AudioEffect` with its parameters fixed:
+    `model` Tube/Tape/Transformer/Modern, `drive`, `tone`, `mix`, `output`); a new **`IFormatEffect`** for inserts that
+    change the channel format (planar in and out, `OutputFormat(input)`, `Prepare(input, output, rate, frames)`), with
+    `anode.down-mixer` (`Effects/Surround/DownMixerInsert`: `format`, a `SpeakerFormat` index, stereo by default, and
+    `lfe` dB) and `anode.binaural` (`Effects/Surround/BinauralInsert`: always stereo, `UseHrtfs(set)`); a format change
+    is structural (compiled, not automated). **`Anode.Dsp/Mastering`**: `MasteringBands` (real, tested equal),
+    `MasteringCharacterKind`, `MasteringMeasurement`, `MasteringAnalyzer.Analyse(left, right, rate)` and `Curve`,
+    `MasteringChainSettings`, `MasteringChainDesigner.Design`, and `MasteringAssistant` (an `AudioEffect`, parameters
+    fixed and tested equal to `MasteringParameters`; `SetChain`). **None is registered** in `BuiltinEffects` or
+    `BuiltinInstruments`: the contract, golden-render and demo tests instantiate and render every entry; A registers
+    them (and the engine creates the `IFormatEffect`s by id) once E's work is in.
+  - **`Anode.Engine/Environment`**: `EnvironmentEvent(sample, status, data1, data2, port?)`, `IEnvironmentSink`
+    (`SequencerInput`, `TrackInput`, `MidiPort`, `Control`), `IEnvironmentEmitter` (`Emit`, `Schedule`),
+    `EnvironmentGraph` (`Empty` and `Compile` of a null or empty graph are real: the default path costs nothing;
+    `QueueCapacity` 4096, `Input`, `InputAt`, `Process`, `Publish`, `Reset`, `Dropped`), `EnvironmentNode` with
+    `Create(settings)` and one node class per kind. **The namespace `Anode.Engine.Environment` shadows
+    `System.Environment` inside `Anode.Engine.*`** (the tests' namespaces included): the existing uses now say
+    `System.Environment`, and new code must too.
+- **Content builder:** `SessionPlayerContent.AddKits(pack, test, t1)` (D) and `TapeContent.AddTapeSets(pack, test)` (E),
+  each behind its `Ready` (false), which `Program.cs` checks, so `scripts/build-content.mjs` runs as before.
+- **Interim:** the model refuses the 22 commands and new or imported tracks of the Session Player kinds (and imported
+  regions with a Pitch Source or key), 422 (`Edits.Phase11.cs`); projects answer an empty chord track and Environment
+  and no Session Player regions (`ProjectState.ToProject`); the identity property skips `RandomProjects.PendingPhase11`,
+  and random projects are built without them (`Buildable`). The editor's fake Server answers the commands, the Session
+  Player track kinds and the 11 endpoints 422 (`fake-phase11.spec.ts`); its `ProjectStore` keeps `chordTrack`,
+  `sessionPlayerRegions` and `environment` and applies their deltas. The Server's JSON leaves `insert.mastering` and
+  `region.key` out when null (required-nullable in the generated client, as `movie`; read them `?? null`).
+- **Not contracted here:** the Compressor's and Limiter's channel link on surround strips (E adds the parameter; A's
+  `MultichannelPolicy.Linked` groups by it).
+
+### What each workstream must know
+
+- **A:** `EnvironmentGraph.Compile` of an empty graph must stay `Empty` (zero cost); write monitors and faders into
+  their `telemetrySlot`s (index + 1); `EnvironmentMidiMessage` enters at an object; register the T3 instruments and
+  effects (including the `IFormatEffect`s, which change the strip's format after them) and the Mastering Assistant (pass
+  `EngineInsert.mastering` to `SetChain`, publish `MasteringEntry`); qualify `System.Environment` in `Anode.Engine`.
+- **B:** replace `Edits.Phase11.cs`, `PendingPhase11` and the generators; schema 11 (the chord track, regions' Pitch
+  Source and keys, Session Player tracks and regions, the Environment, `Insert.mastering`); section kinds by name;
+  compile Session Player regions through `SessionPlayerGenerator` (rhythm sources as onset ticks), the Environment to
+  `EngineEnvironment` (route order, telemetry slots, `EngineAutomationTarget`s), and the assistant's chain through
+  `MasteringChainDesigner`.
+- **C:** `setSessionPlayerRegion` and `setEnvironmentObject` are flat except the switch records (send null); kinds,
+  bands, qualities, drum notes and section kinds are values in `models.ts`; generated notes come from
+  `sessionPlayerNotes`; read `mastering` and `key` `?? null`.
+- **D:** shapes in `Anode.Generative` and `Anode.Dsp/Analysis/Chords` are fixed; `ChordTemplates` must stay equal to
+  `ChordQualities`; Drummer notes and kit pads are `DrumKitNotes`; flip `SessionPlayerContent.Ready`.
+- **E:** the instruments' parameter lists are yours; Saturation's and the assistant's parameters are fixed (append
+  only); `MasteringBands` must stay equal to the contract's; flip `TapeContent.Ready`.
+
 ## Workstreams
 
 Five, in parallel, each on its own branch; they meet only at the contracts above.

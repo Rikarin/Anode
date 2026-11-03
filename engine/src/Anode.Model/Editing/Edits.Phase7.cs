@@ -725,7 +725,9 @@ public static partial class Edits {
             [],
             [],
             false,
-            ProjectDefaults.Notation
+            ProjectDefaults.Notation,
+            PitchSourceMode.Off,
+            null
         );
     }
 

@@ -361,8 +361,8 @@ public sealed unsafe class SurroundSessionTests : IDisposable {
             + string.Join("; ", results);
         TestContext.Current.SendDiagnosticMessage(message);
         Console.WriteLine(message);
-        if (Environment.GetEnvironmentVariable("ANODE_MEASURE_LOG") is { Length: > 0 } log) {
-            File.AppendAllText(log, message + Environment.NewLine);
+        if (System.Environment.GetEnvironmentVariable("ANODE_MEASURE_LOG") is { Length: > 0 } log) {
+            File.AppendAllText(log, message + System.Environment.NewLine);
         }
     }
 }

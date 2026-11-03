@@ -27,7 +27,9 @@ const audio = (id: string, startTick: number, length: number, fileOffset = 0): A
   flexMarkers: [],
   transpose: 0,
   fineTune: 0,
-  pitchNotes: []
+  pitchNotes: [],
+  pitchSource: 'off',
+  key: null
 });
 const midi: MidiRegion = {
   id: 'mid_1',
@@ -39,7 +41,9 @@ const midi: MidiRegion = {
   notation: { ...DefaultRegionNotation },
   notes: [],
   controls: [],
-  muted: true
+  muted: true,
+  pitchSource: 'off',
+  key: null
 };
 
 function lookup(regions: AudioRegion[]): RegionLookup {

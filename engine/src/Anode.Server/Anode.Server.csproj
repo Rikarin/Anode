@@ -21,6 +21,8 @@
     <ProjectReference Include="../Anode.Interchange/Anode.Interchange.csproj"/>
     <!-- Phase 10: FFmpeg and listen-in's Opus (workstream E). The host does not reference it. -->
     <ProjectReference Include="../Anode.Media/Anode.Media.csproj"/>
+    <!-- Phase 11: the Session Player generator and style library (workstream D). The host does not reference it. -->
+    <ProjectReference Include="../Anode.Generative/Anode.Generative.csproj"/>
     <!-- The built-in instruments' descriptors: the catalogue edits use before a host has sent one, and FakeHost's. -->
     <ProjectReference Include="../Anode.Dsp/Anode.Dsp.csproj"/>
     <ProjectReference Include="../Anode.Ipc/Anode.Ipc.csproj"/>

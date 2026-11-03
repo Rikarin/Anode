@@ -252,7 +252,12 @@ public sealed record ProjectState(
             [..ArticulationSets.Values],
             [..LaneSets.Values],
             Score,
-            Movie
+            Movie,
+            // The chord track, Session Player regions and the Environment: Phase 11, workstream B
+            // (docs/12-phase-11.md).
+            ChordTrack.Empty,
+            [],
+            MidiEnvironment.Empty
         );
 
     /// <summary>Applies one delta operation (an edit's primitive step, also what clients apply).</summary>

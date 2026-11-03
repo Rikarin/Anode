@@ -47,7 +47,7 @@ public sealed unsafe class SegmentTests {
             ),
             new(TrackEntry.MetronomeTrack, [], [])
         ];
-        using var written = SegmentWriter.Write(tracks, 42, 48_000, "an-test", Environment.ProcessId, true);
+        using var written = SegmentWriter.Write(tracks, 42, 48_000, "an-test", System.Environment.ProcessId, true);
         using var mapped = MappedSegment.Map(1, written.Name, written.Length);
         mapped.ValidateLayout();
         mapped.Verify();
@@ -93,7 +93,7 @@ public sealed unsafe class SegmentTests {
                 [new() { Cents = 200 }]
             )
         ];
-        using var written = SegmentWriter.Write(tracks, 1, 48_000, "an-test-warp", Environment.ProcessId, true);
+        using var written = SegmentWriter.Write(tracks, 1, 48_000, "an-test-warp", System.Environment.ProcessId, true);
         using var mapped = MappedSegment.Map(2, written.Name, written.Length);
         mapped.ValidateLayout();
         mapped.Verify();
@@ -124,7 +124,7 @@ public sealed unsafe class SegmentTests {
             1,
             48_000,
             "an-test-flex",
-            Environment.ProcessId * 100L + Interlocked.Increment(ref ids),
+            System.Environment.ProcessId * 100L + Interlocked.Increment(ref ids),
             false
         );
         if (format is { } f) {
@@ -231,7 +231,7 @@ public sealed unsafe class SegmentTests {
             1,
             48_000,
             "an-test-cells",
-            Environment.ProcessId,
+            System.Environment.ProcessId,
             true,
             tempo: tempo,
             cells: cells
@@ -261,7 +261,7 @@ public sealed unsafe class SegmentTests {
     [Fact]
     public void A_segment_without_tempo_points_or_cells_is_as_before() {
         TrackModel[] tracks = [new(1, [], [])];
-        using var written = SegmentWriter.Write(tracks, 1, 0, "an-test-plain", Environment.ProcessId, false);
+        using var written = SegmentWriter.Write(tracks, 1, 0, "an-test-plain", System.Environment.ProcessId, false);
         using var mapped = MappedSegment.Map(4, written.Name, written.Length);
         mapped.ValidateLayout();
         mapped.Verify();

@@ -322,7 +322,9 @@ public sealed partial class Jobs {
                             [],
                             0,
                             0,
-                            []
+                            [],
+                            PitchSourceMode.Off,
+                            null
                         )
                     ],
                     format

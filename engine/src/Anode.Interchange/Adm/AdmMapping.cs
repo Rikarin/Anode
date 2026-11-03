@@ -303,7 +303,9 @@ public static class AdmMapping {
             [],
             0,
             0,
-            []
+            [],
+            PitchSourceMode.Off,
+            null
         );
     }
 

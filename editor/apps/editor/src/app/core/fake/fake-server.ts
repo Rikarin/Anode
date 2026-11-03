@@ -15,6 +15,8 @@ import {
   type BounceInPlaceRequest,
   type BounceRequest,
   type ChannelStrip,
+  type ChordIdRequest,
+  type ChordTrack,
   type CommandBatch,
   type CommandResult,
   type ControllerAssignments,
@@ -26,7 +28,10 @@ import {
   type DirectoryListing,
   type DiscoveryInfo,
   type EditCommand,
+  EmptyChordTrack,
+  EmptyEnvironment,
   EmptyProjectScore,
+  type EnvironmentInputRequest,
   type FileAnalysis,
   type GrooveTemplate,
   type ImportedContent,
@@ -48,7 +53,11 @@ import {
   type LoopPage,
   type LoopSearchRequest,
   type LoopSearchResult,
+  type MasteringAnalysisRequest,
+  type MasteringSettings,
+  type MasteringState,
   type MidiDevices,
+  type MidiEnvironment,
   type MidiExportRequest,
   type MidiImportRequest,
   type MidiRegion,
@@ -75,6 +84,7 @@ import {
   type ProjectBackup,
   type ProjectDelta,
   type ProjectSummary,
+  type RegenerateRequest,
   type RemotePads,
   type SampleRange,
   type SavePatchRequest,
@@ -83,6 +93,9 @@ import {
   type Screenset,
   type ScriptPreset,
   type ServerMessage,
+  type SessionPlayerCatalog,
+  type SessionPlayerConvertRequest,
+  type SessionPlayerNotes,
   SpeakerLayouts,
   type StaffStyle,
   type StemKind,
@@ -482,7 +495,10 @@ export class FakeAnodeServer implements AnodeApi {
         articulationSets: [],
         laneSets: [],
         score: structuredClone(EmptyProjectScore),
-        movie: null
+        movie: null,
+        chordTrack: structuredClone(EmptyChordTrack),
+        sessionPlayerRegions: [],
+        environment: structuredClone(EmptyEnvironment)
       };
       this.disk.set(path, structuredClone(project));
       this.open(project);
@@ -1862,7 +1878,9 @@ export class FakeAnodeServer implements AnodeApi {
       flexMarkers: [],
       transpose: 0,
       fineTune: 0,
-      pitchNotes: []
+      pitchNotes: [],
+      pitchSource: 'off',
+      key: null
     });
     const [drums, bass] = files as [AudioFile, AudioFile];
     const content: ImportedContent = {
@@ -2268,6 +2286,60 @@ export class FakeAnodeServer implements AnodeApi {
 
   listenInState(): Promise<ListenInState> {
     return this.answer('GetListenIn', () => this.listenInStatus());
+  }
+
+  // ---- Phase 11 (docs/12-phase-11.md): the chord track and Chord ID, Session Players, the Mastering Assistant and the
+  // Environment, until the editor workstream (C) implements them (with a fake generator and a fake Chord ID).
+
+  chordTrack(): Promise<ChordTrack> {
+    return this.phase11Pending('GetChordTrack');
+  }
+
+  detectChords(_request: ChordIdRequest): Promise<Job> {
+    return this.phase11Pending('DetectChords');
+  }
+
+  sessionPlayerCatalog(): Promise<SessionPlayerCatalog> {
+    return this.phase11Pending('GetSessionPlayerCatalog');
+  }
+
+  sessionPlayerNotes(_regionId: string): Promise<SessionPlayerNotes> {
+    return this.phase11Pending('GetSessionPlayerNotes');
+  }
+
+  regenerateSessionPlayer(_regionId: string, _request: RegenerateRequest): Promise<CommandResult> {
+    return this.phase11Pending('RegenerateSessionPlayer');
+  }
+
+  convertSessionPlayer(_regionId: string, _request: SessionPlayerConvertRequest): Promise<Job> {
+    return this.phase11Pending('ConvertSessionPlayer');
+  }
+
+  mastering(): Promise<MasteringState> {
+    return this.phase11Pending('GetMastering');
+  }
+
+  setMastering(_settings: MasteringSettings): Promise<CommandResult> {
+    return this.phase11Pending('SetMastering');
+  }
+
+  analyseMastering(_request: MasteringAnalysisRequest): Promise<Job> {
+    return this.phase11Pending('AnalyseMastering');
+  }
+
+  environment(): Promise<MidiEnvironment> {
+    return this.phase11Pending('GetEnvironment');
+  }
+
+  environmentInput(_objectId: string, _request: EnvironmentInputRequest): Promise<void> {
+    return this.phase11Pending('EnvironmentInput');
+  }
+
+  /** A Phase 11 endpoint the fake Server does not answer yet (docs/12-phase-11.md): 422. */
+  private phase11Pending<T>(operation: string): Promise<T> {
+    return this.answer(operation, () => {
+      throw new ApiError(422, `${operation}: not in the fake Server yet.`);
+    });
   }
 
   /**
@@ -2702,7 +2774,9 @@ export class FakeAnodeServer implements AnodeApi {
         flexMarkers: [],
         transpose: info.oneShot ? 0 : transpose,
         fineTune: 0,
-        pitchNotes: []
+        pitchNotes: [],
+        pitchSource: 'off',
+        key: null
       };
     } else if (info.kind === 'midi') {
       midi = {
@@ -2725,7 +2799,9 @@ export class FakeAnodeServer implements AnodeApi {
           }))
         ),
         controls: [],
-        muted: false
+        muted: false,
+        pitchSource: 'off',
+        key: null
       };
     } else {
       if (track.kind === 'midi') {
@@ -3703,6 +3779,10 @@ export class FakeAnodeServer implements AnodeApi {
       case 'addTrack': {
         const count = project.tracks.length;
         const kind = command.kind ?? 'audio';
+        if (kind === 'drummer' || kind === 'bassPlayer' || kind === 'keyboardPlayer') {
+          // Session Player tracks come from addSessionPlayerTrack: Phase 11, the editor workstream (docs/12-phase-11.md).
+          throw new ApiError(422, `addTrack of kind ${kind}: not in the fake Server yet.`);
+        }
         const instrument = kind === 'instrument' ? plugin(command.pluginId ?? 'anode.synth') : null;
         const sameKind = project.tracks.filter(t => t.kind === kind).length;
         const added: Track = {
@@ -3833,7 +3913,9 @@ export class FakeAnodeServer implements AnodeApi {
           flexMarkers: [],
           transpose: 0,
           fineTune: 0,
-          pitchNotes: []
+          pitchNotes: [],
+          pitchSource: 'off',
+          key: null
         };
         const smart = project.settings.smartTempo;
         const adapts =
@@ -4108,7 +4190,9 @@ export class FakeAnodeServer implements AnodeApi {
           notation: { ...DefaultRegionNotation },
           notes: [],
           controls: [],
-          muted: false
+          muted: false,
+          pitchSource: 'off',
+          key: null
         };
         return { ...project, midiRegions: [...project.midiRegions, added] };
       }
@@ -4589,6 +4673,31 @@ export class FakeAnodeServer implements AnodeApi {
           id: prefix => `${prefix}_${this.nextId++}`,
           mix: this.mixContext()
         });
+      case 'addChords':
+      case 'editChords':
+      case 'deleteChords':
+      case 'setScales':
+      case 'applyChordId':
+      case 'setPitchSource':
+      case 'setRegionKey':
+      case 'addSessionPlayerTrack':
+      case 'addSessionPlayerRegion':
+      case 'setSessionPlayerRegion':
+      case 'regenerateSessionPlayer':
+      case 'convertSessionPlayerRegions':
+      case 'setMastering':
+      case 'setMasteringAnalysis':
+      case 'addEnvironmentLayer':
+      case 'setEnvironmentLayer':
+      case 'removeEnvironmentLayer':
+      case 'addEnvironmentObject':
+      case 'setEnvironmentObject':
+      case 'removeEnvironmentObjects':
+      case 'connectEnvironment':
+      case 'disconnectEnvironment':
+        // The chord track, Pitch Source, Session Players, the Mastering Assistant and the Environment: Phase 11, the
+        // editor workstream (docs/12-phase-11.md).
+        throw new ApiError(422, `${command.type}: not in the fake Server yet.`);
       default:
         if (isPhase9Command(command)) {
           // Staff styles, region notation, score symbols, lyrics, chord symbols, score sets, layout and score edits
@@ -5019,7 +5128,10 @@ export class FakeAnodeServer implements AnodeApi {
       articulationSets: [],
       laneSets: [],
       score: structuredClone(EmptyProjectScore),
-      movie: null
+      movie: null,
+      chordTrack: structuredClone(EmptyChordTrack),
+      sessionPlayerRegions: [],
+      environment: structuredClone(EmptyEnvironment)
     };
     let project = base;
     for (const name of ['Drums', 'Bass', 'Guitar', 'Vocals']) {
@@ -5127,7 +5239,8 @@ export class FakeAnodeServer implements AnodeApi {
             name: chorus.name,
             bypassed: false,
             parameters: defaultParameters(chorus),
-            sidechain: null
+            sidechain: null,
+            mastering: null
           }
         ];
       }
@@ -5388,7 +5501,10 @@ const KindNames: Record<Track['kind'], string> = {
   midi: 'MIDI',
   stack: 'Stack',
   aux: 'Aux',
-  vca: 'VCA'
+  vca: 'VCA',
+  drummer: 'Drummer',
+  bassPlayer: 'Bass',
+  keyboardPlayer: 'Keys'
 };
 
 /** MIDI region ids are `mid_…` (docs/03-phase-2.md). */

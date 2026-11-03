@@ -24,6 +24,8 @@ public static class AnodeApi {
         InterchangeApi.Map(api);
         MediaApi.Map(api);
         RemoteApi.Map(api);
+        GenerativeApi.Map(api);
+        EnvironmentApi.Map(api);
         RealtimeApi.Map(app);
     }
 }

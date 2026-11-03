@@ -161,6 +161,28 @@ namespace Anode.Contracts;
 [JsonDerivedType(typeof(SetMoviePositionCommand), "setMoviePosition")]
 [JsonDerivedType(typeof(RemoveMovieCommand), "removeMovie")]
 [JsonDerivedType(typeof(AddSceneMarkersCommand), "addSceneMarkers")]
+[JsonDerivedType(typeof(AddChordsCommand), "addChords")]
+[JsonDerivedType(typeof(EditChordsCommand), "editChords")]
+[JsonDerivedType(typeof(DeleteChordsCommand), "deleteChords")]
+[JsonDerivedType(typeof(SetScalesCommand), "setScales")]
+[JsonDerivedType(typeof(ApplyChordIdCommand), "applyChordId")]
+[JsonDerivedType(typeof(SetPitchSourceCommand), "setPitchSource")]
+[JsonDerivedType(typeof(SetRegionKeyCommand), "setRegionKey")]
+[JsonDerivedType(typeof(AddSessionPlayerTrackCommand), "addSessionPlayerTrack")]
+[JsonDerivedType(typeof(AddSessionPlayerRegionCommand), "addSessionPlayerRegion")]
+[JsonDerivedType(typeof(SetSessionPlayerRegionCommand), "setSessionPlayerRegion")]
+[JsonDerivedType(typeof(RegenerateSessionPlayerCommand), "regenerateSessionPlayer")]
+[JsonDerivedType(typeof(ConvertSessionPlayerRegionsCommand), "convertSessionPlayerRegions")]
+[JsonDerivedType(typeof(SetMasteringCommand), "setMastering")]
+[JsonDerivedType(typeof(SetMasteringAnalysisCommand), "setMasteringAnalysis")]
+[JsonDerivedType(typeof(AddEnvironmentLayerCommand), "addEnvironmentLayer")]
+[JsonDerivedType(typeof(SetEnvironmentLayerCommand), "setEnvironmentLayer")]
+[JsonDerivedType(typeof(RemoveEnvironmentLayerCommand), "removeEnvironmentLayer")]
+[JsonDerivedType(typeof(AddEnvironmentObjectCommand), "addEnvironmentObject")]
+[JsonDerivedType(typeof(SetEnvironmentObjectCommand), "setEnvironmentObject")]
+[JsonDerivedType(typeof(RemoveEnvironmentObjectsCommand), "removeEnvironmentObjects")]
+[JsonDerivedType(typeof(ConnectEnvironmentCommand), "connectEnvironment")]
+[JsonDerivedType(typeof(DisconnectEnvironmentCommand), "disconnectEnvironment")]
 public abstract record EditCommand;
 
 /// <summary>
@@ -1170,3 +1192,195 @@ public sealed record RemoveMovieCommand : EditCommand;
 ///     <c>sceneDetect</c> job applies it; clients do not send it.
 /// </summary>
 public sealed record AddSceneMarkersCommand(IReadOnlyList<long> Ticks, bool ReplaceExisting = true) : EditCommand;
+
+/// <summary>A chord to add to the chord track (<see cref="Chord" /> without its id).</summary>
+public sealed record NewChord(long Tick, PitchName Root, string Quality, PitchName? Bass = null);
+
+/// <summary>
+///     Phase 11 (docs/12-phase-11.md): adds chords to the chord track (ticks of 0 or more, alterations −2…2, a quality of
+///     <see cref="ChordQualities" />); a chord at the tick of an existing one replaces it.
+/// </summary>
+public sealed record AddChordsCommand(IReadOnlyList<NewChord> Chords) : EditCommand;
+
+/// <summary>Phase 11: replaces chord track chords by id (moving, re-rooting, a new quality or bass, or none).</summary>
+public sealed record EditChordsCommand(IReadOnlyList<Chord> Chords) : EditCommand;
+
+public sealed record DeleteChordsCommand(IReadOnlyList<string> ChordIds) : EditCommand;
+
+/// <summary>Phase 11: replaces the chord track's key and scale changes (ticks of 0 or more, each once).</summary>
+public sealed record SetScalesCommand(IReadOnlyList<ScaleChange> Scales) : EditCommand;
+
+/// <summary>
+///     Phase 11, Chord ID's result: writes the detected chords into the chord track over the result's range by its
+///     <c>write</c> and sets each detected region key, in one undo step. The <c>chordId</c> job applies it; clients do
+///     not send it.
+/// </summary>
+public sealed record ApplyChordIdCommand(ChordIdResult Result) : EditCommand;
+
+/// <summary>
+///     Phase 11: sets how MIDI and audio regions follow the chord track; <c>chords</c> only on MIDI regions (an audio
+///     region among them: 422). <c>root</c> on an audio region needs nothing more: its pitch shift follows.
+/// </summary>
+public sealed record SetPitchSourceCommand(IReadOnlyList<string> RegionIds, PitchSourceMode Mode) : EditCommand;
+
+/// <summary>Phase 11: sets (or with null clears) MIDI and audio regions' own key.</summary>
+public sealed record SetRegionKeyCommand(IReadOnlyList<string> RegionIds, RegionKey? Key) : EditCommand;
+
+/// <summary>
+///     Phase 11, New Tracks' Session Player: adds a <c>drummer</c>, <c>bassPlayer</c> or <c>keyboardPlayer</c> track at
+///     <c>index</c> (the end when left out) playing style <c>styleId</c> (left out: the player's first) with preset
+///     <c>presetId</c> (left out: the style's first). A Drummer gets kit patch <c>kitPatchId</c> (left out: the style's);
+///     a Bass or Keyboard Player instrument <c>pluginId</c> (left out: the style's patch, else the default synth). With
+///     <c>regions</c>, it gets a Session Player region per arrangement section (each with its section kind's defaults
+///     and a seed of its own), or, without sections, one of 8 bars from the project start.
+/// </summary>
+public sealed record AddSessionPlayerTrackCommand(
+    SessionPlayerKind Player,
+    string? StyleId = null,
+    string? PresetId = null,
+    string? KitPatchId = null,
+    string? PluginId = null,
+    string? Name = null,
+    int? Index = null,
+    bool Regions = true
+) : EditCommand;
+
+/// <summary>
+///     Phase 11: adds a Session Player region to a Session Player track at <c>startTick</c>, <c>lengthTicks</c> long
+///     (left out: to the end of the section it starts in, else 8 bars), with <c>parameters</c> (left out: the track's
+///     style's defaults for the section kind there) and <c>seed</c> (left out: drawn).
+/// </summary>
+public sealed record AddSessionPlayerRegionCommand(
+    string TrackId,
+    long StartTick,
+    long? LengthTicks = null,
+    SessionPlayerParameters? Parameters = null,
+    string? Name = null,
+    long? Seed = null
+) : EditCommand;
+
+/// <summary>
+///     Phase 11, the Session Player Editor: changes a Session Player region; left-out properties stay. <c>presetId</c>
+///     applies that preset of the region's style first (then the other properties given); <c>styleId</c> a style of
+///     the track's player (its first preset's parameters unless <c>presetId</c> names another); any other parameter
+///     change clears the region's <c>presetId</c>. The XY pad is <c>complexity</c> and <c>intensity</c> (0…1);
+///     <c>feel</c> is −1…1, the others 0…1; the switches (<c>drums</c>, <c>bass</c> or <c>keys</c>, the track's
+///     player's) replace the region's. The region keeps its seed: the same inputs give the same notes.
+/// </summary>
+public sealed record SetSessionPlayerRegionCommand(
+    string RegionId,
+    long? StartTick = null,
+    long? LengthTicks = null,
+    string? Name = null,
+    bool? Muted = null,
+    string? StyleId = null,
+    string? PresetId = null,
+    double? Complexity = null,
+    double? Intensity = null,
+    double? FillAmount = null,
+    bool? FillAtSectionEnds = null,
+    double? Swing = null,
+    double? Feel = null,
+    bool? FollowChords = null,
+    DrummerSwitches? Drums = null,
+    BassSwitches? Bass = null,
+    KeysSwitches? Keys = null
+) : EditCommand;
+
+/// <summary>Phase 11, Regenerate: gives Session Player regions a new seed (left out: each one drawn).</summary>
+public sealed record RegenerateSessionPlayerCommand(IReadOnlyList<string> RegionIds, long? Seed = null) : EditCommand;
+
+/// <summary>
+///     Phase 11, Convert's result: replaces each Session Player region by a MIDI region of its notes (or, from a
+///     Drummer, a pattern region of its pattern) at the same place, with its name and mute, in one undo step. The
+///     <c>sessionPlayerConvert</c> job applies it; clients do not send it.
+/// </summary>
+public sealed record ConvertSessionPlayerRegionsCommand(IReadOnlyList<ConvertedSessionPlayerRegion> Regions)
+    : EditCommand;
+
+/// <summary>
+///     Phase 11: changes the master's Mastering Assistant's settings (its parameters, <see cref="MasteringParameters" />,
+///     in their ranges); left-out properties stay. <c>insertId</c> left out: the master's (last) assistant; 422 when it
+///     has none. During playback a master in touch, latch or write records the change as <c>setInsertParameter</c> does.
+/// </summary>
+public sealed record SetMasteringCommand(
+    string? InsertId = null,
+    MasteringCharacter? Character = null,
+    double? TargetLufs = null,
+    double? CeilingDbtp = null,
+    double? Eq = null,
+    double? Dynamics = null,
+    double? Width = null,
+    bool? MatchedBypass = null
+) : EditCommand;
+
+/// <summary>
+///     Phase 11, a Mastering analysis' result: stores it in the master's assistant <c>insertId</c>
+///     (<c>Insert.mastering</c>). The <c>masteringAnalysis</c> job applies it; clients do not send it.
+/// </summary>
+public sealed record SetMasteringAnalysisCommand(string InsertId, MasteringAnalysis Analysis) : EditCommand;
+
+/// <summary>Phase 11, the Environment: adds a layer at the end (named <c>Layer N</c> when left out).</summary>
+public sealed record AddEnvironmentLayerCommand(string? Name = null) : EditCommand;
+
+/// <summary>Phase 11: renames a layer or moves it to <c>index</c> among the layers.</summary>
+public sealed record SetEnvironmentLayerCommand(string LayerId, string? Name = null, int? Index = null) : EditCommand;
+
+/// <summary>Phase 11: removes a layer, its objects and every cable to or from them.</summary>
+public sealed record RemoveEnvironmentLayerCommand(string LayerId) : EditCommand;
+
+/// <summary>
+///     Phase 11: adds an object of <c>kind</c> to layer <c>layerId</c> (left out: the first layer, made as
+///     <c>Layer 1</c> when there is none) at <c>x</c>, <c>y</c>, named <c>name</c> (left out: the kind's), with
+///     <c>parameters</c> (missing ones at their defaults) and the kind's other settings
+///     (<see cref="EnvironmentObject" />).
+/// </summary>
+public sealed record AddEnvironmentObjectCommand(
+    EnvironmentObjectKind Kind,
+    double X,
+    double Y,
+    string? LayerId = null,
+    string? Name = null,
+    IReadOnlyDictionary<string, double>? Parameters = null,
+    string? Port = null,
+    string? TrackId = null,
+    string? Address = null,
+    IReadOnlyList<TransformCondition>? Conditions = null,
+    IReadOnlyList<TransformOperation>? Operations = null,
+    IReadOnlyList<DelayTap>? Taps = null,
+    IReadOnlyList<int>? Chord = null
+) : EditCommand;
+
+/// <summary>
+///     Phase 11: changes an Environment object (moving it on its canvas or to another layer, renaming it, its settings);
+///     left-out properties stay. <c>parameters</c> are merged into its own; an empty <c>port</c>, <c>trackId</c> or
+///     <c>address</c> clears it; <c>conditions</c>, <c>operations</c>, <c>taps</c> and <c>chord</c> replace its own (an
+///     empty <c>chord</c> clears it).
+/// </summary>
+public sealed record SetEnvironmentObjectCommand(
+    string ObjectId,
+    string? Name = null,
+    string? LayerId = null,
+    double? X = null,
+    double? Y = null,
+    IReadOnlyDictionary<string, double>? Parameters = null,
+    string? Port = null,
+    string? TrackId = null,
+    string? Address = null,
+    IReadOnlyList<TransformCondition>? Conditions = null,
+    IReadOnlyList<TransformOperation>? Operations = null,
+    IReadOnlyList<DelayTap>? Taps = null,
+    IReadOnlyList<int>? Chord = null
+) : EditCommand;
+
+/// <summary>Phase 11: removes Environment objects and every cable to or from them.</summary>
+public sealed record RemoveEnvironmentObjectsCommand(IReadOnlyList<string> ObjectIds) : EditCommand;
+
+/// <summary>
+///     Phase 11: a cable from outlet <c>outlet</c> of one object to inlet <c>inlet</c> of another (both existing on their
+///     kinds; 422 for a cable that exists, or one that would close a cycle).
+/// </summary>
+public sealed record ConnectEnvironmentCommand(string FromObjectId, int Outlet, string ToObjectId, int Inlet)
+    : EditCommand;
+
+public sealed record DisconnectEnvironmentCommand(IReadOnlyList<string> CableIds) : EditCommand;

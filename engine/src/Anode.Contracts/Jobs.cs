@@ -82,7 +82,28 @@ public enum JobKind {
 
     /// <summary>Phase 10: movie thumbnails (<c>ThumbnailsRequest</c>); its files are the JPEGs, cached per movie.</summary>
     [JsonStringEnumMemberName("thumbnails")]
-    Thumbnails
+    Thumbnails,
+
+    /// <summary>
+    ///     Phase 11: Chord ID (<c>ChordIdRequest</c>, docs/12-phase-11.md); applies <c>applyChordId</c> (the chord track
+    ///     and the regions' keys, one undo step).
+    /// </summary>
+    [JsonStringEnumMemberName("chordId")]
+    ChordId,
+
+    /// <summary>
+    ///     Phase 11: the Mastering Assistant's analysis (<c>MasteringAnalysisRequest</c>) over an offline render of the
+    ///     master before it; applies <c>setMasteringAnalysis</c>.
+    /// </summary>
+    [JsonStringEnumMemberName("masteringAnalysis")]
+    MasteringAnalysis,
+
+    /// <summary>
+    ///     Phase 11: Convert to MIDI or to a pattern (<c>SessionPlayerConvertRequest</c>); applies
+    ///     <c>convertSessionPlayerRegions</c>.
+    /// </summary>
+    [JsonStringEnumMemberName("sessionPlayerConvert")]
+    SessionPlayerConvert
 }
 
 [JsonConverter(typeof(JsonStringEnumConverter<JobState>))]

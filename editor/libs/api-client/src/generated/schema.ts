@@ -1776,6 +1776,177 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/api/v1/project/chords': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** The chord track (as Project.chordTrack): chords, key and scale changes; 404 without a project. */
+    get: operations['GetChordTrack'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/project/chords/detect': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Chord ID over MIDI and audio regions: a chordId job that writes the chord track (replace or merge over the range) and the regions' detected keys, one undo step. */
+    post: operations['DetectChords'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/library/session-players': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** The style library's catalogue: its version and every Drummer, Bass and Keyboard Player style. */
+    get: operations['GetSessionPlayerCatalog'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/project/regions/{regionId}/session-player': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** A Session Player region's generated notes (relative to its start) and their input hash, for the editor to draw; 404 when it is not a Session Player region. */
+    get: operations['GetSessionPlayerNotes'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/project/regions/{regionId}/session-player/regenerate': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Regenerate: applies regenerateSessionPlayer to the region (a new seed; one undo step). */
+    post: operations['RegenerateSessionPlayer'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/project/regions/{regionId}/session-player/convert': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Convert to MIDI (or, from a Drummer, to a pattern): a sessionPlayerConvert job that replaces the regions by regions of their generated notes, one undo step. */
+    post: operations['ConvertSessionPlayer'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/project/mastering': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** The master's Mastering Assistant: its insert, settings and analysis; 404 when the master has none. */
+    get: operations['GetMastering'];
+    /** Replaces the assistant's settings: applies setMastering (one undo step); 404 without one. */
+    put: operations['SetMastering'];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/project/mastering/analyse': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Analyse: a masteringAnalysis job that renders the master before the assistant offline (adding one last when asked), analyses it and stores the analysis in it (one undo step). */
+    post: operations['AnalyseMastering'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/project/environment': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** The Environment (as Project.environment): layers, objects and cables; empty is the default input path. */
+    get: operations['GetEnvironment'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/project/environment/objects/{objectId}/input': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Live MIDI into an on-screen object (a keyboard plays it, a fader moves), as if it came from a device; 404 for an object that is not a keyboard or fader. */
+    post: operations['EnvironmentInput'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -2038,6 +2209,8 @@ export interface components {
       /** Format: int32 */
       fineTune: number;
       pitchNotes: components['schemas']['PitchNote'][];
+      pitchSource: components['schemas']['PitchSourceMode'];
+      key: null | components['schemas']['RegionKey'];
     };
     /**
      * @description Track automation of one parameter. `trackId` null is the master strip. `target` is `volume` (dB),
@@ -2073,6 +2246,18 @@ export interface components {
      * @enum {unknown}
      */
     Barline: 'single' | 'double' | 'final';
+    /**
+     * @description The Bass Player's switches: its range (MIDI notes `lowNote` … `highNote`, at least an octave apart,
+     *     within 24…72), and whether it plays slides and dead notes.
+     */
+    BassSwitches: {
+      /** Format: int32 */
+      lowNote: number;
+      /** Format: int32 */
+      highNote: number;
+      slides: boolean;
+      deadNotes: boolean;
+    };
     /**
      * @description Beat mapping: tick `tick` lands on project sample `sample` (the tempo events are set so that it does,
      *     keeping earlier mappings and the positions before them).
@@ -2252,6 +2437,55 @@ export interface components {
       panner: components['schemas']['Panner'];
     };
     /**
+     * @description A chord of the chord track at project tick `tick` (it holds until the next chord): its root, its quality
+     *     (ChordQualities) and an optional slash bass ("G/B"). Chords are in tick order, at most one per tick.
+     */
+    Chord: {
+      id: string;
+      /** Format: int64 */
+      tick: number;
+      root: components['schemas']['PitchName'];
+      quality: string;
+      bass: null | components['schemas']['PitchName'];
+    };
+    /**
+     * @description Chord ID (`POST /project/chords/detect`, job `chordId`): over MIDI regions (template matching per
+     *     beat, smoothed) and audio regions (a harmonic chromagram, beat-synchronous, the same templates and an HMM), every
+     *     region of `regionIds` together, between `startTick` and `endTick` (left out: the regions' span).
+     *     The job writes the chord track by `write` and, when `detectKeys`, each region's detected key, in one undo
+     *     step (`applyChordId`). `resolutionTicks` is the shortest chord it reports (left out: a beat).
+     */
+    ChordIdRequest: {
+      regionIds: string[];
+      /** Format: int64 */
+      startTick?: null | number;
+      /** Format: int64 */
+      endTick?: null | number;
+      write: components['schemas']['ChordIdWrite'];
+      /** @default true */
+      detectKeys: boolean;
+      /** Format: int64 */
+      resolutionTicks?: null | number;
+    };
+    /**
+     * @description What a Chord ID job found over `startTick`…`endTick` (the range it analysed), and how it writes it:
+     *     `applyChordId`'s content.
+     */
+    ChordIdResult: {
+      /** Format: int64 */
+      startTick: number;
+      /** Format: int64 */
+      endTick: number;
+      write: components['schemas']['ChordIdWrite'];
+      chords: components['schemas']['DetectedChord'][];
+      keys: components['schemas']['DetectedKey'][];
+    };
+    /**
+     * @description How Chord ID writes what it found into the chord track over its range.
+     * @enum {unknown}
+     */
+    ChordIdWrite: 'replace' | 'merge' | 'none';
+    /**
      * @description A chord symbol on a track at project tick `tick`: its root, its quality as written after the root ("" major,
      *     "m", "7", "maj7", "m7", "dim", "m7b5", "aug", "sus4", "6", "9"…; MusicXML's `kind` is derived from it),
      *     an optional bass ("C/E"), and whether a chord grid (guitar diagram) is drawn with it.
@@ -2265,6 +2499,15 @@ export interface components {
       quality: string;
       bass: null | components['schemas']['PitchName'];
       showGrid: boolean;
+    };
+    /**
+     * @description The chord track (`Project.chordTrack`): a global track of chords and of key and scale changes, shown with
+     *     the other global tracks. Session Players and Pitch Source follow it; Chord ID writes it. Empty in every project
+     *     from before Phase 11.
+     */
+    ChordTrack: {
+      chords: components['schemas']['Chord'][];
+      scales: components['schemas']['ScaleChange'][];
     };
     /**
      * @description A staff's clef (docs/10-phase-9.md). The octave clefs read an octave below (8vb) or above (8va) the plain one.
@@ -2449,6 +2692,13 @@ export interface components {
       modes: components['schemas']['ControlMode'][];
       activeModeId: string;
     };
+    /** @description A converted region: the Session Player region it replaces and the notes (or the pattern) it holds. */
+    ConvertedSessionPlayerRegion: {
+      regionId: string;
+      target: components['schemas']['SessionPlayerConvertTarget'];
+      notes: components['schemas']['NewNote'][];
+      pattern: null | components['schemas']['Pattern'];
+    };
     CreateAlternativeRequest: {
       name: string;
     };
@@ -2467,6 +2717,15 @@ export interface components {
     };
     /** @enum {unknown} */
     CycleRecordMode: 'takeFolder' | 'regions';
+    /** @description A delay line's tap: `delayTicks` after the event (1…3840), transposed, its velocity offset (−127…127). */
+    DelayTap: {
+      /** Format: int64 */
+      delayTicks: number;
+      /** Format: int32 */
+      transpose: number;
+      /** Format: int32 */
+      velocity: number;
+    };
     DeltaOp:
       | components['schemas']['DeltaOpTrackUpserted']
       | components['schemas']['DeltaOpTrackRemoved']
@@ -2509,7 +2768,11 @@ export interface components {
       | components['schemas']['DeltaOpScoreSetUpserted']
       | components['schemas']['DeltaOpScoreSetRemoved']
       | components['schemas']['DeltaOpScoreLayoutChanged']
-      | components['schemas']['DeltaOpMovieChanged'];
+      | components['schemas']['DeltaOpMovieChanged']
+      | components['schemas']['DeltaOpChordTrackChanged']
+      | components['schemas']['DeltaOpSessionPlayerRegionUpserted']
+      | components['schemas']['DeltaOpSessionPlayerRegionRemoved']
+      | components['schemas']['DeltaOpEnvironmentChanged'];
     DeltaOpArticulationSetRemoved: {
       /** @enum {string} */
       op: 'articulationSetRemoved';
@@ -2546,6 +2809,22 @@ export interface components {
       /** @enum {string} */
       op: 'chordSymbolUpserted';
       chord: components['schemas']['ChordSymbol'];
+    };
+    /**
+     * @description Phase 11 (docs/12-phase-11.md): the chord track changed (the whole track: chords, key and scale changes). Regions'
+     *     Pitch Source and keys come as `regionUpserted` and `midiRegionUpserted`, a Mastering Assistant's
+     *     settings and analysis as `masterChanged`.
+     */
+    DeltaOpChordTrackChanged: {
+      /** @enum {string} */
+      op: 'chordTrackChanged';
+      chordTrack: components['schemas']['ChordTrack'];
+    };
+    /** @description Phase 11: the Environment changed (the whole document: layers, objects and cables). */
+    DeltaOpEnvironmentChanged: {
+      /** @enum {string} */
+      op: 'environmentChanged';
+      environment: components['schemas']['MidiEnvironment'];
     };
     DeltaOpGrooveRemoved: {
       /** @enum {string} */
@@ -2702,6 +2981,21 @@ export interface components {
       op: 'sectionUpserted';
       section: components['schemas']['ArrangementMarker'];
     };
+    DeltaOpSessionPlayerRegionRemoved: {
+      /** @enum {string} */
+      op: 'sessionPlayerRegionRemoved';
+      id: string;
+    };
+    /**
+     * @description Phase 11: a Session Player region was added or changed (its parameters and seed included; clients refetch its
+     *     notes, `GET /project/regions/{id}/session-player`, after this, or after the chord track, the sections or its
+     *     rhythm source's regions change over its range).
+     */
+    DeltaOpSessionPlayerRegionUpserted: {
+      /** @enum {string} */
+      op: 'sessionPlayerRegionUpserted';
+      region: components['schemas']['SessionPlayerRegion'];
+    };
     DeltaOpSettingsChanged: {
       /** @enum {string} */
       op: 'settingsChanged';
@@ -2745,6 +3039,25 @@ export interface components {
       track: components['schemas']['Track'];
       /** Format: int32 */
       index: number;
+    };
+    /** @description A chord Chord ID found: from `tick` for `lengthTicks`, with a confidence 0…1. */
+    DetectedChord: {
+      /** Format: int64 */
+      tick: number;
+      /** Format: int64 */
+      lengthTicks: number;
+      root: components['schemas']['PitchName'];
+      quality: string;
+      bass: null | components['schemas']['PitchName'];
+      /** Format: double */
+      confidence: number;
+    };
+    /** @description A region's key Chord ID found, with a confidence 0…1. */
+    DetectedKey: {
+      regionId: string;
+      key: components['schemas']['RegionKey'];
+      /** Format: double */
+      confidence: number;
     };
     /** @description A folder's entries, folders first; `parent` is null at a root. */
     DirectoryListing: {
@@ -2793,12 +3106,33 @@ export interface components {
       notehead: components['schemas']['Notehead'];
       name: string;
     };
+    /**
+     * @description The Drummer's switches: every kit piece (DrumPiece, each once, in that order), and the rhythm
+     *     source to follow (Logic's Follow: a track whose notes, or audio onsets, the kick and snare lean towards; null:
+     *     none).
+     */
+    DrummerSwitches: {
+      pieces: components['schemas']['DrumPieceSetting'][];
+      rhythmSourceTrackId?: null | string;
+    };
     /** @description A pad of a Drum Machine Designer: note `note` (0…127) plays sub-track `trackId`. */
     DrumPad: {
       /** Format: int32 */
       note: number;
       name: string;
       trackId: string;
+    };
+    /**
+     * @description A Drummer kit piece, switched on or off and given a pattern variation.
+     * @enum {unknown}
+     */
+    DrumPiece: 'kick' | 'snare' | 'hiHat' | 'toms' | 'cymbals' | 'percussion';
+    /** @description A kit piece's switch: on or off, and its pattern variation (0 the style's default … 3). */
+    DrumPieceSetting: {
+      piece: components['schemas']['DrumPiece'];
+      on: boolean;
+      /** Format: int32 */
+      variation: number;
     };
     /**
      * @description An edit of the open project (docs/adr/0004-state-ownership.md). A batch of them is applied atomically as one
@@ -2958,7 +3292,29 @@ export interface components {
       | components['schemas']['EditCommandSetMovieCommand']
       | components['schemas']['EditCommandSetMoviePositionCommand']
       | components['schemas']['EditCommandRemoveMovieCommand']
-      | components['schemas']['EditCommandAddSceneMarkersCommand'];
+      | components['schemas']['EditCommandAddSceneMarkersCommand']
+      | components['schemas']['EditCommandAddChordsCommand']
+      | components['schemas']['EditCommandEditChordsCommand']
+      | components['schemas']['EditCommandDeleteChordsCommand']
+      | components['schemas']['EditCommandSetScalesCommand']
+      | components['schemas']['EditCommandApplyChordIdCommand']
+      | components['schemas']['EditCommandSetPitchSourceCommand']
+      | components['schemas']['EditCommandSetRegionKeyCommand']
+      | components['schemas']['EditCommandAddSessionPlayerTrackCommand']
+      | components['schemas']['EditCommandAddSessionPlayerRegionCommand']
+      | components['schemas']['EditCommandSetSessionPlayerRegionCommand']
+      | components['schemas']['EditCommandRegenerateSessionPlayerCommand']
+      | components['schemas']['EditCommandConvertSessionPlayerRegionsCommand']
+      | components['schemas']['EditCommandSetMasteringCommand']
+      | components['schemas']['EditCommandSetMasteringAnalysisCommand']
+      | components['schemas']['EditCommandAddEnvironmentLayerCommand']
+      | components['schemas']['EditCommandSetEnvironmentLayerCommand']
+      | components['schemas']['EditCommandRemoveEnvironmentLayerCommand']
+      | components['schemas']['EditCommandAddEnvironmentObjectCommand']
+      | components['schemas']['EditCommandSetEnvironmentObjectCommand']
+      | components['schemas']['EditCommandRemoveEnvironmentObjectsCommand']
+      | components['schemas']['EditCommandConnectEnvironmentCommand']
+      | components['schemas']['EditCommandDisconnectEnvironmentCommand'];
     /**
      * @description Sets the project's tempo events from an audio region's file tempo (analysed now if need be) over the region's
      *     range, and makes the region play unwarped there.
@@ -2975,6 +3331,15 @@ export interface components {
       /** Format: int32 */
       bus?: null | number;
       name?: null | string;
+    };
+    /**
+     * @description Phase 11 (docs/12-phase-11.md): adds chords to the chord track (ticks of 0 or more, alterations −2…2, a quality of
+     *     ChordQualities); a chord at the tick of an existing one replaces it.
+     */
+    EditCommandAddChordsCommand: {
+      /** @enum {string} */
+      type: 'addChords';
+      chords: components['schemas']['NewChord'][];
     };
     /** @description Phase 9: adds chord symbols to tracks that hold MIDI (alterations −2…2, ticks of 0 or more). */
     EditCommandAddChordSymbolsCommand: {
@@ -3001,6 +3366,39 @@ export interface components {
       note: number;
       name?: null | string;
       pluginId?: null | string;
+    };
+    /** @description Phase 11, the Environment: adds a layer at the end (named `Layer N` when left out). */
+    EditCommandAddEnvironmentLayerCommand: {
+      /** @enum {string} */
+      type: 'addEnvironmentLayer';
+      name?: null | string;
+    };
+    /**
+     * @description Phase 11: adds an object of `kind` to layer `layerId` (left out: the first layer, made as
+     *     `Layer 1` when there is none) at `x`, `y`, named `name` (left out: the kind's), with
+     *     `parameters` (missing ones at their defaults) and the kind's other settings
+     *     (EnvironmentObject).
+     */
+    EditCommandAddEnvironmentObjectCommand: {
+      /** @enum {string} */
+      type: 'addEnvironmentObject';
+      kind: components['schemas']['EnvironmentObjectKind'];
+      /** Format: double */
+      x: number;
+      /** Format: double */
+      y: number;
+      layerId?: null | string;
+      name?: null | string;
+      parameters?: null | {
+        [key: string]: number;
+      };
+      port?: null | string;
+      trackId?: null | string;
+      address?: null | string;
+      conditions?: null | components['schemas']['TransformCondition'][];
+      operations?: null | components['schemas']['TransformOperation'][];
+      taps?: null | components['schemas']['DelayTap'][];
+      chord?: null | number[];
     };
     /**
      * @description Adds an insert effect at `index` (the end when left out); the master's when `trackId` is left out. With
@@ -3153,6 +3551,46 @@ export interface components {
       preFader?: null | boolean;
     };
     /**
+     * @description Phase 11: adds a Session Player region to a Session Player track at `startTick`, `lengthTicks` long
+     *     (left out: to the end of the section it starts in, else 8 bars), with `parameters` (left out: the track's
+     *     style's defaults for the section kind there) and `seed` (left out: drawn).
+     */
+    EditCommandAddSessionPlayerRegionCommand: {
+      /** @enum {string} */
+      type: 'addSessionPlayerRegion';
+      trackId: string;
+      /** Format: int64 */
+      startTick: number;
+      /** Format: int64 */
+      lengthTicks?: null | number;
+      parameters: null | components['schemas']['SessionPlayerParameters'];
+      name?: null | string;
+      /** Format: int64 */
+      seed?: null | number;
+    };
+    /**
+     * @description Phase 11, New Tracks' Session Player: adds a `drummer`, `bassPlayer` or `keyboardPlayer` track at
+     *     `index` (the end when left out) playing style `styleId` (left out: the player's first) with preset
+     *     `presetId` (left out: the style's first). A Drummer gets kit patch `kitPatchId` (left out: the style's);
+     *     a Bass or Keyboard Player instrument `pluginId` (left out: the style's patch, else the default synth). With
+     *     `regions`, it gets a Session Player region per arrangement section (each with its section kind's defaults
+     *     and a seed of its own), or, without sections, one of 8 bars from the project start.
+     */
+    EditCommandAddSessionPlayerTrackCommand: {
+      /** @enum {string} */
+      type: 'addSessionPlayerTrack';
+      player: components['schemas']['SessionPlayerKind'];
+      styleId?: null | string;
+      presetId?: null | string;
+      kitPatchId?: null | string;
+      pluginId?: null | string;
+      name?: null | string;
+      /** Format: int32 */
+      index?: null | number;
+      /** @default true */
+      regions: boolean;
+    };
+    /**
      * @description Phase 8, the Stem Splitter's result: for each stem, in the order given (the order of StemKind), a
      *     new audio track below audio region `regionId`'s track (named after the region and the stem, with the source
      *     track's output) holding a region of the whole file at the source region's position (each file covers the
@@ -3186,6 +3624,16 @@ export interface components {
       /** @enum {string} */
       type: 'addVca';
       name?: null | string;
+    };
+    /**
+     * @description Phase 11, Chord ID's result: writes the detected chords into the chord track over the result's range by its
+     *     `write` and sets each detected region key, in one undo step. The `chordId` job applies it; clients do
+     *     not send it.
+     */
+    EditCommandApplyChordIdCommand: {
+      /** @enum {string} */
+      type: 'applyChordId';
+      result: components['schemas']['ChordIdResult'];
     };
     /** @description Replaces a track's instrument, inserts and sends with a saved patch's. */
     EditCommandApplyPatchCommand: {
@@ -3238,6 +3686,20 @@ export interface components {
       on: boolean;
     };
     /**
+     * @description Phase 11: a cable from outlet `outlet` of one object to inlet `inlet` of another (both existing on their
+     *     kinds; 422 for a cable that exists, or one that would close a cycle).
+     */
+    EditCommandConnectEnvironmentCommand: {
+      /** @enum {string} */
+      type: 'connectEnvironment';
+      fromObjectId: string;
+      /** Format: int32 */
+      outlet: number;
+      toObjectId: string;
+      /** Format: int32 */
+      inlet: number;
+    };
+    /**
      * @description Replaces a pattern region with a MIDI region of exactly the notes it plays over its length (one pass of the
      *     region), at the same place, with its name and mute.
      */
@@ -3245,6 +3707,16 @@ export interface components {
       /** @enum {string} */
       type: 'convertPatternToMidi';
       regionId: string;
+    };
+    /**
+     * @description Phase 11, Convert's result: replaces each Session Player region by a MIDI region of its notes (or, from a
+     *     Drummer, a pattern region of its pattern) at the same place, with its name and mute, in one undo step. The
+     *     `sessionPlayerConvert` job applies it; clients do not send it.
+     */
+    EditCommandConvertSessionPlayerRegionsCommand: {
+      /** @enum {string} */
+      type: 'convertSessionPlayerRegions';
+      regions: components['schemas']['ConvertedSessionPlayerRegion'][];
     };
     /**
      * @description Copies regions (of any kind) `offsetTicks` later (or earlier), onto `trackId` when given (⌥-drag,
@@ -3287,6 +3759,11 @@ export interface components {
       /** @enum {string} */
       type: 'deleteCells';
       cellIds: string[];
+    };
+    EditCommandDeleteChordsCommand: {
+      /** @enum {string} */
+      type: 'deleteChords';
+      chordIds: string[];
     };
     EditCommandDeleteChordSymbolsCommand: {
       /** @enum {string} */
@@ -3373,6 +3850,17 @@ export interface components {
       type: 'deleteTrackAlternative';
       trackId: string;
       alternativeId: string;
+    };
+    EditCommandDisconnectEnvironmentCommand: {
+      /** @enum {string} */
+      type: 'disconnectEnvironment';
+      cableIds: string[];
+    };
+    /** @description Phase 11: replaces chord track chords by id (moving, re-rooting, a new quality or bass, or none). */
+    EditCommandEditChordsCommand: {
+      /** @enum {string} */
+      type: 'editChords';
+      chords: components['schemas']['Chord'][];
     };
     /** @description Phase 9: replaces chord symbols by id. */
     EditCommandEditChordSymbolsCommand: {
@@ -3622,6 +4110,14 @@ export interface components {
       grooveId?: null | string;
       grooveVelocity?: null | boolean;
     };
+    /** @description Phase 11, Regenerate: gives Session Player regions a new seed (left out: each one drawn). */
+    EditCommandRegenerateSessionPlayerCommand: {
+      /** @enum {string} */
+      type: 'regenerateSessionPlayer';
+      regionIds: string[];
+      /** Format: int64 */
+      seed?: null | number;
+    };
     /** @description Removes the pad on note `note` of a DMD track, with its track. */
     EditCommandRemoveDrumPadCommand: {
       /** @enum {string} */
@@ -3629,6 +4125,18 @@ export interface components {
       trackId: string;
       /** Format: int32 */
       note: number;
+    };
+    /** @description Phase 11: removes a layer, its objects and every cable to or from them. */
+    EditCommandRemoveEnvironmentLayerCommand: {
+      /** @enum {string} */
+      type: 'removeEnvironmentLayer';
+      layerId: string;
+    };
+    /** @description Phase 11: removes Environment objects and every cable to or from them. */
+    EditCommandRemoveEnvironmentObjectsCommand: {
+      /** @enum {string} */
+      type: 'removeEnvironmentObjects';
+      objectIds: string[];
     };
     EditCommandRemoveInsertCommand: {
       /** @enum {string} */
@@ -3803,6 +4311,42 @@ export interface components {
       /** Format: int32 */
       toNote?: null | number;
     };
+    /** @description Phase 11: renames a layer or moves it to `index` among the layers. */
+    EditCommandSetEnvironmentLayerCommand: {
+      /** @enum {string} */
+      type: 'setEnvironmentLayer';
+      layerId: string;
+      name?: null | string;
+      /** Format: int32 */
+      index?: null | number;
+    };
+    /**
+     * @description Phase 11: changes an Environment object (moving it on its canvas or to another layer, renaming it, its settings);
+     *     left-out properties stay. `parameters` are merged into its own; an empty `port`, `trackId` or
+     *     `address` clears it; `conditions`, `operations`, `taps` and `chord` replace its own (an
+     *     empty `chord` clears it).
+     */
+    EditCommandSetEnvironmentObjectCommand: {
+      /** @enum {string} */
+      type: 'setEnvironmentObject';
+      objectId: string;
+      name?: null | string;
+      layerId?: null | string;
+      /** Format: double */
+      x?: null | number;
+      /** Format: double */
+      y?: null | number;
+      parameters?: null | {
+        [key: string]: number;
+      };
+      port?: null | string;
+      trackId?: null | string;
+      address?: null | string;
+      conditions?: null | components['schemas']['TransformCondition'][];
+      operations?: null | components['schemas']['TransformOperation'][];
+      taps?: null | components['schemas']['DelayTap'][];
+      chord?: null | number[];
+    };
     /** @description Sets a file's tempo, beats and downbeats (the Smart Tempo Editor), or clears them (null). */
     EditCommandSetFileTempoCommand: {
       /** @enum {string} */
@@ -3938,6 +4482,38 @@ export interface components {
       color?: null | string;
       text?: null | string;
       kind?: null | components['schemas']['MarkerKind'];
+    };
+    /**
+     * @description Phase 11, a Mastering analysis' result: stores it in the master's assistant `insertId`
+     *     (`Insert.mastering`). The `masteringAnalysis` job applies it; clients do not send it.
+     */
+    EditCommandSetMasteringAnalysisCommand: {
+      /** @enum {string} */
+      type: 'setMasteringAnalysis';
+      insertId: string;
+      analysis: components['schemas']['MasteringAnalysis'];
+    };
+    /**
+     * @description Phase 11: changes the master's Mastering Assistant's settings (its parameters, MasteringParameters,
+     *     in their ranges); left-out properties stay. `insertId` left out: the master's (last) assistant; 422 when it
+     *     has none. During playback a master in touch, latch or write records the change as `setInsertParameter` does.
+     */
+    EditCommandSetMasteringCommand: {
+      /** @enum {string} */
+      type: 'setMastering';
+      insertId?: null | string;
+      character?: null | components['schemas']['MasteringCharacter'];
+      /** Format: double */
+      targetLufs?: null | number;
+      /** Format: double */
+      ceilingDbtp?: null | number;
+      /** Format: double */
+      eq?: null | number;
+      /** Format: double */
+      dynamics?: null | number;
+      /** Format: double */
+      width?: null | number;
+      matchedBypass?: null | boolean;
     };
     /** @description Phase 7: a track's "match groove track": its quantise follows the groove track. */
     EditCommandSetMatchGrooveCommand: {
@@ -4107,6 +4683,16 @@ export interface components {
       regionId: string;
       notes: components['schemas']['PitchNote'][];
     };
+    /**
+     * @description Phase 11: sets how MIDI and audio regions follow the chord track; `chords` only on MIDI regions (an audio
+     *     region among them: 422). `root` on an audio region needs nothing more: its pitch shift follows.
+     */
+    EditCommandSetPitchSourceCommand: {
+      /** @enum {string} */
+      type: 'setPitchSource';
+      regionIds: string[];
+      mode: components['schemas']['PitchSourceMode'];
+    };
     EditCommandSetProjectNotesCommand: {
       /** @enum {string} */
       type: 'setProjectNotes';
@@ -4154,6 +4740,13 @@ export interface components {
       /** Format: int32 */
       fineTune?: null | number;
     };
+    /** @description Phase 11: sets (or with null clears) MIDI and audio regions' own key. */
+    EditCommandSetRegionKeyCommand: {
+      /** @enum {string} */
+      type: 'setRegionKey';
+      regionIds: string[];
+      key: null | components['schemas']['RegionKey'];
+    };
     /**
      * @description Phase 9: changes the score settings (RegionNotation) of MIDI regions; left-out properties stay.
      *     Grids are 0 or divide a whole note (3840 ticks); `maxDots` 0…3.
@@ -4171,6 +4764,12 @@ export interface components {
       syncopation?: null | boolean;
       /** Format: int32 */
       maxDots?: null | number;
+    };
+    /** @description Phase 11: replaces the chord track's key and scale changes (ticks of 0 or more, each once). */
+    EditCommandSetScalesCommand: {
+      /** @enum {string} */
+      type: 'setScales';
+      scales: components['schemas']['ScaleChange'][];
     };
     /** @description Renames a scene, or moves it to `index`. */
     EditCommandSetSceneCommand: {
@@ -4234,6 +4833,42 @@ export interface components {
       preFader?: null | boolean;
       /** Format: int32 */
       bus?: null | number;
+    };
+    /**
+     * @description Phase 11, the Session Player Editor: changes a Session Player region; left-out properties stay. `presetId`
+     *     applies that preset of the region's style first (then the other properties given); `styleId` a style of
+     *     the track's player (its first preset's parameters unless `presetId` names another); any other parameter
+     *     change clears the region's `presetId`. The XY pad is `complexity` and `intensity` (0…1);
+     *     `feel` is −1…1, the others 0…1; the switches (`drums`, `bass` or `keys`, the track's
+     *     player's) replace the region's. The region keeps its seed: the same inputs give the same notes.
+     */
+    EditCommandSetSessionPlayerRegionCommand: {
+      /** @enum {string} */
+      type: 'setSessionPlayerRegion';
+      regionId: string;
+      /** Format: int64 */
+      startTick?: null | number;
+      /** Format: int64 */
+      lengthTicks?: null | number;
+      name?: null | string;
+      muted?: null | boolean;
+      styleId?: null | string;
+      presetId?: null | string;
+      /** Format: double */
+      complexity?: null | number;
+      /** Format: double */
+      intensity?: null | number;
+      /** Format: double */
+      fillAmount?: null | number;
+      fillAtSectionEnds?: null | boolean;
+      /** Format: double */
+      swing?: null | number;
+      /** Format: double */
+      feel?: null | number;
+      followChords?: null | boolean;
+      drums: null | components['schemas']['DrummerSwitches'];
+      bass: null | components['schemas']['BassSwitches'];
+      keys: null | components['schemas']['KeysSwitches'];
     };
     /** @description Sets the signature at the project start (the first signature event), keeping later changes. */
     EditCommandSetSignatureCommand: {
@@ -4547,6 +5182,79 @@ export interface components {
       message?: null | string;
     };
     /**
+     * @description A cable from outlet `outlet` of an object to inlet `inlet` of another (0-based, as the kind lists
+     *     them). An outlet may feed several cables (each gets every event) and an inlet take several; a cable may cross
+     *     layers. The graph has no cycles.
+     */
+    EnvironmentCable: {
+      id: string;
+      fromObjectId: string;
+      /** Format: int32 */
+      outlet: number;
+      toObjectId: string;
+      /** Format: int32 */
+      inlet: number;
+    };
+    /**
+     * @description Live MIDI into an on-screen object (`POST /project/environment/objects/{id}/input`): a keyboard plays it, a
+     *     fader takes it as a move (the editor sends a control change of the fader's value).
+     */
+    EnvironmentInputRequest: {
+      events: components['schemas']['LiveMidiEvent'][];
+    };
+    /** @description A layer of the Environment: one canvas of the window (Logic's layers). Objects belong to one layer. */
+    EnvironmentLayer: {
+      id: string;
+      name: string;
+    };
+    /**
+     * @description An Environment object: its kind, name, layer and position on the layer's canvas (pixels at zoom 1). Its numeric
+     *     settings are `parameters` (ids by kind, EnvironmentObjectKinds; missing ones at their
+     *     defaults). `port` (physical input: a device; MIDI port: an output), `trackId` (track input; control
+     *     target, null for the master), `address` (control target), `conditions` and `operations`
+     *     (transformer), `taps` (delay line) and `chord` (chord memoriser) are used by the kinds that say so and
+     *     null on the others.
+     */
+    EnvironmentObject: {
+      id: string;
+      layerId: string;
+      kind: components['schemas']['EnvironmentObjectKind'];
+      name: string;
+      /** Format: double */
+      x: number;
+      /** Format: double */
+      y: number;
+      parameters: {
+        [key: string]: number;
+      };
+      port?: null | string;
+      trackId?: null | string;
+      address?: null | string;
+      conditions?: null | components['schemas']['TransformCondition'][];
+      operations?: null | components['schemas']['TransformOperation'][];
+      taps?: null | components['schemas']['DelayTap'][];
+      chord?: null | number[];
+    };
+    /**
+     * @description The Environment's object kinds (ADR-0015's fixed set). Their inlets and outlets:
+     *     EnvironmentObjectKinds.
+     * @enum {unknown}
+     */
+    EnvironmentObjectKind:
+      | 'physicalInput'
+      | 'sequencerInput'
+      | 'keyboard'
+      | 'monitor'
+      | 'fader'
+      | 'transformer'
+      | 'delayLine'
+      | 'arpeggiator'
+      | 'chordMemorizer'
+      | 'channelSplitter'
+      | 'midiPort'
+      | 'trackInput'
+      | 'controlTarget';
+    /**
      * @description A file's analysis, cached in the package as `Analysis/&lt;fileId&gt;.json` and rebuilt on demand: its
      *     transients (file frames), its tempo (null until beats are tracked), its pitch curve (MIDI cents per
      *     `hop` frames from frame 0; null where unvoiced; empty until pitch is analysed), its notes, and whether
@@ -4730,7 +5438,9 @@ export interface components {
      *     server stores it here): `parameters` holds their values, and they automate
      *     (`midiEffect:{slotId}:{parameterId}`) and map to Smart Controls as any parameter (null: the plugin's
      *     catalogue list applies). `source` is a Scripter slot's script (`setScript`; null on every other
-     *     slot).
+     *     slot). `mastering` (Phase 11, docs/12-phase-11.md) is a Mastering Assistant's analysis (null on every other
+     *     insert, and on an assistant not analysed yet); its settings are its parameters
+     *     (MasteringParameters).
      */
     Insert: {
       id: string;
@@ -4744,6 +5454,7 @@ export interface components {
       file?: null | string;
       runtimeParameters?: null | components['schemas']['ParameterInfo'][];
       source?: null | string;
+      mastering: null | components['schemas']['MasteringAnalysis'];
     };
     /** @enum {unknown} */
     InsertChain: 'inserts' | 'midiEffects' | null;
@@ -4812,7 +5523,10 @@ export interface components {
       | 'movieAudioImport'
       | 'movieAudioExport'
       | 'sceneDetect'
-      | 'thumbnails';
+      | 'thumbnails'
+      | 'chordId'
+      | 'masteringAnalysis'
+      | 'sessionPlayerConvert';
     /** @enum {unknown} */
     JobState: 'queued' | 'running' | 'done' | 'failed' | 'cancelled';
     /** @description A key-command pad on the remote: its label, the key command it runs (a `KeyCommandSet` id), and a colour. */
@@ -4838,6 +5552,30 @@ export interface components {
     };
     /** @enum {unknown} */
     KeyMode: 'major' | 'minor';
+    /**
+     * @description What the Keyboard Player's left hand plays below the voicing.
+     * @enum {unknown}
+     */
+    KeysLeftHand: 'off' | 'root' | 'octaves' | 'rootFifth';
+    /**
+     * @description The Keyboard Player's switches: the voicing, the right hand's range (MIDI notes `lowNote` …
+     *     `highNote`, at least an octave apart, within 36…96), the left-hand part, and the rhythm pattern (one of the
+     *     style's `rhythms`; null: the style's phrases' own).
+     */
+    KeysSwitches: {
+      voicing: components['schemas']['KeysVoicing'];
+      /** Format: int32 */
+      lowNote: number;
+      /** Format: int32 */
+      highNote: number;
+      leftHand: components['schemas']['KeysLeftHand'];
+      rhythmId?: null | string;
+    };
+    /**
+     * @description How the Keyboard Player voices a chord.
+     * @enum {unknown}
+     */
+    KeysVoicing: 'close' | 'spread' | 'shell';
     /**
      * @description A Step Editor lane: its kind, its controller or key (`number`: for `controlChange`,
      *     `polyPressure` and `note`; null otherwise), its name, and the grid the pencil and line tools draw on
@@ -5055,6 +5793,76 @@ export interface components {
      * @enum {unknown}
      */
     MarkerKind: 'marker' | 'scene';
+    /**
+     * @description What the analysis found over `startTick`…`endTick` of the master before the assistant: integrated
+     *     loudness (BS.1770, LUFS), the loudest short-term loudness, the loudness range (LU), true peak (dBTP, 4×
+     *     oversampled), crest factor (peak to RMS, dB), stereo width (0 mono … 1 uncorrelated; the side-to-mid energy
+     *     ratio, clamped), the smoothed spectrum per band of MasteringBands (dB, relative to its mean), and
+     *     the character's reference curve it was matched against (the same bands, dB). `revision` is the project
+     *     revision it rendered.
+     */
+    MasteringAnalysis: {
+      /** Format: int64 */
+      startTick: number;
+      /** Format: int64 */
+      endTick: number;
+      /** Format: int64 */
+      revision: number;
+      /** Format: double */
+      integratedLufs: number;
+      /** Format: double */
+      maxShortTermLufs: number;
+      /** Format: double */
+      loudnessRange: number;
+      /** Format: double */
+      truePeakDbtp: number;
+      /** Format: double */
+      crestFactorDb: number;
+      /** Format: double */
+      width: number;
+      spectrumDb: number[];
+      curveDb: number[];
+    };
+    /**
+     * @description Analyse (`POST /project/mastering/analyse`, job `masteringAnalysis`): renders the master before the
+     *     assistant offline over `startTick`…`endTick` (left out: the cycle when it is on, else the whole song),
+     *     analyses it, and stores the analysis in the assistant (one undo step, `setMasteringAnalysis`). Without an
+     *     assistant on the master, `add` adds one last first (else 404).
+     */
+    MasteringAnalysisRequest: {
+      /** Format: int64 */
+      startTick?: null | number;
+      /** Format: int64 */
+      endTick?: null | number;
+      /** @default true */
+      add: boolean;
+    };
+    /** @enum {unknown} */
+    MasteringCharacter: 'clean' | 'valve' | 'punch' | 'transparent' | null;
+    /** @description The Mastering Assistant's settings, as its parameters hold them (MasteringParameters). */
+    MasteringSettings: {
+      character: components['schemas']['MasteringCharacter'];
+      /** Format: double */
+      targetLufs: number;
+      /** Format: double */
+      ceilingDbtp: number;
+      /** Format: double */
+      eq: number;
+      /** Format: double */
+      dynamics: number;
+      /** Format: double */
+      width: number;
+      matchedBypass: boolean;
+    };
+    /**
+     * @description The master's Mastering Assistant (`GET /project/mastering`): its insert, settings and analysis (null: not
+     *     analysed yet; it then passes the audio through its limiter only).
+     */
+    MasteringState: {
+      insertId: string;
+      settings: components['schemas']['MasteringSettings'];
+      analysis: null | components['schemas']['MasteringAnalysis'];
+    };
     /** @description The click: on or off, a one-bar count-in before recording, and its level in dB. */
     MetronomeSettings: {
       enabled: boolean;
@@ -5065,6 +5873,15 @@ export interface components {
     MidiDevices: {
       inputs: components['schemas']['MidiPort'][];
       outputs: components['schemas']['MidiPort'][];
+    };
+    /**
+     * @description The project's Environment (`Project.environment`): its layers, objects and cables. MidiEnvironment MidiEnvironment.Empty
+     *     (no objects) is the default input path, physical input to sequencer input.
+     */
+    MidiEnvironment: {
+      layers: components['schemas']['EnvironmentLayer'][];
+      objects: components['schemas']['EnvironmentObject'][];
+      cables: components['schemas']['EnvironmentCable'][];
     };
     /**
      * @description Standard MIDI File export (`POST /project/export/midi`, job `midiExport`) at 960 PPQ: `format` 0
@@ -5120,7 +5937,9 @@ export interface components {
      * @description A MIDI region: it starts at `startTick` and lasts `lengthTicks`; its notes and controller events are
      *     positioned relative to its start (ticks at 960 PPQ). Events past the end do not play; a note that crosses the end
      *     is cut there. `playback` holds the non-destructive region parameters. `notation` (Phase 9,
-     *     docs/10-phase-9.md) holds its score settings: display quantise and interpretation.
+     *     docs/10-phase-9.md) holds its score settings: display quantise and interpretation. `pitchSource` and
+     *     `key` (Phase 11, docs/12-phase-11.md): how it follows the chord track (applied at compile time; its notes
+     *     stay as they are) and its own key (null: the project's at its start).
      */
     MidiRegion: {
       id: string;
@@ -5135,6 +5954,8 @@ export interface components {
       controls: components['schemas']['ControlEvent'][];
       muted: boolean;
       notation: components['schemas']['RegionNotation'];
+      pitchSource: components['schemas']['PitchSourceMode'];
+      key: null | components['schemas']['RegionKey'];
     };
     /**
      * @description A MIDI output (a `MidiPort.id`) that Anode sends sync to: MIDI Clock (24 ppq, Start, Stop, Continue, Song
@@ -5305,6 +6126,14 @@ export interface components {
      */
     MusicXmlImportRequest: {
       path: string;
+    };
+    /** @description A chord to add to the chord track (Chord without its id). */
+    NewChord: {
+      /** Format: int64 */
+      tick: number;
+      root: components['schemas']['PitchName'];
+      quality: string;
+      bass: null | components['schemas']['PitchName'];
     };
     /** @description A chord symbol to add (ChordSymbol without its id). */
     NewChordSymbol: {
@@ -5666,6 +6495,11 @@ export interface components {
       confidence: number;
     };
     /**
+     * @description How a region follows the chord track (`pitchSource` on MIDI and audio regions).
+     * @enum {unknown}
+     */
+    PitchSourceMode: 'off' | 'root' | 'chords';
+    /**
      * @description A diatonic step, as MusicXML and MEI spell pitches.
      * @enum {unknown}
      */
@@ -5754,7 +6588,9 @@ export interface components {
      *     `grooves` are the project's groove templates, `articulationSets` its articulation sets and
      *     `laneSets` its Step Editor lane sets. Phase 9 (docs/10-phase-9.md): `score` is its stored score content
      *     (staff styles, symbols, lyrics, chord symbols, score sets, layout). Phase 10 (docs/11-phase-10.md): `movie`
-     *     is its movie (null: none).
+     *     is its movie (null: none). Phase 11 (docs/12-phase-11.md): `chordTrack` is its chord track (chords, key and
+     *     scale changes), `sessionPlayerRegions` the Session Player regions of its Drummer, Bass Player and Keyboard
+     *     Player tracks, and `environment` its MIDI Environment (empty: physical input to sequencer input).
      */
     Project: {
       id: string;
@@ -5784,6 +6620,9 @@ export interface components {
       laneSets: components['schemas']['LaneSet'][];
       score: components['schemas']['ProjectScore'];
       movie: null | components['schemas']['Movie'];
+      chordTrack: components['schemas']['ChordTrack'];
+      sessionPlayerRegions: components['schemas']['SessionPlayerRegion'][];
+      environment: components['schemas']['MidiEnvironment'];
     };
     /** @description A saved alternative of the open project (Logic's project alternatives); one is current. */
     ProjectAlternative: {
@@ -5879,6 +6718,16 @@ export interface components {
       /** Format: int64 */
       punchOutTick: number;
     };
+    /** @description Regenerate (`POST /project/regions/{id}/session-player/regenerate`): a new seed (left out: drawn). */
+    RegenerateRequest: {
+      /** Format: int64 */
+      seed?: null | number;
+    };
+    /** @description A region's own key (`key` on MIDI and audio regions; null: the project's at the region's start). */
+    RegionKey: {
+      tonic: components['schemas']['PitchName'];
+      mode: components['schemas']['KeyMode'];
+    };
     /**
      * @description A MIDI region's score settings (Logic's region parameters in the Score Editor's inspector): the display
      *     quantise, a straight grid in ticks (240 a 1/16; 0: the track's staff style's grids) and a triplet grid
@@ -5962,6 +6811,31 @@ export interface components {
       name: string;
       category: string;
     };
+    /**
+     * @description A key and scale change of the chord track at `tick` (it holds until the next): the scale the players take
+     *     passing and approach notes from, and Chord ID's key prior. Before the first (or with none) the chord track's key
+     *     is the project's key track (`settings.keys`), a major key read as `major`, a minor one as `minor`.
+     */
+    ScaleChange: {
+      /** Format: int64 */
+      tick: number;
+      tonic: components['schemas']['PitchName'];
+      scale: components['schemas']['ScaleKind'];
+    };
+    /**
+     * @description A scale of the chord track (its key and scale changes; Logic's).
+     * @enum {unknown}
+     */
+    ScaleKind:
+      | 'major'
+      | 'minor'
+      | 'harmonicMinor'
+      | 'melodicMinor'
+      | 'dorian'
+      | 'phrygian'
+      | 'lydian'
+      | 'mixolydian'
+      | 'locrian';
     /** @description A row of the Live Loops grid. */
     Scene: {
       id: string;
@@ -6282,6 +7156,16 @@ export interface components {
       description: string;
       source: string;
     };
+    /** @description A style's default parameters for a region over a section of kind `kind`. */
+    SectionDefaults: {
+      kind: components['schemas']['SectionKind'];
+      parameters: components['schemas']['SessionPlayerParameters'];
+    };
+    /**
+     * @description What an arrangement section is to the players: their default parameters and variation grammar per kind.
+     * @enum {unknown}
+     */
+    SectionKind: 'intro' | 'verse' | 'chorus' | 'bridge' | 'outro';
     /**
      * @description The editor's selection as far as the server needs it (`PUT /project/selection`): the selected track, which
      *     selected-track controller assignments, surfaces and OSC follow; null: none.
@@ -6299,6 +7183,129 @@ export interface components {
       /** Format: double */
       pan: number;
       preFader: boolean;
+    };
+    /**
+     * @description The style library's catalogue (`GET /library/session-players`): its version (part of every region's
+     *     generation input, so a new library regenerates the regions) and its styles.
+     */
+    SessionPlayerCatalog: {
+      version: string;
+      styles: components['schemas']['SessionPlayerStyle'][];
+    };
+    /**
+     * @description Convert to MIDI or to a pattern (`POST /project/regions/{id}/session-player/convert`, job
+     *     `sessionPlayerConvert`): the region (and `regionIds`, the others selected with it) replaced in one undo
+     *     step (`convertSessionPlayerRegions`) by a region of the generated notes, at the same place, with its name
+     *     and mute.
+     */
+    SessionPlayerConvertRequest: {
+      target: components['schemas']['SessionPlayerConvertTarget'];
+      regionIds?: null | string[];
+    };
+    /**
+     * @description What Convert turns Session Player regions into.
+     * @enum {unknown}
+     */
+    SessionPlayerConvertTarget: 'midi' | 'pattern';
+    /**
+     * @description Which player a Session Player track or style is for.
+     * @enum {unknown}
+     */
+    SessionPlayerKind: 'drummer' | 'bass' | 'keyboard';
+    /**
+     * @description A Session Player region's generated notes (`GET /project/regions/{id}/session-player`), positioned relative
+     *     to the region's start as a MIDI region's, for the editor to draw (read-only in the piano roll); `hash` is
+     *     the generation input's hash (the server's cache key; equal hashes, equal notes).
+     */
+    SessionPlayerNotes: {
+      regionId: string;
+      hash: string;
+      notes: components['schemas']['Note'][];
+    };
+    /**
+     * @description The XY pad: `complexity` (x, 0 simple … 1 busy) and `intensity` (y, 0 soft … 1 loud); phrases are
+     *     picked and morphed at that point of the style's phrase space.
+     */
+    SessionPlayerPad: {
+      /** Format: double */
+      complexity: number;
+      /** Format: double */
+      intensity: number;
+    };
+    /**
+     * @description A Session Player region's parameters: the style (SessionPlayerStyle, of the track's player) and the
+     *     preset they came from (null: edited since, or none); the XY pad; fills (`fillAmount` 0…1, and a fill in a
+     *     section's last bar when `fillAtSectionEnds`); `swing` 0…1 (on the style's grid); `feel` −1 (lay
+     *     back) … 1 (push), a fraction of a 32nd; whether it follows the chord track (bass and keys: off plays the region's
+     *     key's tonic chord); and the switches of its player (the others null).
+     */
+    SessionPlayerParameters: {
+      styleId: string;
+      presetId?: null | string;
+      pad: components['schemas']['SessionPlayerPad'];
+      /** Format: double */
+      fillAmount: number;
+      fillAtSectionEnds: boolean;
+      /** Format: double */
+      swing: number;
+      /** Format: double */
+      feel: number;
+      followChords: boolean;
+      drums: null | components['schemas']['DrummerSwitches'];
+      bass: null | components['schemas']['BassSwitches'];
+      keys: null | components['schemas']['KeysSwitches'];
+    };
+    /**
+     * @description A preset of a style: named parameters (the region's `styleId` is the style's; switches of the style's player
+     *     only).
+     */
+    SessionPlayerPreset: {
+      id: string;
+      name: string;
+      parameters: components['schemas']['SessionPlayerParameters'];
+    };
+    /**
+     * @description A Session Player region on a `drummer`, `bassPlayer` or `keyboardPlayer` track (the project's
+     *     `sessionPlayerRegions`, beside its MIDI and pattern regions): it plays from `startTick` for
+     *     `lengthTicks` the notes the generator makes from its parameters and `seed`. Regenerate draws a new
+     *     seed. `moveRegion`, `copyRegions` and `deleteRegions` take Session Player regions too.
+     */
+    SessionPlayerRegion: {
+      id: string;
+      trackId: string;
+      name: string;
+      /** Format: int64 */
+      startTick: number;
+      /** Format: int64 */
+      lengthTicks: number;
+      muted: boolean;
+      parameters: components['schemas']['SessionPlayerParameters'];
+      /** Format: int64 */
+      seed: number;
+    };
+    /** @description A Keyboard Player rhythm pattern a style offers (`KeysSwitches.rhythmId`). */
+    SessionPlayerRhythm: {
+      id: string;
+      name: string;
+    };
+    /**
+     * @description A style of the style library: its player, a generic, descriptive name (a genre and a feel, never a person's or a
+     *     product preset's: ADR-0014), its genre, whether it is a Synth Player style (Keyboard Player styles that play a
+     *     synth patch), the kit patch a new Drummer track of it gets (null: not a drum style), its rhythms (Keyboard
+     *     Player), its presets (the first is the default) and its default parameters per section kind (a region's defaults:
+     *     every SectionKind, each once).
+     */
+    SessionPlayerStyle: {
+      id: string;
+      name: string;
+      player: components['schemas']['SessionPlayerKind'];
+      genre: string;
+      description: string;
+      synthPlayer: boolean;
+      kitPatchId?: null | string;
+      rhythms: components['schemas']['SessionPlayerRhythm'][];
+      presets: components['schemas']['SessionPlayerPreset'][];
+      sections: components['schemas']['SectionDefaults'][];
     };
     /** @description A time signature change, on a bar line of the signature before it. The first is at tick 0. */
     SignatureEvent: {
@@ -6686,7 +7693,7 @@ export interface components {
       stereo: boolean;
     };
     /** @enum {unknown} */
-    TrackKind: 'audio' | 'instrument' | 'midi' | 'stack' | 'aux' | 'vca';
+    TrackKind: 'audio' | 'instrument' | 'midi' | 'stack' | 'aux' | 'vca' | 'drummer' | 'bassPlayer' | 'keyboardPlayer';
     /** @enum {unknown} */
     TrackSwitchAction: 'mute' | 'solo' | 'recordArm' | 'selectNext' | 'selectPrevious' | null;
     /**
@@ -11276,6 +12283,425 @@ export interface operations {
         content: {
           'application/json': components['schemas']['ListenInState'];
         };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  GetChordTrack: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ChordTrack'];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  DetectChords: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['ChordIdRequest'];
+      };
+    };
+    responses: {
+      /** @description Accepted */
+      202: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Job'];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  GetSessionPlayerCatalog: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['SessionPlayerCatalog'];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  GetSessionPlayerNotes: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        regionId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['SessionPlayerNotes'];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  RegenerateSessionPlayer: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        regionId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['RegenerateRequest'];
+      };
+    };
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['CommandResult'];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  ConvertSessionPlayer: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        regionId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['SessionPlayerConvertRequest'];
+      };
+    };
+    responses: {
+      /** @description Accepted */
+      202: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Job'];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  GetMastering: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['MasteringState'];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  SetMastering: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['MasteringSettings'];
+      };
+    };
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['CommandResult'];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  AnalyseMastering: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['MasteringAnalysisRequest'];
+      };
+    };
+    responses: {
+      /** @description Accepted */
+      202: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Job'];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  GetEnvironment: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['MidiEnvironment'];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  EnvironmentInput: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        objectId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['EnvironmentInputRequest'];
+      };
+    };
+    responses: {
+      /** @description No Content */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
       };
       /** @description Internal Server Error */
       500: {

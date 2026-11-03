@@ -13,7 +13,9 @@ public sealed record ProjectSummary(string Id, string Name, string Path, DateTim
 ///     <c>grooves</c> are the project's groove templates, <c>articulationSets</c> its articulation sets and
 ///     <c>laneSets</c> its Step Editor lane sets. Phase 9 (docs/10-phase-9.md): <c>score</c> is its stored score content
 ///     (staff styles, symbols, lyrics, chord symbols, score sets, layout). Phase 10 (docs/11-phase-10.md): <c>movie</c>
-///     is its movie (null: none).
+///     is its movie (null: none). Phase 11 (docs/12-phase-11.md): <c>chordTrack</c> is its chord track (chords, key and
+///     scale changes), <c>sessionPlayerRegions</c> the Session Player regions of its Drummer, Bass Player and Keyboard
+///     Player tracks, and <c>environment</c> its MIDI Environment (empty: physical input to sequencer input).
 /// </summary>
 public sealed record Project(
     string Id,
@@ -40,7 +42,10 @@ public sealed record Project(
     IReadOnlyList<ArticulationSet> ArticulationSets,
     IReadOnlyList<LaneSet> LaneSets,
     ProjectScore Score,
-    Movie? Movie
+    Movie? Movie,
+    ChordTrack ChordTrack,
+    IReadOnlyList<SessionPlayerRegion> SessionPlayerRegions,
+    MidiEnvironment Environment
 );
 
 /// <summary>
@@ -106,7 +111,29 @@ public enum TrackKind {
 
     /// <summary>A VCA: its volume, mute and solo control the tracks whose strip names it in <c>vcaId</c>.</summary>
     [JsonStringEnumMemberName("vca")]
-    Vca
+    Vca,
+
+    /// <summary>
+    ///     Phase 11 (docs/12-phase-11.md): a Drummer track. It is a Drum Machine Designer (<c>drumMachine</c>, its kit;
+    ///     its pads are member instrument tracks, so the kit is multi-output) that plays Session Player regions of a
+    ///     drum style, and MIDI and pattern regions as a DMD does.
+    /// </summary>
+    [JsonStringEnumMemberName("drummer")]
+    Drummer,
+
+    /// <summary>
+    ///     Phase 11: a Bass Player track: an instrument track (<c>instrument</c>) that plays Session Player regions of a
+    ///     bass style, and MIDI regions.
+    /// </summary>
+    [JsonStringEnumMemberName("bassPlayer")]
+    BassPlayer,
+
+    /// <summary>
+    ///     Phase 11: a Keyboard Player track: an instrument track that plays Session Player regions of a keys style
+    ///     (Synth Player styles included), and MIDI regions.
+    /// </summary>
+    [JsonStringEnumMemberName("keyboardPlayer")]
+    KeyboardPlayer
 }
 
 /// <summary>
@@ -206,6 +233,11 @@ public sealed record ChannelStrip(
 ///     <c>fileOffset + n</c> at <c>startTick</c> plus n frames, as before. A warped region's file frames map through
 ///     its base map (by <c>follow</c> and the file's <c>tempo</c>), scaled linearly between its <c>flexMarkers</c>;
 ///     its end tick is where its last file frame lands (derived, never stored). Fades stay in project frames.
+///     <para>
+///         Phase 11 (docs/12-phase-11.md): <c>pitchSource</c> is how it follows the chord track (<c>off</c> or
+///         <c>root</c>: each chord segment transposed, crossfaded; <c>chords</c> is MIDI only), and <c>key</c> its own
+///         key (null: the project's at its start), which Pitch Source transposes from.
+///     </para>
 /// </remarks>
 public sealed record AudioRegion(
     string Id,
@@ -225,7 +257,9 @@ public sealed record AudioRegion(
     IReadOnlyList<FlexMarker> FlexMarkers,
     int Transpose,
     int FineTune,
-    IReadOnlyList<PitchNote> PitchNotes
+    IReadOnlyList<PitchNote> PitchNotes,
+    PitchSourceMode PitchSource,
+    RegionKey? Key
 );
 
 /// <summary>

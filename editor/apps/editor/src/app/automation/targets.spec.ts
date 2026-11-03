@@ -59,9 +59,18 @@ describe('automation targets', () => {
           name: 'Compressor',
           bypassed: false,
           parameters: {},
-          sidechain: null
+          sidechain: null,
+          mastering: null
         },
-        { id: 'ins_2', pluginId: 'gone', name: 'Gone', bypassed: false, parameters: {}, sidechain: null }
+        {
+          id: 'ins_2',
+          pluginId: 'gone',
+          name: 'Gone',
+          bypassed: false,
+          parameters: {},
+          sidechain: null,
+          mastering: null
+        }
       ]
     })
   };

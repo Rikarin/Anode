@@ -107,7 +107,9 @@ public static class Recordings {
                         [],
                         0,
                         0,
-                        []
+                        [],
+                        PitchSourceMode.Off,
+                        null
                     )
                 )
             );

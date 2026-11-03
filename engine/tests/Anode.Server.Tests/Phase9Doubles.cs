@@ -153,7 +153,9 @@ sealed class FakeFormats : IInterchangeFormats {
                             [new(1, 72, 80, 1, 0, 960, 0), new(2, 74, 80, 1, 960, 960, 0)],
                             [],
                             false,
-                            ProjectDefaults.Notation
+                            ProjectDefaults.Notation,
+                            PitchSourceMode.Off,
+                            null
                         )
                     ],
                     []
@@ -244,7 +246,9 @@ sealed class FakeFormats : IInterchangeFormats {
                             [],
                             0,
                             0,
-                            []
+                            [],
+                            PitchSourceMode.Off,
+                            null
                         )
                     ]
                 )

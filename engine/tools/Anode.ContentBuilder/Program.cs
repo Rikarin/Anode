@@ -24,6 +24,16 @@ var staging = Path.Combine(Path.GetTempPath(), $"anode-content-{Guid.NewGuid():n
 try {
     var content = new Content(t1);
     var pack = test ? content.TestPack(staging) : content.Essentials(staging);
+    // Phase 11 (docs/12-phase-11.md): the Drummer kits (workstream D) and the tape sets (workstream E), each skipped
+    // until its workstream makes it.
+    if (SessionPlayerContent.Ready) {
+        SessionPlayerContent.AddKits(pack, test, t1);
+    }
+
+    if (TapeContent.Ready) {
+        TapeContent.AddTapeSets(pack, test);
+    }
+
     pack.Finish(output);
     Console.WriteLine(
         $"Wrote {Path.GetFullPath(output)}: {pack.Written.Count} files, drums from "

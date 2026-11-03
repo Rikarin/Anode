@@ -353,7 +353,8 @@ function newInsert(plugin: PluginInfo, ctx: MixContext): Insert {
     name: plugin.name,
     bypassed: false,
     parameters: defaultParameters(plugin),
-    sidechain: null
+    sidechain: null,
+    mastering: null
   };
 }
 

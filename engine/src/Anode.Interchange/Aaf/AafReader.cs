@@ -128,7 +128,9 @@ public static class AafReader {
                     [],
                     0,
                     0,
-                    []
+                    [],
+                    PitchSourceMode.Off,
+                    null
                 );
         }
 

@@ -100,7 +100,9 @@ public sealed class Phase7VectorTests {
                     Edits.Sorted(notes),
                     Edits.Sorted(controls),
                     false,
-                    ProjectDefaults.Notation
+                    ProjectDefaults.Notation,
+                    PitchSourceMode.Off,
+                    null
                 )
             )
         );

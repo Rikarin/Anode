@@ -140,7 +140,9 @@ public static partial class Edits {
                         [],
                         0,
                         0,
-                        []
+                        [],
+                        PitchSourceMode.Off,
+                        null
                     )
                 )
             );

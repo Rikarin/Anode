@@ -63,6 +63,8 @@ namespace Anode.Ipc;
 [JsonDerivedType(typeof(SyncStateMessage), "syncState")]
 [JsonDerivedType(typeof(SetMonitoringMessage), "setMonitoring")]
 [JsonDerivedType(typeof(SetMasterTapMessage), "setMasterTap")]
+[JsonDerivedType(typeof(SetEnvironmentMessage), "setEnvironment")]
+[JsonDerivedType(typeof(EnvironmentMidiMessage), "environmentMidi")]
 public abstract record IpcMessage;
 
 /// <summary>
@@ -202,6 +204,8 @@ public sealed record EnginePanner(EnginePannerMode Mode, EngineSurroundPanner Su
 ///     (another engine track's post-fader signal, or a bus; −1 and 0 for none). <paramref name="Source" /> (Phase 7) is
 ///     a Scripter MIDI FX slot's script (the contract's <c>Insert.source</c>): the host compiles it on the control
 ///     thread when it creates the instance, and answers with a <see cref="SlotParametersMessage" />.
+///     <paramref name="Mastering" /> (Phase 11) is a Mastering Assistant's chain from its analysis (null on every other
+///     insert, and on an assistant not analysed yet, which then only limits to its ceiling).
 /// </summary>
 public sealed record EngineInsert(
     string Id,
@@ -212,7 +216,25 @@ public sealed record EngineInsert(
     int SidechainTrack = -1,
     int SidechainBus = 0,
     string? File = null,
-    string? Source = null
+    string? Source = null,
+    EngineMasteringChain? Mastering = null
+);
+
+/// <summary>
+///     Phase 11 (docs/12-phase-11.md): what a Mastering Assistant's analysis sets in its chain, at full strength (the
+///     insert's <c>eq</c> and <c>dynamics</c> parameters scale it in the host, its <c>character</c>, <c>width</c>,
+///     <c>targetLufs</c>, <c>ceilingDbtp</c> and <c>matchedBypass</c> apply live, so all of them automate): the EQ's gain
+///     per band of the contract's <c>MasteringBands</c> (dB, 30 values), the compressor's threshold (dBFS) and ratio,
+///     the analysed integrated loudness of its input (LUFS) and the loudness the EQ and compressor add at full strength
+///     (LU, usually negative). The limiter's input gain is <c>targetLufs − LoudnessLufs − ChainGainDb</c> (at the
+///     current strengths), and the level-matched bypass plays the input at the output's measured loudness.
+/// </summary>
+public sealed record EngineMasteringChain(
+    IReadOnlyList<float> EqGainsDb,
+    float CompressorThresholdDb,
+    float CompressorRatio,
+    float LoudnessLufs,
+    float ChainGainDb
 );
 
 /// <summary>A send to bus 1…64 at linear gain, with its pan, taken before or after the fader.</summary>
@@ -280,7 +302,9 @@ public sealed record EngineMidiIo(string? InputDevice, int InputChannel, string?
 ///     Format 4 (Phase 6, docs/07-phase-6.md): a whole model carries the tempo points (the compiled tempo map the
 ///     engine computes every block's transport context from) and every Live Loops cell; a per-track segment carries no
 ///     tempo points (the model's stay) and the cells of the tracks it holds, which replace those tracks' cells. Cell
-///     indices, like automation target indices, are stable while the project is open.
+///     indices, like automation target indices, are stable while the project is open. Phase 11: a whole model carries
+///     the Environment (<paramref name="Environment" />; null: the default input path, physical input to sequencer
+///     input); a per-track segment leaves it as it is.
 /// </remarks>
 public sealed record LoadModelMessage(
     SegmentRef Segment,
@@ -289,7 +313,8 @@ public sealed record LoadModelMessage(
     IReadOnlyList<EngineFile> Files,
     EngineStrip Master,
     string RecordDirectory,
-    IReadOnlyList<EngineAutomationTarget>? AutomationTargets = null
+    IReadOnlyList<EngineAutomationTarget>? AutomationTargets = null,
+    EngineEnvironment? Environment = null
 ) : IpcMessage;
 
 /// <summary>
@@ -862,3 +887,111 @@ public sealed record SetMonitoringMessage(
 ///     master after its inserts and fader (its stereo down-mix for a surround master), never the monitoring render.
 /// </summary>
 public sealed record SetMasterTapMessage(bool Enabled) : IpcMessage;
+
+/// <summary>The Environment's object kinds (the contract's <c>EnvironmentObjectKind</c>, in its order).</summary>
+[JsonConverter(typeof(JsonStringEnumConverter<EngineEnvironmentKind>))]
+public enum EngineEnvironmentKind {
+    [JsonStringEnumMemberName("physicalInput")]
+    PhysicalInput,
+
+    [JsonStringEnumMemberName("sequencerInput")]
+    SequencerInput,
+
+    [JsonStringEnumMemberName("keyboard")]
+    Keyboard,
+
+    [JsonStringEnumMemberName("monitor")]
+    Monitor,
+
+    [JsonStringEnumMemberName("fader")]
+    Fader,
+
+    [JsonStringEnumMemberName("transformer")]
+    Transformer,
+
+    [JsonStringEnumMemberName("delayLine")]
+    DelayLine,
+
+    [JsonStringEnumMemberName("arpeggiator")]
+    Arpeggiator,
+
+    [JsonStringEnumMemberName("chordMemorizer")]
+    ChordMemorizer,
+
+    [JsonStringEnumMemberName("channelSplitter")]
+    ChannelSplitter,
+
+    [JsonStringEnumMemberName("midiPort")]
+    MidiPort,
+
+    [JsonStringEnumMemberName("trackInput")]
+    TrackInput,
+
+    [JsonStringEnumMemberName("controlTarget")]
+    ControlTarget
+}
+
+/// <summary>
+///     A cable as the host runs it: from outlet <paramref name="Outlet" /> to inlet <paramref name="Inlet" /> of object
+///     index <paramref name="To" />.
+/// </summary>
+public sealed record EngineEnvironmentRoute(int Outlet, int To, int Inlet);
+
+/// <summary>
+///     A transformer condition or operation (the contract's <c>TransformCondition</c> and <c>TransformOperation</c>):
+///     the field and operation by their contract names (<c>status</c>, <c>channel</c>, <c>pitch</c> (data 1),
+///     <c>velocity</c> (data 2); <c>equal</c>, <c>add</c>, …) and their values.
+/// </summary>
+public sealed record EngineTransformRule(string Field, string Op, double A, double B);
+
+/// <summary>A delay line tap: its delay in ticks (converted by the tempo at the event), transpose and velocity.</summary>
+public sealed record EngineDelayTap(long DelayTicks, int Transpose, int Velocity);
+
+/// <summary>
+///     An Environment object as the host runs it: its index in <see cref="EngineEnvironment.Objects" /> (objects are
+///     in an order in which every route goes to a later one), kind, parameters by the contract's ids (an arpeggiator's
+///     and chord memoriser's are their MIDI FX's), and what its kind uses: <paramref name="Port" /> (physical input:
+///     the device, null every input; MIDI port: the output), <paramref name="TrackId" /> (track input; control target,
+///     −1 the master: engine track ids), <paramref name="Control" /> (control target: the parameter, as automation
+///     addresses it), the transformer's <paramref name="Conditions" /> and <paramref name="Operations" />, the delay
+///     line's <paramref name="Taps" />, the chord memoriser's <paramref name="Chord" /> (semitones from the key; null: its
+///     Chord parameter's), and its <paramref name="Routes" />. A monitor or fader writes its telemetry slot
+///     <paramref name="TelemetrySlot" /> (<see cref="Telemetry.EnvironmentMonitorEntry" />,
+///     <see cref="Telemetry.EnvironmentFaderEntry" />; −1 for other kinds).
+/// </summary>
+public sealed record EngineEnvironmentObject(
+    int Index,
+    EngineEnvironmentKind Kind,
+    IReadOnlyDictionary<string, double> Parameters,
+    IReadOnlyList<EngineEnvironmentRoute> Routes,
+    string? Port = null,
+    int TrackId = -1,
+    EngineAutomationTarget? Control = null,
+    IReadOnlyList<EngineTransformRule>? Conditions = null,
+    IReadOnlyList<EngineTransformRule>? Operations = null,
+    IReadOnlyList<EngineDelayTap>? Taps = null,
+    IReadOnlyList<int>? Chord = null,
+    int TelemetrySlot = -1
+);
+
+/// <summary>
+///     Phase 11 (docs/12-phase-11.md, docs/adr/0015-environment.md): the Environment compiled flat for the host: its
+///     objects, ordered so every route goes forward (the server has checked there are no cycles), with no layers. The
+///     host runs it on the MIDI input path at each event's sample; delays and the arpeggiator schedule within its event
+///     queue (bounded), and an event it cannot schedule in the block is dropped and counted
+///     (<see cref="Telemetry.TelemetryHeader.EnvironmentDropped" />). The contract object ids are the server's to map;
+///     the host knows indices only.
+/// </summary>
+public sealed record EngineEnvironment(IReadOnlyList<EngineEnvironmentObject> Objects);
+
+/// <summary>
+///     Server → host (Phase 11): replaces the Environment (null: the default input path), compiled off the audio
+///     thread and swapped in; held notes of objects that go are released.
+/// </summary>
+public sealed record SetEnvironmentMessage(EngineEnvironment? Environment) : IpcMessage;
+
+/// <summary>
+///     Server → host (Phase 11): live MIDI into an on-screen Environment object (a keyboard plays it, a fader takes it as
+///     a move), entering at that object at the next block's start.
+/// </summary>
+public sealed record EnvironmentMidiMessage(int ObjectIndex, IReadOnlyList<EngineMidiEvent> Events) : IpcMessage;
