@@ -12,17 +12,27 @@ namespace Anode.Engine.Mixing;
 ///     An insert's effect instance, kept across structure changes by insert id while its plugin stays the same: the
 ///     prepared effect (null when it failed to load: the slot passes audio through), the parameter values the control
 ///     thread last set and the queue that carries changes to the audio thread.
+///     <para>
+///         Phase 11: an insert that changes its strip's format (<see cref="IFormatEffect" />, <see cref="IsFormat" />)
+///         has no <see cref="Effect" />; its instance is its <see cref="Format" /> stage, prepared for the format at its
+///         slot and replaced whole when that format or its parameters change it (structure).
+///     </para>
 /// </summary>
 public sealed class InsertSlot : IDisposable {
     readonly Dictionary<string, int> indexById = new(StringComparer.Ordinal);
     int failed;
+    FormatStage? format;
 
-    public InsertSlot(string id, string pluginId, IAudioEffect? effect) {
+    public InsertSlot(string id, string pluginId, IAudioEffect? effect) : this(id, pluginId, effect?.Descriptor) {
+        Effect = effect;
+    }
+
+    /// <summary>A slot for <paramref name="descriptor" />'s plugin (an <see cref="IFormatEffect" />'s, or none).</summary>
+    InsertSlot(string id, string pluginId, EffectDescriptor? descriptor) {
         Id = id;
         PluginId = pluginId;
-        Effect = effect;
-        if (effect is not null) {
-            foreach (var p in effect.Descriptor.Parameters) {
+        if (descriptor is not null) {
+            foreach (var p in descriptor.Parameters) {
                 indexById[p.Id] = p.Index;
                 Values[p.Id] = p.Default;
             }
@@ -30,6 +40,66 @@ public sealed class InsertSlot : IDisposable {
 
         Parameters = new(Math.Max(256, 2 * indexById.Count));
     }
+
+    /// <summary>A slot of an insert that changes its strip's format (Phase 11), its stage still to be prepared.</summary>
+    public static InsertSlot ForFormat(string id, string pluginId, EffectDescriptor descriptor, string? file) =>
+        new(id, pluginId, descriptor) { IsFormat = true, File = file };
+
+    /// <summary>The insert changes its strip's format (Phase 11): its instance is <see cref="Format" />.</summary>
+    public bool IsFormat { get; private init; }
+
+    /// <summary>
+    ///     The format insert's prepared instance (null: none to be had; the slot then passes the signal as it is).
+    ///     Swapped whole by the control thread before a plan that needs it is published.
+    /// </summary>
+    public FormatStage? Format {
+        get => Volatile.Read(ref format);
+        set => Volatile.Write(ref format, value);
+    }
+
+    /// <summary>Control thread: a parameter of a format insert changed since its stage was prepared.</summary>
+    internal bool FormatStale { get; set; }
+
+    /// <summary>Control thread: a format insert's saved state (base64), which each new stage loads.</summary>
+    internal string? FormatState { get; set; }
+
+    /// <summary>A Mastering Assistant's meter (Phase 11; null on every other insert), which the telemetry reads.</summary>
+    public MasteringMeter? Mastering { get; init; }
+
+    EngineMasteringChain? chain;
+
+    /// <summary>
+    ///     Control thread: a Mastering Assistant's chain from its analysis (null: none yet), handed to the assistant when
+    ///     it differs from the one it has.
+    /// </summary>
+    public void SetChain(EngineMasteringChain? next) {
+        if (Mastering is not { } meter || Same(chain, next)) {
+            return;
+        }
+
+        chain = next;
+        meter.Chain.SetChain(
+            next is null
+                ? null
+                : new(
+                    [..next.EqGainsDb],
+                    next.CompressorThresholdDb,
+                    next.CompressorRatio,
+                    next.LoudnessLufs,
+                    next.ChainGainDb
+                )
+        );
+    }
+
+    static bool Same(EngineMasteringChain? a, EngineMasteringChain? b) =>
+        ReferenceEquals(a, b)
+        || (a is not null
+            && b is not null
+            && a.EqGainsDb.SequenceEqual(b.EqGainsDb)
+            && a.CompressorThresholdDb == b.CompressorThresholdDb
+            && a.CompressorRatio == b.CompressorRatio
+            && a.LoudnessLufs == b.LoudnessLufs
+            && a.ChainGainDb == b.ChainGainDb);
 
     public string Id { get; }
 
@@ -55,15 +125,18 @@ public sealed class InsertSlot : IDisposable {
     /// <summary>The parameter's index, or −1.</summary>
     public int IndexOf(string parameterId) => indexById.GetValueOrDefault(parameterId, -1);
 
-    /// <summary>Control thread, before the slot is published: sets the parameter directly. False for an unknown id.</summary>
+    /// <summary>
+    ///     Control thread, before the slot is published: sets the parameter directly (a format insert's when its stage
+    ///     is prepared). False for an unknown id.
+    /// </summary>
     public bool Initialise(string parameterId, double value) {
         var index = IndexOf(parameterId);
-        if (index < 0 || !double.IsFinite(value) || Effect is null) {
+        if (index < 0 || !double.IsFinite(value) || (Effect is null && !IsFormat)) {
             return false;
         }
 
         Values[parameterId] = value;
-        Effect.SetParameter(index, (float)value);
+        Effect?.SetParameter(index, (float)value);
         return true;
     }
 
@@ -92,7 +165,10 @@ public sealed class InsertSlot : IDisposable {
     /// <summary>Audio thread: applies the queued changes (to the extra instances of a multichannel strip too).</summary>
     public void ApplyParameters() {
         if (Effect is null) {
-            while (Parameters.TryDequeue(out _)) { }
+            var stage = format?.Effect;
+            while (Parameters.TryDequeue(out var queued)) {
+                stage?.SetParameter(queued.Index, queued.Value); // a format insert's (Phase 11)
+            }
 
             return;
         }
@@ -111,7 +187,31 @@ public sealed class InsertSlot : IDisposable {
     public void Dispose() {
         Effect?.Dispose();
         multi?.Dispose();
+        format?.Dispose();
     }
+}
+
+/// <summary>
+///     A format insert's instance as the plan uses it (Phase 11): the effect prepared from <see cref="In" /> to
+///     <see cref="Out" /> (what it outputs at its parameters), and the gains a bypassed one mixes the channels with
+///     (each to its label's speaker, or a down-mix), output-major. Immutable in shape; built on the control thread.
+/// </summary>
+public sealed class FormatStage(IFormatEffect effect, SpeakerFormat input, SpeakerFormat output, float[] bypass)
+    : IDisposable {
+    public IFormatEffect Effect { get; } = effect;
+
+    public SpeakerFormat In { get; } = input;
+
+    public SpeakerFormat Out { get; } = output;
+
+    public int InChannels { get; } = SpeakerLayout.Of(input).ChannelCount;
+
+    public int OutChannels { get; } = SpeakerLayout.Of(output).ChannelCount;
+
+    /// <summary>The gains of the bypassed insert, <c>[o × InChannels + i]</c>.</summary>
+    public float[] Bypass { get; } = bypass;
+
+    public void Dispose() => Effect.Dispose();
 }
 
 /// <summary>

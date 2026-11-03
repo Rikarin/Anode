@@ -96,10 +96,11 @@ public sealed class MultichannelTests : IDisposable {
             EngineStrip master,
             int outputs,
             TestSpatial? spatial = null,
-            EngineAutomationTarget[]? targets = null
+            EngineAutomationTarget[]? targets = null,
+            Plugins.PluginRegistry? registry = null
         ) {
             Spatial = spatial ?? new TestSpatial();
-            Controller = new(new(Rate, block), SpatialFixtures.Registry()) { SpatialFactory = Spatial };
+            Controller = new(new(Rate, block), registry ?? SpatialFixtures.Registry()) { SpatialFactory = Spatial };
             using var segment = TestAudio.Segment(models, 1);
             Controller.LoadModel(
                 TestAudio.Load(segment, 1, true, tracks, files, dir, master) with { AutomationTargets = targets }

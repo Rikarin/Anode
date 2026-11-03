@@ -371,7 +371,7 @@ public sealed partial class EngineController {
 
     /// <summary>A master render's channels: the master's, or what the monitoring sends when it renders that.</summary>
     (int Channels, SpeakerFormat? Format) MasterFormat(MixPlan plan, bool monitored) {
-        var format = plan.MasterFormat;
+        var format = plan.MasterOutputFormat;
         if (!monitored || Engine.Monitoring is not { } setup || setup.From != format) {
             return (SpeakerLayout.Of(format).ChannelCount, format);
         }

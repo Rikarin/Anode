@@ -12,7 +12,7 @@ namespace Anode.Dsp.Mastering;
 ///     A stub of the Phase 11 contracts: its id and parameters are fixed, its processing is workstream E's. Not in
 ///     <see cref="BuiltinEffects" /> until it works (the engine registers it with the T3 effects, workstream A).
 /// </remarks>
-public sealed class MasteringAssistant : AudioEffect {
+public sealed class MasteringAssistant : AudioEffect, IMasteringChain {
     public const string Id = "anode.mastering-assistant";
     static readonly EffectParameters P = new();
 
@@ -40,8 +40,14 @@ public sealed class MasteringAssistant : AudioEffect {
 
     public MasteringAssistant() : base(Info) { }
 
-    /// <summary>On the control thread: the chain from the analysis (null: none yet, the limiter alone).</summary>
+    /// <inheritdoc />
     public void SetChain(MasteringChainSettings? chain) => throw Pending.WorkstreamE();
+
+    /// <summary>The compressor's gain reduction now (dB, 0 or less; the host's telemetry reads it).</summary>
+    public float CompressorReductionDb => throw Pending.WorkstreamE();
+
+    /// <summary>The limiter's gain reduction now (dB, 0 or less; the host's telemetry reads it).</summary>
+    public float LimiterReductionDb => throw Pending.WorkstreamE();
 
     protected override void OnPrepare(float sampleRate) => throw Pending.WorkstreamE();
 

@@ -20,6 +20,7 @@ public sealed class PluginRegistry {
     readonly List<(InstrumentDescriptor Descriptor, Func<IInstrument> Create)> extras = [];
     readonly List<(EffectDescriptor Descriptor, Func<IAudioEffect> Create)> effects = [];
     readonly List<(MidiEffectDescriptor Descriptor, Func<IMidiEffect> Create)> midiEffects = [];
+    readonly List<(EffectDescriptor Descriptor, Func<IFormatEffect> Create)> formatEffects = [];
     IPluginFactory factory = NullPluginFactory.Instance;
     TaskCompletionSource idle = Done();
     IReadOnlyList<ClapEntry> clap = [];
@@ -54,6 +55,46 @@ public sealed class PluginRegistry {
     public void AddBuiltinEffect(EffectDescriptor descriptor, Func<IAudioEffect> create) {
         lock (gate) {
             effects.Add((descriptor, create));
+        }
+    }
+
+    /// <summary>Adds an insert that changes its strip's format (Phase 11), treated as built in (tests, tools).</summary>
+    public void AddBuiltinFormatEffect(EffectDescriptor descriptor, Func<IFormatEffect> create) {
+        lock (gate) {
+            formatEffects.Add((descriptor, create));
+        }
+    }
+
+    /// <summary>
+    ///     A new, unprepared insert <paramref name="pluginId" /> that changes its strip's format (Phase 11:
+    ///     <see cref="BuiltinFormatEffects" />, or one added with <see cref="AddBuiltinFormatEffect" />), or null when
+    ///     there is none. Hosted plugins never change the format. Control thread.
+    /// </summary>
+    public IFormatEffect? CreateFormatEffect(string pluginId) {
+        if (BuiltinFormatEffects.Create(pluginId) is { } builtin) {
+            return builtin;
+        }
+
+        Func<IFormatEffect>? create = null;
+        lock (gate) {
+            foreach (var (d, f) in formatEffects) {
+                if (d.Id == pluginId) {
+                    create = f;
+                }
+            }
+        }
+
+        return create?.Invoke();
+    }
+
+    /// <summary>Whether <paramref name="pluginId" /> is an insert that changes its strip's format.</summary>
+    public bool IsFormatEffect(string pluginId) {
+        if (BuiltinFormatEffects.All.Any(d => d.Id == pluginId)) {
+            return true;
+        }
+
+        lock (gate) {
+            return formatEffects.Exists(e => e.Descriptor.Id == pluginId);
         }
     }
 
@@ -103,6 +144,10 @@ public sealed class PluginRegistry {
             list.Add(Builtin(d));
         }
 
+        foreach (var d in BuiltinFormatEffects.All) {
+            list.Add(Builtin(d));
+        }
+
         foreach (var d in BuiltinMidiEffects.All) {
             list.Add(Builtin(d));
         }
@@ -113,6 +158,10 @@ public sealed class PluginRegistry {
             }
 
             foreach (var (d, _) in effects) {
+                list.Add(Builtin(d));
+            }
+
+            foreach (var (d, _) in formatEffects) {
                 list.Add(Builtin(d));
             }
 

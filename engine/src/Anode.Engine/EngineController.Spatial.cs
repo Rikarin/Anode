@@ -64,7 +64,7 @@ public sealed partial class EngineController {
     ///     (a new master format) it is logged and the master is sent as it is.
     /// </summary>
     void ApplyMonitoring(bool strict = false) {
-        var format = Engine.Root.Mix.MasterFormat;
+        var format = Engine.Root.Mix.MasterOutputFormat;
         if (monitoredFormat == format) {
             return;
         }
@@ -219,10 +219,7 @@ public sealed partial class EngineController {
             return false;
         }
 
-        foreach (var insert in config.Inserts) {
-            EnsureMulti(insert.Slot, trackId, input, null, replaced);
-        }
-
+        PrepareInserts(config, trackId, input, replaced);
         channel.Config = config with { InputFormat = input, OutputFormat = output, PannerMode = mode };
         return true;
     }
@@ -280,10 +277,10 @@ public sealed partial class EngineController {
             }
 
             return node.OutputEdge switch {
-                null when node.Width > 2 => (node.Width, node.Format),
+                null when node.SignalWidth > 2 => (node.SignalWidth, node.SignalFormat),
                 null or { Kind: EdgeKind.Stereo or EdgeKind.DownmixStereo } => (2, null),
                 { Kind: EdgeKind.Mono } => (1, null),
-                { Kind: EdgeKind.Object } => (Math.Min(node.Width, 2), null),
+                { Kind: EdgeKind.Object } => (Math.Min(node.SignalWidth, 2), null),
                 var edge => (edge.Width, edge.Format)
             };
         }

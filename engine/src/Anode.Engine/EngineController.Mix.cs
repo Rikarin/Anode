@@ -1,4 +1,5 @@
 using Anode.Dsp.Effects;
+using Anode.Dsp.Mastering;
 using Anode.Dsp.MidiEffects;
 using Anode.Engine.Mixing;
 using Anode.Engine.Plugins;
@@ -61,6 +62,10 @@ public sealed partial class EngineController {
 
                 Hold(root, trackId, AutomationKind.MidiEffect, insertId, parameterId);
                 return true;
+            }
+
+            if (slot.IsFormat) {
+                return SetFormatParameter(trackId, slot, parameterId, value);
             }
 
             if (!slot.Set(parameterId, value)) {
@@ -236,10 +241,11 @@ public sealed partial class EngineController {
         var claimed = new HashSet<InsertSlot>();
         var inserts = new List<ChannelInsert>();
         var input = Formats.Of(strip.InputFormat);
+        var format = input; // Phase 11: what a format insert outputs, the inserts after it run in
         foreach (var spec in strip.Inserts ?? []) {
             var slot = KeepInsert(old, spec, claimed) ?? BuildInsert(trackId, spec);
             claimed.Add(slot);
-            EnsureMulti(slot, trackId, input, spec.State, replaced);
+            format = Prepare(slot, trackId, format, spec.State, replaced);
             inserts.Add(new(slot, spec.Bypassed, spec.SidechainTrack, spec.SidechainBus));
         }
 
@@ -294,10 +300,16 @@ public sealed partial class EngineController {
 
         foreach (var (id, value) in spec.Parameters) {
             if (!slot.Values.TryGetValue(id, out var known) || Math.Abs(known - value) > 1e-9) {
-                slot.Set(id, value);
+                if (slot.IsFormat) {
+                    slot.Values[id] = value; // Phase 11: a format insert's are structure, its stage is rebuilt
+                    slot.FormatStale = true;
+                } else {
+                    slot.Set(id, value);
+                }
             }
         }
 
+        slot.SetChain(spec.Mastering);
         return slot;
     }
 
@@ -306,6 +318,10 @@ public sealed partial class EngineController {
     ///     parameters set. One that cannot be loaded becomes an empty slot that passes audio through, and is reported.
     /// </summary>
     InsertSlot BuildInsert(int trackId, EngineInsert spec) {
+        if (Plugins.IsFormatEffect(spec.PluginId)) {
+            return BuildFormatInsert(trackId, spec);
+        }
+
         var callbacks = new PluginCallbacks(this, trackId, spec.Id, spec.PluginId);
         IAudioEffect? effect = null;
         try {
@@ -327,10 +343,15 @@ public sealed partial class EngineController {
                 Log?.Invoke($"{spec.PluginId}: cannot load {spec.File}");
             }
 
-            var slot = new InsertSlot(spec.Id, spec.PluginId, effect) { File = spec.File };
+            var slot = new InsertSlot(spec.Id, spec.PluginId, effect) {
+                File = spec.File,
+                Mastering = effect is IMasteringChain assistant ? new(assistant, Options.SampleRate) : null
+            };
             foreach (var (id, value) in spec.Parameters) {
                 slot.Initialise(id, value);
             }
+
+            slot.SetChain(spec.Mastering); // Phase 11: a Mastering Assistant's, from its analysis
 
             callbacks.Slot = slot;
             return slot;
@@ -474,6 +495,8 @@ public sealed partial class EngineController {
             foreach (var insert in node.Config.Inserts) {
                 if (insert.Slot.Effect is { } effect) {
                     bound += Math.Max(0, effect.LatencySamples);
+                } else if (insert.Slot.Format is { } stage) {
+                    bound += Math.Max(0, stage.Effect.LatencySamples);
                 }
             }
         }
@@ -484,7 +507,8 @@ public sealed partial class EngineController {
 
         var frames = (int)Math.Min(int.MaxValue / 4, Math.Max(MinDelayFrames, 2 * bound));
         foreach (var node in plan.Order.Append(plan.Master)) {
-            var extra = Math.Max(0, node.Width - 2); // a surround strip's channels after the first two
+            // A surround strip's channels after the first two (after its format inserts: the line is written there).
+            var extra = Math.Max(0, Math.Max(node.Width, node.SignalWidth) - 2);
             if (node.Channel.Delay is not { } line || line.MaxDelay < bound || line.ExtraChannels < extra) {
                 node.Channel.Delay = new(frames, extra);
             }

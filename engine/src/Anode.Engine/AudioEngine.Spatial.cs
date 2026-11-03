@@ -178,8 +178,22 @@ public sealed unsafe partial class AudioEngine {
     ///     returns whether the signal is (at least) stereo after them, and its channels in <paramref name="width" />.
     /// </summary>
     bool InsertsAny(MixNode node, Span<float> left, Span<float> right, ref int width, int first) {
+        if (node.FormatInserts && !BypassedForRender(node)) {
+            if (width == 1) {
+                left.CopyTo(right); // a mono track's inserts are stereo, as on the stereo path
+                width = 2;
+            }
+
+            InsertsMulti(node, ref width, first); // Phase 11: an insert changes the format
+            if (width <= 2) {
+                CaptureFreeze(node, left, width == 2 ? right : left, width == 2);
+            }
+
+            return width > 1;
+        }
+
         if (width > 2) {
-            InsertsMulti(node, width, first);
+            InsertsMulti(node, ref width, first);
             return true;
         }
 
@@ -778,12 +792,17 @@ public sealed unsafe partial class AudioEngine {
     ///     The inserts of a channel whose signal has <paramref name="width" /> channels (more than two), each by its
     ///     <see cref="MultichannelPolicy" />.
     /// </summary>
-    void InsertsMulti(MixNode node, int width, int first) {
+    void InsertsMulti(MixNode node, ref int width, int first) {
         var inserts = node.Config.Inserts;
         var live = node.Channel.Live;
         for (var k = first; k < inserts.Length; k++) {
             var insert = inserts[k];
             insert.Slot.ApplyParameters();
+            if (insert.Slot.IsFormat) {
+                width = FormatInsert(insert, width);
+                continue;
+            }
+
             if (Active(insert, live) is not { } effect) {
                 continue;
             }
@@ -809,6 +828,70 @@ public sealed unsafe partial class AudioEngine {
                     Process(effect, bindings, last, Signal(0), Signal(1), sideL, sideR);
                     DelayRest(multi, effect.LatencySamples, width);
                     break;
+            }
+
+            insert.Slot.Mastering?.Measure(Signal(0), Signal(1), blockTransport.Playing);
+        }
+    }
+
+    /// <summary>
+    ///     A format insert (Phase 11) on the signal's <paramref name="width" /> channels: its stage from its input format
+    ///     to its output (a bypassed or failed one through its gains, each channel to its label's speaker or a down-mix);
+    ///     returns the channels after it. Channels the stage expects that the signal lacks are silent; one with no stage
+    ///     passes the signal as it is.
+    /// </summary>
+    int FormatInsert(ChannelInsert insert, int width) {
+        if (insert.Slot.Format is not { } stage) {
+            return width;
+        }
+
+        var frames = blockFrames;
+        var inputs = stage.InChannels;
+        var outputs = stage.OutChannels;
+        for (var c = 0; c < inputs; c++) {
+            var o = pieceIn.AsSpan(c * frames, frames);
+            if (c < width) {
+                Signal(c).CopyTo(o);
+            } else {
+                o.Clear();
+            }
+        }
+
+        var output = pieceOut.AsSpan(0, outputs * frames);
+        if (insert.Bypassed || insert.Slot.Failed) {
+            Bypass(stage, output);
+        } else {
+            stage.Effect.Process(new(pieceIn, inputs, frames), new(pieceOut, outputs, frames));
+        }
+
+        for (var c = 0; c < outputs; c++) {
+            output.Slice(c * frames, frames).CopyTo(Signal(c));
+        }
+
+        return outputs;
+    }
+
+    /// <summary>
+    ///     A bypassed format insert: its input (in <see cref="pieceIn" />) by its stage's gains into
+    ///     <paramref name="output" />.
+    /// </summary>
+    void Bypass(FormatStage stage, Span<float> output) {
+        var frames = blockFrames;
+        var inputs = stage.InChannels;
+        var matrix = stage.Bypass;
+        output.Clear();
+        for (var o = 0; o < stage.OutChannels; o++) {
+            var y = output.Slice(o * frames, frames);
+            for (var i = 0; i < inputs; i++) {
+                var g = matrix[o * inputs + i];
+                if (g == 0) {
+                    continue;
+                }
+
+                var x = pieceIn.AsSpan(i * frames, frames);
+                for (var f = 0; f < frames; f++) {
+                    y[f] += g * x[f];
+                }
             }
         }
     }
@@ -1031,7 +1114,7 @@ public sealed unsafe partial class AudioEngine {
             RenderObjects(plan, width);
         }
 
-        InsertsMulti(node, width, 0);
+        InsertsMulti(node, ref width, 0); // Phase 11: from here on in the format its inserts leave
         var line = ch.Delay;
         if (line is not null) {
             for (var c = 2; c < width && c - 2 < line.ExtraChannels; c++) {
@@ -1139,8 +1222,8 @@ public sealed unsafe partial class AudioEngine {
     ) {
         var plan = blockModel.Mix;
         var frames = blockFrames;
-        var width = plan.Master.Width;
-        if (width == 2) {
+        var width = plan.Master.SignalWidth;
+        if (!plan.MasterMulti) {
             left.CopyTo(masterPlanar);
             right.CopyTo(masterPlanar.AsSpan(frames));
         }
@@ -1169,7 +1252,7 @@ public sealed unsafe partial class AudioEngine {
         var frames = blockFrames;
         count = width;
         latency = 0;
-        if (setup is null || setup.From != plan.MasterFormat) {
+        if (setup is null || setup.From != plan.MasterOutputFormat) {
             return masterPlanar;
         }
 
@@ -1223,7 +1306,7 @@ public sealed unsafe partial class AudioEngine {
         var plan = blockModel.Mix;
         var frames = blockFrames;
         if (plan.MasterMulti && plan.TapDownmix is { } downmix) {
-            downmix.Process(new(masterPlanar, plan.Master.Width, frames), new(tapPlanar, 2, frames));
+            downmix.Process(new(masterPlanar, plan.Master.SignalWidth, frames), new(tapPlanar, 2, frames));
             left = tapPlanar.AsSpan(0, frames);
             right = tapPlanar.AsSpan(frames, frames);
         }
@@ -1275,6 +1358,8 @@ public sealed unsafe partial class AudioEngine {
 
         foreach (var insert in node.Config.Inserts) {
             insert.Slot.Multi?.Clear();
+            insert.Slot.Format?.Effect.Reset();
+            insert.Slot.Mastering?.Reset();
         }
     }
 }
