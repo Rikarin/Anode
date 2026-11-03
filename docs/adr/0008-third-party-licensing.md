@@ -21,6 +21,7 @@ Anode is **GPL-3.0-or-later**, as Cathode. Third-party code must be GPL-3-compat
 | Script Editor | CodeMirror 6 (`@codemirror/state`, `view`, `commands`, `language`, `lang-javascript`), `@lezer/highlight` | MIT |
 | AAF container (Compound File Binary, [MS-CFB]) | Anode's own reader and writer (`Anode.Interchange/Aaf/Cfb`) | GPL-3.0-or-later (ours) |
 | AAF object model | The standard class and type definitions, generated from pyaaf2 1.7.1's model tables (`scripts/aaf-model.py` → `AafMetaModel.g.cs`, which carries pyaaf2's copyright and licence notice, "Copyright (c) 2017 Mark Reid", in its header) | MIT (pyaaf2) |
+| Listen-in decoding (remote, browsers without WebCodecs Opus) | `opus-decoder` 0.7.12 (npm, pinned exactly; libopus compiled to WebAssembly, embedded), with `@wasm-audio-decoders/common` 9.0.7 and `simple-yenc` 1.0.4 (MIT) and `@eshaz/web-worker` 1.2.2 (Apache-2.0); loaded lazily by the remote only when `AudioDecoder` cannot decode Opus ([ADR-0013](0013-video-and-listen-in.md)) | MIT (libopus inside: BSD-3-Clause) |
 | AAF verification | pyaaf2 1.7.1, an independent reader in opt-in tests and the writer of the import fixtures (`scripts/setup-pyaaf2.py`); not shipped | MIT |
 
 **AAF's compound file:** Anode writes and reads [MS-CFB] itself ([docs/interchange/aaf.md](../interchange/aaf.md)).
