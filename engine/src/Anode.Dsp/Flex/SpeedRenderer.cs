@@ -17,6 +17,9 @@ internal sealed class SpeedRenderer : WindowedFlexRenderer {
     public SpeedRenderer(int channels, int maxFrames)
         : base(channels, Math.Max(maxFrames, 1_024) + 2 * (int)(ZeroCrossings * MaxRate) + 8_192) { }
 
+    /// <summary>The most frames it reads from its source at once.</summary>
+    public int WindowFrames => Window.Capacity;
+
     protected override void RenderRun(in FlexRegion region, long offset, Span<float> output, IFlexSource source) {
         var warp = region.Warp;
         var channels = Channels;

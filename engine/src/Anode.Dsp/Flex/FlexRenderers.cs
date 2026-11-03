@@ -24,7 +24,10 @@ public static class FlexRenderers {
                 nameof(algorithm),
                 "An unwarped entry needs no renderer."
             ),
-            FlexKind.Polyphonic or FlexKind.Monophonic or FlexKind.Pitch => StretchAvailable
+            FlexKind.Polyphonic or FlexKind.Monophonic => StretchAvailable
+                ? new TransposingRenderer(algorithm, channels, sampleRate, maxFrames)
+                : new ReferenceFlexRenderer(channels, maxFrames),
+            FlexKind.Pitch => StretchAvailable
                 ? new StretchRenderer(algorithm, channels, sampleRate, maxFrames)
                 : new ReferenceFlexRenderer(channels, maxFrames),
             FlexKind.Slicing => new SlicingRenderer(false, channels, sampleRate, maxFrames),

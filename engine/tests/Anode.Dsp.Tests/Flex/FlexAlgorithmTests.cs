@@ -134,6 +134,21 @@ public sealed class FlexAlgorithmTests(ITestOutputHelper output) {
         }
     }
 
+    /// <summary>A constant transposition (a region's, a Pitch Source segment's) is exact, low tones too.</summary>
+    [Theory]
+    [InlineData(FlexKind.Polyphonic)]
+    [InlineData(FlexKind.Monophonic)]
+    public void A_constant_transposition_is_within_five_cents_of_its_interval(FlexKind kind) {
+        SkipWithoutStretch(kind);
+        foreach (var frequency in new[] { 110.0, 130.81, 261.63, 1_000 }) {
+            foreach (var semitones in new[] { -6, -5, -3, -1, 2, 4, 5 }) {
+                var error = PitchError(kind, frequency, 1, semitones * 100.0);
+                output.WriteLine($"{kind} {frequency} Hz, {semitones:+0;-0} st: {error:+0.00;-0.00} ¢");
+                Assert.True(Math.Abs(error) <= 5, $"{frequency} Hz at {semitones} st: {error:F2} ¢ off");
+            }
+        }
+    }
+
     [Theory]
     [InlineData(0.8)]
     [InlineData(1.25)]
@@ -165,7 +180,8 @@ public sealed class FlexAlgorithmTests(ITestOutputHelper output) {
             var moved = FormantShift(FlexKind.Polyphonic, cents);
             output.WriteLine($"{cents:+0;-0} ¢: Pitch {kept:+0.0;-0.0} st, Polyphonic {moved:+0.0;-0.0} st");
             Assert.True(Math.Abs(kept) <= 2.5, $"Pitch mode moved the formants {kept:F1} st");
-            Assert.True(Math.Abs(moved - cents / 100) <= 1.5, $"Polyphonic moved the formants {moved:F1} st");
+            // A constant transposition resamples, so the envelope moves exactly; its harmonics sample it coarsely here.
+            Assert.True(Math.Abs(moved - cents / 100) <= 2.5, $"Polyphonic moved the formants {moved:F1} st");
         }
     }
 
