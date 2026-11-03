@@ -4,7 +4,7 @@ import { FakeAnodeServer } from '../../core/fake/fake-server';
 import { codecOf, interleave, Pcm16Decoder } from './decoders';
 import { type DecodedFrame, JitterBuffer } from './jitter-buffer';
 import { behindMs, ListenInClient, parseFormat } from './listen-in-client';
-import { DirectPlayer, ProcessorName, workletSource } from './player';
+import { createPlayer, DirectPlayer, ProcessorName, ScriptBlock, ScriptPlayer, workletSource } from './player';
 
 const FrameMs = 20;
 
@@ -244,5 +244,39 @@ describe('the listen-in client', () => {
     client.start();
     expect(client.status).toBe('failed');
     expect(client.error).toContain('4 listeners');
+  });
+});
+
+describe('the player where there is no AudioWorklet (a remote over plain HTTP)', () => {
+  it('pulls the jitter buffer through a script processor', async () => {
+    const node = {
+      onaudioprocess: null as ((event: { outputBuffer: unknown }) => void) | null,
+      connect: () => undefined,
+      disconnect: () => undefined
+    };
+    const context = {
+      createScriptProcessor: (size: number, inputs: number, outputs: number) => {
+        expect([size, inputs, outputs]).toEqual([ScriptBlock, 0, 2]);
+        return node;
+      },
+      destination: {},
+      outputLatency: 0,
+      baseLatency: 0,
+      close: () => Promise.resolve()
+    } as unknown as AudioContext;
+    const player = await createPlayer(context, { projectSampleRate: 48000 });
+    expect(player).toBeInstanceOf(ScriptPlayer);
+    for (let s = 0; s < 20; s++) {
+      player.push(frame(s));
+    }
+    const left = new Float32Array(ScriptBlock);
+    const right = new Float32Array(ScriptBlock);
+    const outputBuffer = { numberOfChannels: 2, getChannelData: (c: number) => (c === 0 ? left : right) };
+    for (let i = 0; i < 8; i++) {
+      node.onaudioprocess?.({ outputBuffer });
+    }
+    expect(left.some(v => v !== 0)).toBe(true);
+    expect(player.stats()).not.toBeNull();
+    player.close();
   });
 });

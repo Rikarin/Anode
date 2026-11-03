@@ -106,6 +106,60 @@ export class WorkletPlayer implements ListenInPlayer {
   }
 }
 
+/**
+ * Plays through a `ScriptProcessorNode` where there is no AudioWorklet: browsers give AudioWorklet (and WebCodecs)
+ * to secure contexts only, and a remote on the LAN opens the studio over plain HTTP (`http://studio.local:5190`). The
+ * same {@link JitterBuffer}, pulled on the main thread in blocks of {@link ScriptBlock} frames (about 11 ms more
+ * latency than the worklet's 128).
+ */
+export class ScriptPlayer implements ListenInPlayer {
+  private readonly buffer: JitterBuffer;
+  private readonly node: ScriptProcessorNode;
+
+  constructor(
+    private readonly context: AudioContext,
+    options: Partial<JitterOptions>
+  ) {
+    this.buffer = new JitterBuffer(options);
+    this.node = context.createScriptProcessor(ScriptBlock, 0, 2);
+    this.node.onaudioprocess = event => {
+      const out = event.outputBuffer;
+      const left = out.getChannelData(0);
+      const right = out.numberOfChannels > 1 ? out.getChannelData(1) : new Float32Array(left.length);
+      this.buffer.pull(left, right);
+    };
+    this.node.connect(context.destination);
+  }
+
+  push(frame: DecodedFrame): void {
+    this.buffer.push(frame);
+  }
+
+  stats(): JitterStats {
+    return this.buffer.stats();
+  }
+
+  outputLatencyMs(): number {
+    return ((this.context.outputLatency || 0) + (this.context.baseLatency || 0)) * 1000 + (ScriptBlock / 48000) * 1000;
+  }
+
+  close(): void {
+    this.node.onaudioprocess = null;
+    this.node.disconnect();
+    void this.context.close();
+  }
+}
+
+/** The script player's block (frames at 48 kHz). */
+export const ScriptBlock = 512;
+
+/** The player for a context: the AudioWorklet where the browser has one (a secure context), else the script player. */
+export function createPlayer(context: AudioContext, options: Partial<JitterOptions>): Promise<ListenInPlayer> {
+  return 'audioWorklet' in context && context.audioWorklet
+    ? WorkletPlayer.create(context, options)
+    : Promise.resolve(new ScriptPlayer(context, options));
+}
+
 /** A player without audio (tests, and the stats without a device): the jitter buffer, pulled by {@link render}. */
 export class DirectPlayer implements ListenInPlayer {
   readonly buffer: JitterBuffer;

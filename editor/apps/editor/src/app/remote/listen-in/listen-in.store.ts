@@ -10,7 +10,7 @@ import { TransportStore } from '../../state/transport.store';
 import { createDecoder } from './decoders';
 import type { JitterStats } from './jitter-buffer';
 import { behindMs, ListenInClient, type ListenInDeps, type ListenInStatus } from './listen-in-client';
-import { DirectPlayer, type ListenInPlayer, WorkletPlayer } from './player';
+import { createPlayer, DirectPlayer, type ListenInPlayer, WorkletPlayer } from './player';
 
 /** How often the remote refreshes what it shows of the stream. */
 const StatsMs = 250;
@@ -43,7 +43,7 @@ export class ListenInStore {
   /** The players the store makes; tests swap in a direct one (no audio device). */
   playerFactory: (context: AudioContext | null) => Promise<ListenInPlayer> = async context =>
     context
-      ? WorkletPlayer.create(context, {
+      ? createPlayer(context, {
           projectSampleRate: this.client?.format?.projectSampleRate ?? 48000,
           frameSamples: this.client?.format?.frameSamples ?? ListenIn.frameSamples
         })
@@ -57,9 +57,14 @@ export class ListenInStore {
     });
     inject(DestroyRef).onDestroy(() => this.stop());
     // The golden path's hook (apps/desktop/e2e/phase10): capture what the remote hears.
-    (globalThis as { anodeListenIn?: Pick<ListenInStore, 'startCapture' | 'capture'> }).anodeListenIn = {
+    (
+      globalThis as {
+        anodeListenIn?: Pick<ListenInStore, 'startCapture' | 'capture'> & { decoder(): string | null };
+      }
+    ).anodeListenIn = {
       startCapture: seconds => this.startCapture(seconds),
-      capture: () => this.capture()
+      capture: () => this.capture(),
+      decoder: () => this.decoderName()
     };
   }
 

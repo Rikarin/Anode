@@ -186,7 +186,8 @@ export class WebGL2Renderer implements TimelineRenderer {
       stencil: false,
       premultipliedAlpha: false,
       powerPreference: 'high-performance'
-    });
+      // A union's getContext overloads do not narrow (HTMLCanvasElement | OffscreenCanvas): 'webgl2' is WebGL2.
+    }) as WebGL2RenderingContext | null;
     if (!gl) {
       throw new RendererUnavailableError('webgl2', 'This canvas has no WebGL2 context.');
     }
