@@ -95,7 +95,7 @@ export function partialBars(count: number, spread: number): { x: number; height:
             [attr.height]="peak * 36"
           />
         }
-        @if (modeIndex() === 1) {
+        @if (modeName() === 'Additive') {
           @for (bar of partials(); track $index) {
             <rect
               class="fill-primary"
@@ -105,7 +105,7 @@ export function partialBars(count: number, spread: number): { x: number; height:
               [attr.height]="bar.height * 0.38"
             />
           }
-        } @else if (modeIndex() === 2) {
+        } @else if (modeName() === 'Spectral') {
           <polyline
             class="stroke-knob-arc fill-none"
             stroke-width="0.8"
@@ -114,7 +114,7 @@ export function partialBars(count: number, spread: number): { x: number; height:
           />
         }
       </svg>
-      @if (modeIndex() === 0 && positionParameter(); as position) {
+      @if (modeName() === 'Granular' && positionParameter(); as position) {
         <span
           class="bg-primary/15 pointer-events-none absolute inset-y-0"
           aria-hidden="true"
@@ -163,27 +163,32 @@ export class SampleAlchemyPanel {
 
   protected readonly modeParameter = computed(() => this.roles()['mode']);
   protected readonly positionParameter = computed(() => this.roles()['position']);
-  /** 0 granular, 1 additive, 2 spectral. */
   protected readonly modeIndex = computed(() => {
     const mode = this.modeParameter();
     return mode ? Math.round(this.host().value(mode.id) - mode.min) : 0;
   });
+  /** The mode as the instrument names it: the parameter's order is the instrument's. */
+  protected readonly modeName = computed(() => this.modeParameter()?.valueNames?.[this.modeIndex()] ?? 'Granular');
   protected readonly positionValue = computed(() => {
     const position = this.positionParameter();
     return position ? this.normal(position) : 0;
   });
-  protected readonly grain = computed(() => grainWindow(this.positionValue(), this.valueOf('size', 0.08)));
+  /** The grain size parameter is in milliseconds. */
+  protected readonly grain = computed(() => grainWindow(this.positionValue(), this.valueOf('size', 80) / 1000));
   /** The spray widens where grains may start: the window grown by the spray on each side. */
   protected readonly spray = computed(() => {
     const grain = this.grain();
-    const spray = this.valueOf('spray', 0) * 20;
+    const spray = (this.valueOf('spray', 0) / 1000 / DefaultSourceSeconds) * 90; // milliseconds of the source
     const start = Math.max(5, grain.start - spray);
     return { start, width: Math.min(95, grain.start + grain.width + spray) - start };
   });
-  protected readonly partials = computed(() => partialBars(this.valueOf('partials', 24), this.valueOf('spread', 0)));
-  /** The spectral envelope: the overview smoothed by the smoothing amount. */
+  /** The partial spread parameter runs −100…100 %. */
+  protected readonly partials = computed(() =>
+    partialBars(this.valueOf('partials', 32), this.valueOf('spread', 0) / 100)
+  );
+  /** The spectral envelope: the overview smoothed. */
   protected readonly envelope = computed(() => {
-    const window = Math.max(1, Math.round(this.valueOf('smoothing', 0.5) * 12));
+    const window = 6;
     return this.overview
       .map((_, i, all) => {
         const part = all.slice(Math.max(0, i - window), i + window + 1);
@@ -195,9 +200,12 @@ export class SampleAlchemyPanel {
   /** The mode's own controls. */
   protected readonly controls = computed(() => {
     const roles = this.roles();
-    const byMode =
-      [['position', 'size', 'density', 'spray'], ['partials', 'spread'], ['smoothing']][this.modeIndex()] ?? [];
-    return byMode.map(role => roles[role]).filter((p): p is ParameterInfo => !!p);
+    const byMode: Record<string, string[]> = {
+      Granular: ['position', 'size', 'density', 'spray', 'pitch'],
+      Additive: ['partials', 'spread'],
+      Spectral: ['noise']
+    };
+    return (byMode[this.modeName()] ?? []).map(role => roles[role]).filter((p): p is ParameterInfo => !!p);
   });
 
   private pointer: number | null = null;

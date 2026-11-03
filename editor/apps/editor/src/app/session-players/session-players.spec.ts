@@ -98,6 +98,14 @@ describe('Session Players in the editor', () => {
     const moved = must(must(server.current).sessionPlayerRegions[0]).parameters.pad;
     expect(moved.complexity).toBeCloseTo(region.parameters.pad.complexity + 0.05);
     expect(moved.intensity).toBe(region.parameters.pad.intensity);
+    // A key held down keeps stepping from the last value, not from the Server's answer to an earlier step.
+    pad.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+    pad.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+    pad.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+    await stable(fixture);
+    expect(must(must(server.current).sessionPlayerRegions[0]).parameters.pad.complexity).toBeCloseTo(
+      moved.complexity + 0.15
+    );
 
     // A preset, then a kit piece off (which clears the preset), each one undo step.
     const preset = must(

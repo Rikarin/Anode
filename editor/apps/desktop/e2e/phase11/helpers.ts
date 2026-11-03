@@ -132,29 +132,67 @@ export function thd(samples: Float32Array, fundamental: number, rate: number): n
   return Math.sqrt(harmonics(samples, fundamental, rate).reduce((sum, h) => sum + 10 ** (h / 10), 0));
 }
 
-/** A note's pitch (Hz) by autocorrelation over a steady stretch, refined by parabolic interpolation. */
+/**
+ * The fundamental of a note, Hz, over `from…to` (at most half a second): YIN's cumulative normalised difference finds
+ * its period (the first dip under 0.15, else the deepest), then a Hann-windowed spectrum around it refines the
+ * fundamental's frequency to a fraction of a cent.
+ */
 export function pitchOf(samples: Float32Array, rate: number, from = 0, to = samples.length, low = 30, high = 2000) {
   const frame = samples.subarray(from, Math.min(to, from + Math.round(rate * 0.5)));
-  const minLag = Math.floor(rate / high);
-  const maxLag = Math.ceil(rate / low);
-  let best = minLag;
-  let bestValue = -Infinity;
-  const values: number[] = [];
-  for (let lag = minLag; lag <= maxLag && lag < frame.length / 2; lag++) {
+  const minLag = Math.max(2, Math.floor(rate / high));
+  const maxLag = Math.min(Math.ceil(rate / low), Math.floor(frame.length / 2));
+  const width = frame.length - maxLag;
+  const yin: number[] = [1];
+  let total = 0;
+  for (let lag = 1; lag <= maxLag; lag++) {
     let sum = 0;
-    for (let i = 0; i + lag < frame.length; i++) {
-      sum += (frame[i] ?? 0) * (frame[i + lag] ?? 0);
+    for (let i = 0; i < width; i++) {
+      const d = (frame[i] ?? 0) - (frame[i + lag] ?? 0);
+      sum += d * d;
     }
-    values[lag] = sum;
-    if (sum > bestValue) {
-      bestValue = sum;
+    total += sum;
+    yin[lag] = total > 0 ? (sum * lag) / total : 1;
+  }
+  let best = minLag;
+  for (let lag = minLag; lag <= maxLag; lag++) {
+    if ((yin[lag] ?? 1) < (yin[best] ?? 1)) {
       best = lag;
     }
+    if ((yin[lag] ?? 1) < 0.15) {
+      best = lag;
+      while (best < maxLag && (yin[best + 1] ?? 1) < (yin[best] ?? 1)) {
+        best++;
+      }
+      break;
+    }
   }
-  const a = values[best - 1] ?? bestValue;
-  const c = values[best + 1] ?? bestValue;
-  const shift = (a - c) / (2 * (a - 2 * bestValue + c) || 1);
-  return rate / (best + shift);
+  const coarse = rate / best;
+  const window = Float32Array.from(frame, (v, i) => v * (0.5 - 0.5 * Math.cos((2 * Math.PI * i) / frame.length)));
+  const power = (hz: number) => {
+    const w = (2 * Math.PI * hz) / rate;
+    let re = 0;
+    let im = 0;
+    for (let i = 0; i < window.length; i++) {
+      re += (window[i] ?? 0) * Math.cos(w * i);
+      im -= (window[i] ?? 0) * Math.sin(w * i);
+    }
+    return re * re + im * im;
+  };
+  const step = 2 ** (2 / 1200); // 2 cents
+  let peak = coarse;
+  let peakPower = -Infinity;
+  for (let k = -40; k <= 40; k++) {
+    const hz = coarse * step ** k;
+    const p = power(hz);
+    if (p > peakPower) {
+      peakPower = p;
+      peak = hz;
+    }
+  }
+  const a = Math.log(power(peak / step) || 1e-30);
+  const b = Math.log(peakPower || 1e-30);
+  const c = Math.log(power(peak * step) || 1e-30);
+  return peak * step ** ((a - c) / (2 * (a - 2 * b + c) || 1));
 }
 
 /** The cents between a measured frequency and a MIDI note's. */

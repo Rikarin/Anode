@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, computed, inject, linkedSignal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, effect, inject, linkedSignal } from '@angular/core';
 import type {
   BassSwitches,
   DrummerSwitches,
@@ -430,6 +430,7 @@ export class SessionPlayerEditor {
   protected readonly pad = computed(
     () => this.draft() ?? this.region()?.parameters.pad ?? { complexity: 0.5, intensity: 0.5 }
   );
+  private padSent: SessionPadValue | null = null;
   /** The track's other regions on the pad. */
   protected readonly others = computed<SessionPadMarker[]>(() => {
     const region = this.region();
@@ -451,32 +452,49 @@ export class SessionPlayerEditor {
 
   constructor() {
     void this.players.loadCatalog();
+    effect(() => {
+      const draft = this.draft();
+      const pad = this.region()?.parameters.pad;
+      if (draft && pad && draft.complexity === pad.complexity && draft.intensity === pad.intensity) {
+        this.padSent = null;
+        this.draft.set(null);
+      }
+    });
   }
 
-  protected set(changes: Parameters<SessionPlayersStore['set']>[1], label: string): void {
+  protected set(changes: Parameters<SessionPlayersStore['set']>[1], label: string): Promise<unknown> {
     const region = this.region();
-    if (region) {
-      void this.players.set(region.id, changes, label);
-    }
+    return region ? this.players.set(region.id, changes, label) : Promise.resolve();
   }
 
   protected commitPad(value: SessionPadValue): void {
-    const current = this.region()?.parameters.pad;
+    // Against what was last sent: the region may not have heard of it yet.
+    const current = this.padSent ?? this.region()?.parameters.pad;
     if (current && (current.complexity !== value.complexity || current.intensity !== value.intensity)) {
-      this.set({ complexity: value.complexity, intensity: value.intensity }, 'Complexity and Intensity');
+      this.padSent = value;
+      // The region's answer redraws the puck (the constructor's effect clears the draft); until then the value stays,
+      // so a key held down keeps stepping from it. A refused edit goes back to the region's.
+      void this.set({ complexity: value.complexity, intensity: value.intensity }, 'Complexity and Intensity').then(
+        result => {
+          if (result === null && this.draft() === value) {
+            this.padSent = null;
+            this.draft.set(null);
+          }
+        }
+      );
+    } else {
+      queueMicrotask(() => this.draft.set(null));
     }
-    // The Server's answer redraws the puck; until then the drag's value stays.
-    queueMicrotask(() => this.draft.set(null));
   }
 
   protected setStyle(styleId: string): void {
     if (styleId !== this.region()?.parameters.styleId) {
-      this.set({ styleId }, 'Session Player Style');
+      void this.set({ styleId }, 'Session Player Style');
     }
   }
 
   protected setPreset(presetId: string): void {
-    this.set({ presetId }, 'Session Player Preset');
+    void this.set({ presetId }, 'Session Player Preset');
   }
 
   protected setPiece(drums: DrummerSwitches, piece: DrumPiece, changes: { on?: boolean; variation?: number }): void {
@@ -487,11 +505,11 @@ export class SessionPlayerEditor {
   }
 
   protected setDrums(drums: DrummerSwitches, label: string): void {
-    this.set({ drums }, label);
+    void this.set({ drums }, label);
   }
 
   protected setBass(bass: BassSwitches): void {
-    this.set({ bass }, 'Bass Player');
+    void this.set({ bass }, 'Bass Player');
   }
 
   protected setLeftHand(keys: KeysSwitches, event: Event): void {
@@ -502,7 +520,7 @@ export class SessionPlayerEditor {
   }
 
   protected setKeys(keys: KeysSwitches): void {
-    this.set({ keys }, 'Keyboard Player');
+    void this.set({ keys }, 'Keyboard Player');
   }
 
   protected convert(target: 'midi' | 'pattern'): void {

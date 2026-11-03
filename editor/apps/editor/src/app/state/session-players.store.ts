@@ -114,7 +114,8 @@ export class SessionPlayersStore {
   async regenerate(regionIds: readonly string[]): Promise<void> {
     const [only, ...more] = regionIds;
     if (only !== undefined && more.length === 0) {
-      await this.notify.run(() => this.api.regenerateSessionPlayer(only, {}), 'Could not regenerate');
+      // In line with the edits, its delta applied here: the next edit must not name a stale revision.
+      await this.project.send(() => this.api.regenerateSessionPlayer(only, {}), 'Could not regenerate');
       return;
     }
     await this.project.execute([{ type: 'regenerateSessionPlayer', regionIds: [...regionIds] }], 'Regenerate');

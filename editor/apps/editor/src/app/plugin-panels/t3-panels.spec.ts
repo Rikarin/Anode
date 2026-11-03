@@ -73,9 +73,9 @@ describe('Custom plugin panels: the T3 instruments (Phase 11)', () => {
     const pickups = element.querySelectorAll('[data-testid="pickup"]');
     expect(pickups).toHaveLength(2);
     await press(pickups[1], 'ArrowLeft');
-    expect(sets.at(-1)).toEqual(['pickup2Position', 0.74]);
+    expect(sets.at(-1)).toEqual(['pickup2Position', 69]);
     const exciters = element.querySelectorAll('[data-testid="exciter"]');
-    expect(exciters[0]?.getAttribute('aria-valuetext')).toBe('10 %, Pick');
+    expect(exciters[0]?.getAttribute('aria-valuetext')).toBe('15 %, Pick');
     expect(exciters[1]?.classList).toContain('opacity-35');
     values.update(v => ({ ...v, object: 3 }));
     await press(null, '');
@@ -88,13 +88,15 @@ describe('Custom plugin panels: the T3 instruments (Phase 11)', () => {
     expect(grainWindow(0, 0.4)).toEqual({ start: 5, width: 9 });
     expect(partialBars(4, 0).map(b => b.height)).toEqual([100, 50, 33.3, 25]);
     const { element, sets, press } = await render(SampleAlchemyPanel, t3('anode.sample-alchemy'));
-    await press(element.querySelector('[data-testid="alchemy-position"]'), 'ArrowRight');
-    expect(sets.at(-1)).toEqual(['grainPosition', 0.31]);
+    // The instrument's modes are Additive, Granular, Spectral, in its parameter's order.
+    expect(element.querySelector('[data-testid="alchemy-position"]')).toBeNull();
+    expect(element.querySelector('[data-parameter="partials"]')).not.toBeNull();
     element.querySelector<HTMLButtonElement>('[data-testid="alchemy-mode-1"]')?.click();
     expect(sets.at(-1)).toEqual(['mode', 1]);
     await press(null, '');
-    expect(element.querySelector('[data-testid="alchemy-position"]')).toBeNull();
-    expect(element.querySelector('[data-parameter="partials"]')).not.toBeNull();
+    await press(element.querySelector('[data-testid="alchemy-position"]'), 'ArrowRight');
+    expect(sets.at(-1)).toEqual(['position', 1]);
+    expect(element.querySelector('[data-parameter="grainSize"]')).not.toBeNull();
     expect(element.querySelector('[data-testid="alchemy-mode-1"]')?.getAttribute('aria-checked')).toBe('true');
   });
 });

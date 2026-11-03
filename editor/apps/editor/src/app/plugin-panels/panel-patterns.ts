@@ -131,14 +131,16 @@ export const PanelPatterns: readonly PanelPattern[] = [
       object: new RegExp(`^object(${S}(kind|type))?$`, 'i'),
       stiffness: /^(material[._-]?)?stiffness$/i,
       damping: /^(material[._-]?)?(damping|loss)$/i,
-      inharmonicity: /^(material[._-]?)?inharmonicity$/i
+      inharmonicity: /^(material[._-]?)?inharmonicity$/i,
+      pickupSpread: new RegExp(`^pickup${S}spread$`, 'i'),
+      body: /^body$/i,
+      bodyAmount: new RegExp(`^body${S}amount$`, 'i')
     },
     series: {
       exciterType: new RegExp(`^exciter${S}(\\d)${S}(?:type|kind)$`, 'i'),
       exciterPosition: new RegExp(`^exciter${S}(\\d)${S}pos(?:ition)?$`, 'i'),
       exciterStrength: new RegExp(`^exciter${S}(\\d)${S}(?:strength|level|amount)$`, 'i'),
-      pickupPosition: new RegExp(`^pickup${S}(\\d)${S}pos(?:ition)?$`, 'i'),
-      pickupLevel: new RegExp(`^pickup${S}(\\d)${S}(?:level|gain)$`, 'i')
+      pickupPosition: new RegExp(`^pickup${S}(\\d)${S}pos(?:ition)?$`, 'i')
     },
     accepts: b =>
       holdsValues(b.roles['object'], 4) &&
@@ -155,7 +157,8 @@ export const PanelPatterns: readonly PanelPattern[] = [
       density: new RegExp(`^(grain${S})?density$`, 'i'),
       partials: new RegExp(`^partials?(${S}(count|number))?$`, 'i'),
       spread: new RegExp(`^partial${S}spread$`, 'i'),
-      smoothing: new RegExp(`^spectral${S}smoothing$`, 'i')
+      pitch: new RegExp(`^grain${S}pitch$`, 'i'),
+      noise: /^noise$/i
     },
     series: {},
     accepts: b => holdsValues(b.roles['mode'], 3) && !!b.roles['position'] && !!b.roles['size']

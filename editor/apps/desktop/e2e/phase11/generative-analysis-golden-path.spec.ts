@@ -1,9 +1,9 @@
 import type { ElectronApplication, Page } from '@playwright/test';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { expect, test } from '../fixtures';
-import { db, readWav, rms, sine, writeWav } from '../phase10/helpers';
+import { amplitude, db, noise, readWav, rms, sine, writeWav } from '../phase10/helpers';
 import {
   centsFrom,
   decayTime,
@@ -20,10 +20,9 @@ import {
  * them, a master that meets a loudness target, the T3 instruments and effects, and an Environment patch between the
  * keyboard and a track — on the null device, against the real app.
  *
- * Written by the editor workstream (C) as `test.fixme`: it needs every workstream merged (D's generator, styles and
- * Chord ID; E's T3 DSP, saturation, down-mixer, binaural insert and Mastering Assistant; A's Environment graph and
- * format-changing inserts; B's model, compiler and jobs) and the content built and installed (the Drummer kits, the
- * tape sets). The signal checks are ./helpers.ts (BS.1770 loudness and true peak, harmonics, a pitch tracker, the decay
+ * It runs every workstream together (D's generator, styles and Chord ID; E's T3 DSP, saturation, down-mixer, binaural
+ * insert and Mastering Assistant; A's Environment graph and format-changing inserts; B's model, compiler and jobs) with
+ * the test pack installed (the Drummer kit, a tape set; the global setup builds it). The signal checks are ./helpers.ts (BS.1770 loudness and true peak, harmonics, a pitch tracker, the decay
  * time, interaural differences). The model is set up through the API where the step is not about the UI; what the
  * step tests goes through the window: the chord track and its popover, the Session Player Editor, the Mastering
  * Assistant window, the Environment window.
@@ -37,6 +36,7 @@ function must<T>(value: T | null | undefined): T {
   return value;
 }
 
+const TestPack = resolve(__dirname, '../../../../../engine/artifacts/content/TestPack.anodepack');
 const Ppq = 960;
 const Bar = 4 * Ppq;
 const Rate = 48_000;
@@ -115,7 +115,7 @@ interface ProjectShape {
   environment: {
     layers: { id: string; name: string }[];
     objects: { id: string; kind: string; name: string; parameters: Record<string, number> }[];
-    cables: { fromObjectId: string; toObjectId: string }[];
+    cables: { id: string; fromObjectId: string; toObjectId: string }[];
   };
 }
 interface JobShape {
@@ -125,8 +125,11 @@ interface JobShape {
 }
 
 const project = (window: Page) => api<ProjectShape>(window, 'GET', '/project');
-const commands = (window: Page, list: unknown[], label = 'Test') =>
-  api(window, 'POST', '/project/commands', { commands: list, label });
+/** Edits through the API; the editor hears of them over its socket, and an edit of its own before that would be refused. */
+async function commands(window: Page, list: unknown[], label = 'Test'): Promise<void> {
+  await api(window, 'POST', '/project/commands', { commands: list, label });
+  await window.waitForTimeout(150);
+}
 const transport = (window: Page, command: 'play' | 'stop' | 'record' | 'locate', tick?: number) =>
   api<{ state: string; positionTick: number }>(window, 'POST', '/transport', { command, tick });
 const notesOf = async (window: Page, regionId: string) =>
@@ -146,14 +149,14 @@ async function finished(window: Page, job: JobShape): Promise<JobShape> {
   return current;
 }
 
-/** A bounce of the mix (or of some tracks), read back. */
+/** A bounce of the mix (or the stem of a track), read back. */
 async function bounce(window: Page, folder: string, name: string, endTick: number, trackIds: string[] | null = null) {
   const job = await api<JobShape>(window, 'POST', '/project/bounce', {
     fileName: name,
     directory: folder,
     startTick: 0,
     endTick,
-    source: 'mix',
+    source: trackIds ? 'stems' : 'mix',
     trackIds,
     format: 'wav',
     bitDepth: 32,
@@ -247,8 +250,8 @@ async function instrumentTrack(window: Page, trackName: string, pluginId: string
   return { trackId, regionId };
 }
 
-const Ruler = 28;
-const Lane = 56;
+const Ruler = 24;
+const Lane = 72;
 
 /** A point on the lane of the track named `trackName`, `x` pixels from the timeline's left (scrolled into view). */
 async function lanePoint(window: Page, trackName: string, x = 8): Promise<{ x: number; y: number }> {
@@ -270,8 +273,19 @@ async function lanePoint(window: Page, trackName: string, x = 8): Promise<{ x: n
   throw new Error(`Could not scroll the Tracks area to ${trackName}.`);
 }
 
+/** Scrolls the Tracks area back to the song's start (a bounce's position scrolls it; lanes draw what is in view). */
+async function scrollToStart(window: Page): Promise<void> {
+  const timeline = await window.locator('an-timeline').boundingBox();
+  if (timeline) {
+    await window.mouse.move(timeline.x + timeline.width / 2, timeline.y + timeline.height / 2);
+    await window.mouse.wheel(-100_000, 0);
+    await window.waitForTimeout(150);
+  }
+}
+
 /** Selects the region at the start of a track's lane (its name bar), so the editors follow it. */
 async function selectRegion(window: Page, trackName: string): Promise<void> {
+  await scrollToStart(window);
   await window.locator('an-timeline').click({ position: await lanePoint(window, trackName) });
 }
 
@@ -281,12 +295,13 @@ test.describe('Phase 11: generative and analysis', () => {
   test.setTimeout(1_200_000);
   test.use({ actionTimeout: 30_000 });
 
-  test.fixme('identifies chords, plays Session Players that follow them, masters to a target, plays the T3 instruments and effects, and patches the Environment', async ({
+  test('identifies chords, plays Session Players that follow them, masters to a target, plays the T3 instruments and effects, and patches the Environment', async ({
     app,
     window
   }) => {
     const folder = mkdtempSync(join(tmpdir(), 'anode-phase11-'));
     try {
+      await api(window, 'POST', '/library/packs', { path: TestPack });
       await newProject(window, folder, 'Generative');
       await commands(window, [
         { type: 'addSection', name: 'Verse', startTick: 0, lengthTicks: 4 * Bar },
@@ -350,11 +365,15 @@ test.describe('Phase 11: generative and analysis', () => {
       measured('1 chord ID (audio)', `${rightChords(state, true, false)} of 8 roots and qualities right`);
 
       // Edit a chord on the chord track (its popover): one undo step.
-      await window.getByTestId('global-chord').locator('[data-chord="Em"]').click();
+      await scrollToStart(window);
+      // (The audio's slash basses are not part of its limit: match the symbol's start.)
+      const edited = window.getByTestId('global-chord').locator('[data-chord^="Em"]');
+      const symbol = await edited.getAttribute('data-chord');
+      await edited.click();
       await window.getByTestId('chord-quality').selectOption('m7');
-      await expect(window.getByTestId('global-chord').locator('[data-chord="Em7"]')).toBeVisible();
+      await expect(window.getByTestId('global-chord').locator('[data-chord^="Em7"]')).toBeVisible();
       await window.getByRole('button', { name: 'Undo' }).click();
-      await expect(window.getByTestId('global-chord').locator('[data-chord="Em"]')).toBeVisible();
+      await expect(window.getByTestId('global-chord').locator(`[data-chord="${symbol}"]`)).toBeVisible();
       await window.keyboard.press('Escape');
 
       // ---- 2. Pitch Source
@@ -376,6 +395,7 @@ test.describe('Phase 11: generative and analysis', () => {
         { type: 'setRegionKey', regionIds: [bass.regionId], key: { tonic: name('c'), mode: 'major' } }
       ]);
       await selectRegion(window, 'Bass');
+      await expect(window.getByText('Region: Bass')).toBeVisible();
       await window.getByTestId('region-pitch-source').selectOption('root');
       await expect
         .poll(async () => (await project(window)).midiRegions.find(r => r.id === bass.regionId)?.pitchSource)
@@ -385,7 +405,7 @@ test.describe('Phase 11: generative and analysis', () => {
       for (const [bar, chord] of Progression.entries()) {
         const up = ((pc(chord.root) + 6) % 12) - 6;
         const start = Math.round(((bar * Bar) / Ppq) * (Rate / 2)); // 120 bpm: half a second a beat
-        const hz = pitchOf(rootBounce.channels[0] ?? new Float32Array(), Rate, start + 2000, start + 20000);
+        const hz = pitchOf(rootBounce.channels[0] ?? new Float32Array(), Rate, start + 12000, start + 22000);
         expect(Math.abs(centsFrom(hz, 36 + up))).toBeLessThan(25);
       }
       // Chords mode: every note on a chord tone.
@@ -406,13 +426,16 @@ test.describe('Phase 11: generative and analysis', () => {
         { type: 'setPitchSource', regionIds: [toneRegion], mode: 'root' }
       ]);
       const followed = await bounce(window, folder, 'Tone root', 8 * Bar, [toneTrack]);
+      let worstCents = 0;
       for (const [bar, chord] of Progression.entries()) {
         const up = ((pc(chord.root) + 6) % 12) - 6;
         const start = bar * 2 * Rate;
         const hz = pitchOf(followed.channels[0] ?? new Float32Array(), Rate, start + 9600, start + 72000, 80, 400);
-        expect(Math.abs(centsFrom(hz, 48 + up))).toBeLessThan(5);
+        const cents = centsFrom(hz, 48 + up);
+        expect(Math.abs(cents)).toBeLessThan(5);
+        worstCents = Math.max(worstCents, Math.abs(cents));
       }
-      measured('2 pitch source', 'MIDI (Root) and audio (Root, within 5 cents) follow the eight chords');
+      measured('2 pitch source', `MIDI and audio follow the eight chords; audio worst ${worstCents.toFixed(2)} cents`);
 
       // ---- 3. Drummer
       await window.getByTestId('add-track-menu').click();
@@ -422,13 +445,14 @@ test.describe('Phase 11: generative and analysis', () => {
       const drummer = must(state.tracks.find(t => t.kind === 'drummer'));
       // Pick a style in the Session Player Editor: two regions, one per section; one 8-bar region over both is generated.
       const drumRegions = state.sessionPlayerRegions.filter(r => r.trackId === drummer.id);
-      expect(drumRegions.map(r => r.name)).toEqual(['Verse', 'Chorus']);
+      expect(drumRegions.toSorted((a, b) => a.startTick - b.startTick).map(r => r.name)).toEqual(['Verse', 'Chorus']);
       await commands(window, [
         { type: 'deleteRegions', regionIds: drumRegions.map(r => r.id) },
         { type: 'addSessionPlayerRegion', trackId: drummer.id, startTick: 0, lengthTicks: 8 * Bar, parameters: null }
       ]);
       const drums = must((await project(window)).sessionPlayerRegions.find(r => r.trackId === drummer.id));
       await selectRegion(window, drummer.name);
+      await window.getByRole('tab', { name: 'Editors' }).click();
       await expect(window.getByRole('region', { name: 'Session Player Editor' })).toBeVisible();
       // The style browser: the library's first drum style (D's styles have generic names).
       await window.getByRole('listbox', { name: 'Styles' }).getByRole('option').first().click();
@@ -481,6 +505,16 @@ test.describe('Phase 11: generative and analysis', () => {
       await expect.poll(async () => JSON.stringify(await notesOf(window, drums.id))).not.toBe(JSON.stringify(notes));
       // Follow a rhythm source (the bass track): at least 75 % of kicks within a sixteenth of a bass onset.
       await window.getByTestId('session-player-rhythm-source').selectOption(bass.trackId);
+      await expect
+        .poll(
+          async () =>
+            (
+              (await project(window)).sessionPlayerRegions.find(r => r.id === drums.id)?.parameters['drums'] as {
+                rhythmSourceTrackId: string | null;
+              }
+            ).rhythmSourceTrackId
+        )
+        .toBe(bass.trackId);
       await expect
         .poll(async () => {
           const bassOnsets = must((await project(window)).midiRegions.find(r => r.id === bass.regionId)).notes.map(
@@ -550,33 +584,49 @@ test.describe('Phase 11: generative and analysis', () => {
           expect(down && down.pitch % 12).toBe(pc(chord.bass ?? chord.root));
         }
       }
+      let worstVoice = 0;
       for (const region of state.sessionPlayerRegions.filter(
         r => state.tracks.find(t => t.id === r.trackId)?.kind === 'keyboardPlayer'
       )) {
         const generated = await notesOf(window, region.id);
         let passing = 0;
-        let previous: number[] = [];
         for (const [i, chord] of chords.entries()) {
           const end = chords[i + 1]?.tick ?? chord.tick + Bar;
           const voiced = generated.filter(
             n => region.startTick + n.startTick >= chord.tick && region.startTick + n.startTick < end
           );
-          const tones = tonesOf(chord.root, chord.quality);
+          const tones = tonesOf(chord.root, chord.quality).add(pc(chord.bass ?? chord.root)); // the slash bass counts
           passing += voiced.filter(n => !tones.has(n.pitch % 12)).length;
-          const onset = voiced
-            .filter(n => n.startTick === voiced[0]?.startTick)
-            .map(n => n.pitch)
-            .sort((a, b) => a - b);
-          if (previous.length && onset.length) {
-            onset.forEach((p, v) =>
-              expect(Math.abs(p - (previous[v] ?? must(previous.at(-1))))).toBeLessThanOrEqual(7)
-            );
+        }
+        // Voice leading: the right hand's whole voicings (its notes struck together, as many as most strikes have) of
+        // neighbouring chords; no voice moves by more than a fifth.
+        const range = region.parameters['keys'] as { lowNote: number };
+        const strikes = new Map<number, number[]>();
+        for (const n of generated.filter(g => g.pitch >= range.lowNote)) {
+          strikes.set(n.startTick, [...(strikes.get(n.startTick) ?? []), n.pitch]);
+        }
+        const whole = [...strikes.entries()].filter(([, pitches]) => pitches.length >= 3);
+        const sizes = whole.map(([, pitches]) => pitches.length);
+        const size = sizes.toSorted((x, y) => sizes.filter(v => v === y).length - sizes.filter(v => v === x).length)[0];
+        const voicings = whole
+          .filter(([, pitches]) => pitches.length === size)
+          .toSorted(([x], [y]) => x - y)
+          .map(([tick, pitches]) => ({
+            chord: chords.findLastIndex(c => c.tick <= region.startTick + tick + Ppq / 16),
+            pitches: pitches.toSorted((x, y) => x - y)
+          }));
+        for (const [k, voicing] of voicings.entries()) {
+          const before = voicings[k - 1];
+          if (before && voicing.chord === before.chord + 1) {
+            voicing.pitches.forEach((p, v) => {
+              worstVoice = Math.max(worstVoice, Math.abs(p - must(before.pitches[v])));
+            });
           }
-          previous = onset.length ? onset : previous;
         }
         expect(passing / Math.max(1, generated.length)).toBeLessThan(0.1);
       }
-      measured('4 players', 'bass roots on every chord change within range; keys chord tones, voice-led');
+      expect(worstVoice).toBeLessThanOrEqual(7);
+      measured('4 players', `bass roots on every chord change, in range; keys chord tones, worst voice move ${worstVoice}`);
 
       // ---- 5. Mastering Assistant: analyse; Clean and Valve at −14 LUFS within 0.5 LU, true peak ≤ −1 dBTP
       await menu(app, 'masteringAssistant');
@@ -598,13 +648,18 @@ test.describe('Phase 11: generative and analysis', () => {
       const testFile = await api<{ id: string }>(window, 'POST', '/project/files/import', { path: testTone });
       await commands(window, [{ type: 'addTrack', kind: 'audio', stereo: false, name: 'Test Tone' }]);
       const testTrack = (await project(window)).tracks.find(t => t.name === 'Test Tone')?.id ?? '';
-      await commands(window, [{ type: 'addRegion', trackId: testTrack, fileId: testFile.id, startTick: 0 }]);
+      await commands(window, [
+        { type: 'addRegion', trackId: testTrack, fileId: testFile.id, startTick: 0 },
+        { type: 'setStrip', trackId: testTrack, solo: true }
+      ]);
       const evens: Record<string, number> = {};
       for (const character of ['clean', 'valve']) {
         await window.getByTestId(`mastering-character-${character}`).click();
-        const out = await bounce(window, folder, `Tone ${character}`, 2 * Bar, [testTrack]);
-        evens[character] = evenHarmonicsDb(out.channels[0] ?? new Float32Array(), 200, out.sampleRate);
+        // Through the master (a stem would not reach the assistant): the tone alone, past the assistant's settling.
+        const out = await bounce(window, folder, `Tone ${character}`, 2 * Bar);
+        evens[character] = evenHarmonicsDb((out.channels[0] ?? new Float32Array()).subarray(Rate), 200, out.sampleRate);
       }
+      await commands(window, [{ type: 'setStrip', trackId: testTrack, solo: false, mute: true }]);
       expect(must(evens['valve']) - must(evens['clean'])).toBeGreaterThanOrEqual(6);
       // The level-matched bypass is within 1 LU of the processed loudness.
       await window.getByTestId('mastering-bypass').click();
@@ -627,9 +682,12 @@ test.describe('Phase 11: generative and analysis', () => {
           }
         ]);
         const out = await bounce(window, folder, `Model ${pitch}`, 2 * Bar, [model.trackId]);
-        expect(
-          Math.abs(centsFrom(pitchOf(out.channels[0] ?? new Float32Array(), Rate, 4800, 28800), pitch))
-        ).toBeLessThan(5);
+        const hz = 440 * 2 ** ((pitch - 69) / 12);
+        const cents = centsFrom(
+          pitchOf(out.channels[0] ?? new Float32Array(), Rate, 4800, 28800, hz / 1.2, hz * 1.2),
+          pitch
+        );
+        expect(Math.abs(cents)).toBeLessThan(5);
         await commands(window, [
           {
             type: 'deleteNotes',
@@ -640,37 +698,90 @@ test.describe('Phase 11: generative and analysis', () => {
           }
         ]);
       }
-      // Lower damping, longer decay (the −60 dB time at least 1.5×).
-      // (Damping is the instrument's own parameter: E's list names it; the editor's panel shows it.)
-      measured('6 physical model', 'C2–C6 within 5 cents');
-      const tape = await instrumentTrack(window, 'Tape', 'anode.tape-replay', 4);
+      // Lower damping, longer decay (the −60 dB time at least 1.5×): a struck string, the damping its own parameter.
+      const decays: number[] = [];
+      const struck = await instrumentTrack(window, 'Struck', 'anode.physical-model', 6);
       await commands(window, [
+        { type: 'setParameter', trackId: struck.trackId, parameterId: 'exciter1Type', value: 3 },
+        {
+          type: 'addNotes',
+          regionId: struck.regionId,
+          notes: [{ pitch: 60, velocity: 100, channel: 1, startTick: 0, lengthTicks: 11 * Ppq * 2 }]
+        }
+      ]);
+      for (const damping of [60, 40]) {
+        await commands(window, [{ type: 'setParameter', trackId: struck.trackId, parameterId: 'damping', value: damping }]);
+        const out = await bounce(window, folder, `Struck ${damping}`, 6 * Bar, [struck.trackId]);
+        decays.push(must(decayTime(out.channels[0] ?? new Float32Array(), Rate)));
+      }
+      expect(must(decays[1]) / must(decays[0])).toBeGreaterThanOrEqual(1.5);
+      measured(
+        '6 physical model',
+        `C2–C6 within 5 cents; −60 dB in ${decays.map(d => d.toFixed(2)).join(' s at 60 % damping, ')} s at 40 %`
+      );
+      // The tape-replay instrument: the test pack's strings over a few keys; a held note stops at its tape's length.
+      const tape = await instrumentTrack(window, 'Tape', 'anode.tape-replay', 6);
+      await commands(window, [
+        { type: 'applyPatch', trackId: tape.trackId, patchId: 'tape_strings' },
+        { type: 'setParameter', trackId: tape.trackId, parameterId: 'wow', value: 0 },
+        { type: 'setParameter', trackId: tape.trackId, parameterId: 'flutter', value: 0 },
         {
           type: 'addNotes',
           regionId: tape.regionId,
-          notes: [{ pitch: 60, velocity: 100, channel: 1, startTick: 0, lengthTicks: 20 * Ppq }]
+          notes: [{ pitch: 57, velocity: 100, channel: 1, startTick: 0, lengthTicks: 20 * Ppq }]
         }
       ]);
       const tapeOut = await bounce(window, folder, 'Tape', 6 * Bar, [tape.trackId]);
       const tapeLeft = tapeOut.channels[0] ?? new Float32Array();
+      expect(db(rms(tapeLeft, 7 * Rate, 7.9 * Rate))).toBeGreaterThan(-50);
       expect(db(rms(tapeLeft, 8.3 * Rate, 9 * Rate))).toBeLessThan(-60);
-      expect(Math.abs(centsFrom(pitchOf(tapeLeft, Rate, Rate, 2 * Rate), 60))).toBeLessThan(5);
-      expect(decayTime(tapeLeft, Rate)).not.toBeNull();
-      const saturation: number[] = [];
-      for (const drive of [0.1, 0.5, 0.9]) {
-        const insert = must((await project(window)).tracks.find(t => t.id === testTrack)).strip.inserts.find(
-          i => i.pluginId === 'anode.saturation'
-        );
-        if (!insert) {
-          await commands(window, [{ type: 'addInsert', trackId: testTrack, pluginId: 'anode.saturation' }]);
+      const tapeCents = centsFrom(pitchOf(tapeLeft, Rate, Rate, 2 * Rate, 150, 300), 57);
+      expect(Math.abs(tapeCents)).toBeLessThan(5);
+      measured(
+        '6 tape',
+        `stops by 8.3 s (${db(rms(tapeLeft, 8.3 * Rate, 9 * Rate)).toFixed(1)} dB after it), A3 ${tapeCents.toFixed(2)} cents`
+      );
+      // Sample Alchemy: the test sample (a harmonic tone on C4) played on G4 in the additive and granular modes.
+      const sampleTone = sine(261.626, -9, 3, Rate).map(
+        (v, i) => v + 0.5 * 0.35 * Math.sin((2 * Math.PI * 523.251 * i) / Rate)
+      );
+      const samplePath = join(folder, 'Alchemy sample.wav');
+      writeWav(samplePath, sampleTone, Rate);
+      const alchemy = await instrumentTrack(window, 'Alchemy', 'anode.sample-alchemy', 2);
+      await commands(window, [
+        { type: 'loadInstrumentFile', trackId: alchemy.trackId, path: samplePath },
+        {
+          type: 'addNotes',
+          regionId: alchemy.regionId,
+          notes: [{ pitch: 67, velocity: 100, channel: 1, startTick: 0, lengthTicks: Bar + Bar / 2 }]
         }
-        const id = must(
-          must((await project(window)).tracks.find(t => t.id === testTrack)).strip.inserts.find(
-            i => i.pluginId === 'anode.saturation'
-          )
-        ).id;
+      ]);
+      const alchemyCents: string[] = [];
+      for (const [mode, modeName] of ['additive', 'granular'].entries()) {
+        await commands(window, [{ type: 'setParameter', trackId: alchemy.trackId, parameterId: 'mode', value: mode }]);
+        const out = await bounce(window, folder, `Alchemy ${modeName}`, 2 * Bar, [alchemy.trackId]);
+        const cents = centsFrom(
+          pitchOf(out.channels[0] ?? new Float32Array(), Rate, Rate / 2, 2 * Rate, 300, 600),
+          67
+        );
+        expect(Math.abs(cents)).toBeLessThan(5);
+        alchemyCents.push(`${modeName} ${cents.toFixed(2)}`);
+      }
+      measured('6 sample alchemy', `G4 from a C4 sample, cents off: ${alchemyCents.join(', ')}`);
+      // Saturation: THD rises with drive (three settings, monotone), on the test tone's stem.
+      await commands(window, [
+        { type: 'setStrip', trackId: testTrack, mute: false },
+        { type: 'addInsert', trackId: testTrack, pluginId: 'anode.saturation' }
+      ]);
+      const saturationId = must(
+        must((await project(window)).tracks.find(t => t.id === testTrack)).strip.inserts.find(
+          i => i.pluginId === 'anode.saturation'
+        )
+      ).id;
+      const saturation: number[] = [];
+      for (const drive of [10, 50, 90]) {
         await commands(window, [
-          { type: 'setInsertParameter', trackId: testTrack, insertId: id, parameterId: 'drive', value: drive }
+          { type: 'setInsertParameter', trackId: testTrack, insertId: saturationId, parameterId: 'drive', value: drive }
         ]);
         const out = await bounce(window, folder, `Saturation ${drive}`, 2 * Bar, [testTrack]);
         saturation.push(thd(out.channels[0] ?? new Float32Array(), 200, Rate));
@@ -678,15 +789,58 @@ test.describe('Phase 11: generative and analysis', () => {
       expect(saturation[0]).toBeLessThan(must(saturation[1]));
       expect(saturation[1]).toBeLessThan(must(saturation[2]));
       measured('6 saturation', `THD ${saturation.map(t => (t * 100).toFixed(2) + ' %').join(' < ')}`);
-      // The Down Mixer on a 5.1 bus and Binaural Post-Processing on a 7.1.4 bus: their plugin windows show, the
-      // down-mix and the interaural differences are measured on bounces of the buses (A's format-changing inserts).
-      const binaural = await bounce(window, folder, 'Binaural', 2 * Bar);
-      const { ild, itdMs } = interauralDifferences(
-        binaural.channels[0] ?? new Float32Array(),
-        binaural.channels[1] ?? new Float32Array(),
-        Rate
+      await commands(window, [{ type: 'setStrip', trackId: testTrack, mute: true }]);
+
+      // The Down Mixer on a 5.1 bus to stereo: C and Ls take BS.775's −3 dB, measured on the bus's stem at its output.
+      const toneOnBus = async (trackName: string, samples: Float32Array, bus: number, angle: number) => {
+        const path = join(folder, `${trackName}.wav`);
+        writeWav(path, samples, Rate);
+        const imported = await api<{ id: string }>(window, 'POST', '/project/files/import', { path });
+        await commands(window, [{ type: 'addTrack', kind: 'audio', stereo: false, name: trackName }]);
+        const trackId = must((await project(window)).tracks.find(t => t.name === trackName)).id;
+        await commands(window, [
+          { type: 'addRegion', trackId, fileId: imported.id, startTick: 0 },
+          { type: 'setOutput', trackId, output: `bus:${bus}` },
+          { type: 'setPanner', trackId, mode: 'surround', angle, diversity: 1 }
+        ]);
+      };
+      const surroundBus = async (bus: number, trackName: string, inputFormat: string, pluginId: string) => {
+        await commands(window, [{ type: 'addAux', bus, name: trackName }]);
+        const trackId = must((await project(window)).tracks.find(t => t.name === trackName)).id;
+        await commands(window, [
+          { type: 'setStripFormat', trackId, inputFormat },
+          { type: 'addInsert', trackId, pluginId }
+        ]);
+        return trackId;
+      };
+      const downMixBus = await surroundBus(11, 'Down Mix Bus', 'surround51', 'anode.down-mixer');
+      await toneOnBus('Down Mix Centre', sine(500, -12, 4, Rate), 11, 0);
+      await toneOnBus('Down Mix Surround', sine(1000, -12, 4, Rate), 11, 110);
+      const downMixed = await bounce(window, folder, 'Down Mixed', Bar, [downMixBus]);
+      expect(downMixed.channels).toHaveLength(2);
+      const mid = (c: Float32Array | undefined) => (c ?? new Float32Array()).subarray(Rate / 2, Rate + Rate / 2);
+      const centreLeft = db(amplitude(mid(downMixed.channels[0]), 500, Rate)) + 12;
+      const centreRight = db(amplitude(mid(downMixed.channels[1]), 500, Rate)) + 12;
+      const surroundLeft = db(amplitude(mid(downMixed.channels[0]), 1000, Rate)) + 12;
+      const surroundRight = db(amplitude(mid(downMixed.channels[1]), 1000, Rate)) + 12;
+      expect(Math.abs(centreLeft + 3.01)).toBeLessThan(0.1);
+      expect(Math.abs(centreRight + 3.01)).toBeLessThan(0.1);
+      expect(Math.abs(surroundLeft + 3.01)).toBeLessThan(0.1);
+      expect(surroundRight).toBeLessThan(-60);
+      measured(
+        '6 down mixer',
+        `C → L ${centreLeft.toFixed(2)}, R ${centreRight.toFixed(2)} dB; Ls → L ${surroundLeft.toFixed(2)} dB, R off`
       );
-      measured('6 binaural', `ILD ${ild.toFixed(1)} dB, ITD ${itdMs.toFixed(2)} ms`);
+      // Binaural Post-Processing on a 7.1.4 bus: noise in the side surround, 90° left.
+      const binauralBus = await surroundBus(12, 'Binaural Bus', 'surround714', 'anode.binaural');
+      await toneOnBus('Binaural Noise', noise(-12, 4, Rate), 12, 90);
+      const ears = await bounce(window, folder, 'Binaural', Bar, [binauralBus]);
+      expect(ears.channels).toHaveLength(2);
+      const { ild, itdMs } = interauralDifferences(mid(ears.channels[0]), mid(ears.channels[1]), Rate);
+      expect(ild).toBeGreaterThanOrEqual(6);
+      expect(itdMs).toBeGreaterThanOrEqual(0.5);
+      expect(itdMs).toBeLessThanOrEqual(0.8);
+      measured('6 binaural', `ILD ${ild.toFixed(1)} dB, ITD ${itdMs.toFixed(3)} ms`);
 
       // ---- 7. Environment: physical input → transformer (+12) → arpeggiator (up, 1/16) → a track's input; a monitor
       await menu(app, 'environment');
@@ -704,7 +858,7 @@ test.describe('Phase 11: generative and analysis', () => {
         {
           type: 'setEnvironmentObject',
           objectId: object('transformer').id,
-          conditions: [{ field: 'status', op: 'equal', a: 144, b: 0 }],
+          conditions: [{ field: 'status', op: 'inside', a: 128, b: 159 }],
           operations: [{ field: 'pitch', op: 'add', a: 12, b: 0 }]
         },
         { type: 'setEnvironmentObject', objectId: object('trackInput').id, trackId: keys.trackId },
@@ -715,7 +869,7 @@ test.describe('Phase 11: generative and analysis', () => {
           address: 'volume'
         },
         { type: 'setEnvironmentObject', objectId: object('fader').id, parameters: { message: 0, number: 7 } },
-        { type: 'disconnectEnvironment', cableIds: [] },
+        { type: 'disconnectEnvironment', cableIds: state.environment.cables.map(c => c.id) },
         {
           type: 'connectEnvironment',
           fromObjectId: object('physicalInput').id,
@@ -755,18 +909,24 @@ test.describe('Phase 11: generative and analysis', () => {
       // Play a chord through live MIDI while recording: the region holds it an octave up, on the 1/16 grid.
       await commands(window, [{ type: 'setTrack', trackId: keys.trackId, recordArmed: true, mute: false }]);
       await transport(window, 'record', 16 * Bar);
-      await api(window, 'POST', `/project/tracks/${keys.trackId}/midi`, {
+      await api(window, 'POST', '/midi/live', {
+        trackId: keys.trackId,
         events: [60, 64, 67].map(data1 => ({ status: 0x90, data1, data2: 100 }))
       });
-      await expect(window.getByTestId('environment-node-Monitor')).toContainText('C5');
+      // Note 72, an octave over 60, which Anode names C4 (Logic's C3 for 60).
+      await expect(window.getByTestId('environment-node-Monitor')).toContainText('Note On C4');
       await window.waitForTimeout(2000);
-      await api(window, 'POST', `/project/tracks/${keys.trackId}/midi`, {
+      await api(window, 'POST', '/midi/live', {
+        trackId: keys.trackId,
         events: [60, 64, 67].map(data1 => ({ status: 0x80, data1, data2: 0 }))
       });
       await transport(window, 'stop');
+      await expect
+        .poll(async () => (await project(window)).midiRegions.some(r => r.trackId === keys.trackId && r.startTick >= 15 * Bar), { timeout: 30_000 })
+        .toBe(true);
       state = await project(window);
       const recorded = state.midiRegions
-        .filter(r => r.trackId === keys.trackId && r.startTick >= 16 * Bar)
+        .filter(r => r.trackId === keys.trackId && r.startTick >= 15 * Bar)
         .flatMap(r => r.notes.map(n => ({ ...n, startTick: r.startTick + n.startTick })));
       expect(new Set(recorded.map(n => n.pitch))).toEqual(new Set([72, 76, 79]));
       expect(recorded.every(n => n.startTick % (Ppq / 4) === 0)).toBe(true);

@@ -1,11 +1,11 @@
 import { execFileSync } from 'node:child_process';
-import { existsSync } from 'node:fs';
+import { existsSync, readdirSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
 /**
  * What the golden paths need besides the built app and engine: Phase 8's `anode-midiprobe` (built with the engine's
- * Release configuration), the Stem Splitter's test mix (`scripts/build-content.mjs --stems`, when it is not there yet)
- * and, through `ANODE_MODELS`, the locally exported separation models in the repository's `models/` (ADR-0010: never
+ * Release configuration), the test pack and the Stem Splitter's test mix (`scripts/build-content.mjs --test`, when they
+ * are not there or are out of date) and, through `ANODE_MODELS`, the locally exported separation models in the repository's `models/` (ADR-0010: never
  * published) for the Server to install from. Phase 9's needs pyaaf2 (`scripts/setup-pyaaf2.py` makes its venv in
  * `engine/artifacts/pyaaf2` when it is not there; `ANODE_PYTHON` is that venv's python unless set), and xmllint and
  * pdftotext on the PATH (`scripts/musicxml-validate.py`, the printed PDF's text), which it checks. Phase 10's needs the
@@ -21,7 +21,11 @@ export default function globalSetup(): void {
     ['build', join(root, 'engine', 'tools', 'Anode.MidiProbe'), '-c', 'Release', '--nologo', '-v', 'quiet'],
     { stdio: 'inherit' }
   );
-  if (!existsSync(join(root, 'engine', 'artifacts', 'content', 'stem-mix', 'mix.wav'))) {
+  // The test pack (and with it the stem mix) when it is missing or older than the content builder's sources: Phase 11's
+  // golden path needs the Drummer kit and tape set in it.
+  if (stalePack(root)) {
+    execFileSync('node', [join(root, 'scripts', 'build-content.mjs'), '--test'], { cwd: root, stdio: 'inherit' });
+  } else if (!existsSync(join(root, 'engine', 'artifacts', 'content', 'stem-mix', 'mix.wav'))) {
     execFileSync('node', [join(root, 'scripts', 'build-content.mjs'), '--stems'], { cwd: root, stdio: 'inherit' });
   }
   if (!process.env['ANODE_PYTHON']) {
@@ -92,6 +96,17 @@ export default function globalSetup(): void {
   if (!process.env['ANODE_MODELS'] && existsSync(join(models, 'htdemucs.onnx'))) {
     process.env['ANODE_MODELS'] = models;
   }
+}
+
+/** Whether the test pack is missing, or older than a source of the content builder. */
+function stalePack(root: string): boolean {
+  const pack = join(root, 'engine', 'artifacts', 'content', 'TestPack.anodepack');
+  if (!existsSync(pack)) {
+    return true;
+  }
+  const built = statSync(pack).mtimeMs;
+  const builder = join(root, 'engine', 'tools', 'Anode.ContentBuilder');
+  return readdirSync(builder).some(file => file.endsWith('.cs') && statSync(join(builder, file)).mtimeMs > built);
 }
 
 /** This environment without the dynamic loader's search variables (Homebrew's DYLD_LIBRARY_PATH, say). */

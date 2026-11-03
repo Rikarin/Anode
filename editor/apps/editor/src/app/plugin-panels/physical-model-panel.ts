@@ -53,7 +53,7 @@ interface Marker {
  * The physical model's panel (Sculpture's object view): the object drawn as a string, bar, membrane or tube (by its
  * Object parameter, the material's stiffness thickening it), its exciters as markers above it and its two pickups
  * below, each an ARIA slider along the object (drag, or ←/→ by 1 %, ⇧ finer, Home/End); an exciter that is off is
- * dimmed. Under it the object, the material and each exciter's kind and strength, the pickups' levels.
+ * dimmed. Under it the object, the material, the pickups' spread, the body and each exciter's kind and strength.
  */
 @Component({
   selector: 'an-physical-model-panel',
@@ -179,16 +179,6 @@ interface Marker {
           }
         </div>
       }
-      @for (pickup of pickupLevels(); track pickup.id; let i = $index) {
-        <div
-          class="border-hairline bg-surface-raised flex flex-col items-center gap-1 rounded-[6px] border px-1 py-1.5"
-          role="group"
-          [attr.aria-label]="'Pickup ' + letters[i]"
-        >
-          <span class="text-foreground text-[11px] font-semibold">Pickup {{ letters[i] }}</span>
-          <an-panel-parameter [host]="host()" [parameter]="pickup" label="Level" />
-        </div>
-      }
     </div>
   `
 })
@@ -211,7 +201,7 @@ export class PhysicalModelPanel {
   });
   protected readonly material = computed(() => {
     const roles = this.binding()?.roles ?? {};
-    return ['object', 'stiffness', 'damping', 'inharmonicity']
+    return ['object', 'stiffness', 'damping', 'inharmonicity', 'pickupSpread', 'body', 'bodyAmount']
       .map(role => roles[role])
       .filter((p): p is ParameterInfo => !!p);
   });
@@ -224,7 +214,6 @@ export class PhysicalModelPanel {
       strength: s['exciterStrength']?.[i]
     }));
   });
-  protected readonly pickupLevels = computed(() => (this.binding()?.series['pickupLevel'] ?? []).slice(0, 2));
   protected readonly markers = computed(() => {
     const exciters = this.exciters().map(e => {
       const kind = e.type ? this.typeName(e.type) : 'Exciter';
