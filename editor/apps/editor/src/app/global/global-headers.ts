@@ -5,7 +5,7 @@ import { XuiIconImports } from '@xui/icon';
 import { XuiMenuImports } from '@xui/menu';
 import { XuiTooltipImports } from '@xui/tooltip';
 import { ProjectStore } from '../state/project.store';
-import { type GlobalLane, GlobalLanes, TracksViewStore } from '../state/tracks-view.store';
+import { type GlobalLane, GlobalLanes, TracksViewStore, visibleGlobalLanes } from '../state/tracks-view.store';
 import { GlobalLaneHeights, keyName } from './global-math';
 
 /**
@@ -88,12 +88,13 @@ export class GlobalHeaders {
   protected readonly names: Record<GlobalLane, string> = {
     arrangement: 'Arrangement',
     marker: 'Marker',
+    movie: 'Movie',
     tempo: 'Tempo',
     beatMapping: 'Beat Mapping',
     signature: 'Signature',
     key: 'Key'
   };
-  protected readonly lanes = computed(() => GlobalLanes.filter(lane => this.view.globalLanes().has(lane)));
+  protected readonly lanes = computed(() => visibleGlobalLanes(this.view.globalLanes(), !!this.project.movie()));
   protected readonly tempo = computed(() => `${this.project.settings().tempo} bpm`);
   protected readonly key = computed(() => {
     const first = this.project.settings().keys[0];

@@ -83,6 +83,34 @@ export function formatFrameRate(rate: VideoFrameRate): string {
   return Number.isInteger(fps) ? String(fps) : fps.toFixed(3).replace(/0+$/, '');
 }
 
+/**
+ * A movie offset as typed (Movie Settings): seconds (`1.5`), or a timecode from the movie's first frame
+ * (`00:00:01:12`, frames at the movie's rate; `1:12` is seconds and frames), or null when it is not one.
+ */
+export function parseMovieOffset(text: string, movie: Pick<Movie, 'frameRate'>): number | null {
+  const trimmed = text.trim();
+  if (/^\d+(\.\d+)?$/.test(trimmed)) {
+    return Number(trimmed);
+  }
+  const parts = trimmed.split(':');
+  if (parts.length < 2 || parts.length > 4 || parts.some(p => !/^\d+$/.test(p))) {
+    return null;
+  }
+  const numbers = parts.map(Number);
+  const frames = numbers.pop() ?? 0;
+  const [s = 0, m = 0, h = 0] = numbers.reverse();
+  const fps = framesPerSecond(movie.frameRate);
+  if (m > 59 || s > 59 || frames >= Math.ceil(fps)) {
+    return null;
+  }
+  return h * 3600 + m * 60 + s + (fps > 0 ? frames / fps : 0);
+}
+
+/** A movie offset as Movie Settings shows it: seconds to the millisecond. */
+export function formatMovieOffset(seconds: number): string {
+  return seconds.toFixed(3);
+}
+
 // ---- drift correction while playing
 
 /** What the player does about the difference between where the video is and where the transport says it should be. */

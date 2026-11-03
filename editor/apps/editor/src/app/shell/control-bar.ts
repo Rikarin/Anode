@@ -4,6 +4,7 @@ import {
   computed,
   effect,
   inject,
+  Injector,
   signal,
   viewChild,
   type ElementRef
@@ -179,6 +180,8 @@ import { Lcd } from './lcd';
                 Export
               </button>
               <button xuiMenuItem type="button" data-testid="score-menu" [xuiMenuTriggerFor]="scoreMenu">Score</button>
+              <!-- Phase 10: the Movie menu (the desktop app's menu bar has it too). -->
+              <button xuiMenuItem type="button" data-testid="movie-menu" [xuiMenuTriggerFor]="movieMenu">Movie</button>
               <xui-menu-divider />
               <button
                 xuiMenuItem
@@ -289,6 +292,70 @@ import { Lcd } from './lcd';
                 (click)="ui.interchange.set({ direction: 'export', format: 'midi' })"
               >
                 Project as MIDI File…
+              </button>
+            </xui-menu>
+          </ng-template>
+          <ng-template #movieMenu>
+            <xui-menu class="min-w-52">
+              <button xuiMenuItem type="button" data-testid="open-movie" (click)="ui.movieDialog.set('open')">
+                Open Movie…
+              </button>
+              <button
+                xuiMenuItem
+                type="button"
+                data-testid="remove-movie"
+                [disabled]="!project.movie()"
+                (click)="movieAction('remove')"
+              >
+                Remove Movie
+              </button>
+              <xui-menu-divider />
+              <button
+                xuiMenuItem
+                type="button"
+                data-testid="show-movie-window"
+                [disabled]="!project.movie()"
+                (click)="ui.movieWindowOpen.set(true)"
+              >
+                Show Movie Window
+              </button>
+              <button
+                xuiMenuItem
+                type="button"
+                data-testid="open-movie-settings"
+                [disabled]="!project.movie()"
+                (click)="ui.movieSettingsOpen.set(true)"
+              >
+                Movie Settings…
+              </button>
+              <xui-menu-divider />
+              <button
+                xuiMenuItem
+                type="button"
+                data-testid="import-movie-audio"
+                [disabled]="!project.movie()?.audio"
+                (click)="movieAction('importAudio')"
+              >
+                Import Audio from Movie
+              </button>
+              <button
+                xuiMenuItem
+                type="button"
+                data-testid="export-movie-audio"
+                [disabled]="!project.movie()"
+                (click)="ui.movieDialog.set('exportAudio')"
+              >
+                Export Audio to Movie…
+              </button>
+              <xui-menu-divider />
+              <button
+                xuiMenuItem
+                type="button"
+                data-testid="detect-scene-cuts"
+                [disabled]="!project.movie()"
+                (click)="ui.movieDialog.set('detectScenes')"
+              >
+                Detect Scene Cuts…
               </button>
             </xui-menu>
           </ng-template>
@@ -711,6 +778,7 @@ export class ControlBar {
   protected readonly screensets = inject(ScreensetStore);
   protected readonly theme = inject(ThemeStore);
   protected readonly ui = inject(UiStore);
+  private readonly injector = inject(Injector);
   private readonly keys = inject(KeyCommandsStore);
 
   protected readonly smartTempo = inject(SmartTempoStore);
@@ -783,6 +851,13 @@ export class ControlBar {
       this.renamingScreenset.set(false);
       void this.screensets.rename(name);
     }
+  }
+
+  /** Movie ▸ Remove Movie and Import Audio from Movie: the video code loads on first use (not in the initial bundle). */
+  protected async movieAction(action: 'remove' | 'importAudio'): Promise<void> {
+    const { MovieActions } = await import('../video/movie-actions');
+    const actions = this.injector.get(MovieActions);
+    await (action === 'remove' ? actions.removeMovie() : actions.importAudio());
   }
 
   protected toggleMerge(): void {
