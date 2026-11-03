@@ -525,7 +525,7 @@ Settled when the five workstreams met (the contract changes are marked **contrac
 - **Binaural HRTF.** `monitoring.HrtfPath` is sent only while listening binaurally, so an insert had none otherwise. The
   Server's `HrtfLocator` (split out of `MonitoringService`, same search) fills `EngineInsert.file` for `anode.binaural`.
 - **Mastering.** The assistant is in the host's catalogue, so `setInsertParameter` and automation name it as any insert.
-  The first-second settling meets the limit: −13.98 and −14.01 LUFS on the golden path's mix. The target is of what the
+  The first-second settling meets the limit: −13.98 to −14.09 LUFS on the golden path's mix. The target is of what the
   analysis measured (open, below).
 - **A constant transposition is exact** (replaces the stretcher's for Pitch Source and a region's transpose, in
   Polyphonic and Monophonic). Signalsmith Stretch's own transposition left low tones up to 15 ¢ off (a sine at 130.8 Hz,
@@ -552,3 +552,59 @@ Settled when the five workstreams met (the contract changes are marked **contrac
   window, Environment window and physical-model panel steps run on the real Server. Bounces of a track are stems (a
   `mix` ignores `trackIds`), so the mastering steps go through the master with the tone soloed. Its pitch tracker is YIN
   with a spectral refinement.
+
+## Status (2026-11-04)
+
+**Exit criterion met on macOS.** The Playwright golden path `phase11/generative-analysis-golden-path.spec.ts` passes on
+the real desktop app, Server and host with the null device, with all eight steps. All twelve e2e specs pass, twice in a
+row.
+
+| Step | Limit | Result |
+|---|---|---|
+| 1. Chord ID, MIDI | ≥ 7 of 8 (root, quality, bass), within an eighth | 8 of 8 |
+| 1. Chord ID, audio | ≥ 7 of 8 (root, quality) | 8 of 8 |
+| 1. Edit a chord | one undo step | one |
+| 2. Pitch Source | MIDI Root and Chords on each bar; audio within 5 ¢ | both; audio worst 0.01 ¢ |
+| 3. Drummer | hits and velocity rise; fill; same seed same notes; Regenerate differs; ≥ 75 % kicks on bass onsets; kick on its strip; converts | hits a bar 8 < 15 < 28; velocity 51.9 < 67.2 < 81.2; all hold; MIDI 193 notes; 2 pattern regions, 221 of 221 hits |
+| 4. Players | bass root on each change, in range; keys chord tones, passing < 10 %, voices ≤ a fifth | hold; worst voice 3 semitones |
+| 5. Mastering | −14 LUFS ± 0.5; ≤ −1.0 dBTP | Clean −14.06 LUFS, −2.40 dBTP; Valve −14.09 LUFS, −2.41 dBTP |
+| 5. Valve's evens | ≥ 6 dB over Clean's | −37.0 dB against −109.9 dB |
+| 5. Matched bypass | within 1 LU of processed | −14.03 against −14.09 LUFS |
+| 6. Physical model | C2–C6 within 5 ¢; −60 dB time ≥ 1.5× | hold; 0.50 s at 60 % damping, 1.60 s at 40 % (3.2×) |
+| 6. Tape replay | stops at 8 s; within 5 ¢ | −240 dB after 8.3 s; −0.08 ¢ |
+| 6. Sample Alchemy | within 5 ¢, additive and granular | 0.03 ¢, −0.01 ¢ |
+| 6. Saturation | THD monotone | 6.16 % < 18.00 % < 35.55 % |
+| 6. Down Mixer | BS.775 within 0.1 dB | C → L, R −3.01 dB; Ls → L −3.01 dB, R off |
+| 6. Binaural | ILD ≥ 6 dB, ITD 0.5–0.8 ms | 17.1 dB, 0.729 ms |
+| 7. Environment | an octave up, on 1/16; monitor; fader moves the strip | 16 notes (72, 76, 79) on 16ths; monitor shows them; strip 0 → +6 dB in model and editor |
+| 8. Reopen | intact; regenerates identically | 8 chords, 4 Session Player regions (same notes), Environment and assistant as saved |
+
+| Check | Result |
+|---|---|
+| Engine tests (`dotnet test --solution engine/Anode.slnx --max-parallel-test-modules 2`) | 3013 pass, 22 skipped (opt-in) of 3035; `The_disk_thread_cost_of_64_warped_stereo_tracks` (#22) failed in earlier full runs under load and passes alone |
+| Two-process (`Phase11TwoProcessTests`) | Session Players through a real kit, Pitch Source, the Environment on live MIDI, the assistant (Clean, Valve), the format inserts |
+| Editor (`nx run-many -t typecheck lint test build`) | 6 projects pass; Storybook + axe pass; initial bundle 982.34 kB (budget 1 MB) |
+| e2e (`nx e2e desktop`) | 12 specs, 6.3 and 6.2 minutes, twice in a row |
+| Skala, Prettier, generated client | clean |
+
+**Contract changes and decisions at integration** (detailed in "Integration decisions" above):
+- `EnvironmentControlMessage`, host to Server: control targets' moves reach the model and the strips.
+- A constant transposition stretches and resamples, exact to the cent.
+- Chords mode goes to the note's own nearest chord tone.
+- `HrtfLocator`: a Binaural Post-Processing insert gets the Server's HRTF set through `EngineInsert.file`.
+
+**Open:**
+- The Mastering Assistant on a surround master processes the front pair only (its analysis hears the first two
+  channels); the rest passes, delayed.
+- The assistant's target is of the analysis' gated loudness: a section over 10 LU under the rest comes back above the
+  gate and pulls the whole under the target (−15.8 LUFS on a 16-bar song whose last 8 bars were drums alone).
+- The Environment's default pair takes two undo steps: a command result carries no new ids, so the cable is a second edit.
+- Note-offs for notes left sounding on MIDI ports at a graph swap are not sent (tracks' are).
+- MIDI device input through the Environment reports no track (track −1): the device's activity shows, a track's light
+  does not; the editor's own live MIDI keeps its track.
+- The audio Chord ID's slash basses are often wrong on a decaying piano (Em/D♯ after A7's C♯): only roots and qualities
+  are in its limit, but a following player reads them.
+- A pattern's grid keeps one hit of a drum per step: Convert to Pattern of a triplet feel can lose one of two close hits.
+- The fake Server's Environment fader does not move a strip (its control targets drive nothing).
+- A bounce moves the Tracks area's scroll with its position.
+- Linux and Windows.
