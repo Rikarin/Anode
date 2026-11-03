@@ -1611,7 +1611,7 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
-    /** A cached thumbnail as JPEG (`height` left out: 64); 404 when it is not rendered (RenderMovieThumbnails). */
+    /** A movie frame as JPEG (`height` left out: 64): the cached thumbnail, else rendered now and cached; 404 without a movie or past its end, 503 without FFmpeg. */
     get: operations['GetMovieFrame'];
     put?: never;
     post?: never;
@@ -1736,6 +1736,23 @@ export interface paths {
     /** Replaces the pad sets (ids unique, key command ids known; 422 otherwise). */
     put: operations['SetRemotePads'];
     post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/remote/pads/run': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Asks the desktop editor to run a key command the remote cannot run itself: broadcast as the keyCommand event, as a controller assignment's (422 for a malformed id). */
+    post: operations['RunRemoteKeyCommand'];
     delete?: never;
     options?: never;
     head?: never;
@@ -5907,6 +5924,13 @@ export interface components {
     /** @description The surfaces' new order (`PUT /control/surfaces/order`): every surface id, once, left to right. */
     ReorderSurfacesRequest: {
       ids: string[];
+    };
+    /**
+     * @description `POST /remote/pads/run`: a key command for the desktop editor to run (one the remote cannot run itself, as
+     *                 a pad's string KeyCommandPad.CommandId); the Server broadcasts it as the `keyCommand` event (Phase 8).
+     */
+    RunKeyCommandRequest: {
+      commandId: string;
     };
     /**
      * @description Samples of a file's current version for the Audio File Editor (`/project/files/{fileId}/samples`):
@@ -11187,6 +11211,37 @@ export interface operations {
         content: {
           'application/json': components['schemas']['RemotePads'];
         };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  RunRemoteKeyCommand: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['RunKeyCommandRequest'];
+      };
+    };
+    responses: {
+      /** @description No Content */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
       };
       /** @description Internal Server Error */
       500: {

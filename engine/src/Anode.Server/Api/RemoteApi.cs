@@ -1,5 +1,7 @@
 using Anode.Contracts;
 using Anode.Server.Library;
+using Anode.Server.Projects;
+using Anode.Server.Realtime;
 using Anode.Server.Remote;
 using Microsoft.AspNetCore.Http.HttpResults;
 
@@ -34,6 +36,25 @@ static class RemoteApi {
             )
             .WithName("SetRemotePads")
             .WithSummary("Replaces the pad sets (ids unique, key command ids known; 422 otherwise).");
+        remote.MapPost(
+                "/pads/run",
+                static Results<NoContent, ProblemHttpResult>(RunKeyCommandRequest request, EventHub hub) => {
+                    if (request?.CommandId is not { Length: > 0 and <= UserSettings.MaxCommandIdLength } id
+                        || string.IsNullOrWhiteSpace(id)) {
+                        throw ProjectException.Unprocessable(
+                            $"A key command id has 1…{UserSettings.MaxCommandIdLength} characters."
+                        );
+                    }
+
+                    hub.Publish(new KeyCommandEvent(id));
+                    return TypedResults.NoContent();
+                }
+            )
+            .WithName("RunRemoteKeyCommand")
+            .WithSummary(
+                "Asks the desktop editor to run a key command the remote cannot run itself: broadcast as the keyCommand "
+                + "event, as a controller assignment's (422 for a malformed id)."
+            );
         remote.MapGet(
                 "/listen/state",
                 static Ok<ListenInState>(ListenInService listen) => TypedResults.Ok(listen.State())

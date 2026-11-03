@@ -147,6 +147,38 @@ public sealed partial class Jobs {
         );
     }
 
+    /// <summary>
+    ///     A movie frame as a JPEG <paramref name="height" /> pixels high (<c>GET /project/movie/frames/{frame}</c>): the
+    ///     cached thumbnail, else rendered into the cache now (FFmpeg, at most two at once), as the movie window asks for
+    ///     the frame at the playhead at its own size. 404 without a movie or for a frame past its end; 503 without
+    ///     FFmpeg.
+    /// </summary>
+    public async Task<string> MovieFrameAsync(long frame, int height, CancellationToken token) {
+        var (view, movie, file) = MovieOf();
+        if (frame < 0 || (movie.Frames > 0 && frame >= movie.Frames)) {
+            throw ProjectException.NotFound($"The movie has frames 0…{Math.Max(0, movie.Frames - 1)}, not {frame}.");
+        }
+
+        var path = Movies.ThumbnailOf(view.Folder, movie, height, frame);
+        if (File.Exists(path)) {
+            return path;
+        }
+
+        RequireMedia();
+        await frameRenders.WaitAsync(token).ConfigureAwait(false);
+        try {
+            if (!File.Exists(path)) {
+                var folder = Movies.ThumbnailFolder(view.Folder, movie, height);
+                Directory.CreateDirectory(folder);
+                await media.ThumbnailsAsync(file, [frame], height, folder, token).ConfigureAwait(false);
+            }
+        } finally {
+            frameRenders.Release();
+        }
+
+        return File.Exists(path) ? path : throw ProjectException.NotFound($"Frame {frame} could not be rendered.");
+    }
+
     /// <summary>Queues Detect Scene Cuts: scene markers at the cuts, one undo step.</summary>
     public Job DetectMovieScenes(SceneDetectRequest request) {
         var (view, _, file) = MovieOf();
@@ -436,6 +468,9 @@ public sealed partial class Jobs {
             ? (view, movie, file)
             : throw ProjectException.NotFound($"The movie '{file}' is missing.");
     }
+
+    /// <summary>On-demand frame renders running at once (<see cref="MovieFrameAsync" />).</summary>
+    readonly SemaphoreSlim frameRenders = new(2);
 
     void RequireMedia() {
         if (!media.Available) {

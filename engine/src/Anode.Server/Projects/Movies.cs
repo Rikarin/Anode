@@ -26,13 +26,12 @@ public static class Movies {
     public static string FileOf(string projectFolder, Movie movie) =>
         movie.InProject ? Path.GetFullPath(Path.Combine(projectFolder, movie.Path)) : movie.Path;
 
-    /// <summary>A movie file's media type, by its extension.</summary>
-    public static string ContentType(string path) =>
-        Path.GetExtension(path).ToLowerInvariant() switch {
-            ".mov" => "video/quicktime",
-            ".m4v" => "video/x-m4v",
-            _ => "video/mp4"
-        };
+    /// <summary>
+    ///     A movie file's media type for the editor's and remotes' <c>&lt;video&gt;</c>: <c>video/mp4</c> for MOV and M4V
+    ///     too (decided at integration). They are the same ISO base media file format, and Chromium and Safari play an
+    ///     H.264 or HEVC QuickTime file served as MP4, while Chromium refuses <c>video/quicktime</c>.
+    /// </summary>
+    public static string ContentType(string path) => "video/mp4";
 
     /// <summary>A thumbnail height as asked (left out: 64), checked.</summary>
     public static int Height(int? height) {

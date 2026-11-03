@@ -534,9 +534,9 @@ export interface TrackMeter {
   peakRight: number;
   /**
    * Phase 10 (docs/11-phase-10.md, multichannel metering): the linear peak of every channel of the strip's output
-   * format, in its layout's order (`SpeakerLayouts`), for a strip (or the master) wider than stereo. Not in the
-   * committed contracts yet: the editor reads it when a Server sends it (the fake Server does), and meters fall back to
-   * `peakLeft`/`peakRight` otherwise.
+   * format, in its layout's order (`SpeakerLayouts`), for a strip (or the master) wider than stereo (`TrackMeter.Peaks`
+   * in `Realtime.cs`, relayed from the host's channel meters); absent for mono and stereo meters, which use
+   * `peakLeft`/`peakRight`.
    */
   peaks?: number[];
 }

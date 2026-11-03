@@ -150,7 +150,7 @@ import {
                   size="sm"
                   aria-label="ADM BWF bit depth"
                   data-testid="export-adm-depth"
-                  [options]="bitDepths"
+                  [options]="admBitDepths"
                   [value]="'' + form().bitDepth"
                   (valueChange)="patch({ bitDepth: depthOf($event) })"
                 />
@@ -336,6 +336,8 @@ export class InterchangeDialog {
     { value: '24', label: '24-bit' },
     { value: '32', label: '32-bit float' }
   ];
+  /** An ADM BWF is 24-bit PCM or 32-bit float (the Server refuses 16). */
+  protected readonly admBitDepths = this.bitDepths.slice(1);
   protected readonly surroundName = computed(() => SpeakerLayouts[this.project.settings().surroundFormat].name);
   protected readonly midiOptions: readonly { key: 'importTempo' | 'importMarkers' | 'merge'; label: string }[] = [
     { key: 'importTempo', label: 'Import the tempo map and signatures' },

@@ -7,7 +7,8 @@ namespace Anode.Server.Api;
 /// <summary>
 ///     Who may call the API. With <see cref="ServerOptions.Token" /> set (the desktop app always sets one, and a Server
 ///     reachable beyond localhost must) every request needs <c>Authorization: Bearer &lt;token&gt;</c>, or
-///     <c>?access_token=</c> on the WebSockets (<c>/ws</c> and Phase 10's listen-in), which browsers cannot give headers;
+///     <c>?access_token=</c> on the WebSockets (<c>/ws</c> and Phase 10's listen-in) and the movie's stream and frames, to
+///     which browsers cannot give headers;
 ///     any origin may then call, as a page
 ///     cannot forge the token. Without a token (development) only loopback origins pass CORS, so an arbitrary web page
 ///     cannot drive the engine through the browser.
@@ -85,8 +86,20 @@ public static class Access {
             return header[7..].Trim();
         }
 
-        return IsSocket(request) ? request.Query["access_token"].ToString() : null;
+        return IsSocket(request) || IsMedia(request) ? request.Query["access_token"].ToString() : null;
     }
+
+    /// <summary>
+    ///     The URLs elements load themselves (<c>&lt;video src&gt;</c>, <c>&lt;img src&gt;</c>, the editor's
+    ///     <c>mediaUrl</c>), which take the token in the query as the WebSockets do: the movie's stream and frames.
+    /// </summary>
+    static bool IsMedia(HttpRequest request) =>
+        (HttpMethods.IsGet(request.Method) || HttpMethods.IsHead(request.Method))
+        && (request.Path.StartsWithSegments(MoviePath + "/stream")
+            || request.Path.StartsWithSegments(MoviePath + "/frames"));
+
+    /// <summary>The movie's endpoints (Phase 10).</summary>
+    const string MoviePath = "/api/v1/project/movie";
 
     /// <summary>The WebSockets, which take the token in the query and need the origin check: <c>/ws</c> and listen-in.</summary>
     static bool IsSocket(HttpRequest request) =>

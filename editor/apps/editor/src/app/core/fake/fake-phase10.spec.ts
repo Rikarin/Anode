@@ -7,7 +7,8 @@ import {
   readListenInFrame,
   type ServerMessage
 } from '@anode/api-client';
-import { FakeListenInCodec } from './fake-phase10';
+import { KeyCommands } from '../../keys/key-commands';
+import { DefaultRemotePads, FakeListenInCodec } from './fake-phase10';
 import { FakeAnodeServer } from './fake-server';
 
 async function status(run: () => Promise<unknown>): Promise<number> {
@@ -260,5 +261,13 @@ describe('FakeAnodeServer, Phase 10 (docs/11-phase-10.md)', () => {
       expect((await server.listenInState()).on).toBe(false);
       expect(states.at(-1)).toBe(false);
     });
+  });
+});
+
+describe('the factory pad sets', () => {
+  it('run key commands the editor has (the real Server has the same sets, RemotePads.Default)', () => {
+    const ids = new Set(KeyCommands.map(c => c.id));
+    const missing = DefaultRemotePads.sets.flatMap(s => s.pads.map(p => p.commandId)).filter(id => !ids.has(id));
+    expect(missing).toEqual([]);
   });
 });

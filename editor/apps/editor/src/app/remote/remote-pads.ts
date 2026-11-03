@@ -7,8 +7,8 @@ import { Touch } from './remote-transport';
 
 /**
  * The remote's key-command pads (Logic Remote's Key Commands view, docs/11-phase-10.md): the pad sets from
- * `/remote/pads` (user settings), one shown at a time; a tap runs the pad's command. Commands the remote cannot run
- * (they act on the desktop's views) show disabled with why. Edit turns the grid into the set's editor: rename the set,
+ * `/remote/pads` (user settings), one shown at a time; a tap runs the pad's command, on the desktop editor (through
+ * the Server) when it acts on the desktop's views, which its tooltip says. Edit turns the grid into the set's editor: rename the set,
  * add a pad for any key command, rename, move or remove pads; each change is saved at once.
  */
 @Component({
@@ -153,7 +153,7 @@ import { Touch } from './remote-transport';
               class="bezel text-foreground relative flex min-h-20 flex-col items-start justify-end overflow-hidden rounded-md p-2 text-start text-[13px] font-semibold disabled:opacity-35"
               data-testid="key-pad"
               [attr.data-command]="pad.commandId"
-              [attr.disabled]="commands.runnable(pad.commandId) ? null : ''"
+              [attr.data-desktop]="commands.runnable(pad.commandId) ? null : ''"
               [xuiTooltip]="tooltip(pad)"
               (click)="commands.run(pad.commandId)"
             >

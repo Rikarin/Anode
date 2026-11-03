@@ -3,8 +3,16 @@ using Anode.Ipc.Telemetry;
 
 namespace Anode.Server.Engine;
 
-/// <summary>One consistent read of the host's telemetry region: the header, each track's meter, and the master's.</summary>
-public sealed record TelemetryFrame(TelemetryHeader Header, MeterEntry[] Tracks, MeterEntry Master);
+/// <summary>
+///     One consistent read of the host's telemetry region: the header, each track's meter, and the master's; and
+///     (Phase 10) the per-channel peaks of each meter wider than stereo (<see cref="TrackPeaks" /> by track index,
+///     <see cref="MasterPeaks" />), null for the others.
+/// </summary>
+public sealed record TelemetryFrame(TelemetryHeader Header, MeterEntry[] Tracks, MeterEntry Master) {
+    public float[]?[] TrackPeaks { get; init; } = [];
+
+    public float[]? MasterPeaks { get; init; }
+}
 
 /// <summary>
 ///     Reads the host's telemetry region (<see cref="TelemetryHeader" />), named in its hello: mapped read-only, read
@@ -58,13 +66,35 @@ public sealed unsafe class TelemetryReader : IDisposable {
             }
 
             var master = meters[count];
+            var channels = (ChannelMeterEntry*)(segment.Pointer + TelemetryLayout.ChannelMetersOffset);
+            var peaks = new float[]?[count];
+            for (var i = 0; i < count; i++) {
+                peaks[i] = Peaks(tracks[i], channels + i);
+            }
+
+            var masterPeaks = Peaks(master, channels + count);
             Interlocked.MemoryBarrier();
             if (Volatile.Read(ref header->Sequence) == before) {
-                return new(copy, tracks, master);
+                return new(copy, tracks, master) { TrackPeaks = peaks, MasterPeaks = masterPeaks };
             }
         }
 
         return null;
+    }
+
+    /// <summary>A meter's channel peaks when it has more than two channels, else null.</summary>
+    static float[]? Peaks(MeterEntry entry, ChannelMeterEntry* channels) {
+        if (entry.Channels <= 2) {
+            return null;
+        }
+
+        var n = Math.Min(entry.Channels, ChannelMeterEntry.MaxChannels);
+        var peaks = new float[n];
+        for (var c = 0; c < n; c++) {
+            peaks[c] = channels->Peaks[c];
+        }
+
+        return peaks;
     }
 
     public void Dispose() => segment.Dispose();

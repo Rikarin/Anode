@@ -70,7 +70,18 @@ public sealed record MetersEvent(
 /// <summary>An insert's reading (<c>IAudioEffect.Reading</c>); <c>trackId</c> null is the master.</summary>
 public sealed record InsertReading(string? TrackId, string InsertId, double Value);
 
-public sealed record TrackMeter(string TrackId, float PeakLeft, float PeakRight);
+/// <summary>
+///     A track's (or the master's, <c>trackId</c> <c>master</c>) peaks since the previous frame, linear. Phase 10: a
+///     strip whose output (or a master) is wider than stereo also has <paramref name="Peaks" />, every channel's peak in
+///     its layout's (ADM) order (<see cref="SpeakerLayouts" />), the first two being <paramref name="PeakLeft" /> and
+///     <paramref name="PeakRight" />; left out otherwise.
+/// </summary>
+public sealed record TrackMeter(
+    string TrackId,
+    float PeakLeft,
+    float PeakRight,
+    IReadOnlyList<float>? Peaks = null
+);
 
 /// <summary>
 ///     Live MIDI the engine received (from a device or <c>/midi/live</c>), batched up to 30 times a second, for

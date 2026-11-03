@@ -106,6 +106,7 @@ namespace Anode.Contracts;
 [JsonSerializable(typeof(MonitoringSettings))]
 [JsonSerializable(typeof(DiscoveryInfo))]
 [JsonSerializable(typeof(RemotePads))]
+[JsonSerializable(typeof(RunKeyCommandRequest))]
 [JsonSerializable(typeof(ListenInState))]
 [JsonSerializable(typeof(ListenInFormat))]
 public sealed partial class ContractsJsonContext : JsonSerializerContext;

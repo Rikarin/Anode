@@ -191,12 +191,13 @@ public sealed class Phase10ApiTests : IAsyncDisposable {
     [Fact]
     public async Task Pad_sets_are_user_settings_with_unique_ids() {
         await StartAsync();
-        var empty = await Client.GetFromJsonAsync(
+        // A new user has the factory sets (the editor's key command ids).
+        var factory = await Client.GetFromJsonAsync(
             "/api/v1/remote/pads",
             ContractsJsonContext.Default.RemotePads,
             Token
         );
-        Assert.Empty(empty!.Sets);
+        Assert.Equal(["transport", "editing"], factory!.Sets.Select(static s => s.Id));
         var pads = new RemotePads(
             [
                 new(
@@ -230,6 +231,29 @@ public sealed class Phase10ApiTests : IAsyncDisposable {
                 "/api/v1/remote/pads",
                 new RemotePads([new("set-2", "A", [new("pad", "Undo", string.Empty)])]),
                 ContractsJsonContext.Default.RemotePads,
+                Token
+            ),
+            HttpStatusCode.UnprocessableEntity
+        );
+    }
+
+    [Fact]
+    public async Task A_pad_the_remote_cannot_run_is_broadcast_for_the_desktop_editor_as_a_key_command() {
+        await StartAsync();
+        await using var events = await EventStream.ConnectAsync(Server);
+        var run = await Client.PostAsJsonAsync(
+            "/api/v1/remote/pads/run",
+            new RunKeyCommandRequest("view.mixer"),
+            ContractsJsonContext.Default.RunKeyCommandRequest,
+            Token
+        );
+        Assert.Equal(HttpStatusCode.NoContent, run.StatusCode);
+        await events.WaitAsync<KeyCommandEvent>(static e => e.Id == "view.mixer");
+        await ApiCalls.AssertProblemAsync(
+            await Client.PostAsJsonAsync(
+                "/api/v1/remote/pads/run",
+                new RunKeyCommandRequest(" "),
+                ContractsJsonContext.Default.RunKeyCommandRequest,
                 Token
             ),
             HttpStatusCode.UnprocessableEntity
@@ -280,7 +304,8 @@ public sealed class Phase10ApiTests : IAsyncDisposable {
         range.Headers.Range = new(10, 19);
         var partial = await Client.SendAsync(range, Token);
         Assert.Equal(HttpStatusCode.PartialContent, partial.StatusCode);
-        Assert.Equal("video/quicktime", partial.Content.Headers.ContentType?.MediaType);
+        // MOV is served as MP4 (the same file format), which Chromium's <video> plays and video/quicktime it refuses.
+        Assert.Equal("video/mp4", partial.Content.Headers.ContentType?.MediaType);
         Assert.Equal("bytes 10-19/1000", partial.Content.Headers.ContentRange?.ToString());
         Assert.Equal(
             Enumerable.Range(10, 10).Select(static i => (byte)i),
@@ -366,9 +391,12 @@ public sealed class Phase10ApiTests : IAsyncDisposable {
         var frame = await Client.GetAsync("/api/v1/project/movie/frames/10?height=64", Token);
         Assert.Equal(HttpStatusCode.OK, frame.StatusCode);
         Assert.Equal("image/jpeg", frame.Content.Headers.ContentType?.MediaType);
+        // A frame not cached is rendered on demand (the movie window's frame at the playhead); past the end: 404.
+        var onDemand = await Client.GetAsync("/api/v1/project/movie/frames/11?height=64", Token);
+        Assert.Equal(HttpStatusCode.OK, onDemand.StatusCode);
         Assert.Equal(
             HttpStatusCode.NotFound,
-            (await Client.GetAsync("/api/v1/project/movie/frames/11", Token)).StatusCode
+            (await Client.GetAsync("/api/v1/project/movie/frames/9999", Token)).StatusCode
         );
         Assert.Empty(
             (await Client.GetFromJsonAsync(
@@ -384,7 +412,7 @@ public sealed class Phase10ApiTests : IAsyncDisposable {
             ContractsJsonContext.Default.ThumbnailsRequest
         );
         Assert.Equal(
-            ["thumbnails 0,10 64", "thumbnails 20 64"],
+            ["thumbnails 0,10 64", "thumbnails 11 64", "thumbnails 20 64"],
             movies.Calls.Where(static c => c.StartsWith("thumbnails", StringComparison.Ordinal))
         );
         await ApiCalls.AssertProblemAsync(

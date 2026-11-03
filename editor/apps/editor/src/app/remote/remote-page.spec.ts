@@ -195,7 +195,7 @@ describe('the remote route', () => {
     expect(server.liveMidi.at(-1)?.events[0]).toMatchObject({ status: 0x90, data1: 36 });
   });
 
-  it('runs key-command pads it can, shows the rest as desktop-only, and edits the sets', async () => {
+  it('runs key-command pads it can, sends the rest to the desktop editor, and edits the sets', async () => {
     const { server, query, element, tab, stable } = await open(1);
     await tab('pads');
     const pad = (command: string) => query(`[data-testid="key-pad"][data-command="${command}"]`);
@@ -206,8 +206,20 @@ describe('the remote route', () => {
       .find(b => b.textContent.includes('Editing'))
       ?.click();
     await stable();
-    expect(pad('region.split')?.hasAttribute('disabled')).toBe(true);
-    expect(pad('track.marker')?.hasAttribute('disabled')).toBe(false);
+    expect(pad('region.split')?.hasAttribute('data-desktop')).toBe(true);
+    expect(pad('track.marker')?.hasAttribute('data-desktop')).toBe(false);
+    // A desktop-only pad goes to the desktop editor as the `keyCommand` event.
+    const relayed: string[] = [];
+    const unsubscribe = server.subscribe(m => {
+      if (m.type === 'keyCommand') {
+        relayed.push(m.id);
+      }
+    });
+    pad('region.split')?.click();
+    await stable();
+    await new Promise(resolve => setTimeout(resolve, 0));
+    unsubscribe();
+    expect(relayed).toEqual(['region.split']);
     pad('track.marker')?.click();
     await stable();
     expect(server.current?.markers).toHaveLength(1);

@@ -347,6 +347,8 @@ export interface AnodeApi {
   /** The remote's key-command pad sets (user settings). */
   remotePads(): Promise<RemotePads>;
   setRemotePads(pads: RemotePads): Promise<RemotePads>;
+  /** Asks the desktop editor to run a key command the remote cannot (broadcast as the `keyCommand` event). */
+  runRemoteKeyCommand(commandId: string): Promise<void>;
   /** Listen-in's state; the stream itself is the WebSocket at `listenInUrl` (`@anode/api-client`). */
   listenInState(): Promise<ListenInState>;
 }
@@ -941,6 +943,10 @@ export class HttpAnodeApi implements AnodeApi {
 
   async setRemotePads(pads: RemotePads): Promise<RemotePads> {
     return unwrap(await this.client.PUT('/api/v1/remote/pads', { body: pads }));
+  }
+
+  async runRemoteKeyCommand(commandId: string): Promise<void> {
+    unwrap(await this.client.POST('/api/v1/remote/pads/run', { body: { commandId } }));
   }
 
   async listenInState(): Promise<ListenInState> {

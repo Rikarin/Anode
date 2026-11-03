@@ -2256,6 +2256,16 @@ export class FakeAnodeServer implements AnodeApi {
     });
   }
 
+  runRemoteKeyCommand(commandId: string): Promise<void> {
+    return this.answer('RunRemoteKeyCommand', () => {
+      if (!commandId.trim() || commandId.length > 128) {
+        throw new ApiError(422, 'A key command id has 1…128 characters.');
+      }
+      // As the Server: a broadcast the desktop editor's key commands run.
+      this.emit({ type: 'keyCommand', id: commandId });
+    });
+  }
+
   listenInState(): Promise<ListenInState> {
     return this.answer('GetListenIn', () => this.listenInStatus());
   }

@@ -76,18 +76,19 @@ static class MediaApi {
             .WithSummary("The frames cached as thumbnails `height` pixels high (left out: 64), and their size.");
         movie.MapGet(
                 "/frames/{frame:long}",
-                static IResult(long frame, int? height, ProjectSession session) => {
-                    if (session.View is not { State.Movie: { } m } view) {
+                static async Task<IResult> (long frame, int? height, Jobs jobs, HttpContext http) => {
+                    try {
+                        var file = await jobs.MovieFrameAsync(frame, Movies.Height(height), http.RequestAborted);
+                        return TypedResults.PhysicalFile(file, "image/jpeg");
+                    } catch (ProjectException e) when (e.Status == StatusCodes.Status404NotFound) {
                         return TypedResults.NotFound();
                     }
-
-                    var file = Movies.ThumbnailOf(view.Folder, m, Movies.Height(height), frame);
-                    return File.Exists(file) ? TypedResults.PhysicalFile(file, "image/jpeg") : TypedResults.NotFound();
                 }
             )
             .WithName("GetMovieFrame")
             .WithSummary(
-                "A cached thumbnail as JPEG (`height` left out: 64); 404 when it is not rendered (RenderMovieThumbnails)."
+                "A movie frame as JPEG (`height` left out: 64): the cached thumbnail, else rendered now and cached; 404 "
+                + "without a movie or past its end, 503 without FFmpeg."
             )
             .Produces(StatusCodes.Status200OK, contentType: "image/jpeg")
             .Produces(StatusCodes.Status404NotFound);

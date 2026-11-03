@@ -1,6 +1,8 @@
 import { DestroyRef, Injectable, inject } from '@angular/core';
 import type { AutomationMode } from '@anode/api-client';
 import { AutomationStore } from '../automation/automation.store';
+import { ANODE_API } from '../core/api';
+import { Notify } from '../core/notify';
 import { KeyCommands } from '../keys/key-commands';
 import { HistoryStore } from '../state/history.store';
 import { KeyCommandsStore } from '../state/key-commands.store';
@@ -9,16 +11,16 @@ import { ProjectStore } from '../state/project.store';
 import { SelectionStore } from '../state/selection.store';
 import { TransportStore } from '../state/transport.store';
 
-/** Why a pad cannot run a command on the remote. */
+/** What a pad does whose command acts on the desktop's views. */
 export const DesktopOnly =
-  'Runs in the desktop editor only: the remote has no Tracks area or editors, and the Server has no way yet to ask the desktop to run a key command.';
+  'Runs in the desktop editor: the remote has no Tracks area or editors, so the Server asks the desktop to run it.';
 
 /**
  * The key commands the remote runs itself (docs/11-phase-10.md, "key-command pads"): the transport, undo and redo,
  * save, a marker at the playhead, the selected tracks' automation mode, and the Live Loops grid. They are registered
  * in the remote's own {@link KeyCommandsStore} while the remote is open (the desktop shell's registry does not exist
- * here; the remote page provides it, so they go when it does); the rest of Logic's commands act on the desktop's views
- * and show as unavailable.
+ * here; the remote page provides it, so they go when it does); the rest of Logic's commands act on the desktop's views,
+ * and the remote asks the Server to have the desktop editor run them (`POST /remote/pads/run`, the `keyCommand` event).
  */
 @Injectable()
 export class RemoteCommands {
@@ -29,6 +31,8 @@ export class RemoteCommands {
   private readonly project = inject(ProjectStore);
   private readonly selection = inject(SelectionStore);
   private readonly automation = inject(AutomationStore);
+  private readonly api = inject(ANODE_API);
+  private readonly notify = inject(Notify);
 
   private readonly actions: Readonly<Record<string, () => void>> = {
     'transport.play': () => this.transport.togglePlay(),
@@ -67,9 +71,13 @@ export class RemoteCommands {
     return commandId in this.actions;
   }
 
-  /** Runs a command; false when the remote cannot. */
+  /** Runs a command: here when the remote can, else on the desktop editor through the Server. */
   run(commandId: string): boolean {
-    return this.runnable(commandId) && this.keys.run(commandId);
+    if (this.runnable(commandId)) {
+      return this.keys.run(commandId);
+    }
+    void this.notify.run(() => this.api.runRemoteKeyCommand(commandId), 'Could not reach the desktop');
+    return true;
   }
 
   label(commandId: string): string {

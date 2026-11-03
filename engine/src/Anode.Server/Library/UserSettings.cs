@@ -219,7 +219,7 @@ public sealed class UserSettings(IOptions<ServerOptions> options) {
     public RemotePads RemotePads() =>
         Read("remote-pads.json", ContractsJsonContext.Default.RemotePads) is { Sets: not null } pads
             ? pads
-            : Contracts.RemotePads.Empty;
+            : Contracts.RemotePads.Default;
 
     /// <summary>
     ///     Saves the pad sets: at most 64 of 64 pads, ids unique across sets and pads (1…64 characters), names and labels

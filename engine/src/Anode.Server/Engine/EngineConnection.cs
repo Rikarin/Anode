@@ -774,14 +774,18 @@ public sealed class EngineConnection(
     static (MetersEvent Meters, bool Live) Meters(TelemetryFrame frame, OpenProjectView view) {
         var meters = new List<TrackMeter>(frame.Tracks.Length);
         var live = frame.Master.PeakLeft > 0 || frame.Master.PeakRight > 0;
-        foreach (var entry in frame.Tracks) {
+        for (var i = 0; i < frame.Tracks.Length; i++) {
+            var entry = frame.Tracks[i];
             if (view.Ids.TrackOf(entry.TrackId) is { } id) {
-                meters.Add(new(id, entry.PeakLeft, entry.PeakRight));
-                live |= entry.PeakLeft > 0 || entry.PeakRight > 0;
+                var peaks = i < frame.TrackPeaks.Length ? frame.TrackPeaks[i] : null;
+                meters.Add(new(id, entry.PeakLeft, entry.PeakRight, peaks));
+                live |= entry.PeakLeft > 0 || entry.PeakRight > 0 || peaks?.Any(static p => p > 0) == true;
             }
         }
 
-        return (new(meters, new("master", frame.Master.PeakLeft, frame.Master.PeakRight)), live);
+        var master = new TrackMeter("master", frame.Master.PeakLeft, frame.Master.PeakRight, frame.MasterPeaks);
+        live |= frame.MasterPeaks?.Any(static p => p > 0) == true;
+        return (new(meters, master), live);
     }
 
     void Kick() {

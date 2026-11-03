@@ -43,9 +43,42 @@ public sealed record PadSet(string Id, string Name, IReadOnlyList<KeyCommandPad>
 ///     and pads.
 /// </summary>
 public sealed record RemotePads(IReadOnlyList<PadSet> Sets) {
-    /// <summary>A new user's: no sets (the remote offers its factory set until there are).</summary>
+    /// <summary>No sets.</summary>
     public static RemotePads Empty { get; } = new([]);
+
+    /// <summary>
+    ///     A new user's (decided at integration; the editor's fake Server has the same, <c>DefaultRemotePads</c>): Logic
+    ///     Remote's transport and editing pads, by the editor's key command ids (<c>keys/key-commands.ts</c>).
+    /// </summary>
+    public static RemotePads Default { get; } = new([
+        new(
+            "transport",
+            "Transport",
+            [
+                new("p1", "Play", "transport.play", "#3fae4a"), new("p2", "Record", "transport.record", "#e5483a"),
+                new("p3", "Cycle", "transport.cycle", "#e6b422"), new("p4", "Go to Start", "transport.goToStart"),
+                new("p5", "Metronome", "transport.metronome"), new("p6", "Capture Recording", "transport.flashback"),
+                new("p7", "Undo", "edit.undo"), new("p8", "Redo", "edit.redo"), new("p9", "Save", "project.save")
+            ]
+        ),
+        new(
+            "editing",
+            "Editing",
+            [
+                new("e1", "Create Marker", "track.marker", "#3b82c4"), new("e2", "Split at Playhead", "region.split"),
+                new("e3", "Join", "region.join"), new("e4", "Mute Regions", "region.mute"),
+                new("e5", "Automation Read", "automation.read"), new("e6", "Automation Touch", "automation.touch"),
+                new("e7", "Automation Latch", "automation.latch"), new("e8", "Live Loops", "view.liveLoops")
+            ]
+        )
+    ]);
 }
+
+/// <summary>
+///     <c>POST /remote/pads/run</c>: a key command for the desktop editor to run (one the remote cannot run itself, as
+///     a pad's <see cref="KeyCommandPad.CommandId" />); the Server broadcasts it as the <c>keyCommand</c> event (Phase 8).
+/// </summary>
+public sealed record RunKeyCommandRequest(string CommandId);
 
 /// <summary>
 ///     Listen-in (<c>GET /remote/listen/state</c>, the <c>listenIn</c> event): <c>on</c> while the master is being

@@ -4516,7 +4516,7 @@
         "tags": [
           "Movie"
         ],
-        "summary": "A cached thumbnail as JPEG (\u0060height\u0060 left out: 64); 404 when it is not rendered (RenderMovieThumbnails).",
+        "summary": "A movie frame as JPEG (\u0060height\u0060 left out: 64): the cached thumbnail, else rendered now and cached; 404 without a movie or past its end, 503 without FFmpeg.",
         "operationId": "GetMovieFrame",
         "parameters": [
           {
@@ -4913,6 +4913,40 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "/api/v1/remote/pads/run": {
+      "post": {
+        "tags": [
+          "Remote"
+        ],
+        "summary": "Asks the desktop editor to run a key command the remote cannot run itself: broadcast as the keyCommand event, as a controller assignment\u0027s (422 for a malformed id).",
+        "operationId": "RunRemoteKeyCommand",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RunKeyCommandRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "No Content"
           }
         }
       }
@@ -16606,6 +16640,18 @@
           }
         },
         "description": "The surfaces\u0027 new order (\u0060PUT /control/surfaces/order\u0060): every surface id, once, left to right."
+      },
+      "RunKeyCommandRequest": {
+        "required": [
+          "commandId"
+        ],
+        "type": "object",
+        "properties": {
+          "commandId": {
+            "type": "string"
+          }
+        },
+        "description": "\u0060POST /remote/pads/run\u0060: a key command for the desktop editor to run (one the remote cannot run itself, as\n            a pad\u0027s string KeyCommandPad.CommandId); the Server broadcasts it as the \u0060keyCommand\u0060 event (Phase 8)."
       },
       "SampleRange": {
         "required": [
