@@ -120,6 +120,7 @@ public sealed class Phase11ApiTests : IAsyncDisposable {
         var first = await NotesAsync(chorus.Id);
         Assert.All(first.Notes.Where(static n => n.Pitch != 60), static n => Assert.Equal(36 + 5, n.Pitch));
         // The host plays them on the track.
+        await ServerFixture.Eventually(() => Task.FromResult(Host.Tracks.Count == 1));
         var engineId = Host.Tracks.Values.Single().Id;
         await ServerFixture.Eventually(() => Task.FromResult(
                 Host.EventsOf(engineId).Any(static e => e.Kind == PlaybackEventKind.NoteOn && e.Data1 == 41)
@@ -371,6 +372,20 @@ public sealed class Phase11ApiTests : IAsyncDisposable {
             Token
         ))!;
         Assert.Equal("Analyse Mastering", history.Undo[0].Label);
+    }
+
+    [Fact]
+    public async Task A_control_target_s_move_in_the_host_moves_the_strip_in_the_model() {
+        await StartAsync();
+        await Client.EditAsync(new AddTrackCommand(Kind: TrackKind.Instrument));
+        var track = (await Client.ProjectAsync()).Tracks[0];
+        var engineTrack = Server.Services.GetRequiredService<ProjectSession>().View!.Ids.Track(track.Id);
+        await Host.ReportEnvironmentControlAsync(new EngineControlMove(new(-1, engineTrack, "volume"), 0.6f));
+        await ServerFixture.Eventually(async () =>
+            Math.Abs((await Client.ProjectAsync()).Tracks[0].Strip.VolumeDb + 6) < 0.01
+        );
+        await Host.ReportEnvironmentControlAsync(new EngineControlMove(new(-1, -1, "volume"), 0.45f));
+        await ServerFixture.Eventually(async () => Math.Abs((await Client.ProjectAsync()).Master.VolumeDb + 12) < 0.01);
     }
 
     [Fact]

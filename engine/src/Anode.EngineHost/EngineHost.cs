@@ -94,6 +94,7 @@ public sealed class EngineHost : IDisposable {
         Controller.ScriptLog = log => Push?.Invoke(log);
         Controller.Midi.StepInput = step => Push?.Invoke(step);
         Controller.Midi.ControlMidi = batch => Push?.Invoke(batch);
+        Controller.EnvironmentControl = moves => Push?.Invoke(moves);
         string? telemetryName = null;
         byte* region;
         if (sharedTelemetry) {
@@ -665,6 +666,7 @@ public sealed class EngineHost : IDisposable {
             SetMasterTapMessage => "setMasterTap",
             SetEnvironmentMessage => "setEnvironment",
             EnvironmentMidiMessage => "environmentMidi",
+            EnvironmentControlMessage => "environmentControl",
             _ => message.GetType().Name
         };
 

@@ -79,6 +79,12 @@ public sealed partial class EngineConnection(
     /// </summary>
     public event Action<ControlMidiMessage>? ControlMidi;
 
+    /// <summary>
+    ///     Phase 11: the Environment's control targets moved (<see cref="EnvironmentControlMessage" />), raised on the
+    ///     reading loop.
+    /// </summary>
+    public event Action<EnvironmentControlMessage>? EnvironmentControl;
+
     /// <summary>Phase 8: the host's sync state (<see cref="SyncStateMessage" />), raised on the reading loop.</summary>
     public event Action<SyncStateMessage>? SyncStateArrived;
 
@@ -629,6 +635,9 @@ public sealed partial class EngineConnection(
                 case ControlMidiMessage control when control.Events is { Count: > 0 }:
                     // In order, here: a gesture's moves (and a 14-bit pair's halves) follow one another.
                     ControlMidi?.Invoke(control);
+                    break;
+                case EnvironmentControlMessage control when control.Moves is { Count: > 0 }:
+                    EnvironmentControl?.Invoke(control);
                     break;
                 case SyncStateMessage sync:
                     SyncStateArrived?.Invoke(sync);

@@ -135,6 +135,16 @@ public static class AutomationEvents {
         };
     }
 
+    /// <summary>The automation address of a target, the inverse of <see cref="Describe" />.</summary>
+    public static string Address(EngineAutomationTarget target) =>
+        target switch {
+            { Kind: "instrument" or "surround" or "object", ParameterId: { } parameter } =>
+                $"{target.Kind}:{parameter}",
+            { Id: { } id, ParameterId: { } parameter } => $"{target.Kind}:{id}:{parameter}",
+            { Id: { } id } => $"{target.Kind}:{id}",
+            _ => target.Kind
+        };
+
     /// <summary>The automation events of a strip (null: the master) under engine track <paramref name="engineTrack" />.</summary>
     public static PlaybackEvent[] Compile(
         ProjectState state,

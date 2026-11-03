@@ -160,12 +160,18 @@ public sealed unsafe class EnvironmentEngineTests : IDisposable {
             )
         );
         var strip = controller.Engine.Root.Tracks[0].Strip;
+        var reported = new List<EngineControlMove>();
+        controller.EnvironmentControl = message => reported.AddRange(message.Moves);
         Assert.False(controller.EnvironmentMidi(4, [new(0xB0, 7, 127)]));
         Assert.True(controller.EnvironmentMidi(0, [new(0xB0, 7, 127)]));
         Callbacks(1);
         controller.PumpControl();
         Assert.Equal(Math.Pow(10, 6 / 20.0), strip.Gain, 1e-5); // the top of the fader law: +6 dB
         Assert.Equal(1f, strip.Pan);
+        // What moved goes to the server, each target's latest, so the model and the editor's strip follow.
+        Assert.Equal(2, reported.Count);
+        Assert.Contains(reported, static m => m.Target.Kind == "volume" && m.Value == 1f);
+        Assert.Contains(reported, static m => m.Target.Kind == "pan" && m.Value == 1f);
         Assert.True(controller.EnvironmentMidi(0, [new(0xB0, 7, 99)]));
         Callbacks(1);
         controller.PumpControl();

@@ -65,6 +65,7 @@ namespace Anode.Ipc;
 [JsonDerivedType(typeof(SetMasterTapMessage), "setMasterTap")]
 [JsonDerivedType(typeof(SetEnvironmentMessage), "setEnvironment")]
 [JsonDerivedType(typeof(EnvironmentMidiMessage), "environmentMidi")]
+[JsonDerivedType(typeof(EnvironmentControlMessage), "environmentControl")]
 public abstract record IpcMessage;
 
 /// <summary>
@@ -998,3 +999,13 @@ public sealed record SetEnvironmentMessage(EngineEnvironment? Environment) : Ipc
 ///     a move), entering at that object at the next block's start.
 /// </summary>
 public sealed record EnvironmentMidiMessage(int ObjectIndex, IReadOnlyList<EngineMidiEvent> Events) : IpcMessage;
+
+/// <summary>
+///     Host → server (Phase 11, added at integration): the Environment's control targets moved strip parameters
+///     (at most every 30 ms, the latest value of each), so the model and the editor's strips follow as they do a control
+///     surface's moves. The host has applied them already.
+/// </summary>
+public sealed record EnvironmentControlMessage(IReadOnlyList<EngineControlMove> Moves) : IpcMessage;
+
+/// <summary>A control target's move: its parameter (<paramref name="Target" />) to <paramref name="Value" />, 0…1.</summary>
+public sealed record EngineControlMove(EngineAutomationTarget Target, float Value);

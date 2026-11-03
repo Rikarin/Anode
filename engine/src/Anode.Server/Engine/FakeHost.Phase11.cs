@@ -12,6 +12,10 @@ namespace Anode.Server.Engine;
 public sealed partial class FakeHost {
     readonly List<EnvironmentMidiMessage> environmentMidi = [];
 
+    /// <summary>Control targets' moves, as a graph in the host reports them.</summary>
+    public Task ReportEnvironmentControlAsync(params EngineControlMove[] moves) =>
+        SendAsync(new EnvironmentControlMessage(moves));
+
     /// <summary>The Environment the server last sent (null: the default input path).</summary>
     public EngineEnvironment? Environment {
         get {

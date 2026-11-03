@@ -16,7 +16,15 @@ public sealed partial class EngineController {
         (0, -144), (0.02, -60), (0.08, -45), (0.18, -30), (0.3, -20), (0.45, -12), (0.6, -6), (0.78, 0), (1, 6)
     ];
 
+    /// <summary>How often the control targets' moves are reported to the server.</summary>
+    const long ControlReportMilliseconds = 30;
+
+    readonly Dictionary<EngineAutomationTarget, float> movedTargets = [];
+    long lastControlReport = long.MinValue / 2;
     Timer? controlPump;
+
+    /// <summary>The control targets' moves on their way to the server (<see cref="EnvironmentControlMessage" />).</summary>
+    public Action<EnvironmentControlMessage>? EnvironmentControl { get; set; }
 
     /// <summary>
     ///     Replaces the Environment (<c>setEnvironment</c>, and a whole model's load; null: the default input path),
@@ -54,17 +62,25 @@ public sealed partial class EngineController {
     /// <summary>
     ///     The control targets' moves since the last pass, applied (tests call it directly): a volume or send level
     ///     along the fader law, a pan over −1…1, a mute on at 0.5, a plugin parameter over its range. Panner targets are
-    ///     not driven.
+    ///     not driven. What moved goes to the server, the latest of each target at most every
+    ///     <see cref="ControlReportMilliseconds" />.
     /// </summary>
     public void PumpControl() {
-        if (Engine.ControlOut.Count == 0) {
-            return;
-        }
-
         lock (gate) {
-            var root = Engine.Root;
-            while (Engine.ControlOut.TryDequeue(out var move)) {
-                Apply(root, move.Target, Math.Clamp(move.Value, 0f, 1f));
+            if (Engine.ControlOut.Count > 0) {
+                var root = Engine.Root;
+                while (Engine.ControlOut.TryDequeue(out var move)) {
+                    var value = Math.Clamp(move.Value, 0f, 1f);
+                    Apply(root, move.Target, value);
+                    movedTargets[move.Target] = value;
+                }
+            }
+
+            var now = System.Environment.TickCount64;
+            if (movedTargets.Count > 0 && now - lastControlReport >= ControlReportMilliseconds) {
+                lastControlReport = now;
+                EnvironmentControl?.Invoke(new([..movedTargets.Select(static m => new EngineControlMove(m.Key, m.Value))]));
+                movedTargets.Clear();
             }
         }
     }

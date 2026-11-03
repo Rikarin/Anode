@@ -1,7 +1,9 @@
 using Anode.Contracts;
 using Anode.Control.Assignments;
 using Anode.Control.Surfaces;
+using Anode.Ipc;
 using Anode.Model;
+using Anode.Model.Compile;
 using Anode.Model.Editing;
 using Anode.Model.History;
 using Anode.Server.Projects;
@@ -62,6 +64,44 @@ public sealed partial class ControlService {
             case ControlTargetKind.ZoneMode:
                 // The engine switched the mode itself (Receive keeps it).
                 break;
+        }
+    }
+
+    /// <summary>
+    ///     The Environment's control targets moved strip parameters (Phase 11): the host has applied them; the model takes
+    ///     each as a control's gesture, so the strips follow and an undo takes the move back whole.
+    /// </summary>
+    void OnEnvironmentControl(EnvironmentControlMessage message) {
+        if (session.View is not { } view) {
+            return;
+        }
+
+        foreach (var move in message.Moves ?? []) {
+            var address = AutomationEvents.Address(move.Target);
+            if (move.Target.TrackId == AutomationEvents.MasterTrack) {
+                SetMaster(address, move.Value);
+            } else if (view.State.FindTrack(view.Ids.TrackOf(move.Target.TrackId) ?? string.Empty) is { } track) {
+                SetParameter("environment", view, track, address, move.Value);
+            }
+        }
+    }
+
+    /// <summary>The master's fader, pan or mute from a control target.</summary>
+    void SetMaster(string address, double value) {
+        EditCommand? command = address switch {
+            "volume" => new SetStripCommand(null, Taper.Db(value)),
+            "pan" => new SetStripCommand(null, Pan: value * 2 - 1),
+            "mute" => new SetStripCommand(null, Mute: value >= 0.5),
+            _ => null
+        };
+        if (command is null) {
+            return;
+        }
+
+        try {
+            session.Apply(new([command]), null, GestureKey($"environment|master|{address}"));
+        } catch (ProjectException e) {
+            ControlLog.MoveIgnored(logger, e.Message);
         }
     }
 

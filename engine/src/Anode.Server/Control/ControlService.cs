@@ -69,6 +69,7 @@ public sealed partial class ControlService(
 
         engine.HostConnected += OnHostConnected;
         engine.ControlMidi += OnControlMidi;
+        engine.EnvironmentControl += OnEnvironmentControl;
         engine.MetersRead += OnMeters;
         await base.StartAsync(cancellationToken).ConfigureAwait(false);
     }
@@ -76,6 +77,7 @@ public sealed partial class ControlService(
     public override async Task StopAsync(CancellationToken cancellationToken) {
         engine.HostConnected -= OnHostConnected;
         engine.ControlMidi -= OnControlMidi;
+        engine.EnvironmentControl -= OnEnvironmentControl;
         engine.MetersRead -= OnMeters;
         await base.StopAsync(cancellationToken).ConfigureAwait(false);
         lock (gate) {
