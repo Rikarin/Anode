@@ -107,6 +107,21 @@ public sealed unsafe partial class AudioEngine {
         set => Volatile.Write(ref cycleObserver, value);
     }
 
+    /// <summary>
+    ///     Any thread (the telemetry's): the master's Mastering Assistant, the last insert on it that is one (Phase 11;
+    ///     <c>Active</c> 0 when there is none).
+    /// </summary>
+    public Ipc.Telemetry.MasteringEntry MasteringReading() {
+        var inserts = Volatile.Read(ref root).Mix.Master.Config.Inserts;
+        for (var k = inserts.Length - 1; k >= 0; k--) {
+            if (inserts[k].Slot.Mastering is { } meter) {
+                return meter.Reading();
+            }
+        }
+
+        return default;
+    }
+
     /// <summary>Control thread: delay compensation, and low-latency mode with its limit in frames.</summary>
     public void SetMixer(DelayCompensation compensation, bool lowLatencyMode, int limitFrames) {
         Volatile.Write(ref delayCompensation, (int)compensation);
@@ -540,6 +555,8 @@ public sealed unsafe partial class AudioEngine {
         foreach (var insert in config.Inserts) {
             if (Active(insert, live) is { } effect) {
                 total += Math.Max(0, effect.LatencySamples);
+            } else if (insert is { Bypassed: false, Slot.Format: { } stage }) {
+                total += Math.Max(0, stage.Effect.LatencySamples); // Phase 11: a format insert, never cut
             }
         }
 
@@ -968,6 +985,8 @@ public sealed unsafe partial class AudioEngine {
             } else {
                 ProcessAutomated(effect, node.InsertBindings[k], node.InsertLast[k], left, right, sideL, sideR);
             }
+
+            insert.Slot.Mastering?.Measure(left, right, blockTransport.Playing); // Phase 11: the assistant's output
         }
 
         return stereo;

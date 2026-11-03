@@ -102,6 +102,18 @@ public sealed class MixNode {
     /// <summary>The format of a signal of more than two channels (its layout's order).</summary>
     public SpeakerFormat Format { get; init; } = SpeakerFormat.Stereo;
 
+    /// <summary>
+    ///     Phase 11: the channels of the signal after the inserts, which the fader, the sends and the output carry: the
+    ///     source's (<see cref="Width" />), unless an insert changes the format (<see cref="FormatInserts" />).
+    /// </summary>
+    public int SignalWidth { get; init; } = 2;
+
+    /// <summary>The format after the inserts (<see cref="Format" /> unless an insert changes it).</summary>
+    public SpeakerFormat SignalFormat { get; init; } = SpeakerFormat.Stereo;
+
+    /// <summary>An insert changes the channel's format (it then runs the multichannel path).</summary>
+    public bool FormatInserts { get; init; }
+
     /// <summary>How the output reaches its summing point (null: nowhere, or the master's own output).</summary>
     public MixEdge? OutputEdge { get; init; }
 
@@ -199,14 +211,17 @@ public sealed class MixPlan {
     /// <summary>Each summing point's format: the master's input format, an aux's bus's.</summary>
     public SpeakerFormat[] DestinationFormats { get; private init; }
 
-    /// <summary>The master is not stereo: it runs the multichannel path.</summary>
-    public bool MasterMulti => Master.Width != 2;
+    /// <summary>The master is not stereo (or an insert changes its format): it runs the multichannel path.</summary>
+    public bool MasterMulti => Master.Width != 2 || Master.FormatInserts;
 
     /// <summary>Any channel or summing point is not stereo (the multichannel path runs at all).</summary>
     public bool Multichannel { get; private init; }
 
-    /// <summary>The master's format.</summary>
+    /// <summary>The master's format (its input's, the sum's).</summary>
     public SpeakerFormat MasterFormat => DestinationFormats[0];
+
+    /// <summary>What the master sends the device stage: its format after its inserts (Phase 11).</summary>
+    public SpeakerFormat MasterOutputFormat => Master.SignalFormat;
 
     /// <summary>The channels whose output is an object, by object index (Phase 10).</summary>
     public MixNode[] Objects { get; private init; } = [];
@@ -316,7 +331,7 @@ public sealed class MixPlan {
                 Multichannel = widths.Any(static w => w != 2) || order.Any(static n => n.Multi),
                 Objects = [..objects],
                 ObjectRenderer = objects.Count > 0 ? spatial.ObjectRenderer(formats[0]) : null,
-                TapDownmix = widths[0] > 2 ? spatial.TapDownmix(formats[0]) : null
+                TapDownmix = masterNode.SignalWidth > 2 ? spatial.TapDownmix(masterNode.SignalFormat) : null
             };
         }
 
@@ -343,6 +358,9 @@ public sealed class MixPlan {
             bool Multi,
             int Width,
             SpeakerFormat Format,
+            int SignalWidth,
+            SpeakerFormat SignalFormat,
+            bool FormatInserts,
             MixEdge? Output,
             MixEdge?[] Sends,
             int[] Surround,
@@ -358,8 +376,9 @@ public sealed class MixPlan {
             int output,
             int[] sends
         ) {
-            var width = WidthOf(track, config);
-            var format = FormatOf(track, width);
+            var sourceWidth = WidthOf(track, config);
+            var sourceFormat = FormatOf(track, sourceWidth);
+            var (width, format, changes) = AfterInserts(config, sourceWidth, sourceFormat);
             surroundUsed = false;
             var outputEdge = track is null
                 ? null
@@ -369,12 +388,15 @@ public sealed class MixPlan {
                 sendEdges[s] = Edge(channel, config.Sends[s].Slot, width, format, sends[s], false);
             }
 
-            var multi = width > 2 || surroundUsed;
+            var multi = sourceWidth > 2 || width > 2 || surroundUsed || changes;
             if (!multi || track is null) {
                 return new(
                     multi,
+                    sourceWidth,
+                    sourceFormat,
                     width,
                     format,
+                    changes,
                     outputEdge,
                     sendEdges,
                     [-1, -1, -1, -1, -1, -1],
@@ -386,7 +408,40 @@ public sealed class MixPlan {
             int[] surround = [..SurroundParameters.Select(p => Lane(trackId, AutomationKind.Surround, null, p))];
             int[] position = [..ObjectParameters.Select(p => Lane(trackId, AutomationKind.Object, null, p))];
             var automated = surround.Any(static t => t >= 0) || position.Any(static t => t >= 0);
-            return new(true, width, format, outputEdge, sendEdges, surround, position, automated);
+            return new(
+                true,
+                sourceWidth,
+                sourceFormat,
+                width,
+                format,
+                changes,
+                outputEdge,
+                sendEdges,
+                surround,
+                position,
+                automated
+            );
+        }
+
+        /// <summary>
+        ///     The signal after the channel's inserts (Phase 11): each format insert's prepared stage outputs its format
+        ///     (one without a stage passes the signal as it is); whether any insert changes the format.
+        /// </summary>
+        static (int Width, SpeakerFormat Format, bool Changes) AfterInserts(
+            ChannelConfig config,
+            int width,
+            SpeakerFormat format
+        ) {
+            var changes = false;
+            foreach (var insert in config.Inserts) {
+                if (insert.Slot is { IsFormat: true, Format: { } stage }) {
+                    format = stage.Out;
+                    width = stage.OutChannels;
+                    changes = true;
+                }
+            }
+
+            return (width, format, changes);
         }
 
         /// <summary>The format of a channel's signal: the master's, an aux's bus's, a track's mono or stereo.</summary>
@@ -585,6 +640,9 @@ public sealed class MixPlan {
                 Multi = spatialParts.Multi,
                 Width = spatialParts.Width,
                 Format = spatialParts.Format,
+                SignalWidth = spatialParts.SignalWidth,
+                SignalFormat = spatialParts.SignalFormat,
+                FormatInserts = spatialParts.FormatInserts,
                 OutputEdge = spatialParts.Output,
                 SendEdges = spatialParts.Sends,
                 SurroundTargets = spatialParts.Surround,

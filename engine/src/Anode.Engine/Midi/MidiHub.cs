@@ -31,6 +31,7 @@ public sealed class MidiHub : IDisposable {
     readonly Lock activityGate = new();
     readonly MidiInputMessage[] input = new MidiInputMessage[ReadBatch];
     readonly List<OutgoingMidi> due = [];
+    readonly List<OutgoingPortMidi> duePorts = [];
     readonly Dictionary<int, List<RecordedMidiEvent>> captured = [];
     readonly Dictionary<int, List<(long Clock, RecordedMidiEvent Event)>> history = [];
     readonly byte[] message = new byte[3];
@@ -48,7 +49,6 @@ public sealed class MidiHub : IDisposable {
     int knownPorts = -1;
     long lastScan;
     long lastActivity;
-    int thru = -1;
     readonly Lock stepGate = new();
     StepChord? stepChord;
 
@@ -75,8 +75,8 @@ public sealed class MidiHub : IDisposable {
 
     /// <summary>The track that hears live input when no armed track takes it (−1: none).</summary>
     public int ThruTrack {
-        get => Volatile.Read(ref thru);
-        set => Volatile.Write(ref thru, value);
+        get => engine.ThruTrack;
+        set => engine.ThruTrack = value;
     }
 
     /// <summary>Anode's virtual input's uid (the contract's <c>VirtualMidiPorts.InputId</c>).</summary>
@@ -182,7 +182,8 @@ public sealed class MidiHub : IDisposable {
 
     /// <summary>
     ///     Control thread: plays <paramref name="events" /> on track <paramref name="trackId" /> now (the server's live
-    ///     MIDI). False when the model has no such track.
+    ///     MIDI); with an Environment (Phase 11), through it, entering at its physical inputs. False when the model has
+    ///     no such track.
     /// </summary>
     public bool Live(int trackId, IReadOnlyList<EngineMidiEvent> events) {
         foreach (var e in events) {
@@ -197,12 +198,18 @@ public sealed class MidiHub : IDisposable {
 
         var track = root.Tracks[index];
         var now = Now();
+        var environment = engine.EnvironmentActive;
         foreach (var e in events) {
             if (e.Status is < 0x80 or >= 0xF0) {
                 continue;
             }
 
-            Push(root, track, new(now, (byte)e.Status, (byte)(e.Data1 & 0x7F), (byte)(e.Data2 & 0x7F)));
+            var (status, data1, data2) = ((byte)e.Status, (byte)(e.Data1 & 0x7F), (byte)(e.Data2 & 0x7F));
+            if (environment) {
+                engine.EnterEnvironment(new(now, status, data1, data2, null, trackId)); // Phase 11: through it
+            } else {
+                Push(root, track, new(now, status, data1, data2));
+            }
         }
 
         lock (activityGate) {
@@ -348,7 +355,7 @@ public sealed class MidiHub : IDisposable {
     /// <summary>
     ///     A message from a device: to the server when the control routing takes it (and, then, nowhere else), a
     ///     system message to the sync follower, the rest to every armed MIDI track whose input matches, else to the thru
-    ///     track.
+    ///     track; with an Environment (Phase 11), the rest into it instead, which routes it.
     /// </summary>
     void Route(ModelRoot root, IReadOnlyList<MidiPortInfo> known, in MidiInputMessage m) {
         if (m.Status < 0x80) {
@@ -361,6 +368,12 @@ public sealed class MidiHub : IDisposable {
         }
 
         Forward(m.Status, m.Data1, m.Data2);
+        if (engine.EnvironmentActive) {
+            engine.EnterEnvironment(new(m.TimeNs, m.Status, m.Data1, m.Data2, device));
+            Note(-1, device, m);
+            return;
+        }
+
         var live = new LiveMidi(m.TimeNs, m.Status, m.Data1, m.Data2);
         var routed = false;
         foreach (var track in root.Tracks) {
@@ -541,7 +554,8 @@ public sealed class MidiHub : IDisposable {
 
     readonly record struct PendingSync(long TimeNs, string Port, OutgoingSync Event);
 
-    static bool Matches(EngineMidiIo? io, string? device, byte status) =>
+    /// <summary>Whether a track's MIDI input (device and channel; null: any) takes a message from <paramref name="device" />.</summary>
+    internal static bool Matches(EngineMidiIo? io, string? device, byte status) =>
         io is null
         || ((io.InputDevice is null || io.InputDevice == device)
             && (io.InputChannel == 0 || io.InputChannel == (status & 0x0F) + 1));
@@ -591,8 +605,12 @@ public sealed class MidiHub : IDisposable {
         }
     }
 
-    /// <summary>External MIDI tracks' messages to their ports: at once when the OS schedules them, else when due.</summary>
+    /// <summary>
+    ///     External MIDI tracks' messages, and the Environment's MIDI port objects' (Phase 11), to their ports: at once
+    ///     when the OS schedules them, else when due.
+    /// </summary>
     void SendOutput() {
+        SendPorts();
         var root = engine.Root;
         while (engine.MidiOut.TryDequeue(out var e)) {
             if (backend is null) {
@@ -622,6 +640,45 @@ public sealed class MidiHub : IDisposable {
         }
 
         due.RemoveRange(0, sent);
+    }
+
+    /// <summary>The Environment's MIDI port objects' messages (Phase 11), as external tracks' are sent.</summary>
+    void SendPorts() {
+        while (engine.EnvironmentOut.TryDequeue(out var e)) {
+            if (backend is null) {
+                continue;
+            }
+
+            if (backend.SchedulesOutput) {
+                SendPort(e);
+            } else {
+                var at = duePorts.Count;
+                while (at > 0 && duePorts[at - 1].TimeNs > e.TimeNs) {
+                    at--;
+                }
+
+                duePorts.Insert(at, e);
+            }
+        }
+
+        if (duePorts.Count == 0) {
+            return;
+        }
+
+        var now = Now();
+        var sent = 0;
+        while (sent < duePorts.Count && duePorts[sent].TimeNs <= now) {
+            SendPort(duePorts[sent++]);
+        }
+
+        duePorts.RemoveRange(0, sent);
+    }
+
+    void SendPort(in OutgoingPortMidi e) {
+        message[0] = e.Status;
+        message[1] = e.Data1;
+        message[2] = e.Data2;
+        backend!.Send(e.Port, message.AsSpan(0, Length(e.Status)), e.TimeNs);
     }
 
     void Send(ModelRoot root, in OutgoingMidi e) {

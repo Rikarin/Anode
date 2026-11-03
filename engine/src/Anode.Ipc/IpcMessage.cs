@@ -205,7 +205,10 @@ public sealed record EnginePanner(EnginePannerMode Mode, EngineSurroundPanner Su
 ///     a Scripter MIDI FX slot's script (the contract's <c>Insert.source</c>): the host compiles it on the control
 ///     thread when it creates the instance, and answers with a <see cref="SlotParametersMessage" />.
 ///     <paramref name="Mastering" /> (Phase 11) is a Mastering Assistant's chain from its analysis (null on every other
-///     insert, and on an assistant not analysed yet, which then only limits to its ceiling).
+///     insert, and on an assistant not analysed yet, which then only limits to its ceiling). An insert that changes its
+///     strip's format (Phase 11: the Down Mixer, Binaural Post-Processing) runs in the format the inserts before it
+///     leave, and the rest of the strip in what it outputs; Binaural Post-Processing's HRTF set is its
+///     <paramref name="File" /> (an <c>.anhrtf</c>; null: the monitoring's HRTF file).
 /// </summary>
 public sealed record EngineInsert(
     string Id,

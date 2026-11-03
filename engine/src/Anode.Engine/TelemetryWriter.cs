@@ -6,7 +6,8 @@ namespace Anode.Engine;
 /// <summary>
 ///     Writes the telemetry region (<see cref="TelemetryHeader" />, docs/02-phase-1.md "Telemetry") about 60 times a
 ///     second on its own thread, from what the audio thread publishes: the transport, the callback counters and each
-///     strip's peaks since the previous write. Readers (the server) copy it under the seqlock. Allocation-free.
+///     strip's peaks since the previous write; and (Phase 11) the Environment's monitors and faders and the Mastering
+///     Assistant's loudness and gain reduction. Readers (the server) copy it under the seqlock. Allocation-free.
 /// </summary>
 public sealed unsafe class TelemetryWriter : IDisposable {
     public static readonly TimeSpan Interval = TimeSpan.FromSeconds(1.0 / 60);
@@ -34,6 +35,12 @@ public sealed unsafe class TelemetryWriter : IDisposable {
     MeterEntry* Meters => (MeterEntry*)(region + sizeof(TelemetryHeader));
 
     ChannelMeterEntry* ChannelMeters => (ChannelMeterEntry*)(region + TelemetryLayout.ChannelMetersOffset);
+
+    EnvironmentMonitorEntry* Monitors => (EnvironmentMonitorEntry*)(region + TelemetryLayout.MonitorsOffset);
+
+    EnvironmentFaderEntry* Faders => (EnvironmentFaderEntry*)(region + TelemetryLayout.FadersOffset);
+
+    MasteringEntry* Mastering => (MasteringEntry*)(region + TelemetryLayout.MasteringOffset);
 
     /// <summary>Writes every <see cref="Interval" /> on a background thread until disposed.</summary>
     public void Start() {
@@ -68,6 +75,13 @@ public sealed unsafe class TelemetryWriter : IDisposable {
         }
 
         meters[count] = Entry(-1, engine.Master, count);
+        // Phase 11: the Environment's monitors and faders in their slots, its drops, and the Mastering Assistant.
+        h->EnvironmentDropped = engine.EnvironmentDropped;
+        engine.Environment.Publish(
+            new(Monitors, TelemetryLayout.MaxMonitors),
+            new(Faders, TelemetryLayout.MaxFaders)
+        );
+        *Mastering = engine.MasteringReading();
         Volatile.Write(ref h->Sequence, h->Sequence + 1);
     }
 
@@ -112,6 +126,43 @@ public sealed unsafe class TelemetryWriter : IDisposable {
         }
 
         header = default;
+        return false;
+    }
+
+    /// <summary>
+    ///     Reader side (Phase 11): a consistent copy of the Environment's monitor and fader slots and the Mastering
+    ///     Assistant's entry.
+    /// </summary>
+    public static bool TryRead(
+        byte* region,
+        Span<EnvironmentMonitorEntry> monitors,
+        Span<EnvironmentFaderEntry> faders,
+        out MasteringEntry mastering
+    ) {
+        var h = (TelemetryHeader*)region;
+        for (var attempt = 0; attempt < 64; attempt++) {
+            var before = Volatile.Read(ref h->Sequence);
+            if ((before & 1) != 0) {
+                Thread.SpinWait(16);
+                continue;
+            }
+
+            new ReadOnlySpan<EnvironmentMonitorEntry>(
+                region + TelemetryLayout.MonitorsOffset,
+                Math.Min(monitors.Length, TelemetryLayout.MaxMonitors)
+            ).CopyTo(monitors);
+            new ReadOnlySpan<EnvironmentFaderEntry>(
+                region + TelemetryLayout.FadersOffset,
+                Math.Min(faders.Length, TelemetryLayout.MaxFaders)
+            ).CopyTo(faders);
+            mastering = *(MasteringEntry*)(region + TelemetryLayout.MasteringOffset);
+            Interlocked.MemoryBarrier();
+            if (Volatile.Read(ref h->Sequence) == before) {
+                return true;
+            }
+        }
+
+        mastering = default;
         return false;
     }
 

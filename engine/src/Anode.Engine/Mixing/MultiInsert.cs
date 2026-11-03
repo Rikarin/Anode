@@ -74,7 +74,8 @@ public static class MultichannelEffects {
                 or SubBass.Id
                 or PitchShifter.Id
                 or DeEsser.Id
-                or Multipressor.Id => MultichannelPolicy.PerChannel,
+                or Multipressor.Id
+                or Saturation.Id => MultichannelPolicy.PerChannel,
             Compressor.Id or NoiseGate.Id or Limiter.Id or AdaptiveLimiter.Id or Enveloper.Id =>
                 MultichannelPolicy.Linked,
             _ => MultichannelPolicy.FrontPair

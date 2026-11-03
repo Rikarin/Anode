@@ -52,6 +52,15 @@ public sealed class Strip {
         Volatile.Write(ref panner, strip.Panner);
     }
 
+    /// <summary>Control thread (Phase 11, an Environment control target): the volume alone.</summary>
+    public void SetGain(float value) => Volatile.Write(ref gain, float.IsFinite(value) ? Math.Max(0f, value) : 0f);
+
+    /// <summary>Control thread: the pan alone.</summary>
+    public void SetPan(float value) => Volatile.Write(ref pan, float.IsFinite(value) ? Math.Clamp(value, -1f, 1f) : 0f);
+
+    /// <summary>Control thread: the mute alone.</summary>
+    public void SetMute(bool value) => Volatile.Write(ref mute, value);
+
     public EngineStrip Settings => new(Gain, Pan, Mute, Solo);
 
     /// <summary>
