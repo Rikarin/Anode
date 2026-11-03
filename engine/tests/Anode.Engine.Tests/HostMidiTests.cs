@@ -202,4 +202,33 @@ public sealed class HostMidiTests : IAsyncLifetime {
             Assert.DoesNotContain(log, static m => m.Contains("misbehaving", StringComparison.Ordinal));
         }
     }
+
+    [Fact]
+    public async Task The_environment_is_set_by_message_and_with_a_whole_model_and_takes_live_midi_into_its_objects() {
+        Assert.IsType<HelloMessage>(await Request(new HelloMessage("server")));
+        await LoadAsync(MidiFixtures.InstrumentTrack(1));
+        Assert.True(Host.Controller.Engine.Environment.IsEmpty);
+        Assert.Null(await Send(new SetEnvironmentMessage(EnvironmentTests.GoldenPatch(1))));
+        Assert.Equal(5, Host.Controller.Engine.Environment.Nodes.Count);
+        Assert.Null(await Send(new EnvironmentMidiMessage(0, [new(0x90, 60, 100)])));
+        Assert.Equal(
+            "environmentMidi",
+            Assert.IsType<ErrorMessage>(await Send(new EnvironmentMidiMessage(5, [new(0x90, 60, 100)]))).Request
+        );
+
+        // A whole model carries its Environment (none: the default path); a per-track segment leaves it.
+        using (var segment = TestAudio.Segment([new(1, [], [])], 2)) {
+            var load = TestAudio.Load(segment, 2, false, [MidiFixtures.InstrumentTrack(1)], [], dir);
+            Assert.IsType<ModelLoadedMessage>(await Request(load));
+        }
+
+        Assert.Equal(5, Host.Controller.Engine.Environment.Nodes.Count);
+        using (var segment = TestAudio.Segment([new(1, [], [])], 3)) {
+            var load = TestAudio.Load(segment, 3, true, [MidiFixtures.InstrumentTrack(1)], [], dir);
+            Assert.IsType<ModelLoadedMessage>(await Request(load));
+        }
+
+        Assert.True(Host.Controller.Engine.Environment.IsEmpty);
+        Assert.Null(await Send(new SetEnvironmentMessage(null)));
+    }
 }

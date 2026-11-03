@@ -146,6 +146,7 @@ public sealed partial class EngineController : IDisposable {
         Streamer.Start();
         Midi.Start();
         StartMaintenance();
+        StartControlPump();
         StartCellPump();
         StartScriptPump();
     }
@@ -186,6 +187,10 @@ public sealed partial class EngineController : IDisposable {
             SetFader(-1, Engine.Master, message.Master);
             ApplyChannel(Engine.MasterChannel, -1, message.Master, inserts);
             draft.PrepareStreams();
+            if (message.Replace) {
+                SetEnvironment(message.Environment); // Phase 11: a whole model's; a per-track segment leaves it
+            }
+
             RecordDirectory = message.RecordDirectory;
             long length;
             unsafe {
@@ -1251,6 +1256,7 @@ public sealed partial class EngineController : IDisposable {
 
     public void Dispose() {
         maintenance?.Dispose();
+        controlPump?.Dispose();
         StopCellPump();
         StopScriptPump();
         lock (gate) {

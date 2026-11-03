@@ -490,7 +490,7 @@ public sealed class EngineHost : IDisposable {
 
     /// <summary>
     ///     The Phase 10 messages: monitoring (an error when its HRTF file cannot be used; the previous monitoring stays)
-    ///     and the master tap. False when <paramref name="message" /> is neither.
+    ///     and the master tap; then Phase 11's. False when <paramref name="message" /> is none of them.
     /// </summary>
     bool Phase10(IpcMessage message, out IpcMessage? reply) {
         reply = null;
@@ -500,6 +500,28 @@ public sealed class EngineHost : IDisposable {
                 return true;
             case SetMasterTapMessage tap:
                 Controller.SetMasterTap(tap.Enabled);
+                return true;
+            default:
+                return Phase11(message, out reply);
+        }
+    }
+
+    /// <summary>
+    ///     The Phase 11 messages: the Environment (replaced whole) and live MIDI into one of its on-screen objects (an
+    ///     error when it has no such object). False when <paramref name="message" /> is neither.
+    /// </summary>
+    bool Phase11(IpcMessage message, out IpcMessage? reply) {
+        reply = null;
+        switch (message) {
+            case SetEnvironmentMessage environment:
+                Controller.SetEnvironment(environment.Environment);
+                return true;
+            case EnvironmentMidiMessage midi:
+                reply = Refused(
+                    Controller.EnvironmentMidi(midi.ObjectIndex, midi.Events),
+                    $"The Environment has no object {midi.ObjectIndex}.",
+                    "environmentMidi"
+                );
                 return true;
             default:
                 return false;
@@ -641,6 +663,8 @@ public sealed class EngineHost : IDisposable {
             SyncStateMessage => "syncState",
             SetMonitoringMessage => "setMonitoring",
             SetMasterTapMessage => "setMasterTap",
+            SetEnvironmentMessage => "setEnvironment",
+            EnvironmentMidiMessage => "environmentMidi",
             _ => message.GetType().Name
         };
 

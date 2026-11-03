@@ -76,8 +76,10 @@ public sealed unsafe partial class AudioEngine {
             if (slot is not null) {
                 slot.Instrument.Reset(); // no release tails on stop or locate
                 midi.Held.Clear();
+                midi.RoutedHeld.Clear();
             } else {
                 Release(midi, 0);
+                ReleaseRouted(midi);
             }
         }
 
@@ -297,6 +299,10 @@ public sealed unsafe partial class AudioEngine {
                 Capture(e, owner, armed, flashback, clock + frame - MidiRecordShift);
             }
         }
+
+        if (midi.RoutedCount > 0) {
+            RoutedInput(track, midi, frames, clock, recording, countIn); // what the Environment sent it (Phase 11)
+        }
     }
 
     /// <summary>
@@ -406,6 +412,18 @@ public sealed unsafe partial class AudioEngine {
         var count = midi.Held.Release(releases);
         for (var i = 0; i < count; i++) {
             midi.Add(frame, releases[i].Status, releases[i].Note, 0);
+        }
+    }
+
+    /// <summary>Note-offs at the block's first frame for every note the Environment left sounding on the track.</summary>
+    void ReleaseRouted(MidiTrackState midi) {
+        if (midi.RoutedHeld.IsEmpty) {
+            return;
+        }
+
+        var count = midi.RoutedHeld.Release(releases);
+        for (var i = 0; i < count; i++) {
+            midi.Add(0, releases[i].Status, releases[i].Note, 0);
         }
     }
 

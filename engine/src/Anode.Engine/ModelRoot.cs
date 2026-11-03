@@ -224,6 +224,13 @@ public sealed class TrackState : IDisposable {
 ///     (released on stop, locate, cycle wrap and recompiles), and live MIDI queued for it by the MIDI thread and the
 ///     control thread.
 /// </summary>
+/// <summary>
+///     An event the Environment sent a track (Phase 11): its frame in the block, its bytes, and the Drum Machine
+///     Designer track it was played on when it was routed to this pad track (−1: played on this track), and whether the
+///     Environment timed it itself (<see cref="Environment.EnvironmentEvent.Generated" />).
+/// </summary>
+public readonly record struct RoutedMidi(int Frame, byte Status, byte Data1, byte Data2, int Origin, bool Generated);
+
 public sealed class MidiTrackState {
     /// <summary>Most events one block passes to an instrument; more are dropped.</summary>
     public const int MaxEvents = 1024;
@@ -250,6 +257,28 @@ public sealed class MidiTrackState {
 
     /// <summary>The last block ended at a cycle jump: the notes its regions held end on the next block's first frame.</summary>
     public bool WrapPending { get; set; }
+
+    /// <summary>Most events the Environment sends a track in one block; more are dropped.</summary>
+    public const int MaxRouted = 512;
+
+    /// <summary>
+    ///     Audio thread (Phase 11): what the Environment sent the track in this block (its live input there), taken by
+    ///     the track's live input and cleared after the block.
+    /// </summary>
+    public RoutedMidi[] Routed { get; } = new RoutedMidi[MaxRouted];
+
+    public int RoutedCount { get; set; }
+
+    /// <summary>Audio thread: the notes the Environment started on the track and has not ended.</summary>
+    public NoteSet RoutedHeld { get; } = new();
+
+    /// <summary>Audio thread: an event the Environment sends the track at <paramref name="frame" /> of the block.</summary>
+    public void Route(int frame, byte status, byte data1, byte data2, int origin, bool generated = false) {
+        if (RoutedCount < MaxRouted) {
+            Routed[RoutedCount++] = new(frame, status, data1, data2, origin, generated);
+            RoutedHeld.Track(status, data1, data2);
+        }
+    }
 
     /// <summary>Audio thread: appends an event (dropped when the block is full).</summary>
     public void Add(int frame, byte status, byte data1, byte data2) {

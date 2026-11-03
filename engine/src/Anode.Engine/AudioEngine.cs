@@ -152,6 +152,7 @@ public sealed unsafe partial class AudioEngine : IAudioProcessor {
             callbackFrames = frames;
             BeginSync(now, frames);
             ApplyCommands();
+            BeginEnvironment(model);
             var clock = transport.Clock;
             var position = transport.Position;
             var offset = 0;
@@ -274,6 +275,7 @@ public sealed unsafe partial class AudioEngine : IAudioProcessor {
         blockTransport = tempo.Context(rolling, position, frames);
         EmitSync(tempo, rolling, position, offset, frames);
         Launchers(model, tempo, position, clock, frames, rolling);
+        EnvironmentBlock(frames);
         var outLeft = busLeft.AsSpan(0, frames);
         var outRight = busRight.AsSpan(0, frames);
         Mix(
@@ -290,6 +292,7 @@ public sealed unsafe partial class AudioEngine : IAudioProcessor {
             outLeft,
             outRight
         );
+        EndEnvironmentBlock();
         var click = clicks.AsSpan(0, frames);
         RenderClicks(model, countIn, position, click);
         if (Volatile.Read(ref offline) == 0) {
