@@ -25,7 +25,14 @@ public sealed class Phase11PlayerTests {
 
     EditException Refused(EditCommand command) =>
         Assert.Throws<EditException>(() =>
-            Edits.Apply(state, command, ids, RandomProjects.Plugins, RandomProjects.Patches, styles: RandomProjects.Styles)
+            Edits.Apply(
+                state,
+                command,
+                ids,
+                RandomProjects.Plugins,
+                RandomProjects.Patches,
+                styles: RandomProjects.Styles
+            )
         );
 
     static SessionPlayerStyle StyleOf(string id) => RandomProjects.Styles.Styles.Single(s => s.Id == id);
@@ -106,21 +113,44 @@ public sealed class Phase11PlayerTests {
         Assert.Equal("drums.rock.soft", region.Parameters.PresetId);
         Apply(new SetSessionPlayerRegionCommand(region.Id, PresetId: "drums.rock.busy", Swing: 0.4));
         var changed = state.SessionPlayerRegions[region.Id];
-        Assert.Equal((null, 0.9, 0.4), (changed.Parameters.PresetId, changed.Parameters.Pad.Complexity, changed.Parameters.Swing));
+        Assert.Equal(
+            (null, 0.9, 0.4),
+            (changed.Parameters.PresetId, changed.Parameters.Pad.Complexity, changed.Parameters.Swing)
+        );
         Apply(new SetSessionPlayerRegionCommand(region.Id, PresetId: "drums.rock.busy", Name: "Groove"));
-        Assert.Equal(("drums.rock.busy", "Groove"), (state.SessionPlayerRegions[region.Id].Parameters.PresetId, state.SessionPlayerRegions[region.Id].Name));
+        Assert.Equal(
+            ("drums.rock.busy", "Groove"),
+            (state.SessionPlayerRegions[region.Id].Parameters.PresetId, state.SessionPlayerRegions[region.Id].Name)
+        );
         // A new style brings its first preset.
         Apply(new SetSessionPlayerRegionCommand(region.Id, StyleId: "drums.funk"));
-        Assert.Equal(("drums.funk", "drums.funk.soft"), (state.SessionPlayerRegions[region.Id].Parameters.StyleId, state.SessionPlayerRegions[region.Id].Parameters.PresetId));
+        Assert.Equal(
+            ("drums.funk", "drums.funk.soft"),
+            (state.SessionPlayerRegions[region.Id].Parameters.StyleId,
+                state.SessionPlayerRegions[region.Id].Parameters.PresetId)
+        );
         Apply(new SetSessionPlayerRegionCommand(region.Id, Complexity: 0.1, Intensity: 0.2));
         var moved = state.SessionPlayerRegions[region.Id];
-        Assert.Equal((new SessionPlayerPad(0.1, 0.2), null, region.Seed), (moved.Parameters.Pad, moved.Parameters.PresetId, moved.Seed));
+        Assert.Equal(
+            (new SessionPlayerPad(0.1, 0.2), null, region.Seed),
+            (moved.Parameters.Pad, moved.Parameters.PresetId, moved.Seed)
+        );
         Refused(new SetSessionPlayerRegionCommand(region.Id, Complexity: 1.5));
         Refused(new SetSessionPlayerRegionCommand(region.Id, Feel: -2));
         Refused(new SetSessionPlayerRegionCommand(region.Id, Bass: Edits.DefaultBass));
         Refused(new SetSessionPlayerRegionCommand(region.Id, StyleId: "bass.pop"));
-        Refused(new SetSessionPlayerRegionCommand(region.Id, Drums: Edits.DefaultDrums with { Pieces = Edits.DefaultDrums.Pieces.Skip(1).ToArray() }));
-        Refused(new SetSessionPlayerRegionCommand(region.Id, Drums: Edits.DefaultDrums with { RhythmSourceTrackId = state.Tracks[0].Id }));
+        Refused(
+            new SetSessionPlayerRegionCommand(
+                region.Id,
+                Drums: Edits.DefaultDrums with { Pieces = Edits.DefaultDrums.Pieces.Skip(1).ToArray() }
+            )
+        );
+        Refused(
+            new SetSessionPlayerRegionCommand(
+                region.Id,
+                Drums: Edits.DefaultDrums with { RhythmSourceTrackId = state.Tracks[0].Id }
+            )
+        );
     }
 
     [Fact]
@@ -129,13 +159,27 @@ public sealed class Phase11PlayerTests {
             new AddSessionPlayerTrackCommand(SessionPlayerKind.Bass, Regions: false),
             new AddSessionPlayerTrackCommand(SessionPlayerKind.Keyboard, Regions: false)
         );
-        Apply(new AddSessionPlayerRegionCommand(state.Tracks[0].Id, 0), new AddSessionPlayerRegionCommand(state.Tracks[1].Id, 0));
-        var (bass, keys) = (state.SessionPlayerRegionsOf(state.Tracks[0].Id).Single(), state.SessionPlayerRegionsOf(state.Tracks[1].Id).Single());
+        Apply(
+            new AddSessionPlayerRegionCommand(state.Tracks[0].Id, 0),
+            new AddSessionPlayerRegionCommand(state.Tracks[1].Id, 0)
+        );
+        var (bass, keys) = (state.SessionPlayerRegionsOf(state.Tracks[0].Id).Single(),
+            state.SessionPlayerRegionsOf(state.Tracks[1].Id).Single());
         Refused(new SetSessionPlayerRegionCommand(bass.Id, Bass: new(30, 40, false, false)));
         Refused(new SetSessionPlayerRegionCommand(bass.Id, Bass: new(20, 60, false, false)));
         Apply(new SetSessionPlayerRegionCommand(bass.Id, Bass: new(24, 36, true, true)));
-        Refused(new SetSessionPlayerRegionCommand(keys.Id, Keys: new(KeysVoicing.Shell, 48, 84, KeysLeftHand.Octaves, "none")));
-        Apply(new SetSessionPlayerRegionCommand(keys.Id, Keys: new(KeysVoicing.Shell, 48, 84, KeysLeftHand.Octaves, "whole")));
+        Refused(
+            new SetSessionPlayerRegionCommand(
+                keys.Id,
+                Keys: new(KeysVoicing.Shell, 48, 84, KeysLeftHand.Octaves, "none")
+            )
+        );
+        Apply(
+            new SetSessionPlayerRegionCommand(
+                keys.Id,
+                Keys: new(KeysVoicing.Shell, 48, 84, KeysLeftHand.Octaves, "whole")
+            )
+        );
         Assert.Equal("whole", state.SessionPlayerRegions[keys.Id].Parameters.Keys!.RhythmId);
     }
 
@@ -150,11 +194,20 @@ public sealed class Phase11PlayerTests {
         Apply(new AddSessionPlayerRegionCommand(track, 3840));
         var first = state.SessionPlayerRegions.Values.Single();
         // To the section's end; the player's first style without a region before it.
-        Assert.Equal((3840L, 15_360 - 3840L, "keys.ballad"), (first.StartTick, first.LengthTicks, first.Parameters.StyleId));
-        Apply(new SetSessionPlayerRegionCommand(first.Id, StyleId: "keys.synth"), new AddSessionPlayerRegionCommand(track, 15_360, Seed: 42));
+        Assert.Equal(
+            (3840L, 15_360 - 3840L, "keys.ballad"),
+            (first.StartTick, first.LengthTicks, first.Parameters.StyleId)
+        );
+        Apply(
+            new SetSessionPlayerRegionCommand(first.Id, StyleId: "keys.synth"),
+            new AddSessionPlayerRegionCommand(track, 15_360, Seed: 42)
+        );
         var second = state.SessionPlayerRegionsOf(track).Last();
         Assert.Equal(("keys.synth", 42L, "Outro"), (second.Parameters.StyleId, second.Seed, second.Name));
-        Assert.Equal(StyleOf("keys.synth").Sections.Single(static s => s.Kind == SectionKind.Outro).Parameters.Pad, second.Parameters.Pad);
+        Assert.Equal(
+            StyleOf("keys.synth").Sections.Single(static s => s.Kind == SectionKind.Outro).Parameters.Pad,
+            second.Parameters.Pad
+        );
         Refused(new AddSessionPlayerRegionCommand(track, 0, Parameters: StyleOf("bass.pop").Presets[0].Parameters));
     }
 
@@ -162,7 +215,10 @@ public sealed class Phase11PlayerTests {
     public void Regenerate_draws_new_seeds_and_Convert_replaces_regions_by_their_notes() {
         Apply(new AddSessionPlayerTrackCommand(SessionPlayerKind.Drummer, Regions: false));
         var drummer = state.Tracks[0].Id;
-        Apply(new AddSessionPlayerRegionCommand(drummer, 0, 3840, Name: "Groove", Seed: 1), new AddSessionPlayerRegionCommand(drummer, 3840, 3840, Seed: 1));
+        Apply(
+            new AddSessionPlayerRegionCommand(drummer, 0, 3840, Name: "Groove", Seed: 1),
+            new AddSessionPlayerRegionCommand(drummer, 3840, 3840, Seed: 1)
+        );
         var (a, b) = (state.SessionPlayerRegionsOf(drummer).First(), state.SessionPlayerRegionsOf(drummer).Last());
         Apply(new RegenerateSessionPlayerCommand([a.Id, b.Id]));
         Assert.NotEqual(1, state.SessionPlayerRegions[a.Id].Seed);
@@ -177,7 +233,12 @@ public sealed class Phase11PlayerTests {
             state,
             new ConvertSessionPlayerRegionsCommand(
                 [
-                    new(a.Id, SessionPlayerConvertTarget.Midi, [new(36, 100, 1, 0, 240), new(42, 80, 1, 480, 120)], null),
+                    new(
+                        a.Id,
+                        SessionPlayerConvertTarget.Midi,
+                        [new(36, 100, 1, 0, 240), new(42, 80, 1, 480, 120)],
+                        null
+                    ),
                     new(b.Id, SessionPlayerConvertTarget.Pattern, [], pattern)
                 ]
             ),
@@ -186,11 +247,48 @@ public sealed class Phase11PlayerTests {
         state = result.State;
         Assert.Empty(state.SessionPlayerRegions);
         var midi = state.MidiRegions.Values.Single();
-        Assert.Equal((drummer, "Groove", 0L, 3840L, true), (midi.TrackId, midi.Name, midi.StartTick, midi.LengthTicks, midi.Muted));
+        Assert.Equal(
+            (drummer, "Groove", 0L, 3840L, true),
+            (midi.TrackId, midi.Name, midi.StartTick, midi.LengthTicks, midi.Muted)
+        );
         Assert.Equal([36, 42], midi.Notes.Select(static n => n.Pitch));
         var converted = state.PatternRegions.Values.Single();
         Assert.Equal((3840L, 3L, drummer), (converted.StartTick, converted.Pattern.Seed, converted.TrackId));
         Assert.Equal(RandomProjects.Json(before), RandomProjects.Json(state.Apply(result.Inverse)));
+    }
+
+    [Fact]
+    public void A_pattern_longer_than_a_row_converts_to_consecutive_pattern_regions() {
+        Apply(new AddSessionPlayerTrackCommand(SessionPlayerKind.Drummer));
+        var region = state.SessionPlayerRegions.Values.Single();
+        // Eight bars of 16ths, a kick on every beat (the generator's ToPattern: one row the region's length).
+        PatternStep[] steps =
+            [..Enumerable.Range(0, 128).Select(static i => new PatternStep(i % 4 == 0, 100, 1, 1, 1, 0))];
+        var row = new PatternRow(
+            "row_36",
+            PatternRowKind.Pad,
+            36,
+            "Kick",
+            128,
+            null,
+            PatternPlayMode.Forward,
+            false,
+            steps
+        );
+        Apply(
+            new ConvertSessionPlayerRegionsCommand(
+                [new(region.Id, SessionPlayerConvertTarget.Pattern, [], new([row], 0, 1))]
+            )
+        );
+        var regions = state.PatternRegions.Values.OrderBy(static r => r.StartTick).ToArray();
+        Assert.Equal([(0L, 15_360L), (15_360L, 15_360L)], regions.Select(static r => (r.StartTick, r.LengthTicks)));
+        Assert.All(
+            regions,
+            static r => Assert.Equal(
+                (64, 16),
+                (r.Pattern.Rows[0].Length, r.Pattern.Rows[0].Steps.Count(static s => s.On))
+            )
+        );
     }
 
     [Fact]
@@ -199,7 +297,12 @@ public sealed class Phase11PlayerTests {
         var region = state.SessionPlayerRegions.Values.Single();
         Assert.Contains(
             "MIDI only",
-            Refused(new ConvertSessionPlayerRegionsCommand([new(region.Id, SessionPlayerConvertTarget.Pattern, [], new([], 0, 1))])).Message
+            Refused(
+                    new ConvertSessionPlayerRegionsCommand(
+                        [new(region.Id, SessionPlayerConvertTarget.Pattern, [], new([], 0, 1))]
+                    )
+                )
+                .Message
         );
     }
 
@@ -217,7 +320,10 @@ public sealed class Phase11PlayerTests {
         Apply(new AddSessionPlayerRegionCommand(one, 0, 7680));
         var region = state.SessionPlayerRegions.Values.Single();
         Apply(new MoveRegionCommand(region.Id, 960, two));
-        Assert.Equal((960L, two), (state.SessionPlayerRegions[region.Id].StartTick, state.SessionPlayerRegions[region.Id].TrackId));
+        Assert.Equal(
+            (960L, two),
+            (state.SessionPlayerRegions[region.Id].StartTick, state.SessionPlayerRegions[region.Id].TrackId)
+        );
         Refused(new MoveRegionCommand(region.Id, 0, instrument));
         Apply(new CopyRegionsCommand([region.Id], 7680));
         var copy = state.SessionPlayerRegions.Values.Single(r => r.Id != region.Id);
@@ -227,7 +333,10 @@ public sealed class Phase11PlayerTests {
         Apply(new MoveSectionCommand(state.Sections.Values.Single(static s => s.Name == "Chorus").Id, 0));
         Assert.Equal(960L, state.SessionPlayerRegions[copy.Id].StartTick);
         Apply(
-            new SetSessionPlayerRegionCommand(region.Id, Drums: Edits.DefaultDrums with { RhythmSourceTrackId = instrument }),
+            new SetSessionPlayerRegionCommand(
+                region.Id,
+                Drums: Edits.DefaultDrums with { RhythmSourceTrackId = instrument }
+            ),
             new DeleteRegionsCommand([copy.Id])
         );
         Assert.Single(state.SessionPlayerRegions);

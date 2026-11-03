@@ -272,17 +272,7 @@ public static partial class Edits {
             throw new EditException($"Unknown track kind {kind}.");
         }
 
-        if (kind is TrackKind.Aux or TrackKind.Vca) {
-            throw new EditException($"Add {(kind == TrackKind.Aux ? "an aux with addAux" : "a VCA with addVca")}.");
-        }
-
-        if (IsSessionPlayerKind(kind)) {
-            throw new EditException("Add a Drummer, Bass Player or Keyboard Player track with addSessionPlayerTrack.");
-        }
-
-        if (c.PluginId is not null && kind != TrackKind.Instrument) {
-            throw new EditException("Only an instrument track takes a plugin.");
-        }
+        CheckNewKind(kind, c.PluginId);
 
         var instrument = kind == TrackKind.Instrument
             ? NewInstrument(plugins, c.PluginId ?? PluginCatalog.DefaultInstrumentId, c.PluginId is not null)
@@ -318,6 +308,21 @@ public static partial class Edits {
             null
         );
         return [new TrackUpserted(track, index)];
+    }
+
+    /// <summary>A kind <c>addTrack</c> adds (not an aux, a VCA or a Session Player's: their own commands add them).</summary>
+    static void CheckNewKind(TrackKind kind, string? pluginId) {
+        if (kind is TrackKind.Aux or TrackKind.Vca) {
+            throw new EditException($"Add {(kind == TrackKind.Aux ? "an aux with addAux" : "a VCA with addVca")}.");
+        }
+
+        if (IsSessionPlayerKind(kind)) {
+            throw new EditException("Add a Drummer, Bass Player or Keyboard Player track with addSessionPlayerTrack.");
+        }
+
+        if (pluginId is not null && kind != TrackKind.Instrument) {
+            throw new EditException("Only an instrument track takes a plugin.");
+        }
     }
 
     static string NextTrackName(ProjectState state, TrackKind kind) {
@@ -373,7 +378,8 @@ public static partial class Edits {
         step.AddRange(state.SessionPlayerRegionsOf(trackId).Select(static r => new SessionPlayerRegionRemoved(r.Id)));
         // Regions that followed the track's rhythm no longer do; the Environment's objects no longer reach it.
         step.AddRange(
-            state.SessionPlayerRegions.Values.Where(r => r.TrackId != trackId && r.Parameters.Drums?.RhythmSourceTrackId == trackId)
+            state.SessionPlayerRegions.Values
+                .Where(r => r.TrackId != trackId && r.Parameters.Drums?.RhythmSourceTrackId == trackId)
                 .Select(static r => new SessionPlayerRegionUpserted(
                         r with {
                             Parameters = r.Parameters with {

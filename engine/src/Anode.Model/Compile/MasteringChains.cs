@@ -19,7 +19,13 @@ public sealed class DspMasteringDesigner : IMasteringDesigner {
 
     public EngineMasteringChain Design(MasteringAnalysis analysis, MasteringCharacter character) {
         var chain = MasteringChainDesigner.Design(Measurement(analysis), (MasteringCharacterKind)character);
-        return new([..chain.EqGainsDb], chain.CompressorThresholdDb, chain.CompressorRatio, chain.LoudnessLufs, chain.ChainGainDb);
+        return new(
+            [..chain.EqGainsDb],
+            chain.CompressorThresholdDb,
+            chain.CompressorRatio,
+            chain.LoudnessLufs,
+            chain.ChainGainDb
+        );
     }
 
     /// <summary>The DSP's measurement from a stored analysis (the contract's without its range).</summary>
@@ -42,6 +48,7 @@ public sealed class DspMasteringDesigner : IMasteringDesigner {
 /// </summary>
 public sealed class MasteringChains(IMasteringDesigner designer) {
     readonly Lock gate = new();
+
     readonly Dictionary<(MasteringAnalysis Analysis, MasteringCharacter Character), EngineMasteringChain?> designed =
         new(ReferenceKeys.Instance);
 

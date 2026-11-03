@@ -533,7 +533,12 @@ static partial class RandomProjects {
                 var (added, assistant) = Edits.AddMasteringAssistant(state, ids);
                 state = state.Apply(added);
                 if (random.Next(2) == 0) {
-                    state = Edits.Apply(state, new SetMasteringAnalysisCommand(assistant.Id, MasteringAnalysis(random)), ids).State;
+                    state = Edits.Apply(
+                            state,
+                            new SetMasteringAnalysisCommand(assistant.Id, MasteringAnalysis(random)),
+                            ids
+                        )
+                        .State;
                 }
             }
         }

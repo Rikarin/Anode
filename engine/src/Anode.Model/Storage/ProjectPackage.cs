@@ -328,9 +328,9 @@ public static class ProjectPackage {
         }
 
         var scales = (stored.Scales ?? []).Where(static s => s is { Tick: >= 0 and <= Edits.MaxTick, Tonic: not null }
-                && Enum.IsDefined(s.Tonic.Step)
-                && s.Tonic.Alter is >= -2 and <= 2
-                && Enum.IsDefined(s.Scale)
+            && Enum.IsDefined(s.Tonic.Step)
+            && s.Tonic.Alter is >= -2 and <= 2
+            && Enum.IsDefined(s.Scale)
             )
             .DistinctBy(static s => s.Tick)
             .OrderBy(static s => s.Tick);
@@ -904,13 +904,7 @@ public static class ProjectPackage {
             Inserts = full
                 ? [
                     ..(strip.Inserts ?? []).Where(static i => i?.Id is not null && i.PluginId is not null)
-                        .Select(i => i with {
-                                Name = i.Name ?? i.PluginId,
-                                Parameters = PluginCatalog.Sorted(i.Parameters),
-                                // Phase 11: an analysis only on the master's Mastering Assistant.
-                                Mastering = track is null && Edits.IsMasteringAssistant(i) ? Analysis(i.Mastering) : null
-                            }
-                        )
+                        .Select(i => Normalise(i, track is null))
                         .DistinctBy(static i => i.Id)
                 ]
                 : [],
@@ -945,6 +939,14 @@ public static class ProjectPackage {
             PitchNotes = [..(region.PitchNotes ?? []).Where(static n => n is not null)],
             PitchSource = region.PitchSource == PitchSourceMode.Root ? PitchSourceMode.Root : PitchSourceMode.Off,
             Key = Key(region.Key)
+        };
+
+    /// <summary>An insert as read: named, its parameters sorted, an analysis only on the master's Mastering Assistant.</summary>
+    static Insert Normalise(Insert insert, bool master) =>
+        insert with {
+            Name = insert.Name ?? insert.PluginId,
+            Parameters = PluginCatalog.Sorted(insert.Parameters),
+            Mastering = master && Edits.IsMasteringAssistant(insert) ? Analysis(insert.Mastering) : null
         };
 
     /// <summary>A Mastering Assistant's analysis as read: one <c>setMasteringAnalysis</c> would take, else none.</summary>
@@ -1091,8 +1093,9 @@ public static class PackageMigrations {
     const string VersionField = "schemaVersion";
 
     /// <summary><c>Steps[n]</c> takes schema <c>n + 1</c> to <c>n + 2</c>; it gets the kind of file and its JSON.</summary>
-    static readonly Func<string, JsonObject, JsonObject>[] Steps =
-        [ToSchema2, ToSchema3, ToSchema4, ToSchema5, ToSchema6, ToSchema7, ToSchema8, ToSchema9, ToSchema10, ToSchema11];
+    static readonly Func<string, JsonObject, JsonObject>[] Steps = [
+        ToSchema2, ToSchema3, ToSchema4, ToSchema5, ToSchema6, ToSchema7, ToSchema8, ToSchema9, ToSchema10, ToSchema11
+    ];
 
     public static JsonObject Upgrade(JsonObject json, string kind) {
         var version = json[VersionField] is JsonValue v && v.TryGetValue<int>(out var n) ? n : 1;

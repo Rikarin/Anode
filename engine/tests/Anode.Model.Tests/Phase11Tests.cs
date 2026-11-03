@@ -61,10 +61,19 @@ public sealed class Phase11Tests : IDisposable {
         var loaded = ProjectPackage.Load(folder);
         Assert.Equal(RandomProjects.Json(state), RandomProjects.Json(loaded));
         Assert.Equal((0, 0), (loaded.ChordTrack.Chords.Count, loaded.ChordTrack.Scales.Count));
-        Assert.Equal((0, 0, 0), (loaded.Environment.Layers.Count, loaded.Environment.Objects.Count, loaded.Environment.Cables.Count));
+        Assert.Equal(
+            (0, 0, 0),
+            (loaded.Environment.Layers.Count, loaded.Environment.Objects.Count, loaded.Environment.Cables.Count)
+        );
         Assert.Empty(loaded.SessionPlayerRegions);
-        Assert.All(loaded.MidiRegions.Values, static r => Assert.Equal((PitchSourceMode.Off, null), (r.PitchSource, r.Key)));
-        Assert.All(loaded.Regions.Values, static r => Assert.Equal((PitchSourceMode.Off, null), (r.PitchSource, r.Key)));
+        Assert.All(
+            loaded.MidiRegions.Values,
+            static r => Assert.Equal((PitchSourceMode.Off, null), (r.PitchSource, r.Key))
+        );
+        Assert.All(
+            loaded.Regions.Values,
+            static r => Assert.Equal((PitchSourceMode.Off, null), (r.PitchSource, r.Key))
+        );
     }
 
     [Fact]
@@ -102,7 +111,8 @@ public sealed class Phase11Tests : IDisposable {
         Apply(
             new AddChordsCommand(
                 [
-                    new(3840, N(PitchStep.F), ChordQualities.MajorSeventh), new(0, N(PitchStep.C), ChordQualities.Major),
+                    new(3840, N(PitchStep.F), ChordQualities.MajorSeventh),
+                    new(0, N(PitchStep.C), ChordQualities.Major),
                     new(7680, N(PitchStep.G), ChordQualities.Seventh, N(PitchStep.B))
                 ]
             )
@@ -120,9 +130,13 @@ public sealed class Phase11Tests : IDisposable {
         Refused(new AddChordsCommand([new(0, N(PitchStep.C), "min")]));
         Refused(new AddChordsCommand([new(0, N(PitchStep.C, 3), ChordQualities.Major)]));
         Refused(new DeleteChordsCommand(["crd_none"]));
-        Apply(new SetScalesCommand([new(7680, N(PitchStep.A), ScaleKind.Dorian), new(0, N(PitchStep.C), ScaleKind.Major)]));
+        Apply(
+            new SetScalesCommand([new(7680, N(PitchStep.A), ScaleKind.Dorian), new(0, N(PitchStep.C), ScaleKind.Major)])
+        );
         Assert.Equal([0L, 7680], state.ChordTrack.Scales.Select(static s => s.Tick));
-        Refused(new SetScalesCommand([new(0, N(PitchStep.C), ScaleKind.Major), new(0, N(PitchStep.D), ScaleKind.Minor)]));
+        Refused(
+            new SetScalesCommand([new(0, N(PitchStep.C), ScaleKind.Major), new(0, N(PitchStep.D), ScaleKind.Minor)])
+        );
     }
 
     [Theory]
@@ -133,7 +147,9 @@ public sealed class Phase11Tests : IDisposable {
         Apply(new AddTrackCommand(Kind: TrackKind.Instrument));
         Apply(
             new AddMidiRegionCommand(state.Tracks[0].Id, 0, 15_360),
-            new AddChordsCommand([new(0, N(PitchStep.C), ChordQualities.Major), new(7680, N(PitchStep.G), ChordQualities.Major)])
+            new AddChordsCommand(
+                [new(0, N(PitchStep.C), ChordQualities.Major), new(7680, N(PitchStep.G), ChordQualities.Major)]
+            )
         );
         var region = state.MidiRegions.Keys.Single();
         var before = state;
@@ -163,14 +179,16 @@ public sealed class Phase11Tests : IDisposable {
             _ => ["c", "g"]
         };
         Assert.Equal(expected, state.ChordTrack.Chords.Select(static c => c.Root.Step.ToString().ToLowerInvariant()));
-        Assert.Equal(new RegionKey(N(PitchStep.A), KeyMode.Minor), state.MidiRegions[region].Key);
+        Assert.Equal(new(N(PitchStep.A), KeyMode.Minor), state.MidiRegions[region].Key);
         Assert.Equal(RandomProjects.Json(before), RandomProjects.Json(state.Apply(result.Inverse)));
     }
 
     [Fact]
     public void Pitch_Source_and_keys_are_set_on_MIDI_and_audio_regions_and_audio_follows_by_root_only() {
         Apply(new AddTrackCommand(Kind: TrackKind.Instrument), new AddTrackCommand(Kind: TrackKind.Audio));
-        state = state.Apply(new AudioFileUpserted(new("aud_1", "Bass", "Audio Files/Bass.wav", 48_000, 1, 480_000, 24, null, 0)));
+        state = state.Apply(
+            new AudioFileUpserted(new("aud_1", "Bass", "Audio Files/Bass.wav", 48_000, 1, 480_000, 24, null, 0))
+        );
         Apply(
             new AddMidiRegionCommand(state.Tracks[0].Id, 0, 3840),
             new AddRegionCommand(state.Tracks[1].Id, "aud_1", 0)
@@ -179,7 +197,10 @@ public sealed class Phase11Tests : IDisposable {
         Apply(new SetPitchSourceCommand([midi, audio], PitchSourceMode.Root));
         Assert.Equal(PitchSourceMode.Root, state.Regions[audio].PitchSource);
         Apply(new SetPitchSourceCommand([midi], PitchSourceMode.Chords));
-        Assert.Contains("audio region", Refused(new SetPitchSourceCommand([midi, audio], PitchSourceMode.Chords)).Message);
+        Assert.Contains(
+            "audio region",
+            Refused(new SetPitchSourceCommand([midi, audio], PitchSourceMode.Chords)).Message
+        );
         Apply(new SetRegionKeyCommand([midi, audio], new(N(PitchStep.E, -1), KeyMode.Major)));
         Assert.Equal(3, Edits.KeyRootOf(state, state.Regions[audio].Key, 0));
         Apply(new SetRegionKeyCommand([audio], null));
@@ -191,13 +212,19 @@ public sealed class Phase11Tests : IDisposable {
 
     [Fact]
     public void The_Mastering_Assistant_keeps_its_settings_as_parameters_and_its_analysis_in_its_insert() {
-        Assert.Contains("no Mastering Assistant", Refused(new SetMasteringCommand(Character: MasteringCharacter.Valve)).Message);
+        Assert.Contains(
+            "no Mastering Assistant",
+            Refused(new SetMasteringCommand(Character: MasteringCharacter.Valve)).Message
+        );
         var (added, assistant) = Edits.AddMasteringAssistant(state, ids);
         state = state.Apply(added);
         Assert.Equal(MasteringSettings.Default, Edits.MasteringSettingsOf(state.Master.Inserts[^1]));
         Apply(new SetMasteringCommand(Character: MasteringCharacter.Valve, TargetLufs: -10, MatchedBypass: true));
         var settings = Edits.MasteringSettingsOf(Edits.MasteringAssistantOf(state)!);
-        Assert.Equal((MasteringCharacter.Valve, -10.0, true), (settings.Character, settings.TargetLufs, settings.MatchedBypass));
+        Assert.Equal(
+            (MasteringCharacter.Valve, -10.0, true),
+            (settings.Character, settings.TargetLufs, settings.MatchedBypass)
+        );
         Assert.Equal(1, state.Master.Inserts[^1].Parameters[MasteringParameters.Character]);
         Refused(new SetMasteringCommand(TargetLufs: -30));
         Refused(new SetMasteringCommand(CeilingDbtp: 0.5));
@@ -264,7 +291,10 @@ public sealed class Phase11Tests : IDisposable {
         Apply(new RemoveEnvironmentObjectsCommand([transformer]));
         Assert.Single(state.Environment.Cables);
         Apply(new RemoveEnvironmentLayerCommand(state.Environment.Layers[0].Id));
-        Assert.Equal((0, 0, 0), (state.Environment.Layers.Count, state.Environment.Objects.Count, state.Environment.Cables.Count));
+        Assert.Equal(
+            (0, 0, 0),
+            (state.Environment.Layers.Count, state.Environment.Objects.Count, state.Environment.Cables.Count)
+        );
     }
 
     [Fact]
@@ -272,10 +302,24 @@ public sealed class Phase11Tests : IDisposable {
         Apply(new AddTrackCommand(Kind: TrackKind.Instrument), new AddTrackCommand(Kind: TrackKind.Audio));
         var (instrument, audio) = (state.Tracks[0].Id, state.Tracks[1].Id);
         Refused(new AddEnvironmentObjectCommand(EnvironmentObjectKind.TrackInput, 0, 0, TrackId: audio));
-        Refused(new AddEnvironmentObjectCommand(EnvironmentObjectKind.ControlTarget, 0, 0, TrackId: audio, Address: "insert:x:y"));
+        Refused(
+            new AddEnvironmentObjectCommand(
+                EnvironmentObjectKind.ControlTarget,
+                0,
+                0,
+                TrackId: audio,
+                Address: "insert:x:y"
+            )
+        );
         Apply(
             new AddEnvironmentObjectCommand(EnvironmentObjectKind.TrackInput, 0, 0, TrackId: instrument),
-            new AddEnvironmentObjectCommand(EnvironmentObjectKind.ControlTarget, 0, 0, TrackId: audio, Address: "volume")
+            new AddEnvironmentObjectCommand(
+                EnvironmentObjectKind.ControlTarget,
+                0,
+                0,
+                TrackId: audio,
+                Address: "volume"
+            )
         );
         var control = state.Environment.Objects[1].Id;
         // An empty address clears it.

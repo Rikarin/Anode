@@ -196,7 +196,9 @@ public static partial class Edits {
         }
 
         return [
-            new EnvironmentChanged(environment with { Cables = [..environment.Cables.Where(x => !gone.Contains(x.Id))] })
+            new EnvironmentChanged(
+                environment with { Cables = [..environment.Cables.Where(x => !gone.Contains(x.Id))] }
+            )
         ];
     }
 
@@ -272,6 +274,23 @@ public static partial class Edits {
             throw new EditException($"An object's place is within ±{MaxCanvas} on its canvas.");
         }
 
+        CheckUses(o);
+        CheckSingle(environment, o);
+        CheckParameters(o);
+        CheckLinks(state, o);
+        CheckRules(o);
+        CheckTaps(o);
+        return o with {
+            Parameters = PluginCatalog.Sorted(o.Parameters),
+            Conditions = o.Conditions is null ? null : [..o.Conditions],
+            Operations = o.Operations is null ? null : [..o.Operations],
+            Taps = o.Taps is null ? null : [..o.Taps],
+            Chord = o.Chord is null ? null : [..o.Chord]
+        };
+    }
+
+    /// <summary>Only the settings an object's kind uses: a port, a track, an address, rules, taps or a chord.</summary>
+    static void CheckUses(EnvironmentObject o) {
         var kind = o.Kind;
         Uses(o.Port is not null, kind is EnvironmentObjectKind.PhysicalInput or EnvironmentObjectKind.MidiPort, "port");
         Uses(
@@ -287,20 +306,33 @@ public static partial class Edits {
             throw new EditException($"A port's name has at most {MaxNameLength} characters.");
         }
 
-        CheckSingle(environment, o);
-        CheckParameters(o);
-        if (o.TrackId is { } trackId) {
-            var track = TrackOf(state, trackId);
-            if (kind == EnvironmentObjectKind.TrackInput && !HoldsMidi(track)) {
-                throw new EditException($"Track '{track.Name}' takes no MIDI: a track input plays a MIDI track.");
+        return;
+
+        void Uses(bool set, bool used, string what) {
+            if (set && !used) {
+                throw new EditException($"A {EnvironmentObjectKinds.Of(kind).Name} object has no {what}.");
             }
+        }
+    }
+
+    /// <summary>A track that exists (a track input's, one that takes MIDI) and a control address its strip has.</summary>
+    static void CheckLinks(ProjectState state, EnvironmentObject o) {
+        if (o.TrackId is { } trackId
+            && TrackOf(state, trackId) is var track
+            && o.Kind == EnvironmentObjectKind.TrackInput
+            && !HoldsMidi(track)) {
+            throw new EditException($"Track '{track.Name}' takes no MIDI: a track input plays a MIDI track.");
         }
 
         if (o.Address is { } address && !TargetExists(state, o.TrackId, address)) {
-            throw new EditException($"'{address}' is not a control of {(o.TrackId is null ? "the master" : "that track")}.");
+            throw new EditException(
+                $"'{address}' is not a control of {(o.TrackId is null ? "the master" : "that track")}."
+            );
         }
+    }
 
-        CheckRules(o);
+    /// <summary>A delay line's taps and a chord memoriser's chord in their ranges.</summary>
+    static void CheckTaps(EnvironmentObject o) {
         if (o.Taps is { } taps
             && (taps.Count > MaxDelayTaps
                 || taps.Any(static t => t is null
@@ -314,29 +346,20 @@ public static partial class Edits {
         }
 
         if (o.Chord is { } chord
-            && (chord.Count > MaxChordNotes || chord.Any(static n => n is < -127 or > 127) || chord.Distinct().Count() != chord.Count)) {
-            throw new EditException($"A chord memoriser's chord is at most {MaxChordNotes} distinct intervals of −127…127.");
-        }
-
-        return o with {
-            Parameters = PluginCatalog.Sorted(o.Parameters),
-            Conditions = o.Conditions is null ? null : [..o.Conditions],
-            Operations = o.Operations is null ? null : [..o.Operations],
-            Taps = o.Taps is null ? null : [..o.Taps],
-            Chord = o.Chord is null ? null : [..o.Chord]
-        };
-
-        void Uses(bool set, bool used, string what) {
-            if (set && !used) {
-                throw new EditException($"A {EnvironmentObjectKinds.Of(kind).Name} object has no {what}.");
-            }
+            && (chord.Count > MaxChordNotes
+                || chord.Any(static n => n is < -127 or > 127)
+                || chord.Distinct().Count() != chord.Count)) {
+            throw new EditException(
+                $"A chord memoriser's chord is at most {MaxChordNotes} distinct intervals of −127…127."
+            );
         }
     }
 
     /// <summary>At most one physical input without a port, and one sequencer input.</summary>
     static void CheckSingle(MidiEnvironment others, EnvironmentObject o) {
         if (o is { Kind: EnvironmentObjectKind.PhysicalInput, Port: null }
-            && others.Objects.Any(x => x is { Kind: EnvironmentObjectKind.PhysicalInput, Port: null } && x.Id != o.Id)) {
+            && others.Objects.Any(x => x is { Kind: EnvironmentObjectKind.PhysicalInput, Port: null } && x.Id != o.Id
+            )) {
             throw new EditException("The Environment has one physical input of every port; give this one a port.");
         }
 
@@ -422,7 +445,10 @@ public static partial class Edits {
     }
 
     /// <summary>A kind's own parameters at their defaults, overridden by <paramref name="given" />.</summary>
-    static Dictionary<string, double> WithDefaults(EnvironmentObjectKindInfo info, IReadOnlyDictionary<string, double>? given) {
+    static Dictionary<string, double> WithDefaults(
+        EnvironmentObjectKindInfo info,
+        IReadOnlyDictionary<string, double>? given
+    ) {
         var parameters = info.Parameters.ToDictionary(static p => p.Id, static p => p.Default, StringComparer.Ordinal);
         foreach (var (id, value) in given ?? new Dictionary<string, double>()) {
             parameters[id] = value;
@@ -511,5 +537,6 @@ public static partial class Edits {
         environment.Layers.FirstOrDefault(l => l.Id == id) ?? throw new EditException($"No Environment layer '{id}'.");
 
     static EnvironmentObject ObjectOf(MidiEnvironment environment, string? id) =>
-        environment.Objects.FirstOrDefault(o => o.Id == id) ?? throw new EditException($"No Environment object '{id}'.");
+        environment.Objects.FirstOrDefault(o => o.Id == id)
+        ?? throw new EditException($"No Environment object '{id}'.");
 }

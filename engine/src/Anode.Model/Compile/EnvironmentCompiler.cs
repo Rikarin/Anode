@@ -31,40 +31,51 @@ public static class EnvironmentCompiler {
         var (monitors, faders) = (0, 0);
         var objects = new EngineEnvironmentObject[order.Count];
         for (var i = 0; i < order.Count; i++) {
-            var o = order[i];
-            var slot = o.Kind switch {
+            var slot = order[i].Kind switch {
                 EnvironmentObjectKind.Monitor => monitors < TelemetryLayout.MaxMonitors ? monitors++ : -1,
                 EnvironmentObjectKind.Fader => faders < TelemetryLayout.MaxFaders ? faders++ : -1,
                 _ => -1
             };
-            objects[i] = new(
-                i,
-                (EngineEnvironmentKind)o.Kind,
-                new Dictionary<string, double>(o.Parameters, StringComparer.Ordinal),
-                [
-                    ..environment.Cables.Where(c => c.FromObjectId == o.Id && index.ContainsKey(c.ToObjectId))
-                        .OrderBy(static c => c.Outlet)
-                        .ThenBy(c => index[c.ToObjectId])
-                        .ThenBy(static c => c.Inlet)
-                        .Select(c => new EngineEnvironmentRoute(c.Outlet, index[c.ToObjectId], c.Inlet))
-                ],
-                o.Port,
-                o.Kind == EnvironmentObjectKind.TrackInput ? EngineTrack(state, ids, o.TrackId) : -1,
-                o.Kind == EnvironmentObjectKind.ControlTarget ? Control(state, ids, o) : null,
-                o.Conditions is { } conditions
-                    ? [..conditions.Select(static c => new EngineTransformRule(Name(c.Field), Name(c.Op), c.A, c.B))]
-                    : null,
-                o.Operations is { } operations
-                    ? [..operations.Select(static p => new EngineTransformRule(Name(p.Field), Name(p.Op), p.A, p.B))]
-                    : null,
-                o.Taps is { } taps ? [..taps.Select(static t => new EngineDelayTap(t.DelayTicks, t.Transpose, t.Velocity))] : null,
-                o.Chord is { } chord ? [..chord] : null,
-                slot
-            );
+            objects[i] = Object(state, ids, order[i], i, index, slot);
         }
 
         return new(objects);
     }
+
+    /// <summary>One object as the host runs it, its routes by the objects' indices.</summary>
+    static EngineEnvironmentObject Object(
+        ProjectState state,
+        EngineIds ids,
+        EnvironmentObject o,
+        int at,
+        Dictionary<string, int> index,
+        int slot
+    ) =>
+        new(
+            at,
+            (EngineEnvironmentKind)o.Kind,
+            new Dictionary<string, double>(o.Parameters, StringComparer.Ordinal),
+            [
+                ..state.Environment.Cables.Where(c => c.FromObjectId == o.Id && index.ContainsKey(c.ToObjectId))
+                    .OrderBy(static c => c.Outlet)
+                    .ThenBy(c => index[c.ToObjectId])
+                    .ThenBy(static c => c.Inlet)
+                    .Select(c => new EngineEnvironmentRoute(c.Outlet, index[c.ToObjectId], c.Inlet))
+            ],
+            o.Port,
+            o.Kind == EnvironmentObjectKind.TrackInput ? EngineTrack(state, ids, o.TrackId) : -1,
+            o.Kind == EnvironmentObjectKind.ControlTarget ? Control(state, ids, o) : null,
+            Rules(o.Conditions?.Select(static c => (c.Field, Name(c.Op), c.A, c.B))),
+            Rules(o.Operations?.Select(static p => (p.Field, Name(p.Op), p.A, p.B))),
+            o.Taps is { } taps
+                ? [..taps.Select(static t => new EngineDelayTap(t.DelayTicks, t.Transpose, t.Velocity))]
+                : null,
+            o.Chord is { } chord ? [..chord] : null,
+            slot
+        );
+
+    static EngineTransformRule[]? Rules(IEnumerable<(TransformField Field, string Op, double A, double B)>? rules) =>
+        rules is null ? null : [..rules.Select(static r => new EngineTransformRule(Name(r.Field), r.Op, r.A, r.B))];
 
     /// <summary>
     ///     The objects in an order in which every cable goes from an earlier to a later one: the project's order, each
@@ -85,7 +96,8 @@ public static class EnvironmentCompiler {
         }
 
         foreach (var cable in environment.Cables) {
-            if (position.TryGetValue(cable.FromObjectId, out var from) && position.TryGetValue(cable.ToObjectId, out var to)) {
+            if (position.TryGetValue(cable.FromObjectId, out var from)
+                && position.TryGetValue(cable.ToObjectId, out var to)) {
                 outgoing[from].Add(to);
                 incoming[to]++;
             }
@@ -109,7 +121,10 @@ public static class EnvironmentCompiler {
 
     /// <summary>The engine track a track input plays, or −1 (none, or one that takes no MIDI).</summary>
     static int EngineTrack(ProjectState state, EngineIds ids, string? trackId) =>
-        trackId is not null && state.FindTrack(trackId) is { } track && Stacks.IsPlayable(track) && Edits.HoldsMidi(track)
+        trackId is not null
+        && state.FindTrack(trackId) is { } track
+        && Stacks.IsPlayable(track)
+        && Edits.HoldsMidi(track)
             ? ids.Track(track.Id)
             : -1;
 

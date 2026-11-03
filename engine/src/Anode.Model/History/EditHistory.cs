@@ -337,28 +337,7 @@ public static class UndoLabels {
                             panner.Size
                         }.Select(static v => v.HasValue ? '1' : '0')
                     ),
-                // Phase 11: an XY pad drag, a Mastering Assistant knob, an Environment object dragged on its canvas.
-                SetSessionPlayerRegionCommand {
-                    StartTick: null, LengthTicks: null, Name: null, Muted: null, StyleId: null, PresetId: null,
-                    FillAtSectionEnds: null, FollowChords: null, Drums: null, Bass: null, Keys: null
-                } region => $"player|{region.RegionId}|"
-                    + string.Concat(
-                        new[] { region.Complexity, region.Intensity, region.FillAmount, region.Swing, region.Feel }.Select(
-                            static v => v.HasValue ? '1' : '0'
-                        )
-                    ),
-                SetMasteringCommand { Character: null, MatchedBypass: null } mastering =>
-                    $"mastering|{mastering.InsertId}|"
-                    + string.Concat(
-                        new[] {
-                            mastering.TargetLufs, mastering.CeilingDbtp, mastering.Eq, mastering.Dynamics, mastering.Width
-                        }.Select(static v => v.HasValue ? '1' : '0')
-                    ),
-                SetEnvironmentObjectCommand {
-                    Name: null, LayerId: null, Port: null, TrackId: null, Address: null, Conditions: null,
-                    Operations: null, Taps: null, Chord: null, Parameters: null
-                } move => $"object|{move.ObjectId}|{move.X.HasValue}{move.Y.HasValue}",
-                _ => null
+                _ => Phase11Key(command)
             };
             if (mine is null) {
                 return null;
@@ -373,4 +352,47 @@ public static class UndoLabels {
 
         return key;
     }
+
+    /// <summary>Phase 11: an XY pad drag, a Mastering Assistant knob, an Environment object dragged on its canvas.</summary>
+    static string? Phase11Key(EditCommand command) =>
+        command switch {
+            SetSessionPlayerRegionCommand {
+                StartTick: null,
+                LengthTicks: null,
+                Name: null,
+                Muted: null,
+                StyleId: null,
+                PresetId: null,
+                FillAtSectionEnds: null,
+                FollowChords: null,
+                Drums: null,
+                Bass: null,
+                Keys: null
+            } region => $"player|{region.RegionId}|"
+                + string.Concat(
+                    new[] {
+                        region.Complexity, region.Intensity, region.FillAmount, region.Swing, region.Feel
+                    }.Select(static v => v.HasValue ? '1' : '0')
+                ),
+            SetMasteringCommand { Character: null, MatchedBypass: null } mastering =>
+                $"mastering|{mastering.InsertId}|"
+                + string.Concat(
+                    new[] {
+                        mastering.TargetLufs, mastering.CeilingDbtp, mastering.Eq, mastering.Dynamics, mastering.Width
+                    }.Select(static v => v.HasValue ? '1' : '0')
+                ),
+            SetEnvironmentObjectCommand {
+                Name: null,
+                LayerId: null,
+                Port: null,
+                TrackId: null,
+                Address: null,
+                Conditions: null,
+                Operations: null,
+                Taps: null,
+                Chord: null,
+                Parameters: null
+            } move => $"object|{move.ObjectId}|{move.X.HasValue}{move.Y.HasValue}",
+            _ => null
+        };
 }

@@ -188,7 +188,8 @@ public static class AutomationEvents {
     }
 
     static IEnumerable<Track> OuterTracks(ProjectState state, Track track) {
-        if (track.ParentId is not null && state.FindTrack(track.ParentId) is { Kind: TrackKind.Stack or TrackKind.Drummer } stack) {
+        if (track.ParentId is not null
+            && state.FindTrack(track.ParentId) is { Kind: TrackKind.Stack or TrackKind.Drummer } stack) {
             yield return stack;
         }
 

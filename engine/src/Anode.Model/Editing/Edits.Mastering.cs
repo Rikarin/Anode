@@ -89,7 +89,9 @@ public static partial class Edits {
     static DeltaOp[] SetMastering(ProjectState state, SetMasteringCommand c) {
         var insert = MasteringAssistantOf(state, c.InsertId)
             ?? throw new EditException(
-                c.InsertId is null ? "The master has no Mastering Assistant." : $"No Mastering Assistant '{c.InsertId}'."
+                c.InsertId is null
+                    ? "The master has no Mastering Assistant."
+                    : $"No Mastering Assistant '{c.InsertId}'."
             );
         var old = MasteringSettingsOf(insert);
         var settings = new MasteringSettings(
@@ -121,7 +123,9 @@ public static partial class Edits {
         }
 
         if (!(s.TargetLufs is >= MinTargetLufs and <= MaxTargetLufs)) {
-            throw new EditException($"The loudness target is {MinTargetLufs}…{MaxTargetLufs} LUFS, not {s.TargetLufs}.");
+            throw new EditException(
+                $"The loudness target is {MinTargetLufs}…{MaxTargetLufs} LUFS, not {s.TargetLufs}."
+            );
         }
 
         if (!(s.CeilingDbtp is >= MinCeilingDbtp and <= MaxCeilingDbtp)) {

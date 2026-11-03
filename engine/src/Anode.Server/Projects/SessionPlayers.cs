@@ -74,7 +74,8 @@ public sealed partial class SessionPlayers(ISessionPlayerLibrary library, ILogge
         IReadOnlyDictionary<string, FileAnalysis> analyses
     ) {
         var (start, end) = (region.StartTick, region.StartTick + region.LengthTicks);
-        var player = Edits.PlayerOf(state.FindTrack(region.TrackId)?.Kind ?? TrackKind.Drummer) ?? SessionPlayerKind.Drummer;
+        var player = Edits.PlayerOf(state.FindTrack(region.TrackId)?.Kind ?? TrackKind.Drummer)
+            ?? SessionPlayerKind.Drummer;
         var chords = state.ChordTrack;
         var settings = state.Settings;
         return new(
@@ -89,13 +90,28 @@ public sealed partial class SessionPlayers(ISessionPlayerLibrary library, ILogge
             ),
             [
                 ..state.Sections.Values.Where(s => s.StartTick < end && s.StartTick + s.LengthTicks > start)
-                    .Concat(state.Sections.Values.Where(s => s.StartTick + s.LengthTicks <= start).OrderBy(static s => s.StartTick).TakeLast(1))
+                    .Concat(
+                        state.Sections.Values.Where(s => s.StartTick + s.LengthTicks <= start)
+                            .OrderBy(static s => s.StartTick)
+                            .TakeLast(1)
+                    )
                     .OrderBy(static s => s.StartTick)
                     .ThenBy(static s => s.Id, StringComparer.Ordinal)
             ],
-            [..Over(settings.Signatures is { Count: > 0 } signatures ? signatures : [new(0, settings.Signature.Numerator, settings.Signature.Denominator)], static s => s.Tick, start, end)],
+            [
+                ..Over(
+                    settings.Signatures is { Count: > 0 } signatures
+                        ? signatures
+                        : [new(0, settings.Signature.Numerator, settings.Signature.Denominator)],
+                    static s => s.Tick,
+                    start,
+                    end
+                )
+            ],
             [..Over(settings.Keys ?? [], static k => k.Tick, start, end)],
-            region.Parameters.Drums?.RhythmSourceTrackId is { } source ? Onsets(state, source, start, end, analyses) : null
+            region.Parameters.Drums?.RhythmSourceTrackId is { } source
+                ? Onsets(state, source, start, end, analyses)
+                : null
         );
     }
 
@@ -120,43 +136,46 @@ public sealed partial class SessionPlayers(ISessionPlayerLibrary library, ILogge
         long end,
         IReadOnlyDictionary<string, FileAnalysis> analyses
     ) {
-        var onsets = new SortedSet<long>();
-        void Add(long tick) {
-            if (tick >= start && tick < end) {
-                onsets.Add(tick);
-            }
-        }
+        var notes = state.MidiRegionsOf(trackId)
+            .Where(static r => !r.Muted)
+            .SelectMany(static r => r.Notes.Where(n => n.StartTick >= 0 && n.StartTick < r.LengthTicks)
+                .Select(n => r.StartTick + n.StartTick)
+            );
+        var steps = state.PatternRegionsOf(trackId)
+            .Where(static r => !r.Muted)
+            .SelectMany(r => PatternUnroller.Unroll(r, t => Edits.KeyAt(state, t)).Select(n => r.StartTick + n.Tick));
+        return [
+            ..notes.Concat(steps)
+                .Concat(Transients(state, trackId, analyses))
+                .Where(t => t >= start && t < end)
+                .Distinct()
+                .Order()
+        ];
+    }
 
-        foreach (var region in state.MidiRegionsOf(trackId).Where(static r => !r.Muted)) {
-            foreach (var note in region.Notes) {
-                if (note.StartTick >= 0 && note.StartTick < region.LengthTicks) {
-                    Add(region.StartTick + note.StartTick);
-                }
-            }
-        }
-
-        foreach (var region in state.PatternRegionsOf(trackId).Where(static r => !r.Muted)) {
-            foreach (var note in PatternUnroller.Unroll(region, t => Edits.KeyAt(state, t))) {
-                Add(region.StartTick + note.Tick);
-            }
-        }
-
+    /// <summary>An audio track's unmuted regions' transients in project ticks (none for a file not analysed yet).</summary>
+    static IEnumerable<long> Transients(
+        ProjectState state,
+        string trackId,
+        IReadOnlyDictionary<string, FileAnalysis> analyses
+    ) {
         foreach (var region in state.RegionsOf(trackId).Where(static r => !r.Muted)) {
             if (analyses.GetValueOrDefault(region.FileId) is not { } analysis) {
                 continue;
             }
 
             var timing = RegionTiming.Of(state, region);
-            foreach (var frame in analysis.Transients) {
-                if (frame >= region.FileOffset && frame < region.FileOffset + region.Length) {
-                    Add((long)Math.Round(timing.TickAt(frame)));
-                }
+            foreach (var frame in analysis.Transients.Where(f => f >= region.FileOffset
+                         && f < region.FileOffset + region.Length
+                     )) {
+                yield return (long)Math.Round(timing.TickAt(frame));
             }
         }
-
-        return [..onsets];
     }
 
-    [LoggerMessage(Level = LogLevel.Warning, Message = "Session Player region {RegionId} could not be generated: {Message}")]
+    [LoggerMessage(
+        Level = LogLevel.Warning,
+        Message = "Session Player region {RegionId} could not be generated: {Message}"
+    )]
     static partial void GenerationFailed(ILogger logger, string regionId, string message);
 }

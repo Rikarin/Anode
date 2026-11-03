@@ -1,5 +1,4 @@
 using Anode.Contracts;
-using Anode.Model.Time;
 
 namespace Anode.Model.Editing;
 
@@ -117,84 +116,126 @@ public static partial class Edits {
 
         var kind = TrackKindOf(c.Player);
         var name = c.Name is null ? NextTrackName(state, kind) : Name(c.Name, "track name");
-        var ops = new List<DeltaOp>();
-        Track track;
-        if (c.Player == SessionPlayerKind.Drummer) {
-            if (c.PluginId is not null) {
-                throw new EditException("A Drummer plays its kit: name a kit patch, not an instrument.");
-            }
-
-            var kit = Kit(patches, c.KitPatchId, style.KitPatchId);
-            track = NewTrack(state, ids, TrackKind.Drummer, name) with { DrumMachine = new([]) };
-            ops.Add(new TrackUpserted(track, index));
-            var after = state.Apply(ops);
-            foreach (var (note, padName, pad) in KitPads(kit)) {
-                var step = NewPad(after, after.FindTrack(track.Id)!, note, padName, ids, plugins, pad);
-                ops.AddRange(step);
-                after = after.Apply(step);
-            }
-        } else {
-            if (c.KitPatchId is not null) {
-                throw new EditException("Only a Drummer takes a kit patch.");
-            }
-
-            // The style's patch (a Synth Player's synth, say) when the library has it, else the plugin asked for, else the
-            // default instrument.
-            var patch = c.PluginId is null && style.KitPatchId is { } patchId ? patches.Find(patchId) : null;
-            track = NewTrack(state, ids, kind, name) with {
-                Instrument = patch?.Instrument is { } slot
-                    ? slot with { Parameters = PluginCatalog.Sorted(slot.Parameters) }
-                    : NewInstrument(plugins, c.PluginId ?? PluginCatalog.DefaultInstrumentId, c.PluginId is not null),
-                Strip = patch is null
-                    ? ProjectDefaults.Strip
-                    : ProjectDefaults.Strip with {
-                        Inserts = [
-                            ..patch.Inserts.Take(MaxInserts)
-                                .Select(i => i with {
-                                        Id = ids.Next(IdPrefix.Insert),
-                                        Parameters = PluginCatalog.Sorted(i.Parameters).Remove(HostTempoParameter),
-                                        Sidechain = null
-                                    }
-                                )
-                        ]
-                    }
-            };
-            ops.Add(new TrackUpserted(track, index));
-        }
-
+        var ops = c.Player == SessionPlayerKind.Drummer
+            ? NewDrummer(state, c, name, index, style, ids, plugins, patches)
+            : NewPlayer(state, c, kind, name, index, style, ids, plugins, patches);
         if (c.Regions) {
-            var sections = state.Sections.Values.OrderBy(static s => s.StartTick).ToArray();
-            (long Start, long Length, string Name, SectionKind Kind)[] spans = sections.Length > 0
-                ? [..sections.Select(static s => (s.StartTick, s.LengthTicks, s.Name, SectionKinds.Of(s.Name)))]
-                : [(0, Bars(state, 0, DefaultPlayerBars), style.Name, SectionKind.Verse)];
-            foreach (var (start, length, regionName, sectionKind) in spans) {
-                var parameters = preset is null
-                    ? Defaults(style, sectionKind, c.Player)
-                    : Normalised(preset.Parameters with { StyleId = style.Id, PresetId = preset.Id }, c.Player);
-                ops.Add(
-                    new SessionPlayerRegionUpserted(
-                        new(
-                            ids.Next(IdPrefix.SessionPlayerRegion),
-                            track.Id,
-                            regionName,
-                            start,
-                            length,
-                            false,
-                            parameters,
-                            IdPrefix.Seed(ids)
-                        )
-                    )
-                );
-            }
+            ops.AddRange(SectionRegions(state, ((TrackUpserted)ops[0]).Track.Id, style, preset, c.Player, ids));
         }
 
         return ops;
     }
 
+    /// <summary>A Drummer: a Drum Machine Designer of kind <c>drummer</c> with its kit's pads.</summary>
+    static List<DeltaOp> NewDrummer(
+        ProjectState state,
+        AddSessionPlayerTrackCommand c,
+        string name,
+        int index,
+        SessionPlayerStyle style,
+        IIdSource ids,
+        PluginCatalog plugins,
+        IPatchSource patches
+    ) {
+        if (c.PluginId is not null) {
+            throw new EditException("A Drummer plays its kit: name a kit patch, not an instrument.");
+        }
+
+        var kit = Kit(patches, c.KitPatchId, style.KitPatchId);
+        var track = NewTrack(state, ids, TrackKind.Drummer, name) with { DrumMachine = new([]) };
+        List<DeltaOp> ops = [new TrackUpserted(track, index)];
+        var after = state.Apply(ops);
+        foreach (var (note, padName, pad) in KitPads(kit)) {
+            var step = NewPad(after, after.FindTrack(track.Id)!, note, padName, ids, plugins, pad);
+            ops.AddRange(step);
+            after = after.Apply(step);
+        }
+
+        return ops;
+    }
+
+    /// <summary>
+    ///     A Bass or Keyboard Player: an instrument track of the style's patch (a Synth Player's synth, say) when the
+    ///     library has it, else of the plugin asked for, else of the default instrument.
+    /// </summary>
+    static List<DeltaOp> NewPlayer(
+        ProjectState state,
+        AddSessionPlayerTrackCommand c,
+        TrackKind kind,
+        string name,
+        int index,
+        SessionPlayerStyle style,
+        IIdSource ids,
+        PluginCatalog plugins,
+        IPatchSource patches
+    ) {
+        if (c.KitPatchId is not null) {
+            throw new EditException("Only a Drummer takes a kit patch.");
+        }
+
+        var patch = c.PluginId is null && style.KitPatchId is { } patchId ? patches.Find(patchId) : null;
+        var track = NewTrack(state, ids, kind, name) with {
+            Instrument = patch?.Instrument is { } slot
+                ? slot with { Parameters = PluginCatalog.Sorted(slot.Parameters) }
+                : NewInstrument(plugins, c.PluginId ?? PluginCatalog.DefaultInstrumentId, c.PluginId is not null),
+            Strip = patch is null
+                ? ProjectDefaults.Strip
+                : ProjectDefaults.Strip with {
+                    Inserts = [
+                        ..patch.Inserts.Take(MaxInserts)
+                            .Select(i => i with {
+                                    Id = ids.Next(IdPrefix.Insert),
+                                    Parameters = PluginCatalog.Sorted(i.Parameters).Remove(HostTempoParameter),
+                                    Sidechain = null
+                                }
+                            )
+                    ]
+                }
+        };
+        return [new TrackUpserted(track, index)];
+    }
+
+    /// <summary>
+    ///     A new player's regions: one per arrangement section with its kind's defaults (or the preset asked for) and a
+    ///     seed of its own; without sections, one of <see cref="DefaultPlayerBars" /> bars from the start.
+    /// </summary>
+    static IEnumerable<DeltaOp> SectionRegions(
+        ProjectState state,
+        string trackId,
+        SessionPlayerStyle style,
+        SessionPlayerPreset? preset,
+        SessionPlayerKind player,
+        IIdSource ids
+    ) {
+        var sections = state.Sections.Values.OrderBy(static s => s.StartTick).ToArray();
+        (long Start, long Length, string Name, SectionKind Kind)[] spans = sections.Length > 0
+            ? [..sections.Select(static s => (s.StartTick, s.LengthTicks, s.Name, SectionKinds.Of(s.Name)))]
+            : [(0, Bars(state, 0, DefaultPlayerBars), style.Name, SectionKind.Verse)];
+        foreach (var (start, length, regionName, sectionKind) in spans) {
+            var parameters = preset is null
+                ? Defaults(style, sectionKind, player)
+                : Normalised(preset.Parameters with { StyleId = style.Id, PresetId = preset.Id }, player);
+            yield return new SessionPlayerRegionUpserted(
+                new(
+                    ids.Next(IdPrefix.SessionPlayerRegion),
+                    trackId,
+                    regionName,
+                    start,
+                    length,
+                    false,
+                    parameters,
+                    IdPrefix.Seed(ids)
+                )
+            );
+        }
+    }
+
     /// <summary>The kit patch a new Drummer gets: the one asked for (it must exist), else the style's when it does.</summary>
     static ChannelPatch? Kit(IPatchSource patches, string? asked, string? style) {
         if (asked is not null) {
-            return patches.Find(asked) is { Pads: not null } kit ? kit : throw new EditException($"No drum kit '{asked}'.");
+            return patches.Find(asked) is { Pads: not null } kit
+                ? kit
+                : throw new EditException($"No drum kit '{asked}'.");
         }
 
         return style is not null && patches.Find(style) is { Pads: not null } found ? found : null;
@@ -354,17 +395,11 @@ public static partial class Edits {
                     throw new EditException($"Region '{source.Id}' is not a Drummer's: it converts to MIDI only.");
                 }
 
-                ops.Add(
-                    new PatternRegionUpserted(
-                        new(
-                            ids.Next(IdPrefix.PatternRegion),
-                            source.TrackId,
-                            source.Name,
-                            source.StartTick,
-                            source.LengthTicks,
-                            source.Muted,
-                            CheckPattern(converted.Pattern ?? throw new EditException("A pattern conversion has a pattern."))
-                        )
+                ops.AddRange(
+                    PatternRegions(
+                        source,
+                        converted.Pattern ?? throw new EditException("A pattern conversion has a pattern."),
+                        ids
                     )
                 );
                 continue;
@@ -414,6 +449,64 @@ public static partial class Edits {
     }
 
     /// <summary>
+    ///     A converted Drummer region's pattern regions: one when its rows fit a pattern
+    ///     (<see cref="MaxRowLength" /> steps), else consecutive regions of <see cref="MaxRowLength" /> steps each (4 bars
+    ///     of 16ths in 4/4; the last what is left), each with its part of every row, so the steps stay where they were.
+    /// </summary>
+    static IEnumerable<PatternRegionUpserted> PatternRegions(
+        SessionPlayerRegion source,
+        Pattern pattern,
+        IIdSource ids
+    ) {
+        if (pattern.Rows is null || pattern.Rows.All(static r => r is null || r.Length <= MaxRowLength)) {
+            yield return new(
+                new(
+                    ids.Next(IdPrefix.PatternRegion),
+                    source.TrackId,
+                    source.Name,
+                    source.StartTick,
+                    source.LengthTicks,
+                    source.Muted,
+                    CheckPattern(pattern)
+                )
+            );
+            yield break;
+        }
+
+        CheckStepTicks(pattern.StepTicks);
+        var longest = pattern.Rows.Max(static r => r?.Steps?.Count ?? 0);
+        for (var from = 0; from < longest; from += MaxRowLength) {
+            var start = source.StartTick + (long)from * pattern.StepTicks;
+            var length =
+                Math.Min((long)MaxRowLength * pattern.StepTicks, source.StartTick + source.LengthTicks - start);
+            if (length <= 0) {
+                yield break;
+            }
+
+            var first = from;
+            var part = pattern with {
+                Rows = [
+                    ..pattern.Rows.Select(r => r.Steps.Skip(first).Take(MaxRowLength).ToArray() is { Length: > 0 } steps
+                            ? r with { Length = steps.Length, Steps = steps }
+                            : r with { Length = 1, Steps = [r.Steps[^1] with { On = false }] }
+                    )
+                ]
+            };
+            yield return new(
+                new(
+                    ids.Next(IdPrefix.PatternRegion),
+                    source.TrackId,
+                    source.Name,
+                    start,
+                    length,
+                    source.Muted,
+                    CheckPattern(part)
+                )
+            );
+        }
+    }
+
+    /// <summary>
     ///     Parameters as a region keeps them: of a style of the player (and a preset of it, when named), in their ranges,
     ///     with the player's switches (the defaults when left out) and no other player's.
     /// </summary>
@@ -455,17 +548,19 @@ public static partial class Edits {
                 CheckRange(normalised.Bass!.LowNote, normalised.Bass.HighNote, MinBassNote, MaxBassNote, "bass");
                 return normalised;
             default:
-                var keys = normalised.Keys!;
-                if (!Enum.IsDefined(keys.Voicing) || !Enum.IsDefined(keys.LeftHand)) {
-                    throw new EditException("Unknown voicing or left-hand part.");
-                }
-
-                CheckRange(keys.LowNote, keys.HighNote, MinKeysNote, MaxKeysNote, "keys");
-                if (keys.RhythmId is { } rhythm && style.Rhythms.All(r => r.Id != rhythm)) {
-                    throw new EditException($"Style '{style.Name}' has no rhythm '{rhythm}'.");
-                }
-
+                CheckKeys(style, normalised.Keys!);
                 return normalised;
+        }
+    }
+
+    static void CheckKeys(SessionPlayerStyle style, KeysSwitches keys) {
+        if (!Enum.IsDefined(keys.Voicing) || !Enum.IsDefined(keys.LeftHand)) {
+            throw new EditException("Unknown voicing or left-hand part.");
+        }
+
+        CheckRange(keys.LowNote, keys.HighNote, MinKeysNote, MaxKeysNote, "keys");
+        if (keys.RhythmId is { } rhythm && style.Rhythms.All(r => r.Id != rhythm)) {
+            throw new EditException($"Style '{style.Name}' has no rhythm '{rhythm}'.");
         }
     }
 
@@ -480,7 +575,9 @@ public static partial class Edits {
         if (drums.RhythmSourceTrackId is { } source) {
             var track = state.FindTrack(source) ?? throw new EditException($"No track '{source}' to follow.");
             if (track.Id == trackId || !(track.Kind == TrackKind.Audio || HoldsMidi(track))) {
-                throw new EditException($"Track '{track.Name}' is no rhythm source: follow another audio or MIDI track.");
+                throw new EditException(
+                    $"Track '{track.Name}' is no rhythm source: follow another audio or MIDI track."
+                );
             }
         }
 
@@ -563,7 +660,9 @@ public static partial class Edits {
         }
 
         throw new EditException(
-            styleId is null ? $"No {PlayerName(player)} style is installed." : $"No {PlayerName(player)} style '{styleId}'."
+            styleId is null
+                ? $"No {PlayerName(player)} style is installed."
+                : $"No {PlayerName(player)} style '{styleId}'."
         );
     }
 
@@ -587,10 +686,11 @@ public static partial class Edits {
     ) {
         var regions = state.SessionPlayerRegionsOf(track.Id).ToArray();
         var near = regions.LastOrDefault(r => r.StartTick <= tick) ?? regions.FirstOrDefault();
-        return near is not null && styles.Styles.FirstOrDefault(s => s.Player == player && s.Id == near.Parameters.StyleId)
-            is { } kept
-            ? kept
-            : StyleFor(styles, player, null);
+        return near is not null
+            && styles.Styles.FirstOrDefault(s => s.Player == player && s.Id == near.Parameters.StyleId)
+                is { } kept
+                ? kept
+                : StyleFor(styles, player, null);
     }
 
     /// <summary>The arrangement section <paramref name="tick" /> is in, or null.</summary>

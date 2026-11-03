@@ -384,6 +384,22 @@ public sealed record ProjectState(
             PatternRegionUpserted or PatternRegionRemoved => InversePattern(op),
             LiveLoopsChanged => new LiveLoopsChanged(LiveLoops),
             MovieChanged => new MovieChanged(Movie),
+            GrooveUpserted
+                or GrooveRemoved
+                or ArticulationSetUpserted
+                or ArticulationSetRemoved
+                or LaneSetUpserted
+                or LaneSetRemoved => InverseSet(op),
+            // Phase 9's score operations, Phase 11's, else unknown.
+            _ => InverseScore(op)
+        };
+
+    /// <summary>
+    ///     The inverse of a Phase 11 operation: the chord track, the Environment, a Session Player region; any other
+    ///     operation is unknown.
+    /// </summary>
+    DeltaOp? InversePhase11(DeltaOp op) =>
+        op switch {
             ChordTrackChanged => new ChordTrackChanged(ChordTrack),
             EnvironmentChanged => new EnvironmentChanged(Environment),
             SessionPlayerRegionUpserted(var region) => SessionPlayerRegions.TryGetValue(region.Id, out var old)
@@ -392,14 +408,7 @@ public sealed record ProjectState(
             SessionPlayerRegionRemoved(var id) => SessionPlayerRegions.TryGetValue(id, out var old)
                 ? new SessionPlayerRegionUpserted(old)
                 : null,
-            GrooveUpserted
-                or GrooveRemoved
-                or ArticulationSetUpserted
-                or ArticulationSetRemoved
-                or LaneSetUpserted
-                or LaneSetRemoved => InverseSet(op),
-            // Phase 9's score operations, else unknown.
-            _ => InverseScore(op)
+            _ => throw new ArgumentException($"Unknown delta operation {op.GetType().Name}.", nameof(op))
         };
 
     /// <summary>The inverse of a Phase 7 set's operation: a groove template, an articulation set or a lane set.</summary>
@@ -458,7 +467,7 @@ public sealed record ProjectState(
                 ? new ScoreSetUpserted(old)
                 : new ScoreSetRemoved(set.Id),
             ScoreSetRemoved(var id) => ScoreSets.TryGetValue(id, out var old) ? new ScoreSetUpserted(old) : null,
-            _ => throw new ArgumentException($"Unknown delta operation {op.GetType().Name}.", nameof(op))
+            _ => InversePhase11(op)
         };
 
     DeltaOp? InversePattern(DeltaOp op) =>

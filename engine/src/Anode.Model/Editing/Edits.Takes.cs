@@ -307,7 +307,8 @@ public static partial class Edits {
             if (target is not null) {
                 var fits = item.Kind switch {
                     TimelineKind.MidiRegion or TimelineKind.PatternRegion => HoldsMidi(target),
-                    TimelineKind.SessionPlayerRegion => target.Kind == state.FindTrack(Timeline.TrackOf(state, item)!)?.Kind,
+                    TimelineKind.SessionPlayerRegion => target.Kind
+                        == state.FindTrack(Timeline.TrackOf(state, item)!)?.Kind,
                     _ => target.Kind == TrackKind.Audio
                 };
                 if (!fits) {

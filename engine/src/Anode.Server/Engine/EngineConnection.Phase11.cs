@@ -48,7 +48,9 @@ public sealed partial class EngineConnection {
         var engine = new EngineMidiEvent[events.Count];
         for (var i = 0; i < engine.Length; i++) {
             if (events[i] is not { Status: >= 0x80 and <= 0xEF, Data1: >= 0 and <= 127, Data2: >= 0 and <= 127 } e) {
-                throw ProjectException.Unprocessable("A MIDI event is a channel message: status 0x80…0xEF, data bytes 0…127.");
+                throw ProjectException.Unprocessable(
+                    "A MIDI event is a channel message: status 0x80…0xEF, data bytes 0…127."
+                );
             }
 
             engine[i] = new(e.Status, e.Data1, e.Data2);
@@ -104,30 +106,13 @@ public sealed partial class EngineConnection {
     void PublishPhase11(TelemetryFrame frame, OpenProjectView view, bool moving) {
         if (frame.Monitors.Length + frame.Faders.Length > 0) {
             var order = Order(view.State.Environment);
-            foreach (var monitor in frame.Monitors) {
-                if (monitor.Object <= 0
-                    || monitor.Object > order.Count
-                    || monitorCounts.GetValueOrDefault(monitor.Object) == monitor.Count) {
-                    continue;
-                }
-
-                monitorCounts[monitor.Object] = monitor.Count;
-                hub.Publish(new EnvironmentMonitorEvent(order[monitor.Object - 1].Id, Monitored(monitor)));
-            }
-
-            foreach (var fader in frame.Faders) {
-                if (fader.Object <= 0
-                    || fader.Object > order.Count
-                    || (faderValues.TryGetValue(fader.Object, out var was) && was.Equals(fader.Value))) {
-                    continue;
-                }
-
-                faderValues[fader.Object] = fader.Value;
-                hub.Publish(new EnvironmentFaderEvent(order[fader.Object - 1].Id, fader.Value));
-            }
+            PublishMonitors(frame.Monitors, order);
+            PublishFaders(frame.Faders, order);
         }
 
-        if (moving && frame.Mastering is { Active: not 0 } m && Edits.MasteringAssistantOf(view.State) is { } assistant) {
+        if (moving
+            && frame.Mastering is { Active: not 0 } m
+            && Edits.MasteringAssistantOf(view.State) is { } assistant) {
             hub.Publish(
                 new MasteringEvent(
                     assistant.Id,
@@ -139,6 +124,28 @@ public sealed partial class EngineConnection {
                     m.LimiterReductionDb
                 )
             );
+        }
+    }
+
+    void PublishMonitors(EnvironmentMonitorEntry[] monitors, IReadOnlyList<EnvironmentObject> order) {
+        foreach (var monitor in monitors) {
+            if (monitor.Object > 0
+                && monitor.Object <= order.Count
+                && monitorCounts.GetValueOrDefault(monitor.Object) != monitor.Count) {
+                monitorCounts[monitor.Object] = monitor.Count;
+                hub.Publish(new EnvironmentMonitorEvent(order[monitor.Object - 1].Id, Monitored(monitor)));
+            }
+        }
+    }
+
+    void PublishFaders(EnvironmentFaderEntry[] faders, IReadOnlyList<EnvironmentObject> order) {
+        foreach (var fader in faders) {
+            if (fader.Object > 0
+                && fader.Object <= order.Count
+                && !(faderValues.TryGetValue(fader.Object, out var was) && was.Equals(fader.Value))) {
+                faderValues[fader.Object] = fader.Value;
+                hub.Publish(new EnvironmentFaderEvent(order[fader.Object - 1].Id, fader.Value));
+            }
         }
     }
 
@@ -162,7 +169,12 @@ public sealed partial class EngineConnection {
         for (var i = 0; i < count; i++) {
             var n = (int)((monitor.Count - count + i) % EnvironmentMonitorEntry.Capacity);
             var bytes = monitor.Events[2 * n + 1];
-            events[i] = new((int)(bytes & 0xFF), (int)((bytes >> 8) & 0xFF), (int)((bytes >> 16) & 0xFF), monitor.Events[2 * n]);
+            events[i] = new(
+                (int)(bytes & 0xFF),
+                (int)((bytes >> 8) & 0xFF),
+                (int)((bytes >> 16) & 0xFF),
+                monitor.Events[2 * n]
+            );
         }
 
         return events;

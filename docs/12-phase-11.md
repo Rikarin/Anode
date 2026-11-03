@@ -394,6 +394,64 @@ Five, in parallel, each on its own branch; they meet only at the contracts above
 - **Tests:** properties for the commands; migration; the compiler's Session Player cache and invalidation; Pitch
   Source over chord changes; Environment validation; jobs with doubles; API tests.
 
+### Server domain decisions (workstream B)
+
+- **Seams** (`Anode.Server/Projects/Generative.cs`): `ISessionPlayerLibrary` (D's `StyleLibrary.Builtin()` and
+  `SessionPlayerGenerator`, loaded on first use; a library that cannot load answers 503 and the Session Player
+  commands 422 for the style they lack), `IChordRecognition` (D's recognisers and `KeyDetector`), `IMasteringAnalysis`
+  (E's `MasteringAnalyzer`), and in the model `IMasteringDesigner` (E's `MasteringChainDesigner`). The real classes
+  are what `Program.cs` registers: D's and E's work drops in with no code change.
+- **Styles in edits:** `Edits.Apply` takes a `SessionPlayerCatalog` (the server passes the library's for the commands
+  that pick styles and presets). Tracks keep no style: a new region takes its track's region before it (else the
+  track's first, else the player's first style). A Bass or Keyboard Player style's `kitPatchId`, when set, is the
+  instrument patch its new tracks get (a Synth Player's synth); else the plugin asked for, else the default synth. A
+  Drummer whose kit patch is not installed gets a Drum Synth pad on each of the 17 notes in `DrumKitNotes` (still
+  multi-output). `addTrack` refuses the Session Player kinds (`addSessionPlayerTrack` adds them). Bass and Keyboard
+  Player tracks count as instrument tracks, a Drummer as a stack, wherever Drum Machine Designers and instrument
+  tracks did (strips, MIDI FX, freeze, patches, groups, VCAs).
+- **Seeds** come from fresh ids (`IdPrefix.Seed`: the SHA-256 of an id, so tests stay deterministic). A copy keeps its
+  seed. A region's name is its section's (else its style's).
+- **Generation input** (`SessionPlayers.Input`): the chords, key and scale changes, signatures and key events in the
+  region's range with the one sounding at its start; the sections over it with the one before it; the rhythm source's
+  unmuted MIDI and pattern note starts, or its audio regions' transients from the files' cached analyses (none until a
+  file is analysed). The cache is by `Hash(input)` (at most 4096 regions); a failing generator gives the region no
+  notes, logged once per input. The compiler gets the notes by region id and plays them as MIDI regions (a Drummer's
+  through its pads); the same note lists are the same models.
+- **Pitch Source:** MIDI before the first chord plays as it is; in Chords mode a note goes to the nearest pitch whose
+  class is a chord tone (the slash bass counts), a tie down. Audio follows through the pitch shift (the region compiled
+  warped), a playlist entry per chord segment crossfaded over 10 ms past each change; a change that would leave a
+  segment shorter than four crossfades (40 ms) is dropped. A following track recompiles when the chord or key track
+  changes. Live Loops cells do not follow.
+- **Chord ID:** the MIDI regions are heard together (their notes in the range, with their playback transpose and
+  velocity); each audio region alone (its file's frames over the range, mixed to mono, the range's beats as frames).
+  The result is the chords of both in tick order, a MIDI chord first where both start at a tick. The project's key
+  track is the recognisers' prior when it has keys. **Spelling:** the recognisers give pitch classes, so roots and
+  slash basses are spelled with flats or sharps as the detected key (`KeyDetector` over the notes, or the audio)
+  spells: flats in F, B♭, E♭, A♭ and D♭ major and D, G, C, F, B♭ and E♭ minor. Merge keeps a chord already within a
+  beat.
+- **Mastering analysis:** the master is rendered offline before the assistant by swapping the host's master strip for
+  one with the assistant and every insert after it bypassed, at unity gain, for the render, then sending the project's
+  strip again (no IPC change; an edit to the master during the render is restored by the next sync). A surround
+  master is analysed on its first two channels. Without an assistant, one is added last in the analysis' undo step.
+  The chain is designed per analysis and character (`MasteringChains`) and travels in `EngineInsert.mastering`; a new
+  chain is a structural strip change (`setChannel`); a designer that fails sends none.
+- **Convert to Pattern:** the generator's pattern has one row the region's length, longer than a row may be
+  (`MaxRowLength`, 64 steps). The limit stays; `convertSessionPlayerRegions` splits such a pattern into consecutive
+  pattern regions of 64 steps (4 bars of 16ths in 4/4; the last what is left), each with its part of every row.
+- **Environment:** objects are stored with their kind's parameters at their defaults (the MIDI FX objects' as given);
+  the transformer refuses `useMap` (no map) besides the time-based operations; at most 1024 objects, 4096 cables, 64
+  layers, 16 taps, 16 chord notes. A removed track's track inputs play nothing and its control targets drive nothing
+  (track and address cleared). A whole model carries the Environment; a change to it, or to the tracks or strips it
+  names, goes as `setEnvironment`. Monitors and faders take telemetry slots in compiled order (32 and 64; the rest
+  report nothing); their events are published when a monitor's count or a fader's value changes, the assistant's
+  while the transport plays.
+- **Package schema 11:** `project.json` holds `chordTrack` and `environment`, track files `sessionPlayerRegions`;
+  regions' `pitchSource` and `key` and an assistant's `mastering` are where they were. Damaged parts read as none
+  (chords and cables that fail their checks, a track input to no track, a rhythm source that is gone); Session Player
+  regions keep styles the library no longer has.
+- **Undo:** labels for every Phase 11 command; an XY pad drag, a Mastering Assistant knob and an Environment object's
+  move coalesce into one step.
+
 ### C — Editor (`editor/`; built with `editor/DESIGN.md`)
 
 - **Chord track** in the global tracks (chords drawn as symbols, edit with a popover, key and scale changes), the

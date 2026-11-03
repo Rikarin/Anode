@@ -23,6 +23,25 @@ static partial class RandomProjects {
     );
 
     static SessionPlayerStyle Style(string id, SessionPlayerKind player, string? patch, bool synth = false) {
+        return new(
+            id,
+            id,
+            player,
+            "Test",
+            "A test style.",
+            synth,
+            patch,
+            player == SessionPlayerKind.Keyboard ? [new("eighths", "Eighths"), new("whole", "Whole Notes")] : [],
+            [
+                new($"{id}.soft", "Soft", Parameters(0.3, 0.3, $"{id}.soft")),
+                new($"{id}.busy", "Busy", Parameters(0.9, 0.8, $"{id}.busy"))
+            ],
+            [
+                ..Enum.GetValues<SectionKind>()
+                    .Select((k, i) => new SectionDefaults(k, Parameters(0.2 + 0.15 * i, 0.3 + 0.1 * i, null)))
+            ]
+        );
+
         SessionPlayerParameters Parameters(double complexity, double intensity, string? preset) =>
             new(
                 id,
@@ -37,22 +56,6 @@ static partial class RandomProjects {
                 player == SessionPlayerKind.Bass ? new(28, 52, true, false) : null,
                 player == SessionPlayerKind.Keyboard ? new(KeysVoicing.Spread, 48, 79, KeysLeftHand.Root, null) : null
             );
-
-        return new(
-            id,
-            id,
-            player,
-            "Test",
-            "A test style.",
-            synth,
-            patch,
-            player == SessionPlayerKind.Keyboard ? [new("eighths", "Eighths"), new("whole", "Whole Notes")] : [],
-            [new($"{id}.soft", "Soft", Parameters(0.3, 0.3, $"{id}.soft")), new($"{id}.busy", "Busy", Parameters(0.9, 0.8, $"{id}.busy"))],
-            [
-                ..Enum.GetValues<SectionKind>()
-                    .Select((k, i) => new SectionDefaults(k, Parameters(0.2 + 0.15 * i, 0.3 + 0.1 * i, null)))
-            ]
-        );
     }
 
     /// <summary>The Phase 11 command types (<see cref="Phase11" /> makes them).</summary>
@@ -134,7 +137,9 @@ static partial class RandomProjects {
                     r.Next(3) == 0 ? null : new(Name(r), Pick(r, Enum.GetValues<KeyMode>()))
                 ),
             nameof(AddSessionPlayerTrackCommand) => AddPlayer(s, r),
-            nameof(AddSessionPlayerRegionCommand) => playerTracks.Length == 0 ? null : AddPlayerRegion(s, Pick(r, playerTracks), r),
+            nameof(AddSessionPlayerRegionCommand) => playerTracks.Length == 0
+                ? null
+                : AddPlayerRegion(s, Pick(r, playerTracks), r),
             nameof(SetSessionPlayerRegionCommand) => players.Length == 0 ? null : SetPlayer(s, Pick(r, players), r),
             nameof(RegenerateSessionPlayerCommand) => players.Length == 0
                 ? null
@@ -158,7 +163,9 @@ static partial class RandomProjects {
             nameof(SetMasteringAnalysisCommand) => Edits.MasteringAssistantOf(s) is { } assistant
                 ? new SetMasteringAnalysisCommand(assistant.Id, MasteringAnalysis(r))
                 : null,
-            nameof(AddEnvironmentLayerCommand) => new AddEnvironmentLayerCommand(r.Next(2) == 0 ? null : $"Layer {r.Next(100)}"),
+            nameof(AddEnvironmentLayerCommand) => new AddEnvironmentLayerCommand(
+                r.Next(2) == 0 ? null : $"Layer {r.Next(100)}"
+            ),
             nameof(SetEnvironmentLayerCommand) => environment.Layers.Count == 0
                 ? null
                 : new SetEnvironmentLayerCommand(
@@ -170,7 +177,9 @@ static partial class RandomProjects {
                 ? null
                 : new RemoveEnvironmentLayerCommand(Pick(r, environment.Layers).Id),
             nameof(AddEnvironmentObjectCommand) => AddObject(s, r),
-            nameof(SetEnvironmentObjectCommand) => environment.Objects.Count == 0 ? null : SetObject(s, Pick(r, environment.Objects), r),
+            nameof(SetEnvironmentObjectCommand) => environment.Objects.Count == 0
+                ? null
+                : SetObject(s, Pick(r, environment.Objects), r),
             nameof(RemoveEnvironmentObjectsCommand) => environment.Objects.Count == 0
                 ? null
                 : new RemoveEnvironmentObjectsCommand([..Some(environment.Objects, r).Select(static o => o.Id)]),
@@ -262,7 +271,9 @@ static partial class RandomProjects {
             r.Next(4) == 0 ? $"Renamed {r.Next(100)}" : null,
             r.Next(4) == 0 ? r.Next(2) == 0 : null,
             style?.Id,
-            r.Next(4) == 0 ? Pick(r, (style ?? styles.First(st => st.Id == region.Parameters.StyleId)).Presets).Id : null,
+            r.Next(4) == 0
+                ? Pick(r, (style ?? styles.First(st => st.Id == region.Parameters.StyleId)).Presets).Id
+                : null,
             r.Next(2) == 0 ? Math.Round(r.NextDouble(), 2) : null,
             r.Next(2) == 0 ? Math.Round(r.NextDouble(), 2) : null,
             r.Next(4) == 0 ? Math.Round(r.NextDouble(), 2) : null,
@@ -276,7 +287,9 @@ static partial class RandomProjects {
                     r.Next(2) == 0 ? null : Pick(r, s.Tracks).Id
                 )
                 : null,
-            player == SessionPlayerKind.Bass && r.Next(3) == 0 ? new(r.Next(24, 40), r.Next(50, 73), r.Next(2) == 0, r.Next(2) == 0) : null,
+            player == SessionPlayerKind.Bass && r.Next(3) == 0
+                ? new(r.Next(24, 40), r.Next(50, 73), r.Next(2) == 0, r.Next(2) == 0)
+                : null,
             player == SessionPlayerKind.Keyboard && r.Next(3) == 0
                 ? new(
                     Pick(r, Enum.GetValues<KeysVoicing>()),
@@ -293,7 +306,14 @@ static partial class RandomProjects {
         var drummer = s.FindTrack(region.TrackId)?.Kind == TrackKind.Drummer;
         NewNote[] notes = [
             ..Enumerable.Range(0, r.Next(0, 9))
-                .Select(i => new NewNote(drummer ? DrumKitNotes.Kick : 36 + r.Next(0, 24), r.Next(40, 128), 1, i * 240L, 240))
+                .Select(i => new NewNote(
+                        drummer ? DrumKitNotes.Kick : 36 + r.Next(0, 24),
+                        r.Next(40, 128),
+                        1,
+                        i * 240L,
+                        240
+                    )
+                )
         ];
         return drummer && r.Next(2) == 0
             ? new(
@@ -311,7 +331,10 @@ static partial class RandomProjects {
                             null,
                             PatternPlayMode.Forward,
                             false,
-                            [..Enumerable.Range(0, 16).Select(i => new PatternStep(i % 4 == 0, 100, 0.5, 1, 1, 0))]
+                            [
+                                ..Enumerable.Range(0, 16)
+                                    .Select(static i => new PatternStep(i % 4 == 0, 100, 0.5, 1, 1, 0))
+                            ]
                         )
                     ],
                     0,
@@ -340,7 +363,9 @@ static partial class RandomProjects {
         var kind = Pick(r, Enum.GetValues<EnvironmentObjectKind>());
         var midi = s.Tracks.Where(Edits.HoldsMidi).ToArray();
         var strips = s.Tracks.Where(static t => Edits.HasAudioStrip(t.Kind)).ToArray();
-        var target = kind == EnvironmentObjectKind.ControlTarget && strips.Length > 0 && r.Next(2) == 0 ? Pick(r, strips) : null;
+        var target = kind == EnvironmentObjectKind.ControlTarget && strips.Length > 0 && r.Next(2) == 0
+            ? Pick(r, strips)
+            : null;
         return new(
             kind,
             r.Next(0, 800),
@@ -363,11 +388,19 @@ static partial class RandomProjects {
                 : target?.Id,
             kind == EnvironmentObjectKind.ControlTarget ? Pick(r, ["volume", "pan", "mute"]) : null,
             kind == EnvironmentObjectKind.Transformer
-                ? [new(TransformField.Status, TransformConditionOp.Equal, 144), new(TransformField.Pitch, TransformConditionOp.Inside, 36, 84)]
+                ? [
+                    new(TransformField.Status, TransformConditionOp.Equal, 144),
+                    new(TransformField.Pitch, TransformConditionOp.Inside, 36, 84)
+                ]
                 : null,
-            kind == EnvironmentObjectKind.Transformer ? [new(TransformField.Pitch, TransformOperationKind.Add, 12)] : null,
+            kind == EnvironmentObjectKind.Transformer
+                ? [new(TransformField.Pitch, TransformOperationKind.Add, 12)]
+                : null,
             kind == EnvironmentObjectKind.DelayLine
-                ? [..Enumerable.Range(1, r.Next(1, 4)).Select(i => new DelayTap(i * 240L, r.Next(-12, 13), -r.Next(0, 30)))]
+                ? [
+                    ..Enumerable.Range(1, r.Next(1, 4))
+                        .Select(i => new DelayTap(i * 240L, r.Next(-12, 13), -r.Next(0, 30)))
+                ]
                 : null,
             kind == EnvironmentObjectKind.ChordMemorizer && r.Next(2) == 0 ? [0, 4, 7] : null
         );
@@ -387,7 +420,9 @@ static partial class RandomProjects {
                 ? r.Next(2) == 0 ? string.Empty : $"Port {r.Next(4)}"
                 : null,
             null,
-            o.Kind == EnvironmentObjectKind.ControlTarget && r.Next(3) == 0 ? Pick(r, ["volume", "pan", string.Empty]) : null,
+            o.Kind == EnvironmentObjectKind.ControlTarget && r.Next(3) == 0
+                ? Pick(r, ["volume", "pan", string.Empty])
+                : null,
             null,
             o.Kind == EnvironmentObjectKind.Transformer && r.Next(2) == 0
                 ? [new(TransformField.Velocity, TransformOperationKind.Fix, r.Next(1, 128))]

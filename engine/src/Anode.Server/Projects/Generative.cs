@@ -62,7 +62,12 @@ public interface IChordRecognition {
         DetectedMusicalKey? key
     );
 
-    IReadOnlyList<RecognisedChord> FromAudio(float[] mono, float sampleRate, IReadOnlyList<long> beats, DetectedMusicalKey? key);
+    IReadOnlyList<RecognisedChord> FromAudio(
+        float[] mono,
+        float sampleRate,
+        IReadOnlyList<long> beats,
+        DetectedMusicalKey? key
+    );
 
     DetectedMusicalKey KeyOfNotes(IReadOnlyList<ChordNote> notes);
 

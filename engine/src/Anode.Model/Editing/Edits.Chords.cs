@@ -140,7 +140,7 @@ public static partial class Edits {
 
         var ops = new List<DeltaOp>();
         if (result.Write != ChordIdWrite.None) {
-            var detected = result.Chords.Select(d => CheckChord(
+            var detected = result.Chords.Select(static d => CheckChord(
                         new(
                             string.Empty,
                             d?.Tick ?? -1,
@@ -274,5 +274,5 @@ public static partial class Edits {
     ///     track's at its start.
     /// </summary>
     public static int KeyRootOf(ProjectState state, RegionKey? key, long startTick) =>
-        key is not null ? PitchSources.PitchClass(key.Tonic) : ((KeyAt(state, startTick).Tonic % 12) + 12) % 12;
+        key is not null ? PitchSources.PitchClass(key.Tonic) : (KeyAt(state, startTick).Tonic % 12 + 12) % 12;
 }

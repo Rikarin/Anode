@@ -17,7 +17,8 @@ public static class PitchFollow {
     public const double CrossfadeSeconds = 0.010;
 
     /// <summary>Whether <paramref name="mode" /> follows anything over <paramref name="track" />'s chords.</summary>
-    public static bool Follows(PitchSourceMode mode, ChordTrack track) => mode != PitchSourceMode.Off && track.Chords.Count > 0;
+    public static bool Follows(PitchSourceMode mode, ChordTrack track) =>
+        mode != PitchSourceMode.Off && track.Chords.Count > 0;
 
     /// <summary>The interval a region of key <paramref name="keyRoot" /> (a pitch class) plays over <paramref name="chord" />.</summary>
     public static int Interval(int keyRoot, Chord chord) =>
@@ -122,7 +123,13 @@ public static class PitchFollow {
             return [Warps.Entry(timing, track, map, state.SampleRate, fileId, analysis)];
         }
 
-        var segments = Segments(state, region.Key, region.StartTick, region.StartTick, (long)Math.Ceiling(timing.EndTick));
+        var segments = Segments(
+            state,
+            region.Key,
+            region.StartTick,
+            region.StartTick,
+            (long)Math.Ceiling(timing.EndTick)
+        );
         if (segments is [{ Interval: 0 }]) {
             return [Warps.Entry(timing, track, map, state.SampleRate, fileId, analysis)];
         }
@@ -130,6 +137,7 @@ public static class PitchFollow {
         var file = state.Files.GetValueOrDefault(region.FileId);
         var rate = state.SampleRate;
         var fade = Math.Max(1, (long)Math.Round(CrossfadeSeconds * rate));
+
         PlacedEntry Through(int interval) =>
             Warps.Entry(
                 RegionTiming.Of(
@@ -147,30 +155,8 @@ public static class PitchFollow {
                 analysis
             );
 
-        // Where each segment starts: a change that would leave a segment shorter than four crossfades is dropped (the
-        // chord before it plays on; at the region's start, the chord after it plays from there).
         var span = Through(0);
-        var shortest = 4 * fade;
-        var cuts = new List<(long Sample, int Interval)>();
-        foreach (var (tick, interval) in segments) {
-            var at = cuts.Count == 0 ? span.Start : map.SampleAt(tick, rate);
-            if (cuts.Count > 0 && span.End - at < shortest) {
-                break;
-            }
-
-            if (cuts.Count > 0 && at - cuts[^1].Sample < shortest) {
-                if (cuts.Count == 1) {
-                    cuts[0] = (cuts[0].Sample, interval);
-                }
-
-                continue;
-            }
-
-            if (cuts.Count == 0 || cuts[^1].Interval != interval) {
-                cuts.Add((at, interval));
-            }
-        }
-
+        var cuts = Cuts(segments, span, map, rate, 4 * fade);
         if (cuts is [{ Interval: 0 }]) {
             return [Warps.Entry(timing, track, map, state.SampleRate, fileId, analysis)];
         }
@@ -179,25 +165,60 @@ public static class PitchFollow {
         for (var i = 0; i < cuts.Count; i++) {
             // Each segment through the pitch shift (a warped region) at its own transposition, running a crossfade
             // past the change into the next.
-            var opening = i == 0;
             var closing = i == cuts.Count - 1;
             var end = closing ? span.End : Math.Min(cuts[i + 1].Sample + fade, span.End);
-            var piece = Slice(Through(cuts[i].Interval), cuts[i].Sample, end);
-            var entry = piece.Entry;
-            // The region's own fades (on its first and last pieces) in what the crossfades leave, with a crossfade's
-            // slack (Varispeed rounds each of them).
-            var fadeIn = opening ? entry.FadeIn : fade;
-            var fadeOut = closing ? entry.FadeOut : fade;
-            if (opening && !closing) {
-                fadeIn = Math.Min(fadeIn, Math.Max(0, entry.Length - 2 * fade));
-            } else if (closing && !opening) {
-                fadeOut = Math.Min(fadeOut, Math.Max(0, entry.Length - 2 * fade));
-            }
-
-            entries.Add(piece with { Entry = entry with { FadeIn = (int)fadeIn, FadeOut = (int)fadeOut } });
+            entries.Add(Faded(Slice(Through(cuts[i].Interval), cuts[i].Sample, end), i == 0, closing, fade));
         }
 
         return entries;
+    }
+
+    /// <summary>
+    ///     Where each segment starts, in samples: a change that would leave a segment shorter than
+    ///     <paramref name="shortest" /> is dropped (the chord before it plays on; at the region's start, the chord after
+    ///     it plays from there).
+    /// </summary>
+    static List<(long Sample, int Interval)> Cuts(
+        IReadOnlyList<(long Tick, int Interval)> segments,
+        PlacedEntry span,
+        TempoMap map,
+        int rate,
+        long shortest
+    ) {
+        var cuts = new List<(long Sample, int Interval)> { (span.Start, segments[0].Interval) };
+        foreach (var (tick, interval) in segments.Skip(1)) {
+            var at = map.SampleAt(tick, rate);
+            if (span.End - at < shortest) {
+                break;
+            }
+
+            if (at - cuts[^1].Sample < shortest) {
+                if (cuts.Count == 1) {
+                    cuts[0] = (cuts[0].Sample, interval);
+                }
+            } else if (cuts[^1].Interval != interval) {
+                cuts.Add((at, interval));
+            }
+        }
+
+        return cuts;
+    }
+
+    /// <summary>
+    ///     A piece's fades: the crossfades with its neighbours, and the region's own fades (on its first and last pieces)
+    ///     in what they leave, with a crossfade's slack (Varispeed rounds each of them).
+    /// </summary>
+    static PlacedEntry Faded(PlacedEntry piece, bool opening, bool closing, long fade) {
+        var entry = piece.Entry;
+        var fadeIn = opening ? entry.FadeIn : fade;
+        var fadeOut = closing ? entry.FadeOut : fade;
+        if (opening && !closing) {
+            fadeIn = Math.Min(fadeIn, Math.Max(0, entry.Length - 2 * fade));
+        } else if (closing && !opening) {
+            fadeOut = Math.Min(fadeOut, Math.Max(0, entry.Length - 2 * fade));
+        }
+
+        return piece with { Entry = entry with { FadeIn = (int)fadeIn, FadeOut = (int)fadeOut } };
     }
 
     /// <summary>The part of an entry from <paramref name="start" /> to <paramref name="end" />, its warp map sliced.</summary>

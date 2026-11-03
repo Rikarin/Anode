@@ -19,7 +19,14 @@ public sealed class Phase11CompilerTests {
     static PitchName N(PitchStep step, int alter = 0) => new(step, alter);
 
     void Apply(params EditCommand[] commands) =>
-        state = Edits.Apply(state, commands, ids, RandomProjects.Plugins, RandomProjects.Patches, styles: RandomProjects.Styles)
+        state = Edits.Apply(
+                state,
+                commands,
+                ids,
+                RandomProjects.Plugins,
+                RandomProjects.Patches,
+                styles: RandomProjects.Styles
+            )
             .State;
 
     /// <summary>C, Am, F and G, a bar each.</summary>
@@ -52,11 +59,17 @@ public sealed class Phase11CompilerTests {
         Apply(new AddMidiRegionCommand(track, 0, 15_360));
         var region = state.MidiRegions.Keys.Single();
         Apply(
-            new AddNotesCommand(region, [..Enumerable.Range(0, 4).Select(static i => new NewNote(52, 100, 1, i * 3840L, 960))]),
+            new AddNotesCommand(
+                region,
+                [..Enumerable.Range(0, 4).Select(static i => new NewNote(52, 100, 1, i * 3840L, 960))]
+            ),
             new SetPitchSourceCommand([region], mode)
         );
         Chords();
-        Assert.Equal(expected, NoteOns(TrackOf(new ModelCompiler().Compile(state, EngineIds.Empty.With(state)), track)));
+        Assert.Equal(
+            expected,
+            NoteOns(TrackOf(new ModelCompiler().Compile(state, EngineIds.Empty.With(state)), track))
+        );
     }
 
     [Fact]
@@ -80,13 +93,18 @@ public sealed class Phase11CompilerTests {
         Assert.Equal([40], NoteOns(TrackOf(model, track)));
         Assert.Contains(EngineIds.Empty.With(state).Track(track), model.Recompiled);
         Apply(new SetMetronomeCommand(LevelDb: -12));
-        Assert.DoesNotContain(EngineIds.Empty.With(state).Track(track), compiler.Compile(state, EngineIds.Empty.With(state)).Recompiled);
+        Assert.DoesNotContain(
+            EngineIds.Empty.With(state).Track(track),
+            compiler.Compile(state, EngineIds.Empty.With(state)).Recompiled
+        );
     }
 
     [Fact]
     public void An_audio_region_plays_a_transposition_per_chord_segment_crossfaded() {
         Apply(new AddTrackCommand(Kind: TrackKind.Audio));
-        state = state.Apply(new AudioFileUpserted(new("aud_1", "Bass", "Audio Files/Bass.wav", 48_000, 1, 480_000, 24, null, 0)));
+        state = state.Apply(
+            new AudioFileUpserted(new("aud_1", "Bass", "Audio Files/Bass.wav", 48_000, 1, 480_000, 24, null, 0))
+        );
         var track = state.Tracks[0].Id;
         Apply(new AddRegionCommand(track, "aud_1", 0, Length: 4 * 96_000));
         Chords();
@@ -138,7 +156,8 @@ public sealed class Phase11CompilerTests {
         Apply(new AddSessionPlayerTrackCommand(SessionPlayerKind.Drummer, "drums.rock"));
         var drummer = state.Tracks[0];
         var region = state.SessionPlayerRegions.Keys.Single();
-        Note[] notes = [new(1, DrumKitNotes.Kick, 100, 10, 0, 120, 0), new(2, DrumKitNotes.Snare, 100, 10, 960, 120, 0)];
+        Note[] notes =
+            [new(1, DrumKitNotes.Kick, 100, 10, 0, 120, 0), new(2, DrumKitNotes.Snare, 100, 10, 960, 120, 0)];
         var model = new ModelCompiler().Compile(
             state,
             EngineIds.Empty.With(state),
@@ -169,7 +188,13 @@ public sealed class Phase11CompilerTests {
             new AddEnvironmentObjectCommand(EnvironmentObjectKind.Monitor, 200, 0),
             new AddEnvironmentObjectCommand(EnvironmentObjectKind.PhysicalInput, 0, 0),
             new AddEnvironmentObjectCommand(EnvironmentObjectKind.Fader, 0, 100),
-            new AddEnvironmentObjectCommand(EnvironmentObjectKind.ControlTarget, 100, 100, TrackId: audio, Address: "volume"),
+            new AddEnvironmentObjectCommand(
+                EnvironmentObjectKind.ControlTarget,
+                100,
+                100,
+                TrackId: audio,
+                Address: "volume"
+            ),
             new AddEnvironmentLayerCommand("Second"),
             new AddEnvironmentObjectCommand(EnvironmentObjectKind.Monitor, 0, 0)
         );
@@ -191,12 +216,15 @@ public sealed class Phase11CompilerTests {
             ],
             compiled.Objects.Select(static x => x.Kind)
         );
-        Assert.All(compiled.Objects, x => Assert.All(x.Routes, r => Assert.True(r.To > x.Index)));
+        Assert.All(compiled.Objects, static x => Assert.All(x.Routes, r => Assert.True(r.To > x.Index)));
         Assert.Equal([new EngineEnvironmentRoute(0, 2, 0), new(1, 6, 0)], compiled.Objects[1].Routes);
-        Assert.Equal(new EngineTransformRule("pitch", "add", 12, 0), compiled.Objects[1].Operations!.Single());
-        Assert.Equal(new EngineTransformRule("status", "equal", 144, 0), compiled.Objects[1].Conditions!.Single());
+        Assert.Equal(new("pitch", "add", 12, 0), compiled.Objects[1].Operations!.Single());
+        Assert.Equal(new("status", "equal", 144, 0), compiled.Objects[1].Conditions!.Single());
         Assert.Equal(engineIds.Track(instrument), compiled.Objects[3].TrackId);
-        Assert.Equal((engineIds.Track(audio), "volume"), (compiled.Objects[5].Control!.TrackId, compiled.Objects[5].Control!.Kind));
+        Assert.Equal(
+            (engineIds.Track(audio), "volume"),
+            (compiled.Objects[5].Control!.TrackId, compiled.Objects[5].Control!.Kind)
+        );
         // Monitors and faders on telemetry slots of their own, in order.
         Assert.Equal([-1, -1, 0, -1, 0, -1, 1], compiled.Objects.Select(static x => x.TelemetrySlot));
         Assert.Equal(7, compiled.Objects[4].Parameters["number"]);
@@ -219,7 +247,10 @@ public sealed class Phase11CompilerTests {
         Assert.Equal(1, designer.Calls);
         Apply(new SetMasteringCommand(Character: MasteringCharacter.Punch));
         var punched = Strips.Engine(state, null, engineIds, chainOf: chains.Of);
-        Assert.Equal((2, (float)MasteringCharacter.Punch), (designer.Calls, punched.Inserts![0].Mastering!.CompressorRatio));
+        Assert.Equal(
+            (2, (float)MasteringCharacter.Punch),
+            (designer.Calls, punched.Inserts![0].Mastering!.CompressorRatio)
+        );
         Assert.True(Strips.StructureDiffers(analysed, punched));
         // A designer that fails gives no chain.
         Assert.Null(new MasteringChains(new FailingDesigner()).Of(Edits.MasteringAssistantOf(state)!));
@@ -236,6 +267,6 @@ public sealed class Phase11CompilerTests {
 
     sealed class FailingDesigner : IMasteringDesigner {
         public EngineMasteringChain Design(MasteringAnalysis analysis, MasteringCharacter character) =>
-            throw new NotImplementedException("Phase 11 workstream E");
+            throw new InvalidOperationException("The designer failed.");
     }
 }

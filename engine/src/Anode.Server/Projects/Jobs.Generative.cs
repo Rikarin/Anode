@@ -53,14 +53,18 @@ public sealed partial class Jobs {
         var start = request.StartTick
             ?? midi.Select(static r => r.StartTick).Concat(audio.Select(static r => r.StartTick)).Min();
         var end = request.EndTick
-            ?? midi.Select(static r => r.StartTick + r.LengthTicks).Concat(audio.Select(r => Edits.EndTick(state, r))).Max();
+            ?? midi.Select(static r => r.StartTick + r.LengthTicks)
+                .Concat(audio.Select(r => Edits.EndTick(state, r)))
+                .Max();
         if (start < 0 || end > Edits.MaxTick || end <= start) {
             throw ProjectException.Unprocessable("Chord ID's range ends after it starts, inside the project.");
         }
 
         var resolution = request.ResolutionTicks ?? SignatureMap.BeatTicks(state.SignatureMap.At(start).Denominator);
         if (resolution < 1 || !Enum.IsDefined(request.Write)) {
-            throw ProjectException.Unprocessable("Chord ID's resolution is a tick or more, and its write replace, merge or none.");
+            throw ProjectException.Unprocessable(
+                "Chord ID's resolution is a tick or more, and its write replace, merge or none."
+            );
         }
 
         var plan = new ChordIdPlan(view.Session, view.Folder, state, midi, audio, start, end, resolution, request);
@@ -91,13 +95,22 @@ public sealed partial class Jobs {
         var keys = new List<DetectedKey>();
         if (plan.Midi.Count > 0) {
             var notes = plan.Midi.SelectMany(r => Notes(r, start, end)).OrderBy(static n => n.StartTick).ToArray();
+            // Spelled in the key the notes are in (the recognisers give pitch classes only).
+            var spelling = notes.Length > 0 ? Flat(recognition.KeyOfNotes(notes)) : false;
             found.AddRange(
                 recognition.FromNotes(notes, beats, plan.Resolution, prior)
-                    .Select(c => Detected(state, c, c.Start, c.End))
+                    .Select(c => Detected(c, c.Start, c.End, spelling))
             );
             if (plan.Request.DetectKeys) {
                 foreach (var region in plan.Midi) {
-                    keys.Add(Key(region.Id, recognition.KeyOfNotes([..Notes(region, region.StartTick, region.StartTick + region.LengthTicks)])));
+                    keys.Add(
+                        Key(
+                            region.Id,
+                            recognition.KeyOfNotes(
+                                [..Notes(region, region.StartTick, region.StartTick + region.LengthTicks)]
+                            )
+                        )
+                    );
                 }
             }
         }
@@ -105,29 +118,7 @@ public sealed partial class Jobs {
         Progress(entry, 0.3);
         for (var i = 0; i < plan.Audio.Count; i++) {
             token.ThrowIfCancellationRequested();
-            var region = plan.Audio[i];
-            var timing = RegionTiming.Of(state, region);
-            var (from, to) = (Math.Max(start, region.StartTick), Math.Min(end, Edits.EndTick(state, region)));
-            if (to > from) {
-                var first = (long)Math.Floor(timing.FrameAt(from));
-                var last = (long)Math.Ceiling(timing.FrameAt(to));
-                var mono = Mono(Path.Combine(plan.Folder, state.Files[region.FileId].Path), first, last);
-                long[] frames = [..beats.Where(t => t >= from && t <= to).Select(t => (long)Math.Round(timing.FrameAt(t)) - first)];
-                found.AddRange(
-                    recognition.FromAudio(mono, state.SampleRate, frames, prior)
-                        .Select(c => Detected(
-                                state,
-                                c,
-                                (long)Math.Round(timing.TickAt(first + c.Start)),
-                                (long)Math.Round(timing.TickAt(first + c.End))
-                            )
-                        )
-                );
-                if (plan.Request.DetectKeys) {
-                    keys.Add(Key(region.Id, recognition.KeyOfAudio(mono, state.SampleRate)));
-                }
-            }
-
+            FromAudio(plan, plan.Audio[i], beats, prior, found, keys);
             Progress(entry, 0.3 + 0.6 * (i + 1) / plan.Audio.Count);
         }
 
@@ -135,9 +126,53 @@ public sealed partial class Jobs {
             start,
             end,
             plan.Request.Write,
-            [..found.Where(c => c.Tick >= start && c.Tick < end).DistinctBy(static c => c.Tick).OrderBy(static c => c.Tick)],
+            [
+                ..found.Where(c => c.Tick >= start && c.Tick < end)
+                    .DistinctBy(static c => c.Tick)
+                    .OrderBy(static c => c.Tick)
+            ],
             keys
         );
+    }
+
+    /// <summary>
+    ///     An audio region's part of the range as Chord ID hears it: its file's frames there, mixed to mono, on the
+    ///     range's beats as frames; what it finds back in ticks.
+    /// </summary>
+    void FromAudio(
+        ChordIdPlan plan,
+        AudioRegion region,
+        long[] beats,
+        DetectedMusicalKey? prior,
+        List<DetectedChord> found,
+        List<DetectedKey> keys
+    ) {
+        var state = plan.State;
+        var timing = RegionTiming.Of(state, region);
+        var (from, to) = (Math.Max(plan.Start, region.StartTick), Math.Min(plan.End, Edits.EndTick(state, region)));
+        if (to <= from) {
+            return;
+        }
+
+        var first = (long)Math.Floor(timing.FrameAt(from));
+        var last = (long)Math.Ceiling(timing.FrameAt(to));
+        var mono = Mono(Path.Combine(plan.Folder, state.Files[region.FileId].Path), first, last);
+        long[] frames =
+            [..beats.Where(t => t >= from && t <= to).Select(t => (long)Math.Round(timing.FrameAt(t)) - first)];
+        var key = recognition.KeyOfAudio(mono, state.SampleRate);
+        found.AddRange(
+            recognition.FromAudio(mono, state.SampleRate, frames, prior)
+                .Select(c => Detected(
+                        c,
+                        (long)Math.Round(timing.TickAt(first + c.Start)),
+                        (long)Math.Round(timing.TickAt(first + c.End)),
+                        Flat(key)
+                    )
+                )
+        );
+        if (plan.Request.DetectKeys) {
+            keys.Add(Key(region.Id, key));
+        }
     }
 
     /// <summary>A MIDI region's notes as Chord ID hears them (in project ticks, cut to the region and the range).</summary>
@@ -182,11 +217,15 @@ public sealed partial class Jobs {
         return mono;
     }
 
-    /// <summary>A recognised chord as the chord track takes it, spelled in the key there.</summary>
-    static DetectedChord Detected(ProjectState state, RecognisedChord chord, long start, long end) {
-        var flats = Flat(Edits.KeyAt(state, start));
-        var quality = chord.Quality >= 0 && chord.Quality < ChordQualities.All.Count ? ChordQualities.All[chord.Quality] : ChordQualities.Major;
-        var root = ((chord.Root % 12) + 12) % 12;
+    /// <summary>
+    ///     A recognised chord as the chord track takes it, its root and slash bass spelled with flats or sharps as the
+    ///     detected key spells.
+    /// </summary>
+    static DetectedChord Detected(RecognisedChord chord, long start, long end, bool flats) {
+        var quality = chord.Quality >= 0 && chord.Quality < ChordQualities.All.Count
+            ? ChordQualities.All[chord.Quality]
+            : ChordQualities.Major;
+        var root = (chord.Root % 12 + 12) % 12;
         return new(
             start,
             Math.Max(1, end - start),
@@ -198,18 +237,25 @@ public sealed partial class Jobs {
     }
 
     static DetectedKey Key(string regionId, DetectedMusicalKey key) {
-        var tonic = ((key.Tonic % 12) + 12) % 12;
+        var tonic = (key.Tonic % 12 + 12) % 12;
         var mode = key.Minor ? KeyMode.Minor : KeyMode.Major;
-        return new(regionId, new(Spell(tonic, Flat(new(0, tonic, mode))), mode), Math.Clamp(key.Confidence, 0, 1));
+        return new(
+            regionId,
+            new(Spell(tonic, Flat(new KeyEvent(0, tonic, mode))), mode),
+            Math.Clamp(key.Confidence, 0, 1)
+        );
     }
 
-    static DetectedMusicalKey KeyOf(KeyEvent key) => new(((key.Tonic % 12) + 12) % 12, key.Mode == KeyMode.Minor, 1);
+    static DetectedMusicalKey KeyOf(KeyEvent key) => new((key.Tonic % 12 + 12) % 12, key.Mode == KeyMode.Minor, 1);
+
+    static bool Flat(DetectedMusicalKey key) =>
+        Flat(new KeyEvent(0, key.Tonic, key.Minor ? KeyMode.Minor : KeyMode.Major));
 
     /// <summary>Whether a key spells with flats: F, B♭, E♭, A♭ and D♭ major; D, G, C, F, B♭ and E♭ minor.</summary>
     static bool Flat(KeyEvent key) =>
         key.Mode == KeyMode.Minor
-            ? (((key.Tonic % 12) + 12) % 12) is 2 or 7 or 0 or 5 or 10 or 3
-            : (((key.Tonic % 12) + 12) % 12) is 5 or 10 or 3 or 8 or 1;
+            ? (key.Tonic % 12 + 12) % 12 is 2 or 7 or 0 or 5 or 10 or 3
+            : (key.Tonic % 12 + 12) % 12 is 5 or 10 or 3 or 8 or 1;
 
     static PitchName Spell(int pitchClass, bool flats) => (flats ? Flats : Sharps)[pitchClass];
 
@@ -228,7 +274,9 @@ public sealed partial class Jobs {
         }
 
         if (assistant is null && state.Master.Inserts.Count >= Edits.MaxInserts) {
-            throw ProjectException.Unprocessable($"The master holds {Edits.MaxInserts} inserts: none is left for the assistant.");
+            throw ProjectException.Unprocessable(
+                $"The master holds {Edits.MaxInserts} inserts: none is left for the assistant."
+            );
         }
 
         var cycle = state.Settings.Cycle;
@@ -259,9 +307,10 @@ public sealed partial class Jobs {
 
             var (audio, rate) = BounceProcessor.Read(path);
             var (left, right) = (audio[0], audio.Length > 1 ? audio[1] : audio[0]);
-            var character = session.View?.State is { } now && Edits.MasteringAssistantOf(now, plan.InsertId) is { } insert
-                ? Edits.MasteringSettingsOf(insert).Character
-                : MasteringSettings.Default.Character;
+            var character =
+                session.View?.State is { } now && Edits.MasteringAssistantOf(now, plan.InsertId) is { } insert
+                    ? Edits.MasteringSettingsOf(insert).Character
+                    : MasteringSettings.Default.Character;
             var measured = mastering.Analyse(left, right, rate);
             var analysis = new MasteringAnalysis(
                 plan.StartTick,
@@ -324,12 +373,17 @@ public sealed partial class Jobs {
 
             if (request.Target == SessionPlayerConvertTarget.Pattern
                 && state.FindTrack(region.TrackId)?.Kind != TrackKind.Drummer) {
-                throw ProjectException.Unprocessable($"Region '{region.Name}' is not a Drummer's: it converts to MIDI only.");
+                throw ProjectException.Unprocessable(
+                    $"Region '{region.Name}' is not a Drummer's: it converts to MIDI only."
+                );
             }
         }
 
         var (session1, target) = (view.Session, request.Target);
-        return Enqueue(JobKind.SessionPlayerConvert, (entry, token) => ConvertAsync(entry, session1, ids, target, token));
+        return Enqueue(
+            JobKind.SessionPlayerConvert,
+            (entry, token) => ConvertAsync(entry, session1, ids, target, token)
+        );
     }
 
     async Task<IReadOnlyList<string>> ConvertAsync(
@@ -350,7 +404,12 @@ public sealed partial class Jobs {
                                 : throw ProjectException.Conflict($"Region '{id}' went while the job waited.");
                             var notes = players.Notes(view, region).Notes;
                             return target == SessionPlayerConvertTarget.Pattern
-                                ? new ConvertedSessionPlayerRegion(id, target, [], library.ToPattern(notes, region.LengthTicks))
+                                ? new ConvertedSessionPlayerRegion(
+                                    id,
+                                    target,
+                                    [],
+                                    library.ToPattern(notes, region.LengthTicks)
+                                )
                                 : new ConvertedSessionPlayerRegion(
                                     id,
                                     target,

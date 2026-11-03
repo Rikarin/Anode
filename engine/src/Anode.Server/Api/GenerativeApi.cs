@@ -102,7 +102,9 @@ static class GenerativeApi {
                 string.Empty,
                 static Results<Ok<MasteringState>, NotFound>(ProjectSession session) =>
                     session.View is { } view && Edits.MasteringAssistantOf(view.State) is { } insert
-                        ? TypedResults.Ok(new MasteringState(insert.Id, Edits.MasteringSettingsOf(insert), insert.Mastering))
+                        ? TypedResults.Ok(
+                            new MasteringState(insert.Id, Edits.MasteringSettingsOf(insert), insert.Mastering)
+                        )
                         : TypedResults.NotFound()
             )
             .WithName("GetMastering")
@@ -141,7 +143,10 @@ static class GenerativeApi {
             .WithSummary("Replaces the assistant's settings: applies setMastering (one undo step); 404 without one.");
         mastering.MapPost(
                 "/analyse",
-                static Results<Accepted<Job>, NotFound, ProblemHttpResult>(MasteringAnalysisRequest request, Jobs jobs) =>
+                static Results<Accepted<Job>, NotFound, ProblemHttpResult>(
+                    MasteringAnalysisRequest request,
+                    Jobs jobs
+                ) =>
                     Accepted(jobs.AnalyseMastering(request))
             )
             .WithName("AnalyseMastering")

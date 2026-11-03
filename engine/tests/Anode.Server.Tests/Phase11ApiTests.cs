@@ -87,7 +87,10 @@ public sealed class Phase11ApiTests : IAsyncDisposable {
     public async Task The_style_catalogue_comes_from_the_library_and_without_one_the_players_are_unavailable() {
         await StartAsync(false);
         var response = await Client.GetAsync("/api/v1/library/session-players", Token);
-        Assert.Contains("not available", await ApiCalls.AssertProblemAsync(response, HttpStatusCode.ServiceUnavailable));
+        Assert.Contains(
+            "not available",
+            await ApiCalls.AssertProblemAsync(response, HttpStatusCode.ServiceUnavailable)
+        );
         var refused = await Client.SendCommandsAsync(null, new AddSessionPlayerTrackCommand(SessionPlayerKind.Drummer));
         Assert.Contains("style", await ApiCalls.AssertProblemAsync(refused, HttpStatusCode.UnprocessableEntity));
     }
@@ -104,17 +107,26 @@ public sealed class Phase11ApiTests : IAsyncDisposable {
         await Client.EditAsync(
             new AddSectionCommand("Verse", 0, 7680),
             new AddSectionCommand("Chorus", 7680, 7680),
-            new AddChordsCommand([new(0, N(PitchStep.C), ChordQualities.Major), new(7680, N(PitchStep.F), ChordQualities.Major)]),
+            new AddChordsCommand(
+                [new(0, N(PitchStep.C), ChordQualities.Major), new(7680, N(PitchStep.F), ChordQualities.Major)]
+            ),
             new AddSessionPlayerTrackCommand(SessionPlayerKind.Bass, "fake.bass")
         );
         var project = await Client.ProjectAsync();
-        var (verse, chorus) = (project.SessionPlayerRegions[0].StartTick == 0 ? project.SessionPlayerRegions[0] : project.SessionPlayerRegions[1],
-            project.SessionPlayerRegions[0].StartTick == 0 ? project.SessionPlayerRegions[1] : project.SessionPlayerRegions[0]);
+        var (verse, chorus) = (project.SessionPlayerRegions[0].StartTick == 0
+            ? project.SessionPlayerRegions[0]
+            : project.SessionPlayerRegions[1],
+            project.SessionPlayerRegions[0].StartTick == 0
+                ? project.SessionPlayerRegions[1]
+                : project.SessionPlayerRegions[0]);
         var first = await NotesAsync(chorus.Id);
         Assert.All(first.Notes.Where(static n => n.Pitch != 60), static n => Assert.Equal(36 + 5, n.Pitch));
         // The host plays them on the track.
         var engineId = Host.Tracks.Values.Single().Id;
-        await ServerFixture.Eventually(() => Task.FromResult(Host.EventsOf(engineId).Any(static e => e.Kind == PlaybackEventKind.NoteOn && e.Data1 == 41)));
+        await ServerFixture.Eventually(() => Task.FromResult(
+                Host.EventsOf(engineId).Any(static e => e.Kind == PlaybackEventKind.NoteOn && e.Data1 == 41)
+            )
+        );
         var generated = players.Generated;
         Assert.Equal(first.Hash, (await NotesAsync(chorus.Id)).Hash);
         Assert.Equal(generated, players.Generated);
@@ -128,9 +140,14 @@ public sealed class Phase11ApiTests : IAsyncDisposable {
         Assert.NotEqual(first.Hash, changed.Hash);
         Assert.Contains(changed.Notes, static n => n.Pitch == 36 + 7);
         // A section's rename (its kind) in range regenerates; a parameter change too, the same seed.
-        await Client.EditAsync(new SetSectionCommand(project.Arrangement.Single(static s => s.Name == "Chorus").Id, Name: "Bridge"));
+        await Client.EditAsync(
+            new SetSectionCommand(project.Arrangement.Single(static s => s.Name == "Chorus").Id, "Bridge")
+        );
         Assert.NotEqual(changed.Hash, (await NotesAsync(chorus.Id)).Hash);
-        Assert.Equal(HttpStatusCode.NotFound, (await Client.GetAsync("/api/v1/project/regions/spr_none/session-player", Token)).StatusCode);
+        Assert.Equal(
+            HttpStatusCode.NotFound,
+            (await Client.GetAsync("/api/v1/project/regions/spr_none/session-player", Token)).StatusCode
+        );
     }
 
     [Fact]
@@ -142,7 +159,10 @@ public sealed class Phase11ApiTests : IAsyncDisposable {
         );
         var project = await Client.ProjectAsync();
         var (bass, drummer) = (project.Tracks[0].Id, project.Tracks.Single(static t => t.Kind == TrackKind.Drummer).Id);
-        await Client.EditAsync(new AddMidiRegionCommand(bass, 0, 3840), new AddSessionPlayerRegionCommand(drummer, 0, 3840, Seed: 2));
+        await Client.EditAsync(
+            new AddMidiRegionCommand(bass, 0, 3840),
+            new AddSessionPlayerRegionCommand(drummer, 0, 3840, Seed: 2)
+        );
         project = await Client.ProjectAsync();
         var midi = project.MidiRegions.Single().Id;
         var region = project.SessionPlayerRegions.Single();
@@ -156,9 +176,17 @@ public sealed class Phase11ApiTests : IAsyncDisposable {
         await Client.EditAsync(new AddNotesCommand(midi, [new(43, 100, 1, 2880, 240)]));
         Assert.Equal([0L, 1440, 2880], (await NotesAsync(region.Id)).Notes.Select(static n => n.StartTick));
         // Its kit is multi-output: the kick plays on its own pad's track.
-        var kick = project.Tracks.Single(static t => t.Kind == TrackKind.Drummer).DrumMachine!.Pads.Single(static p => p.Note == DrumKitNotes.Kick).TrackId;
-        var kickTrack = Host.Tracks.Values.Single(t => Server.Services.GetRequiredService<ProjectSession>().View!.Ids.Track(kick) == t.Id).Id;
-        await ServerFixture.Eventually(() => Task.FromResult(Host.EventsOf(kickTrack).Count(static e => e.Kind == PlaybackEventKind.NoteOn) == 1));
+        var kick = project.Tracks.Single(static t => t.Kind == TrackKind.Drummer).DrumMachine!.Pads
+            .Single(static p => p.Note == DrumKitNotes.Kick)
+            .TrackId;
+        var kickTrack = Host.Tracks.Values.Single(t =>
+                Server.Services.GetRequiredService<ProjectSession>().View!.Ids.Track(kick) == t.Id
+            )
+            .Id;
+        await ServerFixture.Eventually(() => Task.FromResult(
+                Host.EventsOf(kickTrack).Count(static e => e.Kind == PlaybackEventKind.NoteOn) == 1
+            )
+        );
     }
 
     [Fact]
@@ -168,7 +196,7 @@ public sealed class Phase11ApiTests : IAsyncDisposable {
         var region = (await Client.ProjectAsync()).SessionPlayerRegions.Single();
         var response = await Client.PostAsJsonAsync(
             $"/api/v1/project/regions/{region.Id}/session-player/regenerate",
-            new RegenerateRequest(5),
+            new(5),
             ContractsJsonContext.Default.RegenerateRequest,
             Token
         );
@@ -179,26 +207,44 @@ public sealed class Phase11ApiTests : IAsyncDisposable {
 
         await DoneAsync(
             $"/api/v1/project/regions/{region.Id}/session-player/convert",
-            JsonContent.Create(new SessionPlayerConvertRequest(SessionPlayerConvertTarget.Pattern), ContractsJsonContext.Default.SessionPlayerConvertRequest)
+            JsonContent.Create(
+                new(SessionPlayerConvertTarget.Pattern),
+                ContractsJsonContext.Default.SessionPlayerConvertRequest
+            )
         );
         var project = await Client.ProjectAsync();
         Assert.Empty(project.SessionPlayerRegions);
-        var pattern = project.PatternRegions.Single();
-        Assert.Equal(notes.Notes.Select(static n => n.Pitch).Distinct().Order(), pattern.Pattern.Rows.Select(static r => r.Note));
+        // Eight bars of 16ths: two pattern regions of four bars (rows hold 64 steps at most).
+        Assert.Equal(
+            [0L, 15_360],
+            project.PatternRegions.OrderBy(static r => r.StartTick).Select(static r => r.StartTick)
+        );
+        var pattern = project.PatternRegions.Single(static r => r.StartTick == 0);
+        Assert.Equal((15_360L, 64), (pattern.LengthTicks, pattern.Pattern.Rows[0].Length));
+        Assert.Equal(
+            notes.Notes.Select(static n => n.Pitch).Distinct().Order(),
+            pattern.Pattern.Rows.Select(static r => r.Note)
+        );
         await Client.PostResultAsync("/api/v1/project/undo");
         Assert.Single((await Client.ProjectAsync()).SessionPlayerRegions);
         await DoneAsync(
             $"/api/v1/project/regions/{region.Id}/session-player/convert",
-            JsonContent.Create(new SessionPlayerConvertRequest(), ContractsJsonContext.Default.SessionPlayerConvertRequest)
+            JsonContent.Create(
+                new(),
+                ContractsJsonContext.Default.SessionPlayerConvertRequest
+            )
         );
         var midi = (await Client.ProjectAsync()).MidiRegions.Single();
-        Assert.Equal(notes.Notes.Select(static n => (n.Pitch, n.StartTick)), midi.Notes.Select(static n => (n.Pitch, n.StartTick)));
+        Assert.Equal(
+            notes.Notes.Select(static n => (n.Pitch, n.StartTick)),
+            midi.Notes.Select(static n => (n.Pitch, n.StartTick))
+        );
         var bass = await Client.SendCommandsAsync(null, new AddSessionPlayerTrackCommand(SessionPlayerKind.Bass));
         bass.EnsureSuccessStatusCode();
         var bassRegion = (await Client.ProjectAsync()).SessionPlayerRegions.Single();
         var refused = await Client.PostAsJsonAsync(
             $"/api/v1/project/regions/{bassRegion.Id}/session-player/convert",
-            new SessionPlayerConvertRequest(SessionPlayerConvertTarget.Pattern),
+            new(SessionPlayerConvertTarget.Pattern),
             ContractsJsonContext.Default.SessionPlayerConvertRequest,
             Token
         );
@@ -212,26 +258,40 @@ public sealed class Phase11ApiTests : IAsyncDisposable {
         var track = (await Client.ProjectAsync()).Tracks[0].Id;
         await Client.EditAsync(new AddMidiRegionCommand(track, 0, 7680));
         var region = (await Client.ProjectAsync()).MidiRegions.Single().Id;
-        // C major for a bar, A minor for a bar.
+        // C major for a bar, B flat major for a bar: spelled with flats in the notes' key (D minor).
         await Client.EditAsync(
             new AddNotesCommand(
                 region,
-                [new(48, 100, 1, 0, 3840), new(52, 100, 1, 0, 3840), new(45, 100, 1, 3840, 3840), new(48, 100, 1, 3840, 3840)]
+                [
+                    new(48, 100, 1, 0, 3840), new(52, 100, 1, 0, 3840), new(46, 100, 1, 3840, 3840),
+                    new(50, 100, 1, 3840, 3840)
+                ]
             )
         );
         await DoneAsync(
             "/api/v1/project/chords/detect",
             JsonContent.Create(new ChordIdRequest([region]), ContractsJsonContext.Default.ChordIdRequest)
         );
-        var chordTrack = (await Client.GetFromJsonAsync("/api/v1/project/chords", ContractsJsonContext.Default.ChordTrack, Token))!;
+        var chordTrack = (await Client.GetFromJsonAsync(
+            "/api/v1/project/chords",
+            ContractsJsonContext.Default.ChordTrack,
+            Token
+        ))!;
         Assert.Equal(
-            [(0L, N(PitchStep.C), ChordQualities.Major), (3840L, N(PitchStep.A), ChordQualities.Minor)],
+            [(0L, N(PitchStep.C), ChordQualities.Major), (3840L, new PitchName(PitchStep.B, -1), ChordQualities.Major)],
             chordTrack.Chords.Select(static c => (c.Tick, c.Root, c.Quality))
         );
         // A beat each, the range the region's.
         Assert.Equal((960L, 9), (chords.Heard[0].Resolution, chords.Heard[0].Beats.Count));
-        Assert.Equal(new RegionKey(N(PitchStep.A), KeyMode.Minor), (await Client.ProjectAsync()).MidiRegions.Single().Key);
-        var history = (await Client.GetFromJsonAsync("/api/v1/project/history", ContractsJsonContext.Default.UndoHistory, Token))!;
+        Assert.Equal(
+            new(N(PitchStep.D), KeyMode.Minor),
+            (await Client.ProjectAsync()).MidiRegions.Single().Key
+        );
+        var history = (await Client.GetFromJsonAsync(
+            "/api/v1/project/history",
+            ContractsJsonContext.Default.UndoHistory,
+            Token
+        ))!;
         Assert.Equal("Chord ID", history.Undo[0].Label);
         await Client.PostResultAsync("/api/v1/project/undo");
         var undone = await Client.ProjectAsync();
@@ -252,7 +312,7 @@ public sealed class Phase11ApiTests : IAsyncDisposable {
         Assert.Equal(HttpStatusCode.NotFound, (await Client.GetAsync("/api/v1/project/mastering", Token)).StatusCode);
         var none = await Client.PostAsJsonAsync(
             "/api/v1/project/mastering/analyse",
-            new MasteringAnalysisRequest(Add: false),
+            new(Add: false),
             ContractsJsonContext.Default.MasteringAnalysisRequest,
             Token
         );
@@ -261,9 +321,16 @@ public sealed class Phase11ApiTests : IAsyncDisposable {
         // Without an assistant: one is added last, in the analysis' undo step.
         await DoneAsync(
             "/api/v1/project/mastering/analyse",
-            JsonContent.Create(new MasteringAnalysisRequest(0, 7680), ContractsJsonContext.Default.MasteringAnalysisRequest)
+            JsonContent.Create(
+                new(0, 7680),
+                ContractsJsonContext.Default.MasteringAnalysisRequest
+            )
         );
-        var state = (await Client.GetFromJsonAsync("/api/v1/project/mastering", ContractsJsonContext.Default.MasteringState, Token))!;
+        var state = (await Client.GetFromJsonAsync(
+            "/api/v1/project/mastering",
+            ContractsJsonContext.Default.MasteringState,
+            Token
+        ))!;
         Assert.Equal(MasteringSettings.Default, state.Settings);
         Assert.Equal((0L, 7680L), (state.Analysis!.StartTick, state.Analysis.EndTick));
         Assert.Equal(4 * 48_000, analysis.Samples);
@@ -284,19 +351,27 @@ public sealed class Phase11ApiTests : IAsyncDisposable {
         Assert.Equal(-11, Host.Master.Inserts![0].Parameters[MasteringParameters.TargetLufs]);
 
         // A second analysis renders with the assistant bypassed, at unity, and restores the master after.
-        await Client.EditAsync(new SetStripCommand(null, VolumeDb: -6));
+        await Client.EditAsync(new SetStripCommand(null, -6));
         await DoneAsync(
             "/api/v1/project/mastering/analyse",
-            JsonContent.Create(new MasteringAnalysisRequest(), ContractsJsonContext.Default.MasteringAnalysisRequest)
+            JsonContent.Create(new(), ContractsJsonContext.Default.MasteringAnalysisRequest)
         );
         var messages = Host.Received.ToArray();
         var render = Array.FindLastIndex(messages, static m => m is RenderMessage);
         var swapped = (SetChannelMessage)messages[..render].Last(static m => m is SetChannelMessage { TrackId: -1 });
         Assert.Equal((1f, true), (swapped.Strip.Gain, swapped.Strip.Inserts![0].Bypassed));
         await ServerFixture.Eventually(() =>
-            Task.FromResult(Host.Received.Skip(render).OfType<SetChannelMessage>().Any(static m => m.TrackId == -1 && !m.Strip.Inserts![0].Bypassed))
+            Task.FromResult(
+                Host.Received.Skip(render)
+                    .OfType<SetChannelMessage>()
+                    .Any(static m => m.TrackId == -1 && !m.Strip.Inserts![0].Bypassed)
+            )
         );
-        var history = (await Client.GetFromJsonAsync("/api/v1/project/history", ContractsJsonContext.Default.UndoHistory, Token))!;
+        var history = (await Client.GetFromJsonAsync(
+            "/api/v1/project/history",
+            ContractsJsonContext.Default.UndoHistory,
+            Token
+        ))!;
         Assert.Equal("Analyse Mastering", history.Undo[0].Label);
     }
 
@@ -317,14 +392,20 @@ public sealed class Phase11ApiTests : IAsyncDisposable {
             new AddEnvironmentObjectCommand(EnvironmentObjectKind.Monitor, 200, 0),
             new AddEnvironmentObjectCommand(EnvironmentObjectKind.TrackInput, 300, 0, TrackId: track)
         );
-        var environment = (await Client.GetFromJsonAsync("/api/v1/project/environment", ContractsJsonContext.Default.MidiEnvironment, Token))!;
+        var environment = (await Client.GetFromJsonAsync(
+            "/api/v1/project/environment",
+            ContractsJsonContext.Default.MidiEnvironment,
+            Token
+        ))!;
         var o = environment.Objects.Select(static x => x.Id).ToArray();
         await Client.EditAsync(
             new ConnectEnvironmentCommand(o[0], 0, o[1], 0),
             new ConnectEnvironmentCommand(o[1], 0, o[2], 0),
             new ConnectEnvironmentCommand(o[2], 0, o[3], 0)
         );
-        await ServerFixture.Eventually(() => Task.FromResult(Host.Environment is { Objects.Count: 4 } e && e.Objects[2].Routes.Count == 1));
+        await ServerFixture.Eventually(() =>
+            Task.FromResult(Host.Environment is { Objects.Count: 4 } e && e.Objects[2].Routes.Count == 1)
+        );
         Assert.Equal(EngineEnvironmentKind.Transformer, Host.Environment!.Objects[1].Kind);
         var cycle = await Client.SendCommandsAsync(null, new ConnectEnvironmentCommand(o[3], 0, o[0], 0));
         await ApiCalls.AssertProblemAsync(cycle, HttpStatusCode.UnprocessableEntity);

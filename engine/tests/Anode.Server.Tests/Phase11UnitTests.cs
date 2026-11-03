@@ -37,7 +37,11 @@ public sealed class Phase11UnitTests {
             new AddSessionPlayerTrackCommand(SessionPlayerKind.Keyboard, Regions: false)
         );
         Apply(new AddSessionPlayerRegionCommand(state.Tracks[0].Id, 3840, 7680));
-        var input = SessionPlayers.Input(state, state.SessionPlayerRegions.Values.Single(), new Dictionary<string, FileAnalysis>());
+        var input = SessionPlayers.Input(
+            state,
+            state.SessionPlayerRegions.Values.Single(),
+            new Dictionary<string, FileAnalysis>()
+        );
         Assert.Equal((SessionPlayerKind.Keyboard, 3840L, 7680L), (input.Player, input.StartTick, input.LengthTicks));
         // D minor sounds at its start; F starts after its end.
         Assert.Equal([1920L, 7680], input.Chords.Chords.Select(static c => c.Tick));
@@ -51,7 +55,9 @@ public sealed class Phase11UnitTests {
     public void A_rhythm_source_s_onsets_are_its_note_starts_and_its_audio_s_transients_over_the_range() {
         Apply(new AddTrackCommand(Kind: TrackKind.Instrument), new AddTrackCommand(Kind: TrackKind.Audio));
         var (midi, audio) = (state.Tracks[0].Id, state.Tracks[1].Id);
-        state = state.Apply(new AudioFileUpserted(new("aud_1", "Loop", "Audio Files/Loop.wav", 48_000, 1, 96_000, 24, null, 0)));
+        state = state.Apply(
+            new AudioFileUpserted(new("aud_1", "Loop", "Audio Files/Loop.wav", 48_000, 1, 96_000, 24, null, 0))
+        );
         Apply(new AddMidiRegionCommand(midi, 0, 3840), new AddRegionCommand(audio, "aud_1", 3840));
         Apply(
             new AddNotesCommand(
