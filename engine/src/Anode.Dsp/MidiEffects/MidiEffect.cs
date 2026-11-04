@@ -8,18 +8,13 @@ namespace Anode.Dsp.MidiEffects;
 ///     What the built-in MIDI effects share: the descriptor, the parameters (clamped and snapped like an instrument's)
 ///     and their state blob (the instruments' <c>ANIS</c> format, by parameter id).
 /// </summary>
-internal abstract class MidiEffect : IMidiEffect {
+internal abstract class MidiEffect(MidiEffectDescriptor descriptor) : IMidiEffect {
     public const string Vendor = "Anode";
     public const string Version = "1.0.0";
 
-    protected MidiEffect(MidiEffectDescriptor descriptor) {
-        Descriptor = descriptor;
-        Parameters = new(descriptor.Parameters);
-    }
+    public MidiEffectDescriptor Descriptor { get; } = descriptor;
 
-    public MidiEffectDescriptor Descriptor { get; }
-
-    protected ParameterBank Parameters { get; }
+    protected ParameterBank Parameters { get; } = new(descriptor.Parameters);
 
     public double SampleRate { get; private set; } = 48_000;
 

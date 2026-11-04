@@ -602,9 +602,10 @@ public sealed class AssignmentEngine {
         }
 
         // Within a step of the target, or crossing it since the last value, picks the target up; a target that moved
-        // elsewhere since the last value sent drops it again.
+        // elsewhere since the last value sent drops it again. Values sent reach the target later than the control's
+        // next message can: a target anywhere on the way the sent values took has not moved elsewhere.
         var tolerance = Math.Max(Math.Abs(span) / r.Max, 1.0 / 256);
-        if (memory.PickedUp && memory.Sent is { } sent && Math.Abs(current - sent) > tolerance) {
+        if (memory.PickedUp && memory.Sent is { } sent && !memory.Settle(current, sent, tolerance)) {
             memory.PickedUp = false;
         }
 
@@ -619,7 +620,7 @@ public sealed class AssignmentEngine {
             return null;
         }
 
-        memory.Sent = value;
+        memory.Send(current, value);
         return value;
     }
 
@@ -679,9 +680,30 @@ public sealed class AssignmentEngine {
 
         public double? LastValue { get; set; }
 
-        public double? Sent { get; set; }
+        public double? Sent { get; private set; }
 
         public bool ToggleOn { get; set; }
+
+        double TravelLow { get; set; }
+
+        double TravelHigh { get; set; }
+
+        /// <summary>Whether a target at <paramref name="current" /> is where the values sent have taken it, or on the way.</summary>
+        public bool Settle(double current, double sent, double tolerance) {
+            if (Math.Abs(current - sent) <= tolerance) {
+                TravelLow = TravelHigh = sent;
+                return true;
+            }
+
+            return current >= TravelLow - tolerance && current <= TravelHigh + tolerance;
+        }
+
+        /// <summary>Records <paramref name="value" /> as sent to a target now at <paramref name="current" />.</summary>
+        public void Send(double current, double value) {
+            TravelLow = Math.Min(Sent is null ? current : TravelLow, Math.Min(current, value));
+            TravelHigh = Math.Max(Sent is null ? current : TravelHigh, Math.Max(current, value));
+            Sent = value;
+        }
     }
 
     /// <summary>

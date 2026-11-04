@@ -20,13 +20,15 @@ namespace Anode.Engine.Midi;
 ///     full frames to the <see cref="Sync" /> follower; sends the audio callback's MIDI Clock and MTC to their
 ///     destinations, each with its delay; and sends a control surface's feedback on request (<see cref="SendNow" />).
 /// </remarks>
-public sealed class MidiHub : IDisposable {
+/// <param name="engine">The audio callback whose tracks it feeds and whose queues it drains.</param>
+/// <param name="backend">The MIDI devices, or null for none (live MIDI from the server still plays).</param>
+public sealed class MidiHub(AudioEngine engine, IMidiBackend? backend) : IDisposable {
     const int ReadBatch = 256;
     static readonly double NanosecondsPerTick = 1e9 / Stopwatch.Frequency;
     static readonly long ActivityInterval = Stopwatch.Frequency / 30 + 1;
 
-    readonly AudioEngine engine;
-    readonly IMidiBackend? backend;
+    readonly AudioEngine engine = engine;
+    readonly IMidiBackend? backend = backend;
     readonly Lock pumpGate = new();
     readonly Lock activityGate = new();
     readonly MidiInputMessage[] input = new MidiInputMessage[ReadBatch];
@@ -51,13 +53,6 @@ public sealed class MidiHub : IDisposable {
     long lastActivity;
     readonly Lock stepGate = new();
     StepChord? stepChord;
-
-    /// <param name="engine">The audio callback whose tracks it feeds and whose queues it drains.</param>
-    /// <param name="backend">The MIDI devices, or null for none (live MIDI from the server still plays).</param>
-    public MidiHub(AudioEngine engine, IMidiBackend? backend) {
-        this.engine = engine;
-        this.backend = backend;
-    }
 
     /// <summary>How often the port count is checked for devices plugged in or out.</summary>
     public TimeSpan ScanInterval { get; init; } = TimeSpan.FromSeconds(1);

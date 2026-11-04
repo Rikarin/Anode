@@ -8,25 +8,19 @@ namespace Anode.Engine;
 ///     recording, at a one-bar count-in the engine times itself. One voice: a new click cuts the previous one.
 ///     Audio-thread code apart from the constructor and <see cref="CountInFor" />.
 /// </summary>
-public sealed unsafe class Metronome {
+public sealed unsafe class Metronome(int sampleRate) {
     /// <summary>Most clicks one block can start (a 4096-frame block at a 1-sample click spacing is not a use case).</summary>
     const int MaxClicks = 64;
 
-    readonly float[] accent;
-    readonly float[] beat;
+    readonly float[] accent = Synthesize(sampleRate, 1_600, 0.030);
+    readonly float[] beat = Synthesize(sampleRate, 1_000, 0.030);
     readonly Click[] clicks = new Click[MaxClicks];
     int clickCount;
     float[]? voice;
     int voicePosition;
     float voiceLevel;
 
-    public Metronome(int sampleRate) {
-        SampleRate = sampleRate;
-        accent = Synthesize(sampleRate, 1_600, 0.030);
-        beat = Synthesize(sampleRate, 1_000, 0.030);
-    }
-
-    public int SampleRate { get; }
+    public int SampleRate { get; } = sampleRate;
 
     /// <summary>The downbeat sound (for tests).</summary>
     public ReadOnlySpan<float> Accent => accent;

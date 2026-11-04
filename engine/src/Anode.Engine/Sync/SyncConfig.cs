@@ -9,46 +9,36 @@ namespace Anode.Engine.Sync;
 ///     rate and offset, and the Link peer it aligns to (when the source is Link). The destinations themselves (ports and
 ///     delays) are the MIDI thread's (<see cref="Midi.MidiHub.SetSyncDestinations" />).
 /// </summary>
-public sealed class SyncConfig {
+public sealed class SyncConfig(
+    EngineSyncSource source,
+    bool clockOut,
+    MtcEncoder? mtc,
+    double startOffsetSeconds,
+    bool linkStartStop,
+    NativeLink? link,
+    long linkOffsetMicros
+) {
     /// <summary>Internal sync, nothing sent.</summary>
     public static SyncConfig Internal { get; } = new(EngineSyncSource.Internal, false, null, 0, false, null, 0);
 
-    public SyncConfig(
-        EngineSyncSource source,
-        bool clockOut,
-        MtcEncoder? mtc,
-        double startOffsetSeconds,
-        bool linkStartStop,
-        NativeLink? link,
-        long linkOffsetMicros
-    ) {
-        Source = source;
-        ClockOut = clockOut;
-        Mtc = mtc;
-        StartOffsetSeconds = startOffsetSeconds;
-        LinkStartStop = linkStartStop;
-        Link = link;
-        LinkOffsetMicros = linkOffsetMicros;
-    }
-
-    public EngineSyncSource Source { get; }
+    public EngineSyncSource Source { get; } = source;
 
     /// <summary>Some destination takes MIDI Clock.</summary>
-    public bool ClockOut { get; }
+    public bool ClockOut { get; } = clockOut;
 
     /// <summary>The MTC generator when some destination takes MTC.</summary>
-    public MtcEncoder? Mtc { get; }
+    public MtcEncoder? Mtc { get; } = mtc;
 
     /// <summary>Seconds of timecode at the project start.</summary>
-    public double StartOffsetSeconds { get; }
+    public double StartOffsetSeconds { get; } = startOffsetSeconds;
 
-    public bool LinkStartStop { get; }
+    public bool LinkStartStop { get; } = linkStartStop;
 
     /// <summary>The Link peer (source Link only).</summary>
-    public NativeLink? Link { get; }
+    public NativeLink? Link { get; } = link;
 
     /// <summary>Link's clock less the engine's (both in microseconds): Link time = host ns / 1000 + this.</summary>
-    public long LinkOffsetMicros { get; }
+    public long LinkOffsetMicros { get; } = linkOffsetMicros;
 }
 
 /// <summary>Which sync message kind an <see cref="OutgoingSync" /> belongs to (its destinations are those that take it).</summary>

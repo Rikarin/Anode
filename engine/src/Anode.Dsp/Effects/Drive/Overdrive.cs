@@ -8,7 +8,7 @@ namespace Anode.Dsp.Effects.Drive;
 ///     clipping), the shaper at 4× the rate (<see cref="Oversampler4x" />), a DC blocker, a 12 dB/octave tone low-pass,
 ///     then the level and the dry/wet mix.
 /// </summary>
-public abstract class DriveEffect : AudioEffect {
+public abstract class DriveEffect(EffectDescriptor descriptor) : AudioEffect(descriptor) {
     const double PreCutHz = 60;
     const double DcCutHz = 8;
 
@@ -28,8 +28,6 @@ public abstract class DriveEffect : AudioEffect {
     GainRamp mix;
     readonly float[] dryLeft = new float[ControlInterval];
     readonly float[] dryRight = new float[ControlInterval];
-
-    protected DriveEffect(EffectDescriptor descriptor) : base(descriptor) { }
 
     /// <summary>The shaper, at 4× the rate.</summary>
     protected abstract float Shape(float x);

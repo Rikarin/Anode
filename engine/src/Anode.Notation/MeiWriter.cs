@@ -20,6 +20,7 @@ namespace Anode.Notation;
 public static class MeiWriter {
     const string Ns = "http://www.music-encoding.org/ns/mei";
     const string XmlNs = "http://www.w3.org/XML/1998/namespace";
+    const string StaffName = "staff";
 
     /// <summary>The MEI document; the same view gives the same text, byte for byte.</summary>
     public static string Write(ScoreView view) {
@@ -342,7 +343,7 @@ public static class MeiWriter {
                 var part = view.Parts[p];
                 for (var s = 0; s < part.Staves.Count; s++) {
                     var staff = part.Measures[index].Staves[s];
-                    xml.WriteStartElement("staff", Ns);
+                    xml.WriteStartElement(StaffName, Ns);
                     xml.WriteAttributeString("n", N(firstStaff[p] + s));
                     percussion = part.Staves[s].Clef == Contracts.Clef.Percussion;
                     foreach (var voice in staff.Voices) {
@@ -589,7 +590,7 @@ public static class MeiWriter {
             var measure = view.Measures[index];
             foreach (var tempo in measure.Tempos) {
                 xml.WriteStartElement("tempo", Ns);
-                xml.WriteAttributeString("staff", "1");
+                xml.WriteAttributeString(StaffName, "1");
                 xml.WriteAttributeString("tstamp", Tstamp(measure, tempo.Tick));
                 xml.WriteAttributeString("place", "above");
                 xml.WriteAttributeString("midi.bpm", D(tempo.Bpm));
@@ -599,7 +600,7 @@ public static class MeiWriter {
 
             foreach (var rehearsal in measure.Rehearsals) {
                 xml.WriteStartElement("reh", Ns);
-                xml.WriteAttributeString("staff", "1");
+                xml.WriteAttributeString(StaffName, "1");
                 xml.WriteAttributeString("tstamp", Tstamp(measure, rehearsal.Tick));
                 xml.WriteString(rehearsal.Text);
                 xml.WriteEndElement();
@@ -630,7 +631,7 @@ public static class MeiWriter {
             // A hidden tie (tieHidden) is left out: MEI 5's tie has no visibility.
             foreach (var note in e.Notes.Where(n => n.TieStart && !hiddenTies.Contains(n.NoteId))) {
                 xml.WriteStartElement("tie", Ns);
-                xml.WriteAttributeString("staff", N(staff));
+                xml.WriteAttributeString(StaffName, N(staff));
                 xml.WriteAttributeString("startid", "#" + note.Id);
                 xml.WriteAttributeString("endid", "#" + ScoreIds.Note(note.NoteId, SegmentOf(note) + 1));
                 xml.WriteEndElement();
@@ -649,7 +650,7 @@ public static class MeiWriter {
 
             xml.WriteStartElement(name, Ns);
             xml.WriteAttributeString("id", XmlNs, ScoreIds.Symbol(symbol.Id));
-            xml.WriteAttributeString("staff", N(staff));
+            xml.WriteAttributeString(StaffName, N(staff));
             Anchors(symbol, e, index);
             Kind(symbol.Kind);
             Place(symbol);
@@ -716,7 +717,7 @@ public static class MeiWriter {
         void Harm(ChordSymbol chord, int staff, ScoreMeasure measure) {
             xml.WriteStartElement("harm", Ns);
             xml.WriteAttributeString("id", XmlNs, ScoreIds.ChordSymbol(chord.Id));
-            xml.WriteAttributeString("staff", N(staff));
+            xml.WriteAttributeString(StaffName, N(staff));
             xml.WriteAttributeString("tstamp", Tstamp(measure, chord.Tick));
             xml.WriteString(ChordText(chord));
             xml.WriteEndElement();

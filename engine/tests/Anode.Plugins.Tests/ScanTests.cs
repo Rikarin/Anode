@@ -21,7 +21,7 @@ public sealed class ScanTests : IDisposable {
         Assert.Equal("vst3", gain.Format);
         Assert.False(gain.IsInstrument);
         Assert.Equal("Utility", gain.Category);
-        Assert.True(gain.HasEditor);
+        Assert.Equal(OperatingSystem.IsMacOS(), gain.HasEditor); // the test editor is Cocoa
         Assert.False(gain.HasSidechain);
         Assert.Equal(["Gain", "Tone"], gain.Parameters.Select(static p => p.Name));
         Assert.Equal(24.0 / 36.0, gain.Parameters[0].Default, 9);
@@ -172,6 +172,13 @@ public sealed class ScanTests : IDisposable {
     static void CopyBundle(string from, string to) {
         foreach (var file in Directory.GetFiles(from, "*", SearchOption.AllDirectories)) {
             var target = Path.Combine(to, Path.GetRelativePath(from, file));
+            if (!OperatingSystem.IsMacOS()) { // off macOS the module inside a bundle is named after it
+                target = Path.Combine(
+                    Path.GetDirectoryName(target)!,
+                    Path.GetFileNameWithoutExtension(to) + Path.GetExtension(target)
+                );
+            }
+
             Directory.CreateDirectory(Path.GetDirectoryName(target)!);
             File.Copy(file, target);
         }

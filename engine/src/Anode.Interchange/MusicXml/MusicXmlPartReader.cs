@@ -14,14 +14,21 @@ namespace Anode.Interchange.MusicXml;
 ///     measure marked <c>implicit</c> (a pickup) is padded at its start to a full bar, so bars stay on the project's
 ///     grid.
 /// </summary>
-sealed class MusicXmlPartReader {
+sealed class MusicXmlPartReader(
+    MusicXmlScoreReader score,
+    XElement part,
+    MusicXmlScoreReader.PartInfo info,
+    string trackId
+) {
+    const string StartType = "start";
+
     /// <summary>A grace note's length: a 1/32 note.</summary>
     static readonly Rational GraceLength = new(1, 8);
 
-    readonly MusicXmlScoreReader score;
-    readonly XElement part;
-    readonly MusicXmlScoreReader.PartInfo info;
-    readonly string trackId;
+    readonly MusicXmlScoreReader score = score;
+    readonly XElement part = part;
+    readonly MusicXmlScoreReader.PartInfo info = info;
+    readonly string trackId = trackId;
 
     readonly List<Building> notes = [];
     readonly Dictionary<int, Building> openTies = [];
@@ -57,18 +64,6 @@ sealed class MusicXmlPartReader {
     bool keySeen;
     int fifths;
     KeyMode mode = KeyMode.Major;
-
-    public MusicXmlPartReader(
-        MusicXmlScoreReader score,
-        XElement part,
-        MusicXmlScoreReader.PartInfo info,
-        string trackId
-    ) {
-        this.score = score;
-        this.part = part;
-        this.info = info;
-        this.trackId = trackId;
-    }
 
     /// <summary>A note being read: ties extend it.</summary>
     sealed class Building(long id, int pitch, Rational start, Rational end, int staff, int? velocity, int channel) {
@@ -394,8 +389,8 @@ sealed class MusicXmlPartReader {
     }
 
     static bool TieStarts(XElement note) =>
-        note.Elements("tie").Any(static t => (string?)t.Attribute("type") == "start")
-        || note.Elements("notations").Elements("tied").Any(static t => (string?)t.Attribute("type") == "start");
+        note.Elements("tie").Any(static t => (string?)t.Attribute("type") == StartType)
+        || note.Elements("notations").Elements("tied").Any(static t => (string?)t.Attribute("type") == StartType);
 
     static bool Unpitched(XElement note) => note.Element("unpitched") is not null;
 
@@ -453,7 +448,7 @@ sealed class MusicXmlPartReader {
         var hidden = (string?)notations.Attribute("print-object") == "no";
         foreach (var child in notations.Elements()) {
             switch (child.Name.LocalName) {
-                case "tied" when hidden && (string?)child.Attribute("type") == "start":
+                case "tied" when hidden && (string?)child.Attribute("type") == StartType:
                     NoteSymbol(ScoreSymbolKind.TieHidden, noteId, null);
                     break;
                 case "slur":
@@ -527,7 +522,7 @@ sealed class MusicXmlPartReader {
     void Slur(XElement slur, long noteId) {
         var number = Integer((string?)slur.Attribute("number")) ?? 1;
         switch ((string?)slur.Attribute("type")) {
-            case "start":
+            case StartType:
                 openSlurs[number] = (noteId, Placement(slur));
                 break;
             case "stop" when openSlurs.Remove(number, out var open) && open.NoteId != noteId:
@@ -570,7 +565,8 @@ sealed class MusicXmlPartReader {
             "end" => Syllabic.End,
             _ => Syllabic.Single
         };
-        var extend = lyric.Element("extend") is { } e && (string?)e.Attribute("type") is null or "start" or "continue";
+        var extend = lyric.Element("extend") is { } e
+            && (string?)e.Attribute("type") is null or StartType or "continue";
         score.Lyrics.Add(new(score.Ids.Next(IdPrefix.Lyric), noteId, verse, text, syllabic, extend));
     }
 
@@ -656,7 +652,7 @@ sealed class MusicXmlPartReader {
             Positioned(ScoreSymbolKind.PedalUp, anchor, null);
         }
 
-        if (type is "start" or "change") {
+        if (type is StartType or "change") {
             Positioned(ScoreSymbolKind.PedalDown, anchor, null);
         }
     }

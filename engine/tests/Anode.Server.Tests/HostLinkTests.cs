@@ -104,7 +104,15 @@ public sealed class HostLinkTests : IAsyncDisposable {
             new SetStripCommand(track.Id, Mute: true),
             new SetTrackCommand(track.Id, RecordArmed: true)
         );
-        await WaitForAsync<SetStripMessage>(static m => m.TrackId == 0);
+        // As a level change, or inside a load when the sync gathered these edits with the track's arrival.
+        await ServerFixture.Eventually(
+            () => Task.FromResult(
+                host!.Received.Any(static m => m is SetStripMessage { TrackId: 0, Strip.Mute: true }
+                    or LoadModelMessage { Tracks: [{ Id: 0, Strip.Mute: true }, ..] }
+                )
+            ),
+            10
+        );
 
         await host!.DisposeAsync();
         host = null;

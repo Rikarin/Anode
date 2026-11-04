@@ -165,12 +165,8 @@ sealed class TestObjects : IObjectRenderer {
 
     public void Reset(int index) => slots[index].Jump();
 
-    sealed class ObjectSlot : RampedGains {
-        readonly int outputs;
-
-        public ObjectSlot(int outputs) {
-            this.outputs = outputs;
-        }
+    sealed class ObjectSlot(int outputs) : RampedGains {
+        readonly int outputs = outputs;
 
         public ObjectPosition Position { get; private set; }
 

@@ -20,23 +20,14 @@ namespace Anode.Dsp.Flex;
 ///     (<see cref="IsCut" />): markers and beats, which lie further apart, always cut. The rule is local, so a render
 ///     from any offset finds the same slices.
 /// </summary>
-internal sealed class SlicingRenderer : WindowedFlexRenderer {
-    readonly int cell;
-    readonly int fadeIn;
-    readonly int fadeOut;
-    readonly int loop;
-    readonly bool rhythmic;
-    readonly int loopFade;
-
-    public SlicingRenderer(bool rhythmic, int channels, int sampleRate, int maxFrames)
-        : base(channels, Math.Max(maxFrames, 1_024) * 2 + 8_192) {
-        this.rhythmic = rhythmic;
-        cell = Math.Max(1, sampleRate / 50);
-        fadeIn = Math.Max(1, sampleRate / 2_000);
-        fadeOut = Math.Max(1, sampleRate / 500);
-        loop = Math.Max(3, sampleRate * 3 / 100);
-        loopFade = Math.Max(1, sampleRate / 200);
-    }
+internal sealed class SlicingRenderer(bool rhythmic, int channels, int sampleRate, int maxFrames)
+    : WindowedFlexRenderer(channels, Math.Max(maxFrames, 1_024) * 2 + 8_192) {
+    readonly int cell = Math.Max(1, sampleRate / 50);
+    readonly int fadeIn = Math.Max(1, sampleRate / 2_000);
+    readonly int fadeOut = Math.Max(1, sampleRate / 500);
+    readonly int loop = Math.Max(3, sampleRate * 3 / 100);
+    readonly bool rhythmic = rhythmic;
+    readonly int loopFade = Math.Max(1, sampleRate / 200);
 
     protected override void RenderRun(in FlexRegion region, long offset, Span<float> output, IFlexSource source) {
         var warp = region.Warp;

@@ -1,3 +1,4 @@
+using Anode.Dsp;
 using Anode.Dsp.Spatial;
 using System.Buffers.Binary;
 
@@ -123,15 +124,7 @@ public sealed class FloatWavWriter : IDisposable {
         var data = (uint)Math.Min(uint.MaxValue - HeaderBytes, dataBytes);
         "RIFF"u8.CopyTo(h);
         BinaryPrimitives.WriteUInt32LittleEndian(h[4..], (uint)(HeaderBytes - 8) + data);
-        "WAVE"u8.CopyTo(h[8..]);
-        "fmt "u8.CopyTo(h[12..]);
-        BinaryPrimitives.WriteUInt32LittleEndian(h[16..], 18);
-        BinaryPrimitives.WriteUInt16LittleEndian(h[20..], 3); // IEEE float
-        BinaryPrimitives.WriteUInt16LittleEndian(h[22..], (ushort)Channels);
-        BinaryPrimitives.WriteUInt32LittleEndian(h[24..], (uint)SampleRate);
-        BinaryPrimitives.WriteUInt32LittleEndian(h[28..], (uint)(SampleRate * Channels * 4));
-        BinaryPrimitives.WriteUInt16LittleEndian(h[32..], (ushort)(Channels * 4));
-        BinaryPrimitives.WriteUInt16LittleEndian(h[34..], 32);
+        WavFormatChunk.Write(h, 18, WavFormatChunk.IeeeFloat, Channels, SampleRate, 32);
         BinaryPrimitives.WriteUInt16LittleEndian(h[36..], 0); // cbSize
         "fact"u8.CopyTo(h[38..]);
         BinaryPrimitives.WriteUInt32LittleEndian(h[42..], 4);

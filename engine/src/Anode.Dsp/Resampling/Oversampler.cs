@@ -174,7 +174,7 @@ internal sealed class HalfBandStage {
 ///     minimum-phase IIR: a little phase shift near the top of the band and no latency to report.
 ///     Allocation-free after construction.
 /// </summary>
-public sealed class Oversampler4x {
+public sealed class Oversampler4x(int maxBlock = Effects.AudioEffect.ControlInterval) {
     public const double AttenuationDb = 100;
     public const double FirstTransition = 0.04;
     public const double SecondTransition = 0.26;
@@ -184,13 +184,8 @@ public sealed class Oversampler4x {
 
     readonly HalfBandStage first = new(FirstStage);
     readonly HalfBandStage second = new(SecondStage);
-    readonly float[] twice;
-    readonly float[] four;
-
-    public Oversampler4x(int maxBlock = Effects.AudioEffect.ControlInterval) {
-        twice = new float[maxBlock * 2];
-        four = new float[maxBlock * 4];
-    }
+    readonly float[] twice = new float[maxBlock * 2];
+    readonly float[] four = new float[maxBlock * 4];
 
     /// <summary>Upsamples <paramref name="input" /> and returns the 4× buffer to process in place.</summary>
     public Span<float> Up(ReadOnlySpan<float> input) {

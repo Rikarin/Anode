@@ -13,14 +13,10 @@ namespace Anode.Engine.Sync;
 ///     <c>k mod 8</c> of the label of frame <c>2 × ⌊k / 8⌋</c>: piece 0 goes out as an even frame starts, and a receiver
 ///     has the whole label when piece 7 arrives, 1¾ frames later.
 /// </remarks>
-public sealed class MtcEncoder {
+public sealed class MtcEncoder(EngineMtcRate rate) {
     const double Epsilon = 1e-9;
 
-    public MtcEncoder(EngineMtcRate rate) {
-        Rate = rate;
-    }
-
-    public EngineMtcRate Rate { get; }
+    public EngineMtcRate Rate { get; } = rate;
 
     /// <summary>
     ///     One block of <paramref name="frames" /> frames over timecode <paramref name="startSeconds" /> …

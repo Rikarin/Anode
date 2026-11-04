@@ -11,11 +11,11 @@ namespace Anode.Engine.Mixing;
 ///     true peak since then (4× interpolated, as the limiters detect it), measured on the audio thread after the insert
 ///     runs; and the gain reductions its compressor and limiter report. Allocation-free once built.
 /// </summary>
-public sealed class MasteringMeter {
+public sealed class MasteringMeter(IMasteringChain chain, double sampleRate) {
     /// <summary>What silence reads (the contract's −144).</summary>
     public const float SilenceDb = -144f;
 
-    readonly LoudnessMeter loudness;
+    readonly LoudnessMeter loudness = new(sampleRate);
 
     // The last TruePeak.Taps samples of each channel, twice over (so the window from any start is contiguous).
     readonly float[] historyLeft = new float[2 * TruePeak.Taps];
@@ -28,13 +28,8 @@ public sealed class MasteringMeter {
     float truePeak = SilenceDb;
     bool rolling;
 
-    public MasteringMeter(IMasteringChain chain, double sampleRate) {
-        Chain = chain;
-        loudness = new(sampleRate);
-    }
-
     /// <summary>The assistant, whose reductions the entry reads.</summary>
-    public IMasteringChain Chain { get; }
+    public IMasteringChain Chain { get; } = chain;
 
     /// <summary>
     ///     Audio thread: measures a block of the insert's output; play starting (<paramref name="playing" /> after a

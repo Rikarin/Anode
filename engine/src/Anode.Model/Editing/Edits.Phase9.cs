@@ -211,13 +211,7 @@ public static partial class Edits {
             throw new EditException($"No staff style '{c.StyleId}'.");
         }
 
-        var ops = new List<DeltaOp>();
-        for (var i = 0; i < state.Tracks.Count; i++) {
-            if (state.Tracks[i].StaffStyleId == c.StyleId) {
-                ops.Add(new TrackUpserted(state.Tracks[i] with { StaffStyleId = null }, i));
-            }
-        }
-
+        var ops = TracksChanged(state, t => t.StaffStyleId == c.StyleId, static t => t with { StaffStyleId = null });
         ops.Add(new StaffStyleRemoved(c.StyleId!));
         return ops;
     }

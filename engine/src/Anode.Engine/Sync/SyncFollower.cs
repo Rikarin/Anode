@@ -49,14 +49,14 @@ public interface ISyncTransport {
 ///     </list>
 ///     The decision runs without allocating; the transport calls it makes are queued.
 /// </summary>
-public sealed class SyncFollower {
+public sealed class SyncFollower(ISyncTransport transport) {
     /// <summary>How long after a relocate the chase waits before judging the playhead again (the disk catches up).</summary>
     const long RelocateHoldNs = 250_000_000;
 
     /// <summary>How far ahead of now a chase from a stop aims, for the disk to prime.</summary>
     const long StartLeadNs = 150_000_000;
 
-    readonly ISyncTransport transport;
+    readonly ISyncTransport transport = transport;
     readonly MidiClockDecoder clock = new();
     readonly TempoEstimator estimator = new();
     readonly Lock gate = new();
@@ -66,10 +66,6 @@ public sealed class SyncFollower {
     bool startRequested;
     long lastRelocateNs;
     int pendingPointer = -1;
-
-    public SyncFollower(ISyncTransport transport) {
-        this.transport = transport;
-    }
 
     /// <summary>Whether the external source is followed now (MIDI Clock: ticks lock; MTC: timecode runs).</summary>
     public bool Locked {

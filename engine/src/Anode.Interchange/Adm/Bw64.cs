@@ -340,16 +340,15 @@ sealed class Bw64Writer : IDisposable {
             stream.Write(ds64);
             stream.Position = dataSizeAt;
             BinaryPrimitives.WriteUInt32LittleEndian(bytes, uint.MaxValue);
-            stream.Write(bytes[..4]);
         } else {
             stream.Position = 4;
             BinaryPrimitives.WriteUInt32LittleEndian(bytes, (uint)riffSize);
             stream.Write(bytes[..4]);
             stream.Position = dataSizeAt;
             BinaryPrimitives.WriteUInt32LittleEndian(bytes, (uint)dataBytes);
-            stream.Write(bytes[..4]);
         }
 
+        stream.Write(bytes[..4]);
         stream.Dispose();
     }
 }

@@ -279,9 +279,7 @@ public sealed partial class FakeHost {
                 foreach (var change in changes) {
                     try {
                         await SendAsync(change).ConfigureAwait(false);
-                    } catch (Exception e) when (e is IOException
-                                                    or InvalidOperationException
-                                                    or ObjectDisposedException) {
+                    } catch (Exception e) when (e is IOException or InvalidOperationException) {
                         return; // the server went away
                     }
                 }

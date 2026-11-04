@@ -499,18 +499,14 @@ internal struct PannerCache {
 ///     (<see cref="Strip" />), the latest configuration (control thread), and the audio thread's delay line, gain ramp
 ///     and post-fader buffer (for tracks other inserts take as a sidechain).
 /// </summary>
-public sealed class ChannelState {
+public sealed class ChannelState(Strip strip) {
     DelayLine? delay;
     float[]? postLeft;
     float[]? postRight;
     float[]? workLeft;
     float[]? workRight;
 
-    public ChannelState(Strip strip) {
-        Strip = strip;
-    }
-
-    public Strip Strip { get; }
+    public Strip Strip { get; } = strip;
 
     /// <summary>Control thread: the configuration the next plan publishes.</summary>
     public ChannelConfig Config { get; set; } = ChannelConfig.Empty;

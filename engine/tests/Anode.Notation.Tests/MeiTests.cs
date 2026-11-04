@@ -213,7 +213,7 @@ public sealed class MeiTests {
         }
     }
 
-    static string? Xmllint() =>
+    internal static string? Xmllint() =>
         (Environment.GetEnvironmentVariable("PATH") ?? string.Empty).Split(Path.PathSeparator)
         .Select(static d => Path.Combine(d, OperatingSystem.IsWindows() ? "xmllint.exe" : "xmllint"))
         .FirstOrDefault(File.Exists);

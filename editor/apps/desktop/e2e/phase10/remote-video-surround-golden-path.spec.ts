@@ -415,6 +415,11 @@ test.describe('Phase 10: remote, video and surround', () => {
       await transport(window, 'play', 0);
       const heard = await hear(remote.page);
       const now = await api<{ positionSamples: number }>(window, 'GET', '/transport');
+      // While it plays: stopped, the remote has no transport to be behind.
+      const latencyText = remote.page.getByTestId('listen-in-latency');
+      await expect(latencyText).toContainText('ms behind');
+      const latency = (await latencyText.textContent()) ?? '';
+      const behindMs = Number(/(\d+)\s*ms behind/.exec(latency)?.[1] ?? NaN);
       await transport(window, 'stop');
       const steady = Float32Array.from(heard.samples.slice(Rate / 4));
       expect(steady.length).toBeGreaterThan(Rate); // 2 s captured, the first quarter second left out
@@ -431,8 +436,6 @@ test.describe('Phase 10: remote, video and surround', () => {
       // The tone track's fader moved in step 1: compare with its level at the fader.
       const fadedDb = -12 + ((await project(window)).tracks.find(t => t.id === tone)?.strip.volumeDb ?? 0);
       expect(Math.abs(toneHeard.peakDb - fadedDb)).toBeLessThan(1);
-      const latency = await remote.page.getByTestId('listen-in-latency').textContent();
-      const behindMs = Number(/(\d+)\s*ms behind/.exec(latency ?? '')?.[1] ?? NaN);
       expect(behindMs).toBeLessThan(500);
       measured(
         '2 listen-in',

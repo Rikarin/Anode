@@ -12,7 +12,7 @@ namespace Anode.Engine.Timing;
 ///     points (a model without tempo, tests) is 120 bpm in 4/4 from the project start. Allocation-free; the segment it
 ///     points into is kept mapped by the model that holds it.
 /// </summary>
-public readonly unsafe struct TempoMap {
+public readonly unsafe struct TempoMap(TempoMapPoint* points, long count, double sampleRate) {
     const double Epsilon = 1e-9;
 
     static readonly TempoMapPoint Default = new() {
@@ -25,19 +25,13 @@ public readonly unsafe struct TempoMap {
         Denominator = 4
     };
 
-    readonly TempoMapPoint* points;
-    readonly int count;
+    readonly TempoMapPoint* points = points;
+    readonly int count = points is null ? 0 : (int)Math.Clamp(count, 0, int.MaxValue);
 
     /// <summary>The default map (120 bpm in 4/4) at <paramref name="sampleRate" />.</summary>
     public TempoMap(double sampleRate) : this(null, 0, sampleRate) { }
 
-    public TempoMap(TempoMapPoint* points, long count, double sampleRate) {
-        this.points = points;
-        this.count = points is null ? 0 : (int)Math.Clamp(count, 0, int.MaxValue);
-        SampleRate = sampleRate;
-    }
-
-    public double SampleRate { get; }
+    public double SampleRate { get; } = sampleRate;
 
     /// <summary>The number of points (0: the default map).</summary>
     public int Count => Math.Max(1, count);

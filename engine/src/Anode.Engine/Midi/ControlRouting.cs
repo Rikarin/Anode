@@ -8,20 +8,19 @@ namespace Anode.Engine.Midi;
 ///     are consumed, and Learn. Immutable; built on the control thread and swapped in whole. <see cref="Decide" /> does
 ///     not allocate.
 /// </summary>
-public sealed class ControlRouting {
-    readonly HashSet<string> controlPorts;
-    readonly EngineControlMatcher[] matchers;
+public sealed class ControlRouting(
+    IEnumerable<string> controlPorts,
+    IEnumerable<EngineControlMatcher> matchers,
+    bool learn) {
+    readonly HashSet<string> controlPorts =
+        new(controlPorts.Where(static p => !string.IsNullOrEmpty(p)), StringComparer.Ordinal);
 
-    public ControlRouting(IEnumerable<string> controlPorts, IEnumerable<EngineControlMatcher> matchers, bool learn) {
-        this.controlPorts = new(controlPorts.Where(static p => !string.IsNullOrEmpty(p)), StringComparer.Ordinal);
-        this.matchers = [..matchers];
-        Learn = learn;
-    }
+    readonly EngineControlMatcher[] matchers = [..matchers];
 
     /// <summary>No control ports, no matchers, not learning: everything plays.</summary>
     public static ControlRouting None { get; } = new([], [], false);
 
-    public bool Learn { get; }
+    public bool Learn { get; } = learn;
 
     public bool HasControlPorts => controlPorts.Count > 0;
 

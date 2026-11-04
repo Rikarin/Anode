@@ -71,17 +71,9 @@ public static class QuickSamplerParameters {
 ///     A sample in memory for <see cref="QuickSampler" />, each channel padded for the cubic interpolation, with the
 ///     slice points its transients give.
 /// </summary>
-internal sealed class QuickSample {
+internal sealed class QuickSample(float[] left, float[] right, int frames, int sampleRate, long[] transients) {
     public const int PadBefore = 1;
     public const int PadAfter = 3;
-
-    public QuickSample(float[] left, float[] right, int frames, int sampleRate, long[] transients) {
-        Left = left;
-        Right = right;
-        Frames = frames;
-        SampleRate = sampleRate;
-        Transients = transients;
-    }
 
     /// <summary>A sample of <paramref name="channels" /> (one or two) as a WAV gives them.</summary>
     public static QuickSample From(float[][] channels, int sampleRate) {
@@ -93,16 +85,16 @@ internal sealed class QuickSample {
         return new(left, right, frames, sampleRate, transients);
     }
 
-    public float[] Left { get; }
-    public float[] Right { get; }
+    public float[] Left { get; } = left;
+    public float[] Right { get; } = right;
 
     /// <summary>The frames that play (a recording grows it on the audio thread).</summary>
-    public int Frames { get; set; }
+    public int Frames { get; set; } = frames;
 
-    public int SampleRate { get; }
+    public int SampleRate { get; } = sampleRate;
 
     /// <summary>The detected onsets, ascending (empty for a recording: its slices are equal).</summary>
-    public long[] Transients { get; }
+    public long[] Transients { get; } = transients;
 
     /// <summary>The frames the buffers hold.</summary>
     public int Capacity => Left.Length - PadBefore - PadAfter;

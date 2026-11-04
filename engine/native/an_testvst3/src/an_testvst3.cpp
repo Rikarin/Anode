@@ -27,7 +27,12 @@
 
 #include <cmath>
 #include <cstring>
-#include <unistd.h>
+#include <chrono>
+#include <thread>
+
+#if !defined(__APPLE__) && !defined(_WIN32)
+#include <dlfcn.h>
+#endif
 
 using namespace Steinberg;
 using namespace Steinberg::Vst;
@@ -221,11 +226,11 @@ public:
                 }
                 if (values[1] >= 1.0) {
                     for (;;) {
-                        sleep(1); // deliberately: hang detection tests
+                        std::this_thread::sleep_for(std::chrono::seconds(1)); // deliberately: hang detection tests
                     }
                 }
                 if (values[1] > 0) {
-                    usleep(static_cast<useconds_t>(values[1] * 100000));
+                    std::this_thread::sleep_for(std::chrono::duration<double>(values[1] * 0.1));
                 }
                 for (int c = 0; c < 2; c++) {
                     if (in && in[c] != out[c]) {
@@ -382,18 +387,34 @@ FUnknown *createController(void *) {
 
 using namespace antest;
 
+#if defined(__APPLE__)
 extern char gPath[]; // the bundle's path (macmain.cpp)
+static const char *module_path() { return gPath; }
+#elif defined(_WIN32)
+extern void *moduleHandle; // dllmain.cpp
+extern "C" __declspec(dllimport) unsigned long __stdcall GetModuleFileNameA(void *, char *, unsigned long);
+static const char *module_path() {
+    static char path[1024];
+    GetModuleFileNameA(moduleHandle, path, sizeof path);
+    return path;
+}
+#else
+static const char *module_path() {
+    Dl_info info{};
+    return dladdr(reinterpret_cast<void *>(&module_path), &info) != 0 && info.dli_fname ? info.dli_fname : "";
+}
+#endif
 
 // A copy of the bundle renamed to contain "CrashOnScan" or "HangOnScan" misbehaves as soon as it is loaded: the
 // scanner tests' blocklist cases.
 bool InitModule() {
-    if (std::strstr(gPath, "CrashOnScan")) {
+    if (std::strstr(module_path(), "CrashOnScan")) {
         volatile int *crash = nullptr;
         *crash = 1;
     }
-    if (std::strstr(gPath, "HangOnScan")) {
+    if (std::strstr(module_path(), "HangOnScan")) {
         for (;;) {
-            sleep(1);
+            std::this_thread::sleep_for(std::chrono::seconds(1));
         }
     }
     return true;

@@ -127,6 +127,8 @@ public sealed class HrtfSet {
     /// <summary>A measured direction (degrees, ADM).</summary>
     public (float Azimuth, float Elevation) Direction(int index) => (azimuths[index], elevations[index]);
 
+    const double TieCosine = 1e-9;
+
     /// <summary>
     ///     The left and right impulse responses for a direction, interpolated between the nearest measured ones (for
     ///     objects), resampled to the set's rate; off the audio thread.
@@ -145,8 +147,8 @@ public sealed class HrtfSet {
         for (var d = 0; d < DirectionCount; d++) {
             var cos = v.X * x[d] + v.Y * y[d] + v.Z * z[d];
             for (var k = 0; k < 3; k++) {
-                if (cos <= cosines[k]) {
-                    continue;
+                if (cos <= cosines[k] + TieCosine) {
+                    continue; // a tie goes to the lower index, or the last bit of the cosine picks it per architecture
                 }
 
                 for (var m = 2; m > k; m--) {

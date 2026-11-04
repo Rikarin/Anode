@@ -6,16 +6,16 @@ namespace Anode.Dsp.Flex;
 ///     the warp plays faster than 1:1 the kernel widens by the rate, so its cutoff follows the output's Nyquist frequency
 ///     (up to <see cref="MaxRate" />, beyond which it aliases). Pitch follows speed exactly, as on a tape.
 /// </summary>
-internal sealed class SpeedRenderer : WindowedFlexRenderer {
+internal sealed class SpeedRenderer(int channels, int maxFrames) : WindowedFlexRenderer(
+    channels,
+    Math.Max(maxFrames, 1_024) + 2 * (int)(ZeroCrossings * MaxRate) + 8_192
+) {
     /// <summary>The widest rate the anti-aliasing kernel follows.</summary>
     public const double MaxRate = 8;
 
     const int ZeroCrossings = 16;
     const int Resolution = 512;
     static readonly float[] Kernel = MakeKernel();
-
-    public SpeedRenderer(int channels, int maxFrames)
-        : base(channels, Math.Max(maxFrames, 1_024) + 2 * (int)(ZeroCrossings * MaxRate) + 8_192) { }
 
     /// <summary>The most frames it reads from its source at once.</summary>
     public int WindowFrames => Window.Capacity;

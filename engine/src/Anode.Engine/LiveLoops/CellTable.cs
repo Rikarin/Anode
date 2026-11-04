@@ -9,21 +9,17 @@ namespace Anode.Engine.LiveLoops;
 ///     for an audio cell, its audio rendered whole into memory when the model loaded (warped through the flex
 ///     renderers then), so a launch never waits for the disk. Immutable once published.
 /// </summary>
-public sealed class CellContent {
+public sealed class CellContent(
+    CellEntry entry,
+    TrackView view,
+    MappedSegment owner,
+    float[]? audio,
+    int channels,
+    ulong hash) {
     /// <summary>The most audio a cell holds in memory: 60 s (longer cells are cut there).</summary>
     public const int MaxSeconds = 60;
 
-    public CellContent(CellEntry entry, TrackView view, MappedSegment owner, float[]? audio, int channels, ulong hash) {
-        Entry = entry;
-        View = view;
-        Owner = owner;
-        Audio = audio;
-        Channels = channels;
-        Frames = audio is null ? 0 : audio.Length / Math.Max(1, channels);
-        Hash = hash;
-    }
-
-    public CellEntry Entry { get; }
+    public CellEntry Entry { get; } = entry;
 
     public int Index => Entry.Index;
 
@@ -35,32 +31,28 @@ public sealed class CellContent {
     public CellMode Mode => Entry.Mode;
 
     /// <summary>Its events and playlist, positions relative to its start.</summary>
-    public TrackView View { get; }
+    public TrackView View { get; } = view;
 
     /// <summary>The segment <see cref="View" /> points into (reference-counted by the models that hold the cell).</summary>
-    public MappedSegment Owner { get; }
+    public MappedSegment Owner { get; } = owner;
 
     /// <summary>An audio cell's audio from its start, <see cref="Channels" /> interleaved; null for a MIDI cell.</summary>
-    public float[]? Audio { get; }
+    public float[]? Audio { get; } = audio;
 
-    public int Channels { get; }
+    public int Channels { get; } = channels;
 
     /// <summary>Frames of <see cref="Audio" /> (at most <see cref="MaxSeconds" />; silence after).</summary>
-    public long Frames { get; }
+    public long Frames { get; } = audio is null ? 0 : audio.Length / Math.Max(1, channels);
 
     /// <summary>What the audio was rendered from (its playlist, maps, files, channels and length), to reuse it.</summary>
-    public ulong Hash { get; }
+    public ulong Hash { get; } = hash;
 }
 
 /// <summary>The model's cells by index (null where none). Immutable once published.</summary>
-public sealed class CellTable {
+public sealed class CellTable(CellContent?[] byIndex) {
     public static readonly CellTable Empty = new([]);
 
-    public CellTable(CellContent?[] byIndex) {
-        ByIndex = byIndex;
-    }
-
-    public CellContent?[] ByIndex { get; }
+    public CellContent?[] ByIndex { get; } = byIndex;
 
     /// <summary>Cell <paramref name="index" />, or null.</summary>
     public CellContent? this[int index] => (uint)index < (uint)ByIndex.Length ? ByIndex[index] : null;

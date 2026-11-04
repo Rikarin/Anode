@@ -186,7 +186,7 @@ public sealed partial class HostProcessTests : IDisposable {
         await host.WaitForExitAsync(Token).WaitAsync(TimeSpan.FromSeconds(10), Token);
         Assert.Equal(0, host.ExitCode);
         Assert.False(File.Exists(socketPath));
-        Assert.Throws<IOException>(() => SharedSegment.Open(hello.TelemetryName!, TelemetryLayout.Size).Dispose());
+        Assert.ThrowsAny<IOException>(() => SharedSegment.Open(hello.TelemetryName!, TelemetryLayout.Size).Dispose());
     }
 
     /// <summary>

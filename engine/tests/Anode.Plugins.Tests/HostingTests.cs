@@ -219,7 +219,10 @@ public sealed class HostingTests : IDisposable {
         Render(gain, 10, Frames);
         var pid = ((IHostedPlugin)gain).Stats.SandboxPid;
         var status = host.SandboxStatus(pid)!.Value;
-        Assert.Equal(0, status.RtStatus);
+        if (OperatingSystem.IsMacOS()) { // elsewhere real-time priority takes rights a test machine may not have
+            Assert.Equal(0, status.RtStatus);
+        }
+
         Assert.True(status.Wakes >= 10);
     }
 }

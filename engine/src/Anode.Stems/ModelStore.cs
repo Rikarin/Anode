@@ -16,21 +16,16 @@ public sealed record ModelFile(StemModel Model, string FileName, Uri? Url, strin
 ///     <c>scripts/fetch-models.mjs</c> agree. Safe to share between threads; two downloads of one model into one folder
 ///     at once are not.
 /// </summary>
-public sealed class ModelStore {
-    readonly IReadOnlyList<ModelFile> files;
+public sealed class ModelStore(string folder, IReadOnlyList<ModelFile> files) {
+    readonly IReadOnlyList<ModelFile> files = files;
 
     /// <summary>The models of <see cref="Manifest" /> in <paramref name="folder" />.</summary>
     public ModelStore(string folder) : this(folder, Manifest) { }
 
-    public ModelStore(string folder, IReadOnlyList<ModelFile> files) {
-        Folder = folder;
-        this.files = files;
-    }
-
     /// <summary>The model files of <c>scripts/models.json</c>.</summary>
     public static IReadOnlyList<ModelFile> Manifest { get; } = ReadManifest();
 
-    public string Folder { get; }
+    public string Folder { get; } = folder;
 
     /// <summary>The listed file of <paramref name="model" />.</summary>
     public ModelFile Describe(StemModel model) =>

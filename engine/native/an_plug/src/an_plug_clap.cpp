@@ -14,7 +14,11 @@
 #if defined(__APPLE__)
 #include <CoreFoundation/CoreFoundation.h>
 #else
+#if defined(_WIN32)
+#include <windows.h>
+#else
 #include <dlfcn.h>
+#endif
 #endif
 
 namespace anplug {
@@ -50,6 +54,13 @@ bool loadModule(const std::string &path, ClapModule &out) {
         return false;
     }
     entry = static_cast<const clap_plugin_entry_t *>(CFBundleGetDataPointerForName(bundle, CFSTR("clap_entry")));
+#elif defined(_WIN32)
+    auto *handle = LoadLibraryA(path.c_str());
+    if (!handle) {
+        fail("could not load " + path);
+        return false;
+    }
+    entry = reinterpret_cast<const clap_plugin_entry_t *>(GetProcAddress(handle, "clap_entry"));
 #else
     auto *handle = dlopen(path.c_str(), RTLD_LOCAL | RTLD_NOW);
     if (!handle) {

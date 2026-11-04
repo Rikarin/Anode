@@ -10,7 +10,12 @@
 #include <cstdlib>
 #include <cstring>
 #include <fcntl.h>
+#if defined(_WIN32)
+#include <io.h>
+#include <xmmintrin.h>
+#else
 #include <unistd.h>
+#endif
 
 namespace anplug {
 
@@ -443,12 +448,20 @@ int32_t an_plug_editor_window(an_plug *plug) { return editor_window(plug->impl);
 
 int32_t an_plug_redirect_stdout(void) {
     std::fflush(stdout);
+#if defined(_WIN32)
+    int fd = _dup(1);
+    if (fd < 0) {
+        return fail("dup failed");
+    }
+    _dup2(2, 1);
+#else
     int fd = dup(1);
     if (fd < 0) {
         return fail("dup failed");
     }
     fcntl(fd, F_SETFD, FD_CLOEXEC);
     dup2(2, 1);
+#endif
     return fd;
 }
 
@@ -463,6 +476,8 @@ void an_plug_flush_denormals(void) {
     __asm__ volatile("stmxcsr %0" : "=m"(csr));
     csr |= 0x8040; // FTZ | DAZ
     __asm__ volatile("ldmxcsr %0" : : "m"(csr));
+#elif defined(_M_X64)
+    _mm_setcsr(_mm_getcsr() | 0x8040); // FTZ | DAZ
 #endif
 }
 
