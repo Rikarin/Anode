@@ -601,10 +601,11 @@ public sealed unsafe partial class AudioEngine {
         ch.Live = live;
         ch.ChainLatency = BypassedForRender(node) ? 0 : InsertLatency(node.Config, live);
         ch.Latency = mode switch {
-            DelayCompensation.Off => input,
-            DelayCompensation.Tracks when aux => input,
-            _ => input + ch.ChainLatency
-        } - ch.Strip.DelayFrames;
+                DelayCompensation.Off => input,
+                DelayCompensation.Tracks when aux => input,
+                _ => input + ch.ChainLatency
+            }
+            - ch.Strip.DelayFrames;
         ch.ImpliedSolo = implied;
         ch.Audible = !anySolo || ch.Strip.Solo || implied || ch.Strip.SoloSafe;
         var soloing = anySolo && ch.Audible;

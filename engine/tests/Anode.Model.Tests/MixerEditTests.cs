@@ -77,7 +77,11 @@ public sealed class MixerEditTests {
         Apply(new SetStripCommand(T("Verb").Id, SoloSafe: true), new SetMixerSettingsCommand(SoloMode: SoloMode.Pfl));
         Assert.True(Strips.Engine(state, T("Verb"), EngineIds.Empty.With(state)).SoloSafe);
         Assert.Equal(SoloMode.Pfl, state.Settings.Mixer.SoloMode);
-        Assert.Contains("solo mode", Fails(new SetMixerSettingsCommand(SoloMode: (SoloMode)9)), StringComparison.Ordinal);
+        Assert.Contains(
+            "solo mode",
+            Fails(new SetMixerSettingsCommand(SoloMode: (SoloMode)9)),
+            StringComparison.Ordinal
+        );
     }
 
     [Fact]
@@ -94,7 +98,11 @@ public sealed class MixerEditTests {
         var engine = Strips.Engine(state, T("Gtr"), ids2);
         Assert.Equal((Ipc.EngineMeterType.K14, Ipc.EngineMeterTap.PreFader), (engine.MeterType, engine.MeterTap));
         Assert.Equal(Ipc.EngineMeterType.Lufs, Strips.Engine(state, null, ids2).MeterType);
-        Assert.Contains("no meter", Fails(new SetStripCommand(T("V").Id, MeterType: MeterType.Rms)), StringComparison.Ordinal);
+        Assert.Contains(
+            "no meter",
+            Fails(new SetStripCommand(T("V").Id, MeterType: MeterType.Rms)),
+            StringComparison.Ordinal
+        );
         Assert.Contains("meter type", Fails(new SetStripCommand(MeterType: (MeterType)9)), StringComparison.Ordinal);
     }
 
@@ -172,8 +180,16 @@ public sealed class MixerEditTests {
         Apply(new AddInsertCommand("anode.test-compressor", gtr));
         var comp = T("Gtr").Strip.Inserts[0].Id;
         Assert.Contains("no inserts", Fails(new TransferInsertCommand(comp, gtr, T("V").Id)), StringComparison.Ordinal);
-        Assert.Contains("outside", Fails(new TransferInsertCommand(comp, gtr, T("Bass").Id, 5)), StringComparison.Ordinal);
-        Assert.Contains("No insert", Fails(new TransferInsertCommand("ins_x", gtr, T("Bass").Id)), StringComparison.Ordinal);
+        Assert.Contains(
+            "outside",
+            Fails(new TransferInsertCommand(comp, gtr, T("Bass").Id, 5)),
+            StringComparison.Ordinal
+        );
+        Assert.Contains(
+            "No insert",
+            Fails(new TransferInsertCommand("ins_x", gtr, T("Bass").Id)),
+            StringComparison.Ordinal
+        );
         for (var i = 0; i < Edits.MaxInserts; i++) {
             Apply(new AddInsertCommand("anode.test-compressor", T("Bass").Id));
         }

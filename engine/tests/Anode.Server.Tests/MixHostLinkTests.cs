@@ -111,7 +111,7 @@ public sealed class MixHostLinkTests : IAsyncDisposable {
         var (gtr, bass, kick) = (tracks[0].Id, tracks[1].Id, tracks[2].Id);
         await client.EditAsync(new AddInsertCommand("anode.compressor", gtr));
         var insert = (await client.ProjectAsync()).Tracks[0].Strip.Inserts[0];
-        await WaitForAsync<SetChannelMessage>(m => m.TrackId == 0 && m.Strip.Inserts is { Count: 1 });
+        await WaitForAsync<SetChannelMessage>(static m => m.TrackId == 0 && m.Strip.Inserts is { Count: 1 });
         var state = Convert.ToBase64String(Encoding.UTF8.GetBytes($"fake-state:anode.compressor:{insert.Id}"));
 
         await client.EditAsync(new TransferInsertCommand(insert.Id, gtr, bass, Copy: true));
@@ -120,7 +120,8 @@ public sealed class MixHostLinkTests : IAsyncDisposable {
         Assert.Equal(state, copy.Strip.Inserts![0].State);
 
         await client.EditAsync(new TransferInsertCommand(insert.Id, gtr, kick));
-        var moved = await WaitForAsync<SetChannelMessage>(static m => m.TrackId == 2 && m.Strip.Inserts is { Count: 1 });
+        var moved = await WaitForAsync<SetChannelMessage>(static m => m.TrackId == 2 && m.Strip.Inserts is { Count: 1 }
+        );
         Assert.Equal(insert.Id, moved.Strip.Inserts![0].Id);
         Assert.Equal(state, moved.Strip.Inserts![0].State);
         await WaitForAsync<SetChannelMessage>(static m => m.TrackId == 0 && m.Strip.Inserts is { Count: 0 });

@@ -770,11 +770,7 @@ public sealed partial class ProjectSession(
 
             var insert = StripOf(before, c.TrackId).Inserts.FirstOrDefault(i => i.Id == c.InsertId);
             var landed = c.Copy
-                ? StripOf(after, c.ToTrackId)
-                    .Inserts.FirstOrDefault(i => i.PluginId == insert?.PluginId
-                        && !StripOf(before, c.ToTrackId).Inserts.Any(b => b.Id == i.Id)
-                        && claimed.Add(i.Id)
-                    )
+                ? Copied(StripOf(before, c.ToTrackId), StripOf(after, c.ToTrackId), insert, claimed)
                 : insert;
             var key = ProjectPackage.StateKey(c.TrackId, c.InsertId);
             var bytes = hostStates is not null && hostStates.TryGetValue(key, out var reported)
@@ -793,6 +789,13 @@ public sealed partial class ProjectSession(
 
         return left;
     }
+
+    /// <summary>The copy of <paramref name="insert" /> a strip gained, that no earlier copy of the batch claimed.</summary>
+    static Insert? Copied(ChannelStrip before, ChannelStrip after, Insert? insert, HashSet<string> claimed) =>
+        after.Inserts.FirstOrDefault(i => i.PluginId == insert?.PluginId
+            && !before.Inserts.Any(b => b.Id == i.Id)
+            && claimed.Add(i.Id)
+        );
 
     static ChannelStrip StripOf(ProjectState state, string? trackId) =>
         trackId is null ? state.Master : state.FindTrack(trackId)?.Strip ?? ProjectDefaults.Strip;

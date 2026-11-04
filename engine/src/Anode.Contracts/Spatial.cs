@@ -299,7 +299,8 @@ public sealed record MonitoringSettings(
 /// <summary>
 ///     The monitor section: what the speakers get after the master, never what a bounce or the listen-in hears. Output
 ///     pairs a strip is routed to directly bypass it. The level is <c>levelDb</c>, or with <c>reference</c> the calibrated
-///     <c>referenceDb</c>; <c>dim</c> takes <c>dimDb</c> (0 or less) off whichever applies; <c>mono</c> folds the front pair
+///     <c>referenceDb</c>; <c>dim</c> takes <c>dimDb</c> (0 or less) off whichever applies; <c>mono</c> folds the front
+///     pair
 ///     to check it in mono.
 /// </summary>
 public sealed record MonitorSection(

@@ -31,7 +31,9 @@ public sealed class StripMeterTests {
 
     [Fact]
     public void A_sines_RMS_reads_3_dB_under_its_peak_whichever_window_the_type_has() {
-        foreach (var type in new[] { EngineMeterType.Rms, EngineMeterType.K20, EngineMeterType.K14, EngineMeterType.K12 }) {
+        foreach (var type in new[] {
+                     EngineMeterType.Rms, EngineMeterType.K20, EngineMeterType.K14, EngineMeterType.K12
+                 }) {
             var strip = Meter(type);
             Feed(strip, 0.5f);
             var (left, right, _, levels) = strip.MeterLevels();

@@ -570,6 +570,11 @@ public sealed class MixPlan {
 
         static readonly SpeakerLayout StereoLayout = SpeakerLayout.Of(SpeakerFormat.Stereo);
 
+        /// <summary>What AFL and PFL hear a signal wider than stereo through; null for the others.</summary>
+        float[]? ListenDownmix(int width, SpeakerFormat format) => width > 2 ? Convert(format, StereoLayout) : null;
+
+        float[]? ListenDownmix(MixEdge? edge) => edge is { Width: > 2 } ? Convert(edge.Format, StereoLayout) : null;
+
         /// <summary>Each aux sits one level above everything feeding its input bus (a loop the server missed is cut).</summary>
         int[] Levels() {
             var n = tracks.Length;
@@ -647,8 +652,8 @@ public sealed class MixPlan {
             var channel = track?.Channel ?? master;
             var spatialParts = SpatialParts(track, trackId, channel, config, output, sends);
             return new() {
-                ListenSignal = spatialParts.SignalWidth > 2 ? Convert(spatialParts.SignalFormat, StereoLayout) : null,
-                ListenOutput = spatialParts.Output is { Width: > 2 } edge ? Convert(edge.Format, StereoLayout) : null,
+                ListenSignal = ListenDownmix(spatialParts.SignalWidth, spatialParts.SignalFormat),
+                ListenOutput = ListenDownmix(spatialParts.Output),
                 Multi = spatialParts.Multi,
                 Width = spatialParts.Width,
                 Format = spatialParts.Format,

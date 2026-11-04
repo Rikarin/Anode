@@ -29,7 +29,7 @@ public static class Strips {
     ) {
         var strip = track is null ? state.Master : Stacks.EffectiveStrip(state, track);
         var full = track is null || Edits.HasAudioStrip(track.Kind);
-        return new(
+        var engine = new EngineStrip(
             Units.DbToGain(strip.VolumeDb),
             (float)strip.Pan,
             strip.Mute,
@@ -63,17 +63,23 @@ public static class Strips {
             (EngineChannelFormat)strip.InputFormat,
             (EngineChannelFormat)strip.OutputFormat,
             track is null ? null : Panner(strip.Panner),
-            full && track is not null
-                ? Units.DbToGain(strip.TrimDb) * (strip.PolarityInverted ? -1f : 1f)
-                : 1f,
-            full && track is not null ? (int)Math.Round(strip.DelayMs * state.SampleRate / 1000) : 0,
-            strip.DualPan,
-            (float)strip.PanLeft,
-            (float)strip.PanRight,
-            full && track is not null && strip.SoloSafe,
-            (EngineMeterType)strip.Meter.Type,
-            (EngineMeterTap)strip.Meter.Tap
+            MeterType: (EngineMeterType)strip.Meter.Type,
+            MeterTap: (EngineMeterTap)strip.Meter.Tap
         );
+        return full && track is not null ? WithInputStage(engine, strip, state.SampleRate) : engine;
+    }
+
+    /// <summary>A full track strip's trim, polarity, delay, dual pan and solo safe, in engine units.</summary>
+    static EngineStrip WithInputStage(EngineStrip engine, ChannelStrip strip, int sampleRate) {
+        var trim = Units.DbToGain(strip.TrimDb);
+        return engine with {
+            Trim = strip.PolarityInverted ? -trim : trim,
+            DelayFrames = (int)Math.Round(strip.DelayMs * sampleRate / 1000),
+            DualPan = strip.DualPan,
+            PanLeft = (float)strip.PanLeft,
+            PanRight = (float)strip.PanRight,
+            SoloSafe = strip.SoloSafe
+        };
     }
 
     /// <summary>A panner in engine units (levels as gains); null for the stereo pan.</summary>

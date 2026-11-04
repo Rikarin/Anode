@@ -719,7 +719,16 @@ public sealed class PackageTests : IDisposable {
         var gtr = state.Tracks[0].Id;
         state = Edits.Apply(
                 state,
-                [new SetStripCommand(gtr, TrimDb: -3, PolarityInverted: true, DelayMs: -12.5, DualPan: true, PanLeft: 0.25)],
+                [
+                    new SetStripCommand(
+                        gtr,
+                        TrimDb: -3,
+                        PolarityInverted: true,
+                        DelayMs: -12.5,
+                        DualPan: true,
+                        PanLeft: 0.25
+                    )
+                ],
                 ids
             )
             .State;

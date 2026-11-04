@@ -27,24 +27,31 @@ function writeToneWav(path: string, seconds = 4, sampleRate = 48_000): void {
   writeFileSync(path, Buffer.concat([header, data]));
 }
 
-async function mixerOf(app: ElectronApplication, window: Page, scratch: string): Promise<[Locator, Locator]> {
-  const wav = join(scratch, 'tone.wav');
-  writeToneWav(wav);
+async function mixerOf(
+  app: ElectronApplication,
+  window: Page,
+  scratch: string,
+  audio = false
+): Promise<[Locator, Locator]> {
   await window.getByTestId('new-project-name').fill('Mixer Parity');
   await window.getByTestId('new-project-folder').fill(scratch);
   await window.getByTestId('create-project').click();
   await expect(window.getByTestId('project-name')).toHaveText('Mixer Parity');
   await window.getByTestId('add-track').click();
-  await window.getByRole('group', { name: 'Track 1: Audio 1' }).click();
-  await app.evaluate(({ dialog }, path) => {
-    dialog.showOpenDialog = () => Promise.resolve({ canceled: false, filePaths: [path] });
-  }, wav);
-  await window.getByRole('button', { name: 'Import audio' }).click();
-  await expect(window.getByRole('img', { name: /^Tracks area:/ })).toHaveAttribute(
-    'aria-label',
-    'Tracks area: 1 region on 1 track',
-    { timeout: 30_000 } // the import analyses the file's tempo first
-  );
+  if (audio) {
+    const wav = join(scratch, 'tone.wav');
+    writeToneWav(wav);
+    await window.getByRole('group', { name: 'Track 1: Audio 1' }).click();
+    await app.evaluate(({ dialog }, path) => {
+      dialog.showOpenDialog = () => Promise.resolve({ canceled: false, filePaths: [path] });
+    }, wav);
+    await window.getByRole('button', { name: 'Import audio' }).click();
+    await expect(window.getByRole('img', { name: /^Tracks area:/ })).toHaveAttribute(
+      'aria-label',
+      'Tracks area: 1 region on 1 track',
+      { timeout: 30_000 } // the import analyses the file's tempo first
+    );
+  }
   await window.getByTestId('add-track').click();
   await window.locator('body').click({ position: { x: 5, y: 300 } });
   await window.keyboard.press('x');
@@ -132,7 +139,7 @@ test('solo safe, a listen mode, the monitor section, a K-meter and the load mete
 }) => {
   const scratch = mkdtempSync(join(tmpdir(), 'anode-mixer-parity-'));
   try {
-    const [first, second] = await mixerOf(app, window, scratch);
+    const [first, second] = await mixerOf(app, window, scratch, true);
 
     // Solo safe on one strip, the solo mode for the project, and the toolbar says so.
     await second.getByTestId('strip-settings').click();

@@ -120,7 +120,7 @@ public sealed record EngineFile(int Id, string Path, int Channels, int SampleRat
 ///         (negative: polarity inverted); <paramref name="DelayFrames" /> moves it in time (negative: earlier, by
 ///         delaying everything else); with <paramref name="DualPan" /> a stereo signal's channels pan on their own to
 ///         <paramref name="PanLeft" /> and <paramref name="PanRight" />. <paramref name="SoloSafe" /> keeps it audible
-///     under others' solo in place.
+///         under others' solo in place.
 ///     </para>
 /// </summary>
 public sealed record EngineStrip(

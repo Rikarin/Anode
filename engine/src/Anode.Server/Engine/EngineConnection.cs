@@ -51,6 +51,7 @@ public sealed partial class EngineConnection(
 
     /// <summary>The load goes out every this many telemetry reads: about four times a second.</summary>
     const int PerformanceEveryTicks = 8;
+
     static readonly TimeSpan StatesTimeout = TimeSpan.FromSeconds(3);
 
     readonly EngineOptions engine = options.Value.Engine;
@@ -763,11 +764,7 @@ public sealed partial class EngineConnection(
                 continue;
             }
 
-            if (++ticks >= PerformanceEveryTicks) {
-                ticks = 0;
-                hub.Publish(new PerformanceEvent(Performance(frame.Header, cores.Sample())));
-            }
-
+            PublishLoad(frame.Header, cores, ref ticks);
             var view = session.View;
             var now = Status(frame.Header, view);
             Volatile.Write(ref transport, now);
@@ -807,8 +804,26 @@ public sealed partial class EngineConnection(
         return new(state, position, map.TickAtSample(position, rate), rate);
     }
 
-    static PerformanceStatus Performance(TelemetryHeader header, IReadOnlyList<double> cores) =>
-        new(header.AudioLoad, header.AudioPeakLoad, cores, header.DiskLoad, header.Overloads, header.Underruns);
+    /// <summary>Every <see cref="PerformanceEveryTicks" /> reads: the engine's load and the machine's cores.</summary>
+    void PublishLoad(in TelemetryHeader header, CoreLoads cores, ref int ticks) {
+        if (++ticks < PerformanceEveryTicks) {
+            return;
+        }
+
+        ticks = 0;
+        hub.Publish(
+            new PerformanceEvent(
+                new(
+                    header.AudioLoad,
+                    header.AudioPeakLoad,
+                    cores.Sample(),
+                    header.DiskLoad,
+                    header.Overloads,
+                    header.Underruns
+                )
+            )
+        );
+    }
 
     /// <summary>A meter's reading: its peaks, and the levels its type publishes.</summary>
     static TrackMeter Meter(string id, MeterEntry entry, IReadOnlyList<float>? peaks) {

@@ -110,8 +110,10 @@ public sealed record InsertReading(string? TrackId, string InsertId, double Valu
 ///     A track's (or the master's, <c>trackId</c> <c>master</c>) peaks since the previous frame, linear. Phase 10: a
 ///     strip whose output (or a master) is wider than stereo also has <paramref name="Peaks" />, every channel's peak in
 ///     its layout's (ADM) order (<see cref="SpeakerLayouts" />), the first two being <paramref name="PeakLeft" /> and
-///     <paramref name="PeakRight" />; left out otherwise. A strip whose meter (<c>ChannelStrip.meter</c>) is RMS or K-system
-///     also has <paramref name="RmsLeft" /> and <paramref name="RmsRight" />, true RMS, linear, over the type's window; one
+///     <paramref name="PeakRight" />; left out otherwise. A strip whose meter (<c>ChannelStrip.meter</c>) is RMS or
+///     K-system
+///     also has <paramref name="RmsLeft" /> and <paramref name="RmsRight" />, true RMS, linear, over the type's window;
+///     one
 ///     that reads loudness has <paramref name="Lufs" />, momentary. At any tap the peaks are the tap's.
 /// </summary>
 public sealed record TrackMeter(

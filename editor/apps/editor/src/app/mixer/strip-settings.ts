@@ -93,7 +93,7 @@ export function stripSummary(strip: ChannelStrip): string {
       }
     </button>
     <ng-template #panel>
-      <div class="grid w-52 grid-cols-[1fr_6rem] items-center gap-x-3 gap-y-2 p-2 text-xs" data-testid="strip-input">
+      <div class="grid w-64 grid-cols-[1fr_9rem] items-center gap-x-3 gap-y-2 p-2 text-xs" data-testid="strip-input">
         <span class="text-foreground-muted">Meter</span>
         <xui-select
           aria-label="Meter type"

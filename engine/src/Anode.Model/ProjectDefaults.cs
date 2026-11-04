@@ -46,7 +46,8 @@ public static class ProjectDefaults {
     /// <summary>
     ///     Delay compensation everywhere; low-latency mode off, at 10 ms; the −3 dB compensated pan law; solo in place.
     /// </summary>
-    public static MixerSettings Mixer { get; } = new(PdcMode.All, false, 10, PanLaw.Minus3DbCompensated, SoloMode.InPlace);
+    public static MixerSettings Mixer { get; } =
+        new(PdcMode.All, false, 10, PanLaw.Minus3DbCompensated, SoloMode.InPlace);
 
     /// <summary>Smart Tempo keeps the project tempo; new regions do not follow it; imports are analysed.</summary>
     public static SmartTempoSettings SmartTempo { get; } = new(ProjectTempoMode.Keep, FlexFollow.Off, true);

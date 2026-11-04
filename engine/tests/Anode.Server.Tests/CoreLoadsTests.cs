@@ -5,18 +5,18 @@ namespace Anode.Server.Tests;
 /// <summary>The machine's cores, from a known <c>/proc/stat</c> and from the real system.</summary>
 public sealed class CoreLoadsTests {
     const string Before = """
-        cpu  300 0 300 2400 0 0 0 0 0 0
-        cpu0 100 0 100 800 0 0 0 0 0 0
-        cpu1 200 0 200 1600 0 0 0 0 0 0
-        intr 123
-        """;
+                          cpu  300 0 300 2400 0 0 0 0 0 0
+                          cpu0 100 0 100 800 0 0 0 0 0 0
+                          cpu1 200 0 200 1600 0 0 0 0 0 0
+                          intr 123
+                          """;
 
     const string After = """
-        cpu  500 0 400 3100 0 0 0 0 0 0
-        cpu0 175 0 125 900 0 0 0 0 0 0
-        cpu1 225 0 225 2100 100 0 0 0 0 0
-        intr 456
-        """;
+                         cpu  500 0 400 3100 0 0 0 0 0 0
+                         cpu0 175 0 125 900 0 0 0 0 0 0
+                         cpu1 225 0 225 2100 100 0 0 0 0 0
+                         intr 456
+                         """;
 
     [Fact]
     public void A_proc_stat_gives_a_load_per_core_with_idle_and_iowait_as_not_busy() {

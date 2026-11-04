@@ -47,7 +47,7 @@ static class ProjectApi {
             .WithName("CloseProject");
         project.MapPost(
                 "/commands",
-                static async Task<Results<Ok<CommandResult>, NotFound, ProblemHttpResult>> (
+                static async Task<Results<Ok<CommandResult>, NotFound, ProblemHttpResult>>(
                     CommandBatch batch,
                     ProjectSession session,
                     EngineConnection engine,

@@ -615,12 +615,7 @@ public static class ProjectPackage {
             Signatures = signatures,
             Keys = keys,
             Recording = settings.Recording ?? ProjectDefaults.Recording(signature),
-            Mixer = settings.Mixer is { } mixer && Enum.IsDefined(mixer.Pdc) && double.IsFinite(mixer.LowLatencyLimitMs)
-                ? mixer with {
-                    PanLaw = Enum.IsDefined(mixer.PanLaw) ? mixer.PanLaw : ProjectDefaults.Mixer.PanLaw,
-                    SoloMode = Enum.IsDefined(mixer.SoloMode) ? mixer.SoloMode : ProjectDefaults.Mixer.SoloMode
-                }
-                : ProjectDefaults.Mixer,
+            Mixer = Mixer(settings.Mixer),
             SmartTempo = settings.SmartTempo is { } smart
                 && Enum.IsDefined(smart.Mode)
                 && Enum.IsDefined(smart.DefaultFollow)
@@ -899,6 +894,19 @@ public static class ProjectPackage {
     static double Unit(double value) => double.IsFinite(value) ? Math.Clamp(value, 0, 1) : 0;
 
     static double Finite(double value, double otherwise) => double.IsFinite(value) ? value : otherwise;
+
+    /// <summary>The mixer settings as read: what is known of them, the defaults for the rest.</summary>
+    static MixerSettings Mixer(MixerSettings? mixer) {
+        var defaults = ProjectDefaults.Mixer;
+        if (mixer is null || !Enum.IsDefined(mixer.Pdc) || !double.IsFinite(mixer.LowLatencyLimitMs)) {
+            return defaults;
+        }
+
+        return mixer with {
+            PanLaw = Enum.IsDefined(mixer.PanLaw) ? mixer.PanLaw : defaults.PanLaw,
+            SoloMode = Enum.IsDefined(mixer.SoloMode) ? mixer.SoloMode : defaults.SoloMode
+        };
+    }
 
     /// <summary>A track's Smart Controls as read: every control of its layout, mappings well formed (null: none yet).</summary>
     static SmartControls? Normalise(SmartControls? smart, Track track) {

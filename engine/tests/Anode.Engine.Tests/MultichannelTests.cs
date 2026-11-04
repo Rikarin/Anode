@@ -558,13 +558,23 @@ public sealed class MultichannelTests : IDisposable {
     [Theory]
     [InlineData(EngineSoloMode.Pfl)]
     [InlineData(EngineSoloMode.Afl)]
-    public void A_soloed_surround_strip_reaches_the_monitors_front_pair_and_a_bounce_keeps_the_mix(EngineSoloMode mode) {
+    public void A_soloed_surround_strip_reaches_the_monitors_front_pair_and_a_bounce_keeps_the_mix(
+        EngineSoloMode mode
+    ) {
         const EngineChannelFormat f51 = EngineChannelFormat.Surround51;
         EngineTrack[] tracks = [
             TestAudio.Track(1, false, Strip(0.5f, outputFormat: f51, panner: Surround(2)) with { Solo = true }),
             TestAudio.Track(2, false, Strip(1f, outputFormat: f51, panner: Surround(5)))
         ];
-        using var rig = new Rig(dir, 64, [Model(1, 0), Model(2, 2)], tracks, Files, Strip(input: f51, outputFormat: f51), 6);
+        using var rig = new Rig(
+            dir,
+            64,
+            [Model(1, 0), Model(2, 2)],
+            tracks,
+            Files,
+            Strip(input: f51, outputFormat: f51),
+            6
+        );
         rig.Controller.SetMixer("all", false, 10, soloMode: mode);
         var o = rig.Render(1_280);
         // PFL hears the source itself, unfaded; AFL the panned channel, faded, through the stand-in's down-mix (½, even

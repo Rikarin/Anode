@@ -91,7 +91,10 @@ public sealed partial class CoreLoads {
         const int IdleState = 2;
 
         static readonly uint Host = HostSelf();
-        static readonly uint Task = (uint)Marshal.ReadInt32(NativeLibrary.GetExport(NativeLibrary.Load(Library), "mach_task_self_"));
+
+        static readonly uint Task = (uint)Marshal.ReadInt32(
+            NativeLibrary.GetExport(NativeLibrary.Load(Library), "mach_task_self_")
+        );
 
         public static CoreTicks[] Read() {
             if (HostProcessorInfo(Host, ProcessorCpuLoadInfo, out var count, out var info, out var length) != 0) {
