@@ -1,6 +1,5 @@
 using Anode.Contracts;
 using Anode.Model;
-using Anode.Model.Audio;
 using Anode.Model.Editing;
 using Anode.Model.Storage;
 
@@ -80,7 +79,9 @@ public sealed partial class Jobs {
         var target = session.Target();
         var bundle = TrackBundle.Of(source, chosen, parts);
         if (source.SampleRate != target.SampleRate
-            && bundle.Files.Where(f => OfflineFiles.Check(folder, f) is not null).ToArray() is { Length: > 0 } offline) {
+            && bundle.Files.Where(f => OfflineFiles.Check(folder, f) is not null).ToArray() is {
+                Length: > 0
+            } offline) {
             throw ProjectException.Unprocessable(
                 $"'{offline[0].Name}' is offline in '{source.Name}', which is at {source.SampleRate} Hz: find it first, "
                 + $"so it can be converted to {target.SampleRate} Hz."
@@ -159,8 +160,8 @@ public sealed partial class Jobs {
         }
 
         Convert(file, source, path, target.SampleRate);
-        var plan = new RatePlan(target.Session, target.Folder, null!, target.SampleRate, SampleRateChangeMode.Convert, []);
-        return ProjectRate.Written(file, id, relative, Checked(file, path, plan), SampleRateChangeMode.Convert);
+        var info = Checked(file, path, target.SampleRate, SampleRateChangeMode.Convert);
+        return ProjectRate.Written(file, id, relative, info, SampleRateChangeMode.Convert);
     }
 
     static string FreeName(string folder, string stem) {
@@ -210,7 +211,11 @@ sealed record ProjectMedia(Dictionary<string, string> Paths) {
         var paths = new Dictionary<string, string>(StringComparer.Ordinal);
         foreach (var relative in Named(tracks)) {
             var from = Path.GetFullPath(Path.Combine(folder, relative));
-            if (Path.IsPathRooted(relative) || !File.Exists(from)) {
+            var inside = from.StartsWith(
+                Path.GetFullPath(folder) + Path.DirectorySeparatorChar,
+                StringComparison.Ordinal
+            );
+            if (Path.IsPathRooted(relative) || !inside || !File.Exists(from)) {
                 continue;
             }
 
@@ -245,7 +250,10 @@ sealed record ProjectMedia(Dictionary<string, string> Paths) {
                     : t.Instrument,
                 Strip = t.Strip with {
                     Inserts = [
-                        ..t.Strip.Inserts.Select(i => i.File is { } file ? i with { File = Paths.GetValueOrDefault(file, file) } : i)
+                        ..t.Strip.Inserts.Select(i => i.File is { } file
+                                ? i with { File = Paths.GetValueOrDefault(file, file) }
+                                : i
+                        )
                     ]
                 }
             }

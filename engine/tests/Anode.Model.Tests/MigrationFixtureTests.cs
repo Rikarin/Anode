@@ -127,14 +127,14 @@ public sealed class MigrationFixtureTests : IDisposable {
         Assert.Equal(schema >= 6 ? 1 : 0, state.PatternRegions.Count);
 
         // Schema 7: grooves.
-        Assert.Equal(schema >= 7, state.Tracks.Any(static t => t.MatchGroove));
+        Assert.Equal(schema >= 7, state.Tracks.Exists(static t => t.MatchGroove));
         Assert.Equal(0, file.Version);
 
         // Schema 8: sync.
         Assert.Equal(schema >= 8 ? MtcFrameRate.Fps30 : MtcFrameRate.Fps25, state.Settings.Sync.FrameRate);
 
         // Schema 9: the score.
-        Assert.Equal(schema >= 9, state.Tracks.Any(static t => t.StaffStyleId == StaffStyleIds.Piano));
+        Assert.Equal(schema >= 9, state.Tracks.Exists(static t => t.StaffStyleId == StaffStyleIds.Piano));
         Assert.All(state.MidiRegions.Values, static r => Assert.NotNull(r.Notation));
 
         // Schema 10: surround and scene markers.
@@ -172,7 +172,8 @@ public sealed class MigrationFixtureTests : IDisposable {
     [Fact]
     public void The_chain_from_any_schema_leaves_what_is_there_alone() =>
         Gen.Select(Gen.Int[0, 500], Gen.Int[1, PackageMigrations.CurrentSchemaVersion])
-            .Sample(sample => {
+            .Sample(
+                static sample => {
                     var (seed, schema) = sample;
                     var target = Directory.CreateTempSubdirectory("anode-chain-").FullName;
                     try {
@@ -201,7 +202,8 @@ public sealed class MigrationFixtureTests : IDisposable {
     [Fact]
     public void A_fixture_with_a_property_taken_out_is_read_or_refused_and_nothing_else() =>
         Gen.Select(Gen.Int[1, PackageMigrations.CurrentSchemaVersion], Gen.Int[0, 100_000], Gen.Int[0, 3])
-            .Sample(sample => {
+            .Sample(
+                static sample => {
                     var (schema, pick, damaged) = sample;
                     var target = Directory.CreateTempSubdirectory("anode-damage-").FullName;
                     try {

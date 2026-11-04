@@ -35,8 +35,7 @@ public static class ProjectRate {
     }
 
     /// <summary>A frame count at <paramref name="to" /> for one at <paramref name="from" />, rounded.</summary>
-    public static long Scale(long frames, int from, int to) =>
-        (long)(((Int128)frames * to * 2 + from) / (from * 2L));
+    public static long Scale(long frames, int from, int to) => (long)(((Int128)frames * to * 2 + from) / (from * 2L));
 
     /// <summary>A file as it will be: new id, path, frames and rate from <paramref name="written" />, its tempo carried over.</summary>
     public static AudioFile Written(
@@ -86,7 +85,10 @@ public static class ProjectRate {
             Pitch = [
                 ..Enumerable.Range(0, count)
                     .Select(i => analysis.Pitch[
-                            Math.Min(analysis.Pitch.Count - 1, (int)Math.Round(i * (double)hop * from / to / analysis.Hop))
+                            Math.Min(
+                                analysis.Pitch.Count - 1,
+                                (int)Math.Round(i * (double)hop * from / to / analysis.Hop)
+                            )
                         ]
                     )
             ],
@@ -120,6 +122,7 @@ public static class ProjectRate {
         ProjectCopy.CopyFile(source, target, CancellationToken.None);
         using var file = new FileStream(target, FileMode.Open, FileAccess.ReadWrite, FileShare.None);
         Span<byte> header = stackalloc byte[8];
+        Span<byte> format = stackalloc byte[16];
         file.Position = 12;
         while (file.Read(header) == header.Length) {
             var size = BinaryPrimitives.ReadUInt32LittleEndian(header[4..]);
@@ -128,7 +131,6 @@ public static class ProjectRate {
                 continue;
             }
 
-            Span<byte> format = stackalloc byte[16];
             file.ReadExactly(format);
             var blockAlign = BinaryPrimitives.ReadUInt16LittleEndian(format[12..]);
             BinaryPrimitives.WriteInt32LittleEndian(format[4..], rate);

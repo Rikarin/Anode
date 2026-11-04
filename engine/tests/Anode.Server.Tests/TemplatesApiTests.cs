@@ -58,7 +58,11 @@ public sealed class TemplatesApiTests : IDisposable {
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var job = (await response.Content.ReadFromJsonAsync(ContractsJsonContext.Default.Job, Token))!;
         await ServerFixture.Eventually(async () => {
-                job = (await client.GetFromJsonAsync($"/api/v1/jobs/{job.Id}", ContractsJsonContext.Default.Job, Token))!;
+                job = (await client.GetFromJsonAsync(
+                    $"/api/v1/jobs/{job.Id}",
+                    ContractsJsonContext.Default.Job,
+                    Token
+                ))!;
                 return job.State is JobState.Done or JobState.Failed;
             }
         );
@@ -67,11 +71,14 @@ public sealed class TemplatesApiTests : IDisposable {
 
     /// <summary>A saved project with audio on a track with a compressor, and an unsaved aux.</summary>
     async Task<(Project Project, AudioFile File)> ProjectAsync(HttpClient client) {
-        var project = await client.CreateProjectAsync("Session");
+        await client.CreateProjectAsync("Session");
         var file = await client.ImportAsync(TestWav.Write(media, "Loop.wav"));
         await client.EditAsync(new AddTrackCommand("Drums"));
         var track = (await client.ProjectAsync()).Tracks[0].Id;
-        await client.EditAsync(new AddRegionCommand(track, file.Id, 0), new AddInsertCommand("anode.compressor", track));
+        await client.EditAsync(
+            new AddRegionCommand(track, file.Id, 0),
+            new AddInsertCommand("anode.compressor", track)
+        );
         Assert.True((await client.PostAsync("/api/v1/project/save", null, Token)).IsSuccessStatusCode);
         await client.EditAsync(new AddAuxCommand(1, "Unsaved"));
         return (await client.ProjectAsync(), file);
@@ -136,7 +143,10 @@ public sealed class TemplatesApiTests : IDisposable {
         Assert.True(job.State == JobState.Done, job.Message);
         Assert.True((await client.ProjectAsync()).Dirty); // saving a template saves nothing of the project
         var template = (await ProjectTemplatesAsync(client)).Single(static t => !t.Factory);
-        Assert.Equal(("My Session", "Mine", 48_000, true), (template.Name, template.Category, template.SampleRate, template.HasAudio));
+        Assert.Equal(
+            ("My Session", "Mine", 48_000, true),
+            (template.Name, template.Category, template.SampleRate, template.HasAudio)
+        );
 
         Assert.Equal(HttpStatusCode.OK, (await CreateAsync(client, "From Template", template.Id)).StatusCode);
 
@@ -169,7 +179,12 @@ public sealed class TemplatesApiTests : IDisposable {
         await SaveProjectTemplateAsync(client, "No Audio");
         var templates = await ProjectTemplatesAsync(client);
 
-        var refused = await CreateAsync(client, "Other", templates.Single(static t => t.Name == "With Audio").Id, 44_100);
+        var refused = await CreateAsync(
+            client,
+            "Other",
+            templates.Single(static t => t.Name == "With Audio").Id,
+            44_100
+        );
         var taken = await CreateAsync(client, "Other", templates.Single(static t => t.Name == "No Audio").Id, 44_100);
 
         Assert.Equal(HttpStatusCode.UnprocessableEntity, refused.StatusCode);

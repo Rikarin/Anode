@@ -20,14 +20,15 @@ public sealed partial class Jobs {
             JobKind.SampleRateChange,
             async (entry, token) => {
                 var written = new List<string>();
+                var committed = false;
                 try {
                     var files = await Task.Run(() => WriteRateFiles(entry, plan, written, token), token)
                         .ConfigureAwait(false);
                     var states = await engine.InstrumentStatesAsync(token).ConfigureAwait(false);
                     token.ThrowIfCancellationRequested();
-                    session.CommitRate(plan, files, states);
+                    session.CommitRate(plan, files, states, () => committed = true);
                     return written;
-                } catch {
+                } catch when (!committed) {
                     written.ForEach(TryDelete);
                     throw;
                 }
@@ -53,7 +54,7 @@ public sealed partial class Jobs {
                 ProjectRate.Relabel(source, path, plan.Rate);
             }
 
-            var info = Checked(file, path, plan);
+            var info = Checked(file, path, plan.Rate, plan.Mode);
             var relative = Path.GetRelativePath(plan.Folder, path).Replace(Path.DirectorySeparatorChar, '/');
             var result = ProjectRate.Written(file, RandomIds.Instance.Next(IdPrefix.File), relative, info, plan.Mode);
             files[file.Id] = result;
@@ -111,19 +112,19 @@ public sealed partial class Jobs {
     static bool Overs(float[][] channels) => channels.Any(static c => Array.Exists(c, static x => MathF.Abs(x) > 1));
 
     /// <summary>A written file must be what it was written for: an empty or wrongly made one stops the change here.</summary>
-    static WavInfo Checked(AudioFile file, string path, RatePlan plan) {
+    static WavInfo Checked(AudioFile file, string path, int rate, SampleRateChangeMode mode) {
         var info = WavReader.Probe(path);
-        var expected = plan.Mode == SampleRateChangeMode.Convert
-            ? ProjectRate.Scale(file.Frames, file.SampleRate, plan.Rate)
+        var expected = mode == SampleRateChangeMode.Convert
+            ? ProjectRate.Scale(file.Frames, file.SampleRate, rate)
             : file.Frames;
-        return info.SampleRate == plan.Rate
+        return info.SampleRate == rate
             && info.Channels == file.Channels
-            && Math.Abs(info.Frames - expected) <= MaxRateFrameDrift(plan.Rate)
+            && Math.Abs(info.Frames - expected) <= MaxRateFrameDrift(rate)
             && info.Frames > 0
                 ? info
                 : throw ProjectException.Unprocessable(
                     $"The converted '{file.Name}' came out with {info.Frames} frames at {info.SampleRate} Hz, not "
-                    + $"{expected} at {plan.Rate} Hz."
+                    + $"{expected} at {rate} Hz."
                 );
     }
 

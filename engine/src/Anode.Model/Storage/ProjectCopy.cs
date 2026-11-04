@@ -107,23 +107,7 @@ public static class ProjectCopy {
     public static void CopyFile(string from, string to, CancellationToken token) {
         var temporary = $"{to}.{Guid.NewGuid():n}{TemporaryExtension}";
         try {
-            using (var input = new FileStream(
-                       from,
-                       FileMode.Open,
-                       FileAccess.Read,
-                       FileShare.ReadWrite | FileShare.Delete
-                   ))
-            using (var output = new FileStream(temporary, FileMode.CreateNew, FileAccess.Write, FileShare.None)) {
-                var buffer = new byte[ChunkBytes];
-                int read;
-                while ((read = input.Read(buffer)) > 0) {
-                    token.ThrowIfCancellationRequested();
-                    output.Write(buffer.AsSpan(0, read));
-                }
-
-                output.Flush(true);
-            }
-
+            Stream(from, temporary, token);
             AtomicRename.Replace(temporary, to);
         } catch {
             if (File.Exists(temporary)) {
@@ -132,6 +116,19 @@ public static class ProjectCopy {
 
             throw;
         }
+    }
+
+    static void Stream(string from, string to, CancellationToken token) {
+        using var input = new FileStream(from, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+        using var output = new FileStream(to, FileMode.CreateNew, FileAccess.Write, FileShare.None);
+        var buffer = new byte[ChunkBytes];
+        int read;
+        while ((read = input.Read(buffer)) > 0) {
+            token.ThrowIfCancellationRequested();
+            output.Write(buffer.AsSpan(0, read));
+        }
+
+        output.Flush(true);
     }
 
     static void CopyTree(

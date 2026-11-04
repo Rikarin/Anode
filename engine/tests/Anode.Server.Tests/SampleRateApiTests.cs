@@ -32,7 +32,11 @@ public sealed class SampleRateApiTests : IDisposable {
     }
 
     ServerFixture Start(IAudioEditor? editor = null) =>
-        new(data: data, editor: editor, configure: static s => s.Configure<ServerOptions>(static o => o.AutosaveSeconds = 0));
+        new(
+            data: data,
+            editor: editor,
+            configure: static s => s.Configure<ServerOptions>(static o => o.AutosaveSeconds = 0)
+        );
 
     /// <summary>A stereo WAV: a sine in the left channel, one click of a sample in the right at <paramref name="click" /> s.</summary>
     string Wav(string name, int rate, double seconds, double click, WavEncoding encoding = WavEncoding.Pcm24) {
@@ -51,7 +55,7 @@ public sealed class SampleRateApiTests : IDisposable {
 
     /// <summary>A saved 44.1 kHz project with a region of a file, at a tick, inside the file, with fades.</summary>
     async Task<(Project Project, AudioFile File, string RegionId)> ProjectAsync(HttpClient client) {
-        var project = await client.CreateProjectAsync("Rate", From, media);
+        await client.CreateProjectAsync("Rate", From, media);
         var file = await client.ImportAsync(Wav("Tone.wav", From, 2, 1.25));
         await client.EditAsync(new AddTrackCommand("Audio"));
         await client.EditAsync(new AddRegionCommand((await client.ProjectAsync()).Tracks[0].Id, file.Id, 960));
@@ -67,7 +71,11 @@ public sealed class SampleRateApiTests : IDisposable {
     static async Task SaveAsync(HttpClient client) =>
         Assert.True((await client.PostAsync("/api/v1/project/save", null, Token)).IsSuccessStatusCode);
 
-    static Task<Job> ChangeAsync(HttpClient client, int rate, SampleRateChangeMode mode = SampleRateChangeMode.Convert) =>
+    static Task<Job> ChangeAsync(
+        HttpClient client,
+        int rate,
+        SampleRateChangeMode mode = SampleRateChangeMode.Convert
+    ) =>
         client.RunJobAsync(
             "/api/v1/project/sample-rate",
             new(rate, mode),
@@ -76,7 +84,9 @@ public sealed class SampleRateApiTests : IDisposable {
 
     static Dictionary<string, byte[]> Bytes(string folder) =>
         Directory.EnumerateFiles(folder, "*", SearchOption.AllDirectories)
-            .Where(f => !Path.GetRelativePath(folder, f).StartsWith(ProjectPackage.PeaksFolder, StringComparison.Ordinal))
+            .Where(f => !Path.GetRelativePath(folder, f)
+                    .StartsWith(ProjectPackage.PeaksFolder, StringComparison.Ordinal)
+            )
             .ToDictionary(f => Path.GetRelativePath(folder, f), File.ReadAllBytes);
 
     static void AssertUntouched(Dictionary<string, byte[]> before, string folder) {
@@ -150,8 +160,8 @@ public sealed class SampleRateApiTests : IDisposable {
         var documents = backups.Select(b => ProjectPackage.Load(ProjectHistory.BackupFolder(project.Path, b.Id)!))
             .ToArray();
         Assert.All(documents, static d => Assert.Equal(From, d.SampleRate));
-        Assert.Contains(documents, static d => d.Tracks.Any(static t => t.Name == "Unsaved"));
-        Assert.Contains(documents, static d => d.Tracks.All(static t => t.Name != "Unsaved"));
+        Assert.Contains(documents, static d => d.Tracks.Exists(static t => t.Name == "Unsaved"));
+        Assert.Contains(documents, static d => d.Tracks.TrueForAll(static t => t.Name != "Unsaved"));
 
         // Undo from the old rate cannot apply here, so there is none.
         var undo = await client.PostAsync("/api/v1/project/undo", null, Token);
@@ -212,7 +222,8 @@ public sealed class SampleRateApiTests : IDisposable {
         Assert.Equal(From, a.SampleRate);
         Assert.Equal(To, b.SampleRate);
         Assert.True(
-            File.ReadAllBytes(old).AsSpan((int)a.DataOffset)
+            File.ReadAllBytes(old)
+                .AsSpan((int)a.DataOffset)
                 .SequenceEqual(File.ReadAllBytes(Path.Combine(project.Path, kept.Path)).AsSpan((int)b.DataOffset))
         );
         var moved = now.Regions.Single(r => r.Id == region);
@@ -285,6 +296,23 @@ public sealed class SampleRateApiTests : IDisposable {
         Assert.Equal(Files(before), Files(now));
         Assert.Single(Directory.EnumerateFiles(Path.Combine(project.Path, ProjectPackage.AudioFolder)));
         Assert.Empty(Directory.EnumerateDirectories(project.Path, ".rate-*"));
+    }
+
+    [Fact]
+    public async Task A_failure_after_the_document_changed_keeps_the_files_it_names() {
+        await using var server = Start();
+        using var client = server.CreateClient();
+        var (project, _, _) = await ProjectAsync(client);
+        // The recent list cannot be written, which comes after the document is replaced.
+        File.Delete(Path.Combine(data, "recent.json"));
+        Directory.CreateDirectory(Path.Combine(data, "recent.json"));
+
+        await ChangeAsync(client, To);
+
+        var read = ProjectPackage.Load(project.Path);
+        Assert.Equal(To, read.SampleRate);
+        Assert.All(read.Files.Values, f => Assert.True(File.Exists(Path.Combine(project.Path, f.Path)), f.Path));
+        Directory.Delete(Path.Combine(data, "recent.json"));
     }
 
     [Fact]
@@ -477,8 +505,8 @@ public sealed class SampleRateApiTests : IDisposable {
         }
     }
 
-    static async Task ConnectedAsync(ServerFixture server, HttpClient client) =>
-        await ServerFixture.Eventually(
+    static Task ConnectedAsync(ServerFixture server, HttpClient client) =>
+        ServerFixture.Eventually(
             async () => (await server.SystemAsync(client)).Engine.State == EngineState.Connected,
             60
         );
@@ -586,7 +614,14 @@ public sealed class SampleRateApiTests : IDisposable {
             return (Truncate ? [..result.Select(static c => c.AsSpan(0, c.Length / 2).ToArray())] : result, rate);
         }
 
-        public IReadOnlyList<LoopCandidate> Loops(float[] mono, int sampleRate, long start, long end, int count, long minFrames) =>
+        public IReadOnlyList<LoopCandidate> Loops(
+            float[] mono,
+            int sampleRate,
+            long start,
+            long end,
+            int count,
+            long minFrames
+        ) =>
             real.Loops(mono, sampleRate, start, end, count, minFrames);
 
         public IReadOnlyList<GrooveOnset> Onsets(float[] mono, int sampleRate) => real.Onsets(mono, sampleRate);

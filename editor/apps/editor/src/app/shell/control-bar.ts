@@ -219,16 +219,17 @@ import { Lcd } from './lcd';
               <!-- Phase 10: the Movie menu (the desktop app's menu bar has it too). -->
               <button xuiMenuItem type="button" data-testid="movie-menu" [xuiMenuTriggerFor]="movieMenu">Movie</button>
               <xui-menu-divider />
+              <button xuiMenuItem type="button" data-testid="sample-rate" (click)="ui.sampleRateOpen.set(true)">
+                Sample Rate…
+              </button>
               <button
                 xuiMenuItem
                 type="button"
                 data-testid="open-sync-settings"
-                (click)="ui.sampleRateOpen.set(true)"
-                data-testid="sample-rate"
+                (click)="ui.syncSettingsOpen.set(true)"
               >
-                Sample Rate…
+                Synchronization…
               </button>
-              <button xuiMenuItem type="button" (click)="ui.syncSettingsOpen.set(true)">Synchronization…</button>
               <button
                 xuiMenuItem
                 type="button"

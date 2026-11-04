@@ -26,13 +26,13 @@ public sealed class SaveAsApiTests : IDisposable {
     }
 
     ServerFixture Start() =>
-        new(data: data, configure: s => s.Configure<ServerOptions>(static o => o.AutosaveSeconds = 0));
+        new(data: data, configure: static s => s.Configure<ServerOptions>(static o => o.AutosaveSeconds = 0));
 
     static ProjectSession Session(ServerFixture server) => server.Services.GetRequiredService<ProjectSession>();
 
     /// <summary>A saved project with a region of a file, and an unsaved track named "Unsaved".</summary>
     async Task<(Project Project, AudioFile File)> ProjectAsync(HttpClient client) {
-        var project = await client.CreateProjectAsync("Original", directory: places);
+        await client.CreateProjectAsync("Original", directory: places);
         var file = await client.ImportAsync(TestWav.Write(places, "Kick.wav"));
         await client.EditAsync(new AddTrackCommand("Drums"));
         await client.EditAsync(new AddRegionCommand((await client.ProjectAsync()).Tracks[0].Id, file.Id, 960));
@@ -59,8 +59,7 @@ public sealed class SaveAsApiTests : IDisposable {
         }
     }
 
-    static IEnumerable<string> Builds(string folder) =>
-        Directory.EnumerateDirectories(folder, ".saving-*");
+    static IEnumerable<string> Builds(string folder) => Directory.EnumerateDirectories(folder, ".saving-*");
 
     [Fact]
     public async Task Save_As_writes_the_whole_package_and_goes_on_there_with_its_undo() {
@@ -89,7 +88,7 @@ public sealed class SaveAsApiTests : IDisposable {
         Assert.Contains(
             ProjectHistory.Backups(original.Path),
             b => ProjectPackage.Load(ProjectHistory.BackupFolder(original.Path, b.Id)!)
-                .Tracks.Any(static t => t.Name == "Unsaved")
+                .Tracks.Exists(static t => t.Name == "Unsaved")
         );
 
         // Undo goes on, and a save lands in the new package.

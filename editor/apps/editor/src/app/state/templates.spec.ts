@@ -127,7 +127,7 @@ describe('Templates', () => {
   });
 
   it('refuses a rate a template with audio cannot take', async () => {
-    const { server, session, project } = stores();
+    const { server, session } = stores();
     await session.create({ name: 'Song', directory: '/music', sampleRate: 48_000 });
     server.addFakeAudio();
     const templates = TestBed.inject(TemplatesStore);

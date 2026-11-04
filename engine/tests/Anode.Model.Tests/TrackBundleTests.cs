@@ -55,7 +55,9 @@ public sealed class TrackBundleTests : IDisposable {
         }
 
         var added = state.Tracks.Skip(target.Tracks.Count).ToArray();
-        var ownBuses = target.Tracks.Where(static t => t.Kind == TrackKind.Aux).Select(static t => t.InputBus).ToHashSet();
+        var ownBuses = target.Tracks.Where(static t => t.Kind == TrackKind.Aux)
+            .Select(static t => t.InputBus)
+            .ToHashSet();
         Assert.All(
             added.SelectMany(Routing.Feeds),
             bus => Assert.DoesNotContain(bus, ownBuses)

@@ -161,7 +161,10 @@ public sealed class ProjectRateTests : IDisposable {
         Assert.Equal((24_000L, 28_800L), (region.PitchNotes[0].StartFrame, region.PitchNotes[0].EndFrame));
         var folder = next.TakeFolders["tkf_a"];
         Assert.Equal(480, folder.Crossfade);
-        Assert.Equal(("aud_new", 480L, 48_000L), (folder.Takes[0].FileId, folder.Takes[0].FileOffset, folder.Takes[0].Length));
+        Assert.Equal(
+            ("aud_new", 480L, 48_000L),
+            (folder.Takes[0].FileId, folder.Takes[0].FileOffset, folder.Takes[0].Length)
+        );
         var track = next.Tracks[0];
         Assert.Equal("aud_new", track.FrozenFileId);
         Assert.Equal("aud_new", track.Alternatives[0].Regions[0].FileId);
@@ -239,7 +242,8 @@ public sealed class ProjectRateTests : IDisposable {
                 Gen.Int[0, 5],
                 Gen.Int[0, 5]
             )
-            .Sample(sample => {
+            .Sample(
+                sample => {
                     var (frames, offsetShare, lengthShare, fadeIn, fadeOut, fromIndex, toIndex) = sample;
                     var (from, to) = (ProjectDefaults.SampleRates[fromIndex], ProjectDefaults.SampleRates[toIndex]);
                     if (from == to) {
@@ -250,21 +254,28 @@ public sealed class ProjectRateTests : IDisposable {
                     var length = Math.Max(1, (long)(lengthShare * (frames - offset)));
                     var state = EveryPlace() with { SampleRate = from };
                     var region = Region("rgn_a", "aud_a", offset, length) with {
-                        FadeIn = Math.Min(fadeIn, length), FadeOut = Math.Min(fadeOut, length - Math.Min(fadeIn, length))
+                        FadeIn = Math.Min(fadeIn, length),
+                        FadeOut = Math.Min(fadeOut, length - Math.Min(fadeIn, length))
                     };
                     var file = File44("aud_a", frames) with { SampleRate = from };
                     state = state with {
                         Files = state.Files.SetItem("aud_a", file), Regions = state.Regions.SetItem("rgn_a", region)
                     };
-                    var written = new WavInfo(2, to, WavEncoding.Pcm24, 44, Math.Max(1, ProjectRate.Scale(frames, from, to)));
+                    var written = new WavInfo(
+                        2,
+                        to,
+                        WavEncoding.Pcm24,
+                        44,
+                        Math.Max(1, ProjectRate.Scale(frames, from, to))
+                    );
                     var result = ProjectRate.Written(file, "aud_new", "x.wav", written, SampleRateChangeMode.Convert);
 
                     var next = ProjectRate.Changed(
-                            state,
-                            to,
-                            SampleRateChangeMode.Convert,
-                            new Dictionary<string, AudioFile> { ["aud_a"] = result }
-                        )
+                        state,
+                        to,
+                        SampleRateChangeMode.Convert,
+                        new Dictionary<string, AudioFile> { ["aud_a"] = result }
+                    )
                         .Regions["rgn_a"];
 
                     Assert.InRange(next.FileOffset, 0, written.Frames - 1);
@@ -274,7 +285,9 @@ public sealed class ProjectRateTests : IDisposable {
 
                     // A second of the source is a second here, to the frame of either rate.
                     var seconds = (double)(offset + length) / from;
-                    Assert.True(Math.Abs((double)(next.FileOffset + next.Length) / to - seconds) <= 2.0 / Math.Min(from, to));
+                    Assert.True(
+                        Math.Abs((double)(next.FileOffset + next.Length) / to - seconds) <= 2.0 / Math.Min(from, to)
+                    );
                 },
                 iter: 2_000
             );
@@ -282,7 +295,10 @@ public sealed class ProjectRateTests : IDisposable {
     [Fact]
     public void Scale_is_exact_where_doubles_would_round() {
         Assert.Equal(480_000, ProjectRate.Scale(441_000, 44_100, 48_000));
-        Assert.Equal(long.MaxValue / 4 / 96_000 * 192_000, ProjectRate.Scale(long.MaxValue / 4 / 96_000 * 96_000, 96_000, 192_000));
+        Assert.Equal(
+            long.MaxValue / 4 / 96_000 * 192_000,
+            ProjectRate.Scale(long.MaxValue / 4 / 96_000 * 96_000, 96_000, 192_000)
+        );
         Assert.Equal(1, ProjectRate.Scale(1, 48_000, 48_000));
         Assert.Equal(0, ProjectRate.Scale(0, 44_100, 192_000));
     }
@@ -340,7 +356,7 @@ public sealed class ProjectRateTests : IDisposable {
                 folder,
                 staged,
                 backup,
-                (from, to) => {
+                static (from, to) => {
                     // Half written: the track files new, the root gone.
                     ProjectHistory.ClearDocument(to);
                     Directory.CreateDirectory(Path.Combine(to, ProjectPackage.TracksFolder));
@@ -400,7 +416,10 @@ public sealed class ProjectRateTests : IDisposable {
         var at48 = new AudioFile("aud_48", "x", "Audio Files/x.wav", To, 1, 100, 24, null, 0);
         state = state with { Files = state.Files.Add(at48.Id, at48) };
 
-        Assert.Equal(["aud_a"], ProjectRate.FilesToWrite(state, To, SampleRateChangeMode.Convert).Select(static f => f.Id));
+        Assert.Equal(
+            ["aud_a"],
+            ProjectRate.FilesToWrite(state, To, SampleRateChangeMode.Convert).Select(static f => f.Id)
+        );
         var next = ProjectRate.Changed(state, To, SampleRateChangeMode.Convert, Converted(state));
         Assert.Contains("aud_48", next.Files.Keys);
     }

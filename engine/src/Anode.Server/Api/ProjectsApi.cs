@@ -38,7 +38,10 @@ static class ProjectsApi {
             .WithSummary("Opens a project folder, closing the open one.");
         projects.MapPost(
                 "/contents",
-                static Results<Ok<ProjectContents>, NotFound, ProblemHttpResult>(OpenProjectRequest request, Jobs jobs) =>
+                static Results<Ok<ProjectContents>, NotFound, ProblemHttpResult>(
+                    OpenProjectRequest request,
+                    Jobs jobs
+                ) =>
                     TypedResults.Ok(jobs.Contents(request.Path))
             )
             .WithName("GetProjectContents")

@@ -1,7 +1,6 @@
 using Anode.Contracts;
 using Anode.Model.Editing;
 using Anode.Model.Storage;
-using Anode.Server.Projects;
 using Microsoft.Extensions.Options;
 using System.Text.Json;
 
@@ -33,7 +32,16 @@ public sealed class TemplateLibrary(IOptions<ServerOptions> options) {
             )
         ),
         ..Read(ProjectsFolder)
-            .Select(static t => new ProjectTemplate(t.Id, t.Name, t.Category, string.Empty, false, t.SampleRate, t.HasAudio))
+            .Select(static t => new ProjectTemplate(
+                    t.Id,
+                    t.Name,
+                    t.Category,
+                    string.Empty,
+                    false,
+                    t.SampleRate,
+                    t.HasAudio
+                )
+            )
     ];
 
     public IReadOnlyList<TrackTemplate> TrackTemplates() => [
@@ -88,12 +96,13 @@ public sealed class TemplateLibrary(IOptions<ServerOptions> options) {
             return [];
         }
 
-        return Directory.EnumerateFiles(folder, "*.json")
-            .Select(Sidecar)
-            .OfType<TemplateFile>()
-            .Where(t => Listed(folder, t.Id) is not null)
-            .OrderBy(static t => t.Name, StringComparer.OrdinalIgnoreCase)
-            .ToArray();
+        return [
+            ..Directory.EnumerateFiles(folder, "*.json")
+                .Select(Sidecar)
+                .OfType<TemplateFile>()
+                .Where(t => Listed(folder, t.Id) is not null)
+                .OrderBy(static t => t.Name, StringComparer.OrdinalIgnoreCase)
+        ];
     }
 
     static TemplateFile? Sidecar(string path) {

@@ -23,11 +23,11 @@ function factory(
 }
 
 function audio(name: string, stereo = false): EditCommand {
-  return { type: 'addTrack', name, stereo } as EditCommand;
+  return { type: 'addTrack', name, stereo };
 }
 
 function instrument(name: string): EditCommand {
-  return { type: 'addTrack', name, stereo: false, kind: 'instrument' } as EditCommand;
+  return { type: 'addTrack', name, stereo: false, kind: 'instrument' };
 }
 
 export const FactoryTemplates: readonly FakeFactoryTemplate[] = [

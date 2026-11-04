@@ -67,12 +67,16 @@ static class ApiCalls {
         System.Text.Json.Serialization.Metadata.JsonTypeInfo<T> type
     ) {
         var response = await client.PostAsJsonAsync(path, request, type, TestContext.Current.CancellationToken);
-        Assert.True(response.IsSuccessStatusCode, await response.Content.ReadAsStringAsync());
+        Assert.True(
+            response.IsSuccessStatusCode,
+            await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken)
+        );
         var job = (await response.Content.ReadFromJsonAsync(
             ContractsJsonContext.Default.Job,
             TestContext.Current.CancellationToken
         ))!;
-        await ServerFixture.Eventually(async () => {
+        await ServerFixture.Eventually(
+            async () => {
                 job = (await client.GetFromJsonAsync(
                     $"/api/v1/jobs/{job.Id}",
                     ContractsJsonContext.Default.Job,

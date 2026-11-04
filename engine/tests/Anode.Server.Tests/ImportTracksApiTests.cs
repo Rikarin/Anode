@@ -22,7 +22,7 @@ public sealed class ImportTracksApiTests : IDisposable {
     ///     an instrument member that has notes; and "Other", which nothing here chooses.
     /// </summary>
     async Task<Project> SourceAsync(HttpClient client, int? rate = null) {
-        var project = await client.CreateProjectAsync("Source", rate, media);
+        await client.CreateProjectAsync("Source", rate, media);
         var file = await client.ImportAsync(TestWav.Write(media, "Riff.wav", rate ?? 48_000));
         await client.EditAsync(
             new AddTrackCommand("Gtr"),
@@ -75,7 +75,9 @@ public sealed class ImportTracksApiTests : IDisposable {
 
     static Dictionary<string, byte[]> Bytes(string folder) =>
         Directory.EnumerateFiles(folder, "*", SearchOption.AllDirectories)
-            .Where(f => !Path.GetRelativePath(folder, f).StartsWith(ProjectPackage.PeaksFolder, StringComparison.Ordinal))
+            .Where(f => !Path.GetRelativePath(folder, f)
+                    .StartsWith(ProjectPackage.PeaksFolder, StringComparison.Ordinal)
+            )
             .ToDictionary(f => Path.GetRelativePath(folder, f), File.ReadAllBytes);
 
     [Fact]
@@ -202,7 +204,10 @@ public sealed class ImportTracksApiTests : IDisposable {
         var states = Path.Combine(source.Path, ProjectPackage.PluginStatesFolder);
         Directory.CreateDirectory(states);
         await File.WriteAllBytesAsync(
-            Path.Combine(states, ProjectPackage.StateFileName(ProjectPackage.StateKey(gtr.Id, gtr.Strip.Inserts[0].Id))),
+            Path.Combine(
+                states,
+                ProjectPackage.StateFileName(ProjectPackage.StateKey(gtr.Id, gtr.Strip.Inserts[0].Id))
+            ),
             [1, 2, 3],
             Token
         );

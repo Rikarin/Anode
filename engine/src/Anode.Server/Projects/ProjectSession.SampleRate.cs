@@ -66,13 +66,14 @@ public sealed partial class ProjectSession {
     /// <summary>
     ///     Applies a change whose files are written: the project at the new rate is proved readable, the last save and any
     ///     unsaved edits go to backups, the document is replaced, and the project reopens there (engine and clients take
-    ///     it from the top, with no undo history). Whatever stops it leaves the project as it was; 409 when the project
-    ///     was closed or its files changed meanwhile.
+    ///     it from the top, with no undo history). Whatever stops it before <paramref name="committed" /> is called leaves
+    ///     the project as it was; 409 when the project was closed or its files changed meanwhile.
     /// </summary>
     public Project CommitRate(
         RatePlan plan,
         IReadOnlyDictionary<string, AudioFile> files,
-        IReadOnlyDictionary<string, byte[]?>? hostStates
+        IReadOnlyDictionary<string, byte[]?>? hostStates,
+        Action committed
     ) {
         using var writes = autosaving.EnterScope();
         lock (gate) {
@@ -115,6 +116,8 @@ public sealed partial class ProjectSession {
                 Remove(staged);
             }
 
+            // The document names the new files from here on: whatever goes wrong now, they stay.
+            committed();
             o.Dirty = false;
             DropAutosave(o);
             return Replace(o.Folder, next, states, false, new(null, o.Revision + 1));

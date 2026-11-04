@@ -30,7 +30,12 @@ public sealed partial class ProjectSession {
                 );
             }
 
-            state = ProjectRate.Changed(state, wanted, SampleRateChangeMode.Convert, new Dictionary<string, AudioFile>());
+            state = ProjectRate.Changed(
+                state,
+                wanted,
+                SampleRateChangeMode.Convert,
+                new Dictionary<string, AudioFile>()
+            );
         }
 
         try {
@@ -96,7 +101,9 @@ public sealed partial class ProjectSession {
         var bundle = TrackBundle.Of(project, chosen, new(Regions: false, Automation: false));
         var id = ids.Next(IdPrefix.Template);
         var target = templates.NewTrackFolder(id);
-        var keys = ProjectPackage.StateKeys(ProjectDefaults.NewProject(id, name, project.SampleRate) with { Tracks = bundle.Tracks })
+        var keys = ProjectPackage.StateKeys(
+                ProjectDefaults.NewProject(id, name, project.SampleRate) with { Tracks = bundle.Tracks }
+            )
             .ToHashSet(StringComparer.Ordinal);
         try {
             ProjectCopy.Build(
@@ -115,7 +122,8 @@ public sealed partial class ProjectSession {
                     ProjectPackage.Save(build, state);
                     ProjectPackage.SaveStates(
                         build,
-                        states.Where(s => keys.Contains(s.Key)).ToDictionary(static s => s.Key, static s => s.Value.Bytes)
+                        states.Where(s => keys.Contains(s.Key))
+                            .ToDictionary(static s => s.Key, static s => s.Value.Bytes)
                     );
                 },
                 CancellationToken.None
@@ -139,10 +147,12 @@ public sealed partial class ProjectSession {
             throw ProjectException.Unprocessable($"A template name has 1…{Edits.MaxNameLength} characters.");
         }
 
-        return category.Length > Library.PatchLibrary.MaxCategoryLength
-            ? throw ProjectException.Unprocessable(
+        if (category.Length > Library.PatchLibrary.MaxCategoryLength) {
+            throw ProjectException.Unprocessable(
                 $"A template category has at most {Library.PatchLibrary.MaxCategoryLength} characters."
-            )
-            : (name, category.Length == 0 ? "My Templates" : category);
+            );
+        }
+
+        return (name, category.Length == 0 ? "My Templates" : category);
     }
 }

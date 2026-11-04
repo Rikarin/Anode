@@ -23,7 +23,9 @@ static class TemplatesApi {
                     TypedResults.Ok(jobs.SaveProjectTemplate(request))
             )
             .WithName("SaveProjectTemplate")
-            .WithSummary("Queues saving the open project, media and unsaved edits included, as a template of the user's.");
+            .WithSummary(
+                "Queues saving the open project, media and unsaved edits included, as a template of the user's."
+            );
         library.MapDelete(
                 "/project-templates/{id}",
                 static Results<NoContent, NotFound>(string id, TemplateLibrary templates) =>
@@ -66,6 +68,8 @@ static class TemplatesApi {
                     TypedResults.Ok(jobs.ApplyTrackTemplate(id))
             )
             .WithName("ApplyTrackTemplate")
-            .WithSummary("Queues adding a template's tracks to the open project, on buses of their own, as one undo step.");
+            .WithSummary(
+                "Queues adding a template's tracks to the open project, on buses of their own, as one undo step."
+            );
     }
 }

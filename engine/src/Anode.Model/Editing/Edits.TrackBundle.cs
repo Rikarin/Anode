@@ -47,15 +47,20 @@ public sealed record TrackBundle(
             parts.Automation
                 ? [
                     ..tracks.SelectMany(t => state.LanesOf(t.Id)
-                            .Where(l => (parts.Inserts || !IsInsertTarget(l.Target))
-                                && (parts.Sends || !IsSendTarget(l.Target))
-                            )
+                        .Where(l => (parts.Inserts || !IsInsertTarget(l.Target))
+                            && (parts.Sends || !IsSendTarget(l.Target))
+                        )
                     )
                 ]
                 : [],
             parts.Regions ? [..tracks.SelectMany(t => state.PatternRegionsOf(t.Id))] : [],
             parts.Regions ? [..tracks.SelectMany(t => state.SessionPlayerRegionsOf(t.Id))] : [],
-            [..tracks.SelectMany(static t => t.Strip.Groups).Distinct().Where(state.Groups.ContainsKey).Select(g => state.Groups[g])],
+            [
+                ..tracks.SelectMany(static t => t.Strip.Groups)
+                    .Distinct()
+                    .Where(state.Groups.ContainsKey)
+                    .Select(g => state.Groups[g])
+            ],
             [
                 ..tracks.Select(static t => t.ArticulationSetId)
                     .OfType<string>()
@@ -102,8 +107,7 @@ public sealed record TrackBundle(
 
         if (!parts.Sends) {
             strip = strip with {
-                Sends = [],
-                Output = Routing.BusOf(strip.Output) is null ? strip.Output : Routing.Master
+                Sends = [], Output = Routing.BusOf(strip.Output) is null ? strip.Output : Routing.Master
             };
             smart = Without(smart, IsSendTarget);
         }
@@ -287,7 +291,12 @@ public static partial class Edits {
                 ArticulationSetId = track.ArticulationSetId is { } set ? sets.GetValueOrDefault(set) : null,
                 StaffStyleId = track.StaffStyleId is { } style && StaffStyleIds.All.Contains(style) ? style : null,
                 DrumMachine = track.DrumMachine is { } kit
-                    ? new([..kit.Pads.Where(p => tracks.ContainsKey(p.TrackId)).Select(p => p with { TrackId = tracks[p.TrackId] })])
+                    ? new(
+                        [
+                            ..kit.Pads.Where(p => tracks.ContainsKey(p.TrackId))
+                                .Select(p => p with { TrackId = tracks[p.TrackId] })
+                        ]
+                    )
                     : null,
                 Alternatives = [..track.Alternatives.Select(a => Alternative(a, regionTrack))],
                 AlternativeId = track.AlternativeId,
@@ -321,7 +330,11 @@ public static partial class Edits {
             };
 
         TakeFolder Folder(TakeFolder folder, string trackId) {
-            var takes = folder.Takes.ToDictionary(static t => t.Id, _ => ids.Next(IdPrefix.Take), StringComparer.Ordinal);
+            var takes = folder.Takes.ToDictionary(
+                static t => t.Id,
+                _ => ids.Next(IdPrefix.Take),
+                StringComparer.Ordinal
+            );
             return folder with {
                 Id = ids.Next(IdPrefix.TakeFolder),
                 TrackId = trackId,
