@@ -47,11 +47,19 @@ static class ProjectApi {
             .WithName("CloseProject");
         project.MapPost(
                 "/commands",
-                static Results<Ok<CommandResult>, NotFound, ProblemHttpResult>(
+                static async Task<Results<Ok<CommandResult>, NotFound, ProblemHttpResult>> (
                     CommandBatch batch,
                     ProjectSession session,
-                    HttpContext http
-                ) => Respond(http, session.Apply(batch, Revisions.Expected(http)))
+                    EngineConnection engine,
+                    HttpContext http,
+                    CancellationToken cancellationToken
+                ) => {
+                    // An insert that moves or is copied takes its state as the host has it now.
+                    var states = batch.Commands.Any(static c => c is TransferInsertCommand)
+                        ? await engine.InstrumentStatesAsync(cancellationToken)
+                        : null;
+                    return Respond(http, session.Apply(batch, Revisions.Expected(http), null, states));
+                }
             )
             .WithName("ApplyCommands")
             .WithSummary(

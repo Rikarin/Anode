@@ -1,4 +1,4 @@
-import { DefaultPanner, type ChannelStrip, type PluginInfo } from '@anode/api-client';
+import { DefaultPanner, StripDefaults, type ChannelStrip, type PluginInfo } from '@anode/api-client';
 import { groupTargets, targetOf, targetsOf, unknownTarget } from './targets';
 
 const strip = (extra: Partial<ChannelStrip> = {}): ChannelStrip => ({
@@ -15,6 +15,7 @@ const strip = (extra: Partial<ChannelStrip> = {}): ChannelStrip => ({
   inputFormat: 'stereo',
   outputFormat: 'stereo',
   panner: DefaultPanner,
+  ...StripDefaults,
   ...extra
 });
 

@@ -87,6 +87,94 @@ public sealed class MixerEditTests {
     }
 
     [Fact]
+    public void An_insert_moves_between_strips_with_its_settings_and_automation_and_undoes() {
+        Apply(new AddTrackCommand("Gtr"), new AddTrackCommand("Bass"), new AddTrackCommand("Kick"));
+        var (gtr, bass, kick) = (T("Gtr").Id, T("Bass").Id, T("Kick").Id);
+        Apply(new AddInsertCommand("anode.test-compressor", gtr));
+        var comp = T("Gtr").Strip.Inserts[0];
+        Apply(
+            new SetInsertCommand(comp.Id, gtr, true, kick),
+            new SetInsertParameterCommand(comp.Id, "threshold", -30, gtr),
+            new SetAutomationCommand($"insert:{comp.Id}:threshold", [new(0, -20, 0)], gtr)
+        );
+        var before = state;
+        var edit = Edits.Apply(state, [new TransferInsertCommand(comp.Id, gtr, bass)], ids);
+        state = edit.State;
+        Assert.Empty(T("Gtr").Strip.Inserts);
+        Assert.Equal(comp.Id, T("Bass").Strip.Inserts[0].Id);
+        Assert.True(T("Bass").Strip.Inserts[0].Bypassed);
+        Assert.Equal(kick, T("Bass").Strip.Inserts[0].Sidechain);
+        Assert.Equal(-30, T("Bass").Strip.Inserts[0].Parameters["threshold"]);
+        Assert.NotNull(state.LaneOf(bass, $"insert:{comp.Id}:threshold"));
+        Assert.Null(state.LaneOf(gtr, $"insert:{comp.Id}:threshold"));
+        var undone = state.Apply(edit.Inverse);
+        Assert.Equal(before.Tracks, undone.Tracks);
+        Assert.Equal(before.Automation, undone.Automation);
+
+        // Onto its own sidechain source: the sidechain goes.
+        Apply(new TransferInsertCommand(comp.Id, bass, kick, 0));
+        Assert.Null(T("Kick").Strip.Inserts[0].Sidechain);
+    }
+
+    [Fact]
+    public void A_copied_insert_gets_its_own_id_and_no_automation_on_any_strip_or_the_master() {
+        Apply(new AddTrackCommand("Gtr"), new AddTrackCommand("Bass"));
+        var (gtr, bass) = (T("Gtr").Id, T("Bass").Id);
+        Apply(new AddInsertCommand("anode.test-compressor", gtr));
+        var comp = T("Gtr").Strip.Inserts[0];
+        Apply(
+            new SetInsertParameterCommand(comp.Id, "threshold", -30, gtr),
+            new SetAutomationCommand($"insert:{comp.Id}:threshold", [new(0, -20, 0)], gtr),
+            new TransferInsertCommand(comp.Id, gtr, bass, Copy: true),
+            new TransferInsertCommand(comp.Id, gtr, gtr, 0, true),
+            new TransferInsertCommand(comp.Id, gtr, null, Copy: true)
+        );
+        Assert.Equal(2, T("Gtr").Strip.Inserts.Count);
+        var copies = new[] { T("Bass").Strip.Inserts[0], T("Gtr").Strip.Inserts[0], state.Master.Inserts[0] };
+        Assert.All(copies, c => Assert.Equal((comp.PluginId, -30d), (c.PluginId, c.Parameters["threshold"])));
+        Assert.Equal(3, copies.Select(static c => c.Id).Append(comp.Id).Distinct().Count() - 1);
+        Assert.Single(state.Automation);
+    }
+
+    [Fact]
+    public void A_transfer_is_refused_where_the_strip_cannot_take_it() {
+        Apply(new AddTrackCommand("Gtr"), new AddVcaCommand("V"), new AddTrackCommand("Bass"));
+        var gtr = T("Gtr").Id;
+        Apply(new AddInsertCommand("anode.test-compressor", gtr));
+        var comp = T("Gtr").Strip.Inserts[0].Id;
+        Assert.Contains("no inserts", Fails(new TransferInsertCommand(comp, gtr, T("V").Id)), StringComparison.Ordinal);
+        Assert.Contains("outside", Fails(new TransferInsertCommand(comp, gtr, T("Bass").Id, 5)), StringComparison.Ordinal);
+        Assert.Contains("No insert", Fails(new TransferInsertCommand("ins_x", gtr, T("Bass").Id)), StringComparison.Ordinal);
+        for (var i = 0; i < Edits.MaxInserts; i++) {
+            Apply(new AddInsertCommand("anode.test-compressor", T("Bass").Id));
+        }
+
+        Assert.Contains("at most", Fails(new TransferInsertCommand(comp, gtr, T("Bass").Id)), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_MIDI_FX_slot_moves_and_copies_with_its_chain_and_only_there() {
+        Apply(
+            new AddTrackCommand("Syn", Kind: TrackKind.Instrument),
+            new AddTrackCommand("Pad", Kind: TrackKind.Instrument)
+        );
+        Apply(new AddTrackCommand("Gtr"));
+        var (syn, pad) = (T("Syn").Id, T("Pad").Id);
+        Apply(new AddInsertCommand("anode.arpeggiator", syn, Chain: InsertChain.MidiEffects));
+        var arp = T("Syn").Strip.MidiEffects[0].Id;
+        Assert.Contains(
+            "no MIDI FX",
+            Fails(new TransferInsertCommand(arp, syn, T("Gtr").Id, Chain: InsertChain.MidiEffects)),
+            StringComparison.Ordinal
+        );
+        Apply(new TransferInsertCommand(arp, syn, pad, Copy: true, Chain: InsertChain.MidiEffects));
+        Assert.NotEqual(arp, T("Pad").Strip.MidiEffects[0].Id);
+        Apply(new TransferInsertCommand(arp, syn, pad, 0, Chain: InsertChain.MidiEffects));
+        Assert.Empty(T("Syn").Strip.MidiEffects);
+        Assert.Equal(arp, T("Pad").Strip.MidiEffects[0].Id);
+    }
+
+    [Fact]
     public void Buses_groups_outputs_and_ids_are_checked() {
         Apply(new AddTrackCommand("Gtr"), new AddVcaCommand());
         var gtr = T("Gtr").Id;

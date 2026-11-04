@@ -264,6 +264,54 @@ function checkStripInput(command: Command<'setStrip'>): void {
   }
 }
 
+/** `transferInsert`: an insert or MIDI FX slot to another strip, or a copy of it, as the Server does. */
+function transferInsert(project: Project, c: Command<'transferInsert'>, ctx: MixContext): Project {
+  const chain = c.chain === 'midiEffects' ? 'midiEffects' : 'inserts';
+  const from = c.trackId ?? null;
+  const to = c.toTrackId ?? null;
+  const strip = stripOf(project, from);
+  const insert = strip[chain].find(i => i.id === c.insertId) ?? refuse(`No insert ${c.insertId} on that strip.`);
+  const takes = (kind: Track['kind']) =>
+    chain === 'midiEffects' ? kind === 'instrument' || kind === 'midi' : hasFullStrip(kind);
+  if (to === null ? chain === 'midiEffects' : !takes(findTrack(project, to).kind)) {
+    refuse('That strip takes no inserts.');
+  }
+  const sameStrip = from === to;
+  if (sameStrip && !c.copy) {
+    const others = strip[chain].filter(i => i.id !== insert.id);
+    const index = clamp(c.index ?? others.length, 0, others.length);
+    return withStrip(project, from, {
+      ...strip,
+      [chain]: [...others.slice(0, index), insert, ...others.slice(index)]
+    });
+  }
+  const target = stripOf(project, to);
+  if (target[chain].length >= MaxInserts) {
+    refuse(`A channel strip holds at most ${MaxInserts} inserts.`);
+  }
+  const index = c.index ?? target[chain].length;
+  if (index < 0 || index > target[chain].length) {
+    refuse(`Insert slot ${index} is outside 0…${target[chain].length}.`);
+  }
+  const landed: Insert = {
+    ...structuredClone(insert),
+    id: c.copy ? ctx.id('ins') : insert.id,
+    sidechain: insert.sidechain === to ? null : (insert.sidechain ?? null)
+  };
+  const placed = [...target[chain].slice(0, index), landed, ...target[chain].slice(index)];
+  if (c.copy) {
+    return withStrip(project, to, { ...target, [chain]: placed });
+  }
+  const left = withStrip(project, from, { ...strip, [chain]: strip[chain].filter(i => i.id !== insert.id) });
+  const prefix = `${chain === 'inserts' ? 'insert' : 'midiEffect'}:${insert.id}:`;
+  return {
+    ...withStrip(left, to, { ...target, [chain]: placed }),
+    automation: left.automation.map(lane =>
+      lane.trackId === from && lane.target.startsWith(prefix) ? { ...lane, trackId: to } : lane
+    )
+  };
+}
+
 /** `setStrip`: the strip, the members of its groups that link each property, and automation recording. */
 export function applyStrip(project: Project, command: Command<'setStrip'>, ctx: MixContext): Project {
   const patch = (s: ChannelStrip): ChannelStrip => ({
@@ -680,6 +728,8 @@ export function applyMixCommand(project: Project, command: EditCommand, ctx: Mix
       }
       return after;
     }
+    case 'transferInsert':
+      return transferInsert(project, command, ctx);
     case 'setMixerSettings': {
       const m = project.settings.mixer;
       const limit = command.lowLatencyLimitMs ?? m.lowLatencyLimitMs;

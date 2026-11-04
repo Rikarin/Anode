@@ -312,6 +312,13 @@ and the sends follow the delayed signal; a sidechain taken from the strip does n
 monitored inputs. The pan law is `settings.mixer.panLaw`: it applies to mono signals (and a send of one), a stereo
 signal is always balanced, and dual pan uses the law's shape with a hard pan at unity, so −1 and 1 change nothing.
 
+**Inserts between strips (after Phase 11):** `transferInsert` moves an insert or MIDI FX slot to a slot of another strip,
+or with `copy` puts a copy there (on the same strip too, under a new id). It carries parameters, bypass, file, sidechain
+(dropped when the strip it lands on is the source) and plugin state, which the API asks the host for first, as saving
+does; a move also carries its automation lanes, a copy starts without any. The move's undo finds the state again as long
+as no other edit came between. The Mixer does it by dragging a slot onto another strip (⌥ copies) and by the slot menu's
+Copy to and Move to.
+
 **Open:**
 - Tempo-synced effects take the tempo from the click, not the tempo track.
 - Touch automation releases on the next change, not on mouse-up.

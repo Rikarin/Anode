@@ -3315,6 +3315,7 @@ export interface components {
       | components['schemas']['EditCommandAddInsertCommand']
       | components['schemas']['EditCommandRemoveInsertCommand']
       | components['schemas']['EditCommandMoveInsertCommand']
+      | components['schemas']['EditCommandTransferInsertCommand']
       | components['schemas']['EditCommandSetInsertCommand']
       | components['schemas']['EditCommandSetInsertParameterCommand']
       | components['schemas']['EditCommandAddSendCommand']
@@ -5297,6 +5298,25 @@ export interface components {
        * @default 50
        */
       postReleaseMs: number;
+    };
+    /**
+     * @description Moves an insert to slot `index` of another strip (`toTrackId`, null: the master; no index: last), or with
+     *     `copy` puts a copy of it there, on the same strip too. It takes its parameters, bypass, sidechain (unless the
+     *     strip it lands on cannot take that source), file and plugin state with it; a move takes its automation too, a copy
+     *     starts without any. `trackId` is the strip it is on (null: the master), `chain` as the other insert
+     *     commands; a MIDI FX slot goes to another strip's MIDI FX.
+     */
+    EditCommandTransferInsertCommand: {
+      /** @enum {string} */
+      type: 'transferInsert';
+      insertId: string;
+      trackId?: null | string;
+      toTrackId?: null | string;
+      /** Format: int32 */
+      index?: null | number;
+      /** @default false */
+      copy: boolean;
+      chain?: null | components['schemas']['InsertChain'];
     };
     /**
      * @description Phase 7, MIDI Transform: applies `set` (mode `operateOnly` or `selectAndOperate`;

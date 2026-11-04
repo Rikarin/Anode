@@ -64,6 +64,7 @@ namespace Anode.Contracts;
 [JsonDerivedType(typeof(AddInsertCommand), "addInsert")]
 [JsonDerivedType(typeof(RemoveInsertCommand), "removeInsert")]
 [JsonDerivedType(typeof(MoveInsertCommand), "moveInsert")]
+[JsonDerivedType(typeof(TransferInsertCommand), "transferInsert")]
 [JsonDerivedType(typeof(SetInsertCommand), "setInsert")]
 [JsonDerivedType(typeof(SetInsertParameterCommand), "setInsertParameter")]
 [JsonDerivedType(typeof(AddSendCommand), "addSend")]
@@ -527,6 +528,22 @@ public sealed record RemoveInsertCommand(string InsertId, string? TrackId = null
 /// <summary>Moves an insert to another slot of the same strip (and chain).</summary>
 public sealed record MoveInsertCommand(string InsertId, int Index, string? TrackId = null, InsertChain? Chain = null)
     : EditCommand;
+
+/// <summary>
+///     Moves an insert to slot <c>index</c> of another strip (<c>toTrackId</c>, null: the master; no index: last), or with
+///     <c>copy</c> puts a copy of it there, on the same strip too. It takes its parameters, bypass, sidechain (unless the
+///     strip it lands on cannot take that source), file and plugin state with it; a move takes its automation too, a copy
+///     starts without any. <c>trackId</c> is the strip it is on (null: the master), <c>chain</c> as the other insert
+///     commands; a MIDI FX slot goes to another strip's MIDI FX.
+/// </summary>
+public sealed record TransferInsertCommand(
+    string InsertId,
+    string? TrackId = null,
+    string? ToTrackId = null,
+    int? Index = null,
+    bool Copy = false,
+    InsertChain? Chain = null
+) : EditCommand;
 
 /// <summary>
 ///     Bypasses an insert, or sets its sidechain (a track id, <c>bus:N</c>, or an empty string for none; never on a MIDI

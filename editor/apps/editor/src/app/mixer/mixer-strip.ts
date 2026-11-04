@@ -71,12 +71,6 @@ export interface StripLayout {
   sends: number;
 }
 
-/** A slot being dragged to reorder its chain. */
-interface SlotDrag {
-  chain: InsertChain;
-  id: string;
-}
-
 /** A slot row's height and the gap between rows, in CSS pixels. */
 const SlotPx = 18;
 const SlotGapPx = 1;
@@ -90,7 +84,7 @@ const BusPages = Array.from({ length: BusCount / 16 }, (_, page) => ({
 /**
  * One strip of the Mixer, top to bottom as in Logic: an aux's input bus; an instrument or external MIDI track's MIDI FX
  * slots (the MIDI effects only) and its instrument; the Audio FX slots (a plugin menu by category,
- * bypass, drag or ⌥↑/⌥↓ to reorder, the editor on a click); the sends (bus menu that refuses loops, level knob,
+ * bypass, drag or ⌥↑/⌥↓ to reorder, drag or a menu to move to another strip, ⌥-drag to copy, the editor on a click); the sends (bus menu that refuses loops, level knob,
  * pre/post); the output (Stereo Out, a bus, or a device output pair, by I/O label); the group and VCA slots; the
  * automation mode; then pan, fader and meter, mute and solo, and the name. The master strip has its inserts only; a VCA
  * strip has no inserts, sends, output, pan or meter.
@@ -185,7 +179,7 @@ const BusPages = Array.from({ length: BusCount / 16 }, (_, page) => ({
                 #midiWrap
                 [xuiContextMenuTriggerFor]="midiFxMenu"
                 [xuiContextMenuTriggerData]="{ $implicit: slot.context }"
-                [class.opacity-50]="dragging()?.id === slot.context.insert?.id"
+                [class.opacity-50]="mixer.insertDrag()?.id === slot.context.insert?.id"
                 [class.shadow-[inset_0_2px_0_var(--color-primary)]]="dropAt() === 'midiEffects:' + slot.context.index"
                 (dragstart)="dragStart(slot.context, $event, 'midiEffects')"
                 (dragend)="dragEnd()"
@@ -243,7 +237,7 @@ const BusPages = Array.from({ length: BusCount / 16 }, (_, page) => ({
               #wrap
               [xuiContextMenuTriggerFor]="insertMenu"
               [xuiContextMenuTriggerData]="{ $implicit: slot.context }"
-              [class.opacity-50]="dragging()?.id === slot.context.insert?.id"
+              [class.opacity-50]="mixer.insertDrag()?.id === slot.context.insert?.id"
               [class.shadow-[inset_0_2px_0_var(--color-primary)]]="dropAt() === 'inserts:' + slot.context.index"
               (dragstart)="dragStart(slot.context, $event, 'inserts')"
               (dragend)="dragEnd()"
@@ -390,6 +384,24 @@ const BusPages = Array.from({ length: BusCount / 16 }, (_, page) => ({
               Side Chain: {{ sidechainName(insert.sidechain) }}
             </button>
           }
+          <button
+            xuiMenuItem
+            type="button"
+            data-testid="insert-copy-to"
+            [xuiMenuTriggerFor]="stripPicker"
+            [xuiMenuTriggerData]="{ $implicit: insert, copy: true, chain: 'inserts' }"
+          >
+            Copy to
+          </button>
+          <button
+            xuiMenuItem
+            type="button"
+            data-testid="insert-move-to"
+            [xuiMenuTriggerFor]="stripPicker"
+            [xuiMenuTriggerData]="{ $implicit: insert, copy: false, chain: 'inserts' }"
+          >
+            Move to
+          </button>
           <xui-menu-divider />
         }
         @for (group of effects(); track group.category) {
@@ -409,6 +421,22 @@ const BusPages = Array.from({ length: BusCount / 16 }, (_, page) => ({
           <button xuiMenuItem type="button" color="error" (click)="mixer.removeInsert(trackId(), insert)">
             Remove {{ insert.name }}
           </button>
+        }
+      </xui-menu>
+    </ng-template>
+    <ng-template #stripPicker let-insert let-copy="copy" let-chain="chain">
+      <xui-menu class="max-h-80 min-w-40 overflow-y-auto" aria-label="Strips">
+        @for (other of transferTargets(chain, copy); track other.key) {
+          <button
+            xuiMenuItem
+            type="button"
+            [attr.data-strip-target]="other.key"
+            (click)="transfer(insert, other.id, copy, chain)"
+          >
+            {{ other.name }}
+          </button>
+        } @empty {
+          <span class="text-foreground-muted px-3 py-1 text-xs">No other strip takes it.</span>
         }
       </xui-menu>
     </ng-template>
@@ -433,6 +461,22 @@ const BusPages = Array.from({ length: BusCount / 16 }, (_, page) => ({
           <button xuiMenuItem type="button" (click)="windows.open(trackId(), insert)">Open Editor</button>
           <button xuiMenuItem type="button" (click)="toggleBypass(slot)">
             {{ insert.bypassed ? 'Turn On' : 'Bypass' }}
+          </button>
+          <button
+            xuiMenuItem
+            type="button"
+            [xuiMenuTriggerFor]="stripPicker"
+            [xuiMenuTriggerData]="{ $implicit: insert, copy: true, chain: 'midiEffects' }"
+          >
+            Copy to
+          </button>
+          <button
+            xuiMenuItem
+            type="button"
+            [xuiMenuTriggerFor]="stripPicker"
+            [xuiMenuTriggerData]="{ $implicit: insert, copy: false, chain: 'midiEffects' }"
+          >
+            Move to
           </button>
           <xui-menu-divider />
         }
@@ -703,7 +747,6 @@ export class MixerStrip {
   protected readonly busPages = BusPages;
   protected readonly outputRoute = outputRoute;
   protected readonly label = pluginLabel;
-  protected readonly dragging = signal<SlotDrag | null>(null);
   /** Where a dragged slot would land: `<chain>:<index>`. */
   protected readonly dropAt = signal<string | null>(null);
 
@@ -933,6 +976,24 @@ export class MixerStrip {
     }
   }
 
+  /** The strips a slot can go to by the Copy to and Move to menus: a copy may land on its own strip. */
+  protected transferTargets(chain: InsertChain, copy: boolean): { key: string; id: string | null; name: string }[] {
+    const here = this.trackId();
+    const tracks = this.project
+      .trackList()
+      .filter(t => (chain === 'midiEffects' ? t.kind === 'instrument' || t.kind === 'midi' : hasFullStrip(t.kind)))
+      .filter(t => t.frozenFileId === null || t.frozenFileId === undefined)
+      .filter(t => copy || t.id !== here)
+      .map(t => ({ key: t.id, id: t.id, name: t.name }));
+    return chain === 'inserts' && (copy || here !== null)
+      ? [...tracks, { key: 'master', id: null, name: 'Stereo Out' }]
+      : tracks;
+  }
+
+  protected transfer(insert: Insert, toTrackId: string | null, copy: boolean, chain: InsertChain): void {
+    void this.mixer.transferInsert(this.trackId(), insert.id, toTrackId, null, copy, chain);
+  }
+
   private slotsOf(chain: InsertChain): readonly Insert[] {
     return chain === 'midiEffects' ? this.strip().midiEffects : this.strip().inserts;
   }
@@ -942,33 +1003,43 @@ export class MixerStrip {
       event.preventDefault();
       return;
     }
-    this.dragging.set({ chain, id: slot.insert.id });
+    this.mixer.insertDrag.set({ chain, id: slot.insert.id, trackId: this.trackId() });
     event.dataTransfer?.setData('application/x-anode-insert', slot.insert.id);
     if (event.dataTransfer) {
-      event.dataTransfer.effectAllowed = 'move';
+      event.dataTransfer.effectAllowed = 'copyMove';
     }
   }
 
   protected dragEnd(): void {
-    this.dragging.set(null);
+    this.mixer.insertDrag.set(null);
     this.dropAt.set(null);
   }
 
   protected dragOver(index: number, event: DragEvent, chain: InsertChain): void {
-    if (this.dragging()?.chain === chain) {
+    if (this.mixer.insertDrag()?.chain === chain) {
       event.preventDefault();
+      if (event.dataTransfer) {
+        event.dataTransfer.dropEffect = event.altKey ? 'copy' : 'move';
+      }
       this.dropAt.set(`${chain}:${index}`);
     }
   }
 
-  /** A slot dropped on another of the same strip and chain moves there (Logic's drag in the Audio FX list). */
+  /**
+   * A slot dropped on a slot of the same chain moves there (Logic's drag in the Audio FX list), onto another strip too,
+   * with ⌥ held a copy lands there instead.
+   */
   protected drop(index: number, event: DragEvent, chain: InsertChain): void {
-    const drag = this.dragging();
+    const drag = this.mixer.insertDrag();
     this.dragEnd();
     if (drag?.chain !== chain) {
       return;
     }
     event.preventDefault();
+    if (drag.trackId !== this.trackId() || event.altKey) {
+      void this.mixer.transferInsert(drag.trackId, drag.id, this.trackId(), index, event.altKey, chain);
+      return;
+    }
     const slots = this.slotsOf(chain);
     const from = slots.findIndex(i => i.id === drag.id);
     const to = Math.min(slots.length - 1, from < index ? index - 1 : index);

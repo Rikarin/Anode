@@ -218,6 +218,8 @@ public static class UndoLabels {
                     AddInsertCommand => "Add Plug-in",
                     RemoveInsertCommand => "Remove Plug-in",
                     MoveInsertCommand => "Move Plug-in",
+                    TransferInsertCommand { Copy: true } => "Copy Plug-in",
+                    TransferInsertCommand => "Move Plug-in",
                     SetInsertCommand => "Change Plug-in",
                     SetInsertParameterCommand => "Change Plug-in Parameter",
                     AddSendCommand => "Add Send",

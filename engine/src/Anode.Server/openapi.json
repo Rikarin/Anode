@@ -9038,6 +9038,9 @@
             "$ref": "#/components/schemas/EditCommandMoveInsertCommand"
           },
           {
+            "$ref": "#/components/schemas/EditCommandTransferInsertCommand"
+          },
+          {
             "$ref": "#/components/schemas/EditCommandSetInsertCommand"
           },
           {
@@ -9459,6 +9462,7 @@
             "addInsert": "#/components/schemas/EditCommandAddInsertCommand",
             "removeInsert": "#/components/schemas/EditCommandRemoveInsertCommand",
             "moveInsert": "#/components/schemas/EditCommandMoveInsertCommand",
+            "transferInsert": "#/components/schemas/EditCommandTransferInsertCommand",
             "setInsert": "#/components/schemas/EditCommandSetInsertCommand",
             "setInsertParameter": "#/components/schemas/EditCommandSetInsertParameterCommand",
             "addSend": "#/components/schemas/EditCommandAddSendCommand",
@@ -15217,6 +15221,58 @@
           }
         },
         "description": "Strip Silence: splits each audio region into one region per stretch above \u0060thresholdDb\u0060 (RMS), each widened\nby \u0060preAttackMs\u0060 before and \u0060postReleaseMs\u0060 after; the silence between them is removed. As in Logic,\n\u0060minTimeMs\u0060 is the shortest silence that splits: stretches separated by less stay in one region."
+      },
+      "EditCommandTransferInsertCommand": {
+        "required": [
+          "insertId",
+          "type",
+          "copy"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "transferInsert"
+            ],
+            "type": "string"
+          },
+          "insertId": {
+            "type": "string"
+          },
+          "trackId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "toTrackId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "index": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int32"
+          },
+          "copy": {
+            "type": "boolean",
+            "default": false
+          },
+          "chain": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/InsertChain"
+              }
+            ]
+          }
+        },
+        "description": "Moves an insert to slot \u0060index\u0060 of another strip (\u0060toTrackId\u0060, null: the master; no index: last), or with\n\u0060copy\u0060 puts a copy of it there, on the same strip too. It takes its parameters, bypass, sidechain (unless the\nstrip it lands on cannot take that source), file and plugin state with it; a move takes its automation too, a copy\nstarts without any. \u0060trackId\u0060 is the strip it is on (null: the master), \u0060chain\u0060 as the other insert\ncommands; a MIDI FX slot goes to another strip\u0027s MIDI FX."
       },
       "EditCommandTransformCommand": {
         "required": [

@@ -217,6 +217,8 @@ public static partial class Edits {
             AddInsertCommand c => AddInsert(state, c, ids, plugins),
             RemoveInsertCommand c => RemoveInsert(state, c),
             MoveInsertCommand c => MoveInsert(state, c),
+            TransferInsertCommand { Chain: InsertChain.MidiEffects } c => TransferMidiEffect(state, c, ids),
+            TransferInsertCommand c => TransferInsert(state, c, ids),
             SetInsertCommand c => SetInsert(state, c, plugins),
             SetInsertParameterCommand c => SetInsertParameter(state, c, plugins),
             AddSendCommand c => AddSend(state, c, ids),

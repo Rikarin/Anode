@@ -5122,9 +5122,10 @@ export class FakeAnodeServer implements AnodeApi {
       case 'setAutomation':
       case 'setAutomationMode':
       case 'setMixerSettings':
+      case 'transferInsert':
       case 'applyPatch':
       case 'unfreezeTrack':
-        if ('chain' in command && command.chain === 'midiEffects') {
+        if ('chain' in command && command.chain === 'midiEffects' && command.type !== 'transferInsert') {
           // MIDI FX slots (Phase 6): the insert commands on a strip's `midiEffects`.
           return applyMidiEffectCommand(project, command, this.phase6Context());
         }

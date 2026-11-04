@@ -3,6 +3,7 @@ using Anode.Ipc;
 using Anode.Ipc.Segments;
 using Anode.Model;
 using Anode.Server.Engine;
+using System.Text;
 
 namespace Anode.Server.Tests;
 
@@ -19,6 +20,43 @@ public sealed class MixHostLinkTests : IAsyncDisposable {
         if (host is not null) {
             await host.DisposeAsync();
         }
+    }
+
+    [Fact]
+    public async Task An_insert_moved_or_copied_to_another_strip_takes_the_state_the_host_has_now() {
+        host = new(EngineConnection.Version);
+        host.Listen(socketPath);
+        await using var server = new ServerFixture(socketPath);
+        using var client = server.CreateClient();
+        await ServerFixture.Eventually(async () =>
+            (await server.SystemAsync(client)).Engine.State == EngineState.Connected
+        );
+        await client.CreateProjectAsync();
+        await client.EditAsync(new AddTrackCommand("Gtr"), new AddTrackCommand("Bass"), new AddTrackCommand("Kick"));
+        var tracks = (await client.ProjectAsync()).Tracks;
+        var (gtr, bass, kick) = (tracks[0].Id, tracks[1].Id, tracks[2].Id);
+        await client.EditAsync(new AddInsertCommand("anode.compressor", gtr));
+        var insert = (await client.ProjectAsync()).Tracks[0].Strip.Inserts[0];
+        await WaitForAsync<SetChannelMessage>(m => m.TrackId == 0 && m.Strip.Inserts is { Count: 1 });
+        var state = Convert.ToBase64String(Encoding.UTF8.GetBytes($"fake-state:anode.compressor:{insert.Id}"));
+
+        await client.EditAsync(new TransferInsertCommand(insert.Id, gtr, bass, Copy: true));
+        var copy = await WaitForAsync<SetChannelMessage>(static m => m.TrackId == 1 && m.Strip.Inserts is { Count: 1 });
+        Assert.NotEqual(insert.Id, copy.Strip.Inserts![0].Id);
+        Assert.Equal(state, copy.Strip.Inserts![0].State);
+
+        await client.EditAsync(new TransferInsertCommand(insert.Id, gtr, kick));
+        var moved = await WaitForAsync<SetChannelMessage>(static m => m.TrackId == 2 && m.Strip.Inserts is { Count: 1 });
+        Assert.Equal(insert.Id, moved.Strip.Inserts![0].Id);
+        Assert.Equal(state, moved.Strip.Inserts![0].State);
+        await WaitForAsync<SetChannelMessage>(static m => m.TrackId == 0 && m.Strip.Inserts is { Count: 0 });
+
+        // The undo brings it back to its strip, state and all.
+        var undone = await client.PostAsync("/api/v1/project/undo", null, TestContext.Current.CancellationToken);
+        undone.EnsureSuccessStatusCode();
+        await WaitForAsync<SetChannelMessage>(m =>
+            m.TrackId == 0 && m.Strip.Inserts is [{ State: { } saved }] && saved == state
+        );
     }
 
     [Fact]

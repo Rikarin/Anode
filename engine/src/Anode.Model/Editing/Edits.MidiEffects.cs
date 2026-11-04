@@ -80,6 +80,35 @@ public static partial class Edits {
         return ops;
     }
 
+    /// <summary>A MIDI FX slot to another strip's MIDI FX, or a copy of it: see <see cref="TransferInsertCommand" />.</summary>
+    static List<DeltaOp> TransferMidiEffect(ProjectState state, TransferInsertCommand c, IIdSource ids) {
+        var track = MidiFxTrackOf(state, c.TrackId);
+        var slot = MidiEffectOf(track, c.InsertId);
+        if (!c.Copy && c.TrackId == c.ToTrackId) {
+            return MoveMidiEffect(
+                state,
+                new(slot.Id, c.Index ?? track.Strip.MidiEffects.Count - 1, c.TrackId, InsertChain.MidiEffects)
+            );
+        }
+
+        var to = MidiFxTrackOf(state, c.ToTrackId);
+        if (to.Strip.MidiEffects.Count >= MaxInserts) {
+            throw new EditException($"A channel strip holds at most {MaxInserts} MIDI FX.");
+        }
+
+        var index = TransferIndex(c, to.Strip.MidiEffects.Count);
+        var landed = c.Copy ? slot with { Id = ids.Next(IdPrefix.Insert) } : slot;
+        var slots = to.Strip.MidiEffects.ToImmutableList().Insert(index, landed);
+        if (c.Copy) {
+            return [WithMidiEffects(state, to, slots)];
+        }
+
+        var ops = MovedLanes(state, c, $"{MidiEffectPrefix}{slot.Id}:");
+        ops.Add(WithMidiEffects(state, track, [..track.Strip.MidiEffects.Where(i => i.Id != slot.Id)]));
+        ops.Add(WithMidiEffects(state, to, slots));
+        return ops;
+    }
+
     static List<DeltaOp> MoveMidiEffect(ProjectState state, MoveInsertCommand c) {
         var track = MidiFxTrackOf(state, c.TrackId);
         var slot = MidiEffectOf(track, c.InsertId);

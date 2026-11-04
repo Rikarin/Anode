@@ -72,6 +72,13 @@ const InputLabels: Record<keyof StripInputChange, string> = {
   panRight: 'Dual Pan'
 };
 
+/** A slot being dragged: its chain, its insert, and its strip (null: the master). */
+export interface InsertDrag {
+  chain: InsertChain;
+  id: string;
+  trackId: string | null;
+}
+
 /** The strip key of the master in {@link MixerStore}'s methods. */
 export const Master = null;
 
@@ -137,6 +144,8 @@ export class MixerStore {
   private readonly pannerCoalescer = new Coalescer<PannerChange>((trackId, change) =>
     this.project.execute([{ type: 'setPanner', trackId, ...change }], 'Panner')
   );
+  /** The insert being dragged in the Mixer, which any strip may take. */
+  readonly insertDrag = signal<InsertDrag | null>(null);
   /** Controls held now (a drag in progress), which show what they send instead of their automation. */
   private readonly held = signal<ReadonlySet<string>>(new Set());
   private readonly holdTimers = new Map<string, ReturnType<typeof setTimeout>>();
@@ -491,6 +500,31 @@ export class MixerStore {
 
   deleteGroup(number: number): Promise<unknown> {
     return this.project.execute([{ type: 'deleteGroup', number }], 'Delete Group');
+  }
+
+  /** Moves an insert to a slot of another strip, or copies it there (on its own strip too), state and all. */
+  transferInsert(
+    fromTrackId: string | null,
+    insertId: string,
+    toTrackId: string | null,
+    index: number | null,
+    copy: boolean,
+    chain: InsertChain = 'inserts'
+  ): Promise<unknown> {
+    return this.project.execute(
+      [
+        {
+          type: 'transferInsert',
+          insertId,
+          copy,
+          ...(fromTrackId === null ? {} : { trackId: fromTrackId }),
+          ...(toTrackId === null ? {} : { toTrackId }),
+          ...(index === null ? {} : { index }),
+          ...(chain === 'inserts' ? {} : { chain })
+        }
+      ],
+      copy ? 'Copy Plug-in' : 'Move Plug-in'
+    );
   }
 
   setMixerSettings(change: Partial<MixerSettings>): Promise<unknown> {

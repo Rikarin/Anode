@@ -10,3 +10,5 @@ All notable changes to Anode are recorded here, by hand.
   the Missing Files window finds or relinks them, checking length, rate and channels.
 - Channel strips: input trim, polarity and a track delay (late or early) on every full strip, dual pan for stereo
   signals, and the pan law as a project setting (schema 12; existing projects keep −3 dB compensated).
+- Mixer: drag an insert or MIDI FX slot to another strip to move it with its state and automation, ⌥-drag to copy it;
+  the slot's menu does the same by Copy to and Move to.
