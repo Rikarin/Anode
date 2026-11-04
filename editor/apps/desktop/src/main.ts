@@ -169,6 +169,7 @@ function createWindow(): void {
     height: 1000,
     minWidth: 1024,
     minHeight: 640,
+    enableLargerThanScreen: Boolean(process.env['ANODE_USER_DATA']), // a test machine's display may be smaller
     title: 'Anode',
     backgroundColor: '#111113',
     show: false,
