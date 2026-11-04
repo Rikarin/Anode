@@ -22,6 +22,7 @@ import {
   type ControllerAssignments,
   type ControlSurface,
   DefaultMonitoringSettings,
+  DefaultMonitorSection,
   DefaultPanner,
   DefaultRegionNotation,
   type DeltaOp,
@@ -36,7 +37,9 @@ import {
   type GrooveTemplate,
   type ImportedContent,
   type ImportedTrack,
+  type ImportProjectTracksRequest,
   type Insert,
+  type InsertDisplayRequest,
   type InsertReading,
   type IoLabel,
   type IoLabels,
@@ -57,6 +60,7 @@ import {
   MasteringParameters,
   type MasteringSettings,
   type MasteringState,
+  type MeterType,
   type MidiDevices,
   type MidiEnvironment,
   type MidiExportRequest,
@@ -90,14 +94,19 @@ import {
   type Project,
   type ProjectAlternative,
   type ProjectBackup,
+  type ProjectContents,
   type ProjectDelta,
   type ProjectSummary,
+  type ProjectTemplate,
   type RecoverableProject,
   type RegenerateRequest,
   type RelinkRequest,
   type RemotePads,
   type SampleRange,
+  type SampleRateChangeMode,
   type SavePatchRequest,
+  type SaveTemplateRequest,
+  type SaveTrackTemplateRequest,
   type SceneDetectRequest,
   type ScoreDocument,
   type Screenset,
@@ -113,6 +122,7 @@ import {
   type StepInputRequest,
   type StepInputState,
   type StopRequest,
+  StripDefaults,
   type SurfaceStatus,
   type SyncState,
   type SystemInfo,
@@ -120,6 +130,7 @@ import {
   type ThumbnailsRequest,
   type Track,
   type TrackMeter,
+  type TrackTemplate,
   type TransformSet,
   type TransportRequest,
   type TransportStatus,
@@ -158,9 +169,11 @@ import {
 } from './fake-arrange';
 import { fakePeaks, hash, readWavHeader } from './fake-audio';
 import { FakeAudioDevices } from './fake-audio-devices';
+import { displayKey, DisplayLeaseMs, fakeDisplay, fakeSpectrum } from './fake-displays';
 import { applyEnvironmentCommand } from './fake-environment';
 import { fakeFileExists, FakeHome, fileKind, listFakeFolder } from './fake-files';
 import { adaptTempo, applyFlexCommand, fakeAnalysis, type FlexContext, timingOf } from './fake-flex';
+import { bundledTracks, contentsOf, withImportedTracks } from './fake-import-tracks';
 import { type FakeLoop, FakeLoopLibrary, keyInterval } from './fake-loops';
 import {
   applyMasteringCommand,
@@ -260,10 +273,15 @@ import {
   withExtension
 } from './fake-phase9';
 import { CrashyPluginId, FakeCatalogue, FakeEffects, FakeMidiDevices } from './fake-plugins';
+import { FakeParityEffects } from './fake-plugins-effects';
 import { FakeT3Effects, FakeT3Instruments } from './fake-plugins-phase11';
 import { FakeMidiEffects, FakeT2Effects, FakeT2Instruments, RemixFxId, withMacros } from './fake-plugins-phase6';
+import { checkedLoop, convertLoops, refuseLooped } from './fake-region-loops';
+import { atRate, rateRefusal } from './fake-sample-rate';
 import { FakeScriptPresets } from './fake-scripts';
 import { FactoryStaffStyles } from './fake-staff-styles';
+import { checkedTemplateName, FactoryTemplates } from './fake-templates';
+import { applyTimeEdit, preRollStart, rollLength } from './fake-time-edit';
 
 /** Ticks per quarter note (the contract's time base). */
 const Ppq = 960;
@@ -368,6 +386,12 @@ export class FakeAnodeServer implements AnodeApi {
   private readonly now: () => number;
   private readonly disk = new Map<string, Project>();
   private recent: ProjectSummary[] = [];
+  private jobFailure: string | null = null;
+  private readonly userTemplates = new Map<string, { template: ProjectTemplate; project: Project }>();
+  private readonly trackTemplateSets = new Map<
+    string,
+    { template: TrackTemplate; project: Project; trackIds: string[] }
+  >();
   private project: Project | null = null;
   private undoStack: UndoStep[] = [];
   private redoStack: UndoStep[] = [];
@@ -389,6 +413,7 @@ export class FakeAnodeServer implements AnodeApi {
       ...FakeEffects,
       ...FakeT2Effects,
       ...FakeT3Effects,
+      ...FakeParityEffects,
       ...FakeMidiEffects
     ]
       .map(withMacros)
@@ -424,6 +449,8 @@ export class FakeAnodeServer implements AnodeApi {
   private jobTimer: ReturnType<typeof setInterval> | null = null;
   private readonly patchStore = new Map<string, StoredPatch>();
   private labels: IoLabels = { inputs: [], outputs: [], buses: [] };
+  /** The leases on inserts' displays: when each runs out. */
+  private readonly watchedDisplays = new Map<string, number>();
   /** Plugin editor windows open, as `trackId/insertId` (`master/…`, `…/instrument`) (tests). */
   readonly editors = new Set<string>();
   /** Inserts the engine bypassed after their plugin crashed. */
@@ -472,6 +499,7 @@ export class FakeAnodeServer implements AnodeApi {
   /** Phase 10: the movie's cached thumbnails by height, the monitoring and pad settings, the listen-in streams. */
   private readonly thumbnailCache = new Map<number, Set<number>>();
   private monitoringSettings: MonitoringSettings = structuredClone(DefaultMonitoringSettings);
+  private overloadCount = 0;
   private padSets: RemotePads = structuredClone(DefaultRemotePads);
   private readonly listenSockets = new Set<FakeListenInSocket>();
   /** Phase 8: controller assignments, Learn, control surfaces, OSC, the selection, Link and external sync. */
@@ -581,6 +609,11 @@ export class FakeAnodeServer implements AnodeApi {
     return true;
   }
 
+  /** The next job to finish fails with `message`, changing nothing (tests). */
+  failNextJob(message: string): void {
+    this.jobFailure = message;
+  }
+
   /** The Server dies: only what is saved or autosaved survives (tests). */
   crash(): void {
     this.stopEngine();
@@ -610,7 +643,7 @@ export class FakeAnodeServer implements AnodeApi {
           tempo: 120,
           signature: { numerator: 4, denominator: 4 },
           cycle: { enabled: false, startTick: 0, endTick: 4 * 4 * Ppq },
-          metronome: { enabled: false, countIn: false, levelDb: -6 },
+          metronome: { enabled: false, countIn: false, levelDb: -6, countInLength: 1, countInUnit: 'bars' },
           endTick: DefaultEndTick,
           mergeMidiRecording: false,
           tempoEvents: [{ tick: 0, bpm: 120, curve: 'step', shape: 0 }],
@@ -621,9 +654,17 @@ export class FakeAnodeServer implements AnodeApi {
             replace: false,
             autopunch: false,
             punchInTick: 0,
-            punchOutTick: 4 * 4 * Ppq
+            punchOutTick: 4 * 4 * Ppq,
+            preRollLength: 0,
+            preRollUnit: 'bars'
           },
-          mixer: { pdc: 'all', lowLatency: false, lowLatencyLimitMs: 10 },
+          mixer: {
+            pdc: 'all',
+            lowLatency: false,
+            lowLatencyLimitMs: 10,
+            panLaw: 'minus3DbCompensated',
+            soloMode: 'inPlace'
+          },
           smartTempo: { mode: 'keep', defaultFollow: 'off', analyzeImports: true },
           varispeed: { enabled: false, mode: 'speedOnly', speed: 1 },
           sync: {
@@ -658,10 +699,169 @@ export class FakeAnodeServer implements AnodeApi {
         sessionPlayerRegions: [],
         environment: structuredClone(EmptyEnvironment)
       };
-      this.disk.set(path, structuredClone(project));
-      this.open(project);
-      return structuredClone(project);
+      const template = request.template ?? null;
+      const made = template ? this.fromTemplate(project, template, request.sampleRate ?? null) : project;
+      this.disk.set(path, structuredClone(made));
+      this.open(made);
+      return structuredClone(made);
     });
+  }
+
+  /** `project` as a template makes it: a factory one's commands, or a copy of a user's under `project`'s identity. */
+  private fromTemplate(project: Project, id: string, rate: number | null): Project {
+    const factory = FactoryTemplates.find(t => t.template.id === id);
+    if (factory) {
+      return factory.commands.reduce((made, command) => this.applyCommand(made, command), project);
+    }
+
+    const user = this.userTemplates.get(id);
+    if (!user) {
+      throw new ApiError(404, `No template '${id}'.`);
+    }
+
+    if (rate !== null && rate !== user.project.sampleRate && user.project.audioFiles.length > 0) {
+      throw new ApiError(422, `This template holds audio at ${user.project.sampleRate} Hz.`);
+    }
+
+    return {
+      ...structuredClone(user.project),
+      id: project.id,
+      name: project.name,
+      path: project.path,
+      sampleRate: rate ?? user.project.sampleRate,
+      revision: 0,
+      dirty: false
+    };
+  }
+
+  projectTemplates(): Promise<ProjectTemplate[]> {
+    return this.answer('ListProjectTemplates', () => [
+      ...FactoryTemplates.map(t => ({ ...t.template })),
+      ...[...this.userTemplates.values()].map(t => ({ ...t.template }))
+    ]);
+  }
+
+  trackTemplates(): Promise<TrackTemplate[]> {
+    return this.answer('ListTrackTemplates', () => [...this.trackTemplateSets.values()].map(t => ({ ...t.template })));
+  }
+
+  saveProjectTemplate(request: SaveTemplateRequest): Promise<Job> {
+    return this.answer('SaveProjectTemplate', () => {
+      const project = this.require();
+      const name = checkedTemplateName(request.name);
+      return this.startJob(
+        'saveTemplate',
+        {
+          finish: () => {
+            const id = `tpl_${this.nextId++}`;
+            this.userTemplates.set(id, {
+              template: {
+                id,
+                name,
+                category: request.category || 'My Templates',
+                description: '',
+                factory: false,
+                sampleRate: project.sampleRate,
+                hasAudio: project.audioFiles.length > 0
+              },
+              project: structuredClone(project)
+            });
+            return [id];
+          }
+        },
+        1
+      );
+    });
+  }
+
+  saveTrackTemplate(request: SaveTrackTemplateRequest): Promise<TrackTemplate> {
+    return this.answer('SaveTrackTemplate', () => {
+      const project = this.require();
+      const name = checkedTemplateName(request.name);
+      if (request.trackIds.length === 0) {
+        throw new ApiError(422, 'Choose the tracks to save.');
+      }
+
+      const count = bundledTracks(project, request.trackIds, true).length;
+      const template: TrackTemplate = {
+        id: `tpl_${this.nextId++}`,
+        name,
+        category: request.category || 'My Templates',
+        tracks: count
+      };
+      this.trackTemplateSets.set(template.id, {
+        template,
+        project: structuredClone(project),
+        trackIds: [...request.trackIds]
+      });
+      return { ...template };
+    });
+  }
+
+  applyTrackTemplate(id: string): Promise<Job> {
+    return this.answer('ApplyTrackTemplate', () => {
+      this.require();
+      const set = this.trackTemplateSets.get(id);
+      if (!set) {
+        throw new ApiError(404, `No track template '${id}'.`);
+      }
+
+      return this.startJob(
+        'projectImport',
+        {
+          finish: () => {
+            const before = this.require();
+            const after = withImportedTracks(
+              before,
+              set.project,
+              { path: '', trackIds: set.trackIds, regions: false, automation: false },
+              prefix => `${prefix}_${this.nextId++}`
+            );
+            this.commit(before, after, 'Add Track Template');
+            return [];
+          }
+        },
+        1
+      );
+    });
+  }
+
+  deleteProjectTemplate(id: string): Promise<void> {
+    return this.answer('DeleteProjectTemplate', () => {
+      if (!this.userTemplates.delete(id)) {
+        throw new ApiError(404, `No template '${id}'.`);
+      }
+    });
+  }
+
+  deleteTrackTemplate(id: string): Promise<void> {
+    return this.answer('DeleteTrackTemplate', () => {
+      if (!this.trackTemplateSets.delete(id)) {
+        throw new ApiError(404, `No track template '${id}'.`);
+      }
+    });
+  }
+
+  /** Puts a file in the open project's pool, so a template of it holds audio (tests). */
+  addFakeAudio(): void {
+    const project = this.require();
+    this.project = {
+      ...project,
+      audioFiles: [
+        ...project.audioFiles,
+        {
+          id: `aud_${this.nextId++}`,
+          name: 'Tone',
+          path: 'Audio Files/Tone.wav',
+          sampleRate: project.sampleRate,
+          channels: 1,
+          frames: 48_000,
+          bitDepth: 24,
+          tempo: null,
+          version: 0
+        }
+      ]
+    };
   }
 
   openProject(path: string): Promise<Project> {
@@ -679,6 +879,170 @@ export class FakeAnodeServer implements AnodeApi {
 
   getProject(): Promise<Project | null> {
     return this.answer('GetProject', () => (this.project ? structuredClone(this.project) : null));
+  }
+
+  saveProjectAs(path: string): Promise<Job> {
+    return this.answer('SaveProjectAs', () => {
+      const target = this.saveTarget(path);
+      return this.startJob('saveAs', { finish: () => this.finishSaveAs(target) }, 1);
+    });
+  }
+
+  saveProjectCopy(path: string): Promise<Job> {
+    return this.answer('SaveProjectCopy', () => {
+      const target = this.saveTarget(path);
+      return this.startJob('saveCopy', { finish: () => this.finishSaveCopy(target) }, 1);
+    });
+  }
+
+  changeSampleRate(sampleRate: number, mode: SampleRateChangeMode): Promise<Job> {
+    return this.answer('ChangeSampleRate', () => {
+      const refusal = rateRefusal(this.require(), sampleRate, mode);
+      if (refusal) {
+        throw new ApiError(422, refusal);
+      }
+
+      return this.startJob('sampleRateChange', { finish: () => this.finishSampleRate(sampleRate, mode) }, 1);
+    });
+  }
+
+  /** The last save and any unsaved edits go to backups; the project reopens saved at the new rate, with no undo. */
+  private finishSampleRate(rate: number, mode: SampleRateChangeMode): string[] {
+    const before = this.require();
+    const backups = this.backupSets.get(before.path) ?? [];
+    const saved = new Date(this.now()).toISOString();
+    const previous = this.disk.get(before.path);
+    if (previous) {
+      backups.unshift({ backup: { id: `bak_${this.nextId++}`, saved }, project: structuredClone(previous) });
+    }
+
+    if (before.dirty) {
+      backups.unshift({ backup: { id: `bak_${this.nextId++}`, saved }, project: structuredClone(before) });
+    }
+
+    this.backupSets.set(before.path, backups.slice(0, 10));
+    this.autosaves.delete(before.path);
+    const next = atRate(before, rate, mode, () => `aud_${this.nextId++}`);
+    this.project = { ...next, dirty: false, revision: before.revision + 1 };
+    this.undoStack = [];
+    this.redoStack = [];
+    this.disk.set(before.path, structuredClone(this.project));
+    this.emit({ type: 'projectOpened', project: this.remember(this.project), revision: this.project.revision });
+    return [before.path];
+  }
+
+  projectContents(path: string): Promise<ProjectContents> {
+    return this.answer('GetProjectContents', () => contentsOf(this.package(path)));
+  }
+
+  importProjectTracks(request: ImportProjectTracksRequest): Promise<Job> {
+    return this.answer('ImportProjectTracks', () => {
+      this.require();
+      const source = this.package(request.path);
+      if (request.trackIds.length === 0) {
+        throw new ApiError(422, 'Choose the tracks to import.');
+      }
+
+      const unknown = request.trackIds.find(id => !source.tracks.some(t => t.id === id));
+      if (unknown) {
+        throw new ApiError(404, `'${source.name}' has no track '${unknown}'.`);
+      }
+
+      return this.startJob(
+        'projectImport',
+        {
+          finish: () => {
+            const before = this.require();
+            const after = withImportedTracks(before, source, request, prefix => `${prefix}_${this.nextId++}`);
+            this.commit(before, after, 'Import Tracks');
+            return [];
+          }
+        },
+        1
+      );
+    });
+  }
+
+  /** A saved project on the fake disk. */
+  private package(path: string): Project {
+    const project = this.disk.get(path.trim().replace(/\/+$/, ''));
+    if (!project) {
+      throw new ApiError(404, `'${path}' is not an Anode project.`);
+    }
+
+    return project;
+  }
+
+  /** A package location as the Server checks it: with its extension, free, and outside the open project. */
+  private saveTarget(path: string): string {
+    const project = this.require();
+    const trimmed = path.trim().replace(/\/+$/, '');
+    if (!trimmed) {
+      throw new ApiError(422, 'Name the folder to save the project to.');
+    }
+
+    const target = trimmed.endsWith('.anode') ? trimmed : `${trimmed}.anode`;
+    if (target === project.path || target.startsWith(`${project.path}/`)) {
+      throw new ApiError(422, 'A project cannot be saved inside itself.');
+    }
+
+    if (this.disk.has(target)) {
+      throw new ApiError(409, `'${target}' already exists.`);
+    }
+
+    return target;
+  }
+
+  /** The open project as a new one at `target`: its own id, and the name its folder gives it. */
+  private packaged(target: string): Project {
+    const name = (target.split('/').pop() ?? target).replace(/\.anode$/, '');
+    return {
+      ...structuredClone(this.require()),
+      id: `prj_${this.nextId++}`,
+      name,
+      path: target
+    };
+  }
+
+  private finishSaveCopy(target: string): string[] {
+    const copy = this.packaged(target);
+    this.disk.set(target, { ...copy, dirty: false });
+    this.remember(copy);
+    return [target];
+  }
+
+  /** Goes on in the new package with its undo; unsaved edits stay behind as a backup, the snapshot goes with them. */
+  private finishSaveAs(target: string): string[] {
+    const before = this.require();
+    const copy = this.packaged(target);
+    if (before.dirty) {
+      const backups = this.backupSets.get(before.path) ?? [];
+      backups.unshift({
+        backup: { id: `bak_${this.nextId++}`, saved: new Date(this.now()).toISOString() },
+        project: structuredClone(before)
+      });
+      this.backupSets.set(before.path, backups.slice(0, 10));
+    }
+
+    this.autosaves.delete(before.path);
+    const renamed = (project: Project): Project => ({
+      ...project,
+      id: copy.id,
+      name: copy.name,
+      path: target
+    });
+    const rebased = (step: UndoStep): UndoStep => ({
+      ...step,
+      before: renamed(step.before),
+      after: renamed(step.after)
+    });
+    this.undoStack = this.undoStack.map(rebased);
+    this.redoStack = this.redoStack.map(rebased);
+    this.project = { ...copy, dirty: false, revision: before.revision + 1 };
+    this.disk.set(target, structuredClone(this.project));
+    const summary = this.remember(this.project);
+    this.emit({ type: 'projectOpened', project: summary, revision: this.project.revision });
+    return [target];
   }
 
   saveProject(): Promise<ProjectSummary> {
@@ -942,8 +1306,13 @@ export class FakeAnodeServer implements AnodeApi {
             throw new ApiError(422, 'Record-enable a track first.');
           }
 
-          this.start('recording', request.tick);
-          this.recordFrom = this.positionTick;
+          // A pre-roll plays before the playhead; the take starts at it.
+          {
+            const from = request.tick ?? this.positionTick;
+            const stopped = this.transportState === 'stopped';
+            this.start('recording', stopped ? preRollStart(project, from) : request.tick);
+            this.recordFrom = stopped ? from : this.positionTick;
+          }
           this.held.clear();
           this.captured.clear();
           break;
@@ -1340,6 +1709,29 @@ export class FakeAnodeServer implements AnodeApi {
       };
       return structuredClone(this.labels);
     });
+  }
+
+  watchInsertDisplays(request: InsertDisplayRequest): Promise<void> {
+    return this.answer('WatchInsertDisplays', () => {
+      for (const { trackId, insertId } of request.inserts) {
+        this.watchedDisplays.set(displayKey(trackId ?? null, insertId), this.now() + DisplayLeaseMs);
+      }
+    });
+  }
+
+  /** The defaults of an insert's plugin, for what the insert has not set. */
+  private fakeDefaults(insert: Insert): ReadonlyMap<string, number> {
+    const plugin = this.catalogue.find(p => p.id === insert.pluginId);
+    return new Map(plugin?.parameters.map(p => [p.id, p.default]));
+  }
+
+  private fakeSpectrumOf(insert: Insert, level: number): number[] {
+    return fakeSpectrum(insert, level, this.positionTick, this.fakeDefaults(insert));
+  }
+
+  /** Whether a client's lease on an insert's display still runs. */
+  private displayWatched(trackId: string | null, insertId: string): boolean {
+    return (this.watchedDisplays.get(displayKey(trackId, insertId)) ?? 0) > this.now();
   }
 
   openPluginEditor(request: PluginEditorRequest): Promise<void> {
@@ -2148,6 +2540,8 @@ export class FakeAnodeServer implements AnodeApi {
       fineTune: 0,
       pitchNotes: [],
       pitchSource: 'off',
+      loopTicks: 0,
+      stretch: 1,
       key: null
     });
     const [drums, bass] = files as [AudioFile, AudioFile];
@@ -2522,7 +2916,10 @@ export class FakeAnodeServer implements AnodeApi {
 
   setMonitoring(settings: MonitoringSettings): Promise<MonitoringSettings> {
     return this.answer('SetMonitoring', () => {
-      this.monitoringSettings = checkMonitoring(settings);
+      this.monitoringSettings = checkMonitoring(
+        settings,
+        this.monitoringSettings.section ?? DefaultMonitoringSettings.section ?? DefaultMonitorSection
+      );
       return structuredClone(this.monitoringSettings);
     });
   }
@@ -3228,6 +3625,8 @@ export class FakeAnodeServer implements AnodeApi {
         fineTune: 0,
         pitchNotes: [],
         pitchSource: 'off',
+        loopTicks: 0,
+        stretch: 1,
         key: null
       };
     } else if (info.kind === 'midi') {
@@ -3253,6 +3652,7 @@ export class FakeAnodeServer implements AnodeApi {
         controls: [],
         muted: false,
         pitchSource: 'off',
+        loopTicks: 0,
         key: null
       };
     } else {
@@ -3266,7 +3666,8 @@ export class FakeAnodeServer implements AnodeApi {
         startTick: tick,
         lengthTicks,
         muted: false,
-        pattern: structuredClone(loop.pattern ?? { rows: [], swing: 0, seed: 1, stepTicks: 240 })
+        pattern: structuredClone(loop.pattern ?? { rows: [], swing: 0, seed: 1, stepTicks: 240 }),
+        loopTicks: 0
       };
     }
     if (request.cellSceneId) {
@@ -3508,6 +3909,12 @@ export class FakeAnodeServer implements AnodeApi {
       return;
     }
     try {
+      if (this.jobFailure) {
+        const failure = this.jobFailure;
+        this.jobFailure = null;
+        throw new ApiError(422, failure);
+      }
+
       const files = entry.finish
         ? entry.finish()
         : entry.bounce
@@ -3642,6 +4049,7 @@ export class FakeAnodeServer implements AnodeApi {
     this.emitCells(this.launcher.advance(tick));
     this.emitTransport();
     this.emit({ type: 'meters', ...this.meters() });
+    this.emitPerformance();
     // Phase 11: the Mastering Assistant's live loudness and gain reduction.
     const mastering = fakeMasteringReading(this.project, this.positionTick);
     if (mastering) {
@@ -4011,6 +4419,28 @@ export class FakeAnodeServer implements AnodeApi {
     this.emit({ type: 'transport', transport: this.status() });
   }
 
+  /** A made-up load, higher while the transport runs: the control bar's meter has something to show. */
+  emitPerformance(): void {
+    const load = this.transportState === 'stopped' ? 0.04 : 0.18;
+    this.emit({
+      type: 'performance',
+      performance: {
+        audioLoad: load,
+        audioPeakLoad: load * 1.5,
+        coreLoads: [load * 2, load * 1.2, load * 0.6, load * 0.3],
+        diskLoad: load / 3,
+        overloads: this.overloadCount,
+        underruns: 0
+      }
+    });
+  }
+
+  /** The engine drops out once (tests, and a way to see the overload light). */
+  simulateOverload(): void {
+    this.overloadCount++;
+    this.emitPerformance();
+  }
+
   /**
    * Levels that follow the regions under the playhead, so the meters move with what plays: VCA gains folded in, aux
    * tracks fed by their bus, only what reaches the master in its meter, and readings of dynamics and metering inserts.
@@ -4021,7 +4451,7 @@ export class FakeAnodeServer implements AnodeApi {
       return { tracks: [], master: { trackId: '', peakLeft: 0, peakRight: 0 }, readings: [] };
     }
 
-    const soloed = project.tracks.some(t => t.strip.solo);
+    const soloed = project.settings.mixer.soloMode === 'inPlace' && project.tracks.some(t => t.strip.solo);
     const byId = new Map(project.tracks.map(t => [t.id, t]));
     const tick = this.positionTick;
     const levels = new Map<string, number>();
@@ -4032,7 +4462,8 @@ export class FakeAnodeServer implements AnodeApi {
       return 10 ** (track.strip.volumeDb / 20) * vcaGain;
     };
     const audible = (track: Track) =>
-      !track.strip.mute && (!soloed || track.strip.solo || track.kind === 'aux' || track.kind === 'vca');
+      !track.strip.mute &&
+      (!soloed || track.strip.solo || track.strip.soloSafe || track.kind === 'aux' || track.kind === 'vca');
     // Sources first: what plays on each track under the playhead.
     for (const track of project.tracks) {
       if (track.kind === 'aux' || track.kind === 'vca' || track.kind === 'stack') {
@@ -4102,14 +4533,18 @@ export class FakeAnodeServer implements AnodeApi {
       if (peaks) {
         return { trackId: track.id, peakLeft: peaks[0] ?? 0, peakRight: peaks[1] ?? 0, peaks };
       }
-      return { trackId: track.id, peakLeft: level * Math.min(1, 1 - pan), peakRight: level * Math.min(1, 1 + pan) };
+      return withMeterLevels(track.strip.meter.type, {
+        trackId: track.id,
+        peakLeft: level * Math.min(1, 1 - pan),
+        peakRight: level * Math.min(1, 1 + pan)
+      });
     });
     const masterGain = 10 ** (project.master.volumeDb / 20) * (project.master.mute ? 0 : 1);
     const master = masterLevel * masterGain;
     const surroundPeaks = masterChannels > 2 ? masterPeaks.map(p => p * masterGain) : null;
     const masterMeter: TrackMeter = surroundPeaks
       ? { trackId: '', peakLeft: surroundPeaks[0] ?? 0, peakRight: surroundPeaks[1] ?? 0, peaks: surroundPeaks }
-      : { trackId: '', peakLeft: master, peakRight: master * 0.97 };
+      : withMeterLevels(project.master.meter.type, { trackId: '', peakLeft: master, peakRight: master * 0.97 });
     const readings: InsertReading[] = [];
     const read = (trackId: string | null, inserts: readonly Insert[], level: number) => {
       const db = level > 0 ? 20 * Math.log10(level) : -144;
@@ -4138,6 +4573,48 @@ export class FakeAnodeServer implements AnodeApi {
             break;
           case 'anode.loudness-meter':
             readings.push({ trackId, insertId: insert.id, value: level > 0 ? Math.max(-70, db - 9) : -70 });
+            break;
+          case 'anode.multipressor': {
+            // Program material falls with frequency: each band hears 4 dB less than the one below it.
+            const bands = [1, 2, 3, 4].map(band =>
+              insert.parameters[`band${band}On`] === 0
+                ? 0
+                : -Math.max(0, db - 4 * (band - 1) - (insert.parameters[`band${band}Threshold`] ?? -20)) *
+                  (1 - 1 / (insert.parameters[`band${band}Ratio`] ?? 2))
+            );
+            readings.push({
+              trackId,
+              insertId: insert.id,
+              value: Math.min(...bands),
+              values: this.displayWatched(trackId, insert.id) ? bands : null
+            });
+            break;
+          }
+          case 'anode.tuner':
+          case 'anode.test-oscillator':
+          case 'anode.expander':
+          case 'anode.frequency-spread':
+          case 'anode.scope':
+          case 'anode.phase-meter':
+          case 'anode.vocoder':
+          case 'anode.voice-shaper': {
+            const shown = fakeDisplay(insert, level, this.positionTick, this.fakeDefaults(insert));
+            readings.push({
+              trackId,
+              insertId: insert.id,
+              value: shown.value,
+              values: this.displayWatched(trackId, insert.id) ? shown.values : null
+            });
+            break;
+          }
+          case 'anode.channel-eq':
+          case 'anode.linear-eq':
+            readings.push({
+              trackId,
+              insertId: insert.id,
+              value: Math.max(-120, db),
+              values: this.displayWatched(trackId, insert.id) ? this.fakeSpectrumOf(insert, level) : null
+            });
             break;
         }
       }
@@ -4388,6 +4865,8 @@ export class FakeAnodeServer implements AnodeApi {
           fineTune: 0,
           pitchNotes: [],
           pitchSource: 'off',
+          loopTicks: 0,
+          stretch: 1,
           key: null
         };
         const smart = project.settings.smartTempo;
@@ -4464,6 +4943,7 @@ export class FakeAnodeServer implements AnodeApi {
           throw new ApiError(422, 'A take folder does not split: flatten it first.');
         }
         const r = region(command.regionId);
+        refuseLooped(r);
         const timing = timingOf(project, r);
         if (command.atTick <= r.startTick || command.atTick >= timing.endTick) {
           throw new ApiError(422, 'A split must fall inside the region.');
@@ -4514,9 +4994,25 @@ export class FakeAnodeServer implements AnodeApi {
           fadeOut,
           fadeInCurve: curve(command.fadeInCurve, r.fadeInCurve),
           fadeOutCurve: curve(command.fadeOutCurve, r.fadeOutCurve),
-          muted: command.muted ?? r.muted
+          muted: command.muted ?? r.muted,
+          loopTicks: checkedLoop(command.loopTicks, r.loopTicks)
         });
       }
+      case 'insertTime':
+      case 'cutTime':
+      case 'rippleDelete':
+        return applyTimeEdit(project, command, {
+          apply: (p, c) => this.applyCommand(p, c),
+          endOf: (p, r) => timingOf(p, r).endTick
+        });
+      case 'convertLoops':
+        return convertLoops(
+          project,
+          command.regionIds,
+          r => timingOf(project, r).endTick,
+          id,
+          () => this.nextId++
+        );
       case 'deleteRegions':
         if (command.regionIds.some(isSessionPlayerRegionId)) {
           const without = deleteSessionPlayerRegions(project, command.regionIds.filter(isSessionPlayerRegionId));
@@ -4591,6 +5087,8 @@ export class FakeAnodeServer implements AnodeApi {
             metronome: {
               enabled: command.enabled ?? m.enabled,
               countIn: command.countIn ?? m.countIn,
+              countInLength: rollLength(command.countInLength, m.countInLength),
+              countInUnit: command.countInUnit ?? m.countInUnit,
               levelDb: command.levelDb ?? m.levelDb
             }
           }
@@ -4673,6 +5171,7 @@ export class FakeAnodeServer implements AnodeApi {
           controls: [],
           muted: false,
           pitchSource: 'off',
+          loopTicks: 0,
           key: null
         };
         return { ...project, midiRegions: [...project.midiRegions, added] };
@@ -4718,7 +5217,13 @@ export class FakeAnodeServer implements AnodeApi {
         if (playback.quantizeTicks < 0 || !inUnit(playback.quantizeStrength) || !inUnit(playback.swing)) {
           throw new ApiError(422, 'Quantise needs a grid of 0 or more ticks, and strength and swing of 0…1.');
         }
-        return withMidiRegion({ ...r, name: command.name ?? r.name, playback, muted: command.muted ?? r.muted });
+        return withMidiRegion({
+          ...r,
+          name: command.name ?? r.name,
+          playback,
+          muted: command.muted ?? r.muted,
+          loopTicks: checkedLoop(command.loopTicks, r.loopTicks)
+        });
       }
       case 'addNotes': {
         const r = midiRegion(command.regionId);
@@ -4991,8 +5496,13 @@ export class FakeAnodeServer implements AnodeApi {
           replace: command.replace ?? r.replace,
           autopunch: command.autopunch ?? r.autopunch,
           punchInTick: Math.round(command.punchInTick ?? r.punchInTick),
-          punchOutTick: Math.round(command.punchOutTick ?? r.punchOutTick)
+          punchOutTick: Math.round(command.punchOutTick ?? r.punchOutTick),
+          preRollLength: command.preRollLength ?? r.preRollLength,
+          preRollUnit: command.preRollUnit ?? r.preRollUnit
         };
+        if (next.preRollLength < 0 || next.preRollLength > 32) {
+          throw new ApiError(422, 'A pre-roll is 0 to 32 bars or beats.');
+        }
         if (next.punchInTick < 0 || next.punchOutTick <= next.punchInTick) {
           throw new ApiError(422, 'The punch range must end after it starts.');
         }
@@ -5121,9 +5631,10 @@ export class FakeAnodeServer implements AnodeApi {
       case 'setAutomation':
       case 'setAutomationMode':
       case 'setMixerSettings':
+      case 'transferInsert':
       case 'applyPatch':
       case 'unfreezeTrack':
-        if ('chain' in command && command.chain === 'midiEffects') {
+        if ('chain' in command && command.chain === 'midiEffects' && command.type !== 'transferInsert') {
           // MIDI FX slots (Phase 6): the insert commands on a strip's `midiEffects`.
           return applyMidiEffectCommand(project, command, this.phase6Context());
         }
@@ -5429,6 +5940,7 @@ export class FakeAnodeServer implements AnodeApi {
    * crosses the split is cut there when it plays), the rest move to the second, relative to its start.
    */
   private splitMidiRegion(project: Project, r: MidiRegion, atTick: number): Project {
+    refuseLooped(r);
     const at = Math.round(atTick);
     if (at <= r.startTick || at >= r.startTick + r.lengthTicks) {
       throw new ApiError(422, 'A split must fall inside the region.');
@@ -5615,7 +6127,7 @@ export class FakeAnodeServer implements AnodeApi {
         tempo: 112,
         signature: { numerator: 4, denominator: 4 },
         cycle: { enabled: false, startTick: 4 * 4 * Ppq, endTick: 8 * 4 * Ppq },
-        metronome: { enabled: false, countIn: true, levelDb: -6 },
+        metronome: { enabled: false, countIn: true, levelDb: -6, countInLength: 1, countInUnit: 'bars' },
         endTick: DefaultEndTick,
         mergeMidiRecording: false,
         tempoEvents: [{ tick: 0, bpm: 112, curve: 'step', shape: 0 }],
@@ -5626,9 +6138,17 @@ export class FakeAnodeServer implements AnodeApi {
           replace: false,
           autopunch: false,
           punchInTick: 0,
-          punchOutTick: 4 * 4 * Ppq
+          punchOutTick: 4 * 4 * Ppq,
+          preRollLength: 0,
+          preRollUnit: 'bars'
         },
-        mixer: { pdc: 'all', lowLatency: false, lowLatencyLimitMs: 10 },
+        mixer: {
+          pdc: 'all',
+          lowLatency: false,
+          lowLatencyLimitMs: 10,
+          panLaw: 'minus3DbCompensated',
+          soloMode: 'inPlace'
+        },
         smartTempo: { mode: 'keep', defaultFollow: 'off', analyzeImports: true },
         varispeed: { enabled: false, mode: 'speedOnly', speed: 1 },
         sync: { source: 'internal', destinations: [], frameRate: 'fps25', startOffsetSeconds: 0, linkStartStop: false },
@@ -5960,8 +6480,21 @@ function strip(): ChannelStrip {
     midiEffects: [],
     inputFormat: 'stereo',
     outputFormat: 'stereo',
-    panner: structuredClone(DefaultPanner)
+    panner: structuredClone(DefaultPanner),
+    ...StripDefaults
   };
+}
+
+/** A meter frame with the levels its type publishes, made up from the peaks as a steady tone's would read. */
+function withMeterLevels(type: MeterType, meter: TrackMeter): TrackMeter {
+  if (type === 'peak') {
+    return meter;
+  }
+  if (type === 'lufs') {
+    const power = (meter.peakLeft ** 2 + meter.peakRight ** 2) / 2;
+    return { ...meter, lufs: power > 0 ? -0.691 + 10 * Math.log10(power) : -120 };
+  }
+  return { ...meter, rmsLeft: meter.peakLeft * Math.SQRT1_2, rmsRight: meter.peakRight * Math.SQRT1_2 };
 }
 
 /**

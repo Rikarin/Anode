@@ -614,7 +614,9 @@ static partial class RandomProjects {
                 Maybe(r.Next(2) == 0),
                 Maybe(r.Next(2) == 0)
             ),
-            nameof(AddRegionCommand) => Track() is { } t && files.Length > 0 ? AddRegion(t, Pick(r, files), r) : null,
+            nameof(AddRegionCommand) => (r.Next(2) == 0 ? FirstAudioTrack(s) : Track()) is { } t && files.Length > 0
+                ? AddRegion(t, Pick(r, files), r)
+                : null,
             nameof(MoveRegionCommand) => AnyRegion() is { } id
                 ? new MoveRegionCommand(id, r.NextInt64(0, 960 * 64), r.Next(2) == 0 ? null : Track())
                 : null,
@@ -625,6 +627,23 @@ static partial class RandomProjects {
                     ? Split(Pick(r, regions), s, r)
                     : null,
             nameof(SetRegionCommand) => regions.Length > 0 ? SetRegion(Pick(r, regions), r) : null,
+            nameof(StretchRegionCommand) => regions.Length > 0
+                ? new StretchRegionCommand(
+                    Pick(r, regions).Id,
+                    Pick(r, [0.25, 0.5, 1, 1.5, 2, 4]),
+                    r.Next(4) == 0 ? r.Next(0, 32) * 480L : null
+                )
+                : null,
+            nameof(InsertTimeCommand) => new InsertTimeCommand(r.Next(0, 32) * 480L, r.Next(1, 16) * 480L),
+            nameof(CutTimeCommand) => r.Next(0, 32) * 480L is var cut
+                ? new CutTimeCommand(cut, cut + r.Next(1, 16) * 480L)
+                : null,
+            nameof(RippleDeleteCommand) => AnyRegion() is not null
+                ? new RippleDeleteCommand([..Enumerable.Range(0, r.Next(1, 3)).Select(_ => AnyRegion()!)])
+                : null,
+            nameof(ConvertLoopsCommand) => AnyRegion() is not null
+                ? new ConvertLoopsCommand([..Enumerable.Range(0, r.Next(1, 4)).Select(_ => AnyRegion()!)])
+                : null,
             nameof(DeleteRegionsCommand) => AnyRegion() is not null
                 ? new DeleteRegionsCommand([..Enumerable.Range(0, r.Next(1, 4)).Select(_ => AnyRegion()!)])
                 : null,
@@ -634,7 +653,9 @@ static partial class RandomProjects {
             nameof(SetMetronomeCommand) => new SetMetronomeCommand(
                 Maybe(r.Next(2) == 0),
                 Maybe(r.Next(2) == 0),
-                Maybe((double)r.Next(-40, 1))
+                Maybe((double)r.Next(-40, 1)),
+                Maybe(r.Next(1, 9)),
+                Maybe(r.Next(2) == 0 ? MusicalUnit.Bars : MusicalUnit.Beats)
             ),
             nameof(RenameProjectCommand) => new RenameProjectCommand($"Song {r.Next(1000)}"),
             nameof(SetInstrumentCommand) => Instrument() is { } t
@@ -670,7 +691,8 @@ static partial class RandomProjects {
                     Maybe(Math.Round(r.NextDouble(), 2)),
                     Maybe(Math.Round(r.NextDouble(), 2)),
                     Maybe(r.Next(2) == 0),
-                    r.Next(3) > 0 ? null : grooves.Length == 0 || r.Next(4) == 0 ? string.Empty : Pick(r, grooves).Id
+                    r.Next(3) > 0 ? null : grooves.Length == 0 || r.Next(4) == 0 ? string.Empty : Pick(r, grooves).Id,
+                    r.Next(4) == 0 ? r.Next(0, 16) * 480L : null
                 )
                 : null,
             nameof(AddNotesCommand) => MidiRegion() is { } m
@@ -839,6 +861,24 @@ static partial class RandomProjects {
                         Pick(r, strip.Inserts).Id,
                         r.Next(0, strip.Inserts.Count + (r.Next(8) == 0 ? 1 : 0)),
                         t
+                    )
+                    : null,
+            nameof(TransferInsertCommand) => r.Next(3) == 0 && withFx.Length > 0 && Pick(r, withFx) is var fx
+                ? new TransferInsertCommand(
+                    Pick(r, fx.Strip.MidiEffects).Id,
+                    fx.Id,
+                    Pick(r, withFx).Id,
+                    r.Next(3) == 0 ? 0 : null,
+                    r.Next(2) == 0,
+                    InsertChain.MidiEffects
+                )
+                : WithInserts() is var (t, strip) && strip is not null
+                    ? new TransferInsertCommand(
+                        Pick(r, strip.Inserts).Id,
+                        t,
+                        r.Next(5) == 0 || mixed.Length == 0 ? null : Pick(r, mixed).Id,
+                        r.Next(3) == 0 ? r.Next(0, 3) : null,
+                        r.Next(2) == 0
                     )
                     : null,
             nameof(SetInsertCommand) when r.Next(3) == 0 && withFx.Length > 0 && Pick(r, withFx) is var fx =>
@@ -1028,7 +1068,8 @@ static partial class RandomProjects {
                     r.Next(2) == 0 ? null : r.Next(0, 32) * 480L,
                     r.Next(2) == 0 ? null : r.Next(r.Next(16) == 0 ? -1 : 1, 16) * 480L,
                     MaybeText($"Groove {r.Next(10)}"),
-                    Maybe(r.Next(2) == 0)
+                    Maybe(r.Next(2) == 0),
+                    r.Next(4) == 0 ? r.Next(0, 16) * 480L : null
                 )
                 : null,
             nameof(SetPatternCommand) => patterns.Length > 0 && Pick(r, patterns) is var p
@@ -2356,7 +2397,8 @@ static partial class RandomProjects {
             r.Next(2) == 0 ? null : r.NextInt64(0, region.Length / 2 + 1),
             r.Next(2) == 0 ? null : Math.Round(r.NextDouble() * 2 - 1, 2),
             r.Next(2) == 0 ? null : Math.Round(r.NextDouble() * 2 - 1, 2),
-            r.Next(2) == 0 ? null : r.Next(2) == 0
+            r.Next(2) == 0 ? null : r.Next(2) == 0,
+            r.Next(4) == 0 ? r.Next(0, 16) * 480L : null
         );
 
     static TempoEvent[] TempoEvents(Random r) {

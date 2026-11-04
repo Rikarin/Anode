@@ -1,8 +1,10 @@
 using Anode.Contracts;
 using Anode.Model;
 using Anode.Model.Audio;
+using Anode.Model.Compile;
 using Anode.Model.Editing;
 using Anode.Server.Engine;
+using Anode.Server.Library;
 using Anode.Server.Realtime;
 using System.Collections.Concurrent;
 using System.Globalization;
@@ -44,6 +46,7 @@ public sealed partial class Jobs : IDisposable {
     readonly IMasteringAnalysis mastering;
     readonly SessionPlayers players;
     readonly ISessionPlayerLibrary library;
+    readonly TemplateLibrary templates;
     readonly TimeProvider time;
     readonly ILogger<Jobs> logger;
     readonly ConcurrentDictionary<string, Entry> jobs = new(StringComparer.Ordinal);
@@ -68,9 +71,11 @@ public sealed partial class Jobs : IDisposable {
         IMasteringAnalysis mastering,
         SessionPlayers players,
         ISessionPlayerLibrary library,
+        TemplateLibrary templates,
         TimeProvider time,
         ILogger<Jobs> logger
     ) {
+        this.templates = templates;
         this.recognition = recognition;
         this.mastering = mastering;
         this.players = players;
@@ -234,15 +239,16 @@ public sealed partial class Jobs : IDisposable {
     }
 
     /// <summary>
-    ///     Where a track's last region (audio, MIDI, take folder or Session Player) ends, in samples, or null when it has
-    ///     none.
+    ///     Where a track's last region (audio, MIDI, pattern, take folder or Session Player) ends with its repeats, in
+    ///     samples, or null when it has none.
     /// </summary>
     static long? LastSample(ProjectState state, string trackId) {
         var map = state.PlaybackMap;
         var ends = state.RegionsOf(trackId)
-            .Select(r => Model.Compile.Varispeed.Of(state).Sample(Edits.EndSample(state, r)))
+            .Select(r => Model.Compile.Varispeed.Of(state).Sample(Loops.EndSample(state, r)))
+            .Concat(state.MidiRegionsOf(trackId).Select(r => map.SampleAt(Loops.EndTick(state, r), state.SampleRate)))
             .Concat(
-                state.MidiRegionsOf(trackId).Select(r => map.SampleAt(r.StartTick + r.LengthTicks, state.SampleRate))
+                state.PatternRegionsOf(trackId).Select(r => map.SampleAt(Loops.EndTick(state, r), state.SampleRate))
             )
             .Concat(
                 state.TakeFoldersOf(trackId).Select(f => map.SampleAt(f.StartTick + f.LengthTicks, state.SampleRate))

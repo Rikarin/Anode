@@ -38,6 +38,23 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/api/v1/plugins/displays': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Keeps these inserts' live displays (spectrum, scope, band gains) on the meters event for the next few seconds: an editor repeats it while a plugin window shows. Unknown inserts are ignored. */
+    post: operations['WatchInsertDisplays'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/api/v1/system/discovery': {
     parameters: {
       query?: never;
@@ -100,6 +117,23 @@ export interface paths {
     put?: never;
     /** Opens a project folder, closing the open one. */
     post: operations['OpenProject'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/projects/contents': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** What a project on the server's disk holds, read without opening it (Import from Project). */
+    post: operations['GetProjectContents'];
     delete?: never;
     options?: never;
     head?: never;
@@ -184,6 +218,74 @@ export interface paths {
     get?: never;
     put?: never;
     post: operations['SaveProject'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/project/save-as': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Queues writing the project, unsaved edits included, as a whole package at a new location and going on working there; the original stays as last saved. 409 when something is there; a job that fails or is cancelled leaves no package and the open project as it was. */
+    post: operations['SaveProjectAs'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/project/save-copy': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Queues writing the project, unsaved edits included, as a whole package at a new location; the open project stays open where it is, unsaved edits and all. */
+    post: operations['SaveProjectCopy'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/project/sample-rate': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Queues changing the project's sample rate, saving it: its files are written anew beside the old ones (converted, or their samples kept), the last save and unsaved edits go to backups, and the project reopens without undo history. 422 while files are offline or tracks unreadable, 409 while it plays. A job that fails or is cancelled leaves the project as it was. */
+    post: operations['ChangeSampleRate'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/project/import-tracks': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Queues importing chosen tracks of a project on the server's disk, with their regions, inserts, sends and automation, as one undo step. The source is only read; a job that fails leaves the open project as it was. */
+    post: operations['ImportProjectTracks'];
     delete?: never;
     options?: never;
     head?: never;
@@ -694,6 +796,90 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/api/v1/library/project-templates': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** The factory's project templates, then the user's: what `template` in CreateProject names. */
+    get: operations['ListProjectTemplates'];
+    put?: never;
+    /** Queues saving the open project, media and unsaved edits included, as a template of the user's. */
+    post: operations['SaveProjectTemplate'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/library/project-templates/{id}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    delete: operations['DeleteProjectTemplate'];
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/library/track-templates': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: operations['ListTrackTemplates'];
+    put?: never;
+    /** Saves tracks as a template with their routing: their stack members, the auxes they reach, their plugins and states. No regions or automation. */
+    post: operations['SaveTrackTemplate'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/library/track-templates/{id}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    delete: operations['DeleteTrackTemplate'];
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/library/track-templates/{id}/apply': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Queues adding a template's tracks to the open project, on buses of their own, as one undo step. */
+    post: operations['ApplyTrackTemplate'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/api/v1/project/bounce': {
     parameters: {
       query?: never;
@@ -958,7 +1144,7 @@ export interface paths {
     get?: never;
     put?: never;
     post?: never;
-    /** Removes an installed pack and its loops from the index; projects keep the copies of the loops they use. */
+    /** Removes an installed pack and its loops from the index; projects keep the copies of the files they use. */
     delete: operations['RemovePack'];
     options?: never;
     head?: never;
@@ -2315,6 +2501,16 @@ export interface components {
       pitchNotes: components['schemas']['PitchNote'][];
       pitchSource: components['schemas']['PitchSourceMode'];
       key: null | components['schemas']['RegionKey'];
+      /**
+       * Format: int64
+       * @default 0
+       */
+      loopTicks: number;
+      /**
+       * Format: double
+       * @default 1
+       */
+      stretch: number;
     };
     /**
      * @description Track automation of one parameter. `trackId` null is the master strip. `target` is `volume` (dB),
@@ -2488,6 +2684,12 @@ export interface components {
     CellKind: 'audio' | 'midi' | 'pattern';
     /** @enum {unknown} */
     CellPlayMode: 'loop' | 'oneShot' | 'retrigger';
+    /** @description A change of the open project's sample rate. */
+    ChangeSampleRateRequest: {
+      /** Format: int32 */
+      sampleRate: number;
+      mode: components['schemas']['SampleRateChangeMode'];
+    };
     /**
      * @description A channel format: an ordered speaker layout (SpeakerLayouts). The engine's buffers carry a strip's
      *     channels in its layout's order. Ambisonics are out of scope.
@@ -2521,7 +2723,13 @@ export interface components {
      *     pan (pan) for a stereo output, the Surround Panner, or an object (PannerMode); an input
      *     of the output's format passes straight through. Sends to a multichannel bus are panned by the strip's panner
      *     (their pan applies to stereo buses only). Every strip of a project from before Phase 10 is stereo in
-     *     and out with the stereo panner.
+     *     and out with the stereo panner.The strip's input stage (a track with a full strip, never the master or a VCA): trimDb and
+     *     polarityInverted apply to its source before the inserts, on every channel; delayMs moves it in
+     *     time after the inserts, before the fader (negative: earlier, which delay compensation pays for by delaying
+     *     everything else). dualPan pans a stereo signal's two channels on their own, to panLeft and
+     *     panRight (−1…1), instead of balancing it with pan; at −1 and 1 the signal passes as it is. They
+     *     stay when it is off. A mono signal always takes pan, a surround output its panner.soloSafe (a track with a full strip, a bus's aux above all): the strip stays audible when others are
+     *                         soloed in place.meter is what the strip's meter shows and where it reads the signal, the master's too.
      */
     ChannelStrip: {
       /** Format: double */
@@ -2539,6 +2747,18 @@ export interface components {
       inputFormat: components['schemas']['ChannelFormat'];
       outputFormat: components['schemas']['ChannelFormat'];
       panner: components['schemas']['Panner'];
+      /** Format: double */
+      trimDb: number;
+      polarityInverted: boolean;
+      /** Format: double */
+      delayMs: number;
+      dualPan: boolean;
+      /** Format: double */
+      panLeft: number;
+      /** Format: double */
+      panRight: number;
+      soloSafe: boolean;
+      meter: components['schemas']['StripMeter'];
     };
     /**
      * @description A chord of the chord track at project tick `tick` (it holds until the next chord): its root, its quality
@@ -2806,11 +3026,17 @@ export interface components {
     CreateAlternativeRequest: {
       name: string;
     };
+    /**
+     * @description A new project. `template` names one of `GET /library/project-templates` (left out: none). Its
+     *     `sampleRate` is the one asked for, else a template's own, else the device's; a template holding audio takes
+     *     only its own.
+     */
     CreateProjectRequest: {
       name: string;
       directory?: null | string;
       /** Format: int32 */
       sampleRate?: null | number;
+      template?: null | string;
     };
     CycleRange: {
       enabled: boolean;
@@ -3254,6 +3480,11 @@ export interface components {
       | components['schemas']['EditCommandSplitRegionCommand']
       | components['schemas']['EditCommandSetRegionCommand']
       | components['schemas']['EditCommandDeleteRegionsCommand']
+      | components['schemas']['EditCommandConvertLoopsCommand']
+      | components['schemas']['EditCommandStretchRegionCommand']
+      | components['schemas']['EditCommandInsertTimeCommand']
+      | components['schemas']['EditCommandCutTimeCommand']
+      | components['schemas']['EditCommandRippleDeleteCommand']
       | components['schemas']['EditCommandSetTempoCommand']
       | components['schemas']['EditCommandSetSignatureCommand']
       | components['schemas']['EditCommandSetCycleCommand']
@@ -3300,6 +3531,7 @@ export interface components {
       | components['schemas']['EditCommandAddInsertCommand']
       | components['schemas']['EditCommandRemoveInsertCommand']
       | components['schemas']['EditCommandMoveInsertCommand']
+      | components['schemas']['EditCommandTransferInsertCommand']
       | components['schemas']['EditCommandSetInsertCommand']
       | components['schemas']['EditCommandSetInsertParameterCommand']
       | components['schemas']['EditCommandAddSendCommand']
@@ -3804,6 +4036,12 @@ export interface components {
       /** Format: int32 */
       inlet: number;
     };
+    /** @description Turns the repeats of looped regions (audio, MIDI, pattern) into regions of their own; what plays stays. */
+    EditCommandConvertLoopsCommand: {
+      /** @enum {string} */
+      type: 'convertLoops';
+      regionIds: string[];
+    };
     /**
      * @description Replaces a pattern region with a MIDI region of exactly the notes it plays over its length (one pass of the
      *     region), at the same place, with its name and mute.
@@ -3853,6 +4091,19 @@ export interface components {
       type: 'createStack';
       trackIds: string[];
       name?: null | string;
+    };
+    /**
+     * @description Removes the time from `startTick` to `endTick` on every track and closes it, as `insertTime` makes
+     *     room: what is inside goes, what crosses it is split, and what follows moves earlier. The tempo, signature, key and
+     *     chord in force at its end hold from its start.
+     */
+    EditCommandCutTimeCommand: {
+      /** @enum {string} */
+      type: 'cutTime';
+      /** Format: int64 */
+      startTick: number;
+      /** Format: int64 */
+      endTick: number;
     };
     /** @description Phase 7: removes an articulation set; tracks that used it have none (their notes keep their ids). */
     EditCommandDeleteArticulationSetCommand: {
@@ -4012,6 +4263,21 @@ export interface components {
       /** @enum {string} */
       type: 'importTracks';
       content: components['schemas']['ImportedContent'];
+    };
+    /**
+     * @description Inserts `lengthTicks` of empty time at `atTick`, on every track: regions across it are split (a looped
+     *     one's repeats become regions first; pattern and Session Player regions grow instead), and everything from there on
+     *     moves later, with the tempo, signature, key and chord tracks, markers, sections, automation, score symbols, the
+     *     cycle, the punch locators, the project end and the movie. A signature change that no longer falls on a bar line
+     *     moves to the nearest one.
+     */
+    EditCommandInsertTimeCommand: {
+      /** @enum {string} */
+      type: 'insertTime';
+      /** Format: int64 */
+      atTick: number;
+      /** Format: int64 */
+      lengthTicks: number;
     };
     /**
      * @description Glues regions of one track into one: MIDI regions merge their notes; audio regions only when they play one
@@ -4331,6 +4597,16 @@ export interface components {
       fileOffset: number;
       /** Format: int64 */
       length: number;
+    };
+    /**
+     * @description Deletes regions and closes the time they took across every track: everything that starts after them moves earlier,
+     *     the global tracks, markers and automation as `cutTime` says; what other tracks hold across that time stays
+     *     where it is, uncut.
+     */
+    EditCommandRippleDeleteCommand: {
+      /** @enum {string} */
+      type: 'rippleDelete';
+      regionIds: string[];
     };
     /** @description Makes one take the whole comp. */
     EditCommandSelectTakeCommand: {
@@ -4654,6 +4930,9 @@ export interface components {
       countIn?: null | boolean;
       /** Format: double */
       levelDb?: null | number;
+      /** Format: int32 */
+      countInLength?: null | number;
+      countInUnit?: null | components['schemas']['MusicalUnit'];
     };
     EditCommandSetMidiIoCommand: {
       /** @enum {string} */
@@ -4668,7 +4947,8 @@ export interface components {
       merge: boolean;
     };
     /**
-     * @description Changes a MIDI region's name, mute or playback parameters. `grooveId` (Phase 7) makes its playback quantise
+     * @description Changes a MIDI region's name, mute, loop or playback parameters. `grooveId` (Phase 7) makes its playback
+     *     quantise
      *     follow a groove template of the project; an empty string returns it to the grid.
      */
     EditCommandSetMidiRegionCommand: {
@@ -4688,6 +4968,8 @@ export interface components {
       swing?: null | number;
       muted?: null | boolean;
       grooveId?: null | string;
+      /** Format: int64 */
+      loopTicks?: null | number;
     };
     EditCommandSetMixerSettingsCommand: {
       /** @enum {string} */
@@ -4696,6 +4978,8 @@ export interface components {
       lowLatency?: null | boolean;
       /** Format: double */
       lowLatencyLimitMs?: null | number;
+      panLaw?: null | components['schemas']['PanLaw'];
+      soloMode?: null | components['schemas']['SoloMode'];
     };
     /**
      * @description Phase 10, a movie import's result: sets the project's movie (replacing one it has). The `movieImport` job
@@ -4784,7 +5068,7 @@ export interface components {
       pattern: components['schemas']['Pattern'];
     };
     /**
-     * @description Moves (in time), resizes, renames or mutes a pattern region; `moveRegion`, `copyRegions` and
+     * @description Moves (in time), resizes, renames, loops or mutes a pattern region; `moveRegion`, `copyRegions` and
      *     `deleteRegions` take pattern regions too.
      */
     EditCommandSetPatternRegionCommand: {
@@ -4797,6 +5081,8 @@ export interface components {
       lengthTicks?: null | number;
       name?: null | string;
       muted?: null | boolean;
+      /** Format: int64 */
+      loopTicks?: null | number;
     };
     /**
      * @description Replaces an audio region's Flex Pitch notes (edits, splits and joins); notes need Flex or Follow, as a
@@ -4833,6 +5119,9 @@ export interface components {
       punchInTick?: null | number;
       /** Format: int64 */
       punchOutTick?: null | number;
+      /** Format: int32 */
+      preRollLength?: null | number;
+      preRollUnit?: null | components['schemas']['MusicalUnit'];
     };
     EditCommandSetRegionCommand: {
       /** @enum {string} */
@@ -4850,6 +5139,8 @@ export interface components {
       /** Format: double */
       fadeOutCurve?: null | number;
       muted?: null | boolean;
+      /** Format: int64 */
+      loopTicks?: null | number;
     };
     /**
      * @description Sets an audio region's Flex &amp; Follow, transpose (semitones) or fine tune (cents). A transpose or fine tune
@@ -5077,6 +5368,19 @@ export interface components {
       pan?: null | number;
       mute?: null | boolean;
       solo?: null | boolean;
+      /** Format: double */
+      trimDb?: null | number;
+      polarityInverted?: null | boolean;
+      /** Format: double */
+      delayMs?: null | number;
+      dualPan?: null | boolean;
+      /** Format: double */
+      panLeft?: null | number;
+      /** Format: double */
+      panRight?: null | number;
+      soloSafe?: null | boolean;
+      meterType?: null | components['schemas']['MeterType'];
+      meterTap?: null | components['schemas']['MeterTap'];
     };
     /**
      * @description Phase 10: sets a track strip's input format (mono or stereo for instrument tracks; any for audio and aux
@@ -5243,6 +5547,20 @@ export interface components {
       lengthTicks?: null | number;
     };
     /**
+     * @description Time-stretches an audio region without touching its file: it lasts `stretch` times as long as recorded
+     *     (0.25…4, 1 back to as recorded), from `startTick` when given (a drag of its left edge moves its start). Its
+     *     flex markers scale with it; its fades stay in frames, cut to fit.
+     */
+    EditCommandStretchRegionCommand: {
+      /** @enum {string} */
+      type: 'stretchRegion';
+      regionId: string;
+      /** Format: double */
+      stretch: number;
+      /** Format: int64 */
+      startTick?: null | number;
+    };
+    /**
      * @description Strip Silence: splits each audio region into one region per stretch above `thresholdDb` (RMS), each widened
      *     by `preAttackMs` before and `postReleaseMs` after; the silence between them is removed. As in Logic,
      *     `minTimeMs` is the shortest silence that splits: stretches separated by less stay in one region.
@@ -5271,6 +5589,25 @@ export interface components {
        * @default 50
        */
       postReleaseMs: number;
+    };
+    /**
+     * @description Moves an insert to slot `index` of another strip (`toTrackId`, null: the master; no index: last), or with
+     *     `copy` puts a copy of it there, on the same strip too. It takes its parameters, bypass, sidechain (unless the
+     *     strip it lands on cannot take that source), file and plugin state with it; a move takes its automation too, a copy
+     *     starts without any. `trackId` is the strip it is on (null: the master), `chain` as the other insert
+     *     commands; a MIDI FX slot goes to another strip's MIDI FX.
+     */
+    EditCommandTransferInsertCommand: {
+      /** @enum {string} */
+      type: 'transferInsert';
+      insertId: string;
+      trackId?: null | string;
+      toTrackId?: null | string;
+      /** Format: int32 */
+      index?: null | number;
+      /** @default false */
+      copy: boolean;
+      chain?: null | components['schemas']['InsertChain'];
     };
     /**
      * @description Phase 7, MIDI Transform: applies `set` (mode `operateOnly` or `selectAndOperate`;
@@ -5573,6 +5910,20 @@ export interface components {
       path: string;
     };
     /**
+     * @description Import from Project: `trackIds` of the package at `path` join the open project after its tracks, as one
+     *     undo step, with their stack members and, with sends, the auxes those reach. Left out, each part comes along:
+     *     `regions` (and take folders, alternatives and frozen files), `inserts`, `sends` and
+     *     `automation`. Their media is copied in, converted when the source is at another rate.
+     */
+    ImportProjectTracksRequest: {
+      path: string;
+      trackIds: string[];
+      regions?: null | boolean;
+      inserts?: null | boolean;
+      sends?: null | boolean;
+      automation?: null | boolean;
+    };
+    /**
      * @description An insert effect on a channel strip: the plugin, whether it is bypassed, its parameter values by parameter id
      *     (all of them), and its sidechain source (a track id or `bus:N`; null: none). A plugin's opaque state lives in
      *     the project's `Plugin States` folder. A MIDI FX slot (`ChannelStrip.midiEffects`) has the same shape,
@@ -5603,6 +5954,15 @@ export interface components {
     };
     /** @enum {unknown} */
     InsertChain: 'inserts' | 'midiEffects' | null;
+    /** @description The inserts whose live display (a spectrum, a scope, band gains) an editor shows now. */
+    InsertDisplayRequest: {
+      inserts: components['schemas']['InsertDisplayTarget'][];
+    };
+    /** @description An insert a plugin window shows; `trackId` null is the master. */
+    InsertDisplayTarget: {
+      trackId?: null | string;
+      insertId: string;
+    };
     /** @description Installs a `.anodepack` from the server's disk (replacing an installed version of the same pack). */
     InstallPackRequest: {
       path: string;
@@ -5671,7 +6031,12 @@ export interface components {
       | 'thumbnails'
       | 'chordId'
       | 'masteringAnalysis'
-      | 'sessionPlayerConvert';
+      | 'sessionPlayerConvert'
+      | 'saveAs'
+      | 'saveCopy'
+      | 'sampleRateChange'
+      | 'projectImport'
+      | 'saveTemplate';
     /** @enum {unknown} */
     JobState: 'queued' | 'running' | 'done' | 'failed' | 'cancelled';
     /** @description A key-command pad on the remote: its label, the key command it runs (a `KeyCommandSet` id), and a colour. */
@@ -6008,12 +6373,31 @@ export interface components {
       settings: components['schemas']['MasteringSettings'];
       analysis: null | components['schemas']['MasteringAnalysis'];
     };
-    /** @description The click: on or off, a one-bar count-in before recording, and its level in dB. */
+    /**
+     * @description Where a strip's meter reads the signal.
+     * @enum {unknown}
+     */
+    MeterTap: 'input' | 'preFader' | 'postFader';
+    /**
+     * @description What a strip's meter shows.
+     * @enum {unknown}
+     */
+    MeterType: 'peak' | 'rms' | 'k20' | 'k14' | 'k12' | 'lufs';
+    /**
+     * @description The click: on or off, a count-in before recording from a stop, and its level in dB. The count-in lasts
+     *     `countInLength` (1…32) of `countInUnit`, measured at where recording starts.
+     */
     MetronomeSettings: {
       enabled: boolean;
       countIn: boolean;
       /** Format: double */
       levelDb: number;
+      /**
+       * Format: int32
+       * @default 1
+       */
+      countInLength: number;
+      countInUnit: components['schemas']['MusicalUnit'];
     };
     MidiDevices: {
       inputs: components['schemas']['MidiPort'][];
@@ -6084,7 +6468,8 @@ export interface components {
      *     is cut there. `playback` holds the non-destructive region parameters. `notation` (Phase 9,
      *     docs/10-phase-9.md) holds its score settings: display quantise and interpretation. `pitchSource` and
      *     `key` (Phase 11, docs/12-phase-11.md): how it follows the chord track (applied at compile time; its notes
-     *     stay as they are) and its own key (null: the project's at its start).
+     *     stay as they are) and its own key (null: the project's at its start). `loopTicks`: it repeats for that many
+     *     ticks after its end, as AudioRegion says.
      */
     MidiRegion: {
       id: string;
@@ -6101,6 +6486,11 @@ export interface components {
       notation: components['schemas']['RegionNotation'];
       pitchSource: components['schemas']['PitchSourceMode'];
       key: null | components['schemas']['RegionKey'];
+      /**
+       * Format: int64
+       * @default 0
+       */
+      loopTicks: number;
     };
     /**
      * @description A MIDI output (a `MidiPort.id`) that Anode sends sync to: MIDI Clock (24 ppq, Start, Stop, Continue, Song
@@ -6132,13 +6522,16 @@ export interface components {
     };
     /**
      * @description Plugin delay compensation, and low-latency mode: while it is on, plugins on the path of record-armed or
-     *     monitored tracks whose latency exceeds `lowLatencyLimitMs` are bypassed.
+     *     monitored tracks whose latency exceeds `lowLatencyLimitMs` are bypassed. `panLaw` is the project's pan
+     *     law, `soloMode` what solo does.
      */
     MixerSettings: {
       pdc: components['schemas']['PdcMode'];
       lowLatency: boolean;
       /** Format: double */
       lowLatencyLimitMs: number;
+      panLaw: components['schemas']['PanLaw'];
+      soloMode: components['schemas']['SoloMode'];
     };
     /**
      * @description Monitoring (`GET/PUT /settings/monitoring`), stored in the user settings, not the project: the speaker map is
@@ -6146,12 +6539,32 @@ export interface components {
      *     changes bounces or ADM exports. `binaural` renders the master's speakers (and objects) through HRTFs to
      *     outputs 1–2; otherwise `downmixTo` (a format smaller than the master's; null: none) down-mixes per ITU-R
      *     BS.775 and sends its channels through the map. `speakerMap[i]` is the 1-based device output of channel i of
-     *     what is sent (0: not sent); an empty or short map sends channel i to output i + 1.
+     *     what is sent (0: not sent); an empty or short map sends channel i to output i + 1. `section` is the monitor
+     *     section (null in a request: as it is).
      */
     MonitoringSettings: {
       binaural: boolean;
       downmixTo?: null | components['schemas']['ChannelFormat'];
       speakerMap: number[];
+      section: null | components['schemas']['MonitorSection'];
+    };
+    /**
+     * @description The monitor section: what the speakers get after the master, never what a bounce or the listen-in hears. Output
+     *     pairs a strip is routed to directly bypass it. The level is `levelDb`, or with `reference` the calibrated
+     *     `referenceDb`; `dim` takes `dimDb` (0 or less) off whichever applies; `mono` folds the front
+     *     pair
+     *     to check it in mono.
+     */
+    MonitorSection: {
+      dim: boolean;
+      /** Format: double */
+      dimDb: number;
+      mono: boolean;
+      reference: boolean;
+      /** Format: double */
+      referenceDb: number;
+      /** Format: double */
+      levelDb: number;
     };
     /**
      * @description The project's movie (`Project.movie`; null: none). `path` is relative to the project folder when the
@@ -6249,6 +6662,12 @@ export interface components {
      * @enum {unknown}
      */
     MtcFrameRate: 'fps24' | 'fps25' | 'fps2997Drop' | 'fps30';
+    /**
+     * @description What a count-in or a pre-roll is counted in: bars or beats of the signature in force.
+     * @default bars
+     * @enum {unknown}
+     */
+    MusicalUnit: 'bars' | 'beats';
     /**
      * @description MusicXML 4.0 export (`POST /project/export/musicxml`, job `musicXmlExport`): score set
      *     `setId` (null: every MIDI track) as a partwise score, or one track's part (`partTrackId`);
@@ -6509,6 +6928,12 @@ export interface components {
       pads: components['schemas']['KeyCommandPad'][];
     };
     /**
+     * @description How a mono signal's level follows its pan: what the centre is, relative to a hard pan. Stereo signals are balanced
+     *     (the far side falls linearly) whatever the law; dual pan takes the law's shape with a hard pan at unity.
+     * @enum {unknown}
+     */
+    PanLaw: 'zeroDb' | 'minus3Db' | 'minus3DbCompensated' | 'minus4Point5Db' | 'minus6Db';
+    /**
      * @description A strip's panner (`ChannelStrip.panner`): the mode that applies, and both panners' settings, which stay when
      *     the mode changes. Automation addresses (`AutomationLane.target`): `surround:angle`,
      *     `surround:diversity`, `surround:elevation`, `surround:centre` (dB), `surround:lfe` (dB),
@@ -6595,6 +7020,11 @@ export interface components {
       lengthTicks: number;
       muted: boolean;
       pattern: components['schemas']['Pattern'];
+      /**
+       * Format: int64
+       * @default 0
+       */
+      loopTicks: number;
     };
     /**
      * @description A row of a pattern: what it plays (`kind` and `note`), its name, its length in steps (1…64; it cycles
@@ -6828,6 +7258,16 @@ export interface components {
       /** Format: date-time */
       saved: string;
     };
+    /** @description What a project on the server's disk holds, read without opening it. */
+    ProjectContents: {
+      name: string;
+      path: string;
+      /** Format: int32 */
+      sampleRate: number;
+      /** Format: double */
+      tempo: number;
+      tracks: components['schemas']['ProjectTrackInfo'][];
+    };
     /**
      * @description What changed between two revisions of the open project (docs/adr/0004-state-ownership.md). Clients apply the
      *     operations in order; a client that misses a revision refetches the project.
@@ -6890,14 +7330,49 @@ export interface components {
       modified: string;
     };
     /**
+     * @description A project template for the chooser. A factory one holds no audio and takes any rate; a user's has the rate it was
+     *     saved at (`sampleRate`) and `hasAudio` says whether it takes only that.
+     */
+    ProjectTemplate: {
+      id: string;
+      name: string;
+      category: string;
+      description: string;
+      factory: boolean;
+      /** Format: int32 */
+      sampleRate?: null | number;
+      hasAudio: boolean;
+    };
+    /**
      * @description What an audio import or recording does to the project tempo (Logic's project tempo modes).
      * @enum {unknown}
      */
     ProjectTempoMode: 'keep' | 'adapt' | 'auto';
     /**
+     * @description A track of a project on the server's disk, for the Import from Project browser: how much comes with it
+     *     (`regions` counts audio, MIDI, pattern and Session Player regions and take folders).
+     */
+    ProjectTrackInfo: {
+      id: string;
+      name: string;
+      kind: components['schemas']['TrackKind'];
+      color: string;
+      parentId?: null | string;
+      /** Format: int32 */
+      regions: number;
+      /** Format: int32 */
+      inserts: number;
+      /** Format: int32 */
+      sends: number;
+      /** Format: int32 */
+      lanes: number;
+    };
+    /**
      * @description How recording works: cycle recording mode; replace mode (a recording removes what it covers on its track); and
      *     autopunch, which records only between `punchInTick` and `punchOutTick` while playback continues around
-     *     them.
+     *     them. `preRollLength` (0…32, 0: none) of `preRollUnit` is how far before the playhead a recording from a
+     *     stop starts playing: what plays there is the project, and the take starts at the playhead (the pre-roll is kept
+     *     in its file, before the region). It stops at the project start.
      */
     RecordingSettings: {
       cycleMode: components['schemas']['CycleRecordMode'];
@@ -6907,6 +7382,12 @@ export interface components {
       punchInTick: number;
       /** Format: int64 */
       punchOutTick: number;
+      /**
+       * Format: int32
+       * @default 0
+       */
+      preRollLength: number;
+      preRollUnit: components['schemas']['MusicalUnit'];
     };
     /**
      * @description A project whose edits since its last save survive in an autosave, offered after a crash (docs/04-phase-3.md,
@@ -7016,10 +7497,32 @@ export interface components {
       min?: null | number[][];
       max?: null | number[][];
     };
+    /**
+     * @description What happens to the audio when a project's sample rate changes.
+     * @enum {unknown}
+     */
+    SampleRateChangeMode: 'convert' | 'keepSamples';
     SavePatchRequest: {
       trackId: string;
       name: string;
       category: string;
+    };
+    /**
+     * @description Where Save As or Save a Copy writes the package: a folder on the server's disk that does not exist yet
+     *     (`.anode` is added when left out). Its name is the new project's.
+     */
+    SaveProjectAsRequest: {
+      path: string;
+    };
+    SaveTemplateRequest: {
+      name: string;
+      category?: null | string;
+    };
+    /** @description Saves `trackIds` as a template, with their stack members and the auxes they reach. */
+    SaveTrackTemplateRequest: {
+      name: string;
+      category?: null | string;
+      trackIds: string[];
     };
     /**
      * @description A key and scale change of the chord track at `tick` (it holds until the next): the scale the players take
@@ -7585,6 +8088,11 @@ export interface components {
       analyzeImports: boolean;
     };
     /**
+     * @description What a strip's solo does.
+     * @enum {unknown}
+     */
+    SoloMode: 'inPlace' | 'afl' | 'pfl';
+    /**
      * @description One staff of a staff style. `transpose` is in semitones, written = concert + transpose (B♭ clarinet +2, F
      *     horn +7, alto sax +9); an octave clef's octave is the clef's, not part of it. With several staves (top to
      *     bottom), a note goes to the first staff whose `splitPitch` (a concert MIDI pitch) it reaches; the last
@@ -7694,6 +8202,11 @@ export interface components {
     /** @description Stops the cells playing on `trackIds` (left out: every track) at the grid's quantise boundary. */
     StopRequest: {
       trackIds?: null | string[];
+    };
+    /** @description A strip's meter: its type and tap point (a new strip's: peak, post-fader). */
+    StripMeter: {
+      type: components['schemas']['MeterType'];
+      tap: components['schemas']['MeterTap'];
     };
     /**
      * @description A surface's live state: whether it answers (Mackie Control's handshake or any input; HUI's ping) and the index of
@@ -7885,9 +8398,9 @@ export interface components {
       staffStyleId?: null | string;
     };
     /**
-     * @description An inactive alternative of a track: a snapshot of its regions, MIDI regions and take folders. The track's live
-     *     ones are its active alternative (`alternativeId`); selecting another swaps them in one undoable step, and
-     *     ids stay unique project-wide.
+     * @description An inactive alternative of a track: a snapshot of its regions, MIDI regions, take folders and pattern regions.
+     *     The track's live ones are its active alternative (`alternativeId`); selecting another swaps them in one
+     *     undoable step, and ids stay unique project-wide.
      */
     TrackAlternative: {
       id: string;
@@ -7895,6 +8408,7 @@ export interface components {
       regions: components['schemas']['AudioRegion'][];
       midiRegions: components['schemas']['MidiRegion'][];
       takeFolders: components['schemas']['TakeFolder'][];
+      patternRegions: components['schemas']['PatternRegion'][];
     };
     /** @description The device input: 1-based first channel (0: none); a stereo input takes that channel and the next. */
     TrackInput: {
@@ -7906,6 +8420,14 @@ export interface components {
     TrackKind: 'audio' | 'instrument' | 'midi' | 'stack' | 'aux' | 'vca' | 'drummer' | 'bassPlayer' | 'keyboardPlayer';
     /** @enum {unknown} */
     TrackSwitchAction: 'mute' | 'solo' | 'recordArm' | 'selectNext' | 'selectPrevious' | null;
+    /** @description A saved set of tracks with their routing (`tracks` counts those that come with them too). */
+    TrackTemplate: {
+      id: string;
+      name: string;
+      category: string;
+      /** Format: int32 */
+      tracks: number;
+    };
     /**
      * @description A condition on one field of an event. A set's conditions are ANDed; a field without a condition (or with
      *     `all`) matches everything. `b` is used by `inside` and `outside` only.
@@ -8130,6 +8652,37 @@ export interface operations {
       };
     };
   };
+  WatchInsertDisplays: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['InsertDisplayRequest'];
+      };
+    };
+    responses: {
+      /** @description No Content */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
   GetDiscovery: {
     parameters: {
       query?: never;
@@ -8242,6 +8795,46 @@ export interface operations {
         content: {
           'application/json': components['schemas']['Project'];
         };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  GetProjectContents: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['OpenProjectRequest'];
+      };
+    };
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ProjectContents'];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
       };
       /** @description Internal Server Error */
       500: {
@@ -8413,6 +9006,166 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ProjectSummary'];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  SaveProjectAs: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['SaveProjectAsRequest'];
+      };
+    };
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Job'];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  SaveProjectCopy: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['SaveProjectAsRequest'];
+      };
+    };
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Job'];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  ChangeSampleRate: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['ChangeSampleRateRequest'];
+      };
+    };
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Job'];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  ImportProjectTracks: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['ImportProjectTracksRequest'];
+      };
+    };
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Job'];
         };
       };
       /** @description Not Found */
@@ -9633,6 +10386,254 @@ export interface operations {
           [name: string]: unknown;
         };
         content?: never;
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  ListProjectTemplates: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ProjectTemplate'][];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  SaveProjectTemplate: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['SaveTemplateRequest'];
+      };
+    };
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Job'];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  DeleteProjectTemplate: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description No Content */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  ListTrackTemplates: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['TrackTemplate'][];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  SaveTrackTemplate: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['SaveTrackTemplateRequest'];
+      };
+    };
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['TrackTemplate'];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  DeleteTrackTemplate: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description No Content */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  ApplyTrackTemplate: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Job'];
+        };
       };
       /** @description Not Found */
       404: {

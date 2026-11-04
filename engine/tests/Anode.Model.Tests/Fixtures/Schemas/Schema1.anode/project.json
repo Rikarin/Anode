@@ -1,0 +1,45 @@
+{
+  "schemaVersion": 1,
+  "id": "prj_schema1",
+  "name": "Schema 1",
+  "sampleRate": 48000,
+  "settings": {
+    "tempo": 120,
+    "signature": {
+      "numerator": 4,
+      "denominator": 4
+    },
+    "cycle": {
+      "enabled": false,
+      "startTick": 0,
+      "endTick": 15360
+    },
+    "metronome": {
+      "enabled": false,
+      "countIn": false,
+      "levelDb": -6
+    },
+    "endTick": 491520,
+    "mergeMidiRecording": false
+  },
+  "master": {
+    "volumeDb": 0,
+    "pan": 0,
+    "mute": false,
+    "solo": false
+  },
+  "tracks": [
+    "trk_fixture001"
+  ],
+  "audioFiles": [
+    {
+      "id": "aud_fixture",
+      "name": "Tone",
+      "path": "Audio Files/Tone.wav",
+      "sampleRate": 48000,
+      "channels": 1,
+      "frames": 48000,
+      "bitDepth": 24
+    }
+  ]
+}

@@ -110,9 +110,9 @@ describe('MixerStore', () => {
     setUpFakeServer();
     const meters = TestBed.inject(MeterBus);
     meters.apply([{ trackId: 'trk_1', peakLeft: 0.5, peakRight: 0.25 }], { trackId: '', peakLeft: 1, peakRight: 1 });
-    expect(meters.level('trk_1')).toEqual({ left: 0.5, right: 0.25 });
+    expect(meters.level('trk_1')).toMatchObject({ left: 0.5, right: 0.25 });
     expect(meters.level(MasterMeter).left).toBe(1);
-    expect(meters.level('trk_unknown')).toEqual({ left: 0, right: 0 });
+    expect(meters.level('trk_unknown')).toMatchObject({ left: 0, right: 0 });
   });
 });
 

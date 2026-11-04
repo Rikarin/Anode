@@ -65,6 +65,7 @@ import { StepSequencerStore, takesPatterns } from '../step-sequencer/step-sequen
 import { AudioImport } from './audio-import';
 import { canPack } from './comp';
 import { DragModes } from './drag-modes';
+import { nextPoint, nudgeCommands, NudgeValues, previousPoint, transientTicks } from './nudge';
 import { plural } from './region-edit';
 import { SnapModes } from './snap';
 import { TakeHeader } from './take-header';
@@ -358,6 +359,46 @@ const Players: readonly { player: SessionPlayerKind; label: string; icon: string
       </ng-template>
       <button
         type="button"
+        class="bezel text-foreground flex h-6.5 items-center px-2 text-[11px] font-semibold"
+        aria-label="Ripple"
+        data-testid="ripple"
+        xuiTooltip="Ripple: deleting a region or a marquee closes the gap on every track"
+        [attr.aria-pressed]="view.ripple() ? 'true' : 'false'"
+        [class.text-lit]="view.ripple()"
+        (click)="view.ripple.set(!view.ripple())"
+      >
+        Ripple
+      </button>
+      <button
+        type="button"
+        class="bezel text-foreground flex h-6.5 items-center gap-1 px-2 text-[11px] font-semibold"
+        aria-label="Nudge value"
+        data-testid="nudge-value"
+        [xuiTooltip]="
+          'Nudge: what ' + keyOf('region.nudgeLeft') + ' and ' + keyOf('region.nudgeRight') + ' move regions by'
+        "
+        [xuiMenuTriggerFor]="nudgeMenu"
+      >
+        <span class="text-foreground-muted">Nudge</span>{{ nudgeLabel() }}
+        <ng-icon xui name="matExpandMoreRound" size="14px" />
+      </button>
+      <ng-template #nudgeMenu>
+        <xui-menu>
+          @for (value of nudgeValues; track value.value) {
+            <button
+              xuiMenuItem
+              type="button"
+              role="menuitemradio"
+              [attr.aria-checked]="view.nudgeValue() === value.value"
+              (click)="view.nudgeValue.set(value.value)"
+            >
+              {{ value.label }}
+            </button>
+          }
+        </xui-menu>
+      </ng-template>
+      <button
+        type="button"
         class="bezel text-foreground grid h-6.5 w-8 place-items-center"
         aria-label="Global tracks"
         data-testid="global-tracks"
@@ -543,6 +584,15 @@ const Players: readonly { player: SessionPlayerKind; label: string; icon: string
               Split at Playhead ({{ keyOf('region.split') }})
             </button>
             <button xuiMenuItem type="button" (click)="repeat()">Repeat Once ({{ keyOf('region.repeat') }})</button>
+            <button
+              xuiMenuItem
+              type="button"
+              data-testid="convert-loops"
+              [disabled]="!menuLoops()"
+              (click)="convertLoops()"
+            >
+              Convert Loops to Regions ({{ keyOf('region.convertLoops') }})
+            </button>
             @if (menuPatterns().length > 0) {
               <button xuiMenuItem type="button" data-testid="convert-to-midi-region" (click)="convertPatterns()">
                 Convert to MIDI Region
@@ -581,6 +631,13 @@ const Players: readonly { player: SessionPlayerKind; label: string; icon: string
                 Chord ID: Write to Chord Track
               </button>
             }
+            <xui-menu-divider />
+            <button xuiMenuItem type="button" data-testid="insert-time" (click)="insertTime()">
+              Insert Time ({{ keyOf('edit.insertTime') }})
+            </button>
+            <button xuiMenuItem type="button" data-testid="cut-time" (click)="cutTime()">
+              Cut Time ({{ keyOf('edit.cutTime') }})
+            </button>
             <xui-menu-divider />
             <button xuiMenuItem type="button" (click)="ui.stripSilenceOpen.set(true)">
               Strip Silence… ({{ keyOf('region.stripSilence') }})
@@ -635,6 +692,15 @@ const Players: readonly { player: SessionPlayerKind; label: string; icon: string
                 <kbd class="text-foreground-muted ms-4 font-sans text-[11px]">{{ tool.key }}</kbd>
               </button>
             }
+            <xui-menu-divider />
+            <button xuiMenuItem type="button" data-testid="insert-time" (click)="insertTime()">
+              <span class="flex-1">Insert Time</span>
+              <kbd class="text-foreground-muted ms-4 font-sans text-[11px]">{{ keyOf('edit.insertTime') }}</kbd>
+            </button>
+            <button xuiMenuItem type="button" data-testid="cut-time" (click)="cutTime()">
+              <span class="flex-1">Cut Time</span>
+              <kbd class="text-foreground-muted ms-4 font-sans text-[11px]">{{ keyOf('edit.cutTime') }}</kbd>
+            </button>
             @if (menuPatternTrack(); as track) {
               <xui-menu-divider />
               <button
@@ -680,6 +746,7 @@ export class TracksArea {
   protected readonly tools = Tools;
   protected readonly snapModes = SnapModes;
   protected readonly dragModes = DragModes;
+  protected readonly nudgeValues = NudgeValues;
   protected readonly offset = computed(() => -this.view.firstLane() * this.view.laneHeight());
   protected readonly globalHeight = computed(() =>
     this.view.globalTracks()
@@ -700,10 +767,23 @@ export class TracksArea {
 
   protected readonly snapLabel = computed(() => SnapModes.find(m => m.value === this.view.snapMode())?.label ?? '');
   protected readonly dragLabel = computed(() => DragModes.find(m => m.value === this.view.dragMode())?.label ?? '');
+  protected readonly nudgeLabel = computed(
+    () => NudgeValues.find(v => v.value === this.view.nudgeValue())?.label ?? ''
+  );
   /** The selected pattern regions the region menu converts to MIDI. */
   protected readonly menuPatterns = computed(() => {
     const target = this.timeline().menuTarget();
     return target.kind === 'regions' ? target.ids.filter(id => this.project.patternRegions().has(id)) : [];
+  });
+  /** Some of the menu's regions loop. */
+  protected readonly menuLoops = computed(() => {
+    const target = this.timeline().menuTarget();
+    const loopTicks = (id: string) =>
+      this.project.regions().get(id)?.loopTicks ??
+      this.project.midiRegions().get(id)?.loopTicks ??
+      this.project.patternRegions().get(id)?.loopTicks ??
+      0;
+    return target.kind === 'regions' && target.ids.some(id => loopTicks(id) > 0);
   });
   /** The menu's Session Player regions (Regenerate, Convert). */
   protected readonly menuPlayers = computed(() => {
@@ -785,6 +865,19 @@ export class TracksArea {
       ['region.mute', () => this.mute()],
       ['region.split', () => this.splitAtPlayhead()],
       ['region.repeat', () => this.repeat()],
+      ['region.convertLoops', () => this.convertLoops()],
+      ['region.nudgeLeft', () => this.nudge(-1)],
+      ['region.nudgeRight', () => this.nudge(1)],
+      ...NudgeValues.map(({ value, label }): [string, () => void] => [
+        `region.nudge${label}`,
+        () => this.view.nudgeValue.set(value)
+      ]),
+      ['transport.nextTransient', () => void this.jumpToTransient(1)],
+      ['transport.previousTransient', () => void this.jumpToTransient(-1)],
+      ['transport.nextRegionEdge', () => this.jumpTo(this.regionEdges(), 1)],
+      ['transport.previousRegionEdge', () => this.jumpTo(this.regionEdges(), -1)],
+      ['transport.nextMarker', () => this.jumpTo(this.markerTicks(), 1)],
+      ['transport.previousMarker', () => this.jumpTo(this.markerTicks(), -1)],
       ['track.stack', () => this.createStack()],
       ['track.marker', () => this.addGlobal('marker')],
       ['track.newAudio', () => this.addTrack('audio')],
@@ -802,7 +895,10 @@ export class TracksArea {
       ['edit.cut', () => this.clipboardKey(() => this.clipboard.cut())],
       ['edit.copy', () => this.clipboardKey(() => this.clipboard.copy())],
       ['edit.paste', () => this.clipboardKey(() => this.clipboard.paste())],
-      ['edit.delete', () => this.deleteSelected()]
+      ['edit.delete', () => this.deleteSelected()],
+      ['edit.insertTime', () => this.insertTime()],
+      ['edit.cutTime', () => this.cutTime()],
+      ['edit.ripple', () => this.view.ripple.update(on => !on)]
     ];
     const unregister = register.map(([id, action]) => this.keys.register(id, action));
     inject(DestroyRef).onDestroy(() => unregister.forEach(off => off()));
@@ -813,6 +909,71 @@ export class TracksArea {
     if (!document.activeElement?.closest('an-editors-pane')) {
       void action();
     }
+  }
+
+  /** Moves the selected regions by the nudge value (⌥← and ⌥→); in an editor the keys are its own. */
+  private nudge(direction: 1 | -1): void {
+    if (document.activeElement?.closest('an-editors-pane')) {
+      return;
+    }
+    const selected = this.timeline()
+      .allSpans()
+      .filter(s => this.selection.isSelected(s.id));
+    const commands = nudgeCommands(selected, this.view.nudgeValue(), direction, this.timeline().snapContext());
+    if (commands.length > 0) {
+      void this.project.execute(commands, plural('Nudge', commands.length));
+    }
+  }
+
+  /** The playhead to the next or previous of `points`, in view. */
+  private jumpTo(points: readonly number[], direction: 1 | -1): void {
+    const from = this.transport.positionAt(performance.now());
+    const to = direction > 0 ? nextPoint(points, from) : previousPoint(points, from);
+    if (to !== null) {
+      this.transport.locate(to);
+      this.timeline().reveal(to);
+    }
+  }
+
+  /** The tracks a jump reads: the selected ones, all of them when none is. */
+  private jumpTracks(): (trackId: string) => boolean {
+    const tracks = this.selection.trackSelection();
+    return tracks.length > 0 ? trackId => tracks.includes(trackId) : () => true;
+  }
+
+  private regionEdges(): number[] {
+    const onTrack = this.jumpTracks();
+    return this.timeline()
+      .allSpans()
+      .filter(s => onTrack(s.trackId))
+      .flatMap(s => {
+        const repeats = s.playedEnd > s.endTick ? [s.playedEnd] : [];
+        return [s.startTick, s.endTick, ...repeats];
+      });
+  }
+
+  private markerTicks(): number[] {
+    return this.project.markers().map(m => m.tick);
+  }
+
+  /**
+   * Tab to Transient: the playhead to the next or previous transient of the selected audio regions, or of the selected
+   * tracks' audio regions when no region is selected. A file's first jump waits for its analysis.
+   */
+  private async jumpToTransient(direction: 1 | -1): Promise<void> {
+    const onTrack = this.jumpTracks();
+    const all = [...this.project.regions().values()];
+    const selected = all.filter(r => this.selection.isSelected(r.id));
+    const regions = selected.length > 0 ? selected : all.filter(r => onTrack(r.trackId));
+    const ticks = await Promise.all(
+      regions.map(async region => {
+        const analysis = await this.flex.load(region.fileId);
+        const timing = this.project.timing(region);
+        const played = this.project.loopEndOf(region, timing.endTick);
+        return analysis ? transientTicks(timing, analysis.transients, played) : [];
+      })
+    );
+    this.jumpTo(ticks.flat(), direction);
   }
 
   /** Quantises the selected audio regions at the Region inspector's grid (Q). */
@@ -1029,6 +1190,22 @@ export class TracksArea {
     void this.project.execute(commands, plural('Split', commands.length));
   }
 
+  /** The selected regions that loop. */
+  private looped(): string[] {
+    return this.timeline()
+      .allSpans()
+      .filter(s => s.playedEnd > s.endTick && this.selection.isSelected(s.id))
+      .map(s => s.id);
+  }
+
+  /** Turns the selected regions' repeats into regions of their own (⌃L). */
+  protected convertLoops(): void {
+    const ids = this.looped();
+    if (ids.length > 0) {
+      void this.project.execute([{ type: 'convertLoops', regionIds: ids }], 'Convert Loops to Regions');
+    }
+  }
+
   /** Repeat Once: a copy right after the selection's end (⌘R). */
   protected repeat(): void {
     const ids = this.selected();
@@ -1055,13 +1232,20 @@ export class TracksArea {
     ]);
   }
 
-  /** Delete: selected automation (points or a range), else the marquee tool's range, else the selected regions. */
+  /**
+   * Delete: selected automation (points or a range), else the marquee tool's range, else the selected regions. With
+   * Ripple on, the time they took closes on every track.
+   */
   deleteSelected(): void {
     if (this.automation.deleteSelection()) {
       return;
     }
     const range = this.view.marquee();
     if (range) {
+      if (this.view.ripple()) {
+        this.cutTime();
+        return;
+      }
       const commands = this.clipboard.marqueeDelete(range);
       this.view.marquee.set(null);
       void this.project.execute(commands, 'Delete Marquee Selection');
@@ -1069,8 +1253,41 @@ export class TracksArea {
     }
     const ids = this.selected();
     if (ids.length > 0) {
-      void this.project.execute([{ type: 'deleteRegions', regionIds: ids }], plural('Delete', ids.length));
+      void this.project.execute(
+        [{ type: this.view.ripple() ? 'rippleDelete' : 'deleteRegions', regionIds: ids }],
+        plural(this.view.ripple() ? 'Ripple Delete' : 'Delete', ids.length)
+      );
     }
+  }
+
+  /** The range Insert and Cut Time work on: the marquee's, else the cycle's (Logic's locators). */
+  private timeRange(): { startTick: number; endTick: number } {
+    return this.view.marquee() ?? this.project.settings().cycle;
+  }
+
+  /** Inserts the range's length of empty time at its start, on every track. */
+  protected insertTime(): void {
+    const { startTick, endTick } = this.timeRange();
+    const locators = !this.view.marquee();
+    this.view.marquee.set(null);
+    const at = Math.round(startTick);
+    const end = Math.round(endTick);
+    const commands: EditCommand[] = [{ type: 'insertTime', atTick: at, lengthTicks: end - at }];
+    // The locators gave the range: they stay on the new time, as Logic's do.
+    void this.project.execute(
+      locators ? [...commands, { type: 'setCycle', startTick: at, endTick: end }] : commands,
+      'Insert Time'
+    );
+  }
+
+  /** Removes the range on every track and closes it. */
+  protected cutTime(): void {
+    const { startTick, endTick } = this.timeRange();
+    this.view.marquee.set(null);
+    void this.project.execute(
+      [{ type: 'cutTime', startTick: Math.round(startTick), endTick: Math.round(endTick) }],
+      'Cut Time'
+    );
   }
 
   protected flatten(folderId: string): void {

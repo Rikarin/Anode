@@ -7,6 +7,28 @@ public sealed record ProjectAlternative(string Id, string Name, DateTimeOffset M
 
 public sealed record CreateAlternativeRequest(string Name);
 
+/// <summary>
+///     A project template for the chooser. A factory one holds no audio and takes any rate; a user's has the rate it was
+///     saved at (<c>sampleRate</c>) and <c>hasAudio</c> says whether it takes only that.
+/// </summary>
+public sealed record ProjectTemplate(
+    string Id,
+    string Name,
+    string Category,
+    string Description,
+    bool Factory,
+    int? SampleRate,
+    bool HasAudio
+);
+
+/// <summary>A saved set of tracks with their routing (<c>tracks</c> counts those that come with them too).</summary>
+public sealed record TrackTemplate(string Id, string Name, string Category, int Tracks);
+
+public sealed record SaveTemplateRequest(string Name, string? Category = null);
+
+/// <summary>Saves <c>trackIds</c> as a template, with their stack members and the auxes they reach.</summary>
+public sealed record SaveTrackTemplateRequest(string Name, string? Category, IReadOnlyList<string> TrackIds);
+
 /// <summary>An automatic backup, made at each save of the current alternative (the newest ten are kept).</summary>
 public sealed record ProjectBackup(string Id, DateTimeOffset Saved);
 

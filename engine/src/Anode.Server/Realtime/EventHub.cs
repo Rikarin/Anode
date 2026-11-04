@@ -9,7 +9,8 @@ namespace Anode.Server.Realtime;
 /// <summary>
 ///     Fans events out to every <c>/ws</c> client. Each client has a bounded outbox of events that are never dropped;
 ///     one that falls <see cref="Backlog" /> events behind gets a single <see cref="ResyncEvent" /> instead of the
-///     backlog, as in Cathode. Telemetry frames (<see cref="TransportEvent" />, <see cref="MetersEvent" />) go to
+///     backlog, as in Cathode. Telemetry frames (<see cref="TransportEvent" />, <see cref="MetersEvent" />,
+///     <see cref="PerformanceEvent" />) go to
 ///     latest-only slots instead: a slow client skips frames rather than falling behind on them.
 /// </summary>
 public sealed class EventHub {
@@ -92,6 +93,7 @@ public sealed class EventHub {
 
         RealtimeEvent? transport;
         RealtimeEvent? meters;
+        RealtimeEvent? performance;
 
         public void Post(RealtimeEvent e) {
             switch (e) {
@@ -100,6 +102,9 @@ public sealed class EventHub {
                     break;
                 case MetersEvent:
                     Volatile.Write(ref meters, e);
+                    break;
+                case PerformanceEvent:
+                    Volatile.Write(ref performance, e);
                     break;
                 default:
                     if (!events.Writer.TryWrite(e)) {
@@ -115,11 +120,13 @@ public sealed class EventHub {
             wake.Writer.TryWrite(true);
         }
 
-        /// <summary>The next frame to send: events first, then the latest transport, then the latest meters.</summary>
+        /// <summary>The next frame to send: events first, then the latest transport, meters and load.</summary>
         public RealtimeEvent? Next() =>
             events.Reader.TryRead(out var e)
                 ? e
-                : Interlocked.Exchange(ref transport, null) ?? Interlocked.Exchange(ref meters, null);
+                : Interlocked.Exchange(ref transport, null)
+                ?? Interlocked.Exchange(ref meters, null)
+                ?? Interlocked.Exchange(ref performance, null);
 
         public async Task WaitAsync(CancellationToken cancellationToken) =>
             await wake.Reader.ReadAsync(cancellationToken).ConfigureAwait(false);

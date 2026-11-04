@@ -23,6 +23,26 @@ public static class GainComputer {
 
         return slope * over;
     }
+
+    /// <summary>
+    ///     A downward expander's gain (dB, ≤ 0) for a level of <paramref name="levelDb" />: above the knee the level
+    ///     passes, below it every dB falls by <paramref name="ratio" /> dB, and a quadratic joins the two within a knee of
+    ///     <paramref name="kneeDb" /> dB centred on the threshold.
+    /// </summary>
+    public static double Expansion(double levelDb, double thresholdDb, double ratio, double kneeDb) {
+        var over = levelDb - thresholdDb;
+        var slope = Math.Max(ratio, 1) - 1;
+        if (2 * over > kneeDb) {
+            return 0;
+        }
+
+        if (kneeDb > 0 && 2 * Math.Abs(over) <= kneeDb) {
+            var x = over - kneeDb / 2;
+            return -slope * x * x / (2 * kneeDb);
+        }
+
+        return slope * over;
+    }
 }
 
 /// <summary>The filter a dynamics processor's detector can hear its signal through.</summary>

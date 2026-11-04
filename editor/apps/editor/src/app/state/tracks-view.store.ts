@@ -1,6 +1,7 @@
 import { Injectable, computed, signal } from '@angular/core';
-import type { DragMode } from '../tracks/drag-modes';
-import type { SnapMode } from '../tracks/snap';
+import { DragModes, type DragMode } from '../tracks/drag-modes';
+import type { NudgeValue } from '../tracks/nudge';
+import { SnapModes, type SnapMode } from '../tracks/snap';
 import { Ppq } from './project.store';
 
 /** The Tracks area's tools (Logic's Left-click and ⌘-click tool menus). */
@@ -40,9 +41,19 @@ export const GlobalLanes: readonly GlobalLane[] = [
   'key'
 ];
 
+const DefaultGlobalLanes: readonly GlobalLane[] = ['arrangement', 'marker', 'movie', 'tempo', 'signature'];
+
 /** The global tracks that show, in order: those chosen, the movie track only when the project has a movie. */
 export function visibleGlobalLanes(chosen: ReadonlySet<GlobalLane>, hasMovie: boolean): GlobalLane[] {
   return GlobalLanes.filter(lane => chosen.has(lane) && (lane !== 'movie' || hasMovie));
+}
+
+function inRange(value: unknown, fallback: number, min: number, max: number): number {
+  return typeof value === 'number' && Number.isFinite(value) ? Math.min(max, Math.max(min, value)) : fallback;
+}
+
+function oneOf<T>(value: unknown, values: readonly T[], fallback: T): T {
+  return values.includes(value as T) ? (value as T) : fallback;
 }
 
 /** A time range picked with the marquee tool, across lanes `laneFrom…laneTo` (inclusive). */
@@ -56,8 +67,9 @@ export interface MarqueeRange {
 /**
  * Where the Tracks area looks and how it edits: horizontal zoom and scroll (the tick at the left edge), vertical scroll
  * (the lane at the top, fractional) and lane height, the left-click and ⌘-click tools, snap and its mode, the drag
- * mode, whether the view follows the playhead (Logic's Catch), which global tracks show and which take folders are
- * open. Per window, not per project, and not undoable.
+ * mode, the nudge value, whether the view follows the playhead (Logic's Catch), which global tracks show and which
+ * take folders are open. Not undoable; each project remembers it (`ProjectViewStore`, except the open folders and the
+ * marquee).
  */
 @Injectable({ providedIn: 'root' })
 export class TracksViewStore {
@@ -72,18 +84,71 @@ export class TracksViewStore {
   readonly snap = signal(true);
   readonly snapMode = signal<SnapMode>('smart');
   readonly dragMode = signal<DragMode>('overlap');
+  /** Ripple: deleting closes the gap on every track. */
+  readonly ripple = signal(false);
+  /** What the Nudge Regions keys move by. */
+  readonly nudgeValue = signal<NudgeValue>('division');
   readonly follow = signal(true);
   /** Whether the global tracks show, and which. */
   readonly globalTracks = signal(false);
-  readonly globalLanes = signal<ReadonlySet<GlobalLane>>(
-    new Set(['arrangement', 'marker', 'movie', 'tempo', 'signature'])
-  );
+  readonly globalLanes = signal<ReadonlySet<GlobalLane>>(new Set(DefaultGlobalLanes));
   /** Take folders shown open, their takes in rows under them. */
   readonly expandedFolders = signal<ReadonlySet<string>>(new Set());
   /** The marquee tool's selection. */
   readonly marquee = signal<MarqueeRange | null>(null);
 
   readonly pixelsPerTick = computed(() => this.pixelsPerQuarter() / Ppq);
+
+  /** What a project remembers of this view. */
+  readonly remembered = computed(() => ({
+    pixelsPerQuarter: this.pixelsPerQuarter(),
+    originTick: this.originTick(),
+    firstLane: this.firstLane(),
+    laneHeight: this.laneHeight(),
+    tool: this.tool(),
+    secondaryTool: this.secondaryTool(),
+    snap: this.snap(),
+    snapMode: this.snapMode(),
+    dragMode: this.dragMode(),
+    follow: this.follow(),
+    globalTracks: this.globalTracks(),
+    globalLanes: [...this.globalLanes()]
+  }));
+
+  /** The view a project left (what it does not hold, or holds wrongly, at its default). */
+  restore(saved: unknown): void {
+    const view = (typeof saved === 'object' && saved !== null ? saved : {}) as Record<string, unknown>;
+    const tools = Tools.map(t => t.value);
+    this.pixelsPerQuarter.set(inRange(view['pixelsPerQuarter'], 48, MinPixelsPerQuarter, MaxPixelsPerQuarter));
+    this.originTick.set(inRange(view['originTick'], 0, 0, Number.MAX_SAFE_INTEGER));
+    this.firstLane.set(inRange(view['firstLane'], 0, 0, Number.MAX_SAFE_INTEGER));
+    this.laneHeight.set(inRange(view['laneHeight'], 72, MinLaneHeight, MaxLaneHeight));
+    this.tool.set(oneOf(view['tool'], tools, 'pointer'));
+    this.secondaryTool.set(oneOf(view['secondaryTool'], tools, 'marquee'));
+    this.snap.set(view['snap'] !== false);
+    this.snapMode.set(
+      oneOf(
+        view['snapMode'],
+        SnapModes.map(m => m.value),
+        'smart'
+      )
+    );
+    this.dragMode.set(
+      oneOf(
+        view['dragMode'],
+        DragModes.map(m => m.value),
+        'overlap'
+      )
+    );
+    this.follow.set(view['follow'] !== false);
+    this.globalTracks.set(view['globalTracks'] === true);
+    const lanes = view['globalLanes'];
+    this.globalLanes.set(
+      new Set(Array.isArray(lanes) ? GlobalLanes.filter(l => lanes.includes(l)) : DefaultGlobalLanes)
+    );
+    this.expandedFolders.set(new Set());
+    this.marquee.set(null);
+  }
 
   /** Zooms by `factor`, keeping the tick under `anchorX` (CSS pixels from the timeline's left edge) in place. */
   zoom(factor: number, anchorX = 0): void {

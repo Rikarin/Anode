@@ -1,5 +1,6 @@
 using Anode.Contracts;
 using Anode.Ipc;
+using Anode.Model;
 using Anode.Server.Library;
 using Anode.Server.Projects;
 
@@ -9,7 +10,8 @@ namespace Anode.Server.Engine;
 ///     Monitoring (docs/11-phase-10.md): the user settings' <see cref="MonitoringSettings" />, sent to the host as
 ///     <see cref="SetMonitoringMessage" /> when a host connects, when they change, and when the open project's format
 ///     changes (a down-mix no narrower than the master is dropped). The contract's 1-based speaker map (0: not sent)
-///     becomes the IPC's 0-based one (−1), and binaural listening names the HRTF set (<see cref="HrtfLocator" />).
+///     becomes the IPC's 0-based one (−1), binaural listening names the HRTF set (<see cref="HrtfLocator" />), and the
+///     monitor section becomes one gain and the mono check.
 /// </summary>
 public sealed class MonitoringService(
     EngineConnection engine,
@@ -40,8 +42,14 @@ public sealed class MonitoringService(
                 ? (EngineChannelFormat)to
                 : null,
             [..monitoring.SpeakerMap.Select(static output => output - 1)],
-            monitoring.Binaural ? hrtf : null
+            monitoring.Binaural ? hrtf : null,
+            Gain(monitoring.Section ?? MonitorSection.Default),
+            monitoring.Section?.Mono ?? false
         );
+
+    /// <summary>The monitor section's gain: the level or the reference, less the dim when it is on.</summary>
+    static float Gain(MonitorSection section) =>
+        Units.DbToGain((section.Reference ? section.ReferenceDb : section.LevelDb) + (section.Dim ? section.DimDb : 0));
 
     void Send() {
         var master = session.View?.State.Settings.SurroundFormat ?? ChannelFormat.Stereo;

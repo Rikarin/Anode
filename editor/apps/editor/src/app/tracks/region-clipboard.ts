@@ -101,6 +101,7 @@ function clipMidi(region: MidiRegion, from: number, to: number): MidiRegion {
     ...region,
     startTick: Math.round(from),
     lengthTicks: Math.round(to - from),
+    loopTicks: 0,
     notes: region.notes
       .filter(n => n.startTick >= start && n.startTick < end)
       .map(n => ({ ...n, startTick: Math.round(n.startTick - start) })),
@@ -132,6 +133,7 @@ function clipAudio(
     startTick: Math.round(from),
     fileOffset: first,
     length,
+    loopTicks: 0,
     fadeIn,
     fadeOut: to < span.endTick ? 0 : Math.min(region.fadeOut, length - fadeIn),
     flexMarkers: region.flexMarkers

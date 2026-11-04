@@ -1,0 +1,269 @@
+{
+  "schemaVersion": 10,
+  "track": {
+    "id": "trk_fixture003",
+    "name": "Keys",
+    "kind": "instrument",
+    "color": "#3fbf7f",
+    "input": {
+      "channel": 0,
+      "stereo": false
+    },
+    "recordArmed": false,
+    "inputMonitoring": false,
+    "strip": {
+      "volumeDb": 0,
+      "pan": 0,
+      "mute": false,
+      "solo": false,
+      "inserts": [],
+      "sends": [],
+      "output": "master",
+      "groups": [],
+      "midiEffects": [],
+      "inputFormat": "stereo",
+      "outputFormat": "stereo",
+      "panner": {
+        "mode": "stereo",
+        "surround": {
+          "angle": 0,
+          "diversity": 1,
+          "elevation": 0,
+          "centreLevelDb": 0,
+          "lfeLevelDb": -144,
+          "spread": 60
+        },
+        "object": {
+          "azimuth": 0,
+          "elevation": 0,
+          "distance": 1,
+          "size": 0
+        }
+      }
+    },
+    "instrument": {
+      "pluginId": "anode.synth",
+      "name": "anode.synth",
+      "parameters": {}
+    },
+    "midiInput": {
+      "channel": 0
+    },
+    "collapsed": false,
+    "notes": "",
+    "inputBus": 0,
+    "automationMode": "read",
+    "flexOn": false,
+    "flexMode": "polyphonic",
+    "alternatives": [],
+    "liveLoopsActive": false,
+    "matchGroove": true,
+    "staffStyleId": "factory.piano"
+  },
+  "regions": [],
+  "midiRegions": [
+    {
+      "id": "mid_fixture004",
+      "trackId": "trk_fixture003",
+      "name": "Keys",
+      "startTick": 0,
+      "lengthTicks": 3840,
+      "playback": {
+        "transpose": 0,
+        "velocity": 0,
+        "quantizeTicks": 0,
+        "quantizeStrength": 1,
+        "swing": 0
+      },
+      "notes": [
+        {
+          "id": 1,
+          "pitch": 60,
+          "velocity": 100,
+          "channel": 1,
+          "startTick": 0,
+          "lengthTicks": 480,
+          "articulationId": 0
+        },
+        {
+          "id": 2,
+          "pitch": 64,
+          "velocity": 90,
+          "channel": 1,
+          "startTick": 480,
+          "lengthTicks": 480,
+          "articulationId": 0
+        }
+      ],
+      "controls": [],
+      "muted": false,
+      "notation": {
+        "displayQuantizeTicks": 0,
+        "tripletQuantizeTicks": 0,
+        "interpretation": true,
+        "noOverlap": true,
+        "syncopation": false,
+        "maxDots": 1
+      },
+      "pitchSource": "off"
+    }
+  ],
+  "takeFolders": [],
+  "automation": [],
+  "patternRegions": [
+    {
+      "id": "ptn_fixture013",
+      "trackId": "trk_fixture003",
+      "name": "Pattern",
+      "startTick": 7680,
+      "lengthTicks": 3840,
+      "muted": false,
+      "pattern": {
+        "rows": [
+          {
+            "id": "row_fixture012",
+            "kind": "note",
+            "note": 60,
+            "name": "C3",
+            "length": 16,
+            "playMode": "forward",
+            "muted": false,
+            "steps": [
+              {
+                "on": false,
+                "velocity": 100,
+                "gate": 1,
+                "repeats": 1,
+                "chance": 1,
+                "offset": 0
+              },
+              {
+                "on": false,
+                "velocity": 100,
+                "gate": 1,
+                "repeats": 1,
+                "chance": 1,
+                "offset": 0
+              },
+              {
+                "on": false,
+                "velocity": 100,
+                "gate": 1,
+                "repeats": 1,
+                "chance": 1,
+                "offset": 0
+              },
+              {
+                "on": false,
+                "velocity": 100,
+                "gate": 1,
+                "repeats": 1,
+                "chance": 1,
+                "offset": 0
+              },
+              {
+                "on": false,
+                "velocity": 100,
+                "gate": 1,
+                "repeats": 1,
+                "chance": 1,
+                "offset": 0
+              },
+              {
+                "on": false,
+                "velocity": 100,
+                "gate": 1,
+                "repeats": 1,
+                "chance": 1,
+                "offset": 0
+              },
+              {
+                "on": false,
+                "velocity": 100,
+                "gate": 1,
+                "repeats": 1,
+                "chance": 1,
+                "offset": 0
+              },
+              {
+                "on": false,
+                "velocity": 100,
+                "gate": 1,
+                "repeats": 1,
+                "chance": 1,
+                "offset": 0
+              },
+              {
+                "on": false,
+                "velocity": 100,
+                "gate": 1,
+                "repeats": 1,
+                "chance": 1,
+                "offset": 0
+              },
+              {
+                "on": false,
+                "velocity": 100,
+                "gate": 1,
+                "repeats": 1,
+                "chance": 1,
+                "offset": 0
+              },
+              {
+                "on": false,
+                "velocity": 100,
+                "gate": 1,
+                "repeats": 1,
+                "chance": 1,
+                "offset": 0
+              },
+              {
+                "on": false,
+                "velocity": 100,
+                "gate": 1,
+                "repeats": 1,
+                "chance": 1,
+                "offset": 0
+              },
+              {
+                "on": false,
+                "velocity": 100,
+                "gate": 1,
+                "repeats": 1,
+                "chance": 1,
+                "offset": 0
+              },
+              {
+                "on": false,
+                "velocity": 100,
+                "gate": 1,
+                "repeats": 1,
+                "chance": 1,
+                "offset": 0
+              },
+              {
+                "on": false,
+                "velocity": 100,
+                "gate": 1,
+                "repeats": 1,
+                "chance": 1,
+                "offset": 0
+              },
+              {
+                "on": false,
+                "velocity": 100,
+                "gate": 1,
+                "repeats": 1,
+                "chance": 1,
+                "offset": 0
+              }
+            ]
+          }
+        ],
+        "swing": 0,
+        "seed": 0,
+        "stepTicks": 240
+      }
+    }
+  ]
+}

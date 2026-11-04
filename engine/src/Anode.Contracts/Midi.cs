@@ -8,7 +8,8 @@ namespace Anode.Contracts;
 ///     is cut there. <c>playback</c> holds the non-destructive region parameters. <c>notation</c> (Phase 9,
 ///     docs/10-phase-9.md) holds its score settings: display quantise and interpretation. <c>pitchSource</c> and
 ///     <c>key</c> (Phase 11, docs/12-phase-11.md): how it follows the chord track (applied at compile time; its notes
-///     stay as they are) and its own key (null: the project's at its start).
+///     stay as they are) and its own key (null: the project's at its start). <c>loopTicks</c>: it repeats for that many
+///     ticks after its end, as <see cref="AudioRegion" /> says.
 /// </summary>
 public sealed record MidiRegion(
     string Id,
@@ -22,7 +23,8 @@ public sealed record MidiRegion(
     bool Muted,
     RegionNotation Notation,
     PitchSourceMode PitchSource,
-    RegionKey? Key
+    RegionKey? Key,
+    long LoopTicks = 0
 );
 
 /// <summary>

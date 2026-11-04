@@ -155,8 +155,46 @@ report. A REST change means regenerating `engine/src/Anode.Server/openapi.json`
     `POST /projects/recover` opens the project with the edits, unsaved; the snapshot stays until they are saved, so a
     second crash loses nothing. Everything else that drops a snapshot moves it to a new backup first:
     `POST /projects/recoverable/discard`, or opening the saved version.
+- **Save As and Save a Copy:**
+  - `POST /project/save-as` and `POST /project/save-copy` queue a job that writes the project, unsaved edits included, as
+    a whole package at a folder that does not exist yet (`ProjectCopy`): media, alternatives, backups, plugin states and
+    caches, with `Autosave/` and temporary files left out. The new package is a new project: its own id and, from its
+    folder, its name, also in its saved documents, so the recent list keeps both.
+  - The package is built in a hidden `.saving-<guid>` folder beside the target, read back, and renamed into place. A
+    failure or a cancel removes the build: there is no target, and the source was only ever read.
+  - A file offline in the source stays offline in the copy, and a track file that cannot be read is copied as it is.
+  - Save a Copy leaves the session alone. Save As goes on in the new package with its undo history, and autosaves there;
+    the original keeps its last save, with its unsaved edits in a backup, and no longer offers them for recovery. A
+    media path outside the package stays as it is (an absolute instrument or insert file, a referenced movie).
+- **Import tracks from another project:**
+  - `POST /projects/contents` reads a package on the server's disk without opening it, and the Import from Project window
+    lists its tracks. `POST /project/import-tracks` queues the import of the chosen ones, one undo step, with regions,
+    take folders, alternatives, automation, inserts, plugin states, sends and MIDI FX. Each of regions, inserts, sends
+    and automation can be left out. The source is only read.
+  - A stack brings its members and, with sends, a track brings the auxes its sends and outputs reach. Everything gets a
+    new id, so importing twice makes two independent sets. Their buses move to ones the project does not use, so they mix
+    with nothing of its, and a group to a free number. What pointed outside the import goes: a parent, a VCA, a
+    sidechain, a groove. Tempo, markers, score content and Live Loops cells stay behind.
+  - Audio is copied into `Audio Files` under new names and ids, and converted when the source is at another rate, with
+    the positions following (`ProjectRate`). Files instruments and inserts name inside the source are copied to the same
+    place. A file offline in the source comes along offline, unless it would need converting: then the import is refused
+    until it is found. A failure removes the copies and leaves the project as it was.
+- **Templates:**
+  - `POST /projects` takes a `template` from `GET /library/project-templates`: the factory's, made by commands on the new
+    project (tracks and routing, no audio, so any rate), then the user's. Save as Template is a job that writes the open
+    project, unsaved edits and media included, as a package in `Library/Project Templates`; a new project is a copy of it
+    (`ProjectCopy`) with its own id and name. A template that holds audio takes only its own rate; one that does not takes
+    any.
+  - `POST /library/track-templates` saves chosen tracks with their routing: their stack members, the auxes they reach,
+    groups, plugins, plugin states and the files those name inside the project, without regions or automation, as a
+    package in `Library/Track Templates`. `POST /library/track-templates/{id}/apply` adds them through the same import
+    as another project's tracks: one undo step, new ids, buses of their own.
+  - Each template has a sidecar `<id>.json`, written last and removed first, so one cut short is never listed.
 - **Screensets, key commands, bookmarks:**
   - Screensets are saved in the project (they mark it unsaved, but are not undo steps).
+  - View settings (Show Flex, the Tracks area's zoom, position, tools and snap, the Mixer's view and filters) are each
+    project's, kept in the window's storage by project id: they do not travel with the project and do not mark it
+    unsaved.
   - Key commands and bookmarks are per user, in `<DataDirectory>/settings/`.
 - **Files and MIDI import:**
   - `/files` lists the server's disk, starting at the user's home.

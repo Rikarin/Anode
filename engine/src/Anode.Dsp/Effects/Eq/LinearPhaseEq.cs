@@ -23,8 +23,9 @@ namespace Anode.Dsp.Effects.Eq;
 ///             and swapped in.
 ///         </item>
 ///     </list>
+///     The display (<see cref="IEffectDisplay" />) is the output's spectrum, as the Channel EQ's.
 /// </summary>
-public sealed class LinearPhaseEq : AudioEffect {
+public sealed class LinearPhaseEq : AudioEffect, IEffectDisplay {
     public const string Id = "anode.linear-eq";
 
     static readonly double[][] Butterworth = [
@@ -116,6 +117,17 @@ public sealed class LinearPhaseEq : AudioEffect {
 
     /// <summary>Control thread: the output spectrum, as <see cref="SpectrumAnalyzer.Read" /> gives it.</summary>
     public void ReadSpectrum(Span<float> bandsDb) => analyzer.Read(bandsDb, SampleRate);
+
+    public int DisplaySize => SpectrumAnalyzer.DisplayBands;
+
+    public int ReadDisplay(Span<float> values) {
+        if (!Prepared) {
+            return 0;
+        }
+
+        ReadSpectrum(values[..SpectrumAnalyzer.DisplayBands]);
+        return SpectrumAnalyzer.DisplayBands;
+    }
 
     protected override void OnPrepare(float sampleRate) {
         var size = 4_096;

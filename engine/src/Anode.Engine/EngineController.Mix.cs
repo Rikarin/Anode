@@ -101,7 +101,13 @@ public sealed partial class EngineController {
     ///     Delay compensation (<c>all</c>, <c>tracks</c>, <c>off</c>) and low-latency mode with its limit in
     ///     milliseconds. Throws <see cref="ArgumentException" /> for another mode.
     /// </summary>
-    public void SetMixer(string pdc, bool lowLatency, double lowLatencyLimitMs) {
+    public void SetMixer(
+        string pdc,
+        bool lowLatency,
+        double lowLatencyLimitMs,
+        EnginePanLaw panLaw = EnginePanLaw.Minus3DbCompensated,
+        EngineSoloMode soloMode = EngineSoloMode.InPlace
+    ) {
         var mode = pdc switch {
             "all" => DelayCompensation.All,
             "tracks" => DelayCompensation.Tracks,
@@ -110,7 +116,7 @@ public sealed partial class EngineController {
         };
         var limit = double.IsFinite(lowLatencyLimitMs) ? Math.Max(0, lowLatencyLimitMs) : 0;
         lock (gate) {
-            Engine.SetMixer(mode, lowLatency, (int)Math.Round(limit * Options.SampleRate / 1000));
+            Engine.SetMixer(mode, lowLatency, (int)Math.Round(limit * Options.SampleRate / 1000), panLaw, soloMode);
             GrowDelays(Engine.Root.Mix);
         }
     }
@@ -168,22 +174,53 @@ public sealed partial class EngineController {
 
     /// <summary>
     ///     Every insert's reading that is a number (track −1: the master), read without the gate: the published model
-    ///     and each channel's configuration are swapped whole, and a reading is a single float the audio thread writes.
+    ///     and each channel's configuration are swapped whole, and a reading is a single float the audio thread writes
+    ///     (or, for an <see cref="IEffectDisplay" /> that an editor watches, values a display may see torn).
     /// </summary>
     public List<InsertReadingEntry> InsertReadings() {
         var readings = new List<InsertReadingEntry>();
+        var watching = Volatile.Read(ref watchedInserts);
         foreach (var (trackId, channel) in Channels(Engine.Root)) {
             foreach (var insert in channel.Config.Inserts) {
                 if (insert.Slot.Effect is { } effect
                     && !insert.Slot.Failed
                     && effect.Reading is var value
                     && !float.IsNaN(value)) {
-                    readings.Add(new(trackId, insert.Slot.Id, value));
+                    var display = watching.Contains(new(trackId, insert.Slot.Id)) ? DisplayOf(effect) : null;
+                    readings.Add(new(trackId, insert.Slot.Id, value, display));
                 }
             }
         }
 
         return readings;
+    }
+
+    /// <summary>The inserts whose displays <see cref="InsertReadings" /> reads, all of them.</summary>
+    public void WatchInserts(IReadOnlyList<WatchedInsert> inserts) => Volatile.Write(ref watchedInserts, [..inserts]);
+
+    /// <summary>
+    ///     What an effect's display shows now, or null when it has none. The IPC frame is JSON, which cannot carry a
+    ///     non-finite number: a value that slipped through reads 0 rather than taking the host's link down.
+    /// </summary>
+    static float[]? DisplayOf(IAudioEffect effect) {
+        if (effect is not IEffectDisplay display) {
+            return null;
+        }
+
+        var values = new float[display.DisplaySize];
+        var count = display.ReadDisplay(values);
+        if (count == 0) {
+            return null;
+        }
+
+        var shown = values[..count];
+        for (var i = 0; i < shown.Length; i++) {
+            if (!float.IsFinite(shown[i])) {
+                shown[i] = 0;
+            }
+        }
+
+        return shown;
     }
 
     IEnumerable<(int TrackId, ChannelState Channel)> Channels(ModelRoot root) {
@@ -481,17 +518,23 @@ public sealed partial class EngineController {
     }
 
     /// <summary>
-    ///     Gives every channel a delay line long enough for any path's latency (the sum of every insert's latency
-    ///     bounds it, doubled for headroom), once any insert has latency and compensation is on.
+    ///     Gives every channel a delay line long enough for any path's latency (the sum of every insert's latency bounds
+    ///     it, with the latest strip's delay and the earliest strip's advance, doubled for headroom), once a strip has a
+    ///     delay or, with compensation on, any insert has latency.
     /// </summary>
     void GrowDelays(MixPlan plan) {
         Engine.TakeLatencyOverflow();
-        if (Engine.Compensation == DelayCompensation.Off) {
-            return;
-        }
-
         long bound = 0;
+        var late = 0;
+        var early = 0;
+        var compensating = Engine.Compensation != DelayCompensation.Off;
         foreach (var node in plan.Order.Append(plan.Master)) {
+            late = Math.Max(late, node.Channel.Strip.DelayFrames);
+            early = Math.Max(early, -node.Channel.Strip.DelayFrames);
+            if (!compensating) {
+                continue;
+            }
+
             foreach (var insert in node.Config.Inserts) {
                 if (insert.Slot.Effect is { } effect) {
                     bound += Math.Max(0, effect.LatencySamples);
@@ -501,6 +544,7 @@ public sealed partial class EngineController {
             }
         }
 
+        bound += late + early;
         if (bound == 0) {
             return;
         }

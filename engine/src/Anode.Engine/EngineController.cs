@@ -62,6 +62,7 @@ public sealed partial class EngineController : IDisposable {
     static readonly TimeSpan PrimeTimeout = TimeSpan.FromSeconds(2);
 
     readonly Lock gate = new();
+    HashSet<WatchedInsert> watchedInserts = [];
     readonly Lock sendGate = new();
     readonly Dictionary<string, MappedSegment> pool = new(StringComparer.Ordinal);
     readonly List<string> poolOrder = [];
@@ -72,6 +73,8 @@ public sealed partial class EngineController : IDisposable {
     long segmentIds;
     int generations;
     bool countIn;
+    int countInLength = 1;
+    bool countInInBeats;
     RecordTake[] takes = [];
     bool recordingPass;
 
@@ -445,7 +448,13 @@ public sealed partial class EngineController : IDisposable {
                 return false;
             }
 
+            var delayed = channel.Strip.DelayFrames != strip.DelayFrames;
             SetFader(trackId, channel.Strip, strip);
+            channel.Strip.PrepareMeter(Options.SampleRate);
+            if (delayed) {
+                GrowDelays(Engine.Root.Mix);
+            }
+
             var replaced = new List<IDisposable>();
             if (ApplyFormats(channel, trackId, strip, replaced)) {
                 PublishPlan(); // Phase 10: a format or panner mode is structure
@@ -662,11 +671,16 @@ public sealed partial class EngineController : IDisposable {
         Send(new(EngineCommandKind.SetCycle, cycle.Start, cycle.End, enabled));
     }
 
-    /// <summary>The click's level and whether it sounds; <paramref name="countInEnabled" /> adds a bar before recording.</summary>
-    public void SetMetronome(bool enabled, float gain, bool countInEnabled) {
+    /// <summary>
+    ///     The click's level and whether it sounds; <paramref name="countInEnabled" /> adds a count-in before recording,
+    ///     of <paramref name="length" /> bars (beats with <paramref name="inBeats" />).
+    /// </summary>
+    public void SetMetronome(bool enabled, float gain, bool countInEnabled, int length = 1, bool inBeats = false) {
         lock (gate) {
             Engine.SetMetronome(enabled, gain);
             countIn = countInEnabled;
+            countInLength = Math.Max(1, length);
+            countInInBeats = inBeats;
         }
     }
 
@@ -697,8 +711,8 @@ public sealed partial class EngineController : IDisposable {
     }
 
     /// <summary>
-    ///     Records the armed tracks from <paramref name="position" /> (negative: the playhead), after a one-bar count-in
-    ///     when it is on and the transport is stopped; while playing, punches in at once.
+    ///     Records the armed tracks from <paramref name="position" /> (negative: the playhead), after a count-in when it
+    ///     is on and the transport is stopped; while playing, punches in at once.
     /// </summary>
     public async Task RecordAsync(long position, CancellationToken cancellationToken = default) {
         if (string.IsNullOrEmpty(RecordDirectory)) {
@@ -722,10 +736,10 @@ public sealed partial class EngineController : IDisposable {
             BeginTakes(root);
             Midi.BeginCapture();
             recordingPass = true;
-            var (frames, beats) = stopped && countIn
-                ? Metronome.CountInFor(root.Metronome, from, Options.SampleRate)
-                : (0L, 0);
-            Send(new(EngineCommandKind.Record, frames, beats));
+            var (frames, beats, accent) = stopped && countIn
+                ? Metronome.CountInFor(root.Metronome, from, Options.SampleRate, countInLength, countInInBeats)
+                : (0L, 0, 0);
+            Send(new(EngineCommandKind.Record, frames, (uint)beats | ((long)accent << 32)));
         }
     }
 

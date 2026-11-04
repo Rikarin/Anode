@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
+import type { ProjectTemplate } from '@anode/api-client';
 import { provideIcons } from '@ng-icons/core';
 import { matFolderOpenRound, matHistoryRound, matRestoreRound } from '@ng-icons/material-icons/round';
 import { XuiButtonImports } from '@xui/button';
@@ -7,6 +8,7 @@ import { XuiInputImports } from '@xui/input';
 import { XuiSegmentedControlImports, type XuiSegmentedOption } from '@xui/segmented-control';
 import { ConnectionService } from '../core/connection';
 import { ProjectSession } from '../state/project-session';
+import { TemplatesStore } from '../state/templates.store';
 
 /** Sample rates a new project can have (one per project; no conversion on import in Phase 1). */
 const SampleRates: XuiSegmentedOption<number>[] = [
@@ -17,7 +19,7 @@ const SampleRates: XuiSegmentedOption<number>[] = [
 
 /**
  * The project chooser (Logic's Project Chooser, docs/01-implementation-plan.md §6.1 `projects`): a new project (name,
- * folder, sample rate), the recent ones, or one opened by its folder, and first of all any edits a crash left unsaved. The desktop app picks folders with its native
+ * folder, template, sample rate), the recent ones, or one opened by its folder, and first of all any edits a crash left unsaved. The desktop app picks folders with its native
  * dialog; a browser types the path on the Server's disk.
  */
 @Component({
@@ -112,16 +114,63 @@ const SampleRates: XuiSegmentedOption<number>[] = [
               }
             </div>
           </div>
-          <label class="flex flex-col gap-1 text-sm">
-            Sample rate
-            <xui-segmented-control
-              size="sm"
-              ariaLabel="Sample rate"
-              [options]="rates"
-              [value]="sampleRate()"
-              (valueChange)="sampleRate.set($event ?? 48000)"
-            />
-          </label>
+          <div class="flex flex-col gap-1 text-sm">
+            <span id="new-project-template">Template</span>
+            <div
+              class="border-hairline flex max-h-48 flex-col overflow-auto rounded-md border p-1"
+              role="group"
+              aria-labelledby="new-project-template"
+              data-testid="project-templates"
+            >
+              @for (group of templates.projectCategories(); track group.category) {
+                <span class="text-foreground-muted px-2 pt-1 text-[10px] font-semibold tracking-wide uppercase">
+                  {{ group.category }}
+                </span>
+                @for (template of group.templates; track template.id) {
+                  <div class="flex items-center">
+                    <button
+                      type="button"
+                      class="hover:bg-hover-overlay focus-visible:outline-focus aria-pressed:bg-surface-raised flex min-w-0 flex-1 flex-col items-start rounded-sm px-2 py-1 text-start focus-visible:outline-2"
+                      [attr.aria-pressed]="chosen()?.id === template.id"
+                      [attr.data-testid]="'template-' + template.name"
+                      [attr.title]="template.description || template.name"
+                      (click)="choose(template)"
+                    >
+                      <span class="text-sm">{{ template.name }}</span>
+                    </button>
+                    @if (!template.factory) {
+                      <button
+                        xuiButton
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        [attr.aria-label]="'Delete the template ' + template.name"
+                        (click)="remove(template)"
+                      >
+                        Delete
+                      </button>
+                    }
+                  </div>
+                }
+              }
+            </div>
+          </div>
+          @if (chosen()?.hasAudio) {
+            <p class="text-foreground-muted text-xs">
+              This template holds audio at {{ chosen()?.sampleRate }} Hz, so the project starts at that rate.
+            </p>
+          } @else {
+            <label class="flex flex-col gap-1 text-sm">
+              Sample rate
+              <xui-segmented-control
+                size="sm"
+                ariaLabel="Sample rate"
+                [options]="rates"
+                [value]="sampleRate()"
+                (valueChange)="sampleRate.set($event ?? 48000)"
+              />
+            </label>
+          }
           <button
             xuiButton
             type="submit"
@@ -182,6 +231,7 @@ const SampleRates: XuiSegmentedOption<number>[] = [
 })
 export class ProjectChooser {
   protected readonly session = inject(ProjectSession);
+  protected readonly templates = inject(TemplatesStore);
   protected readonly dialogs = inject(ConnectionService).desktop?.dialogs ?? null;
 
   protected readonly rates = SampleRates;
@@ -189,8 +239,11 @@ export class ProjectChooser {
   protected readonly folder = signal('');
   protected readonly sampleRate = signal(48_000);
   protected readonly path = signal('');
+  /** The template a new project starts from; none: an empty project. */
+  protected readonly chosen = signal<ProjectTemplate | null>(null);
 
   constructor() {
+    void this.templates.refresh();
     void this.session.refreshRecent();
     void this.session.refreshRecoverable();
   }
@@ -202,8 +255,26 @@ export class ProjectChooser {
   protected async create(): Promise<void> {
     const name = this.name().trim();
     if (name) {
-      await this.session.create({ name, directory: this.folder().trim() || null, sampleRate: this.sampleRate() });
+      const template = this.chosen();
+      await this.session.create({
+        name,
+        directory: this.folder().trim() || null,
+        ...(template?.hasAudio ? {} : { sampleRate: this.sampleRate() }),
+        template: template?.id ?? null
+      });
     }
+  }
+
+  protected choose(template: ProjectTemplate): void {
+    this.chosen.set(template);
+  }
+
+  protected async remove(template: ProjectTemplate): Promise<void> {
+    if (this.chosen()?.id === template.id) {
+      this.chosen.set(null);
+    }
+
+    await this.templates.deleteProject(template.id);
   }
 
   protected async chooseFolder(): Promise<void> {

@@ -246,6 +246,19 @@ export function applyFlexCommand(project: Project, command: EditCommand, ctx: Fl
       const next = follow === 'off' ? project : withFileTempo(project, fileOf(r));
       return withRegion(next, { ...r, follow, transpose, fineTune });
     }
+    case 'stretchRegion': {
+      const r = region(command.regionId);
+      if (!(command.stretch >= 0.25 && command.stretch <= 4)) {
+        throw new ApiError(422, 'A region stretches 0.25 to 4 times.');
+      }
+      const scale = command.stretch / r.stretch;
+      return withRegion(project, {
+        ...r,
+        stretch: command.stretch,
+        startTick: command.startTick ?? r.startTick,
+        flexMarkers: r.flexMarkers.map(m => ({ ...m, tick: Math.round(m.tick * scale) }))
+      });
+    }
     case 'setFlexMarkers': {
       const r = region(command.regionId);
       if (!track(r.trackId).flexOn) {
@@ -414,14 +427,14 @@ export function applyFlexCommand(project: Project, command: EditCommand, ctx: Fl
       let activeId = t.alternativeId;
       if (!activeId) {
         activeId = ctx.id('alt');
-        alternatives = [{ id: activeId, name: 'A', regions: [], midiRegions: [], takeFolders: [] }];
+        alternatives = [{ id: activeId, name: 'A', ...noContent() }];
       }
       // The active one keeps its name; its content is snapshotted as it is set aside.
       alternatives = alternatives.map(a => (a.id === activeId ? { ...a, ...live } : a));
       const id = ctx.id('alt');
       const name = command.name?.trim() || String.fromCharCode(65 + Math.min(25, alternatives.length));
-      const copy = command.duplicate ? copyContent(live, ctx) : { regions: [], midiRegions: [], takeFolders: [] };
-      alternatives = [...alternatives, { id, name, regions: [], midiRegions: [], takeFolders: [] }];
+      const copy = command.duplicate ? copyContent(live, ctx) : noContent();
+      alternatives = [...alternatives, { id, name, ...noContent() }];
       return withContent(withTrack(project, { ...t, alternatives, alternativeId: id }), t.id, copy);
     }
     case 'selectTrackAlternative': {
@@ -435,11 +448,7 @@ export function applyFlexCommand(project: Project, command: EditCommand, ctx: Fl
       }
       const live = liveContent(project, t.id);
       const alternatives = t.alternatives.map(a =>
-        a.id === t.alternativeId
-          ? { ...a, ...live }
-          : a.id === target.id
-            ? { ...a, regions: [], midiRegions: [], takeFolders: [] }
-            : a
+        a.id === t.alternativeId ? { ...a, ...live } : a.id === target.id ? { ...a, ...noContent() } : a
       );
       return withContent(withTrack(project, { ...t, alternatives, alternativeId: target.id }), t.id, target);
     }
@@ -564,13 +573,18 @@ function round2(value: number): number {
   return Math.round(value * 100) / 100;
 }
 
-type Content = Pick<TrackAlternative, 'regions' | 'midiRegions' | 'takeFolders'>;
+type Content = Pick<TrackAlternative, 'regions' | 'midiRegions' | 'takeFolders' | 'patternRegions'>;
+
+function noContent(): Content {
+  return { regions: [], midiRegions: [], takeFolders: [], patternRegions: [] };
+}
 
 function liveContent(project: Project, trackId: string): Content {
   return {
     regions: project.regions.filter(r => r.trackId === trackId),
     midiRegions: project.midiRegions.filter(r => r.trackId === trackId),
-    takeFolders: project.takeFolders.filter(f => f.trackId === trackId)
+    takeFolders: project.takeFolders.filter(f => f.trackId === trackId),
+    patternRegions: project.patternRegions.filter(r => r.trackId === trackId)
   };
 }
 
@@ -580,7 +594,8 @@ function withContent(project: Project, trackId: string, content: Content): Proje
     ...project,
     regions: [...project.regions.filter(r => r.trackId !== trackId), ...content.regions],
     midiRegions: [...project.midiRegions.filter(r => r.trackId !== trackId), ...content.midiRegions],
-    takeFolders: [...project.takeFolders.filter(f => f.trackId !== trackId), ...content.takeFolders]
+    takeFolders: [...project.takeFolders.filter(f => f.trackId !== trackId), ...content.takeFolders],
+    patternRegions: [...project.patternRegions.filter(r => r.trackId !== trackId), ...content.patternRegions]
   };
 }
 
@@ -589,7 +604,8 @@ function copyContent(content: Content, ctx: FlexContext): Content {
   return {
     regions: content.regions.map(r => ({ ...r, id: ctx.id('rgn') })),
     midiRegions: content.midiRegions.map(r => ({ ...r, id: ctx.id('mid') })),
-    takeFolders: content.takeFolders.map(f => ({ ...f, id: ctx.id('tkf') }))
+    takeFolders: content.takeFolders.map(f => ({ ...f, id: ctx.id('tkf') })),
+    patternRegions: content.patternRegions.map(r => ({ ...r, id: ctx.id('pat') }))
   };
 }
 

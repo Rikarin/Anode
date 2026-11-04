@@ -44,7 +44,20 @@ public sealed unsafe class AllocationTests : IDisposable {
                 .ToArray();
             models.Add(new(t, [], regions));
             tracks.Add(
-                TestAudio.Track(t, (t & 1) == 1, new(0.8f, t / 8f - 0.5f, t == 5, t == 3), t & 1, t == 2, t < 4)
+                TestAudio.Track(
+                    t,
+                    (t & 1) == 1,
+                    new(0.8f, t / 8f - 0.5f, t == 5, t == 3) {
+                        Trim = t == 2 ? 1f : -0.9f,
+                        DelayFrames = 40 * (t - 4),
+                        DualPan = t == 1,
+                        MeterType = (EngineMeterType)(t % 6),
+                        MeterTap = (EngineMeterTap)(t % 3)
+                    },
+                    t & 1,
+                    t == 2,
+                    t < 4
+                )
             );
         }
 
@@ -59,11 +72,18 @@ public sealed unsafe class AllocationTests : IDisposable {
         using var controller = new EngineController(new(Rate, 64));
         controller.LoadModel(TestAudio.Load(segment, 1, true, tracks, files, dir));
         controller.Engine.SetMetronome(true, 0.5f);
+        controller.SetMixer("all", false, 10, soloMode: EngineSoloMode.Afl);
+        controller.Engine.SetMonitorSection(0.5f, true);
         using var driver = new OfflineDriver(controller, 64);
         using var take = new RecordTake(2, Path.Combine(dir, "2-take.wav"), 1, Rate);
         controller.Engine.Root.Tracks[2].Take = take;
         var region = NativeMemory.AlignedAlloc((nuint)TelemetryLayout.Size, 64);
-        using var telemetry = new TelemetryWriter(controller.Engine, (byte*)region, static () => 0);
+        using var telemetry = new TelemetryWriter(
+            controller.Engine,
+            (byte*)region,
+            static () => 0,
+            controller.Streamer.TakeLoad
+        );
         var scratch = new float[8192];
         try {
             driver.Send(new(EngineCommandKind.SetCycle, 30_000, 150_000, true));

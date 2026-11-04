@@ -4,7 +4,7 @@ import { ItemFlag, type PixelRect, type TimelineScene, type TimelineView } from 
 import { type LaneIntervalIndex } from './lane-interval-index';
 
 /** What part of a region the pointer is over, which says what a drag there does (Logic's pointer tool). */
-export type RegionZone = 'body' | 'trim-start' | 'trim-end' | 'fade-in' | 'fade-out';
+export type RegionZone = 'body' | 'trim-start' | 'trim-end' | 'fade-in' | 'fade-out' | 'loop';
 
 export interface RegionHit {
   /** The item's index in the scene. */
@@ -14,6 +14,8 @@ export interface RegionHit {
 
 /** How close to a region's edge (CSS pixels) the pointer trims (lower half) or fades (upper half) instead of moving. */
 export const EDGE_PX = 6;
+/** How far down a region's upper right corner (CSS pixels) a drag loops it, as Logic's pointer does. */
+export const LOOP_CORNER_PX = 10;
 /** How close to a fade's end (CSS pixels) the pointer grabs its handle. */
 export const FADE_HANDLE_PX = 4;
 
@@ -41,7 +43,8 @@ export function yAtLane(view: TimelineView, lane: number): number {
 /**
  * The region under (x, y) and the zone the pointer is in, or null. Where regions overlap, the one drawn last (the
  * latest start) wins, as it is on top. A region's edges trim in its lower half and fade in its upper half; an existing
- * fade's end is a handle in the upper half too.
+ * fade's end is a handle in the upper half too. The upper right corner of a region, or of the last repeat of a loop,
+ * loops it.
  */
 export function hitTest(
   scene: TimelineScene,
@@ -62,6 +65,7 @@ export function hitTest(
   const found = new Uint32Array(Math.max(1, index.size));
   const count = index.query(tick - tolerance, tick + tolerance, lane, lane + 1, found);
   const upper = lanePosition - lane < 0.5;
+  const corner = scene.regions !== undefined && (lanePosition - lane) * view.laneHeight < LOOP_CORNER_PX;
   const { items, regions } = scene;
   let best: RegionHit | null = null;
   for (let k = 0; k < count; k++) {
@@ -84,6 +88,18 @@ export function hitTest(
       continue;
     }
     const edge = Math.min(EDGE_PX, (xEnd - xStart) / 4);
+    if (flag & ItemFlag.Loop) {
+      if (corner && Math.abs(xEnd - x) <= edge) {
+        best = { index: id, zone: 'loop' };
+      } else if (x > xStart && x < xEnd) {
+        best = { index: id, zone: 'body' };
+      }
+      continue;
+    }
+    if (corner && Math.abs(xEnd - x) <= edge) {
+      best = { index: id, zone: 'loop' };
+      continue;
+    }
     const fades = regions !== undefined && !(flag & ItemFlag.Midi);
     let zone: RegionZone | null = null;
     if (fades && upper) {

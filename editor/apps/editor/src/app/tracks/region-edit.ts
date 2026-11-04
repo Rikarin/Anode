@@ -114,6 +114,38 @@ export function trimEnd(region: AudioRegion, tick: number, fileFrames: number, c
   return { startTick: region.startTick, fileOffset: region.fileOffset, length };
 }
 
+/** How far a region stretches: a quarter of its recorded length to four times it (the Model's limits). */
+export const MinStretch = 0.25;
+export const MaxStretch = 4;
+
+/** A region's new stretch, and its new start when its left edge moved. */
+export interface Stretched {
+  startTick: number;
+  stretch: number;
+}
+
+/**
+ * Stretches a region by dragging an edge to `tick` (snapped): the other edge stays, and the audio takes the span. The
+ * limits hold the edge back: a drag past them stops at 4 times the recorded length or a quarter of it.
+ */
+export function stretchEdge(
+  region: { startTick: number; stretch: number },
+  endTick: number,
+  edge: 'start' | 'end',
+  tick: number,
+  context: EditContext
+): Stretched {
+  const length = endTick - region.startTick;
+  const wanted = snapIn(context, tick);
+  const span = edge === 'end' ? wanted - region.startTick : endTick - wanted;
+  const stretch = Math.max(MinStretch, Math.min(MaxStretch, (region.stretch * Math.max(1, span)) / length));
+  const kept = (length * stretch) / region.stretch;
+  return {
+    startTick: edge === 'end' ? region.startTick : Math.max(0, Math.round(endTick - kept)),
+    stretch: Math.round(stretch * 10_000) / 10_000
+  };
+}
+
 /** The fade-in that ends at `tick`, in frames: from none to the region's length less its fade-out. Not snapped. */
 export function fadeInTo(region: AudioRegion, tick: number, context: EditContext): number {
   const frames = Math.round((tick - region.startTick) * context.framesPerTick);

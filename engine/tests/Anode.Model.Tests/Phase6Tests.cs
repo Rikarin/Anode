@@ -19,6 +19,44 @@ public sealed class Phase6Tests {
     Track T(string name) => state.Tracks.Single(t => t.Name == name);
 
     [Fact]
+    public void Track_alternatives_carry_pattern_regions() {
+        Apply(new AddTrackCommand("Keys", Kind: TrackKind.Instrument));
+        var keys = T("Keys").Id;
+        Apply(new AddPatternRegionCommand(keys, 0, 3840));
+        var kept = Assert.Single(state.PatternRegions.Values);
+
+        // A new, empty alternative puts the pattern away with the track's other content.
+        Apply(new NewTrackAlternativeCommand(keys));
+        Assert.Empty(state.PatternRegions);
+        var (first, second) = (T("Keys").Alternatives[0], T("Keys").Alternatives[1]);
+        Assert.Equal(kept, Assert.Single(first.PatternRegions));
+        Assert.Equal(second.Id, T("Keys").AlternativeId);
+
+        // Selecting swaps them, and undoing the swap swaps them back.
+        Apply(new AddPatternRegionCommand(keys, 7680, 3840));
+        var other = Assert.Single(state.PatternRegions.Values);
+        var before = state;
+        var select = Edits.Apply(state, new SelectTrackAlternativeCommand(keys, first.Id), ids);
+        state = select.State;
+        Assert.Equal(kept, Assert.Single(state.PatternRegions.Values));
+        Assert.Empty(T("Keys").Alternatives[0].PatternRegions); // the active one's content is live
+        Assert.Equal(other, Assert.Single(T("Keys").Alternatives[1].PatternRegions));
+        Assert.Equal(RandomProjects.Json(before), RandomProjects.Json(state.Apply(select.Inverse)));
+
+        // A duplicate has copies, with ids of their own.
+        Apply(new NewTrackAlternativeCommand(keys, Duplicate: true));
+        var copy = Assert.Single(state.PatternRegions.Values);
+        Assert.NotEqual(kept.Id, copy.Id);
+        Assert.Equal((kept.StartTick, kept.Pattern), (copy.StartTick, copy.Pattern));
+        Assert.Equal(kept, Assert.Single(T("Keys").Alternatives[0].PatternRegions));
+
+        // Deleting the active alternative brings the next one's in.
+        Apply(new DeleteTrackAlternativeCommand(keys, T("Keys").AlternativeId!));
+        Assert.Equal(T("Keys").Alternatives[^1].Id, T("Keys").AlternativeId);
+        Assert.Equal(other, Assert.Single(state.PatternRegions.Values));
+    }
+
+    [Fact]
     public void Smart_control_maths_follow_the_graph_the_range_and_invert() {
         Assert.Equal(0.25, SmartMath.Graph(SmartMath.Line, 0.25), 9);
         IReadOnlyList<GraphPoint> bend = [new(0, 0), new(0.5, 0.8), new(1, 1)];

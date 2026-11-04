@@ -47,6 +47,73 @@ public sealed class FlexApiTests {
     }
 
     [Fact]
+    public async Task An_edit_goes_through_while_an_import_is_analysed() {
+        using var analyzer = new HeldAnalyzer();
+        await using var server = new ServerFixture(analyzer: analyzer);
+        using var client = server.CreateClient();
+        await using var events = await EventStream.ConnectAsync(server);
+        var project = await client.CreateProjectAsync();
+        var import = client.ImportAsync(TestWav.Write(media, "Loop.wav", frames: 8 * Beat));
+        analyzer.Entered.Wait(Token);
+
+        // What the editor does when a menu item is picked meanwhile: an edit at the revision it knows.
+        using var waiting = CancellationTokenSource.CreateLinkedTokenSource(Token);
+        waiting.CancelAfter(TimeSpan.FromSeconds(10));
+        var edit = client.SendCommandsAsync(project.Revision, new AddTrackCommand("Added", Kind: TrackKind.Instrument));
+        try {
+            var response = await edit.WaitAsync(waiting.Token);
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        } catch (OperationCanceledException) {
+            Assert.Fail("The edit waited for the import's analysis.");
+        } finally {
+            analyzer.Release();
+        }
+
+        var file = await import;
+        Assert.Equal(100, file.Tempo!.Bpm);
+        await events.WaitAsync<AnalysisEvent>(e => e.FileId == file.Id);
+        var after = await client.ProjectAsync();
+        Assert.Equal("Added", Assert.Single(after.Tracks).Name);
+        Assert.Equal(file.Id, Assert.Single(after.AudioFiles).Id);
+        Assert.Equal(project.Revision + 2, after.Revision);
+    }
+
+    [Fact]
+    public async Task A_project_closed_while_an_import_is_analysed_refuses_the_file() {
+        using var analyzer = new HeldAnalyzer();
+        await using var server = new ServerFixture(analyzer: analyzer);
+        using var client = server.CreateClient();
+        await client.CreateProjectAsync();
+        var import = client.PostAsJsonAsync(
+            "/api/v1/project/files/import",
+            new(TestWav.Write(media, "Loop.wav", frames: 8 * Beat)),
+            ContractsJsonContext.Default.ImportFileRequest,
+            Token
+        );
+        analyzer.Entered.Wait(Token);
+        var closing = client.PostAsync("/api/v1/project/close", null, Token);
+        try {
+            await ServerFixture.Eventually(
+                async () => {
+                    var answer = await client.GetAsync("/api/v1/project", Token);
+                    return answer.StatusCode == HttpStatusCode.NotFound;
+                },
+                10
+            );
+        } finally {
+            analyzer.Release();
+        }
+
+        await closing;
+        var response = await import;
+        Assert.Contains(
+            "closed while the file was imported",
+            await ApiCalls.AssertProblemAsync(response, HttpStatusCode.Conflict),
+            StringComparison.Ordinal
+        );
+    }
+
+    [Fact]
     public async Task Without_import_analysis_the_analysis_is_built_when_asked_for() {
         var analyzer = new FakeAnalyzer();
         await using var server = new ServerFixture(analyzer: analyzer);
@@ -176,6 +243,38 @@ public sealed class FlexApiTests {
     }
 
     [Fact]
+    public async Task Bounce_in_place_renders_a_loop_to_where_its_repeats_end() {
+        await using var server = new ServerFixture(analyzer: new FakeAnalyzer());
+        using var client = server.CreateClient();
+        await using var events = await EventStream.ConnectAsync(server);
+        await client.CreateProjectAsync();
+        await client.EditAsync(new AddTrackCommand("Gtr"));
+        var file = await client.ImportAsync(TestWav.Write(media, "Gtr.wav", frames: Rate));
+        var track = (await client.ProjectAsync()).Tracks[0].Id;
+        await client.EditAsync(new AddRegionCommand(track, file.Id, 0));
+        var region = (await client.ProjectAsync()).Regions.Single().Id;
+        // A second at 120 BPM is 1920 ticks: one repeat.
+        await client.EditAsync(new SetRegionCommand(region, LoopTicks: 1920));
+        await WaitEngineAsync(server, client);
+
+        var job = await StartAsync(client, "/api/v1/project/bounce-in-place", new BounceInPlaceRequest([track]));
+        var done = await events.WaitAsync<JobEvent>(
+            e => e.Job.Id == job.Id && e.Job.State is JobState.Done or JobState.Failed,
+            30
+        );
+        Assert.Equal(JobState.Done, done.Job.State);
+
+        var project = await client.ProjectAsync();
+        var bounced = project.Regions.Single(r => r.TrackId == project.Tracks[1].Id);
+        var bouncedFile = project.AudioFiles.Single(f => f.Id == bounced.FileId);
+        // The region's second, its repeat, and the two-second tail.
+        Assert.Equal(4 * Rate, bouncedFile.Frames);
+        var (audio, _) = BounceProcessor.Read(Path.Combine(project.Path, bouncedFile.Path));
+        Assert.Equal(0.25 * Math.Sin(0.05 * 1000), audio[0][Rate + 1000], 4);
+        Assert.Equal(0, audio[0][2 * Rate + 100], 6);
+    }
+
+    [Fact]
     public async Task Selection_based_processing_replaces_part_of_a_region_with_a_processed_file() {
         await using var server = new ServerFixture(analyzer: new FakeAnalyzer());
         using var client = server.CreateClient();
@@ -281,6 +380,47 @@ public sealed class FlexApiTests {
     ///     A deterministic analyzer: transients every 1/16 of 100 bpm, every second one 300 frames late; steady 100 bpm
     ///     beats; a pitch of 6900 cents throughout, two notes; sound in 20 000 frames of every 30 000.
     /// </summary>
+    /// <summary>A <see cref="FakeAnalyzer" /> whose rhythm analysis waits, once started, until it is released.</summary>
+    sealed class HeldAnalyzer : IAudioAnalyzer, IDisposable {
+        readonly FakeAnalyzer inner = new();
+        readonly ManualResetEventSlim released = new();
+
+        public ManualResetEventSlim Entered { get; } = new();
+
+        public void Release() => released.Set();
+
+        public void Dispose() {
+            released.Set();
+            released.Dispose();
+            Entered.Dispose();
+        }
+
+        long[] IAudioAnalyzer.Transients(float[] mono, int sampleRate) {
+            Entered.Set();
+            released.Wait(TimeSpan.FromSeconds(30));
+            return ((IAudioAnalyzer)inner).Transients(mono, sampleRate);
+        }
+
+        public BeatTrack Beats(float[] mono, int sampleRate) => inner.Beats(mono, sampleRate);
+
+        public PitchTrack Pitch(float[] mono, int sampleRate, int hop) => inner.Pitch(mono, sampleRate, hop);
+
+        public NoteSegment[] Notes(PitchTrack track, int sampleRate) => inner.Notes(track, sampleRate);
+
+        public bool Polyphonic(float[] mono, int sampleRate, PitchTrack track) =>
+            inner.Polyphonic(mono, sampleRate, track);
+
+        public (long Start, long End)[] Silence(
+            float[] mono,
+            int sampleRate,
+            double thresholdDb,
+            double minTimeMs,
+            double preAttackMs,
+            double postReleaseMs
+        ) =>
+            inner.Silence(mono, sampleRate, thresholdDb, minTimeMs, preAttackMs, postReleaseMs);
+    }
+
     public sealed class FakeAnalyzer : IAudioAnalyzer {
         int rhythmRuns;
 

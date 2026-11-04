@@ -259,6 +259,19 @@ function handleIpc(): void {
       })
     )
   );
+  ipcMain.handle('anode:dialog:saveProject', async (event, suggested: unknown) => {
+    const owner = BrowserWindow.fromWebContents(event.sender);
+    if (!owner || owner !== window) {
+      return null;
+    }
+    const target = await dialog.showSaveDialog(owner, {
+      title: 'Save the Project As',
+      buttonLabel: 'Save',
+      ...(typeof suggested === 'string' ? { defaultPath: suggested } : {}),
+      properties: ['createDirectory', 'showOverwriteConfirmation']
+    });
+    return target.canceled || !target.filePath ? null : target.filePath;
+  });
   ipcMain.handle('anode:dialog:importAudio', async event =>
     pick(event.sender, {
       title: 'Import Audio',
@@ -603,6 +616,9 @@ function buildMenu(): void {
     command('Open Project…', 'openProject', 'CmdOrCtrl+O'),
     { type: 'separator' },
     command('Save', 'saveProject', 'CmdOrCtrl+S'),
+    command('Save As…', 'saveProjectAs', 'CmdOrCtrl+Shift+S'),
+    command('Save a Copy…', 'saveProjectCopy'),
+    command('Save as Template…', 'saveTemplate'),
     command('Close Project', 'closeProject', 'CmdOrCtrl+Shift+W'),
     { type: 'separator' },
     command('Import Audio…', 'importAudio', 'CmdOrCtrl+Shift+I'),
@@ -611,6 +627,7 @@ function buildMenu(): void {
     {
       label: 'Import',
       submenu: [
+        command('From Project…', 'importProject'),
         command('MusicXML…', 'importMusicXml'),
         command('AAF…', 'importAaf'),
         command('MIDI File (with options)…', 'importMidiOptions'),
@@ -643,6 +660,7 @@ function buildMenu(): void {
     {
       label: 'Project Settings',
       submenu: [
+        command('Sample Rate…', 'sampleRateSettings'),
         command('Synchronization…', 'syncSettings'),
         // Phase 10: the project's surround format, and the movie's position.
         command('Surround…', 'surroundSettings'),

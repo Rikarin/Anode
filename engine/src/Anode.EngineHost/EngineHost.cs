@@ -113,7 +113,7 @@ public sealed class EngineHost : IDisposable {
         }
 
         TelemetryRegion = region;
-        telemetry = new(Controller.Engine, region, () => device.Overloads);
+        telemetry = new(Controller.Engine, region, () => device.Overloads, Controller.Streamer.TakeLoad);
 
         // Phase 10: the master tap ring for listen-in (segment format 5), created with the telemetry region.
         string? tapName = null;
@@ -187,6 +187,8 @@ public sealed class EngineHost : IDisposable {
     /// <summary>How often the inserts' readings are pushed (at most 15 times a second).</summary>
     static readonly TimeSpan ReadingsInterval = TimeSpan.FromSeconds(1.0 / 15);
 
+    int readingsBusy;
+
     /// <summary>
     ///     How often the sync state is checked: pushed on a change (at most 10 a second), and every 250 ms while
     ///     external.
@@ -234,13 +236,17 @@ public sealed class EngineHost : IDisposable {
 
     /// <summary>Pushes the inserts' readings when any insert has one.</summary>
     void PushReadings() {
-        if (Push is not { } push) {
-            return;
+        if (Push is not { } push || Interlocked.Exchange(ref readingsBusy, 1) != 0) {
+            return; // a display has one reader at a time: a tick that finds the last one running skips
         }
 
-        var list = Controller.InsertReadings();
-        if (list.Count > 0) {
-            push(new InsertReadingsMessage(list));
+        try {
+            var list = Controller.InsertReadings();
+            if (list.Count > 0) {
+                push(new InsertReadingsMessage(list));
+            }
+        } finally {
+            Volatile.Write(ref readingsBusy, 0);
         }
     }
 
@@ -330,7 +336,13 @@ public sealed class EngineHost : IDisposable {
                     Controller.SetCycle(cycle.Enabled, cycle.StartSample, cycle.EndSample);
                     return null;
                 case SetMetronomeMessage metronome:
-                    Controller.SetMetronome(metronome.Enabled, metronome.Gain, metronome.CountIn);
+                    Controller.SetMetronome(
+                        metronome.Enabled,
+                        metronome.Gain,
+                        metronome.CountIn,
+                        metronome.CountInLength,
+                        metronome.CountInBeats
+                    );
                     return null;
                 case TransportMessage transport:
                     return await TransportAsync(transport, cancellationToken).ConfigureAwait(false);
@@ -420,13 +432,17 @@ public sealed class EngineHost : IDisposable {
                 );
                 return true;
             case SetMixerMessage mixer:
-                Controller.SetMixer(mixer.Pdc, mixer.LowLatency, mixer.LowLatencyLimitMs);
+                Controller.SetMixer(mixer.Pdc, mixer.LowLatency, mixer.LowLatencyLimitMs, mixer.PanLaw, mixer.SoloMode);
                 return true;
             case RenderMessage render:
                 Render(render);
                 return true;
             case CancelRenderMessage cancel:
                 CancelRender(cancel.JobId);
+                return true;
+            case WatchInsertsMessage watch:
+                Controller.WatchInserts(watch.Inserts ?? []);
+                reply = null;
                 return true;
             case OpenPluginEditorMessage editor:
                 reply = Refused(
@@ -649,6 +665,7 @@ public sealed class EngineHost : IDisposable {
             ParameterChangedMessage => "parameterChanged",
             PluginProblemMessage => "pluginProblem",
             InsertReadingsMessage => "insertReadings",
+            WatchInsertsMessage => "watchInserts",
             LaunchCellsMessage => "launchCells",
             StopCellsMessage => "stopCells",
             CellStateMessage => "cellState",

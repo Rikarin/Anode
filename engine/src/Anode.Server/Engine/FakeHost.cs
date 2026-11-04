@@ -65,6 +65,7 @@ public sealed partial class FakeHost : IAsyncDisposable {
     readonly Dictionary<(int Track, string Insert), string> insertStates = [];
     readonly Dictionary<int, CancellationTokenSource> renders = [];
     readonly HashSet<(int Track, string? Insert)> editors = [];
+    IReadOnlyList<WatchedInsert> watchedInserts = [];
     readonly SemaphoreSlim writing;
     Stream? connection;
     SetMixerMessage mixer = new("all", false, 10);
@@ -198,6 +199,15 @@ public sealed partial class FakeHost : IAsyncDisposable {
     ];
 
     /// <summary>The plugin editors open now: (engine track, insert id; null the instrument).</summary>
+    /// <summary>The inserts whose displays the server last asked for.</summary>
+    public IReadOnlyList<WatchedInsert> WatchedInserts {
+        get {
+            lock (gate) {
+                return watchedInserts;
+            }
+        }
+    }
+
     public IReadOnlyCollection<(int Track, string? Insert)> Editors {
         get {
             lock (gate) {
@@ -582,6 +592,12 @@ public sealed partial class FakeHost : IAsyncDisposable {
                 }
 
                 break;
+            case WatchInsertsMessage watch:
+                lock (gate) {
+                    watchedInserts = watch.Inserts;
+                }
+
+                break;
             case OpenPluginEditorMessage editor:
                 lock (gate) {
                     if (editor.Open) {
@@ -756,7 +772,7 @@ public sealed partial class FakeHost : IAsyncDisposable {
         RenderMessage render
     ) {
         lock (gate) {
-            var soloed = tracks.Values.Any(static t => t.Strip.Solo);
+            var soloed = Soloed();
             if (render.Tracks is null) {
                 // A bed-only render (Phase 10's ADM bed) leaves the objects out.
                 return ([
@@ -782,7 +798,7 @@ public sealed partial class FakeHost : IAsyncDisposable {
                     return render.IncludeVolumePan ? t.Strip.Gain : 1;
                 }
 
-                return t.Strip.Mute || (soloed && !t.Strip.Solo) ? 0 : t.Strip.Gain;
+                return t.Strip.Mute || (soloed && !t.Strip.Solo && !t.Strip.SoloSafe) ? 0 : t.Strip.Gain;
             }
         }
     }
@@ -1198,15 +1214,31 @@ public sealed partial class FakeHost : IAsyncDisposable {
                 State = state,
                 SampleRate = SampleRate,
                 Callbacks = callbacks,
-                ModelVersion = modelVersion
+                ModelVersion = modelVersion,
+                AudioLoad = FakeAudioLoad,
+                AudioPeakLoad = 2 * FakeAudioLoad,
+                DiskLoad = 0.1f,
+                Overloads = 3,
+                Underruns = 1
             };
-            var soloed = tracks.Values.Any(static t => t.Strip.Solo);
+            var soloed = Soloed();
             meters = [
                 ..tracks.Values.OrderBy(static t => t.Id)
-                    .Select(t => new MeterEntry {
-                            TrackId = t.Id,
-                            PeakLeft = Level(t, position, soloed),
-                            PeakRight = Level(t, position, soloed)
+                    .Select(t => {
+                            var level = Level(t, position, soloed);
+                            return new MeterEntry {
+                                TrackId = t.Id,
+                                PeakLeft = level,
+                                PeakRight = level,
+                                RmsLeft = level * MathF.Sqrt(0.5f),
+                                RmsRight = level * MathF.Sqrt(0.5f),
+                                Lufs = level > 0 ? 20 * MathF.Log10(level) - 3 : -120,
+                                Levels = t.Strip.MeterType switch {
+                                    EngineMeterType.Peak => 0,
+                                    EngineMeterType.Lufs => MeterEntry.HasLufs,
+                                    _ => MeterEntry.HasRms
+                                }
+                            };
                         }
                     )
             ];
@@ -1218,9 +1250,15 @@ public sealed partial class FakeHost : IAsyncDisposable {
         telemetry.Write(header, meters, masterMeter);
     }
 
+    /// <summary>The load the fake reports.</summary>
+    public const float FakeAudioLoad = 0.25f;
+
+    /// <summary>Whether a solo silences the rest: one is on, in place (AFL and PFL leave the mix alone).</summary>
+    bool Soloed() => mixer.SoloMode == EngineSoloMode.InPlace && tracks.Values.Any(static t => t.Strip.Solo);
+
     /// <summary>A plausible level: the take's while recording or monitoring, half scale while a region plays.</summary>
     float Level(EngineTrack track, long position, bool soloed) {
-        if (track.Strip.Mute || (soloed && !track.Strip.Solo)) {
+        if (track.Strip.Mute || (soloed && !track.Strip.Solo && !track.Strip.SoloSafe)) {
             return 0;
         }
 

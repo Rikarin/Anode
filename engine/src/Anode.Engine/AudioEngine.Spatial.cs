@@ -161,6 +161,7 @@ public sealed unsafe partial class AudioEngine {
         var r = right.AsSpan(0, frames);
         var stereo = InsertsAny(node, l, r, ref width, firstInsert);
         var source = stereo ? r : l;
+        MeterWide(node.Channel.Strip, Ipc.EngineMeterTap.PreFader, width);
         var line = node.Channel.Delay;
         WriteLine(line, l, source, width);
         var tapped = -1;
@@ -249,7 +250,7 @@ public sealed unsafe partial class AudioEngine {
             WritePost(ch, left, source);
         }
 
-        TrackOutput(node, line, left, source, ref tapped);
+        TrackOutput(node, line, left, source, stereo, ref tapped);
     }
 
     /// <summary>Send <paramref name="s" /> by its edge.</summary>
@@ -310,10 +311,23 @@ public sealed unsafe partial class AudioEngine {
         if (edge.Kind == EdgeKind.DownmixStereo) {
             Downmix(edge, line, delay, width, ref tapped);
             OutputGains(node, true);
+            if (blockListen && ch.Strip.Solo) {
+                if (blockSoloMode == Ipc.EngineSoloMode.Pfl) {
+                    ListenPre(pieceOut.AsSpan(0, frames), pieceOut.AsSpan(frames, frames));
+                } else {
+                    Accumulate(
+                        pieceOut.AsSpan(0, frames),
+                        pieceOut.AsSpan(frames, frames),
+                        listenLeft.AsSpan(0, frames),
+                        listenRight.AsSpan(0, frames)
+                    );
+                }
+            }
+
             var outL = edgeLeft.AsSpan(0, frames);
             var outR = edgeRight.AsSpan(0, frames);
             var (peakL, peakR) = AccumulateTo(pieceOut.AsSpan(0, frames), pieceOut.AsSpan(frames, frames), outL, outR);
-            ch.Strip.Meter(peakL, peakR);
+            PostFaderMeter(ch.Strip, peakL, peakR, outL, outR);
             stem?.Write(outL, outR, destLatency[destination]);
             Add(destLeft[destination].AsSpan(0, frames), outL);
             Add(destRight[destination].AsSpan(0, frames), outR);
@@ -321,6 +335,10 @@ public sealed unsafe partial class AudioEngine {
         }
 
         var count = Render(node, edge, line, delay, width, ref tapped);
+        if (blockListen && ch.Strip.Solo) {
+            ListenWide(node, count, width);
+        }
+
         MeterPlanar(ch, planar.AsSpan(0, count * frames), count);
         stem?.WritePlanar(planar.AsSpan(0, count * frames), count, frames, destLatency[destination]);
         if (edge.Kind == EdgeKind.Object) {
@@ -335,6 +353,40 @@ public sealed unsafe partial class AudioEngine {
         }
 
         AddToDestination(destination, edge.Width, count);
+    }
+
+    /// <summary>
+    ///     A soloed strip whose output is rendered by its edge into the listen bus: PFL the signal before the fader
+    ///     (<paramref name="width" /> channels of it, tapped), AFL the <paramref name="count" /> rendered channels;
+    ///     down-mixed to stereo when wider.
+    /// </summary>
+    void ListenWide(MixNode node, int count, int width) {
+        var frames = blockFrames;
+        if (blockSoloMode == Ipc.EngineSoloMode.Pfl) {
+            if (node.ListenSignal is { } signal) {
+                Mix(signal, 2, width, 0, edgeLeft.AsSpan(0, frames));
+                Mix(signal, 2, width, 1, edgeRight.AsSpan(0, frames));
+                ListenPre(edgeLeft.AsSpan(0, frames), edgeRight.AsSpan(0, frames));
+            } else {
+                ListenPre(Tapped(0), Tapped(width > 1 ? 1 : 0));
+            }
+
+            return;
+        }
+
+        if (node.ListenOutput is not { } matrix) {
+            ListenPre(planar.AsSpan(0, frames), planar.AsSpan(count > 1 ? frames : 0, frames));
+            return;
+        }
+
+        var inputs = matrix.Length / 2;
+        for (var i = 0; i < Math.Min(count, inputs); i++) {
+            var from = planar.AsSpan(i * frames, frames);
+            for (var f = 0; f < frames; f++) {
+                listenLeft[f] += matrix[i] * from[f];
+                listenRight[f] += matrix[inputs + i] * from[f];
+            }
+        }
     }
 
     /// <summary>
@@ -661,8 +713,15 @@ public sealed unsafe partial class AudioEngine {
         return planar.AsSpan(0, width * frames);
     }
 
-    /// <summary>The peaks of each of <paramref name="count" /> planar channels into the strip's meter.</summary>
+    /// <summary>
+    ///     The peaks of each of <paramref name="count" /> planar channels into the strip's meter, when it reads after the
+    ///     fader; its type's levels from the front pair.
+    /// </summary>
     void MeterPlanar(ChannelState ch, ReadOnlySpan<float> block, int count) {
+        if (ch.Strip.MeterTap != Ipc.EngineMeterTap.PostFader) {
+            return;
+        }
+
         var frames = blockFrames;
         for (var c = 0; c < count; c++) {
             float peak = 0;
@@ -674,6 +733,35 @@ public sealed unsafe partial class AudioEngine {
         }
 
         ch.Strip.MeterChannels(peaks.AsSpan(0, count));
+        ch.Strip.MeasureLevels(block[..frames], block.Slice(count > 1 ? frames : 0, frames));
+    }
+
+    /// <summary>
+    ///     The channel's signal (<paramref name="width" /> channels) into the strip's meter, when it reads at
+    ///     <paramref name="tap" />: a surround signal's peaks per channel, its type's levels from the front pair.
+    /// </summary>
+    void MeterWide(Strip strip, Ipc.EngineMeterTap tap, int width) {
+        if (strip.MeterTap != tap) {
+            return;
+        }
+
+        var right = Signal(width > 1 ? 1 : 0);
+        if (width <= 2) {
+            strip.MeterSignal(Signal(0), right);
+            return;
+        }
+
+        for (var c = 0; c < width; c++) {
+            float peak = 0;
+            foreach (var v in Signal(c)) {
+                peak = Math.Max(peak, Math.Abs(v));
+            }
+
+            peaks[c] = peak;
+        }
+
+        strip.MeterChannels(peaks.AsSpan(0, width));
+        strip.MeasureLevels(Signal(0), right);
     }
 
     /// <summary>The post-fader signal another insert takes as a sidechain: the front pair at the fader's gains.</summary>
@@ -1156,7 +1244,9 @@ public sealed unsafe partial class AudioEngine {
             RenderObjects(plan, width);
         }
 
+        MeterWide(ch.Strip, Ipc.EngineMeterTap.Input, width);
         InsertsMulti(node, ref width, 0); // Phase 11: from here on in the format its inserts leave
+        MeterWide(ch.Strip, Ipc.EngineMeterTap.PreFader, width);
         var line = ch.Delay;
         if (line is not null) {
             for (var c = 2; c < width && c - 2 < line.ExtraChannels; c++) {
@@ -1277,6 +1367,7 @@ public sealed unsafe partial class AudioEngine {
             target.WritePlanar(sent.AsSpan(0, count * frames), count, frames, m.Latency + masterOutputDelay + latency);
         }
 
+        MonitorSection(sent, count);
         var map = setup?.Map;
         for (var i = 0; i < count; i++) {
             var output = map is not null && i < map.Length ? map[i] : i;

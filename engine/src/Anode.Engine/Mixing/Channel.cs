@@ -471,6 +471,17 @@ internal struct EdgeGain {
     internal bool Set;
 }
 
+/// <summary>
+///     The gains of a dual pan last applied (each channel's to the left and right), so a change ramps over a block.
+/// </summary>
+internal struct DualGain {
+    internal float LeftToLeft;
+    internal float LeftToRight;
+    internal float RightToLeft;
+    internal float RightToRight;
+    internal bool Set;
+}
+
 /// <summary>A prepared Surround Panner kept for an edge while its output format and input width stay (control thread).</summary>
 internal struct PannerCache {
     ISurroundPanner? panner;
@@ -527,6 +538,14 @@ public sealed class ChannelState(Strip strip) {
 
     /// <summary>Audio thread: the output's gain ramp.</summary>
     internal EdgeGain Output;
+
+    /// <summary>Audio thread: the trim last applied, so a change ramps over a block.</summary>
+    internal float AppliedTrim;
+
+    internal bool TrimApplied;
+
+    /// <summary>Audio thread: the dual pan's ramp.</summary>
+    internal DualGain Dual;
 
     /// <summary>Audio thread (Phase 10): the fader's gain ramp of an output with no stereo pan (surround, object, mono).</summary>
     internal EdgeGain Fader;

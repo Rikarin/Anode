@@ -81,7 +81,8 @@ public sealed record Pattern(IReadOnlyList<PatternRow> Rows, double Swing, long 
 ///     pass), draws under its chance; offset, swing and repeats as <see cref="PatternStep" /> and
 ///     <see cref="Pattern" /> say. The same project always gives the same notes; <c>reseedPattern</c> changes the seed.
 ///     Workstream B fixes the generator and the unrolling in <c>PatternVectors.json</c>, shared with the editor.
-///     Converting to a MIDI region replaces the region with exactly those notes, over the region's length.
+///     Converting to a MIDI region replaces the region with exactly those notes, over the region's length, and keeps
+///     its loop. <c>loopTicks</c>: it repeats for that many ticks after its end, as <see cref="AudioRegion" /> says.
 /// </remarks>
 public sealed record PatternRegion(
     string Id,
@@ -90,7 +91,8 @@ public sealed record PatternRegion(
     long StartTick,
     long LengthTicks,
     bool Muted,
-    Pattern Pattern
+    Pattern Pattern,
+    long LoopTicks = 0
 );
 
 /// <summary>A pad of a Drum Machine Designer: note <c>note</c> (0…127) plays sub-track <c>trackId</c>.</summary>

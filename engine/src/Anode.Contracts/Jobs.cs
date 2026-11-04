@@ -103,7 +103,27 @@ public enum JobKind {
     ///     <c>convertSessionPlayerRegions</c>.
     /// </summary>
     [JsonStringEnumMemberName("sessionPlayerConvert")]
-    SessionPlayerConvert
+    SessionPlayerConvert,
+
+    /// <summary>Save As (<c>SaveProjectAsRequest</c>): writes a whole package elsewhere and goes on working there.</summary>
+    [JsonStringEnumMemberName("saveAs")]
+    SaveAs,
+
+    /// <summary>Save a Copy (<c>SaveProjectAsRequest</c>): writes a whole package elsewhere; the open project stays.</summary>
+    [JsonStringEnumMemberName("saveCopy")]
+    SaveCopy,
+
+    /// <summary>A change of the project's sample rate (<c>ChangeSampleRateRequest</c>); it reopens at the new rate.</summary>
+    [JsonStringEnumMemberName("sampleRateChange")]
+    SampleRateChange,
+
+    /// <summary>Import from Project (<c>ImportProjectTracksRequest</c>): chosen tracks of another package, one undo step.</summary>
+    [JsonStringEnumMemberName("projectImport")]
+    ProjectImport,
+
+    /// <summary>Saving the open project as a template of the user's (<c>SaveTemplateRequest</c>).</summary>
+    [JsonStringEnumMemberName("saveTemplate")]
+    SaveTemplate
 }
 
 [JsonConverter(typeof(JsonStringEnumConverter<JobState>))]

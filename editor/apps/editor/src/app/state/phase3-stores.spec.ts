@@ -1,5 +1,5 @@
 import { TestBed } from '@angular/core/testing';
-import { DefaultPanner, type Track } from '@anode/api-client';
+import { DefaultPanner, StripDefaults, type Track } from '@anode/api-client';
 import { setUpFakeServer, settle } from '../core/fake/testing';
 import { defaultLayout, parseLayout, showPane } from '../pages/layout';
 import { KeyCommandsStore } from './key-commands.store';
@@ -97,7 +97,8 @@ describe('lane rows', () => {
       midiEffects: [],
       inputFormat: 'stereo',
       outputFormat: 'stereo',
-      panner: DefaultPanner
+      panner: DefaultPanner,
+      ...StripDefaults
     },
     instrument: null,
     midiInput: { device: null, channel: 0 },

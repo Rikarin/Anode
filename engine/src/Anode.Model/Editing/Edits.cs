@@ -217,6 +217,8 @@ public static partial class Edits {
             AddInsertCommand c => AddInsert(state, c, ids, plugins),
             RemoveInsertCommand c => RemoveInsert(state, c),
             MoveInsertCommand c => MoveInsert(state, c),
+            TransferInsertCommand { Chain: InsertChain.MidiEffects } c => TransferMidiEffect(state, c, ids),
+            TransferInsertCommand c => TransferInsert(state, c, ids),
             SetInsertCommand c => SetInsert(state, c, plugins),
             SetInsertParameterCommand c => SetInsertParameter(state, c, plugins),
             AddSendCommand c => AddSend(state, c, ids),
@@ -234,7 +236,8 @@ public static partial class Edits {
             SetMixerSettingsCommand c => SetMixerSettings(state, c),
             ApplyPatchCommand c => ApplyPatch(state, c, ids, patches ?? NoPatches.Instance),
             UnfreezeTrackCommand c => UnfreezeTrack(state, c),
-            _ => FlexOps(state, command, ids, plugins, analysis ?? NoAnalysis.Instance)
+            _ => TimeOps(state, command, ids)
+                ?? FlexOps(state, command, ids, plugins, analysis ?? NoAnalysis.Instance)
                 ?? Phase6Ops(state, command, ids, plugins, patches ?? NoPatches.Instance)
                 ?? Phase7Ops(state, command, ids, analysis ?? NoAnalysis.Instance)
                 ?? Phase8Ops(state, command, ids, plugins)
@@ -262,12 +265,7 @@ public static partial class Edits {
             throw new EditException($"Track index {index} is outside 0…{count}.");
         }
 
-        // A stack's members follow it: a new track asked for among them (after the stack, or after one of its pads)
-        // goes after the last of them, outside the stack.
-        if (index < count && state.Tracks[index].ParentId is { } parent) {
-            index = AfterStack(state, parent);
-        }
-
+        index = OutsideStacks(state, index);
         var kind = c.Kind ?? TrackKind.Audio;
         if (!Enum.IsDefined(kind)) {
             throw new EditException($"Unknown track kind {kind}.");
@@ -447,13 +445,17 @@ public static partial class Edits {
         };
     }
 
-    static DeltaOp[] MoveTrack(ProjectState state, MoveTrackCommand c) {
+    /// <summary>
+    ///     Moves a track: a stack with its members, a member within its stack (<c>setTrackParent</c> takes it out), and a
+    ///     track asked for among a stack's members goes after them (<see cref="Grouped" />).
+    /// </summary>
+    static List<DeltaOp> MoveTrack(ProjectState state, MoveTrackCommand c) {
         var track = TrackOf(state, c.TrackId);
         if (c.Index < 0 || c.Index >= state.Tracks.Count) {
             throw new EditException($"Track index {c.Index} is outside 0…{state.Tracks.Count - 1}.");
         }
 
-        return [new TrackUpserted(track, c.Index)];
+        return InOrder(state, Grouped(state.Tracks.Remove(track).Insert(c.Index, track)));
     }
 
     static List<DeltaOp> SetTrack(ProjectState state, SetTrackCommand c) {
@@ -502,8 +504,25 @@ public static partial class Edits {
 
     static List<DeltaOp> SetStrip(ProjectState state, SetStripCommand c) {
         CheckStrip(c);
+        var input = c.TrimDb is not null
+            || c.PolarityInverted is not null
+            || c.DelayMs is not null
+            || c.DualPan is not null
+            || c.PanLeft is not null
+            || c.PanRight is not null
+            || c.SoloSafe is not null;
+        if (c.MeterType is { } type && !Enum.IsDefined(type)) {
+            throw new EditException($"Unknown meter type {type}.");
+        }
+
+        if (c.MeterTap is { } tap && !Enum.IsDefined(tap)) {
+            throw new EditException($"Unknown meter tap point {tap}.");
+        }
+
         if (c.TrackId is null) {
-            return [new MasterChanged(Changed(state.Master, c))];
+            return input
+                ? throw new EditException("The master has no trim, polarity, delay, dual pan or solo safe.")
+                : [new MasterChanged(Changed(state.Master, c))];
         }
 
         if (state.FindTrack(c.TrackId) is { Kind: TrackKind.Vca } && c.Pan is not null) {
@@ -511,6 +530,14 @@ public static partial class Edits {
         }
 
         var track = TrackOf(state, c.TrackId);
+        if (input && !HasAudioStrip(track.Kind)) {
+            throw new EditException($"A {Kind(track.Kind)} track has no trim, polarity, delay, dual pan or solo safe.");
+        }
+
+        if ((c.MeterType is not null || c.MeterTap is not null) && !HasAudioStrip(track.Kind)) {
+            throw new EditException($"A {Kind(track.Kind)} track has no meter.");
+        }
+
         List<DeltaOp> ops =
             [new TrackUpserted(track with { Strip = Changed(track.Strip, c) }, state.IndexOfTrack(track.Id))];
         ops.AddRange(GroupFollows(state, track, c));
@@ -524,6 +551,16 @@ public static partial class Edits {
 
         if (c.Pan is { } pan && !(pan is >= -1 and <= 1)) {
             throw new EditException($"Pan {pan} is outside −1…1.");
+        }
+
+        CheckPan(c.PanLeft);
+        CheckPan(c.PanRight);
+        if (c.TrimDb is { } trim && !(trim is >= -MaxTrimDb and <= MaxTrimDb)) {
+            throw new EditException($"Trim {trim} dB is outside ±{MaxTrimDb} dB.");
+        }
+
+        if (c.DelayMs is { } delay && !(delay is >= -MaxStripDelayMs and <= MaxStripDelayMs)) {
+            throw new EditException($"Delay {delay} ms is outside ±{MaxStripDelayMs} ms.");
         }
     }
 
@@ -539,6 +576,17 @@ public static partial class Edits {
             (s, v) => s with { VolumeDb = Follow(s.VolumeDb, v - track.Strip.VolumeDb) }
         );
         Link(static p => p.Pan, c.Pan, (s, v) => s with { Pan = Math.Clamp(s.Pan + (v - track.Strip.Pan), -1, 1) });
+        Link(static p => p.Pan, c.DualPan, static (s, v) => s with { DualPan = v });
+        Link(
+            static p => p.Pan,
+            c.PanLeft,
+            (s, v) => s with { PanLeft = Math.Clamp(s.PanLeft + (v - track.Strip.PanLeft), -1, 1) }
+        );
+        Link(
+            static p => p.Pan,
+            c.PanRight,
+            (s, v) => s with { PanRight = Math.Clamp(s.PanRight + (v - track.Strip.PanRight), -1, 1) }
+        );
         Link(static p => p.Mute, c.Mute, static (s, v) => s with { Mute = v });
         Link(static p => p.Solo, c.Solo, static (s, v) => s with { Solo = v });
         foreach (var other in state.Tracks) {
@@ -566,7 +614,15 @@ public static partial class Edits {
             VolumeDb = c.VolumeDb ?? strip.VolumeDb,
             Pan = c.Pan ?? strip.Pan,
             Mute = c.Mute ?? strip.Mute,
-            Solo = c.Solo ?? strip.Solo
+            Solo = c.Solo ?? strip.Solo,
+            TrimDb = c.TrimDb ?? strip.TrimDb,
+            PolarityInverted = c.PolarityInverted ?? strip.PolarityInverted,
+            DelayMs = c.DelayMs ?? strip.DelayMs,
+            DualPan = c.DualPan ?? strip.DualPan,
+            PanLeft = c.PanLeft ?? strip.PanLeft,
+            PanRight = c.PanRight ?? strip.PanRight,
+            SoloSafe = c.SoloSafe ?? strip.SoloSafe,
+            Meter = new(c.MeterType ?? strip.Meter.Type, c.MeterTap ?? strip.Meter.Tap)
         };
 
     static DeltaOp[] AddRegion(ProjectState state, AddRegionCommand c, IIdSource ids) {
@@ -687,25 +743,37 @@ public static partial class Edits {
         }
 
         var region = RegionOf(state, c.RegionId!);
-        var timing = RegionTiming.Of(state, region);
-        long at;
-        if (timing.Warped) {
-            at = c.AtTick > region.StartTick ? (long)Math.Round(timing.FrameAt(c.AtTick)) - region.FileOffset : 0;
-        } else {
-            var map = state.TempoMap;
-            var start = map.SampleAt(region.StartTick, state.SampleRate);
-            at = c.AtTick > region.StartTick ? map.SampleAt(c.AtTick, state.SampleRate) - start : 0;
-        }
-
+        RefuseLooped(region.LoopTicks, region.Id, "split");
+        var at = SplitFrames(state, region, c.AtTick);
         if (at <= 0 || at >= region.Length) {
             throw new EditException($"Tick {c.AtTick} is not inside region '{region.Id}'.");
         }
 
+        return Split(region, at, c.AtTick, ids);
+    }
+
+    /// <summary>How many of a region's frames play before <paramref name="tick" />: 0 at or before its start.</summary>
+    static long SplitFrames(ProjectState state, AudioRegion region, long tick) {
+        if (tick <= region.StartTick) {
+            return 0;
+        }
+
+        var timing = RegionTiming.Of(state, region);
+        if (timing.Warped) {
+            return (long)Math.Round(timing.FrameAt(tick)) - region.FileOffset;
+        }
+
+        var map = state.TempoMap;
+        return map.SampleAt(tick, state.SampleRate) - map.SampleAt(region.StartTick, state.SampleRate);
+    }
+
+    /// <summary>A region in two after <paramref name="at" /> of its frames, the second starting at <paramref name="tick" />.</summary>
+    static DeltaOp[] Split(AudioRegion region, long at, long tick, IIdSource ids) {
         var left = Piece(region, region.FileOffset, region.FileOffset + at, region.StartTick) with {
             FadeIn = Math.Min(region.FadeIn, at), FadeOut = 0
         };
         var rightLength = region.Length - at;
-        var right = Piece(region, region.FileOffset + at, region.FileOffset + region.Length, c.AtTick) with {
+        var right = Piece(region, region.FileOffset + at, region.FileOffset + region.Length, tick) with {
             Id = ids.Next(IdPrefix.Region), FadeIn = 0, FadeOut = Math.Min(region.FadeOut, rightLength)
         };
         return [new RegionUpserted(left), new RegionUpserted(right)];
@@ -714,7 +782,7 @@ public static partial class Edits {
     /// <summary>
     ///     The part of <paramref name="region" /> over file frames <paramref name="from" />…<paramref name="to" />,
     ///     starting at <paramref name="startTick" />: its flex markers inside that part (their ticks relative to the new
-    ///     start) and its pitch notes cut to it.
+    ///     start) and its pitch notes cut to it, without a loop.
     /// </summary>
     public static AudioRegion Piece(AudioRegion region, long from, long to, long startTick) {
         var shift = startTick - region.StartTick;
@@ -722,6 +790,7 @@ public static partial class Edits {
             StartTick = startTick,
             FileOffset = from,
             Length = to - from,
+            LoopTicks = 0,
             FlexMarkers = region.FlexMarkers.Count == 0
                 ? region.FlexMarkers
                 : [
@@ -762,6 +831,7 @@ public static partial class Edits {
 
         CheckCurve(c.FadeInCurve);
         CheckCurve(c.FadeOutCurve);
+        CheckLoop(c.LoopTicks);
         return [
             new RegionUpserted(
                 region with {
@@ -771,7 +841,8 @@ public static partial class Edits {
                     FadeOut = fadeOut,
                     FadeInCurve = c.FadeInCurve ?? region.FadeInCurve,
                     FadeOutCurve = c.FadeOutCurve ?? region.FadeOutCurve,
-                    Muted = c.Muted ?? region.Muted
+                    Muted = c.Muted ?? region.Muted,
+                    LoopTicks = c.LoopTicks ?? region.LoopTicks
                 }
             )
         ];
@@ -821,11 +892,23 @@ public static partial class Edits {
             throw new EditException($"Click level {level} dB is outside {MinClickDb}…{MaxClickDb} dB.");
         }
 
+        if (c.CountInLength is < 1 or > MaxRollLength) {
+            throw new EditException($"A count-in is 1…{MaxRollLength} bars or beats, not {c.CountInLength}.");
+        }
+
         var old = state.Settings.Metronome;
+        var unit = c.CountInUnit ?? old.CountInUnit;
+        CheckUnit(unit);
         return [
             new SettingsChanged(
                 state.Settings with {
-                    Metronome = new(c.Enabled ?? old.Enabled, c.CountIn ?? old.CountIn, c.LevelDb ?? old.LevelDb)
+                    Metronome = new(
+                        c.Enabled ?? old.Enabled,
+                        c.CountIn ?? old.CountIn,
+                        c.LevelDb ?? old.LevelDb,
+                        c.CountInLength ?? old.CountInLength,
+                        unit
+                    )
                 }
             )
         ];

@@ -9,7 +9,7 @@ namespace Anode.Engine.Tests;
 ///     samples (docs/05-phase-4.md, workstream A): routing to buses, aux tracks and device output pairs, pre- and
 ///     post-fader sends, sidechains (with the one-block rule), plugin delay compensation (null tests) and automation.
 /// </summary>
-public sealed class MixTests : IDisposable {
+public sealed partial class MixTests : IDisposable {
     const int Rate = 48_000;
     const int Seconds = 3;
     readonly string dir = TestAudio.TempDirectory();

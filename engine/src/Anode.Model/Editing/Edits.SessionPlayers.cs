@@ -110,10 +110,7 @@ public static partial class Edits {
             throw new EditException($"Track index {index} is outside 0…{count}.");
         }
 
-        if (index < count && state.Tracks[index].ParentId is { } parent) {
-            index = AfterStack(state, parent);
-        }
-
+        index = OutsideStacks(state, index);
         var kind = TrackKindOf(c.Player);
         var name = c.Name is null ? NextTrackName(state, kind) : Name(c.Name, "track name");
         var ops = c.Player == SessionPlayerKind.Drummer

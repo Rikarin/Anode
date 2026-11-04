@@ -46,6 +46,7 @@ namespace Anode.Ipc;
 [JsonDerivedType(typeof(ParameterChangedMessage), "parameterChanged")]
 [JsonDerivedType(typeof(PluginProblemMessage), "pluginProblem")]
 [JsonDerivedType(typeof(InsertReadingsMessage), "insertReadings")]
+[JsonDerivedType(typeof(WatchInsertsMessage), "watchInserts")]
 [JsonDerivedType(typeof(LaunchCellsMessage), "launchCells")]
 [JsonDerivedType(typeof(StopCellsMessage), "stopCells")]
 [JsonDerivedType(typeof(CellStateMessage), "cellState")]
@@ -115,6 +116,13 @@ public sealed record EngineFile(int Id, string Path, int Channels, int SampleRat
 ///         maps one to the other (null: the stereo pan, as before). The engine's buffers carry a strip's channels in its
 ///         format's layout order (<c>Anode.Dsp.Spatial.SpeakerLayout</c>); a stereo strip costs what it did.
 ///     </para>
+///     <para>
+///         The strip's input stage: <paramref name="Trim" /> is the signed linear gain on its source before the inserts
+///         (negative: polarity inverted); <paramref name="DelayFrames" /> moves it in time (negative: earlier, by
+///         delaying everything else); with <paramref name="DualPan" /> a stereo signal's channels pan on their own to
+///         <paramref name="PanLeft" /> and <paramref name="PanRight" />. <paramref name="SoloSafe" /> keeps it audible
+///         under others' solo in place.
+///     </para>
 /// </summary>
 public sealed record EngineStrip(
     float Gain,
@@ -127,8 +135,83 @@ public sealed record EngineStrip(
     IReadOnlyList<EngineInsert>? MidiEffects = null,
     EngineChannelFormat InputFormat = EngineChannelFormat.Stereo,
     EngineChannelFormat OutputFormat = EngineChannelFormat.Stereo,
-    EnginePanner? Panner = null
+    EnginePanner? Panner = null,
+    float Trim = 1f,
+    int DelayFrames = 0,
+    bool DualPan = false,
+    float PanLeft = -1f,
+    float PanRight = 1f,
+    bool SoloSafe = false,
+    EngineMeterType MeterType = EngineMeterType.Peak,
+    EngineMeterTap MeterTap = EngineMeterTap.PostFader
 );
+
+/// <summary>The contract's <c>MeterType</c>, in its order.</summary>
+[JsonConverter(typeof(JsonStringEnumConverter<EngineMeterType>))]
+public enum EngineMeterType {
+    [JsonStringEnumMemberName("peak")]
+    Peak,
+
+    [JsonStringEnumMemberName("rms")]
+    Rms,
+
+    [JsonStringEnumMemberName("k20")]
+    K20,
+
+    [JsonStringEnumMemberName("k14")]
+    K14,
+
+    [JsonStringEnumMemberName("k12")]
+    K12,
+
+    [JsonStringEnumMemberName("lufs")]
+    Lufs
+}
+
+/// <summary>The contract's <c>MeterTap</c>, in its order.</summary>
+[JsonConverter(typeof(JsonStringEnumConverter<EngineMeterTap>))]
+public enum EngineMeterTap {
+    [JsonStringEnumMemberName("input")]
+    Input,
+
+    [JsonStringEnumMemberName("preFader")]
+    PreFader,
+
+    [JsonStringEnumMemberName("postFader")]
+    PostFader
+}
+
+/// <summary>The contract's <c>SoloMode</c>, in its order.</summary>
+[JsonConverter(typeof(JsonStringEnumConverter<EngineSoloMode>))]
+public enum EngineSoloMode {
+    [JsonStringEnumMemberName("inPlace")]
+    InPlace,
+
+    [JsonStringEnumMemberName("afl")]
+    Afl,
+
+    [JsonStringEnumMemberName("pfl")]
+    Pfl
+}
+
+/// <summary>The contract's <c>PanLaw</c>, in its order.</summary>
+[JsonConverter(typeof(JsonStringEnumConverter<EnginePanLaw>))]
+public enum EnginePanLaw {
+    [JsonStringEnumMemberName("zeroDb")]
+    ZeroDb,
+
+    [JsonStringEnumMemberName("minus3Db")]
+    Minus3Db,
+
+    [JsonStringEnumMemberName("minus3DbCompensated")]
+    Minus3DbCompensated,
+
+    [JsonStringEnumMemberName("minus4Point5Db")]
+    Minus4Point5Db,
+
+    [JsonStringEnumMemberName("minus6Db")]
+    Minus6Db
+}
 
 /// <summary>The contract's <c>ChannelFormat</c>, in its order (and <c>Anode.Dsp.Spatial.SpeakerFormat</c>'s).</summary>
 [JsonConverter(typeof(JsonStringEnumConverter<EngineChannelFormat>))]
@@ -381,11 +464,18 @@ public sealed record SetCycleMessage(bool Enabled, long StartSample, long EndSam
 /// <summary>
 ///     Server → host: whether the metronome sounds (its clicks are events of track
 ///     <see cref="Segments.TrackEntry.MetronomeTrack" /> in the model) and at what linear gain, and whether a recording
-///     started from a stop gets a one-bar count-in (<paramref name="CountIn" />, the project's
-///     <c>MetronomeSettings.CountIn</c>). The host times the count-in from the model's clicks and sounds it at
+///     started from a stop gets a count-in (<paramref name="CountIn" />, the project's
+///     <c>MetronomeSettings.CountIn</c>) of <paramref name="CountInLength" /> bars, or beats with
+///     <paramref name="CountInBeats" />. The host times the count-in from the model's clicks and sounds it at
 ///     <paramref name="Gain" /> even when the metronome itself is off.
 /// </summary>
-public sealed record SetMetronomeMessage(bool Enabled, float Gain, bool CountIn = false) : IpcMessage;
+public sealed record SetMetronomeMessage(
+    bool Enabled,
+    float Gain,
+    bool CountIn = false,
+    int CountInLength = 1,
+    bool CountInBeats = false
+) : IpcMessage;
 
 /// <summary>
 ///     One recorded take: a WAV file the host finished writing. A take that wrapped (cycle recording, or a Flashback
@@ -547,7 +637,13 @@ public sealed record SetSendLevelMessage(int TrackId, string SendId, float Gain,
 ///     Server → host: plugin delay compensation (<c>all</c>, <c>tracks</c>, <c>off</c>) and low-latency mode with its
 ///     limit in milliseconds.
 /// </summary>
-public sealed record SetMixerMessage(string Pdc, bool LowLatency, double LowLatencyLimitMs) : IpcMessage;
+public sealed record SetMixerMessage(
+    string Pdc,
+    bool LowLatency,
+    double LowLatencyLimitMs,
+    EnginePanLaw PanLaw = EnginePanLaw.Minus3DbCompensated,
+    EngineSoloMode SoloMode = EngineSoloMode.InPlace
+) : IpcMessage;
 
 /// <summary>
 ///     Server → host: render <paramref name="StartSample" />…<paramref name="EndSample" /> to 32-bit float stereo WAV,
@@ -604,14 +700,26 @@ public sealed record ParameterChangedMessage(int TrackId, string? InsertId, stri
 /// <summary>Host → server: a plugin crashed or failed to load and is bypassed.</summary>
 public sealed record PluginProblemMessage(int TrackId, string? InsertId, string PluginId, string Message) : IpcMessage;
 
-/// <summary>An insert's reading (<c>IAudioEffect.Reading</c>: a compressor's gain reduction in dB, a meter's level).</summary>
-public sealed record InsertReadingEntry(int TrackId, string InsertId, float Value);
+/// <summary>
+///     An insert's reading (<c>IAudioEffect.Reading</c>: a compressor's gain reduction in dB, a meter's level), and
+///     <paramref name="Values" />, what its <c>IEffectDisplay</c> shows, when it has one and an editor watches it.
+/// </summary>
+public sealed record InsertReadingEntry(int TrackId, string InsertId, float Value, float[]? Values = null);
 
 /// <summary>
 ///     Host → server: the inserts' readings (track −1: the master; inserts without one are left out), at most 15 times a
 ///     second while any insert has one.
 /// </summary>
 public sealed record InsertReadingsMessage(IReadOnlyList<InsertReadingEntry> Readings) : IpcMessage;
+
+/// <summary>An insert whose display an editor shows (track −1: the master).</summary>
+public sealed record WatchedInsert(int TrackId, string InsertId);
+
+/// <summary>
+///     Server → host: the inserts whose <c>IEffectDisplay</c> values to read and send, all of them (it replaces the last
+///     list). A display can be a spectrum's FFT, so one nobody looks at costs nothing.
+/// </summary>
+public sealed record WatchInsertsMessage(IReadOnlyList<WatchedInsert> Inserts) : IpcMessage;
 
 /// <summary>A Live Loops quantise (the contract's <c>LaunchQuantize</c>): the boundary a launch or stop waits for.</summary>
 [JsonConverter(typeof(JsonStringEnumConverter<EngineQuantize>))]
@@ -879,13 +987,17 @@ public sealed record SyncStateMessage(EngineSyncSource Source, bool Locked, doub
 ///     rendered through the HRTF set <paramref name="HrtfPath" /> (Anode's compact file) to outputs 1–2; otherwise
 ///     with <paramref name="DownmixTo" /> they are down-mixed to that format (null: sent as they are). Channel i of what
 ///     is sent goes to 0-based device output <paramref name="SpeakerMap" />[i] (−1: not sent; past the map's end:
-///     output i). The host prepares the renderer off the audio thread and swaps it in.
+///     output i). The host prepares the renderer off the audio thread and swaps it in. <paramref name="Gain" /> and
+///     <paramref name="Mono" /> are the monitor section's (the server works the level out from it): what goes to the
+///     speakers, ramped, the click included; they alone changing costs no new renderer.
 /// </summary>
 public sealed record SetMonitoringMessage(
     bool Binaural,
     EngineChannelFormat? DownmixTo,
     IReadOnlyList<int> SpeakerMap,
-    string? HrtfPath = null
+    string? HrtfPath = null,
+    float Gain = 1f,
+    bool Mono = false
 ) : IpcMessage;
 
 /// <summary>

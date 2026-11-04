@@ -13,6 +13,7 @@ import {
   type ListenInFormat,
   type Marker,
   type MonitoringSettings,
+  type MonitorSection,
   type Movie,
   type Panner,
   type PannerMode,
@@ -479,6 +480,8 @@ function wholeRegion(id: string, trackId: string, file: AudioFile, startTick: nu
     fineTune: 0,
     pitchNotes: [],
     pitchSource: 'off',
+    loopTicks: 0,
+    stretch: 1,
     key: null
   };
 }
@@ -580,14 +583,24 @@ export function admContent(project: Project, path: string, id: (prefix: string) 
 // ---- monitoring, discovery, pads
 
 /** Checks monitoring settings (`PUT /settings/monitoring`): a known down-mix format, outputs 0 (not sent) to 64. */
-export function checkMonitoring(settings: MonitoringSettings): MonitoringSettings {
+export function checkMonitoring(settings: MonitoringSettings, current: MonitorSection): MonitoringSettings {
   if (settings.downmixTo != null) {
     checkFormat(settings.downmixTo);
   }
   if (settings.speakerMap.length > 64 || settings.speakerMap.some(o => !Number.isInteger(o) || o < 0 || o > 64)) {
     refuse('The speaker map gives each channel a device output from 1 to 64 (0: not sent).');
   }
-  return { binaural: settings.binaural, downmixTo: settings.downmixTo ?? null, speakerMap: [...settings.speakerMap] };
+  const section = settings.section ?? current;
+  const outside = (db: number, max: number) => !Number.isFinite(db) || db < -96 || db > max;
+  if (outside(section.levelDb, 12) || outside(section.referenceDb, 12) || outside(section.dimDb, 0)) {
+    refuse("The monitor section's levels are −96…12 dB, its dim −96…0 dB.");
+  }
+  return {
+    binaural: settings.binaural,
+    downmixTo: settings.downmixTo ?? null,
+    speakerMap: [...settings.speakerMap],
+    section: { ...section }
+  };
 }
 
 /** The remote's pad sets out of the box (`RemotePads`, user settings): Logic Remote's transport and editing pads. */

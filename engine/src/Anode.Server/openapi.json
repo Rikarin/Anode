@@ -78,6 +78,40 @@
         }
       }
     },
+    "/api/v1/plugins/displays": {
+      "post": {
+        "tags": [
+          "Plugins"
+        ],
+        "summary": "Keeps these inserts\u0027 live displays (spectrum, scope, band gains) on the meters event for the next few seconds: an editor repeats it while a plugin window shows. Unknown inserts are ignored.",
+        "operationId": "WatchInsertDisplays",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InsertDisplayRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "No Content"
+          }
+        }
+      }
+    },
     "/api/v1/system/discovery": {
       "get": {
         "tags": [
@@ -221,6 +255,50 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/contents": {
+      "post": {
+        "tags": [
+          "Projects"
+        ],
+        "summary": "What a project on the server\u0027s disk holds, read without opening it (Import from Project).",
+        "operationId": "GetProjectContents",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OpenProjectRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectContents"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
           }
         }
       }
@@ -397,6 +475,182 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ProjectSummary"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/api/v1/project/save-as": {
+      "post": {
+        "tags": [
+          "Project"
+        ],
+        "summary": "Queues writing the project, unsaved edits included, as a whole package at a new location and going on working there; the original stays as last saved. 409 when something is there; a job that fails or is cancelled leaves no package and the open project as it was.",
+        "operationId": "SaveProjectAs",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SaveProjectAsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Job"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/api/v1/project/save-copy": {
+      "post": {
+        "tags": [
+          "Project"
+        ],
+        "summary": "Queues writing the project, unsaved edits included, as a whole package at a new location; the open project stays open where it is, unsaved edits and all.",
+        "operationId": "SaveProjectCopy",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SaveProjectAsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Job"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/api/v1/project/sample-rate": {
+      "post": {
+        "tags": [
+          "Project"
+        ],
+        "summary": "Queues changing the project\u0027s sample rate, saving it: its files are written anew beside the old ones (converted, or their samples kept), the last save and unsaved edits go to backups, and the project reopens without undo history. 422 while files are offline or tracks unreadable, 409 while it plays. A job that fails or is cancelled leaves the project as it was.",
+        "operationId": "ChangeSampleRate",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangeSampleRateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Job"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/api/v1/project/import-tracks": {
+      "post": {
+        "tags": [
+          "Project"
+        ],
+        "summary": "Queues importing chosen tracks of a project on the server\u0027s disk, with their regions, inserts, sends and automation, as one undo step. The source is only read; a job that fails leaves the open project as it was.",
+        "operationId": "ImportProjectTracks",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImportProjectTracksRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Job"
                 }
               }
             }
@@ -1706,6 +1960,273 @@
         }
       }
     },
+    "/api/v1/library/project-templates": {
+      "get": {
+        "tags": [
+          "Library"
+        ],
+        "summary": "The factory\u0027s project templates, then the user\u0027s: what \u0060template\u0060 in CreateProject names.",
+        "operationId": "ListProjectTemplates",
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ProjectTemplate"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Library"
+        ],
+        "summary": "Queues saving the open project, media and unsaved edits included, as a template of the user\u0027s.",
+        "operationId": "SaveProjectTemplate",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SaveTemplateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Job"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/api/v1/library/project-templates/{id}": {
+      "delete": {
+        "tags": [
+          "Library"
+        ],
+        "operationId": "DeleteProjectTemplate",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "No Content"
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/api/v1/library/track-templates": {
+      "get": {
+        "tags": [
+          "Library"
+        ],
+        "operationId": "ListTrackTemplates",
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TrackTemplate"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Library"
+        ],
+        "summary": "Saves tracks as a template with their routing: their stack members, the auxes they reach, their plugins and states. No regions or automation.",
+        "operationId": "SaveTrackTemplate",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SaveTrackTemplateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TrackTemplate"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/api/v1/library/track-templates/{id}": {
+      "delete": {
+        "tags": [
+          "Library"
+        ],
+        "operationId": "DeleteTrackTemplate",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "No Content"
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/api/v1/library/track-templates/{id}/apply": {
+      "post": {
+        "tags": [
+          "Library"
+        ],
+        "summary": "Queues adding a template\u0027s tracks to the open project, on buses of their own, as one undo step.",
+        "operationId": "ApplyTrackTemplate",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Job"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
     "/api/v1/project/bounce": {
       "post": {
         "tags": [
@@ -2545,7 +3066,7 @@
         "tags": [
           "Library"
         ],
-        "summary": "Removes an installed pack and its loops from the index; projects keep the copies of the loops they use.",
+        "summary": "Removes an installed pack and its loops from the index; projects keep the copies of the files they use.",
         "operationId": "RemovePack",
         "parameters": [
           {
@@ -6196,7 +6717,9 @@
           "fineTune",
           "pitchNotes",
           "pitchSource",
-          "key"
+          "key",
+          "loopTicks",
+          "stretch"
         ],
         "type": "object",
         "properties": {
@@ -6282,6 +6805,16 @@
                 "$ref": "#/components/schemas/RegionKey"
               }
             ]
+          },
+          "loopTicks": {
+            "type": "integer",
+            "format": "int64",
+            "default": 0
+          },
+          "stretch": {
+            "type": "number",
+            "format": "double",
+            "default": 1
           }
         },
         "description": "A region of an audio file on a track: it starts at \u0060startTick\u0060 and plays \u0060length\u0060 frames of the file\nfrom \u0060fileOffset\u0060, at \u0060gainDb\u0060, with fades of \u0060fadeIn\u0060 and \u0060fadeOut\u0060 frames whose curves run\nfrom \u22121 (slow start, exponential-looking) through 0 (linear) to 1 (fast start, logarithmic-looking): a fade-in\u0027s\ngain at position x (0\u20261) is x^(2^(\u22122c)), a fade-out the mirror. A muted region\ndoes not play. Two regions on a track may overlap only as a crossfade: where the earlier fades out and the later\nfades in."
@@ -6698,6 +7231,23 @@
           "retrigger"
         ]
       },
+      "ChangeSampleRateRequest": {
+        "required": [
+          "sampleRate",
+          "mode"
+        ],
+        "type": "object",
+        "properties": {
+          "sampleRate": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "mode": {
+            "$ref": "#/components/schemas/SampleRateChangeMode"
+          }
+        },
+        "description": "A change of the open project\u0027s sample rate."
+      },
       "ChannelFormat": {
         "enum": [
           "mono",
@@ -6727,7 +7277,15 @@
           "midiEffects",
           "inputFormat",
           "outputFormat",
-          "panner"
+          "panner",
+          "trimDb",
+          "polarityInverted",
+          "delayMs",
+          "dualPan",
+          "panLeft",
+          "panRight",
+          "soloSafe",
+          "meter"
         ],
         "type": "object",
         "properties": {
@@ -6787,9 +7345,37 @@
           },
           "panner": {
             "$ref": "#/components/schemas/Panner"
+          },
+          "trimDb": {
+            "type": "number",
+            "format": "double"
+          },
+          "polarityInverted": {
+            "type": "boolean"
+          },
+          "delayMs": {
+            "type": "number",
+            "format": "double"
+          },
+          "dualPan": {
+            "type": "boolean"
+          },
+          "panLeft": {
+            "type": "number",
+            "format": "double"
+          },
+          "panRight": {
+            "type": "number",
+            "format": "double"
+          },
+          "soloSafe": {
+            "type": "boolean"
+          },
+          "meter": {
+            "$ref": "#/components/schemas/StripMeter"
           }
         },
-        "description": "                A channel strip: volume in dB (\u2212\u221E as \u2212144), pan \u22121 (left) \u2026 1 (right), mute and solo; its insert effects in\n                order; its sends to buses; where it goes (\u0060output\u0060: \u0060master\u0060, \u0060bus:N\u0060 for bus 1\u202664, or\n                \u0060output:N\u0060 for the device\u0027s stereo output pair N); the mixer groups it belongs to (1\u202632); and the VCA track\n                that offsets its volume, if any. The master strip uses only volume, pan, mute and its inserts. Phase 6:\n                \u0060midiEffects\u0060 are its MIDI FX slots (instrument and external MIDI tracks only; empty elsewhere), in the\n                same shape as inserts: they run in slot order on the block\u0027s MIDI (regions, live and step input) before the\n                instrument; bypassed slots pass it through.\n                Phase 10 (docs/11-phase-10.md): inputFormat is the format of the signal the strip processes before its\npanner (an audio track\u0027s recording and regions, an instrument\u0027s output, an aux\u0027s bus: an aux\u0027s input format\nis its bus\u0027s format); outputFormat is its destination\u0027s format, kept by the server (the master\u0027s is\nthe project\u0027s surroundFormat, a bus\u0027s its aux\u0027s input format, a device output pair stereo; the\nmaster\u0027s input and output are the project\u0027s). panner maps the input channels to the output: stereo\npan (pan) for a stereo output, the Surround Panner, or an object (PannerMode); an input\nof the output\u0027s format passes straight through. Sends to a multichannel bus are panned by the strip\u0027s panner\n(their pan applies to stereo buses only). Every strip of a project from before Phase 10 is stereo in\nand out with the stereo panner."
+        "description": "                A channel strip: volume in dB (\u2212\u221E as \u2212144), pan \u22121 (left) \u2026 1 (right), mute and solo; its insert effects in\n                order; its sends to buses; where it goes (\u0060output\u0060: \u0060master\u0060, \u0060bus:N\u0060 for bus 1\u202664, or\n                \u0060output:N\u0060 for the device\u0027s stereo output pair N); the mixer groups it belongs to (1\u202632); and the VCA track\n                that offsets its volume, if any. The master strip uses only volume, pan, mute and its inserts. Phase 6:\n                \u0060midiEffects\u0060 are its MIDI FX slots (instrument and external MIDI tracks only; empty elsewhere), in the\n                same shape as inserts: they run in slot order on the block\u0027s MIDI (regions, live and step input) before the\n                instrument; bypassed slots pass it through.\n                Phase 10 (docs/11-phase-10.md): inputFormat is the format of the signal the strip processes before its\npanner (an audio track\u0027s recording and regions, an instrument\u0027s output, an aux\u0027s bus: an aux\u0027s input format\nis its bus\u0027s format); outputFormat is its destination\u0027s format, kept by the server (the master\u0027s is\nthe project\u0027s surroundFormat, a bus\u0027s its aux\u0027s input format, a device output pair stereo; the\nmaster\u0027s input and output are the project\u0027s). panner maps the input channels to the output: stereo\npan (pan) for a stereo output, the Surround Panner, or an object (PannerMode); an input\nof the output\u0027s format passes straight through. Sends to a multichannel bus are panned by the strip\u0027s panner\n(their pan applies to stereo buses only). Every strip of a project from before Phase 10 is stereo in\nand out with the stereo panner.The strip\u0027s input stage (a track with a full strip, never the master or a VCA): trimDb and\npolarityInverted apply to its source before the inserts, on every channel; delayMs moves it in\ntime after the inserts, before the fader (negative: earlier, which delay compensation pays for by delaying\neverything else). dualPan pans a stereo signal\u0027s two channels on their own, to panLeft and\npanRight (\u22121\u20261), instead of balancing it with pan; at \u22121 and 1 the signal passes as it is. They\nstay when it is off. A mono signal always takes pan, a surround output its panner.soloSafe (a track with a full strip, a bus\u0027s aux above all): the strip stays audible when others are\n                    soloed in place.meter is what the strip\u0027s meter shows and where it reads the signal, the master\u0027s too."
       },
       "Chord": {
         "required": [
@@ -7523,8 +8109,15 @@
               "integer"
             ],
             "format": "int32"
+          },
+          "template": {
+            "type": [
+              "null",
+              "string"
+            ]
           }
-        }
+        },
+        "description": "A new project. \u0060template\u0060 names one of \u0060GET /library/project-templates\u0060 (left out: none). Its\n\u0060sampleRate\u0060 is the one asked for, else a template\u0027s own, else the device\u0027s; a template holding audio takes\nonly its own."
       },
       "CycleRange": {
         "required": [
@@ -8872,6 +9465,21 @@
             "$ref": "#/components/schemas/EditCommandDeleteRegionsCommand"
           },
           {
+            "$ref": "#/components/schemas/EditCommandConvertLoopsCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandStretchRegionCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandInsertTimeCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandCutTimeCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandRippleDeleteCommand"
+          },
+          {
             "$ref": "#/components/schemas/EditCommandSetTempoCommand"
           },
           {
@@ -9008,6 +9616,9 @@
           },
           {
             "$ref": "#/components/schemas/EditCommandMoveInsertCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandTransferInsertCommand"
           },
           {
             "$ref": "#/components/schemas/EditCommandSetInsertCommand"
@@ -9385,6 +9996,11 @@
             "splitRegion": "#/components/schemas/EditCommandSplitRegionCommand",
             "setRegion": "#/components/schemas/EditCommandSetRegionCommand",
             "deleteRegions": "#/components/schemas/EditCommandDeleteRegionsCommand",
+            "convertLoops": "#/components/schemas/EditCommandConvertLoopsCommand",
+            "stretchRegion": "#/components/schemas/EditCommandStretchRegionCommand",
+            "insertTime": "#/components/schemas/EditCommandInsertTimeCommand",
+            "cutTime": "#/components/schemas/EditCommandCutTimeCommand",
+            "rippleDelete": "#/components/schemas/EditCommandRippleDeleteCommand",
             "setTempo": "#/components/schemas/EditCommandSetTempoCommand",
             "setSignature": "#/components/schemas/EditCommandSetSignatureCommand",
             "setCycle": "#/components/schemas/EditCommandSetCycleCommand",
@@ -9431,6 +10047,7 @@
             "addInsert": "#/components/schemas/EditCommandAddInsertCommand",
             "removeInsert": "#/components/schemas/EditCommandRemoveInsertCommand",
             "moveInsert": "#/components/schemas/EditCommandMoveInsertCommand",
+            "transferInsert": "#/components/schemas/EditCommandTransferInsertCommand",
             "setInsert": "#/components/schemas/EditCommandSetInsertCommand",
             "setInsertParameter": "#/components/schemas/EditCommandSetInsertParameterCommand",
             "addSend": "#/components/schemas/EditCommandAddSendCommand",
@@ -10662,6 +11279,27 @@
         },
         "description": "Phase 11: a cable from outlet \u0060outlet\u0060 of one object to inlet \u0060inlet\u0060 of another (both existing on their\nkinds; 422 for a cable that exists, or one that would close a cycle)."
       },
+      "EditCommandConvertLoopsCommand": {
+        "required": [
+          "regionIds",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "convertLoops"
+            ],
+            "type": "string"
+          },
+          "regionIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "description": "Turns the repeats of looped regions (audio, MIDI, pattern) into regions of their own; what plays stays."
+      },
       "EditCommandConvertPatternToMidiCommand": {
         "required": [
           "regionId",
@@ -10791,6 +11429,30 @@
           }
         },
         "description": "Puts tracks into a new folder stack, inserted where the first of them was."
+      },
+      "EditCommandCutTimeCommand": {
+        "required": [
+          "startTick",
+          "endTick",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "cutTime"
+            ],
+            "type": "string"
+          },
+          "startTick": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "endTick": {
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "description": "Removes the time from \u0060startTick\u0060 to \u0060endTick\u0060 on every track and closes it, as \u0060insertTime\u0060 makes\nroom: what is inside goes, what crosses it is split, and what follows moves earlier. The tempo, signature, key and\nchord in force at its end hold from its start."
       },
       "EditCommandDeleteArticulationSetCommand": {
         "required": [
@@ -11305,6 +11967,30 @@
           }
         },
         "description": "Phase 9, an interchange import\u0027s result (ImportedContent): adds its tracks after the project\u0027s\nwith their regions, staff styles and score content, gives every provisional id a real one (rewriting the\nreferences), replaces the tempo map, signatures and keys it carries, and adds its markers, in one undo step. The\n\u0060musicXmlImport\u0060, \u0060aafImport\u0060 and \u0060midiImport\u0060 jobs apply it after copying the media into the\nproject (undo leaves the files); clients do not send it."
+      },
+      "EditCommandInsertTimeCommand": {
+        "required": [
+          "atTick",
+          "lengthTicks",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "insertTime"
+            ],
+            "type": "string"
+          },
+          "atTick": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "lengthTicks": {
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "description": "Inserts \u0060lengthTicks\u0060 of empty time at \u0060atTick\u0060, on every track: regions across it are split (a looped\none\u0027s repeats become regions first; pattern and Session Player regions grow instead), and everything from there on\nmoves later, with the tempo, signature, key and chord tracks, markers, sections, automation, score symbols, the\ncycle, the punch locators, the project end and the movie. A signature change that no longer falls on a bar line\nmoves to the nearest one."
       },
       "EditCommandJoinRegionsCommand": {
         "required": [
@@ -12161,6 +12847,27 @@
           }
         },
         "description": "Trims a region: its new start, and the part of the file it plays."
+      },
+      "EditCommandRippleDeleteCommand": {
+        "required": [
+          "regionIds",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "rippleDelete"
+            ],
+            "type": "string"
+          },
+          "regionIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "description": "Deletes regions and closes the time they took across every track: everything that starts after them moves earlier,\nthe global tracks, markers and automation as \u0060cutTime\u0060 says; what other tracks hold across that time stays\nwhere it is, uncut."
       },
       "EditCommandSelectTakeCommand": {
         "required": [
@@ -13220,6 +13927,23 @@
               "number"
             ],
             "format": "double"
+          },
+          "countInLength": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int32"
+          },
+          "countInUnit": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/MusicalUnit"
+              }
+            ]
           }
         }
       },
@@ -13346,9 +14070,16 @@
               "null",
               "string"
             ]
+          },
+          "loopTicks": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int64"
           }
         },
-        "description": "Changes a MIDI region\u0027s name, mute or playback parameters. \u0060grooveId\u0060 (Phase 7) makes its playback quantise\nfollow a groove template of the project; an empty string returns it to the grid."
+        "description": "Changes a MIDI region\u0027s name, mute, loop or playback parameters. \u0060grooveId\u0060 (Phase 7) makes its playback\nquantise\nfollow a groove template of the project; an empty string returns it to the grid."
       },
       "EditCommandSetMixerSettingsCommand": {
         "required": [
@@ -13383,6 +14114,26 @@
               "number"
             ],
             "format": "double"
+          },
+          "panLaw": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PanLaw"
+              }
+            ]
+          },
+          "soloMode": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SoloMode"
+              }
+            ]
           }
         }
       },
@@ -13641,9 +14392,16 @@
               "null",
               "boolean"
             ]
+          },
+          "loopTicks": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int64"
           }
         },
-        "description": "Moves (in time), resizes, renames or mutes a pattern region; \u0060moveRegion\u0060, \u0060copyRegions\u0060 and\n\u0060deleteRegions\u0060 take pattern regions too."
+        "description": "Moves (in time), resizes, renames, loops or mutes a pattern region; \u0060moveRegion\u0060, \u0060copyRegions\u0060 and\n\u0060deleteRegions\u0060 take pattern regions too."
       },
       "EditCommandSetPitchNotesCommand": {
         "required": [
@@ -13758,6 +14516,23 @@
               "integer"
             ],
             "format": "int64"
+          },
+          "preRollLength": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int32"
+          },
+          "preRollUnit": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/MusicalUnit"
+              }
+            ]
           }
         }
       },
@@ -13822,6 +14597,13 @@
               "null",
               "boolean"
             ]
+          },
+          "loopTicks": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int64"
           }
         }
       },
@@ -14538,6 +15320,72 @@
               "null",
               "boolean"
             ]
+          },
+          "trimDb": {
+            "type": [
+              "null",
+              "number"
+            ],
+            "format": "double"
+          },
+          "polarityInverted": {
+            "type": [
+              "null",
+              "boolean"
+            ]
+          },
+          "delayMs": {
+            "type": [
+              "null",
+              "number"
+            ],
+            "format": "double"
+          },
+          "dualPan": {
+            "type": [
+              "null",
+              "boolean"
+            ]
+          },
+          "panLeft": {
+            "type": [
+              "null",
+              "number"
+            ],
+            "format": "double"
+          },
+          "panRight": {
+            "type": [
+              "null",
+              "number"
+            ],
+            "format": "double"
+          },
+          "soloSafe": {
+            "type": [
+              "null",
+              "boolean"
+            ]
+          },
+          "meterType": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/MeterType"
+              }
+            ]
+          },
+          "meterTap": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/MeterTap"
+              }
+            ]
           }
         },
         "description": "Changes a track\u0027s volume, pan, mute or solo, or the master\u0027s when \u0060trackId\u0060 is left out. Members of the\ntrack\u0027s enabled mixer groups that link the property follow it (volume keeps their offsets). During playback, a\ntrack whose automation mode is touch, latch or write records the change into its lane (and the batch coalesces as\na drag does)."
@@ -15095,6 +15943,36 @@
         },
         "description": "Phase 7, step input: a tie lengthens the last step\u0027s notes (\u0060noteIds\u0060; the server fills them in) by one step\n(\u0060lengthTicks\u0060; filled in from the state), and advances the position. A rest is not an edit:\n\u0060POST /project/step-input/rest\u0060."
       },
+      "EditCommandStretchRegionCommand": {
+        "required": [
+          "regionId",
+          "stretch",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "stretchRegion"
+            ],
+            "type": "string"
+          },
+          "regionId": {
+            "type": "string"
+          },
+          "stretch": {
+            "type": "number",
+            "format": "double"
+          },
+          "startTick": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int64"
+          }
+        },
+        "description": "Time-stretches an audio region without touching its file: it lasts \u0060stretch\u0060 times as long as recorded\n(0.25\u20264, 1 back to as recorded), from \u0060startTick\u0060 when given (a drag of its left edge moves its start). Its\nflex markers scale with it; its fades stay in frames, cut to fit."
+      },
       "EditCommandStripSilenceCommand": {
         "required": [
           "regionIds",
@@ -15139,6 +16017,58 @@
           }
         },
         "description": "Strip Silence: splits each audio region into one region per stretch above \u0060thresholdDb\u0060 (RMS), each widened\nby \u0060preAttackMs\u0060 before and \u0060postReleaseMs\u0060 after; the silence between them is removed. As in Logic,\n\u0060minTimeMs\u0060 is the shortest silence that splits: stretches separated by less stay in one region."
+      },
+      "EditCommandTransferInsertCommand": {
+        "required": [
+          "insertId",
+          "type",
+          "copy"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "transferInsert"
+            ],
+            "type": "string"
+          },
+          "insertId": {
+            "type": "string"
+          },
+          "trackId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "toTrackId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "index": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int32"
+          },
+          "copy": {
+            "type": "boolean",
+            "default": false
+          },
+          "chain": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/InsertChain"
+              }
+            ]
+          }
+        },
+        "description": "Moves an insert to slot \u0060index\u0060 of another strip (\u0060toTrackId\u0060, null: the master; no index: last), or with\n\u0060copy\u0060 puts a copy of it there, on the same strip too. It takes its parameters, bypass, sidechain (unless the\nstrip it lands on cannot take that source), file and plugin state with it; a move takes its automation too, a copy\nstarts without any. \u0060trackId\u0060 is the strip it is on (null: the master), \u0060chain\u0060 as the other insert\ncommands; a MIDI FX slot goes to another strip\u0027s MIDI FX."
       },
       "EditCommandTransformCommand": {
         "required": [
@@ -15977,6 +16907,49 @@
         },
         "description": "Import an audio file the server can read from its own disk (the desktop app, a headless box\u0027s library)."
       },
+      "ImportProjectTracksRequest": {
+        "required": [
+          "path",
+          "trackIds"
+        ],
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "trackIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "regions": {
+            "type": [
+              "null",
+              "boolean"
+            ]
+          },
+          "inserts": {
+            "type": [
+              "null",
+              "boolean"
+            ]
+          },
+          "sends": {
+            "type": [
+              "null",
+              "boolean"
+            ]
+          },
+          "automation": {
+            "type": [
+              "null",
+              "boolean"
+            ]
+          }
+        },
+        "description": "Import from Project: \u0060trackIds\u0060 of the package at \u0060path\u0060 join the open project after its tracks, as one\nundo step, with their stack members and, with sends, the auxes those reach. Left out, each part comes along:\n\u0060regions\u0060 (and take folders, alternatives and frozen files), \u0060inserts\u0060, \u0060sends\u0060 and\n\u0060automation\u0060. Their media is copied in, converted when the source is at another rate."
+      },
       "Insert": {
         "required": [
           "id",
@@ -16053,6 +17026,39 @@
           "midiEffects",
           null
         ]
+      },
+      "InsertDisplayRequest": {
+        "required": [
+          "inserts"
+        ],
+        "type": "object",
+        "properties": {
+          "inserts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/InsertDisplayTarget"
+            }
+          }
+        },
+        "description": "The inserts whose live display (a spectrum, a scope, band gains) an editor shows now."
+      },
+      "InsertDisplayTarget": {
+        "required": [
+          "insertId"
+        ],
+        "type": "object",
+        "properties": {
+          "trackId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "insertId": {
+            "type": "string"
+          }
+        },
+        "description": "An insert a plugin window shows; \u0060trackId\u0060 null is the master."
       },
       "InstallPackRequest": {
         "required": [
@@ -16223,7 +17229,12 @@
           "thumbnails",
           "chordId",
           "masteringAnalysis",
-          "sessionPlayerConvert"
+          "sessionPlayerConvert",
+          "saveAs",
+          "saveCopy",
+          "sampleRateChange",
+          "projectImport",
+          "saveTemplate"
         ]
       },
       "JobState": {
@@ -17104,11 +18115,32 @@
         },
         "description": "The master\u0027s Mastering Assistant (\u0060GET /project/mastering\u0060): its insert, settings and analysis (null: not\nanalysed yet; it then passes the audio through its limiter only)."
       },
+      "MeterTap": {
+        "enum": [
+          "input",
+          "preFader",
+          "postFader"
+        ],
+        "description": "Where a strip\u0027s meter reads the signal."
+      },
+      "MeterType": {
+        "enum": [
+          "peak",
+          "rms",
+          "k20",
+          "k14",
+          "k12",
+          "lufs"
+        ],
+        "description": "What a strip\u0027s meter shows."
+      },
       "MetronomeSettings": {
         "required": [
           "enabled",
           "countIn",
-          "levelDb"
+          "levelDb",
+          "countInLength",
+          "countInUnit"
         ],
         "type": "object",
         "properties": {
@@ -17121,9 +18153,17 @@
           "levelDb": {
             "type": "number",
             "format": "double"
+          },
+          "countInLength": {
+            "type": "integer",
+            "format": "int32",
+            "default": 1
+          },
+          "countInUnit": {
+            "$ref": "#/components/schemas/MusicalUnit"
           }
         },
-        "description": "The click: on or off, a one-bar count-in before recording, and its level in dB."
+        "description": "The click: on or off, a count-in before recording from a stop, and its level in dB. The count-in lasts\n\u0060countInLength\u0060 (1\u202632) of \u0060countInUnit\u0060, measured at where recording starts."
       },
       "MidiDevices": {
         "required": [
@@ -17306,7 +18346,8 @@
           "muted",
           "notation",
           "pitchSource",
-          "key"
+          "key",
+          "loopTicks"
         ],
         "type": "object",
         "properties": {
@@ -17360,9 +18401,14 @@
                 "$ref": "#/components/schemas/RegionKey"
               }
             ]
+          },
+          "loopTicks": {
+            "type": "integer",
+            "format": "int64",
+            "default": 0
           }
         },
-        "description": "A MIDI region: it starts at \u0060startTick\u0060 and lasts \u0060lengthTicks\u0060; its notes and controller events are\npositioned relative to its start (ticks at 960 PPQ). Events past the end do not play; a note that crosses the end\nis cut there. \u0060playback\u0060 holds the non-destructive region parameters. \u0060notation\u0060 (Phase 9,\ndocs/10-phase-9.md) holds its score settings: display quantise and interpretation. \u0060pitchSource\u0060 and\n\u0060key\u0060 (Phase 11, docs/12-phase-11.md): how it follows the chord track (applied at compile time; its notes\nstay as they are) and its own key (null: the project\u0027s at its start)."
+        "description": "A MIDI region: it starts at \u0060startTick\u0060 and lasts \u0060lengthTicks\u0060; its notes and controller events are\npositioned relative to its start (ticks at 960 PPQ). Events past the end do not play; a note that crosses the end\nis cut there. \u0060playback\u0060 holds the non-destructive region parameters. \u0060notation\u0060 (Phase 9,\ndocs/10-phase-9.md) holds its score settings: display quantise and interpretation. \u0060pitchSource\u0060 and\n\u0060key\u0060 (Phase 11, docs/12-phase-11.md): how it follows the chord track (applied at compile time; its notes\nstay as they are) and its own key (null: the project\u0027s at its start). \u0060loopTicks\u0060: it repeats for that many\nticks after its end, as AudioRegion says."
       },
       "MidiSyncDestination": {
         "required": [
@@ -17434,7 +18480,9 @@
         "required": [
           "pdc",
           "lowLatency",
-          "lowLatencyLimitMs"
+          "lowLatencyLimitMs",
+          "panLaw",
+          "soloMode"
         ],
         "type": "object",
         "properties": {
@@ -17447,13 +18495,20 @@
           "lowLatencyLimitMs": {
             "type": "number",
             "format": "double"
+          },
+          "panLaw": {
+            "$ref": "#/components/schemas/PanLaw"
+          },
+          "soloMode": {
+            "$ref": "#/components/schemas/SoloMode"
           }
         },
-        "description": "Plugin delay compensation, and low-latency mode: while it is on, plugins on the path of record-armed or\nmonitored tracks whose latency exceeds \u0060lowLatencyLimitMs\u0060 are bypassed."
+        "description": "Plugin delay compensation, and low-latency mode: while it is on, plugins on the path of record-armed or\nmonitored tracks whose latency exceeds \u0060lowLatencyLimitMs\u0060 are bypassed. \u0060panLaw\u0060 is the project\u0027s pan\nlaw, \u0060soloMode\u0060 what solo does."
       },
       "MonitoringSettings": {
         "required": [
           "binaural",
+          "section",
           "speakerMap"
         ],
         "type": "object",
@@ -17477,9 +18532,54 @@
               "type": "integer",
               "format": "int32"
             }
+          },
+          "section": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/MonitorSection"
+              }
+            ]
           }
         },
-        "description": "Monitoring (\u0060GET/PUT /settings/monitoring\u0060), stored in the user settings, not the project: the speaker map is\nthe machine\u0027s and binaural listening the listener\u0027s. It happens after the master and before the device, and never\nchanges bounces or ADM exports. \u0060binaural\u0060 renders the master\u0027s speakers (and objects) through HRTFs to\noutputs 1\u20132; otherwise \u0060downmixTo\u0060 (a format smaller than the master\u0027s; null: none) down-mixes per ITU-R\nBS.775 and sends its channels through the map. \u0060speakerMap[i]\u0060 is the 1-based device output of channel i of\nwhat is sent (0: not sent); an empty or short map sends channel i to output i \u002B 1."
+        "description": "Monitoring (\u0060GET/PUT /settings/monitoring\u0060), stored in the user settings, not the project: the speaker map is\nthe machine\u0027s and binaural listening the listener\u0027s. It happens after the master and before the device, and never\nchanges bounces or ADM exports. \u0060binaural\u0060 renders the master\u0027s speakers (and objects) through HRTFs to\noutputs 1\u20132; otherwise \u0060downmixTo\u0060 (a format smaller than the master\u0027s; null: none) down-mixes per ITU-R\nBS.775 and sends its channels through the map. \u0060speakerMap[i]\u0060 is the 1-based device output of channel i of\nwhat is sent (0: not sent); an empty or short map sends channel i to output i \u002B 1. \u0060section\u0060 is the monitor\nsection (null in a request: as it is)."
+      },
+      "MonitorSection": {
+        "required": [
+          "dim",
+          "dimDb",
+          "mono",
+          "reference",
+          "referenceDb",
+          "levelDb"
+        ],
+        "type": "object",
+        "properties": {
+          "dim": {
+            "type": "boolean"
+          },
+          "dimDb": {
+            "type": "number",
+            "format": "double"
+          },
+          "mono": {
+            "type": "boolean"
+          },
+          "reference": {
+            "type": "boolean"
+          },
+          "referenceDb": {
+            "type": "number",
+            "format": "double"
+          },
+          "levelDb": {
+            "type": "number",
+            "format": "double"
+          }
+        },
+        "description": "The monitor section: what the speakers get after the master, never what a bounce or the listen-in hears. Output\npairs a strip is routed to directly bypass it. The level is \u0060levelDb\u0060, or with \u0060reference\u0060 the calibrated\n\u0060referenceDb\u0060; \u0060dim\u0060 takes \u0060dimDb\u0060 (0 or less) off whichever applies; \u0060mono\u0060 folds the front\npair\nto check it in mono."
       },
       "Movie": {
         "required": [
@@ -17682,6 +18782,14 @@
           "fps30"
         ],
         "description": "An MTC frame rate."
+      },
+      "MusicalUnit": {
+        "enum": [
+          "bars",
+          "beats"
+        ],
+        "description": "What a count-in or a pre-roll is counted in: bars or beats of the signature in force.",
+        "default": "bars"
       },
       "MusicXmlExportRequest": {
         "required": [
@@ -18361,6 +19469,16 @@
         },
         "description": "A page of key-command pads (the remote shows one set at a time)."
       },
+      "PanLaw": {
+        "enum": [
+          "zeroDb",
+          "minus3Db",
+          "minus3DbCompensated",
+          "minus4Point5Db",
+          "minus6Db"
+        ],
+        "description": "How a mono signal\u0027s level follows its pan: what the centre is, relative to a hard pan. Stereo signals are balanced\n(the far side falls linearly) whatever the law; dual pan takes the law\u0027s shape with a hard pan at unity."
+      },
       "Panner": {
         "required": [
           "mode",
@@ -18537,7 +19655,8 @@
           "startTick",
           "lengthTicks",
           "muted",
-          "pattern"
+          "pattern",
+          "loopTicks"
         ],
         "type": "object",
         "properties": {
@@ -18563,6 +19682,11 @@
           },
           "pattern": {
             "$ref": "#/components/schemas/Pattern"
+          },
+          "loopTicks": {
+            "type": "integer",
+            "format": "int64",
+            "default": 0
           }
         },
         "description": "A pattern region on an instrument track: it plays \u0060pattern\u0060 from \u0060startTick\u0060 for\n\u0060lengthTicks\u0060, every row cycling from the region\u0027s start."
@@ -19226,6 +20350,39 @@
         },
         "description": "An automatic backup, made at each save of the current alternative (the newest ten are kept)."
       },
+      "ProjectContents": {
+        "required": [
+          "name",
+          "path",
+          "sampleRate",
+          "tempo",
+          "tracks"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          },
+          "sampleRate": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "tempo": {
+            "type": "number",
+            "format": "double"
+          },
+          "tracks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ProjectTrackInfo"
+            }
+          }
+        },
+        "description": "What a project on the server\u0027s disk holds, read without opening it."
+      },
       "ProjectDelta": {
         "required": [
           "revision",
@@ -19403,6 +20560,45 @@
         },
         "description": "A project in the recent list."
       },
+      "ProjectTemplate": {
+        "required": [
+          "id",
+          "name",
+          "category",
+          "description",
+          "factory",
+          "hasAudio"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "category": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "factory": {
+            "type": "boolean"
+          },
+          "sampleRate": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int32"
+          },
+          "hasAudio": {
+            "type": "boolean"
+          }
+        },
+        "description": "A project template for the chooser. A factory one holds no audio and takes any rate; a user\u0027s has the rate it was\nsaved at (\u0060sampleRate\u0060) and \u0060hasAudio\u0060 says whether it takes only that."
+      },
       "ProjectTempoMode": {
         "enum": [
           "keep",
@@ -19411,13 +20607,65 @@
         ],
         "description": "What an audio import or recording does to the project tempo (Logic\u0027s project tempo modes)."
       },
+      "ProjectTrackInfo": {
+        "required": [
+          "id",
+          "name",
+          "kind",
+          "color",
+          "regions",
+          "inserts",
+          "sends",
+          "lanes"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/TrackKind"
+          },
+          "color": {
+            "type": "string"
+          },
+          "parentId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "regions": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "inserts": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "sends": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "lanes": {
+            "type": "integer",
+            "format": "int32"
+          }
+        },
+        "description": "A track of a project on the server\u0027s disk, for the Import from Project browser: how much comes with it\n(\u0060regions\u0060 counts audio, MIDI, pattern and Session Player regions and take folders)."
+      },
       "RecordingSettings": {
         "required": [
           "cycleMode",
           "replace",
           "autopunch",
           "punchInTick",
-          "punchOutTick"
+          "punchOutTick",
+          "preRollLength",
+          "preRollUnit"
         ],
         "type": "object",
         "properties": {
@@ -19437,9 +20685,17 @@
           "punchOutTick": {
             "type": "integer",
             "format": "int64"
+          },
+          "preRollLength": {
+            "type": "integer",
+            "format": "int32",
+            "default": 0
+          },
+          "preRollUnit": {
+            "$ref": "#/components/schemas/MusicalUnit"
           }
         },
-        "description": "How recording works: cycle recording mode; replace mode (a recording removes what it covers on its track); and\nautopunch, which records only between \u0060punchInTick\u0060 and \u0060punchOutTick\u0060 while playback continues around\nthem."
+        "description": "How recording works: cycle recording mode; replace mode (a recording removes what it covers on its track); and\nautopunch, which records only between \u0060punchInTick\u0060 and \u0060punchOutTick\u0060 while playback continues around\nthem. \u0060preRollLength\u0060 (0\u202632, 0: none) of \u0060preRollUnit\u0060 is how far before the playhead a recording from a\nstop starts playing: what plays there is the project, and the take starts at the playhead (the pre-roll is kept\nin its file, before the region). It stops at the project start."
       },
       "RecoverableProject": {
         "required": [
@@ -19709,6 +20965,13 @@
         },
         "description": "Samples of a file\u0027s current version for the Audio File Editor (\u0060/project/files/{fileId}/samples\u0060):\n\u0060frames\u0060 frames from \u0060startFrame\u0060, in buckets of \u0060bucket\u0060 frames. With \u0060bucket\u0060 1,\n\u0060samples\u0060 holds each channel\u0027s samples and \u0060min\u0060 and \u0060max\u0060 are null; with a larger bucket,\n\u0060min\u0060 and \u0060max\u0060 hold each channel\u0027s extremes per bucket (the last bucket may be short) and\n\u0060samples\u0060 is null."
       },
+      "SampleRateChangeMode": {
+        "enum": [
+          "convert",
+          "keepSamples"
+        ],
+        "description": "What happens to the audio when a project\u0027s sample rate changes."
+      },
       "SavePatchRequest": {
         "required": [
           "trackId",
@@ -19727,6 +20990,60 @@
             "type": "string"
           }
         }
+      },
+      "SaveProjectAsRequest": {
+        "required": [
+          "path"
+        ],
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string"
+          }
+        },
+        "description": "Where Save As or Save a Copy writes the package: a folder on the server\u0027s disk that does not exist yet\n(\u0060.anode\u0060 is added when left out). Its name is the new project\u0027s."
+      },
+      "SaveTemplateRequest": {
+        "required": [
+          "name"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "category": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "SaveTrackTemplateRequest": {
+        "required": [
+          "name",
+          "trackIds"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "category": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "trackIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "description": "Saves \u0060trackIds\u0060 as a template, with their stack members and the auxes they reach."
       },
       "ScaleChange": {
         "required": [
@@ -21109,6 +22426,14 @@
         },
         "description": "Smart Tempo: the project tempo mode, the \u0060follow\u0060 new audio regions get, and whether imports are analysed\n(transients and beats) as they arrive."
       },
+      "SoloMode": {
+        "enum": [
+          "inPlace",
+          "afl",
+          "pfl"
+        ],
+        "description": "What a strip\u0027s solo does."
+      },
       "Staff": {
         "required": [
           "clef",
@@ -21379,6 +22704,22 @@
           }
         },
         "description": "Stops the cells playing on \u0060trackIds\u0060 (left out: every track) at the grid\u0027s quantise boundary."
+      },
+      "StripMeter": {
+        "required": [
+          "type",
+          "tap"
+        ],
+        "type": "object",
+        "properties": {
+          "type": {
+            "$ref": "#/components/schemas/MeterType"
+          },
+          "tap": {
+            "$ref": "#/components/schemas/MeterTap"
+          }
+        },
+        "description": "A strip\u0027s meter: its type and tap point (a new strip\u0027s: peak, post-fader)."
       },
       "SurfaceStatus": {
         "required": [
@@ -21870,7 +23211,8 @@
           "name",
           "regions",
           "midiRegions",
-          "takeFolders"
+          "takeFolders",
+          "patternRegions"
         ],
         "type": "object",
         "properties": {
@@ -21897,9 +23239,15 @@
             "items": {
               "$ref": "#/components/schemas/TakeFolder"
             }
+          },
+          "patternRegions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PatternRegion"
+            }
           }
         },
-        "description": "An inactive alternative of a track: a snapshot of its regions, MIDI regions and take folders. The track\u0027s live\nones are its active alternative (\u0060alternativeId\u0060); selecting another swaps them in one undoable step, and\nids stay unique project-wide."
+        "description": "An inactive alternative of a track: a snapshot of its regions, MIDI regions, take folders and pattern regions.\nThe track\u0027s live ones are its active alternative (\u0060alternativeId\u0060); selecting another swaps them in one\nundoable step, and ids stay unique project-wide."
       },
       "TrackInput": {
         "required": [
@@ -21940,6 +23288,31 @@
           "selectPrevious",
           null
         ]
+      },
+      "TrackTemplate": {
+        "required": [
+          "id",
+          "name",
+          "category",
+          "tracks"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "category": {
+            "type": "string"
+          },
+          "tracks": {
+            "type": "integer",
+            "format": "int32"
+          }
+        },
+        "description": "A saved set of tracks with their routing (\u0060tracks\u0060 counts those that come with them too)."
       },
       "TransformCondition": {
         "required": [
@@ -22257,10 +23630,10 @@
       "name": "Files"
     },
     {
-      "name": "Jobs"
+      "name": "Library"
     },
     {
-      "name": "Library"
+      "name": "Jobs"
     },
     {
       "name": "Control"

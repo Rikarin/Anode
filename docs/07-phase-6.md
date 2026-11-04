@@ -191,8 +191,10 @@ report. A REST change means regenerating `engine/src/Anode.Server/openapi.json`
 - **Packs:**
   - Installed under `<DataDirectory>/Library/Packs/<packId>/`; the loop index is
     `<DataDirectory>/Library/Loops/index.json`, rebuilt from packs and user loops.
-  - Removing a pack removes its loops from the index. Projects that used them keep their copies: adding a loop copies
-    its file into the project.
+  - Removing a pack removes its loops from the index. Projects that used it keep their copies: adding a loop copies its
+    file into the project, and a patch or kit copies its samples (`Samples/`) and impulse responses
+    (`Impulse Responses/`). A project saved with paths into a pack takes the files in when it is opened with the pack
+    installed.
 - **Remix FX:**
   - A built-in effect, `anode.remix-fx`, on the master by default when Live Loops is shown.
   - Two XY pads (filter/wobble/orbit; repeater/reverse/scratch/gater/downsampler/tape stop), synced to the transport
@@ -448,22 +450,19 @@ desktop app with the null device and the test pack, with all nine steps. All sev
   `keyFollow` off.
 - `loadInsertFile` and `Insert.file` load an impulse response into the convolution reverb (`IFileEffect`); an IR from
   outside the project is copied into its `Impulse Responses` folder.
-- Kits are library patches of kind stack, with pads; pack paths are made absolute inside the installed pack.
+- Kits are library patches of kind stack, with pads; a pack's paths are made absolute by the library, and copied into a
+  project that takes them.
 - Launching a cell while stopped starts playback, as in Logic; the server activates the cell's track first.
 - `setSmartControl` drags coalesce into one undo step; saving clears the values Compare returns to.
 - Record into Cell record-enables the track and starts recording; the take becomes the cell, in whole bars.
-- A track added among a stack's members goes after them, so a DMD's pads stay together.
+- A track added or moved among a stack's members goes after them, so a DMD's pads stay together. A stack moves with its
+  members and a member moves within its stack; a project saved otherwise is put right when it is read.
 - The Processing dialog's effect menu scrolls (the T2 effects made it taller than the window).
 
 **Open:**
 - Loop preview plays audio loops only; MIDI and pattern loops answer 422.
-- Track alternatives do not carry pattern regions.
-- Moving a track, or adding an aux, can still place it among a stack's members (adding a track no longer does).
-- Kits and loops that point into a removed pack keep their paths into it (loop files themselves are copied into the
-  project).
 - A `stopping` cell event carries only the stop boundary, so an editor that connects while a cell is stopping cannot
   draw its progress.
-- The Multipressor's per-band gain readings are not sent to the editor.
 - The phase 1 golden path failed once on a `toHaveAttribute` assertion in a full run and did not reproduce in ten.
 - The editor's initial bundle is 1.13 MB against a 1.00 MB budget (a build warning).
 - Linux and Windows.

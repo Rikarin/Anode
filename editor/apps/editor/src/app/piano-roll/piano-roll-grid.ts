@@ -78,7 +78,8 @@ const Cursors: Record<RegionZone, string> = {
   'trim-start': 'ew-resize',
   'trim-end': 'ew-resize',
   'fade-in': 'ew-resize',
-  'fade-out': 'ew-resize'
+  'fade-out': 'ew-resize',
+  loop: 'ew-resize'
 };
 
 /**

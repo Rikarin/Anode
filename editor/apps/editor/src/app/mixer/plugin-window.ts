@@ -1,5 +1,15 @@
 import { NgComponentOutlet } from '@angular/common';
-import { ChangeDetectionStrategy, Component, DestroyRef, computed, inject, input, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  DestroyRef,
+  computed,
+  effect,
+  inject,
+  input,
+  signal,
+  untracked
+} from '@angular/core';
 import type { ControlTarget, EditCommand, Insert, ParameterInfo, PluginInfo } from '@anode/api-client';
 import { AnChoice, AnKnob, AnReadingMeter } from '@anode/audio-ui';
 import { provideIcons } from '@ng-icons/core';
@@ -7,6 +17,7 @@ import { matCloseRound, matPowerSettingsNewRound } from '@ng-icons/material-icon
 import { XuiButtonImports } from '@xui/button';
 import { XuiIconImports } from '@xui/icon';
 import { LearnTarget, LearnTargets } from '../control/learn-menu';
+import { ANODE_API } from '../core/api';
 import { ConnectionService } from '../core/connection';
 import { isChoice, parameterGroups } from '../inspector/parameter-editor';
 import { type PluginPanelHost, deferredPanel, pluginPanel } from '../plugin-panels/plugin-panel';
@@ -18,23 +29,44 @@ import { ProjectStore } from '../state/project.store';
 import { type PluginWindow, UiStore } from '../state/ui.store';
 import { pluginLabel } from './plugin-menu';
 
-/** How often an open window reads its plugin's reading (the meters stream at about 30 frames a second). */
-const ReadingMs = 100;
+/** How often an open window reads its plugin's reading (the host sends them about 15 times a second). */
+const ReadingMs = 66;
+/** How often the open windows renew their displays' lease (`/plugins/displays`; it lasts a few seconds). */
+const DisplayLeaseMs = 1_000;
 
-/** The reading a plugin shows: gain reduction for dynamics, loudness for meters, a level otherwise. */
-export function readingKind(plugin: PluginInfo | undefined): {
+/** How a plugin's reading reads. */
+export interface ReadingKind {
   kind: 'reduction' | 'level';
   min: number;
+  max: number;
   label: string;
   unit: string;
-} {
-  if (plugin?.category === 'Metering') {
-    return { kind: 'level', min: -60, label: 'Loudness', unit: 'LUFS' };
+  /** The plugin's panel shows it better: no bar over it. */
+  hidden?: boolean;
+}
+
+const Correlation: ReadingKind = { kind: 'level', min: -1, max: 1, label: 'Correlation', unit: '' };
+
+/** The meters whose reading is not a level in dB. */
+const OwnReadings: Readonly<Record<string, ReadingKind>> = {
+  'anode.loudness-meter': { kind: 'level', min: -60, max: 0, label: 'Loudness', unit: 'LUFS' },
+  'anode.multimeter': Correlation,
+  'anode.phase-meter': Correlation,
+  'anode.tuner': { kind: 'level', min: -50, max: 50, label: 'Offset', unit: 'ct', hidden: true },
+  'anode.pitch-correction': { kind: 'level', min: -100, max: 100, label: 'Correction', unit: 'ct' },
+  'anode.voice-shaper': { kind: 'level', min: 0, max: 1_000, label: 'Pitch', unit: 'Hz' }
+};
+
+/** The reading a plugin shows: gain reduction for dynamics, a meter's own, a level otherwise. */
+export function readingKind(plugin: PluginInfo | undefined): ReadingKind {
+  const own = plugin && OwnReadings[plugin.id];
+  if (own) {
+    return own;
   }
   if (plugin?.category === 'Dynamics') {
-    return { kind: 'reduction', min: -30, label: 'Gain Reduction', unit: 'dB' };
+    return { kind: 'reduction', min: -30, max: 0, label: 'Gain Reduction', unit: 'dB' };
   }
-  return { kind: 'level', min: -60, label: 'Level', unit: 'dB' };
+  return { kind: 'level', min: -60, max: 0, label: 'Level', unit: 'dB' };
 }
 
 /**
@@ -105,12 +137,13 @@ export function readingKind(plugin: PluginInfo | undefined): {
     </div>
     @if (insert(); as i) {
       <div class="flex min-h-0 flex-col gap-3 overflow-y-auto p-3" [attr.data-testid]="'plugin-window-' + i.pluginId">
-        @if (reading() !== null) {
+        @if (reading() !== null && !readingInfo().hidden) {
           <an-reading-meter
             class="w-full"
             [label]="readingInfo().label"
             [kind]="readingInfo().kind"
             [min]="readingInfo().min"
+            [max]="readingInfo().max"
             [unit]="readingInfo().unit"
             [value]="reading()"
           />
@@ -236,7 +269,10 @@ export class PluginWindowView {
     return {
       plugin,
       value: id => this.mixer.parameterValue(this.window().trackId, insert, id),
-      set: (id, value) => void this.mixer.setParameter(this.window().trackId, insert.id, id, value)
+      set: (id, value) => void this.mixer.setParameter(this.window().trackId, insert.id, id, value),
+      readingValues: () => this.readingValues(),
+      sampleRate: this.project.info()?.sampleRate,
+      sidechain: insert.sidechain ?? null
     };
   });
   protected readonly groups = computed(() => parameterGroups(this.plugin()?.parameters ?? []));
@@ -249,6 +285,7 @@ export class PluginWindowView {
   });
   protected readonly readingInfo = computed(() => readingKind(this.plugin()));
   protected readonly reading = signal<number | null>(null);
+  private readonly readingValues = signal<readonly number[] | null>(null);
 
   constructor() {
     const timer = setInterval(() => {
@@ -257,6 +294,7 @@ export class PluginWindowView {
       if (value !== this.reading()) {
         this.reading.set(value);
       }
+      this.readingValues.set(this.meters.readingValues(trackId, insertId));
     }, ReadingMs);
     inject(DestroyRef).onDestroy(() => clearInterval(timer));
   }
@@ -364,4 +402,26 @@ export class PluginWindowView {
 })
 export class PluginWindowsHost {
   protected readonly ui = inject(UiStore);
+  private readonly api = inject(ANODE_API);
+
+  constructor() {
+    const lease = () => untracked(() => this.renewDisplays());
+    effect(() => {
+      this.ui.pluginWindows();
+      lease();
+    });
+    const timer = setInterval(lease, DisplayLeaseMs);
+    inject(DestroyRef).onDestroy(() => clearInterval(timer));
+  }
+
+  /** Tells the Server which inserts' live displays are on screen (it stops reading them when this stops). */
+  private renewDisplays(): void {
+    const inserts = this.ui
+      .pluginWindows()
+      .filter(w => w.chain !== 'midiEffects')
+      .map(w => ({ trackId: w.trackId, insertId: w.insertId }));
+    if (inserts.length > 0) {
+      this.api.watchInsertDisplays({ inserts }).catch(() => undefined); // the next renewal asks again
+    }
+  }
 }

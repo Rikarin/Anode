@@ -88,6 +88,7 @@ public sealed partial class ProjectSession(
     ISessionPlayerLibrary players,
     MasteringChains mastering,
     HrtfLocator hrtfs,
+    TemplateLibrary templates,
     TimeProvider time,
     ILogger<ProjectSession> logger
 ) {
@@ -123,13 +124,10 @@ public sealed partial class ProjectSession(
     }
 
     public Project Create(CreateProjectRequest request) {
-        var name = (request.Name ?? string.Empty).Trim();
-        if (name.Length is 0 or > Edits.MaxNameLength
-            || name.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0
-            || name.StartsWith('.')) {
-            throw ProjectException.Unprocessable("A project name has 1…128 characters and no path separators.");
-        }
-
+        var name = CheckProjectName((request.Name ?? string.Empty).Trim());
+        var user = request.Template is { Length: > 0 } id && FactoryTemplates.Find(id) is null
+            ? templates.ProjectFolder(id) ?? throw ProjectException.NotFound($"No template '{id}'.")
+            : null;
         var rate = request.SampleRate ?? device.SampleRate ?? ProjectDefaults.SampleRate;
         if (!ProjectDefaults.SampleRates.Contains(rate)) {
             throw ProjectException.Unprocessable(
@@ -143,7 +141,19 @@ public sealed partial class ProjectSession(
             throw ProjectException.Conflict($"'{folder}' already exists.");
         }
 
+        if (user is not null) {
+            return FromTemplate(name, folder, user, request.SampleRate);
+        }
+
         var state = ProjectDefaults.NewProject(ids.Next(IdPrefix.Project), name, rate);
+        try {
+            if (FactoryTemplates.Find(request.Template ?? string.Empty) is { } factory) {
+                state = FactoryTemplates.Build(factory, state, ids, catalog.ForEdits);
+            }
+        } catch (EditException e) {
+            throw ProjectException.Unprocessable($"Could not make the template: {e.Message}");
+        }
+
         try {
             ProjectPackage.Save(folder, state);
         } catch (Exception e) when (e is IOException or UnauthorizedAccessException) {
@@ -159,6 +169,7 @@ public sealed partial class ProjectSession(
         }
 
         var folder = Path.TrimEndingDirectorySeparator(Path.GetFullPath(path));
+        FinishInterrupted(folder);
         if (!ProjectPackage.Exists(folder)) {
             throw ProjectException.NotFound($"'{folder}' is not an Anode project.");
         }
@@ -477,13 +488,19 @@ public sealed partial class ProjectSession(
     /// <summary>
     ///     Applies a batch as <see cref="Apply(CommandBatch, long?)" /> does, coalescing it under
     ///     <paramref name="coalesceKey" /> instead of the batch's own key when one is given (a hardware control's gesture,
-    ///     <see cref="EditHistory.GesturePrefix" />); an automation pass still takes over.
+    ///     <see cref="EditHistory.GesturePrefix" />); an automation pass still takes over. <paramref name="hostStates" />
+    ///     are the plugins' states as the host has them now, which an insert that moves or is copied takes along.
     /// </summary>
-    public CommandResult Apply(CommandBatch batch, long? expected, string? coalesceKey) {
+    public CommandResult Apply(
+        CommandBatch batch,
+        long? expected,
+        string? coalesceKey,
+        IReadOnlyDictionary<string, byte[]?>? hostStates = null
+    ) {
         CommandResult result;
         IReadOnlyList<FileAnalysis> built = [];
         try {
-            result = ApplyLocked(batch, expected, coalesceKey, ref built);
+            result = ApplyLocked(batch, expected, coalesceKey, hostStates, ref built);
         } finally {
             Announce(built);
         }
@@ -496,6 +513,7 @@ public sealed partial class ProjectSession(
         CommandBatch batch,
         long? expected,
         string? coalesceKey,
+        IReadOnlyDictionary<string, byte[]?>? hostStates,
         ref IReadOnlyList<FileAnalysis> built
     ) {
         CommandResult result;
@@ -519,7 +537,7 @@ public sealed partial class ProjectSession(
                         Resolve(o, batch.Commands),
                         ids,
                         catalog.ForEdits,
-                        patches,
+                        PatchesOf(o),
                         analysis,
                         notation,
                         StylesFor(batch.Commands)
@@ -547,7 +565,7 @@ public sealed partial class ProjectSession(
                 }
             }
 
-            KeepStates(o, o.State, state, batch.Commands);
+            KeepStates(o, o.State, state, batch.Commands, hostStates);
             result = Commit(o, state, forward);
             // Compare (Smart Controls) swaps values without an undo step (docs/07-phase-6.md).
             if (!batch.Commands.All(static c => c is CompareSmartControlsCommand)) {
@@ -630,6 +648,21 @@ public sealed partial class ProjectSession(
         }
     }
 
+    /// <summary>
+    ///     The tick a recording with a pre-roll was started from: what it took before there is not kept, as with a
+    ///     punch-in (<see cref="Recordings.PreRolled" />). Null without a pre-roll; the next recording sets it again.
+    /// </summary>
+    public long? PreRollTick {
+        get => Volatile.Read(ref preRollTick) is >= 0 and var tick ? tick : null;
+        set => Volatile.Write(ref preRollTick, value ?? -1);
+    }
+
+    long preRollTick = -1;
+
+    /// <summary>The recording settings a finished pass ran under.</summary>
+    RecordingSettings RecordingFor(ProjectState state) =>
+        PreRollTick is { } tick ? Recordings.PreRolled(state.Settings.Recording, tick) : state.Settings.Recording;
+
     /// <summary>The pass recording now (started when playback did), with the playhead's tick; null while stopped.</summary>
     (AutomationPass Pass, long Tick)? PassOf(Open o) {
         if (clock.Playing is not var (number, start, tick)) {
@@ -704,10 +737,19 @@ public sealed partial class ProjectSession(
 
     /// <summary>
     ///     Keeps the plugin states in step with an edit: a patch brings its plugins' states (for the inserts it adds, in
-    ///     order, and its instrument), and a plugin that changed or went loses its state.
+    ///     order, and its instrument), an insert that moved or was copied brings its own (the host's now, else the one
+    ///     saved), and a plugin that changed or went loses its state. A move's old state stays until the next edit, for
+    ///     its undo.
     /// </summary>
-    void KeepStates(Open o, ProjectState before, ProjectState after, IReadOnlyList<EditCommand> commands) {
+    void KeepStates(
+        Open o,
+        ProjectState before,
+        ProjectState after,
+        IReadOnlyList<EditCommand> commands,
+        IReadOnlyDictionary<string, byte[]?>? hostStates = null
+    ) {
         var states = o.States.ToBuilder();
+        var moved = TransferStates(states, before, after, commands, hostStates);
         var patched = false;
         foreach (var apply in commands.OfType<ApplyPatchCommand>()) {
             patched = true;
@@ -727,8 +769,62 @@ public sealed partial class ProjectSession(
             }
         }
 
+        foreach (var (key, state) in moved) {
+            states[key] = state;
+        }
+
         o.States = states.ToImmutable();
     }
+
+    /// <summary>
+    ///     Gives each insert a <see cref="TransferInsertCommand" /> placed its source's state, and returns the states of
+    ///     those that left their strip (by their old key).
+    /// </summary>
+    static List<(string Key, SavedState State)> TransferStates(
+        ImmutableDictionary<string, SavedState>.Builder states,
+        ProjectState before,
+        ProjectState after,
+        IReadOnlyList<EditCommand> commands,
+        IReadOnlyDictionary<string, byte[]?>? hostStates
+    ) {
+        var left = new List<(string, SavedState)>();
+        var claimed = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var c in commands.OfType<TransferInsertCommand>()) {
+            if (c.Chain == InsertChain.MidiEffects || (!c.Copy && c.TrackId == c.ToTrackId)) {
+                continue;
+            }
+
+            var insert = StripOf(before, c.TrackId).Inserts.FirstOrDefault(i => i.Id == c.InsertId);
+            var landed = c.Copy
+                ? Copied(StripOf(before, c.ToTrackId), StripOf(after, c.ToTrackId), insert, claimed)
+                : insert;
+            var key = ProjectPackage.StateKey(c.TrackId, c.InsertId);
+            var bytes = hostStates is not null && hostStates.TryGetValue(key, out var reported)
+                ? reported
+                : states.GetValueOrDefault(key)?.Bytes;
+            if (insert is null || landed is null || bytes is not { Length: > 0 }) {
+                continue;
+            }
+
+            var state = new SavedState(insert.PluginId, bytes);
+            states[ProjectPackage.StateKey(c.ToTrackId, landed.Id)] = state;
+            if (!c.Copy) {
+                left.Add((key, state));
+            }
+        }
+
+        return left;
+    }
+
+    /// <summary>The copy of <paramref name="insert" /> a strip gained, that no earlier copy of the batch claimed.</summary>
+    static Insert? Copied(ChannelStrip before, ChannelStrip after, Insert? insert, HashSet<string> claimed) =>
+        after.Inserts.FirstOrDefault(i => i.PluginId == insert?.PluginId
+            && !before.Inserts.Any(b => b.Id == i.Id)
+            && claimed.Add(i.Id)
+        );
+
+    static ChannelStrip StripOf(ProjectState state, string? trackId) =>
+        trackId is null ? state.Master : state.FindTrack(trackId)?.Strip ?? ProjectDefaults.Strip;
 
     /// <summary>A patch's plugin states, for the inserts it gave the track (in order) and its instrument.</summary>
     static void PatchStates(ImmutableDictionary<string, SavedState>.Builder states, PatchFile patch, Track track) {
@@ -782,7 +878,7 @@ public sealed partial class ProjectSession(
             var track = o.State.FindTrack(trackId) ?? throw ProjectException.NotFound($"No track '{trackId}'.");
             var states = States(o, hostStates)
                 .ToDictionary(static s => s.Key, static s => s.Value.Bytes, StringComparer.Ordinal);
-            return (track, states);
+            return (Portable(o.Folder, track), states);
         }
     }
 
@@ -865,22 +961,28 @@ public sealed partial class ProjectSession(
 
     /// <summary>
     ///     Adds a WAV already copied into the open project's <c>Audio Files</c> folder to its pool: a change of its
-    ///     own (a new revision and a delta), not an undo step. Starts building its peaks.
+    ///     own (a new revision and a delta), not an undo step. Starts building its peaks. Its analysis runs outside the
+    ///     session's lock: it takes seconds, and edits go on meanwhile.
     /// </summary>
     public AudioFile AddFile(long session, string absolutePath, WavInfo info) {
         AudioFile file;
-        var built = new List<FileAnalysis>();
+        string folder;
+        bool analyse;
         lock (gate) {
-            var o = Required();
-            if (o.Session != session) {
-                throw ProjectException.Conflict("The project was closed while the file was imported.");
-            }
-
+            var o = Opening(session);
             file = Describe(o, absolutePath, info);
-            if (o.State.Settings.SmartTempo?.AnalyzeImports == true) {
-                file = Analysed(o, file, built);
-            }
+            folder = o.Folder;
+            analyse = o.State.Settings.SmartTempo?.AnalyzeImports == true;
+        }
 
+        var built = new List<FileAnalysis>();
+        if (analyse) {
+            file = Analysed(folder, file, built);
+        }
+
+        lock (gate) {
+            var o = Opening(session);
+            Keep(o, built);
             var op = new AudioFileUpserted(file);
             Commit(o, o.State.Apply(op), [op]);
         }
@@ -891,15 +993,21 @@ public sealed partial class ProjectSession(
         return file;
     }
 
+    /// <summary>The open project, which must be opening <paramref name="session" /> (a 409 otherwise).</summary>
+    Open Opening(long session) =>
+        open is { } o && o.Session == session
+            ? o
+            : throw ProjectException.Conflict("The project was closed while the file was imported.");
+
     /// <summary>
-    ///     <paramref name="file" /> with its tempo from an analysis of its transients and beats (Smart Tempo), cached and
-    ///     kept; as it is when it cannot be analysed (logged).
+    ///     <paramref name="file" /> with its tempo from an analysis of its transients and beats (Smart Tempo), cached, a
+    ///     fresh one added to <paramref name="built" />; as it is when it cannot be analysed (logged).
     /// </summary>
-    AudioFile Analysed(Open o, AudioFile file, List<FileAnalysis> built) {
+    AudioFile Analysed(string folder, AudioFile file, List<FileAnalysis> built) {
         try {
-            var (analysis, fresh) = analyses.Rhythm(o.Folder, file);
+            var (analysis, fresh) = analyses.Rhythm(folder, file);
             if (fresh) {
-                built.AddRange(Keep(o, [analysis]));
+                built.Add(analysis);
             }
 
             return Edits.HasBeats(analysis.Tempo) ? file with { Tempo = analysis.Tempo } : file;
@@ -1102,7 +1210,8 @@ public sealed partial class ProjectSession(
             return after;
         }
 
-        var analysed = Analysed(o, file, built);
+        var analysed = Analysed(o.Folder, file, built);
+        Keep(o, built);
         if (!Edits.AdaptsTempo(before, analysed)) {
             return after;
         }
@@ -1168,7 +1277,7 @@ public sealed partial class ProjectSession(
             ]
             : [new(Math.Max(0, take.StartSample), 0, info.Frames)];
         if (!flashback) {
-            passes = Recordings.Punched(state, passes);
+            passes = Recordings.Punched(state, passes, RecordingFor(state));
         }
 
         return (file, Recordings.Audio(state, track, file, passes, flashback, ids));
@@ -1191,7 +1300,7 @@ public sealed partial class ProjectSession(
         var passStart = map.TickAtSample(Math.Max(0, take.StartSample), rate);
         var passEnd = Math.Max(passStart + 1, map.TickAtSample(Math.Max(0, take.EndSample), rate));
         var (notes, controls) = MidiRecording.Events(take, map, rate, passEnd, SwitchesOf(state, track));
-        var recording = state.Settings.Recording;
+        var recording = RecordingFor(state);
         if (!flashback && recording.Autopunch) {
             var (from, to) = (recording.PunchInTick, recording.PunchOutTick);
             notes = [..notes.Where(n => n.StartTick >= from && n.StartTick < to)];
@@ -1257,9 +1366,9 @@ public sealed partial class ProjectSession(
 
     /// <summary>
     ///     The batch with each <c>loadInstrumentFile</c> path resolved on the server's disk (a relative path is the
-    ///     project's): the file must exist, and inside the project it is kept relative to it.
+    ///     project's): the file must exist, and inside the project it is kept relative to it; a pack's is copied in.
     /// </summary>
-    static IReadOnlyList<EditCommand> Resolve(Open o, IReadOnlyList<EditCommand> commands) {
+    IReadOnlyList<EditCommand> Resolve(Open o, IReadOnlyList<EditCommand> commands) {
         if (!commands.Any(static c => c is LoadInstrumentFileCommand or LoadInsertFileCommand)) {
             return commands;
         }
@@ -1267,7 +1376,7 @@ public sealed partial class ProjectSession(
         return [
             ..commands.Select(EditCommand(c) => c switch {
                     LoadInstrumentFileCommand { Path: { Length: > 0 } path } load => load with {
-                        Path = InstrumentPath(o.Folder, path)
+                        Path = Kept(o.Folder, SamplesFolder, InstrumentPath(o.Folder, path))
                     },
                     LoadInsertFileCommand { Path: { Length: > 0 } path } load => load with {
                         Path = InsertPath(o.Folder, path)
@@ -1276,54 +1385,6 @@ public sealed partial class ProjectSession(
                 }
             )
         ];
-    }
-
-    /// <summary>The folder of a project that loaded insert files (impulse responses) are copied into.</summary>
-    public const string ImpulseResponsesFolder = "Impulse Responses";
-
-    /// <summary>
-    ///     An insert's file (an impulse response) as the project keeps it: one outside the project is copied into its
-    ///     <see cref="ImpulseResponsesFolder" /> (a file of that name and size there is reused), so the project stays whole
-    ///     when it moves; the path is the project's relative one.
-    /// </summary>
-    static string InsertPath(string folder, string path) {
-        var full = Path.GetFullPath(InstrumentPath(folder, path), folder);
-        if (IsInside(folder, full)) {
-            return Path.GetRelativePath(folder, full).Replace(Path.DirectorySeparatorChar, '/');
-        }
-
-        try {
-            var target = Directory.CreateDirectory(Path.Combine(folder, ImpulseResponsesFolder)).FullName;
-            var copy = Path.Combine(target, Path.GetFileName(full));
-            for (var n = 2; File.Exists(copy) && new FileInfo(copy).Length != new FileInfo(full).Length; n++) {
-                copy = Path.Combine(target, $"{Path.GetFileNameWithoutExtension(full)} {n}{Path.GetExtension(full)}");
-            }
-
-            if (!File.Exists(copy)) {
-                File.Copy(full, copy);
-            }
-
-            return Path.GetRelativePath(folder, copy).Replace(Path.DirectorySeparatorChar, '/');
-        } catch (Exception e) when (e is IOException or UnauthorizedAccessException) {
-            throw ProjectException.Unprocessable($"Could not copy '{full}' into the project: {e.Message}");
-        }
-    }
-
-    static string InstrumentPath(string folder, string path) {
-        string full;
-        try {
-            full = Path.GetFullPath(path.Trim(), folder);
-        } catch (Exception e) when (e is ArgumentException or NotSupportedException or PathTooLongException) {
-            throw ProjectException.Unprocessable($"'{path}' is not a file path: {e.Message}");
-        }
-
-        if (!File.Exists(full)) {
-            throw ProjectException.Unprocessable($"No file '{full}'.");
-        }
-
-        return IsInside(folder, full)
-            ? Path.GetRelativePath(folder, full).Replace(Path.DirectorySeparatorChar, '/')
-            : full;
     }
 
     /// <summary>
@@ -1379,14 +1440,23 @@ public sealed partial class ProjectSession(
             )
             .ContinueWith(static _ => { }, TaskScheduler.Default);
 
+    /// <summary>
+    ///     What carries over when the project goes on in another document: its undo history, and a revision to go on from
+    ///     (clients refetch when an opened project's revision is not theirs).
+    /// </summary>
+    sealed record Continued(EditHistory? History, long Revision);
+
     Project Replace(
         string folder,
         ProjectState state,
         ImmutableDictionary<string, SavedState>? states = null,
-        bool recovered = false
+        bool recovered = false,
+        Continued? continued = null
     ) {
         Project project;
         using var writes = autosaving.EnterScope();
+        var saved = state;
+        state = WithPackFilesKept(folder, state);
         var offline = OfflineFiles.Report(folder, state);
         lock (gate) {
             if (open is { } old) {
@@ -1399,11 +1469,12 @@ public sealed partial class ProjectSession(
             }
 
             ResetStepInput();
-            open = new(++sessions, folder, state, new(time)) {
+            open = new(++sessions, folder, state, continued?.History ?? new(time)) {
+                Revision = continued?.Revision ?? 1,
                 States = states ?? ImmutableDictionary.Create<string, SavedState>(StringComparer.Ordinal),
                 Analyses = FileAnalyses.CachedAll(folder, state.Files.Values)
                     .ToImmutableDictionary(StringComparer.Ordinal),
-                Dirty = recovered,
+                Dirty = recovered || !ReferenceEquals(state, saved),
                 Offline = offline
             };
             open.MarkAutosaved(open.Changes);

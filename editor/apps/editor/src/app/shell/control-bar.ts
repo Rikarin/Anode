@@ -9,6 +9,7 @@ import {
   viewChild,
   type ElementRef
 } from '@angular/core';
+import type { MusicalUnit } from '@anode/api-client';
 import { provideIcons } from '@ng-icons/core';
 import {
   matAvTimerRound,
@@ -49,12 +50,14 @@ import { ProjectSession } from '../state/project-session';
 import { ProjectStore } from '../state/project.store';
 import { ScreensetStore } from '../state/screenset.store';
 import { SmartTempoStore } from '../state/smart-tempo.store';
+import { TemplatesStore } from '../state/templates.store';
 import { ThemeStore } from '../state/theme.store';
-import { TransportStore } from '../state/transport.store';
+import { CountInLengths, musicalLength, PreRollLengths, TransportStore } from '../state/transport.store';
 import { UiStore } from '../state/ui.store';
 import { SyncControl } from '../sync/sync-control';
 import { EngineStatus } from './engine-status';
 import { Lcd } from './lcd';
+import { PerformanceMeter } from './performance-meter';
 
 /**
  * The control bar (Logic's): the project's name and save state, undo and redo, the transport (go to start, stop, play,
@@ -68,6 +71,7 @@ import { Lcd } from './lcd';
   imports: [
     AnVarispeedDisplay,
     EngineStatus,
+    PerformanceMeter,
     Lcd,
     SyncControl,
     XuiIconImports,
@@ -146,6 +150,37 @@ import { Lcd } from './lcd';
           </button>
           <ng-template #projectMenu>
             <xui-menu class="min-w-56">
+              <button xuiMenuItem type="button" data-testid="save-as" (click)="ui.saveAsOpen.set('saveAs')">
+                Save As…
+              </button>
+              <button xuiMenuItem type="button" data-testid="save-copy" (click)="ui.saveAsOpen.set('saveCopy')">
+                Save a Copy…
+              </button>
+              <button
+                xuiMenuItem
+                type="button"
+                data-testid="save-template-menu"
+                (click)="ui.saveTemplateOpen.set('project')"
+              >
+                Save as Template…
+              </button>
+              <button
+                xuiMenuItem
+                type="button"
+                data-testid="save-track-template"
+                (click)="ui.saveTemplateOpen.set('tracks')"
+              >
+                Save Tracks as Template…
+              </button>
+              <button
+                xuiMenuItem
+                type="button"
+                data-testid="add-track-template"
+                [xuiMenuTriggerFor]="trackTemplatesMenu"
+                (menuOpened)="templates.refresh()"
+              >
+                Add Tracks from Template
+              </button>
               <button
                 xuiMenuItem
                 type="button"
@@ -187,6 +222,9 @@ import { Lcd } from './lcd';
               <!-- Phase 10: the Movie menu (the desktop app's menu bar has it too). -->
               <button xuiMenuItem type="button" data-testid="movie-menu" [xuiMenuTriggerFor]="movieMenu">Movie</button>
               <xui-menu-divider />
+              <button xuiMenuItem type="button" data-testid="sample-rate" (click)="ui.sampleRateOpen.set(true)">
+                Sample Rate…
+              </button>
               <button
                 xuiMenuItem
                 type="button"
@@ -243,8 +281,27 @@ import { Lcd } from './lcd';
               }
             </xui-menu>
           </ng-template>
+          <ng-template #trackTemplatesMenu>
+            <xui-menu>
+              @for (template of templates.trackTemplates(); track template.id) {
+                <button
+                  xuiMenuItem
+                  type="button"
+                  [attr.data-testid]="'track-template-' + template.name"
+                  (click)="templates.apply(template.id)"
+                >
+                  {{ template.name }}
+                </button>
+              } @empty {
+                <button xuiMenuItem type="button" disabled>No track templates yet</button>
+              }
+            </xui-menu>
+          </ng-template>
           <ng-template #importMenu>
             <xui-menu>
+              <button xuiMenuItem type="button" data-testid="import-project" (click)="ui.importProjectOpen.set(true)">
+                From Project…
+              </button>
               <button
                 xuiMenuItem
                 type="button"
@@ -578,12 +635,61 @@ import { Lcd } from './lcd';
             class="flex items-center px-2.5"
             [class.text-lit]="transport.countIn()"
             [attr.aria-pressed]="transport.countIn() ? 'true' : 'false'"
-            xuiTooltip="One bar of count-in before recording"
+            [xuiTooltip]="countInTip()"
             (click)="transport.toggleCountIn()"
           >
             <span class="flex xl:hidden"><ng-icon xui name="matLooksOneRound" size="14px" /></span>
             <span class="max-xl:sr-only">Count-in</span>
           </button>
+          <button
+            type="button"
+            class="flex w-5 items-center justify-center"
+            aria-label="Count-in and pre-roll lengths"
+            data-testid="count-in-menu"
+            xuiTooltip="Count-in length and pre-roll"
+            [xuiMenuTriggerFor]="rollMenu"
+          >
+            <ng-icon xui name="matExpandMoreRound" size="14px" />
+          </button>
+          <ng-template #rollMenu>
+            <xui-menu class="min-w-40" aria-label="Count-in and pre-roll">
+              @for (choice of countInLengths; track $index) {
+                <button
+                  xuiMenuItem
+                  type="button"
+                  role="menuitemradio"
+                  [attr.data-testid]="'count-in-' + choice.length + '-' + choice.unit"
+                  [attr.aria-checked]="isCountIn(choice)"
+                  (click)="transport.setCountIn(choice.length, choice.unit)"
+                >
+                  Count-in: {{ lengthLabel(choice) }}
+                </button>
+              }
+              <xui-menu-divider />
+              <button
+                xuiMenuItem
+                type="button"
+                role="menuitemradio"
+                data-testid="pre-roll-off"
+                [attr.aria-checked]="transport.preRoll().length === 0"
+                (click)="transport.setPreRoll(0, 'bars')"
+              >
+                Pre-roll: Off
+              </button>
+              @for (choice of preRollLengths; track $index) {
+                <button
+                  xuiMenuItem
+                  type="button"
+                  role="menuitemradio"
+                  [attr.data-testid]="'pre-roll-' + choice.length + '-' + choice.unit"
+                  [attr.aria-checked]="isPreRoll(choice)"
+                  (click)="transport.setPreRoll(choice.length, choice.unit)"
+                >
+                  Pre-roll: {{ lengthLabel(choice) }}
+                </button>
+              }
+            </xui-menu>
+          </ng-template>
           <button
             type="button"
             class="flex items-center px-2.5"
@@ -769,11 +875,13 @@ import { Lcd } from './lcd';
           <ng-icon xui [name]="theme.appearance() === 'dark' ? 'matLightModeRound' : 'matDarkModeRound'" size="sm" />
         </button>
       }
+      <an-performance-meter />
       <an-engine-status />
     </div>
   `
 })
 export class ControlBar {
+  protected readonly templates = inject(TemplatesStore);
   protected readonly transport = inject(TransportStore);
   protected readonly project = inject(ProjectStore);
   protected readonly history = inject(HistoryStore);
@@ -876,6 +984,24 @@ export class ControlBar {
       [{ type: 'setMidiRecording', merge }],
       merge ? 'Merge MIDI Recordings' : 'Separate MIDI Recordings'
     );
+  }
+
+  protected readonly countInLengths = CountInLengths;
+  protected readonly preRollLengths = PreRollLengths;
+  protected readonly countInTip = computed(() => {
+    const { length, unit } = this.transport.countInLength();
+    return `${musicalLength(length, unit)} of count-in before recording`;
+  });
+  protected lengthLabel(choice: { length: number; unit: MusicalUnit }): string {
+    return musicalLength(choice.length, choice.unit);
+  }
+  protected isCountIn(choice: { length: number; unit: MusicalUnit }): boolean {
+    const { length, unit } = this.transport.countInLength();
+    return choice.length === length && choice.unit === unit;
+  }
+  protected isPreRoll(choice: { length: number; unit: MusicalUnit }): boolean {
+    const { length, unit } = this.transport.preRoll();
+    return choice.length === length && choice.unit === unit;
   }
 
   protected readonly undoTip = computed(() => {

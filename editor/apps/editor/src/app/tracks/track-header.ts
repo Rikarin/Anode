@@ -54,7 +54,7 @@ import { ProjectStore } from '../state/project.store';
 import { SelectionStore } from '../state/selection.store';
 import { TrackAlternativesStore } from '../state/track-alternatives.store';
 import { TrackColors } from '../state/track-colors';
-import { setTrack, setTrackLabel, type TrackChange } from '../state/track-commands';
+import { moveIndex, setTrack, setTrackLabel, type TrackChange } from '../state/track-commands';
 import { UiStore } from '../state/ui.store';
 
 /**
@@ -333,10 +333,8 @@ import { UiStore } from '../state/ui.store';
         <ng-template #menu>
           <xui-menu>
             <button xuiMenuItem type="button" (click)="startRename()">Rename</button>
-            <button xuiMenuItem type="button" [disabled]="index() === 0" (click)="moveBy(-1)">Move Up</button>
-            <button xuiMenuItem type="button" [disabled]="index() === count() - 1" (click)="moveBy(1)">
-              Move Down
-            </button>
+            <button xuiMenuItem type="button" [disabled]="moveTarget(-1) === null" (click)="moveBy(-1)">Move Up</button>
+            <button xuiMenuItem type="button" [disabled]="moveTarget(1) === null" (click)="moveBy(1)">Move Down</button>
             <xui-menu-divider />
             @if (track().kind === 'stack') {
               <button xuiMenuItem type="button" (click)="unstack()">Flatten Stack</button>
@@ -523,7 +521,6 @@ export class TrackHeader {
   protected readonly renaming = signal(false);
   private readonly nameInput = viewChild<ElementRef<HTMLInputElement>>('name');
   protected readonly number = computed(() => this.index() + 1);
-  protected readonly count = computed(() => this.project.trackIds().length);
   protected readonly selected = computed(
     () => this.selection.track() === this.track().id || this.selection.tracks().has(this.track().id)
   );
@@ -675,9 +672,14 @@ export class TrackHeader {
     void this.mixer.set(this.track().id, 'volumeDb', Math.round(faderDb(position) * 10) / 10);
   }
 
-  protected moveBy(offset: number): void {
-    const index = this.index() + offset;
-    if (index >= 0 && index < this.count()) {
+  protected moveTarget(offset: -1 | 1): number | null {
+    const tracks = this.project.trackIds().flatMap(id => this.project.track(id) ?? []);
+    return moveIndex(tracks, this.track().id, offset);
+  }
+
+  protected moveBy(offset: -1 | 1): void {
+    const index = this.moveTarget(offset);
+    if (index !== null) {
       void this.project.execute([{ type: 'moveTrack', trackId: this.track().id, index }], 'Move Track');
     }
   }

@@ -40,8 +40,17 @@ public sealed partial class EngineController {
                 throw new ArgumentException("Binaural monitoring needs an HRTF file.", nameof(message));
             }
 
+            Engine.SetMonitorSection(message.Gain, message.Mono);
             var previous = monitoring;
             monitoring = message;
+            if (previous is not null
+                && previous.Binaural == message.Binaural
+                && previous.DownmixTo == message.DownmixTo
+                && previous.HrtfPath == message.HrtfPath
+                && previous.SpeakerMap.SequenceEqual(message.SpeakerMap)) {
+                return; // the monitor section alone: the prepared renderer stays
+            }
+
             monitoredFormat = null;
             try {
                 ApplyMonitoring(true);
@@ -269,6 +278,9 @@ public sealed partial class EngineController {
         }
 
         Engine.EnsureObjects(plan.Objects.Length);
+        foreach (var node in plan.Order.Append(plan.Master)) {
+            node.Channel.Strip.PrepareMeter(Options.SampleRate);
+        }
     }
 
     /// <summary>

@@ -7,6 +7,8 @@ import type {
   GroupProperties,
   Insert,
   InsertChain,
+  MeterTap,
+  MeterType,
   MixerGroup,
   MixerSettings,
   Panner,
@@ -56,6 +58,28 @@ export function withPannerChange(panner: Panner, change: PannerChange): Panner {
     next = { ...next, [which]: { ...next[which], [property]: value } };
   }
   return next;
+}
+
+/** A change of a strip's input stage: `setStrip`'s fields for its trim, polarity, delay and dual pan. */
+export type StripInputChange = Partial<
+  Pick<ChannelStrip, 'trimDb' | 'polarityInverted' | 'delayMs' | 'dualPan' | 'panLeft' | 'panRight' | 'soloSafe'>
+>;
+
+const InputLabels: Record<keyof StripInputChange, string> = {
+  trimDb: 'Trim',
+  polarityInverted: 'Polarity',
+  delayMs: 'Track Delay',
+  dualPan: 'Dual Pan',
+  panLeft: 'Dual Pan',
+  panRight: 'Dual Pan',
+  soloSafe: 'Solo Safe'
+};
+
+/** A slot being dragged: its chain, its insert, and its strip (null: the master). */
+export interface InsertDrag {
+  chain: InsertChain;
+  id: string;
+  trackId: string | null;
 }
 
 /** The strip key of the master in {@link MixerStore}'s methods. */
@@ -123,6 +147,8 @@ export class MixerStore {
   private readonly pannerCoalescer = new Coalescer<PannerChange>((trackId, change) =>
     this.project.execute([{ type: 'setPanner', trackId, ...change }], 'Panner')
   );
+  /** The insert being dragged in the Mixer, which any strip may take. */
+  readonly insertDrag = signal<InsertDrag | null>(null);
   /** Controls held now (a drag in progress), which show what they send instead of their automation. */
   private readonly held = signal<ReadonlySet<string>>(new Set());
   private readonly holdTimers = new Map<string, ReturnType<typeof setTimeout>>();
@@ -208,6 +234,20 @@ export class MixerStore {
   /** A strip's input format (audio tracks and auxes; an aux's is its bus's). */
   setInputFormat(trackId: string, inputFormat: ChannelFormat): Promise<unknown> {
     return this.project.execute([{ type: 'setStripFormat', trackId, inputFormat }], 'Input Format');
+  }
+
+  /** A strip's meter: its type or tap point (the master's too). */
+  setMeter(trackId: string | null, change: { meterType?: MeterType; meterTap?: MeterTap }): Promise<unknown> {
+    return this.project.execute(
+      [{ type: 'setStrip', ...(trackId === null ? {} : { trackId }), ...change }],
+      'Meter Settings'
+    );
+  }
+
+  /** Changes a track strip's input stage (the master and a VCA have none). */
+  setStripInput(trackId: string, change: StripInputChange): Promise<unknown> {
+    const field = Object.keys(change)[0] as keyof StripInputChange | undefined;
+    return this.project.execute([stripCommand(trackId, change)], field ? InputLabels[field] : 'Strip');
   }
 
   toggleMute(trackId: string | null): void {
@@ -473,6 +513,31 @@ export class MixerStore {
     return this.project.execute([{ type: 'deleteGroup', number }], 'Delete Group');
   }
 
+  /** Moves an insert to a slot of another strip, or copies it there (on its own strip too), state and all. */
+  transferInsert(
+    fromTrackId: string | null,
+    insertId: string,
+    toTrackId: string | null,
+    index: number | null,
+    copy: boolean,
+    chain: InsertChain = 'inserts'
+  ): Promise<unknown> {
+    return this.project.execute(
+      [
+        {
+          type: 'transferInsert',
+          insertId,
+          copy,
+          ...(fromTrackId === null ? {} : { trackId: fromTrackId }),
+          ...(toTrackId === null ? {} : { toTrackId }),
+          ...(index === null ? {} : { index }),
+          ...(chain === 'inserts' ? {} : { chain })
+        }
+      ],
+      copy ? 'Copy Plug-in' : 'Move Plug-in'
+    );
+  }
+
   setMixerSettings(change: Partial<MixerSettings>): Promise<unknown> {
     return this.project.execute([{ type: 'setMixerSettings', ...change }], 'Mixer Settings');
   }
@@ -536,7 +601,7 @@ function owner(trackId: string | null): { trackId?: string } {
 /** A `setStrip` command for a track's strip, or the master's when `trackId` is null. */
 export function stripCommand(
   trackId: string | null,
-  change: Partial<Pick<ChannelStrip, 'volumeDb' | 'pan' | 'mute' | 'solo'>>
+  change: Partial<Pick<ChannelStrip, 'volumeDb' | 'pan' | 'mute' | 'solo'>> & StripInputChange
 ): EditCommand {
   return { type: 'setStrip', ...(trackId === null ? {} : { trackId }), ...change };
 }

@@ -55,11 +55,14 @@ import {
   plural,
   snapIn,
   splitSpan,
+  type Stretched,
+  stretchEdge,
   trimEnd,
   trimMidiEnd,
   trimMidiStart,
   trimStart
 } from './region-edit';
+import { loopAt, loopCommand } from './region-loop';
 import { buildScene, type TracksScene } from './scene';
 import { snapBy, type SnapContext, snapUnit } from './snap';
 import { createSurface, type TimelineSurface } from './timeline-surface';
@@ -109,7 +112,11 @@ interface RegionSpan {
   trackId: string;
   startTick: number;
   endTick: number;
+  /** Where its playing ends: past `endTick` when it loops. */
+  playedEnd: number;
   kind: 'audio' | 'midi' | 'folder' | 'pattern';
+  /** A pattern region; `pattern` spans are Session Player regions too, and those do not loop. */
+  loops: boolean;
 }
 
 /** What a right-click (or the T key) opens the menu on. */
@@ -124,7 +131,8 @@ const Cursors: Record<RegionZone, string> = {
   'trim-start': 'ew-resize',
   'trim-end': 'ew-resize',
   'fade-in': 'nesw-resize',
-  'fade-out': 'nwse-resize'
+  'fade-out': 'nwse-resize',
+  loop: 'e-resize'
 };
 
 const ToolCursors: Record<TracksTool, string> = {
@@ -147,11 +155,12 @@ const ToolCursors: Record<TracksTool, string> = {
  * the signature track, the cycle area and the autopunch range; the playhead. Drawn by `@anode/timeline` in its render
  * worker, in the light or dark palette as the appearance changes.
  *
- * The pointer edits with the left-click tool (the ⌘-click tool with ⌘): Pointer selects, moves (⌥ copies), trims and
- * drags fades (⌃⇧ on a fade changes its curve); a drag on a take is Quick Swipe Comping; Pencil makes MIDI regions;
+ * The pointer edits with the left-click tool (the ⌘-click tool with ⌘): Pointer selects, moves (⌥ copies), trims (⌥
+ * time-stretches an audio region instead) and drags fades (⌃⇧ on a fade changes its curve); a drag on a take is Quick Swipe Comping; Pencil makes MIDI regions;
  * Eraser deletes; Text renames; Scissors split; Glue joins; Solo plays from the click while held; Mute mutes; Zoom
  * zooms (⌥ out, drag a range); Fade drags fades, their curves (vertically, inside a fade) and crossfades (across where
- * two regions meet); Marquee selects a range to delete. Moves follow the drag mode and everything snaps by the snap
+ * two regions meet); Marquee selects a range to delete. The upper right corner of a region, or of its last repeat, drags
+ * its loop. Moves follow the drag mode and everything snaps by the snap
  * mode. A drag is a local preview; dropping sends one command batch (docs/01-implementation-plan.md §4.4). The ruler
  * locates the playhead and, in its lower band, draws or toggles the cycle, or the punch range under autopunch. WAV and
  * MIDI files, and files from the browsers, dropped here are imported onto the row under the pointer.
@@ -235,6 +244,8 @@ export class Timeline {
   private overrides: ItemOverride[] | null = null;
   private marqueeRect: PixelRect | null = null;
   private cycleDraft: CycleArea | null = null;
+  /** The loop a drag of a region's corner is setting: the scene draws its repeats. */
+  private readonly loopDraft = signal<{ id: string; loopTicks: number } | null>(null);
   private punchDraft: CycleArea | null = null;
   /** Set when something the view does not show changed (scene, waveform, size): the next frame is sent regardless. */
   private dirty = true;
@@ -280,7 +291,8 @@ export class Timeline {
       meter: settings.signatures,
       selected: this.selection.regions(),
       waveformKey: fileId => this.fileKey(fileId),
-      offline: this.project.offlineIds()
+      offline: this.project.offlineIds(),
+      loopDraft: this.loopDraft()
     });
   });
 
@@ -456,6 +468,11 @@ export class Timeline {
     };
   }
 
+  /** Scrolls a position the keys moved the playhead to into view. */
+  reveal(tick: number): void {
+    this.view.reveal(tick, this.width);
+  }
+
   private drawFrame(): void {
     if (!this.surface) {
       return;
@@ -481,7 +498,7 @@ export class Timeline {
     return { x: event.clientX - rect.left, y: event.clientY - rect.top };
   }
 
-  private snapContext(): SnapContext {
+  snapContext(): SnapContext {
     return {
       meter: this.project.meter(),
       tempo: this.project.tempoMap(),
@@ -675,7 +692,8 @@ export class Timeline {
         this.selection.select([region.id]);
       }
       this.selection.track.set(region.trackId);
-      start(hit.zone, region.id);
+      // Take folders and Session Player regions do not loop: their corner trims.
+      start(hit.zone === 'loop' && !region.loops ? 'trim-end' : hit.zone, region.id);
       return;
     }
 
@@ -776,10 +794,9 @@ export class Timeline {
         if (this.drawn) {
           const drawn = this.drawn;
           const found = itemsInRect(drawn.scene, drawn.index, view, this.marqueeRect)
-            .filter(i => drawn.indexOf.get(drawn.regionIds[i] ?? '') === i)
             .map(i => drawn.regionIds[i] ?? '')
             .filter(id => !id.includes('/'));
-          this.selection.select(gesture.shift ? [...gesture.base, ...found] : found);
+          this.selection.select(gesture.shift ? [...gesture.base, ...found] : [...new Set(found)]);
         }
         break;
       }
@@ -889,16 +906,21 @@ export class Timeline {
     const commands = this.commit(gesture, tick, Math.floor(laneAtY(view, y)), y, event.altKey);
     if (commands.commands.length === 0) {
       this.overrides = null;
+      this.loopDraft.set(null);
       return;
     }
 
     // The preview stays until the edit's delta has redrawn the regions (or it was refused), so nothing jumps back.
-    void this.project.execute(commands.commands, commands.label).finally(() => (this.overrides = null));
+    void this.project.execute(commands.commands, commands.label).finally(() => {
+      this.overrides = null;
+      this.loopDraft.set(null);
+    });
   }
 
   protected cancel(): void {
     this.gesture = null;
     this.overrides = null;
+    this.loopDraft.set(null);
     this.marqueeRect = null;
     this.cycleDraft = null;
     this.punchDraft = null;
@@ -925,6 +947,15 @@ export class Timeline {
     const drawn = this.drawn;
     const index = gesture.regionId ? drawn?.indexOf.get(gesture.regionId) : undefined;
     if (!drawn || !gesture.regionId || index === undefined) {
+      return [];
+    }
+
+    if (gesture.kind === 'loop') {
+      const span = this.span(gesture.regionId);
+      const loopTicks = span ? loopAt(span.endTick, snapIn(this.context(), tick)) : 0;
+      if (this.loopDraft()?.loopTicks !== loopTicks) {
+        this.loopDraft.set({ id: gesture.regionId, loopTicks });
+      }
       return [];
     }
 
@@ -962,6 +993,19 @@ export class Timeline {
     }
     const context = this.context(region);
 
+    if (gesture.alt && (gesture.kind === 'trim-start' || gesture.kind === 'trim-end')) {
+      const s = this.stretched(region, gesture.kind, tick);
+      const end = this.project.regionEnd(region);
+      return [
+        {
+          index,
+          start: s.startTick,
+          length: ((end - region.startTick) * s.stretch) / region.stretch,
+          timeScale: s.stretch / region.stretch
+        }
+      ];
+    }
+
     switch (gesture.kind) {
       case 'trim-start': {
         const t = trimStart(region, tick, context);
@@ -998,6 +1042,15 @@ export class Timeline {
   ): { commands: EditCommand[]; label: string } {
     if (gesture.kind === 'body') {
       return this.commitMove(gesture, tick, lane, alt);
+    }
+
+    if (gesture.kind === 'loop') {
+      const draft = this.loopDraft();
+      const span = gesture.regionId ? this.span(gesture.regionId) : undefined;
+      const kind = span?.kind;
+      return draft && span && kind && kind !== 'folder'
+        ? { commands: [loopCommand(span.id, kind, draft.loopTicks)], label: 'Loop Region' }
+        : { commands: [], label: '' };
     }
 
     if (gesture.kind === 'xfade') {
@@ -1055,6 +1108,14 @@ export class Timeline {
     switch (gesture.kind) {
       case 'trim-start':
       case 'trim-end': {
+        if (gesture.alt) {
+          const s = this.stretched(region, gesture.kind, tick);
+          const same = s.stretch === region.stretch && s.startTick === region.startTick;
+          return {
+            commands: same ? [] : [{ type: 'stretchRegion', regionId: region.id, ...s }],
+            label: 'Time Stretch Region'
+          };
+        }
         const t =
           gesture.kind === 'trim-start'
             ? trimStart(region, tick, context)
@@ -1094,6 +1155,12 @@ export class Timeline {
       default:
         return { commands: [], label: '' };
     }
+  }
+
+  /** What a ⌥-drag of a region's edge to `tick` makes of its stretch. */
+  private stretched(region: AudioRegion, zone: 'trim-start' | 'trim-end', tick: number): Stretched {
+    const edge = zone === 'trim-start' ? 'start' : 'end';
+    return stretchEdge(region, this.project.regionEnd(region), edge, tick, this.context(region));
   }
 
   /** A finished move: the moves (or ⌥ copies), then what the drag mode does around them. */
@@ -1222,7 +1289,12 @@ export class Timeline {
         trackId: pattern.trackId,
         startTick: pattern.startTick,
         endTick: pattern.startTick + pattern.lengthTicks,
-        kind: 'pattern'
+        playedEnd:
+          'loopTicks' in pattern
+            ? this.project.loopEndOf(pattern, pattern.startTick + pattern.lengthTicks)
+            : pattern.startTick + pattern.lengthTicks,
+        kind: 'pattern',
+        loops: 'loopTicks' in pattern
       };
     }
     const midi = this.project.midiRegions().get(id);
@@ -1232,7 +1304,9 @@ export class Timeline {
         trackId: midi.trackId,
         startTick: midi.startTick,
         endTick: midi.startTick + midi.lengthTicks,
-        kind: 'midi'
+        playedEnd: this.project.loopEndOf(midi, midi.startTick + midi.lengthTicks),
+        kind: 'midi',
+        loops: true
       };
     }
     const folder = this.project.takeFolders().get(id);
@@ -1242,7 +1316,9 @@ export class Timeline {
         trackId: folder.trackId,
         startTick: folder.startTick,
         endTick: folder.startTick + folder.lengthTicks,
-        kind: 'folder'
+        playedEnd: folder.startTick + folder.lengthTicks,
+        kind: 'folder',
+        loops: false
       };
     }
     const audio = this.project.regions().get(id);
@@ -1252,7 +1328,9 @@ export class Timeline {
           trackId: audio.trackId,
           startTick: audio.startTick,
           endTick: this.project.regionEnd(audio),
-          kind: 'audio'
+          playedEnd: this.project.loopEndOf(audio, this.project.regionEnd(audio)),
+          kind: 'audio',
+          loops: true
         }
       : undefined;
   }
@@ -1385,7 +1463,8 @@ export class Timeline {
       this.cursor.set('crosshair'); // Quick Swipe
       return;
     }
-    this.cursor.set(hit ? Cursors[hit.zone] : 'default');
+    const stretching = event.altKey && (hit?.zone === 'trim-start' || hit?.zone === 'trim-end');
+    this.cursor.set(stretching ? 'col-resize' : hit ? Cursors[hit.zone] : 'default');
   }
 
   // ---- wheel, double-click, drop

@@ -14,6 +14,8 @@ namespace Anode.Server.Library;
 /// </summary>
 public sealed class UserSettings(IOptions<ServerOptions> options) {
     public const string Folder = "settings";
+    public const double MinMonitorDb = -96;
+    public const double MaxMonitorDb = 12;
     public const int MaxCommands = 2_000;
     public const int MaxBindingsPerCommand = 8;
     public const int MaxCommandIdLength = 128;
@@ -183,7 +185,7 @@ public sealed class UserSettings(IOptions<ServerOptions> options) {
     public MonitoringSettings Monitoring() =>
         Read("monitoring.json", ContractsJsonContext.Default.MonitoringSettings) is { SpeakerMap: not null } m
         && Valid(m)
-            ? m
+            ? m with { Section = m.Section ?? MonitorSection.Default }
             : MonitoringSettings.Default;
 
     /// <summary>
@@ -197,6 +199,13 @@ public sealed class UserSettings(IOptions<ServerOptions> options) {
             );
         }
 
+        var section = monitoring.Section ?? Monitoring().Section ?? MonitorSection.Default;
+        if (!Valid(section)) {
+            throw ProjectException.Unprocessable(
+                $"The monitor section's levels are {MinMonitorDb}…{MaxMonitorDb} dB, its dim {MinMonitorDb}…0 dB."
+            );
+        }
+
         if (monitoring.DownmixTo is { } to
             && master is { } format
             && SpeakerLayouts.ChannelCount(to) >= SpeakerLayouts.ChannelCount(format)) {
@@ -205,10 +214,15 @@ public sealed class UserSettings(IOptions<ServerOptions> options) {
             );
         }
 
-        var saved = monitoring with { SpeakerMap = [..monitoring.SpeakerMap] };
+        var saved = monitoring with { SpeakerMap = [..monitoring.SpeakerMap], Section = section };
         Write("monitoring.json", saved, ContractsJsonContext.Default.MonitoringSettings);
         return saved;
     }
+
+    static bool Valid(MonitorSection s) =>
+        s.DimDb is >= MinMonitorDb and <= 0
+        && s.LevelDb is >= MinMonitorDb and <= MaxMonitorDb
+        && s.ReferenceDb is >= MinMonitorDb and <= MaxMonitorDb;
 
     static bool Valid(MonitoringSettings m) =>
         (m.DownmixTo is not { } to || Enum.IsDefined(to))

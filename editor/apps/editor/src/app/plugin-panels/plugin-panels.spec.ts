@@ -7,7 +7,7 @@ import { DrawbarsPanel, drawbarSetting, drawbarValue } from './drawbars-panel';
 import { FmAlgorithmPanel } from './fm-algorithm-panel';
 import { MultipressorPanel, axisFrequency, axisPosition } from './multipressor-panel';
 import { matchPanel } from './panel-patterns';
-import { type PluginPanelHost, pluginPanel } from './plugin-panel';
+import { type PluginPanelHost, deferredPanel, pluginPanel } from './plugin-panel';
 
 const fake = (id: string): PluginInfo => {
   const plugin = [...FakeT2Instruments, ...FakeT2Effects].find(p => p.id === id);
@@ -49,6 +49,7 @@ describe('Custom plugin panels: parameter-id patterns', () => {
     expect(matchPanel(fake('anode.fm'))?.kind).toBe('fmAlgorithm');
     expect(matchPanel(fake('anode.delay-designer'))?.kind).toBe('delayTaps');
     expect(matchPanel(fake('anode.multipressor'))?.kind).toBe('multipressorBands');
+    expect(deferredPanel(fake('anode.linear-eq'))).toBe('eqCurve');
     const panelled = ['anode.organ', 'anode.fm', 'anode.delay-designer', 'anode.multipressor'];
     for (const other of [...FakeT2Instruments, ...FakeT2Effects, ...FakeMidiEffects]) {
       if (!panelled.includes(other.id)) {
@@ -207,6 +208,8 @@ describe('Custom plugin panels: value plumbing', () => {
     expect(axisFrequency(axisPosition(632))).toBeCloseTo(632);
     const { element, sets, press, values } = await render(MultipressorPanel, fake('anode.multipressor'));
     expect(element.querySelectorAll('[data-testid="multipressor-band"]')).toHaveLength(4);
+    // No reading yet: each band's meter rests at its minimum and says so.
+    expect(element.querySelector('[data-testid="band-reduction-2"]')?.getAttribute('aria-valuetext')).toBe('—');
     const bypass = element.querySelector<HTMLButtonElement>('[aria-label="Bypass band 2"]');
     bypass?.click();
     expect(sets).toEqual([['band2On', 0]]);
@@ -222,5 +225,21 @@ describe('Custom plugin panels: value plumbing', () => {
       await press(crossovers[0], 'PageUp');
     }
     expect(values()['cross1']).toBeLessThan(values()['cross2'] ?? 0);
+  });
+
+  it('Multipressor: each band shows its own gain reduction', async () => {
+    const readings = signal<readonly number[] | null>([-1.5, -9, 0, -0.5]);
+    const { host } = testHost(fake('anode.multipressor'));
+    const fixture = TestBed.createComponent(MultipressorPanel);
+    fixture.componentRef.setInput('host', { ...host, readingValues: () => readings() });
+    fixture.autoDetectChanges();
+    await fixture.whenStable();
+    const element = fixture.nativeElement as HTMLElement;
+    const text = (band: number) =>
+      element.querySelector(`[data-testid="band-reduction-${band}"]`)?.getAttribute('aria-valuetext');
+    expect([1, 2, 3, 4].map(text)).toEqual(['−1.5 dB', '−9.0 dB', '0.0 dB', '−0.5 dB']);
+    readings.set([0, -3, 0, 0]);
+    await fixture.whenStable();
+    expect(text(2)).toBe('−3.0 dB');
   });
 });

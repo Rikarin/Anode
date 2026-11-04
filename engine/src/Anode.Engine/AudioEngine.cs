@@ -19,6 +19,9 @@ public sealed unsafe partial class AudioEngine : IAudioProcessor {
 
     static readonly double NanosecondsPerTick = 1e9 / Stopwatch.Frequency;
 
+    /// <summary>What the callback's load is averaged over.</summary>
+    const double LoadSeconds = 0.3;
+
     readonly Transport transport = new();
     readonly SnapshotSeqlock published = new();
     readonly Metronome metronome;
@@ -46,7 +49,14 @@ public sealed unsafe partial class AudioEngine : IAudioProcessor {
     long countInTotal;
     long countInRemaining;
     int countInBeats;
+    int countInAccent;
     int callbackFrames;
+    float loadAverage;
+    float loadPeak;
+    float publishedLoad;
+    float publishedPeakLoad;
+    int loadResetRequested;
+    int loadResetSeen;
     bool metronomeEnabled;
     float metronomeGain = 1f;
 
@@ -144,6 +154,7 @@ public sealed unsafe partial class AudioEngine : IAudioProcessor {
         Run(inputs, inputChannels, outputs, outputChannels, frames);
 
     void Run(float** inputs, int inputChannels, float** outputs, int outputChannels, int frames) {
+        var begin = Stopwatch.GetTimestamp();
         Interlocked.Increment(ref started); // full fence before the root is read
         try {
             var model = Volatile.Read(ref root);
@@ -185,7 +196,38 @@ public sealed unsafe partial class AudioEngine : IAudioProcessor {
         } finally {
             AudioThread.Mark(false); // only while in the callback: offline renders run it on other threads
             Volatile.Write(ref completed, completed + 1);
+            MeasureLoad(begin, frames);
         }
+    }
+
+    /// <summary>
+    ///     The callback's load, measured on the monotonic clock whatever <see cref="HostClock" /> says: a one-pole over
+    ///     <see cref="LoadSeconds" />, and the worst since the reader last asked. Renders do not count.
+    /// </summary>
+    void MeasureLoad(long begin, int frames) {
+        if (frames <= 0 || Volatile.Read(ref offline) != 0) {
+            return;
+        }
+
+        var seconds = (Stopwatch.GetTimestamp() - begin) / (double)Stopwatch.Frequency;
+        var load = (float)(seconds * SampleRate / frames);
+        var request = Volatile.Read(ref loadResetRequested);
+        if (request != loadResetSeen) {
+            loadResetSeen = request;
+            loadPeak = 0;
+        }
+
+        loadPeak = Math.Max(loadPeak, load);
+        loadAverage += (load - loadAverage) * (float)(1 - Math.Exp(-frames / (LoadSeconds * SampleRate)));
+        Volatile.Write(ref publishedLoad, loadAverage);
+        Volatile.Write(ref publishedPeakLoad, loadPeak);
+    }
+
+    /// <summary>Reader (telemetry): the callback's load, and its worst since the previous call.</summary>
+    public (float Load, float Peak) TakeLoad() {
+        var load = (Volatile.Read(ref publishedLoad), Volatile.Read(ref publishedPeakLoad));
+        Interlocked.Increment(ref loadResetRequested);
+        return load;
     }
 
     void ApplyCommands() {
@@ -243,7 +285,7 @@ public sealed unsafe partial class AudioEngine : IAudioProcessor {
 
     /// <summary>
     ///     From a stop: a count-in of <paramref name="countIn" /> frames (if any) then recording; while playing: a
-    ///     punch-in.
+    ///     punch-in. <paramref name="beats" /> holds its clicks, and in its upper half how many make a bar.
     /// </summary>
     void Record(long countIn, long beats) {
         if (transport.State == TransportState.Playing) {
@@ -251,7 +293,8 @@ public sealed unsafe partial class AudioEngine : IAudioProcessor {
             BeginRecording();
         } else if (transport.State == TransportState.Stopped && countInRemaining == 0 && countIn > 0) {
             countInTotal = countInRemaining = countIn;
-            countInBeats = (int)Math.Clamp(beats, 1, 64);
+            countInBeats = Math.Clamp((int)(beats & int.MaxValue), 1, Metronome.MaxCountInBeats);
+            countInAccent = (int)(beats >> 32);
             Volatile.Write(ref recordStart, -1);
             transport.PrepareRecord();
         } else if (transport.State == TransportState.Stopped && countInRemaining == 0) {
@@ -308,6 +351,7 @@ public sealed unsafe partial class AudioEngine : IAudioProcessor {
             || blockCapture is { MonitoringRender: true }) {
             MonitorOutputs(outputs, outputChannels, offset, outLeft, outRight, click);
         } else {
+            MonitorSection(outLeft, outRight);
             WriteOutputs(outputs, outputChannels, offset, outLeft, outRight, click);
         }
 
@@ -420,7 +464,13 @@ public sealed unsafe partial class AudioEngine : IAudioProcessor {
         click.Clear();
         metronome.Begin();
         if (countIn) {
-            metronome.AddCountIn(countInTotal, countInBeats, countInTotal - countInRemaining, click.Length);
+            metronome.AddCountIn(
+                countInTotal,
+                countInBeats,
+                countInTotal - countInRemaining,
+                click.Length,
+                countInAccent
+            );
         } else if (transport.Rolling && Volatile.Read(ref metronomeEnabled)) {
             AddModelClicks(model, position, click.Length);
         }

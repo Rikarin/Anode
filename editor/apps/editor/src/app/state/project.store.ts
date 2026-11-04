@@ -30,6 +30,7 @@ import {
   type ProjectScore,
   type ProjectSettings,
   type SessionPlayerRegion,
+  StripDefaults,
   type TakeFolder,
   type Track
 } from '@anode/api-client';
@@ -39,6 +40,7 @@ import { EventStream } from '../core/events';
 import { Notify } from '../core/notify';
 import { RegionTiming } from '../music/region-timing';
 import { TempoMap } from '../music/tempo-map';
+import { loopEnd, nextStartAfter } from '../tracks/region-loop';
 
 /** Ticks per quarter note: the project's musical time base (docs/01-implementation-plan.md §5.1). */
 export const Ppq = 960;
@@ -60,14 +62,22 @@ export const DefaultSettings: ProjectSettings = {
   tempo: 120,
   signature: { numerator: 4, denominator: 4 },
   cycle: { enabled: false, startTick: 0, endTick: 4 * 4 * Ppq },
-  metronome: { enabled: false, countIn: false, levelDb: -6 },
+  metronome: { enabled: false, countIn: false, levelDb: -6, countInLength: 1, countInUnit: 'bars' },
   endTick: 32 * 4 * Ppq,
   mergeMidiRecording: false,
   tempoEvents: [{ tick: 0, bpm: 120, curve: 'step', shape: 0 }],
   signatures: [{ tick: 0, numerator: 4, denominator: 4 }],
   keys: [{ tick: 0, tonic: 0, mode: 'major' }],
-  recording: { cycleMode: 'takeFolder', replace: false, autopunch: false, punchInTick: 0, punchOutTick: 4 * 4 * Ppq },
-  mixer: { pdc: 'all', lowLatency: false, lowLatencyLimitMs: 10 },
+  recording: {
+    cycleMode: 'takeFolder',
+    replace: false,
+    autopunch: false,
+    punchInTick: 0,
+    punchOutTick: 4 * 4 * Ppq,
+    preRollLength: 0,
+    preRollUnit: 'bars'
+  },
+  mixer: { pdc: 'all', lowLatency: false, lowLatencyLimitMs: 10, panLaw: 'minus3DbCompensated', soloMode: 'inPlace' },
   smartTempo: { mode: 'keep', defaultFollow: 'off', analyzeImports: true },
   varispeed: { enabled: false, mode: 'speedOnly', speed: 1 },
   sync: { source: 'internal', destinations: [], frameRate: 'fps25', startOffsetSeconds: 0, linkStartStop: false },
@@ -87,7 +97,8 @@ const SilentStrip: ChannelStrip = {
   midiEffects: [],
   inputFormat: 'stereo',
   outputFormat: 'stereo',
-  panner: DefaultPanner
+  panner: DefaultPanner,
+  ...StripDefaults
 };
 
 /** A new project's Live Loops grid: empty, launching on the bar, hidden. */
@@ -445,6 +456,27 @@ export class ProjectStore {
     return map.constant
       ? region.startTick + regionTicks(region, this.framesPerTick())
       : map.tickAfterFrames(region.startTick, region.length, this.info()?.sampleRate ?? 48_000);
+  }
+
+  /** The start of the next region of any kind on a track after `tick`, or null (where a loop stops). */
+  nextRegionStart(trackId: string, tick: number): number | null {
+    const starts = [
+      ...this.regionList(),
+      ...this.midiRegionList(),
+      ...this.patternRegionList(),
+      ...this.sessionPlayerRegions().values(),
+      ...this.takeFolderList()
+    ]
+      .filter(r => r.trackId === trackId)
+      .map(r => r.startTick);
+    return nextStartAfter(starts, tick);
+  }
+
+  /** Where a region's playing ends: `endTick`, or as far as its repeats go. */
+  loopEndOf(region: { trackId: string; startTick: number; loopTicks: number }, endTick: number): number {
+    return region.loopTicks > 0
+      ? loopEnd(endTick, region.loopTicks, this.nextRegionStart(region.trackId, region.startTick))
+      : endTick;
   }
 
   /** Audio frames per tick over a region (its average under a changing tempo). */

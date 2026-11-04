@@ -199,6 +199,76 @@ public sealed class ArrangementEditTests {
         );
     }
 
+    string[] Names => [..state.Tracks.Select(static t => t.Name)];
+
+    [Fact]
+    public void A_track_moved_among_a_stacks_members_goes_after_them() {
+        Apply(new AddTrackCommand("A"), new AddTrackCommand("B"), new AddTrackCommand("C"), new AddTrackCommand("D"));
+        Apply(new CreateStackCommand([Track("A"), Track("B")], "Stack"));
+        Assert.Equal(["Stack", "A", "B", "C", "D"], Names);
+        Apply(new MoveTrackCommand(Track("D"), 2));
+        Assert.Equal(["Stack", "A", "B", "D", "C"], Names);
+        Assert.Null(state.FindTrack(Track("D"))!.ParentId);
+        Apply(new MoveTrackCommand(Track("C"), 1));
+        Assert.Equal(["Stack", "A", "B", "C", "D"], Names);
+        // Before the stack and after its members are fine.
+        Apply(new MoveTrackCommand(Track("D"), 0));
+        Assert.Equal(["D", "Stack", "A", "B", "C"], Names);
+    }
+
+    [Fact]
+    public void A_stack_moves_with_its_members() {
+        Apply(new AddTrackCommand("A"), new AddTrackCommand("B"), new AddTrackCommand("C"), new AddTrackCommand("D"));
+        Apply(new CreateStackCommand([Track("A"), Track("B")], "Stack"));
+        var before = state;
+        var moved = Edits.Apply(state, new MoveTrackCommand(Track("Stack"), 4), ids);
+        state = moved.State;
+        Assert.Equal(["C", "D", "Stack", "A", "B"], Names);
+        Assert.Equal(RandomProjects.Json(before), RandomProjects.Json(state.Apply(moved.Inverse)));
+        Apply(new MoveTrackCommand(Track("Stack"), 0));
+        Assert.Equal(["Stack", "A", "B", "C", "D"], Names);
+    }
+
+    [Fact]
+    public void A_stack_moved_among_another_stacks_members_goes_after_them() {
+        Apply(new AddTrackCommand("A"), new AddTrackCommand("B"), new AddTrackCommand("C"), new AddTrackCommand("D"));
+        Apply(new CreateStackCommand([Track("A")], "One"), new CreateStackCommand([Track("B"), Track("C")], "Two"));
+        Assert.Equal(["One", "A", "Two", "B", "C", "D"], Names);
+        Apply(new MoveTrackCommand(Track("One"), 3));
+        Assert.Equal(["Two", "B", "C", "One", "A", "D"], Names);
+    }
+
+    [Fact]
+    public void A_member_moves_within_its_stack_and_stays_in_it() {
+        Apply(new AddTrackCommand("A"), new AddTrackCommand("B"), new AddTrackCommand("C"), new AddTrackCommand("D"));
+        Apply(new CreateStackCommand([Track("A"), Track("B"), Track("C")], "Stack"));
+        Apply(new MoveTrackCommand(Track("A"), 2));
+        Assert.Equal(["Stack", "B", "A", "C", "D"], Names);
+        // Out past either end it stays at that end: setTrackParent takes a track out of a stack.
+        Apply(new MoveTrackCommand(Track("A"), 4));
+        Assert.Equal(["Stack", "B", "C", "A", "D"], Names);
+        Apply(new MoveTrackCommand(Track("A"), 0));
+        Assert.Equal(["Stack", "A", "B", "C", "D"], Names);
+        Assert.Equal(Track("Stack"), state.FindTrack(Track("A"))!.ParentId);
+    }
+
+    [Fact]
+    public void A_stack_made_from_another_stacks_member_leaves_that_stacks_members_together() {
+        Apply(new AddTrackCommand("A"), new AddTrackCommand("B"), new AddTrackCommand("C"), new AddTrackCommand("D"));
+        Apply(new CreateStackCommand([Track("A"), Track("B"), Track("C")], "Outer"));
+        Apply(new CreateStackCommand([Track("B")], "Inner"));
+        Assert.Equal(["Outer", "A", "C", "Inner", "B", "D"], Names);
+    }
+
+    [Fact]
+    public void An_aux_and_a_VCA_are_added_after_a_last_stacks_members() {
+        Apply(new AddTrackCommand("A"), new AddTrackCommand("B"));
+        Apply(new CreateStackCommand([Track("A"), Track("B")], "Stack"));
+        Apply(new AddAuxCommand(Name: "Aux"), new AddVcaCommand("VCA"));
+        Assert.Equal(["Stack", "A", "B", "Aux", "VCA"], Names);
+        Assert.Null(state.FindTrack(Track("Aux"))!.ParentId);
+    }
+
     [Fact]
     public void A_stacks_strip_offsets_its_members_volume_and_its_mute_and_solo_apply_to_them() {
         Apply(new AddTrackCommand("A"), new AddTrackCommand("B"));

@@ -1,4 +1,4 @@
-import { type AudioRegion, DefaultPanner, type Track } from '@anode/api-client';
+import { type AudioRegion, DefaultPanner, StripDefaults, type Track } from '@anode/api-client';
 import { hitTest, ItemFlag, LaneIntervalIndex, RULER_HEIGHT, type TimelineView } from '@anode/timeline';
 import {
   type EditContext,
@@ -9,6 +9,7 @@ import {
   moveRegions,
   plural,
   splitPoint,
+  stretchEdge,
   trimEnd,
   trimStart
 } from './region-edit';
@@ -39,6 +40,8 @@ function region(change: Partial<AudioRegion> = {}): AudioRegion {
     fineTune: 0,
     pitchNotes: [],
     pitchSource: 'off',
+    loopTicks: 0,
+    stretch: 1,
     key: null,
     ...change
   };
@@ -143,7 +146,8 @@ describe('buildScene', () => {
       midiEffects: [],
       inputFormat: 'stereo',
       outputFormat: 'stereo',
-      panner: DefaultPanner
+      panner: DefaultPanner,
+      ...StripDefaults
     },
     instrument: null,
     midiInput: { device: null, channel: 0 },
@@ -198,5 +202,33 @@ describe('buildScene', () => {
     const hit = hitTest(scene, new LaneIntervalIndex(scene.items, 1), view, 130, RULER_HEIGHT + 50);
     expect(hit && regionIds[hit.index]).toBe('rgn_1');
     expect(trackColor('rgb(1 2 3)')).toBe(trackColor('#0090ff'));
+  });
+});
+
+describe('stretchEdge', () => {
+  const context = { framesPerTick: 25, snap: 0 };
+  const region = { startTick: 960, stretch: 1 };
+
+  it('stretches by the right edge, its start staying', () => {
+    expect(stretchEdge(region, 4800, 'end', 8640, context)).toEqual({ startTick: 960, stretch: 2 });
+    expect(stretchEdge(region, 4800, 'end', 2880, context)).toEqual({ startTick: 960, stretch: 0.5 });
+  });
+
+  it('stretches by the left edge, its end staying', () => {
+    const stretched = { startTick: 3840, stretch: 2 };
+    expect(stretchEdge(stretched, 7680, 'start', 1920, context)).toEqual({ startTick: 1920, stretch: 3 });
+  });
+
+  it('stops at the limits, the edge held back', () => {
+    expect(stretchEdge(region, 4800, 'end', 100_000, context)).toEqual({ startTick: 960, stretch: 4 });
+    expect(stretchEdge(region, 4800, 'end', 961, context)).toEqual({ startTick: 960, stretch: 0.25 });
+    expect(stretchEdge(region, 4800, 'start', 4799, context)).toEqual({ startTick: 3840, stretch: 0.25 });
+  });
+
+  it('snaps the dragged edge', () => {
+    expect(stretchEdge(region, 4800, 'end', 8700, { framesPerTick: 25, snap: 960 })).toEqual({
+      startTick: 960,
+      stretch: 2
+    });
   });
 });

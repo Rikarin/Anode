@@ -38,6 +38,50 @@ static class ProjectApi {
             )
             .WithName("SaveProject");
         project.MapPost(
+                "/save-as",
+                static Results<Ok<Job>, NotFound, ProblemHttpResult>(SaveProjectAsRequest request, Jobs jobs) =>
+                    TypedResults.Ok(jobs.SaveAs(request))
+            )
+            .WithName("SaveProjectAs")
+            .WithSummary(
+                "Queues writing the project, unsaved edits included, as a whole package at a new location and going on "
+                + "working there; the original stays as last saved. 409 when something is there; a job that fails or is "
+                + "cancelled leaves no package and the open project as it was."
+            );
+        project.MapPost(
+                "/save-copy",
+                static Results<Ok<Job>, NotFound, ProblemHttpResult>(SaveProjectAsRequest request, Jobs jobs) =>
+                    TypedResults.Ok(jobs.SaveCopy(request))
+            )
+            .WithName("SaveProjectCopy")
+            .WithSummary(
+                "Queues writing the project, unsaved edits included, as a whole package at a new location; the open "
+                + "project stays open where it is, unsaved edits and all."
+            );
+        project.MapPost(
+                "/sample-rate",
+                static Results<Ok<Job>, NotFound, ProblemHttpResult>(ChangeSampleRateRequest request, Jobs jobs) =>
+                    TypedResults.Ok(jobs.ChangeSampleRate(request))
+            )
+            .WithName("ChangeSampleRate")
+            .WithSummary(
+                "Queues changing the project's sample rate, saving it: its files are written anew beside the old ones "
+                + "(converted, or their samples kept), the last save and unsaved edits go to backups, and the project "
+                + "reopens without undo history. 422 while files are offline or tracks unreadable, 409 while it plays. "
+                + "A job that fails or is cancelled leaves the project as it was."
+            );
+        project.MapPost(
+                "/import-tracks",
+                static Results<Ok<Job>, NotFound, ProblemHttpResult>(ImportProjectTracksRequest request, Jobs jobs) =>
+                    TypedResults.Ok(jobs.ImportProjectTracks(request))
+            )
+            .WithName("ImportProjectTracks")
+            .WithSummary(
+                "Queues importing chosen tracks of a project on the server's disk, with their regions, inserts, sends "
+                + "and automation, as one undo step. The source is only read; a job that fails leaves the open project "
+                + "as it was."
+            );
+        project.MapPost(
                 "/close",
                 static Results<NoContent, NotFound>(ProjectSession session) => {
                     session.Close();
@@ -47,11 +91,19 @@ static class ProjectApi {
             .WithName("CloseProject");
         project.MapPost(
                 "/commands",
-                static Results<Ok<CommandResult>, NotFound, ProblemHttpResult>(
+                static async Task<Results<Ok<CommandResult>, NotFound, ProblemHttpResult>>(
                     CommandBatch batch,
                     ProjectSession session,
-                    HttpContext http
-                ) => Respond(http, session.Apply(batch, Revisions.Expected(http)))
+                    EngineConnection engine,
+                    HttpContext http,
+                    CancellationToken cancellationToken
+                ) => {
+                    // An insert that moves or is copied takes its state as the host has it now.
+                    var states = batch.Commands.Any(static c => c is TransferInsertCommand)
+                        ? await engine.InstrumentStatesAsync(cancellationToken)
+                        : null;
+                    return Respond(http, session.Apply(batch, Revisions.Expected(http), null, states));
+                }
             )
             .WithName("ApplyCommands")
             .WithSummary(

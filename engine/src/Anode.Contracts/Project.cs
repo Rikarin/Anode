@@ -84,8 +84,27 @@ public sealed record TimeSignature(int Numerator, int Denominator);
 
 public sealed record CycleRange(bool Enabled, long StartTick, long EndTick);
 
-/// <summary>The click: on or off, a one-bar count-in before recording, and its level in dB.</summary>
-public sealed record MetronomeSettings(bool Enabled, bool CountIn, double LevelDb);
+/// <summary>What a count-in or a pre-roll is counted in: bars or beats of the signature in force.</summary>
+[JsonConverter(typeof(JsonStringEnumConverter<MusicalUnit>))]
+public enum MusicalUnit {
+    [JsonStringEnumMemberName("bars")]
+    Bars,
+
+    [JsonStringEnumMemberName("beats")]
+    Beats
+}
+
+/// <summary>
+///     The click: on or off, a count-in before recording from a stop, and its level in dB. The count-in lasts
+///     <c>countInLength</c> (1…32) of <c>countInUnit</c>, measured at where recording starts.
+/// </summary>
+public sealed record MetronomeSettings(
+    bool Enabled,
+    bool CountIn,
+    double LevelDb,
+    int CountInLength = 1,
+    MusicalUnit CountInUnit = MusicalUnit.Bars
+);
 
 [JsonConverter(typeof(JsonStringEnumConverter<TrackKind>))]
 public enum TrackKind {
@@ -203,6 +222,19 @@ public sealed record TrackInput(int Channel, bool Stereo);
 ///         (their <c>pan</c> applies to stereo buses only). Every strip of a project from before Phase 10 is stereo in
 ///         and out with the stereo panner.
 ///     </para>
+///     <para>
+///         The strip's input stage (a track with a full strip, never the master or a VCA): <c>trimDb</c> and
+///         <c>polarityInverted</c> apply to its source before the inserts, on every channel; <c>delayMs</c> moves it in
+///         time after the inserts, before the fader (negative: earlier, which delay compensation pays for by delaying
+///         everything else). <c>dualPan</c> pans a stereo signal's two channels on their own, to <c>panLeft</c> and
+///         <c>panRight</c> (−1…1), instead of balancing it with <c>pan</c>; at −1 and 1 the signal passes as it is. They
+///         stay when it is off. A mono signal always takes <c>pan</c>, a surround output its panner.
+///     </para>
+///     <para>
+///         <c>soloSafe</c> (a track with a full strip, a bus's aux above all): the strip stays audible when others are
+///         soloed in place.
+///     </para>
+///     <para><c>meter</c> is what the strip's meter shows and where it reads the signal, the master's too.</para>
 /// </summary>
 public sealed record ChannelStrip(
     double VolumeDb,
@@ -217,7 +249,15 @@ public sealed record ChannelStrip(
     IReadOnlyList<Insert> MidiEffects,
     ChannelFormat InputFormat,
     ChannelFormat OutputFormat,
-    Panner Panner
+    Panner Panner,
+    double TrimDb,
+    bool PolarityInverted,
+    double DelayMs,
+    bool DualPan,
+    double PanLeft,
+    double PanRight,
+    bool SoloSafe,
+    StripMeter Meter
 );
 
 /// <summary>
@@ -240,6 +280,16 @@ public sealed record ChannelStrip(
 ///         <c>root</c>: each chord segment transposed, crossfaded; <c>chords</c> is MIDI only), and <c>key</c> its own
 ///         key (null: the project's at its start), which Pitch Source transposes from.
 ///     </para>
+///     <para>
+///         <c>loopTicks</c>: it plays again and again, end to end, for that many ticks after its end (0: it does not
+///         loop), the last repeat cut there, stopping where the next region on the track starts. Repeats are the region
+///         again, fades included. <c>convertLoops</c> turns them into regions of their own; a looped region is not
+///         split or joined. MIDI and pattern regions have the same.
+///     </para>
+///     <para>
+///         <c>stretch</c>: how many times longer its audio lasts (1: as recorded; 0.25…4), scaling its base map whatever
+///         its follow. A region stretched at all is warped; its file is untouched (<c>stretchRegion</c>).
+///     </para>
 /// </remarks>
 public sealed record AudioRegion(
     string Id,
@@ -261,7 +311,9 @@ public sealed record AudioRegion(
     int FineTune,
     IReadOnlyList<PitchNote> PitchNotes,
     PitchSourceMode PitchSource,
-    RegionKey? Key
+    RegionKey? Key,
+    long LoopTicks = 0,
+    double Stretch = 1
 );
 
 /// <summary>
@@ -284,9 +336,81 @@ public sealed record AudioFile(
     int Version
 );
 
-public sealed record CreateProjectRequest(string Name, string? Directory, int? SampleRate);
+/// <summary>
+///     A new project. <c>template</c> names one of <c>GET /library/project-templates</c> (left out: none). Its
+///     <c>sampleRate</c> is the one asked for, else a template's own, else the device's; a template holding audio takes
+///     only its own.
+/// </summary>
+public sealed record CreateProjectRequest(string Name, string? Directory, int? SampleRate, string? Template = null);
 
 public sealed record OpenProjectRequest(string Path);
+
+/// <summary>
+///     Where Save As or Save a Copy writes the package: a folder on the server's disk that does not exist yet
+///     (<c>.anode</c> is added when left out). Its name is the new project's.
+/// </summary>
+public sealed record SaveProjectAsRequest(string Path);
+
+/// <summary>
+///     A track of a project on the server's disk, for the Import from Project browser: how much comes with it
+///     (<c>regions</c> counts audio, MIDI, pattern and Session Player regions and take folders).
+/// </summary>
+public sealed record ProjectTrackInfo(
+    string Id,
+    string Name,
+    TrackKind Kind,
+    string Color,
+    string? ParentId,
+    int Regions,
+    int Inserts,
+    int Sends,
+    int Lanes
+);
+
+/// <summary>What a project on the server's disk holds, read without opening it.</summary>
+public sealed record ProjectContents(
+    string Name,
+    string Path,
+    int SampleRate,
+    double Tempo,
+    IReadOnlyList<ProjectTrackInfo> Tracks
+);
+
+/// <summary>
+///     Import from Project: <c>trackIds</c> of the package at <c>path</c> join the open project after its tracks, as one
+///     undo step, with their stack members and, with sends, the auxes those reach. Left out, each part comes along:
+///     <c>regions</c> (and take folders, alternatives and frozen files), <c>inserts</c>, <c>sends</c> and
+///     <c>automation</c>. Their media is copied in, converted when the source is at another rate.
+/// </summary>
+public sealed record ImportProjectTracksRequest(
+    string Path,
+    IReadOnlyList<string> TrackIds,
+    bool? Regions = null,
+    bool? Inserts = null,
+    bool? Sends = null,
+    bool? Automation = null
+);
+
+/// <summary>What happens to the audio when a project's sample rate changes.</summary>
+[JsonConverter(typeof(JsonStringEnumConverter<SampleRateChangeMode>))]
+public enum SampleRateChangeMode {
+    /// <summary>
+    ///     Every file is converted to a new file at the new rate, and frames scale with it: the project sounds the same,
+    ///     at the same pitch and tempo.
+    /// </summary>
+    [JsonStringEnumMemberName("convert")]
+    Convert,
+
+    /// <summary>
+    ///     Every file keeps its samples and is labelled with the new rate, and the tempo scales with it: every position
+    ///     stays on its sample, and the whole project plays faster or slower, audio pitch with it.
+    /// </summary>
+    [JsonStringEnumMemberName("keepSamples")]
+    KeepSamples
+}
+
+/// <summary>A change of the open project's sample rate.</summary>
+public sealed record ChangeSampleRateRequest(int SampleRate, SampleRateChangeMode Mode);
 
 /// <summary>
 ///     A project whose edits since its last save survive in an autosave, offered after a crash (docs/04-phase-3.md,

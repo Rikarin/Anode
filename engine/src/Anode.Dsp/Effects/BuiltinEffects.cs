@@ -17,8 +17,9 @@ namespace Anode.Dsp.Effects;
 
 /// <summary>
 ///     Anode's own effects: the T1 suite of the plan's §7 (docs/05-phase-4.md, workstream D), then the T2 effects
-///     (docs/07-phase-6.md, workstream D), and the T3 ones (docs/12-phase-11.md, workstream E): saturation and the
-///     Mastering Assistant. The engine lists <see cref="All" /> in its plugin catalogue.
+///     (docs/07-phase-6.md, workstream D), the T3 ones (docs/12-phase-11.md, workstream E): saturation and the Mastering
+///     Assistant, and the parity effects (docs/effects/parity.md). The engine lists <see cref="All" /> in its plugin
+///     catalogue.
 /// </summary>
 public static class BuiltinEffects {
     public static IReadOnlyList<EffectDescriptor> All { get; } = [
@@ -59,7 +60,15 @@ public static class BuiltinEffects {
         BeatBreaker.Info,
         RemixFx.Info,
         Saturation.Info,
-        MasteringAssistant.Info
+        MasteringAssistant.Info,
+        Tuner.Info,
+        TestOscillator.Info,
+        Expander.Info,
+        FrequencySpread.Info,
+        Scope.Info,
+        PhaseMeter.Info,
+        Vocoder.Info,
+        VoiceShaper.Info
     ];
 
     /// <summary>
@@ -109,6 +118,14 @@ public static class BuiltinEffects {
             RemixFx.Id => new RemixFx(),
             Saturation.Id => new Saturation(),
             MasteringAssistant.Id => new MasteringAssistant(),
+            Tuner.Id => new Tuner(),
+            TestOscillator.Id => new TestOscillator(),
+            Expander.Id => new Expander(),
+            FrequencySpread.Id => new FrequencySpread(),
+            Scope.Id => new Scope(),
+            PhaseMeter.Id => new PhaseMeter(),
+            Vocoder.Id => new Vocoder(),
+            VoiceShaper.Id => new VoiceShaper(),
             _ => null
         };
 }

@@ -71,7 +71,8 @@ export class PianoRollStore {
         controls: [],
         muted: r.muted,
         pitchSource: 'off' as const,
-        key: null
+        key: null,
+        loopTicks: 0
       }))
       .sort((a, b) => a.startTick - b.startTick);
   });

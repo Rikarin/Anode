@@ -439,6 +439,14 @@ public sealed class HostSync(HostLink link, SegmentPool pool, ILogger logger, Se
             || old.Mute != now.Mute
             || old.Solo != now.Solo
             || old.Panner != now.Panner
+            || old.Trim != now.Trim
+            || old.DelayFrames != now.DelayFrames
+            || old.DualPan != now.DualPan
+            || old.PanLeft != now.PanLeft
+            || old.PanRight != now.PanRight
+            || old.SoloSafe != now.SoloSafe
+            || old.MeterType != now.MeterType
+            || old.MeterTap != now.MeterTap
                 ? [new SetStripMessage(id, now)]
                 : [];
         return levels.Concat(
@@ -505,18 +513,24 @@ public sealed class HostSync(HostLink link, SegmentPool pool, ILogger logger, Se
                     _ => "all"
                 },
                 mixer.LowLatency,
-                mixer.LowLatencyLimitMs
+                mixer.LowLatencyLimitMs,
+                (EnginePanLaw)mixer.PanLaw,
+                (EngineSoloMode)mixer.SoloMode
             );
         }
 
         if (before is null
             || before.Settings.Metronome.Enabled != settings.Metronome.Enabled
             || before.Settings.Metronome.LevelDb != settings.Metronome.LevelDb
-            || before.Settings.Metronome.CountIn != settings.Metronome.CountIn) {
+            || before.Settings.Metronome.CountIn != settings.Metronome.CountIn
+            || before.Settings.Metronome.CountInLength != settings.Metronome.CountInLength
+            || before.Settings.Metronome.CountInUnit != settings.Metronome.CountInUnit) {
             yield return new SetMetronomeMessage(
                 settings.Metronome.Enabled,
                 Units.DbToGain(settings.Metronome.LevelDb),
-                settings.Metronome.CountIn
+                settings.Metronome.CountIn,
+                settings.Metronome.CountInLength,
+                settings.Metronome.CountInUnit == MusicalUnit.Beats
             );
         }
     }

@@ -322,6 +322,62 @@ public sealed class PackageTests : IDisposable {
     }
 
     [Fact]
+    public void A_schema_11_package_loads_with_regions_that_do_not_loop_or_stretch() {
+        var (state, _, _) = RandomProjects.Build(3, 40);
+        var settings = state.Settings;
+        state = state.Apply(
+            [
+                new SettingsChanged(
+                    settings with {
+                        Metronome = settings.Metronome with { CountInLength = 1, CountInUnit = MusicalUnit.Bars },
+                        Recording = settings.Recording with { PreRollLength = 0, PreRollUnit = MusicalUnit.Bars }
+                    }
+                ),
+                ..state.Regions.Values.Select(static r => new RegionUpserted(r with { LoopTicks = 0, Stretch = 1 })),
+                ..state.MidiRegions.Values.Select(static r => new MidiRegionUpserted(r with { LoopTicks = 0 })),
+                ..state.PatternRegions.Values.Select(static r => new PatternRegionUpserted(r with { LoopTicks = 0 }))
+            ]
+        );
+        Assert.NotEmpty(state.PatternRegions);
+        ProjectPackage.Save(folder, state);
+        var path = Path.Combine(folder, "project.json");
+        var root = JsonNode.Parse(File.ReadAllText(path))!.AsObject();
+        root["schemaVersion"] = 11;
+        root["settings"]!["metronome"]!.AsObject().Remove("countInLength");
+        root["settings"]!["metronome"]!.AsObject().Remove("countInUnit");
+        root["settings"]!["recording"]!.AsObject().Remove("preRollLength");
+        root["settings"]!["recording"]!.AsObject().Remove("preRollUnit");
+        File.WriteAllText(path, root.ToJsonString());
+        foreach (var file in Directory.EnumerateFiles(Path.Combine(folder, "tracks"))) {
+            var json = JsonNode.Parse(File.ReadAllText(file))!.AsObject();
+            json["schemaVersion"] = 11;
+            foreach (var holder in json["track"]!["alternatives"]!.AsArray().Append(json).OfType<JsonObject>()) {
+                foreach (var list in (string[])["regions", "midiRegions", "patternRegions"]) {
+                    foreach (var region in (holder[list] as JsonArray ?? []).OfType<JsonObject>()) {
+                        region.Remove("loopTicks");
+                        region.Remove("stretch");
+                    }
+                }
+            }
+
+            File.WriteAllText(file, json.ToJsonString());
+        }
+
+        var loaded = ProjectPackage.Load(folder);
+        Assert.Equal(RandomProjects.Json(state), RandomProjects.Json(loaded));
+        Assert.All(loaded.Regions.Values, static r => Assert.Equal(0, r.LoopTicks));
+        Assert.All(loaded.Regions.Values, static r => Assert.Equal(1, r.Stretch));
+        Assert.Equal(
+            (1, MusicalUnit.Bars),
+            (loaded.Settings.Metronome.CountInLength, loaded.Settings.Metronome.CountInUnit)
+        );
+        Assert.Equal(0, loaded.Settings.Recording.PreRollLength);
+        ProjectPackage.Save(folder, loaded);
+        var saved = JsonNode.Parse(File.ReadAllText(path))!.AsObject();
+        Assert.Equal(PackageMigrations.CurrentSchemaVersion, saved["schemaVersion"]!.GetValue<int>());
+    }
+
+    [Fact]
     public void Phase_9_content_survives_the_package_format_and_damage_is_left_out() {
         var ids = new SequentialIds();
         var state = Edits.Apply(
@@ -460,6 +516,32 @@ public sealed class PackageTests : IDisposable {
     }
 
     [Fact]
+    public void A_schema_11_package_opens_without_loops_stretches_or_a_pre_roll_and_saves_as_the_current_schema() {
+        CopyFixture("Schema11.anode");
+        var state = ProjectPackage.Load(folder);
+        Assert.Equal(("prj_schema11fixture", "Schema 11 Song"), (state.Id, state.Name));
+        var region = Assert.Single(state.Regions.Values);
+        Assert.Equal((960L, 0L, 1.0), (region.StartTick, region.LoopTicks, region.Stretch));
+        Assert.Equal(0, Assert.Single(state.MidiRegions.Values).LoopTicks);
+        Assert.Equal(0, Assert.Single(state.PatternRegions.Values).LoopTicks);
+        Assert.Equal(
+            new MetronomeSettings(false, true, -6, 1, MusicalUnit.Bars),
+            state.Settings.Metronome
+        );
+        Assert.Equal(
+            (0, MusicalUnit.Bars, 3840L),
+            (state.Settings.Recording.PreRollLength, state.Settings.Recording.PreRollUnit,
+                state.Settings.Recording.PunchInTick)
+        );
+
+        ProjectPackage.Save(folder, state);
+        var saved = JsonNode.Parse(File.ReadAllText(Path.Combine(folder, "project.json")))!;
+        Assert.Equal(PackageMigrations.CurrentSchemaVersion, saved["schemaVersion"]!.GetValue<int>());
+        Assert.Equal(1, saved["settings"]!["metronome"]!["countInLength"]!.GetValue<int>());
+        Assert.Equal(RandomProjects.Json(state), RandomProjects.Json(ProjectPackage.Load(folder)));
+    }
+
+    [Fact]
     public void A_Phase_2_package_opens_with_global_tracks_of_its_tempo_and_signature_and_saves_as_the_current_schema() {
         CopyFixture("Phase2.anode");
         var state = ProjectPackage.Load(folder);
@@ -502,10 +584,69 @@ public sealed class PackageTests : IDisposable {
     }
 
     [Fact]
+    public void A_package_saved_with_a_track_among_a_stacks_members_reads_them_together() {
+        var ids = new SequentialIds();
+        var state = ProjectDefaults.NewProject("prj_1", "Song", 48_000);
+        foreach (var name in (string[])["A", "B", "C"]) {
+            state = Edits.Apply(state, new AddTrackCommand(name), ids).State;
+        }
+
+        state = Edits.Apply(state, new CreateStackCommand([state.Tracks[0].Id, state.Tracks[1].Id], "Stack"), ids)
+            .State;
+        ProjectPackage.Save(folder, state);
+        var path = Path.Combine(folder, "project.json");
+        var root = JsonNode.Parse(File.ReadAllText(path))!.AsObject();
+        var order = state.Tracks.Select(static t => t.Id).ToArray();
+        root["tracks"] = new JsonArray(order[0], order[1], order[3], order[2]);
+        File.WriteAllText(path, root.ToJsonString());
+        Assert.Equal(["Stack", "A", "B", "C"], ProjectPackage.Load(folder).Tracks.Select(static t => t.Name));
+    }
+
+    [Fact]
+    public void A_Phase_11_package_reads_its_alternatives_without_pattern_regions_and_keeps_the_live_ones() {
+        CopyFixture("Phase11.anode");
+        var state = ProjectPackage.Load(folder);
+        var keys = state.FindTrack("trk_000001")!;
+        Assert.Equal(["A", "Sparse"], keys.Alternatives.Select(static a => a.Name));
+        Assert.All(keys.Alternatives, static a => Assert.Empty(a.PatternRegions));
+        Assert.Equal("mid_000002", Assert.Single(keys.Alternatives[0].MidiRegions).Id);
+        // In schema 11 the pattern region stayed live whichever alternative was selected, and it still is.
+        Assert.Equal(7680, Assert.Single(state.PatternRegions.Values).StartTick);
+
+        ProjectPackage.Save(folder, state);
+        var track = JsonNode.Parse(File.ReadAllText(Path.Combine(folder, "tracks", "trk_000001.json")))!;
+        Assert.Equal(PackageMigrations.CurrentSchemaVersion, track["schemaVersion"]!.GetValue<int>());
+        Assert.Empty(track["track"]!["alternatives"]![0]!["patternRegions"]!.AsArray());
+        Assert.Equal(RandomProjects.Json(state), RandomProjects.Json(ProjectPackage.Load(folder)));
+    }
+
+    [Fact]
+    public void An_alternatives_pattern_regions_survive_a_save_and_a_damaged_one_is_left_out() {
+        var ids = new SequentialIds();
+        var state = ProjectDefaults.NewProject("prj_1", "Song", 48_000);
+        state = Edits.Apply(state, new AddTrackCommand("Keys", Kind: TrackKind.Instrument), ids, RandomProjects.Plugins)
+            .State;
+        var keys = state.Tracks[0].Id;
+        state = Edits.Apply(state, new AddPatternRegionCommand(keys, 0, 3840), ids).State;
+        var region = Assert.Single(state.PatternRegions.Values);
+        state = Edits.Apply(state, new NewTrackAlternativeCommand(keys), ids).State;
+        ProjectPackage.Save(folder, state);
+        var loaded = ProjectPackage.Load(folder);
+        Assert.Equal(RandomProjects.Json(state), RandomProjects.Json(loaded));
+        Assert.Equal(region.Id, Assert.Single(loaded.Tracks[0].Alternatives[0].PatternRegions).Id);
+
+        var path = Path.Combine(folder, "tracks", keys + ".json");
+        var json = JsonNode.Parse(File.ReadAllText(path))!.AsObject();
+        json["track"]!["alternatives"]![0]!["patternRegions"]![0]!["pattern"] = null;
+        File.WriteAllText(path, json.ToJsonString());
+        Assert.Empty(ProjectPackage.Load(folder).Tracks[0].Alternatives[0].PatternRegions);
+    }
+
+    [Fact]
     public void A_Phase_3_package_opens_with_plain_channel_strips_and_saves_as_the_current_schema() {
         CopyFixture("Phase3.anode");
         var state = ProjectPackage.Load(folder);
-        Assert.Equal(new(PdcMode.All, false, 10), state.Settings.Mixer);
+        Assert.Equal(ProjectDefaults.Mixer, state.Settings.Mixer);
         Assert.Empty(state.Groups);
         Assert.Empty(state.Automation);
         Assert.Equal(
@@ -684,6 +825,106 @@ public sealed class PackageTests : IDisposable {
         ProjectPackage.SaveStates(folder, new Dictionary<string, byte[]> { [b] = [5] });
         Assert.False(File.Exists(Path.Combine(folder, "Plugin States", a + ".bin")));
         Assert.Equal([b], ProjectPackage.LoadStates(folder, state).Keys);
+    }
+
+    [Fact]
+    public void A_schema_11_package_keeps_its_sound_with_the_strip_input_stage_at_its_defaults() {
+        CopyFixture("Schema11.anode");
+        var root = JsonNode.Parse(File.ReadAllText(Path.Combine(folder, "project.json")))!;
+        Assert.Equal(11, root["schemaVersion"]!.GetValue<int>());
+        var state = ProjectPackage.Load(folder);
+        Assert.Equal(PanLaw.Minus3DbCompensated, state.Settings.Mixer.PanLaw);
+        Assert.NotEmpty(state.Tracks);
+        foreach (var strip in state.Tracks.Select(static t => t.Strip).Append(state.Master)) {
+            Assert.Equal(
+                (0d, false, 0d, false, -1d, 1d),
+                (strip.TrimDb, strip.PolarityInverted, strip.DelayMs, strip.DualPan, strip.PanLeft, strip.PanRight)
+            );
+        }
+
+        ProjectPackage.Save(folder, state);
+        var saved = JsonNode.Parse(File.ReadAllText(Path.Combine(folder, "project.json")))!;
+        Assert.Equal(PackageMigrations.CurrentSchemaVersion, saved["schemaVersion"]!.GetValue<int>());
+        Assert.Equal("minus3DbCompensated", saved["settings"]!["mixer"]!["panLaw"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public void The_strip_input_stage_and_pan_law_survive_the_package_and_damage_is_clamped() {
+        var ids = new SequentialIds();
+        var state = Edits.Apply(
+                ProjectDefaults.NewProject("prj_1", "Song", 48_000),
+                [new AddTrackCommand("Gtr"), new SetMixerSettingsCommand(PanLaw: PanLaw.Minus6Db)],
+                ids
+            )
+            .State;
+        var gtr = state.Tracks[0].Id;
+        state = Edits.Apply(
+                state,
+                [
+                    new SetStripCommand(
+                        gtr,
+                        TrimDb: -3,
+                        PolarityInverted: true,
+                        DelayMs: -12.5,
+                        DualPan: true,
+                        PanLeft: 0.25
+                    )
+                ],
+                ids
+            )
+            .State;
+        ProjectPackage.Save(folder, state);
+        var loaded = ProjectPackage.Load(folder);
+        Assert.Equal(PanLaw.Minus6Db, loaded.Settings.Mixer.PanLaw);
+        var strip = loaded.Tracks[0].Strip;
+        Assert.Equal(
+            (-3d, true, -12.5, true, 0.25, 1d),
+            (strip.TrimDb, strip.PolarityInverted, strip.DelayMs, strip.DualPan, strip.PanLeft, strip.PanRight)
+        );
+
+        var path = Path.Combine(folder, "tracks", gtr + ".json");
+        var track = JsonNode.Parse(File.ReadAllText(path))!;
+        track["track"]!["strip"]!["trimDb"] = 900;
+        track["track"]!["strip"]!["delayMs"] = -9000;
+        track["track"]!["strip"]!["panRight"] = 7;
+        File.WriteAllText(path, track.ToJsonString());
+        strip = ProjectPackage.Load(folder).Tracks[0].Strip;
+        Assert.Equal(
+            (Edits.MaxTrimDb, -Edits.MaxStripDelayMs, 1d),
+            (strip.TrimDb, strip.DelayMs, strip.PanRight)
+        );
+    }
+
+    [Fact]
+    public void A_schema_11_package_has_no_solo_safe_strips_and_solos_in_place() {
+        CopyFixture("Schema11.anode");
+        var root = JsonNode.Parse(File.ReadAllText(Path.Combine(folder, "project.json")))!;
+        Assert.Equal(11, root["schemaVersion"]!.GetValue<int>());
+        var state = ProjectPackage.Load(folder);
+        Assert.Equal(SoloMode.InPlace, state.Settings.Mixer.SoloMode);
+        Assert.NotEmpty(state.Tracks);
+        Assert.All(state.Tracks, static t => Assert.False(t.Strip.SoloSafe));
+        ProjectPackage.Save(folder, state);
+        var saved = JsonNode.Parse(File.ReadAllText(Path.Combine(folder, "project.json")))!;
+        Assert.Equal(PackageMigrations.CurrentSchemaVersion, saved["schemaVersion"]!.GetValue<int>());
+        Assert.Equal("inPlace", saved["settings"]!["mixer"]!["soloMode"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public void A_schema_11_package_keeps_its_post_fader_peak_meters() {
+        CopyFixture("Schema11.anode");
+        var root = JsonNode.Parse(File.ReadAllText(Path.Combine(folder, "project.json")))!;
+        Assert.Equal(11, root["schemaVersion"]!.GetValue<int>());
+        var state = ProjectPackage.Load(folder);
+        Assert.NotEmpty(state.Tracks);
+        foreach (var strip in state.Tracks.Select(static t => t.Strip).Append(state.Master)) {
+            Assert.Equal(StripMeter.Default, strip.Meter);
+        }
+
+        ProjectPackage.Save(folder, state);
+        var saved = JsonNode.Parse(File.ReadAllText(Path.Combine(folder, "project.json")))!;
+        Assert.Equal(PackageMigrations.CurrentSchemaVersion, saved["schemaVersion"]!.GetValue<int>());
+        Assert.Equal("postFader", saved["master"]!["meter"]!["tap"]!.GetValue<string>());
     }
 
     void CopyFixture(string name) {

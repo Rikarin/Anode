@@ -10,6 +10,13 @@ namespace Anode.Model.Editing;
 /// </summary>
 public static partial class Edits {
     public const int MaxFlexMarkers = 10_000;
+
+    /// <summary>How much shorter a region may stretch to.</summary>
+    public const double MinStretch = 0.25;
+
+    /// <summary>How much longer a region may stretch to.</summary>
+    public const double MaxStretch = 4;
+
     public const int MaxPitchNotes = 10_000;
     public const int MaxRegionTranspose = 36;
     public const int MaxFineTune = 50;
@@ -33,6 +40,7 @@ public static partial class Edits {
             SetTrackFlexCommand c => SetTrackFlex(state, c),
             SetRegionFlexCommand c => SetRegionFlex(state, c, analysis),
             SetFlexMarkersCommand c => SetFlexMarkers(state, c),
+            StretchRegionCommand c => StretchRegion(state, c),
             QuantizeAudioCommand c => QuantizeAudio(state, c, analysis),
             SetPitchNotesCommand c => SetPitchNotes(state, c),
             FlexPitchToMidiCommand c => FlexPitchToMidi(state, c, ids, plugins),
@@ -104,6 +112,42 @@ public static partial class Edits {
 
         ops.Add(new RegionUpserted(changed));
         return ops;
+    }
+
+    /// <summary>
+    ///     Sets a region's stretch (and its start, for a drag of its left edge): its flex markers keep their place in the
+    ///     audio, and its fades, in project frames, are cut to what still fits.
+    /// </summary>
+    static DeltaOp[] StretchRegion(ProjectState state, StretchRegionCommand c) {
+        if (state.MidiRegions.ContainsKey(c.RegionId ?? string.Empty)) {
+            throw new EditException($"Region '{c.RegionId}' is a MIDI region: only audio stretches.");
+        }
+
+        var region = RegionOf(state, c.RegionId ?? string.Empty);
+        CheckStretch(c.Stretch);
+        if (c.StartTick is { } start) {
+            CheckTick(start, "start");
+        }
+
+        var scale = c.Stretch / region.Stretch;
+        var stretched = region with {
+            Stretch = c.Stretch,
+            StartTick = c.StartTick ?? region.StartTick,
+            FlexMarkers = [
+                ..region.FlexMarkers.Select(m => m with { Tick = (long)Math.Round(m.Tick * scale) })
+            ]
+        };
+        var span = SpanSamples(state, stretched);
+        var fadeIn = Math.Min(region.FadeIn, span);
+        return [
+            new RegionUpserted(stretched with { FadeIn = fadeIn, FadeOut = Math.Min(region.FadeOut, span - fadeIn) })
+        ];
+    }
+
+    static void CheckStretch(double stretch) {
+        if (!(stretch is >= MinStretch and <= MaxStretch)) {
+            throw new EditException($"A region stretches {MinStretch}…{MaxStretch} times, not {stretch}.");
+        }
     }
 
     static DeltaOp[] SetFlexMarkers(ProjectState state, SetFlexMarkersCommand c) {

@@ -7,6 +7,7 @@ import {
   EmptyProjectScore,
   type Project,
   type ProjectDelta,
+  StripDefaults,
   type Track
 } from '@anode/api-client';
 import { EventStream } from '../core/events';
@@ -36,7 +37,8 @@ function track(id: string, name = id): Track {
       midiEffects: [],
       inputFormat: 'stereo',
       outputFormat: 'stereo',
-      panner: DefaultPanner
+      panner: DefaultPanner,
+      ...StripDefaults
     },
     instrument: null,
     midiInput: { device: null, channel: 0 },
@@ -79,6 +81,8 @@ function region(id: string, trackId: string, startTick = 0): AudioRegion {
     fineTune: 0,
     pitchNotes: [],
     pitchSource: 'off',
+    loopTicks: 0,
+    stretch: 1,
     key: null
   };
 }
@@ -95,14 +99,28 @@ function snapshot(revision = 3): Project {
       tempo: 120,
       signature: { numerator: 4, denominator: 4 },
       cycle: { enabled: false, startTick: 0, endTick: 15_360 },
-      metronome: { enabled: false, countIn: false, levelDb: -6 },
+      metronome: { enabled: false, countIn: false, levelDb: -6, countInLength: 1, countInUnit: 'bars' },
       endTick: 122_880,
       mergeMidiRecording: false,
       tempoEvents: [{ tick: 0, bpm: 120, curve: 'step', shape: 0 }],
       signatures: [{ tick: 0, numerator: 4, denominator: 4 }],
       keys: [{ tick: 0, tonic: 0, mode: 'major' }],
-      recording: { cycleMode: 'takeFolder', replace: false, autopunch: false, punchInTick: 0, punchOutTick: 15_360 },
-      mixer: { pdc: 'all', lowLatency: false, lowLatencyLimitMs: 10 },
+      recording: {
+        cycleMode: 'takeFolder',
+        replace: false,
+        autopunch: false,
+        punchInTick: 0,
+        punchOutTick: 15_360,
+        preRollLength: 0,
+        preRollUnit: 'bars'
+      },
+      mixer: {
+        pdc: 'all',
+        lowLatency: false,
+        lowLatencyLimitMs: 10,
+        panLaw: 'minus3DbCompensated',
+        soloMode: 'inPlace'
+      },
       smartTempo: { mode: 'keep', defaultFollow: 'off', analyzeImports: true },
       varispeed: { enabled: false, mode: 'speedOnly', speed: 1 },
       sync: { source: 'internal', destinations: [], frameRate: 'fps25', startOffsetSeconds: 0, linkStartStop: false },
@@ -121,7 +139,8 @@ function snapshot(revision = 3): Project {
       midiEffects: [],
       inputFormat: 'stereo',
       outputFormat: 'stereo',
-      panner: DefaultPanner
+      panner: DefaultPanner,
+      ...StripDefaults
     },
     tracks: [track('trk_1'), track('trk_2')],
     regions: [region('rgn_1', 'trk_1')],
@@ -201,7 +220,8 @@ describe('ProjectStore deltas', () => {
             midiEffects: [],
             inputFormat: 'stereo',
             outputFormat: 'stereo',
-            panner: DefaultPanner
+            panner: DefaultPanner,
+            ...StripDefaults
           }
         },
         { op: 'projectRenamed', name: 'Renamed' }

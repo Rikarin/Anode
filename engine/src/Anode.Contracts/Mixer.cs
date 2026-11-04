@@ -103,10 +103,109 @@ public enum PdcMode {
 }
 
 /// <summary>
-///     Plugin delay compensation, and low-latency mode: while it is on, plugins on the path of record-armed or
-///     monitored tracks whose latency exceeds <c>lowLatencyLimitMs</c> are bypassed.
+///     How a mono signal's level follows its pan: what the centre is, relative to a hard pan. Stereo signals are balanced
+///     (the far side falls linearly) whatever the law; dual pan takes the law's shape with a hard pan at unity.
 /// </summary>
-public sealed record MixerSettings(PdcMode Pdc, bool LowLatency, double LowLatencyLimitMs);
+[JsonConverter(typeof(JsonStringEnumConverter<PanLaw>))]
+public enum PanLaw {
+    /// <summary>The centre as loud as a hard pan: the far side falls linearly, the near side stays at unity.</summary>
+    [JsonStringEnumMemberName("zeroDb")]
+    ZeroDb,
+
+    /// <summary>Constant power: a hard pan at unity, the centre −3 dB.</summary>
+    [JsonStringEnumMemberName("minus3Db")]
+    Minus3Db,
+
+    /// <summary>Constant power with the centre at unity: a hard pan +3 dB (Logic's default, and Anode's).</summary>
+    [JsonStringEnumMemberName("minus3DbCompensated")]
+    Minus3DbCompensated,
+
+    /// <summary>Between constant power and linear: a hard pan at unity, the centre −4.5 dB.</summary>
+    [JsonStringEnumMemberName("minus4Point5Db")]
+    Minus4Point5Db,
+
+    /// <summary>Linear: a hard pan at unity, the centre −6 dB.</summary>
+    [JsonStringEnumMemberName("minus6Db")]
+    Minus6Db
+}
+
+/// <summary>What a strip's meter shows.</summary>
+[JsonConverter(typeof(JsonStringEnumConverter<MeterType>))]
+public enum MeterType {
+    /// <summary>Sample peaks.</summary>
+    [JsonStringEnumMemberName("peak")]
+    Peak,
+
+    /// <summary>True RMS over 300 ms: a sine reads 3 dB under its peak.</summary>
+    [JsonStringEnumMemberName("rms")]
+    Rms,
+
+    /// <summary>K-20: RMS over 600 ms, a sine reading its peak (AES17), 0 on the scale at −20 dBFS.</summary>
+    [JsonStringEnumMemberName("k20")]
+    K20,
+
+    /// <summary>K-14: as K-20, 0 on the scale at −14 dBFS.</summary>
+    [JsonStringEnumMemberName("k14")]
+    K14,
+
+    /// <summary>K-12: as K-20, 0 on the scale at −12 dBFS.</summary>
+    [JsonStringEnumMemberName("k12")]
+    K12,
+
+    /// <summary>Momentary loudness (BS.1770, 400 ms). A mono signal before the pan counts as one channel.</summary>
+    [JsonStringEnumMemberName("lufs")]
+    Lufs
+}
+
+/// <summary>Where a strip's meter reads the signal.</summary>
+[JsonConverter(typeof(JsonStringEnumConverter<MeterTap>))]
+public enum MeterTap {
+    /// <summary>The source after trim, before the inserts.</summary>
+    [JsonStringEnumMemberName("input")]
+    Input,
+
+    /// <summary>After the inserts, before the fader.</summary>
+    [JsonStringEnumMemberName("preFader")]
+    PreFader,
+
+    /// <summary>After fader and pan, what goes to the output.</summary>
+    [JsonStringEnumMemberName("postFader")]
+    PostFader
+}
+
+/// <summary>A strip's meter: its type and tap point (a new strip's: peak, post-fader).</summary>
+public sealed record StripMeter(MeterType Type, MeterTap Tap) {
+    public static StripMeter Default { get; } = new(MeterType.Peak, MeterTap.PostFader);
+}
+
+/// <summary>What a strip's solo does.</summary>
+[JsonConverter(typeof(JsonStringEnumConverter<SoloMode>))]
+public enum SoloMode {
+    /// <summary>Solo in place: everything else falls silent, in the mix and in a bounce.</summary>
+    [JsonStringEnumMemberName("inPlace")]
+    InPlace,
+
+    /// <summary>After-fader listen: the mix stays as it is; the monitors hear the soloed strips after fader and pan.</summary>
+    [JsonStringEnumMemberName("afl")]
+    Afl,
+
+    /// <summary>Pre-fader listen: the mix stays as it is; the monitors hear the soloed strips before their faders.</summary>
+    [JsonStringEnumMemberName("pfl")]
+    Pfl
+}
+
+/// <summary>
+///     Plugin delay compensation, and low-latency mode: while it is on, plugins on the path of record-armed or
+///     monitored tracks whose latency exceeds <c>lowLatencyLimitMs</c> are bypassed. <c>panLaw</c> is the project's pan
+///     law, <c>soloMode</c> what solo does.
+/// </summary>
+public sealed record MixerSettings(
+    PdcMode Pdc,
+    bool LowLatency,
+    double LowLatencyLimitMs,
+    PanLaw PanLaw,
+    SoloMode SoloMode
+);
 
 /// <summary>A user name for an input, output pair or bus (Logic's I/O Labels).</summary>
 public sealed record IoLabel(int Number, string Name);
@@ -123,6 +222,12 @@ public sealed record SavePatchRequest(string TrackId, string Name, string Catego
 
 /// <summary>Opens (or closes) a plugin's own editor window: an insert, or with no <c>insertId</c> the instrument.</summary>
 public sealed record PluginEditorRequest(string? TrackId, string? InsertId, bool Open);
+
+/// <summary>An insert a plugin window shows; <c>trackId</c> null is the master.</summary>
+public sealed record InsertDisplayTarget(string? TrackId, string InsertId);
+
+/// <summary>The inserts whose live display (a spectrum, a scope, band gains) an editor shows now.</summary>
+public sealed record InsertDisplayRequest(IReadOnlyList<InsertDisplayTarget> Inserts);
 
 /// <summary>
 ///     A Scripter factory script (Phase 7, <c>GET /library/scripts</c>): its stable id (<c>factory.…</c>), name, a
