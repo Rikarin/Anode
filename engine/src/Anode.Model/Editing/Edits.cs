@@ -511,6 +511,14 @@ public static partial class Edits {
             || c.PanLeft is not null
             || c.PanRight is not null
             || c.SoloSafe is not null;
+        if (c.MeterType is { } type && !Enum.IsDefined(type)) {
+            throw new EditException($"Unknown meter type {type}.");
+        }
+
+        if (c.MeterTap is { } tap && !Enum.IsDefined(tap)) {
+            throw new EditException($"Unknown meter tap point {tap}.");
+        }
+
         if (c.TrackId is null) {
             return input
                 ? throw new EditException("The master has no trim, polarity, delay, dual pan or solo safe.")
@@ -524,6 +532,10 @@ public static partial class Edits {
         var track = TrackOf(state, c.TrackId);
         if (input && !HasAudioStrip(track.Kind)) {
             throw new EditException($"A {Kind(track.Kind)} track has no trim, polarity, delay, dual pan or solo safe.");
+        }
+
+        if ((c.MeterType is not null || c.MeterTap is not null) && !HasAudioStrip(track.Kind)) {
+            throw new EditException($"A {Kind(track.Kind)} track has no meter.");
         }
 
         List<DeltaOp> ops =
@@ -609,7 +621,8 @@ public static partial class Edits {
             DualPan = c.DualPan ?? strip.DualPan,
             PanLeft = c.PanLeft ?? strip.PanLeft,
             PanRight = c.PanRight ?? strip.PanRight,
-            SoloSafe = c.SoloSafe ?? strip.SoloSafe
+            SoloSafe = c.SoloSafe ?? strip.SoloSafe,
+            Meter = new(c.MeterType ?? strip.Meter.Type, c.MeterTap ?? strip.Meter.Tap)
         };
 
     static DeltaOp[] AddRegion(ProjectState state, AddRegionCommand c, IIdSource ids) {

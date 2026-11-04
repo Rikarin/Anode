@@ -5,6 +5,7 @@ import {
   type ElementRef,
   afterNextRender,
   booleanAttribute,
+  computed,
   inject,
   input,
   signal,
@@ -95,6 +96,13 @@ export class MeterBallistics {
           <div class="meter-gradient absolute inset-0"></div>
           <div #cover class="bg-meter-unlit absolute inset-0 origin-top" style="transform: scaleY(1)"></div>
           <div #hold class="bg-meter-peak absolute inset-x-0 top-0 h-0.5 opacity-0"></div>
+          @if (markPercent() !== null) {
+            <div
+              class="bg-foreground absolute inset-x-0 h-px"
+              data-testid="meter-mark"
+              [style.bottom.%]="markPercent()"
+            ></div>
+          }
         </div>
       }
     </div>
@@ -112,9 +120,15 @@ export class AnPeakMeter {
   readonly label = input('Level');
   /** One bar instead of two. */
   readonly mono = input(false, { transform: booleanAttribute });
+  /** A line on the scale at this level in dBFS (a K-system meter's 0); null: none. */
+  readonly markDb = input<number | null>(null);
 
   protected readonly floor = MeterFloorDb;
   protected readonly clipped = signal(false);
+  protected readonly markPercent = computed(() => {
+    const mark = this.markDb();
+    return mark === null ? null : meterFraction(mark) * 100;
+  });
   protected readonly channels = () => (this.mono() ? [0] : [0, 1]);
 
   constructor() {

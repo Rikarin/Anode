@@ -797,6 +797,20 @@ public sealed partial class EngineConnection(
         return new(state, position, map.TickAtSample(position, rate), rate);
     }
 
+    /// <summary>A meter's reading: its peaks, and the levels its type publishes.</summary>
+    static TrackMeter Meter(string id, MeterEntry entry, IReadOnlyList<float>? peaks) {
+        var rms = (entry.Levels & MeterEntry.HasRms) != 0;
+        return new(
+            id,
+            entry.PeakLeft,
+            entry.PeakRight,
+            peaks,
+            rms ? entry.RmsLeft : null,
+            rms ? entry.RmsRight : null,
+            (entry.Levels & MeterEntry.HasLufs) != 0 ? entry.Lufs : null
+        );
+    }
+
     /// <summary>The frame's meters by domain track id, and whether any shows a level.</summary>
     static (MetersEvent Meters, bool Live) Meters(TelemetryFrame frame, OpenProjectView view) {
         var meters = new List<TrackMeter>(frame.Tracks.Length);
@@ -805,12 +819,12 @@ public sealed partial class EngineConnection(
             var entry = frame.Tracks[i];
             if (view.Ids.TrackOf(entry.TrackId) is { } id) {
                 var peaks = i < frame.TrackPeaks.Length ? frame.TrackPeaks[i] : null;
-                meters.Add(new(id, entry.PeakLeft, entry.PeakRight, peaks));
+                meters.Add(Meter(id, entry, peaks));
                 live |= entry.PeakLeft > 0 || entry.PeakRight > 0 || peaks?.Any(static p => p > 0) == true;
             }
         }
 
-        var master = new TrackMeter("master", frame.Master.PeakLeft, frame.Master.PeakRight, frame.MasterPeaks);
+        var master = Meter("master", frame.Master, frame.MasterPeaks);
         live |= frame.MasterPeaks?.Any(static p => p > 0) == true;
         return (new(meters, master), live);
     }

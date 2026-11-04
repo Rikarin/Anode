@@ -70,7 +70,9 @@ public static class Strips {
             strip.DualPan,
             (float)strip.PanLeft,
             (float)strip.PanRight,
-            full && track is not null && strip.SoloSafe
+            full && track is not null && strip.SoloSafe,
+            (EngineMeterType)strip.Meter.Type,
+            (EngineMeterTap)strip.Meter.Tap
         );
     }
 

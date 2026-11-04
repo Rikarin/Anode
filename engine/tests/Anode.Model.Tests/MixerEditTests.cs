@@ -81,6 +81,24 @@ public sealed class MixerEditTests {
     }
 
     [Fact]
+    public void A_strip_chooses_its_meter_the_master_too_and_a_VCA_has_none() {
+        Apply(new AddTrackCommand("Gtr"), new AddVcaCommand("V"));
+        Apply(
+            new SetStripCommand(T("Gtr").Id, MeterType: MeterType.K14),
+            new SetStripCommand(T("Gtr").Id, MeterTap: MeterTap.PreFader),
+            new SetStripCommand(MeterType: MeterType.Lufs)
+        );
+        Assert.Equal(new(MeterType.K14, MeterTap.PreFader), T("Gtr").Strip.Meter);
+        Assert.Equal(new(MeterType.Lufs, MeterTap.PostFader), state.Master.Meter);
+        var ids2 = EngineIds.Empty.With(state);
+        var engine = Strips.Engine(state, T("Gtr"), ids2);
+        Assert.Equal((Ipc.EngineMeterType.K14, Ipc.EngineMeterTap.PreFader), (engine.MeterType, engine.MeterTap));
+        Assert.Equal(Ipc.EngineMeterType.Lufs, Strips.Engine(state, null, ids2).MeterType);
+        Assert.Contains("no meter", Fails(new SetStripCommand(T("V").Id, MeterType: MeterType.Rms)), StringComparison.Ordinal);
+        Assert.Contains("meter type", Fails(new SetStripCommand(MeterType: (MeterType)9)), StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Group_members_that_link_pan_follow_a_dual_pan() {
         Apply(
             new AddTrackCommand("A"),

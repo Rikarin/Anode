@@ -278,6 +278,9 @@ public sealed partial class EngineController {
         }
 
         Engine.EnsureObjects(plan.Objects.Length);
+        foreach (var node in plan.Order.Append(plan.Master)) {
+            node.Channel.Strip.PrepareMeter(Options.SampleRate);
+        }
     }
 
     /// <summary>

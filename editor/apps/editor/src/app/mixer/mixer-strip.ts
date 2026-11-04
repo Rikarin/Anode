@@ -28,7 +28,7 @@ import { learnKey } from '../control/assignments';
 import { LearnMenu } from '../control/learn-menu';
 import { InstrumentStore } from '../state/instrument.store';
 import { IoLabelsStore } from '../state/io-labels.store';
-import { MasterMeter, MeterBus } from '../state/meters';
+import { MasterMeter, MeterBus, meterZeroDb } from '../state/meters';
 import { MixerStore } from '../state/mixer.store';
 import { PluginsStore } from '../state/plugins.store';
 import { ProjectStore } from '../state/project.store';
@@ -119,6 +119,7 @@ const BusPages = Array.from({ length: BusCount / 16 }, (_, page) => ({
       [selected]="selected()"
       [flow]="flow()"
       [meter]="meter()"
+      [meterMarkDb]="meterMark()"
       [customPan]="customPan()"
       [customMeter]="multichannel()"
       [attr.data-strip]="trackId() ?? 'master'"
@@ -161,8 +162,8 @@ const BusPages = Array.from({ length: BusCount / 16 }, (_, page) => ({
           <div class="h-4.5" aria-hidden="true"></div>
         }
       }
-      @if (inputTrack(); as t) {
-        <an-strip-settings [track]="t" [name]="name()" />
+      @if (hasStripSettings()) {
+        <an-strip-settings [track]="track()" [name]="name()" [surround]="multichannel()" />
       } @else {
         <div class="h-4.5" aria-hidden="true"></div>
       }
@@ -751,10 +752,10 @@ export class MixerStrip {
   protected readonly dropAt = signal<string | null>(null);
 
   protected readonly trackId = computed(() => this.track()?.id ?? null);
-  /** The track, when its strip has an input stage (trim, polarity, delay, dual pan). */
-  protected readonly inputTrack = computed(() => {
+  /** A full strip's settings, or the master's (its meter's). */
+  protected readonly hasStripSettings = computed(() => {
     const track = this.track();
-    return track && hasFullStrip(track.kind) ? track : null;
+    return track === null || hasFullStrip(track.kind);
   });
   protected readonly kind = computed(() => this.track()?.kind ?? 'master');
   protected readonly strip = computed<ChannelStrip>(() => this.track()?.strip ?? this.project.master());
@@ -816,7 +817,10 @@ export class MixerStrip {
       { key: 'empty', context: { insert: null, index: slots.length } }
     ];
   });
-  private readonly meterSource: MeterSource = () => this.meters.level(this.trackId() ?? MasterMeter);
+  private readonly meterSource: MeterSource = () =>
+    this.meters.levelAs(this.trackId() ?? MasterMeter, this.strip().meter.type);
+  /** A K-system meter's 0 on the scale. */
+  protected readonly meterMark = computed(() => meterZeroDb(this.strip().meter.type));
   protected readonly meter = computed(() => (this.kind() === 'vca' ? null : this.meterSource));
   /** Phase 10: the strip outputs in surround (the master: the project's format). */
   protected readonly surround = computed(() => this.kind() !== 'vca' && isSurround(this.strip().outputFormat));

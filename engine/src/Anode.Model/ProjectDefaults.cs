@@ -39,7 +39,8 @@ public static class ProjectDefaults {
         false,
         -1,
         1,
-        false
+        false,
+        StripMeter.Default
     );
 
     /// <summary>

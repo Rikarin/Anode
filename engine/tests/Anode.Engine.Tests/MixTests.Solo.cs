@@ -99,6 +99,54 @@ public sealed partial class MixTests {
         Assert.True(engine.Master.TakePeaks().Left >= before.Left, "the meter reads the master, not the speakers");
     }
 
+    [Theory]
+    [InlineData(EngineMeterTap.Input, 2f)]
+    [InlineData(EngineMeterTap.PreFader, 1f)]
+    [InlineData(EngineMeterTap.PostFader, 0.5f)]
+    public void A_strip_meter_reads_at_its_tap_point(EngineMeterTap tap, float scale) {
+        // A trim of 2, a halving insert, a fader at 0.5: each tap sees its own level of the source.
+        var halve = TestEffects.Insert("half", TestEffects.Gain, Gain(0.5f));
+        var strip = Strip(0.5f, inserts: [halve]) with { Trim = 2f, MeterTap = tap };
+        using var rig = new Rig(dir, 64, [Model(1, 1)], [Track(1, true, strip)], Files);
+        var o = rig.Render(2_400);
+        var peak = 0f;
+        for (var n = 0; n < o[0].Length; n++) {
+            peak = float.Max(peak, MathF.Abs(S(n).L));
+        }
+
+        var (left, _) = rig.Controller.Engine.Root.Tracks[0].Strip.TakePeaks();
+        Assert.Equal(peak * scale, left, 1e-4f);
+    }
+
+    [Theory]
+    [InlineData(EngineMeterTap.Input)]
+    [InlineData(EngineMeterTap.PreFader)]
+    [InlineData(EngineMeterTap.PostFader)]
+    public void A_masters_meter_has_the_same_tap_points(EngineMeterTap tap) {
+        var master = Strip(0.5f) with { MeterTap = tap };
+        using var rig = new Rig(dir, 64, [Model(1, 1)], [Track(1, true, Strip())], Files, master);
+        var o = rig.Render(2_400);
+        var peak = 0f;
+        for (var n = 0; n < o[0].Length; n++) {
+            peak = float.Max(peak, MathF.Abs(S(n).L));
+        }
+
+        var expected = tap == EngineMeterTap.PostFader ? peak * 0.5f : peak;
+        Assert.Equal(expected, rig.Controller.Engine.Master.TakePeaks().Left, 1e-4f);
+    }
+
+    [Fact]
+    public void A_meter_that_wants_the_signal_changes_nothing_of_the_mix() {
+        var strip = Strip(0.5f) with { MeterType = EngineMeterType.Lufs };
+        using var rig = new Rig(dir, 64, [Model(1, 1)], [Track(1, true, strip)], Files);
+        var o = rig.Render(9_600);
+        for (var n = 0; n < o[0].Length; n++) {
+            Same(S(n).L * 0.5f, o[0][n], n, "the mix");
+        }
+
+        Assert.True(rig.Controller.Engine.Root.Tracks[0].Strip.MeterLevels().Lufs > -120f);
+    }
+
     [Fact]
     public void The_monitor_level_ramps_and_takes_the_click_along() {
         using var rig = new Rig(dir, 64, [Model(1, 0)], [Track(1, false, Strip())], Files);

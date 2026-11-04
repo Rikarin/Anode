@@ -445,6 +445,8 @@ public sealed class HostSync(HostLink link, SegmentPool pool, ILogger logger, Se
             || old.PanLeft != now.PanLeft
             || old.PanRight != now.PanRight
             || old.SoloSafe != now.SoloSafe
+            || old.MeterType != now.MeterType
+            || old.MeterTap != now.MeterTap
                 ? [new SetStripMessage(id, now)]
                 : [];
         return levels.Concat(

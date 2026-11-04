@@ -49,14 +49,25 @@ public struct TelemetryHeader {
 ///     Peak levels since the previous write (linear, 0…), per track and for the master (track id −1). Phase 10: a meter of
 ///     more than two channels (a surround output, bus or master) has their count in <see cref="Channels" /> and each
 ///     channel's peak, in its layout's (ADM) order, in the <see cref="ChannelMeterEntry" /> of the same index (the first
-///     two are also <see cref="PeakLeft" /> and <see cref="PeakRight" />); 0 for a mono or stereo meter.
+///     two are also <see cref="PeakLeft" /> and <see cref="PeakRight" />); 0 for a mono or stereo meter. A strip's meter
+///     type asks for more (<see cref="Levels" />): RMS, linear, over the type's window, or momentary loudness.
 /// </summary>
 [StructLayout(LayoutKind.Sequential)]
 public struct MeterEntry {
+    /// <summary><see cref="Levels" />: <see cref="RmsLeft" /> and <see cref="RmsRight" /> mean something.</summary>
+    public const int HasRms = 1;
+
+    /// <summary><see cref="Levels" />: <see cref="Lufs" /> means something.</summary>
+    public const int HasLufs = 2;
+
     public int TrackId;
     public float PeakLeft;
     public float PeakRight;
     public int Channels;
+    public float RmsLeft;
+    public float RmsRight;
+    public float Lufs;
+    public int Levels;
 }
 
 /// <summary>A surround meter's peaks per channel (Phase 10), at the index of its <see cref="MeterEntry" />.</summary>

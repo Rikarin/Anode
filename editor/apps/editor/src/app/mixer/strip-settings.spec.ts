@@ -73,12 +73,29 @@ describe('the strip input stage', () => {
     expect(project.settings().mixer.panLaw).toBe('minus3DbCompensated');
   });
 
-  it('offers the input row on full strips and leaves it out on the master', async () => {
-    const { element, fixture, track } = await strip('aux');
+  it('offers the row on full strips and the master, not a VCA', async () => {
+    const { element, fixture, track, project } = await strip('aux');
     expect(track().kind).toBe('aux');
     expect(element.querySelector('[data-testid="strip-settings"]')).not.toBeNull();
     fixture.componentRef.setInput('track', null);
     await fixture.whenStable();
+    expect(element.querySelector('[data-testid="strip-settings"]')).not.toBeNull();
+    await project.execute([{ type: 'addVca', name: 'V' }], 'VCA');
+    fixture.componentRef.setInput('track', project.trackList().at(-1));
+    await fixture.whenStable();
     expect(element.querySelector('[data-testid="strip-settings"]')).toBeNull();
+  });
+
+  it('keeps a meter type and tap on the strip, the master too', async () => {
+    const { project, track } = await strip();
+    const mixer = TestBed.inject(MixerStore);
+    await mixer.setMeter(track().id, { meterType: 'k14' });
+    await mixer.setMeter(track().id, { meterTap: 'preFader' });
+    await mixer.setMeter(null, { meterType: 'lufs' });
+    expect(track().strip.meter).toEqual({ type: 'k14', tap: 'preFader' });
+    expect(project.master().meter).toEqual({ type: 'lufs', tap: 'postFader' });
+    expect(stripSummary(track().strip)).toBe('K-14 Pre');
+    await project.undo();
+    expect(project.master().meter.type).toBe('peak');
   });
 });

@@ -247,6 +247,10 @@ public sealed unsafe partial class AudioEngine {
             destLeft[0].AsSpan(0, frames).CopyTo(sumLeft);
             destRight[0].AsSpan(0, frames).CopyTo(sumRight);
             MixPreview(sumLeft, sumRight);
+            if (Master.MeterTap == Ipc.EngineMeterTap.Input) {
+                Master.MeterSignal(sumLeft, sumRight);
+            }
+
             Channel(plan.Master, sumLeft, sumRight, true, outLeft, outRight);
         }
 
@@ -282,6 +286,9 @@ public sealed unsafe partial class AudioEngine {
         if (node.Multi) {
             var width = SourceMulti(node, left, right);
             TrimWide(node, left, right, width);
+            signalLeft = trackLeft;
+            signalRight = trackRight;
+            MeterWide(node.Channel.Strip, Ipc.EngineMeterTap.Input, width);
             ChannelMulti(node, trackLeft, trackRight, width);
             return;
         }
@@ -298,6 +305,11 @@ public sealed unsafe partial class AudioEngine {
             if (stereo) {
                 Scale(right, from, to);
             }
+        }
+
+        var strip = node.Channel.Strip;
+        if (strip.MeterTap == Ipc.EngineMeterTap.Input) {
+            strip.MeterSignal(left, stereo ? right : left);
         }
     }
 
@@ -682,6 +694,10 @@ public sealed unsafe partial class AudioEngine {
         var ch = node.Channel;
         stereo = Inserts(node, left, right, stereo, firstInsert);
         var source = stereo ? right : left;
+        if (ch.Strip.MeterTap == Ipc.EngineMeterTap.PreFader) {
+            ch.Strip.MeterSignal(left, source);
+        }
+
         CaptureFreeze(node, left, source, stereo);
         var line = ch.Delay;
         line?.Write(left, source);
@@ -798,7 +814,7 @@ public sealed unsafe partial class AudioEngine {
         outLeft.Clear();
         outRight.Clear();
         var (peakL, peakR) = AccumulateMetered(srcL, srcR, outLeft, outRight);
-        ch.Strip.Meter(peakL, peakR);
+        PostFaderMeter(ch.Strip, peakL, peakR, outLeft, outRight);
         if (blockCapture is { MonitoringRender: false, Master: { } master }) {
             master.Write(outLeft, outRight, ch.Latency + masterOutputDelay);
         }
@@ -833,24 +849,24 @@ public sealed unsafe partial class AudioEngine {
             stems.Tracks.TryGetValue(node.TrackId, out stem);
         }
 
-        if (stem is null && destination >= 0) {
+        if (stem is null && destination >= 0 && ch.Strip.MeterType == Ipc.EngineMeterType.Peak) {
             var (l, r) = AccumulateMetered(
                 srcL,
                 srcR,
                 destLeft[destination].AsSpan(0, frames),
                 destRight[destination].AsSpan(0, frames)
             );
-            ch.Strip.Meter(l, r);
+            PostFaderMeter(ch.Strip, l, r, default, default);
             return;
         }
 
-        // The stem (or a channel routed nowhere, metered all the same).
+        // The stem, a meter that wants the signal, or a channel routed nowhere (metered all the same).
         var el = edgeLeft.AsSpan(0, frames);
         var er = edgeRight.AsSpan(0, frames);
         el.Clear();
         er.Clear();
         var (peakL, peakR) = AccumulateMetered(srcL, srcR, el, er);
-        ch.Strip.Meter(peakL, peakR);
+        PostFaderMeter(ch.Strip, peakL, peakR, el, er);
         stem?.Write(el, er, destination >= 0 ? destLatency[destination] : 0);
         if (destination >= 0) {
             Add(destLeft[destination].AsSpan(0, frames), el);
@@ -895,6 +911,20 @@ public sealed unsafe partial class AudioEngine {
             var rr = from.RightToRight + (to.RightToRight - from.RightToRight) * t;
             dstL[i] = srcL[i] * ll + srcR[i] * rl;
             dstR[i] = srcL[i] * lr + srcR[i] * rr;
+        }
+    }
+
+    /// <summary>A block's post-fader peaks and signal to the strip's meter, when that is where it reads.</summary>
+    static void PostFaderMeter(
+        Strip strip,
+        float peakLeft,
+        float peakRight,
+        ReadOnlySpan<float> left,
+        ReadOnlySpan<float> right
+    ) {
+        if (strip.MeterTap == Ipc.EngineMeterTap.PostFader) {
+            strip.Meter(peakLeft, peakRight);
+            strip.MeasureLevels(left, right);
         }
     }
 

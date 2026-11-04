@@ -58,6 +58,7 @@ import {
   MasteringParameters,
   type MasteringSettings,
   type MasteringState,
+  type MeterType,
   type MidiDevices,
   type MidiEnvironment,
   type MidiExportRequest,
@@ -4032,7 +4033,7 @@ export class FakeAnodeServer implements AnodeApi {
       return { tracks: [], master: { trackId: '', peakLeft: 0, peakRight: 0 }, readings: [] };
     }
 
-    const soloed = project.tracks.some(t => t.strip.solo);
+    const soloed = project.settings.mixer.soloMode === 'inPlace' && project.tracks.some(t => t.strip.solo);
     const byId = new Map(project.tracks.map(t => [t.id, t]));
     const tick = this.positionTick;
     const levels = new Map<string, number>();
@@ -4043,7 +4044,8 @@ export class FakeAnodeServer implements AnodeApi {
       return 10 ** (track.strip.volumeDb / 20) * vcaGain;
     };
     const audible = (track: Track) =>
-      !track.strip.mute && (!soloed || track.strip.solo || track.kind === 'aux' || track.kind === 'vca');
+      !track.strip.mute &&
+      (!soloed || track.strip.solo || track.strip.soloSafe || track.kind === 'aux' || track.kind === 'vca');
     // Sources first: what plays on each track under the playhead.
     for (const track of project.tracks) {
       if (track.kind === 'aux' || track.kind === 'vca' || track.kind === 'stack') {
@@ -4113,14 +4115,18 @@ export class FakeAnodeServer implements AnodeApi {
       if (peaks) {
         return { trackId: track.id, peakLeft: peaks[0] ?? 0, peakRight: peaks[1] ?? 0, peaks };
       }
-      return { trackId: track.id, peakLeft: level * Math.min(1, 1 - pan), peakRight: level * Math.min(1, 1 + pan) };
+      return withMeterLevels(track.strip.meter.type, {
+        trackId: track.id,
+        peakLeft: level * Math.min(1, 1 - pan),
+        peakRight: level * Math.min(1, 1 + pan)
+      });
     });
     const masterGain = 10 ** (project.master.volumeDb / 20) * (project.master.mute ? 0 : 1);
     const master = masterLevel * masterGain;
     const surroundPeaks = masterChannels > 2 ? masterPeaks.map(p => p * masterGain) : null;
     const masterMeter: TrackMeter = surroundPeaks
       ? { trackId: '', peakLeft: surroundPeaks[0] ?? 0, peakRight: surroundPeaks[1] ?? 0, peaks: surroundPeaks }
-      : { trackId: '', peakLeft: master, peakRight: master * 0.97 };
+      : withMeterLevels(project.master.meter.type, { trackId: '', peakLeft: master, peakRight: master * 0.97 });
     const readings: InsertReading[] = [];
     const read = (trackId: string | null, inserts: readonly Insert[], level: number) => {
       const db = level > 0 ? 20 * Math.log10(level) : -144;
@@ -5981,6 +5987,18 @@ function strip(): ChannelStrip {
     panner: structuredClone(DefaultPanner),
     ...StripDefaults
   };
+}
+
+/** A meter frame with the levels its type publishes, made up from the peaks as a steady tone's would read. */
+function withMeterLevels(type: MeterType, meter: TrackMeter): TrackMeter {
+  if (type === 'peak') {
+    return meter;
+  }
+  if (type === 'lufs') {
+    const power = (meter.peakLeft ** 2 + meter.peakRight ** 2) / 2;
+    return { ...meter, lufs: power > 0 ? -0.691 + 10 * Math.log10(power) : -120 };
+  }
+  return { ...meter, rmsLeft: meter.peakLeft * Math.SQRT1_2, rmsRight: meter.peakRight * Math.SQRT1_2 };
 }
 
 /**

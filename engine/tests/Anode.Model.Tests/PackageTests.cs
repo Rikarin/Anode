@@ -760,6 +760,23 @@ public sealed class PackageTests : IDisposable {
         Assert.Equal("inPlace", saved["settings"]!["mixer"]!["soloMode"]!.GetValue<string>());
     }
 
+    [Fact]
+    public void A_schema_13_package_keeps_its_post_fader_peak_meters() {
+        CopyFixture("Schema13.anode");
+        var root = JsonNode.Parse(File.ReadAllText(Path.Combine(folder, "project.json")))!;
+        Assert.Equal(13, root["schemaVersion"]!.GetValue<int>());
+        var state = ProjectPackage.Load(folder);
+        Assert.NotEmpty(state.Tracks);
+        foreach (var strip in state.Tracks.Select(static t => t.Strip).Append(state.Master)) {
+            Assert.Equal(StripMeter.Default, strip.Meter);
+        }
+
+        ProjectPackage.Save(folder, state);
+        var saved = JsonNode.Parse(File.ReadAllText(Path.Combine(folder, "project.json")))!;
+        Assert.Equal(PackageMigrations.CurrentSchemaVersion, saved["schemaVersion"]!.GetValue<int>());
+        Assert.Equal("postFader", saved["master"]!["meter"]!["tap"]!.GetValue<string>());
+    }
+
     void CopyFixture(string name) {
         var source = Path.Combine(AppContext.BaseDirectory, "Fixtures", name);
         foreach (var path in Directory.EnumerateFiles(source, "*", SearchOption.AllDirectories)) {

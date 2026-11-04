@@ -947,6 +947,9 @@ public static class ProjectPackage {
             Sends = full && track is not null ? [..sends] : [],
             Output = Routing.Normalise(strip.Output) ?? Routing.Master,
             Groups = strip.Groups ?? [],
+            Meter = strip.Meter is { } meter && Enum.IsDefined(meter.Type) && Enum.IsDefined(meter.Tap)
+                ? meter
+                : StripMeter.Default,
             TrimDb = Math.Clamp(Finite(strip.TrimDb, 0), -Edits.MaxTrimDb, Edits.MaxTrimDb),
             DelayMs = Math.Clamp(Finite(strip.DelayMs, 0), -Edits.MaxStripDelayMs, Edits.MaxStripDelayMs),
             PanLeft = Math.Clamp(Finite(strip.PanLeft, -1), -1, 1),
@@ -1138,13 +1141,13 @@ static class PackageKeys {
 ///     refused rather than read wrongly.
 /// </remarks>
 public static class PackageMigrations {
-    public const int CurrentSchemaVersion = 13;
+    public const int CurrentSchemaVersion = 14;
     const string VersionField = "schemaVersion";
 
     /// <summary><c>Steps[n]</c> takes schema <c>n + 1</c> to <c>n + 2</c>; it gets the kind of file and its JSON.</summary>
     static readonly Func<string, JsonObject, JsonObject>[] Steps = [
         ToSchema2, ToSchema3, ToSchema4, ToSchema5, ToSchema6, ToSchema7, ToSchema8, ToSchema9, ToSchema10, ToSchema11,
-        ToSchema12, ToSchema13
+        ToSchema12, ToSchema13, ToSchema14
     ];
 
     public static JsonObject Upgrade(JsonObject json, string kind) {
@@ -1394,6 +1397,18 @@ public static class PackageMigrations {
     /// </summary>
     static JsonObject ToSchema12(string kind, JsonObject json) {
         Schema12.Fill(kind, json);
+        return json;
+    }
+
+    /// <summary>Schema 13 to 14 (strip metering options): every strip's meter stays the post-fader peak it was.</summary>
+    static JsonObject ToSchema14(string kind, JsonObject json) {
+        var strip = kind == PackageKeys.ProjectKind
+            ? json["master"] as JsonObject
+            : json[PackageKeys.Track]?["strip"] as JsonObject;
+        if (strip is not null) {
+            strip["meter"] ??= new JsonObject { ["type"] = "peak", ["tap"] = "postFader" };
+        }
+
         return json;
     }
 

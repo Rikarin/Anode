@@ -328,6 +328,13 @@ section`, a user setting) is the last stage before the device: dim, the mono che
 the calibrated reference, one gain to the host (`SetMonitoringMessage`), ramped, the click included. Device output pairs
 strips go to directly, the listen-in tap and a bounce (the monitoring render too) are not behind it.
 
+**Strip meters (after Phase 11):** `ChannelStrip.meter` is a strip's type and tap point. Peaks are measured at the tap
+whatever the type. RMS is true RMS over 300 ms and K-system over 600 ms (one-poles on each block's mean square); LUFS is
+BS.1770 momentary. The host publishes them per strip only when the type asks, and K-system's AES17 offset and scale are
+the client's, the bars staying on the dBFS scale with a line at the type's 0. A mono signal before the pan counts as one
+channel for loudness. A surround strip's bars stay peaks per speaker at its tap point; the levels of its type are of the
+front pair and no bar shows them yet.
+
 **Open:**
 - Tempo-synced effects take the tempo from the click, not the tempo track.
 - Touch automation releases on the next change, not on mouse-up.

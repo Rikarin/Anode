@@ -232,7 +232,9 @@ public sealed record SetStripCommand(
     bool? DualPan = null,
     double? PanLeft = null,
     double? PanRight = null,
-    bool? SoloSafe = null
+    bool? SoloSafe = null,
+    MeterType? MeterType = null,
+    MeterTap? MeterTap = null
 ) : EditCommand;
 
 /// <summary>Places a file on a track; the whole file unless <c>fileOffset</c> and <c>length</c> say otherwise.</summary>

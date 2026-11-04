@@ -48,7 +48,13 @@ import { AnPeakMeter, type MeterSource } from './peak-meter';
       @if (customMeter()) {
         <ng-content select="[stripMeter]" />
       } @else if (!vca()) {
-        <an-peak-meter class="h-auto! pt-6 pb-2" [label]="name() + ' level'" [source]="meter()" [mono]="mono()" />
+        <an-peak-meter
+          class="h-auto! pt-6 pb-2"
+          [label]="name() + ' level'"
+          [source]="meter()"
+          [mono]="mono()"
+          [markDb]="meterMarkDb()"
+        />
       }
     </div>
     <div class="flex gap-1">
@@ -108,6 +114,8 @@ export class AnChannelStrip {
   readonly customMeter = input(false, { transform: booleanAttribute });
   /** Where the meter reads its level each animation frame. */
   readonly meter = input<MeterSource | null>(null);
+  /** A line on the meter's scale in dBFS (a K-system meter's 0). */
+  readonly meterMarkDb = input<number | null>(null);
 
   /** The fader moved (every step of a drag). */
   readonly volumeChange = output<number>();

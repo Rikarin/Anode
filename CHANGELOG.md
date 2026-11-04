@@ -14,3 +14,5 @@ All notable changes to Anode are recorded here, by hand.
   the slot's menu does the same by Copy to and Move to.
 - Solo: solo safe on any full strip, AFL and PFL as a solo mode (schema 13), and a monitor section in the Mixer's toolbar
   with dim, mono and a reference level, which the speakers hear and a bounce does not.
+- Meters: each strip, the master too, chooses Peak, RMS, K-20, K-14, K-12 or LUFS and reads at the input, before or
+  after the fader (schema 14; existing strips keep post-fader peaks).

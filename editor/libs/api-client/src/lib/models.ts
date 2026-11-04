@@ -85,6 +85,8 @@ export type MixerSettings = Schemas['MixerSettings'];
 export type PdcMode = Schemas['PdcMode'];
 export type PanLaw = Schemas['PanLaw'];
 export type SoloMode = Schemas['SoloMode'];
+export type MeterType = Schemas['MeterType'];
+export type MeterTap = Schemas['MeterTap'];
 export type MonitorSection = Schemas['MonitorSection'];
 export type IoLabels = Schemas['IoLabels'];
 export type IoLabel = Schemas['IoLabel'];
@@ -455,7 +457,8 @@ export const StripDefaults = {
   dualPan: false,
   panLeft: -1,
   panRight: 1,
-  soloSafe: false
+  soloSafe: false,
+  meter: { type: 'peak', tap: 'postFader' }
 } as const;
 
 export const DefaultPanner: Panner = {
@@ -825,6 +828,11 @@ export interface TrackMeter {
    * `peakLeft`/`peakRight`.
    */
   peaks?: number[];
+  /** True RMS, linear, over the meter type's window, for a strip whose meter is RMS or K-system. */
+  rmsLeft?: number;
+  rmsRight?: number;
+  /** Momentary loudness, for a strip whose meter reads it. */
+  lufs?: number;
 }
 
 /**

@@ -2527,7 +2527,7 @@ export interface components {
      *     everything else). dualPan pans a stereo signal's two channels on their own, to panLeft and
      *     panRight (−1…1), instead of balancing it with pan; at −1 and 1 the signal passes as it is. They
      *     stay when it is off. A mono signal always takes pan, a surround output its panner.soloSafe (a track with a full strip, a bus's aux above all): the strip stays audible when others are
-     *                         soloed in place.
+     *                         soloed in place.meter is what the strip's meter shows and where it reads the signal, the master's too.
      */
     ChannelStrip: {
       /** Format: double */
@@ -2556,6 +2556,7 @@ export interface components {
       /** Format: double */
       panRight: number;
       soloSafe: boolean;
+      meter: components['schemas']['StripMeter'];
     };
     /**
      * @description A chord of the chord track at project tick `tick` (it holds until the next chord): its root, its quality
@@ -5108,6 +5109,8 @@ export interface components {
       /** Format: double */
       panRight?: null | number;
       soloSafe?: null | boolean;
+      meterType?: null | components['schemas']['MeterType'];
+      meterTap?: null | components['schemas']['MeterTap'];
     };
     /**
      * @description Phase 10: sets a track strip's input format (mono or stereo for instrument tracks; any for audio and aux
@@ -6058,6 +6061,16 @@ export interface components {
       settings: components['schemas']['MasteringSettings'];
       analysis: null | components['schemas']['MasteringAnalysis'];
     };
+    /**
+     * @description Where a strip's meter reads the signal.
+     * @enum {unknown}
+     */
+    MeterTap: 'input' | 'preFader' | 'postFader';
+    /**
+     * @description What a strip's meter shows.
+     * @enum {unknown}
+     */
+    MeterType: 'peak' | 'rms' | 'k20' | 'k14' | 'k12' | 'lufs';
     /** @description The click: on or off, a one-bar count-in before recording, and its level in dB. */
     MetronomeSettings: {
       enabled: boolean;
@@ -7777,6 +7790,11 @@ export interface components {
     /** @description Stops the cells playing on `trackIds` (left out: every track) at the grid's quantise boundary. */
     StopRequest: {
       trackIds?: null | string[];
+    };
+    /** @description A strip's meter: its type and tap point (a new strip's: peak, post-fader). */
+    StripMeter: {
+      type: components['schemas']['MeterType'];
+      tap: components['schemas']['MeterTap'];
     };
     /**
      * @description A surface's live state: whether it answers (Mackie Control's handshake or any input; HUI's ping) and the index of

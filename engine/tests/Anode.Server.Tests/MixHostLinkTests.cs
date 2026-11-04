@@ -25,6 +25,24 @@ public sealed class MixHostLinkTests : IAsyncDisposable {
     }
 
     [Fact]
+    public async Task A_strips_meter_settings_reach_the_host() {
+        host = new(EngineConnection.Version);
+        host.Listen(socketPath);
+        await using var server = new ServerFixture(socketPath);
+        using var client = server.CreateClient();
+        await ServerFixture.Eventually(async () =>
+            (await server.SystemAsync(client)).Engine.State == EngineState.Connected
+        );
+        await client.CreateProjectAsync();
+        await client.EditAsync(new AddTrackCommand("Gtr"));
+        var gtr = (await client.ProjectAsync()).Tracks[0].Id;
+        await client.EditAsync(new SetStripCommand(gtr, MeterType: MeterType.K20, MeterTap: MeterTap.Input));
+        await WaitForAsync<SetStripMessage>(static m =>
+            m is { Strip.MeterType: EngineMeterType.K20, Strip.MeterTap: EngineMeterTap.Input }
+        );
+    }
+
+    [Fact]
     public async Task The_solo_mode_solo_safe_and_the_monitor_section_reach_the_host() {
         host = new(EngineConnection.Version);
         host.Listen(socketPath);

@@ -92,7 +92,17 @@ public sealed unsafe class TelemetryWriter : IDisposable {
     MeterEntry Entry(int trackId, Strip strip, int index) {
         var peaks = new Span<float>(ChannelMeters[index].Peaks, ChannelMeterEntry.MaxChannels);
         var (left, right) = strip.TakePeaks(peaks, out var channels);
-        return new() { TrackId = trackId, PeakLeft = left, PeakRight = right, Channels = channels > 2 ? channels : 0 };
+        var (rmsLeft, rmsRight, lufs, levels) = strip.MeterLevels();
+        return new() {
+            TrackId = trackId,
+            PeakLeft = left,
+            PeakRight = right,
+            Channels = channels > 2 ? channels : 0,
+            RmsLeft = rmsLeft,
+            RmsRight = rmsRight,
+            Lufs = lufs,
+            Levels = levels
+        };
     }
 
     /// <summary>

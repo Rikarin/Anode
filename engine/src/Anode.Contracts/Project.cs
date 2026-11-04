@@ -215,6 +215,7 @@ public sealed record TrackInput(int Channel, bool Stereo);
 ///         <c>soloSafe</c> (a track with a full strip, a bus's aux above all): the strip stays audible when others are
 ///         soloed in place.
 ///     </para>
+///     <para><c>meter</c> is what the strip's meter shows and where it reads the signal, the master's too.</para>
 /// </summary>
 public sealed record ChannelStrip(
     double VolumeDb,
@@ -236,7 +237,8 @@ public sealed record ChannelStrip(
     bool DualPan,
     double PanLeft,
     double PanRight,
-    bool SoloSafe
+    bool SoloSafe,
+    StripMeter Meter
 );
 
 /// <summary>

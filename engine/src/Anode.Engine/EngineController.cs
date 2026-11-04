@@ -447,6 +447,7 @@ public sealed partial class EngineController : IDisposable {
 
             var delayed = channel.Strip.DelayFrames != strip.DelayFrames;
             SetFader(trackId, channel.Strip, strip);
+            channel.Strip.PrepareMeter(Options.SampleRate);
             if (delayed) {
                 GrowDelays(Engine.Root.Mix);
             }

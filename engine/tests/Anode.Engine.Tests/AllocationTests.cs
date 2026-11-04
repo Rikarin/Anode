@@ -48,7 +48,11 @@ public sealed unsafe class AllocationTests : IDisposable {
                     t,
                     (t & 1) == 1,
                     new(0.8f, t / 8f - 0.5f, t == 5, t == 3) {
-                        Trim = t == 2 ? 1f : -0.9f, DelayFrames = 40 * (t - 4), DualPan = t == 1
+                        Trim = t == 2 ? 1f : -0.9f,
+                        DelayFrames = 40 * (t - 4),
+                        DualPan = t == 1,
+                        MeterType = (EngineMeterType)(t % 6),
+                        MeterTap = (EngineMeterTap)(t % 3)
                     },
                     t & 1,
                     t == 2,

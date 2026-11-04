@@ -6734,7 +6734,8 @@
           "dualPan",
           "panLeft",
           "panRight",
-          "soloSafe"
+          "soloSafe",
+          "meter"
         ],
         "type": "object",
         "properties": {
@@ -6819,9 +6820,12 @@
           },
           "soloSafe": {
             "type": "boolean"
+          },
+          "meter": {
+            "$ref": "#/components/schemas/StripMeter"
           }
         },
-        "description": "                A channel strip: volume in dB (\u2212\u221E as \u2212144), pan \u22121 (left) \u2026 1 (right), mute and solo; its insert effects in\n                order; its sends to buses; where it goes (\u0060output\u0060: \u0060master\u0060, \u0060bus:N\u0060 for bus 1\u202664, or\n                \u0060output:N\u0060 for the device\u0027s stereo output pair N); the mixer groups it belongs to (1\u202632); and the VCA track\n                that offsets its volume, if any. The master strip uses only volume, pan, mute and its inserts. Phase 6:\n                \u0060midiEffects\u0060 are its MIDI FX slots (instrument and external MIDI tracks only; empty elsewhere), in the\n                same shape as inserts: they run in slot order on the block\u0027s MIDI (regions, live and step input) before the\n                instrument; bypassed slots pass it through.\n                Phase 10 (docs/11-phase-10.md): inputFormat is the format of the signal the strip processes before its\npanner (an audio track\u0027s recording and regions, an instrument\u0027s output, an aux\u0027s bus: an aux\u0027s input format\nis its bus\u0027s format); outputFormat is its destination\u0027s format, kept by the server (the master\u0027s is\nthe project\u0027s surroundFormat, a bus\u0027s its aux\u0027s input format, a device output pair stereo; the\nmaster\u0027s input and output are the project\u0027s). panner maps the input channels to the output: stereo\npan (pan) for a stereo output, the Surround Panner, or an object (PannerMode); an input\nof the output\u0027s format passes straight through. Sends to a multichannel bus are panned by the strip\u0027s panner\n(their pan applies to stereo buses only). Every strip of a project from before Phase 10 is stereo in\nand out with the stereo panner.The strip\u0027s input stage (a track with a full strip, never the master or a VCA): trimDb and\npolarityInverted apply to its source before the inserts, on every channel; delayMs moves it in\ntime after the inserts, before the fader (negative: earlier, which delay compensation pays for by delaying\neverything else). dualPan pans a stereo signal\u0027s two channels on their own, to panLeft and\npanRight (\u22121\u20261), instead of balancing it with pan; at \u22121 and 1 the signal passes as it is. They\nstay when it is off. A mono signal always takes pan, a surround output its panner.soloSafe (a track with a full strip, a bus\u0027s aux above all): the strip stays audible when others are\n                    soloed in place."
+        "description": "                A channel strip: volume in dB (\u2212\u221E as \u2212144), pan \u22121 (left) \u2026 1 (right), mute and solo; its insert effects in\n                order; its sends to buses; where it goes (\u0060output\u0060: \u0060master\u0060, \u0060bus:N\u0060 for bus 1\u202664, or\n                \u0060output:N\u0060 for the device\u0027s stereo output pair N); the mixer groups it belongs to (1\u202632); and the VCA track\n                that offsets its volume, if any. The master strip uses only volume, pan, mute and its inserts. Phase 6:\n                \u0060midiEffects\u0060 are its MIDI FX slots (instrument and external MIDI tracks only; empty elsewhere), in the\n                same shape as inserts: they run in slot order on the block\u0027s MIDI (regions, live and step input) before the\n                instrument; bypassed slots pass it through.\n                Phase 10 (docs/11-phase-10.md): inputFormat is the format of the signal the strip processes before its\npanner (an audio track\u0027s recording and regions, an instrument\u0027s output, an aux\u0027s bus: an aux\u0027s input format\nis its bus\u0027s format); outputFormat is its destination\u0027s format, kept by the server (the master\u0027s is\nthe project\u0027s surroundFormat, a bus\u0027s its aux\u0027s input format, a device output pair stereo; the\nmaster\u0027s input and output are the project\u0027s). panner maps the input channels to the output: stereo\npan (pan) for a stereo output, the Surround Panner, or an object (PannerMode); an input\nof the output\u0027s format passes straight through. Sends to a multichannel bus are panned by the strip\u0027s panner\n(their pan applies to stereo buses only). Every strip of a project from before Phase 10 is stereo in\nand out with the stereo panner.The strip\u0027s input stage (a track with a full strip, never the master or a VCA): trimDb and\npolarityInverted apply to its source before the inserts, on every channel; delayMs moves it in\ntime after the inserts, before the fader (negative: earlier, which delay compensation pays for by delaying\neverything else). dualPan pans a stereo signal\u0027s two channels on their own, to panLeft and\npanRight (\u22121\u20261), instead of balancing it with pan; at \u22121 and 1 the signal passes as it is. They\nstay when it is off. A mono signal always takes pan, a surround output its panner.soloSafe (a track with a full strip, a bus\u0027s aux above all): the strip stays audible when others are\n                    soloed in place.meter is what the strip\u0027s meter shows and where it reads the signal, the master\u0027s too."
       },
       "Chord": {
         "required": [
@@ -14640,6 +14644,26 @@
               "null",
               "boolean"
             ]
+          },
+          "meterType": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/MeterType"
+              }
+            ]
+          },
+          "meterTap": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/MeterTap"
+              }
+            ]
           }
         },
         "description": "Changes a track\u0027s volume, pan, mute or solo, or the master\u0027s when \u0060trackId\u0060 is left out. Members of the\ntrack\u0027s enabled mixer groups that link the property follow it (volume keeps their offsets). During playback, a\ntrack whose automation mode is touch, latch or write records the change into its lane (and the batch coalesces as\na drag does)."
@@ -17257,6 +17281,25 @@
           }
         },
         "description": "The master\u0027s Mastering Assistant (\u0060GET /project/mastering\u0060): its insert, settings and analysis (null: not\nanalysed yet; it then passes the audio through its limiter only)."
+      },
+      "MeterTap": {
+        "enum": [
+          "input",
+          "preFader",
+          "postFader"
+        ],
+        "description": "Where a strip\u0027s meter reads the signal."
+      },
+      "MeterType": {
+        "enum": [
+          "peak",
+          "rms",
+          "k20",
+          "k14",
+          "k12",
+          "lufs"
+        ],
+        "description": "What a strip\u0027s meter shows."
       },
       "MetronomeSettings": {
         "required": [
@@ -21605,6 +21648,22 @@
           }
         },
         "description": "Stops the cells playing on \u0060trackIds\u0060 (left out: every track) at the grid\u0027s quantise boundary."
+      },
+      "StripMeter": {
+        "required": [
+          "type",
+          "tap"
+        ],
+        "type": "object",
+        "properties": {
+          "type": {
+            "$ref": "#/components/schemas/MeterType"
+          },
+          "tap": {
+            "$ref": "#/components/schemas/MeterTap"
+          }
+        },
+        "description": "A strip\u0027s meter: its type and tap point (a new strip\u0027s: peak, post-fader)."
       },
       "SurfaceStatus": {
         "required": [

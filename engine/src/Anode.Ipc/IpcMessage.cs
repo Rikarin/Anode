@@ -140,8 +140,45 @@ public sealed record EngineStrip(
     bool DualPan = false,
     float PanLeft = -1f,
     float PanRight = 1f,
-    bool SoloSafe = false
+    bool SoloSafe = false,
+    EngineMeterType MeterType = EngineMeterType.Peak,
+    EngineMeterTap MeterTap = EngineMeterTap.PostFader
 );
+
+/// <summary>The contract's <c>MeterType</c>, in its order.</summary>
+[JsonConverter(typeof(JsonStringEnumConverter<EngineMeterType>))]
+public enum EngineMeterType {
+    [JsonStringEnumMemberName("peak")]
+    Peak,
+
+    [JsonStringEnumMemberName("rms")]
+    Rms,
+
+    [JsonStringEnumMemberName("k20")]
+    K20,
+
+    [JsonStringEnumMemberName("k14")]
+    K14,
+
+    [JsonStringEnumMemberName("k12")]
+    K12,
+
+    [JsonStringEnumMemberName("lufs")]
+    Lufs
+}
+
+/// <summary>The contract's <c>MeterTap</c>, in its order.</summary>
+[JsonConverter(typeof(JsonStringEnumConverter<EngineMeterTap>))]
+public enum EngineMeterTap {
+    [JsonStringEnumMemberName("input")]
+    Input,
+
+    [JsonStringEnumMemberName("preFader")]
+    PreFader,
+
+    [JsonStringEnumMemberName("postFader")]
+    PostFader
+}
 
 /// <summary>The contract's <c>SoloMode</c>, in its order.</summary>
 [JsonConverter(typeof(JsonStringEnumConverter<EngineSoloMode>))]

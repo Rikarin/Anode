@@ -7,6 +7,8 @@ import type {
   GroupProperties,
   Insert,
   InsertChain,
+  MeterTap,
+  MeterType,
   MixerGroup,
   MixerSettings,
   Panner,
@@ -232,6 +234,14 @@ export class MixerStore {
   /** A strip's input format (audio tracks and auxes; an aux's is its bus's). */
   setInputFormat(trackId: string, inputFormat: ChannelFormat): Promise<unknown> {
     return this.project.execute([{ type: 'setStripFormat', trackId, inputFormat }], 'Input Format');
+  }
+
+  /** A strip's meter: its type or tap point (the master's too). */
+  setMeter(trackId: string | null, change: { meterType?: MeterType; meterTap?: MeterTap }): Promise<unknown> {
+    return this.project.execute(
+      [{ type: 'setStrip', ...(trackId === null ? {} : { trackId }), ...change }],
+      'Meter Settings'
+    );
   }
 
   /** Changes a track strip's input stage (the master and a VCA have none). */

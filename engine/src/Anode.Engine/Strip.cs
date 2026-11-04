@@ -1,11 +1,13 @@
+using Anode.Dsp.Metering;
 using Anode.Ipc;
+using Anode.Ipc.Telemetry;
 
 namespace Anode.Engine;
 
 /// <summary>
 ///     A channel strip's fader settings (linear gain, pan −1…1, mute, solo) and input stage (signed trim, delay, dual
-///     pan), written by the control thread and read by the audio thread field by field, plus its peak meter. The mixer
-///     (<c>AudioEngine.Mix.cs</c>) applies them.
+///     pan), written by the control thread and read by the audio thread field by field, plus its meter: peaks, and what
+///     its type asks for, at its tap point. The mixer (<c>AudioEngine.Mix.cs</c>) applies them.
 /// </summary>
 public sealed class Strip {
     float gain = 1f;
@@ -18,6 +20,23 @@ public sealed class Strip {
     float panLeft = -1f;
     float panRight = 1f;
     bool soloSafe;
+    int meterType;
+    int meterTap = (int)EngineMeterTap.PostFader;
+
+    // RMS: a one-pole on each block's mean square (audio thread), published as linear RMS.
+    double squareLeft;
+    double squareRight;
+    float publishedRmsLeft;
+    float publishedRmsRight;
+    float publishedLufs = LoudnessMeter.FloorLufs;
+    LoudnessMeter? loudness;
+    float[] silence = [];
+    double meterRate = 48_000;
+
+    /// <summary>The RMS meter's window, and K-system's (Katz's 600 ms), in seconds.</summary>
+    const double RmsSeconds = 0.3;
+
+    const double KSystemSeconds = 0.6;
 
     /// <summary>The most a strip's delay is, either way, in frames (500 ms at the highest rate, and then some).</summary>
     const int MaxDelayFrames = 1 << 18;
@@ -66,6 +85,10 @@ public sealed class Strip {
     /// <summary>The strip stays audible under others' solo in place.</summary>
     public bool SoloSafe => Volatile.Read(ref soloSafe);
 
+    public EngineMeterType MeterType => (EngineMeterType)Volatile.Read(ref meterType);
+
+    public EngineMeterTap MeterTap => (EngineMeterTap)Volatile.Read(ref meterTap);
+
     /// <summary>The panner's settings (Phase 10; null: the stereo pan), swapped whole by the control thread.</summary>
     public EnginePanner? Panner => Volatile.Read(ref panner);
 
@@ -82,6 +105,32 @@ public sealed class Strip {
         Volatile.Write(ref panLeft, float.IsFinite(strip.PanLeft) ? Math.Clamp(strip.PanLeft, -1f, 1f) : -1f);
         Volatile.Write(ref panRight, float.IsFinite(strip.PanRight) ? Math.Clamp(strip.PanRight, -1f, 1f) : 1f);
         Volatile.Write(ref soloSafe, strip.SoloSafe);
+        Volatile.Write(ref meterType, (int)strip.MeterType);
+        Volatile.Write(ref meterTap, (int)strip.MeterTap);
+    }
+
+    /// <summary>Control thread: readies the meter for the engine's rate, and the loudness meter when its type wants it.</summary>
+    public void PrepareMeter(double sampleRate) {
+        meterRate = sampleRate;
+        if (MeterType == EngineMeterType.Lufs && loudness is null) {
+            silence = GC.AllocateArray<float>(AudioEngine.MaxFrames, true);
+            Volatile.Write(ref loudness, new(sampleRate));
+        }
+    }
+
+    /// <summary>
+    ///     Reader (telemetry): the levels the meter's type publishes, and which of them mean something
+    ///     (<see cref="MeterEntry.Levels" />).
+    /// </summary>
+    public (float RmsLeft, float RmsRight, float Lufs, int Levels) MeterLevels() {
+        var type = MeterType;
+        var levels = type switch {
+            EngineMeterType.Peak => 0,
+            EngineMeterType.Lufs => MeterEntry.HasLufs,
+            _ => MeterEntry.HasRms
+        };
+        return (Volatile.Read(ref publishedRmsLeft), Volatile.Read(ref publishedRmsRight),
+            Volatile.Read(ref publishedLufs), levels);
     }
 
     /// <summary>Control thread (Phase 11, an Environment control target): the volume alone.</summary>
@@ -157,6 +206,58 @@ public sealed class Strip {
         }
 
         return TakePeaks();
+    }
+
+    /// <summary>
+    ///     Audio thread: a block at the meter's tap point (a mono signal: the same span twice), its peaks and what its type
+    ///     wants.
+    /// </summary>
+    public void MeterSignal(ReadOnlySpan<float> left, ReadOnlySpan<float> right) {
+        float peakLeft = 0, peakRight = 0;
+        for (var i = 0; i < left.Length; i++) {
+            peakLeft = Math.Max(peakLeft, Math.Abs(left[i]));
+            peakRight = Math.Max(peakRight, Math.Abs(right[i]));
+        }
+
+        Meter(peakLeft, peakRight);
+        MeasureLevels(left, right);
+    }
+
+    /// <summary>Audio thread: what the meter's type wants of a block, beyond its peaks.</summary>
+    internal void MeasureLevels(ReadOnlySpan<float> left, ReadOnlySpan<float> right) {
+        var type = MeterType;
+        if (type == EngineMeterType.Peak) {
+            return;
+        }
+
+        if (type == EngineMeterType.Lufs) {
+            MeasureLoudness(left, right);
+            return;
+        }
+
+        double sumLeft = 0, sumRight = 0;
+        for (var i = 0; i < left.Length; i++) {
+            sumLeft += left[i] * left[i];
+            sumRight += right[i] * right[i];
+        }
+
+        var seconds = type == EngineMeterType.Rms ? RmsSeconds : KSystemSeconds;
+        var rise = 1 - Math.Exp(-left.Length / (seconds * meterRate));
+        squareLeft += rise * (sumLeft / left.Length - squareLeft);
+        squareRight += rise * (sumRight / left.Length - squareRight);
+        Volatile.Write(ref publishedRmsLeft, (float)Math.Sqrt(squareLeft));
+        Volatile.Write(ref publishedRmsRight, (float)Math.Sqrt(squareRight));
+    }
+
+    /// <summary>Momentary loudness; a mono signal (the same span twice) is one channel.</summary>
+    void MeasureLoudness(ReadOnlySpan<float> left, ReadOnlySpan<float> right) {
+        if (Volatile.Read(ref loudness) is not { } meter) {
+            return;
+        }
+
+        var mono = left.Overlaps(right);
+        meter.Process(left, mono ? silence.AsSpan(0, left.Length) : right);
+        Volatile.Write(ref publishedLufs, meter.Momentary);
     }
 
     /// <summary>Audio thread: adds a block's post-fader peaks to the meter.</summary>

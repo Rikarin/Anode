@@ -1203,10 +1203,21 @@ public sealed partial class FakeHost : IAsyncDisposable {
             var soloed = Soloed();
             meters = [
                 ..tracks.Values.OrderBy(static t => t.Id)
-                    .Select(t => new MeterEntry {
-                            TrackId = t.Id,
-                            PeakLeft = Level(t, position, soloed),
-                            PeakRight = Level(t, position, soloed)
+                    .Select(t => {
+                            var level = Level(t, position, soloed);
+                            return new MeterEntry {
+                                TrackId = t.Id,
+                                PeakLeft = level,
+                                PeakRight = level,
+                                RmsLeft = level * MathF.Sqrt(0.5f),
+                                RmsRight = level * MathF.Sqrt(0.5f),
+                                Lufs = level > 0 ? 20 * MathF.Log10(level) - 3 : -120,
+                                Levels = t.Strip.MeterType switch {
+                                    EngineMeterType.Peak => 0,
+                                    EngineMeterType.Lufs => MeterEntry.HasLufs,
+                                    _ => MeterEntry.HasRms
+                                }
+                            };
                         }
                     )
             ];

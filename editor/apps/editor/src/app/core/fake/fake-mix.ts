@@ -327,7 +327,8 @@ export function applyStrip(project: Project, command: Command<'setStrip'>, ctx: 
     dualPan: command.dualPan ?? s.dualPan,
     panLeft: command.panLeft ?? s.panLeft,
     panRight: command.panRight ?? s.panRight,
-    soloSafe: command.soloSafe ?? s.soloSafe
+    soloSafe: command.soloSafe ?? s.soloSafe,
+    meter: { type: command.meterType ?? s.meter.type, tap: command.meterTap ?? s.meter.tap }
   });
   checkStripInput(command);
   const input = [
@@ -348,6 +349,10 @@ export function applyStrip(project: Project, command: Command<'setStrip'>, ctx: 
   const track = findTrack(project, command.trackId);
   if (input && !hasFullStrip(track.kind)) {
     refuse(`${track.name} has no trim, polarity, delay, dual pan or solo safe.`);
+  }
+  const metered = (command.meterType ?? command.meterTap ?? null) !== null;
+  if (metered && !hasFullStrip(track.kind)) {
+    refuse(`${track.name} has no meter.`);
   }
   const next = patch(track.strip);
   let after = withTrack(project, { ...track, strip: next });
