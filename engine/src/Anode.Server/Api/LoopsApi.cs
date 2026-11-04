@@ -101,7 +101,7 @@ static class LoopsApi {
             )
             .WithName("RemovePack")
             .WithSummary(
-                "Removes an installed pack and its loops from the index; projects keep the copies of the loops they use."
+                "Removes an installed pack and its loops from the index; projects keep the copies of the files they use."
             );
 
         var project = api.MapGroup("/project").WithTags("Project").AddEndpointFilter<ProblemFilter>();

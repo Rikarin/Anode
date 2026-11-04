@@ -519,7 +519,7 @@ public sealed partial class ProjectSession(
                         Resolve(o, batch.Commands),
                         ids,
                         catalog.ForEdits,
-                        patches,
+                        PatchesOf(o),
                         analysis,
                         notation,
                         StylesFor(batch.Commands)
@@ -782,7 +782,7 @@ public sealed partial class ProjectSession(
             var track = o.State.FindTrack(trackId) ?? throw ProjectException.NotFound($"No track '{trackId}'.");
             var states = States(o, hostStates)
                 .ToDictionary(static s => s.Key, static s => s.Value.Bytes, StringComparer.Ordinal);
-            return (track, states);
+            return (Portable(o.Folder, track), states);
         }
     }
 
@@ -1270,9 +1270,9 @@ public sealed partial class ProjectSession(
 
     /// <summary>
     ///     The batch with each <c>loadInstrumentFile</c> path resolved on the server's disk (a relative path is the
-    ///     project's): the file must exist, and inside the project it is kept relative to it.
+    ///     project's): the file must exist, and inside the project it is kept relative to it; a pack's is copied in.
     /// </summary>
-    static IReadOnlyList<EditCommand> Resolve(Open o, IReadOnlyList<EditCommand> commands) {
+    IReadOnlyList<EditCommand> Resolve(Open o, IReadOnlyList<EditCommand> commands) {
         if (!commands.Any(static c => c is LoadInstrumentFileCommand or LoadInsertFileCommand)) {
             return commands;
         }
@@ -1280,7 +1280,7 @@ public sealed partial class ProjectSession(
         return [
             ..commands.Select(EditCommand(c) => c switch {
                     LoadInstrumentFileCommand { Path: { Length: > 0 } path } load => load with {
-                        Path = InstrumentPath(o.Folder, path)
+                        Path = Kept(o.Folder, SamplesFolder, InstrumentPath(o.Folder, path))
                     },
                     LoadInsertFileCommand { Path: { Length: > 0 } path } load => load with {
                         Path = InsertPath(o.Folder, path)
@@ -1305,11 +1305,19 @@ public sealed partial class ProjectSession(
             return Path.GetRelativePath(folder, full).Replace(Path.DirectorySeparatorChar, '/');
         }
 
+        return CopiedInto(folder, ImpulseResponsesFolder, full);
+    }
+
+    /// <summary>
+    ///     A copy of <paramref name="full" /> in the project's <paramref name="target" /> folder (a file of that name and
+    ///     size there is reused), by the project's relative path.
+    /// </summary>
+    static string CopiedInto(string folder, string target, string full) {
         try {
-            var target = Directory.CreateDirectory(Path.Combine(folder, ImpulseResponsesFolder)).FullName;
-            var copy = Path.Combine(target, Path.GetFileName(full));
+            var into = Directory.CreateDirectory(Path.Combine(folder, target)).FullName;
+            var copy = Path.Combine(into, Path.GetFileName(full));
             for (var n = 2; File.Exists(copy) && new FileInfo(copy).Length != new FileInfo(full).Length; n++) {
-                copy = Path.Combine(target, $"{Path.GetFileNameWithoutExtension(full)} {n}{Path.GetExtension(full)}");
+                copy = Path.Combine(into, $"{Path.GetFileNameWithoutExtension(full)} {n}{Path.GetExtension(full)}");
             }
 
             if (!File.Exists(copy)) {
@@ -1400,6 +1408,8 @@ public sealed partial class ProjectSession(
     ) {
         Project project;
         using var writes = autosaving.EnterScope();
+        var saved = state;
+        state = WithPackFilesKept(folder, state);
         var offline = OfflineFiles.Report(folder, state);
         lock (gate) {
             if (open is { } old) {
@@ -1416,7 +1426,7 @@ public sealed partial class ProjectSession(
                 States = states ?? ImmutableDictionary.Create<string, SavedState>(StringComparer.Ordinal),
                 Analyses = FileAnalyses.CachedAll(folder, state.Files.Values)
                     .ToImmutableDictionary(StringComparer.Ordinal),
-                Dirty = recovered,
+                Dirty = recovered || !ReferenceEquals(state, saved),
                 Offline = offline
             };
             open.MarkAutosaved(open.Changes);

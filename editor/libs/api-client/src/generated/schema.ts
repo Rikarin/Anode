@@ -958,7 +958,7 @@ export interface paths {
     get?: never;
     put?: never;
     post?: never;
-    /** Removes an installed pack and its loops from the index; projects keep the copies of the loops they use. */
+    /** Removes an installed pack and its loops from the index; projects keep the copies of the files they use. */
     delete: operations['RemovePack'];
     options?: never;
     head?: never;

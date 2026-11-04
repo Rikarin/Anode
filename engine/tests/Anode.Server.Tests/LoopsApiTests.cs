@@ -1,5 +1,6 @@
 using Anode.Contracts;
 using Anode.Model.Midi;
+using Anode.Server.Engine;
 using Anode.Server.Library;
 using Microsoft.Extensions.DependencyInjection;
 using System.Buffers.Binary;
@@ -138,6 +139,17 @@ public sealed class LoopsApiTests : IDisposable {
                "parameters":{"mode":0,"keyFollow":0},"file":"patches/samples/Clap.wav"},"inserts":[]}]}
             """
         );
+        // A patch with a sampler on a sample of the pack and a reverb on one of its impulse responses.
+        File.WriteAllText(
+            Path.Combine(staging, "patches", "pch_pack.json"),
+            """
+            {"schemaVersion":1,"id":"pch_pack","name":"Pack Patch","category":"Keys","kind":"instrument",
+             "instrument":{"pluginId":"anode.quick-sampler","name":"Quick Sampler",
+               "parameters":{"mode":0,"keyFollow":0},"file":"patches/samples/Clap.wav"},
+             "inserts":[{"id":"ins_1","pluginId":"anode.space","name":"Space","bypassed":false,
+               "parameters":{},"file":"patches/samples/Clap.wav"}],"sends":[]}
+            """
+        );
         var pack = Path.Combine(folder, $"{id}-{Guid.NewGuid():n}.anodepack");
         ZipFile.CreateFromDirectory(staging, pack);
         return pack;
@@ -204,12 +216,7 @@ public sealed class LoopsApiTests : IDisposable {
         await client.CreateProjectAsync();
         await client.EditAsync(new CreateDrumMachineCommand(null, "kit_pack"));
         var pad = (await client.ProjectAsync()).Tracks.Single(static t => t.Name == "Clap").Instrument!;
-        Assert.True(Path.IsPathRooted(pad.File) && File.Exists(pad.File), pad.File);
-        Assert.EndsWith(
-            Path.Combine("test-pack", "patches", "samples", "Clap.wav"),
-            pad.File,
-            StringComparison.Ordinal
-        );
+        Assert.Equal("Samples/Clap.wav", pad.File);
 
         var packs = await client.GetFromJsonAsync(
             "/api/v1/library/packs",
@@ -226,6 +233,125 @@ public sealed class LoopsApiTests : IDisposable {
             (await client.DeleteAsync("/api/v1/library/packs/test-pack", Token)).StatusCode
         );
         Assert.Equal(0, (await QueryAsync(client)).Total);
+    }
+
+    [Fact]
+    public async Task A_kit_and_a_patch_from_a_pack_keep_their_files_when_the_pack_is_removed() {
+        await using var server = new ServerFixture();
+        using var client = server.CreateClient();
+        await InstallAsync(client, Pack());
+        var project = await client.CreateProjectAsync();
+        var catalogue = server.Services.GetRequiredService<EngineCatalog>();
+        await ServerFixture.Eventually(() =>
+            Task.FromResult(catalogue.ForEdits.Find("anode.space") is { FileTypes.Count: > 0 })
+        );
+        await client.EditAsync(
+            new CreateDrumMachineCommand(null, "kit_pack"),
+            new AddTrackCommand("Keys", Kind: TrackKind.Instrument)
+        );
+        var keys = (await client.ProjectAsync()).Tracks.Single(static t => t.Name == "Keys").Id;
+        await client.EditAsync(new ApplyPatchCommand(keys, "pch_pack"));
+
+        Assert.Equal(
+            HttpStatusCode.NoContent,
+            (await client.DeleteAsync("/api/v1/library/packs/test-pack", Token)).StatusCode
+        );
+
+        var tracks = (await client.ProjectAsync()).Tracks;
+        var clap = tracks.Single(static t => t.Name == "Clap").Instrument!.File!;
+        var patched = tracks.Single(static t => t.Name == "Keys");
+        var reverb = patched.Strip.Inserts.Single().File!;
+        Assert.Equal("Impulse Responses/Clap.wav", reverb);
+        foreach (var file in (string[])[clap, patched.Instrument!.File!, reverb]) {
+            Assert.False(Path.IsPathRooted(file), file);
+            Assert.True(File.Exists(Path.Combine(project.Path, file)), file);
+        }
+    }
+
+    [Fact]
+    public async Task A_sample_of_a_pack_loaded_by_path_is_copied_into_the_project() {
+        await using var server = new ServerFixture();
+        using var client = server.CreateClient();
+        await InstallAsync(client, Pack());
+        var project = await client.CreateProjectAsync();
+        await client.EditAsync(new AddTrackCommand("Keys", Kind: TrackKind.Instrument, PluginId: "anode.quick-sampler"));
+        var keys = (await client.ProjectAsync()).Tracks.Single().Id;
+        var sample = Path.Combine(
+            server.DataDirectory,
+            "Library",
+            "Packs",
+            "test-pack",
+            "patches",
+            "samples",
+            "Clap.wav"
+        );
+        await client.EditAsync(new LoadInstrumentFileCommand(keys, sample));
+        Assert.Equal("Samples/Clap.wav", (await client.ProjectAsync()).Tracks[0].Instrument!.File);
+        Assert.True(File.Exists(Path.Combine(project.Path, "Samples", "Clap.wav")));
+    }
+
+    [Fact]
+    public async Task A_project_saved_with_paths_into_a_pack_takes_the_files_in_when_it_is_opened() {
+        await using var server = new ServerFixture();
+        using var client = server.CreateClient();
+        await InstallAsync(client, Pack());
+        var project = await client.CreateProjectAsync();
+        await client.EditAsync(new CreateDrumMachineCommand(null, "kit_pack"));
+        await client.PostAsync("/api/v1/project/save", null, Token);
+        await client.PostAsync("/api/v1/project/close", null, Token);
+
+        var sample = Path.Combine(
+            server.DataDirectory,
+            "Library",
+            "Packs",
+            "test-pack",
+            "patches",
+            "samples",
+            "Clap.wav"
+        );
+        foreach (var path in Directory.EnumerateFiles(Path.Combine(project.Path, "tracks"))) {
+            File.WriteAllText(path, File.ReadAllText(path).Replace("Samples/Clap.wav", sample, StringComparison.Ordinal));
+        }
+
+        Directory.Delete(Path.Combine(project.Path, "Samples"), true);
+        var opened = await client.PostAsJsonAsync(
+            "/api/v1/projects/open",
+            new(project.Path),
+            ContractsJsonContext.Default.OpenProjectRequest,
+            Token
+        );
+        Assert.True(opened.IsSuccessStatusCode, await opened.Content.ReadAsStringAsync(Token));
+        var reopened = await client.ProjectAsync();
+        Assert.True(reopened.Dirty);
+        Assert.Equal("Samples/Clap.wav", reopened.Tracks.Single(static t => t.Name == "Clap").Instrument!.File);
+        Assert.True(File.Exists(Path.Combine(project.Path, "Samples", "Clap.wav")));
+    }
+
+    [Fact]
+    public async Task A_patch_saved_from_a_track_finds_its_project_files_in_another_project() {
+        await using var server = new ServerFixture();
+        using var client = server.CreateClient();
+        await InstallAsync(client, Pack());
+        var first = await client.CreateProjectAsync();
+        await client.EditAsync(new AddTrackCommand("Keys", Kind: TrackKind.Instrument));
+        var keys = (await client.ProjectAsync()).Tracks.Single().Id;
+        await client.EditAsync(new ApplyPatchCommand(keys, "pch_pack"));
+        var saved = await client.PostAsJsonAsync(
+            "/api/v1/library/patches",
+            new(keys, "Mine", "Keys"),
+            ContractsJsonContext.Default.SavePatchRequest,
+            Token
+        );
+        var patch = (await saved.Content.ReadFromJsonAsync(ContractsJsonContext.Default.PatchInfo, Token))!;
+
+        await client.CreateProjectAsync("Other");
+        await client.EditAsync(new AddTrackCommand("Keys", Kind: TrackKind.Instrument));
+        var other = (await client.ProjectAsync()).Tracks.Single().Id;
+        await client.EditAsync(new ApplyPatchCommand(other, patch.Id));
+        Assert.Equal(
+            Path.Combine(first.Path, "Samples", "Clap.wav"),
+            (await client.ProjectAsync()).Tracks.Single().Instrument!.File
+        );
     }
 
     [Fact]

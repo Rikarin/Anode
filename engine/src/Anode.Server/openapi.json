@@ -2545,7 +2545,7 @@
         "tags": [
           "Library"
         ],
-        "summary": "Removes an installed pack and its loops from the index; projects keep the copies of the loops they use.",
+        "summary": "Removes an installed pack and its loops from the index; projects keep the copies of the files they use.",
         "operationId": "RemovePack",
         "parameters": [
           {
