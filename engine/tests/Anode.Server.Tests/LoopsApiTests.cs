@@ -274,7 +274,9 @@ public sealed class LoopsApiTests : IDisposable {
         using var client = server.CreateClient();
         await InstallAsync(client, Pack());
         var project = await client.CreateProjectAsync();
-        await client.EditAsync(new AddTrackCommand("Keys", Kind: TrackKind.Instrument, PluginId: "anode.quick-sampler"));
+        await client.EditAsync(
+            new AddTrackCommand("Keys", Kind: TrackKind.Instrument, PluginId: "anode.quick-sampler")
+        );
         var keys = (await client.ProjectAsync()).Tracks.Single().Id;
         var sample = Path.Combine(
             server.DataDirectory,
@@ -310,7 +312,10 @@ public sealed class LoopsApiTests : IDisposable {
             "Clap.wav"
         );
         foreach (var path in Directory.EnumerateFiles(Path.Combine(project.Path, "tracks"))) {
-            File.WriteAllText(path, File.ReadAllText(path).Replace("Samples/Clap.wav", sample, StringComparison.Ordinal));
+            File.WriteAllText(
+                path,
+                File.ReadAllText(path).Replace("Samples/Clap.wav", sample, StringComparison.Ordinal)
+            );
         }
 
         Directory.Delete(Path.Combine(project.Path, "Samples"), true);
@@ -436,7 +441,7 @@ public sealed class LoopsApiTests : IDisposable {
         var drums = loops.Single(static l => l.Name == "Drums 100");
         var preview = await client.PostAsync($"/api/v1/library/loops/{drums.Id}/preview", null, Token);
         Assert.Equal(HttpStatusCode.NoContent, preview.StatusCode);
-        var host = server.Services.GetRequiredService<Engine.EngineConnection>().InProcessHost!;
+        var host = server.Services.GetRequiredService<EngineConnection>().InProcessHost!;
         await ServerFixture.Eventually(() => Task.FromResult(Math.Abs(host.PreviewSync.TempoRatio - 1.1) < 1e-9));
         Assert.Equal((2, true), (host.PreviewSync.TransposeSemitones, host.PreviewSync.StartOnBar));
         var bassId = loops.Single(static l => l.Name == "Bass C").Id;

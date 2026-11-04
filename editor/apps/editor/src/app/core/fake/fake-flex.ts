@@ -435,11 +435,7 @@ export function applyFlexCommand(project: Project, command: EditCommand, ctx: Fl
       }
       const live = liveContent(project, t.id);
       const alternatives = t.alternatives.map(a =>
-        a.id === t.alternativeId
-          ? { ...a, ...live }
-          : a.id === target.id
-            ? { ...a, ...noContent() }
-            : a
+        a.id === t.alternativeId ? { ...a, ...live } : a.id === target.id ? { ...a, ...noContent() } : a
       );
       return withContent(withTrack(project, { ...t, alternatives, alternativeId: target.id }), t.id, target);
     }

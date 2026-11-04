@@ -509,7 +509,8 @@ public sealed class PackageTests : IDisposable {
             state = Edits.Apply(state, new AddTrackCommand(name), ids).State;
         }
 
-        state = Edits.Apply(state, new CreateStackCommand([state.Tracks[0].Id, state.Tracks[1].Id], "Stack"), ids).State;
+        state = Edits.Apply(state, new CreateStackCommand([state.Tracks[0].Id, state.Tracks[1].Id], "Stack"), ids)
+            .State;
         ProjectPackage.Save(folder, state);
         var path = Path.Combine(folder, "project.json");
         var root = JsonNode.Parse(File.ReadAllText(path))!.AsObject();

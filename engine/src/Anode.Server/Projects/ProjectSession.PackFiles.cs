@@ -38,8 +38,8 @@ public sealed partial class ProjectSession {
         inserts.Any(i => i.File is { } file && Kept(folder, ImpulseResponsesFolder, file) != file)
             ? [
                 ..inserts.Select(i => i.File is { } file
-                    ? i with { File = Kept(folder, ImpulseResponsesFolder, file) }
-                    : i
+                        ? i with { File = Kept(folder, ImpulseResponsesFolder, file) }
+                        : i
                 )
             ]
             : inserts;

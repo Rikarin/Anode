@@ -93,7 +93,8 @@ public sealed class FlexApiTests {
         analyzer.Entered.Wait(Token);
         var closing = client.PostAsync("/api/v1/project/close", null, Token);
         try {
-            await ServerFixture.Eventually(async () => {
+            await ServerFixture.Eventually(
+                async () => {
                     var answer = await client.GetAsync("/api/v1/project", Token);
                     return answer.StatusCode == HttpStatusCode.NotFound;
                 },

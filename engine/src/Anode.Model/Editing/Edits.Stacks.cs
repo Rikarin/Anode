@@ -131,7 +131,9 @@ public static partial class Edits {
     ///     a track keeps, and what a project saved without it reads as.
     /// </summary>
     internal static List<Track> Grouped(IReadOnlyCollection<Track> tracks) {
-        var stacks = tracks.Where(static t => IsStackKind(t.Kind)).Select(static t => t.Id).ToHashSet(StringComparer.Ordinal);
+        var stacks = tracks.Where(static t => IsStackKind(t.Kind))
+            .Select(static t => t.Id)
+            .ToHashSet(StringComparer.Ordinal);
         var members = tracks.Where(t => t.ParentId is not null && stacks.Contains(t.ParentId))
             .ToLookup(static t => t.ParentId!, StringComparer.Ordinal);
         var ordered = new List<Track>(tracks.Count);

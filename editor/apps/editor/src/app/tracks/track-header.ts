@@ -334,9 +334,7 @@ import { UiStore } from '../state/ui.store';
           <xui-menu>
             <button xuiMenuItem type="button" (click)="startRename()">Rename</button>
             <button xuiMenuItem type="button" [disabled]="moveTarget(-1) === null" (click)="moveBy(-1)">Move Up</button>
-            <button xuiMenuItem type="button" [disabled]="moveTarget(1) === null" (click)="moveBy(1)">
-              Move Down
-            </button>
+            <button xuiMenuItem type="button" [disabled]="moveTarget(1) === null" (click)="moveBy(1)">Move Down</button>
             <xui-menu-divider />
             @if (track().kind === 'stack') {
               <button xuiMenuItem type="button" (click)="unstack()">Flatten Stack</button>
