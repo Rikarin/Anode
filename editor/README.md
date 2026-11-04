@@ -45,6 +45,9 @@ backups, screensets, key commands, bookmarks, a small fake disk for the All File
 and Standard MIDI File import (the fake makes two instrument tracks from any `.mid` path). The demo project adds
 arrangement sections, markers, a two-take vocal folder and a project note.
 
+It reports a made-up load in `performance` events too, and `simulateOverload()` drops out once, for the control bar's
+load meter.
+
 It stands in for the desktop app's audio bridge too (`core/fake/fake-audio-devices.ts`), so Settings ▸ Audio ▸ Devices
 works in a browser: a few devices, made-up latencies, a Fake Interface that settles on 64 samples and refuses rates over
 96 kHz, and an Unplugged Interface that cannot open, for the failed switch.
