@@ -279,7 +279,8 @@ export class Timeline {
       beatsPerBar: (signature.numerator * 4) / signature.denominator,
       meter: settings.signatures,
       selected: this.selection.regions(),
-      waveformKey: fileId => this.fileKey(fileId)
+      waveformKey: fileId => this.fileKey(fileId),
+      offline: this.project.offlineIds()
     });
   });
 

@@ -16,6 +16,7 @@ public sealed record ProjectSummary(string Id, string Name, string Path, DateTim
 ///     is its movie (null: none). Phase 11 (docs/12-phase-11.md): <c>chordTrack</c> is its chord track (chords, key and
 ///     scale changes), <c>sessionPlayerRegions</c> the Session Player regions of its Drummer, Bass Player and Keyboard
 ///     Player tracks, and <c>environment</c> its MIDI Environment (empty: physical input to sequencer input).
+///     <c>offline</c> is what the disk lacks of it (not stored; the <c>offlineChanged</c> event follows it).
 /// </summary>
 public sealed record Project(
     string Id,
@@ -45,7 +46,8 @@ public sealed record Project(
     Movie? Movie,
     ChordTrack ChordTrack,
     IReadOnlyList<SessionPlayerRegion> SessionPlayerRegions,
-    MidiEnvironment Environment
+    MidiEnvironment Environment,
+    OfflineReport Offline
 );
 
 /// <summary>
@@ -266,7 +268,9 @@ public sealed record AudioRegion(
 ///     An audio file of the project; <c>path</c> is relative to the project folder. <c>tempo</c> is its File Tempo
 ///     (Smart Tempo), null until analysed. <c>version</c> (Phase 7) counts the Audio File Editor's operations on it: 0
 ///     is the file as imported or recorded; operation N wrote <c>path</c> as <c>&lt;name&gt;.vN.wav</c> beside it, and
-///     undo points <c>path</c> and <c>version</c> back at the previous one.
+///     undo points <c>path</c> and <c>version</c> back at the previous one. <c>channels</c> 0 is a file the project
+///     lost its entry for: its regions kept it, <c>frames</c> is as far as they reach, and its format is not known until
+///     it is relinked.
 /// </summary>
 public sealed record AudioFile(
     string Id,

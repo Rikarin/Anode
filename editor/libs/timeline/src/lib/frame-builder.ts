@@ -75,6 +75,8 @@ export interface TimelineTheme {
   readonly regionText: number;
   /** A muted region's fill. */
   readonly muted: number;
+  /** The fill of a region whose audio file is offline. */
+  readonly offline: number;
   /** The autopunch range in the ruler, on and off. */
   readonly punch: number;
   readonly punchOff: number;
@@ -101,6 +103,7 @@ export const darkTheme: TimelineTheme = {
   fade: parseHexColor('#ededf0'),
   regionText: parseHexColor('#f8f8fa'),
   muted: parseHexColor('#6c6c72'),
+  offline: parseHexColor('#6e3430'),
   punch: parseHexColor('#ff453a'),
   punchOff: parseHexColor('#7a3a37')
 };
@@ -126,9 +129,18 @@ export const lightTheme: TimelineTheme = {
   fade: parseHexColor('#ffffff'),
   regionText: parseHexColor('#ffffff'),
   muted: parseHexColor('#a2a2a8'),
+  offline: parseHexColor('#b0605a'),
   punch: parseHexColor('#e0352b'),
   punchOff: parseHexColor('#d9a3a0')
 };
+
+/** An item's colour before shading: an offline file's says so first, muted second, else its own. */
+function itemBase(theme: TimelineTheme, flag: number, color: number): number {
+  if (flag & ItemFlag.Offline) {
+    return theme.offline;
+  }
+  return flag & ItemFlag.Muted ? theme.muted : color;
+}
 
 /** The palette for a {@link TimelineScene.theme}. */
 export function timelineTheme(name: TimelineScene['theme']): TimelineTheme {
@@ -389,7 +401,7 @@ export class FrameBuilder {
         const x1 = Math.min(width + 2, Math.max(xOf(region.start + region.length), x0 + 1));
         const y = laneY(region.lane) + inset;
         const h = laneHeight - 2 * inset;
-        const base = flag & ItemFlag.Muted ? theme.muted : (scene.items.color[region.id] ?? 0);
+        const base = itemBase(theme, flag, scene.items.color[region.id] ?? 0);
         if (inner) {
           // A part: flat, between the name bar and the bottom edge, a little lighter than the item's body.
           const top = h >= NAME_BAR_MIN_HEIGHT ? NAME_BAR_HEIGHT : 1;
@@ -537,7 +549,7 @@ export class FrameBuilder {
     const x0 = Math.max(0, Math.floor(xStart));
     const x1 = Math.min(width, Math.ceil(xEnd));
     const flag = details.flags[id] ?? 0;
-    const base = flag & ItemFlag.Muted ? theme.muted : (scene.items.color[id] ?? 0);
+    const base = itemBase(theme, flag, scene.items.color[id] ?? 0);
     const withName = h >= NAME_BAR_MIN_HEIGHT;
     const top = withName ? y + NAME_BAR_HEIGHT : y + 1;
     const bottom = y + h - 1;

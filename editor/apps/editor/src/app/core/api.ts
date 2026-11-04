@@ -55,6 +55,9 @@ import {
   type MovieThumbnails,
   type MusicXmlExportRequest,
   type MusicXmlImportRequest,
+  type OfflineReport,
+  type OfflineSearch,
+  type OfflineSearchRequest,
   type OscSettings,
   type OscStatus,
   type Pack,
@@ -68,6 +71,7 @@ import {
   type ProjectBackup,
   type ProjectSummary,
   type RegenerateRequest,
+  type RelinkRequest,
   type RemotePads,
   type SampleRange,
   type SavePatchRequest,
@@ -154,6 +158,12 @@ export interface AnodeApi {
   uploadAudioFile(file: File): Promise<AudioFile>;
   /** Copies a WAV the Server can read from its own disk into the project (the desktop app). */
   importAudioFile(path: string): Promise<AudioFile>;
+  /** Reads the disk now: what is offline. */
+  offline(): Promise<OfflineReport>;
+  /** Looks through a folder of the Server's disk for WAVs named as the offline files, judging each by what it holds. */
+  searchOffline(request: OfflineSearchRequest): Promise<OfflineSearch>;
+  /** Points files at WAVs on the Server's disk, one undo step; 422, changing nothing, when one does not match. */
+  relinkFiles(request: RelinkRequest): Promise<CommandResult>;
   /** A `PeakFormat` body at the kept resolution nearest `framesPerPeak`. */
   peaks(fileId: string, framesPerPeak: number): Promise<ArrayBuffer>;
   transport(): Promise<TransportStatus>;
@@ -483,6 +493,18 @@ export class HttpAnodeApi implements AnodeApi {
 
   async importAudioFile(path: string): Promise<AudioFile> {
     return unwrap(await this.client.POST('/api/v1/project/files/import', { body: { path } }));
+  }
+
+  async offline(): Promise<OfflineReport> {
+    return unwrap(await this.client.GET('/api/v1/project/offline'));
+  }
+
+  async searchOffline(request: OfflineSearchRequest): Promise<OfflineSearch> {
+    return unwrap(await this.client.POST('/api/v1/project/offline/search', { body: request }));
+  }
+
+  async relinkFiles(request: RelinkRequest): Promise<CommandResult> {
+    return unwrap(await this.client.POST('/api/v1/project/offline/relink', { body: request }));
   }
 
   async peaks(fileId: string, framesPerPeak: number): Promise<ArrayBuffer> {

@@ -462,6 +462,128 @@
         }
       }
     },
+    "/api/v1/project/offline": {
+      "get": {
+        "tags": [
+          "Project"
+        ],
+        "summary": "Reads the disk now: the project\u0027s offline files and unreadable tracks.",
+        "operationId": "GetOffline",
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OfflineReport"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/api/v1/project/offline/search": {
+      "post": {
+        "tags": [
+          "Project"
+        ],
+        "summary": "Looks through a folder of the server\u0027s disk (left out: the project\u0027s) for WAVs named as the offline files, and says of each whether its length, rate and channels match.",
+        "operationId": "SearchOffline",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OfflineSearchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OfflineSearch"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/api/v1/project/offline/relink": {
+      "post": {
+        "tags": [
+          "Project"
+        ],
+        "summary": "Points files of the project at WAVs on the server\u0027s disk, copied into Audio Files, as one undo step; 422, changing nothing, when one\u0027s length, rate or channels do not match the file it replaces.",
+        "operationId": "RelinkFiles",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RelinkRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommandResult"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
     "/api/v1/project/files": {
       "post": {
         "tags": [
@@ -5929,7 +6051,7 @@
             "format": "int32"
           }
         },
-        "description": "An audio file of the project; \u0060path\u0060 is relative to the project folder. \u0060tempo\u0060 is its File Tempo\n(Smart Tempo), null until analysed. \u0060version\u0060 (Phase 7) counts the Audio File Editor\u0027s operations on it: 0\nis the file as imported or recorded; operation N wrote \u0060path\u0060 as \u0060\u0026lt;name\u0026gt;.vN.wav\u0060 beside it, and\nundo points \u0060path\u0060 and \u0060version\u0060 back at the previous one."
+        "description": "An audio file of the project; \u0060path\u0060 is relative to the project folder. \u0060tempo\u0060 is its File Tempo\n(Smart Tempo), null until analysed. \u0060version\u0060 (Phase 7) counts the Audio File Editor\u0027s operations on it: 0\nis the file as imported or recorded; operation N wrote \u0060path\u0060 as \u0060\u0026lt;name\u0026gt;.vN.wav\u0060 beside it, and\nundo points \u0060path\u0060 and \u0060version\u0060 back at the previous one. \u0060channels\u0060 0 is a file the project\nlost its entry for: its regions kept it, \u0060frames\u0060 is as far as they reach, and its format is not known until\nit is relinked."
       },
       "AudioFormat": {
         "enum": [
@@ -12381,6 +12503,20 @@
               "integer"
             ],
             "format": "int32"
+          },
+          "channels": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int32"
+          },
+          "bitDepth": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int32"
           }
         },
         "description": "Phase 7, the Audio File Editor: points a file at another version of itself: \u0060path\u0060 (relative to the\nproject, the \u0060\u0026lt;name\u0026gt;.vN.wav\u0060 an \u0060audioEdit\u0060 job wrote) as \u0060version\u0060, with its frame count\nand rate when an operation changed them. The job applies it when it finishes (with the region shifts a length\nchange needs, in the same undo step); undo applies it back. Clients do not send it."
@@ -17738,6 +17874,123 @@
         },
         "description": "The 3D Object Panner: an object\u0027s position, polar as ADM\u0027s (\u0060audioBlockFormat\u0060 of type Objects):\n\u0060azimuth\u0060 and \u0060elevation\u0060 in degrees, \u0060distance\u0060 0\u20261 (1: on the speakers\u0027 sphere), and\n\u0060size\u0060 0\u20261 (its spread over neighbouring speakers; ADM width, height and depth together)."
       },
+      "OfflineCandidate": {
+        "required": [
+          "fileId",
+          "path"
+        ],
+        "type": "object",
+        "properties": {
+          "fileId": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          },
+          "problem": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        },
+        "description": "A WAV with the name of an offline file. \u0060problem\u0060 is null when its length, rate and channels match, so it\ncan be relinked; otherwise it says what differs."
+      },
+      "OfflineFile": {
+        "required": [
+          "fileId",
+          "name",
+          "path",
+          "reason"
+        ],
+        "type": "object",
+        "properties": {
+          "fileId": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          },
+          "reason": {
+            "$ref": "#/components/schemas/OfflineReason"
+          },
+          "detail": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        },
+        "description": "A file of the project the disk cannot give. Its regions stay, play silence (a \u0060changed\u0060 file plays what is\nthere) and save as they are. \u0060detail\u0060 says what is wrong with a \u0060changed\u0060 file."
+      },
+      "OfflineReason": {
+        "enum": [
+          "missing",
+          "changed",
+          "unlisted"
+        ],
+        "description": "Why a file of the project is offline."
+      },
+      "OfflineReport": {
+        "required": [
+          "files",
+          "unreadableTracks"
+        ],
+        "type": "object",
+        "properties": {
+          "files": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OfflineFile"
+            }
+          },
+          "unreadableTracks": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "description": "What the project could not find when last checked: its offline files, and the tracks whose\n\u0060tracks/\u0026lt;id\u0026gt;.json\u0060 is missing or unreadable (they are not in the project, and saving keeps their files)."
+      },
+      "OfflineSearch": {
+        "required": [
+          "directory",
+          "candidates",
+          "truncated"
+        ],
+        "type": "object",
+        "properties": {
+          "directory": {
+            "type": "string"
+          },
+          "candidates": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OfflineCandidate"
+            }
+          },
+          "truncated": {
+            "type": "boolean"
+          }
+        },
+        "description": "What a search found, those that match first; \u0060truncated\u0060: it stopped before seeing the whole folder."
+      },
+      "OfflineSearchRequest": {
+        "type": "object",
+        "properties": {
+          "directory": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        },
+        "description": "Searches a folder of the server\u0027s disk and those inside it (left out: the project\u0027s own)."
+      },
       "OpenProjectRequest": {
         "required": [
           "path"
@@ -18558,7 +18811,8 @@
           "movie",
           "chordTrack",
           "sessionPlayerRegions",
-          "environment"
+          "environment",
+          "offline"
         ],
         "type": "object",
         "properties": {
@@ -18696,9 +18950,12 @@
           },
           "environment": {
             "$ref": "#/components/schemas/MidiEnvironment"
+          },
+          "offline": {
+            "$ref": "#/components/schemas/OfflineReport"
           }
         },
-        "description": "The open project (docs/01-implementation-plan.md \u00A75). Musical positions are ticks at 960 PPQ; audio offsets,\nlengths and fades are frames at the project\u0027s \u0060sampleRate\u0060. \u0060revision\u0060 grows with every edit and is\nthe ETag; \u0060dirty\u0060 says whether it has unsaved edits. Phase 6 (docs/07-phase-6.md): \u0060patternRegions\u0060\nare the Step Sequencer\u0027s regions; \u0060liveLoops\u0060 is the Live Loops grid. Phase 7 (docs/08-phase-7.md):\n\u0060grooves\u0060 are the project\u0027s groove templates, \u0060articulationSets\u0060 its articulation sets and\n\u0060laneSets\u0060 its Step Editor lane sets. Phase 9 (docs/10-phase-9.md): \u0060score\u0060 is its stored score content\n(staff styles, symbols, lyrics, chord symbols, score sets, layout). Phase 10 (docs/11-phase-10.md): \u0060movie\u0060\nis its movie (null: none). Phase 11 (docs/12-phase-11.md): \u0060chordTrack\u0060 is its chord track (chords, key and\nscale changes), \u0060sessionPlayerRegions\u0060 the Session Player regions of its Drummer, Bass Player and Keyboard\nPlayer tracks, and \u0060environment\u0060 its MIDI Environment (empty: physical input to sequencer input)."
+        "description": "The open project (docs/01-implementation-plan.md \u00A75). Musical positions are ticks at 960 PPQ; audio offsets,\nlengths and fades are frames at the project\u0027s \u0060sampleRate\u0060. \u0060revision\u0060 grows with every edit and is\nthe ETag; \u0060dirty\u0060 says whether it has unsaved edits. Phase 6 (docs/07-phase-6.md): \u0060patternRegions\u0060\nare the Step Sequencer\u0027s regions; \u0060liveLoops\u0060 is the Live Loops grid. Phase 7 (docs/08-phase-7.md):\n\u0060grooves\u0060 are the project\u0027s groove templates, \u0060articulationSets\u0060 its articulation sets and\n\u0060laneSets\u0060 its Step Editor lane sets. Phase 9 (docs/10-phase-9.md): \u0060score\u0060 is its stored score content\n(staff styles, symbols, lyrics, chord symbols, score sets, layout). Phase 10 (docs/11-phase-10.md): \u0060movie\u0060\nis its movie (null: none). Phase 11 (docs/12-phase-11.md): \u0060chordTrack\u0060 is its chord track (chords, key and\nscale changes), \u0060sessionPlayerRegions\u0060 the Session Player regions of its Drummer, Bass Player and Keyboard\nPlayer tracks, and \u0060environment\u0060 its MIDI Environment (empty: physical input to sequencer input).\n\u0060offline\u0060 is what the disk lacks of it (not stored; the \u0060offlineChanged\u0060 event follows it)."
       },
       "ProjectAlternative": {
         "required": [
@@ -19059,6 +19316,37 @@
           }
         },
         "description": "How a MIDI region plays, without changing its notes (Logic\u0027s Region inspector): transpose in semitones,\nvelocity offset (\u2212127\u2026127), quantise grid in ticks (0: off) with strength (0\u20261, 1 = all the way) and swing\n(0\u20261, 0 = straight; delays every second grid step by up to half a step). \u0060grooveId\u0060 (Phase 7): it\nquantises to that groove template of the project instead of the grid (\u0060quantizeTicks\u0060 and \u0060swing\u0060\nthen unused; null: the grid)."
+      },
+      "RelinkRequest": {
+        "required": [
+          "files"
+        ],
+        "type": "object",
+        "properties": {
+          "files": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RelinkTarget"
+            }
+          }
+        },
+        "description": "Relinks files, as one undo step."
+      },
+      "RelinkTarget": {
+        "required": [
+          "fileId",
+          "path"
+        ],
+        "type": "object",
+        "properties": {
+          "fileId": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          }
+        },
+        "description": "Points a file of the project at a WAV on the server\u0027s disk."
       },
       "RemotePads": {
         "required": [
