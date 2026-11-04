@@ -13,6 +13,7 @@ namespace Anode.Contracts;
 [JsonDerivedType(typeof(ProjectAutosavedEvent), "projectAutosaved")]
 [JsonDerivedType(typeof(AutosaveFailedEvent), "autosaveFailed")]
 [JsonDerivedType(typeof(ProjectChangedEvent), "projectChanged")]
+[JsonDerivedType(typeof(OfflineChangedEvent), "offlineChanged")]
 [JsonDerivedType(typeof(TransportEvent), "transport")]
 [JsonDerivedType(typeof(MetersEvent), "meters")]
 [JsonDerivedType(typeof(MidiActivityEvent), "midiActivity")]
@@ -60,6 +61,9 @@ public sealed record AutosaveFailedEvent(string Message) : RealtimeEvent;
 
 /// <summary>An edit, undo or redo (from any client, or a finished recording) changed the project.</summary>
 public sealed record ProjectChangedEvent(ProjectDelta Delta) : RealtimeEvent;
+
+/// <summary>The disk no longer agrees with <c>Project.offline</c>: this is what is offline now.</summary>
+public sealed record OfflineChangedEvent(OfflineReport Offline, long Revision) : RealtimeEvent;
 
 /// <summary>
 ///     The playhead, about 30 times a second while it moves and once when it stops. Clients extrapolate between

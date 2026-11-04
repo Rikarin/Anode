@@ -12,17 +12,18 @@ const FakeKey = 'anode.fake';
 
 /**
  * Whether the page asks for the fake Server, and with what: `?fake` in the address (`http://localhost:4200/?fake`)
- * opens a demo project, `?fake&empty` starts at the project chooser. For working on the editor without anode-server;
+ * opens a demo project, `?fake&offline` the demo with its audio files offline, `?fake&empty` starts at the project
+ * chooser. For working on the editor without anode-server;
  * never in the desktop app. Remembered for the tab, since the router drops the query from the address.
  */
-export function fakeMode(location: Pick<Location, 'search'> = window.location): 'demo' | 'empty' | null {
+export function fakeMode(location: Pick<Location, 'search'> = window.location): 'demo' | 'offline' | 'empty' | null {
   if (window.anode) {
     return null;
   }
 
   const query = new URLSearchParams(location.search);
   if (query.has('fake')) {
-    const mode = query.has('empty') ? 'empty' : 'demo';
+    const mode = query.has('empty') ? 'empty' : query.has('offline') ? 'offline' : 'demo';
     try {
       sessionStorage.setItem(FakeKey, mode);
     } catch {
@@ -33,7 +34,7 @@ export function fakeMode(location: Pick<Location, 'search'> = window.location): 
 
   try {
     const stored = sessionStorage.getItem(FakeKey);
-    return stored === 'demo' || stored === 'empty' ? stored : null;
+    return stored === 'demo' || stored === 'offline' || stored === 'empty' ? stored : null;
   } catch {
     return null;
   }

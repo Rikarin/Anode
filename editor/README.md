@@ -31,7 +31,8 @@ pnpm exec nx serve editor
 ```
 
 Or run the editor against an in-memory fake Server (no engine needed): `pnpm exec nx serve editor`, then open
-`http://localhost:4200/?fake` (a demo project) or `?fake&empty` (the project chooser). The fake
+`http://localhost:4200/?fake` (a demo project), `?fake&offline` (the demo with its audio files offline, for Missing
+Files) or `?fake&empty` (the project chooser). The fake
 (`apps/editor/src/app/core/fake`) follows the Phase 1 and Phase 2 contracts: every command, undo, deltas, transport,
 recording on armed tracks (audio takes, and MIDI takes from live MIDI or a few faked notes), meters, synthetic peaks, a
 plugin catalogue (`anode.synth`, `anode.sampler`, a CLAP test instrument), MIDI devices, live MIDI with activity, and

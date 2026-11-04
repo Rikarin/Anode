@@ -26,6 +26,52 @@ public sealed class HostLinkTests : IAsyncDisposable {
     }
 
     [Fact]
+    public async Task The_host_opens_a_relinked_file_and_one_put_back() {
+        StartHost();
+        await using var server = new ServerFixture(socketPath);
+        using var client = server.CreateClient();
+        await WaitConnectedAsync(server, client);
+        var project = await client.CreateProjectAsync();
+        var file = await client.ImportAsync(TestWav.Write(media, "Kick.wav"));
+        await client.PostAsync("/api/v1/project/save", null, TestContext.Current.CancellationToken);
+        await WaitForAsync<LoadModelMessage>(static m => m.Files.Count > 0);
+        var inside = Path.Combine(project.Path, file.Path);
+        File.Delete(inside);
+        var report = await client.GetFromJsonAsync(
+            "/api/v1/project/offline",
+            ContractsJsonContext.Default.OfflineReport,
+            TestContext.Current.CancellationToken
+        );
+        Assert.Single(report!.Files);
+
+        TestWav.Write(Path.GetDirectoryName(inside)!, "Kick.wav");
+        await client.GetAsync("/api/v1/project/offline", TestContext.Current.CancellationToken);
+
+        var back = await WaitForAsync<LoadModelMessage>(m => m.Replace && m.Files.Any(f => f.Path == inside));
+        Assert.Equal(inside, Assert.Single(back.Files).Path);
+        Assert.True(back.Replace);
+
+        File.Delete(inside);
+        await client.GetAsync("/api/v1/project/offline", TestContext.Current.CancellationToken);
+        var replacement = TestWav.Write(media, "Found.wav");
+        var relinked = await client.PostAsJsonAsync(
+            "/api/v1/project/offline/relink",
+            new([new(file.Id, replacement)]),
+            ContractsJsonContext.Default.RelinkRequest,
+            TestContext.Current.CancellationToken
+        );
+        Assert.True(relinked.IsSuccessStatusCode);
+
+        var moved = await WaitForAsync<LoadModelMessage>(static m => m.Files.Any(static f => f.Path.EndsWith(
+                    "Found.wav",
+                    StringComparison.Ordinal
+                )
+            )
+        );
+        Assert.Equal(file.Frames, Assert.Single(moved.Files).Frames);
+    }
+
+    [Fact]
     public async Task The_host_gets_the_project_whole_then_only_what_changes() {
         StartHost();
         await using var server = new ServerFixture(socketPath);

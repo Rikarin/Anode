@@ -154,6 +154,9 @@ import { Lcd } from './lcd';
               >
                 Save as Alternative…
               </button>
+              <button xuiMenuItem type="button" data-testid="missing-files" (click)="ui.missingFilesOpen.set(true)">
+                Missing Files…
+              </button>
               <button
                 xuiMenuItem
                 type="button"

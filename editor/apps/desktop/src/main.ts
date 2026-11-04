@@ -636,6 +636,7 @@ function buildMenu(): void {
     command('I/O Labels…', 'ioLabels'),
     { type: 'separator' },
     command('Save as Alternative…', 'saveAlternative'),
+    command('Missing Files…', 'missingFiles'),
     command('Key Commands…', 'keyCommands'),
     { type: 'separator' },
     // Phase 8 (docs/09-phase-8.md): the project's synchronisation, as Logic's File ▸ Project Settings has it.

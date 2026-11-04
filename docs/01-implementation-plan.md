@@ -266,6 +266,21 @@ MySong.anode/                      # a directory package (a folder on macOS)
 ```
 - All writes use Cathode's `AtomicRename`. Autosave is incremental.
 - A "consolidate and copy media" option on Save As covers Logic's "copy files into project".
+- **Offline files.** A project opens whatever the disk lacks. Offline is about the disk, not the document, so it is not
+  stored: `OfflineFiles` reads it on open, when the project's files change and on `GET /project/offline`, and
+  `Project.offline` and the `offlineChanged` event carry it. A file is `missing` (nothing at its path), `changed`
+  (something else there: unreadable, or not its length, rate or channels) or `unlisted` (regions name it but
+  `audioFiles` lost it). A load gives an unlisted file an entry again, with channels 0, the project's rate and as many
+  frames as its users reach, so regions, takes, alternatives, frozen tracks and cells keep it and every save writes it
+  (no schema change: older builds read it as a file that is not there). Regions of offline files stay and play silence,
+  but a `changed` file plays what is there. A track file that cannot be read is left out, reported, and kept by saving
+  (`ProjectState.UnreadableTracks`), which appends its id to the end of `tracks`.
+- **Relinking.** `POST /project/offline/search` finds WAVs by name in a folder of the server's disk and judges them by
+  content; `POST /project/offline/relink` refuses (422, changing nothing) a candidate whose rate, channels or length
+  differ from the file's, whatever it is called; an unlisted file needs the project's rate and to reach as far as its
+  regions, and takes the candidate's format. What passes is copied into `Audio Files` and applied as `setFileVersion`,
+  one undo step: a new version, so its peaks are its own and undo finds the old ones. The host gets a file again when
+  its path changes or it comes back online.
 
 ---
 

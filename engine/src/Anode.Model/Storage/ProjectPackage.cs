@@ -153,7 +153,7 @@ public static class ProjectPackage {
             state.SampleRate,
             state.Settings,
             state.Master,
-            [..state.Tracks.Select(static t => t.Id)],
+            [..state.Tracks.Select(static t => t.Id), ..state.UnreadableTracks],
             [..state.Files.Values],
             [..state.Markers.Values.OrderBy(static m => m.Tick).ThenBy(static m => m.Id, StringComparer.Ordinal)],
             [..state.Sections.Values.OrderBy(static s => s.StartTick)],
@@ -175,7 +175,10 @@ public static class ProjectPackage {
             JsonSerializer.SerializeToUtf8Bytes(root, PackageJsonContext.Default.ProjectFile)
         );
 
-        var kept = state.Tracks.Select(static t => TrackFileName(t.Id)).ToHashSet(StringComparer.Ordinal);
+        var kept = state.Tracks.Select(static t => t.Id)
+            .Concat(state.UnreadableTracks)
+            .Select(TrackFileName)
+            .ToHashSet(StringComparer.Ordinal);
         foreach (var stale in Directory.EnumerateFiles(tracksFolder, "*.json")) {
             if (!kept.Contains(Path.GetFileName(stale))) {
                 File.Delete(stale);
@@ -184,9 +187,11 @@ public static class ProjectPackage {
     }
 
     /// <summary>
-    ///     Reads a package. A track file that is missing or unreadable, and a region whose file or track is unknown,
-    ///     are left out rather than failing the whole project; a damaged or newer <c>project.json</c> throws
-    ///     <see cref="PackageException" />.
+    ///     Reads a package. A track file that is missing or unreadable is left out rather than failing the whole project,
+    ///     and stays named (<see cref="ProjectState.UnreadableTracks" />), so saving does not lose it. Whatever names an
+    ///     audio file <c>project.json</c> does not list keeps it: the file comes back as an entry of unknown format
+    ///     (<see cref="OfflineFiles" />), offline until relinked, and a region stored under another track's id stays on the
+    ///     track whose file holds it. A damaged or newer <c>project.json</c> throws <see cref="PackageException" />.
     /// </summary>
     public static ProjectState Load(string folder) {
         var root = Read(
@@ -203,10 +208,6 @@ public static class ProjectPackage {
             throw new PackageException($"'{folder}' has no readable {ProjectFileName}.");
         }
 
-        var files = ImmutableSortedDictionary.CreateRange(
-            StringComparer.Ordinal,
-            (root.AudioFiles ?? []).Select(static f => KeyValuePair.Create(f.Id, f))
-        );
         var tracks = ImmutableList.CreateBuilder<Track>();
         var regions = ImmutableSortedDictionary.CreateBuilder<string, AudioRegion>(StringComparer.Ordinal);
         var midiRegions = ImmutableSortedDictionary.CreateBuilder<string, MidiRegion>(StringComparer.Ordinal);
@@ -214,14 +215,18 @@ public static class ProjectPackage {
         var patterns = ImmutableSortedDictionary.CreateBuilder<string, PatternRegion>(StringComparer.Ordinal);
         var players = ImmutableSortedDictionary.CreateBuilder<string, SessionPlayerRegion>(StringComparer.Ordinal);
         var trackFiles = new List<TrackFile>();
+        var unreadable = ImmutableList.CreateBuilder<string>();
         foreach (var id in (root.Tracks ?? []).Distinct(StringComparer.Ordinal)) {
             if (ReadTrack(folder, id) is { } file) {
                 var track = Normalise(file.Track);
                 tracks.Add(track);
                 trackFiles.Add(file with { Track = track });
+            } else if (id is not null && IsSafeId(id)) {
+                unreadable.Add(id);
             }
         }
 
+        var files = OfflineFiles.WithUnlisted(root, trackFiles);
         Unnest(tracks);
         foreach (var file in trackFiles) {
             AddRegions(file, file.Track, files, regions, midiRegions, folders);
@@ -269,6 +274,7 @@ public static class ProjectPackage {
             TakeFolders = folders.ToImmutable(),
             PatternRegions = patterns.ToImmutable(),
             SessionPlayerRegions = players.ToImmutable(),
+            UnreadableTracks = unreadable.ToImmutable(),
             ChordTrack = ChordTrack(root.ChordTrack),
             LiveLoops = liveLoops,
             Movie = Movie(root.Movie),
@@ -634,8 +640,8 @@ public static class ProjectPackage {
         id is not null && tracks.Any(t => t.Id == id && (t.Kind == TrackKind.Audio || Edits.HoldsMidi(t))) ? id : null;
 
     /// <summary>
-    ///     A track file's regions that belong to it: audio ones of known files on an audio track, MIDI ones on a MIDI
-    ///     track.
+    ///     A track file's regions that belong to it: audio ones on an audio track, MIDI ones on a MIDI track. An audio
+    ///     region or take folder naming another track stays here, as the file that holds it says.
     /// </summary>
     static void AddRegions(
         TrackFile file,
@@ -646,8 +652,10 @@ public static class ProjectPackage {
         ImmutableSortedDictionary<string, TakeFolder>.Builder folders
     ) {
         foreach (var region in file.Regions ?? []) {
-            if (region?.TrackId == track.Id && track.Kind == TrackKind.Audio && files.ContainsKey(region.FileId)) {
-                regions[region.Id] = Normalise(region);
+            if (region?.Id is not null
+                && track.Kind == TrackKind.Audio
+                && files.ContainsKey(region.FileId ?? string.Empty)) {
+                regions[region.Id] = Normalise(region) with { TrackId = track.Id };
             }
         }
 
@@ -658,13 +666,13 @@ public static class ProjectPackage {
         }
 
         foreach (var folder in file.TakeFolders ?? []) {
-            if (folder?.TrackId == track.Id
+            if (folder?.Id is not null
                 && track.Kind == TrackKind.Audio
-                && folder.Id is not null
                 && folder.Takes is { Count: > 0 } takes
                 && takes.All(t => t is not null && files.ContainsKey(t.FileId ?? string.Empty))) {
                 var ids = takes.Select(static t => t.Id).ToHashSet();
                 folders[folder.Id] = folder with {
+                    TrackId = track.Id,
                     Name = folder.Name ?? track.Name,
                     Comp = [..(folder.Comp ?? []).Where(s => s is not null && ids.Contains(s.TakeId))]
                 };

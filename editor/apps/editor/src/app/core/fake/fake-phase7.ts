@@ -347,7 +347,9 @@ export function applyPhase7Command(project: Project, command: EditCommand, ctx: 
         version: command.version,
         path: command.path,
         frames: command.frames ?? file.frames,
-        sampleRate: command.sampleRate ?? file.sampleRate
+        sampleRate: command.sampleRate ?? file.sampleRate,
+        channels: command.channels ?? file.channels,
+        bitDepth: command.bitDepth ?? file.bitDepth
       };
       return { ...project, audioFiles: project.audioFiles.map(f => (f.id === file.id ? next : f)) };
     }

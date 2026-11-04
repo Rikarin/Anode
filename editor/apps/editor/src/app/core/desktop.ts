@@ -57,6 +57,7 @@ export type AppCommand =
   | 'importAudio'
   | 'importMidi'
   | 'saveAlternative'
+  | 'missingFiles'
   | 'keyCommands'
   | 'bounce'
   | 'ioLabels'

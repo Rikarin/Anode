@@ -802,8 +802,21 @@ public static partial class Edits {
             }
         }
 
+        if (c.Channels < 1 || c.BitDepth < 1) {
+            throw new EditException($"A file has channels and a bit depth, not {c.Channels} and {c.BitDepth}.");
+        }
+
         return [
-            new AudioFileUpserted(file with { Version = c.Version, Path = path, Frames = frames, SampleRate = rate })
+            new AudioFileUpserted(
+                file with {
+                    Version = c.Version,
+                    Path = path,
+                    Frames = frames,
+                    SampleRate = rate,
+                    Channels = c.Channels ?? file.Channels,
+                    BitDepth = c.BitDepth ?? file.BitDepth
+                }
+            )
         ];
     }
 

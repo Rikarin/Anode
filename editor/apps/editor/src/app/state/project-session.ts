@@ -4,6 +4,7 @@ import { ANODE_API, type CreateProject } from '../core/api';
 import { Notify } from '../core/notify';
 import { ProjectStore } from './project.store';
 import { ScreensetStore } from './screenset.store';
+import { UiStore } from './ui.store';
 
 /**
  * Creating, opening, saving and closing projects, and the recent list: the project chooser's and the File menu's
@@ -16,6 +17,7 @@ export class ProjectSession {
   private readonly project = inject(ProjectStore);
   private readonly screensets = inject(ScreensetStore);
   private readonly notify = inject(Notify);
+  private readonly ui = inject(UiStore);
 
   readonly recent = signal<ProjectSummary[]>([]);
   /** Projects with autosaved edits nobody saved: what the project chooser offers after a crash. */
@@ -229,6 +231,7 @@ export class ProjectSession {
       const project = await this.notify.run(request, failure);
       if (project) {
         this.project.load(project);
+        this.ui.missingFilesOpen.set(project.offline.files.length + project.offline.unreadableTracks.length > 0);
       }
 
       return project !== null;

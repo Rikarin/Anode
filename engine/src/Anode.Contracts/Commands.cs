@@ -969,7 +969,9 @@ public sealed record SetFileVersionCommand(
     int Version,
     string Path,
     long? Frames = null,
-    int? SampleRate = null
+    int? SampleRate = null,
+    int? Channels = null,
+    int? BitDepth = null
 ) : EditCommand;
 
 /// <summary>

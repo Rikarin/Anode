@@ -62,7 +62,7 @@ export function documentTheme(): TimelineThemeName {
  * its lane (a comp segment of a take folder, the comped part of a take): flat, under the name bar, with its waveform,
  * never hit by the pointer.
  */
-export const ItemFlag = { Selected: 1, Muted: 2, Midi: 4, Folder: 8, Inner: 16 } as const;
+export const ItemFlag = { Selected: 1, Muted: 2, Midi: 4, Folder: 8, Inner: 16, Offline: 32 } as const;
 
 /**
  * The notes MIDI regions draw as miniatures in the Tracks area, as columns: region `i`'s notes are

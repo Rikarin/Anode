@@ -154,7 +154,8 @@ function snapshot(revision = 3): Project {
     movie: null,
     chordTrack: structuredClone(EmptyChordTrack),
     sessionPlayerRegions: [],
-    environment: structuredClone(EmptyEnvironment)
+    environment: structuredClone(EmptyEnvironment),
+    offline: { files: [], unreadableTracks: [] }
   };
 }
 

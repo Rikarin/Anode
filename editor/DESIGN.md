@@ -146,6 +146,8 @@ the Canvas2D fallback mirrors:
   (0.56×–0.46×, from 22 px tall) with the name in semibold SF Mono (`regionText`), a hairline 0.34× edge and a highlight
   along the top. Waveforms are `waveformColor(base)` (a lighter tint); MIDI regions show their notes as small bars in
   `miniatureColor(base)`. Selected: the colour 1.25× brighter and a white ring (`RectStyle.Selected`). Muted: `muted` grey.
+  Offline (`ItemFlag.Offline`, its audio file is not there): the `offline` dull red, no waveform, `(offline)` after the
+  name; it wins over muted.
 - **Notes** (`RectStyle.Note`): 2 px rounded, velocity-coloured, soft gradient, darker edge; selected with a white ring.
 - **Ruler** (`RectStyle.Ruler`): a graded band, bar numbers beside tall ticks, beat ticks at the bottom; the **cycle
   area** (`RectStyle.Cycle`) is a rounded yellow band (`cycle`; grey `cycleOff` when cycling is off).

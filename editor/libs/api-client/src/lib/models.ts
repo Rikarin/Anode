@@ -9,6 +9,14 @@ export type ProblemDetails = Schemas['ProblemDetails'];
 
 export type Project = Schemas['Project'];
 export type ProjectSummary = Schemas['ProjectSummary'];
+export type OfflineReport = Schemas['OfflineReport'];
+export type OfflineFile = Schemas['OfflineFile'];
+export type OfflineReason = NonNullable<Schemas['OfflineReason']>;
+export type OfflineSearch = Schemas['OfflineSearch'];
+export type OfflineSearchRequest = Schemas['OfflineSearchRequest'];
+export type OfflineCandidate = Schemas['OfflineCandidate'];
+export type RelinkRequest = Schemas['RelinkRequest'];
+export type RelinkTarget = Schemas['RelinkTarget'];
 export type ProjectSettings = Schemas['ProjectSettings'];
 export type TimeSignature = Schemas['TimeSignature'];
 export type CycleRange = Schemas['CycleRange'];
@@ -839,6 +847,7 @@ export type ServerMessage =
   | { type: 'projectSaved'; project: ProjectSummary; revision: number }
   | { type: 'projectAutosaved'; revision: number; autosaved: string }
   | { type: 'autosaveFailed'; message: string }
+  | { type: 'offlineChanged'; offline: OfflineReport; revision: number }
   | { type: 'projectChanged'; delta: ProjectDelta }
   | { type: 'transport'; transport: TransportStatus }
   | { type: 'meters'; tracks: TrackMeter[]; master: TrackMeter; readings?: InsertReading[] }

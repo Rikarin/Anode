@@ -32,6 +32,9 @@ public sealed record OpenProjectView(
 ) {
     public string AudioFolder => Path.Combine(Folder, ProjectPackage.AudioFolder);
 
+    /// <summary>What the disk lacked of the project when last checked.</summary>
+    public OfflineReport Offline { get; init; } = OfflineReport.None;
+
     /// <summary>The state saved for <paramref name="track" />'s instrument, when it is still that instrument's.</summary>
     public byte[]? StateOf(Track track) =>
         track.Instrument is { } slot && States.TryGetValue(track.Id, out var saved) && saved.PluginId == slot.PluginId
@@ -1384,6 +1387,7 @@ public sealed partial class ProjectSession(
     ) {
         Project project;
         using var writes = autosaving.EnterScope();
+        var offline = OfflineFiles.Report(folder, state);
         lock (gate) {
             if (open is { } old) {
                 // Unsaved edits of the project being replaced are kept beside it, as a backup.
@@ -1399,7 +1403,8 @@ public sealed partial class ProjectSession(
                 States = states ?? ImmutableDictionary.Create<string, SavedState>(StringComparer.Ordinal),
                 Analyses = FileAnalyses.CachedAll(folder, state.Files.Values)
                     .ToImmutableDictionary(StringComparer.Ordinal),
-                Dirty = recovered
+                Dirty = recovered,
+                Offline = offline
             };
             open.MarkAutosaved(open.Changes);
             Publish();
@@ -1409,7 +1414,8 @@ public sealed partial class ProjectSession(
             hub.Publish(new ProjectOpenedEvent(summary, open.Revision));
         }
 
-        foreach (var file in state.Files.Values) {
+        var online = offline.Files.Select(static f => f.FileId).ToHashSet(StringComparer.Ordinal);
+        foreach (var file in state.Files.Values.Where(f => !online.Contains(f.Id))) {
             StartPeaks(file);
         }
 
@@ -1420,10 +1426,14 @@ public sealed partial class ProjectSession(
     CommandResult Commit(Open o, ProjectState state, IReadOnlyList<DeltaOp> ops) {
         NoteScripts(o.State, state);
         NoteVersions(o, o.State, state);
+        var filesChanged = !ReferenceEquals(o.State.Files, state.Files);
         o.State = state;
         o.Revision++;
         o.Dirty = true;
-        Publish();
+        if (!filesChanged || !Note(o, OfflineFiles.Report(o.Folder, state))) {
+            Publish();
+        }
+
         var delta = new ProjectDelta(o.Revision, ops);
         hub.Publish(new ProjectChangedEvent(delta));
         return new(o.Revision, delta);
@@ -1435,7 +1445,7 @@ public sealed partial class ProjectSession(
             Volatile.Write(
                 ref view,
                 new(o.Session, o.Folder, o.State, o.Ids, o.Revision, o.States, o.Analyses) {
-                    Mastering = mastering, HrtfPath = hrtfs.Path
+                    Mastering = mastering, HrtfPath = hrtfs.Path, Offline = o.Offline
                 }
             );
         } else {
@@ -1506,7 +1516,10 @@ public sealed partial class ProjectSession(
         public ImmutableDictionary<string, SavedState> States { get; set; } =
             ImmutableDictionary.Create<string, SavedState>(StringComparer.Ordinal);
 
-        public Project ToProject() => State.ToProject(Folder, Revision, Dirty);
+        /// <summary>What the disk lacked when last checked.</summary>
+        public OfflineReport Offline { get; set; } = OfflineReport.None;
+
+        public Project ToProject() => State.ToProject(Folder, Revision, Dirty, Offline);
 
         public ProjectSummary Summary(DateTimeOffset now) => new(State.Id, State.Name, Folder, now);
     }
