@@ -5,6 +5,7 @@ using System.Diagnostics;
 using System.Net.Sockets;
 using System.Runtime.InteropServices;
 using System.Text;
+using System.Text.Json;
 
 namespace Anode.Engine.Tests;
 
@@ -38,10 +39,19 @@ public sealed partial class HostProcessTests : IDisposable {
         }
     }
 
-    [LibraryImport("libc", EntryPoint = "kill", SetLastError = true)]
-    private static partial int Kill(int pid, int signal);
+    /// <summary>Runs anode-host to its end; its exit code and everything it printed.</summary>
+    static async Task<(int Exit, string Output, string Error)> RunToEndAsync(params string[] arguments) {
+        var start = new ProcessStartInfo("dotnet", ["exec", HostDll(), ..arguments]) {
+            RedirectStandardOutput = true, RedirectStandardError = true
+        };
+        using var process = Process.Start(start)!;
+        var standardOutput = process.StandardOutput.ReadToEndAsync(Token);
+        var standardError = process.StandardError.ReadToEndAsync(Token);
+        await process.WaitForExitAsync(Token).WaitAsync(TimeSpan.FromSeconds(30), Token);
+        return (process.ExitCode, await standardOutput, await standardError);
+    }
 
-    async Task StartAsync(params string[] extra) {
+    static string HostDll() {
         var dll = Path.Combine(
             AppContext.BaseDirectory.Replace(
                 Path.Combine("tests", "Anode.Engine.Tests"),
@@ -51,6 +61,14 @@ public sealed partial class HostProcessTests : IDisposable {
             "anode-host.dll"
         );
         Assert.True(File.Exists(dll), $"anode-host not built at {dll}");
+        return dll;
+    }
+
+    [LibraryImport("libc", EntryPoint = "kill", SetLastError = true)]
+    private static partial int Kill(int pid, int signal);
+
+    async Task StartAsync(params string[] extra) {
+        var dll = HostDll();
         host = new() {
             StartInfo = new(
                 "dotnet",
@@ -89,6 +107,41 @@ public sealed partial class HostProcessTests : IDisposable {
     static unsafe TelemetryHeader Header(SharedSegment region) => *(TelemetryHeader*)region.Pointer;
 
     [Fact]
+    public async Task A_device_that_cannot_open_ends_the_host_before_it_serves_saying_why() {
+        var (exit, standardOutput, error) = await RunToEndAsync(
+            "--serve",
+            "--socket",
+            socketPath,
+            "--data-dir",
+            Path.Combine(dir, "data"),
+            "--device",
+            "no-such-device"
+        );
+
+        // The desktop app tells a failed switch by this: no readiness line, and the reason on the error stream.
+        Assert.Equal(1, exit);
+        Assert.DoesNotContain(" serving on ", standardOutput, StringComparison.Ordinal);
+        Assert.Contains("error: ", error, StringComparison.Ordinal);
+        Assert.False(File.Exists(socketPath));
+    }
+
+    [Fact]
+    public async Task Lists_devices_as_the_desktop_app_reads_them() {
+        var (exit, standardOutput, _) = await RunToEndAsync("--devices", "--json");
+
+        Assert.Equal(0, exit);
+        using var list = JsonDocument.Parse(standardOutput);
+        Assert.False(string.IsNullOrEmpty(list.RootElement.GetProperty("backend").GetString()));
+        foreach (var device in list.RootElement.GetProperty("devices").EnumerateArray()) {
+            Assert.False(string.IsNullOrEmpty(device.GetProperty("uid").GetString()));
+            Assert.True(device.TryGetProperty("name", out _));
+            Assert.True(device.GetProperty("inputChannels").GetInt32() >= 0);
+            Assert.True(device.GetProperty("outputChannels").GetInt32() >= 0);
+            Assert.True(device.GetProperty("sampleRate").GetDouble() >= 0);
+        }
+    }
+
+    [Fact]
     public async Task Serves_plays_records_and_exits_cleanly_on_sigterm() {
         await StartAsync("--input-tone");
         using var socket = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
@@ -120,6 +173,7 @@ public sealed partial class HostProcessTests : IDisposable {
             ("null", Rate, 64, 16, 16),
             (hello.Backend, hello.SampleRate, hello.BufferFrames, hello.InputChannels, hello.OutputChannels)
         );
+        Assert.Equal((0, 0), (hello.InputLatencyFrames, hello.OutputLatencyFrames)); // the null device has none
         using var region = SharedSegment.Open(hello.TelemetryName!, TelemetryLayout.Size);
 
         var file = TestAudio.Write24(dir, "a.wav", 1, 4 * Rate, 1);

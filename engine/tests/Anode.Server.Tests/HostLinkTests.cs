@@ -119,8 +119,10 @@ public sealed class HostLinkTests : IAsyncDisposable {
         await ServerFixture.Eventually(async () =>
             (await server.SystemAsync(client)).Engine.State == EngineState.Disconnected
         );
+        Assert.Null((await server.SystemAsync(client)).Engine.Audio); // no host: no stream to report
         StartHost();
         await WaitConnectedAsync(server, client);
+        Assert.NotNull((await server.SystemAsync(client)).Engine.Audio);
 
         var load = await WaitForAsync<LoadModelMessage>(static m => m.Replace);
         var engineTrack = Assert.Single(load.Tracks);

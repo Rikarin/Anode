@@ -4,6 +4,7 @@ type Schemas = components['schemas'];
 
 export type SystemInfo = Schemas['SystemInfo'];
 export type EngineStatus = Schemas['EngineStatus'];
+export type EngineAudio = Schemas['EngineAudio'];
 export type ProblemDetails = Schemas['ProblemDetails'];
 
 export type Project = Schemas['Project'];

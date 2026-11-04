@@ -149,6 +149,7 @@ import {
   tempoOf
 } from './fake-arrange';
 import { fakePeaks, hash, readWavHeader } from './fake-audio';
+import { FakeAudioDevices } from './fake-audio-devices';
 import { applyEnvironmentCommand } from './fake-environment';
 import { fakeFileExists, FakeHome, fileKind, listFakeFolder } from './fake-files';
 import { adaptTempo, applyFlexCommand, fakeAnalysis, type FlexContext, timingOf } from './fake-flex';
@@ -433,6 +434,9 @@ export class FakeAnodeServer implements AnodeApi {
     () => this.devices
   );
 
+  /** The desktop app's audio bridge, which the fake stands in for too: `engine` events follow its switches. */
+  readonly audioDevices = new FakeAudioDevices(engine => this.emit({ type: 'engine', engine }));
+
   constructor(options: FakeServerOptions = {}) {
     this.now = options.now ?? (() => Date.now());
     this.realtime = options.realtime ?? false;
@@ -458,7 +462,7 @@ export class FakeAnodeServer implements AnodeApi {
   system(): Promise<SystemInfo> {
     return this.answer('GetSystem', () => ({
       version: '0.1.0-fake',
-      engine: { state: 'inprocess', backend: 'fake', hostVersion: '0.1.0-fake', message: null }
+      engine: this.audioDevices.engine
     }));
   }
 

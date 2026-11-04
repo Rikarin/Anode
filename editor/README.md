@@ -44,6 +44,10 @@ backups, screensets, key commands, bookmarks, a small fake disk for the All File
 and Standard MIDI File import (the fake makes two instrument tracks from any `.mid` path). The demo project adds
 arrangement sections, markers, a two-take vocal folder and a project note.
 
+It stands in for the desktop app's audio bridge too (`core/fake/fake-audio-devices.ts`), so Settings ▸ Audio ▸ Devices
+works in a browser: a few devices, made-up latencies, a Fake Interface that settles on 64 samples and refuses rates over
+96 kHz, and an Unplugged Interface that cannot open, for the failed switch.
+
 Or run the whole desktop app. Build the engine first with `dotnet build -c Release` in `engine/`:
 
 ```bash
