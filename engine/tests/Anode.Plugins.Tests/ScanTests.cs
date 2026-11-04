@@ -172,6 +172,13 @@ public sealed class ScanTests : IDisposable {
     static void CopyBundle(string from, string to) {
         foreach (var file in Directory.GetFiles(from, "*", SearchOption.AllDirectories)) {
             var target = Path.Combine(to, Path.GetRelativePath(from, file));
+            if (!OperatingSystem.IsMacOS()) { // off macOS the module inside a bundle is named after it
+                target = Path.Combine(
+                    Path.GetDirectoryName(target)!,
+                    Path.GetFileNameWithoutExtension(to) + Path.GetExtension(target)
+                );
+            }
+
             Directory.CreateDirectory(Path.GetDirectoryName(target)!);
             File.Copy(file, target);
         }
