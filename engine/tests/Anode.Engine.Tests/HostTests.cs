@@ -117,7 +117,7 @@ public sealed class HostTests : IAsyncLifetime {
             (Rate, 64, 2, 2),
             (hello.SampleRate, hello.BufferFrames, hello.InputChannels, hello.OutputChannels)
         );
-        Assert.StartsWith("shm:/an-tl-", hello.TelemetryName);
+        Assert.Contains("an-tl-", hello.TelemetryName, StringComparison.Ordinal);
 
         // The server's side: map the region read-only by its name.
         using var region = SharedSegment.Open(hello.TelemetryName!, TelemetryLayout.Size);
@@ -240,6 +240,11 @@ public sealed class HostTests : IAsyncLifetime {
         Assert.Empty(finished.Takes);
     }
 
+    static string MissingSegment =>
+        OperatingSystem.IsMacOS() ? "shm:/an-missing-segment"
+        : OperatingSystem.IsWindows() ? @"Local\an-missing-segment"
+        : Path.Combine(SharedSegment.DefaultDirectory(), "an-missing-segment.seg");
+
     [Fact]
     public async Task Bad_requests_get_errors_and_the_host_carries_on() {
         var error = await Expect<ErrorMessage>(new TransportMessage(TransportAction.Record));
@@ -251,7 +256,7 @@ public sealed class HostTests : IAsyncLifetime {
         );
         Assert.Equal("transport", (await Expect<ErrorMessage>(new TransportMessage(TransportAction.Locate))).Request);
         var load = await Expect<ErrorMessage>(
-            new LoadModelMessage(new("shm:/an-missing-segment", 4096, 1), true, [], [], TestAudio.Unity, dir)
+            new LoadModelMessage(new(MissingSegment, 4096, 1), true, [], [], TestAudio.Unity, dir)
         );
         Assert.Equal("loadModel", load.Request);
         Assert.Equal("modelLoaded", (await Expect<ErrorMessage>(new ModelLoadedMessage(1))).Request);

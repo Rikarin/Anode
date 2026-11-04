@@ -27,7 +27,7 @@ jobs:
       - uses: ./.github/actions/setup-dotnet
       - name: Install ALSA headers
         if: runner.os == 'Linux'
-        run: sudo apt-get update -q && sudo apt-get install -y -q libasound2-dev
+        run: sudo apt-get update -q && sudo apt-get install -y -q libasound2-dev libxml2-utils
       - name: Build native shim
         shell: bash
         run: ./native/build.sh

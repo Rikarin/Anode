@@ -56,6 +56,11 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: ./.github/actions/setup-dotnet
+      # pdftotext and xmllint for the Phase 9 golden path; ALSA for the native shim.
+      - run: sudo apt-get update -q && sudo apt-get install -y -q libasound2-dev poppler-utils libxml2-utils
+      - name: Build the native shim
+        working-directory: engine
+        run: ./native/build.sh
       - name: Build the engine
         working-directory: engine
         run: dotnet build Anode.slnx -c Release

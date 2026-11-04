@@ -148,8 +148,10 @@ public sealed class PropertyTests {
         );
 
     [Fact]
-    public void Random_scores_are_valid_MEI_5() =>
+    public void Random_scores_are_valid_MEI_5() {
+        Assert.SkipWhen(MeiTests.Xmllint() is null, "xmllint is not installed; MEI is checked structurally only.");
         ScoreGen.Sample(static score => MeiTests.Valid(Render(score.Build(), score)), iter: 12);
+    }
 
     static ScoreView Render(ProjectState state, RandomScore score) =>
         NotationEngine.Render(

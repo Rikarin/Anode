@@ -27,7 +27,8 @@
 
 #include <cmath>
 #include <cstring>
-#include <unistd.h>
+#include <chrono>
+#include <thread>
 
 using namespace Steinberg;
 using namespace Steinberg::Vst;
@@ -221,11 +222,11 @@ public:
                 }
                 if (values[1] >= 1.0) {
                     for (;;) {
-                        sleep(1); // deliberately: hang detection tests
+                        std::this_thread::sleep_for(std::chrono::seconds(1)); // deliberately: hang detection tests
                     }
                 }
                 if (values[1] > 0) {
-                    usleep(static_cast<useconds_t>(values[1] * 100000));
+                    std::this_thread::sleep_for(std::chrono::duration<double>(values[1] * 0.1));
                 }
                 for (int c = 0; c < 2; c++) {
                     if (in && in[c] != out[c]) {
@@ -393,7 +394,7 @@ bool InitModule() {
     }
     if (std::strstr(gPath, "HangOnScan")) {
         for (;;) {
-            sleep(1);
+            std::this_thread::sleep_for(std::chrono::seconds(1));
         }
     }
     return true;

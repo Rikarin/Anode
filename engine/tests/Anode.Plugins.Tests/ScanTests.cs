@@ -21,7 +21,7 @@ public sealed class ScanTests : IDisposable {
         Assert.Equal("vst3", gain.Format);
         Assert.False(gain.IsInstrument);
         Assert.Equal("Utility", gain.Category);
-        Assert.True(gain.HasEditor);
+        Assert.Equal(OperatingSystem.IsMacOS(), gain.HasEditor); // the test editor is Cocoa
         Assert.False(gain.HasSidechain);
         Assert.Equal(["Gain", "Tone"], gain.Parameters.Select(static p => p.Name));
         Assert.Equal(24.0 / 36.0, gain.Parameters[0].Default, 9);
