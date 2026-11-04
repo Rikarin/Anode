@@ -14,11 +14,12 @@ namespace Anode.Engine.Recording;
 ///     timeline position P was played at P − latency), and only the frames it keeps: inside the punch range when
 ///     autopunch is on, and never before the project's zero.
 /// </remarks>
-public sealed unsafe class RecordTake : IDisposable {
+public sealed unsafe class RecordTake(int trackId, string path, int channels, int sampleRate, double ringSeconds = 4)
+    : IDisposable {
     /// <summary>Passes a take can describe; a recording that wraps more often merges the rest into its last pass.</summary>
     public const int MaxPasses = 4096;
 
-    readonly WavWriter writer;
+    readonly WavWriter writer = new(path, channels, sampleRate);
     readonly long[] passPositions = new long[MaxPasses];
     readonly long[] passOffsets = new long[MaxPasses];
     int passes; // audio thread; published by `pushed`
@@ -26,23 +27,15 @@ public sealed unsafe class RecordTake : IDisposable {
     long pushed;
     long dropped;
 
-    public RecordTake(int trackId, string path, int channels, int sampleRate, double ringSeconds = 4) {
-        TrackId = trackId;
-        Channels = channels;
-        SampleRate = sampleRate;
-        Ring = new(checked((int)(sampleRate * ringSeconds) * channels));
-        writer = new(path, channels, sampleRate);
-    }
+    public int TrackId { get; } = trackId;
 
-    public int TrackId { get; }
+    public int Channels { get; } = channels;
 
-    public int Channels { get; }
-
-    public int SampleRate { get; }
+    public int SampleRate { get; } = sampleRate;
 
     public string Path => writer.Path;
 
-    public SpscRing Ring { get; }
+    public SpscRing Ring { get; } = new(checked((int)(sampleRate * ringSeconds) * channels));
 
     /// <summary>The timeline position of the first frame kept (−1 until then).</summary>
     public long StartPosition => Volatile.Read(ref pushed) > 0 ? passPositions[0] : -1;

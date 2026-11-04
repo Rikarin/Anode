@@ -19,18 +19,14 @@ public readonly record struct MtcPosition(double Seconds, long TimeNs, bool Full
 ///     waits for the next piece 0. The frame rate is the one the timecode carries (piece 7, the full frame), else the
 ///     configured one.
 /// </remarks>
-public sealed class MtcDecoder {
+public sealed class MtcDecoder(EngineMtcRate rate) {
     readonly int[] nibbles = new int[8];
     int expected = -1;
     long lastQuarterNs;
     bool running;
 
-    public MtcDecoder(EngineMtcRate rate) {
-        Rate = rate;
-    }
-
     /// <summary>The frame rate: configured, then as the timecode says.</summary>
-    public EngineMtcRate Rate { get; private set; }
+    public EngineMtcRate Rate { get; private set; } = rate;
 
     /// <summary>Whether quarter frames are arriving (none for two frames' time: stopped).</summary>
     public bool Running => running;

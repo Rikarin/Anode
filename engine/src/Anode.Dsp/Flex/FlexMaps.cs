@@ -127,17 +127,11 @@ internal static class PitchCurve {
 ///     A window of a source's frames (interleaved), read in large blocks so that renderers call the source rarely.
 ///     Allocation-free after construction.
 /// </summary>
-internal sealed class SourceWindow {
-    readonly int channels;
-    readonly float[] data;
-    readonly int frames;
+internal sealed class SourceWindow(int channels, int frames) {
+    readonly int channels = channels;
+    readonly float[] data = new float[frames * channels];
+    readonly int frames = frames;
     long start = long.MinValue;
-
-    public SourceWindow(int channels, int frames) {
-        this.channels = channels;
-        this.frames = frames;
-        data = new float[frames * channels];
-    }
 
     public float[] Data => data;
 

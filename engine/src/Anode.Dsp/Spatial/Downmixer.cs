@@ -33,24 +33,18 @@ namespace Anode.Dsp.Spatial;
 ///         </item>
 ///     </list>
 /// </remarks>
-public sealed class Downmixer {
-    readonly float[] matrix;
+/// <remarks>
+///     Off the audio thread: the matrix from <paramref name="from" /> to <paramref name="to" />, the LFE (when the
+///     target has none) at <paramref name="lfeGain" /> into the front pair.
+/// </remarks>
+public sealed class Downmixer(SpeakerLayout from, SpeakerLayout to, float lfeGain) {
+    readonly float[] matrix = Build(from, to, lfeGain);
 
     /// <summary>Off the audio thread: the matrix from <paramref name="from" /> to <paramref name="to" />.</summary>
     public Downmixer(SpeakerLayout from, SpeakerLayout to) : this(from, to, 0) { }
 
-    /// <summary>
-    ///     Off the audio thread: the matrix from <paramref name="from" /> to <paramref name="to" />, the LFE (when the
-    ///     target has none) at <paramref name="lfeGain" /> into the front pair.
-    /// </summary>
-    public Downmixer(SpeakerLayout from, SpeakerLayout to, float lfeGain) {
-        From = from;
-        To = to;
-        matrix = Build(from, to, lfeGain);
-    }
-
-    public SpeakerLayout From { get; }
-    public SpeakerLayout To { get; }
+    public SpeakerLayout From { get; } = from;
+    public SpeakerLayout To { get; } = to;
 
     /// <summary>
     ///     The gain of input channel <paramref name="input" /> in output channel <paramref name="output" /> (linear; the

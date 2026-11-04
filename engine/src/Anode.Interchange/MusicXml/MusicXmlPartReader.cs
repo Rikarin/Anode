@@ -14,16 +14,21 @@ namespace Anode.Interchange.MusicXml;
 ///     measure marked <c>implicit</c> (a pickup) is padded at its start to a full bar, so bars stay on the project's
 ///     grid.
 /// </summary>
-sealed class MusicXmlPartReader {
+sealed class MusicXmlPartReader(
+    MusicXmlScoreReader score,
+    XElement part,
+    MusicXmlScoreReader.PartInfo info,
+    string trackId
+) {
     const string StartType = "start";
 
     /// <summary>A grace note's length: a 1/32 note.</summary>
     static readonly Rational GraceLength = new(1, 8);
 
-    readonly MusicXmlScoreReader score;
-    readonly XElement part;
-    readonly MusicXmlScoreReader.PartInfo info;
-    readonly string trackId;
+    readonly MusicXmlScoreReader score = score;
+    readonly XElement part = part;
+    readonly MusicXmlScoreReader.PartInfo info = info;
+    readonly string trackId = trackId;
 
     readonly List<Building> notes = [];
     readonly Dictionary<int, Building> openTies = [];
@@ -59,18 +64,6 @@ sealed class MusicXmlPartReader {
     bool keySeen;
     int fifths;
     KeyMode mode = KeyMode.Major;
-
-    public MusicXmlPartReader(
-        MusicXmlScoreReader score,
-        XElement part,
-        MusicXmlScoreReader.PartInfo info,
-        string trackId
-    ) {
-        this.score = score;
-        this.part = part;
-        this.info = info;
-        this.trackId = trackId;
-    }
 
     /// <summary>A note being read: ties extend it.</summary>
     sealed class Building(long id, int pitch, Rational start, Rational end, int staff, int? velocity, int channel) {

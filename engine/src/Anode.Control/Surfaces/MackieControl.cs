@@ -47,7 +47,7 @@ sealed class SurfaceState {
 ///     name/value; VPot modes pan, sends and plug-in (the selected track's insert, parameters paged by 8). An extender
 ///     has the strips alone. Checked against <c>engine/tests/Anode.Control.Tests/McuVectors.json</c>.
 /// </summary>
-public sealed class MackieControl : IControlSurface {
+public sealed class MackieControl(bool extender) : IControlSurface {
     const int StripCount = 8;
     const long QueryInterval = 2_000_000_000;
 
@@ -63,13 +63,8 @@ public sealed class MackieControl : IControlSurface {
     long? _lastQuery;
     ProjectView? _view;
 
-
-    public MackieControl(bool extender) {
-        Extender = extender;
-    }
-
     /// <summary>Whether this is a Mackie Control XT (strips only; SysEx device id 0x15 rather than 0x14).</summary>
-    public bool Extender { get; }
+    public bool Extender { get; } = extender;
 
     public ControlSurfaceKind Kind => Extender ? ControlSurfaceKind.MackieControlXt : ControlSurfaceKind.MackieControl;
 

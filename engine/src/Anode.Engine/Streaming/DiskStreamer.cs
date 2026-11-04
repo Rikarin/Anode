@@ -10,11 +10,16 @@ namespace Anode.Engine.Streaming;
 ///     through each stream's flex renderers (<see cref="FlexLane" />, docs/06-phase-5.md): a fill that starts inside
 ///     one, or a cycle jump into one, primes its renderer, which costs this thread time, not the audio a gap.
 /// </summary>
-public sealed class DiskStreamer : IDisposable {
+/// <param name="engine">The engine whose model and transport the streamer follows.</param>
+/// <param name="leadFrames">
+///     How far ahead of the playhead a new fill starts while rolling, so it is on disk before the playhead gets
+///     there and the old audio plays seamlessly until then.
+/// </param>
+public sealed class DiskStreamer(AudioEngine engine, int leadFrames) : IDisposable {
     /// <summary>Frames of one read for a mono track (96 KiB of 24-bit audio); a stereo track reads half as many.</summary>
     public const int ReadFrames = 32_768;
 
-    readonly AudioEngine engine;
+    readonly AudioEngine engine = engine;
     readonly PlaylistRenderer renderer = new(ReadFrames);
     readonly float[] chunk = GC.AllocateArray<float>(ReadFrames, true);
     readonly AutoResetEvent wake = new(false);
@@ -23,17 +28,7 @@ public sealed class DiskStreamer : IDisposable {
     long started;
     long completed;
 
-    /// <param name="engine">The engine whose model and transport the streamer follows.</param>
-    /// <param name="leadFrames">
-    ///     How far ahead of the playhead a new fill starts while rolling, so it is on disk before the playhead gets
-    ///     there and the old audio plays seamlessly until then.
-    /// </param>
-    public DiskStreamer(AudioEngine engine, int leadFrames) {
-        this.engine = engine;
-        LeadFrames = leadFrames;
-    }
-
-    public int LeadFrames { get; }
+    public int LeadFrames { get; } = leadFrames;
 
     /// <summary>Whether the disk thread runs (otherwise whoever drives the engine calls <see cref="Pass" />).</summary>
     public bool IsRunning => running;

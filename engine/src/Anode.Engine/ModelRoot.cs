@@ -18,7 +18,13 @@ namespace Anode.Engine;
 ///     playing); it is replaced only when the track's channel count changes, and the replacement takes over the
 ///     instrument and MIDI state.
 /// </summary>
-public sealed class TrackState : IDisposable {
+public sealed class TrackState(
+    int id,
+    bool stereo,
+    int streamFrames,
+    MidiTrackState? midi = null,
+    ChannelState? channel = null
+) : IDisposable {
     int inputChannel;
     bool armed;
     bool monitoring;
@@ -30,26 +36,12 @@ public sealed class TrackState : IDisposable {
     int[]? noteRoutes;
     bool liveLoopsActive;
 
-    public TrackState(
-        int id,
-        bool stereo,
-        int streamFrames,
-        MidiTrackState? midi = null,
-        ChannelState? channel = null
-    ) {
-        Id = id;
-        Stream = new(stereo ? 2 : 1, streamFrames);
-        Midi = midi ?? new();
-        Channel = channel ?? new(new());
-        SourceStereo = stereo;
-    }
-
-    public int Id { get; }
+    public int Id { get; } = id;
 
     public bool Stereo => Stream.Channels == 2;
 
     /// <summary>The track's stream: every playlist entry, or those in lane 0 when it has crossfades.</summary>
-    public TrackFeed Stream { get; }
+    public TrackFeed Stream { get; } = new(stereo ? 2 : 1, streamFrames);
 
     /// <summary>
     ///     The track's second stream, for the entries in lane 1 (<see cref="PlaylistLanes" />): made by the control
@@ -61,7 +53,7 @@ public sealed class TrackState : IDisposable {
     public Strip Strip => Channel.Strip;
 
     /// <summary>The track's channel strip: fader, inserts, sends and output, kept when the track's stream is replaced.</summary>
-    public ChannelState Channel { get; }
+    public ChannelState Channel { get; } = channel ?? new(new());
 
     /// <summary>An aux track's input bus (1…64), else 0. Control thread; the audio thread reads the plan's copy.</summary>
     public int InputBus { get; set; }
@@ -75,7 +67,7 @@ public sealed class TrackState : IDisposable {
     ///     Whether the track's source is stereo (<see cref="EngineTrack.Stereo" />); a frozen mono track streams its
     ///     stereo freeze file but keeps its mono pan law when it had no inserts (the file's channels are then equal).
     /// </summary>
-    public bool SourceStereo { get; set; }
+    public bool SourceStereo { get; set; } = stereo;
 
     /// <summary>The 0-based first device input (−1: none); a stereo track takes it and the next one.</summary>
     public int InputChannel => Volatile.Read(ref inputChannel);
@@ -155,7 +147,7 @@ public sealed class TrackState : IDisposable {
     public bool IsMidi => Instrument is not null || MidiIo is not null || NoteRoutes is not null;
 
     /// <summary>The audio thread's MIDI state, and the queue live MIDI reaches it through.</summary>
-    public MidiTrackState Midi { get; }
+    public MidiTrackState Midi { get; } = midi ?? new();
 
     /// <summary>The Live Loops launcher's state for this track (audio thread), kept when the track's stream is replaced.</summary>
     public CellPlayer Player { get; init; } = new();
@@ -308,7 +300,18 @@ public sealed class MidiTrackState {
 ///     thread, read by the audio and disk threads without locks. It holds each track's view into a mapped segment and
 ///     the generation of that view, so the disk thread knows when to re-render a track.
 /// </summary>
-public sealed class ModelRoot {
+public sealed class ModelRoot(
+    long version,
+    long lengthSamples,
+    TrackState[] tracks,
+    TrackView[] views,
+    int[] generations,
+    MappedSegment?[] owners,
+    TrackView metronome,
+    MappedSegment? metronomeOwner,
+    StreamFile?[] files,
+    byte[]?[]? lanes = null
+) {
     public static readonly ModelRoot Empty = new(0, 0, [], [], [], [], default, null, []);
 
     /// <summary>The mixer graph (published with the model, RCU).</summary>
@@ -387,59 +390,35 @@ public sealed class ModelRoot {
             Cells = cells ?? Cells
         };
 
-    public ModelRoot(
-        long version,
-        long lengthSamples,
-        TrackState[] tracks,
-        TrackView[] views,
-        int[] generations,
-        MappedSegment?[] owners,
-        TrackView metronome,
-        MappedSegment? metronomeOwner,
-        StreamFile?[] files,
-        byte[]?[]? lanes = null
-    ) {
-        Version = version;
-        Lanes = lanes ?? new byte[]?[tracks.Length];
-        LengthSamples = lengthSamples;
-        Tracks = tracks;
-        Views = views;
-        Generations = generations;
-        Owners = owners;
-        Metronome = metronome;
-        MetronomeOwner = metronomeOwner;
-        Files = files;
-    }
+    public long Version { get; } = version;
 
-    public long Version { get; }
-
-    public long LengthSamples { get; }
+    public long LengthSamples { get; } = lengthSamples;
 
     /// <summary>The tracks, in mix order.</summary>
-    public TrackState[] Tracks { get; }
+    public TrackState[] Tracks { get; } = tracks;
 
     /// <summary>Each track's compiled events and playlist (default: none yet).</summary>
-    public TrackView[] Views { get; }
+    public TrackView[] Views { get; } = views;
 
     /// <summary>Each track's compile generation: changes whenever its view does.</summary>
-    public int[] Generations { get; }
+    public int[] Generations { get; } = generations;
 
     /// <summary>The segment each view points into (reference-counted on the control thread).</summary>
-    public MappedSegment?[] Owners { get; }
+    public MappedSegment?[] Owners { get; } = owners;
 
     /// <summary>The metronome's clicks (<see cref="TrackEntry.MetronomeTrack" />).</summary>
-    public TrackView Metronome { get; }
+    public TrackView Metronome { get; } = metronome;
 
-    public MappedSegment? MetronomeOwner { get; }
+    public MappedSegment? MetronomeOwner { get; } = metronomeOwner;
 
     /// <summary>
     ///     Each track's playlist lanes (<see cref="PlaylistLanes.Of" />): null when nothing overlaps and the track
     ///     plays through one stream, else the lane of each entry, and the track plays its second stream too.
     /// </summary>
-    public byte[]?[] Lanes { get; }
+    public byte[]?[] Lanes { get; } = lanes ?? new byte[]?[tracks.Length];
 
     /// <summary>The files the playlists name, indexed by engine file id.</summary>
-    public StreamFile?[] Files { get; }
+    public StreamFile?[] Files { get; } = files;
 
     public int IndexOf(int trackId) {
         for (var i = 0; i < Tracks.Length; i++) {

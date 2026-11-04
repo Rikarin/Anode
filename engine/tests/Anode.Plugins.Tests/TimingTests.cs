@@ -77,7 +77,9 @@ public sealed class TimingTests : IDisposable {
         var result = new long[cycles];
         var thread = new Thread(() => {
                 if (realTime) {
-                    Assert.Equal(0, IpcWake.RtPromote(PeriodNs, PeriodNs / 2, PeriodNs));
+                    // Off macOS real-time priority takes rights a test machine may not have.
+                    var promoted = IpcWake.RtPromote(PeriodNs, PeriodNs / 2, PeriodNs);
+                    Assert.True(promoted == 0 || !OperatingSystem.IsMacOS());
                 }
 
                 var l = new float[Frames];

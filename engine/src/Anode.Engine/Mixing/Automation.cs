@@ -157,18 +157,13 @@ public sealed class AutomationLane {
 }
 
 /// <summary>The model's automation: the targets the server numbered and each one's lane. Immutable.</summary>
-public sealed class AutomationSet {
+public sealed class AutomationSet(EngineAutomationTarget?[] targets, AutomationLane?[] lanes) {
     public static readonly AutomationSet Empty = new([], []);
 
-    public AutomationSet(EngineAutomationTarget?[] targets, AutomationLane?[] lanes) {
-        Targets = targets;
-        Lanes = lanes;
-    }
-
     /// <summary>The targets by index (null where the server numbered none).</summary>
-    public EngineAutomationTarget?[] Targets { get; }
+    public EngineAutomationTarget?[] Targets { get; } = targets;
 
-    public AutomationLane?[] Lanes { get; }
+    public AutomationLane?[] Lanes { get; } = lanes;
 
     /// <summary>The lane of target <paramref name="index" />, or null.</summary>
     public AutomationLane? Lane(int index) => (uint)index < (uint)Lanes.Length ? Lanes[index] : null;

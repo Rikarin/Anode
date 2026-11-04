@@ -12,12 +12,18 @@ namespace Anode.Interchange.Adm;
 ///     an object per bed and per object, the beds' packs, the objects' packs, channel, stream and track formats, and a
 ///     track UID per track.
 /// </summary>
-sealed class AdmMetadata {
+sealed class AdmMetadata(AdmScene scene, int bitDepth) {
     static readonly XNamespace Ns = AdmDefinitions.Namespace;
-    readonly AdmScene scene;
-    readonly int bitDepth;
-    readonly int rate;
-    readonly XElement content;
+    readonly AdmScene scene = scene;
+    readonly int bitDepth = bitDepth;
+    readonly int rate = scene.SampleRate;
+
+    readonly XElement content = new(
+        Ns + "audioContent",
+        new XAttribute("audioContentID", "ACO_1001"),
+        new XAttribute("audioContentName", scene.Name)
+    );
+
     readonly List<XElement> objects = [];
     readonly List<XElement> formats = [];
     readonly List<XElement> uids = [];
@@ -27,17 +33,6 @@ sealed class AdmMetadata {
     int customPack = 0x1000;
     int objectPack = 0x1000;
     int objectChannel = 0x1000;
-
-    public AdmMetadata(AdmScene scene, int bitDepth) {
-        this.scene = scene;
-        this.bitDepth = bitDepth;
-        rate = scene.SampleRate;
-        content = new(
-            Ns + "audioContent",
-            new XAttribute("audioContentID", "ACO_1001"),
-            new XAttribute("audioContentName", scene.Name)
-        );
-    }
 
     public (byte[] Axml, byte[] Chna, int Channels) Build() {
         foreach (var bed in scene.Beds) {
