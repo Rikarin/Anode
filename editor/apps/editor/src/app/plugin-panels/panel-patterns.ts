@@ -9,6 +9,13 @@ export type PanelKind =
   | 'multipressorBands'
   // The Channel EQ's and the Linear Phase EQ's curve and analyser.
   | 'eqCurve'
+  // The utility effects and meters, by plugin id.
+  | 'tuner'
+  | 'scope'
+  | 'phaseMeter'
+  | 'expander'
+  | 'testOscillator'
+  | 'frequencySpread'
   // Phase 11 (docs/12-phase-11.md): the physical model's object and pickups, Sample Alchemy's source view.
   | 'physicalModel'
   | 'sampleAlchemy';
@@ -29,6 +36,8 @@ export interface PanelBinding {
  */
 export interface PanelPattern {
   readonly kind: PanelKind;
+  /** Only this plugin (a panel drawn for one of Anode's own effects, not a shape of parameters). */
+  readonly pluginId?: string;
   readonly roles: Readonly<Record<string, RegExp>>;
   readonly series: Readonly<Record<string, RegExp>>;
   accepts(binding: PanelBinding): boolean;
@@ -43,6 +52,11 @@ function holdsValues(parameter: ParameterInfo | undefined, count: number): boole
     return false;
   }
   return parameter.steps > 0 ? parameter.steps + 1 >= count : parameter.max - parameter.min >= count - 1;
+}
+
+/** The pattern of a panel drawn for one built-in effect. */
+function ownPanel(kind: PanelKind, pluginId: string): PanelPattern {
+  return { kind, pluginId, roles: {}, series: {}, accepts: () => true };
 }
 
 /**
@@ -135,6 +149,12 @@ export const PanelPatterns: readonly PanelPattern[] = [
     series: {},
     accepts: b => EqParameterIds.every(id => !!b.roles[id])
   },
+  ownPanel('tuner', 'anode.tuner'),
+  ownPanel('scope', 'anode.scope'),
+  ownPanel('phaseMeter', 'anode.phase-meter'),
+  ownPanel('expander', 'anode.expander'),
+  ownPanel('testOscillator', 'anode.test-oscillator'),
+  ownPanel('frequencySpread', 'anode.frequency-spread'),
   {
     kind: 'physicalModel',
     roles: {
@@ -222,6 +242,9 @@ export function matchPanel(plugin: PluginInfo | null | undefined): { kind: Panel
     return null;
   }
   for (const pattern of PanelPatterns) {
+    if (pattern.pluginId && pattern.pluginId !== plugin.id) {
+      continue;
+    }
     const binding = bindPattern(pattern, plugin.parameters);
     if (pattern.accepts(binding)) {
       return { kind: pattern.kind, binding };

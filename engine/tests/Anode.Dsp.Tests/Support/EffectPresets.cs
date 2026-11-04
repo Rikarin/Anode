@@ -48,6 +48,9 @@ public static class EffectPresets {
                 (LinearPhaseEq.Peak2Gain, -4), (LinearPhaseEq.Peak2Q, 2), (LinearPhaseEq.Peak3Gain, 3),
                 (LinearPhaseEq.HighShelfGain, 4)
             ],
+            Expander.Id => [(Expander.Threshold, -24), (Expander.Ratio, 3)],
+            TestOscillator.Id => [(TestOscillator.Wave, TestOscillator.Sawtooth), (TestOscillator.Frequency, 220)],
+            FrequencySpread.Id => [(FrequencySpread.Width, 70), (FrequencySpread.Output, -4)],
             Multipressor.Id => [
                 (Multipressor.Bands[0].Threshold, -30), (Multipressor.Bands[0].Ratio, 4),
                 (Multipressor.Bands[1].Threshold, -30), (Multipressor.Bands[1].Ratio, 3),

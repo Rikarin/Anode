@@ -21,9 +21,19 @@ export interface PluginPanelHost {
 }
 
 /** The panels drawn by `an-t3-panel` (t3-panel.ts), which the plugin window loads when first shown. */
-export type DeferredPanelKind = Extract<PanelKind, 'physicalModel' | 'sampleAlchemy' | 'eqCurve'>;
+export type DeferredPanelKind = Exclude<PanelKind, 'drawbars' | 'fmAlgorithm' | 'delayTaps' | 'multipressorBands'>;
 
-const Deferred: ReadonlySet<PanelKind> = new Set<DeferredPanelKind>(['physicalModel', 'sampleAlchemy', 'eqCurve']);
+const Deferred: ReadonlySet<PanelKind> = new Set<DeferredPanelKind>([
+  'physicalModel',
+  'sampleAlchemy',
+  'eqCurve',
+  'tuner',
+  'scope',
+  'phaseMeter',
+  'expander',
+  'testOscillator',
+  'frequencySpread'
+]);
 
 /** The panel component of each kind loaded with the window (the deferred ones are not here). */
 const Panels: Readonly<Record<Exclude<PanelKind, DeferredPanelKind>, Type<unknown>>> = {
@@ -46,7 +56,7 @@ export function pluginPanel(plugin: PluginInfo | null | undefined): Type<unknown
 
 /**
  * The deferred panel for a plugin (the physical model's object and pickups, Sample Alchemy's source view, an EQ's
- * curve), or null. They load with their own chunk (`@defer` in the plugin window), so the initial bundle carries none of them.
+ * curve, the utility effects' and meters' displays), or null. They load with their own chunk (`@defer` in the plugin window), so the initial bundle carries none of them.
  */
 export function deferredPanel(plugin: PluginInfo | null | undefined): DeferredPanelKind | null {
   const kind = matchPanel(plugin)?.kind;

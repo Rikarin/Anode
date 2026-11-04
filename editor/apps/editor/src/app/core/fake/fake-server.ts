@@ -159,7 +159,7 @@ import {
 } from './fake-arrange';
 import { fakePeaks, hash, readWavHeader } from './fake-audio';
 import { FakeAudioDevices } from './fake-audio-devices';
-import { displayKey, DisplayLeaseMs, fakeSpectrum } from './fake-displays';
+import { displayKey, DisplayLeaseMs, fakeDisplay, fakeSpectrum } from './fake-displays';
 import { applyEnvironmentCommand } from './fake-environment';
 import { fakeFileExists, FakeHome, fileKind, listFakeFolder } from './fake-files';
 import { adaptTempo, applyFlexCommand, fakeAnalysis, type FlexContext, timingOf } from './fake-flex';
@@ -262,6 +262,7 @@ import {
   withExtension
 } from './fake-phase9';
 import { CrashyPluginId, FakeCatalogue, FakeEffects, FakeMidiDevices } from './fake-plugins';
+import { FakeParityEffects } from './fake-plugins-effects';
 import { FakeT3Effects, FakeT3Instruments } from './fake-plugins-phase11';
 import { FakeMidiEffects, FakeT2Effects, FakeT2Instruments, RemixFxId, withMacros } from './fake-plugins-phase6';
 import { FakeScriptPresets } from './fake-scripts';
@@ -391,6 +392,7 @@ export class FakeAnodeServer implements AnodeApi {
       ...FakeEffects,
       ...FakeT2Effects,
       ...FakeT3Effects,
+      ...FakeParityEffects,
       ...FakeMidiEffects
     ]
       .map(withMacros)
@@ -1354,10 +1356,14 @@ export class FakeAnodeServer implements AnodeApi {
     });
   }
 
-  private fakeSpectrumOf(insert: Insert, level: number): number[] {
+  /** The defaults of an insert's plugin, for what the insert has not set. */
+  private fakeDefaults(insert: Insert): ReadonlyMap<string, number> {
     const plugin = this.catalogue.find(p => p.id === insert.pluginId);
-    const defaults = new Map(plugin?.parameters.map(p => [p.id, p.default]));
-    return fakeSpectrum(insert, level, this.positionTick, defaults);
+    return new Map(plugin?.parameters.map(p => [p.id, p.default]));
+  }
+
+  private fakeSpectrumOf(insert: Insert, level: number): number[] {
+    return fakeSpectrum(insert, level, this.positionTick, this.fakeDefaults(insert));
   }
 
   /** Whether a client's lease on an insert's display still runs. */
@@ -4175,6 +4181,21 @@ export class FakeAnodeServer implements AnodeApi {
               insertId: insert.id,
               value: Math.min(...bands),
               values: this.displayWatched(trackId, insert.id) ? bands : null
+            });
+            break;
+          }
+          case 'anode.tuner':
+          case 'anode.test-oscillator':
+          case 'anode.expander':
+          case 'anode.frequency-spread':
+          case 'anode.scope':
+          case 'anode.phase-meter': {
+            const shown = fakeDisplay(insert, level, this.positionTick, this.fakeDefaults(insert));
+            readings.push({
+              trackId,
+              insertId: insert.id,
+              value: shown.value,
+              values: this.displayWatched(trackId, insert.id) ? shown.values : null
             });
             break;
           }

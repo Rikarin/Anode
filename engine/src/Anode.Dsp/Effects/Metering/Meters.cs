@@ -169,10 +169,8 @@ public sealed class MultiMeter : AudioEffect {
 
     public static EffectDescriptor Info { get; } = P.Describe(Id, "MultiMeter", EffectCategories.Metering, Integration);
 
+    StereoImage image;
     double coefficient;
-    double product;
-    double squareLeft;
-    double squareRight;
     double peakLeft;
     double peakRight;
     float balance;
@@ -190,9 +188,7 @@ public sealed class MultiMeter : AudioEffect {
     protected override void OnPrepare(float sampleRate) { }
 
     protected override void OnReset() {
-        product = 0;
-        squareLeft = 0;
-        squareRight = 0;
+        image.Reset();
         peakLeft = 0;
         peakRight = 0;
         Volatile.Write(ref balance, 0);
@@ -211,29 +207,19 @@ public sealed class MultiMeter : AudioEffect {
         for (var i = 0; i < left.Length; i++) {
             double l = left[i];
             double r = right[i];
-            product = c * product + (1 - c) * l * r;
-            squareLeft = c * squareLeft + (1 - c) * l * l;
-            squareRight = c * squareRight + (1 - c) * r * r;
+            image.Tick(c, l, r);
             peakLeft = Math.Max(peakLeft, Math.Abs(l));
             peakRight = Math.Max(peakRight, Math.Abs(r));
         }
     }
 
     protected override void Finish() {
-        var energy = Math.Sqrt(squareLeft * squareRight);
-        var correlation = energy > 1e-12 ? Math.Clamp(product / energy, -1, 1) : 0;
-        var b = squareLeft > 1e-12 && squareRight > 1e-12 ? 10 * Math.Log10(squareRight / squareLeft) : 0;
-        Volatile.Write(ref balance, (float)b);
+        Volatile.Write(ref balance, (float)image.BalanceDb);
         Volatile.Write(ref leftPeak, Decibels.FromGain(peakLeft));
         Volatile.Write(ref rightPeak, Decibels.FromGain(peakRight));
         peakLeft = 0;
         peakRight = 0;
-        if (energy < 1e-30) {
-            product = 0;
-            squareLeft = 0;
-            squareRight = 0;
-        }
-
-        Publish((float)correlation);
+        Publish((float)image.Correlation);
+        image.FlushDenormals();
     }
 }

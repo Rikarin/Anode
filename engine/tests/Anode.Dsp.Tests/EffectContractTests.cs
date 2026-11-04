@@ -27,7 +27,10 @@ public sealed class EffectContractTests {
         "anode.delay-designer", "anode.pitch-shifter", "anode.pitch-correction", "anode.ensemble",
         "anode.rotor-cabinet", "anode.phat-fx", "anode.step-fx", "anode.beat-breaker", "anode.remix-fx",
         // The T3 effects of docs/12-phase-11.md; the format-changing inserts have their contract in T3ContractTests.
-        "anode.saturation", "anode.mastering-assistant"
+        "anode.saturation", "anode.mastering-assistant",
+        // The parity effects of docs/effects/parity.md.
+        "anode.tuner", "anode.test-oscillator", "anode.expander", "anode.frequency-spread", "anode.scope",
+        "anode.phase-meter"
     ];
 
     [Fact]
@@ -249,8 +252,12 @@ public sealed class EffectContractTests {
             effect.SetParameter(Effects.Modulation.Tremolo.Depth, 0);
         }
 
-        if (id is "anode.compressor" or "anode.deesser") {
-            return; // dry at Mix 0 is trivial; the compressor and de-esser are zero-latency by construction
+        if (id == "anode.frequency-spread") {
+            effect.SetParameter(Effects.Utility.FrequencySpread.Width, 0);
+        }
+
+        if (id is "anode.compressor" or "anode.deesser" or "anode.test-oscillator") {
+            return; // dry at Mix 0 is trivial; the compressor and de-esser are zero-latency, an oscillator takes no input
         }
 
         var input = Fx.Impulse(4_096, 1_000, 0.25f);

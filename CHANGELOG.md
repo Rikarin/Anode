@@ -12,3 +12,6 @@ All notable changes to Anode are recorded here, by hand.
   under its knobs. A meters frame without readings no longer blanks the reading a plugin window shows.
 - Channel EQ and Linear Phase EQ: a draggable curve over a live analyser of the output, with a handle per band. An
   insert's live display is read only while a window shows it (`POST /plugins/displays`, a lease the window renews).
+- New utility effects and meters, each with its panel: Tuner, Test Oscillator, Expander, Frequency Spread, Oscilloscope
+  and Phase Meter with a goniometer (docs/effects/parity.md). Plugin windows show the MultiMeter's correlation as a
+  correlation, not LUFS.

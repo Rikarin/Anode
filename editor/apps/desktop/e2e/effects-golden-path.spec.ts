@@ -108,6 +108,27 @@ test('shows live plugin displays from the real engine', async ({ app, window }) 
     await expect(band).toHaveAttribute('aria-valuetext', /^−[1-9]/, { timeout: 15_000 });
     await expect(pressor.getByTestId('band-reduction-1')).toHaveAttribute('aria-valuetext', /^(−0\.\d|0\.0) dB/);
     await pressor.getByRole('button', { name: /^Close/ }).click();
+
+    // The meters, on the same tone. Each insert's editor shows what the DSP measures.
+    await addInsert(window, strip, 'Metering', /^Tuner/);
+    const tuner = await openEditor(window, strip, /^Insert 3 on Audio 1: Tuner/, /Audio 1: Tuner/);
+    await expect(tuner.getByTestId('tuner-note')).toHaveText('B5', { timeout: 15_000 });
+    await expect(tuner.getByTestId('tuner-offset')).toContainText('1000.0 Hz');
+    await tuner.getByRole('button', { name: /^Close/ }).click();
+
+    await addInsert(window, strip, 'Metering', /^Oscilloscope/);
+    const scope = await openEditor(window, strip, /^Insert 4 on Audio 1: Oscilloscope/, /Audio 1: Oscilloscope/);
+    // Triggered on the rising edge: the trace starts at the middle or just above it (a point is its slice's peak).
+    await expect(scope.getByTestId('scope-left')).toHaveAttribute('points', /^0,(\d\d|1[01]\d)(\.\d)? /, {
+      timeout: 15_000
+    });
+    await scope.getByRole('button', { name: /^Close/ }).click();
+
+    await addInsert(window, strip, 'Metering', /^Phase Meter/);
+    const phase = await openEditor(window, strip, /^Insert 5 on Audio 1: Phase Meter/, /Audio 1: Phase Meter/);
+    await expect(phase.getByTestId('goniometer-point')).toHaveCount(256, { timeout: 15_000 });
+    await expect(phase.getByRole('meter', { name: 'Correlation' }).first()).toHaveAttribute('aria-valuetext', '1.0');
+    await phase.getByRole('button', { name: /^Close/ }).click();
   } finally {
     rmSync(scratch, { recursive: true, force: true });
   }

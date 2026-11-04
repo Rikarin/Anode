@@ -34,20 +34,35 @@ const ReadingMs = 66;
 /** How often the open windows renew their displays' lease (`/plugins/displays`; it lasts a few seconds). */
 const DisplayLeaseMs = 1_000;
 
-/** The reading a plugin shows: gain reduction for dynamics, loudness for meters, a level otherwise. */
-export function readingKind(plugin: PluginInfo | undefined): {
+/** How a plugin's reading reads. */
+export interface ReadingKind {
   kind: 'reduction' | 'level';
   min: number;
+  max: number;
   label: string;
   unit: string;
-} {
-  if (plugin?.category === 'Metering') {
-    return { kind: 'level', min: -60, label: 'Loudness', unit: 'LUFS' };
+}
+
+const Correlation: ReadingKind = { kind: 'level', min: -1, max: 1, label: 'Correlation', unit: '' };
+
+/** The meters whose reading is not a level in dB. */
+const OwnReadings: Readonly<Record<string, ReadingKind>> = {
+  'anode.loudness-meter': { kind: 'level', min: -60, max: 0, label: 'Loudness', unit: 'LUFS' },
+  'anode.multimeter': Correlation,
+  'anode.phase-meter': Correlation,
+  'anode.tuner': { kind: 'level', min: -50, max: 50, label: 'Offset', unit: 'ct' }
+};
+
+/** The reading a plugin shows: gain reduction for dynamics, a meter's own, a level otherwise. */
+export function readingKind(plugin: PluginInfo | undefined): ReadingKind {
+  const own = plugin && OwnReadings[plugin.id];
+  if (own) {
+    return own;
   }
   if (plugin?.category === 'Dynamics') {
-    return { kind: 'reduction', min: -30, label: 'Gain Reduction', unit: 'dB' };
+    return { kind: 'reduction', min: -30, max: 0, label: 'Gain Reduction', unit: 'dB' };
   }
-  return { kind: 'level', min: -60, label: 'Level', unit: 'dB' };
+  return { kind: 'level', min: -60, max: 0, label: 'Level', unit: 'dB' };
 }
 
 /**
@@ -124,6 +139,7 @@ export function readingKind(plugin: PluginInfo | undefined): {
             [label]="readingInfo().label"
             [kind]="readingInfo().kind"
             [min]="readingInfo().min"
+            [max]="readingInfo().max"
             [unit]="readingInfo().unit"
             [value]="reading()"
           />
