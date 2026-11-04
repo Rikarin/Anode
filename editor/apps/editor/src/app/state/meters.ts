@@ -21,7 +21,7 @@ export class MeterBus {
   private readonly levels = new Map<string, StereoLevel>();
   /** Phase 10: per-channel peaks of strips wider than stereo (`TrackMeter.peaks`), when the Server sends them. */
   private readonly channels = new Map<string, number[]>();
-  private readonly readings = new Map<string, number>();
+  private readonly readings = new Map<string, InsertReading>();
   /** When the last frame arrived (performance.now()), so a meter can tell a stalled stream. */
   lastFrame = 0;
 
@@ -29,7 +29,10 @@ export class MeterBus {
     inject(EventStream).events$.subscribe(message => {
       if (message.type === 'meters') {
         this.apply(message.tracks, message.master);
-        this.applyReadings(message.readings ?? []);
+        // The host reports readings at 15 Hz and the meters run at 30: a frame without any says nothing about them.
+        if (message.readings) {
+          this.applyReadings(message.readings);
+        }
       }
     });
   }
@@ -46,13 +49,18 @@ export class MeterBus {
   applyReadings(readings: readonly InsertReading[]): void {
     this.readings.clear();
     for (const reading of readings) {
-      this.readings.set(readingKey(reading.trackId, reading.insertId), reading.value);
+      this.readings.set(readingKey(reading.trackId, reading.insertId), reading);
     }
   }
 
   /** An insert's latest reading (a compressor's gain reduction in dB, a meter's LUFS), or null when it sent none. */
   reading(trackId: string | null, insertId: string): number | null {
-    return this.readings.get(readingKey(trackId, insertId)) ?? null;
+    return this.readings.get(readingKey(trackId, insertId))?.value ?? null;
+  }
+
+  /** What an insert with more to show sent beside its reading (the Multipressor's band gains), or null. */
+  readingValues(trackId: string | null, insertId: string): readonly number[] | null {
+    return this.readings.get(readingKey(trackId, insertId))?.values ?? null;
   }
 
   /** The latest level of a track (or {@link MasterMeter}); silence when none arrived. */

@@ -236,7 +236,8 @@ export class PluginWindowView {
     return {
       plugin,
       value: id => this.mixer.parameterValue(this.window().trackId, insert, id),
-      set: (id, value) => void this.mixer.setParameter(this.window().trackId, insert.id, id, value)
+      set: (id, value) => void this.mixer.setParameter(this.window().trackId, insert.id, id, value),
+      readingValues: () => this.readingValues()
     };
   });
   protected readonly groups = computed(() => parameterGroups(this.plugin()?.parameters ?? []));
@@ -249,6 +250,7 @@ export class PluginWindowView {
   });
   protected readonly readingInfo = computed(() => readingKind(this.plugin()));
   protected readonly reading = signal<number | null>(null);
+  private readonly readingValues = signal<readonly number[] | null>(null);
 
   constructor() {
     const timer = setInterval(() => {
@@ -257,6 +259,7 @@ export class PluginWindowView {
       if (value !== this.reading()) {
         this.reading.set(value);
       }
+      this.readingValues.set(this.meters.readingValues(trackId, insertId));
     }, ReadingMs);
     inject(DestroyRef).onDestroy(() => clearInterval(timer));
   }

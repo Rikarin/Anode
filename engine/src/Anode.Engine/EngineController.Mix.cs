@@ -168,7 +168,8 @@ public sealed partial class EngineController {
 
     /// <summary>
     ///     Every insert's reading that is a number (track −1: the master), read without the gate: the published model
-    ///     and each channel's configuration are swapped whole, and a reading is a single float the audio thread writes.
+    ///     and each channel's configuration are swapped whole, and a reading is a single float the audio thread writes
+    ///     (or, for an <see cref="IEffectDisplay" />, values a display may see torn).
     /// </summary>
     public List<InsertReadingEntry> InsertReadings() {
         var readings = new List<InsertReadingEntry>();
@@ -178,12 +179,37 @@ public sealed partial class EngineController {
                     && !insert.Slot.Failed
                     && effect.Reading is var value
                     && !float.IsNaN(value)) {
-                    readings.Add(new(trackId, insert.Slot.Id, value));
+                    readings.Add(new(trackId, insert.Slot.Id, value, DisplayOf(effect)));
                 }
             }
         }
 
         return readings;
+    }
+
+    /// <summary>
+    ///     What an effect's display shows now, or null when it has none. The IPC frame is JSON, which cannot carry a
+    ///     non-finite number: a value that slipped through reads 0 rather than taking the host's link down.
+    /// </summary>
+    static float[]? DisplayOf(IAudioEffect effect) {
+        if (effect is not IEffectDisplay display) {
+            return null;
+        }
+
+        var values = new float[display.DisplaySize];
+        var count = display.ReadDisplay(values);
+        if (count == 0) {
+            return null;
+        }
+
+        var shown = values[..count];
+        for (var i = 0; i < shown.Length; i++) {
+            if (!float.IsFinite(shown[i])) {
+                shown[i] = 0;
+            }
+        }
+
+        return shown;
     }
 
     IEnumerable<(int TrackId, ChannelState Channel)> Channels(ModelRoot root) {

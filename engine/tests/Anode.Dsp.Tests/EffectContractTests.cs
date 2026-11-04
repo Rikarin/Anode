@@ -143,6 +143,12 @@ public sealed class EffectContractTests {
             Assert.All(l, static s => Assert.True(float.IsFinite(s)));
             Assert.All(r, static s => Assert.True(float.IsFinite(s)));
             Assert.True(float.IsNaN(effect.Reading) || float.IsFinite(effect.Reading));
+            if (effect is IEffectDisplay display) {
+                var values = new float[display.DisplaySize];
+                var count = display.ReadDisplay(values);
+                Assert.InRange(count, 0, values.Length);
+                Assert.All(values, static v => Assert.True(float.IsFinite(v)));
+            }
         }
     }
 

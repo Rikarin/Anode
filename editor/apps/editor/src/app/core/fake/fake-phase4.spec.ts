@@ -429,6 +429,22 @@ describe('FakeAnodeServer, patches, I/O labels, plugin editors and problems', ()
     ]);
   });
 
+  it('reports the Multipressor’s gain reduction per band', async () => {
+    let time = 0;
+    const server = new FakeAnodeServer({ now: () => time, demo: true });
+    const events = messages(server);
+    const track = server.current?.tracks.find(t => t.kind === 'audio');
+    await run(server, { type: 'addInsert', trackId: track?.id ?? '', pluginId: 'anode.multipressor' });
+    await server.controlTransport({ command: 'play', tick: 6 * Bar });
+    time += 200;
+    server.advance();
+    const meters = events.filter(m => m.type === 'meters').at(-1);
+    const insert = server.current?.tracks.find(t => t.id === track?.id)?.strip.inserts.at(-1);
+    const reading = meters?.type === 'meters' ? meters.readings?.find(r => r.insertId === insert?.id) : undefined;
+    expect(reading?.values).toHaveLength(4);
+    expect(reading?.value).toBe(Math.min(...(reading?.values ?? [])));
+  });
+
   it('reports insert readings and aux levels in the meters', async () => {
     let time = 0;
     const server = new FakeAnodeServer({ now: () => time, demo: true });

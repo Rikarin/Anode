@@ -14,6 +14,8 @@ export interface PluginPanelHost {
   readonly plugin: PluginInfo;
   value(parameterId: string): number;
   set(parameterId: string, value: number): void;
+  /** What the insert shows beyond its reading (`InsertReading.values`), a signal read; instruments have none. */
+  readingValues?(): readonly number[] | null;
 }
 
 /** The T3 panels (Phase 11): drawn by `an-t3-panel` (t3-panel.ts), which the plugin window loads when first shown. */

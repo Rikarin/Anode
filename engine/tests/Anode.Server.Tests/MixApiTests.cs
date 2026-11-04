@@ -443,6 +443,11 @@ public sealed class MixApiTests {
         var meters = await events.WaitAsync<MetersEvent>(static e => e.Readings is { Count: > 0 });
         Assert.Equal(new(gtr, inserts[1].Id, -4.5), Assert.Single(meters.Readings!));
 
+        // An effect with more to show sends it beside the reading (the Multipressor's four band gains).
+        await host.ReportReadingsAsync([new(0, inserts[1].Id, -9, [-1, -9, 0, -0.5f])]);
+        meters = await events.WaitAsync<MetersEvent>(static e => e.Readings?[0].Values is not null);
+        Assert.Equal([-1, -9, 0, -0.5], Assert.Single(meters.Readings!).Values!);
+
         await host.ReportProblemAsync(0, inserts[0].Id, FakeHost.FakeVst3Id, "The plugin crashed.");
         var problem = await events.WaitAsync<PluginProblemEvent>();
         Assert.Equal(

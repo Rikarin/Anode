@@ -207,6 +207,8 @@ describe('Custom plugin panels: value plumbing', () => {
     expect(axisFrequency(axisPosition(632))).toBeCloseTo(632);
     const { element, sets, press, values } = await render(MultipressorPanel, fake('anode.multipressor'));
     expect(element.querySelectorAll('[data-testid="multipressor-band"]')).toHaveLength(4);
+    // No reading yet: each band's meter rests at its minimum and says so.
+    expect(element.querySelector('[data-testid="band-reduction-2"]')?.getAttribute('aria-valuetext')).toBe('—');
     const bypass = element.querySelector<HTMLButtonElement>('[aria-label="Bypass band 2"]');
     bypass?.click();
     expect(sets).toEqual([['band2On', 0]]);
@@ -222,5 +224,21 @@ describe('Custom plugin panels: value plumbing', () => {
       await press(crossovers[0], 'PageUp');
     }
     expect(values()['cross1']).toBeLessThan(values()['cross2'] ?? 0);
+  });
+
+  it('Multipressor: each band shows its own gain reduction', async () => {
+    const readings = signal<readonly number[] | null>([-1.5, -9, 0, -0.5]);
+    const { host } = testHost(fake('anode.multipressor'));
+    const fixture = TestBed.createComponent(MultipressorPanel);
+    fixture.componentRef.setInput('host', { ...host, readingValues: () => readings() });
+    fixture.autoDetectChanges();
+    await fixture.whenStable();
+    const element = fixture.nativeElement as HTMLElement;
+    const text = (band: number) =>
+      element.querySelector(`[data-testid="band-reduction-${band}"]`)?.getAttribute('aria-valuetext');
+    expect([1, 2, 3, 4].map(text)).toEqual(['−1.5 dB', '−9.0 dB', '0.0 dB', '−0.5 dB']);
+    readings.set([0, -3, 0, 0]);
+    await fixture.whenStable();
+    expect(text(2)).toBe('−3.0 dB');
   });
 });

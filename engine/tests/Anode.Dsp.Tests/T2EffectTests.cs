@@ -362,6 +362,23 @@ public sealed class T2EffectTests {
     }
 
     [Fact]
+    public void Multipressor_display_shows_each_bands_gain() {
+        using var effect = (Multipressor)Fx.Create(Multipressor.Id);
+        // Band 2 alone: 500 Hz peaking at −12 dBFS over −20 dB at 2:1 settles 4 dB down, less what the 1 kHz crossover
+        // has already taken off the tone before the band's detector hears it (0.66 dB, so 0.33 dB less reduction).
+        Fx.Run(effect, TestWav.Sine(500, Rate, 2, 0.25f));
+        var values = new float[effect.DisplaySize];
+        Assert.Equal(Multipressor.BandCount, effect.ReadDisplay(values));
+        Assert.Equal(-3.67, values[1], 0.05);
+        Assert.Equal(effect.Reading, values[1]);
+        for (var band = 0; band < Multipressor.BandCount; band++) {
+            Assert.Equal(effect.BandGain(band), values[band]);
+        }
+
+        Assert.True(values[0] > -1 && values[2] > -1 && values[3] > -1, string.Join(' ', values));
+    }
+
+    [Fact]
     public void Multipressor_expands_below_its_expander_threshold() {
         // Every band: the crossovers leak a little of the tone into the bands beside its own.
         using var effect = (Multipressor)Fx.Create(

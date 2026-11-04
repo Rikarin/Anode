@@ -604,8 +604,11 @@ public sealed record ParameterChangedMessage(int TrackId, string? InsertId, stri
 /// <summary>Host → server: a plugin crashed or failed to load and is bypassed.</summary>
 public sealed record PluginProblemMessage(int TrackId, string? InsertId, string PluginId, string Message) : IpcMessage;
 
-/// <summary>An insert's reading (<c>IAudioEffect.Reading</c>: a compressor's gain reduction in dB, a meter's level).</summary>
-public sealed record InsertReadingEntry(int TrackId, string InsertId, float Value);
+/// <summary>
+///     An insert's reading (<c>IAudioEffect.Reading</c>: a compressor's gain reduction in dB, a meter's level), and
+///     <paramref name="Values" />, what its <c>IEffectDisplay</c> shows, when it has one.
+/// </summary>
+public sealed record InsertReadingEntry(int TrackId, string InsertId, float Value, float[]? Values = null);
 
 /// <summary>
 ///     Host → server: the inserts' readings (track −1: the master; inserts without one are left out), at most 15 times a

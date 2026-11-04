@@ -674,7 +674,14 @@ public sealed partial class EngineConnection(
 
             var trackId = r.TrackId < 0 ? null : ids?.TrackOf(r.TrackId);
             if (r.TrackId < 0 || trackId is not null) {
-                readings.Add(new(trackId, r.InsertId, r.Value));
+                readings.Add(
+                    new(
+                        trackId,
+                        r.InsertId,
+                        r.Value,
+                        r.Values is { } values ? Array.ConvertAll(values, static v => (double)v) : null
+                    )
+                );
             }
         }
 

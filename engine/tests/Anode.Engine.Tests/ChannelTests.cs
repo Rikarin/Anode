@@ -184,7 +184,10 @@ public sealed class ChannelTests : IDisposable {
             0f,
             false,
             false,
-            [TestEffects.Insert("g", TestEffects.Gain), TestEffects.Insert("m", "anode.level-meter")],
+            [
+                TestEffects.Insert("g", TestEffects.Gain), TestEffects.Insert("m", "anode.level-meter"),
+                TestEffects.Insert("p", "anode.multipressor")
+            ],
             [new("s", 1, 0.5f, 0f, false)]
         );
         Assert.Null(await host.HandleAsync(new SetChannelMessage(1, strip), Token));
@@ -227,6 +230,11 @@ public sealed class ChannelTests : IDisposable {
         }
 
         Assert.True(reading, "No reading of the meter was pushed.");
+        lock (pushed) {
+            var last = pushed.OfType<InsertReadingsMessage>().Last().Readings;
+            Assert.Equal(4, last.First(static r => r.InsertId == "p").Values?.Length);
+            Assert.Null(last.First(static r => r.InsertId == "m").Values);
+        }
 
         var states = Assert.IsType<InstrumentStatesMessage>(
             await host.HandleAsync(new RequestInstrumentStatesMessage(), Token)

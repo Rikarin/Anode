@@ -82,8 +82,17 @@ public sealed record MetersEvent(
     IReadOnlyList<InsertReading>? Readings = null
 ) : RealtimeEvent;
 
-/// <summary>An insert's reading (<c>IAudioEffect.Reading</c>); <c>trackId</c> null is the master.</summary>
-public sealed record InsertReading(string? TrackId, string InsertId, double Value);
+/// <summary>
+///     An insert's reading (<c>IAudioEffect.Reading</c>); <c>trackId</c> null is the master. <c>values</c> are what an
+///     effect with more to show sends beside it (the Multipressor's band gains, band 1 first; docs/effects/T2.md lists
+///     each effect's layout); left out otherwise.
+/// </summary>
+public sealed record InsertReading(
+    string? TrackId,
+    string InsertId,
+    double Value,
+    IReadOnlyList<double>? Values = null
+);
 
 /// <summary>
 ///     A track's (or the master's, <c>trackId</c> <c>master</c>) peaks since the previous frame, linear. Phase 10: a

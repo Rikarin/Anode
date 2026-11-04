@@ -4139,6 +4139,17 @@ export class FakeAnodeServer implements AnodeApi {
           case 'anode.loudness-meter':
             readings.push({ trackId, insertId: insert.id, value: level > 0 ? Math.max(-70, db - 9) : -70 });
             break;
+          case 'anode.multipressor': {
+            // Program material falls with frequency: each band hears 4 dB less than the one below it.
+            const values = [1, 2, 3, 4].map(band =>
+              insert.parameters[`band${band}On`] === 0
+                ? 0
+                : -Math.max(0, db - 4 * (band - 1) - (insert.parameters[`band${band}Threshold`] ?? -20)) *
+                  (1 - 1 / (insert.parameters[`band${band}Ratio`] ?? 2))
+            );
+            readings.push({ trackId, insertId: insert.id, value: Math.min(...values), values });
+            break;
+          }
         }
       }
     };

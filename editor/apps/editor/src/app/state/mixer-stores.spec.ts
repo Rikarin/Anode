@@ -1,4 +1,5 @@
 import { TestBed } from '@angular/core/testing';
+import { EventStream } from '../core/events';
 import { CrashyPluginId } from '../core/fake/fake-plugins';
 import type { FakeAnodeServer } from '../core/fake/fake-server';
 import { setUpFakeServer, settle } from '../core/fake/testing';
@@ -308,5 +309,21 @@ describe('patches, I/O labels and plugin windows', () => {
     expect(bus.reading('t', 'i')).toBe(-4);
     bus.applyReadings([]);
     expect(bus.reading('t', 'i')).toBeNull();
+  });
+
+  it('keeps an insert’s reading values, and its reading across a frame without any', () => {
+    const bus = TestBed.inject(MeterBus);
+    const stream = TestBed.inject(EventStream);
+    const frame = { tracks: [], master: { trackId: '', peakLeft: 0, peakRight: 0 } };
+    stream.events$.next({
+      type: 'meters',
+      ...frame,
+      readings: [{ trackId: 't', insertId: 'i', value: -4, values: [-1, -4] }]
+    });
+    expect(bus.readingValues('t', 'i')).toEqual([-1, -4]);
+    expect(bus.readingValues('t', 'other')).toBeNull();
+    stream.events$.next({ type: 'meters', ...frame });
+    expect(bus.reading('t', 'i')).toBe(-4);
+    expect(bus.readingValues('t', 'i')).toEqual([-1, -4]);
   });
 });
