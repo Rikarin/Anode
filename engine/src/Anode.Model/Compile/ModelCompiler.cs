@@ -580,7 +580,7 @@ public sealed class ModelCompiler {
         return Narrowed(placed, fileOffset, start, end);
     }
 
-    /// <summary>The entry narrowed to <paramref name="start" />…<paramref name="end" />, its warp map and fades with it.</summary>
+    /// <summary>The entry narrowed to a part of itself, its warp map and fades with it.</summary>
     internal static PlacedEntry Narrowed(PlacedEntry placed, long fileOffset, long start, long end) {
         var e = placed.Entry;
         var length = end - start;

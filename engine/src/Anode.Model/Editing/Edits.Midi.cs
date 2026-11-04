@@ -222,42 +222,42 @@ public static partial class Edits {
         ];
     }
 
-    /// <summary>A list of <paramref name="items" /> with room for <paramref name="more" />.</summary>
-    static List<T> Extended<T>(IReadOnlyList<T> items, int more) {
-        var list = new List<T>(items.Count + more);
+    /// <summary>A region's items in a list with room for what a command adds, once that is checked.</summary>
+    static List<T> ForAdding<T, TNew>(
+        MidiRegion region,
+        IReadOnlyList<T> items,
+        IReadOnlyList<TNew>? added,
+        string what
+    ) {
+        if (added is not { Count: > 0 and <= MaxNotesPerCommand }) {
+            throw new EditException($"Add 1…{MaxNotesPerCommand} {what}.");
+        }
+
+        CheckCapacity(region, added.Count);
+        var list = new List<T>(items.Count + added.Count);
         list.AddRange(items);
         return list;
     }
 
     static DeltaOp[] AddNotes(ProjectState state, AddNotesCommand c) {
         var region = MidiRegionOf(state, c.RegionId);
-        if (c.Notes is not { Count: > 0 and <= MaxNotesPerCommand }) {
-            throw new EditException($"Add 1…{MaxNotesPerCommand} notes.");
-        }
-
-        CheckCapacity(region, c.Notes.Count);
+        var notes = ForAdding(region, region.Notes, c.Notes, "notes");
         var next = state.LastEventId;
-        var notes = Extended(region.Notes, c.Notes.Count);
         foreach (var n in c.Notes) {
             if (n is null) {
                 throw new EditException("A note is null.");
             }
 
-            var note = new Note(
-                ++next,
-                n.Pitch,
-                n.Velocity,
-                n.Channel,
-                n.StartTick,
-                n.LengthTicks,
-                n.ArticulationId ?? 0
-            );
+            var note = NoteOf(++next, n);
             CheckNote(region, note, true);
             notes.Add(note);
         }
 
         return [new MidiRegionUpserted(region with { Notes = Sorted(notes) })];
     }
+
+    static Note NoteOf(long id, NewNote n) =>
+        new(id, n.Pitch, n.Velocity, n.Channel, n.StartTick, n.LengthTicks, n.ArticulationId ?? 0);
 
     static DeltaOp[] EditNotes(ProjectState state, EditNotesCommand c) {
         var region = MidiRegionOf(state, c.RegionId);
@@ -364,13 +364,8 @@ public static partial class Edits {
 
     static DeltaOp[] AddControls(ProjectState state, AddControlsCommand c) {
         var region = MidiRegionOf(state, c.RegionId);
-        if (c.Events is not { Count: > 0 and <= MaxNotesPerCommand }) {
-            throw new EditException($"Add 1…{MaxNotesPerCommand} controller events.");
-        }
-
-        CheckCapacity(region, c.Events.Count);
+        var controls = ForAdding(region, region.Controls, c.Events, "controller events");
         var next = state.LastEventId;
-        var controls = Extended(region.Controls, c.Events.Count);
         foreach (var e in c.Events) {
             if (e is null) {
                 throw new EditException("A controller event is null.");

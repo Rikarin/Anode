@@ -109,7 +109,7 @@ public sealed class PluginRegistry {
         return LastAdded(midiEffects, static d => d.Id, pluginId);
     }
 
-    /// <summary>A new instance of the entry added last under <paramref name="pluginId" />, or null without one.</summary>
+    /// <summary>A new instance of the entry added last under an id, or null without one.</summary>
     T? LastAdded<TDescriptor, T>(
         List<(TDescriptor Descriptor, Func<T> Create)> entries,
         Func<TDescriptor, string> idOf,

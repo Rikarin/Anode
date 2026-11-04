@@ -174,7 +174,7 @@ public sealed class PluginCatalog {
     /// <summary>Where CLAP plugins live: <c>CLAP_PATH</c> first, then the platform's standard folders.</summary>
     public static IReadOnlyList<string> ClapFolders() => Folders("CLAP_PATH", "CLAP", ".clap", ["/usr/lib/clap"]);
 
-    /// <summary>The folders in <paramref name="variable" /> first, then the platform's standard ones for a format.</summary>
+    /// <summary>The folders in an environment variable first, then the platform's standard ones.</summary>
     static List<string> Folders(string variable, string format, string linuxHomeFolder, string[] linuxFolders) {
         var folders = FromEnvironment(variable);
         var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
