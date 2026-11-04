@@ -246,6 +246,19 @@ export function applyFlexCommand(project: Project, command: EditCommand, ctx: Fl
       const next = follow === 'off' ? project : withFileTempo(project, fileOf(r));
       return withRegion(next, { ...r, follow, transpose, fineTune });
     }
+    case 'stretchRegion': {
+      const r = region(command.regionId);
+      if (!(command.stretch >= 0.25 && command.stretch <= 4)) {
+        throw new ApiError(422, 'A region stretches 0.25 to 4 times.');
+      }
+      const scale = command.stretch / r.stretch;
+      return withRegion(project, {
+        ...r,
+        stretch: command.stretch,
+        startTick: command.startTick ?? r.startTick,
+        flexMarkers: r.flexMarkers.map(m => ({ ...m, tick: Math.round(m.tick * scale) }))
+      });
+    }
     case 'setFlexMarkers': {
       const r = region(command.regionId);
       if (!track(r.trackId).flexOn) {

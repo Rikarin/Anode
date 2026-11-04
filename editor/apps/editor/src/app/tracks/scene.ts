@@ -23,6 +23,7 @@ import type { RegionTiming } from '../music/region-timing';
 import type { LaneRow } from '../state/lanes';
 import { Ppq } from '../state/project.store';
 import { wholeTake } from './comp';
+import { loopEnd, loopRepeats, nextStartAfter } from './region-loop';
 
 /** A region's colour when its track's is not a `#rrggbb` the renderer can read. */
 const Fallback = parseHexColor('#0090ff');
@@ -68,6 +69,8 @@ export interface SceneInput {
   offline?: ReadonlySet<string>;
   /** A region's timing (Phase 5): a warped region is drawn through its map, its length where its last frame lands. */
   timing?: (region: AudioRegion) => RegionTiming;
+  /** The loop being dragged, drawn in place of the region's own. */
+  loopDraft?: { readonly id: string; readonly loopTicks: number } | null;
 }
 
 /** A track colour for the renderer: `#rgb` and `#rrggbb` (the Server's colours); anything else falls back. */
@@ -107,7 +110,7 @@ interface Draft {
  * The Tracks area's scene: one item per region on its track's row, in its track's colour, with its selection. Audio
  * regions carry their file mapping, fades and curves, gain, name and waveform; MIDI regions their note miniatures and
  * pattern regions their unrolled steps as notes; take folders show their comp (each segment's take waveform, drawn
- * inside the folder); an open folder's takes are rows of their own, greyed but for what the comp plays from them. Muted regions, folders and tracks are drawn muted, and regions of offline files as offline.
+ * inside the folder); an open folder's takes are rows of their own, greyed but for what the comp plays from them. Muted regions, folders and tracks are drawn muted, and regions of offline files as offline. A looped region's repeats follow it, dimmed.
  */
 export function buildScene(input: SceneInput): TracksScene {
   const rows: readonly LaneRow[] =
@@ -127,6 +130,43 @@ export function buildScene(input: SceneInput): TracksScene {
   const flagsOf = (id: string, trackId: string, muted: boolean) =>
     (input.selected.has(id) ? ItemFlag.Selected : 0) | (muted || mutedTracks.has(trackId) ? ItemFlag.Muted : 0);
 
+  // A loop stops where the next region on its track starts, as it plays.
+  const starts = new Map<string, number[]>();
+  for (const list of [
+    input.regions,
+    input.midiRegions ?? [],
+    input.patternRegions ?? [],
+    input.sessionPlayerRegions ?? [],
+    input.takeFolders ?? []
+  ]) {
+    for (const r of list) {
+      const onTrack = starts.get(r.trackId);
+      if (onTrack) {
+        onTrack.push(r.startTick);
+      } else {
+        starts.set(r.trackId, [r.startTick]);
+      }
+    }
+  }
+  /** Copies of the item for each repeat of a region: `draft` is the item, its length the repeats' period. */
+  const repeats = (id: string, trackId: string, startTick: number, loopTicks: number, draft: Draft): void => {
+    const loop = input.loopDraft?.id === id ? input.loopDraft.loopTicks : loopTicks;
+    if (loop <= 0) {
+      return;
+    }
+    const until = loopEnd(startTick + draft.length, loop, nextStartAfter(starts.get(trackId) ?? [], startTick));
+    for (const repeat of loopRepeats(startTick, draft.length, until)) {
+      drafts.push({
+        ...draft,
+        whole: false,
+        start: repeat.startTick,
+        length: repeat.lengthTicks,
+        flags: (draft.flags & ~ItemFlag.Selected) | ItemFlag.Loop,
+        name: ''
+      });
+    }
+  };
+
   for (const region of input.regions) {
     const lane = lanes.get(region.trackId);
     if (lane === undefined) {
@@ -136,7 +176,7 @@ export function buildScene(input: SceneInput): TracksScene {
     const warped = timing?.warped ? timing : null;
     const r = warped ? warped.averageRate || rate(region) : rate(region);
     const offline = input.offline?.has(region.fileId) ?? false;
-    drafts.push({
+    const item: Draft = {
       id: region.id,
       whole: true,
       lane,
@@ -154,14 +194,16 @@ export function buildScene(input: SceneInput): TracksScene {
       fadeOutCurve: region.fadeOutCurve,
       rate: r,
       gain: 10 ** (region.gainDb / 20)
-    });
+    };
+    drafts.push(item);
+    repeats(region.id, region.trackId, region.startTick, region.loopTicks, item);
   }
   for (const region of input.midiRegions ?? []) {
     const lane = lanes.get(region.trackId);
     if (lane === undefined) {
       continue;
     }
-    drafts.push({
+    const item: Draft = {
       id: region.id,
       whole: true,
       lane,
@@ -175,7 +217,9 @@ export function buildScene(input: SceneInput): TracksScene {
         length: note.lengthTicks,
         pitch: Math.min(127, Math.max(0, note.pitch + region.playback.transpose))
       }))
-    });
+    };
+    drafts.push(item);
+    repeats(region.id, region.trackId, region.startTick, region.loopTicks, item);
   }
   for (const region of input.patternRegions ?? []) {
     const lane = lanes.get(region.trackId);
@@ -184,7 +228,7 @@ export function buildScene(input: SceneInput): TracksScene {
     }
     // Unrolled as if unmuted: a muted region still shows its notes, greyed.
     const notes = unrollPattern({ ...region, muted: false }, { keys: input.keys ?? [] });
-    drafts.push({
+    const item: Draft = {
       id: region.id,
       whole: true,
       lane,
@@ -198,7 +242,9 @@ export function buildScene(input: SceneInput): TracksScene {
         length: note.lengthTicks,
         pitch: note.pitch
       }))
-    });
+    };
+    drafts.push(item);
+    repeats(region.id, region.trackId, region.startTick, region.loopTicks, item);
   }
   for (const region of input.sessionPlayerRegions ?? []) {
     const lane = lanes.get(region.trackId);

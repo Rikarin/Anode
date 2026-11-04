@@ -7,6 +7,7 @@ import { canPitch } from '../music/region-timing';
 import { FlexStore, FollowModes } from '../state/flex.store';
 import { ProjectStore } from '../state/project.store';
 import { UiStore } from '../state/ui.store';
+import { LoopFields } from './loop-fields';
 import { PitchSourceFields } from './pitch-source-fields';
 
 /** A native select in the Inspector's dense grid, on the field surface. */
@@ -24,7 +25,7 @@ const Band =
 @Component({
   selector: 'an-audio-region-inspector',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [AnFadeCurve, PitchSourceFields, XuiNumericInputImports],
+  imports: [AnFadeCurve, LoopFields, PitchSourceFields, XuiNumericInputImports],
   host: { class: 'flex flex-col gap-2', role: 'group', '[attr.aria-label]': '"Region: " + region().name' },
   template: `
     <h3 [class]="band" [attr.title]="region().name">Region: {{ region().name }}</h3>
@@ -40,6 +41,26 @@ const Band =
       >
         M
       </button>
+      <an-loop-fields
+        kind="audio"
+        [regionId]="region().id"
+        [trackId]="region().trackId"
+        [startTick]="region().startTick"
+        [endTick]="project.regionEnd(region())"
+        [loopTicks]="region().loopTicks"
+      />
+      <span class="text-foreground-muted">Stretch</span>
+      <xui-numeric-input
+        size="sm"
+        aria-label="Region time stretch, percent"
+        data-testid="region-stretch"
+        [min]="25"
+        [max]="400"
+        [stepSize]="1"
+        [majorStepSize]="10"
+        [value]="stretchPercent()"
+        (valueChange)="$event !== null && setStretch($event)"
+      />
       <an-pitch-source-fields
         [audio]="true"
         [regionId]="region().id"
@@ -292,6 +313,19 @@ export class AudioRegionInspector {
 
   protected frames(ms: number): number {
     return Math.max(0, Math.round((ms / 1000) * this.rate()));
+  }
+
+  /** The stretch as a percentage of the recorded length. */
+  protected readonly stretchPercent = computed(() => Math.round(this.region().stretch * 10_000) / 100);
+
+  protected setStretch(percent: number): void {
+    const stretch = Math.round(percent * 100) / 10_000;
+    if (stretch !== this.region().stretch) {
+      void this.project.execute(
+        [{ type: 'stretchRegion', regionId: this.region().id, stretch }],
+        'Time Stretch Region'
+      );
+    }
   }
 
   protected set(change: Partial<Extract<EditCommand, { type: 'setRegion' }>>, label: string): void {

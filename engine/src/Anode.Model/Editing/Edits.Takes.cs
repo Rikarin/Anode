@@ -234,6 +234,10 @@ public static partial class Edits {
             throw new EditException("The regions to join are on one track.");
         }
 
+        foreach (var region in regions) {
+            RefuseLooped(region.LoopTicks, region.Id, "join");
+        }
+
         var end = regions.Max(static r => r.StartTick + r.LengthTicks);
         var notes = regions.SelectMany(r => r.Notes.Select(n => n with {
                     StartTick = n.StartTick + r.StartTick - first.StartTick
@@ -265,12 +269,17 @@ public static partial class Edits {
             .ToArray();
         var first = regions[0];
         var map = state.TempoMap;
+        foreach (var region in regions) {
+            RefuseLooped(region.LoopTicks, region.Id, "join");
+        }
+
         for (var i = 1; i < regions.Length; i++) {
             var (previous, r) = (regions[i - 1], regions[i]);
             var gap = map.SampleAt(r.StartTick, state.SampleRate) - EndSample(state, previous);
             if (r.TrackId != first.TrackId
                 || r.FileId != first.FileId
                 || r.FileOffset != previous.FileOffset + previous.Length
+                || r.Stretch != previous.Stretch
                 || Math.Abs(gap) > 1) {
                 throw new EditException(
                     "Audio regions join only when they play one contiguous stretch of one file (others need a bounce)."

@@ -553,6 +553,7 @@ function addScoreNote(project: Project, command: Command<'addScoreNote'>, ctx: P
       controls: [],
       muted: false,
       pitchSource: 'off',
+      loopTicks: 0,
       key: null
     };
     midiRegions = [...midiRegions, region];
@@ -681,6 +682,7 @@ function region(id: string, trackId: string, name: string, bars: number, notes: 
     controls: [],
     muted: false,
     pitchSource: 'off',
+    loopTicks: 0,
     key: null
   };
 }

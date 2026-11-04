@@ -17,3 +17,15 @@ All notable changes to Anode are recorded here, by hand.
   tracks save with their routing, plugins and states and come back on buses of their own.
 - Migration fixtures: a package written by the real build of each schema, 1 to 11, loads through the chain with what it
   held, with properties that the chain leaves what is there alone and that a damaged file is read or refused.
+- Nudge regions and jump by key: ⌥← and ⌥→ nudge the selected regions by the Tracks area's Nudge value (tick, frame,
+  division, beat, bar), and key commands move the playhead to the next or previous transient, region edge and marker.
+- Loop regions: audio, MIDI and pattern regions repeat by the inspector's Loop and Repeats or by dragging their upper
+  right corner, compiled, bounced and exported to MIDI files; repeats stop at the next region, and Convert Loops to
+  Regions (⌃L) makes them regions of their own.
+- Time-stretch regions: ⌥-drag an audio region's lower edge, or set the inspector's Stretch, and it lasts up to four
+  times longer or shorter through the flex engine, its file untouched.
+- Insert and cut time, ripple edit: Insert Time (⌃⌘Z) and Cut Time (⌃⌘X) work on the marquee or the locators across every
+  track, splitting what crosses them and moving tempo, signature, key and chord tracks, markers, sections, automation,
+  score symbols, cycle and punch; the Ripple switch makes Delete and Cut close the gap on every track.
+- Pre-roll and count-in length: the control bar's menu sets the count-in in bars or beats and a pre-roll that starts
+  recording from a stop that far before the playhead, the take starting at the playhead.

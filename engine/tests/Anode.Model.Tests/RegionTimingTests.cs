@@ -25,7 +25,8 @@ public sealed class RegionTimingTests {
         long offset,
         long length,
         FlexFollow follow = FlexFollow.Off,
-        IReadOnlyList<FlexMarker>? markers = null
+        IReadOnlyList<FlexMarker>? markers = null,
+        double stretch = 1
     ) =>
         new(
             "rgn_1",
@@ -47,7 +48,9 @@ public sealed class RegionTimingTests {
             0,
             [],
             PitchSourceMode.Off,
-            null
+            null,
+            0,
+            stretch
         );
 
     static RegionTiming Timing(
@@ -243,6 +246,14 @@ public sealed class RegionTimingTests {
             Frames(0, 240_000, 5));
         yield return ("markers over a concave ramp", concave, FourFour, true,
             Region(480, 0, 192_000, FlexFollow.On, [new(96_000, 2_000)]), file60, Frames(0, 192_000, 4));
+        yield return ("stretched twice as long", At120, FourFour, false,
+            Region(960, 1_000, 96_000, stretch: 2), null, Frames(1_000, 96_000, 4));
+        yield return ("stretched to half over a linear ramp", linear, FourFour, false,
+            Region(0, 0, 240_000, stretch: 0.5), null, Frames(0, 240_000, 5));
+        yield return ("stretched and following", At120, FourFour, false,
+            Region(0, 0, 96_000, FlexFollow.On, stretch: 1.5), Steady100, Frames(0, 96_000, 4));
+        yield return ("stretched with markers", At120, FourFour, true,
+            Region(0, 0, 96_000, FlexFollow.Off, [new(48_000, 3_000)], 1.5), null, Frames(0, 96_000, 4));
     }
 
     [Fact]

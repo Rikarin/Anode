@@ -198,12 +198,14 @@ public static partial class Edits {
         }
 
         CheckPlayback(playback);
+        CheckLoop(c.LoopTicks);
         return [
             new MidiRegionUpserted(
                 region with {
                     Name = c.Name is null ? region.Name : Name(c.Name, "region name"),
                     Playback = playback,
-                    Muted = c.Muted ?? region.Muted
+                    Muted = c.Muted ?? region.Muted,
+                    LoopTicks = c.LoopTicks ?? region.LoopTicks
                 }
             )
         ];
@@ -394,6 +396,7 @@ public static partial class Edits {
 
     /// <summary>A MIDI region in two at <paramref name="at" />: notes and events go to the side they start on.</summary>
     static DeltaOp[] SplitMidiRegion(MidiRegion region, long at, IIdSource ids) {
+        RefuseLooped(region.LoopTicks, region.Id, "split");
         var cut = at - region.StartTick;
         if (cut <= 0 || cut >= region.LengthTicks) {
             throw new EditException($"Tick {at} is not inside region '{region.Id}'.");

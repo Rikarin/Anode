@@ -1,5 +1,6 @@
 import { Injectable, computed, signal } from '@angular/core';
 import { DragModes, type DragMode } from '../tracks/drag-modes';
+import type { NudgeValue } from '../tracks/nudge';
 import { SnapModes, type SnapMode } from '../tracks/snap';
 import { Ppq } from './project.store';
 
@@ -66,8 +67,9 @@ export interface MarqueeRange {
 /**
  * Where the Tracks area looks and how it edits: horizontal zoom and scroll (the tick at the left edge), vertical scroll
  * (the lane at the top, fractional) and lane height, the left-click and ⌘-click tools, snap and its mode, the drag
- * mode, whether the view follows the playhead (Logic's Catch), which global tracks show and which take folders are
- * open. Not undoable; each project remembers it (`ProjectViewStore`, except the open folders and the marquee).
+ * mode, the nudge value, whether the view follows the playhead (Logic's Catch), which global tracks show and which
+ * take folders are open. Not undoable; each project remembers it (`ProjectViewStore`, except the open folders and the
+ * marquee).
  */
 @Injectable({ providedIn: 'root' })
 export class TracksViewStore {
@@ -82,6 +84,10 @@ export class TracksViewStore {
   readonly snap = signal(true);
   readonly snapMode = signal<SnapMode>('smart');
   readonly dragMode = signal<DragMode>('overlap');
+  /** Ripple: deleting closes the gap on every track. */
+  readonly ripple = signal(false);
+  /** What the Nudge Regions keys move by. */
+  readonly nudgeValue = signal<NudgeValue>('division');
   readonly follow = signal(true);
   /** Whether the global tracks show, and which. */
   readonly globalTracks = signal(false);

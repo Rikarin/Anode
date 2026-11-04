@@ -77,8 +77,20 @@ export class RegionClipboardStore {
     const count = clipboard ? regionCount(clipboard.content) : 0;
     const range = this.view.marquee();
     const ids = [...this.selection.regions()];
-    const commands: EditCommand[] = range ? this.marqueeDelete(range) : [{ type: 'deleteRegions', regionIds: ids }];
     this.view.marquee.set(null);
+    if (this.view.ripple()) {
+      // The time goes on every track, and the automation in it with it.
+      void this.project.execute(
+        [
+          range
+            ? { type: 'cutTime', startTick: Math.round(range.startTick), endTick: Math.round(range.endTick) }
+            : { type: 'rippleDelete', regionIds: ids }
+        ],
+        plural('Ripple Cut', count)
+      );
+      return;
+    }
+    const commands: EditCommand[] = range ? this.marqueeDelete(range) : [{ type: 'deleteRegions', regionIds: ids }];
     void this.project.execute(
       [...commands, ...cutLaneCommands(clipboard?.lanes ?? [], this.project.automationList())],
       plural('Cut', count)

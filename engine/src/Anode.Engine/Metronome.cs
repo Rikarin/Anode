@@ -6,9 +6,12 @@ namespace Anode.Engine;
 ///     The click: two short synthesized sounds (a higher one on a bar's downbeat), started at the sample positions of
 ///     the model's click events (compiled by the server, <see cref="PlaybackEventKind.Click" />) and, before a
 ///     recording, at a one-bar count-in the engine times itself. One voice: a new click cuts the previous one.
-///     Audio-thread code apart from the constructor and <see cref="CountInFor" />.
+///     Audio-thread code apart from the constructor and <c>CountInFor</c>.
 /// </summary>
 public sealed unsafe class Metronome(int sampleRate) {
+    /// <summary>The most clicks a count-in has: 32 bars of 32 beats.</summary>
+    public const int MaxCountInBeats = 1024;
+
     /// <summary>Most clicks one block can start (a 4096-frame block at a 1-sample click spacing is not a use case).</summary>
     const int MaxClicks = 64;
 
@@ -69,13 +72,14 @@ public sealed unsafe class Metronome(int sampleRate) {
 
     /// <summary>
     ///     Queues the count-in clicks that fall in frames [<paramref name="elapsed" />, + <paramref name="count" />) of
-    ///     a count-in of <paramref name="beats" /> beats over <paramref name="total" /> frames.
+    ///     a count-in of <paramref name="beats" /> beats over <paramref name="total" /> frames, every
+    ///     <paramref name="accent" />th accented (0: the first alone).
     /// </summary>
-    public void AddCountIn(long total, int beats, long elapsed, int count) {
+    public void AddCountIn(long total, int beats, long elapsed, int count, int accent = 0) {
         for (var k = 0; k < beats; k++) {
             var at = total * k / beats;
             if (at >= elapsed && at < elapsed + count) {
-                Add((int)(at - elapsed), k == 0, 1f);
+                Add((int)(at - elapsed), accent > 0 ? k % accent == 0 : k == 0, 1f);
             }
         }
     }
@@ -115,6 +119,24 @@ public sealed unsafe class Metronome(int sampleRate) {
         if (voicePosition >= voice.Length) {
             voice = null;
         }
+    }
+
+    /// <summary>
+    ///     The count-in before recording at <paramref name="position" />: <paramref name="length" /> of the bar
+    ///     <see cref="CountInFor(in TrackView, long, int)" /> measures, or of its beats with <paramref name="inBeats" />;
+    ///     its clicks, and how many of them make a bar (only the first of a count in beats is accented).
+    /// </summary>
+    public static (long Frames, int Beats, int Accent) CountInFor(
+        in TrackView clicks,
+        long position,
+        int sampleRate,
+        int length,
+        bool inBeats
+    ) {
+        var (frames, beats) = CountInFor(clicks, position, sampleRate);
+        return inBeats
+            ? (frames * length / beats, length, length)
+            : (frames * length, Math.Min(beats * length, MaxCountInBeats), beats);
     }
 
     /// <summary>

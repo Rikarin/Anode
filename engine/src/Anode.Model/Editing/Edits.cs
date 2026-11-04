@@ -234,7 +234,8 @@ public static partial class Edits {
             SetMixerSettingsCommand c => SetMixerSettings(state, c),
             ApplyPatchCommand c => ApplyPatch(state, c, ids, patches ?? NoPatches.Instance),
             UnfreezeTrackCommand c => UnfreezeTrack(state, c),
-            _ => FlexOps(state, command, ids, plugins, analysis ?? NoAnalysis.Instance)
+            _ => TimeOps(state, command, ids)
+                ?? FlexOps(state, command, ids, plugins, analysis ?? NoAnalysis.Instance)
                 ?? Phase6Ops(state, command, ids, plugins, patches ?? NoPatches.Instance)
                 ?? Phase7Ops(state, command, ids, analysis ?? NoAnalysis.Instance)
                 ?? Phase8Ops(state, command, ids, plugins)
@@ -686,25 +687,37 @@ public static partial class Edits {
         }
 
         var region = RegionOf(state, c.RegionId!);
-        var timing = RegionTiming.Of(state, region);
-        long at;
-        if (timing.Warped) {
-            at = c.AtTick > region.StartTick ? (long)Math.Round(timing.FrameAt(c.AtTick)) - region.FileOffset : 0;
-        } else {
-            var map = state.TempoMap;
-            var start = map.SampleAt(region.StartTick, state.SampleRate);
-            at = c.AtTick > region.StartTick ? map.SampleAt(c.AtTick, state.SampleRate) - start : 0;
-        }
-
+        RefuseLooped(region.LoopTicks, region.Id, "split");
+        var at = SplitFrames(state, region, c.AtTick);
         if (at <= 0 || at >= region.Length) {
             throw new EditException($"Tick {c.AtTick} is not inside region '{region.Id}'.");
         }
 
+        return Split(region, at, c.AtTick, ids);
+    }
+
+    /// <summary>How many of a region's frames play before <paramref name="tick" />: 0 at or before its start.</summary>
+    static long SplitFrames(ProjectState state, AudioRegion region, long tick) {
+        if (tick <= region.StartTick) {
+            return 0;
+        }
+
+        var timing = RegionTiming.Of(state, region);
+        if (timing.Warped) {
+            return (long)Math.Round(timing.FrameAt(tick)) - region.FileOffset;
+        }
+
+        var map = state.TempoMap;
+        return map.SampleAt(tick, state.SampleRate) - map.SampleAt(region.StartTick, state.SampleRate);
+    }
+
+    /// <summary>A region in two after <paramref name="at" /> of its frames, the second starting at <paramref name="tick" />.</summary>
+    static DeltaOp[] Split(AudioRegion region, long at, long tick, IIdSource ids) {
         var left = Piece(region, region.FileOffset, region.FileOffset + at, region.StartTick) with {
             FadeIn = Math.Min(region.FadeIn, at), FadeOut = 0
         };
         var rightLength = region.Length - at;
-        var right = Piece(region, region.FileOffset + at, region.FileOffset + region.Length, c.AtTick) with {
+        var right = Piece(region, region.FileOffset + at, region.FileOffset + region.Length, tick) with {
             Id = ids.Next(IdPrefix.Region), FadeIn = 0, FadeOut = Math.Min(region.FadeOut, rightLength)
         };
         return [new RegionUpserted(left), new RegionUpserted(right)];
@@ -713,7 +726,7 @@ public static partial class Edits {
     /// <summary>
     ///     The part of <paramref name="region" /> over file frames <paramref name="from" />…<paramref name="to" />,
     ///     starting at <paramref name="startTick" />: its flex markers inside that part (their ticks relative to the new
-    ///     start) and its pitch notes cut to it.
+    ///     start) and its pitch notes cut to it, without a loop.
     /// </summary>
     public static AudioRegion Piece(AudioRegion region, long from, long to, long startTick) {
         var shift = startTick - region.StartTick;
@@ -721,6 +734,7 @@ public static partial class Edits {
             StartTick = startTick,
             FileOffset = from,
             Length = to - from,
+            LoopTicks = 0,
             FlexMarkers = region.FlexMarkers.Count == 0
                 ? region.FlexMarkers
                 : [
@@ -761,6 +775,7 @@ public static partial class Edits {
 
         CheckCurve(c.FadeInCurve);
         CheckCurve(c.FadeOutCurve);
+        CheckLoop(c.LoopTicks);
         return [
             new RegionUpserted(
                 region with {
@@ -770,7 +785,8 @@ public static partial class Edits {
                     FadeOut = fadeOut,
                     FadeInCurve = c.FadeInCurve ?? region.FadeInCurve,
                     FadeOutCurve = c.FadeOutCurve ?? region.FadeOutCurve,
-                    Muted = c.Muted ?? region.Muted
+                    Muted = c.Muted ?? region.Muted,
+                    LoopTicks = c.LoopTicks ?? region.LoopTicks
                 }
             )
         ];
@@ -820,11 +836,23 @@ public static partial class Edits {
             throw new EditException($"Click level {level} dB is outside {MinClickDb}…{MaxClickDb} dB.");
         }
 
+        if (c.CountInLength is < 1 or > MaxRollLength) {
+            throw new EditException($"A count-in is 1…{MaxRollLength} bars or beats, not {c.CountInLength}.");
+        }
+
         var old = state.Settings.Metronome;
+        var unit = c.CountInUnit ?? old.CountInUnit;
+        CheckUnit(unit);
         return [
             new SettingsChanged(
                 state.Settings with {
-                    Metronome = new(c.Enabled ?? old.Enabled, c.CountIn ?? old.CountIn, c.LevelDb ?? old.LevelDb)
+                    Metronome = new(
+                        c.Enabled ?? old.Enabled,
+                        c.CountIn ?? old.CountIn,
+                        c.LevelDb ?? old.LevelDb,
+                        c.CountInLength ?? old.CountInLength,
+                        unit
+                    )
                 }
             )
         ];

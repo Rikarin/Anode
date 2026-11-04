@@ -84,8 +84,27 @@ public sealed record TimeSignature(int Numerator, int Denominator);
 
 public sealed record CycleRange(bool Enabled, long StartTick, long EndTick);
 
-/// <summary>The click: on or off, a one-bar count-in before recording, and its level in dB.</summary>
-public sealed record MetronomeSettings(bool Enabled, bool CountIn, double LevelDb);
+/// <summary>What a count-in or a pre-roll is counted in: bars or beats of the signature in force.</summary>
+[JsonConverter(typeof(JsonStringEnumConverter<MusicalUnit>))]
+public enum MusicalUnit {
+    [JsonStringEnumMemberName("bars")]
+    Bars,
+
+    [JsonStringEnumMemberName("beats")]
+    Beats
+}
+
+/// <summary>
+///     The click: on or off, a count-in before recording from a stop, and its level in dB. The count-in lasts
+///     <c>countInLength</c> (1…32) of <c>countInUnit</c>, measured at where recording starts.
+/// </summary>
+public sealed record MetronomeSettings(
+    bool Enabled,
+    bool CountIn,
+    double LevelDb,
+    int CountInLength = 1,
+    MusicalUnit CountInUnit = MusicalUnit.Bars
+);
 
 [JsonConverter(typeof(JsonStringEnumConverter<TrackKind>))]
 public enum TrackKind {
@@ -240,6 +259,16 @@ public sealed record ChannelStrip(
 ///         <c>root</c>: each chord segment transposed, crossfaded; <c>chords</c> is MIDI only), and <c>key</c> its own
 ///         key (null: the project's at its start), which Pitch Source transposes from.
 ///     </para>
+///     <para>
+///         <c>loopTicks</c>: it plays again and again, end to end, for that many ticks after its end (0: it does not
+///         loop), the last repeat cut there, stopping where the next region on the track starts. Repeats are the region
+///         again, fades included. <c>convertLoops</c> turns them into regions of their own; a looped region is not
+///         split or joined. MIDI and pattern regions have the same.
+///     </para>
+///     <para>
+///         <c>stretch</c>: how many times longer its audio lasts (1: as recorded; 0.25…4), scaling its base map whatever
+///         its follow. A region stretched at all is warped; its file is untouched (<c>stretchRegion</c>).
+///     </para>
 /// </remarks>
 public sealed record AudioRegion(
     string Id,
@@ -261,7 +290,9 @@ public sealed record AudioRegion(
     int FineTune,
     IReadOnlyList<PitchNote> PitchNotes,
     PitchSourceMode PitchSource,
-    RegionKey? Key
+    RegionKey? Key,
+    long LoopTicks = 0,
+    double Stretch = 1
 );
 
 /// <summary>

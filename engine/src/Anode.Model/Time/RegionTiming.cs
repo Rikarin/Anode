@@ -7,6 +7,10 @@ namespace Anode.Model.Time;
 ///     <c>engine/tests/Anode.Model.Tests/RegionTimingVectors.json</c> holds the cases both check.
 ///     <list type="bullet">
 ///         <item>
+///             A region's <c>stretch</c> scales its base map, whatever the map: a file frame lands <c>stretch</c> times as
+///             far from the start, in time or ticks, and any stretch but 1 warps the region.
+///         </item>
+///         <item>
 ///             An <b>unwarped</b> region (<see cref="IsWarped" /> false) plays file frame <c>fileOffset + n</c> at project
 ///             sample <c>SampleAt(startTick) + n</c>.
 ///         </item>
@@ -32,6 +36,7 @@ namespace Anode.Model.Time;
 public sealed class RegionTiming {
     readonly TempoMap map;
     readonly double rate;
+    readonly double stretch;
     readonly long fileOffset;
     readonly long endFrame;
 
@@ -54,6 +59,7 @@ public sealed class RegionTiming {
     RegionTiming(AudioRegion region, FileTempo? tempo, bool warped, TempoMap map, SignatureMap signatures, int rate) {
         this.map = map;
         this.rate = rate;
+        stretch = region.Stretch;
         Region = region;
         Warped = warped;
         fileOffset = region.FileOffset;
@@ -120,12 +126,13 @@ public sealed class RegionTiming {
     }
 
     /// <summary>
-    ///     Whether a region is warped: its track's flex is on, it follows the tempo, or it has a transpose, a fine tune or
-    ///     pitch notes.
+    ///     Whether a region is warped: its track's flex is on, it follows the tempo, or it has a stretch, a transpose, a
+    ///     fine tune or pitch notes.
     /// </summary>
     public static bool IsWarped(AudioRegion region, bool flexOn) =>
         flexOn
         || region.Follow != FlexFollow.Off
+        || region.Stretch != 1
         || region.Transpose != 0
         || region.FineTune != 0
         || region.PitchNotes is { Count: > 0 };
@@ -155,9 +162,14 @@ public sealed class RegionTiming {
     /// <summary>The base map's tick (relative to the start) at file frame <paramref name="frame" />.</summary>
     public double Base(double frame) {
         if (baseFrames.Length == 0) {
-            return map.TickAt((StartSample + frame - fileOffset) / rate) - StartTick;
+            return map.TickAt((StartSample + (frame - fileOffset) * stretch) / rate) - StartTick;
         }
 
+        return stretch * Unstretched(frame);
+    }
+
+    /// <summary>The follow map's relative tick at <paramref name="frame" />, before the stretch.</summary>
+    double Unstretched(double frame) {
         if (frame <= baseFrames[0]) {
             return baseTicks[0] + (frame - baseFrames[0]) * slope;
         }
@@ -175,9 +187,10 @@ public sealed class RegionTiming {
     /// <summary>The file frame the base map puts at relative tick <paramref name="tick" />.</summary>
     public double BaseFrame(double tick) {
         if (baseFrames.Length == 0) {
-            return fileOffset + map.SecondsAt(StartTick + tick) * rate - StartSample;
+            return fileOffset + (map.SecondsAt(StartTick + tick) * rate - StartSample) / stretch;
         }
 
+        tick /= stretch;
         if (tick <= baseTicks[0]) {
             return baseFrames[0] + (tick - baseTicks[0]) / slope;
         }

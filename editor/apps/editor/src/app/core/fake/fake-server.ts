@@ -270,10 +270,12 @@ import {
 import { CrashyPluginId, FakeCatalogue, FakeEffects, FakeMidiDevices } from './fake-plugins';
 import { FakeT3Effects, FakeT3Instruments } from './fake-plugins-phase11';
 import { FakeMidiEffects, FakeT2Effects, FakeT2Instruments, RemixFxId, withMacros } from './fake-plugins-phase6';
+import { checkedLoop, convertLoops, refuseLooped } from './fake-region-loops';
 import { atRate, rateRefusal } from './fake-sample-rate';
 import { FakeScriptPresets } from './fake-scripts';
 import { FactoryStaffStyles } from './fake-staff-styles';
 import { checkedTemplateName, FactoryTemplates } from './fake-templates';
+import { applyTimeEdit, preRollStart, rollLength } from './fake-time-edit';
 
 /** Ticks per quarter note (the contract's time base). */
 const Ppq = 960;
@@ -631,7 +633,7 @@ export class FakeAnodeServer implements AnodeApi {
           tempo: 120,
           signature: { numerator: 4, denominator: 4 },
           cycle: { enabled: false, startTick: 0, endTick: 4 * 4 * Ppq },
-          metronome: { enabled: false, countIn: false, levelDb: -6 },
+          metronome: { enabled: false, countIn: false, levelDb: -6, countInLength: 1, countInUnit: 'bars' },
           endTick: DefaultEndTick,
           mergeMidiRecording: false,
           tempoEvents: [{ tick: 0, bpm: 120, curve: 'step', shape: 0 }],
@@ -642,7 +644,9 @@ export class FakeAnodeServer implements AnodeApi {
             replace: false,
             autopunch: false,
             punchInTick: 0,
-            punchOutTick: 4 * 4 * Ppq
+            punchOutTick: 4 * 4 * Ppq,
+            preRollLength: 0,
+            preRollUnit: 'bars'
           },
           mixer: { pdc: 'all', lowLatency: false, lowLatencyLimitMs: 10 },
           smartTempo: { mode: 'keep', defaultFollow: 'off', analyzeImports: true },
@@ -1286,8 +1290,13 @@ export class FakeAnodeServer implements AnodeApi {
             throw new ApiError(422, 'Record-enable a track first.');
           }
 
-          this.start('recording', request.tick);
-          this.recordFrom = this.positionTick;
+          // A pre-roll plays before the playhead; the take starts at it.
+          {
+            const from = request.tick ?? this.positionTick;
+            const stopped = this.transportState === 'stopped';
+            this.start('recording', stopped ? preRollStart(project, from) : request.tick);
+            this.recordFrom = stopped ? from : this.positionTick;
+          }
           this.held.clear();
           this.captured.clear();
           break;
@@ -2492,6 +2501,8 @@ export class FakeAnodeServer implements AnodeApi {
       fineTune: 0,
       pitchNotes: [],
       pitchSource: 'off',
+      loopTicks: 0,
+      stretch: 1,
       key: null
     });
     const [drums, bass] = files as [AudioFile, AudioFile];
@@ -3572,6 +3583,8 @@ export class FakeAnodeServer implements AnodeApi {
         fineTune: 0,
         pitchNotes: [],
         pitchSource: 'off',
+        loopTicks: 0,
+        stretch: 1,
         key: null
       };
     } else if (info.kind === 'midi') {
@@ -3597,6 +3610,7 @@ export class FakeAnodeServer implements AnodeApi {
         controls: [],
         muted: false,
         pitchSource: 'off',
+        loopTicks: 0,
         key: null
       };
     } else {
@@ -3610,7 +3624,8 @@ export class FakeAnodeServer implements AnodeApi {
         startTick: tick,
         lengthTicks,
         muted: false,
-        pattern: structuredClone(loop.pattern ?? { rows: [], swing: 0, seed: 1, stepTicks: 240 })
+        pattern: structuredClone(loop.pattern ?? { rows: [], swing: 0, seed: 1, stepTicks: 240 }),
+        loopTicks: 0
       };
     }
     if (request.cellSceneId) {
@@ -4738,6 +4753,8 @@ export class FakeAnodeServer implements AnodeApi {
           fineTune: 0,
           pitchNotes: [],
           pitchSource: 'off',
+          loopTicks: 0,
+          stretch: 1,
           key: null
         };
         const smart = project.settings.smartTempo;
@@ -4814,6 +4831,7 @@ export class FakeAnodeServer implements AnodeApi {
           throw new ApiError(422, 'A take folder does not split: flatten it first.');
         }
         const r = region(command.regionId);
+        refuseLooped(r);
         const timing = timingOf(project, r);
         if (command.atTick <= r.startTick || command.atTick >= timing.endTick) {
           throw new ApiError(422, 'A split must fall inside the region.');
@@ -4864,9 +4882,25 @@ export class FakeAnodeServer implements AnodeApi {
           fadeOut,
           fadeInCurve: curve(command.fadeInCurve, r.fadeInCurve),
           fadeOutCurve: curve(command.fadeOutCurve, r.fadeOutCurve),
-          muted: command.muted ?? r.muted
+          muted: command.muted ?? r.muted,
+          loopTicks: checkedLoop(command.loopTicks, r.loopTicks)
         });
       }
+      case 'insertTime':
+      case 'cutTime':
+      case 'rippleDelete':
+        return applyTimeEdit(project, command, {
+          apply: (p, c) => this.applyCommand(p, c),
+          endOf: (p, r) => timingOf(p, r).endTick
+        });
+      case 'convertLoops':
+        return convertLoops(
+          project,
+          command.regionIds,
+          r => timingOf(project, r).endTick,
+          id,
+          () => this.nextId++
+        );
       case 'deleteRegions':
         if (command.regionIds.some(isSessionPlayerRegionId)) {
           const without = deleteSessionPlayerRegions(project, command.regionIds.filter(isSessionPlayerRegionId));
@@ -4941,6 +4975,8 @@ export class FakeAnodeServer implements AnodeApi {
             metronome: {
               enabled: command.enabled ?? m.enabled,
               countIn: command.countIn ?? m.countIn,
+              countInLength: rollLength(command.countInLength, m.countInLength),
+              countInUnit: command.countInUnit ?? m.countInUnit,
               levelDb: command.levelDb ?? m.levelDb
             }
           }
@@ -5023,6 +5059,7 @@ export class FakeAnodeServer implements AnodeApi {
           controls: [],
           muted: false,
           pitchSource: 'off',
+          loopTicks: 0,
           key: null
         };
         return { ...project, midiRegions: [...project.midiRegions, added] };
@@ -5068,7 +5105,13 @@ export class FakeAnodeServer implements AnodeApi {
         if (playback.quantizeTicks < 0 || !inUnit(playback.quantizeStrength) || !inUnit(playback.swing)) {
           throw new ApiError(422, 'Quantise needs a grid of 0 or more ticks, and strength and swing of 0…1.');
         }
-        return withMidiRegion({ ...r, name: command.name ?? r.name, playback, muted: command.muted ?? r.muted });
+        return withMidiRegion({
+          ...r,
+          name: command.name ?? r.name,
+          playback,
+          muted: command.muted ?? r.muted,
+          loopTicks: checkedLoop(command.loopTicks, r.loopTicks)
+        });
       }
       case 'addNotes': {
         const r = midiRegion(command.regionId);
@@ -5341,8 +5384,13 @@ export class FakeAnodeServer implements AnodeApi {
           replace: command.replace ?? r.replace,
           autopunch: command.autopunch ?? r.autopunch,
           punchInTick: Math.round(command.punchInTick ?? r.punchInTick),
-          punchOutTick: Math.round(command.punchOutTick ?? r.punchOutTick)
+          punchOutTick: Math.round(command.punchOutTick ?? r.punchOutTick),
+          preRollLength: command.preRollLength ?? r.preRollLength,
+          preRollUnit: command.preRollUnit ?? r.preRollUnit
         };
+        if (next.preRollLength < 0 || next.preRollLength > 32) {
+          throw new ApiError(422, 'A pre-roll is 0 to 32 bars or beats.');
+        }
         if (next.punchInTick < 0 || next.punchOutTick <= next.punchInTick) {
           throw new ApiError(422, 'The punch range must end after it starts.');
         }
@@ -5779,6 +5827,7 @@ export class FakeAnodeServer implements AnodeApi {
    * crosses the split is cut there when it plays), the rest move to the second, relative to its start.
    */
   private splitMidiRegion(project: Project, r: MidiRegion, atTick: number): Project {
+    refuseLooped(r);
     const at = Math.round(atTick);
     if (at <= r.startTick || at >= r.startTick + r.lengthTicks) {
       throw new ApiError(422, 'A split must fall inside the region.');
@@ -5965,7 +6014,7 @@ export class FakeAnodeServer implements AnodeApi {
         tempo: 112,
         signature: { numerator: 4, denominator: 4 },
         cycle: { enabled: false, startTick: 4 * 4 * Ppq, endTick: 8 * 4 * Ppq },
-        metronome: { enabled: false, countIn: true, levelDb: -6 },
+        metronome: { enabled: false, countIn: true, levelDb: -6, countInLength: 1, countInUnit: 'bars' },
         endTick: DefaultEndTick,
         mergeMidiRecording: false,
         tempoEvents: [{ tick: 0, bpm: 112, curve: 'step', shape: 0 }],
@@ -5976,7 +6025,9 @@ export class FakeAnodeServer implements AnodeApi {
           replace: false,
           autopunch: false,
           punchInTick: 0,
-          punchOutTick: 4 * 4 * Ppq
+          punchOutTick: 4 * 4 * Ppq,
+          preRollLength: 0,
+          preRollUnit: 'bars'
         },
         mixer: { pdc: 'all', lowLatency: false, lowLatencyLimitMs: 10 },
         smartTempo: { mode: 'keep', defaultFollow: 'off', analyzeImports: true },

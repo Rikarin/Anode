@@ -37,6 +37,7 @@ function region(): MidiRegion {
       { id: 14, kind: 'polyPressure', channel: 1, number: 62, value: 40, tick: 1440 }
     ],
     pitchSource: 'off',
+    loopTicks: 0,
     key: null
   };
 }

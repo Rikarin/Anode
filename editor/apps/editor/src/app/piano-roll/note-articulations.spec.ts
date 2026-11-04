@@ -31,6 +31,7 @@ const region: MidiRegion = {
   controls: [],
   muted: false,
   pitchSource: 'off',
+  loopTicks: 0,
   key: null
 };
 

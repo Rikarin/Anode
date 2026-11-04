@@ -68,14 +68,18 @@ public enum CycleRecordMode {
 /// <summary>
 ///     How recording works: cycle recording mode; replace mode (a recording removes what it covers on its track); and
 ///     autopunch, which records only between <c>punchInTick</c> and <c>punchOutTick</c> while playback continues around
-///     them.
+///     them. <c>preRollLength</c> (0…32, 0: none) of <c>preRollUnit</c> is how far before the playhead a recording from a
+///     stop starts playing: what plays there is the project, and the take starts at the playhead (the pre-roll is kept
+///     in its file, before the region). It stops at the project start.
 /// </summary>
 public sealed record RecordingSettings(
     CycleRecordMode CycleMode,
     bool Replace,
     bool Autopunch,
     long PunchInTick,
-    long PunchOutTick
+    long PunchOutTick,
+    int PreRollLength = 0,
+    MusicalUnit PreRollUnit = MusicalUnit.Bars
 );
 
 /// <summary>

@@ -9,6 +9,7 @@ import {
   viewChild,
   type ElementRef
 } from '@angular/core';
+import type { MusicalUnit } from '@anode/api-client';
 import { provideIcons } from '@ng-icons/core';
 import {
   matAvTimerRound,
@@ -51,7 +52,7 @@ import { ScreensetStore } from '../state/screenset.store';
 import { SmartTempoStore } from '../state/smart-tempo.store';
 import { TemplatesStore } from '../state/templates.store';
 import { ThemeStore } from '../state/theme.store';
-import { TransportStore } from '../state/transport.store';
+import { CountInLengths, musicalLength, PreRollLengths, TransportStore } from '../state/transport.store';
 import { UiStore } from '../state/ui.store';
 import { SyncControl } from '../sync/sync-control';
 import { EngineStatus } from './engine-status';
@@ -632,12 +633,61 @@ import { Lcd } from './lcd';
             class="flex items-center px-2.5"
             [class.text-lit]="transport.countIn()"
             [attr.aria-pressed]="transport.countIn() ? 'true' : 'false'"
-            xuiTooltip="One bar of count-in before recording"
+            [xuiTooltip]="countInTip()"
             (click)="transport.toggleCountIn()"
           >
             <span class="flex xl:hidden"><ng-icon xui name="matLooksOneRound" size="14px" /></span>
             <span class="max-xl:sr-only">Count-in</span>
           </button>
+          <button
+            type="button"
+            class="flex w-5 items-center justify-center"
+            aria-label="Count-in and pre-roll lengths"
+            data-testid="count-in-menu"
+            xuiTooltip="Count-in length and pre-roll"
+            [xuiMenuTriggerFor]="rollMenu"
+          >
+            <ng-icon xui name="matExpandMoreRound" size="14px" />
+          </button>
+          <ng-template #rollMenu>
+            <xui-menu class="min-w-40" aria-label="Count-in and pre-roll">
+              @for (choice of countInLengths; track $index) {
+                <button
+                  xuiMenuItem
+                  type="button"
+                  role="menuitemradio"
+                  [attr.data-testid]="'count-in-' + choice.length + '-' + choice.unit"
+                  [attr.aria-checked]="isCountIn(choice)"
+                  (click)="transport.setCountIn(choice.length, choice.unit)"
+                >
+                  Count-in: {{ lengthLabel(choice) }}
+                </button>
+              }
+              <xui-menu-divider />
+              <button
+                xuiMenuItem
+                type="button"
+                role="menuitemradio"
+                data-testid="pre-roll-off"
+                [attr.aria-checked]="transport.preRoll().length === 0"
+                (click)="transport.setPreRoll(0, 'bars')"
+              >
+                Pre-roll: Off
+              </button>
+              @for (choice of preRollLengths; track $index) {
+                <button
+                  xuiMenuItem
+                  type="button"
+                  role="menuitemradio"
+                  [attr.data-testid]="'pre-roll-' + choice.length + '-' + choice.unit"
+                  [attr.aria-checked]="isPreRoll(choice)"
+                  (click)="transport.setPreRoll(choice.length, choice.unit)"
+                >
+                  Pre-roll: {{ lengthLabel(choice) }}
+                </button>
+              }
+            </xui-menu>
+          </ng-template>
           <button
             type="button"
             class="flex items-center px-2.5"
@@ -931,6 +981,24 @@ export class ControlBar {
       [{ type: 'setMidiRecording', merge }],
       merge ? 'Merge MIDI Recordings' : 'Separate MIDI Recordings'
     );
+  }
+
+  protected readonly countInLengths = CountInLengths;
+  protected readonly preRollLengths = PreRollLengths;
+  protected readonly countInTip = computed(() => {
+    const { length, unit } = this.transport.countInLength();
+    return `${musicalLength(length, unit)} of count-in before recording`;
+  });
+  protected lengthLabel(choice: { length: number; unit: MusicalUnit }): string {
+    return musicalLength(choice.length, choice.unit);
+  }
+  protected isCountIn(choice: { length: number; unit: MusicalUnit }): boolean {
+    const { length, unit } = this.transport.countInLength();
+    return choice.length === length && choice.unit === unit;
+  }
+  protected isPreRoll(choice: { length: number; unit: MusicalUnit }): boolean {
+    const { length, unit } = this.transport.preRoll();
+    return choice.length === length && choice.unit === unit;
   }
 
   protected readonly undoTip = computed(() => {

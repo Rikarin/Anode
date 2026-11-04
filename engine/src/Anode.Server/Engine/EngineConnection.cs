@@ -56,6 +56,7 @@ public sealed partial class EngineConnection(
     EngineStatus status = new(EngineState.Disconnected, null, null, "Not connected yet.");
     Connection? current;
     TransportStatus? transport;
+
     string? thru;
     List<InsertReading>? pendingReadings;
     string? masterTap;
@@ -146,13 +147,37 @@ public sealed partial class EngineConnection(
             throw ProjectException.Unprocessable("Arm a track to record.");
         }
 
-        if (Volatile.Read(ref current) is not { } link
-            || !link.Work.Writer.TryWrite(new TransportMessage(action, position))) {
+        position = Send(request.Command, action, position, view, map, rate);
+        var at = position >= 0 ? position : Transport().PositionSamples;
+        return new(state, at, map.TickAtSample(at, rate), rate);
+    }
+
+    /// <summary>Writes a transport message, a recording's pre-roll applied; answers the position it sent.</summary>
+    long Send(
+        TransportCommand command,
+        TransportAction action,
+        long position,
+        OpenProjectView? view,
+        TempoMap map,
+        int rate
+    ) {
+        if (Volatile.Read(ref current) is not { } link) {
             throw ProjectException.Unprocessable("The engine is not connected.");
         }
 
-        var at = position >= 0 ? position : Transport().PositionSamples;
-        return new(state, at, map.TickAtSample(at, rate), rate);
+        if (command == TransportCommand.Record) {
+            position = PreRolled(link, view!.State, map, rate, position);
+        }
+
+        if (!link.Work.Writer.TryWrite(new TransportMessage(action, position))) {
+            throw ProjectException.Unprocessable("The engine is not connected.");
+        }
+
+        if (command == TransportCommand.Stop && Interlocked.Exchange(ref preRollPunch, 0) != 0) {
+            RestorePunch(link, view);
+        }
+
+        return position;
     }
 
     /// <summary>

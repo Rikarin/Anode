@@ -14,6 +14,7 @@ import { MeterMap } from '@anode/timeline';
 import { RegionTiming } from '../../music/region-timing';
 import { TempoMap } from '../../music/tempo-map';
 import { normalizeComp, swipeComp } from '../../tracks/comp';
+import { refuseLooped } from './fake-region-loops';
 
 /** Makes the next id with a prefix (`rgn_12`); the fake Server's counter. */
 export type IdMaker = (prefix: string) => string;
@@ -343,6 +344,7 @@ export function pasteRegions(
  * stretch of one file (each starting where the previous ends, in time and in the file).
  */
 export function joinRegions(project: Project, ids: readonly string[]): Project {
+  [...project.regions, ...project.midiRegions].filter(r => ids.includes(r.id)).forEach(refuseLooped);
   if (ids.length < 2) {
     throw new ApiError(422, 'Join needs two regions or more.');
   }
@@ -512,6 +514,8 @@ export function flattenTakeFolder(project: Project, folderId: string, id: IdMake
         fineTune: 0,
         pitchNotes: [],
         pitchSource: 'off',
+        loopTicks: 0,
+        stretch: 1,
         key: null
       }
     ];

@@ -512,11 +512,15 @@ public sealed class HostSync(HostLink link, SegmentPool pool, ILogger logger, Se
         if (before is null
             || before.Settings.Metronome.Enabled != settings.Metronome.Enabled
             || before.Settings.Metronome.LevelDb != settings.Metronome.LevelDb
-            || before.Settings.Metronome.CountIn != settings.Metronome.CountIn) {
+            || before.Settings.Metronome.CountIn != settings.Metronome.CountIn
+            || before.Settings.Metronome.CountInLength != settings.Metronome.CountInLength
+            || before.Settings.Metronome.CountInUnit != settings.Metronome.CountInUnit) {
             yield return new SetMetronomeMessage(
                 settings.Metronome.Enabled,
                 Units.DbToGain(settings.Metronome.LevelDb),
-                settings.Metronome.CountIn
+                settings.Metronome.CountIn,
+                settings.Metronome.CountInLength,
+                settings.Metronome.CountInUnit == MusicalUnit.Beats
             );
         }
     }

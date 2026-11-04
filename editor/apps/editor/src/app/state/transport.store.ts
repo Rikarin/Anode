@@ -1,5 +1,11 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
-import type { CycleRecordMode, TransportRequest, TransportState, TransportStatus } from '@anode/api-client';
+import type {
+  CycleRecordMode,
+  MusicalUnit,
+  TransportRequest,
+  TransportState,
+  TransportStatus
+} from '@anode/api-client';
 import { ANODE_API } from '../core/api';
 import { EventStream } from '../core/events';
 import { Notify } from '../core/notify';
@@ -64,6 +70,31 @@ export function parseSignature(text: string): TimeSignature | null {
   return numerator >= 1 && [1, 2, 4, 8, 16, 32].includes(denominator) ? { numerator, denominator } : null;
 }
 
+/** "1 bar", "2 beats": a count-in's or a pre-roll's length. */
+export function musicalLength(length: number, unit: MusicalUnit): string {
+  const noun = unit === 'bars' ? 'bar' : 'beat';
+  return `${length} ${length === 1 ? noun : `${noun}s`}`;
+}
+
+/** The lengths the control bar offers a count-in. */
+export const CountInLengths: readonly { length: number; unit: MusicalUnit }[] = [
+  { length: 1, unit: 'bars' },
+  { length: 2, unit: 'bars' },
+  { length: 4, unit: 'bars' },
+  { length: 1, unit: 'beats' },
+  { length: 2, unit: 'beats' },
+  { length: 3, unit: 'beats' },
+  { length: 4, unit: 'beats' }
+];
+
+/** The lengths it offers a pre-roll, besides off. */
+export const PreRollLengths: readonly { length: number; unit: MusicalUnit }[] = [
+  { length: 1, unit: 'beats' },
+  { length: 2, unit: 'beats' },
+  { length: 1, unit: 'bars' },
+  { length: 2, unit: 'bars' }
+];
+
 /**
  * The transport. The engine host owns it: the Server streams `transport` frames (about 30 Hz while it moves, once when
  * it stops) and the store extrapolates the playhead between them at the project's tempo, so it moves smoothly at the
@@ -84,6 +115,14 @@ export class TransportStore {
   readonly cycle = computed(() => this.project.settings().cycle.enabled);
   readonly metronome = computed(() => this.project.settings().metronome.enabled);
   readonly countIn = computed(() => this.project.settings().metronome.countIn);
+  readonly countInLength = computed(() => {
+    const metronome = this.project.settings().metronome;
+    return { length: metronome.countInLength, unit: metronome.countInUnit };
+  });
+  readonly preRoll = computed(() => {
+    const recording = this.project.settings().recording;
+    return { length: recording.preRollLength, unit: recording.preRollUnit };
+  });
   readonly tempo = computed(() => this.project.settings().tempo);
   readonly signature = computed<TimeSignature>(() => this.project.settings().signature);
   readonly ticksPerSecond = computed(() => (this.tempo() / 60) * Ppq);
@@ -218,6 +257,22 @@ export class TransportStore {
   toggleCountIn(): void {
     const on = !this.countIn();
     void this.project.execute([{ type: 'setMetronome', countIn: on }], on ? 'Count-in On' : 'Count-in Off');
+  }
+
+  /** The count-in's length, turning it on. */
+  setCountIn(length: number, unit: MusicalUnit): void {
+    void this.project.execute(
+      [{ type: 'setMetronome', countIn: true, countInLength: length, countInUnit: unit }],
+      `Count-in: ${musicalLength(length, unit)}`
+    );
+  }
+
+  /** How far before the playhead a recording starts playing (0: off). */
+  setPreRoll(length: number, unit: MusicalUnit): void {
+    void this.project.execute(
+      [{ type: 'setRecording', preRollLength: length, preRollUnit: unit }],
+      length > 0 ? `Pre-roll: ${musicalLength(length, unit)}` : 'Pre-roll Off'
+    );
   }
 
   setCycleMode(cycleMode: CycleRecordMode): void {

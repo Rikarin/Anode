@@ -79,6 +79,8 @@ function region(id: string, trackId: string, startTick = 0): AudioRegion {
     fineTune: 0,
     pitchNotes: [],
     pitchSource: 'off',
+    loopTicks: 0,
+    stretch: 1,
     key: null
   };
 }
@@ -95,13 +97,21 @@ function snapshot(revision = 3): Project {
       tempo: 120,
       signature: { numerator: 4, denominator: 4 },
       cycle: { enabled: false, startTick: 0, endTick: 15_360 },
-      metronome: { enabled: false, countIn: false, levelDb: -6 },
+      metronome: { enabled: false, countIn: false, levelDb: -6, countInLength: 1, countInUnit: 'bars' },
       endTick: 122_880,
       mergeMidiRecording: false,
       tempoEvents: [{ tick: 0, bpm: 120, curve: 'step', shape: 0 }],
       signatures: [{ tick: 0, numerator: 4, denominator: 4 }],
       keys: [{ tick: 0, tonic: 0, mode: 'major' }],
-      recording: { cycleMode: 'takeFolder', replace: false, autopunch: false, punchInTick: 0, punchOutTick: 15_360 },
+      recording: {
+        cycleMode: 'takeFolder',
+        replace: false,
+        autopunch: false,
+        punchInTick: 0,
+        punchOutTick: 15_360,
+        preRollLength: 0,
+        preRollUnit: 'bars'
+      },
       mixer: { pdc: 'all', lowLatency: false, lowLatencyLimitMs: 10 },
       smartTempo: { mode: 'keep', defaultFollow: 'off', analyzeImports: true },
       varispeed: { enabled: false, mode: 'speedOnly', speed: 1 },

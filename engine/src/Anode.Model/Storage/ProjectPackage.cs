@@ -1158,7 +1158,7 @@ public static class PackageMigrations {
     /// <summary><c>Steps[n]</c> takes schema <c>n + 1</c> to <c>n + 2</c>; it gets the kind of file and its JSON.</summary>
     static readonly Func<string, JsonObject, JsonObject>[] Steps = [
         ToSchema2, ToSchema3, ToSchema4, ToSchema5, ToSchema6, ToSchema7, ToSchema8, ToSchema9, ToSchema10, ToSchema11,
-        ToSchema12
+        PackageSteps.ToSchema12
     ];
 
     public static JsonObject Upgrade(JsonObject json, string kind) {

@@ -135,6 +135,11 @@ export const lightTheme: TimelineTheme = {
 };
 
 /** An item's colour before shading: an offline file's says so first, muted second, else its own. */
+/** A loop's repeats are the region's colour, dimmed. */
+function loopBase(flag: number, base: number): number {
+  return flag & ItemFlag.Loop ? shadeColor(base, 0.62) : base;
+}
+
 function itemBase(theme: TimelineTheme, flag: number, color: number): number {
   if (flag & ItemFlag.Offline) {
     return theme.offline;
@@ -285,6 +290,8 @@ interface DrawnRegion {
   fadeOut: number;
   fadeInCurve: number;
   fadeOutCurve: number;
+  /** How many times longer its audio is drawn than the scene says: a time-stretch drag. */
+  timeScale: number;
 }
 
 /**
@@ -401,7 +408,7 @@ export class FrameBuilder {
         const x1 = Math.min(width + 2, Math.max(xOf(region.start + region.length), x0 + 1));
         const y = laneY(region.lane) + inset;
         const h = laneHeight - 2 * inset;
-        const base = itemBase(theme, flag, scene.items.color[region.id] ?? 0);
+        const base = loopBase(flag, itemBase(theme, flag, scene.items.color[region.id] ?? 0));
         if (inner) {
           // A part: flat, between the name bar and the bottom edge, a little lighter than the item's body.
           const top = h >= NAME_BAR_MIN_HEIGHT ? NAME_BAR_HEIGHT : 1;
@@ -516,7 +523,8 @@ export class FrameBuilder {
       fadeIn: o?.fadeIn ?? regions?.fadeIn[id] ?? 0,
       fadeOut: o?.fadeOut ?? regions?.fadeOut[id] ?? 0,
       fadeInCurve: o?.fadeInCurve ?? regions?.fadeInCurve[id] ?? 0,
-      fadeOutCurve: o?.fadeOutCurve ?? regions?.fadeOutCurve[id] ?? 0
+      fadeOutCurve: o?.fadeOutCurve ?? regions?.fadeOutCurve[id] ?? 0,
+      timeScale: o?.timeScale ?? 1
     });
     for (let k = 0; k < found; k++) {
       const id = this.visible[k] ?? 0;
@@ -549,14 +557,14 @@ export class FrameBuilder {
     const x0 = Math.max(0, Math.floor(xStart));
     const x1 = Math.min(width, Math.ceil(xEnd));
     const flag = details.flags[id] ?? 0;
-    const base = itemBase(theme, flag, scene.items.color[id] ?? 0);
+    const base = loopBase(flag, itemBase(theme, flag, scene.items.color[id] ?? 0));
     const withName = h >= NAME_BAR_MIN_HEIGHT;
     const top = withName ? y + NAME_BAR_HEIGHT : y + 1;
     const bottom = y + h - 1;
     const own = details.rate[id] ?? 0;
     const framesPerTick = own > 0 ? own : details.framesPerTick;
     const inner = (flag & ItemFlag.Inner) !== 0;
-    const ownFades = !inner && !(flag & ItemFlag.Folder);
+    const ownFades = !inner && !(flag & (ItemFlag.Folder | ItemFlag.Loop));
 
     // Waveform: one column per CSS pixel, from the coarsest peak level that still resolves a pixel.
     const waveform = this.waveforms.best(details.waveform[id] ?? -1, framesPerTick / ppt);
@@ -574,7 +582,7 @@ export class FrameBuilder {
       const shift = fileOffset - sceneFileOffset(details, id);
       let k = from;
       const frameAt = (x: number): number => {
-        const tick = originTick + x / ppt - start;
+        const tick = (originTick + x / ppt - start) / region.timeScale;
         if (!warped) {
           return fileOffset + tick * framesPerTick;
         }

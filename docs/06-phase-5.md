@@ -87,7 +87,7 @@ report. A REST change means regenerating `engine/src/Anode.Server/openapi.json`
 ### Rules the contracts imply
 
 - **Region timing (one helper, `RegionTiming`, in the Model and mirrored in the editor):**
-  - A region is *warped* when its track's flex is on, or its `follow` is not `off`, or it has a transpose or pitch
+  - A region is *warped* when its track's flex is on, or its `follow` is not `off`, or it has a `stretch`, a transpose or pitch
     notes (these need Flex or Follow; the server refuses them otherwise).
   - An unwarped region plays its file 1:1 in time, as before: file frame `fileOffset + n` at the time of `startTick`
     plus n frames.
@@ -97,6 +97,7 @@ report. A REST change means regenerating `engine/src/Anode.Server/openapi.json`
       quarter note, linear in ticks.
     - `follow: bars` / `barsAndBeats`: the file's downbeats (or beats too) land on the project's bars (or beats);
       linear in ticks between them.
+    - `stretch` scales any of these: a file frame lands that many times as far from the region's start.
   - **Flex markers** move a file frame to a tick (relative to `startTick`). Between neighbouring markers, and between
     the outermost markers and the region's ends, the base map is scaled linearly; the region's start and end stay
     where the base map puts them, as in Logic.

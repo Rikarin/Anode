@@ -13,6 +13,9 @@ public static partial class Edits {
     public const int MaxTextLength = 100_000;
     public const int MaxColorLength = 64;
 
+    /// <summary>The longest count-in or pre-roll, in bars or beats.</summary>
+    public const int MaxRollLength = 32;
+
     static DeltaOp[] SetTempo(ProjectState state, SetTempoCommand c) {
         CheckBpm(c.Bpm);
         var events = TempoEventsOf(state.Settings);
@@ -113,8 +116,15 @@ public static partial class Edits {
             c.Replace ?? old.Replace,
             c.Autopunch ?? old.Autopunch,
             c.PunchInTick ?? old.PunchInTick,
-            c.PunchOutTick ?? old.PunchOutTick
+            c.PunchOutTick ?? old.PunchOutTick,
+            c.PreRollLength ?? old.PreRollLength,
+            c.PreRollUnit ?? old.PreRollUnit
         );
+        if (recording.PreRollLength is < 0 or > MaxRollLength) {
+            throw new EditException($"A pre-roll is 0…{MaxRollLength} bars or beats, not {recording.PreRollLength}.");
+        }
+
+        CheckUnit(recording.PreRollUnit);
         if (!Enum.IsDefined(recording.CycleMode)) {
             throw new EditException($"Unknown cycle recording mode {recording.CycleMode}.");
         }
@@ -126,6 +136,27 @@ public static partial class Edits {
         }
 
         return [new SettingsChanged(state.Settings with { Recording = recording })];
+    }
+
+    /// <summary>Where a recording from <paramref name="tick" /> starts playing: its pre-roll before, at most to the start.</summary>
+    public static long PreRollStart(ProjectState state, long tick) {
+        var recording = state.Settings.Recording;
+        var signatures = state.SignatureMap;
+        var start = tick;
+        for (var i = 0; i < recording.PreRollLength && start > 0; i++) {
+            var signature = signatures.At(start - 1);
+            start -= recording.PreRollUnit == MusicalUnit.Bars
+                ? SignatureMap.BarTicks(signature)
+                : SignatureMap.BeatTicks(signature.Denominator);
+        }
+
+        return Math.Max(0, start);
+    }
+
+    static void CheckUnit(MusicalUnit unit) {
+        if (!Enum.IsDefined(unit)) {
+            throw new EditException($"Unknown unit {unit}.");
+        }
     }
 
     static DeltaOp[] SetProjectNotes(SetProjectNotesCommand c) => [new NotesChanged(Text(c.Text, "project notes"))];

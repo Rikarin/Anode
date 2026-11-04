@@ -147,7 +147,8 @@ export function patternContent(track: Track, lengthTicks: number): CellContent {
     startTick: 0,
     lengthTicks,
     muted: false,
-    pattern
+    pattern,
+    loopTicks: 0
   };
   return { audio: null, midi: null, pattern: region };
 }
@@ -166,6 +167,7 @@ export function midiContent(track: Track, lengthTicks: number): CellContent {
     controls: [],
     muted: false,
     pitchSource: 'off',
+    loopTicks: 0,
     key: null
   };
   return { audio: null, midi: region, pattern: null };

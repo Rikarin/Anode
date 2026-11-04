@@ -330,7 +330,13 @@ public sealed class EngineHost : IDisposable {
                     Controller.SetCycle(cycle.Enabled, cycle.StartSample, cycle.EndSample);
                     return null;
                 case SetMetronomeMessage metronome:
-                    Controller.SetMetronome(metronome.Enabled, metronome.Gain, metronome.CountIn);
+                    Controller.SetMetronome(
+                        metronome.Enabled,
+                        metronome.Gain,
+                        metronome.CountIn,
+                        metronome.CountInLength,
+                        metronome.CountInBeats
+                    );
                     return null;
                 case TransportMessage transport:
                     return await TransportAsync(transport, cancellationToken).ConfigureAwait(false);

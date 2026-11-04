@@ -9,7 +9,8 @@ const Ppq = 960;
 export type TimedRegion = Pick<
   AudioRegion,
   'startTick' | 'fileOffset' | 'length' | 'follow' | 'flexMarkers' | 'transpose' | 'fineTune' | 'pitchNotes'
->;
+> &
+  Partial<Pick<AudioRegion, 'stretch'>>;
 
 /** The project's time: its tempo and signature tracks and its sample rate. */
 export interface TimingContext {
@@ -26,12 +27,13 @@ export interface WarpKnot {
 
 /**
  * Whether a region is warped (docs/06-phase-5.md): its track's flex is on, its `follow` is not `off`, or it has a
- * transpose, a fine tune or pitch notes. An unwarped region plays its file 1:1 in time.
+ * stretch, a transpose, a fine tune or pitch notes. An unwarped region plays its file 1:1 in time.
  */
 export function isWarped(region: Partial<TimedRegion>, flexOn: boolean): boolean {
   return (
     flexOn ||
     (region.follow ?? 'off') !== 'off' ||
+    (region.stretch ?? 1) !== 1 ||
     (region.transpose ?? 0) !== 0 ||
     (region.fineTune ?? 0) !== 0 ||
     (region.pitchNotes?.length ?? 0) > 0
@@ -66,6 +68,8 @@ export function followRate(tempo: FileTempo | null | undefined, sampleRate: numb
  *   Without a file tempo these fall back to `on`, and `on` to time.
  * - Flex markers move a file frame to `startTick + tick`; between neighbouring knots (the region's start, the markers,
  *   its end) the base map is scaled linearly, so the start and the end stay where the base map puts them.
+ *
+ * - `stretch` scales the base map, whatever it is: a file frame lands that many times as far from the start.
  *
  * A region's end tick is where its last file frame lands ({@link endTick}); its length in ticks is derived.
  */
@@ -195,10 +199,23 @@ function segment(count: number, atOrBefore: (i: number) => boolean): number {
 function timeMap(region: TimedRegion, context: TimingContext): BaseMap {
   const { tempo, sampleRate } = context;
   const s0 = tempo.secondsAt(region.startTick);
+  const stretch = region.stretch ?? 1;
   return {
-    tick: frame => tempo.tickAt(s0 + (frame - region.fileOffset) / sampleRate),
-    frame: tick => region.fileOffset + (tempo.secondsAt(tick) - s0) * sampleRate
+    tick: frame => tempo.tickAt(s0 + ((frame - region.fileOffset) * stretch) / sampleRate),
+    frame: tick => region.fileOffset + ((tempo.secondsAt(tick) - s0) * sampleRate) / stretch
   };
+}
+
+/** A follow map under the region's stretch. */
+function stretched(map: BaseMap, region: TimedRegion): BaseMap {
+  const stretch = region.stretch ?? 1;
+  const start = region.startTick;
+  return stretch === 1
+    ? map
+    : {
+        tick: frame => start + (map.tick(frame) - start) * stretch,
+        frame: tick => map.frame(start + (tick - start) / stretch)
+      };
 }
 
 function linearMap(region: TimedRegion, rate: number): BaseMap {
@@ -209,9 +226,19 @@ function linearMap(region: TimedRegion, rate: number): BaseMap {
 }
 
 function baseMap(region: TimedRegion, fileTempo: FileTempo | null | undefined, context: TimingContext): BaseMap {
+  const map = followMap(region, fileTempo, context);
+  return map ? stretched(map, region) : timeMap(region, context);
+}
+
+/** A region's map through its file's tempo; null when it does not follow one. */
+function followMap(
+  region: TimedRegion,
+  fileTempo: FileTempo | null | undefined,
+  context: TimingContext
+): BaseMap | null {
   const rate = followRate(fileTempo, context.sampleRate);
   if (region.follow === 'off' || rate === null) {
-    return timeMap(region, context);
+    return null;
   }
   if (region.follow === 'on' || !fileTempo) {
     return linearMap(region, rate);

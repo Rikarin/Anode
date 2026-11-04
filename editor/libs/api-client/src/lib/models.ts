@@ -69,6 +69,7 @@ export type Marker = Schemas['Marker'];
 export type ArrangementMarker = Schemas['ArrangementMarker'];
 export type RecordingSettings = Schemas['RecordingSettings'];
 export type CycleRecordMode = Schemas['CycleRecordMode'];
+export type MusicalUnit = Schemas['MusicalUnit'];
 export type TakeFolder = Schemas['TakeFolder'];
 export type Take = Schemas['Take'];
 export type CompSegment = Schemas['CompSegment'];

@@ -18,6 +18,11 @@ namespace Anode.Contracts;
 [JsonDerivedType(typeof(SplitRegionCommand), "splitRegion")]
 [JsonDerivedType(typeof(SetRegionCommand), "setRegion")]
 [JsonDerivedType(typeof(DeleteRegionsCommand), "deleteRegions")]
+[JsonDerivedType(typeof(ConvertLoopsCommand), "convertLoops")]
+[JsonDerivedType(typeof(StretchRegionCommand), "stretchRegion")]
+[JsonDerivedType(typeof(InsertTimeCommand), "insertTime")]
+[JsonDerivedType(typeof(CutTimeCommand), "cutTime")]
+[JsonDerivedType(typeof(RippleDeleteCommand), "rippleDelete")]
 [JsonDerivedType(typeof(SetTempoCommand), "setTempo")]
 [JsonDerivedType(typeof(SetSignatureCommand), "setSignature")]
 [JsonDerivedType(typeof(SetCycleCommand), "setCycle")]
@@ -258,10 +263,44 @@ public sealed record SetRegionCommand(
     long? FadeOut = null,
     double? FadeInCurve = null,
     double? FadeOutCurve = null,
-    bool? Muted = null
+    bool? Muted = null,
+    long? LoopTicks = null
 ) : EditCommand;
 
 public sealed record DeleteRegionsCommand(IReadOnlyList<string> RegionIds) : EditCommand;
+
+/// <summary>
+///     Time-stretches an audio region without touching its file: it lasts <c>stretch</c> times as long as recorded
+///     (0.25…4, 1 back to as recorded), from <c>startTick</c> when given (a drag of its left edge moves its start). Its
+///     flex markers scale with it; its fades stay in frames, cut to fit.
+/// </summary>
+public sealed record StretchRegionCommand(string RegionId, double Stretch, long? StartTick = null) : EditCommand;
+
+/// <summary>
+///     Inserts <c>lengthTicks</c> of empty time at <c>atTick</c>, on every track: regions across it are split (a looped
+///     one's repeats become regions first; pattern and Session Player regions grow instead), and everything from there on
+///     moves later, with the tempo, signature, key and chord tracks, markers, sections, automation, score symbols, the
+///     cycle, the punch locators, the project end and the movie. A signature change that no longer falls on a bar line
+///     moves to the nearest one.
+/// </summary>
+public sealed record InsertTimeCommand(long AtTick, long LengthTicks) : EditCommand;
+
+/// <summary>
+///     Removes the time from <c>startTick</c> to <c>endTick</c> on every track and closes it, as <c>insertTime</c> makes
+///     room: what is inside goes, what crosses it is split, and what follows moves earlier. The tempo, signature, key and
+///     chord in force at its end hold from its start.
+/// </summary>
+public sealed record CutTimeCommand(long StartTick, long EndTick) : EditCommand;
+
+/// <summary>
+///     Deletes regions and closes the time they took across every track: everything that starts after them moves earlier,
+///     the global tracks, markers and automation as <c>cutTime</c> says; what other tracks hold across that time stays
+///     where it is, uncut.
+/// </summary>
+public sealed record RippleDeleteCommand(IReadOnlyList<string> RegionIds) : EditCommand;
+
+/// <summary>Turns the repeats of looped regions (audio, MIDI, pattern) into regions of their own; what plays stays.</summary>
+public sealed record ConvertLoopsCommand(IReadOnlyList<string> RegionIds) : EditCommand;
 
 /// <summary>Sets the tempo at the project start (the first tempo event), keeping the rest of the tempo track.</summary>
 public sealed record SetTempoCommand(double Bpm) : EditCommand;
@@ -272,7 +311,13 @@ public sealed record SetSignatureCommand(int Numerator, int Denominator) : EditC
 public sealed record SetCycleCommand(bool? Enabled = null, long? StartTick = null, long? EndTick = null)
     : EditCommand;
 
-public sealed record SetMetronomeCommand(bool? Enabled = null, bool? CountIn = null, double? LevelDb = null)
+public sealed record SetMetronomeCommand(
+    bool? Enabled = null,
+    bool? CountIn = null,
+    double? LevelDb = null,
+    int? CountInLength = null,
+    MusicalUnit? CountInUnit = null
+)
     : EditCommand;
 
 public sealed record RenameProjectCommand(string Name) : EditCommand;
@@ -306,7 +351,8 @@ public sealed record AddMidiRegionCommand(string TrackId, long StartTick, long L
 public sealed record ResizeMidiRegionCommand(string RegionId, long StartTick, long LengthTicks) : EditCommand;
 
 /// <summary>
-///     Changes a MIDI region's name, mute or playback parameters. <c>grooveId</c> (Phase 7) makes its playback quantise
+///     Changes a MIDI region's name, mute, loop or playback parameters. <c>grooveId</c> (Phase 7) makes its playback
+///     quantise
 ///     follow a groove template of the project; an empty string returns it to the grid.
 /// </summary>
 public sealed record SetMidiRegionCommand(
@@ -318,7 +364,8 @@ public sealed record SetMidiRegionCommand(
     double? QuantizeStrength = null,
     double? Swing = null,
     bool? Muted = null,
-    string? GrooveId = null
+    string? GrooveId = null,
+    long? LoopTicks = null
 ) : EditCommand;
 
 public sealed record AddNotesCommand(string RegionId, IReadOnlyList<NewNote> Notes) : EditCommand;
@@ -449,7 +496,9 @@ public sealed record SetRecordingCommand(
     bool? Replace = null,
     bool? Autopunch = null,
     long? PunchInTick = null,
-    long? PunchOutTick = null
+    long? PunchOutTick = null,
+    int? PreRollLength = null,
+    MusicalUnit? PreRollUnit = null
 ) : EditCommand;
 
 /// <summary>Puts tracks into a new folder stack, inserted where the first of them was.</summary>
@@ -721,7 +770,7 @@ public sealed record AddPatternRegionCommand(
 ) : EditCommand;
 
 /// <summary>
-///     Moves (in time), resizes, renames or mutes a pattern region; <c>moveRegion</c>, <c>copyRegions</c> and
+///     Moves (in time), resizes, renames, loops or mutes a pattern region; <c>moveRegion</c>, <c>copyRegions</c> and
 ///     <c>deleteRegions</c> take pattern regions too.
 /// </summary>
 public sealed record SetPatternRegionCommand(
@@ -729,7 +778,8 @@ public sealed record SetPatternRegionCommand(
     long? StartTick = null,
     long? LengthTicks = null,
     string? Name = null,
-    bool? Muted = null
+    bool? Muted = null,
+    long? LoopTicks = null
 ) : EditCommand;
 
 /// <summary>

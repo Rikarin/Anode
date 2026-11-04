@@ -361,7 +361,8 @@ describe('FakeAnodeServer, Phase 6', () => {
         controls: [],
         muted: false,
         pitchSource: 'off' as const,
-        key: null
+        key: null,
+        loopTicks: 0
       };
       await run(server, {
         type: 'setCell',

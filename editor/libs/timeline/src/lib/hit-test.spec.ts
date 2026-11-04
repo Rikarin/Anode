@@ -1,6 +1,13 @@
 import { RULER_HEIGHT } from './frame-builder';
 import { hitTest, itemsInRect, laneAtY, snapStep, snapTick, tickAtX } from './hit-test';
-import { createItems, createRegionDetails, type TimelineScene, type TimelineView } from './items';
+import {
+  createItems,
+  createRegionDetails,
+  ItemFlag,
+  type RegionDetails,
+  type TimelineScene,
+  type TimelineView
+} from './items';
 import { LaneIntervalIndex } from './lane-interval-index';
 
 // Two regions on lane 0 (beats 1–3 and 4–5) and one on lane 1 (beats 2–4); 40 px per beat, 40 px lanes.
@@ -48,6 +55,16 @@ describe('hitTest', () => {
     // Region 2 starts at 80 px with a 20 px fade-in: its handle is at 100 px.
     expect(hit(101, lane1Upper)).toEqual({ index: 2, zone: 'fade-in' });
     expect(hit(120, lane1Upper)).toEqual({ index: 2, zone: 'body' });
+  });
+
+  it('loops at the upper right corner, of a region or of its last repeat', () => {
+    expect(hit(117, RULER_HEIGHT + 4)).toEqual({ index: 0, zone: 'loop' });
+    const looped = scene();
+    (looped.regions as RegionDetails).flags[1] = ItemFlag.Loop;
+    const repeats = new LaneIntervalIndex(looped.items, looped.laneCount);
+    expect(hitTest(looped, repeats, view, 197, RULER_HEIGHT + 4)).toEqual({ index: 1, zone: 'loop' });
+    expect(hitTest(looped, repeats, view, 170, RULER_HEIGHT + 4)).toEqual({ index: 1, zone: 'body' });
+    expect(hitTest(looped, repeats, view, 197, lane0Lower)).toEqual({ index: 1, zone: 'body' });
   });
 
   it('selects what a marquee touches', () => {

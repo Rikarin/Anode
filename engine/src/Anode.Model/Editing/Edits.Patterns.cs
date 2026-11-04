@@ -180,13 +180,15 @@ public static partial class Edits {
             CheckLength(length);
         }
 
+        CheckLoop(c.LoopTicks);
         return [
             new PatternRegionUpserted(
                 region with {
                     StartTick = c.StartTick ?? region.StartTick,
                     LengthTicks = c.LengthTicks ?? region.LengthTicks,
                     Name = c.Name is null ? region.Name : Name(c.Name, "region name"),
-                    Muted = c.Muted ?? region.Muted
+                    Muted = c.Muted ?? region.Muted,
+                    LoopTicks = c.LoopTicks ?? region.LoopTicks
                 }
             )
         ];
@@ -221,7 +223,8 @@ public static partial class Edits {
             region.Muted,
             ProjectDefaults.Notation,
             PitchSourceMode.Off,
-            null
+            null,
+            region.LoopTicks
         );
         return [new PatternRegionRemoved(region.Id), new MidiRegionUpserted(midi)];
     }

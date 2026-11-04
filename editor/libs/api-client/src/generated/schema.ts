@@ -2484,6 +2484,16 @@ export interface components {
       pitchNotes: components['schemas']['PitchNote'][];
       pitchSource: components['schemas']['PitchSourceMode'];
       key: null | components['schemas']['RegionKey'];
+      /**
+       * Format: int64
+       * @default 0
+       */
+      loopTicks: number;
+      /**
+       * Format: double
+       * @default 1
+       */
+      stretch: number;
     };
     /**
      * @description Track automation of one parameter. `trackId` null is the master strip. `target` is `volume` (dB),
@@ -3435,6 +3445,11 @@ export interface components {
       | components['schemas']['EditCommandSplitRegionCommand']
       | components['schemas']['EditCommandSetRegionCommand']
       | components['schemas']['EditCommandDeleteRegionsCommand']
+      | components['schemas']['EditCommandConvertLoopsCommand']
+      | components['schemas']['EditCommandStretchRegionCommand']
+      | components['schemas']['EditCommandInsertTimeCommand']
+      | components['schemas']['EditCommandCutTimeCommand']
+      | components['schemas']['EditCommandRippleDeleteCommand']
       | components['schemas']['EditCommandSetTempoCommand']
       | components['schemas']['EditCommandSetSignatureCommand']
       | components['schemas']['EditCommandSetCycleCommand']
@@ -3985,6 +4000,12 @@ export interface components {
       /** Format: int32 */
       inlet: number;
     };
+    /** @description Turns the repeats of looped regions (audio, MIDI, pattern) into regions of their own; what plays stays. */
+    EditCommandConvertLoopsCommand: {
+      /** @enum {string} */
+      type: 'convertLoops';
+      regionIds: string[];
+    };
     /**
      * @description Replaces a pattern region with a MIDI region of exactly the notes it plays over its length (one pass of the
      *     region), at the same place, with its name and mute.
@@ -4034,6 +4055,19 @@ export interface components {
       type: 'createStack';
       trackIds: string[];
       name?: null | string;
+    };
+    /**
+     * @description Removes the time from `startTick` to `endTick` on every track and closes it, as `insertTime` makes
+     *     room: what is inside goes, what crosses it is split, and what follows moves earlier. The tempo, signature, key and
+     *     chord in force at its end hold from its start.
+     */
+    EditCommandCutTimeCommand: {
+      /** @enum {string} */
+      type: 'cutTime';
+      /** Format: int64 */
+      startTick: number;
+      /** Format: int64 */
+      endTick: number;
     };
     /** @description Phase 7: removes an articulation set; tracks that used it have none (their notes keep their ids). */
     EditCommandDeleteArticulationSetCommand: {
@@ -4193,6 +4227,21 @@ export interface components {
       /** @enum {string} */
       type: 'importTracks';
       content: components['schemas']['ImportedContent'];
+    };
+    /**
+     * @description Inserts `lengthTicks` of empty time at `atTick`, on every track: regions across it are split (a looped
+     *     one's repeats become regions first; pattern and Session Player regions grow instead), and everything from there on
+     *     moves later, with the tempo, signature, key and chord tracks, markers, sections, automation, score symbols, the
+     *     cycle, the punch locators, the project end and the movie. A signature change that no longer falls on a bar line
+     *     moves to the nearest one.
+     */
+    EditCommandInsertTimeCommand: {
+      /** @enum {string} */
+      type: 'insertTime';
+      /** Format: int64 */
+      atTick: number;
+      /** Format: int64 */
+      lengthTicks: number;
     };
     /**
      * @description Glues regions of one track into one: MIDI regions merge their notes; audio regions only when they play one
@@ -4512,6 +4561,16 @@ export interface components {
       fileOffset: number;
       /** Format: int64 */
       length: number;
+    };
+    /**
+     * @description Deletes regions and closes the time they took across every track: everything that starts after them moves earlier,
+     *     the global tracks, markers and automation as `cutTime` says; what other tracks hold across that time stays
+     *     where it is, uncut.
+     */
+    EditCommandRippleDeleteCommand: {
+      /** @enum {string} */
+      type: 'rippleDelete';
+      regionIds: string[];
     };
     /** @description Makes one take the whole comp. */
     EditCommandSelectTakeCommand: {
@@ -4835,6 +4894,9 @@ export interface components {
       countIn?: null | boolean;
       /** Format: double */
       levelDb?: null | number;
+      /** Format: int32 */
+      countInLength?: null | number;
+      countInUnit?: null | components['schemas']['MusicalUnit'];
     };
     EditCommandSetMidiIoCommand: {
       /** @enum {string} */
@@ -4849,7 +4911,8 @@ export interface components {
       merge: boolean;
     };
     /**
-     * @description Changes a MIDI region's name, mute or playback parameters. `grooveId` (Phase 7) makes its playback quantise
+     * @description Changes a MIDI region's name, mute, loop or playback parameters. `grooveId` (Phase 7) makes its playback
+     *     quantise
      *     follow a groove template of the project; an empty string returns it to the grid.
      */
     EditCommandSetMidiRegionCommand: {
@@ -4869,6 +4932,8 @@ export interface components {
       swing?: null | number;
       muted?: null | boolean;
       grooveId?: null | string;
+      /** Format: int64 */
+      loopTicks?: null | number;
     };
     EditCommandSetMixerSettingsCommand: {
       /** @enum {string} */
@@ -4965,7 +5030,7 @@ export interface components {
       pattern: components['schemas']['Pattern'];
     };
     /**
-     * @description Moves (in time), resizes, renames or mutes a pattern region; `moveRegion`, `copyRegions` and
+     * @description Moves (in time), resizes, renames, loops or mutes a pattern region; `moveRegion`, `copyRegions` and
      *     `deleteRegions` take pattern regions too.
      */
     EditCommandSetPatternRegionCommand: {
@@ -4978,6 +5043,8 @@ export interface components {
       lengthTicks?: null | number;
       name?: null | string;
       muted?: null | boolean;
+      /** Format: int64 */
+      loopTicks?: null | number;
     };
     /**
      * @description Replaces an audio region's Flex Pitch notes (edits, splits and joins); notes need Flex or Follow, as a
@@ -5014,6 +5081,9 @@ export interface components {
       punchInTick?: null | number;
       /** Format: int64 */
       punchOutTick?: null | number;
+      /** Format: int32 */
+      preRollLength?: null | number;
+      preRollUnit?: null | components['schemas']['MusicalUnit'];
     };
     EditCommandSetRegionCommand: {
       /** @enum {string} */
@@ -5031,6 +5101,8 @@ export interface components {
       /** Format: double */
       fadeOutCurve?: null | number;
       muted?: null | boolean;
+      /** Format: int64 */
+      loopTicks?: null | number;
     };
     /**
      * @description Sets an audio region's Flex &amp; Follow, transpose (semitones) or fine tune (cents). A transpose or fine tune
@@ -5422,6 +5494,20 @@ export interface components {
       noteIds?: null | number[];
       /** Format: int64 */
       lengthTicks?: null | number;
+    };
+    /**
+     * @description Time-stretches an audio region without touching its file: it lasts `stretch` times as long as recorded
+     *     (0.25…4, 1 back to as recorded), from `startTick` when given (a drag of its left edge moves its start). Its
+     *     flex markers scale with it; its fades stay in frames, cut to fit.
+     */
+    EditCommandStretchRegionCommand: {
+      /** @enum {string} */
+      type: 'stretchRegion';
+      regionId: string;
+      /** Format: double */
+      stretch: number;
+      /** Format: int64 */
+      startTick?: null | number;
     };
     /**
      * @description Strip Silence: splits each audio region into one region per stretch above `thresholdDb` (RMS), each widened
@@ -6208,12 +6294,21 @@ export interface components {
       settings: components['schemas']['MasteringSettings'];
       analysis: null | components['schemas']['MasteringAnalysis'];
     };
-    /** @description The click: on or off, a one-bar count-in before recording, and its level in dB. */
+    /**
+     * @description The click: on or off, a count-in before recording from a stop, and its level in dB. The count-in lasts
+     *     `countInLength` (1…32) of `countInUnit`, measured at where recording starts.
+     */
     MetronomeSettings: {
       enabled: boolean;
       countIn: boolean;
       /** Format: double */
       levelDb: number;
+      /**
+       * Format: int32
+       * @default 1
+       */
+      countInLength: number;
+      countInUnit: components['schemas']['MusicalUnit'];
     };
     MidiDevices: {
       inputs: components['schemas']['MidiPort'][];
@@ -6284,7 +6379,8 @@ export interface components {
      *     is cut there. `playback` holds the non-destructive region parameters. `notation` (Phase 9,
      *     docs/10-phase-9.md) holds its score settings: display quantise and interpretation. `pitchSource` and
      *     `key` (Phase 11, docs/12-phase-11.md): how it follows the chord track (applied at compile time; its notes
-     *     stay as they are) and its own key (null: the project's at its start).
+     *     stay as they are) and its own key (null: the project's at its start). `loopTicks`: it repeats for that many
+     *     ticks after its end, as AudioRegion says.
      */
     MidiRegion: {
       id: string;
@@ -6301,6 +6397,11 @@ export interface components {
       notation: components['schemas']['RegionNotation'];
       pitchSource: components['schemas']['PitchSourceMode'];
       key: null | components['schemas']['RegionKey'];
+      /**
+       * Format: int64
+       * @default 0
+       */
+      loopTicks: number;
     };
     /**
      * @description A MIDI output (a `MidiPort.id`) that Anode sends sync to: MIDI Clock (24 ppq, Start, Stop, Continue, Song
@@ -6449,6 +6550,12 @@ export interface components {
      * @enum {unknown}
      */
     MtcFrameRate: 'fps24' | 'fps25' | 'fps2997Drop' | 'fps30';
+    /**
+     * @description What a count-in or a pre-roll is counted in: bars or beats of the signature in force.
+     * @default bars
+     * @enum {unknown}
+     */
+    MusicalUnit: 'bars' | 'beats';
     /**
      * @description MusicXML 4.0 export (`POST /project/export/musicxml`, job `musicXmlExport`): score set
      *     `setId` (null: every MIDI track) as a partwise score, or one track's part (`partTrackId`);
@@ -6795,6 +6902,11 @@ export interface components {
       lengthTicks: number;
       muted: boolean;
       pattern: components['schemas']['Pattern'];
+      /**
+       * Format: int64
+       * @default 0
+       */
+      loopTicks: number;
     };
     /**
      * @description A row of a pattern: what it plays (`kind` and `note`), its name, its length in steps (1…64; it cycles
@@ -7140,7 +7252,9 @@ export interface components {
     /**
      * @description How recording works: cycle recording mode; replace mode (a recording removes what it covers on its track); and
      *     autopunch, which records only between `punchInTick` and `punchOutTick` while playback continues around
-     *     them.
+     *     them. `preRollLength` (0…32, 0: none) of `preRollUnit` is how far before the playhead a recording from a
+     *     stop starts playing: what plays there is the project, and the take starts at the playhead (the pre-roll is kept
+     *     in its file, before the region). It stops at the project start.
      */
     RecordingSettings: {
       cycleMode: components['schemas']['CycleRecordMode'];
@@ -7150,6 +7264,12 @@ export interface components {
       punchInTick: number;
       /** Format: int64 */
       punchOutTick: number;
+      /**
+       * Format: int32
+       * @default 0
+       */
+      preRollLength: number;
+      preRollUnit: components['schemas']['MusicalUnit'];
     };
     /**
      * @description A project whose edits since its last save survive in an autosave, offered after a crash (docs/04-phase-3.md,

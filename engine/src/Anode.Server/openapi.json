@@ -6683,7 +6683,9 @@
           "fineTune",
           "pitchNotes",
           "pitchSource",
-          "key"
+          "key",
+          "loopTicks",
+          "stretch"
         ],
         "type": "object",
         "properties": {
@@ -6769,6 +6771,16 @@
                 "$ref": "#/components/schemas/RegionKey"
               }
             ]
+          },
+          "loopTicks": {
+            "type": "integer",
+            "format": "int64",
+            "default": 0
+          },
+          "stretch": {
+            "type": "number",
+            "format": "double",
+            "default": 1
           }
         },
         "description": "A region of an audio file on a track: it starts at \u0060startTick\u0060 and plays \u0060length\u0060 frames of the file\nfrom \u0060fileOffset\u0060, at \u0060gainDb\u0060, with fades of \u0060fadeIn\u0060 and \u0060fadeOut\u0060 frames whose curves run\nfrom \u22121 (slow start, exponential-looking) through 0 (linear) to 1 (fast start, logarithmic-looking): a fade-in\u0027s\ngain at position x (0\u20261) is x^(2^(\u22122c)), a fade-out the mirror. A muted region\ndoes not play. Two regions on a track may overlap only as a crossfade: where the earlier fades out and the later\nfades in."
@@ -9383,6 +9395,21 @@
             "$ref": "#/components/schemas/EditCommandDeleteRegionsCommand"
           },
           {
+            "$ref": "#/components/schemas/EditCommandConvertLoopsCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandStretchRegionCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandInsertTimeCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandCutTimeCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandRippleDeleteCommand"
+          },
+          {
             "$ref": "#/components/schemas/EditCommandSetTempoCommand"
           },
           {
@@ -9896,6 +9923,11 @@
             "splitRegion": "#/components/schemas/EditCommandSplitRegionCommand",
             "setRegion": "#/components/schemas/EditCommandSetRegionCommand",
             "deleteRegions": "#/components/schemas/EditCommandDeleteRegionsCommand",
+            "convertLoops": "#/components/schemas/EditCommandConvertLoopsCommand",
+            "stretchRegion": "#/components/schemas/EditCommandStretchRegionCommand",
+            "insertTime": "#/components/schemas/EditCommandInsertTimeCommand",
+            "cutTime": "#/components/schemas/EditCommandCutTimeCommand",
+            "rippleDelete": "#/components/schemas/EditCommandRippleDeleteCommand",
             "setTempo": "#/components/schemas/EditCommandSetTempoCommand",
             "setSignature": "#/components/schemas/EditCommandSetSignatureCommand",
             "setCycle": "#/components/schemas/EditCommandSetCycleCommand",
@@ -11173,6 +11205,27 @@
         },
         "description": "Phase 11: a cable from outlet \u0060outlet\u0060 of one object to inlet \u0060inlet\u0060 of another (both existing on their\nkinds; 422 for a cable that exists, or one that would close a cycle)."
       },
+      "EditCommandConvertLoopsCommand": {
+        "required": [
+          "regionIds",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "convertLoops"
+            ],
+            "type": "string"
+          },
+          "regionIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "description": "Turns the repeats of looped regions (audio, MIDI, pattern) into regions of their own; what plays stays."
+      },
       "EditCommandConvertPatternToMidiCommand": {
         "required": [
           "regionId",
@@ -11302,6 +11355,30 @@
           }
         },
         "description": "Puts tracks into a new folder stack, inserted where the first of them was."
+      },
+      "EditCommandCutTimeCommand": {
+        "required": [
+          "startTick",
+          "endTick",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "cutTime"
+            ],
+            "type": "string"
+          },
+          "startTick": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "endTick": {
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "description": "Removes the time from \u0060startTick\u0060 to \u0060endTick\u0060 on every track and closes it, as \u0060insertTime\u0060 makes\nroom: what is inside goes, what crosses it is split, and what follows moves earlier. The tempo, signature, key and\nchord in force at its end hold from its start."
       },
       "EditCommandDeleteArticulationSetCommand": {
         "required": [
@@ -11816,6 +11893,30 @@
           }
         },
         "description": "Phase 9, an interchange import\u0027s result (ImportedContent): adds its tracks after the project\u0027s\nwith their regions, staff styles and score content, gives every provisional id a real one (rewriting the\nreferences), replaces the tempo map, signatures and keys it carries, and adds its markers, in one undo step. The\n\u0060musicXmlImport\u0060, \u0060aafImport\u0060 and \u0060midiImport\u0060 jobs apply it after copying the media into the\nproject (undo leaves the files); clients do not send it."
+      },
+      "EditCommandInsertTimeCommand": {
+        "required": [
+          "atTick",
+          "lengthTicks",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "insertTime"
+            ],
+            "type": "string"
+          },
+          "atTick": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "lengthTicks": {
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "description": "Inserts \u0060lengthTicks\u0060 of empty time at \u0060atTick\u0060, on every track: regions across it are split (a looped\none\u0027s repeats become regions first; pattern and Session Player regions grow instead), and everything from there on\nmoves later, with the tempo, signature, key and chord tracks, markers, sections, automation, score symbols, the\ncycle, the punch locators, the project end and the movie. A signature change that no longer falls on a bar line\nmoves to the nearest one."
       },
       "EditCommandJoinRegionsCommand": {
         "required": [
@@ -12672,6 +12773,27 @@
           }
         },
         "description": "Trims a region: its new start, and the part of the file it plays."
+      },
+      "EditCommandRippleDeleteCommand": {
+        "required": [
+          "regionIds",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "rippleDelete"
+            ],
+            "type": "string"
+          },
+          "regionIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "description": "Deletes regions and closes the time they took across every track: everything that starts after them moves earlier,\nthe global tracks, markers and automation as \u0060cutTime\u0060 says; what other tracks hold across that time stays\nwhere it is, uncut."
       },
       "EditCommandSelectTakeCommand": {
         "required": [
@@ -13731,6 +13853,23 @@
               "number"
             ],
             "format": "double"
+          },
+          "countInLength": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int32"
+          },
+          "countInUnit": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/MusicalUnit"
+              }
+            ]
           }
         }
       },
@@ -13857,9 +13996,16 @@
               "null",
               "string"
             ]
+          },
+          "loopTicks": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int64"
           }
         },
-        "description": "Changes a MIDI region\u0027s name, mute or playback parameters. \u0060grooveId\u0060 (Phase 7) makes its playback quantise\nfollow a groove template of the project; an empty string returns it to the grid."
+        "description": "Changes a MIDI region\u0027s name, mute, loop or playback parameters. \u0060grooveId\u0060 (Phase 7) makes its playback\nquantise\nfollow a groove template of the project; an empty string returns it to the grid."
       },
       "EditCommandSetMixerSettingsCommand": {
         "required": [
@@ -14152,9 +14298,16 @@
               "null",
               "boolean"
             ]
+          },
+          "loopTicks": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int64"
           }
         },
-        "description": "Moves (in time), resizes, renames or mutes a pattern region; \u0060moveRegion\u0060, \u0060copyRegions\u0060 and\n\u0060deleteRegions\u0060 take pattern regions too."
+        "description": "Moves (in time), resizes, renames, loops or mutes a pattern region; \u0060moveRegion\u0060, \u0060copyRegions\u0060 and\n\u0060deleteRegions\u0060 take pattern regions too."
       },
       "EditCommandSetPitchNotesCommand": {
         "required": [
@@ -14269,6 +14422,23 @@
               "integer"
             ],
             "format": "int64"
+          },
+          "preRollLength": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int32"
+          },
+          "preRollUnit": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/MusicalUnit"
+              }
+            ]
           }
         }
       },
@@ -14333,6 +14503,13 @@
               "null",
               "boolean"
             ]
+          },
+          "loopTicks": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int64"
           }
         }
       },
@@ -15605,6 +15782,36 @@
           }
         },
         "description": "Phase 7, step input: a tie lengthens the last step\u0027s notes (\u0060noteIds\u0060; the server fills them in) by one step\n(\u0060lengthTicks\u0060; filled in from the state), and advances the position. A rest is not an edit:\n\u0060POST /project/step-input/rest\u0060."
+      },
+      "EditCommandStretchRegionCommand": {
+        "required": [
+          "regionId",
+          "stretch",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "stretchRegion"
+            ],
+            "type": "string"
+          },
+          "regionId": {
+            "type": "string"
+          },
+          "stretch": {
+            "type": "number",
+            "format": "double"
+          },
+          "startTick": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int64"
+          }
+        },
+        "description": "Time-stretches an audio region without touching its file: it lasts \u0060stretch\u0060 times as long as recorded\n(0.25\u20264, 1 back to as recorded), from \u0060startTick\u0060 when given (a drag of its left edge moves its start). Its\nflex markers scale with it; its fades stay in frames, cut to fit."
       },
       "EditCommandStripSilenceCommand": {
         "required": [
@@ -17667,7 +17874,9 @@
         "required": [
           "enabled",
           "countIn",
-          "levelDb"
+          "levelDb",
+          "countInLength",
+          "countInUnit"
         ],
         "type": "object",
         "properties": {
@@ -17680,9 +17889,17 @@
           "levelDb": {
             "type": "number",
             "format": "double"
+          },
+          "countInLength": {
+            "type": "integer",
+            "format": "int32",
+            "default": 1
+          },
+          "countInUnit": {
+            "$ref": "#/components/schemas/MusicalUnit"
           }
         },
-        "description": "The click: on or off, a one-bar count-in before recording, and its level in dB."
+        "description": "The click: on or off, a count-in before recording from a stop, and its level in dB. The count-in lasts\n\u0060countInLength\u0060 (1\u202632) of \u0060countInUnit\u0060, measured at where recording starts."
       },
       "MidiDevices": {
         "required": [
@@ -17865,7 +18082,8 @@
           "muted",
           "notation",
           "pitchSource",
-          "key"
+          "key",
+          "loopTicks"
         ],
         "type": "object",
         "properties": {
@@ -17919,9 +18137,14 @@
                 "$ref": "#/components/schemas/RegionKey"
               }
             ]
+          },
+          "loopTicks": {
+            "type": "integer",
+            "format": "int64",
+            "default": 0
           }
         },
-        "description": "A MIDI region: it starts at \u0060startTick\u0060 and lasts \u0060lengthTicks\u0060; its notes and controller events are\npositioned relative to its start (ticks at 960 PPQ). Events past the end do not play; a note that crosses the end\nis cut there. \u0060playback\u0060 holds the non-destructive region parameters. \u0060notation\u0060 (Phase 9,\ndocs/10-phase-9.md) holds its score settings: display quantise and interpretation. \u0060pitchSource\u0060 and\n\u0060key\u0060 (Phase 11, docs/12-phase-11.md): how it follows the chord track (applied at compile time; its notes\nstay as they are) and its own key (null: the project\u0027s at its start)."
+        "description": "A MIDI region: it starts at \u0060startTick\u0060 and lasts \u0060lengthTicks\u0060; its notes and controller events are\npositioned relative to its start (ticks at 960 PPQ). Events past the end do not play; a note that crosses the end\nis cut there. \u0060playback\u0060 holds the non-destructive region parameters. \u0060notation\u0060 (Phase 9,\ndocs/10-phase-9.md) holds its score settings: display quantise and interpretation. \u0060pitchSource\u0060 and\n\u0060key\u0060 (Phase 11, docs/12-phase-11.md): how it follows the chord track (applied at compile time; its notes\nstay as they are) and its own key (null: the project\u0027s at its start). \u0060loopTicks\u0060: it repeats for that many\nticks after its end, as AudioRegion says."
       },
       "MidiSyncDestination": {
         "required": [
@@ -18241,6 +18464,14 @@
           "fps30"
         ],
         "description": "An MTC frame rate."
+      },
+      "MusicalUnit": {
+        "enum": [
+          "bars",
+          "beats"
+        ],
+        "description": "What a count-in or a pre-roll is counted in: bars or beats of the signature in force.",
+        "default": "bars"
       },
       "MusicXmlExportRequest": {
         "required": [
@@ -19096,7 +19327,8 @@
           "startTick",
           "lengthTicks",
           "muted",
-          "pattern"
+          "pattern",
+          "loopTicks"
         ],
         "type": "object",
         "properties": {
@@ -19122,6 +19354,11 @@
           },
           "pattern": {
             "$ref": "#/components/schemas/Pattern"
+          },
+          "loopTicks": {
+            "type": "integer",
+            "format": "int64",
+            "default": 0
           }
         },
         "description": "A pattern region on an instrument track: it plays \u0060pattern\u0060 from \u0060startTick\u0060 for\n\u0060lengthTicks\u0060, every row cycling from the region\u0027s start."
@@ -20098,7 +20335,9 @@
           "replace",
           "autopunch",
           "punchInTick",
-          "punchOutTick"
+          "punchOutTick",
+          "preRollLength",
+          "preRollUnit"
         ],
         "type": "object",
         "properties": {
@@ -20118,9 +20357,17 @@
           "punchOutTick": {
             "type": "integer",
             "format": "int64"
+          },
+          "preRollLength": {
+            "type": "integer",
+            "format": "int32",
+            "default": 0
+          },
+          "preRollUnit": {
+            "$ref": "#/components/schemas/MusicalUnit"
           }
         },
-        "description": "How recording works: cycle recording mode; replace mode (a recording removes what it covers on its track); and\nautopunch, which records only between \u0060punchInTick\u0060 and \u0060punchOutTick\u0060 while playback continues around\nthem."
+        "description": "How recording works: cycle recording mode; replace mode (a recording removes what it covers on its track); and\nautopunch, which records only between \u0060punchInTick\u0060 and \u0060punchOutTick\u0060 while playback continues around\nthem. \u0060preRollLength\u0060 (0\u202632, 0: none) of \u0060preRollUnit\u0060 is how far before the playhead a recording from a\nstop starts playing: what plays there is the project, and the take starts at the playhead (the pre-roll is kept\nin its file, before the region). It stops at the project start."
       },
       "RecoverableProject": {
         "required": [
