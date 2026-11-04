@@ -15,7 +15,7 @@ elseif(WIN32)
   # AnodeTest.vst3/Contents/x86_64-win/AnodeTest.vst3; no editor there yet.
   add_library(an_testvst3 MODULE src/an_testvst3.cpp src/an_testvst3_noview.cpp ${AN_VST3_SDK}/public.sdk/source/main/dllmain.cpp)
   target_link_libraries(an_testvst3 PRIVATE an_vst3_plugin)
-  target_compile_definitions(an_testvst3 PRIVATE _CRT_SECURE_NO_WARNINGS)
+  target_compile_definitions(an_testvst3 PRIVATE _CRT_SECURE_NO_WARNINGS _USE_MATH_DEFINES)
   set_target_properties(an_testvst3 PROPERTIES OUTPUT_NAME "AnodeTest" PREFIX "" SUFFIX ".vst3")
   set(AN_VST3_DIR ${AN_VST3_DIR}/AnodeTest.vst3/Contents/x86_64-win)
 else()
