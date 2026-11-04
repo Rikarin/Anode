@@ -57,6 +57,24 @@ describe('FakeAnodeServer, Phase 6', () => {
       expect(await status(server, { type: 'addPatternRegion', trackId: audio, startTick: 0, pattern: null })).toBe(422);
     });
 
+    it('goes away and comes back with its track alternative', async () => {
+      const { server, synth } = await project();
+      await run(server, { type: 'addPatternRegion', trackId: synth, startTick: 0, pattern: null });
+      const kept = project$(server).patternRegions[0];
+      await run(server, { type: 'newTrackAlternative', trackId: synth, duplicate: false });
+      expect(project$(server).patternRegions).toEqual([]);
+      const alternatives = project$(server).tracks.find(t => t.id === synth)?.alternatives ?? [];
+      expect(alternatives[0]?.patternRegions).toEqual([kept]);
+
+      await run(server, { type: 'selectTrackAlternative', trackId: synth, alternativeId: alternatives[0]?.id ?? '' });
+      expect(project$(server).patternRegions).toEqual([kept]);
+
+      await run(server, { type: 'newTrackAlternative', trackId: synth, duplicate: true });
+      const copy = project$(server).patternRegions[0];
+      expect(copy?.id).not.toBe(kept?.id);
+      expect(copy?.pattern).toEqual(kept?.pattern);
+    });
+
     it('replaces the pattern (checked), reseeds, moves, copies, deletes and converts to MIDI', async () => {
       const { server, synth } = await project();
       await run(server, { type: 'addPatternRegion', trackId: synth, startTick: 0, pattern: null });

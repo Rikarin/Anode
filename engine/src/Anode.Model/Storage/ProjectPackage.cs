@@ -20,7 +20,8 @@ namespace Anode.Model.Storage;
 ///     with tracks' staff styles and regions' notation in the track files; schema 10 (docs/11-phase-10.md) the
 ///     project's surround format (in <c>settings</c>), strips' formats and panners, markers' kinds and the movie;
 ///     schema 11 (docs/12-phase-11.md) the chord track and the Environment, with the Mastering Assistant's analysis in
-///     its insert, and regions' Pitch Source and keys and the Session Player regions in the track files.
+///     its insert, and regions' Pitch Source and keys and the Session Player regions in the track files; schema 12 the
+///     pattern regions in track alternatives.
 /// </summary>
 public sealed record ProjectFile(
     int SchemaVersion,
@@ -51,7 +52,8 @@ public sealed record ProjectFile(
 ///     <c>tracks/&lt;id&gt;.json</c>: one track and its regions, audio and MIDI (schema 2), its take folders (schema 3),
 ///     its automation lanes (schema 4), and its flex and alternatives, and its regions' flex (schema 5); its MIDI FX,
 ///     drum machine, Smart Controls and Live Loops activation, and its pattern regions (schema 6); its groove matching
-///     and articulation set, and its notes' articulations (schema 7); its Session Player regions (schema 11).
+///     and articulation set, and its notes' articulations (schema 7); its Session Player regions (schema 11); its
+///     alternatives' pattern regions (schema 12).
 /// </summary>
 public sealed record TrackFile(
     int SchemaVersion,
@@ -1033,7 +1035,19 @@ public static class ProjectPackage {
                             && f.Takes.All(t => t is not null && files.ContainsKey(t.FileId ?? string.Empty))
                             )
                             .Select(f => f with { TrackId = track.Id, Comp = f.Comp ?? [] })
-                    ]
+                    ],
+                    PatternRegions = Edits.HoldsMidi(track)
+                        ? [
+                            ..(a.PatternRegions ?? []).Where(static r => r?.Id is not null
+                                    && r.Name is not null
+                                    && Valid(r.Pattern)
+                                )
+                                .Select(r => r with {
+                                        TrackId = track.Id, Pattern = r.Pattern with { Rows = [..r.Pattern.Rows] }
+                                    }
+                                )
+                        ]
+                        : []
                 }
             )
             .ToList();
@@ -1046,7 +1060,7 @@ public static class ProjectPackage {
         }
 
         // The live content has lost its entry: it gets one back.
-        var restored = new TrackAlternative(track.AlternativeId ?? "alt_restored", "Current", [], [], []);
+        var restored = new TrackAlternative(track.AlternativeId ?? "alt_restored", "Current", [], [], [], []);
         return ([restored, ..entries.Where(a => a.Id != restored.Id)], restored.Id);
     }
 
@@ -1116,6 +1130,7 @@ static class PackageKeys {
     public const string Settings = "settings";
     public const string Track = "track";
     public const string MidiRegions = "midiRegions";
+    public const string PatternRegions = "patternRegions";
 }
 
 /// <summary>
@@ -1129,12 +1144,13 @@ static class PackageKeys {
 ///     refused rather than read wrongly.
 /// </remarks>
 public static class PackageMigrations {
-    public const int CurrentSchemaVersion = 11;
+    public const int CurrentSchemaVersion = 12;
     const string VersionField = "schemaVersion";
 
     /// <summary><c>Steps[n]</c> takes schema <c>n + 1</c> to <c>n + 2</c>; it gets the kind of file and its JSON.</summary>
     static readonly Func<string, JsonObject, JsonObject>[] Steps = [
-        ToSchema2, ToSchema3, ToSchema4, ToSchema5, ToSchema6, ToSchema7, ToSchema8, ToSchema9, ToSchema10, ToSchema11
+        ToSchema2, ToSchema3, ToSchema4, ToSchema5, ToSchema6, ToSchema7, ToSchema8, ToSchema9, ToSchema10, ToSchema11,
+        ToSchema12
     ];
 
     public static JsonObject Upgrade(JsonObject json, string kind) {
@@ -1375,6 +1391,21 @@ public static class PackageMigrations {
     /// </summary>
     static JsonObject ToSchema11(string kind, JsonObject json) {
         Schema11.Fill(kind, json);
+        return json;
+    }
+
+    /// <summary>
+    ///     Schema 11 to 12: alternatives hold pattern regions. An older alternative has none: while it was put away, the
+    ///     track's pattern regions stayed live.
+    /// </summary>
+    static JsonObject ToSchema12(string kind, JsonObject json) {
+        if (kind == PackageKeys.TrackKind) {
+            foreach (var alternative in (json[PackageKeys.Track]?["alternatives"] as JsonArray ?? [])
+                     .OfType<JsonObject>()) {
+                alternative[PackageKeys.PatternRegions] ??= new JsonArray();
+            }
+        }
+
         return json;
     }
 }

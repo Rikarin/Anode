@@ -3,10 +3,10 @@ using Anode.Contracts;
 namespace Anode.Model.Editing;
 
 /// <summary>
-///     Track alternatives (docs/06-phase-5.md, "Track alternatives"). A track's live regions, MIDI regions and take
-///     folders are its active alternative; <c>alternatives</c> lists every alternative in menu order, the active one
-///     (<c>alternativeId</c>) as an entry without content (its content is the live one) and the others with their
-///     snapshots. Selecting swaps in one step; snapshots keep their ids, so ids stay unique project-wide.
+///     Track alternatives (docs/06-phase-5.md, "Track alternatives"). A track's live regions, MIDI regions, take folders
+///     and pattern regions are its active alternative; <c>alternatives</c> lists every alternative in menu order, the
+///     active one (<c>alternativeId</c>) as an entry without content (its content is the live one) and the others with
+///     their snapshots. Selecting swaps in one step; snapshots keep their ids, so ids stay unique project-wide.
 /// </summary>
 public static partial class Edits {
     public const int MaxAlternatives = 64;
@@ -18,7 +18,7 @@ public static partial class Edits {
         if (active is null) {
             // The track's first alternative also names what it holds now.
             active = ids.Next(IdPrefix.Alternative);
-            entries.Add(new(active, AlternativeName(0), [], [], []));
+            entries.Add(new(active, AlternativeName(0), [], [], [], []));
         }
 
         if (entries.Count >= MaxAlternatives) {
@@ -26,7 +26,7 @@ public static partial class Edits {
         }
 
         var name = c.Name is null ? AlternativeName(entries.Count) : Name(c.Name, "alternative name");
-        var created = new TrackAlternative(ids.Next(IdPrefix.Alternative), name, [], [], []);
+        var created = new TrackAlternative(ids.Next(IdPrefix.Alternative), name, [], [], [], []);
         var ops = new List<DeltaOp>();
         var copies = new List<DeltaOp>();
         if (c.Duplicate) {
@@ -65,7 +65,7 @@ public static partial class Edits {
         }
 
         entries[entries.FindIndex(e => e.Id == target.Id)] =
-            target with { Regions = [], MidiRegions = [], TakeFolders = [] };
+            target with { Regions = [], MidiRegions = [], TakeFolders = [], PatternRegions = [] };
         var ops = new List<DeltaOp>();
         ops.AddRange(LiveItems(state, track.Id).Select(Timeline.Remove));
         ops.Add(
@@ -77,6 +77,7 @@ public static partial class Edits {
         ops.AddRange(target.Regions.Select(static r => new RegionUpserted(r)));
         ops.AddRange(target.MidiRegions.Select(static r => new MidiRegionUpserted(r)));
         ops.AddRange(target.TakeFolders.Select(static f => new TakeFolderUpserted(f)));
+        ops.AddRange(target.PatternRegions.Select(static r => new PatternRegionUpserted(r)));
         return ops;
     }
 
@@ -126,13 +127,17 @@ public static partial class Edits {
         entry with {
             Regions = [..state.RegionsOf(trackId)],
             MidiRegions = [..state.MidiRegionsOf(trackId)],
-            TakeFolders = [..state.TakeFoldersOf(trackId)]
+            TakeFolders = [..state.TakeFoldersOf(trackId)],
+            PatternRegions = [..state.PatternRegionsOf(trackId)]
         };
 
-    /// <summary>The track's live regions (audio and MIDI) and take folders.</summary>
+    /// <summary>The track's live regions (audio, MIDI and pattern) and take folders.</summary>
     static TimelineItem[] LiveItems(ProjectState state, string trackId) => [
         ..Timeline.Items(state)
-            .Where(i => i.Kind is TimelineKind.AudioRegion or TimelineKind.MidiRegion or TimelineKind.TakeFolder
+            .Where(i => i.Kind is TimelineKind.AudioRegion
+                    or TimelineKind.MidiRegion
+                    or TimelineKind.TakeFolder
+                    or TimelineKind.PatternRegion
                 && Timeline.TrackOf(state, i) == trackId
             )
     ];

@@ -150,7 +150,7 @@ report. A REST change means regenerating `engine/src/Anode.Server/openapi.json`
   - **Beat mapping:** each mapping (tick → sample) sets tempo events so that the tick lands on the sample, keeping
     earlier mappings and the positions before them.
   - **Track alternatives:**
-    - A track's live regions, MIDI regions and take folders are its active alternative.
+    - A track's live regions, MIDI regions, take folders and pattern regions are its active alternative.
     - The others are stored as snapshots in `alternatives`.
     - Selecting one swaps them in one undoable step; ids stay unique project-wide.
   - **Bounce in place:**

@@ -39,7 +39,7 @@ public sealed class Phase11Tests : IDisposable {
         ProjectPackage.Save(folder, state);
         var path = Path.Combine(folder, ProjectPackage.ProjectFileName);
         var root = JsonNode.Parse(File.ReadAllText(path))!.AsObject();
-        Assert.Equal(11, (int)root["schemaVersion"]!);
+        Assert.Equal(PackageMigrations.CurrentSchemaVersion, (int)root["schemaVersion"]!);
         root["schemaVersion"] = 10;
         root.Remove("chordTrack");
         root.Remove("environment");

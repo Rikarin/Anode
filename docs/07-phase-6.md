@@ -457,7 +457,6 @@ desktop app with the null device and the test pack, with all nine steps. All sev
 
 **Open:**
 - Loop preview plays audio loops only; MIDI and pattern loops answer 422.
-- Track alternatives do not carry pattern regions.
 - Moving a track, or adding an aux, can still place it among a stack's members (adding a track no longer does).
 - Kits and loops that point into a removed pack keep their paths into it (loop files themselves are copied into the
   project).
