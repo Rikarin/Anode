@@ -262,12 +262,7 @@ public static partial class Edits {
             throw new EditException($"Track index {index} is outside 0…{count}.");
         }
 
-        // A stack's members follow it: a new track asked for among them (after the stack, or after one of its pads)
-        // goes after the last of them, outside the stack.
-        if (index < count && state.Tracks[index].ParentId is { } parent) {
-            index = AfterStack(state, parent);
-        }
-
+        index = OutsideStacks(state, index);
         var kind = c.Kind ?? TrackKind.Audio;
         if (!Enum.IsDefined(kind)) {
             throw new EditException($"Unknown track kind {kind}.");
@@ -447,13 +442,17 @@ public static partial class Edits {
         };
     }
 
-    static DeltaOp[] MoveTrack(ProjectState state, MoveTrackCommand c) {
+    /// <summary>
+    ///     Moves a track: a stack with its members, a member within its stack (<c>setTrackParent</c> takes it out), and a
+    ///     track asked for among a stack's members goes after them (<see cref="Grouped" />).
+    /// </summary>
+    static List<DeltaOp> MoveTrack(ProjectState state, MoveTrackCommand c) {
         var track = TrackOf(state, c.TrackId);
         if (c.Index < 0 || c.Index >= state.Tracks.Count) {
             throw new EditException($"Track index {c.Index} is outside 0…{state.Tracks.Count - 1}.");
         }
 
-        return [new TrackUpserted(track, c.Index)];
+        return InOrder(state, Grouped(state.Tracks.Remove(track).Insert(c.Index, track)));
     }
 
     static List<DeltaOp> SetTrack(ProjectState state, SetTrackCommand c) {

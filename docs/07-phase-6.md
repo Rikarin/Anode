@@ -452,12 +452,12 @@ desktop app with the null device and the test pack, with all nine steps. All sev
 - Launching a cell while stopped starts playback, as in Logic; the server activates the cell's track first.
 - `setSmartControl` drags coalesce into one undo step; saving clears the values Compare returns to.
 - Record into Cell record-enables the track and starts recording; the take becomes the cell, in whole bars.
-- A track added among a stack's members goes after them, so a DMD's pads stay together.
+- A track added or moved among a stack's members goes after them, so a DMD's pads stay together. A stack moves with its
+  members and a member moves within its stack; a project saved otherwise is put right when it is read.
 - The Processing dialog's effect menu scrolls (the T2 effects made it taller than the window).
 
 **Open:**
 - Loop preview plays audio loops only; MIDI and pattern loops answer 422.
-- Moving a track, or adding an aux, can still place it among a stack's members (adding a track no longer does).
 - Kits and loops that point into a removed pack keep their paths into it (loop files themselves are copied into the
   project).
 - A `stopping` cell event carries only the stop boundary, so an editor that connects while a cell is stopping cannot

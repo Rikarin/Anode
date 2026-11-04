@@ -502,6 +502,24 @@ public sealed class PackageTests : IDisposable {
     }
 
     [Fact]
+    public void A_package_saved_with_a_track_among_a_stacks_members_reads_them_together() {
+        var ids = new SequentialIds();
+        var state = ProjectDefaults.NewProject("prj_1", "Song", 48_000);
+        foreach (var name in (string[])["A", "B", "C"]) {
+            state = Edits.Apply(state, new AddTrackCommand(name), ids).State;
+        }
+
+        state = Edits.Apply(state, new CreateStackCommand([state.Tracks[0].Id, state.Tracks[1].Id], "Stack"), ids).State;
+        ProjectPackage.Save(folder, state);
+        var path = Path.Combine(folder, "project.json");
+        var root = JsonNode.Parse(File.ReadAllText(path))!.AsObject();
+        var order = state.Tracks.Select(static t => t.Id).ToArray();
+        root["tracks"] = new JsonArray(order[0], order[1], order[3], order[2]);
+        File.WriteAllText(path, root.ToJsonString());
+        Assert.Equal(["Stack", "A", "B", "C"], ProjectPackage.Load(folder).Tracks.Select(static t => t.Name));
+    }
+
+    [Fact]
     public void A_Phase_11_package_reads_its_alternatives_without_pattern_regions_and_keeps_the_live_ones() {
         CopyFixture("Phase11.anode");
         var state = ProjectPackage.Load(folder);

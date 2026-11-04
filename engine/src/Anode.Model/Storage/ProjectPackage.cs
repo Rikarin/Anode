@@ -528,7 +528,10 @@ public static class ProjectPackage {
             ? source
             : null;
 
-    /// <summary>Stacks do not nest, and a member's stack is one of the project's: other parents are dropped.</summary>
+    /// <summary>
+    ///     Stacks do not nest, and a member's stack is one of the project's: other parents are dropped. Members follow
+    ///     their stack (a project saved before every command kept them there is put right).
+    /// </summary>
     static void Unnest(ImmutableList<Track>.Builder tracks) {
         var stacks = tracks.Where(static t => Edits.IsStackKind(t.Kind)).Select(static t => t.Id).ToHashSet();
         for (var i = 0; i < tracks.Count; i++) {
@@ -537,6 +540,10 @@ public static class ProjectPackage {
                 tracks[i] = t with { ParentId = null };
             }
         }
+
+        var grouped = Edits.Grouped(tracks.ToImmutable());
+        tracks.Clear();
+        tracks.AddRange(grouped);
     }
 
     /// <summary>A track's articulation set is one of the project's, on a track that has one, or none.</summary>
