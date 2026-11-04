@@ -59,11 +59,12 @@ public static partial class Edits {
         var layer = LayerOf(environment, c.LayerId);
         var changed = layer with { Name = c.Name is null ? layer.Name : Name(c.Name, "layer name") };
         var layers = environment.Layers.Where(l => l.Id != layer.Id).ToList();
-        var index = c.Index ?? environment.Layers.ToList().FindIndex(l => l.Id == layer.Id);
-        if (index < 0 || index > layers.Count) {
-            throw new EditException($"Layer index {index} is outside 0…{layers.Count}.");
-        }
-
+        var index = MoveIndex(
+            c.Index,
+            environment.Layers.ToList().FindIndex(l => l.Id == layer.Id),
+            layers.Count,
+            "Layer"
+        );
         layers.Insert(index, changed);
         return [new EnvironmentChanged(environment with { Layers = layers })];
     }

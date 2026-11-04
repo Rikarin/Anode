@@ -1,4 +1,5 @@
 using Anode.Contracts;
+using Anode.Dsp;
 using Anode.Interchange.Aaf.Cfb;
 using Anode.Model;
 using Anode.Model.Audio;
@@ -536,15 +537,7 @@ public static class AafWriter {
             header[4..],
             (uint)Math.Min(uint.MaxValue, 36 + dataBytes + (dataBytes & 1))
         );
-        "WAVE"u8.CopyTo(header[8..]);
-        "fmt "u8.CopyTo(header[12..]);
-        BinaryPrimitives.WriteUInt32LittleEndian(header[16..], 16);
-        BinaryPrimitives.WriteUInt16LittleEndian(header[20..], 1);
-        BinaryPrimitives.WriteUInt16LittleEndian(header[22..], (ushort)channels);
-        BinaryPrimitives.WriteUInt32LittleEndian(header[24..], (uint)sampleRate);
-        BinaryPrimitives.WriteUInt32LittleEndian(header[28..], (uint)(sampleRate * channels * bits / 8));
-        BinaryPrimitives.WriteUInt16LittleEndian(header[32..], (ushort)(channels * bits / 8));
-        BinaryPrimitives.WriteUInt16LittleEndian(header[34..], (ushort)bits);
+        WavFormatChunk.Write(header, 16, WavFormatChunk.Pcm, channels, sampleRate, bits);
         "data"u8.CopyTo(header[36..]);
         BinaryPrimitives.WriteUInt32LittleEndian(header[40..], (uint)Math.Min(uint.MaxValue, dataBytes));
         into.Write(header);

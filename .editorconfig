@@ -37,3 +37,31 @@ dotnet_diagnostic.SK7001.severity = none
 dotnet_diagnostic.SK7002.severity = none
 dotnet_diagnostic.SK7003.severity = none
 dotnet_diagnostic.SK7030.severity = none
+
+# Tests: a test class or a random-project generator names the contract types it drives, and the generator is one
+# table of every edit. The ceilings stay, a little over today's largest, so a fixture nobody can hold in mind still
+# shows up.
+[engine/tests/**.cs]
+dotnet_code_quality.SK7030.threshold = 2500
+dotnet_code_quality.SK7081.threshold = 350
+
+# The tools: a probe's main loop is one long flat menu of checks, and the content builder's repeated literals are the
+# parameter names of the factory content it writes. Neither ships in the engine.
+[engine/tools/**.cs]
+dotnet_code_quality.SK7001.threshold = 40
+dotnet_code_quality.SK7083.threshold = 60
+
+# The dispatchers over the closed unions: EditCommand has some 180 cases, DeltaOp and IpcMessage about as many again,
+# and anything that switches over one, names each case once or lists them for the JSON source generator is a flat
+# table of them. Its branch and type counts are the size of the wire contract, not tangled logic (cognitive complexity,
+# SK7002, stays at its default and passes), and splitting a table would only hide it. The bound checkers and parsers
+# in the list read the same way: one flat guard or lookup after another. The ceilings stay over today's largest.
+[engine/src/{Anode.Contracts/Commands,Anode.Contracts/ContractsJsonContext,Anode.Engine/EngineController,Anode.Engine/Environment/EnvironmentNodes,Anode.EngineHost/EngineHost,Anode.Interchange/MusicXml/MusicXmlVocabulary,Anode.Ipc/Segments/MappedSegment,Anode.Model/History/EditHistory,Anode.Model/ProjectState,Anode.Model/Storage/ProjectPackage,Anode.Model/Editing/Edits,Anode.Model/Editing/Edits.Environment,Anode.Model/Editing/Edits.Mixer,Anode.Model/Editing/Edits.Phase7,Anode.Model/Editing/Edits.Phase9,Anode.Server/Engine/EngineConnection,Anode.Server/Engine/FakeHost,Anode.Server/Engine/HostSync,Anode.Server/Projects/Jobs,Anode.Server/Projects/ProjectSession}.cs]
+dotnet_code_quality.SK7001.threshold = 100
+dotnet_code_quality.SK7081.threshold = 200
+
+# File length: these are one closed thing each (the command union, the IPC messages, the package format and its
+# migrations) or a partial class already split by subject, and the next cut would be arbitrary. SK7030's default of
+# 1000 is its own "starting policy, not a measurement"; this is the measurement, with the ceiling just over the largest.
+[engine/src/{Anode.Contracts/Commands,Anode.Engine/AudioEngine.Mix,Anode.Engine/AudioEngine.Spatial,Anode.Engine/EngineController,Anode.Ipc/IpcMessage,Anode.Model/Storage/ProjectPackage,Anode.Server/Engine/FakeHost,Anode.Server/Projects/ProjectSession}.cs]
+dotnet_code_quality.SK7030.threshold = 1600

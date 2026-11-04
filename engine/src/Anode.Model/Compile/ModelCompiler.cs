@@ -576,10 +576,17 @@ public sealed class ModelCompiler {
     /// <summary>The part of an entry from <paramref name="start" /> to <paramref name="end" /> (a warped one's map sliced).</summary>
     static PlacedEntry Piece(PlacedEntry placed, long start, long end) {
         var e = placed.Entry;
+        var fileOffset = placed.Warp is null ? e.FileOffset + (start - e.Start) : e.FileOffset;
+        return Narrowed(placed, fileOffset, start, end);
+    }
+
+    /// <summary>The entry narrowed to a part of itself, its warp map and fades with it.</summary>
+    internal static PlacedEntry Narrowed(PlacedEntry placed, long fileOffset, long start, long end) {
+        var e = placed.Entry;
         var length = end - start;
         var entry = e with {
             Start = start,
-            FileOffset = placed.Warp is null ? e.FileOffset + (start - e.Start) : e.FileOffset,
+            FileOffset = fileOffset,
             Length = length,
             FadeIn = start == e.Start ? (int)Math.Min(e.FadeIn, length) : 0,
             FadeOut = end == e.Start + e.Length ? (int)Math.Min(e.FadeOut, length) : 0

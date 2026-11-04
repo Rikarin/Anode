@@ -20,14 +20,23 @@ public static partial class Edits {
         return [new SettingsChanged(state.Settings with { Tempo = c.Bpm, TempoEvents = events })];
     }
 
-    static DeltaOp[] SetTempoEvents(ProjectState state, SetTempoEventsCommand c) {
-        if (c.Events is not { Count: > 0 and <= MaxGlobalEvents } events) {
-            throw new EditException($"A tempo track has 1…{MaxGlobalEvents} events.");
-        }
+    /// <summary>A global track's list of events: 1…<see cref="MaxGlobalEvents" /> of them, or it is refused.</summary>
+    static IReadOnlyList<T> GlobalEvents<T>(IReadOnlyList<T>? events, string track) =>
+        events is { Count: > 0 and <= MaxGlobalEvents }
+            ? events
+            : throw new EditException($"A {track} track has 1…{MaxGlobalEvents} events.");
 
+    /// <summary>Event <paramref name="i" /> of a global track, its tick checked against the event before it.</summary>
+    static T GlobalEvent<T>(IReadOnlyList<T> events, int i, Func<T, long> tick, string track) where T : class {
+        var e = events[i] ?? throw new EditException($"A {track} event is null.");
+        CheckEventTick(tick(e), i == 0 ? null : events[i - 1] is { } before ? tick(before) : null, track);
+        return e;
+    }
+
+    static DeltaOp[] SetTempoEvents(ProjectState state, SetTempoEventsCommand c) {
+        var events = GlobalEvents(c.Events, "tempo");
         for (var i = 0; i < events.Count; i++) {
-            var e = events[i] ?? throw new EditException("A tempo event is null.");
-            CheckEventTick(e.Tick, i == 0 ? null : events[i - 1]?.Tick, "tempo");
+            var e = GlobalEvent(events, i, static t => t.Tick, "tempo");
             CheckBpm(e.Bpm);
             if (!Enum.IsDefined(e.Curve)) {
                 throw new EditException($"Unknown tempo curve {e.Curve}.");
@@ -64,13 +73,9 @@ public static partial class Edits {
     }
 
     static DeltaOp[] SetSignatures(ProjectState state, SetSignaturesCommand c) {
-        if (c.Events is not { Count: > 0 and <= MaxGlobalEvents } events) {
-            throw new EditException($"A signature track has 1…{MaxGlobalEvents} events.");
-        }
-
+        var events = GlobalEvents(c.Events, "signature");
         for (var i = 0; i < events.Count; i++) {
-            var e = events[i] ?? throw new EditException("A signature event is null.");
-            CheckEventTick(e.Tick, i == 0 ? null : events[i - 1]?.Tick, "signature");
+            var e = GlobalEvent(events, i, static t => t.Tick, "signature");
             CheckSignature(e.Numerator, e.Denominator);
             if (i > 0 && (e.Tick - events[i - 1].Tick) % SignatureMap.BarTicks(events[i - 1]) != 0) {
                 throw new EditException($"The signature change at tick {e.Tick} is not on a bar line.");
@@ -86,13 +91,9 @@ public static partial class Edits {
     }
 
     static DeltaOp[] SetKeys(ProjectState state, SetKeysCommand c) {
-        if (c.Events is not { Count: > 0 and <= MaxGlobalEvents } events) {
-            throw new EditException($"A key track has 1…{MaxGlobalEvents} events.");
-        }
-
+        var events = GlobalEvents(c.Events, "key");
         for (var i = 0; i < events.Count; i++) {
-            var e = events[i] ?? throw new EditException("A key event is null.");
-            CheckEventTick(e.Tick, i == 0 ? null : events[i - 1]?.Tick, "key");
+            var e = GlobalEvent(events, i, static t => t.Tick, "key");
             if (e.Tonic is < 0 or > 11) {
                 throw new EditException($"A key's tonic is a pitch class 0…11, not {e.Tonic}.");
             }

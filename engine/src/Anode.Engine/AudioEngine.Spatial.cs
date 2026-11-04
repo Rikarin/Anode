@@ -40,8 +40,8 @@ public sealed unsafe partial class AudioEngine {
     readonly float[] masterPlanar = GC.AllocateArray<float>(Planar, true);
     readonly float[] sentPlanar = GC.AllocateArray<float>(Planar, true);
     readonly float[] tapPlanar = GC.AllocateArray<float>(2 * MaxFrames, true);
-    readonly float[] faderLane = GC.AllocateArray<float>(MaxFrames, true);
-    readonly float[] pairScratch = GC.AllocateArray<float>(MaxFrames, true);
+    readonly float[] faderLane = PinnedBlock();
+    readonly float[] pairScratch = PinnedBlock();
     readonly float[] peaks = new float[Formats.MaxChannels];
     readonly float[]?[] objectBuffers = new float[]?[ObjectRenderer.MaxObjects];
     readonly int[] objectWidths = new int[ObjectRenderer.MaxObjects];

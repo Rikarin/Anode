@@ -10,6 +10,9 @@ namespace Anode.Interchange.MusicXml;
 ///     <c>lyric</c>s.
 /// </summary>
 sealed class MusicXmlPartWriter {
+    const string StartType = "start";
+    const string NumberAttribute = "number";
+
     readonly MusicXmlScoreWriter score;
     readonly ScorePart part;
     readonly string partId;
@@ -350,7 +353,10 @@ sealed class MusicXmlPartWriter {
     // ---- Measures.
 
     XElement Measure(int m, ScoreMeasure measure) {
-        var element = new XElement("measure", new XAttribute("number", MusicXmlScoreWriter.Format(measure.Number)));
+        var element = new XElement(
+            "measure",
+            new XAttribute(NumberAttribute, MusicXmlScoreWriter.Format(measure.Number))
+        );
         element.Add(Attributes(m, measure));
         var staves = m < part.Measures.Count ? part.Measures[m].Staves : [];
         for (var s = 0; s < Math.Max(1, staves.Count); s++) {
@@ -483,7 +489,7 @@ sealed class MusicXmlPartWriter {
         var (sign, line, octave) = MusicXmlVocabulary.ClefElement(clef);
         return new(
             "clef",
-            multiStaff ? new XAttribute("number", MusicXmlScoreWriter.Format(staff + 1)) : null,
+            multiStaff ? new XAttribute(NumberAttribute, MusicXmlScoreWriter.Format(staff + 1)) : null,
             new XElement("sign", sign),
             line is { } l ? new XElement("line", MusicXmlScoreWriter.Format(l)) : null,
             octave != 0 ? new XElement("clef-octave-change", MusicXmlScoreWriter.Format(octave)) : null
@@ -590,7 +596,7 @@ sealed class MusicXmlPartWriter {
             Sound(note, percussion, measureRest),
             new XElement("duration", score.Duration(duration)),
             note is { TieStop: true } ? new XElement("tie", new XAttribute("type", "stop")) : null,
-            note is { TieStart: true } ? new XElement("tie", new XAttribute("type", "start")) : null,
+            note is { TieStart: true } ? new XElement("tie", new XAttribute("type", StartType)) : null,
             note is not null && percussion
                 ? new XElement("instrument", new XAttribute("id", InstrumentId(partId, Math.Clamp(note.Pitch, 0, 127))))
                 : null,
@@ -699,13 +705,13 @@ sealed class MusicXmlPartWriter {
             var after = next is { } n && MusicXmlVocabulary.BeamLevels(n.Duration.Value) >= level;
             var value = (before, after) switch {
                 (true, true) => "continue",
-                (true, false) => "end",
-                (false, true) => "begin",
+                (true, _) => "end",
+                (_, true) => "begin",
                 _ when level == 1 => null,
                 _ => previous is not null ? "backward hook" : "forward hook"
             };
             if (value is not null) {
-                yield return new("beam", new XAttribute("number", MusicXmlScoreWriter.Format(level)), value);
+                yield return new("beam", new XAttribute(NumberAttribute, MusicXmlScoreWriter.Format(level)), value);
             }
         }
     }
@@ -741,7 +747,7 @@ sealed class MusicXmlPartWriter {
             children.AddRange(ends.Select(s => Slur("stop", s)));
         }
 
-        children.AddRange(attached.Where(static s => s.Kind == ScoreSymbolKind.Slur).Select(s => Slur("start", s)));
+        children.AddRange(attached.Where(static s => s.Kind == ScoreSymbolKind.Slur).Select(s => Slur(StartType, s)));
         if (k == 0) {
             children.AddRange(Tuplets(voice, e));
         }
@@ -763,7 +769,7 @@ sealed class MusicXmlPartWriter {
         }
 
         if (note is { TieStart: true }) {
-            yield return new("tied", new XAttribute("type", "start"));
+            yield return new("tied", new XAttribute("type", StartType));
         }
     }
 
@@ -778,14 +784,14 @@ sealed class MusicXmlPartWriter {
         if (previous?.Group != tuplet.Group) {
             yield return new(
                 "tuplet",
-                new XAttribute("type", "start"),
-                new XAttribute("number", "1"),
+                new XAttribute("type", StartType),
+                new XAttribute(NumberAttribute, "1"),
                 new XAttribute("bracket", "yes")
             );
         }
 
         if (next?.Group != tuplet.Group) {
-            yield return new("tuplet", new XAttribute("type", "stop"), new XAttribute("number", "1"));
+            yield return new("tuplet", new XAttribute("type", "stop"), new XAttribute(NumberAttribute, "1"));
         }
     }
 
@@ -830,14 +836,14 @@ sealed class MusicXmlPartWriter {
         new(
             "slur",
             new XAttribute("type", type),
-            new XAttribute("number", MusicXmlScoreWriter.Format(numbers.GetValueOrDefault(symbol.Id, 1))),
-            type == "start" ? PlacementAttribute(symbol.Placement) : null
+            new XAttribute(NumberAttribute, MusicXmlScoreWriter.Format(numbers.GetValueOrDefault(symbol.Id, 1))),
+            type == StartType ? PlacementAttribute(symbol.Placement) : null
         );
 
     static XElement Lyric(LyricSyllable lyric) =>
         new(
             "lyric",
-            new XAttribute("number", MusicXmlScoreWriter.Format(Math.Max(1, lyric.Verse))),
+            new XAttribute(NumberAttribute, MusicXmlScoreWriter.Format(Math.Max(1, lyric.Verse))),
             new XElement(
                 "syllabic",
                 lyric.Syllabic switch {
@@ -886,13 +892,13 @@ sealed class MusicXmlPartWriter {
         new("sound", new XAttribute("tempo", MusicXmlScoreWriter.Format(Math.Max(0, bpm))));
 
     static XElement Wedge(string type, int number) =>
-        new("wedge", new XAttribute("type", type), new XAttribute("number", MusicXmlScoreWriter.Format(number)));
+        new("wedge", new XAttribute("type", type), new XAttribute(NumberAttribute, MusicXmlScoreWriter.Format(number)));
 
     static XElement OctaveShift(string type, int number) =>
         new(
             "octave-shift",
             new XAttribute("type", type),
-            new XAttribute("number", MusicXmlScoreWriter.Format(number)),
+            new XAttribute(NumberAttribute, MusicXmlScoreWriter.Format(number)),
             new XAttribute("size", "8")
         );
 
@@ -907,7 +913,7 @@ sealed class MusicXmlPartWriter {
                 new("words", new XAttribute("font-weight", "bold"), MusicXmlScoreWriter.Clean(text))
             ],
             ScoreSymbolKind.Rehearsal when symbol.Text is { Length: > 0 } text => [Rehearsal(text)],
-            ScoreSymbolKind.PedalDown => [Pedal("start")],
+            ScoreSymbolKind.PedalDown => [Pedal(StartType)],
             ScoreSymbolKind.PedalUp => [Pedal("stop")],
             _ => null
         };

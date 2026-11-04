@@ -709,7 +709,7 @@ public sealed partial class FakeHost : IAsyncDisposable {
 
                 try {
                     await SendAsync(finished).ConfigureAwait(false);
-                } catch (Exception e) when (e is IOException or InvalidOperationException or ObjectDisposedException) {
+                } catch (Exception e) when (e is IOException or InvalidOperationException) {
                     // the server went away
                 }
             },

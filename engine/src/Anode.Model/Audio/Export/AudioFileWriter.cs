@@ -1,4 +1,5 @@
 using Anode.Contracts;
+using Anode.Dsp;
 using Anode.Dsp.Spatial;
 using System.Buffers.Binary;
 using SpeakerLayout = Anode.Dsp.Spatial.SpeakerLayout;
@@ -192,15 +193,8 @@ public static class AudioFileWriter {
         var padded = dataBytes + (dataBytes & 1);
         "RIFF"u8.CopyTo(at);
         BinaryPrimitives.WriteUInt32LittleEndian(at[4..], (uint)(header.Length - 8 + padded));
-        "WAVE"u8.CopyTo(at[8..]);
-        "fmt "u8.CopyTo(at[12..]);
-        BinaryPrimitives.WriteUInt32LittleEndian(at[16..], (uint)formatSize);
-        BinaryPrimitives.WriteUInt16LittleEndian(at[20..], (ushort)(isFloat ? 3 : 1));
-        BinaryPrimitives.WriteUInt16LittleEndian(at[22..], (ushort)channelCount);
-        BinaryPrimitives.WriteUInt32LittleEndian(at[24..], (uint)rate);
-        BinaryPrimitives.WriteUInt32LittleEndian(at[28..], (uint)(rate * channelCount * bits / 8));
-        BinaryPrimitives.WriteUInt16LittleEndian(at[32..], (ushort)(channelCount * bits / 8));
-        BinaryPrimitives.WriteUInt16LittleEndian(at[34..], (ushort)bits);
+        var tag = isFloat ? WavFormatChunk.IeeeFloat : WavFormatChunk.Pcm;
+        WavFormatChunk.Write(at, formatSize, tag, channelCount, rate, bits);
         var next = 20 + formatSize; // cbSize (when there) is already 0
         if (isFloat) {
             "fact"u8.CopyTo(at[next..]);
@@ -232,15 +226,7 @@ public static class AudioFileWriter {
         var padded = dataBytes + (dataBytes & 1);
         "RIFF"u8.CopyTo(at);
         BinaryPrimitives.WriteUInt32LittleEndian(at[4..], (uint)(header.Length - 8 + padded));
-        "WAVE"u8.CopyTo(at[8..]);
-        "fmt "u8.CopyTo(at[12..]);
-        BinaryPrimitives.WriteUInt32LittleEndian(at[16..], 40);
-        BinaryPrimitives.WriteUInt16LittleEndian(at[20..], 0xFFFE);
-        BinaryPrimitives.WriteUInt16LittleEndian(at[22..], (ushort)channelCount);
-        BinaryPrimitives.WriteUInt32LittleEndian(at[24..], (uint)rate);
-        BinaryPrimitives.WriteUInt32LittleEndian(at[28..], (uint)(rate * channelCount * bits / 8));
-        BinaryPrimitives.WriteUInt16LittleEndian(at[32..], (ushort)(channelCount * bits / 8));
-        BinaryPrimitives.WriteUInt16LittleEndian(at[34..], (ushort)bits);
+        WavFormatChunk.Write(at, 40, WavFormatChunk.Extensible, channelCount, rate, bits);
         BinaryPrimitives.WriteUInt16LittleEndian(at[36..], 22);
         BinaryPrimitives.WriteUInt16LittleEndian(at[38..], (ushort)bits);
         BinaryPrimitives.WriteUInt32LittleEndian(at[40..], mask);

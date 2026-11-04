@@ -1,3 +1,4 @@
+using Anode.Dsp;
 using System.Buffers.Binary;
 
 namespace Anode.Engine.Recording;
@@ -80,15 +81,7 @@ public sealed class WavWriter : IDisposable {
     void WriteHeader(Span<byte> h, long dataBytes) {
         "RIFF"u8.CopyTo(h);
         BinaryPrimitives.WriteUInt32LittleEndian(h[4..], (uint)Math.Min(uint.MaxValue, 36 + dataBytes));
-        "WAVE"u8.CopyTo(h[8..]);
-        "fmt "u8.CopyTo(h[12..]);
-        BinaryPrimitives.WriteUInt32LittleEndian(h[16..], 16);
-        BinaryPrimitives.WriteUInt16LittleEndian(h[20..], 1); // PCM
-        BinaryPrimitives.WriteUInt16LittleEndian(h[22..], (ushort)Channels);
-        BinaryPrimitives.WriteUInt32LittleEndian(h[24..], (uint)SampleRate);
-        BinaryPrimitives.WriteUInt32LittleEndian(h[28..], (uint)(SampleRate * Channels * 3));
-        BinaryPrimitives.WriteUInt16LittleEndian(h[32..], (ushort)(Channels * 3));
-        BinaryPrimitives.WriteUInt16LittleEndian(h[34..], 24);
+        WavFormatChunk.Write(h, 16, WavFormatChunk.Pcm, Channels, SampleRate, 24);
         "data"u8.CopyTo(h[36..]);
         BinaryPrimitives.WriteUInt32LittleEndian(h[40..], (uint)Math.Min(uint.MaxValue - 36, dataBytes));
     }

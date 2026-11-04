@@ -223,17 +223,6 @@ public static class PitchFollow {
     }
 
     /// <summary>The part of an entry from <paramref name="start" /> to <paramref name="end" />, its warp map sliced.</summary>
-    static PlacedEntry Slice(PlacedEntry placed, long start, long end) {
-        var e = placed.Entry;
-        var length = end - start;
-        var entry = e with {
-            Start = start,
-            Length = length,
-            FadeIn = start == e.Start ? (int)Math.Min(e.FadeIn, length) : 0,
-            FadeOut = end == e.Start + e.Length ? (int)Math.Min(e.FadeOut, length) : 0
-        };
-        return placed.Warp is { } warp
-            ? placed with { Entry = entry, Warp = Warps.Slice(warp, start - e.Start, length) }
-            : placed with { Entry = entry };
-    }
+    static PlacedEntry Slice(PlacedEntry placed, long start, long end) =>
+        ModelCompiler.Narrowed(placed, placed.Entry.FileOffset, start, end);
 }

@@ -181,7 +181,11 @@ public static class ProjectPackage {
     ///     <see cref="PackageException" />.
     /// </summary>
     public static ProjectState Load(string folder) {
-        var root = Read(Path.Combine(folder, ProjectFileName), PackageJsonContext.Default.ProjectFile, "project");
+        var root = Read(
+            Path.Combine(folder, ProjectFileName),
+            PackageJsonContext.Default.ProjectFile,
+            PackageKeys.ProjectKind
+        );
         // Deserialisation leaves a property the JSON lacks null, whatever its declared type.
         if (root?.Id is null
             || root.Name is null
@@ -1039,7 +1043,7 @@ public static class ProjectPackage {
             var file = Read(
                 Path.Combine(folder, TracksFolder, TrackFileName(id)),
                 PackageJsonContext.Default.TrackFile,
-                "track"
+                PackageKeys.TrackKind
             );
             return file?.Track?.Id == id ? file : null;
         } catch (PackageException) {
@@ -1076,6 +1080,15 @@ public static class ProjectPackage {
             throw new PackageException($"Could not read '{path}': {e.Message}", e);
         }
     }
+}
+
+/// <summary>The two kinds of package file, and the JSON properties the migrations read in both.</summary>
+static class PackageKeys {
+    public const string ProjectKind = "project";
+    public const string TrackKind = "track";
+    public const string Settings = "settings";
+    public const string Track = "track";
+    public const string MidiRegions = "midiRegions";
 }
 
 /// <summary>
@@ -1118,17 +1131,17 @@ public static class PackageMigrations {
     ///     track file has no MIDI regions, and MIDI recording made new regions.
     /// </summary>
     static JsonObject ToSchema2(string kind, JsonObject json) {
-        if (kind == "project") {
-            if (json["settings"] is JsonObject settings) {
+        if (kind == PackageKeys.ProjectKind) {
+            if (json[PackageKeys.Settings] is JsonObject settings) {
                 settings["mergeMidiRecording"] ??= false;
             }
-        } else if (kind == "track") {
-            if (json["track"] is JsonObject track) {
+        } else if (kind == PackageKeys.TrackKind) {
+            if (json[PackageKeys.Track] is JsonObject track) {
                 track["kind"] ??= "audio";
                 track["midiInput"] ??= new JsonObject { ["channel"] = 0 };
             }
 
-            json["midiRegions"] ??= new JsonArray();
+            json[PackageKeys.MidiRegions] ??= new JsonArray();
         }
 
         return json;
@@ -1141,9 +1154,9 @@ public static class PackageMigrations {
     ///     expanded, without notes; regions are unmuted with linear fades; tracks have no take folders.
     /// </summary>
     static JsonObject ToSchema3(string kind, JsonObject json) {
-        if (kind == "project") {
+        if (kind == PackageKeys.ProjectKind) {
             ProjectToSchema3(json);
-        } else if (kind == "track") {
+        } else if (kind == PackageKeys.TrackKind) {
             TrackToSchema3(json);
         }
 
@@ -1151,7 +1164,7 @@ public static class PackageMigrations {
     }
 
     static void ProjectToSchema3(JsonObject json) {
-        if (json["settings"] is JsonObject settings) {
+        if (json[PackageKeys.Settings] is JsonObject settings) {
             var tempo = settings["tempo"]?.DeepClone() ?? JsonValue.Create(ProjectDefaults.Tempo);
             var signature = settings["signature"] as JsonObject;
             var numerator = signature?["numerator"]?.GetValue<int>() ?? 4;
@@ -1178,7 +1191,7 @@ public static class PackageMigrations {
     }
 
     static void TrackToSchema3(JsonObject json) {
-        if (json["track"] is JsonObject track) {
+        if (json[PackageKeys.Track] is JsonObject track) {
             track["collapsed"] ??= false;
             track["notes"] ??= string.Empty;
         }
@@ -1189,7 +1202,7 @@ public static class PackageMigrations {
             region["muted"] ??= false;
         }
 
-        foreach (var region in (json["midiRegions"] as JsonArray ?? []).OfType<JsonObject>()) {
+        foreach (var region in (json[PackageKeys.MidiRegions] as JsonArray ?? []).OfType<JsonObject>()) {
             region["muted"] ??= false;
         }
 
@@ -1202,8 +1215,8 @@ public static class PackageMigrations {
     ///     there are no groups and no automation; tracks read automation, take no bus and are not frozen.
     /// </summary>
     static JsonObject ToSchema4(string kind, JsonObject json) {
-        if (kind == "project") {
-            if (json["settings"] is JsonObject settings) {
+        if (kind == PackageKeys.ProjectKind) {
+            if (json[PackageKeys.Settings] is JsonObject settings) {
                 settings["mixer"] ??= new JsonObject {
                     ["pdc"] = "all", ["lowLatency"] = false, ["lowLatencyLimitMs"] = 10
                 };
@@ -1212,8 +1225,8 @@ public static class PackageMigrations {
             Schema4.Strip(json["master"] as JsonObject);
             json["groups"] ??= new JsonArray();
             json["automation"] ??= new JsonArray();
-        } else if (kind == "track") {
-            if (json["track"] is JsonObject track) {
+        } else if (kind == PackageKeys.TrackKind) {
+            if (json[PackageKeys.Track] is JsonObject track) {
                 Schema4.Strip(track["strip"] as JsonObject);
                 track["inputBus"] ??= 0;
                 track["automationMode"] ??= "read";
@@ -1232,8 +1245,8 @@ public static class PackageMigrations {
     ///     follow the tempo and have no markers, transpose, fine tune or pitch notes.
     /// </summary>
     static JsonObject ToSchema5(string kind, JsonObject json) {
-        if (kind == "project") {
-            if (json["settings"] is JsonObject settings) {
+        if (kind == PackageKeys.ProjectKind) {
+            if (json[PackageKeys.Settings] is JsonObject settings) {
                 settings["smartTempo"] ??= new JsonObject {
                     ["mode"] = "keep", ["defaultFollow"] = "off", ["analyzeImports"] = true
                 };
@@ -1242,8 +1255,8 @@ public static class PackageMigrations {
                     tempo["shape"] ??= 0;
                 }
             }
-        } else if (kind == "track") {
-            if (json["track"] is JsonObject track) {
+        } else if (kind == PackageKeys.TrackKind) {
+            if (json[PackageKeys.Track] is JsonObject track) {
                 track["flexOn"] ??= false;
                 track["flexMode"] ??= "polyphonic";
                 track["alternatives"] ??= new JsonArray();
@@ -1267,13 +1280,13 @@ public static class PackageMigrations {
     ///     the Live Loops grid is empty, launching on the bar, hidden.
     /// </summary>
     static JsonObject ToSchema6(string kind, JsonObject json) {
-        if (kind == "project") {
+        if (kind == PackageKeys.ProjectKind) {
             Schema6.Strip(json["master"] as JsonObject);
             json["liveLoops"] ??= new JsonObject {
                 ["scenes"] = new JsonArray(), ["cells"] = new JsonArray(), ["quantize"] = "bar", ["shown"] = false
             };
-        } else if (kind == "track") {
-            if (json["track"] is JsonObject track) {
+        } else if (kind == PackageKeys.TrackKind) {
+            if (json[PackageKeys.Track] is JsonObject track) {
                 Schema6.Strip(track["strip"] as JsonObject);
                 track["liveLoopsActive"] ??= false;
             }
@@ -1291,9 +1304,9 @@ public static class PackageMigrations {
     ///     alternatives and in Live Loops cells); regions quantise to the grid.
     /// </summary>
     static JsonObject ToSchema7(string kind, JsonObject json) {
-        if (kind == "project") {
+        if (kind == PackageKeys.ProjectKind) {
             Schema7.Project(json);
-        } else if (kind == "track") {
+        } else if (kind == PackageKeys.TrackKind) {
             Schema7.Track(json);
         }
 
@@ -1302,7 +1315,7 @@ public static class PackageMigrations {
 
     /// <summary>Schema 7 to 8 (Phase 8, docs/09-phase-8.md): a project's sync settings are the defaults.</summary>
     static JsonObject ToSchema8(string kind, JsonObject json) {
-        if (kind == "project") {
+        if (kind == PackageKeys.ProjectKind) {
             Schema8.Project(json);
         }
 
@@ -1347,7 +1360,7 @@ public static class PackageMigrations {
 /// </summary>
 static class Schema11 {
     public static void Fill(string kind, JsonObject json) {
-        if (kind == "project") {
+        if (kind == PackageKeys.ProjectKind) {
             json["chordTrack"] ??= new JsonObject { ["chords"] = new JsonArray(), ["scales"] = new JsonArray() };
             json["environment"] ??= new JsonObject {
                 ["layers"] = new JsonArray(), ["objects"] = new JsonArray(), ["cables"] = new JsonArray()
@@ -1356,9 +1369,10 @@ static class Schema11 {
                 Follows(cell["content"]?["midi"] as JsonObject);
                 Follows(cell["content"]?["audio"] as JsonObject);
             }
-        } else if (kind == "track") {
+        } else if (kind == PackageKeys.TrackKind) {
             json["sessionPlayerRegions"] ??= new JsonArray();
-            foreach (var alternative in (json["track"]?["alternatives"] as JsonArray ?? []).OfType<JsonObject>()) {
+            foreach (var alternative in (json[PackageKeys.Track]?["alternatives"] as JsonArray
+                         ?? []).OfType<JsonObject>()) {
                 Regions(alternative);
             }
 
@@ -1367,7 +1381,7 @@ static class Schema11 {
     }
 
     static void Regions(JsonObject holder) {
-        foreach (var list in (string[])["regions", "midiRegions"]) {
+        foreach (var list in (string[])["regions", PackageKeys.MidiRegions]) {
             foreach (var region in (holder[list] as JsonArray ?? []).OfType<JsonObject>()) {
                 Follows(region);
             }
@@ -1389,8 +1403,8 @@ static class Schema11 {
 /// </summary>
 static class Schema10 {
     public static void Fill(string kind, JsonObject json) {
-        if (kind == "project") {
-            if (json["settings"] is JsonObject settings) {
+        if (kind == PackageKeys.ProjectKind) {
+            if (json[PackageKeys.Settings] is JsonObject settings) {
                 settings["surroundFormat"] ??= "stereo";
             }
 
@@ -1398,8 +1412,8 @@ static class Schema10 {
             foreach (var marker in (json["markers"] as JsonArray ?? []).OfType<JsonObject>()) {
                 marker["kind"] ??= "marker";
             }
-        } else if (kind == "track") {
-            Strip(json["track"]?["strip"] as JsonObject);
+        } else if (kind == PackageKeys.TrackKind) {
+            Strip(json[PackageKeys.Track]?["strip"] as JsonObject);
         }
     }
 
@@ -1419,7 +1433,7 @@ static class Schema10 {
 /// </summary>
 static class Schema9 {
     public static void Fill(string kind, JsonObject json) {
-        if (kind == "project") {
+        if (kind == PackageKeys.ProjectKind) {
             json["score"] ??= JsonSerializer.SerializeToNode(
                 ProjectScore.Empty,
                 PackageJsonContext.Default.ProjectScore
@@ -1427,14 +1441,15 @@ static class Schema9 {
             foreach (var cell in (json["liveLoops"]?["cells"] as JsonArray ?? []).OfType<JsonObject>()) {
                 Notation(cell["content"]?["midi"] as JsonObject);
             }
-        } else if (kind == "track") {
-            foreach (var alternative in (json["track"]?["alternatives"] as JsonArray ?? []).OfType<JsonObject>()) {
-                foreach (var region in (alternative["midiRegions"] as JsonArray ?? []).OfType<JsonObject>()) {
+        } else if (kind == PackageKeys.TrackKind) {
+            foreach (var alternative in (json[PackageKeys.Track]?["alternatives"] as JsonArray
+                         ?? []).OfType<JsonObject>()) {
+                foreach (var region in (alternative[PackageKeys.MidiRegions] as JsonArray ?? []).OfType<JsonObject>()) {
                     Notation(region);
                 }
             }
 
-            foreach (var region in (json["midiRegions"] as JsonArray ?? []).OfType<JsonObject>()) {
+            foreach (var region in (json[PackageKeys.MidiRegions] as JsonArray ?? []).OfType<JsonObject>()) {
                 Notation(region);
             }
         }
@@ -1461,7 +1476,7 @@ static class Schema9 {
 /// </summary>
 static class Schema8 {
     public static void Project(JsonObject json) {
-        if (json["settings"] is JsonObject settings) {
+        if (json[PackageKeys.Settings] is JsonObject settings) {
             settings["sync"] ??= new JsonObject {
                 ["source"] = "internal",
                 ["destinations"] = new JsonArray(),
@@ -1489,16 +1504,16 @@ static class Schema7 {
     }
 
     public static void Track(JsonObject json) {
-        if (json["track"] is JsonObject track) {
+        if (json[PackageKeys.Track] is JsonObject track) {
             track["matchGroove"] ??= false;
             foreach (var alternative in (track["alternatives"] as JsonArray ?? []).OfType<JsonObject>()) {
-                foreach (var region in (alternative["midiRegions"] as JsonArray ?? []).OfType<JsonObject>()) {
+                foreach (var region in (alternative[PackageKeys.MidiRegions] as JsonArray ?? []).OfType<JsonObject>()) {
                     Notes(region);
                 }
             }
         }
 
-        foreach (var region in (json["midiRegions"] as JsonArray ?? []).OfType<JsonObject>()) {
+        foreach (var region in (json[PackageKeys.MidiRegions] as JsonArray ?? []).OfType<JsonObject>()) {
             Notes(region);
         }
     }

@@ -23,6 +23,10 @@ public sealed record ProjectState(
     ImmutableSortedDictionary<string, AudioFile> Files,
     ImmutableSortedDictionary<string, MidiRegion> MidiRegions
 ) {
+    /// <summary>An empty keyed collection, ordinal by id.</summary>
+    static ImmutableSortedDictionary<string, T> ById<T>() =>
+        ImmutableSortedDictionary.Create<string, T>(StringComparer.Ordinal);
+
     static readonly ConditionalWeakTable<IReadOnlyList<TempoEvent>, TempoMap> TempoMaps = new();
     static readonly ConditionalWeakTable<IReadOnlyList<SignatureEvent>, SignatureMap> SignatureMaps = new();
 
@@ -30,14 +34,14 @@ public sealed record ProjectState(
 
     /// <summary>The take folders, by id (docs/04-phase-3.md, "Take folders").</summary>
     public ImmutableSortedDictionary<string, TakeFolder> TakeFolders { get; init; } =
-        ImmutableSortedDictionary.Create<string, TakeFolder>(StringComparer.Ordinal);
+        ById<TakeFolder>();
 
     public ImmutableSortedDictionary<string, Marker> Markers { get; init; } =
-        ImmutableSortedDictionary.Create<string, Marker>(StringComparer.Ordinal);
+        ById<Marker>();
 
     /// <summary>The arrangement track's sections, by id; they never overlap.</summary>
     public ImmutableSortedDictionary<string, ArrangementMarker> Sections { get; init; } =
-        ImmutableSortedDictionary.Create<string, ArrangementMarker>(StringComparer.Ordinal);
+        ById<ArrangementMarker>();
 
     /// <summary>The mixer groups, by number (1…32; docs/05-phase-4.md).</summary>
     public ImmutableSortedDictionary<int, MixerGroup> Groups { get; init; } =
@@ -45,46 +49,46 @@ public sealed record ProjectState(
 
     /// <summary>The automation lanes, by id: at most one per strip (a track, or the master) and target.</summary>
     public ImmutableSortedDictionary<string, AutomationLane> Automation { get; init; } =
-        ImmutableSortedDictionary.Create<string, AutomationLane>(StringComparer.Ordinal);
+        ById<AutomationLane>();
 
     /// <summary>The Step Sequencer's pattern regions, by id (docs/07-phase-6.md).</summary>
     public ImmutableSortedDictionary<string, PatternRegion> PatternRegions { get; init; } =
-        ImmutableSortedDictionary.Create<string, PatternRegion>(StringComparer.Ordinal);
+        ById<PatternRegion>();
 
     /// <summary>The Live Loops grid (docs/07-phase-6.md).</summary>
     public LiveLoopsGrid LiveLoops { get; init; } = ProjectDefaults.LiveLoops;
 
     /// <summary>The project's groove templates, by id (docs/08-phase-7.md).</summary>
     public ImmutableSortedDictionary<string, GrooveTemplate> Grooves { get; init; } =
-        ImmutableSortedDictionary.Create<string, GrooveTemplate>(StringComparer.Ordinal);
+        ById<GrooveTemplate>();
 
     /// <summary>The project's articulation sets, by id (docs/08-phase-7.md).</summary>
     public ImmutableSortedDictionary<string, ArticulationSet> ArticulationSets { get; init; } =
-        ImmutableSortedDictionary.Create<string, ArticulationSet>(StringComparer.Ordinal);
+        ById<ArticulationSet>();
 
     /// <summary>The project's Step Editor lane sets, by id (docs/08-phase-7.md).</summary>
     public ImmutableSortedDictionary<string, LaneSet> LaneSets { get; init; } =
-        ImmutableSortedDictionary.Create<string, LaneSet>(StringComparer.Ordinal);
+        ById<LaneSet>();
 
     /// <summary>The project's own staff styles, by id (docs/10-phase-9.md; factory styles are the notation engine's).</summary>
     public ImmutableSortedDictionary<string, StaffStyle> StaffStyles { get; init; } =
-        ImmutableSortedDictionary.Create<string, StaffStyle>(StringComparer.Ordinal);
+        ById<StaffStyle>();
 
     /// <summary>The score symbols, by id (Phase 9).</summary>
     public ImmutableSortedDictionary<string, ScoreSymbol> ScoreSymbols { get; init; } =
-        ImmutableSortedDictionary.Create<string, ScoreSymbol>(StringComparer.Ordinal);
+        ById<ScoreSymbol>();
 
     /// <summary>The lyric syllables, by id (Phase 9): at most one per note and verse.</summary>
     public ImmutableSortedDictionary<string, LyricSyllable> Lyrics { get; init; } =
-        ImmutableSortedDictionary.Create<string, LyricSyllable>(StringComparer.Ordinal);
+        ById<LyricSyllable>();
 
     /// <summary>The chord symbols, by id (Phase 9).</summary>
     public ImmutableSortedDictionary<string, ChordSymbol> ChordSymbols { get; init; } =
-        ImmutableSortedDictionary.Create<string, ChordSymbol>(StringComparer.Ordinal);
+        ById<ChordSymbol>();
 
     /// <summary>The score sets, by id (Phase 9).</summary>
     public ImmutableSortedDictionary<string, ScoreSet> ScoreSets { get; init; } =
-        ImmutableSortedDictionary.Create<string, ScoreSet>(StringComparer.Ordinal);
+        ById<ScoreSet>();
 
     /// <summary>The score's layout (Phase 9): one per project.</summary>
     public ScoreLayout ScoreLayout { get; init; } = ScoreLayout.Default;
@@ -110,7 +114,7 @@ public sealed record ProjectState(
 
     /// <summary>The Session Player regions of the Drummer, Bass Player and Keyboard Player tracks, by id (Phase 11).</summary>
     public ImmutableSortedDictionary<string, SessionPlayerRegion> SessionPlayerRegions { get; init; } =
-        ImmutableSortedDictionary.Create<string, SessionPlayerRegion>(StringComparer.Ordinal);
+        ById<SessionPlayerRegion>();
 
     /// <summary>The MIDI Environment (Phase 11, docs/adr/0015-environment.md); empty: the default input path.</summary>
     public MidiEnvironment Environment { get; init; } = MidiEnvironment.Empty;
