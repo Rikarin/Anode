@@ -225,6 +225,50 @@
         }
       }
     },
+    "/api/v1/projects/contents": {
+      "post": {
+        "tags": [
+          "Projects"
+        ],
+        "summary": "What a project on the server\u0027s disk holds, read without opening it (Import from Project).",
+        "operationId": "GetProjectContents",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OpenProjectRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectContents"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
     "/api/v1/projects/recoverable": {
       "get": {
         "tags": [
@@ -507,6 +551,50 @@
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/ChangeSampleRateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Job"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/api/v1/project/import-tracks": {
+      "post": {
+        "tags": [
+          "Project"
+        ],
+        "summary": "Queues importing chosen tracks of a project on the server\u0027s disk, with their regions, inserts, sends and automation, as one undo step. The source is only read; a job that fails leaves the open project as it was.",
+        "operationId": "ImportProjectTracks",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImportProjectTracksRequest"
               }
             }
           },
@@ -16126,6 +16214,49 @@
         },
         "description": "Import an audio file the server can read from its own disk (the desktop app, a headless box\u0027s library)."
       },
+      "ImportProjectTracksRequest": {
+        "required": [
+          "path",
+          "trackIds"
+        ],
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "trackIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "regions": {
+            "type": [
+              "null",
+              "boolean"
+            ]
+          },
+          "inserts": {
+            "type": [
+              "null",
+              "boolean"
+            ]
+          },
+          "sends": {
+            "type": [
+              "null",
+              "boolean"
+            ]
+          },
+          "automation": {
+            "type": [
+              "null",
+              "boolean"
+            ]
+          }
+        },
+        "description": "Import from Project: \u0060trackIds\u0060 of the package at \u0060path\u0060 join the open project after its tracks, as one\nundo step, with their stack members and, with sends, the auxes those reach. Left out, each part comes along:\n\u0060regions\u0060 (and take folders, alternatives and frozen files), \u0060inserts\u0060, \u0060sends\u0060 and\n\u0060automation\u0060. Their media is copied in, converted when the source is at another rate."
+      },
       "Insert": {
         "required": [
           "id",
@@ -16375,7 +16506,8 @@
           "sessionPlayerConvert",
           "saveAs",
           "saveCopy",
-          "sampleRateChange"
+          "sampleRateChange",
+          "projectImport"
         ]
       },
       "JobState": {
@@ -19378,6 +19510,39 @@
         },
         "description": "An automatic backup, made at each save of the current alternative (the newest ten are kept)."
       },
+      "ProjectContents": {
+        "required": [
+          "name",
+          "path",
+          "sampleRate",
+          "tempo",
+          "tracks"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          },
+          "sampleRate": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "tempo": {
+            "type": "number",
+            "format": "double"
+          },
+          "tracks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ProjectTrackInfo"
+            }
+          }
+        },
+        "description": "What a project on the server\u0027s disk holds, read without opening it."
+      },
       "ProjectDelta": {
         "required": [
           "revision",
@@ -19562,6 +19727,56 @@
           "auto"
         ],
         "description": "What an audio import or recording does to the project tempo (Logic\u0027s project tempo modes)."
+      },
+      "ProjectTrackInfo": {
+        "required": [
+          "id",
+          "name",
+          "kind",
+          "color",
+          "regions",
+          "inserts",
+          "sends",
+          "lanes"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/TrackKind"
+          },
+          "color": {
+            "type": "string"
+          },
+          "parentId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "regions": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "inserts": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "sends": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "lanes": {
+            "type": "integer",
+            "format": "int32"
+          }
+        },
+        "description": "A track of a project on the server\u0027s disk, for the Import from Project browser: how much comes with it\n(\u0060regions\u0060 counts audio, MIDI, pattern and Session Player regions and take folders)."
       },
       "RecordingSettings": {
         "required": [

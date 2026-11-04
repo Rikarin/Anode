@@ -1,8 +1,10 @@
-import { Injectable, inject, signal } from '@angular/core';
+import { Injectable, computed, inject, signal } from '@angular/core';
 import type {
+  ImportProjectTracksRequest,
   Job,
   ProjectAlternative,
   ProjectBackup,
+  ProjectContents,
   ProjectSummary,
   RecoverableProject,
   SampleRateChangeMode
@@ -205,6 +207,20 @@ export class ProjectSession {
       this.notify.info(`The project is now at ${sampleRate} Hz. Its last save is a backup.`);
     }
 
+    return job !== null;
+  }
+
+  /** The open project's sample rate. */
+  readonly sampleRate = computed(() => this.project.info()?.sampleRate ?? null);
+
+  /** What a project on the Server's disk holds, for Import from Project; null (reported) when it cannot be read. */
+  projectContents(path: string): Promise<ProjectContents | null> {
+    return this.notify.run(() => this.api.projectContents(path.trim()), 'Could not read the project');
+  }
+
+  /** File ▸ Import ▸ From Project…: the edit arrives as a delta when the job is done, one undo step. */
+  async importTracks(request: ImportProjectTracksRequest): Promise<boolean> {
+    const job = await this.packageJob(() => this.api.importProjectTracks(request), 'Could not import the tracks');
     return job !== null;
   }
 

@@ -58,6 +58,8 @@ function same(a: PluginWindow, b: PluginWindow): boolean {
 export class UiStore {
   readonly keyCommandsOpen = signal(false);
   readonly saveAlternativeOpen = signal(false);
+  /** File ▸ Import ▸ From Project…. */
+  readonly importProjectOpen = signal(false);
   /** File ▸ Project Settings ▸ Sample Rate…. */
   readonly sampleRateOpen = signal(false);
   /** File ▸ Save As… or Save a Copy…: which of them is open. */

@@ -58,6 +58,7 @@ export type AppCommand =
   | 'closeProject'
   | 'importAudio'
   | 'importMidi'
+  | 'importProject'
   | 'saveAlternative'
   | 'missingFiles'
   | 'keyCommands'

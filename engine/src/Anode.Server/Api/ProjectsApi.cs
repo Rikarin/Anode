@@ -36,6 +36,13 @@ static class ProjectsApi {
             )
             .WithName("OpenProject")
             .WithSummary("Opens a project folder, closing the open one.");
+        projects.MapPost(
+                "/contents",
+                static Results<Ok<ProjectContents>, NotFound, ProblemHttpResult>(OpenProjectRequest request, Jobs jobs) =>
+                    TypedResults.Ok(jobs.Contents(request.Path))
+            )
+            .WithName("GetProjectContents")
+            .WithSummary("What a project on the server's disk holds, read without opening it (Import from Project).");
         projects.MapGet(
                 "/recoverable",
                 static Ok<IReadOnlyList<RecoverableProject>>(ProjectSession session) =>

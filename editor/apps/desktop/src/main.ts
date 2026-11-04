@@ -626,6 +626,7 @@ function buildMenu(): void {
     {
       label: 'Import',
       submenu: [
+        command('From Project…', 'importProject'),
         command('MusicXML…', 'importMusicXml'),
         command('AAF…', 'importAaf'),
         command('MIDI File (with options)…', 'importMidiOptions'),

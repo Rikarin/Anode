@@ -71,6 +71,17 @@ static class ProjectApi {
                 + "A job that fails or is cancelled leaves the project as it was."
             );
         project.MapPost(
+                "/import-tracks",
+                static Results<Ok<Job>, NotFound, ProblemHttpResult>(ImportProjectTracksRequest request, Jobs jobs) =>
+                    TypedResults.Ok(jobs.ImportProjectTracks(request))
+            )
+            .WithName("ImportProjectTracks")
+            .WithSummary(
+                "Queues importing chosen tracks of a project on the server's disk, with their regions, inserts, sends "
+                + "and automation, as one undo step. The source is only read; a job that fails leaves the open project "
+                + "as it was."
+            );
+        project.MapPost(
                 "/close",
                 static Results<NoContent, NotFound>(ProjectSession session) => {
                     session.Close();

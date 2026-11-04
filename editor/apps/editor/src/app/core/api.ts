@@ -67,7 +67,9 @@ import {
   type PreviewRangeRequest,
   type ProcessRequest,
   type Project,
+  type ImportProjectTracksRequest,
   type ProjectAlternative,
+  type ProjectContents,
   type SampleRateChangeMode,
   type ProjectBackup,
   type ProjectSummary,
@@ -150,6 +152,10 @@ export interface AnodeApi {
   /** The open project, or null when none is open (404). */
   getProject(): Promise<Project | null>;
   saveProject(): Promise<ProjectSummary>;
+  /** What a project on the Server's disk holds, read without opening it. */
+  projectContents(path: string): Promise<ProjectContents>;
+  /** Queues importing chosen tracks of another project, one undo step. */
+  importProjectTracks(request: ImportProjectTracksRequest): Promise<Job>;
   /** Queues changing the project's sample rate; it reopens at the new rate when done. */
   changeSampleRate(sampleRate: number, mode: SampleRateChangeMode): Promise<Job>;
   /** Queues writing the whole package at a new place and going on there. */
@@ -484,6 +490,14 @@ export class HttpAnodeApi implements AnodeApi {
 
   async changeSampleRate(sampleRate: number, mode: SampleRateChangeMode): Promise<Job> {
     return unwrap(await this.client.POST('/api/v1/project/sample-rate', { body: { sampleRate, mode } }));
+  }
+
+  async projectContents(path: string): Promise<ProjectContents> {
+    return unwrap(await this.client.POST('/api/v1/projects/contents', { body: { path } }));
+  }
+
+  async importProjectTracks(request: ImportProjectTracksRequest): Promise<Job> {
+    return unwrap(await this.client.POST('/api/v1/project/import-tracks', { body: request }));
   }
 
   async saveProject(): Promise<ProjectSummary> {

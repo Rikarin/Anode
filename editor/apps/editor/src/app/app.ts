@@ -44,6 +44,7 @@ import { ScriptEditor } from './scripter/script-editor';
 import { ControlBar } from './shell/control-bar';
 import { MissingFilesDialog } from './shell/missing-files';
 import { ChangeSampleRateDialog } from './shell/change-sample-rate';
+import { ImportProjectDialog } from './shell/import-project';
 import { SaveAlternativeDialog } from './shell/save-alternative';
 import { SaveProjectAsDialog } from './shell/save-project-as';
 import { HistoryStore } from './state/history.store';
@@ -102,6 +103,7 @@ const InterchangeCommands = {
     RouterOutlet,
     MissingFilesDialog,
     SaveAlternativeDialog,
+    ImportProjectDialog,
     ChangeSampleRateDialog,
     SaveProjectAsDialog,
     ScriptEditor,
@@ -196,6 +198,11 @@ const InterchangeCommands = {
           @if (ui.saveAlternativeOpen()) {
             @defer (on immediate) {
               <an-save-alternative />
+            }
+          }
+          @if (ui.importProjectOpen()) {
+            @defer (on immediate) {
+              <an-import-project />
             }
           }
           @if (ui.sampleRateOpen()) {
@@ -455,6 +462,7 @@ export class App {
       'edit.redo': () => void this.history.redo(),
       'project.save': () => void this.session.save(),
       'project.saveAlternative': () => this.ui.saveAlternativeOpen.set(true),
+      'project.importTracks': () => this.ui.importProjectOpen.set(this.project.isOpen()),
       'project.saveAs': () => this.saveAs('saveAs'),
       'project.saveCopy': () => this.saveAs('saveCopy'),
       'view.keyCommands': () => this.ui.keyCommandsOpen.set(true),
@@ -535,6 +543,9 @@ export class App {
       }
       case 'saveProject':
         await this.session.save();
+        break;
+      case 'importProject':
+        this.ui.importProjectOpen.set(this.project.isOpen());
         break;
       case 'saveProjectAs':
         this.saveAs('saveAs');

@@ -19,6 +19,8 @@ namespace Anode.Contracts;
 [JsonSerializable(typeof(IReadOnlyList<ProjectSummary>))]
 [JsonSerializable(typeof(CreateProjectRequest))]
 [JsonSerializable(typeof(SaveProjectAsRequest))]
+[JsonSerializable(typeof(ImportProjectTracksRequest))]
+[JsonSerializable(typeof(ProjectContents))]
 [JsonSerializable(typeof(ChangeSampleRateRequest))]
 [JsonSerializable(typeof(OpenProjectRequest))]
 [JsonSerializable(typeof(IReadOnlyList<RecoverableProject>))]

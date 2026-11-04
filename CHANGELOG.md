@@ -10,3 +10,6 @@ All notable changes to Anode are recorded here, by hand.
   the Missing Files window finds or relinks them, checking length, rate and channels.
 - Save As and Save a Copy: the whole package at a new place, built beside it and renamed in only when complete; Save As
   goes on there with its undo history, and a failure leaves the original and the session as they were.
+- Import from Project: a browser reads another project without opening it, and chosen tracks join this one as one undo
+  step with their regions, inserts, sends and automation, on buses of their own; media is copied, and converted from
+  another sample rate.

@@ -132,6 +132,68 @@ public sealed partial class ProjectSession {
         return new(session, read, state, states);
     }
 
+    /// <summary>
+    ///     Adds imported tracks, their files already in the project's folder, as one undo step "Import Tracks"; their
+    ///     plugins bring their states (<paramref name="states" />, by the source's keys). 409 when the project was closed.
+    /// </summary>
+    public CommandResult ImportTracks(long session, TrackBundle bundle, IReadOnlyDictionary<string, byte[]> states) {
+        CommandResult result;
+        HashSet<string> offline;
+        lock (gate) {
+            var o = Required();
+            if (o.Session != session) {
+                throw ProjectException.Conflict("The project was closed while its tracks were imported.");
+            }
+
+            var job = new JobEdit(o.State, ids, catalog.ForEdits);
+            job.Step(bundle.Files.Select(static f => new AudioFileUpserted(f)));
+            TrackInsertion inserted;
+            try {
+                inserted = Edits.InsertTracks(job.State, bundle, ids);
+                job.Step(inserted.Ops);
+            } catch (EditException e) {
+                throw ProjectException.Unprocessable(e.Message);
+            }
+
+            job.Inverse.Reverse();
+            result = Commit(o, job.State, job.Forward);
+            o.History.Push("Import Tracks", o.Revision, new(job.Forward, job.Inverse), null);
+            o.States = o.States.SetItems(ImportedStates(bundle, inserted, states));
+            offline = o.Offline.Files.Select(static f => f.FileId).ToHashSet(StringComparer.Ordinal);
+            Publish();
+        }
+
+        foreach (var file in bundle.Files.Where(f => !offline.Contains(f.Id))) {
+            StartPeaks(file);
+        }
+
+        Changed?.Invoke();
+        return result;
+    }
+
+    /// <summary>The states of the bundle's plugins under the keys they have in the project now.</summary>
+    static IEnumerable<KeyValuePair<string, SavedState>> ImportedStates(
+        TrackBundle bundle,
+        TrackInsertion inserted,
+        IReadOnlyDictionary<string, byte[]> states
+    ) {
+        foreach (var track in bundle.Tracks) {
+            var id = inserted.Tracks[track.Id];
+            if (track.Instrument is { } slot && states.TryGetValue(track.Id, out var bytes)) {
+                yield return KeyValuePair.Create<string, SavedState>(id, new(slot.PluginId, bytes));
+            }
+
+            foreach (var insert in track.Strip.Inserts) {
+                if (states.TryGetValue(ProjectPackage.StateKey(track.Id, insert.Id), out var saved)) {
+                    yield return KeyValuePair.Create<string, SavedState>(
+                        ProjectPackage.StateKey(id, insert.Id),
+                        new(insert.PluginId, saved)
+                    );
+                }
+            }
+        }
+    }
+
     /// <summary>A project name that can be a folder name: 422 otherwise.</summary>
     static string CheckProjectName(string name) =>
         name.Length is 0 or > Edits.MaxNameLength

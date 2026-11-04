@@ -202,13 +202,7 @@ import { Lcd } from './lcd';
               >
                 Sample Rate…
               </button>
-              <button
-                xuiMenuItem
-                type="button"
-                (click)="ui.syncSettingsOpen.set(true)"
-              >
-                Synchronization…
-              </button>
+              <button xuiMenuItem type="button" (click)="ui.syncSettingsOpen.set(true)">Synchronization…</button>
               <button
                 xuiMenuItem
                 type="button"
@@ -259,6 +253,9 @@ import { Lcd } from './lcd';
           </ng-template>
           <ng-template #importMenu>
             <xui-menu>
+              <button xuiMenuItem type="button" data-testid="import-project" (click)="ui.importProjectOpen.set(true)">
+                From Project…
+              </button>
               <button
                 xuiMenuItem
                 type="button"

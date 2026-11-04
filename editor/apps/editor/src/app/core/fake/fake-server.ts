@@ -36,6 +36,7 @@ import {
   type GrooveTemplate,
   type ImportedContent,
   type ImportedTrack,
+  type ImportProjectTracksRequest,
   type Insert,
   type InsertReading,
   type IoLabel,
@@ -90,6 +91,7 @@ import {
   type Project,
   type ProjectAlternative,
   type ProjectBackup,
+  type ProjectContents,
   type ProjectDelta,
   type ProjectSummary,
   type RecoverableProject,
@@ -162,6 +164,7 @@ import { FakeAudioDevices } from './fake-audio-devices';
 import { applyEnvironmentCommand } from './fake-environment';
 import { fakeFileExists, FakeHome, fileKind, listFakeFolder } from './fake-files';
 import { adaptTempo, applyFlexCommand, fakeAnalysis, type FlexContext, timingOf } from './fake-flex';
+import { contentsOf, withImportedTracks } from './fake-import-tracks';
 import { type FakeLoop, FakeLoopLibrary, keyInterval } from './fake-loops';
 import {
   applyMasteringCommand,
@@ -737,6 +740,48 @@ export class FakeAnodeServer implements AnodeApi {
     this.disk.set(before.path, structuredClone(this.project));
     this.emit({ type: 'projectOpened', project: this.remember(this.project), revision: this.project.revision });
     return [before.path];
+  }
+
+  projectContents(path: string): Promise<ProjectContents> {
+    return this.answer('GetProjectContents', () => contentsOf(this.package(path)));
+  }
+
+  importProjectTracks(request: ImportProjectTracksRequest): Promise<Job> {
+    return this.answer('ImportProjectTracks', () => {
+      this.require();
+      const source = this.package(request.path);
+      if (request.trackIds.length === 0) {
+        throw new ApiError(422, 'Choose the tracks to import.');
+      }
+
+      const unknown = request.trackIds.find(id => !source.tracks.some(t => t.id === id));
+      if (unknown) {
+        throw new ApiError(404, `'${source.name}' has no track '${unknown}'.`);
+      }
+
+      return this.startJob(
+        'projectImport',
+        {
+          finish: () => {
+            const before = this.require();
+            const after = withImportedTracks(before, source, request, prefix => `${prefix}_${this.nextId++}`);
+            this.commit(before, after, 'Import Tracks');
+            return [];
+          }
+        },
+        1
+      );
+    });
+  }
+
+  /** A saved project on the fake disk. */
+  private package(path: string): Project {
+    const project = this.disk.get(path.trim().replace(/\/+$/, ''));
+    if (!project) {
+      throw new ApiError(404, `'${path}' is not an Anode project.`);
+    }
+
+    return project;
   }
 
   /** A package location as the Server checks it: with its extension, free, and outside the open project. */

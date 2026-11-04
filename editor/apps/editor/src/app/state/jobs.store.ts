@@ -45,7 +45,8 @@ const JobNames: Record<JobKind, string> = {
   sessionPlayerConvert: 'Session Player conversion',
   saveAs: 'Save As',
   saveCopy: 'Save a Copy',
-  sampleRateChange: 'Sample rate change'
+  sampleRateChange: 'Sample rate change',
+  projectImport: 'Import from project'
 };
 
 /** A file's name from its absolute path. */

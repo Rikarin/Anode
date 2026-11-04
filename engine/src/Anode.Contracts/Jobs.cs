@@ -115,7 +115,11 @@ public enum JobKind {
 
     /// <summary>A change of the project's sample rate (<c>ChangeSampleRateRequest</c>); it reopens at the new rate.</summary>
     [JsonStringEnumMemberName("sampleRateChange")]
-    SampleRateChange
+    SampleRateChange,
+
+    /// <summary>Import from Project (<c>ImportProjectTracksRequest</c>): chosen tracks of another package, one undo step.</summary>
+    [JsonStringEnumMemberName("projectImport")]
+    ProjectImport
 }
 
 [JsonConverter(typeof(JsonStringEnumConverter<JobState>))]

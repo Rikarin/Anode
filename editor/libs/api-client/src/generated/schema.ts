@@ -106,6 +106,23 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/api/v1/projects/contents': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** What a project on the server's disk holds, read without opening it (Import from Project). */
+    post: operations['GetProjectContents'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/api/v1/projects/recoverable': {
     parameters: {
       query?: never;
@@ -235,6 +252,23 @@ export interface paths {
     put?: never;
     /** Queues changing the project's sample rate, saving it: its files are written anew beside the old ones (converted, or their samples kept), the last save and unsaved edits go to backups, and the project reopens without undo history. 422 while files are offline or tracks unreadable, 409 while it plays. A job that fails or is cancelled leaves the project as it was. */
     post: operations['ChangeSampleRate'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/project/import-tracks': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Queues importing chosen tracks of a project on the server's disk, with their regions, inserts, sends and automation, as one undo step. The source is only read; a job that fails leaves the open project as it was. */
+    post: operations['ImportProjectTracks'];
     delete?: never;
     options?: never;
     head?: never;
@@ -5630,6 +5664,20 @@ export interface components {
       path: string;
     };
     /**
+     * @description Import from Project: `trackIds` of the package at `path` join the open project after its tracks, as one
+     *     undo step, with their stack members and, with sends, the auxes those reach. Left out, each part comes along:
+     *     `regions` (and take folders, alternatives and frozen files), `inserts`, `sends` and
+     *     `automation`. Their media is copied in, converted when the source is at another rate.
+     */
+    ImportProjectTracksRequest: {
+      path: string;
+      trackIds: string[];
+      regions?: null | boolean;
+      inserts?: null | boolean;
+      sends?: null | boolean;
+      automation?: null | boolean;
+    };
+    /**
      * @description An insert effect on a channel strip: the plugin, whether it is bypassed, its parameter values by parameter id
      *     (all of them), and its sidechain source (a track id or `bus:N`; null: none). A plugin's opaque state lives in
      *     the project's `Plugin States` folder. A MIDI FX slot (`ChannelStrip.midiEffects`) has the same shape,
@@ -5731,7 +5779,8 @@ export interface components {
       | 'sessionPlayerConvert'
       | 'saveAs'
       | 'saveCopy'
-      | 'sampleRateChange';
+      | 'sampleRateChange'
+      | 'projectImport';
     /** @enum {unknown} */
     JobState: 'queued' | 'running' | 'done' | 'failed' | 'cancelled';
     /** @description A key-command pad on the remote: its label, the key command it runs (a `KeyCommandSet` id), and a colour. */
@@ -6888,6 +6937,16 @@ export interface components {
       /** Format: date-time */
       saved: string;
     };
+    /** @description What a project on the server's disk holds, read without opening it. */
+    ProjectContents: {
+      name: string;
+      path: string;
+      /** Format: int32 */
+      sampleRate: number;
+      /** Format: double */
+      tempo: number;
+      tracks: components['schemas']['ProjectTrackInfo'][];
+    };
     /**
      * @description What changed between two revisions of the open project (docs/adr/0004-state-ownership.md). Clients apply the
      *     operations in order; a client that misses a revision refetches the project.
@@ -6954,6 +7013,25 @@ export interface components {
      * @enum {unknown}
      */
     ProjectTempoMode: 'keep' | 'adapt' | 'auto';
+    /**
+     * @description A track of a project on the server's disk, for the Import from Project browser: how much comes with it
+     *     (`regions` counts audio, MIDI, pattern and Session Player regions and take folders).
+     */
+    ProjectTrackInfo: {
+      id: string;
+      name: string;
+      kind: components['schemas']['TrackKind'];
+      color: string;
+      parentId?: null | string;
+      /** Format: int32 */
+      regions: number;
+      /** Format: int32 */
+      inserts: number;
+      /** Format: int32 */
+      sends: number;
+      /** Format: int32 */
+      lanes: number;
+    };
     /**
      * @description How recording works: cycle recording mode; replace mode (a recording removes what it covers on its track); and
      *     autopunch, which records only between `punchInTick` and `punchOutTick` while playback continues around
@@ -8326,6 +8404,46 @@ export interface operations {
       };
     };
   };
+  GetProjectContents: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['OpenProjectRequest'];
+      };
+    };
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ProjectContents'];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
   ListRecoverableProjects: {
     parameters: {
       query?: never;
@@ -8595,6 +8713,46 @@ export interface operations {
     requestBody: {
       content: {
         'application/json': components['schemas']['ChangeSampleRateRequest'];
+      };
+    };
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Job'];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  ImportProjectTracks: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['ImportProjectTracksRequest'];
       };
     };
     responses: {

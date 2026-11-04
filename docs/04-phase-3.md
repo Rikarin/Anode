@@ -166,6 +166,19 @@ report. A REST change means regenerating `engine/src/Anode.Server/openapi.json`
   - Save a Copy leaves the session alone. Save As goes on in the new package with its undo history, and autosaves there;
     the original keeps its last save, with its unsaved edits in a backup, and no longer offers them for recovery. A
     media path outside the package stays as it is (an absolute instrument or insert file, a referenced movie).
+- **Import tracks from another project:**
+  - `POST /projects/contents` reads a package on the server's disk without opening it, and the Import from Project window
+    lists its tracks. `POST /project/import-tracks` queues the import of the chosen ones, one undo step, with regions,
+    take folders, alternatives, automation, inserts, plugin states, sends and MIDI FX. Each of regions, inserts, sends
+    and automation can be left out. The source is only read.
+  - A stack brings its members and, with sends, a track brings the auxes its sends and outputs reach. Everything gets a
+    new id, so importing twice makes two independent sets. Their buses move to ones the project does not use, so they mix
+    with nothing of its, and a group to a free number. What pointed outside the import goes: a parent, a VCA, a
+    sidechain, a groove. Tempo, markers, score content and Live Loops cells stay behind.
+  - Audio is copied into `Audio Files` under new names and ids, and converted when the source is at another rate, with
+    the positions following (`ProjectRate`). Files instruments and inserts name inside the source are copied to the same
+    place. A file offline in the source comes along offline, unless it would need converting: then the import is refused
+    until it is found. A failure removes the copies and leaves the project as it was.
 - **Screensets, key commands, bookmarks:**
   - Screensets are saved in the project (they mark it unsaved, but are not undo steps).
   - Key commands and bookmarks are per user, in `<DataDirectory>/settings/`.

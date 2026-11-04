@@ -294,6 +294,46 @@ public sealed record OpenProjectRequest(string Path);
 /// </summary>
 public sealed record SaveProjectAsRequest(string Path);
 
+/// <summary>
+///     A track of a project on the server's disk, for the Import from Project browser: how much comes with it
+///     (<c>regions</c> counts audio, MIDI, pattern and Session Player regions and take folders).
+/// </summary>
+public sealed record ProjectTrackInfo(
+    string Id,
+    string Name,
+    TrackKind Kind,
+    string Color,
+    string? ParentId,
+    int Regions,
+    int Inserts,
+    int Sends,
+    int Lanes
+);
+
+/// <summary>What a project on the server's disk holds, read without opening it.</summary>
+public sealed record ProjectContents(
+    string Name,
+    string Path,
+    int SampleRate,
+    double Tempo,
+    IReadOnlyList<ProjectTrackInfo> Tracks
+);
+
+/// <summary>
+///     Import from Project: <c>trackIds</c> of the package at <c>path</c> join the open project after its tracks, as one
+///     undo step, with their stack members and, with sends, the auxes those reach. Left out, each part comes along:
+///     <c>regions</c> (and take folders, alternatives and frozen files), <c>inserts</c>, <c>sends</c> and
+///     <c>automation</c>. Their media is copied in, converted when the source is at another rate.
+/// </summary>
+public sealed record ImportProjectTracksRequest(
+    string Path,
+    IReadOnlyList<string> TrackIds,
+    bool? Regions = null,
+    bool? Inserts = null,
+    bool? Sends = null,
+    bool? Automation = null
+);
+
 /// <summary>What happens to the audio when a project's sample rate changes.</summary>
 [JsonConverter(typeof(JsonStringEnumConverter<SampleRateChangeMode>))]
 public enum SampleRateChangeMode {
