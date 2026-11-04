@@ -865,22 +865,28 @@ public sealed partial class ProjectSession(
 
     /// <summary>
     ///     Adds a WAV already copied into the open project's <c>Audio Files</c> folder to its pool: a change of its
-    ///     own (a new revision and a delta), not an undo step. Starts building its peaks.
+    ///     own (a new revision and a delta), not an undo step. Starts building its peaks. Its analysis runs outside the
+    ///     session's lock: it takes seconds, and edits go on meanwhile.
     /// </summary>
     public AudioFile AddFile(long session, string absolutePath, WavInfo info) {
         AudioFile file;
-        var built = new List<FileAnalysis>();
+        string folder;
+        bool analyse;
         lock (gate) {
-            var o = Required();
-            if (o.Session != session) {
-                throw ProjectException.Conflict("The project was closed while the file was imported.");
-            }
-
+            var o = Opening(session);
             file = Describe(o, absolutePath, info);
-            if (o.State.Settings.SmartTempo?.AnalyzeImports == true) {
-                file = Analysed(o, file, built);
-            }
+            folder = o.Folder;
+            analyse = o.State.Settings.SmartTempo?.AnalyzeImports == true;
+        }
 
+        var built = new List<FileAnalysis>();
+        if (analyse) {
+            file = Analysed(folder, file, built);
+        }
+
+        lock (gate) {
+            var o = Opening(session);
+            Keep(o, built);
             var op = new AudioFileUpserted(file);
             Commit(o, o.State.Apply(op), [op]);
         }
@@ -891,15 +897,21 @@ public sealed partial class ProjectSession(
         return file;
     }
 
+    /// <summary>The open project, which must be opening <paramref name="session" /> (a 409 otherwise).</summary>
+    Open Opening(long session) =>
+        open is { } o && o.Session == session
+            ? o
+            : throw ProjectException.Conflict("The project was closed while the file was imported.");
+
     /// <summary>
-    ///     <paramref name="file" /> with its tempo from an analysis of its transients and beats (Smart Tempo), cached and
-    ///     kept; as it is when it cannot be analysed (logged).
+    ///     <paramref name="file" /> with its tempo from an analysis of its transients and beats (Smart Tempo), cached, a
+    ///     fresh one added to <paramref name="built" />; as it is when it cannot be analysed (logged).
     /// </summary>
-    AudioFile Analysed(Open o, AudioFile file, List<FileAnalysis> built) {
+    AudioFile Analysed(string folder, AudioFile file, List<FileAnalysis> built) {
         try {
-            var (analysis, fresh) = analyses.Rhythm(o.Folder, file);
+            var (analysis, fresh) = analyses.Rhythm(folder, file);
             if (fresh) {
-                built.AddRange(Keep(o, [analysis]));
+                built.Add(analysis);
             }
 
             return Edits.HasBeats(analysis.Tempo) ? file with { Tempo = analysis.Tempo } : file;
@@ -1102,7 +1114,8 @@ public sealed partial class ProjectSession(
             return after;
         }
 
-        var analysed = Analysed(o, file, built);
+        var analysed = Analysed(o.Folder, file, built);
+        Keep(o, built);
         if (!Edits.AdaptsTempo(before, analysed)) {
             return after;
         }
