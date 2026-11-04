@@ -33,6 +33,12 @@ public enum DelayCompensation {
 //
 // Delay compensation delays a channel's post-insert signal before its fader, so automation on a delayed path applies
 // to audio as late as the latent path's (where the latent insert delays the audio but not the fader).
+//
+// The strip's input stage: its trim and polarity scale the source before the inserts (not a frozen track's: the freeze
+// has them). Its delay is an offset to the latency delay compensation aligns on, so it runs on the same lines whatever
+// the compensation mode: a late strip claims less latency than it has and its edges read further back; an early strip
+// claims more, and everything else on the way to its summing points is delayed to make room. A dual pan mixes the
+// output's two channels (not the sends') just before the fader.
 public sealed unsafe partial class AudioEngine {
     /// <summary>Parameter automation is applied at this granularity, in frames.</summary>
     public const int ParameterBlock = 32;
@@ -58,11 +64,14 @@ public sealed unsafe partial class AudioEngine {
     readonly float[] sideRight = PinnedBlock();
     readonly float[] edgeLeft = PinnedBlock();
     readonly float[] edgeRight = PinnedBlock();
+    readonly float[] dualLeft = PinnedBlock();
+    readonly float[] dualRight = PinnedBlock();
     readonly MidiEvent[] chunkEvents = new MidiEvent[MidiTrackState.MaxEvents];
 
     int delayCompensation;
     int lowLatency;
     int lowLatencyLimit;
+    int panLaw = (int)Ipc.EnginePanLaw.Minus3DbCompensated;
     int latencyOverflow;
     int masterOutputDelay;
     RenderCapture? capture;
@@ -78,6 +87,7 @@ public sealed unsafe partial class AudioEngine {
     long blockPosition;
     long blockClock;
     bool blockCountIn;
+    Ipc.EnginePanLaw blockPanLaw;
     TransportContext blockTransport;
 
     // The gains of the edge being mixed: constant (gainLeft, gainRight) or per frame (coefLeft, coefRight).
@@ -122,11 +132,17 @@ public sealed unsafe partial class AudioEngine {
         return default;
     }
 
-    /// <summary>Control thread: delay compensation, and low-latency mode with its limit in frames.</summary>
-    public void SetMixer(DelayCompensation compensation, bool lowLatencyMode, int limitFrames) {
+    /// <summary>Control thread: delay compensation, low-latency mode with its limit in frames, and the pan law.</summary>
+    public void SetMixer(
+        DelayCompensation compensation,
+        bool lowLatencyMode,
+        int limitFrames,
+        Ipc.EnginePanLaw law = Ipc.EnginePanLaw.Minus3DbCompensated
+    ) {
         Volatile.Write(ref delayCompensation, (int)compensation);
         Volatile.Write(ref lowLatencyLimit, Math.Max(0, limitFrames));
         Volatile.Write(ref lowLatency, lowLatencyMode ? 1 : 0);
+        Volatile.Write(ref panLaw, (int)law);
     }
 
     /// <summary>
@@ -180,6 +196,7 @@ public sealed unsafe partial class AudioEngine {
         blockPosition = position;
         blockClock = clock;
         blockCountIn = countIn;
+        blockPanLaw = (Ipc.EnginePanLaw)Volatile.Read(ref panLaw);
         var plan = model.Mix;
         var rolling = transport.Rolling && !countIn;
         blockCapture = rolling ? Volatile.Read(ref capture) : null; // a render captures from its first rolling frame
@@ -249,12 +266,67 @@ public sealed unsafe partial class AudioEngine {
         var left = trackLeft.AsSpan(0, frames);
         var right = trackRight.AsSpan(0, frames);
         if (node.Multi) {
-            ChannelMulti(node, trackLeft, trackRight, SourceMulti(node, left, right));
+            var width = SourceMulti(node, left, right);
+            TrimWide(node, left, right, width);
+            ChannelMulti(node, trackLeft, trackRight, width);
             return;
         }
 
         var stereo = Source(node, left, right);
+        Trim(node, left, right, stereo);
         Channel(node, left, right, stereo, default, default);
+    }
+
+    /// <summary>The strip's trim and polarity on its source (a mono one in <paramref name="left" /> alone).</summary>
+    static void Trim(MixNode node, Span<float> left, Span<float> right, bool stereo) {
+        if (TrimRamp(node, out var from, out var to)) {
+            Scale(left, from, to);
+            if (stereo) {
+                Scale(right, from, to);
+            }
+        }
+    }
+
+    /// <summary>As <see cref="Trim" />, for a signal of <paramref name="width" /> channels on the multichannel path.</summary>
+    void TrimWide(MixNode node, Span<float> left, Span<float> right, int width) {
+        if (!TrimRamp(node, out var from, out var to)) {
+            return;
+        }
+
+        Scale(left, from, to);
+        if (width > 1) {
+            Scale(right, from, to);
+        }
+
+        for (var c = 2; c < width; c++) {
+            Scale(trackExtra[c - 2].AsSpan(0, left.Length), from, to);
+        }
+    }
+
+    /// <summary>The trim to ramp over this block; false when the source passes as it is.</summary>
+    static bool TrimRamp(MixNode node, out float from, out float to) {
+        var ch = node.Channel;
+        to = node.Frozen ? 1f : ch.Strip.Trim;
+        from = ch.TrimApplied ? ch.AppliedTrim : to;
+        ch.AppliedTrim = to;
+        ch.TrimApplied = true;
+        return from != 1f || to != 1f;
+    }
+
+    /// <summary>Scales a block by a gain moving linearly from <paramref name="from" /> to <paramref name="to" />.</summary>
+    static void Scale(Span<float> block, float from, float to) {
+        if (from == to) {
+            for (var i = 0; i < block.Length; i++) {
+                block[i] *= to;
+            }
+
+            return;
+        }
+
+        var step = (to - from) / block.Length;
+        for (var i = 0; i < block.Length; i++) {
+            block[i] *= from + step * (i + 1);
+        }
     }
 
     /// <summary>
@@ -495,10 +567,10 @@ public sealed unsafe partial class AudioEngine {
         ch.Live = live;
         ch.ChainLatency = BypassedForRender(node) ? 0 : InsertLatency(node.Config, live);
         ch.Latency = mode switch {
-            DelayCompensation.Off => 0,
+            DelayCompensation.Off => input,
             DelayCompensation.Tracks when aux => input,
             _ => input + ch.ChainLatency
-        };
+        } - ch.Strip.DelayFrames;
         ch.ImpliedSolo = implied;
         ch.Audible = !anySolo || ch.Strip.Solo || implied;
         var soloing = anySolo && ch.Audible;
@@ -514,11 +586,7 @@ public sealed unsafe partial class AudioEngine {
         m.Live = destLive[0];
         m.Audible = true;
         m.ChainLatency = InsertLatency(plan.Master.Config, m.Live);
-        m.Latency = mode switch {
-            DelayCompensation.Off => 0,
-            DelayCompensation.Tracks => destLatency[0],
-            _ => destLatency[0] + m.ChainLatency
-        };
+        m.Latency = mode == DelayCompensation.All ? destLatency[0] + m.ChainLatency : destLatency[0];
         masterOutputDelay = 0;
         if (mode != DelayCompensation.All) {
             return;
@@ -604,7 +672,7 @@ public sealed unsafe partial class AudioEngine {
         if (node.Track is null) {
             MasterOutput(ch, line, left, source, ref tapped, outLeft, outRight);
         } else {
-            TrackOutput(node, line, left, source, ref tapped);
+            TrackOutput(node, line, left, source, stereo, ref tapped);
         }
 
         var sends = node.Config.Sends;
@@ -649,10 +717,18 @@ public sealed unsafe partial class AudioEngine {
     ) {
         var strip = node.Channel.Strip;
         var automation = blockModel.Automation;
-        var pan = LaneFor(automation, node.PanTarget);
+        var dual = stereo && strip.DualPan;
+        var pan = dual ? null : LaneFor(automation, node.PanTarget);
         Lane(LaneFor(automation, node.VolumeTarget), volumeLane, strip.Gain);
-        Lane(pan, panLane, strip.Pan);
+        Lane(pan, panLane, dual ? 0f : strip.Pan);
         Pan(panLane.AsSpan(0, blockFrames), pan is not null, stereo);
+        if (dual) {
+            var gains = DualTarget(strip);
+            Dual(gains, gains, left, right, dualLeft.AsSpan(0, blockFrames), dualRight.AsSpan(0, blockFrames));
+            left = dualLeft.AsSpan(0, blockFrames);
+            right = dualRight.AsSpan(0, blockFrames);
+        }
+
         var l = edgeLeft.AsSpan(0, blockFrames);
         var r = edgeRight.AsSpan(0, blockFrames);
         for (var i = 0; i < l.Length; i++) {
@@ -707,11 +783,20 @@ public sealed unsafe partial class AudioEngine {
     }
 
     /// <summary>A track's fader and pan into its destination (and its stem, when one is rendered).</summary>
-    void TrackOutput(MixNode node, DelayLine? line, Span<float> left, Span<float> right, ref int tapped) {
+    void TrackOutput(MixNode node, DelayLine? line, Span<float> left, Span<float> right, bool stereo, ref int tapped) {
         var ch = node.Channel;
         var destination = node.OutputDestination;
         Tap(line, Delay(destination, ch.Latency), left, right, ref tapped, out var srcL, out var srcR);
         var frames = blockFrames;
+        if (stereo && ch.Strip.DualPan) {
+            var target = DualTarget(ch.Strip);
+            var from = ch.Dual.Set ? ch.Dual : target;
+            ch.Dual = target;
+            Dual(from, target, srcL, srcR, dualLeft.AsSpan(0, frames), dualRight.AsSpan(0, frames));
+            srcL = dualLeft.AsSpan(0, frames);
+            srcR = dualRight.AsSpan(0, frames);
+        }
+
         RenderTarget? stem = null;
         if (blockCapture is { Kind: RenderKind.Stems } stems) {
             stems.Tracks.TryGetValue(node.TrackId, out stem);
@@ -739,6 +824,40 @@ public sealed unsafe partial class AudioEngine {
         if (destination >= 0) {
             Add(destLeft[destination].AsSpan(0, frames), el);
             Add(destRight[destination].AsSpan(0, frames), er);
+        }
+    }
+
+    /// <summary>A dual pan's gains under the block's pan law.</summary>
+    DualGain DualTarget(Strip strip) {
+        var (leftToLeft, leftToRight) = Strip.DualGains(strip.PanLeft, blockPanLaw);
+        var (rightToLeft, rightToRight) = Strip.DualGains(strip.PanRight, blockPanLaw);
+        return new() {
+            LeftToLeft = leftToLeft,
+            LeftToRight = leftToRight,
+            RightToLeft = rightToLeft,
+            RightToRight = rightToRight,
+            Set = true
+        };
+    }
+
+    /// <summary>Each channel of a stereo signal to its own place, the gains moving linearly over the block.</summary>
+    static void Dual(
+        in DualGain from,
+        in DualGain to,
+        ReadOnlySpan<float> srcL,
+        ReadOnlySpan<float> srcR,
+        Span<float> dstL,
+        Span<float> dstR
+    ) {
+        var n = dstL.Length;
+        for (var i = 0; i < n; i++) {
+            var t = (i + 1f) / n;
+            var ll = from.LeftToLeft + (to.LeftToLeft - from.LeftToLeft) * t;
+            var lr = from.LeftToRight + (to.LeftToRight - from.LeftToRight) * t;
+            var rl = from.RightToLeft + (to.RightToLeft - from.RightToLeft) * t;
+            var rr = from.RightToRight + (to.RightToRight - from.RightToRight) * t;
+            dstL[i] = srcL[i] * ll + srcR[i] * rl;
+            dstR[i] = srcL[i] * lr + srcR[i] * rr;
         }
     }
 
@@ -827,18 +946,20 @@ public sealed unsafe partial class AudioEngine {
         var strip = ch.Strip;
         var automation = blockModel.Automation;
         var volume = LaneFor(automation, node.VolumeTarget);
-        var pan = LaneFor(automation, node.PanTarget);
+        var dual = stereo && strip.DualPan; // its gains apply first (TrackOutput), and the pan knob has no say
+        var pan = dual ? null : LaneFor(automation, node.PanTarget);
         var mute = LaneFor(automation, node.MuteTarget);
+        var position = dual ? 0f : strip.Pan;
         if (volume is null && pan is null && mute is null) {
             var g = ch.Audible && !strip.Mute ? strip.Gain : 0f;
-            var (l, r) = Strip.PanGains(strip.Pan, stereo);
+            var (l, r) = Strip.PanGains(position, stereo, blockPanLaw);
             Ramp(ref ch.Output, g * l, g * r);
             return;
         }
 
         Lane(volume, volumeLane, strip.Gain);
         Lane(mute, muteLane, strip.Mute ? 1f : 0f);
-        Lane(pan, panLane, strip.Pan);
+        Lane(pan, panLane, position);
         Pan(panLane.AsSpan(0, blockFrames), pan is not null, stereo);
         Scale(volumeLane, ch.Audible);
         Remember(ref ch.Output);
@@ -853,7 +974,7 @@ public sealed unsafe partial class AudioEngine {
         var level = LaneFor(automation, target);
         var volume = send.PreFader ? null : LaneFor(automation, node.VolumeTarget);
         var mute = LaneFor(automation, node.MuteTarget);
-        var (pl, pr) = Strip.PanGains(slot.Pan, stereo);
+        var (pl, pr) = Strip.PanGains(slot.Pan, stereo, blockPanLaw);
         if (level is null && volume is null && mute is null) {
             var g = !ch.Audible || strip.Mute ? 0f
                 : send.PreFader ? slot.Gain
@@ -892,7 +1013,7 @@ public sealed unsafe partial class AudioEngine {
         var cl = coefLeft.AsSpan(0, pans.Length);
         var cr = coefRight.AsSpan(0, pans.Length);
         if (!automated) {
-            var (l, r) = Strip.PanGains(pans[0], stereo);
+            var (l, r) = Strip.PanGains(pans[0], stereo, blockPanLaw);
             cl.Fill(l);
             cr.Fill(r);
             return;
@@ -903,7 +1024,7 @@ public sealed unsafe partial class AudioEngine {
         for (var i = 0; i < pans.Length; i++) {
             var x = Math.Clamp(pans[i], -1f, 1f);
             if (x != last) {
-                (pl, pr) = Strip.PanGains(x, stereo);
+                (pl, pr) = Strip.PanGains(x, stereo, blockPanLaw);
                 last = x;
             }
 
@@ -1001,6 +1122,7 @@ public sealed unsafe partial class AudioEngine {
         var left = ch.WorkLeft.AsSpan(0, blockFrames);
         var right = ch.WorkRight.AsSpan(0, blockFrames);
         var stereo = Source(node, left, right);
+        Trim(node, left, right, stereo);
         var inserts = node.Config.Inserts;
         var k = BypassedForRender(node) ? inserts.Length : 0;
         ch.Begun = false;
@@ -1196,6 +1318,8 @@ public sealed unsafe partial class AudioEngine {
         ch.Delay?.Clear();
         ch.PostFrames = 0;
         ch.Output = default;
+        ch.TrimApplied = false;
+        ch.Dual = default;
         foreach (var last in node.InsertLast) {
             last.AsSpan().Fill(float.NaN);
         }

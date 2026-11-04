@@ -1,4 +1,4 @@
-import { type ChannelStrip, DefaultPanner, type PluginInfo } from '@anode/api-client';
+import { DefaultPanner, type ChannelStrip, type PluginInfo } from '@anode/api-client';
 import { groupTargets, targetOf, targetsOf, unknownTarget } from './targets';
 
 const strip = (extra: Partial<ChannelStrip> = {}): ChannelStrip => ({

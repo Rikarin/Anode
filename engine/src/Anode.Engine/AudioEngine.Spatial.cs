@@ -249,7 +249,7 @@ public sealed unsafe partial class AudioEngine {
             WritePost(ch, left, source);
         }
 
-        TrackOutput(node, line, left, source, ref tapped);
+        TrackOutput(node, line, left, source, stereo, ref tapped);
     }
 
     /// <summary>Send <paramref name="s" /> by its edge.</summary>

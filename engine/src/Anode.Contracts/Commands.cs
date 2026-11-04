@@ -224,7 +224,13 @@ public sealed record SetStripCommand(
     double? VolumeDb = null,
     double? Pan = null,
     bool? Mute = null,
-    bool? Solo = null
+    bool? Solo = null,
+    double? TrimDb = null,
+    bool? PolarityInverted = null,
+    double? DelayMs = null,
+    bool? DualPan = null,
+    double? PanLeft = null,
+    double? PanRight = null
 ) : EditCommand;
 
 /// <summary>Places a file on a track; the whole file unless <c>fileOffset</c> and <c>length</c> say otherwise.</summary>
@@ -595,7 +601,8 @@ public sealed record SetAutomationModeCommand(AutomationMode Mode, string? Track
 public sealed record SetMixerSettingsCommand(
     PdcMode? Pdc = null,
     bool? LowLatency = null,
-    double? LowLatencyLimitMs = null)
+    double? LowLatencyLimitMs = null,
+    PanLaw? PanLaw = null)
     : EditCommand;
 
 /// <summary>Replaces a track's instrument, inserts and sends with a saved patch's.</summary>

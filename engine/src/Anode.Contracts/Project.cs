@@ -203,6 +203,14 @@ public sealed record TrackInput(int Channel, bool Stereo);
 ///         (their <c>pan</c> applies to stereo buses only). Every strip of a project from before Phase 10 is stereo in
 ///         and out with the stereo panner.
 ///     </para>
+///     <para>
+///         The strip's input stage (a track with a full strip, never the master or a VCA): <c>trimDb</c> and
+///         <c>polarityInverted</c> apply to its source before the inserts, on every channel; <c>delayMs</c> moves it in
+///         time after the inserts, before the fader (negative: earlier, which delay compensation pays for by delaying
+///         everything else). <c>dualPan</c> pans a stereo signal's two channels on their own, to <c>panLeft</c> and
+///         <c>panRight</c> (−1…1), instead of balancing it with <c>pan</c>; at −1 and 1 the signal passes as it is. They
+///         stay when it is off. A mono signal always takes <c>pan</c>, a surround output its panner.
+///     </para>
 /// </summary>
 public sealed record ChannelStrip(
     double VolumeDb,
@@ -217,7 +225,13 @@ public sealed record ChannelStrip(
     IReadOnlyList<Insert> MidiEffects,
     ChannelFormat InputFormat,
     ChannelFormat OutputFormat,
-    Panner Panner
+    Panner Panner,
+    double TrimDb,
+    bool PolarityInverted,
+    double DelayMs,
+    bool DualPan,
+    double PanLeft,
+    double PanRight
 );
 
 /// <summary>

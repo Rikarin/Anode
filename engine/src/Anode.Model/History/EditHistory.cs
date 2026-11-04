@@ -320,7 +320,8 @@ public static class UndoLabels {
         foreach (var command in batch.Commands) {
             var mine = command switch {
                 SetStripCommand strip => $"strip|{strip.TrackId ?? "master"}|{strip.VolumeDb.HasValue}"
-                    + $"{strip.Pan.HasValue}{strip.Mute.HasValue}{strip.Solo.HasValue}",
+                    + $"{strip.Pan.HasValue}{strip.Mute.HasValue}{strip.Solo.HasValue}{strip.TrimDb.HasValue}"
+                    + $"{strip.DelayMs.HasValue}{strip.PanLeft.HasValue}{strip.PanRight.HasValue}",
                 SetParameterCommand parameter => $"parameter|{parameter.TrackId}|{parameter.ParameterId}",
                 SetInsertParameterCommand insert =>
                     $"insert|{insert.TrackId ?? "master"}|{insert.InsertId}|{insert.ParameterId}",

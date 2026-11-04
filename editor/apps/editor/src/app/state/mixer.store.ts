@@ -58,6 +58,20 @@ export function withPannerChange(panner: Panner, change: PannerChange): Panner {
   return next;
 }
 
+/** A change of a strip's input stage: `setStrip`'s fields for its trim, polarity, delay and dual pan. */
+export type StripInputChange = Partial<
+  Pick<ChannelStrip, 'trimDb' | 'polarityInverted' | 'delayMs' | 'dualPan' | 'panLeft' | 'panRight'>
+>;
+
+const InputLabels: Record<keyof StripInputChange, string> = {
+  trimDb: 'Trim',
+  polarityInverted: 'Polarity',
+  delayMs: 'Track Delay',
+  dualPan: 'Dual Pan',
+  panLeft: 'Dual Pan',
+  panRight: 'Dual Pan'
+};
+
 /** The strip key of the master in {@link MixerStore}'s methods. */
 export const Master = null;
 
@@ -208,6 +222,12 @@ export class MixerStore {
   /** A strip's input format (audio tracks and auxes; an aux's is its bus's). */
   setInputFormat(trackId: string, inputFormat: ChannelFormat): Promise<unknown> {
     return this.project.execute([{ type: 'setStripFormat', trackId, inputFormat }], 'Input Format');
+  }
+
+  /** Changes a track strip's input stage (the master and a VCA have none). */
+  setStripInput(trackId: string, change: StripInputChange): Promise<unknown> {
+    const field = Object.keys(change)[0] as keyof StripInputChange | undefined;
+    return this.project.execute([stripCommand(trackId, change)], field ? InputLabels[field] : 'Strip');
   }
 
   toggleMute(trackId: string | null): void {
@@ -536,7 +556,7 @@ function owner(trackId: string | null): { trackId?: string } {
 /** A `setStrip` command for a track's strip, or the master's when `trackId` is null. */
 export function stripCommand(
   trackId: string | null,
-  change: Partial<Pick<ChannelStrip, 'volumeDb' | 'pan' | 'mute' | 'solo'>>
+  change: Partial<Pick<ChannelStrip, 'volumeDb' | 'pan' | 'mute' | 'solo'>> & StripInputChange
 ): EditCommand {
   return { type: 'setStrip', ...(trackId === null ? {} : { trackId }), ...change };
 }

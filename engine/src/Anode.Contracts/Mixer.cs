@@ -103,10 +103,38 @@ public enum PdcMode {
 }
 
 /// <summary>
-///     Plugin delay compensation, and low-latency mode: while it is on, plugins on the path of record-armed or
-///     monitored tracks whose latency exceeds <c>lowLatencyLimitMs</c> are bypassed.
+///     How a mono signal's level follows its pan: what the centre is, relative to a hard pan. Stereo signals are balanced
+///     (the far side falls linearly) whatever the law; dual pan takes the law's shape with a hard pan at unity.
 /// </summary>
-public sealed record MixerSettings(PdcMode Pdc, bool LowLatency, double LowLatencyLimitMs);
+[JsonConverter(typeof(JsonStringEnumConverter<PanLaw>))]
+public enum PanLaw {
+    /// <summary>The centre as loud as a hard pan: the far side falls linearly, the near side stays at unity.</summary>
+    [JsonStringEnumMemberName("zeroDb")]
+    ZeroDb,
+
+    /// <summary>Constant power: a hard pan at unity, the centre −3 dB.</summary>
+    [JsonStringEnumMemberName("minus3Db")]
+    Minus3Db,
+
+    /// <summary>Constant power with the centre at unity: a hard pan +3 dB (Logic's default, and Anode's).</summary>
+    [JsonStringEnumMemberName("minus3DbCompensated")]
+    Minus3DbCompensated,
+
+    /// <summary>Between constant power and linear: a hard pan at unity, the centre −4.5 dB.</summary>
+    [JsonStringEnumMemberName("minus4Point5Db")]
+    Minus4Point5Db,
+
+    /// <summary>Linear: a hard pan at unity, the centre −6 dB.</summary>
+    [JsonStringEnumMemberName("minus6Db")]
+    Minus6Db
+}
+
+/// <summary>
+///     Plugin delay compensation, and low-latency mode: while it is on, plugins on the path of record-armed or
+///     monitored tracks whose latency exceeds <c>lowLatencyLimitMs</c> are bypassed. <c>panLaw</c> is the project's pan
+///     law.
+/// </summary>
+public sealed record MixerSettings(PdcMode Pdc, bool LowLatency, double LowLatencyLimitMs, PanLaw PanLaw);
 
 /// <summary>A user name for an input, output pair or bus (Logic's I/O Labels).</summary>
 public sealed record IoLabel(int Number, string Name);

@@ -45,6 +45,48 @@ public sealed class MixerEditTests {
     }
 
     [Fact]
+    public void The_strip_input_stage_is_checked_compiled_and_undone() {
+        Apply(new AddTrackCommand("Gtr"), new AddVcaCommand("V"));
+        var gtr = T("Gtr").Id;
+        Assert.Contains("Trim", Fails(new SetStripCommand(gtr, TrimDb: 24.5)), StringComparison.Ordinal);
+        Assert.Contains("Delay", Fails(new SetStripCommand(gtr, DelayMs: -501)), StringComparison.Ordinal);
+        Assert.Contains("Pan", Fails(new SetStripCommand(gtr, PanLeft: 1.5)), StringComparison.Ordinal);
+        Assert.Contains("master", Fails(new SetStripCommand(TrimDb: 3)), StringComparison.Ordinal);
+        Assert.Contains("VCA", Fails(new SetStripCommand(T("V").Id, DelayMs: 3)), StringComparison.Ordinal);
+
+        var before = state;
+        var edit = Edits.Apply(
+            state,
+            [new SetStripCommand(gtr, TrimDb: 6, PolarityInverted: true, DelayMs: 10, DualPan: true, PanRight: 0.5)],
+            ids
+        );
+        state = edit.State;
+        var engine = Strips.Engine(state, T("Gtr"), EngineIds.Empty.With(state));
+        Assert.Equal(-Units.DbToGain(6), engine.Trim);
+        Assert.Equal(480, engine.DelayFrames);
+        Assert.True(engine.DualPan);
+        Assert.Equal((-1f, 0.5f), (engine.PanLeft, engine.PanRight));
+        Assert.Equal(before.Tracks[0], state.Apply(edit.Inverse).Tracks[0]);
+    }
+
+    [Fact]
+    public void Group_members_that_link_pan_follow_a_dual_pan() {
+        Apply(
+            new AddTrackCommand("A"),
+            new AddTrackCommand("B"),
+            new SetGroupCommand(1, "G", Properties: new(false, false, false, true, false, false, false, false))
+        );
+        Apply(
+            new SetTrackGroupsCommand(T("A").Id, [1]),
+            new SetTrackGroupsCommand(T("B").Id, [1]),
+            new SetStripCommand(T("B").Id, PanRight: 0.5),
+            new SetStripCommand(T("A").Id, DualPan: true, PanLeft: -0.75)
+        );
+        Assert.True(T("B").Strip.DualPan);
+        Assert.Equal((-0.75, 0.5), (T("B").Strip.PanLeft, T("B").Strip.PanRight));
+    }
+
+    [Fact]
     public void Buses_groups_outputs_and_ids_are_checked() {
         Apply(new AddTrackCommand("Gtr"), new AddVcaCommand());
         var gtr = T("Gtr").Id;

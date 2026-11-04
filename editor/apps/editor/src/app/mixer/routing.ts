@@ -1,9 +1,16 @@
-import type { IoLabels, Track } from '@anode/api-client';
+import type { IoLabels, Track, TrackKind } from '@anode/api-client';
 
 /** Buses 1…64 (docs/05-phase-4.md). */
 export const BusCount = 64;
 /** Device output pairs the pickers offer when the I/O labels name none (Output 1-2 … 15-16). */
 export const DefaultOutputPairs = 8;
+
+/** Whether a track of this kind has a full strip (inserts, sends, an output), as the Server's `HasAudioStrip`. */
+export function hasFullStrip(kind: TrackKind): boolean {
+  return (
+    kind === 'audio' || kind === 'aux' || kind === 'instrument' || kind === 'bassPlayer' || kind === 'keyboardPlayer'
+  );
+}
 
 /** Where a strip goes: the master, a bus, or a device output pair (which bypasses the master). */
 export type Route = { kind: 'master' } | { kind: 'bus'; bus: number } | { kind: 'output'; pair: number };

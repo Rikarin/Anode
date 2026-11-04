@@ -12,6 +12,7 @@ namespace Anode.Model.Compile;
 ///     solos its members. Phase 10 (docs/11-phase-10.md): the input and output formats, and the panner unless it is the
 ///     stereo pan (the master has none), its levels as linear gains. Phase 11 (docs/12-phase-11.md): an analysed
 ///     Mastering Assistant carries its chain (<see cref="EngineInsert.Mastering" />, <see cref="MasteringChains" />).
+///     The input stage (trim, polarity, delay; dual pan) is a full track strip's.
 /// </summary>
 public static class Strips {
     /// <summary>
@@ -61,7 +62,14 @@ public static class Strips {
                 : [],
             (EngineChannelFormat)strip.InputFormat,
             (EngineChannelFormat)strip.OutputFormat,
-            track is null ? null : Panner(strip.Panner)
+            track is null ? null : Panner(strip.Panner),
+            full && track is not null
+                ? Units.DbToGain(strip.TrimDb) * (strip.PolarityInverted ? -1f : 1f)
+                : 1f,
+            full && track is not null ? (int)Math.Round(strip.DelayMs * state.SampleRate / 1000) : 0,
+            strip.DualPan,
+            (float)strip.PanLeft,
+            (float)strip.PanRight
         );
     }
 

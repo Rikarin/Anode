@@ -2521,7 +2521,12 @@ export interface components {
      *     pan (pan) for a stereo output, the Surround Panner, or an object (PannerMode); an input
      *     of the output's format passes straight through. Sends to a multichannel bus are panned by the strip's panner
      *     (their pan applies to stereo buses only). Every strip of a project from before Phase 10 is stereo in
-     *     and out with the stereo panner.
+     *     and out with the stereo panner.The strip's input stage (a track with a full strip, never the master or a VCA): trimDb and
+     *     polarityInverted apply to its source before the inserts, on every channel; delayMs moves it in
+     *     time after the inserts, before the fader (negative: earlier, which delay compensation pays for by delaying
+     *     everything else). dualPan pans a stereo signal's two channels on their own, to panLeft and
+     *     panRight (−1…1), instead of balancing it with pan; at −1 and 1 the signal passes as it is. They
+     *     stay when it is off. A mono signal always takes pan, a surround output its panner.
      */
     ChannelStrip: {
       /** Format: double */
@@ -2539,6 +2544,16 @@ export interface components {
       inputFormat: components['schemas']['ChannelFormat'];
       outputFormat: components['schemas']['ChannelFormat'];
       panner: components['schemas']['Panner'];
+      /** Format: double */
+      trimDb: number;
+      polarityInverted: boolean;
+      /** Format: double */
+      delayMs: number;
+      dualPan: boolean;
+      /** Format: double */
+      panLeft: number;
+      /** Format: double */
+      panRight: number;
     };
     /**
      * @description A chord of the chord track at project tick `tick` (it holds until the next chord): its root, its quality
@@ -4696,6 +4711,7 @@ export interface components {
       lowLatency?: null | boolean;
       /** Format: double */
       lowLatencyLimitMs?: null | number;
+      panLaw?: null | components['schemas']['PanLaw'];
     };
     /**
      * @description Phase 10, a movie import's result: sets the project's movie (replacing one it has). The `movieImport` job
@@ -5077,6 +5093,16 @@ export interface components {
       pan?: null | number;
       mute?: null | boolean;
       solo?: null | boolean;
+      /** Format: double */
+      trimDb?: null | number;
+      polarityInverted?: null | boolean;
+      /** Format: double */
+      delayMs?: null | number;
+      dualPan?: null | boolean;
+      /** Format: double */
+      panLeft?: null | number;
+      /** Format: double */
+      panRight?: null | number;
     };
     /**
      * @description Phase 10: sets a track strip's input format (mono or stereo for instrument tracks; any for audio and aux
@@ -6132,13 +6158,15 @@ export interface components {
     };
     /**
      * @description Plugin delay compensation, and low-latency mode: while it is on, plugins on the path of record-armed or
-     *     monitored tracks whose latency exceeds `lowLatencyLimitMs` are bypassed.
+     *     monitored tracks whose latency exceeds `lowLatencyLimitMs` are bypassed. `panLaw` is the project's pan
+     *     law.
      */
     MixerSettings: {
       pdc: components['schemas']['PdcMode'];
       lowLatency: boolean;
       /** Format: double */
       lowLatencyLimitMs: number;
+      panLaw: components['schemas']['PanLaw'];
     };
     /**
      * @description Monitoring (`GET/PUT /settings/monitoring`), stored in the user settings, not the project: the speaker map is
@@ -6508,6 +6536,12 @@ export interface components {
       name: string;
       pads: components['schemas']['KeyCommandPad'][];
     };
+    /**
+     * @description How a mono signal's level follows its pan: what the centre is, relative to a hard pan. Stereo signals are balanced
+     *     (the far side falls linearly) whatever the law; dual pan takes the law's shape with a hard pan at unity.
+     * @enum {unknown}
+     */
+    PanLaw: 'zeroDb' | 'minus3Db' | 'minus3DbCompensated' | 'minus4Point5Db' | 'minus6Db';
     /**
      * @description A strip's panner (`ChannelStrip.panner`): the mode that applies, and both panners' settings, which stay when
      *     the mode changes. Automation addresses (`AutomationLane.target`): `surround:angle`,

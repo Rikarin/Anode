@@ -44,7 +44,16 @@ public sealed unsafe class AllocationTests : IDisposable {
                 .ToArray();
             models.Add(new(t, [], regions));
             tracks.Add(
-                TestAudio.Track(t, (t & 1) == 1, new(0.8f, t / 8f - 0.5f, t == 5, t == 3), t & 1, t == 2, t < 4)
+                TestAudio.Track(
+                    t,
+                    (t & 1) == 1,
+                    new(0.8f, t / 8f - 0.5f, t == 5, t == 3) {
+                        Trim = t == 2 ? 1f : -0.9f, DelayFrames = 40 * (t - 4), DualPan = t == 1
+                    },
+                    t & 1,
+                    t == 2,
+                    t < 4
+                )
             );
         }
 

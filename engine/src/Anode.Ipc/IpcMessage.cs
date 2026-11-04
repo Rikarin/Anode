@@ -115,6 +115,12 @@ public sealed record EngineFile(int Id, string Path, int Channels, int SampleRat
 ///         maps one to the other (null: the stereo pan, as before). The engine's buffers carry a strip's channels in its
 ///         format's layout order (<c>Anode.Dsp.Spatial.SpeakerLayout</c>); a stereo strip costs what it did.
 ///     </para>
+///     <para>
+///         The strip's input stage: <paramref name="Trim" /> is the signed linear gain on its source before the inserts
+///         (negative: polarity inverted); <paramref name="DelayFrames" /> moves it in time (negative: earlier, by
+///         delaying everything else); with <paramref name="DualPan" /> a stereo signal's channels pan on their own to
+///         <paramref name="PanLeft" /> and <paramref name="PanRight" />.
+///     </para>
 /// </summary>
 public sealed record EngineStrip(
     float Gain,
@@ -127,8 +133,32 @@ public sealed record EngineStrip(
     IReadOnlyList<EngineInsert>? MidiEffects = null,
     EngineChannelFormat InputFormat = EngineChannelFormat.Stereo,
     EngineChannelFormat OutputFormat = EngineChannelFormat.Stereo,
-    EnginePanner? Panner = null
+    EnginePanner? Panner = null,
+    float Trim = 1f,
+    int DelayFrames = 0,
+    bool DualPan = false,
+    float PanLeft = -1f,
+    float PanRight = 1f
 );
+
+/// <summary>The contract's <c>PanLaw</c>, in its order.</summary>
+[JsonConverter(typeof(JsonStringEnumConverter<EnginePanLaw>))]
+public enum EnginePanLaw {
+    [JsonStringEnumMemberName("zeroDb")]
+    ZeroDb,
+
+    [JsonStringEnumMemberName("minus3Db")]
+    Minus3Db,
+
+    [JsonStringEnumMemberName("minus3DbCompensated")]
+    Minus3DbCompensated,
+
+    [JsonStringEnumMemberName("minus4Point5Db")]
+    Minus4Point5Db,
+
+    [JsonStringEnumMemberName("minus6Db")]
+    Minus6Db
+}
 
 /// <summary>The contract's <c>ChannelFormat</c>, in its order (and <c>Anode.Dsp.Spatial.SpeakerFormat</c>'s).</summary>
 [JsonConverter(typeof(JsonStringEnumConverter<EngineChannelFormat>))]
@@ -547,7 +577,12 @@ public sealed record SetSendLevelMessage(int TrackId, string SendId, float Gain,
 ///     Server → host: plugin delay compensation (<c>all</c>, <c>tracks</c>, <c>off</c>) and low-latency mode with its
 ///     limit in milliseconds.
 /// </summary>
-public sealed record SetMixerMessage(string Pdc, bool LowLatency, double LowLatencyLimitMs) : IpcMessage;
+public sealed record SetMixerMessage(
+    string Pdc,
+    bool LowLatency,
+    double LowLatencyLimitMs,
+    EnginePanLaw PanLaw = EnginePanLaw.Minus3DbCompensated
+) : IpcMessage;
 
 /// <summary>
 ///     Server → host: render <paramref name="StartSample" />…<paramref name="EndSample" /> to 32-bit float stereo WAV,

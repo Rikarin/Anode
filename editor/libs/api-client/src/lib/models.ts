@@ -83,6 +83,7 @@ export type AutomationPoint = Schemas['AutomationPoint'];
 export type AutomationLane = Schemas['AutomationLane'];
 export type MixerSettings = Schemas['MixerSettings'];
 export type PdcMode = Schemas['PdcMode'];
+export type PanLaw = Schemas['PanLaw'];
 export type IoLabels = Schemas['IoLabels'];
 export type IoLabel = Schemas['IoLabel'];
 export type PatchInfo = Schemas['PatchInfo'];
@@ -444,6 +445,16 @@ export const DefaultSurroundPanner: SurroundPanner = {
 export const DefaultObjectPanner: ObjectPanner = { azimuth: 0, elevation: 0, distance: 1, size: 0 };
 
 /** A new strip's panner (`Panner.Default`): stereo pan, the other panners at their defaults. */
+/** What a new strip has beyond its routing: no trim or delay, polarity as recorded, the plain pan. */
+export const StripDefaults = {
+  trimDb: 0,
+  polarityInverted: false,
+  delayMs: 0,
+  dualPan: false,
+  panLeft: -1,
+  panRight: 1
+} as const;
+
 export const DefaultPanner: Panner = {
   mode: 'stereo',
   surround: DefaultSurroundPanner,

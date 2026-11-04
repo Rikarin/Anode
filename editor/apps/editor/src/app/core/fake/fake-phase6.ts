@@ -19,6 +19,7 @@ import {
   type SmartControl,
   type SmartControls,
   type SmartMapping,
+  StripDefaults,
   type Track
 } from '@anode/api-client';
 import { MeterMap } from '@anode/timeline';
@@ -147,7 +148,8 @@ export function blankTrack(id: string, name: string, kind: Track['kind'], color:
       midiEffects: [],
       inputFormat: 'stereo',
       outputFormat: 'stereo',
-      panner: structuredClone(DefaultPanner)
+      panner: structuredClone(DefaultPanner),
+      ...StripDefaults
     },
     instrument: null,
     midiInput: { device: null, channel: 0 },

@@ -113,6 +113,7 @@ import {
   type StepInputRequest,
   type StepInputState,
   type StopRequest,
+  StripDefaults,
   type SurfaceStatus,
   type SyncState,
   type SystemInfo,
@@ -623,7 +624,7 @@ export class FakeAnodeServer implements AnodeApi {
             punchInTick: 0,
             punchOutTick: 4 * 4 * Ppq
           },
-          mixer: { pdc: 'all', lowLatency: false, lowLatencyLimitMs: 10 },
+          mixer: { pdc: 'all', lowLatency: false, lowLatencyLimitMs: 10, panLaw: 'minus3DbCompensated' },
           smartTempo: { mode: 'keep', defaultFollow: 'off', analyzeImports: true },
           varispeed: { enabled: false, mode: 'speedOnly', speed: 1 },
           sync: {
@@ -5628,7 +5629,7 @@ export class FakeAnodeServer implements AnodeApi {
           punchInTick: 0,
           punchOutTick: 4 * 4 * Ppq
         },
-        mixer: { pdc: 'all', lowLatency: false, lowLatencyLimitMs: 10 },
+        mixer: { pdc: 'all', lowLatency: false, lowLatencyLimitMs: 10, panLaw: 'minus3DbCompensated' },
         smartTempo: { mode: 'keep', defaultFollow: 'off', analyzeImports: true },
         varispeed: { enabled: false, mode: 'speedOnly', speed: 1 },
         sync: { source: 'internal', destinations: [], frameRate: 'fps25', startOffsetSeconds: 0, linkStartStop: false },
@@ -5960,7 +5961,8 @@ function strip(): ChannelStrip {
     midiEffects: [],
     inputFormat: 'stereo',
     outputFormat: 'stereo',
-    panner: structuredClone(DefaultPanner)
+    panner: structuredClone(DefaultPanner),
+    ...StripDefaults
   };
 }
 

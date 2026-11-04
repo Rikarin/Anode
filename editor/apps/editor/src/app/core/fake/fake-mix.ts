@@ -1,9 +1,10 @@
 import {
   ApiError,
+  DefaultPanner,
+  StripDefaults,
   type AutomationLane,
   type AutomationPoint,
   type ChannelStrip,
-  DefaultPanner,
   type EditCommand,
   type GroupProperties,
   type Insert,
@@ -16,7 +17,7 @@ import {
   type Track
 } from '@anode/api-client';
 import { clampParameter, defaultParameters } from '../../instruments/parameters';
-import { BusCount, lowestFreeBus, parseRoute, wouldLoop } from '../../mixer/routing';
+import { BusCount, hasFullStrip, lowestFreeBus, parseRoute, wouldLoop } from '../../mixer/routing';
 import { TrackColors } from '../../state/track-colors';
 import { PannerRanges } from './fake-phase10';
 
@@ -250,6 +251,19 @@ function dropLanes(project: Project, trackId: string | null, prefix: string): Pr
   };
 }
 
+/** The ranges the Server keeps a strip's input stage to. */
+function checkStripInput(command: Command<'setStrip'>): void {
+  if (Math.abs(command.trimDb ?? 0) > 24) {
+    refuse('Trim is ±24 dB.');
+  }
+  if (Math.abs(command.delayMs ?? 0) > 500) {
+    refuse('Delay is ±500 ms.');
+  }
+  if (Math.abs(command.panLeft ?? 0) > 1 || Math.abs(command.panRight ?? 0) > 1) {
+    refuse('Pan is −1 to 1.');
+  }
+}
+
 /** `setStrip`: the strip, the members of its groups that link each property, and automation recording. */
 export function applyStrip(project: Project, command: Command<'setStrip'>, ctx: MixContext): Project {
   const patch = (s: ChannelStrip): ChannelStrip => ({
@@ -258,12 +272,33 @@ export function applyStrip(project: Project, command: Command<'setStrip'>, ctx: 
     pan: clamp(command.pan ?? s.pan, -1, 1),
     mute: command.mute ?? s.mute,
     solo: command.solo ?? s.solo,
-    vcaId: s.vcaId ?? null
+    vcaId: s.vcaId ?? null,
+    trimDb: command.trimDb ?? s.trimDb,
+    polarityInverted: command.polarityInverted ?? s.polarityInverted,
+    delayMs: command.delayMs ?? s.delayMs,
+    dualPan: command.dualPan ?? s.dualPan,
+    panLeft: command.panLeft ?? s.panLeft,
+    panRight: command.panRight ?? s.panRight
   });
+  checkStripInput(command);
+  const input = [
+    command.trimDb,
+    command.polarityInverted,
+    command.delayMs,
+    command.dualPan,
+    command.panLeft,
+    command.panRight
+  ].some(value => value !== null && value !== undefined);
   if (command.trackId === null || command.trackId === undefined) {
+    if (input) {
+      refuse('The master has no trim, polarity, delay or dual pan.');
+    }
     return { ...project, master: patch(project.master) };
   }
   const track = findTrack(project, command.trackId);
+  if (input && !hasFullStrip(track.kind)) {
+    refuse(`${track.name} has no trim, polarity, delay or dual pan.`);
+  }
   const next = patch(track.strip);
   let after = withTrack(project, { ...track, strip: next });
   const follow = (property: keyof GroupProperties, change: (s: ChannelStrip) => ChannelStrip) => {
@@ -280,6 +315,17 @@ export function applyStrip(project: Project, command: Command<'setStrip'>, ctx: 
   if (command.pan !== null && command.pan !== undefined) {
     follow('pan', s => ({ ...s, pan: next.pan }));
     after = record(after, track.id, 'pan', next.pan, ctx);
+  }
+  if (command.dualPan !== null && command.dualPan !== undefined) {
+    follow('pan', s => ({ ...s, dualPan: next.dualPan }));
+  }
+  if (command.panLeft !== null && command.panLeft !== undefined) {
+    const delta = next.panLeft - track.strip.panLeft;
+    follow('pan', s => ({ ...s, panLeft: clamp(s.panLeft + delta, -1, 1) }));
+  }
+  if (command.panRight !== null && command.panRight !== undefined) {
+    const delta = next.panRight - track.strip.panRight;
+    follow('pan', s => ({ ...s, panRight: clamp(s.panRight + delta, -1, 1) }));
   }
   if (command.mute !== null && command.mute !== undefined) {
     follow('mute', s => ({ ...s, mute: next.mute }));
@@ -324,7 +370,8 @@ function newTrack(project: Project, kind: 'aux' | 'vca', name: string, inputBus:
       midiEffects: [],
       inputFormat: 'stereo',
       outputFormat: 'stereo',
-      panner: structuredClone(DefaultPanner)
+      panner: structuredClone(DefaultPanner),
+      ...StripDefaults
     },
     instrument: null,
     midiInput: { device: null, channel: 0 },
@@ -643,7 +690,12 @@ export function applyMixCommand(project: Project, command: EditCommand, ctx: Mix
         ...project,
         settings: {
           ...project.settings,
-          mixer: { pdc: command.pdc ?? m.pdc, lowLatency: command.lowLatency ?? m.lowLatency, lowLatencyLimitMs: limit }
+          mixer: {
+            pdc: command.pdc ?? m.pdc,
+            lowLatency: command.lowLatency ?? m.lowLatency,
+            lowLatencyLimitMs: limit,
+            panLaw: command.panLaw ?? m.panLaw
+          }
         }
       };
     }

@@ -42,12 +42,14 @@ import {
   busName,
   busRoute,
   DefaultOutputPairs,
+  hasFullStrip,
   lowestFreeBus,
   outputPairName,
   outputRoute,
   routeName
 } from './routing';
 import { isSurround, StripPanner } from './strip-panner';
+import { StripSettings } from './strip-settings';
 
 /** What an insert slot's menu acts on: a filled slot's insert, or an empty slot at `index`. */
 interface SlotContext {
@@ -103,6 +105,7 @@ const BusPages = Array.from({ length: BusCount / 16 }, (_, page) => ({
     AnMultichannelMeter,
     AnSendKnob,
     StripPanner,
+    StripSettings,
     XuiContextMenuImports,
     XuiMenuImports,
     XuiTooltipImports
@@ -163,6 +166,11 @@ const BusPages = Array.from({ length: BusCount / 16 }, (_, page) => ({
         } @else {
           <div class="h-4.5" aria-hidden="true"></div>
         }
+      }
+      @if (inputTrack(); as t) {
+        <an-strip-settings [track]="t" [name]="name()" />
+      } @else {
+        <div class="h-4.5" aria-hidden="true"></div>
       }
       @if (layout().midiEffects) {
         @if (hasMidiEffects()) {
@@ -700,6 +708,11 @@ export class MixerStrip {
   protected readonly dropAt = signal<string | null>(null);
 
   protected readonly trackId = computed(() => this.track()?.id ?? null);
+  /** The track, when its strip has an input stage (trim, polarity, delay, dual pan). */
+  protected readonly inputTrack = computed(() => {
+    const track = this.track();
+    return track && hasFullStrip(track.kind) ? track : null;
+  });
   protected readonly kind = computed(() => this.track()?.kind ?? 'master');
   protected readonly strip = computed<ChannelStrip>(() => this.track()?.strip ?? this.project.master());
   protected readonly name = computed(() => this.track()?.name ?? 'Stereo Out');

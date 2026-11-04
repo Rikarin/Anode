@@ -502,8 +502,16 @@ public static partial class Edits {
 
     static List<DeltaOp> SetStrip(ProjectState state, SetStripCommand c) {
         CheckStrip(c);
+        var input = c.TrimDb is not null
+            || c.PolarityInverted is not null
+            || c.DelayMs is not null
+            || c.DualPan is not null
+            || c.PanLeft is not null
+            || c.PanRight is not null;
         if (c.TrackId is null) {
-            return [new MasterChanged(Changed(state.Master, c))];
+            return input
+                ? throw new EditException("The master has no trim, polarity, delay or dual pan.")
+                : [new MasterChanged(Changed(state.Master, c))];
         }
 
         if (state.FindTrack(c.TrackId) is { Kind: TrackKind.Vca } && c.Pan is not null) {
@@ -511,6 +519,10 @@ public static partial class Edits {
         }
 
         var track = TrackOf(state, c.TrackId);
+        if (input && !HasAudioStrip(track.Kind)) {
+            throw new EditException($"A {Kind(track.Kind)} track has no trim, polarity, delay or dual pan.");
+        }
+
         List<DeltaOp> ops =
             [new TrackUpserted(track with { Strip = Changed(track.Strip, c) }, state.IndexOfTrack(track.Id))];
         ops.AddRange(GroupFollows(state, track, c));
@@ -524,6 +536,16 @@ public static partial class Edits {
 
         if (c.Pan is { } pan && !(pan is >= -1 and <= 1)) {
             throw new EditException($"Pan {pan} is outside −1…1.");
+        }
+
+        CheckPan(c.PanLeft);
+        CheckPan(c.PanRight);
+        if (c.TrimDb is { } trim && !(trim is >= -MaxTrimDb and <= MaxTrimDb)) {
+            throw new EditException($"Trim {trim} dB is outside ±{MaxTrimDb} dB.");
+        }
+
+        if (c.DelayMs is { } delay && !(delay is >= -MaxStripDelayMs and <= MaxStripDelayMs)) {
+            throw new EditException($"Delay {delay} ms is outside ±{MaxStripDelayMs} ms.");
         }
     }
 
@@ -539,6 +561,17 @@ public static partial class Edits {
             (s, v) => s with { VolumeDb = Follow(s.VolumeDb, v - track.Strip.VolumeDb) }
         );
         Link(static p => p.Pan, c.Pan, (s, v) => s with { Pan = Math.Clamp(s.Pan + (v - track.Strip.Pan), -1, 1) });
+        Link(static p => p.Pan, c.DualPan, static (s, v) => s with { DualPan = v });
+        Link(
+            static p => p.Pan,
+            c.PanLeft,
+            (s, v) => s with { PanLeft = Math.Clamp(s.PanLeft + (v - track.Strip.PanLeft), -1, 1) }
+        );
+        Link(
+            static p => p.Pan,
+            c.PanRight,
+            (s, v) => s with { PanRight = Math.Clamp(s.PanRight + (v - track.Strip.PanRight), -1, 1) }
+        );
         Link(static p => p.Mute, c.Mute, static (s, v) => s with { Mute = v });
         Link(static p => p.Solo, c.Solo, static (s, v) => s with { Solo = v });
         foreach (var other in state.Tracks) {
@@ -566,7 +599,13 @@ public static partial class Edits {
             VolumeDb = c.VolumeDb ?? strip.VolumeDb,
             Pan = c.Pan ?? strip.Pan,
             Mute = c.Mute ?? strip.Mute,
-            Solo = c.Solo ?? strip.Solo
+            Solo = c.Solo ?? strip.Solo,
+            TrimDb = c.TrimDb ?? strip.TrimDb,
+            PolarityInverted = c.PolarityInverted ?? strip.PolarityInverted,
+            DelayMs = c.DelayMs ?? strip.DelayMs,
+            DualPan = c.DualPan ?? strip.DualPan,
+            PanLeft = c.PanLeft ?? strip.PanLeft,
+            PanRight = c.PanRight ?? strip.PanRight
         };
 
     static DeltaOp[] AddRegion(ProjectState state, AddRegionCommand c, IIdSource ids) {

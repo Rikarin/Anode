@@ -616,7 +616,9 @@ public static class ProjectPackage {
             Keys = keys,
             Recording = settings.Recording ?? ProjectDefaults.Recording(signature),
             Mixer = settings.Mixer is { } mixer && Enum.IsDefined(mixer.Pdc) && double.IsFinite(mixer.LowLatencyLimitMs)
-                ? mixer
+                ? mixer with {
+                    PanLaw = Enum.IsDefined(mixer.PanLaw) ? mixer.PanLaw : ProjectDefaults.Mixer.PanLaw
+                }
                 : ProjectDefaults.Mixer,
             SmartTempo = settings.SmartTempo is { } smart
                 && Enum.IsDefined(smart.Mode)
@@ -895,6 +897,8 @@ public static class ProjectPackage {
     /// <summary>A value 0…1 as read (0 when it is not a number).</summary>
     static double Unit(double value) => double.IsFinite(value) ? Math.Clamp(value, 0, 1) : 0;
 
+    static double Finite(double value, double otherwise) => double.IsFinite(value) ? value : otherwise;
+
     /// <summary>A track's Smart Controls as read: every control of its layout, mappings well formed (null: none yet).</summary>
     static SmartControls? Normalise(SmartControls? smart, Track track) {
         if (smart is null || !Edits.HasAudioStrip(track.Kind)) {
@@ -942,6 +946,10 @@ public static class ProjectPackage {
             Sends = full && track is not null ? [..sends] : [],
             Output = Routing.Normalise(strip.Output) ?? Routing.Master,
             Groups = strip.Groups ?? [],
+            TrimDb = Math.Clamp(Finite(strip.TrimDb, 0), -Edits.MaxTrimDb, Edits.MaxTrimDb),
+            DelayMs = Math.Clamp(Finite(strip.DelayMs, 0), -Edits.MaxStripDelayMs, Edits.MaxStripDelayMs),
+            PanLeft = Math.Clamp(Finite(strip.PanLeft, -1), -1, 1),
+            PanRight = Math.Clamp(Finite(strip.PanRight, 1), -1, 1),
             InputFormat = Known(strip.InputFormat),
             OutputFormat = Known(strip.OutputFormat),
             Panner = strip.Panner is { Surround: not null, Object: not null } panner && Enum.IsDefined(panner.Mode)
@@ -1129,12 +1137,13 @@ static class PackageKeys {
 ///     refused rather than read wrongly.
 /// </remarks>
 public static class PackageMigrations {
-    public const int CurrentSchemaVersion = 11;
+    public const int CurrentSchemaVersion = 12;
     const string VersionField = "schemaVersion";
 
     /// <summary><c>Steps[n]</c> takes schema <c>n + 1</c> to <c>n + 2</c>; it gets the kind of file and its JSON.</summary>
     static readonly Func<string, JsonObject, JsonObject>[] Steps = [
-        ToSchema2, ToSchema3, ToSchema4, ToSchema5, ToSchema6, ToSchema7, ToSchema8, ToSchema9, ToSchema10, ToSchema11
+        ToSchema2, ToSchema3, ToSchema4, ToSchema5, ToSchema6, ToSchema7, ToSchema8, ToSchema9, ToSchema10, ToSchema11,
+        ToSchema12
     ];
 
     public static JsonObject Upgrade(JsonObject json, string kind) {
@@ -1376,6 +1385,43 @@ public static class PackageMigrations {
     static JsonObject ToSchema11(string kind, JsonObject json) {
         Schema11.Fill(kind, json);
         return json;
+    }
+
+    /// <summary>
+    ///     Schema 11 to 12 (strip trim, polarity, delay, dual pan and the pan law): every strip keeps its sound: no trim,
+    ///     polarity as recorded, no delay, plain pan; the pan law is the one Anode always had, −3 dB compensated.
+    /// </summary>
+    static JsonObject ToSchema12(string kind, JsonObject json) {
+        Schema12.Fill(kind, json);
+        return json;
+    }
+}
+
+/// <summary>The schema-12 additions to a schema-11 file: see <c>ToSchema12</c>. Leaves fields that are present alone.</summary>
+static class Schema12 {
+    public static void Fill(string kind, JsonObject json) {
+        if (kind == PackageKeys.ProjectKind) {
+            if (json[PackageKeys.Settings]?["mixer"] is JsonObject mixer) {
+                mixer["panLaw"] ??= "minus3DbCompensated";
+            }
+
+            Strip(json["master"] as JsonObject);
+        } else if (kind == PackageKeys.TrackKind) {
+            Strip(json[PackageKeys.Track]?["strip"] as JsonObject);
+        }
+    }
+
+    static void Strip(JsonObject? strip) {
+        if (strip is null) {
+            return;
+        }
+
+        strip["trimDb"] ??= 0;
+        strip["polarityInverted"] ??= false;
+        strip["delayMs"] ??= 0;
+        strip["dualPan"] ??= false;
+        strip["panLeft"] ??= -1;
+        strip["panRight"] ??= 1;
     }
 }
 

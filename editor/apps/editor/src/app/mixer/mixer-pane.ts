@@ -14,6 +14,7 @@ import { SelectionStore } from '../state/selection.store';
 import { UiStore } from '../state/ui.store';
 import { MixerStrip, type StripLayout } from './mixer-strip';
 import { signalFlow } from './routing';
+import { PanLaws } from './strip-settings';
 
 /** Logic's Mixer views: every strip, the tracks' strips, or the buses (aux and VCA strips) and outputs. */
 export type MixerView = 'all' | 'tracks' | 'buses';
@@ -85,7 +86,7 @@ export class MixerViewStore {
 
 /**
  * The Mixer, like Logic's: a toolbar (the All / Tracks / Buses and Outputs views, filters by strip kind, new aux and VCA
- * strips, I/O Labels, plugin delay compensation and low-latency mode), then a strip per track in track order, and the
+ * strips, I/O Labels, plugin delay compensation, low-latency mode and the pan law), then a strip per track in track order, and the
  * master apart on the right. The selected strip's signal flow (the aux strips and outputs it reaches) is highlighted.
  * Edits go through {@link MixerStore}, optimistic and coalesced.
  */
@@ -185,6 +186,22 @@ export class MixerViewStore {
             >
               Low Latency Mode ({{ project.settings().mixer.lowLatencyLimitMs }} ms)
             </button>
+            <xui-menu-divider />
+            <span class="text-foreground-muted px-3 pt-1 text-[10px] font-semibold tracking-wide uppercase">
+              Pan Law
+            </span>
+            @for (law of panLaws; track law.value) {
+              <button
+                xuiMenuItem
+                type="button"
+                role="menuitemradio"
+                [attr.data-pan-law]="law.value"
+                [attr.aria-checked]="project.settings().mixer.panLaw === law.value"
+                (click)="mixer.setMixerSettings({ panLaw: law.value })"
+              >
+                {{ law.label }}
+              </button>
+            }
           </xui-menu>
         </ng-template>
         <button
@@ -263,6 +280,7 @@ export class MixerPane {
   ];
   protected readonly filters = StripFilters;
   protected readonly pdcModes = PdcModes;
+  protected readonly panLaws = PanLaws;
   protected readonly selected = this.selection.track;
   protected readonly strips = computed(() =>
     visibleStrips(this.project.trackList(), this.store.view(), this.store.hidden())

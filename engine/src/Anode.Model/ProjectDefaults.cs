@@ -32,11 +32,17 @@ public static class ProjectDefaults {
         [],
         ChannelFormat.Stereo,
         ChannelFormat.Stereo,
-        Panner.Default
+        Panner.Default,
+        0,
+        false,
+        0,
+        false,
+        -1,
+        1
     );
 
-    /// <summary>Delay compensation everywhere; low-latency mode off, at 10 ms.</summary>
-    public static MixerSettings Mixer { get; } = new(PdcMode.All, false, 10);
+    /// <summary>Delay compensation everywhere; low-latency mode off, at 10 ms; the −3 dB compensated pan law.</summary>
+    public static MixerSettings Mixer { get; } = new(PdcMode.All, false, 10, PanLaw.Minus3DbCompensated);
 
     /// <summary>Smart Tempo keeps the project tempo; new regions do not follow it; imports are analysed.</summary>
     public static SmartTempoSettings SmartTempo { get; } = new(ProjectTempoMode.Keep, FlexFollow.Off, true);

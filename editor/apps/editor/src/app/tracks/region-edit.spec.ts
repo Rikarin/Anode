@@ -1,4 +1,4 @@
-import { type AudioRegion, DefaultPanner, type Track } from '@anode/api-client';
+import { type AudioRegion, DefaultPanner, StripDefaults, type Track } from '@anode/api-client';
 import { hitTest, ItemFlag, LaneIntervalIndex, RULER_HEIGHT, type TimelineView } from '@anode/timeline';
 import {
   type EditContext,
@@ -143,7 +143,8 @@ describe('buildScene', () => {
       midiEffects: [],
       inputFormat: 'stereo',
       outputFormat: 'stereo',
-      panner: DefaultPanner
+      panner: DefaultPanner,
+      ...StripDefaults
     },
     instrument: null,
     midiInput: { device: null, channel: 0 },

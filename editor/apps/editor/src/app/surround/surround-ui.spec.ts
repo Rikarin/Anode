@@ -1,5 +1,11 @@
 import { TestBed } from '@angular/core/testing';
-import { type ChannelStrip, DefaultMonitoringSettings, DefaultPanner, type Track } from '@anode/api-client';
+import {
+  type ChannelStrip,
+  DefaultMonitoringSettings,
+  DefaultPanner,
+  StripDefaults,
+  type Track
+} from '@anode/api-client';
 import { pannerTargets, targetsOf } from '../automation/targets';
 import { setUpFakeServer, settle } from '../core/fake/testing';
 import { MixerStrip } from '../mixer/mixer-strip';
@@ -34,6 +40,7 @@ const strip = (extra: Partial<ChannelStrip> = {}): ChannelStrip => ({
   inputFormat: 'mono',
   outputFormat: 'surround51',
   panner: { ...DefaultPanner, mode: 'surround' },
+  ...StripDefaults,
   ...extra
 });
 

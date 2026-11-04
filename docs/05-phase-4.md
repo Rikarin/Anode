@@ -304,6 +304,14 @@ All five e2e specs pass, twice in a row.
 - In small windows the Mixer scrolls instead of squeezing its strips, and the control bar folds its labels into icons
   below 1280 px.
 
+**Strip input stage (after Phase 11):** a full track strip has a trim and polarity (a signed gain on its source, ramped
+over a block, before the inserts; a frozen track's are in its freeze), a delay of ±500 ms and dual pan. The delay is an
+offset to the latency delay compensation aligns on, so it needs no line of its own and works with compensation off: a
+late strip's edges read further back, and an early strip makes everything else at its summing points wait. Automation
+and the sends follow the delayed signal; a sidechain taken from the strip does not. Early delay adds to the latency of
+monitored inputs. The pan law is `settings.mixer.panLaw`: it applies to mono signals (and a send of one), a stereo
+signal is always balanced, and dual pan uses the law's shape with a hard pan at unity, so −1 and 1 change nothing.
+
 **Open:**
 - Tempo-synced effects take the tempo from the click, not the tempo track.
 - Touch automation releases on the next change, not on mouse-up.

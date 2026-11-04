@@ -420,7 +420,7 @@ public sealed class EngineHost : IDisposable {
                 );
                 return true;
             case SetMixerMessage mixer:
-                Controller.SetMixer(mixer.Pdc, mixer.LowLatency, mixer.LowLatencyLimitMs);
+                Controller.SetMixer(mixer.Pdc, mixer.LowLatency, mixer.LowLatencyLimitMs, mixer.PanLaw);
                 return true;
             case RenderMessage render:
                 Render(render);
