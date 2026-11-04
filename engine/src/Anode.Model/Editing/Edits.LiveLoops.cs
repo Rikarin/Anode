@@ -54,12 +54,18 @@ public static partial class Edits {
         var scene = SceneOf(grid, c.SceneId);
         var changed = scene with { Name = c.Name is null ? scene.Name : Name(c.Name, "scene name") };
         var scenes = grid.Scenes.Where(s => s.Id != scene.Id).ToImmutableList();
-        var index = c.Index ?? grid.Scenes.ToList().FindIndex(s => s.Id == scene.Id);
-        if (index < 0 || index > scenes.Count) {
-            throw new EditException($"Scene index {index} is outside 0…{scenes.Count}.");
+        var index = MoveIndex(c.Index, grid.Scenes.ToList().FindIndex(s => s.Id == scene.Id), scenes.Count, "Scene");
+        return [new LiveLoopsChanged(grid with { Scenes = scenes.Insert(index, changed) })];
+    }
+
+    /// <summary>Where an item goes back into a list of <paramref name="count" /> others: asked for, else where it was.</summary>
+    static int MoveIndex(int? requested, int current, int count, string what) {
+        var index = requested ?? current;
+        if (index < 0 || index > count) {
+            throw new EditException($"{what} index {index} is outside 0…{count}.");
         }
 
-        return [new LiveLoopsChanged(grid with { Scenes = scenes.Insert(index, changed) })];
+        return index;
     }
 
     static List<DeltaOp> SetCell(ProjectState state, SetCellCommand c, IIdSource ids) {

@@ -1,3 +1,4 @@
+using Anode.Dsp;
 using System.Buffers.Binary;
 
 namespace Anode.Model.Audio;
@@ -265,15 +266,8 @@ public sealed class WavWriter : IDisposable {
         };
         Span<byte> header = stackalloc byte[44];
         "RIFF"u8.CopyTo(header);
-        "WAVE"u8.CopyTo(header[8..]);
-        "fmt "u8.CopyTo(header[12..]);
-        BinaryPrimitives.WriteUInt32LittleEndian(header[16..], 16);
-        BinaryPrimitives.WriteUInt16LittleEndian(header[20..], (ushort)(encoding == WavEncoding.Float32 ? 3 : 1));
-        BinaryPrimitives.WriteUInt16LittleEndian(header[22..], (ushort)channels);
-        BinaryPrimitives.WriteUInt32LittleEndian(header[24..], (uint)sampleRate);
-        BinaryPrimitives.WriteUInt32LittleEndian(header[28..], (uint)(sampleRate * channels * bits / 8));
-        BinaryPrimitives.WriteUInt16LittleEndian(header[32..], (ushort)(channels * bits / 8));
-        BinaryPrimitives.WriteUInt16LittleEndian(header[34..], (ushort)bits);
+        var tag = encoding == WavEncoding.Float32 ? WavFormatChunk.IeeeFloat : WavFormatChunk.Pcm;
+        WavFormatChunk.Write(header, 16, tag, channels, sampleRate, bits);
         "data"u8.CopyTo(header[36..]);
         stream.Write(header);
     }

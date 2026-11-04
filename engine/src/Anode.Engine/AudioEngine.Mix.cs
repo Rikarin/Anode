@@ -46,18 +46,18 @@ public sealed unsafe partial class AudioEngine {
     readonly bool[] destLive = new bool[MixPlan.Destinations];
     readonly bool[] destSolo = new bool[MixPlan.Destinations];
     readonly long[] positions = new long[MaxFrames];
-    readonly float[] tapLeft = GC.AllocateArray<float>(MaxFrames, true);
-    readonly float[] tapRight = GC.AllocateArray<float>(MaxFrames, true);
-    readonly float[] coefLeft = GC.AllocateArray<float>(MaxFrames, true);
-    readonly float[] coefRight = GC.AllocateArray<float>(MaxFrames, true);
-    readonly float[] volumeLane = GC.AllocateArray<float>(MaxFrames, true);
-    readonly float[] panLane = GC.AllocateArray<float>(MaxFrames, true);
-    readonly float[] muteLane = GC.AllocateArray<float>(MaxFrames, true);
-    readonly float[] levelLane = GC.AllocateArray<float>(MaxFrames, true);
-    readonly float[] sideLeft = GC.AllocateArray<float>(MaxFrames, true);
-    readonly float[] sideRight = GC.AllocateArray<float>(MaxFrames, true);
-    readonly float[] edgeLeft = GC.AllocateArray<float>(MaxFrames, true);
-    readonly float[] edgeRight = GC.AllocateArray<float>(MaxFrames, true);
+    readonly float[] tapLeft = PinnedBlock();
+    readonly float[] tapRight = PinnedBlock();
+    readonly float[] coefLeft = PinnedBlock();
+    readonly float[] coefRight = PinnedBlock();
+    readonly float[] volumeLane = PinnedBlock();
+    readonly float[] panLane = PinnedBlock();
+    readonly float[] muteLane = PinnedBlock();
+    readonly float[] levelLane = PinnedBlock();
+    readonly float[] sideLeft = PinnedBlock();
+    readonly float[] sideRight = PinnedBlock();
+    readonly float[] edgeLeft = PinnedBlock();
+    readonly float[] edgeRight = PinnedBlock();
     readonly MidiEvent[] chunkEvents = new MidiEvent[MidiTrackState.MaxEvents];
 
     int delayCompensation;
@@ -146,7 +146,7 @@ public sealed unsafe partial class AudioEngine {
     static float[][] Buffers(int count) {
         var buffers = new float[count][];
         for (var i = 0; i < count; i++) {
-            buffers[i] = GC.AllocateArray<float>(MaxFrames, true);
+            buffers[i] = PinnedBlock();
         }
 
         return buffers;

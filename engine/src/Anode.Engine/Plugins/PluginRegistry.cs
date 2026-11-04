@@ -75,16 +75,7 @@ public sealed class PluginRegistry {
             return builtin;
         }
 
-        Func<IFormatEffect>? create = null;
-        lock (gate) {
-            foreach (var (d, f) in formatEffects) {
-                if (d.Id == pluginId) {
-                    create = f;
-                }
-            }
-        }
-
-        return create?.Invoke();
+        return LastAdded(formatEffects, static d => d.Id, pluginId);
     }
 
     /// <summary>Whether <paramref name="pluginId" /> is an insert that changes its strip's format.</summary>
@@ -115,10 +106,19 @@ public sealed class PluginRegistry {
             return builtin;
         }
 
-        Func<IMidiEffect>? create = null;
+        return LastAdded(midiEffects, static d => d.Id, pluginId);
+    }
+
+    /// <summary>A new instance of the entry added last under <paramref name="pluginId" />, or null without one.</summary>
+    T? LastAdded<TDescriptor, T>(
+        List<(TDescriptor Descriptor, Func<T> Create)> entries,
+        Func<TDescriptor, string> idOf,
+        string pluginId
+    ) where T : class {
+        Func<T>? create = null;
         lock (gate) {
-            foreach (var (d, f) in midiEffects) {
-                if (d.Id == pluginId) {
+            foreach (var (d, f) in entries) {
+                if (idOf(d) == pluginId) {
                     create = f;
                 }
             }

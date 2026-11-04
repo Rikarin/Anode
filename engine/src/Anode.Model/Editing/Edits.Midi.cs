@@ -63,14 +63,7 @@ public static partial class Edits {
         var value = c.Value;
         var info = plugins.Find(slot.PluginId)?.Parameters.FirstOrDefault(p => p.Id == c.ParameterId);
         if (info is not null) {
-            if (value < info.Min || value > info.Max) {
-                throw new EditException($"Parameter '{info.Id}' takes {info.Min}…{info.Max}, not {value}.");
-            }
-
-            if (info.Steps > 0 && info.Max > info.Min) {
-                var step = (info.Max - info.Min) / info.Steps;
-                value = Math.Clamp(info.Min + Math.Round((value - info.Min) / step) * step, info.Min, info.Max);
-            }
+            value = InRange(info, value);
         } else if (!slot.Parameters.ContainsKey(c.ParameterId)) {
             throw new EditException($"Instrument '{slot.PluginId}' has no parameter '{c.ParameterId}'.");
         }
@@ -229,6 +222,13 @@ public static partial class Edits {
         ];
     }
 
+    /// <summary>A list of <paramref name="items" /> with room for <paramref name="more" />.</summary>
+    static List<T> Extended<T>(IReadOnlyList<T> items, int more) {
+        var list = new List<T>(items.Count + more);
+        list.AddRange(items);
+        return list;
+    }
+
     static DeltaOp[] AddNotes(ProjectState state, AddNotesCommand c) {
         var region = MidiRegionOf(state, c.RegionId);
         if (c.Notes is not { Count: > 0 and <= MaxNotesPerCommand }) {
@@ -237,8 +237,7 @@ public static partial class Edits {
 
         CheckCapacity(region, c.Notes.Count);
         var next = state.LastEventId;
-        var notes = new List<Note>(region.Notes.Count + c.Notes.Count);
-        notes.AddRange(region.Notes);
+        var notes = Extended(region.Notes, c.Notes.Count);
         foreach (var n in c.Notes) {
             if (n is null) {
                 throw new EditException("A note is null.");
@@ -371,8 +370,7 @@ public static partial class Edits {
 
         CheckCapacity(region, c.Events.Count);
         var next = state.LastEventId;
-        var controls = new List<ControlEvent>(region.Controls.Count + c.Events.Count);
-        controls.AddRange(region.Controls);
+        var controls = Extended(region.Controls, c.Events.Count);
         foreach (var e in c.Events) {
             if (e is null) {
                 throw new EditException("A controller event is null.");

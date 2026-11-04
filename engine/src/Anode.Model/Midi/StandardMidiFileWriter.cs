@@ -193,39 +193,11 @@ public static class StandardMidiFileWriter {
         var micros = (int)Math.Round(60_000_000 / Math.Clamp(bpm, TempoMap.MinBpm, TempoMap.MaxBpm));
         events.Add((0, -1, [0xFF, 0x51, 0x03, (byte)(micros >> 16), (byte)(micros >> 8), (byte)micros]));
         events.Add((0, -1, [0xFF, 0x58, 0x04, 4, 2, 24, 8]));
-        foreach (var note in notes) {
-            var channel = (byte)(Math.Clamp(note.Channel, 1, 16) - 1);
-            var pitch = (byte)Math.Clamp(note.Pitch, 0, 127);
-            events.Add((note.StartTick, 2, [(byte)(0x90 | channel), pitch, (byte)Math.Clamp(note.Velocity, 1, 127)]));
-            events.Add((note.StartTick + Math.Max(1, note.LengthTicks), 0, [(byte)(0x80 | channel), pitch, 0]));
-        }
-
-        foreach (var control in controls ?? []) {
-            var channel = (byte)(Math.Clamp(control.Channel, 1, 16) - 1);
-            events.Add((control.Tick, 1, ControlBytes(control, channel)));
-        }
-
-        var last = Math.Max(endTick, events.Count == 0 ? 0 : events.Max(static e => e.Tick));
-        events.Add((last, 3, [0xFF, 0x2F, 0x00]));
-        var track = new List<byte>();
-        long tick = 0;
-        foreach (var e in events.Select(static (e, i) => (e, i))
-                     .OrderBy(static x => x.e.Tick)
-                     .ThenBy(static x => x.e.Rank)
-                     .ThenBy(static x => x.i)) {
-            track.AddRange(VarInt((int)(e.e.Tick - tick)));
-            track.AddRange(e.e.Bytes);
-            tick = e.e.Tick;
-        }
-
+        AddEvents(events, notes, controls);
         var bytes = new List<byte>();
         bytes.AddRange("MThd"u8.ToArray());
         bytes.AddRange([0, 0, 0, 6, 0, 0, 0, 1, TempoMap.Ppq >> 8, TempoMap.Ppq & 0xFF]);
-        bytes.AddRange("MTrk"u8.ToArray());
-        bytes.AddRange(
-            [(byte)(track.Count >> 24), (byte)(track.Count >> 16), (byte)(track.Count >> 8), (byte)track.Count]
-        );
-        bytes.AddRange(track);
+        Chunk(bytes, events, endTick);
         return [..bytes];
     }
 

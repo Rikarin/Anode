@@ -255,12 +255,9 @@ internal sealed class PluginInstance : IDisposable {
     }
 }
 
-/// <summary>A hosted plugin effect, as the engine sees it.</summary>
-internal sealed class HostedEffect(PluginInstance instance) : IAudioEffect, IHostedPlugin, ISplitProcessing {
-    readonly EffectDescriptor descriptor = instance.Entry.EffectDescriptor();
-
+/// <summary>What a hosted plugin effect and instrument both forward to their instance.</summary>
+internal abstract class HostedPlugin(PluginInstance instance) : IHostedPlugin, IDisposable {
     public PluginInstance Instance => instance;
-    public EffectDescriptor Descriptor => descriptor;
     public PluginOwner Owner => instance.Owner;
     public string PluginId => instance.Entry.PluginId;
     public bool HasEditor => instance.Entry.Description.HasEditor;
@@ -268,33 +265,15 @@ internal sealed class HostedEffect(PluginInstance instance) : IAudioEffect, IHos
     public string? Failure => instance.Failure;
     public HostedPluginStats Stats => instance.Stats;
     public int EditorWindow => instance.EditorWindow;
+
+    /// <summary>The plugin's latency, in samples (for delay compensation).</summary>
     public int LatencySamples => instance.Latency;
-    public float Reading => float.NaN;
 
     public void Prepare(float sampleRate, int maxFrames) => instance.Prepare(sampleRate, maxFrames);
 
     public void SetParameter(int index, float value) => instance.SetParameter(index, value);
 
     public float GetParameter(int index) => (float)instance.GetParameter(index);
-
-    /// <summary>In place; on a miss or a failure the block passes through dry.</summary>
-    public void Process(
-        Span<float> left,
-        Span<float> right,
-        ReadOnlySpan<float> sidechainLeft,
-        ReadOnlySpan<float> sidechainRight
-    ) =>
-        instance.Process(left, right, sidechainLeft, sidechainRight, [], left, right);
-
-    public bool Begin(
-        ReadOnlySpan<float> left,
-        ReadOnlySpan<float> right,
-        ReadOnlySpan<float> sidechainLeft,
-        ReadOnlySpan<float> sidechainRight
-    ) =>
-        instance.Submit(left, right, sidechainLeft, sidechainRight);
-
-    public bool End(Span<float> left, Span<float> right) => instance.Complete(left, right);
 
     public void Reset() => instance.Reset();
 
@@ -307,46 +286,46 @@ internal sealed class HostedEffect(PluginInstance instance) : IAudioEffect, IHos
     public void Dispose() => instance.Dispose();
 }
 
+/// <summary>A hosted plugin effect, as the engine sees it.</summary>
+internal sealed class HostedEffect(PluginInstance plugin) : HostedPlugin(plugin), IAudioEffect, ISplitProcessing {
+    readonly EffectDescriptor descriptor = plugin.Entry.EffectDescriptor();
+
+    public EffectDescriptor Descriptor => descriptor;
+    public float Reading => float.NaN;
+
+    /// <summary>In place; on a miss or a failure the block passes through dry.</summary>
+    public void Process(
+        Span<float> left,
+        Span<float> right,
+        ReadOnlySpan<float> sidechainLeft,
+        ReadOnlySpan<float> sidechainRight
+    ) =>
+        Instance.Process(left, right, sidechainLeft, sidechainRight, [], left, right);
+
+    public bool Begin(
+        ReadOnlySpan<float> left,
+        ReadOnlySpan<float> right,
+        ReadOnlySpan<float> sidechainLeft,
+        ReadOnlySpan<float> sidechainRight
+    ) =>
+        Instance.Submit(left, right, sidechainLeft, sidechainRight);
+
+    public bool End(Span<float> left, Span<float> right) => Instance.Complete(left, right);
+}
+
 /// <summary>A hosted plugin instrument, as the engine sees it.</summary>
-internal sealed class HostedInstrument(PluginInstance instance) : IInstrument, IHostedPlugin {
-    readonly InstrumentDescriptor descriptor = instance.Entry.InstrumentDescriptor();
+internal sealed class HostedInstrument(PluginInstance plugin) : HostedPlugin(plugin), IInstrument {
+    readonly InstrumentDescriptor descriptor = plugin.Entry.InstrumentDescriptor();
 
-    public PluginInstance Instance => instance;
     public InstrumentDescriptor Descriptor => descriptor;
-    public PluginOwner Owner => instance.Owner;
-    public string PluginId => instance.Entry.PluginId;
-    public bool HasEditor => instance.Entry.Description.HasEditor;
-    public bool IsFailed => instance.IsFailed;
-    public string? Failure => instance.Failure;
-    public HostedPluginStats Stats => instance.Stats;
-    public int EditorWindow => instance.EditorWindow;
-
-    /// <summary>The instrument's latency, in samples (for delay compensation).</summary>
-    public int LatencySamples => instance.Latency;
-
-    public void Prepare(float sampleRate, int maxFrames) => instance.Prepare(sampleRate, maxFrames);
-
-    public void SetParameter(int index, float value) => instance.SetParameter(index, value);
-
-    public float GetParameter(int index) => (float)instance.GetParameter(index);
 
     /// <summary>On a miss or a failure the block is silent.</summary>
     public void Process(ReadOnlySpan<MidiEvent> events, Span<float> left, Span<float> right) {
-        if (!instance.Process([], [], [], [], events, left, right)) {
+        if (!Instance.Process([], [], [], [], events, left, right)) {
             left.Clear();
             right.Clear();
         }
     }
 
-    public void Reset() => instance.Reset();
-
     public bool LoadFile(string path) => false;
-
-    public byte[]? SaveState() => instance.SaveState();
-
-    public bool LoadState(ReadOnlySpan<byte> state) => instance.LoadState(state);
-
-    public int OpenEditor(bool open, EditorPlacement? placement = null) => instance.OpenEditor(open, placement);
-
-    public void Dispose() => instance.Dispose();
 }

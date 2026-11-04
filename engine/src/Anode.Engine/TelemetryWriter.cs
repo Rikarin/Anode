@@ -167,27 +167,8 @@ public sealed unsafe class TelemetryWriter : IDisposable {
     }
 
     /// <summary>Reader side, for tests and in-process readers: a consistent copy of the header and its meters.</summary>
-    public static bool TryRead(byte* region, out TelemetryHeader header, Span<MeterEntry> meters) {
-        var h = (TelemetryHeader*)region;
-        for (var attempt = 0; attempt < 64; attempt++) {
-            var before = Volatile.Read(ref h->Sequence);
-            if ((before & 1) != 0) {
-                Thread.SpinWait(16);
-                continue;
-            }
-
-            header = *h;
-            var count = Math.Min(Math.Min(header.TrackCount, TelemetryHeader.MaxTracks) + 1, meters.Length);
-            new ReadOnlySpan<MeterEntry>(region + sizeof(TelemetryHeader), count).CopyTo(meters);
-            Interlocked.MemoryBarrier();
-            if (Volatile.Read(ref h->Sequence) == before) {
-                return true;
-            }
-        }
-
-        header = default;
-        return false;
-    }
+    public static bool TryRead(byte* region, out TelemetryHeader header, Span<MeterEntry> meters) =>
+        TryRead(region, out header, meters, []);
 
     void Run() {
         var next = DateTime.UtcNow;

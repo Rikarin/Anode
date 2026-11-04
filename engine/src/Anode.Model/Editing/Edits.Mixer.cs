@@ -202,16 +202,23 @@ public static partial class Edits {
 
         var info = InfoOf(plugins, pluginId, runtime, parameterId);
         if (info is not null) {
-            if (value < info.Min || value > info.Max) {
-                throw new EditException($"Parameter '{info.Id}' takes {info.Min}…{info.Max}, not {value}.");
-            }
-
-            if (info.Steps > 0 && info.Max > info.Min) {
-                var step = (info.Max - info.Min) / info.Steps;
-                value = Math.Clamp(info.Min + Math.Round((value - info.Min) / step) * step, info.Min, info.Max);
-            }
+            value = InRange(info, value);
         } else if (!known.ContainsKey(parameterId)) {
             throw new EditException($"{what} '{pluginId}' has no parameter '{parameterId}'.");
+        }
+
+        return value;
+    }
+
+    /// <summary>A parameter's value, refused outside its range and moved to its nearest step.</summary>
+    static double InRange(ParameterInfo info, double value) {
+        if (value < info.Min || value > info.Max) {
+            throw new EditException($"Parameter '{info.Id}' takes {info.Min}…{info.Max}, not {value}.");
+        }
+
+        if (info.Steps > 0 && info.Max > info.Min) {
+            var step = (info.Max - info.Min) / info.Steps;
+            value = Math.Clamp(info.Min + Math.Round((value - info.Min) / step) * step, info.Min, info.Max);
         }
 
         return value;

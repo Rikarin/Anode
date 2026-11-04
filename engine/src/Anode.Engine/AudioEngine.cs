@@ -22,13 +22,17 @@ public sealed unsafe partial class AudioEngine : IAudioProcessor {
     readonly Transport transport = new();
     readonly SnapshotSeqlock published = new();
     readonly Metronome metronome;
-    readonly float[] trackLeft = GC.AllocateArray<float>(MaxFrames, true);
-    readonly float[] trackRight = GC.AllocateArray<float>(MaxFrames, true);
-    readonly float[] busLeft = GC.AllocateArray<float>(MaxFrames, true);
-    readonly float[] busRight = GC.AllocateArray<float>(MaxFrames, true);
-    readonly float[] clicks = GC.AllocateArray<float>(MaxFrames, true);
-    readonly float[] laneLeft = GC.AllocateArray<float>(MaxFrames, true);
-    readonly float[] laneRight = GC.AllocateArray<float>(MaxFrames, true);
+
+    /// <summary>One block of samples the GC never moves, so the mix can hold pointers to it.</summary>
+    static float[] PinnedBlock() => GC.AllocateArray<float>(MaxFrames, true);
+
+    readonly float[] trackLeft = PinnedBlock();
+    readonly float[] trackRight = PinnedBlock();
+    readonly float[] busLeft = PinnedBlock();
+    readonly float[] busRight = PinnedBlock();
+    readonly float[] clicks = PinnedBlock();
+    readonly float[] laneLeft = PinnedBlock();
+    readonly float[] laneRight = PinnedBlock();
 
     ModelRoot root = ModelRoot.Empty;
     int offline;

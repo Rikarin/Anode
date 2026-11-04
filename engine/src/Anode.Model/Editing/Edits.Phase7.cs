@@ -596,14 +596,24 @@ public static partial class Edits {
         }
 
         // Tracks that used it have none; their notes keep their articulation ids.
+        var ops = TracksChanged(
+            state,
+            t => t.ArticulationSetId == c.SetId,
+            static t => t with { ArticulationSetId = null }
+        );
+        ops.Add(new ArticulationSetRemoved(c.SetId!));
+        return ops;
+    }
+
+    /// <summary>The upserts of the tracks <paramref name="matches" /> picks, each changed in place.</summary>
+    static List<DeltaOp> TracksChanged(ProjectState state, Func<Track, bool> matches, Func<Track, Track> change) {
         var ops = new List<DeltaOp>();
         for (var i = 0; i < state.Tracks.Count; i++) {
-            if (state.Tracks[i].ArticulationSetId == c.SetId) {
-                ops.Add(new TrackUpserted(state.Tracks[i] with { ArticulationSetId = null }, i));
+            if (matches(state.Tracks[i])) {
+                ops.Add(new TrackUpserted(change(state.Tracks[i]), i));
             }
         }
 
-        ops.Add(new ArticulationSetRemoved(c.SetId!));
         return ops;
     }
 

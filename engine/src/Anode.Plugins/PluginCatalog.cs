@@ -168,35 +168,24 @@ public sealed class PluginCatalog {
     }
 
     /// <summary>Where VST3 plugins live: <c>VST3_PATH</c> first, then the platform's standard folders.</summary>
-    public static IReadOnlyList<string> Vst3Folders() {
-        var folders = FromEnvironment("VST3_PATH");
-        var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-        if (OperatingSystem.IsMacOS()) {
-            folders.Add(Path.Combine(home, "Library", "Audio", "Plug-Ins", "VST3"));
-            folders.Add("/Library/Audio/Plug-Ins/VST3");
-        } else if (OperatingSystem.IsWindows()) {
-            folders.Add(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonProgramFiles), "VST3"));
-        } else {
-            folders.Add(Path.Combine(home, ".vst3"));
-            folders.Add("/usr/lib/vst3");
-            folders.Add("/usr/local/lib/vst3");
-        }
-
-        return folders;
-    }
+    public static IReadOnlyList<string> Vst3Folders() =>
+        Folders("VST3_PATH", "VST3", ".vst3", ["/usr/lib/vst3", "/usr/local/lib/vst3"]);
 
     /// <summary>Where CLAP plugins live: <c>CLAP_PATH</c> first, then the platform's standard folders.</summary>
-    public static IReadOnlyList<string> ClapFolders() {
-        var folders = FromEnvironment("CLAP_PATH");
+    public static IReadOnlyList<string> ClapFolders() => Folders("CLAP_PATH", "CLAP", ".clap", ["/usr/lib/clap"]);
+
+    /// <summary>The folders in <paramref name="variable" /> first, then the platform's standard ones for a format.</summary>
+    static List<string> Folders(string variable, string format, string linuxHomeFolder, string[] linuxFolders) {
+        var folders = FromEnvironment(variable);
         var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
         if (OperatingSystem.IsMacOS()) {
-            folders.Add(Path.Combine(home, "Library", "Audio", "Plug-Ins", "CLAP"));
-            folders.Add("/Library/Audio/Plug-Ins/CLAP");
+            folders.Add(Path.Combine(home, "Library", "Audio", "Plug-Ins", format));
+            folders.Add("/Library/Audio/Plug-Ins/" + format);
         } else if (OperatingSystem.IsWindows()) {
-            folders.Add(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonProgramFiles), "CLAP"));
+            folders.Add(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonProgramFiles), format));
         } else {
-            folders.Add(Path.Combine(home, ".clap"));
-            folders.Add("/usr/lib/clap");
+            folders.Add(Path.Combine(home, linuxHomeFolder));
+            folders.AddRange(linuxFolders);
         }
 
         return folders;
