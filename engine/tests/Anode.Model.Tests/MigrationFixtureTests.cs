@@ -11,7 +11,8 @@ namespace Anode.Model.Tests;
 ///     through that build's own edit commands, each schema adding what it brought. They are never regenerated: a new
 ///     schema adds a folder, and <see cref="Every_schema_has_a_fixture" /> fails until it does. Schema 1 to 11 came from
 ///     f0ee395~1, 6e96cda~1, a911c56~1, 8243598~1, a612505~1, f5aa076~1, d0670db~1, 15524a3~1, 97807c7~1, 18dfef2~1 and
-///     97dbdbc. The audio file is named but absent (fixtures are about the document), so it reads as offline.
+///     97dbdbc. Schema 12 is schema 11's song opened and saved by the build that wrote schema 12. The audio file is named
+///     but absent (fixtures are about the document), so it reads as offline.
 /// </summary>
 public sealed class MigrationFixtureTests : IDisposable {
     readonly string folder = Directory.CreateTempSubdirectory("anode-migration-").FullName;

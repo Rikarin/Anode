@@ -82,7 +82,8 @@ public sealed class ProjectRateTests : IDisposable {
                             441,
                             false
                         )
-                    ]
+                    ],
+                    []
                 )
             ],
             "alt_a",

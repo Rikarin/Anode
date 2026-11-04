@@ -6374,9 +6374,6 @@ export interface components {
       analysis: null | components['schemas']['MasteringAnalysis'];
     };
     /**
-     * @description The click: on or off, a count-in before recording from a stop, and its level in dB. The count-in lasts
-     *     `countInLength` (1…32) of `countInUnit`, measured at where recording starts.
-     */
      * @description Where a strip's meter reads the signal.
      * @enum {unknown}
      */
@@ -6386,7 +6383,10 @@ export interface components {
      * @enum {unknown}
      */
     MeterType: 'peak' | 'rms' | 'k20' | 'k14' | 'k12' | 'lufs';
-    /** @description The click: on or off, a one-bar count-in before recording, and its level in dB. */
+    /**
+     * @description The click: on or off, a count-in before recording from a stop, and its level in dB. The count-in lasts
+     *     `countInLength` (1…32) of `countInUnit`, measured at where recording starts.
+     */
     MetronomeSettings: {
       enabled: boolean;
       countIn: boolean;
