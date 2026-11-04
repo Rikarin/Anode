@@ -685,6 +685,10 @@ export class App {
     }
 
     const id = this.keys.resolve(event);
+    // Text selected on the page keeps the system's Copy.
+    if (id === 'edit.copy' && window.getSelection()?.isCollapsed === false) {
+      return;
+    }
     const pressKey = event.key === ' ' || event.key === 'Enter';
     // Space and Return on a focused button press it; the shortcuts are for the rest of the window.
     if (id && !(pressKey && !modified && target?.closest('button, [role="slider"], [role="radio"]'))) {

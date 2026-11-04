@@ -142,6 +142,7 @@ import {
   meterOf,
   moveSection,
   packTakeFolder,
+  pasteRegions,
   replaceRange,
   shiftFolder,
   sortSections,
@@ -4865,6 +4866,8 @@ export class FakeAnodeServer implements AnodeApi {
           : withPatterns;
         return rest.length ? copyRegions(copied, rest, offset, command.trackId, id) : copied;
       }
+      case 'pasteRegions':
+        return pasteRegions(project, command, id, () => this.nextId++);
       case 'addInsert':
       case 'removeInsert':
       case 'moveInsert':

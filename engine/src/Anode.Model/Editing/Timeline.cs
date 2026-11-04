@@ -181,19 +181,7 @@ static class Timeline {
             }
             case TimelineKind.TakeFolder: {
                 var f = Shifted(state.TakeFolders[item.Id], offset);
-                var renamed = f.Takes.ToDictionary(
-                    static t => t.Id,
-                    _ => ids.Next(IdPrefix.Take),
-                    StringComparer.Ordinal
-                );
-                return new TakeFolderUpserted(
-                    f with {
-                        Id = ids.Next(IdPrefix.TakeFolder),
-                        TrackId = trackId ?? f.TrackId,
-                        Takes = [..f.Takes.Select(t => t with { Id = renamed[t.Id] })],
-                        Comp = [..f.Comp.Select(s => s with { TakeId = renamed[s.TakeId] })]
-                    }
-                );
+                return new TakeFolderUpserted(WithNewIds(f with { TrackId = trackId ?? f.TrackId }, ids));
             }
             case TimelineKind.PatternRegion: {
                 var p = state.PatternRegions[item.Id];
@@ -224,6 +212,20 @@ static class Timeline {
                     section with { Id = ids.Next(IdPrefix.Section), StartTick = section.StartTick + offset }
                 );
         }
+    }
+
+    /// <summary>A take folder with ids of its own, for it and its takes (its comp follows them).</summary>
+    public static TakeFolder WithNewIds(TakeFolder folder, IIdSource ids) {
+        var renamed = folder.Takes.ToDictionary(
+            static t => t.Id,
+            _ => ids.Next(IdPrefix.Take),
+            StringComparer.Ordinal
+        );
+        return folder with {
+            Id = ids.Next(IdPrefix.TakeFolder),
+            Takes = [..folder.Takes.Select(t => t with { Id = renamed[t.Id] })],
+            Comp = [..folder.Comp.Select(s => s with { TakeId = renamed[s.TakeId] })]
+        };
     }
 
     /// <summary>A take folder <paramref name="offset" /> ticks later: its takes and comp with it.</summary>

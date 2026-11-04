@@ -805,6 +805,11 @@ static partial class RandomProjects {
                     r.Next(3) == 0 ? Track() : null
                 )
                 : null,
+            nameof(PasteRegionsCommand) => midiRegions.Length > 0
+                ? new PasteRegionsCommand(MidiRegions: [Pick(r, midiRegions) with { StartTick = r.Next(16) * 960L }])
+                : regions.Length > 0
+                    ? new PasteRegionsCommand([Pick(r, regions) with { StartTick = r.Next(16) * 960L }])
+                    : null,
             nameof(AddInsertCommand) => r.Next(4) == 0 && midiTracks.Length > 0
                 ? new AddInsertCommand(
                     r.Next(8) == 0 ? Pick(r, Effects).Id : Pick(r, MidiEffects).Id,

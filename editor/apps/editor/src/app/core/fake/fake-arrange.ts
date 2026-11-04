@@ -3,6 +3,7 @@ import {
   type ArrangementMarker,
   type AudioRegion,
   type CompSegment,
+  type EditCommand,
   type MidiRegion,
   type Project,
   type Take,
@@ -262,6 +263,79 @@ export function copyRegions(
     }
   }
   return next;
+}
+
+/** A pasted region's place: on the project's timeline, on a track that can hold it. */
+function pastedTrack(project: Project, region: { startTick: number; trackId: string }, fits: (t: Track) => boolean) {
+  const track = project.tracks.find(t => t.id === region.trackId);
+  if (!track) {
+    throw new ApiError(404, `No track ${region.trackId}.`);
+  }
+  if (!fits(track)) {
+    throw new ApiError(422, `${track.name} cannot hold that region.`);
+  }
+  if (!(region.startTick >= 0)) {
+    throw new ApiError(422, 'A region start must not be negative.');
+  }
+}
+
+/**
+ * `pasteRegions`: regions off the clipboard, each on the track and at the start it names. A cut has deleted them, so
+ * they are checked as new ones, and every copy gets ids of its own.
+ */
+export function pasteRegions(
+  project: Project,
+  command: Extract<EditCommand, { type: 'pasteRegions' }>,
+  id: IdMaker,
+  eventId: () => number
+): Project {
+  const regions = command.regions ?? [];
+  const midi = command.midiRegions ?? [];
+  const folders = command.takeFolders ?? [];
+  const patterns = command.patternRegions ?? [];
+  const players = command.sessionPlayerRegions ?? [];
+  if (regions.length + midi.length + folders.length + patterns.length + players.length === 0) {
+    throw new ApiError(422, 'Paste at least one region.');
+  }
+  const holdsMidi = (t: Track) =>
+    ['instrument', 'midi', 'bassPlayer', 'keyboardPlayer'].includes(t.kind) || t.drumMachine !== null;
+  const isAudio = (t: Track) => t.kind === 'audio';
+  const isPlayer = (t: Track) => ['drummer', 'bassPlayer', 'keyboardPlayer'].includes(t.kind);
+  const known = (fileId: string) => {
+    if (!project.audioFiles.some(f => f.id === fileId)) {
+      throw new ApiError(422, `No audio file ${fileId}.`);
+    }
+  };
+  regions.forEach(r => {
+    pastedTrack(project, r, isAudio);
+    known(r.fileId);
+  });
+  folders.forEach(f => {
+    pastedTrack(project, f, isAudio);
+    f.takes.forEach(t => known(t.fileId));
+  });
+  midi.forEach(r => pastedTrack(project, r, holdsMidi));
+  patterns.forEach(r => pastedTrack(project, r, holdsMidi));
+  players.forEach(r => pastedTrack(project, r, isPlayer));
+  return {
+    ...project,
+    regions: [...project.regions, ...regions.map(r => ({ ...structuredClone(r), id: id('rgn') }))],
+    midiRegions: [
+      ...project.midiRegions,
+      ...midi.map(r => ({
+        ...structuredClone(r),
+        id: id('mid'),
+        notes: r.notes.map(n => ({ ...n, id: eventId() })),
+        controls: r.controls.map(c => ({ ...c, id: eventId() }))
+      }))
+    ],
+    takeFolders: [...project.takeFolders, ...folders.map(f => copyFolder(structuredClone(f), id))],
+    patternRegions: [...project.patternRegions, ...patterns.map(r => ({ ...structuredClone(r), id: id('pat') }))],
+    sessionPlayerRegions: [
+      ...project.sessionPlayerRegions,
+      ...players.map(r => ({ ...structuredClone(r), id: id('spr') }))
+    ]
+  };
 }
 
 /**
