@@ -40,6 +40,37 @@ export const KeyCommands: readonly KeyCommand[] = [
   { id: 'transport.autopunch', label: 'Autopunch Mode', group: 'Transport', defaults: ['Meta+Ctrl+P'] },
   { id: 'transport.replace', label: 'Replace Mode', group: 'Transport', defaults: ['Alt+R'] },
   { id: 'transport.metronome', label: 'Metronome Click', group: 'Transport', defaults: ['K'] },
+  {
+    id: 'transport.nextTransient',
+    label: 'Go to Next Transient',
+    group: 'Transport',
+    defaults: ['Alt+Shift+ArrowRight']
+  },
+  {
+    id: 'transport.previousTransient',
+    label: 'Go to Previous Transient',
+    group: 'Transport',
+    defaults: ['Alt+Shift+ArrowLeft']
+  },
+  {
+    id: 'transport.nextRegionEdge',
+    label: 'Go to Next Region Edge',
+    group: 'Transport',
+    defaults: ['Ctrl+Alt+ArrowRight']
+  },
+  {
+    id: 'transport.previousRegionEdge',
+    label: 'Go to Previous Region Edge',
+    group: 'Transport',
+    defaults: ['Ctrl+Alt+ArrowLeft']
+  },
+  { id: 'transport.nextMarker', label: 'Go to Next Marker', group: 'Transport', defaults: ['Meta+Alt+ArrowRight'] },
+  {
+    id: 'transport.previousMarker',
+    label: 'Go to Previous Marker',
+    group: 'Transport',
+    defaults: ['Meta+Alt+ArrowLeft']
+  },
   { id: 'edit.undo', label: 'Undo', group: 'Edit', defaults: ['Meta+Z'] },
   { id: 'edit.redo', label: 'Redo', group: 'Edit', defaults: ['Meta+Shift+Z', 'Meta+Y'] },
   { id: 'edit.cut', label: 'Cut', group: 'Edit', defaults: ['Meta+X'] },
@@ -51,6 +82,13 @@ export const KeyCommands: readonly KeyCommand[] = [
   { id: 'region.join', label: 'Join Regions', group: 'Regions', defaults: ['Meta+J'] },
   { id: 'region.split', label: 'Split Regions at Playhead', group: 'Regions', defaults: ['Meta+T'] },
   { id: 'region.repeat', label: 'Repeat Regions Once', group: 'Regions', defaults: ['Meta+R'] },
+  { id: 'region.nudgeLeft', label: 'Nudge Regions Left', group: 'Regions', defaults: ['Alt+ArrowLeft'] },
+  { id: 'region.nudgeRight', label: 'Nudge Regions Right', group: 'Regions', defaults: ['Alt+ArrowRight'] },
+  { id: 'region.nudgeTick', label: 'Set Nudge Value to Tick', group: 'Regions', defaults: [] },
+  { id: 'region.nudgeFrame', label: 'Set Nudge Value to Frame', group: 'Regions', defaults: [] },
+  { id: 'region.nudgeDivision', label: 'Set Nudge Value to Division', group: 'Regions', defaults: [] },
+  { id: 'region.nudgeBeat', label: 'Set Nudge Value to Beat', group: 'Regions', defaults: [] },
+  { id: 'region.nudgeBar', label: 'Set Nudge Value to Bar', group: 'Regions', defaults: [] },
   { id: 'region.pack', label: 'Pack Take Folder', group: 'Regions', defaults: ['Meta+Ctrl+F'] },
   { id: 'region.flatten', label: 'Flatten Take Folder', group: 'Regions', defaults: ['Meta+Ctrl+Shift+F'] },
   { id: 'region.toggleTakes', label: 'Open/Close Take Folder', group: 'Regions', defaults: ['Ctrl+F'] },
@@ -272,6 +310,7 @@ export function formatBinding(binding: string): string {
     Delete: '⌦',
     Backspace: '⌫',
     Escape: '⎋',
+    Tab: '⇥',
     ArrowLeft: '←',
     ArrowRight: '→',
     ArrowUp: '↑',

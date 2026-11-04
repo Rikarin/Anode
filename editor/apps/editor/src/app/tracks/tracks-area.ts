@@ -65,6 +65,7 @@ import { StepSequencerStore, takesPatterns } from '../step-sequencer/step-sequen
 import { AudioImport } from './audio-import';
 import { canPack } from './comp';
 import { DragModes } from './drag-modes';
+import { nextPoint, nudgeCommands, NudgeValues, previousPoint, transientTicks } from './nudge';
 import { plural } from './region-edit';
 import { SnapModes } from './snap';
 import { TakeHeader } from './take-header';
@@ -352,6 +353,34 @@ const Players: readonly { player: SessionPlayerKind; label: string; icon: string
               (click)="view.dragMode.set(mode.value)"
             >
               {{ mode.label }}
+            </button>
+          }
+        </xui-menu>
+      </ng-template>
+      <button
+        type="button"
+        class="bezel text-foreground flex h-6.5 items-center gap-1 px-2 text-[11px] font-semibold"
+        aria-label="Nudge value"
+        data-testid="nudge-value"
+        [xuiTooltip]="
+          'Nudge: what ' + keyOf('region.nudgeLeft') + ' and ' + keyOf('region.nudgeRight') + ' move regions by'
+        "
+        [xuiMenuTriggerFor]="nudgeMenu"
+      >
+        <span class="text-foreground-muted">Nudge</span>{{ nudgeLabel() }}
+        <ng-icon xui name="matExpandMoreRound" size="14px" />
+      </button>
+      <ng-template #nudgeMenu>
+        <xui-menu>
+          @for (value of nudgeValues; track value.value) {
+            <button
+              xuiMenuItem
+              type="button"
+              role="menuitemradio"
+              [attr.aria-checked]="view.nudgeValue() === value.value"
+              (click)="view.nudgeValue.set(value.value)"
+            >
+              {{ value.label }}
             </button>
           }
         </xui-menu>
@@ -680,6 +709,7 @@ export class TracksArea {
   protected readonly tools = Tools;
   protected readonly snapModes = SnapModes;
   protected readonly dragModes = DragModes;
+  protected readonly nudgeValues = NudgeValues;
   protected readonly offset = computed(() => -this.view.firstLane() * this.view.laneHeight());
   protected readonly globalHeight = computed(() =>
     this.view.globalTracks()
@@ -700,6 +730,9 @@ export class TracksArea {
 
   protected readonly snapLabel = computed(() => SnapModes.find(m => m.value === this.view.snapMode())?.label ?? '');
   protected readonly dragLabel = computed(() => DragModes.find(m => m.value === this.view.dragMode())?.label ?? '');
+  protected readonly nudgeLabel = computed(
+    () => NudgeValues.find(v => v.value === this.view.nudgeValue())?.label ?? ''
+  );
   /** The selected pattern regions the region menu converts to MIDI. */
   protected readonly menuPatterns = computed(() => {
     const target = this.timeline().menuTarget();
@@ -785,6 +818,18 @@ export class TracksArea {
       ['region.mute', () => this.mute()],
       ['region.split', () => this.splitAtPlayhead()],
       ['region.repeat', () => this.repeat()],
+      ['region.nudgeLeft', () => this.nudge(-1)],
+      ['region.nudgeRight', () => this.nudge(1)],
+      ...NudgeValues.map(({ value, label }): [string, () => void] => [
+        `region.nudge${label}`,
+        () => this.view.nudgeValue.set(value)
+      ]),
+      ['transport.nextTransient', () => void this.jumpToTransient(1)],
+      ['transport.previousTransient', () => void this.jumpToTransient(-1)],
+      ['transport.nextRegionEdge', () => this.jumpTo(this.regionEdges(), 1)],
+      ['transport.previousRegionEdge', () => this.jumpTo(this.regionEdges(), -1)],
+      ['transport.nextMarker', () => this.jumpTo(this.markerTicks(), 1)],
+      ['transport.previousMarker', () => this.jumpTo(this.markerTicks(), -1)],
       ['track.stack', () => this.createStack()],
       ['track.marker', () => this.addGlobal('marker')],
       ['track.newAudio', () => this.addTrack('audio')],
@@ -813,6 +858,66 @@ export class TracksArea {
     if (!document.activeElement?.closest('an-editors-pane')) {
       void action();
     }
+  }
+
+  /** Moves the selected regions by the nudge value (⌥← and ⌥→); in an editor the keys are its own. */
+  private nudge(direction: 1 | -1): void {
+    if (document.activeElement?.closest('an-editors-pane')) {
+      return;
+    }
+    const selected = this.timeline()
+      .allSpans()
+      .filter(s => this.selection.isSelected(s.id));
+    const commands = nudgeCommands(selected, this.view.nudgeValue(), direction, this.timeline().snapContext());
+    if (commands.length > 0) {
+      void this.project.execute(commands, plural('Nudge', commands.length));
+    }
+  }
+
+  /** The playhead to the next or previous of `points`, in view. */
+  private jumpTo(points: readonly number[], direction: 1 | -1): void {
+    const from = this.transport.positionAt(performance.now());
+    const to = direction > 0 ? nextPoint(points, from) : previousPoint(points, from);
+    if (to !== null) {
+      this.transport.locate(to);
+      this.timeline().reveal(to);
+    }
+  }
+
+  /** The tracks a jump reads: the selected ones, all of them when none is. */
+  private jumpTracks(): (trackId: string) => boolean {
+    const tracks = this.selection.trackSelection();
+    return tracks.length > 0 ? trackId => tracks.includes(trackId) : () => true;
+  }
+
+  private regionEdges(): number[] {
+    const onTrack = this.jumpTracks();
+    return this.timeline()
+      .allSpans()
+      .filter(s => onTrack(s.trackId))
+      .flatMap(s => [s.startTick, s.endTick]);
+  }
+
+  private markerTicks(): number[] {
+    return this.project.markers().map(m => m.tick);
+  }
+
+  /**
+   * Tab to Transient: the playhead to the next or previous transient of the selected audio regions, or of the selected
+   * tracks' audio regions when no region is selected. A file's first jump waits for its analysis.
+   */
+  private async jumpToTransient(direction: 1 | -1): Promise<void> {
+    const onTrack = this.jumpTracks();
+    const all = [...this.project.regions().values()];
+    const selected = all.filter(r => this.selection.isSelected(r.id));
+    const regions = selected.length > 0 ? selected : all.filter(r => onTrack(r.trackId));
+    const ticks = await Promise.all(
+      regions.map(async region => {
+        const analysis = await this.flex.load(region.fileId);
+        return analysis ? transientTicks(this.project.timing(region), analysis.transients) : [];
+      })
+    );
+    this.jumpTo(ticks.flat(), direction);
   }
 
   /** Quantises the selected audio regions at the Region inspector's grid (Q). */

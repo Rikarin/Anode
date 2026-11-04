@@ -456,6 +456,11 @@ export class Timeline {
     };
   }
 
+  /** Scrolls a position the keys moved the playhead to into view. */
+  reveal(tick: number): void {
+    this.view.reveal(tick, this.width);
+  }
+
   private drawFrame(): void {
     if (!this.surface) {
       return;
@@ -481,7 +486,7 @@ export class Timeline {
     return { x: event.clientX - rect.left, y: event.clientY - rect.top };
   }
 
-  private snapContext(): SnapContext {
+  snapContext(): SnapContext {
     return {
       meter: this.project.meter(),
       tempo: this.project.tempoMap(),
