@@ -318,6 +318,55 @@ export function deleteRange(
 }
 
 /**
+ * The stretch of a lane over a time range, to lay elsewhere with {@link laySpan}: the points in `startTick…endTick` (the
+ * end itself is the next stretch's), between points that hold the lane's values at the range's edges. Empty when the
+ * lane has no point in the range.
+ */
+export function sliceRange(
+  points: readonly AutomationPoint[],
+  startTick: number,
+  endTick: number,
+  stepped = false
+): AutomationPoint[] {
+  const lo = Math.max(0, Math.min(startTick, endTick));
+  const hi = Math.max(startTick, endTick);
+  const inside = points.filter(p => p.tick >= lo && p.tick < hi);
+  const first = inside[0];
+  const last = inside.at(-1);
+  if (!first || !last) {
+    return [];
+  }
+  const slice = [...inside];
+  if (first.tick > lo) {
+    const value = automationValueAt(points, lo, stepped) ?? first.value;
+    slice.unshift({ tick: lo, value, curve: points[segmentAt(points, lo)]?.curve ?? 0 });
+  }
+  if (last.tick < hi) {
+    slice.push({ tick: hi, value: automationValueAt(points, hi, stepped) ?? last.value, curve: 0 });
+  }
+  return slice;
+}
+
+/**
+ * The lane with a stretch laid over the time it spans: what the lane had there goes, its values just outside stay (a
+ * jump at each end, when the stretch differs), and a tick keeps at most two points. `stroke` is in tick order.
+ */
+export function laySpan(
+  points: readonly AutomationPoint[],
+  stroke: readonly AutomationPoint[],
+  stepped = false
+): AutomationPoint[] {
+  const first = stroke[0];
+  const last = stroke.at(-1);
+  if (!first || !last) {
+    return [...points];
+  }
+  const kept = deleteRange(points, first.tick, last.tick, stepped);
+  const laid = [...kept.filter(p => p.tick <= first.tick), ...stroke, ...kept.filter(p => p.tick > first.tick)];
+  return laid.filter((p, i) => !(laid[i - 1]?.tick === p.tick && laid[i + 1]?.tick === p.tick));
+}
+
+/**
  * Ramer–Douglas–Peucker: the points of a drawn line worth keeping, within `tolerance` of the line through the kept ones
  * (in whatever space `x` and `y` measure, CSS pixels for a pencil stroke). The ends are always kept.
  */

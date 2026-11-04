@@ -19,6 +19,47 @@ async function run(server: FakeAnodeServer, ...commands: EditCommand[]): Promise
   return server.current as Project;
 }
 
+describe('FakeAnodeServer, pasteRegions', () => {
+  it('makes copies with ids of their own, after a cut too, and undoes in one step', async () => {
+    const server = new FakeAnodeServer();
+    const { file, trackIds } = await audioProject(server, 2);
+    const [from = '', to = ''] = trackIds;
+    let p = await run(server, { type: 'addRegion', trackId: from, fileId: file.id, startTick: 0, length: 48_000 });
+    const region = p.regions[0];
+    if (!region) {
+      throw new Error('no region');
+    }
+    await run(server, { type: 'deleteRegions', regionIds: [region.id] });
+    p = await run(
+      server,
+      { type: 'pasteRegions', regions: [{ ...region, trackId: to, startTick: Bar }] },
+      { type: 'setAutomation', trackId: to, target: 'volume', points: [{ tick: Bar, value: -6, curve: 0 }] }
+    );
+    expect(p.regions).toHaveLength(1);
+    expect(p.regions[0]).toMatchObject({ trackId: to, startTick: Bar });
+    expect(p.regions[0]?.id).not.toBe(region.id);
+    await server.undo();
+    expect(server.current?.regions).toEqual([]);
+    expect(server.current?.automation).toEqual([]);
+  });
+
+  it('refuses what the Server refuses', async () => {
+    const server = new FakeAnodeServer();
+    const { file, trackId } = await audioProject(server);
+    const p = await run(server, { type: 'addRegion', trackId, fileId: file.id, startTick: 0, length: 48_000 });
+    const region = p.regions[0];
+    if (!region) {
+      throw new Error('no region');
+    }
+    const paste = (command: Partial<EditCommand>) =>
+      server.applyCommands({ commands: [{ type: 'pasteRegions', ...command } as EditCommand] });
+    await expect(paste({})).rejects.toThrow('at least one');
+    await expect(paste({ regions: [{ ...region, trackId: 'trk_none' }] })).rejects.toThrow('track');
+    await expect(paste({ regions: [{ ...region, fileId: 'aud_none' }] })).rejects.toThrow('file');
+    await expect(paste({ regions: [{ ...region, startTick: -1 }] })).rejects.toThrow('negative');
+  });
+});
+
 describe('FakeAnodeServer, Phase 3 commands', () => {
   it('keeps the tempo and signature tracks and their first events in step', async () => {
     const server = new FakeAnodeServer();

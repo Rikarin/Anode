@@ -13,7 +13,13 @@ public static partial class Edits {
 
     static DeltaOp[] SetComp(ProjectState state, SetCompCommand c) {
         var folder = FolderOf(state, c.FolderId);
-        if (c.Segments is not { Count: <= MaxCompSegments } segments) {
+        CheckComp(folder, c.Segments);
+        return [new TakeFolderUpserted(folder with { Comp = [..c.Segments] })];
+    }
+
+    /// <summary>A comp lies inside its folder, in order, and names the folder's takes.</summary>
+    static void CheckComp(TakeFolder folder, IReadOnlyList<CompSegment>? comp) {
+        if (comp is not { Count: <= MaxCompSegments } segments) {
             throw new EditException($"A comp has 0…{MaxCompSegments} segments.");
         }
 
@@ -34,8 +40,6 @@ public static partial class Edits {
                 throw new EditException($"Take folder '{folder.Id}' has no take '{s.TakeId}'.");
             }
         }
-
-        return [new TakeFolderUpserted(folder with { Comp = [..segments] })];
     }
 
     static DeltaOp[] SelectTake(ProjectState state, SelectTakeCommand c) {
@@ -50,9 +54,8 @@ public static partial class Edits {
 
     static DeltaOp[] SetTakeFolder(ProjectState state, SetTakeFolderCommand c) {
         var folder = FolderOf(state, c.FolderId);
-        if (c.Crossfade is { } crossfade
-            && (crossfade < 0 || crossfade > (long)state.SampleRate * MaxCrossfadeSeconds)) {
-            throw new EditException($"A comp crossfade is 0…{MaxCrossfadeSeconds} s of frames, not {crossfade}.");
+        if (c.Crossfade is { } crossfade) {
+            CheckCrossfade(state, crossfade);
         }
 
         if (c.TakeName is not null && c.TakeId is null) {
@@ -78,6 +81,12 @@ public static partial class Edits {
                 }
             )
         ];
+    }
+
+    static void CheckCrossfade(ProjectState state, long crossfade) {
+        if (crossfade < 0 || crossfade > (long)state.SampleRate * MaxCrossfadeSeconds) {
+            throw new EditException($"A comp crossfade is 0…{MaxCrossfadeSeconds} s of frames, not {crossfade}.");
+        }
     }
 
     static DeltaOp[] DeleteTake(ProjectState state, DeleteTakeCommand c) {

@@ -208,6 +208,7 @@ public static partial class Edits {
             SetProjectNotesCommand c => SetProjectNotes(c),
             JoinRegionsCommand c => JoinRegions(state, c),
             CopyRegionsCommand c => CopyRegions(state, c, ids),
+            PasteRegionsCommand c => PasteRegions(state, c, ids, styles ?? NoStyles),
             AddInsertCommand { Chain: InsertChain.MidiEffects } c => AddMidiEffect(state, c, ids, plugins),
             RemoveInsertCommand { Chain: InsertChain.MidiEffects } c => RemoveMidiEffect(state, c),
             MoveInsertCommand { Chain: InsertChain.MidiEffects } c => MoveMidiEffect(state, c),

@@ -8761,6 +8761,9 @@
             "$ref": "#/components/schemas/EditCommandCopyRegionsCommand"
           },
           {
+            "$ref": "#/components/schemas/EditCommandPasteRegionsCommand"
+          },
+          {
             "$ref": "#/components/schemas/EditCommandAddInsertCommand"
           },
           {
@@ -9187,6 +9190,7 @@
             "setProjectNotes": "#/components/schemas/EditCommandSetProjectNotesCommand",
             "joinRegions": "#/components/schemas/EditCommandJoinRegionsCommand",
             "copyRegions": "#/components/schemas/EditCommandCopyRegionsCommand",
+            "pasteRegions": "#/components/schemas/EditCommandPasteRegionsCommand",
             "addInsert": "#/components/schemas/EditCommandAddInsertCommand",
             "removeInsert": "#/components/schemas/EditCommandRemoveInsertCommand",
             "moveInsert": "#/components/schemas/EditCommandMoveInsertCommand",
@@ -11446,6 +11450,65 @@
           }
         },
         "description": "Packs overlapping or adjacent audio regions of one track into a new take folder, one take each."
+      },
+      "EditCommandPasteRegionsCommand": {
+        "required": [
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "pasteRegions"
+            ],
+            "type": "string"
+          },
+          "regions": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/AudioRegion"
+            }
+          },
+          "midiRegions": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/MidiRegion"
+            }
+          },
+          "takeFolders": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/TakeFolder"
+            }
+          },
+          "patternRegions": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/PatternRegion"
+            }
+          },
+          "sessionPlayerRegions": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/SessionPlayerRegion"
+            }
+          }
+        },
+        "description": "Puts regions of any kind on the timeline from the editor\u0027s clipboard (\u2318V): whole regions as the project returned\nthem, each with the \u0060trackId\u0060 and \u0060startTick\u0060 it lands on (a take folder\u0027s takes and comp moved with\nit). A cut has deleted them, so they need name nothing in the project: everything is checked as new, and every\ncopy gets ids of its own. Files are the project\u0027s, so a region of another project is refused. Track automation\ngoes in the same batch, as \u0060setAutomation\u0060."
       },
       "EditCommandQuantizeAudioCommand": {
         "required": [

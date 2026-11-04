@@ -97,7 +97,19 @@ report. A REST change means regenerating `engine/src/Anode.Server/openapi.json`
   - Ids are `tkf_…` and take ids `tak_…`.
   - The compiler turns the comp into playlist entries, with `crossfade` frames of equal-power-ish crossfade (curve 0 on
     both) centred on each boundary.
-  - `moveRegion`, `deleteRegions` and `copyRegions` take folders; `splitRegion` does not.
+  - `moveRegion`, `deleteRegions`, `copyRegions` and `pasteRegions` take folders; `splitRegion` does not.
+- **Cut, copy and paste (#88):**
+  - The clipboard is the editor's and holds whole regions, because a cut deletes the originals. It lasts until the next
+    copy or until another project opens: a region's files are its project's.
+  - ⌘X, ⌘C and ⌘V act on what Delete acts on, in its order: selected automation, the marquee range (regions across an
+    edge cut to it), then the selected regions. They leave an editor's focus alone.
+  - Automation goes with regions where a lane has points under them, from the lane's value at each edge. A target the
+    destination track does not have (another track's plug-in) stays behind, and the person is told.
+  - Paste is one `CommandBatch`, `pasteRegions` then `setAutomation`, so one undo step. `pasteRegions` carries each
+    region's final `trackId` and `startTick`; the Server checks them as new and gives every copy ids of its own.
+  - The earliest of it lands on the playhead and its topmost track on the selected track. Other tracks keep their
+    distance below it and move on down past tracks that cannot hold them. Paste is refused, whole, when the selected
+    track cannot hold its part or the tracks run out.
 - **Cycle recording:**
   - The host writes one file per armed track for the whole recording and reports its passes in
     `RecordedTake.Passes`.

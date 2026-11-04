@@ -3192,6 +3192,7 @@ export interface components {
       | components['schemas']['EditCommandSetProjectNotesCommand']
       | components['schemas']['EditCommandJoinRegionsCommand']
       | components['schemas']['EditCommandCopyRegionsCommand']
+      | components['schemas']['EditCommandPasteRegionsCommand']
       | components['schemas']['EditCommandAddInsertCommand']
       | components['schemas']['EditCommandRemoveInsertCommand']
       | components['schemas']['EditCommandMoveInsertCommand']
@@ -4057,6 +4058,22 @@ export interface components {
       type: 'packTakeFolder';
       regionIds: string[];
       name?: null | string;
+    };
+    /**
+     * @description Puts regions of any kind on the timeline from the editor's clipboard (⌘V): whole regions as the project returned
+     *     them, each with the `trackId` and `startTick` it lands on (a take folder's takes and comp moved with
+     *     it). A cut has deleted them, so they need name nothing in the project: everything is checked as new, and every
+     *     copy gets ids of its own. Files are the project's, so a region of another project is refused. Track automation
+     *     goes in the same batch, as `setAutomation`.
+     */
+    EditCommandPasteRegionsCommand: {
+      /** @enum {string} */
+      type: 'pasteRegions';
+      regions?: null | components['schemas']['AudioRegion'][];
+      midiRegions?: null | components['schemas']['MidiRegion'][];
+      takeFolders?: null | components['schemas']['TakeFolder'][];
+      patternRegions?: null | components['schemas']['PatternRegion'][];
+      sessionPlayerRegions?: null | components['schemas']['SessionPlayerRegion'][];
     };
     /**
      * @description Quantises audio regions: flex markers on their transients (analysed now if need be) move toward the grid of

@@ -57,6 +57,45 @@ public sealed class MixApiTests {
     }
 
     [Fact]
+    public async Task A_cut_region_is_pasted_with_its_automation_as_the_project_returned_it_in_one_undo_step() {
+        await using var server = new ServerFixture();
+        using var client = server.CreateClient();
+        await client.CreateProjectAsync();
+        await client.EditAsync(
+            new AddTrackCommand("Keys", Kind: TrackKind.Instrument),
+            new AddTrackCommand("Pad", Kind: TrackKind.Instrument)
+        );
+        var project = await client.ProjectAsync();
+        var (keys, pad) = (project.Tracks[0].Id, project.Tracks[1].Id);
+        await client.EditAsync(new AddMidiRegionCommand(keys, 0, Bar));
+        var id = (await client.ProjectAsync()).MidiRegions[0].Id;
+        await client.EditAsync(new AddNotesCommand(id, [new(60, 100, 1, 0, 480)]));
+        var region = (await client.ProjectAsync()).MidiRegions[0];
+
+        await client.EditAsync(new DeleteRegionsCommand([id]));
+        var undoBefore = (await History(client)).Undo.Count;
+        await client.EditAsync(
+            new PasteRegionsCommand(MidiRegions: [region with { TrackId = pad, StartTick = 4 * Bar }]),
+            new SetAutomationCommand("volume", [new(4 * Bar, -6, 0), new(5 * Bar, 0, 0)], pad)
+        );
+
+        project = await client.ProjectAsync();
+        var pasted = Assert.Single(project.MidiRegions);
+        Assert.Equal((pad, 4 * Bar), (pasted.TrackId, pasted.StartTick));
+        Assert.Equal(60, Assert.Single(pasted.Notes).Pitch);
+        Assert.NotEqual(id, pasted.Id);
+        Assert.Equal(pad, Assert.Single(project.Automation).TrackId);
+        var history = await History(client);
+        Assert.Equal(undoBefore + 1, history.Undo.Count);
+        Assert.Equal("Paste Regions", history.Undo[0].Label);
+
+        await client.PostResultAsync("/api/v1/project/undo");
+        project = await client.ProjectAsync();
+        Assert.Empty(project.MidiRegions);
+        Assert.Empty(project.Automation);
+    }
+
+    [Fact]
     public async Task Moving_a_fader_in_touch_during_playback_records_one_undo_step_per_pass() {
         await using var server = new ServerFixture();
         using var client = server.CreateClient();

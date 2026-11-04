@@ -39,7 +39,7 @@ the MIDI-thru track. The demo has two instrument tracks with MIDI regions. Unit 
 
 It also follows the Phase 3 contracts (docs/04-phase-3.md): every arranging command (tempo, signature and key tracks,
 markers, arrangement sections with move/copy/delete-with-content, take folders with comps, pack and flatten, stacks,
-notes, join, copy), cycle recording into take folders or regions, replace, autopunch, Flashback Capture, alternatives,
+notes, join, copy, paste), cycle recording into take folders or regions, replace, autopunch, Flashback Capture, alternatives,
 backups, screensets, key commands, bookmarks, a small fake disk for the All Files browser (`/Users/anode`), WAV preview
 and Standard MIDI File import (the fake makes two instrument tracks from any `.mid` path). The demo project adds
 arrangement sections, markers, a two-take vocal folder and a project note.

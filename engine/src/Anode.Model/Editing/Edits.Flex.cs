@@ -112,15 +112,19 @@ public static partial class Edits {
             throw new EditException("Flex markers need the track's flex on.");
         }
 
-        if (c.Markers is not { Count: <= MaxFlexMarkers } markers) {
+        var end = RegionTiming.Of(state, region with { FlexMarkers = [] }).Base(region.FileOffset + region.Length);
+        return [new RegionUpserted(region with { FlexMarkers = CheckedFlexMarkers(region, c.Markers, end) })];
+    }
+
+    /// <summary>Flex markers in file order, strictly inside the region, up to tick <paramref name="end" /> of it.</summary>
+    static FlexMarker[] CheckedFlexMarkers(AudioRegion region, IReadOnlyList<FlexMarker>? flexMarkers, double end) {
+        if (flexMarkers is not { Count: <= MaxFlexMarkers } markers) {
             throw new EditException($"A region has 0…{MaxFlexMarkers} flex markers.");
         }
 
         var sorted = markers.Select(static m => m ?? throw new EditException("A flex marker is null."))
             .OrderBy(static m => m.FileFrame)
             .ToArray();
-        var timing = RegionTiming.Of(state, region with { FlexMarkers = [] });
-        var end = timing.Base(region.FileOffset + region.Length);
         FlexMarker? previous = null;
         foreach (var m in sorted) {
             if (m.FileFrame <= region.FileOffset
@@ -140,7 +144,7 @@ public static partial class Edits {
             previous = m;
         }
 
-        return [new RegionUpserted(region with { FlexMarkers = sorted })];
+        return sorted;
     }
 
     /// <summary>
@@ -229,7 +233,13 @@ public static partial class Edits {
             throw new EditException("Pitch notes need Flex or Follow: turn one on first.");
         }
 
-        if (c.Notes is not { Count: <= MaxPitchNotes } notes) {
+        CheckPitchNotes(region, c.Notes);
+        return [new RegionUpserted(region with { PitchNotes = [..c.Notes] })];
+    }
+
+    /// <summary>Pitch notes inside the region's frames, in order, not overlapping, their values in range.</summary>
+    static void CheckPitchNotes(AudioRegion region, IReadOnlyList<PitchNote>? pitchNotes) {
+        if (pitchNotes is not { Count: <= MaxPitchNotes } notes) {
             throw new EditException($"A region has 0…{MaxPitchNotes} pitch notes.");
         }
 
@@ -258,8 +268,6 @@ public static partial class Edits {
             CheckRange(n.GainDb, MinRegionGainDb, MaxRegionGainDb, "A note's gain (dB)");
             previous = n;
         }
-
-        return [new RegionUpserted(region with { PitchNotes = [..notes] })];
     }
 
     static void CheckRange(double value, double min, double max, string what) {

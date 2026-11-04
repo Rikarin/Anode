@@ -60,6 +60,7 @@ namespace Anode.Contracts;
 [JsonDerivedType(typeof(SetProjectNotesCommand), "setProjectNotes")]
 [JsonDerivedType(typeof(JoinRegionsCommand), "joinRegions")]
 [JsonDerivedType(typeof(CopyRegionsCommand), "copyRegions")]
+[JsonDerivedType(typeof(PasteRegionsCommand), "pasteRegions")]
 [JsonDerivedType(typeof(AddInsertCommand), "addInsert")]
 [JsonDerivedType(typeof(RemoveInsertCommand), "removeInsert")]
 [JsonDerivedType(typeof(MoveInsertCommand), "moveInsert")]
@@ -474,6 +475,21 @@ public sealed record JoinRegionsCommand(IReadOnlyList<string> RegionIds) : EditC
 /// </summary>
 public sealed record CopyRegionsCommand(IReadOnlyList<string> RegionIds, long OffsetTicks, string? TrackId = null)
     : EditCommand;
+
+/// <summary>
+///     Puts regions of any kind on the timeline from the editor's clipboard (⌘V): whole regions as the project returned
+///     them, each with the <c>trackId</c> and <c>startTick</c> it lands on (a take folder's takes and comp moved with
+///     it). A cut has deleted them, so they need name nothing in the project: everything is checked as new, and every
+///     copy gets ids of its own. Files are the project's, so a region of another project is refused. Track automation
+///     goes in the same batch, as <c>setAutomation</c>.
+/// </summary>
+public sealed record PasteRegionsCommand(
+    IReadOnlyList<AudioRegion>? Regions = null,
+    IReadOnlyList<MidiRegion>? MidiRegions = null,
+    IReadOnlyList<TakeFolder>? TakeFolders = null,
+    IReadOnlyList<PatternRegion>? PatternRegions = null,
+    IReadOnlyList<SessionPlayerRegion>? SessionPlayerRegions = null
+) : EditCommand;
 
 /// <summary>
 ///     Which slots of a strip an insert command edits: its inserts (the default), or its MIDI FX slots (Phase 6; an
