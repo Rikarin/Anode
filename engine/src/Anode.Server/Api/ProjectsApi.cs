@@ -36,6 +36,38 @@ static class ProjectsApi {
             )
             .WithName("OpenProject")
             .WithSummary("Opens a project folder, closing the open one.");
+        projects.MapGet(
+                "/recoverable",
+                static Ok<IReadOnlyList<RecoverableProject>>(ProjectSession session) =>
+                    TypedResults.Ok(session.Recoverable())
+            )
+            .WithName("ListRecoverableProjects")
+            .WithSummary("Recent projects with autosaved edits their last save does not have.");
+        projects.MapPost(
+                "/recover",
+                static Results<Ok<Project>, NotFound, ProblemHttpResult>(
+                    OpenProjectRequest request,
+                    ProjectSession session,
+                    HttpContext http
+                ) => Respond(http, session.Recover(request.Path))
+            )
+            .WithName("RecoverProject")
+            .WithSummary(
+                "Opens a project with its autosaved edits, closing the open one. The saved project is untouched until "
+                + "the next save; the edits show as unsaved."
+            );
+        projects.MapPost(
+                "/recoverable/discard",
+                static Results<NoContent, NotFound, ProblemHttpResult>(
+                    OpenProjectRequest request,
+                    ProjectSession session
+                ) => {
+                    session.DiscardRecovery(request.Path);
+                    return TypedResults.NoContent();
+                }
+            )
+            .WithName("DiscardRecovery")
+            .WithSummary("Stops offering a project's autosaved edits; they stay available as its newest backup.");
     }
 
     static Ok<Project> Respond(HttpContext http, Project project) {

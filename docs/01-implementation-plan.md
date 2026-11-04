@@ -262,6 +262,7 @@ MySong.anode/                      # a directory package (a folder on macOS)
   Audio Files/ Freeze Files/ Bounces/ Samples/ Movie Files/ Plugin States/ Peaks/ Analysis/
   Alternatives/<name>/             # project alternatives (Logic feature)
   Backups/<n>/                     # rolling auto-backups (Logic "Revert to backup")
+  Autosave/                        # unsaved edits, for crash recovery (docs/04-phase-3.md); never the saved document
 ```
 - All writes use Cathode's `AtomicRename`. Autosave is incremental.
 - A "consolidate and copy media" option on Save As covers Logic's "copy files into project".

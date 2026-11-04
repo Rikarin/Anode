@@ -25,6 +25,12 @@ public sealed class ServerOptions {
     /// </summary>
     public string? ModelSource { get; set; } = Environment.GetEnvironmentVariable("ANODE_MODELS");
 
+    /// <summary>
+    ///     How often unsaved edits are autosaved, in seconds (docs/04-phase-3.md, "Autosave and crash recovery"); zero
+    ///     turns autosave off.
+    /// </summary>
+    public double AutosaveSeconds { get; set; } = 30;
+
     public EngineOptions Engine { get; set; } = new();
 }
 

@@ -225,6 +225,121 @@
         }
       }
     },
+    "/api/v1/projects/recoverable": {
+      "get": {
+        "tags": [
+          "Projects"
+        ],
+        "summary": "Recent projects with autosaved edits their last save does not have.",
+        "operationId": "ListRecoverableProjects",
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/RecoverableProject"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/recover": {
+      "post": {
+        "tags": [
+          "Projects"
+        ],
+        "summary": "Opens a project with its autosaved edits, closing the open one. The saved project is untouched until the next save; the edits show as unsaved.",
+        "operationId": "RecoverProject",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OpenProjectRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Project"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/api/v1/projects/recoverable/discard": {
+      "post": {
+        "tags": [
+          "Projects"
+        ],
+        "summary": "Stops offering a project\u0027s autosaved edits; they stay available as its newest backup.",
+        "operationId": "DiscardRecovery",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OpenProjectRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "No Content"
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
     "/api/v1/project": {
       "get": {
         "tags": [
@@ -18956,6 +19071,31 @@
           }
         },
         "description": "How recording works: cycle recording mode; replace mode (a recording removes what it covers on its track); and\nautopunch, which records only between \u0060punchInTick\u0060 and \u0060punchOutTick\u0060 while playback continues around\nthem."
+      },
+      "RecoverableProject": {
+        "required": [
+          "id",
+          "name",
+          "path",
+          "autosaved"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          },
+          "autosaved": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "description": "A project whose edits since its last save survive in an autosave, offered after a crash (docs/04-phase-3.md,\n\u0022Autosave and crash recovery\u0022). \u0060autosaved\u0060 is when they were last written."
       },
       "RegenerateRequest": {
         "type": "object",

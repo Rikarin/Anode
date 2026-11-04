@@ -55,6 +55,7 @@ builder.Services.AddSingleton<MidiEditLibraries>();
 builder.Services.AddSingleton<FileAnalyses>();
 builder.Services.AddSingleton<HrtfLocator>();
 builder.Services.AddSingleton<ProjectSession>();
+builder.Services.AddHostedService<AutosaveService>();
 builder.Services.AddSingleton<Jobs>();
 builder.Services.AddSingleton<AudioImport>();
 builder.Services.AddSingleton<UserSettings>();
