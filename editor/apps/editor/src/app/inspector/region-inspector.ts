@@ -7,6 +7,7 @@ import { type QuantizeChoice, quantizeChoices, regionQuantizeCommand } from '../
 import { gridLabel, QuantizeGrids } from '../midi/midi-math';
 import { ProjectStore } from '../state/project.store';
 import { UiStore } from '../state/ui.store';
+import { LoopFields } from './loop-fields';
 import { PitchSourceFields } from './pitch-source-fields';
 
 type PlaybackField = 'transpose' | 'velocity' | 'quantizeStrength' | 'swing';
@@ -26,7 +27,7 @@ const Labels: Record<PlaybackField, string> = {
 @Component({
   selector: 'an-region-inspector',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [AnKnob, PitchSourceFields, XuiNumericInputImports, XuiSelectImports],
+  imports: [AnKnob, LoopFields, PitchSourceFields, XuiNumericInputImports, XuiSelectImports],
   host: { class: 'flex flex-col gap-2', role: 'group', '[attr.aria-label]': '"Region: " + region().name' },
   template: `
     <h3
@@ -36,6 +37,14 @@ const Labels: Record<PlaybackField, string> = {
       Region: {{ region().name }}
     </h3>
     <div class="grid grid-cols-[5.5rem_1fr] items-center gap-x-2 gap-y-1.5 text-xs">
+      <an-loop-fields
+        kind="midi"
+        [regionId]="region().id"
+        [trackId]="region().trackId"
+        [startTick]="region().startTick"
+        [endTick]="region().startTick + region().lengthTicks"
+        [loopTicks]="region().loopTicks"
+      />
       <span class="text-foreground-muted">Transpose</span>
       <xui-numeric-input
         size="sm"

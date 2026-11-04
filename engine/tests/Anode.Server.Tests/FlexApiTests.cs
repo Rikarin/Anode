@@ -176,6 +176,38 @@ public sealed class FlexApiTests {
     }
 
     [Fact]
+    public async Task Bounce_in_place_renders_a_loop_to_where_its_repeats_end() {
+        await using var server = new ServerFixture(analyzer: new FakeAnalyzer());
+        using var client = server.CreateClient();
+        await using var events = await EventStream.ConnectAsync(server);
+        await client.CreateProjectAsync();
+        await client.EditAsync(new AddTrackCommand("Gtr"));
+        var file = await client.ImportAsync(TestWav.Write(media, "Gtr.wav", frames: Rate));
+        var track = (await client.ProjectAsync()).Tracks[0].Id;
+        await client.EditAsync(new AddRegionCommand(track, file.Id, 0));
+        var region = (await client.ProjectAsync()).Regions.Single().Id;
+        // A second at 120 BPM is 1920 ticks: one repeat.
+        await client.EditAsync(new SetRegionCommand(region, LoopTicks: 1920));
+        await WaitEngineAsync(server, client);
+
+        var job = await StartAsync(client, "/api/v1/project/bounce-in-place", new BounceInPlaceRequest([track]));
+        var done = await events.WaitAsync<JobEvent>(
+            e => e.Job.Id == job.Id && e.Job.State is JobState.Done or JobState.Failed,
+            30
+        );
+        Assert.Equal(JobState.Done, done.Job.State);
+
+        var project = await client.ProjectAsync();
+        var bounced = project.Regions.Single(r => r.TrackId == project.Tracks[1].Id);
+        var bouncedFile = project.AudioFiles.Single(f => f.Id == bounced.FileId);
+        // The region's second, its repeat, and the two-second tail.
+        Assert.Equal(4 * Rate, bouncedFile.Frames);
+        var (audio, _) = BounceProcessor.Read(Path.Combine(project.Path, bouncedFile.Path));
+        Assert.Equal(0.25 * Math.Sin(0.05 * 1000), audio[0][Rate + 1000], 4);
+        Assert.Equal(0, audio[0][2 * Rate + 100], 6);
+    }
+
+    [Fact]
     public async Task Selection_based_processing_replaces_part_of_a_region_with_a_processed_file() {
         await using var server = new ServerFixture(analyzer: new FakeAnalyzer());
         using var client = server.CreateClient();

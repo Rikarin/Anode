@@ -240,6 +240,12 @@ public sealed record ChannelStrip(
 ///         <c>root</c>: each chord segment transposed, crossfaded; <c>chords</c> is MIDI only), and <c>key</c> its own
 ///         key (null: the project's at its start), which Pitch Source transposes from.
 ///     </para>
+///     <para>
+///         <c>loopTicks</c>: it plays again and again, end to end, for that many ticks after its end (0: it does not
+///         loop), the last repeat cut there, stopping where the next region on the track starts. Repeats are the region
+///         again, fades included. <c>convertLoops</c> turns them into regions of their own; a looped region is not
+///         split or joined. MIDI and pattern regions have the same.
+///     </para>
 /// </remarks>
 public sealed record AudioRegion(
     string Id,
@@ -261,7 +267,8 @@ public sealed record AudioRegion(
     int FineTune,
     IReadOnlyList<PitchNote> PitchNotes,
     PitchSourceMode PitchSource,
-    RegionKey? Key
+    RegionKey? Key,
+    long LoopTicks = 0
 );
 
 /// <summary>

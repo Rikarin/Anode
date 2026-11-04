@@ -39,6 +39,7 @@ function region(change: Partial<AudioRegion> = {}): AudioRegion {
     fineTune: 0,
     pitchNotes: [],
     pitchSource: 'off',
+    loopTicks: 0,
     key: null,
     ...change
   };

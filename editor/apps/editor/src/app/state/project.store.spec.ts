@@ -79,6 +79,7 @@ function region(id: string, trackId: string, startTick = 0): AudioRegion {
     fineTune: 0,
     pitchNotes: [],
     pitchSource: 'off',
+    loopTicks: 0,
     key: null
   };
 }

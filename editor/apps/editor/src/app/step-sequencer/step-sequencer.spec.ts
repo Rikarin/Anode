@@ -126,6 +126,7 @@ describe('Step Sequencer', () => {
       startTick: 3840,
       lengthTicks: 3840,
       muted: true,
+      loopTicks: 0,
       pattern: {
         rows: [
           {

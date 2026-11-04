@@ -102,6 +102,7 @@ describe('MIDI region edits in the Tracks area', () => {
       controls: [],
       muted: false,
       pitchSource: 'off',
+      loopTicks: 0,
       key: null
     };
     const { scene, regionIds } = buildScene({

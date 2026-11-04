@@ -39,6 +39,7 @@ import {
 import { TrackColors } from '../../state/track-colors';
 import { type MixContext, record, setLane, targetRange } from './fake-mix';
 import { MidiEffectCategory, RemixFxId } from './fake-plugins-phase6';
+import { checkedLoop } from './fake-region-loops';
 
 /** A command of one type. */
 type Command<T extends EditCommand['type']> = Extract<EditCommand, { type: T }>;
@@ -1043,7 +1044,8 @@ export function applyPhase6Command(project: Project, command: EditCommand, ctx: 
         startTick: Math.round(command.startTick),
         lengthTicks: Math.round(length),
         muted: false,
-        pattern: command.pattern ? checkPattern(command.pattern) : defaultPattern(track, ctx)
+        pattern: command.pattern ? checkPattern(command.pattern) : defaultPattern(track, ctx),
+        loopTicks: 0
       };
       return { ...project, patternRegions: [...project.patternRegions, region] };
     }
@@ -1060,7 +1062,8 @@ export function applyPhase6Command(project: Project, command: EditCommand, ctx: 
         startTick: Math.round(command.startTick ?? region.startTick),
         lengthTicks: Math.round(command.lengthTicks ?? region.lengthTicks),
         name: command.name?.trim() || region.name,
-        muted: command.muted ?? region.muted
+        muted: command.muted ?? region.muted,
+        loopTicks: checkedLoop(command.loopTicks, region.loopTicks)
       });
     }
     case 'setPattern': {
@@ -1088,6 +1091,7 @@ export function applyPhase6Command(project: Project, command: EditCommand, ctx: 
         controls: [],
         muted: region.muted,
         pitchSource: 'off',
+        loopTicks: 0,
         key: null
       };
       return {

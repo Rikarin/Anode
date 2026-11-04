@@ -58,11 +58,12 @@ export function documentTheme(): TimelineThemeName {
 /**
  * Item flags ({@link RegionDetails.flags}, {@link TimelineScene.noteFlags}). `Midi` marks a MIDI region: it has no
  * waveform and no fades, so its edges trim in both halves and it draws its note miniatures. `Folder` marks a take
- * folder: a region with a name bar and no fades of its own. `Inner` marks a part drawn inside the item before it on
+ * folder: a region with a name bar and no fades of its own. `Loop` marks a repeat of a looped region: dimmed, with no
+ * name or fades, and the pointer takes it as the region it repeats. `Inner` marks a part drawn inside the item before it on
  * its lane (a comp segment of a take folder, the comped part of a take): flat, under the name bar, with its waveform,
  * never hit by the pointer.
  */
-export const ItemFlag = { Selected: 1, Muted: 2, Midi: 4, Folder: 8, Inner: 16, Offline: 32 } as const;
+export const ItemFlag = { Selected: 1, Muted: 2, Midi: 4, Folder: 8, Inner: 16, Offline: 32, Loop: 64 } as const;
 
 /**
  * The notes MIDI regions draw as miniatures in the Tracks area, as columns: region `i`'s notes are

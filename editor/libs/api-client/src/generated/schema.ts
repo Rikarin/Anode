@@ -2315,6 +2315,11 @@ export interface components {
       pitchNotes: components['schemas']['PitchNote'][];
       pitchSource: components['schemas']['PitchSourceMode'];
       key: null | components['schemas']['RegionKey'];
+      /**
+       * Format: int64
+       * @default 0
+       */
+      loopTicks: number;
     };
     /**
      * @description Track automation of one parameter. `trackId` null is the master strip. `target` is `volume` (dB),
@@ -3254,6 +3259,7 @@ export interface components {
       | components['schemas']['EditCommandSplitRegionCommand']
       | components['schemas']['EditCommandSetRegionCommand']
       | components['schemas']['EditCommandDeleteRegionsCommand']
+      | components['schemas']['EditCommandConvertLoopsCommand']
       | components['schemas']['EditCommandSetTempoCommand']
       | components['schemas']['EditCommandSetSignatureCommand']
       | components['schemas']['EditCommandSetCycleCommand']
@@ -3803,6 +3809,12 @@ export interface components {
       toObjectId: string;
       /** Format: int32 */
       inlet: number;
+    };
+    /** @description Turns the repeats of looped regions (audio, MIDI, pattern) into regions of their own; what plays stays. */
+    EditCommandConvertLoopsCommand: {
+      /** @enum {string} */
+      type: 'convertLoops';
+      regionIds: string[];
     };
     /**
      * @description Replaces a pattern region with a MIDI region of exactly the notes it plays over its length (one pass of the
@@ -4668,7 +4680,7 @@ export interface components {
       merge: boolean;
     };
     /**
-     * @description Changes a MIDI region's name, mute or playback parameters. `grooveId` (Phase 7) makes its playback quantise
+     * @description Changes a MIDI region's name, mute, loop or playback parameters. `grooveId` (Phase 7) makes its playback quantise
      *     follow a groove template of the project; an empty string returns it to the grid.
      */
     EditCommandSetMidiRegionCommand: {
@@ -4688,6 +4700,8 @@ export interface components {
       swing?: null | number;
       muted?: null | boolean;
       grooveId?: null | string;
+      /** Format: int64 */
+      loopTicks?: null | number;
     };
     EditCommandSetMixerSettingsCommand: {
       /** @enum {string} */
@@ -4784,7 +4798,7 @@ export interface components {
       pattern: components['schemas']['Pattern'];
     };
     /**
-     * @description Moves (in time), resizes, renames or mutes a pattern region; `moveRegion`, `copyRegions` and
+     * @description Moves (in time), resizes, renames, loops or mutes a pattern region; `moveRegion`, `copyRegions` and
      *     `deleteRegions` take pattern regions too.
      */
     EditCommandSetPatternRegionCommand: {
@@ -4797,6 +4811,8 @@ export interface components {
       lengthTicks?: null | number;
       name?: null | string;
       muted?: null | boolean;
+      /** Format: int64 */
+      loopTicks?: null | number;
     };
     /**
      * @description Replaces an audio region's Flex Pitch notes (edits, splits and joins); notes need Flex or Follow, as a
@@ -4850,6 +4866,8 @@ export interface components {
       /** Format: double */
       fadeOutCurve?: null | number;
       muted?: null | boolean;
+      /** Format: int64 */
+      loopTicks?: null | number;
     };
     /**
      * @description Sets an audio region's Flex &amp; Follow, transpose (semitones) or fine tune (cents). A transpose or fine tune
@@ -6084,7 +6102,8 @@ export interface components {
      *     is cut there. `playback` holds the non-destructive region parameters. `notation` (Phase 9,
      *     docs/10-phase-9.md) holds its score settings: display quantise and interpretation. `pitchSource` and
      *     `key` (Phase 11, docs/12-phase-11.md): how it follows the chord track (applied at compile time; its notes
-     *     stay as they are) and its own key (null: the project's at its start).
+     *     stay as they are) and its own key (null: the project's at its start). `loopTicks`: it repeats for that many
+     *     ticks after its end, as AudioRegion says.
      */
     MidiRegion: {
       id: string;
@@ -6101,6 +6120,11 @@ export interface components {
       notation: components['schemas']['RegionNotation'];
       pitchSource: components['schemas']['PitchSourceMode'];
       key: null | components['schemas']['RegionKey'];
+      /**
+       * Format: int64
+       * @default 0
+       */
+      loopTicks: number;
     };
     /**
      * @description A MIDI output (a `MidiPort.id`) that Anode sends sync to: MIDI Clock (24 ppq, Start, Stop, Continue, Song
@@ -6595,6 +6619,11 @@ export interface components {
       lengthTicks: number;
       muted: boolean;
       pattern: components['schemas']['Pattern'];
+      /**
+       * Format: int64
+       * @default 0
+       */
+      loopTicks: number;
     };
     /**
      * @description A row of a pattern: what it plays (`kind` and `note`), its name, its length in steps (1…64; it cycles

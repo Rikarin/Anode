@@ -91,3 +91,38 @@ test('nudges regions and moves the playhead by region edge and transient from th
     rmSync(scratch, { recursive: true, force: true });
   }
 });
+
+// A loop by the inspector, and by dragging the region's corner: the next region edge is where its repeats end.
+test('loops a region from the inspector and by its corner', async ({ app, window }) => {
+  const scratch = mkdtempSync(join(tmpdir(), 'anode-timeline-'));
+  try {
+    await projectWithRegion(app, window, scratch);
+
+    await window.getByTestId('region-repeats').locator('input').fill('2');
+    await window.getByTestId('region-repeats').locator('input').press('Enter');
+    await window.locator('an-timeline').click({ position: { x: 40, y: 60 } });
+    await window.keyboard.press('Control+Alt+ArrowRight');
+    await expectPlayhead(window, /^\s*2\s+1\s+1\s+1/);
+    await window.keyboard.press('Control+Alt+ArrowRight');
+    await expectPlayhead(window, /^\s*4\s+1\s+1\s+1/);
+
+    await window.keyboard.press('ControlOrMeta+z');
+    await window.keyboard.press('Control+Alt+ArrowLeft');
+    await expectPlayhead(window, /^\s*2\s+1\s+1\s+1/);
+    await window.keyboard.press('Control+Alt+ArrowLeft');
+    await expectPlayhead(window, /^\s*1\s+1\s+1\s+1/);
+
+    // One bar is 192 px at the default zoom: the corner is at the top of the first lane's right end.
+    const timeline = window.locator('an-timeline');
+    const ruler = 24;
+    await timeline.dragTo(timeline, {
+      sourcePosition: { x: 191, y: ruler + 3 },
+      targetPosition: { x: 3 * 192, y: ruler + 3 }
+    });
+    await window.keyboard.press('Control+Alt+ArrowRight');
+    await window.keyboard.press('Control+Alt+ArrowRight');
+    await expectPlayhead(window, /^\s*4\s+1\s+1\s+1/);
+  } finally {
+    rmSync(scratch, { recursive: true, force: true });
+  }
+});

@@ -322,6 +322,37 @@ public sealed class PackageTests : IDisposable {
     }
 
     [Fact]
+    public void A_schema_11_package_loads_with_regions_that_do_not_loop() {
+        var (state, _, _) = RandomProjects.Build(3, 40);
+        Assert.NotEmpty(state.PatternRegions);
+        ProjectPackage.Save(folder, state);
+        var path = Path.Combine(folder, "project.json");
+        var root = JsonNode.Parse(File.ReadAllText(path))!.AsObject();
+        root["schemaVersion"] = 11;
+        File.WriteAllText(path, root.ToJsonString());
+        foreach (var file in Directory.EnumerateFiles(Path.Combine(folder, "tracks"))) {
+            var json = JsonNode.Parse(File.ReadAllText(file))!.AsObject();
+            json["schemaVersion"] = 11;
+            foreach (var holder in json["track"]!["alternatives"]!.AsArray().Append(json).OfType<JsonObject>()) {
+                foreach (var list in (string[])["regions", "midiRegions", "patternRegions"]) {
+                    foreach (var region in (holder[list] as JsonArray ?? []).OfType<JsonObject>()) {
+                        region.Remove("loopTicks");
+                    }
+                }
+            }
+
+            File.WriteAllText(file, json.ToJsonString());
+        }
+
+        var loaded = ProjectPackage.Load(folder);
+        Assert.Equal(RandomProjects.Json(state), RandomProjects.Json(loaded));
+        Assert.All(loaded.Regions.Values, static r => Assert.Equal(0, r.LoopTicks));
+        ProjectPackage.Save(folder, loaded);
+        var saved = JsonNode.Parse(File.ReadAllText(path))!.AsObject();
+        Assert.Equal(PackageMigrations.CurrentSchemaVersion, saved["schemaVersion"]!.GetValue<int>());
+    }
+
+    [Fact]
     public void Phase_9_content_survives_the_package_format_and_damage_is_left_out() {
         var ids = new SequentialIds();
         var state = Edits.Apply(

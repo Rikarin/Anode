@@ -1,8 +1,9 @@
 import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
-import type { AudioRegion, MidiRegion, TakeFolder } from '@anode/api-client';
+import type { AudioRegion, MidiRegion, PatternRegion, TakeFolder } from '@anode/api-client';
 import { ProjectStore } from '../state/project.store';
 import { SelectionStore } from '../state/selection.store';
 import { AudioRegionInspector, TakeFolderInspector } from './audio-region-inspector';
+import { PatternRegionInspector } from './pattern-region-inspector';
 import { RegionInspector } from './region-inspector';
 import { RegionNotationInspector, TrackStaffStyle } from './score-inspector';
 import { TrackDetails } from './track-details';
@@ -21,6 +22,7 @@ const Band =
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     AudioRegionInspector,
+    PatternRegionInspector,
     RegionInspector,
     RegionNotationInspector,
     TakeFolderInspector,
@@ -41,6 +43,9 @@ const Band =
         }
         @case ('folder') {
           <an-take-folder-inspector [folder]="r.folder" />
+        }
+        @case ('pattern') {
+          <an-pattern-region-inspector [region]="r.pattern" />
         }
       }
     }
@@ -67,6 +72,7 @@ export class Inspector {
     | { kind: 'midi'; midi: MidiRegion; trackId: string }
     | { kind: 'audio'; audio: AudioRegion; trackId: string }
     | { kind: 'folder'; folder: TakeFolder; trackId: string }
+    | { kind: 'pattern'; pattern: PatternRegion; trackId: string }
     | null
   >(() => {
     for (const id of this.selection.regions()) {
@@ -81,6 +87,10 @@ export class Inspector {
       const folder = this.project.takeFolders().get(id);
       if (folder) {
         return { kind: 'folder', folder, trackId: folder.trackId };
+      }
+      const pattern = this.project.patternRegions().get(id);
+      if (pattern) {
+        return { kind: 'pattern', pattern, trackId: pattern.trackId };
       }
     }
     return null;

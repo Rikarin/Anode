@@ -39,7 +39,8 @@
         "transpose": 0,
         "fineTune": 0,
         "pitchNotes": [],
-        "pitchSource": "off"
+        "pitchSource": "off",
+        "loopTicks": 0
       },
       "fileTempo": null,
       "expected": {
@@ -115,7 +116,8 @@
         "transpose": 0,
         "fineTune": 0,
         "pitchNotes": [],
-        "pitchSource": "off"
+        "pitchSource": "off",
+        "loopTicks": 0
       },
       "fileTempo": {
         "bpm": 100,
@@ -223,7 +225,8 @@
         "transpose": 0,
         "fineTune": 0,
         "pitchNotes": [],
-        "pitchSource": "off"
+        "pitchSource": "off",
+        "loopTicks": 0
       },
       "fileTempo": {
         "bpm": 100,
@@ -351,7 +354,8 @@
         "transpose": 0,
         "fineTune": 0,
         "pitchNotes": [],
-        "pitchSource": "off"
+        "pitchSource": "off",
+        "loopTicks": 0
       },
       "fileTempo": null,
       "expected": {
@@ -417,7 +421,8 @@
         "transpose": 0,
         "fineTune": 0,
         "pitchNotes": [],
-        "pitchSource": "off"
+        "pitchSource": "off",
+        "loopTicks": 0
       },
       "fileTempo": {
         "bpm": 100,
@@ -507,7 +512,8 @@
         "transpose": 0,
         "fineTune": 0,
         "pitchNotes": [],
-        "pitchSource": "off"
+        "pitchSource": "off",
+        "loopTicks": 0
       },
       "fileTempo": {
         "bpm": 100,
@@ -605,7 +611,8 @@
         "transpose": 0,
         "fineTune": 0,
         "pitchNotes": [],
-        "pitchSource": "off"
+        "pitchSource": "off",
+        "loopTicks": 0
       },
       "fileTempo": {
         "bpm": 100,
@@ -696,7 +703,8 @@
         "transpose": 0,
         "fineTune": 0,
         "pitchNotes": [],
-        "pitchSource": "off"
+        "pitchSource": "off",
+        "loopTicks": 0
       },
       "fileTempo": {
         "bpm": 100,
@@ -817,7 +825,8 @@
         "transpose": 0,
         "fineTune": 0,
         "pitchNotes": [],
-        "pitchSource": "off"
+        "pitchSource": "off",
+        "loopTicks": 0
       },
       "fileTempo": {
         "bpm": 100,
@@ -925,7 +934,8 @@
         "transpose": 0,
         "fineTune": 0,
         "pitchNotes": [],
-        "pitchSource": "off"
+        "pitchSource": "off",
+        "loopTicks": 0
       },
       "fileTempo": null,
       "expected": {
@@ -1007,7 +1017,8 @@
         "transpose": 0,
         "fineTune": 0,
         "pitchNotes": [],
-        "pitchSource": "off"
+        "pitchSource": "off",
+        "loopTicks": 0
       },
       "fileTempo": null,
       "expected": {
@@ -1094,7 +1105,8 @@
         "transpose": 0,
         "fineTune": 0,
         "pitchNotes": [],
-        "pitchSource": "off"
+        "pitchSource": "off",
+        "loopTicks": 0
       },
       "fileTempo": {
         "bpm": 60,
@@ -1195,7 +1207,8 @@
         "transpose": 0,
         "fineTune": 0,
         "pitchNotes": [],
-        "pitchSource": "off"
+        "pitchSource": "off",
+        "loopTicks": 0
       },
       "fileTempo": {
         "bpm": 60,
@@ -1296,7 +1309,8 @@
         "transpose": 0,
         "fineTune": 0,
         "pitchNotes": [],
-        "pitchSource": "off"
+        "pitchSource": "off",
+        "loopTicks": 0
       },
       "fileTempo": {
         "bpm": 60,
@@ -1402,7 +1416,8 @@
         "transpose": 0,
         "fineTune": 0,
         "pitchNotes": [],
-        "pitchSource": "off"
+        "pitchSource": "off",
+        "loopTicks": 0
       },
       "fileTempo": {
         "bpm": 60,

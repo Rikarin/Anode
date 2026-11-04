@@ -82,6 +82,7 @@ export const KeyCommands: readonly KeyCommand[] = [
   { id: 'region.join', label: 'Join Regions', group: 'Regions', defaults: ['Meta+J'] },
   { id: 'region.split', label: 'Split Regions at Playhead', group: 'Regions', defaults: ['Meta+T'] },
   { id: 'region.repeat', label: 'Repeat Regions Once', group: 'Regions', defaults: ['Meta+R'] },
+  { id: 'region.convertLoops', label: 'Convert Loops to Regions', group: 'Regions', defaults: ['Ctrl+L'] },
   { id: 'region.nudgeLeft', label: 'Nudge Regions Left', group: 'Regions', defaults: ['Alt+ArrowLeft'] },
   { id: 'region.nudgeRight', label: 'Nudge Regions Right', group: 'Regions', defaults: ['Alt+ArrowRight'] },
   { id: 'region.nudgeTick', label: 'Set Nudge Value to Tick', group: 'Regions', defaults: [] },

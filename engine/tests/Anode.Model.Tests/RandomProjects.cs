@@ -625,6 +625,9 @@ static partial class RandomProjects {
                     ? Split(Pick(r, regions), s, r)
                     : null,
             nameof(SetRegionCommand) => regions.Length > 0 ? SetRegion(Pick(r, regions), r) : null,
+            nameof(ConvertLoopsCommand) => AnyRegion() is not null
+                ? new ConvertLoopsCommand([..Enumerable.Range(0, r.Next(1, 4)).Select(_ => AnyRegion()!)])
+                : null,
             nameof(DeleteRegionsCommand) => AnyRegion() is not null
                 ? new DeleteRegionsCommand([..Enumerable.Range(0, r.Next(1, 4)).Select(_ => AnyRegion()!)])
                 : null,
@@ -670,7 +673,8 @@ static partial class RandomProjects {
                     Maybe(Math.Round(r.NextDouble(), 2)),
                     Maybe(Math.Round(r.NextDouble(), 2)),
                     Maybe(r.Next(2) == 0),
-                    r.Next(3) > 0 ? null : grooves.Length == 0 || r.Next(4) == 0 ? string.Empty : Pick(r, grooves).Id
+                    r.Next(3) > 0 ? null : grooves.Length == 0 || r.Next(4) == 0 ? string.Empty : Pick(r, grooves).Id,
+                    r.Next(4) == 0 ? r.Next(0, 16) * 480L : null
                 )
                 : null,
             nameof(AddNotesCommand) => MidiRegion() is { } m
@@ -1028,7 +1032,8 @@ static partial class RandomProjects {
                     r.Next(2) == 0 ? null : r.Next(0, 32) * 480L,
                     r.Next(2) == 0 ? null : r.Next(r.Next(16) == 0 ? -1 : 1, 16) * 480L,
                     MaybeText($"Groove {r.Next(10)}"),
-                    Maybe(r.Next(2) == 0)
+                    Maybe(r.Next(2) == 0),
+                    r.Next(4) == 0 ? r.Next(0, 16) * 480L : null
                 )
                 : null,
             nameof(SetPatternCommand) => patterns.Length > 0 && Pick(r, patterns) is var p
@@ -2356,7 +2361,8 @@ static partial class RandomProjects {
             r.Next(2) == 0 ? null : r.NextInt64(0, region.Length / 2 + 1),
             r.Next(2) == 0 ? null : Math.Round(r.NextDouble() * 2 - 1, 2),
             r.Next(2) == 0 ? null : Math.Round(r.NextDouble() * 2 - 1, 2),
-            r.Next(2) == 0 ? null : r.Next(2) == 0
+            r.Next(2) == 0 ? null : r.Next(2) == 0,
+            r.Next(4) == 0 ? r.Next(0, 16) * 480L : null
         );
 
     static TempoEvent[] TempoEvents(Random r) {

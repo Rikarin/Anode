@@ -164,6 +164,7 @@ public static partial class Edits {
             SplitRegionCommand c => SplitRegion(state, c, ids),
             SetRegionCommand c => SetRegion(state, c),
             DeleteRegionsCommand c => DeleteRegions(state, c),
+            ConvertLoopsCommand c => ConvertLoops(state, c, ids),
             SetTempoCommand c => SetTempo(state, c),
             SetSignatureCommand c => SetSignature(state, c),
             SetCycleCommand c => SetCycle(state, c),
@@ -687,6 +688,7 @@ public static partial class Edits {
         }
 
         var region = RegionOf(state, c.RegionId!);
+        RefuseLooped(region.LoopTicks, region.Id, "split");
         var timing = RegionTiming.Of(state, region);
         long at;
         if (timing.Warped) {
@@ -714,7 +716,7 @@ public static partial class Edits {
     /// <summary>
     ///     The part of <paramref name="region" /> over file frames <paramref name="from" />…<paramref name="to" />,
     ///     starting at <paramref name="startTick" />: its flex markers inside that part (their ticks relative to the new
-    ///     start) and its pitch notes cut to it.
+    ///     start) and its pitch notes cut to it, without a loop.
     /// </summary>
     public static AudioRegion Piece(AudioRegion region, long from, long to, long startTick) {
         var shift = startTick - region.StartTick;
@@ -722,6 +724,7 @@ public static partial class Edits {
             StartTick = startTick,
             FileOffset = from,
             Length = to - from,
+            LoopTicks = 0,
             FlexMarkers = region.FlexMarkers.Count == 0
                 ? region.FlexMarkers
                 : [
@@ -762,6 +765,7 @@ public static partial class Edits {
 
         CheckCurve(c.FadeInCurve);
         CheckCurve(c.FadeOutCurve);
+        CheckLoop(c.LoopTicks);
         return [
             new RegionUpserted(
                 region with {
@@ -771,7 +775,8 @@ public static partial class Edits {
                     FadeOut = fadeOut,
                     FadeInCurve = c.FadeInCurve ?? region.FadeInCurve,
                     FadeOutCurve = c.FadeOutCurve ?? region.FadeOutCurve,
-                    Muted = c.Muted ?? region.Muted
+                    Muted = c.Muted ?? region.Muted,
+                    LoopTicks = c.LoopTicks ?? region.LoopTicks
                 }
             )
         ];

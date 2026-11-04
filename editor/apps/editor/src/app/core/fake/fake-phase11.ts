@@ -696,6 +696,7 @@ function convertRegions(project: Project, command: Command<'convertSessionPlayer
         controls: [],
         muted: region.muted,
         pitchSource: 'off',
+        loopTicks: 0,
         key: null
       };
       next = { ...next, sessionPlayerRegions: rest, midiRegions: [...next.midiRegions, midi] };
@@ -1198,7 +1199,8 @@ function patternRegions(region: SessionPlayerRegion, pattern: Pattern, ctx: Phas
     startTick,
     lengthTicks,
     muted: region.muted,
-    pattern: { ...structuredClone(pattern), rows: structuredClone(rows) }
+    pattern: { ...structuredClone(pattern), rows: structuredClone(rows) },
+    loopTicks: 0
   });
   if (pattern.rows.every(row => row.length <= MaxRowLength)) {
     return [part(region.startTick, region.lengthTicks, pattern.rows)];

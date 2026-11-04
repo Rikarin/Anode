@@ -29,6 +29,7 @@ const audio = (id: string, startTick: number, length: number, fileOffset = 0): A
   fineTune: 0,
   pitchNotes: [],
   pitchSource: 'off',
+  loopTicks: 0,
   key: null
 });
 const midi: MidiRegion = {
@@ -43,6 +44,7 @@ const midi: MidiRegion = {
   controls: [],
   muted: true,
   pitchSource: 'off',
+  loopTicks: 0,
   key: null
 };
 

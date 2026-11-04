@@ -79,13 +79,15 @@ public static partial class Edits {
         }
 
         CheckPitchNotes(source, source.PitchNotes);
+        CheckLoop(source.LoopTicks);
         // Under another tempo a marker's tick may pass the region's plain end: a copy keeps what its source had.
         return region with {
             Follow = source.Follow,
             FlexMarkers = CheckedFlexMarkers(source, source.FlexMarkers, MaxTick),
             Transpose = source.Transpose,
             FineTune = source.FineTune,
-            PitchNotes = [..source.PitchNotes]
+            PitchNotes = [..source.PitchNotes],
+            LoopTicks = source.LoopTicks
         };
     }
 

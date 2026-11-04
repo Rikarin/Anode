@@ -7,6 +7,7 @@ import { canPitch } from '../music/region-timing';
 import { FlexStore, FollowModes } from '../state/flex.store';
 import { ProjectStore } from '../state/project.store';
 import { UiStore } from '../state/ui.store';
+import { LoopFields } from './loop-fields';
 import { PitchSourceFields } from './pitch-source-fields';
 
 /** A native select in the Inspector's dense grid, on the field surface. */
@@ -24,7 +25,7 @@ const Band =
 @Component({
   selector: 'an-audio-region-inspector',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [AnFadeCurve, PitchSourceFields, XuiNumericInputImports],
+  imports: [AnFadeCurve, LoopFields, PitchSourceFields, XuiNumericInputImports],
   host: { class: 'flex flex-col gap-2', role: 'group', '[attr.aria-label]': '"Region: " + region().name' },
   template: `
     <h3 [class]="band" [attr.title]="region().name">Region: {{ region().name }}</h3>
@@ -40,6 +41,14 @@ const Band =
       >
         M
       </button>
+      <an-loop-fields
+        kind="audio"
+        [regionId]="region().id"
+        [trackId]="region().trackId"
+        [startTick]="region().startTick"
+        [endTick]="project.regionEnd(region())"
+        [loopTicks]="region().loopTicks"
+      />
       <an-pitch-source-fields
         [audio]="true"
         [regionId]="region().id"

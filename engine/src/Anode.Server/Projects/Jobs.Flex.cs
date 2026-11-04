@@ -2,6 +2,7 @@ using Anode.Contracts;
 using Anode.Dsp.Effects;
 using Anode.Model;
 using Anode.Model.Audio;
+using Anode.Model.Compile;
 using Anode.Model.Editing;
 using Anode.Model.Time;
 
@@ -100,11 +101,9 @@ public sealed partial class Jobs {
             var regions = state.RegionsOf(track.Id).ToArray();
             var midi = state.MidiRegionsOf(track.Id).ToArray();
             var folders = state.TakeFoldersOf(track.Id).ToArray();
-            var spans = regions.Select(r => (RegionTiming.Of(state, r).StartSample, Edits.EndSample(state, r)))
+            var spans = regions.Select(r => (RegionTiming.Of(state, r).StartSample, Loops.EndSample(state, r)))
                 .Concat(
-                    midi.Select(r => (map.SampleAt(r.StartTick, rate),
-                            map.SampleAt(r.StartTick + r.LengthTicks, rate))
-                    )
+                    midi.Select(r => (map.SampleAt(r.StartTick, rate), map.SampleAt(Loops.EndTick(state, r), rate)))
                 )
                 .Concat(
                     folders.Select(f => (map.SampleAt(f.StartTick, rate),
@@ -138,11 +137,11 @@ public sealed partial class Jobs {
         var sources = new List<InPlace>();
         var items = request.RegionIds!.Distinct(StringComparer.Ordinal)
             .Select(id => id is not null && state.Regions.TryGetValue(id, out var audio)
-                    ? (audio.TrackId, id, RegionTiming.Of(state, audio).StartSample, Edits.EndSample(state, audio),
+                    ? (audio.TrackId, id, RegionTiming.Of(state, audio).StartSample, Loops.EndSample(state, audio),
                         false)
                     : id is not null && state.MidiRegions.TryGetValue(id, out var midi)
                         ? (midi.TrackId, id, map.SampleAt(midi.StartTick, rate),
-                            map.SampleAt(midi.StartTick + midi.LengthTicks, rate), true)
+                            map.SampleAt(Loops.EndTick(state, midi), rate), true)
                         : throw ProjectException.NotFound($"No region '{id}'.")
             )
             .ToArray();

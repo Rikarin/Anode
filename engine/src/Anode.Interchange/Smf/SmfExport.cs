@@ -1,5 +1,6 @@
 using Anode.Contracts;
 using Anode.Model;
+using Anode.Model.Compile;
 using Anode.Model.Editing;
 using Anode.Model.Groove;
 using Anode.Model.Midi;
@@ -32,7 +33,7 @@ public static class SmfExport {
             var region = state.MidiRegions.TryGetValue(regionId, out var r)
                 ? r
                 : throw new ArgumentException($"No MIDI region '{regionId}'.", nameof(request));
-            tracks.Add(TrackOf(state, region.Name, [region]));
+            tracks.Add(TrackOf(state, region.Name, [..Loops.Played(state, region)]));
         } else {
             var chosen = request.TrackIds is { } ids
                 ? ids.Distinct(StringComparer.Ordinal)
@@ -41,7 +42,14 @@ public static class SmfExport {
                             : throw new ArgumentException($"No MIDI track '{id}'.", nameof(request))
                     )
                 : state.Tracks.Where(t => Edits.HoldsMidi(t) && state.MidiRegionsOf(t.Id).Any());
-            tracks.AddRange(chosen.Select(t => TrackOf(state, t.Name, [..state.MidiRegionsOf(t.Id)])));
+            tracks.AddRange(
+                chosen.Select(t => TrackOf(
+                        state,
+                        t.Name,
+                        [..state.MidiRegionsOf(t.Id).SelectMany(r => Loops.Played(state, r))]
+                    )
+                )
+            );
         }
 
         var settings = state.Settings;

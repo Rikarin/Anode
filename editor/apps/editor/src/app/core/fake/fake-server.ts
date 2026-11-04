@@ -262,6 +262,7 @@ import {
 import { CrashyPluginId, FakeCatalogue, FakeEffects, FakeMidiDevices } from './fake-plugins';
 import { FakeT3Effects, FakeT3Instruments } from './fake-plugins-phase11';
 import { FakeMidiEffects, FakeT2Effects, FakeT2Instruments, RemixFxId, withMacros } from './fake-plugins-phase6';
+import { checkedLoop, convertLoops, refuseLooped } from './fake-region-loops';
 import { FakeScriptPresets } from './fake-scripts';
 import { FactoryStaffStyles } from './fake-staff-styles';
 
@@ -2148,6 +2149,7 @@ export class FakeAnodeServer implements AnodeApi {
       fineTune: 0,
       pitchNotes: [],
       pitchSource: 'off',
+      loopTicks: 0,
       key: null
     });
     const [drums, bass] = files as [AudioFile, AudioFile];
@@ -3228,6 +3230,7 @@ export class FakeAnodeServer implements AnodeApi {
         fineTune: 0,
         pitchNotes: [],
         pitchSource: 'off',
+        loopTicks: 0,
         key: null
       };
     } else if (info.kind === 'midi') {
@@ -3253,6 +3256,7 @@ export class FakeAnodeServer implements AnodeApi {
         controls: [],
         muted: false,
         pitchSource: 'off',
+        loopTicks: 0,
         key: null
       };
     } else {
@@ -3266,7 +3270,8 @@ export class FakeAnodeServer implements AnodeApi {
         startTick: tick,
         lengthTicks,
         muted: false,
-        pattern: structuredClone(loop.pattern ?? { rows: [], swing: 0, seed: 1, stepTicks: 240 })
+        pattern: structuredClone(loop.pattern ?? { rows: [], swing: 0, seed: 1, stepTicks: 240 }),
+        loopTicks: 0
       };
     }
     if (request.cellSceneId) {
@@ -4388,6 +4393,7 @@ export class FakeAnodeServer implements AnodeApi {
           fineTune: 0,
           pitchNotes: [],
           pitchSource: 'off',
+          loopTicks: 0,
           key: null
         };
         const smart = project.settings.smartTempo;
@@ -4464,6 +4470,7 @@ export class FakeAnodeServer implements AnodeApi {
           throw new ApiError(422, 'A take folder does not split: flatten it first.');
         }
         const r = region(command.regionId);
+        refuseLooped(r);
         const timing = timingOf(project, r);
         if (command.atTick <= r.startTick || command.atTick >= timing.endTick) {
           throw new ApiError(422, 'A split must fall inside the region.');
@@ -4514,9 +4521,18 @@ export class FakeAnodeServer implements AnodeApi {
           fadeOut,
           fadeInCurve: curve(command.fadeInCurve, r.fadeInCurve),
           fadeOutCurve: curve(command.fadeOutCurve, r.fadeOutCurve),
-          muted: command.muted ?? r.muted
+          muted: command.muted ?? r.muted,
+          loopTicks: checkedLoop(command.loopTicks, r.loopTicks)
         });
       }
+      case 'convertLoops':
+        return convertLoops(
+          project,
+          command.regionIds,
+          r => timingOf(project, r).endTick,
+          id,
+          () => this.nextId++
+        );
       case 'deleteRegions':
         if (command.regionIds.some(isSessionPlayerRegionId)) {
           const without = deleteSessionPlayerRegions(project, command.regionIds.filter(isSessionPlayerRegionId));
@@ -4673,6 +4689,7 @@ export class FakeAnodeServer implements AnodeApi {
           controls: [],
           muted: false,
           pitchSource: 'off',
+          loopTicks: 0,
           key: null
         };
         return { ...project, midiRegions: [...project.midiRegions, added] };
@@ -4718,7 +4735,13 @@ export class FakeAnodeServer implements AnodeApi {
         if (playback.quantizeTicks < 0 || !inUnit(playback.quantizeStrength) || !inUnit(playback.swing)) {
           throw new ApiError(422, 'Quantise needs a grid of 0 or more ticks, and strength and swing of 0…1.');
         }
-        return withMidiRegion({ ...r, name: command.name ?? r.name, playback, muted: command.muted ?? r.muted });
+        return withMidiRegion({
+          ...r,
+          name: command.name ?? r.name,
+          playback,
+          muted: command.muted ?? r.muted,
+          loopTicks: checkedLoop(command.loopTicks, r.loopTicks)
+        });
       }
       case 'addNotes': {
         const r = midiRegion(command.regionId);
@@ -5429,6 +5452,7 @@ export class FakeAnodeServer implements AnodeApi {
    * crosses the split is cut there when it plays), the rest move to the second, relative to its start.
    */
   private splitMidiRegion(project: Project, r: MidiRegion, atTick: number): Project {
+    refuseLooped(r);
     const at = Math.round(atTick);
     if (at <= r.startTick || at >= r.startTick + r.lengthTicks) {
       throw new ApiError(422, 'A split must fall inside the region.');

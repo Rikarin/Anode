@@ -6196,7 +6196,8 @@
           "fineTune",
           "pitchNotes",
           "pitchSource",
-          "key"
+          "key",
+          "loopTicks"
         ],
         "type": "object",
         "properties": {
@@ -6282,6 +6283,11 @@
                 "$ref": "#/components/schemas/RegionKey"
               }
             ]
+          },
+          "loopTicks": {
+            "type": "integer",
+            "format": "int64",
+            "default": 0
           }
         },
         "description": "A region of an audio file on a track: it starts at \u0060startTick\u0060 and plays \u0060length\u0060 frames of the file\nfrom \u0060fileOffset\u0060, at \u0060gainDb\u0060, with fades of \u0060fadeIn\u0060 and \u0060fadeOut\u0060 frames whose curves run\nfrom \u22121 (slow start, exponential-looking) through 0 (linear) to 1 (fast start, logarithmic-looking): a fade-in\u0027s\ngain at position x (0\u20261) is x^(2^(\u22122c)), a fade-out the mirror. A muted region\ndoes not play. Two regions on a track may overlap only as a crossfade: where the earlier fades out and the later\nfades in."
@@ -8872,6 +8878,9 @@
             "$ref": "#/components/schemas/EditCommandDeleteRegionsCommand"
           },
           {
+            "$ref": "#/components/schemas/EditCommandConvertLoopsCommand"
+          },
+          {
             "$ref": "#/components/schemas/EditCommandSetTempoCommand"
           },
           {
@@ -9385,6 +9394,7 @@
             "splitRegion": "#/components/schemas/EditCommandSplitRegionCommand",
             "setRegion": "#/components/schemas/EditCommandSetRegionCommand",
             "deleteRegions": "#/components/schemas/EditCommandDeleteRegionsCommand",
+            "convertLoops": "#/components/schemas/EditCommandConvertLoopsCommand",
             "setTempo": "#/components/schemas/EditCommandSetTempoCommand",
             "setSignature": "#/components/schemas/EditCommandSetSignatureCommand",
             "setCycle": "#/components/schemas/EditCommandSetCycleCommand",
@@ -10661,6 +10671,27 @@
           }
         },
         "description": "Phase 11: a cable from outlet \u0060outlet\u0060 of one object to inlet \u0060inlet\u0060 of another (both existing on their\nkinds; 422 for a cable that exists, or one that would close a cycle)."
+      },
+      "EditCommandConvertLoopsCommand": {
+        "required": [
+          "regionIds",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "convertLoops"
+            ],
+            "type": "string"
+          },
+          "regionIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "description": "Turns the repeats of looped regions (audio, MIDI, pattern) into regions of their own; what plays stays."
       },
       "EditCommandConvertPatternToMidiCommand": {
         "required": [
@@ -13346,9 +13377,16 @@
               "null",
               "string"
             ]
+          },
+          "loopTicks": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int64"
           }
         },
-        "description": "Changes a MIDI region\u0027s name, mute or playback parameters. \u0060grooveId\u0060 (Phase 7) makes its playback quantise\nfollow a groove template of the project; an empty string returns it to the grid."
+        "description": "Changes a MIDI region\u0027s name, mute, loop or playback parameters. \u0060grooveId\u0060 (Phase 7) makes its playback quantise\nfollow a groove template of the project; an empty string returns it to the grid."
       },
       "EditCommandSetMixerSettingsCommand": {
         "required": [
@@ -13641,9 +13679,16 @@
               "null",
               "boolean"
             ]
+          },
+          "loopTicks": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int64"
           }
         },
-        "description": "Moves (in time), resizes, renames or mutes a pattern region; \u0060moveRegion\u0060, \u0060copyRegions\u0060 and\n\u0060deleteRegions\u0060 take pattern regions too."
+        "description": "Moves (in time), resizes, renames, loops or mutes a pattern region; \u0060moveRegion\u0060, \u0060copyRegions\u0060 and\n\u0060deleteRegions\u0060 take pattern regions too."
       },
       "EditCommandSetPitchNotesCommand": {
         "required": [
@@ -13822,6 +13867,13 @@
               "null",
               "boolean"
             ]
+          },
+          "loopTicks": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int64"
           }
         }
       },
@@ -17306,7 +17358,8 @@
           "muted",
           "notation",
           "pitchSource",
-          "key"
+          "key",
+          "loopTicks"
         ],
         "type": "object",
         "properties": {
@@ -17360,9 +17413,14 @@
                 "$ref": "#/components/schemas/RegionKey"
               }
             ]
+          },
+          "loopTicks": {
+            "type": "integer",
+            "format": "int64",
+            "default": 0
           }
         },
-        "description": "A MIDI region: it starts at \u0060startTick\u0060 and lasts \u0060lengthTicks\u0060; its notes and controller events are\npositioned relative to its start (ticks at 960 PPQ). Events past the end do not play; a note that crosses the end\nis cut there. \u0060playback\u0060 holds the non-destructive region parameters. \u0060notation\u0060 (Phase 9,\ndocs/10-phase-9.md) holds its score settings: display quantise and interpretation. \u0060pitchSource\u0060 and\n\u0060key\u0060 (Phase 11, docs/12-phase-11.md): how it follows the chord track (applied at compile time; its notes\nstay as they are) and its own key (null: the project\u0027s at its start)."
+        "description": "A MIDI region: it starts at \u0060startTick\u0060 and lasts \u0060lengthTicks\u0060; its notes and controller events are\npositioned relative to its start (ticks at 960 PPQ). Events past the end do not play; a note that crosses the end\nis cut there. \u0060playback\u0060 holds the non-destructive region parameters. \u0060notation\u0060 (Phase 9,\ndocs/10-phase-9.md) holds its score settings: display quantise and interpretation. \u0060pitchSource\u0060 and\n\u0060key\u0060 (Phase 11, docs/12-phase-11.md): how it follows the chord track (applied at compile time; its notes\nstay as they are) and its own key (null: the project\u0027s at its start). \u0060loopTicks\u0060: it repeats for that many\nticks after its end, as AudioRegion says."
       },
       "MidiSyncDestination": {
         "required": [
@@ -18537,7 +18595,8 @@
           "startTick",
           "lengthTicks",
           "muted",
-          "pattern"
+          "pattern",
+          "loopTicks"
         ],
         "type": "object",
         "properties": {
@@ -18563,6 +18622,11 @@
           },
           "pattern": {
             "$ref": "#/components/schemas/Pattern"
+          },
+          "loopTicks": {
+            "type": "integer",
+            "format": "int64",
+            "default": 0
           }
         },
         "description": "A pattern region on an instrument track: it plays \u0060pattern\u0060 from \u0060startTick\u0060 for\n\u0060lengthTicks\u0060, every row cycling from the region\u0027s start."

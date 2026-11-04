@@ -141,7 +141,8 @@
           "swing": 0,
           "seed": 1,
           "stepTicks": 240
-        }
+        },
+        "loopTicks": 0
       },
       "keys": [
         {
@@ -302,7 +303,8 @@
           "swing": 0,
           "seed": 1,
           "stepTicks": 240
-        }
+        },
+        "loopTicks": 0
       },
       "keys": [
         {
@@ -426,7 +428,8 @@
           "swing": 0,
           "seed": 1,
           "stepTicks": 240
-        }
+        },
+        "loopTicks": 0
       },
       "keys": [
         {
@@ -584,7 +587,8 @@
           "swing": 0,
           "seed": 1,
           "stepTicks": 240
-        }
+        },
+        "loopTicks": 0
       },
       "keys": [
         {
@@ -692,7 +696,8 @@
           "swing": 0,
           "seed": 42,
           "stepTicks": 240
-        }
+        },
+        "loopTicks": 0
       },
       "keys": [
         {
@@ -858,7 +863,8 @@
           "swing": 0.6,
           "seed": 1,
           "stepTicks": 240
-        }
+        },
+        "loopTicks": 0
       },
       "keys": [
         {
@@ -976,7 +982,8 @@
           "swing": 0,
           "seed": 1,
           "stepTicks": 240
-        }
+        },
+        "loopTicks": 0
       },
       "keys": [
         {
@@ -1082,7 +1089,8 @@
           "swing": 0,
           "seed": 1,
           "stepTicks": 240
-        }
+        },
+        "loopTicks": 0
       },
       "keys": [
         {
@@ -1206,7 +1214,8 @@
           "swing": 0,
           "seed": 1,
           "stepTicks": 240
-        }
+        },
+        "loopTicks": 0
       },
       "keys": [
         {
@@ -1320,7 +1329,8 @@
           "swing": 0,
           "seed": 99,
           "stepTicks": 240
-        }
+        },
+        "loopTicks": 0
       },
       "keys": [
         {
@@ -1487,7 +1497,8 @@
           "swing": 0.5,
           "seed": 1,
           "stepTicks": 240
-        }
+        },
+        "loopTicks": 0
       },
       "keys": [
         {
@@ -1617,7 +1628,8 @@
           "swing": 0,
           "seed": 1,
           "stepTicks": 240
-        }
+        },
+        "loopTicks": 0
       },
       "keys": [
         {
@@ -1754,7 +1766,8 @@
           "swing": 0,
           "seed": 1,
           "stepTicks": 240
-        }
+        },
+        "loopTicks": 0
       },
       "keys": [
         {
@@ -1992,7 +2005,8 @@
           "swing": 0.25,
           "seed": 3,
           "stepTicks": 240
-        }
+        },
+        "loopTicks": 0
       },
       "keys": [
         {

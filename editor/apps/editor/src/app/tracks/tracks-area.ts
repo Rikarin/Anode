@@ -572,6 +572,15 @@ const Players: readonly { player: SessionPlayerKind; label: string; icon: string
               Split at Playhead ({{ keyOf('region.split') }})
             </button>
             <button xuiMenuItem type="button" (click)="repeat()">Repeat Once ({{ keyOf('region.repeat') }})</button>
+            <button
+              xuiMenuItem
+              type="button"
+              data-testid="convert-loops"
+              [disabled]="!menuLoops()"
+              (click)="convertLoops()"
+            >
+              Convert Loops to Regions ({{ keyOf('region.convertLoops') }})
+            </button>
             @if (menuPatterns().length > 0) {
               <button xuiMenuItem type="button" data-testid="convert-to-midi-region" (click)="convertPatterns()">
                 Convert to MIDI Region
@@ -738,6 +747,16 @@ export class TracksArea {
     const target = this.timeline().menuTarget();
     return target.kind === 'regions' ? target.ids.filter(id => this.project.patternRegions().has(id)) : [];
   });
+  /** Some of the menu's regions loop. */
+  protected readonly menuLoops = computed(() => {
+    const target = this.timeline().menuTarget();
+    const loopTicks = (id: string) =>
+      this.project.regions().get(id)?.loopTicks ??
+      this.project.midiRegions().get(id)?.loopTicks ??
+      this.project.patternRegions().get(id)?.loopTicks ??
+      0;
+    return target.kind === 'regions' && target.ids.some(id => loopTicks(id) > 0);
+  });
   /** The menu's Session Player regions (Regenerate, Convert). */
   protected readonly menuPlayers = computed(() => {
     const target = this.timeline().menuTarget();
@@ -818,6 +837,7 @@ export class TracksArea {
       ['region.mute', () => this.mute()],
       ['region.split', () => this.splitAtPlayhead()],
       ['region.repeat', () => this.repeat()],
+      ['region.convertLoops', () => this.convertLoops()],
       ['region.nudgeLeft', () => this.nudge(-1)],
       ['region.nudgeRight', () => this.nudge(1)],
       ...NudgeValues.map(({ value, label }): [string, () => void] => [
@@ -895,7 +915,10 @@ export class TracksArea {
     return this.timeline()
       .allSpans()
       .filter(s => onTrack(s.trackId))
-      .flatMap(s => [s.startTick, s.endTick]);
+      .flatMap(s => {
+        const repeats = s.playedEnd > s.endTick ? [s.playedEnd] : [];
+        return [s.startTick, s.endTick, ...repeats];
+      });
   }
 
   private markerTicks(): number[] {
@@ -1132,6 +1155,22 @@ export class TracksArea {
         : [];
     });
     void this.project.execute(commands, plural('Split', commands.length));
+  }
+
+  /** The selected regions that loop. */
+  private looped(): string[] {
+    return this.timeline()
+      .allSpans()
+      .filter(s => s.playedEnd > s.endTick && this.selection.isSelected(s.id))
+      .map(s => s.id);
+  }
+
+  /** Turns the selected regions' repeats into regions of their own (⌃L). */
+  protected convertLoops(): void {
+    const ids = this.looped();
+    if (ids.length > 0) {
+      void this.project.execute([{ type: 'convertLoops', regionIds: ids }], 'Convert Loops to Regions');
+    }
   }
 
   /** Repeat Once: a copy right after the selection's end (⌘R). */

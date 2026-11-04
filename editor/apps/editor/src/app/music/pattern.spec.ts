@@ -30,7 +30,8 @@ function region(rows: PatternRow[], overrides: Partial<Pattern> = {}, lengthTick
     startTick: 0,
     lengthTicks,
     muted: false,
-    pattern: { rows, swing: 0, seed: 1, stepTicks: 240, ...overrides }
+    pattern: { rows, swing: 0, seed: 1, stepTicks: 240, ...overrides },
+    loopTicks: 0
   };
 }
 

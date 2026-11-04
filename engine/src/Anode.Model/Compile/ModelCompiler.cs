@@ -38,7 +38,7 @@ public sealed record CompiledModel(
 ///     Incremental: a track is recompiled only when its regions (audio or MIDI), take folders, their files, the tempo
 ///     track or the sample rate changed since the previous call; otherwise the previous <see cref="TrackModel" />
 ///     instance is reused, so a caller finds the dirty tracks by reference.
-///     Phase 11 (docs/12-phase-11.md): Session Player regions play as MIDI regions of the notes the server generated
+///     Regions that loop play their repeats (<see cref="Loops" />). Phase 11 (docs/12-phase-11.md): Session Player regions play as MIDI regions of the notes the server generated
 ///     for them (<c>sessionPlayers</c>, by region id; a Drummer's through its kit's pads, as a Drum Machine Designer's);
 ///     regions that follow the chord track play as <see cref="PitchFollow" /> says, and recompile when the chord track
 ///     or the key track changes.
@@ -240,7 +240,7 @@ public sealed class ModelCompiler {
         if (!cache.TryGetValue(engineId, out var cached) || !cached.Key.Equals(key)) {
             var (playlist, warp, pitch) = Playlist(state, map, ids, regions, folders, track, source.Analyses);
             var events = Merge(
-                MidiEvents(state, map, engineId, [..midi.Select(r => PitchFollow.Followed(state, r))]),
+                MidiEvents(state, map, engineId, Played(state, midi)),
                 PatternEvents(state, map, engineId, patterns),
                 routed is { } r ? RoutedEvents(state, map, engineId, r) : []
             );
@@ -250,6 +250,11 @@ public sealed class ModelCompiler {
 
         return WithAutomation(cached.Model, AutomationEvents.Compile(state, map, ids, track, engineId));
     }
+
+    /// <summary>MIDI regions as they play: with their repeats, each following the chord track where it falls.</summary>
+    static MidiRegion[] Played(ProjectState state, MidiRegion[] regions) => [
+        ..regions.SelectMany(r => Loops.Played(state, r)).Select(r => PitchFollow.Followed(state, r))
+    ];
 
     static PatternRegion[] Ordered(IEnumerable<PatternRegion> regions) => [
         ..regions.OrderBy(static r => r.StartTick).ThenBy(static r => r.Id, StringComparer.Ordinal)
@@ -283,7 +288,7 @@ public sealed class ModelCompiler {
     /// </summary>
     static PlaybackEvent[] RoutedEvents(ProjectState state, TempoMap map, int engineId, Route route) {
         var all = Merge(
-            MidiEvents(state, map, engineId, [..route.Midi.Select(r => PitchFollow.Followed(state, r))]),
+            MidiEvents(state, map, engineId, Played(state, route.Midi)),
             PatternEvents(state, map, engineId, route.Patterns)
         );
         return [
@@ -292,8 +297,8 @@ public sealed class ModelCompiler {
     }
 
     /// <summary>
-    ///     Pattern regions' notes as events (<see cref="PatternUnroller" />): unmuted regions only, notes cut at their
-    ///     region's end, channel 1, sorted with note-offs before note-ons at equal samples.
+    ///     Pattern regions' notes as events (<see cref="PatternUnroller" />): unmuted regions only, with their repeats,
+    ///     notes cut at their region's end, channel 1, sorted with note-offs before note-ons at equal samples.
     /// </summary>
     public static PlaybackEvent[] PatternEvents(
         ProjectState state,
@@ -306,11 +311,7 @@ public sealed class ModelCompiler {
         }
 
         var events = new List<PlaybackEvent>();
-        foreach (var region in regions) {
-            if (region.Muted) {
-                continue;
-            }
-
+        foreach (var region in regions.Where(static r => !r.Muted).SelectMany(r => Loops.Played(state, r))) {
             foreach (var note in PatternUnroller.Unroll(region, t => Editing.Edits.KeyAt(state, t))) {
                 var at = region.StartTick + note.Tick;
                 var on = map.SampleAt(at, state.SampleRate);
@@ -427,8 +428,8 @@ public sealed class ModelCompiler {
         var entries = new List<(PlacedEntry Entry, int Order)>();
         foreach (var (_, _, region, folder) in placed) {
             if (region is not null) {
-                // One entry, or (following the chord track, Phase 11) one per chord segment, crossfaded.
-                foreach (var entry in PitchFollow.Entries(
+                // One entry, or (following the chord track, Phase 11) one per chord segment, crossfaded; then its repeats.
+                foreach (var entry in Loops.Entries(
                              state,
                              region,
                              track ?? state.FindTrack(region.TrackId)!,
