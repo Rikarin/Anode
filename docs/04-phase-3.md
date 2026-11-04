@@ -157,6 +157,9 @@ report. A REST change means regenerating `engine/src/Anode.Server/openapi.json`
     `POST /projects/recoverable/discard`, or opening the saved version.
 - **Screensets, key commands, bookmarks:**
   - Screensets are saved in the project (they mark it unsaved, but are not undo steps).
+  - View settings (Show Flex, the Tracks area's zoom, position, tools and snap, the Mixer's view and filters) are each
+    project's, kept in the window's storage by project id: they do not travel with the project and do not mark it
+    unsaved.
   - Key commands and bookmarks are per user, in `<DataDirectory>/settings/`.
 - **Files and MIDI import:**
   - `/files` lists the server's disk, starting at the user's home.

@@ -447,7 +447,6 @@ desktop app with the null device, with all nine steps. All eight e2e specs pass,
 **Open:**
 - Loop search lands exactly at its limit on the golden path's tone (100 frames, one period); deterministic, but no
   margin.
-- Window-level view state (Show Flex and others) carries over when a project is closed and reopened.
 - Host timing tests (`HostLinkTests.A_restarted_host_gets_everything_again`, `FlexPlaybackTests` disk-thread cost) fail
   occasionally under load.
 - Open items from Phases 5 and 6 (GitHub issues #1–#19) are unchanged.

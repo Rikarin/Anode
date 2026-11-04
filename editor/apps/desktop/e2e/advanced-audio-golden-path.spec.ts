@@ -603,12 +603,8 @@ test('edits audio in time and pitch: Smart Tempo, Follow, Flex Time and Pitch, q
     await expect(window.getByTestId('project-name')).toHaveText('Advanced');
     await expectRegions(window, afterProcessing, 6);
     await expect(window.getByTestId('lcd-tempo')).toHaveText(tempo);
-    // Show Flex is the window's, not the project's: it is still on from before the reopening, so make sure it is on
-    // rather than toggle it (a toggle turned it off a moment after the markers were first drawn).
+    // Each project remembers its view: Show Flex is on as the project was left, without touching it.
     const flexView = window.getByTestId('flex-toggle');
-    if ((await flexView.getAttribute('aria-pressed')) !== 'true') {
-      await flexView.click();
-    }
     await expect(flexView).toHaveAttribute('aria-pressed', 'true');
     const reopened = window.getByRole('group', { name: 'Track 1: Audio 1' });
     await expect(reopened.getByTestId('track-flex')).toHaveAttribute('aria-pressed', 'true');

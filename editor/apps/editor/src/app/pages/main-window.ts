@@ -11,6 +11,7 @@ import { LoopBrowser } from '../loops/loop-browser';
 import { MixerPane } from '../mixer/mixer-pane';
 import { NotePad } from '../notes/note-pad';
 import { SmartControlsPane } from '../smart-controls/smart-controls-pane';
+import { ProjectViewStore } from '../state/project-view.store';
 import { ProjectStore } from '../state/project.store';
 import { ScreensetStore } from '../state/screenset.store';
 import { TracksArea } from '../tracks/tracks-area';
@@ -94,4 +95,9 @@ export { defaultLayout } from './layout';
 export class MainWindow {
   protected readonly project = inject(ProjectStore);
   protected readonly screensets = inject(ScreensetStore);
+
+  constructor() {
+    // Follows the open project from the start: each project has its own view.
+    inject(ProjectViewStore);
+  }
 }
