@@ -475,6 +475,7 @@ export class FakeAnodeServer implements AnodeApi {
   /** Phase 10: the movie's cached thumbnails by height, the monitoring and pad settings, the listen-in streams. */
   private readonly thumbnailCache = new Map<number, Set<number>>();
   private monitoringSettings: MonitoringSettings = structuredClone(DefaultMonitoringSettings);
+  private overloadCount = 0;
   private padSets: RemotePads = structuredClone(DefaultRemotePads);
   private readonly listenSockets = new Set<FakeListenInSocket>();
   /** Phase 8: controller assignments, Learn, control surfaces, OSC, the selection, Link and external sync. */
@@ -3654,6 +3655,7 @@ export class FakeAnodeServer implements AnodeApi {
     this.emitCells(this.launcher.advance(tick));
     this.emitTransport();
     this.emit({ type: 'meters', ...this.meters() });
+    this.emitPerformance();
     // Phase 11: the Mastering Assistant's live loudness and gain reduction.
     const mastering = fakeMasteringReading(this.project, this.positionTick);
     if (mastering) {
@@ -4021,6 +4023,28 @@ export class FakeAnodeServer implements AnodeApi {
 
   private emitTransport(): void {
     this.emit({ type: 'transport', transport: this.status() });
+  }
+
+  /** A made-up load, higher while the transport runs: the control bar's meter has something to show. */
+  emitPerformance(): void {
+    const load = this.transportState === 'stopped' ? 0.04 : 0.18;
+    this.emit({
+      type: 'performance',
+      performance: {
+        audioLoad: load,
+        audioPeakLoad: load * 1.5,
+        coreLoads: [load * 2, load * 1.2, load * 0.6, load * 0.3],
+        diskLoad: load / 3,
+        overloads: this.overloadCount,
+        underruns: 0
+      }
+    });
+  }
+
+  /** The engine drops out once (tests, and a way to see the overload light). */
+  simulateOverload(): void {
+    this.overloadCount++;
+    this.emitPerformance();
   }
 
   /**

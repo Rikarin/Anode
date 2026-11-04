@@ -16,6 +16,7 @@ namespace Anode.Contracts;
 [JsonDerivedType(typeof(OfflineChangedEvent), "offlineChanged")]
 [JsonDerivedType(typeof(TransportEvent), "transport")]
 [JsonDerivedType(typeof(MetersEvent), "meters")]
+[JsonDerivedType(typeof(PerformanceEvent), "performance")]
 [JsonDerivedType(typeof(MidiActivityEvent), "midiActivity")]
 [JsonDerivedType(typeof(PluginsChangedEvent), "pluginsChanged")]
 [JsonDerivedType(typeof(MidiDevicesChangedEvent), "midiDevicesChanged")]
@@ -81,6 +82,26 @@ public sealed record MetersEvent(
     TrackMeter Master,
     IReadOnlyList<InsertReading>? Readings = null
 ) : RealtimeEvent;
+
+/// <summary>How hard the engine works, a few times a second while a host is connected.</summary>
+public sealed record PerformanceEvent(PerformanceStatus Performance) : RealtimeEvent;
+
+/// <summary>
+///     The engine's load. <c>audioLoad</c> is the share of the audio callback's time the callback takes (past 1: it missed
+///     its deadline), smoothed over 300 ms, and <c>audioPeakLoad</c> its worst in about the last second.
+///     <c>coreLoads</c> is how busy each of the machine's cores is, from everything that runs on it (0…1; empty where the
+///     system does not say). <c>diskLoad</c> is the share of time the disk thread spends reading. <c>overloads</c> counts
+///     the dropouts the device reported and <c>underruns</c> the callbacks a track found short of audio, since the host
+///     started.
+/// </summary>
+public sealed record PerformanceStatus(
+    double AudioLoad,
+    double AudioPeakLoad,
+    IReadOnlyList<double> CoreLoads,
+    double DiskLoad,
+    long Overloads,
+    long Underruns
+);
 
 /// <summary>An insert's reading (<c>IAudioEffect.Reading</c>); <c>trackId</c> null is the master.</summary>
 public sealed record InsertReading(string? TrackId, string InsertId, double Value);

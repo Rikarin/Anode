@@ -25,6 +25,24 @@ public sealed class MixHostLinkTests : IAsyncDisposable {
     }
 
     [Fact]
+    public async Task The_engines_load_reaches_clients_as_a_performance_event() {
+        host = new(EngineConnection.Version);
+        host.Listen(socketPath);
+        await using var server = new ServerFixture(socketPath);
+        using var client = server.CreateClient();
+        await ServerFixture.Eventually(async () =>
+            (await server.SystemAsync(client)).Engine.State == EngineState.Connected
+        );
+        await client.CreateProjectAsync();
+        await using var events = await EventStream.ConnectAsync(server);
+        var performance = await events.WaitAsync<PerformanceEvent>();
+        Assert.Equal(FakeHost.FakeAudioLoad, performance.Performance.AudioLoad, 1e-6);
+        Assert.Equal(2 * FakeHost.FakeAudioLoad, performance.Performance.AudioPeakLoad, 1e-6);
+        Assert.Equal(0.1, performance.Performance.DiskLoad, 1e-6);
+        Assert.Equal((3, 1), (performance.Performance.Overloads, performance.Performance.Underruns));
+    }
+
+    [Fact]
     public async Task A_strips_meter_settings_reach_the_host() {
         host = new(EngineConnection.Version);
         host.Listen(socketPath);

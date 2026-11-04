@@ -335,6 +335,12 @@ the client's, the bars staying on the dBFS scale with a line at the type's 0. A 
 channel for loudness. A surround strip's bars stay peaks per speaker at its tap point; the levels of its type are of the
 front pair and no bar shows them yet.
 
+**Load meter (after Phase 11):** the callback times itself on the monotonic clock against its deadline, off in renders;
+the telemetry carries that load, its worst over about a second and the share of time the disk thread reads. The server
+adds each core's load (the whole machine's, `host_processor_info` on macOS, `/proc/stat` on Linux) and sends a
+`performance` event four times a second, conflated as meters are. The control bar's overload light is the client's, on
+for 3 s after the device's dropout count or the engine's underrun count grows.
+
 **Open:**
 - Tempo-synced effects take the tempo from the click, not the tempo track.
 - Touch automation releases on the next change, not on mouse-up.

@@ -16,3 +16,5 @@ All notable changes to Anode are recorded here, by hand.
   with dim, mono and a reference level, which the speakers hear and a bounce does not.
 - Meters: each strip, the master too, chooses Peak, RMS, K-20, K-14, K-12 or LUFS and reads at the input, before or
   after the fader (schema 14; existing strips keep post-fader peaks).
+- Control bar: a load meter with a bar per core, the disk, and an overload light; a click shows the audio thread's load,
+  its peak and the overload and underrun counts.

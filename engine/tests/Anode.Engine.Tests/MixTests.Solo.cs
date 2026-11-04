@@ -148,6 +148,24 @@ public sealed partial class MixTests {
     }
 
     [Fact]
+    public void The_callback_load_is_the_share_of_its_deadline_it_takes() {
+        // A 64-frame callback has 1.33 ms; an insert that takes 4 ms makes it about 3 times too slow.
+        var slow = TestEffects.Insert("s", TestEffects.Slow, new Dictionary<string, double> { ["ms"] = 4 });
+        using var rig = new Rig(dir, 64, [Model(1, 0)], [Track(1, false, Strip(inserts: [slow]))], Files);
+        rig.Render(1_920);
+        var (load, peak) = rig.Controller.Engine.TakeLoad();
+        Assert.True(peak >= 2.9f, $"the worst callback took 3 deadlines at least, not {peak}");
+        Assert.True(load > 0.2f, $"the average climbs towards it, at {load}");
+
+        Assert.True(rig.Controller.SetInsertParameter(1, "s", "ms", 0));
+        rig.Driver.Send(new(EngineCommandKind.Stop));
+        rig.Render(640);
+        rig.Controller.Engine.TakeLoad();
+        rig.Driver.Process();
+        Assert.True(rig.Controller.Engine.TakeLoad().Peak < peak, "the peak is since the last time it was taken");
+    }
+
+    [Fact]
     public void The_monitor_level_ramps_and_takes_the_click_along() {
         using var rig = new Rig(dir, 64, [Model(1, 0)], [Track(1, false, Strip())], Files);
         rig.Render(64);

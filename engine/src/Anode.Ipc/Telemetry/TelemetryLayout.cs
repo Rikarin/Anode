@@ -43,6 +43,19 @@ public struct TelemetryHeader {
     ///     scheduled in the block).
     /// </summary>
     public long EnvironmentDropped;
+
+    /// <summary>
+    ///     The audio callback's load: the share of its time it takes, over 300 ms; and its worst over about the last
+    ///     second. Past 1 it missed its deadline.
+    /// </summary>
+    public float AudioLoad;
+
+    public float AudioPeakLoad;
+
+    /// <summary>The share of time the disk thread spends reading.</summary>
+    public float DiskLoad;
+
+    public int Reserved;
 }
 
 /// <summary>

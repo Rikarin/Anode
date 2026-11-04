@@ -78,7 +78,12 @@ public sealed unsafe class AllocationTests : IDisposable {
         using var take = new RecordTake(2, Path.Combine(dir, "2-take.wav"), 1, Rate);
         controller.Engine.Root.Tracks[2].Take = take;
         var region = NativeMemory.AlignedAlloc((nuint)TelemetryLayout.Size, 64);
-        using var telemetry = new TelemetryWriter(controller.Engine, (byte*)region, static () => 0);
+        using var telemetry = new TelemetryWriter(
+            controller.Engine,
+            (byte*)region,
+            static () => 0,
+            controller.Streamer.TakeLoad
+        );
         var scratch = new float[8192];
         try {
             driver.Send(new(EngineCommandKind.SetCycle, 30_000, 150_000, true));

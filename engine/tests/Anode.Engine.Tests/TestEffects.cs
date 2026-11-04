@@ -14,6 +14,7 @@ static class TestEffects {
     public const string Delay = "test.delay";
     public const string Sidechain = "test.sidechain";
     public const string Biquad = "test.biquad";
+    public const string Slow = "test.slow";
 
     /// <summary>A registry with every test effect (and the test instrument).</summary>
     public static PluginRegistry Registry() {
@@ -23,6 +24,7 @@ static class TestEffects {
         registry.AddBuiltinEffect(DelayEffect.Info, static () => new DelayEffect());
         registry.AddBuiltinEffect(SidechainEffect.Info, static () => new SidechainEffect());
         registry.AddBuiltinEffect(BiquadEffect.Info, static () => new BiquadEffect());
+        registry.AddBuiltinEffect(SlowEffect.Info, static () => new SlowEffect());
         return registry;
     }
 
@@ -110,6 +112,32 @@ sealed class GainEffect() : TestEffect(Info) {
 
         SetParameter(0, BitConverter.ToSingle(state));
         return true;
+    }
+}
+
+/// <summary>Takes <c>ms</c> milliseconds of the callback, on the spot, and leaves the signal alone.</summary>
+sealed class SlowEffect() : TestEffect(Info) {
+    public static readonly EffectDescriptor Info = new(
+        TestEffects.Slow,
+        "Test Slow",
+        "Anode tests",
+        "1.0",
+        "Utility",
+        [Parameter(0, "ms", 0, 1000, 0)],
+        false
+    );
+
+    public override void Process(
+        Span<float> left,
+        Span<float> right,
+        ReadOnlySpan<float> sidechainLeft,
+        ReadOnlySpan<float> sidechainRight
+    ) {
+        var end = System.Diagnostics.Stopwatch.GetTimestamp()
+            + (long)(GetParameter(0) * System.Diagnostics.Stopwatch.Frequency / 1000);
+        while (System.Diagnostics.Stopwatch.GetTimestamp() < end) {
+            Thread.SpinWait(32);
+        }
     }
 }
 

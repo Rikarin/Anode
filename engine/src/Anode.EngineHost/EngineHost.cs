@@ -113,7 +113,7 @@ public sealed class EngineHost : IDisposable {
         }
 
         TelemetryRegion = region;
-        telemetry = new(Controller.Engine, region, () => device.Overloads);
+        telemetry = new(Controller.Engine, region, () => device.Overloads, Controller.Streamer.TakeLoad);
 
         // Phase 10: the master tap ring for listen-in (segment format 5), created with the telemetry region.
         string? tapName = null;

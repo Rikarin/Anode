@@ -1198,7 +1198,12 @@ public sealed partial class FakeHost : IAsyncDisposable {
                 State = state,
                 SampleRate = SampleRate,
                 Callbacks = callbacks,
-                ModelVersion = modelVersion
+                ModelVersion = modelVersion,
+                AudioLoad = FakeAudioLoad,
+                AudioPeakLoad = 2 * FakeAudioLoad,
+                DiskLoad = 0.1f,
+                Overloads = 3,
+                Underruns = 1
             };
             var soloed = Soloed();
             meters = [
@@ -1228,6 +1233,9 @@ public sealed partial class FakeHost : IAsyncDisposable {
 
         telemetry.Write(header, meters, masterMeter);
     }
+
+    /// <summary>The load the fake reports.</summary>
+    public const float FakeAudioLoad = 0.25f;
 
     /// <summary>Whether a solo silences the rest: one is on, in place (AFL and PFL leave the mix alone).</summary>
     bool Soloed() => mixer.SoloMode == EngineSoloMode.InPlace && tracks.Values.Any(static t => t.Strip.Solo);

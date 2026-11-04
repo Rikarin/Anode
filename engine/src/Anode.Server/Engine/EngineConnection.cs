@@ -48,6 +48,9 @@ public sealed partial class EngineConnection(
 
     static readonly TimeSpan RetryDelay = TimeSpan.FromMilliseconds(250);
     static readonly TimeSpan TelemetryInterval = TimeSpan.FromMilliseconds(33);
+
+    /// <summary>The load goes out every this many telemetry reads: about four times a second.</summary>
+    const int PerformanceEveryTicks = 8;
     static readonly TimeSpan StatesTimeout = TimeSpan.FromSeconds(3);
 
     readonly EngineOptions engine = options.Value.Engine;
@@ -753,9 +756,16 @@ public sealed partial class EngineConnection(
         using var timer = new PeriodicTimer(TelemetryInterval);
         TransportStatus? last = null;
         var metersLive = false;
+        var cores = new CoreLoads();
+        var ticks = 0;
         while (await timer.WaitForNextTickAsync(cancellationToken).ConfigureAwait(false)) {
             if (telemetry.Read() is not { } frame) {
                 continue;
+            }
+
+            if (++ticks >= PerformanceEveryTicks) {
+                ticks = 0;
+                hub.Publish(new PerformanceEvent(Performance(frame.Header, cores.Sample())));
             }
 
             var view = session.View;
@@ -796,6 +806,9 @@ public sealed partial class EngineConnection(
         };
         return new(state, position, map.TickAtSample(position, rate), rate);
     }
+
+    static PerformanceStatus Performance(TelemetryHeader header, IReadOnlyList<double> cores) =>
+        new(header.AudioLoad, header.AudioPeakLoad, cores, header.DiskLoad, header.Overloads, header.Underruns);
 
     /// <summary>A meter's reading: its peaks, and the levels its type publishes.</summary>
     static TrackMeter Meter(string id, MeterEntry entry, IReadOnlyList<float>? peaks) {
