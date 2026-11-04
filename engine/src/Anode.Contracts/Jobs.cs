@@ -111,7 +111,11 @@ public enum JobKind {
 
     /// <summary>Save a Copy (<c>SaveProjectAsRequest</c>): writes a whole package elsewhere; the open project stays.</summary>
     [JsonStringEnumMemberName("saveCopy")]
-    SaveCopy
+    SaveCopy,
+
+    /// <summary>A change of the project's sample rate (<c>ChangeSampleRateRequest</c>); it reopens at the new rate.</summary>
+    [JsonStringEnumMemberName("sampleRateChange")]
+    SampleRateChange
 }
 
 [JsonConverter(typeof(JsonStringEnumConverter<JobState>))]

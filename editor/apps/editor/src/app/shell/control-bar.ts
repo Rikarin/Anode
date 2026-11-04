@@ -197,6 +197,14 @@ import { Lcd } from './lcd';
                 xuiMenuItem
                 type="button"
                 data-testid="open-sync-settings"
+                (click)="ui.sampleRateOpen.set(true)"
+                data-testid="sample-rate"
+              >
+                Sample Rate…
+              </button>
+              <button
+                xuiMenuItem
+                type="button"
                 (click)="ui.syncSettingsOpen.set(true)"
               >
                 Synchronization…

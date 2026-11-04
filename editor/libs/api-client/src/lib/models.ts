@@ -12,6 +12,7 @@ export type ProjectSummary = Schemas['ProjectSummary'];
 export type OfflineReport = Schemas['OfflineReport'];
 export type OfflineFile = Schemas['OfflineFile'];
 export type OfflineReason = NonNullable<Schemas['OfflineReason']>;
+export type SampleRateChangeMode = NonNullable<Schemas['SampleRateChangeMode']>;
 export type OfflineSearch = Schemas['OfflineSearch'];
 export type OfflineSearchRequest = Schemas['OfflineSearchRequest'];
 export type OfflineCandidate = Schemas['OfflineCandidate'];

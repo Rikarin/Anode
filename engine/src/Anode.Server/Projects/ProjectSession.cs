@@ -153,6 +153,7 @@ public sealed partial class ProjectSession(
         }
 
         var folder = Path.TrimEndingDirectorySeparator(Path.GetFullPath(path));
+        FinishInterrupted(folder);
         if (!ProjectPackage.Exists(folder)) {
             throw ProjectException.NotFound($"'{folder}' is not an Anode project.");
         }

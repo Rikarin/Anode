@@ -1,5 +1,12 @@
 import { Injectable, inject, signal } from '@angular/core';
-import type { Job, ProjectAlternative, ProjectBackup, ProjectSummary, RecoverableProject } from '@anode/api-client';
+import type {
+  Job,
+  ProjectAlternative,
+  ProjectBackup,
+  ProjectSummary,
+  RecoverableProject,
+  SampleRateChangeMode
+} from '@anode/api-client';
 import { ANODE_API, type CreateProject } from '../core/api';
 import { Notify } from '../core/notify';
 import { JobsStore } from './jobs.store';
@@ -180,6 +187,22 @@ export class ProjectSession {
     if (job) {
       this.notify.info(`Saved a copy at “${job.files[0] ?? path}”.`);
       void this.refreshRecent();
+    }
+
+    return job !== null;
+  }
+
+  /**
+   * File ▸ Project Settings ▸ Sample Rate…: the Server keeps a backup, saves the project at the new rate and reopens it,
+   * so the project comes back on its `projectOpened` event.
+   */
+  async changeSampleRate(sampleRate: number, mode: SampleRateChangeMode): Promise<boolean> {
+    const job = await this.packageJob(
+      () => this.api.changeSampleRate(sampleRate, mode),
+      'Could not change the sample rate'
+    );
+    if (job) {
+      this.notify.info(`The project is now at ${sampleRate} Hz. Its last save is a backup.`);
     }
 
     return job !== null;

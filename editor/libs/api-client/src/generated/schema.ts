@@ -224,6 +224,23 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/api/v1/project/sample-rate': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Queues changing the project's sample rate, saving it: its files are written anew beside the old ones (converted, or their samples kept), the last save and unsaved edits go to backups, and the project reopens without undo history. 422 while files are offline or tracks unreadable, 409 while it plays. A job that fails or is cancelled leaves the project as it was. */
+    post: operations['ChangeSampleRate'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/api/v1/project/close': {
     parameters: {
       query?: never;
@@ -2522,6 +2539,12 @@ export interface components {
     CellKind: 'audio' | 'midi' | 'pattern';
     /** @enum {unknown} */
     CellPlayMode: 'loop' | 'oneShot' | 'retrigger';
+    /** @description A change of the open project's sample rate. */
+    ChangeSampleRateRequest: {
+      /** Format: int32 */
+      sampleRate: number;
+      mode: components['schemas']['SampleRateChangeMode'];
+    };
     /**
      * @description A channel format: an ordered speaker layout (SpeakerLayouts). The engine's buffers carry a strip's
      *     channels in its layout's order. Ambisonics are out of scope.
@@ -5707,7 +5730,8 @@ export interface components {
       | 'masteringAnalysis'
       | 'sessionPlayerConvert'
       | 'saveAs'
-      | 'saveCopy';
+      | 'saveCopy'
+      | 'sampleRateChange';
     /** @enum {unknown} */
     JobState: 'queued' | 'running' | 'done' | 'failed' | 'cancelled';
     /** @description A key-command pad on the remote: its label, the key command it runs (a `KeyCommandSet` id), and a colour. */
@@ -7052,6 +7076,11 @@ export interface components {
       min?: null | number[][];
       max?: null | number[][];
     };
+    /**
+     * @description What happens to the audio when a project's sample rate changes.
+     * @enum {unknown}
+     */
+    SampleRateChangeMode: 'convert' | 'keepSamples';
     SavePatchRequest: {
       trackId: string;
       name: string;
@@ -8526,6 +8555,46 @@ export interface operations {
     requestBody: {
       content: {
         'application/json': components['schemas']['SaveProjectAsRequest'];
+      };
+    };
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Job'];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  ChangeSampleRate: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['ChangeSampleRateRequest'];
       };
     };
     responses: {

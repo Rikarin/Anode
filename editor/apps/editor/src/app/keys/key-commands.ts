@@ -107,6 +107,7 @@ export const KeyCommands: readonly KeyCommand[] = [
   { id: 'project.saveAlternative', label: 'Save as Alternative…', group: 'Project', defaults: [] },
   { id: 'project.bounce', label: 'Bounce Project or Section…', group: 'Project', defaults: ['Meta+B'] },
   // Phase 8 (docs/09-phase-8.md): control surfaces, controller assignments, synchronisation, the Stem Splitter.
+  { id: 'project.sampleRate', label: 'Change Sample Rate…', group: 'Project', defaults: [] },
   { id: 'project.syncSettings', label: 'Synchronization Settings…', group: 'Project', defaults: [] },
   { id: 'region.stemSplitter', label: 'Stem Splitter…', group: 'Regions', defaults: [] },
   { id: 'control.surfaces', label: 'Control Surfaces Setup…', group: 'Control', defaults: [] },

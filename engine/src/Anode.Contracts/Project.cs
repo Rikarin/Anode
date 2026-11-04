@@ -294,6 +294,27 @@ public sealed record OpenProjectRequest(string Path);
 /// </summary>
 public sealed record SaveProjectAsRequest(string Path);
 
+/// <summary>What happens to the audio when a project's sample rate changes.</summary>
+[JsonConverter(typeof(JsonStringEnumConverter<SampleRateChangeMode>))]
+public enum SampleRateChangeMode {
+    /// <summary>
+    ///     Every file is converted to a new file at the new rate, and frames scale with it: the project sounds the same,
+    ///     at the same pitch and tempo.
+    /// </summary>
+    [JsonStringEnumMemberName("convert")]
+    Convert,
+
+    /// <summary>
+    ///     Every file keeps its samples and is labelled with the new rate, and the tempo scales with it: every position
+    ///     stays on its sample, and the whole project plays faster or slower, audio pitch with it.
+    /// </summary>
+    [JsonStringEnumMemberName("keepSamples")]
+    KeepSamples
+}
+
+/// <summary>A change of the open project's sample rate.</summary>
+public sealed record ChangeSampleRateRequest(int SampleRate, SampleRateChangeMode Mode);
+
 /// <summary>
 ///     A project whose edits since its last save survive in an autosave, offered after a crash (docs/04-phase-3.md,
 ///     "Autosave and crash recovery"). <c>autosaved</c> is when they were last written.

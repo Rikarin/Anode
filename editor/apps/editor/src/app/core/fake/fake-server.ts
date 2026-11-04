@@ -97,6 +97,7 @@ import {
   type RelinkRequest,
   type RemotePads,
   type SampleRange,
+  type SampleRateChangeMode,
   type SavePatchRequest,
   type SceneDetectRequest,
   type ScoreDocument,
@@ -262,6 +263,7 @@ import {
 import { CrashyPluginId, FakeCatalogue, FakeEffects, FakeMidiDevices } from './fake-plugins';
 import { FakeT3Effects, FakeT3Instruments } from './fake-plugins-phase11';
 import { FakeMidiEffects, FakeT2Effects, FakeT2Instruments, RemixFxId, withMacros } from './fake-plugins-phase6';
+import { atRate, rateRefusal } from './fake-sample-rate';
 import { FakeScriptPresets } from './fake-scripts';
 import { FactoryStaffStyles } from './fake-staff-styles';
 
@@ -699,6 +701,42 @@ export class FakeAnodeServer implements AnodeApi {
       const target = this.saveTarget(path);
       return this.startJob('saveCopy', { finish: () => this.finishSaveCopy(target) }, 1);
     });
+  }
+
+  changeSampleRate(sampleRate: number, mode: SampleRateChangeMode): Promise<Job> {
+    return this.answer('ChangeSampleRate', () => {
+      const refusal = rateRefusal(this.require(), sampleRate, mode);
+      if (refusal) {
+        throw new ApiError(422, refusal);
+      }
+
+      return this.startJob('sampleRateChange', { finish: () => this.finishSampleRate(sampleRate, mode) }, 1);
+    });
+  }
+
+  /** The last save and any unsaved edits go to backups; the project reopens saved at the new rate, with no undo. */
+  private finishSampleRate(rate: number, mode: SampleRateChangeMode): string[] {
+    const before = this.require();
+    const backups = this.backupSets.get(before.path) ?? [];
+    const saved = new Date(this.now()).toISOString();
+    const previous = this.disk.get(before.path);
+    if (previous) {
+      backups.unshift({ backup: { id: `bak_${this.nextId++}`, saved }, project: structuredClone(previous) });
+    }
+
+    if (before.dirty) {
+      backups.unshift({ backup: { id: `bak_${this.nextId++}`, saved }, project: structuredClone(before) });
+    }
+
+    this.backupSets.set(before.path, backups.slice(0, 10));
+    this.autosaves.delete(before.path);
+    const next = atRate(before, rate, mode, () => `aud_${this.nextId++}`);
+    this.project = { ...next, dirty: false, revision: before.revision + 1 };
+    this.undoStack = [];
+    this.redoStack = [];
+    this.disk.set(before.path, structuredClone(this.project));
+    this.emit({ type: 'projectOpened', project: this.remember(this.project), revision: this.project.revision });
+    return [before.path];
   }
 
   /** A package location as the Server checks it: with its extension, free, and outside the open project. */

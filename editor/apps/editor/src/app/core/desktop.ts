@@ -66,6 +66,7 @@ export type AppCommand =
   | 'controlSurfaces'
   | 'controllerAssignments'
   | 'syncSettings'
+  | 'sampleRateSettings'
   | 'stemSplitter'
   | 'importMusicXml'
   | 'importAaf'

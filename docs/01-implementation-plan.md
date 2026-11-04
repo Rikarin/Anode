@@ -275,6 +275,17 @@ MySong.anode/                      # a directory package (a folder on macOS)
   (no schema change: older builds read it as a file that is not there). Regions of offline files stay and play silence,
   but a `changed` file plays what is there. A track file that cannot be read is left out, reported, and kept by saving
   (`ProjectState.UnreadableTracks`), which appends its id to the end of `tracks`.
+- **Changing the sample rate.** `POST /project/sample-rate` queues a job with a choice: `convert` keeps the sound (every
+  file is converted to a new file, frames scale, pitch and tempo stay) and `keepSamples` keeps the samples (every file is
+  copied with the new rate in its header, frames stay, the tempo scales, so every position stays on its sample and the
+  whole project plays faster or slower, audio pitch with it). New files take new ids, so peaks and analyses stay apart,
+  and old files stay on the disk: backups and alternatives keep naming them, each at its own rate. It is refused while
+  files are offline (they cannot be converted, and could not be used after) or tracks unreadable (their frames cannot
+  be rewritten). The job writes every new file first; a failure removes them and changes nothing else. Then the
+  document at the new rate is written beside the root and read back, the last save and any unsaved edits go to backups,
+  and `ProjectHistory.ReplaceDocument` swaps it in with `rollback.json` naming the backup: a failure goes back at once,
+  a crash at the next open. The project reopens saved, without undo history, because steps from the old rate cannot
+  apply to the new one; Revert to Backup is the way back.
 - **Relinking.** `POST /project/offline/search` finds WAVs by name in a folder of the server's disk and judges them by
   content; `POST /project/offline/relink` refuses (422, changing nothing) a candidate whose rate, channels or length
   differ from the file's, whatever it is called; an unlisted file needs the project's rate and to reach as far as its

@@ -43,6 +43,7 @@ import { StaffStylesWindow } from './score/staff-styles-window';
 import { ScriptEditor } from './scripter/script-editor';
 import { ControlBar } from './shell/control-bar';
 import { MissingFilesDialog } from './shell/missing-files';
+import { ChangeSampleRateDialog } from './shell/change-sample-rate';
 import { SaveAlternativeDialog } from './shell/save-alternative';
 import { SaveProjectAsDialog } from './shell/save-project-as';
 import { HistoryStore } from './state/history.store';
@@ -101,6 +102,7 @@ const InterchangeCommands = {
     RouterOutlet,
     MissingFilesDialog,
     SaveAlternativeDialog,
+    ChangeSampleRateDialog,
     SaveProjectAsDialog,
     ScriptEditor,
     SoundLibraryDialog,
@@ -194,6 +196,11 @@ const InterchangeCommands = {
           @if (ui.saveAlternativeOpen()) {
             @defer (on immediate) {
               <an-save-alternative />
+            }
+          }
+          @if (ui.sampleRateOpen()) {
+            @defer (on immediate) {
+              <an-change-sample-rate />
             }
           }
           @if (ui.saveAsOpen() !== null) {
@@ -488,6 +495,7 @@ export class App {
       'control.assignments': () => this.ui.controllerAssignmentsOpen.set(true),
       'control.learn': () => void this.learnNew(),
       'project.syncSettings': () => this.ui.syncSettingsOpen.set(true),
+      'project.sampleRate': () => this.ui.sampleRateOpen.set(this.project.isOpen()),
       'region.stemSplitter': () => this.openStemSplitter(),
       'sync.link': () => void this.sync.toggleLink(),
       'view.score': () => this.showEditor('score'),
@@ -572,6 +580,9 @@ export class App {
         break;
       case 'controllerAssignments':
         this.ui.controllerAssignmentsOpen.set(true);
+        break;
+      case 'sampleRateSettings':
+        this.ui.sampleRateOpen.set(this.project.isOpen());
         break;
       case 'syncSettings':
         if (this.project.isOpen()) {

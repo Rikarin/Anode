@@ -658,6 +658,7 @@ function buildMenu(): void {
     {
       label: 'Project Settings',
       submenu: [
+        command('Sample Rate…', 'sampleRateSettings'),
         command('Synchronization…', 'syncSettings'),
         // Phase 10: the project's surround format, and the movie's position.
         command('Surround…', 'surroundSettings'),

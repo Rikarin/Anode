@@ -44,7 +44,8 @@ const JobNames: Record<JobKind, string> = {
   masteringAnalysis: 'Mastering analysis',
   sessionPlayerConvert: 'Session Player conversion',
   saveAs: 'Save As',
-  saveCopy: 'Save a Copy'
+  saveCopy: 'Save a Copy',
+  sampleRateChange: 'Sample rate change'
 };
 
 /** A file's name from its absolute path. */

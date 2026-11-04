@@ -495,6 +495,50 @@
         }
       }
     },
+    "/api/v1/project/sample-rate": {
+      "post": {
+        "tags": [
+          "Project"
+        ],
+        "summary": "Queues changing the project\u0027s sample rate, saving it: its files are written anew beside the old ones (converted, or their samples kept), the last save and unsaved edits go to backups, and the project reopens without undo history. 422 while files are offline or tracks unreadable, 409 while it plays. A job that fails or is cancelled leaves the project as it was.",
+        "operationId": "ChangeSampleRate",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangeSampleRateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Job"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
     "/api/v1/project/close": {
       "post": {
         "tags": [
@@ -6785,6 +6829,23 @@
           "oneShot",
           "retrigger"
         ]
+      },
+      "ChangeSampleRateRequest": {
+        "required": [
+          "sampleRate",
+          "mode"
+        ],
+        "type": "object",
+        "properties": {
+          "sampleRate": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "mode": {
+            "$ref": "#/components/schemas/SampleRateChangeMode"
+          }
+        },
+        "description": "A change of the open project\u0027s sample rate."
       },
       "ChannelFormat": {
         "enum": [
@@ -16313,7 +16374,8 @@
           "masteringAnalysis",
           "sessionPlayerConvert",
           "saveAs",
-          "saveCopy"
+          "saveCopy",
+          "sampleRateChange"
         ]
       },
       "JobState": {
@@ -19798,6 +19860,13 @@
           }
         },
         "description": "Samples of a file\u0027s current version for the Audio File Editor (\u0060/project/files/{fileId}/samples\u0060):\n\u0060frames\u0060 frames from \u0060startFrame\u0060, in buckets of \u0060bucket\u0060 frames. With \u0060bucket\u0060 1,\n\u0060samples\u0060 holds each channel\u0027s samples and \u0060min\u0060 and \u0060max\u0060 are null; with a larger bucket,\n\u0060min\u0060 and \u0060max\u0060 hold each channel\u0027s extremes per bucket (the last bucket may be short) and\n\u0060samples\u0060 is null."
+      },
+      "SampleRateChangeMode": {
+        "enum": [
+          "convert",
+          "keepSamples"
+        ],
+        "description": "What happens to the audio when a project\u0027s sample rate changes."
       },
       "SavePatchRequest": {
         "required": [
