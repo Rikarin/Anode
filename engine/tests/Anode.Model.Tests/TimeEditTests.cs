@@ -207,6 +207,38 @@ public sealed class TimeEditTests {
     }
 
     [Fact]
+    public void A_comp_on_a_take_that_stays_on_one_side_stays_with_it() {
+        var a = Audio();
+        // The first take ends at bar 1; the comp plays it past the cut at bar 2, then the long take.
+        state = state.Apply(
+            new TakeFolderUpserted(
+                new(
+                    "tkf_1",
+                    a,
+                    "Takes",
+                    0,
+                    4 * Bar,
+                    [new("tak_short", "Short", "aud_1", 0, 0, 96_000), new("tak_long", "Long", "aud_1", 0, 0, 384_000)],
+                    [new(0, 3 * Bar, "tak_short"), new(3 * Bar, 4 * Bar, "tak_long")],
+                    0,
+                    false
+                )
+            )
+        );
+
+        Apply(new InsertTimeCommand(2 * Bar, Bar));
+
+        var folders = state.TakeFolders.Values.OrderBy(static f => f.StartTick).ToArray();
+        Assert.Equal(2, folders.Length);
+        Assert.All(
+            folders,
+            static f => Assert.All(f.Comp, s => Assert.Contains(f.Takes, t => t.Id == s.TakeId))
+        );
+        Assert.Equal("tak_short", Assert.Single(folders[0].Comp).TakeId);
+        Assert.Equal(folders[1].Takes[0].Id, Assert.Single(folders[1].Comp).TakeId);
+    }
+
+    [Fact]
     public void Ripple_delete_closes_the_gap_leaving_what_crosses_it_on_other_tracks() {
         var a = Audio();
         var b = Audio();

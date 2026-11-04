@@ -202,11 +202,14 @@ public static partial class Edits {
             return [];
         }
 
+        // A take that ends before the cut or starts after it stays on one side, and its comp segments with it.
+        var onLeft = left.Select(static t => t.Id).ToHashSet(StringComparer.Ordinal);
+        var onRight = right.Select(static t => t.Id).ToHashSet(StringComparer.Ordinal);
         var first = folder with {
             LengthTicks = tick - folder.StartTick,
             Takes = left,
             Comp = [
-                ..folder.Comp.Where(s => s.StartTick < tick)
+                ..folder.Comp.Where(s => s.StartTick < tick && onLeft.Contains(s.TakeId))
                     .Select(s => s with { EndTick = Math.Min(s.EndTick, tick) })
             ]
         };
@@ -216,7 +219,7 @@ public static partial class Edits {
                 LengthTicks = folder.StartTick + folder.LengthTicks - tick,
                 Takes = right,
                 Comp = [
-                    ..folder.Comp.Where(s => s.EndTick > tick)
+                    ..folder.Comp.Where(s => s.EndTick > tick && onRight.Contains(s.TakeId))
                         .Select(s => s with { StartTick = Math.Max(s.StartTick, tick) })
                 ]
             },

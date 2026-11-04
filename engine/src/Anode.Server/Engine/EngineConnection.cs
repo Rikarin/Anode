@@ -1,6 +1,5 @@
 using Anode.Contracts;
 using Anode.Ipc;
-using Anode.Ipc.Telemetry;
 using Anode.Model;
 using Anode.Model.Compile;
 using Anode.Model.Time;
