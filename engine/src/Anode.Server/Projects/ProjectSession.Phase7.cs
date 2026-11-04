@@ -215,7 +215,7 @@ public sealed partial class ProjectSession {
                     _ => command
                 };
                 var before = state.LastEventId;
-                var ops = Edits.Ops(state, resolved, ids, catalog.ForEdits, patches, analysis, notation);
+                var ops = Edits.Ops(state, resolved, ids, catalog.ForEdits, PatchesOf(o), analysis, notation);
                 state = Edits.Step(state, ops, forward, inverse);
                 steps = resolved switch {
                     StepNotesCommand c => Stepped(steps, c, ops, before),

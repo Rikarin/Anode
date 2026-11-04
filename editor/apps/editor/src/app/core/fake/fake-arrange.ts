@@ -546,10 +546,7 @@ export function groupStacks(tracks: readonly Track[]): Track[] {
     if (t.parentId && tracks.some(s => s.id === t.parentId)) {
       continue;
     }
-    result.push(t);
-    if (t.kind === 'stack') {
-      result.push(...tracks.filter(m => m.parentId === t.id));
-    }
+    result.push(t, ...tracks.filter(m => m.parentId === t.id));
   }
   return result;
 }

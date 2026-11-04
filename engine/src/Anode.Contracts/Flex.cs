@@ -132,16 +132,17 @@ public enum VarispeedMode {
 public sealed record VarispeedSettings(bool Enabled, VarispeedMode Mode, double Speed);
 
 /// <summary>
-///     An inactive alternative of a track: a snapshot of its regions, MIDI regions and take folders. The track's live
-///     ones are its active alternative (<c>alternativeId</c>); selecting another swaps them in one undoable step, and
-///     ids stay unique project-wide.
+///     An inactive alternative of a track: a snapshot of its regions, MIDI regions, take folders and pattern regions.
+///     The track's live ones are its active alternative (<c>alternativeId</c>); selecting another swaps them in one
+///     undoable step, and ids stay unique project-wide.
 /// </summary>
 public sealed record TrackAlternative(
     string Id,
     string Name,
     IReadOnlyList<AudioRegion> Regions,
     IReadOnlyList<MidiRegion> MidiRegions,
-    IReadOnlyList<TakeFolder> TakeFolders
+    IReadOnlyList<TakeFolder> TakeFolders,
+    IReadOnlyList<PatternRegion> PatternRegions
 );
 
 /// <summary>

@@ -144,13 +144,13 @@ report. A REST change means regenerating `engine/src/Anode.Server/openapi.json`
   - Analysis is cached in the package as `Analysis/<fileId>.json`; it is rebuilt on demand, not undoable.
   - Commands that need transients or beats (quantise audio, strip silence, adapt tempo, follow) run that analysis
     synchronously; pitch analysis runs as an `analyze` job.
-  - Imports are analysed when `smartTempo.analyzeImports` is on.
+  - Imports are analysed when `smartTempo.analyzeImports` is on, outside the session's lock: edits go on meanwhile.
   - With tempo mode `adapt` (or `auto` in a project with no MIDI regions and a single tempo event), the first audio
     import or recording sets the tempo events from its beats and makes the region play unwarped.
   - **Beat mapping:** each mapping (tick → sample) sets tempo events so that the tick lands on the sample, keeping
     earlier mappings and the positions before them.
   - **Track alternatives:**
-    - A track's live regions, MIDI regions and take folders are its active alternative.
+    - A track's live regions, MIDI regions, take folders and pattern regions are its active alternative.
     - The others are stored as snapshots in `alternatives`.
     - Selecting one swaps them in one undoable step; ids stay unique project-wide.
   - **Bounce in place:**
@@ -364,7 +364,6 @@ Onsets are measured in 1 ms steps.
   double and halve fix them by hand.
 - Monophonic is out of tune below 200 Hz at every block size; a PSOLA path (S5) remains out of scope.
 - Splitting a region with flex markers shifts the audio near the cut.
-- A menu opened while an import lands closes.
 - The editor's fake server anchors beat mapping differently from the server when a ramp ends at the anchor.
 - Selection-based processing takes built-in effects only.
 - Linux and Windows.

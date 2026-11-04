@@ -1,4 +1,4 @@
-import type { EditCommand, TrackInput } from '@anode/api-client';
+import type { EditCommand, Track, TrackInput } from '@anode/api-client';
 
 export interface TrackChange {
   name?: string;
@@ -28,4 +28,20 @@ export function setTrackLabel(change: TrackChange): string {
     return change.inputMonitoring ? 'Input Monitoring On' : 'Input Monitoring Off';
   }
   return 'Track Input';
+}
+
+/**
+ * The `moveTrack` index that moves a track one place up (-1) or down (1), or null when it is at that end. A stack's
+ * members follow it, so a member moves among its stack's members, and any other track past the next track or stack with
+ * its members.
+ */
+export function moveIndex(
+  tracks: readonly Pick<Track, 'id' | 'parentId'>[],
+  trackId: string,
+  offset: -1 | 1
+): number | null {
+  const parentId = tracks.find(t => t.id === trackId)?.parentId ?? null;
+  const siblings = tracks.flatMap((t, index) => ((t.parentId ?? null) === parentId ? [{ id: t.id, index }] : []));
+  const at = siblings.findIndex(t => t.id === trackId);
+  return at < 0 ? null : (siblings[at + offset]?.index ?? null);
 }

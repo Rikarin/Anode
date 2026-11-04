@@ -64,13 +64,13 @@ public static partial class Edits {
             );
         }
 
-        // Upserts in final order from the first member's place: the stack, then its members right after it.
-        var at = state.IndexOfTrack(members[0].Id);
-        ops.Add(new TrackUpserted(stack, at));
-        for (var i = 0; i < members.Length; i++) {
-            ops.Add(new TrackUpserted(members[i] with { ParentId = stack.Id }, at + 1 + i));
-        }
-
+        // At the first member's place: the stack, then its members. A member taken from another stack leaves that
+        // stack's other members together, the new stack after them.
+        var after = state.Apply(ops);
+        var at = after.IndexOfTrack(members[0].Id);
+        var tracks = after.Tracks.RemoveAll(t => leaving.Contains(t.Id))
+            .InsertRange(at, [stack, ..members.Select(m => m with { ParentId = stack.Id })]);
+        ops.AddRange(InOrder(after, Grouped(tracks)));
         return ops;
     }
 
@@ -125,6 +125,50 @@ public static partial class Edits {
         DeltaOp into = new TrackUpserted(track with { ParentId = stack.Id }, AfterStack(without, stack.Id));
         return PadOwner(state, track.Id) is { } owner ? [WithoutPad(state, owner, track.Id), into] : [into];
     }
+
+    /// <summary>
+    ///     Tracks in order with every stack's members right after it, in their order: the rule every command that places
+    ///     a track keeps, and what a project saved without it reads as.
+    /// </summary>
+    internal static List<Track> Grouped(IReadOnlyCollection<Track> tracks) {
+        var stacks = tracks.Where(static t => IsStackKind(t.Kind))
+            .Select(static t => t.Id)
+            .ToHashSet(StringComparer.Ordinal);
+        var members = tracks.Where(t => t.ParentId is not null && stacks.Contains(t.ParentId))
+            .ToLookup(static t => t.ParentId!, StringComparer.Ordinal);
+        var ordered = new List<Track>(tracks.Count);
+        foreach (var track in tracks) {
+            if (track.ParentId is null || !stacks.Contains(track.ParentId)) {
+                ordered.Add(track);
+                ordered.AddRange(members[track.Id]);
+            }
+        }
+
+        return ordered;
+    }
+
+    /// <summary>The upserts that take <paramref name="state" />'s track list to <paramref name="tracks" />.</summary>
+    static List<DeltaOp> InOrder(ProjectState state, List<Track> tracks) {
+        var ops = new List<DeltaOp>();
+        var current = state.Tracks.ToList();
+        for (var i = 0; i < tracks.Count; i++) {
+            var track = tracks[i];
+            if (i >= current.Count || !ReferenceEquals(current[i], track)) {
+                ops.Add(new TrackUpserted(track, i));
+                current.RemoveAll(t => t.Id == track.Id);
+                current.Insert(i, track);
+            }
+        }
+
+        return ops;
+    }
+
+    /// <summary>
+    ///     Where a new track goes when asked for at <paramref name="index" />: there, unless that is among a stack's
+    ///     members (after the stack, or after one of its pads), when it goes after the last of them, outside the stack.
+    /// </summary>
+    static int OutsideStacks(ProjectState state, int index) =>
+        index < state.Tracks.Count && state.Tracks[index].ParentId is { } parent ? AfterStack(state, parent) : index;
 
     /// <summary>The index just after a stack and its members in <paramref name="state" />'s track list.</summary>
     static int AfterStack(ProjectState state, string stackId) {

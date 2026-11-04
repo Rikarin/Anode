@@ -519,7 +519,7 @@ public sealed partial class ProjectSession(
                         Resolve(o, batch.Commands),
                         ids,
                         catalog.ForEdits,
-                        patches,
+                        PatchesOf(o),
                         analysis,
                         notation,
                         StylesFor(batch.Commands)
@@ -782,7 +782,7 @@ public sealed partial class ProjectSession(
             var track = o.State.FindTrack(trackId) ?? throw ProjectException.NotFound($"No track '{trackId}'.");
             var states = States(o, hostStates)
                 .ToDictionary(static s => s.Key, static s => s.Value.Bytes, StringComparer.Ordinal);
-            return (track, states);
+            return (Portable(o.Folder, track), states);
         }
     }
 
@@ -865,22 +865,28 @@ public sealed partial class ProjectSession(
 
     /// <summary>
     ///     Adds a WAV already copied into the open project's <c>Audio Files</c> folder to its pool: a change of its
-    ///     own (a new revision and a delta), not an undo step. Starts building its peaks.
+    ///     own (a new revision and a delta), not an undo step. Starts building its peaks. Its analysis runs outside the
+    ///     session's lock: it takes seconds, and edits go on meanwhile.
     /// </summary>
     public AudioFile AddFile(long session, string absolutePath, WavInfo info) {
         AudioFile file;
-        var built = new List<FileAnalysis>();
+        string folder;
+        bool analyse;
         lock (gate) {
-            var o = Required();
-            if (o.Session != session) {
-                throw ProjectException.Conflict("The project was closed while the file was imported.");
-            }
-
+            var o = Opening(session);
             file = Describe(o, absolutePath, info);
-            if (o.State.Settings.SmartTempo?.AnalyzeImports == true) {
-                file = Analysed(o, file, built);
-            }
+            folder = o.Folder;
+            analyse = o.State.Settings.SmartTempo?.AnalyzeImports == true;
+        }
 
+        var built = new List<FileAnalysis>();
+        if (analyse) {
+            file = Analysed(folder, file, built);
+        }
+
+        lock (gate) {
+            var o = Opening(session);
+            Keep(o, built);
             var op = new AudioFileUpserted(file);
             Commit(o, o.State.Apply(op), [op]);
         }
@@ -891,15 +897,21 @@ public sealed partial class ProjectSession(
         return file;
     }
 
+    /// <summary>The open project, which must be opening <paramref name="session" /> (a 409 otherwise).</summary>
+    Open Opening(long session) =>
+        open is { } o && o.Session == session
+            ? o
+            : throw ProjectException.Conflict("The project was closed while the file was imported.");
+
     /// <summary>
-    ///     <paramref name="file" /> with its tempo from an analysis of its transients and beats (Smart Tempo), cached and
-    ///     kept; as it is when it cannot be analysed (logged).
+    ///     <paramref name="file" /> with its tempo from an analysis of its transients and beats (Smart Tempo), cached, a
+    ///     fresh one added to <paramref name="built" />; as it is when it cannot be analysed (logged).
     /// </summary>
-    AudioFile Analysed(Open o, AudioFile file, List<FileAnalysis> built) {
+    AudioFile Analysed(string folder, AudioFile file, List<FileAnalysis> built) {
         try {
-            var (analysis, fresh) = analyses.Rhythm(o.Folder, file);
+            var (analysis, fresh) = analyses.Rhythm(folder, file);
             if (fresh) {
-                built.AddRange(Keep(o, [analysis]));
+                built.Add(analysis);
             }
 
             return Edits.HasBeats(analysis.Tempo) ? file with { Tempo = analysis.Tempo } : file;
@@ -1102,7 +1114,8 @@ public sealed partial class ProjectSession(
             return after;
         }
 
-        var analysed = Analysed(o, file, built);
+        var analysed = Analysed(o.Folder, file, built);
+        Keep(o, built);
         if (!Edits.AdaptsTempo(before, analysed)) {
             return after;
         }
@@ -1257,9 +1270,9 @@ public sealed partial class ProjectSession(
 
     /// <summary>
     ///     The batch with each <c>loadInstrumentFile</c> path resolved on the server's disk (a relative path is the
-    ///     project's): the file must exist, and inside the project it is kept relative to it.
+    ///     project's): the file must exist, and inside the project it is kept relative to it; a pack's is copied in.
     /// </summary>
-    static IReadOnlyList<EditCommand> Resolve(Open o, IReadOnlyList<EditCommand> commands) {
+    IReadOnlyList<EditCommand> Resolve(Open o, IReadOnlyList<EditCommand> commands) {
         if (!commands.Any(static c => c is LoadInstrumentFileCommand or LoadInsertFileCommand)) {
             return commands;
         }
@@ -1267,7 +1280,7 @@ public sealed partial class ProjectSession(
         return [
             ..commands.Select(EditCommand(c) => c switch {
                     LoadInstrumentFileCommand { Path: { Length: > 0 } path } load => load with {
-                        Path = InstrumentPath(o.Folder, path)
+                        Path = Kept(o.Folder, SamplesFolder, InstrumentPath(o.Folder, path))
                     },
                     LoadInsertFileCommand { Path: { Length: > 0 } path } load => load with {
                         Path = InsertPath(o.Folder, path)
@@ -1292,11 +1305,19 @@ public sealed partial class ProjectSession(
             return Path.GetRelativePath(folder, full).Replace(Path.DirectorySeparatorChar, '/');
         }
 
+        return CopiedInto(folder, ImpulseResponsesFolder, full);
+    }
+
+    /// <summary>
+    ///     A copy of <paramref name="full" /> in the project's <paramref name="target" /> folder (a file of that name and
+    ///     size there is reused), by the project's relative path.
+    /// </summary>
+    static string CopiedInto(string folder, string target, string full) {
         try {
-            var target = Directory.CreateDirectory(Path.Combine(folder, ImpulseResponsesFolder)).FullName;
-            var copy = Path.Combine(target, Path.GetFileName(full));
+            var into = Directory.CreateDirectory(Path.Combine(folder, target)).FullName;
+            var copy = Path.Combine(into, Path.GetFileName(full));
             for (var n = 2; File.Exists(copy) && new FileInfo(copy).Length != new FileInfo(full).Length; n++) {
-                copy = Path.Combine(target, $"{Path.GetFileNameWithoutExtension(full)} {n}{Path.GetExtension(full)}");
+                copy = Path.Combine(into, $"{Path.GetFileNameWithoutExtension(full)} {n}{Path.GetExtension(full)}");
             }
 
             if (!File.Exists(copy)) {
@@ -1387,6 +1408,8 @@ public sealed partial class ProjectSession(
     ) {
         Project project;
         using var writes = autosaving.EnterScope();
+        var saved = state;
+        state = WithPackFilesKept(folder, state);
         var offline = OfflineFiles.Report(folder, state);
         lock (gate) {
             if (open is { } old) {
@@ -1403,7 +1426,7 @@ public sealed partial class ProjectSession(
                 States = states ?? ImmutableDictionary.Create<string, SavedState>(StringComparer.Ordinal),
                 Analyses = FileAnalyses.CachedAll(folder, state.Files.Values)
                     .ToImmutableDictionary(StringComparer.Ordinal),
-                Dirty = recovered,
+                Dirty = recovered || !ReferenceEquals(state, saved),
                 Offline = offline
             };
             open.MarkAutosaved(open.Changes);

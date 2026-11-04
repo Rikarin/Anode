@@ -502,6 +502,65 @@ public sealed class PackageTests : IDisposable {
     }
 
     [Fact]
+    public void A_package_saved_with_a_track_among_a_stacks_members_reads_them_together() {
+        var ids = new SequentialIds();
+        var state = ProjectDefaults.NewProject("prj_1", "Song", 48_000);
+        foreach (var name in (string[])["A", "B", "C"]) {
+            state = Edits.Apply(state, new AddTrackCommand(name), ids).State;
+        }
+
+        state = Edits.Apply(state, new CreateStackCommand([state.Tracks[0].Id, state.Tracks[1].Id], "Stack"), ids)
+            .State;
+        ProjectPackage.Save(folder, state);
+        var path = Path.Combine(folder, "project.json");
+        var root = JsonNode.Parse(File.ReadAllText(path))!.AsObject();
+        var order = state.Tracks.Select(static t => t.Id).ToArray();
+        root["tracks"] = new JsonArray(order[0], order[1], order[3], order[2]);
+        File.WriteAllText(path, root.ToJsonString());
+        Assert.Equal(["Stack", "A", "B", "C"], ProjectPackage.Load(folder).Tracks.Select(static t => t.Name));
+    }
+
+    [Fact]
+    public void A_Phase_11_package_reads_its_alternatives_without_pattern_regions_and_keeps_the_live_ones() {
+        CopyFixture("Phase11.anode");
+        var state = ProjectPackage.Load(folder);
+        var keys = state.FindTrack("trk_000001")!;
+        Assert.Equal(["A", "Sparse"], keys.Alternatives.Select(static a => a.Name));
+        Assert.All(keys.Alternatives, static a => Assert.Empty(a.PatternRegions));
+        Assert.Equal("mid_000002", Assert.Single(keys.Alternatives[0].MidiRegions).Id);
+        // In schema 11 the pattern region stayed live whichever alternative was selected, and it still is.
+        Assert.Equal(7680, Assert.Single(state.PatternRegions.Values).StartTick);
+
+        ProjectPackage.Save(folder, state);
+        var track = JsonNode.Parse(File.ReadAllText(Path.Combine(folder, "tracks", "trk_000001.json")))!;
+        Assert.Equal(PackageMigrations.CurrentSchemaVersion, track["schemaVersion"]!.GetValue<int>());
+        Assert.Empty(track["track"]!["alternatives"]![0]!["patternRegions"]!.AsArray());
+        Assert.Equal(RandomProjects.Json(state), RandomProjects.Json(ProjectPackage.Load(folder)));
+    }
+
+    [Fact]
+    public void An_alternatives_pattern_regions_survive_a_save_and_a_damaged_one_is_left_out() {
+        var ids = new SequentialIds();
+        var state = ProjectDefaults.NewProject("prj_1", "Song", 48_000);
+        state = Edits.Apply(state, new AddTrackCommand("Keys", Kind: TrackKind.Instrument), ids, RandomProjects.Plugins)
+            .State;
+        var keys = state.Tracks[0].Id;
+        state = Edits.Apply(state, new AddPatternRegionCommand(keys, 0, 3840), ids).State;
+        var region = Assert.Single(state.PatternRegions.Values);
+        state = Edits.Apply(state, new NewTrackAlternativeCommand(keys), ids).State;
+        ProjectPackage.Save(folder, state);
+        var loaded = ProjectPackage.Load(folder);
+        Assert.Equal(RandomProjects.Json(state), RandomProjects.Json(loaded));
+        Assert.Equal(region.Id, Assert.Single(loaded.Tracks[0].Alternatives[0].PatternRegions).Id);
+
+        var path = Path.Combine(folder, "tracks", keys + ".json");
+        var json = JsonNode.Parse(File.ReadAllText(path))!.AsObject();
+        json["track"]!["alternatives"]![0]!["patternRegions"]![0]!["pattern"] = null;
+        File.WriteAllText(path, json.ToJsonString());
+        Assert.Empty(ProjectPackage.Load(folder).Tracks[0].Alternatives[0].PatternRegions);
+    }
+
+    [Fact]
     public void A_Phase_3_package_opens_with_plain_channel_strips_and_saves_as_the_current_schema() {
         CopyFixture("Phase3.anode");
         var state = ProjectPackage.Load(folder);

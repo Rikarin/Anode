@@ -53,6 +53,23 @@ public sealed class EditPropertyTests {
     }
 
     [Fact]
+    public void A_stacks_members_follow_it_whatever_is_edited() =>
+        Gen.Int.Sample(
+            static seed => {
+                var (state, _, _) = RandomProjects.Build(seed, 80);
+                string? stack = null;
+                foreach (var track in state.Tracks) {
+                    if (track.ParentId is { } parent) {
+                        Assert.Equal(stack, parent);
+                    } else {
+                        stack = Edits.IsStackKind(track.Kind) ? track.Id : null;
+                    }
+                }
+            },
+            iter: 200
+        );
+
+    [Fact]
     public void A_batch_inverts_as_a_whole() =>
         Gen.Int.Sample(
             static seed => {

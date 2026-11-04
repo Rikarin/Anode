@@ -20,7 +20,8 @@ namespace Anode.Model.Storage;
 ///     with tracks' staff styles and regions' notation in the track files; schema 10 (docs/11-phase-10.md) the
 ///     project's surround format (in <c>settings</c>), strips' formats and panners, markers' kinds and the movie;
 ///     schema 11 (docs/12-phase-11.md) the chord track and the Environment, with the Mastering Assistant's analysis in
-///     its insert, and regions' Pitch Source and keys and the Session Player regions in the track files.
+///     its insert, and regions' Pitch Source and keys and the Session Player regions in the track files; schema 12 the
+///     pattern regions in track alternatives.
 /// </summary>
 public sealed record ProjectFile(
     int SchemaVersion,
@@ -51,7 +52,8 @@ public sealed record ProjectFile(
 ///     <c>tracks/&lt;id&gt;.json</c>: one track and its regions, audio and MIDI (schema 2), its take folders (schema 3),
 ///     its automation lanes (schema 4), and its flex and alternatives, and its regions' flex (schema 5); its MIDI FX,
 ///     drum machine, Smart Controls and Live Loops activation, and its pattern regions (schema 6); its groove matching
-///     and articulation set, and its notes' articulations (schema 7); its Session Player regions (schema 11).
+///     and articulation set, and its notes' articulations (schema 7); its Session Player regions (schema 11); its
+///     alternatives' pattern regions (schema 12).
 /// </summary>
 public sealed record TrackFile(
     int SchemaVersion,
@@ -526,7 +528,10 @@ public static class ProjectPackage {
             ? source
             : null;
 
-    /// <summary>Stacks do not nest, and a member's stack is one of the project's: other parents are dropped.</summary>
+    /// <summary>
+    ///     Stacks do not nest, and a member's stack is one of the project's: other parents are dropped. Members follow
+    ///     their stack (a project saved before every command kept them there is put right).
+    /// </summary>
     static void Unnest(ImmutableList<Track>.Builder tracks) {
         var stacks = tracks.Where(static t => Edits.IsStackKind(t.Kind)).Select(static t => t.Id).ToHashSet();
         for (var i = 0; i < tracks.Count; i++) {
@@ -535,6 +540,10 @@ public static class ProjectPackage {
                 tracks[i] = t with { ParentId = null };
             }
         }
+
+        var grouped = Edits.Grouped(tracks.ToImmutable());
+        tracks.Clear();
+        tracks.AddRange(grouped);
     }
 
     /// <summary>A track's articulation set is one of the project's, on a track that has one, or none.</summary>
@@ -1033,7 +1042,19 @@ public static class ProjectPackage {
                             && f.Takes.All(t => t is not null && files.ContainsKey(t.FileId ?? string.Empty))
                             )
                             .Select(f => f with { TrackId = track.Id, Comp = f.Comp ?? [] })
-                    ]
+                    ],
+                    PatternRegions = Edits.HoldsMidi(track)
+                        ? [
+                            ..(a.PatternRegions ?? []).Where(static r => r?.Id is not null
+                                && r.Name is not null
+                                && Valid(r.Pattern)
+                                )
+                                .Select(r => r with {
+                                        TrackId = track.Id, Pattern = r.Pattern with { Rows = [..r.Pattern.Rows] }
+                                    }
+                                )
+                        ]
+                        : []
                 }
             )
             .ToList();
@@ -1046,7 +1067,7 @@ public static class ProjectPackage {
         }
 
         // The live content has lost its entry: it gets one back.
-        var restored = new TrackAlternative(track.AlternativeId ?? "alt_restored", "Current", [], [], []);
+        var restored = new TrackAlternative(track.AlternativeId ?? "alt_restored", "Current", [], [], [], []);
         return ([restored, ..entries.Where(a => a.Id != restored.Id)], restored.Id);
     }
 
@@ -1116,6 +1137,7 @@ static class PackageKeys {
     public const string Settings = "settings";
     public const string Track = "track";
     public const string MidiRegions = "midiRegions";
+    public const string PatternRegions = "patternRegions";
 }
 
 /// <summary>
@@ -1129,12 +1151,13 @@ static class PackageKeys {
 ///     refused rather than read wrongly.
 /// </remarks>
 public static class PackageMigrations {
-    public const int CurrentSchemaVersion = 11;
+    public const int CurrentSchemaVersion = 12;
     const string VersionField = "schemaVersion";
 
     /// <summary><c>Steps[n]</c> takes schema <c>n + 1</c> to <c>n + 2</c>; it gets the kind of file and its JSON.</summary>
     static readonly Func<string, JsonObject, JsonObject>[] Steps = [
-        ToSchema2, ToSchema3, ToSchema4, ToSchema5, ToSchema6, ToSchema7, ToSchema8, ToSchema9, ToSchema10, ToSchema11
+        ToSchema2, ToSchema3, ToSchema4, ToSchema5, ToSchema6, ToSchema7, ToSchema8, ToSchema9, ToSchema10, ToSchema11,
+        ToSchema12
     ];
 
     public static JsonObject Upgrade(JsonObject json, string kind) {
@@ -1377,204 +1400,20 @@ public static class PackageMigrations {
         Schema11.Fill(kind, json);
         return json;
     }
-}
 
-/// <summary>
-///     The Phase 11 additions to a schema-10 file (docs/12-phase-11.md): an empty chord track and Environment, Pitch
-///     Source <c>off</c> on every MIDI and audio region (on tracks, in track alternatives and in Live Loops cells; their
-///     keys null, left out), and no Session Player regions. No Mastering Assistant has an analysis (left out). Leaves
-///     fields that are present alone.
-/// </summary>
-static class Schema11 {
-    public static void Fill(string kind, JsonObject json) {
-        if (kind == PackageKeys.ProjectKind) {
-            json["chordTrack"] ??= new JsonObject { ["chords"] = new JsonArray(), ["scales"] = new JsonArray() };
-            json["environment"] ??= new JsonObject {
-                ["layers"] = new JsonArray(), ["objects"] = new JsonArray(), ["cables"] = new JsonArray()
-            };
-            foreach (var cell in (json["liveLoops"]?["cells"] as JsonArray ?? []).OfType<JsonObject>()) {
-                Follows(cell["content"]?["midi"] as JsonObject);
-                Follows(cell["content"]?["audio"] as JsonObject);
-            }
-        } else if (kind == PackageKeys.TrackKind) {
-            json["sessionPlayerRegions"] ??= new JsonArray();
-            foreach (var alternative in (json[PackageKeys.Track]?["alternatives"] as JsonArray
-                         ?? []).OfType<JsonObject>()) {
-                Regions(alternative);
-            }
-
-            Regions(json);
-        }
-    }
-
-    static void Regions(JsonObject holder) {
-        foreach (var list in (string[])["regions", PackageKeys.MidiRegions]) {
-            foreach (var region in (holder[list] as JsonArray ?? []).OfType<JsonObject>()) {
-                Follows(region);
-            }
-        }
-    }
-
-    static void Follows(JsonObject? region) {
-        if (region is not null) {
-            region["pitchSource"] ??= "off";
-        }
-    }
-}
-
-/// <summary>
-///     The Phase 10 additions to a schema-9 file (docs/11-phase-10.md): the project is stereo
-///     (<c>settings.surroundFormat</c>), every strip (the master's and each track's) is stereo in and out with
-///     <see cref="Panner.Default" />, every marker is of kind <c>marker</c>, and there is no movie (left out). Leaves
-///     fields that are present alone.
-/// </summary>
-static class Schema10 {
-    public static void Fill(string kind, JsonObject json) {
-        if (kind == PackageKeys.ProjectKind) {
-            if (json[PackageKeys.Settings] is JsonObject settings) {
-                settings["surroundFormat"] ??= "stereo";
-            }
-
-            Strip(json["master"] as JsonObject);
-            foreach (var marker in (json["markers"] as JsonArray ?? []).OfType<JsonObject>()) {
-                marker["kind"] ??= "marker";
-            }
-        } else if (kind == PackageKeys.TrackKind) {
-            Strip(json[PackageKeys.Track]?["strip"] as JsonObject);
-        }
-    }
-
-    static void Strip(JsonObject? strip) {
-        if (strip is not null) {
-            strip["inputFormat"] ??= "stereo";
-            strip["outputFormat"] ??= "stereo";
-            strip["panner"] ??= JsonSerializer.SerializeToNode(Panner.Default, PackageJsonContext.Default.Panner);
-        }
-    }
-}
-
-/// <summary>
-///     The Phase 9 additions to a schema-8 file (docs/10-phase-9.md): every MIDI region (on tracks, in track
-///     alternatives and in Live Loops cells) has <see cref="RegionNotation.Default" />; tracks have no staff style (null,
-///     left out) and the project's score is <see cref="ProjectScore.Empty" />. Leaves fields that are present alone.
-/// </summary>
-static class Schema9 {
-    public static void Fill(string kind, JsonObject json) {
-        if (kind == PackageKeys.ProjectKind) {
-            json["score"] ??= JsonSerializer.SerializeToNode(
-                ProjectScore.Empty,
-                PackageJsonContext.Default.ProjectScore
-            );
-            foreach (var cell in (json["liveLoops"]?["cells"] as JsonArray ?? []).OfType<JsonObject>()) {
-                Notation(cell["content"]?["midi"] as JsonObject);
-            }
-        } else if (kind == PackageKeys.TrackKind) {
-            foreach (var alternative in (json[PackageKeys.Track]?["alternatives"] as JsonArray
-                         ?? []).OfType<JsonObject>()) {
-                foreach (var region in (alternative[PackageKeys.MidiRegions] as JsonArray ?? []).OfType<JsonObject>()) {
-                    Notation(region);
-                }
-            }
-
-            foreach (var region in (json[PackageKeys.MidiRegions] as JsonArray ?? []).OfType<JsonObject>()) {
-                Notation(region);
-            }
-        }
-    }
-
-    static void Notation(JsonObject? region) {
-        if (region is not null) {
-            region["notation"] ??= new JsonObject {
-                ["displayQuantizeTicks"] = 0,
-                ["tripletQuantizeTicks"] = 0,
-                ["interpretation"] = true,
-                ["noOverlap"] = true,
-                ["syncopation"] = false,
-                ["maxDots"] = 1
-            };
-        }
-    }
-}
-
-/// <summary>
-///     The Phase 8 additions to a schema-7 file (docs/09-phase-8.md): the project's sync settings at
-///     <see cref="SyncSettings.Default" /> (internal, nothing sent, 25 fps, from timecode 0, Link start/stop off, any
-///     input). Leaves fields that are present alone.
-/// </summary>
-static class Schema8 {
-    public static void Project(JsonObject json) {
-        if (json[PackageKeys.Settings] is JsonObject settings) {
-            settings["sync"] ??= new JsonObject {
-                ["source"] = "internal",
-                ["destinations"] = new JsonArray(),
-                ["frameRate"] = "fps25",
-                ["startOffsetSeconds"] = 0,
-                ["linkStartStop"] = false
-            };
-        }
-    }
-}
-
-/// <summary>The Phase 7 additions to a schema-6 file (docs/08-phase-7.md).</summary>
-static class Schema7 {
-    public static void Project(JsonObject json) {
-        json["grooves"] ??= new JsonArray();
-        json["articulationSets"] ??= new JsonArray();
-        json["laneSets"] ??= new JsonArray();
-        foreach (var file in (json["audioFiles"] as JsonArray ?? []).OfType<JsonObject>()) {
-            file["version"] ??= 0;
-        }
-
-        foreach (var cell in (json["liveLoops"]?["cells"] as JsonArray ?? []).OfType<JsonObject>()) {
-            Notes(cell["content"]?["midi"] as JsonObject);
-        }
-    }
-
-    public static void Track(JsonObject json) {
-        if (json[PackageKeys.Track] is JsonObject track) {
-            track["matchGroove"] ??= false;
-            foreach (var alternative in (track["alternatives"] as JsonArray ?? []).OfType<JsonObject>()) {
-                foreach (var region in (alternative[PackageKeys.MidiRegions] as JsonArray ?? []).OfType<JsonObject>()) {
-                    Notes(region);
-                }
+    /// <summary>
+    ///     Schema 11 to 12: alternatives hold pattern regions. An older alternative has none: while it was put away, the
+    ///     track's pattern regions stayed live.
+    /// </summary>
+    static JsonObject ToSchema12(string kind, JsonObject json) {
+        if (kind == PackageKeys.TrackKind) {
+            foreach (var alternative in (json[PackageKeys.Track]?["alternatives"] as JsonArray ?? [])
+                     .OfType<JsonObject>()) {
+                alternative[PackageKeys.PatternRegions] ??= new JsonArray();
             }
         }
 
-        foreach (var region in (json[PackageKeys.MidiRegions] as JsonArray ?? []).OfType<JsonObject>()) {
-            Notes(region);
-        }
-    }
-
-    /// <summary>The notes of a MIDI region without articulations.</summary>
-    public static void Notes(JsonObject? region) {
-        foreach (var note in (region?["notes"] as JsonArray ?? []).OfType<JsonObject>()) {
-            note["articulationId"] ??= 0;
-        }
-    }
-}
-
-/// <summary>The Phase 6 additions to a schema-5 file (docs/07-phase-6.md).</summary>
-static class Schema6 {
-    /// <summary>A channel strip without MIDI FX.</summary>
-    public static void Strip(JsonObject? strip) {
-        if (strip is not null) {
-            strip["midiEffects"] ??= new JsonArray();
-        }
-    }
-}
-
-/// <summary>The Phase 4 additions to a schema-3 file (docs/05-phase-4.md).</summary>
-static class Schema4 {
-    /// <summary>A channel strip without inserts or sends, to the master, in no group and no VCA.</summary>
-    public static void Strip(JsonObject? strip) {
-        if (strip is null) {
-            return;
-        }
-
-        strip["inserts"] ??= new JsonArray();
-        strip["sends"] ??= new JsonArray();
-        strip["output"] ??= "master";
-        strip["groups"] ??= new JsonArray();
+        return json;
     }
 }
 

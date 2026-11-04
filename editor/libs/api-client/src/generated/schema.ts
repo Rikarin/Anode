@@ -958,7 +958,7 @@ export interface paths {
     get?: never;
     put?: never;
     post?: never;
-    /** Removes an installed pack and its loops from the index; projects keep the copies of the loops they use. */
+    /** Removes an installed pack and its loops from the index; projects keep the copies of the files they use. */
     delete: operations['RemovePack'];
     options?: never;
     head?: never;
@@ -7885,9 +7885,9 @@ export interface components {
       staffStyleId?: null | string;
     };
     /**
-     * @description An inactive alternative of a track: a snapshot of its regions, MIDI regions and take folders. The track's live
-     *     ones are its active alternative (`alternativeId`); selecting another swaps them in one undoable step, and
-     *     ids stay unique project-wide.
+     * @description An inactive alternative of a track: a snapshot of its regions, MIDI regions, take folders and pattern regions.
+     *     The track's live ones are its active alternative (`alternativeId`); selecting another swaps them in one
+     *     undoable step, and ids stay unique project-wide.
      */
     TrackAlternative: {
       id: string;
@@ -7895,6 +7895,7 @@ export interface components {
       regions: components['schemas']['AudioRegion'][];
       midiRegions: components['schemas']['MidiRegion'][];
       takeFolders: components['schemas']['TakeFolder'][];
+      patternRegions: components['schemas']['PatternRegion'][];
     };
     /** @description The device input: 1-based first channel (0: none); a stereo input takes that channel and the next. */
     TrackInput: {

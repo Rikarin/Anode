@@ -2545,7 +2545,7 @@
         "tags": [
           "Library"
         ],
-        "summary": "Removes an installed pack and its loops from the index; projects keep the copies of the loops they use.",
+        "summary": "Removes an installed pack and its loops from the index; projects keep the copies of the files they use.",
         "operationId": "RemovePack",
         "parameters": [
           {
@@ -21870,7 +21870,8 @@
           "name",
           "regions",
           "midiRegions",
-          "takeFolders"
+          "takeFolders",
+          "patternRegions"
         ],
         "type": "object",
         "properties": {
@@ -21897,9 +21898,15 @@
             "items": {
               "$ref": "#/components/schemas/TakeFolder"
             }
+          },
+          "patternRegions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PatternRegion"
+            }
           }
         },
-        "description": "An inactive alternative of a track: a snapshot of its regions, MIDI regions and take folders. The track\u0027s live\nones are its active alternative (\u0060alternativeId\u0060); selecting another swaps them in one undoable step, and\nids stay unique project-wide."
+        "description": "An inactive alternative of a track: a snapshot of its regions, MIDI regions, take folders and pattern regions.\nThe track\u0027s live ones are its active alternative (\u0060alternativeId\u0060); selecting another swaps them in one\nundoable step, and ids stay unique project-wide."
       },
       "TrackInput": {
         "required": [

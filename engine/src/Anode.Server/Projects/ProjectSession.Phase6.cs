@@ -38,7 +38,7 @@ public sealed partial class ProjectSession {
                         }
 
                         commands.Add(command);
-                        var ops = Edits.Ops(state, command, ids, catalog.ForEdits, patches, analysis);
+                        var ops = Edits.Ops(state, command, ids, catalog.ForEdits, PatchesOf(o), analysis);
                         previous = state;
                         state = Edits.Step(state, ops, forward, inverse);
                     }

@@ -9,6 +9,7 @@ import { XuiSegmentedControlImports } from '@xui/segmented-control';
 import { XuiTooltipImports } from '@xui/tooltip';
 import { KeyCommandsStore } from '../state/key-commands.store';
 import { MixerStore } from '../state/mixer.store';
+import { ProjectViewStore } from '../state/project-view.store';
 import { ProjectStore } from '../state/project.store';
 import { SelectionStore } from '../state/selection.store';
 import { UiStore } from '../state/ui.store';
@@ -66,11 +67,22 @@ export function stripEntries(strips: readonly Track[]): StripEntry[] {
   return entries;
 }
 
-/** The Mixer's view and filters: per window, not per project. */
+/** The Mixer's view and filters: each project remembers them (`ProjectViewStore`). */
 @Injectable({ providedIn: 'root' })
 export class MixerViewStore {
   readonly view = signal<MixerView>('all');
   readonly hidden = signal<ReadonlySet<StripFilter>>(new Set());
+
+  constructor() {
+    inject(ProjectViewStore).keep('mixer', {
+      value: () => ({ view: this.view(), hidden: [...this.hidden()] }),
+      restore: saved => {
+        const { view, hidden } = (saved ?? {}) as { view?: unknown; hidden?: unknown };
+        this.view.set(view === 'tracks' || view === 'buses' ? view : 'all');
+        this.hidden.set(new Set(Array.isArray(hidden) ? (hidden as StripFilter[]) : []));
+      }
+    });
+  }
 
   toggle(filter: StripFilter): void {
     this.hidden.update(set => {
