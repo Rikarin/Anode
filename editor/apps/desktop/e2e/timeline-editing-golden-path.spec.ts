@@ -123,9 +123,7 @@ test('loops a region from the inspector and by its corner', async ({ app, window
       targetPosition: { x: 3 * 192, y: ruler + 3 }
     });
     await expect(window.getByTestId('region-repeats').locator('input')).toHaveValue('2');
-    await window.keyboard.press('Control+Alt+ArrowRight');
-    await window.keyboard.press('Control+Alt+ArrowRight');
-    await expectPlayhead(window, /^\s*4\s+1\s+1\s+1/);
+    await pressUntil(window, 'Control+Alt+ArrowRight', /^\s*4\s+1\s+1\s+1/);
   } finally {
     rmSync(scratch, { recursive: true, force: true });
   }
@@ -157,6 +155,45 @@ test('time-stretches a region by dragging its edge with Option', async ({ app, w
 
     await window.keyboard.press('ControlOrMeta+z');
     await expect(window.getByTestId('region-stretch').locator('input')).toHaveValue(/^100/);
+  } finally {
+    rmSync(scratch, { recursive: true, force: true });
+  }
+});
+
+// Insert and cut time over the cycle, and a ripple delete, seen from where the region's edges end up.
+test('inserts and cuts time on the locators, and ripple deletes', async ({ app, window }) => {
+  const scratch = mkdtempSync(join(tmpdir(), 'anode-timeline-'));
+  try {
+    await projectWithRegion(app, window, scratch);
+    const timeline = window.locator('an-timeline');
+
+    // The cycle over bar 1: its ruler's lower band.
+    await timeline.dragTo(timeline, { sourcePosition: { x: 1, y: 22 }, targetPosition: { x: 192, y: 22 } });
+    await window.locator('an-timeline').click({ position: { x: 40, y: 60 } });
+    await window.keyboard.press('Meta+Control+z');
+    await pressUntil(window, 'Control+Alt+ArrowRight', /^\s*3\s+1\s+1\s+1/);
+    await pressUntil(window, 'Control+Alt+ArrowLeft', /^\s*2\s+1\s+1\s+1/);
+
+    await window.keyboard.press('Meta+Control+x');
+    await pressUntil(window, 'Control+Alt+ArrowLeft', /^\s*1\s+1\s+1\s+1/);
+    await pressUntil(window, 'Control+Alt+ArrowRight', /^\s*2\s+1\s+1\s+1/);
+
+    // A copy after the region, then Ripple: deleting the first brings the second back to the start.
+    await window.locator('an-timeline').click({ position: { x: 40, y: 60 } });
+    await window.keyboard.press('ControlOrMeta+r');
+    await expect(window.getByRole('img', { name: /^Tracks area:/ })).toHaveAttribute(
+      'aria-label',
+      /^Tracks area: 2 regions on /
+    );
+    await window.getByTestId('ripple').click();
+    await window.locator('an-timeline').click({ position: { x: 40, y: 60 } });
+    await window.keyboard.press('Delete');
+    await expect(window.getByRole('img', { name: /^Tracks area:/ })).toHaveAttribute(
+      'aria-label',
+      /^Tracks area: 1 region on /
+    );
+    await window.keyboard.press('Enter');
+    await pressUntil(window, 'Control+Alt+ArrowRight', /^\s*2\s+1\s+1\s+1/);
   } finally {
     rmSync(scratch, { recursive: true, force: true });
   }

@@ -15,3 +15,6 @@ All notable changes to Anode are recorded here, by hand.
   Regions (⌃L) makes them regions of their own. Project schema 12.
 - Time-stretch regions: ⌥-drag an audio region's lower edge, or set the inspector's Stretch, and it lasts up to four
   times longer or shorter through the flex engine, its file untouched. Project schema 13.
+- Insert and cut time, ripple edit: Insert Time (⌃⌘Z) and Cut Time (⌃⌘X) work on the marquee or the locators across every
+  track, splitting what crosses them and moving tempo, signature, key and chord tracks, markers, sections, automation,
+  score symbols, cycle and punch; the Ripple switch makes Delete and Cut close the gap on every track.

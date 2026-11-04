@@ -8890,6 +8890,15 @@
             "$ref": "#/components/schemas/EditCommandStretchRegionCommand"
           },
           {
+            "$ref": "#/components/schemas/EditCommandInsertTimeCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandCutTimeCommand"
+          },
+          {
+            "$ref": "#/components/schemas/EditCommandRippleDeleteCommand"
+          },
+          {
             "$ref": "#/components/schemas/EditCommandSetTempoCommand"
           },
           {
@@ -9405,6 +9414,9 @@
             "deleteRegions": "#/components/schemas/EditCommandDeleteRegionsCommand",
             "convertLoops": "#/components/schemas/EditCommandConvertLoopsCommand",
             "stretchRegion": "#/components/schemas/EditCommandStretchRegionCommand",
+            "insertTime": "#/components/schemas/EditCommandInsertTimeCommand",
+            "cutTime": "#/components/schemas/EditCommandCutTimeCommand",
+            "rippleDelete": "#/components/schemas/EditCommandRippleDeleteCommand",
             "setTempo": "#/components/schemas/EditCommandSetTempoCommand",
             "setSignature": "#/components/schemas/EditCommandSetSignatureCommand",
             "setCycle": "#/components/schemas/EditCommandSetCycleCommand",
@@ -10833,6 +10845,30 @@
         },
         "description": "Puts tracks into a new folder stack, inserted where the first of them was."
       },
+      "EditCommandCutTimeCommand": {
+        "required": [
+          "startTick",
+          "endTick",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "cutTime"
+            ],
+            "type": "string"
+          },
+          "startTick": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "endTick": {
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "description": "Removes the time from \u0060startTick\u0060 to \u0060endTick\u0060 on every track and closes it, as \u0060insertTime\u0060 makes\nroom: what is inside goes, what crosses it is split, and what follows moves earlier. The tempo, signature, key and\nchord in force at its end hold from its start."
+      },
       "EditCommandDeleteArticulationSetCommand": {
         "required": [
           "setId",
@@ -11346,6 +11382,30 @@
           }
         },
         "description": "Phase 9, an interchange import\u0027s result (ImportedContent): adds its tracks after the project\u0027s\nwith their regions, staff styles and score content, gives every provisional id a real one (rewriting the\nreferences), replaces the tempo map, signatures and keys it carries, and adds its markers, in one undo step. The\n\u0060musicXmlImport\u0060, \u0060aafImport\u0060 and \u0060midiImport\u0060 jobs apply it after copying the media into the\nproject (undo leaves the files); clients do not send it."
+      },
+      "EditCommandInsertTimeCommand": {
+        "required": [
+          "atTick",
+          "lengthTicks",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "insertTime"
+            ],
+            "type": "string"
+          },
+          "atTick": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "lengthTicks": {
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "description": "Inserts \u0060lengthTicks\u0060 of empty time at \u0060atTick\u0060, on every track: regions across it are split (a looped\none\u0027s repeats become regions first; pattern and Session Player regions grow instead), and everything from there on\nmoves later, with the tempo, signature, key and chord tracks, markers, sections, automation, score symbols, the\ncycle, the punch locators, the project end and the movie. A signature change that no longer falls on a bar line\nmoves to the nearest one."
       },
       "EditCommandJoinRegionsCommand": {
         "required": [
@@ -12202,6 +12262,27 @@
           }
         },
         "description": "Trims a region: its new start, and the part of the file it plays."
+      },
+      "EditCommandRippleDeleteCommand": {
+        "required": [
+          "regionIds",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "rippleDelete"
+            ],
+            "type": "string"
+          },
+          "regionIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "description": "Deletes regions and closes the time they took across every track: everything that starts after them moves earlier,\nthe global tracks, markers and automation as \u0060cutTime\u0060 says; what other tracks hold across that time stays\nwhere it is, uncut."
       },
       "EditCommandSelectTakeCommand": {
         "required": [

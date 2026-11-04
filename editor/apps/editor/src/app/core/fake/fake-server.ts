@@ -265,6 +265,7 @@ import { FakeMidiEffects, FakeT2Effects, FakeT2Instruments, RemixFxId, withMacro
 import { checkedLoop, convertLoops, refuseLooped } from './fake-region-loops';
 import { FakeScriptPresets } from './fake-scripts';
 import { FactoryStaffStyles } from './fake-staff-styles';
+import { applyTimeEdit } from './fake-time-edit';
 
 /** Ticks per quarter note (the contract's time base). */
 const Ppq = 960;
@@ -4528,6 +4529,13 @@ export class FakeAnodeServer implements AnodeApi {
           loopTicks: checkedLoop(command.loopTicks, r.loopTicks)
         });
       }
+      case 'insertTime':
+      case 'cutTime':
+      case 'rippleDelete':
+        return applyTimeEdit(project, command, {
+          apply: (p, c) => this.applyCommand(p, c),
+          endOf: (p, r) => timingOf(p, r).endTick
+        });
       case 'convertLoops':
         return convertLoops(
           project,

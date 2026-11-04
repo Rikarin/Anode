@@ -3266,6 +3266,9 @@ export interface components {
       | components['schemas']['EditCommandDeleteRegionsCommand']
       | components['schemas']['EditCommandConvertLoopsCommand']
       | components['schemas']['EditCommandStretchRegionCommand']
+      | components['schemas']['EditCommandInsertTimeCommand']
+      | components['schemas']['EditCommandCutTimeCommand']
+      | components['schemas']['EditCommandRippleDeleteCommand']
       | components['schemas']['EditCommandSetTempoCommand']
       | components['schemas']['EditCommandSetSignatureCommand']
       | components['schemas']['EditCommandSetCycleCommand']
@@ -3872,6 +3875,19 @@ export interface components {
       trackIds: string[];
       name?: null | string;
     };
+    /**
+     * @description Removes the time from `startTick` to `endTick` on every track and closes it, as `insertTime` makes
+     *     room: what is inside goes, what crosses it is split, and what follows moves earlier. The tempo, signature, key and
+     *     chord in force at its end hold from its start.
+     */
+    EditCommandCutTimeCommand: {
+      /** @enum {string} */
+      type: 'cutTime';
+      /** Format: int64 */
+      startTick: number;
+      /** Format: int64 */
+      endTick: number;
+    };
     /** @description Phase 7: removes an articulation set; tracks that used it have none (their notes keep their ids). */
     EditCommandDeleteArticulationSetCommand: {
       /** @enum {string} */
@@ -4030,6 +4046,21 @@ export interface components {
       /** @enum {string} */
       type: 'importTracks';
       content: components['schemas']['ImportedContent'];
+    };
+    /**
+     * @description Inserts `lengthTicks` of empty time at `atTick`, on every track: regions across it are split (a looped
+     *     one's repeats become regions first; pattern and Session Player regions grow instead), and everything from there on
+     *     moves later, with the tempo, signature, key and chord tracks, markers, sections, automation, score symbols, the
+     *     cycle, the punch locators, the project end and the movie. A signature change that no longer falls on a bar line
+     *     moves to the nearest one.
+     */
+    EditCommandInsertTimeCommand: {
+      /** @enum {string} */
+      type: 'insertTime';
+      /** Format: int64 */
+      atTick: number;
+      /** Format: int64 */
+      lengthTicks: number;
     };
     /**
      * @description Glues regions of one track into one: MIDI regions merge their notes; audio regions only when they play one
@@ -4349,6 +4380,16 @@ export interface components {
       fileOffset: number;
       /** Format: int64 */
       length: number;
+    };
+    /**
+     * @description Deletes regions and closes the time they took across every track: everything that starts after them moves earlier,
+     *     the global tracks, markers and automation as `cutTime` says; what other tracks hold across that time stays
+     *     where it is, uncut.
+     */
+    EditCommandRippleDeleteCommand: {
+      /** @enum {string} */
+      type: 'rippleDelete';
+      regionIds: string[];
     };
     /** @description Makes one take the whole comp. */
     EditCommandSelectTakeCommand: {

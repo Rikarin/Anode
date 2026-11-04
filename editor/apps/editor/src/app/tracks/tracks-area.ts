@@ -359,6 +359,18 @@ const Players: readonly { player: SessionPlayerKind; label: string; icon: string
       </ng-template>
       <button
         type="button"
+        class="bezel text-foreground flex h-6.5 items-center px-2 text-[11px] font-semibold"
+        aria-label="Ripple"
+        data-testid="ripple"
+        xuiTooltip="Ripple: deleting a region or a marquee closes the gap on every track"
+        [attr.aria-pressed]="view.ripple() ? 'true' : 'false'"
+        [class.text-lit]="view.ripple()"
+        (click)="view.ripple.set(!view.ripple())"
+      >
+        Ripple
+      </button>
+      <button
+        type="button"
         class="bezel text-foreground flex h-6.5 items-center gap-1 px-2 text-[11px] font-semibold"
         aria-label="Nudge value"
         data-testid="nudge-value"
@@ -620,6 +632,13 @@ const Players: readonly { player: SessionPlayerKind; label: string; icon: string
               </button>
             }
             <xui-menu-divider />
+            <button xuiMenuItem type="button" data-testid="insert-time" (click)="insertTime()">
+              Insert Time ({{ keyOf('edit.insertTime') }})
+            </button>
+            <button xuiMenuItem type="button" data-testid="cut-time" (click)="cutTime()">
+              Cut Time ({{ keyOf('edit.cutTime') }})
+            </button>
+            <xui-menu-divider />
             <button xuiMenuItem type="button" (click)="ui.stripSilenceOpen.set(true)">
               Strip Silence… ({{ keyOf('region.stripSilence') }})
             </button>
@@ -673,6 +692,15 @@ const Players: readonly { player: SessionPlayerKind; label: string; icon: string
                 <kbd class="text-foreground-muted ms-4 font-sans text-[11px]">{{ tool.key }}</kbd>
               </button>
             }
+            <xui-menu-divider />
+            <button xuiMenuItem type="button" data-testid="insert-time" (click)="insertTime()">
+              <span class="flex-1">Insert Time</span>
+              <kbd class="text-foreground-muted ms-4 font-sans text-[11px]">{{ keyOf('edit.insertTime') }}</kbd>
+            </button>
+            <button xuiMenuItem type="button" data-testid="cut-time" (click)="cutTime()">
+              <span class="flex-1">Cut Time</span>
+              <kbd class="text-foreground-muted ms-4 font-sans text-[11px]">{{ keyOf('edit.cutTime') }}</kbd>
+            </button>
             @if (menuPatternTrack(); as track) {
               <xui-menu-divider />
               <button
@@ -867,7 +895,10 @@ export class TracksArea {
       ['edit.cut', () => this.clipboardKey(() => this.clipboard.cut())],
       ['edit.copy', () => this.clipboardKey(() => this.clipboard.copy())],
       ['edit.paste', () => this.clipboardKey(() => this.clipboard.paste())],
-      ['edit.delete', () => this.deleteSelected()]
+      ['edit.delete', () => this.deleteSelected()],
+      ['edit.insertTime', () => this.insertTime()],
+      ['edit.cutTime', () => this.cutTime()],
+      ['edit.ripple', () => this.view.ripple.update(on => !on)]
     ];
     const unregister = register.map(([id, action]) => this.keys.register(id, action));
     inject(DestroyRef).onDestroy(() => unregister.forEach(off => off()));
@@ -1199,13 +1230,20 @@ export class TracksArea {
     ]);
   }
 
-  /** Delete: selected automation (points or a range), else the marquee tool's range, else the selected regions. */
+  /**
+   * Delete: selected automation (points or a range), else the marquee tool's range, else the selected regions. With
+   * Ripple on, the time they took closes on every track.
+   */
   deleteSelected(): void {
     if (this.automation.deleteSelection()) {
       return;
     }
     const range = this.view.marquee();
     if (range) {
+      if (this.view.ripple()) {
+        this.cutTime();
+        return;
+      }
       const commands = this.clipboard.marqueeDelete(range);
       this.view.marquee.set(null);
       void this.project.execute(commands, 'Delete Marquee Selection');
@@ -1213,8 +1251,41 @@ export class TracksArea {
     }
     const ids = this.selected();
     if (ids.length > 0) {
-      void this.project.execute([{ type: 'deleteRegions', regionIds: ids }], plural('Delete', ids.length));
+      void this.project.execute(
+        [{ type: this.view.ripple() ? 'rippleDelete' : 'deleteRegions', regionIds: ids }],
+        plural(this.view.ripple() ? 'Ripple Delete' : 'Delete', ids.length)
+      );
     }
+  }
+
+  /** The range Insert and Cut Time work on: the marquee's, else the cycle's (Logic's locators). */
+  private timeRange(): { startTick: number; endTick: number } {
+    return this.view.marquee() ?? this.project.settings().cycle;
+  }
+
+  /** Inserts the range's length of empty time at its start, on every track. */
+  protected insertTime(): void {
+    const { startTick, endTick } = this.timeRange();
+    const locators = !this.view.marquee();
+    this.view.marquee.set(null);
+    const at = Math.round(startTick);
+    const end = Math.round(endTick);
+    const commands: EditCommand[] = [{ type: 'insertTime', atTick: at, lengthTicks: end - at }];
+    // The locators gave the range: they stay on the new time, as Logic's do.
+    void this.project.execute(
+      locators ? [...commands, { type: 'setCycle', startTick: at, endTick: end }] : commands,
+      'Insert Time'
+    );
+  }
+
+  /** Removes the range on every track and closes it. */
+  protected cutTime(): void {
+    const { startTick, endTick } = this.timeRange();
+    this.view.marquee.set(null);
+    void this.project.execute(
+      [{ type: 'cutTime', startTick: Math.round(startTick), endTick: Math.round(endTick) }],
+      'Cut Time'
+    );
   }
 
   protected flatten(folderId: string): void {

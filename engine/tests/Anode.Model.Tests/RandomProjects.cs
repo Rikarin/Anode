@@ -632,6 +632,13 @@ static partial class RandomProjects {
                     r.Next(4) == 0 ? r.Next(0, 32) * 480L : null
                 )
                 : null,
+            nameof(InsertTimeCommand) => new InsertTimeCommand(r.Next(0, 32) * 480L, r.Next(1, 16) * 480L),
+            nameof(CutTimeCommand) => r.Next(0, 32) * 480L is var cut
+                ? new CutTimeCommand(cut, cut + r.Next(1, 16) * 480L)
+                : null,
+            nameof(RippleDeleteCommand) => AnyRegion() is not null
+                ? new RippleDeleteCommand([..Enumerable.Range(0, r.Next(1, 3)).Select(_ => AnyRegion()!)])
+                : null,
             nameof(ConvertLoopsCommand) => AnyRegion() is not null
                 ? new ConvertLoopsCommand([..Enumerable.Range(0, r.Next(1, 4)).Select(_ => AnyRegion()!)])
                 : null,

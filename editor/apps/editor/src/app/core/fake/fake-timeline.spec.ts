@@ -114,3 +114,81 @@ describe('FakeAnodeServer, stretchRegion', () => {
     ).rejects.toMatchObject({ status: 422 });
   });
 });
+
+describe('FakeAnodeServer, editing time', () => {
+  it('inserts time on every track, with markers, the cycle and the tempo track', async () => {
+    const server = new FakeAnodeServer();
+    const { file, trackId } = await audioProject(server);
+    await run(
+      server,
+      { type: 'addRegion', trackId, fileId: file.id, startTick: 0, length: 192_000 },
+      { type: 'addMarker', name: 'Later', tick: Bar * 2, lengthTicks: 0 },
+      { type: 'setCycle', enabled: true, startTick: Bar * 2, endTick: Bar * 4 },
+      {
+        type: 'setTempoEvents',
+        events: [
+          { tick: 0, bpm: 120, curve: 'step', shape: 0 },
+          { tick: Bar * 3, bpm: 90, curve: 'step', shape: 0 }
+        ]
+      }
+    );
+    const p = await run(server, { type: 'insertTime', atTick: Bar, lengthTicks: Bar });
+    const regions = [...p.regions].sort((a, b) => a.startTick - b.startTick);
+    expect(regions.map(r => [r.startTick, r.fileOffset, r.length])).toEqual([
+      [0, 0, 96_000],
+      [Bar * 2, 96_000, 96_000]
+    ]);
+    expect(p.markers[0]?.tick).toBe(Bar * 3);
+    expect(p.settings.cycle).toMatchObject({ startTick: Bar * 3, endTick: Bar * 5 });
+    expect(p.settings.tempoEvents.map(e => e.tick)).toEqual([0, Bar * 4]);
+  });
+
+  it('cuts time, keeping what crosses it and what was in force at its end', async () => {
+    const server = new FakeAnodeServer();
+    const { file, trackId } = await audioProject(server);
+    await run(
+      server,
+      { type: 'addRegion', trackId, fileId: file.id, startTick: 0, length: 192_000 },
+      { type: 'addMarker', name: 'Gone', tick: Bar, lengthTicks: 0 },
+      {
+        type: 'setTempoEvents',
+        events: [
+          { tick: 0, bpm: 120, curve: 'step', shape: 0 },
+          { tick: Bar, bpm: 90, curve: 'step', shape: 0 }
+        ]
+      }
+    );
+    const p = await run(server, { type: 'cutTime', startTick: Bar / 2, endTick: Bar + Bar / 2 });
+    expect(p.regions).toHaveLength(2);
+    expect(p.markers).toEqual([]);
+    expect(p.settings.tempoEvents.map(e => [e.tick, e.bpm])).toEqual([
+      [0, 120],
+      [Bar / 2, 90]
+    ]);
+  });
+
+  it('ripple deletes, leaving what crosses on other tracks', async () => {
+    const server = new FakeAnodeServer();
+    await server.createProject({ name: 'Test' });
+    await server.applyCommands({
+      commands: [
+        { type: 'addTrack', stereo: false },
+        { type: 'addTrack', stereo: false }
+      ]
+    });
+    const file = await server.importAudioFile('/audio/take.wav');
+    const [a = '', b = ''] = (server.current?.tracks ?? []).map(t => t.id);
+    let p = await run(
+      server,
+      { type: 'addRegion', trackId: a, fileId: file.id, startTick: Bar, length: 96_000 },
+      { type: 'addRegion', trackId: a, fileId: file.id, startTick: Bar * 3, length: 96_000 },
+      { type: 'addRegion', trackId: b, fileId: file.id, startTick: 0, length: 192_000 }
+    );
+    const gone = p.regions.find(r => r.startTick === Bar)?.id ?? '';
+    p = await run(server, { type: 'rippleDelete', regionIds: [gone] });
+    expect(p.regions.map(r => [r.trackId, r.startTick]).sort()).toEqual([
+      [a, Bar * 2],
+      [b, 0]
+    ]);
+  });
+});

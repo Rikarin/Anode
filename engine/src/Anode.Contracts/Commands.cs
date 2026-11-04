@@ -20,6 +20,9 @@ namespace Anode.Contracts;
 [JsonDerivedType(typeof(DeleteRegionsCommand), "deleteRegions")]
 [JsonDerivedType(typeof(ConvertLoopsCommand), "convertLoops")]
 [JsonDerivedType(typeof(StretchRegionCommand), "stretchRegion")]
+[JsonDerivedType(typeof(InsertTimeCommand), "insertTime")]
+[JsonDerivedType(typeof(CutTimeCommand), "cutTime")]
+[JsonDerivedType(typeof(RippleDeleteCommand), "rippleDelete")]
 [JsonDerivedType(typeof(SetTempoCommand), "setTempo")]
 [JsonDerivedType(typeof(SetSignatureCommand), "setSignature")]
 [JsonDerivedType(typeof(SetCycleCommand), "setCycle")]
@@ -272,6 +275,29 @@ public sealed record DeleteRegionsCommand(IReadOnlyList<string> RegionIds) : Edi
 ///     flex markers scale with it; its fades stay in frames, cut to fit.
 /// </summary>
 public sealed record StretchRegionCommand(string RegionId, double Stretch, long? StartTick = null) : EditCommand;
+
+/// <summary>
+///     Inserts <c>lengthTicks</c> of empty time at <c>atTick</c>, on every track: regions across it are split (a looped
+///     one's repeats become regions first; pattern and Session Player regions grow instead), and everything from there on
+///     moves later, with the tempo, signature, key and chord tracks, markers, sections, automation, score symbols, the
+///     cycle, the punch locators, the project end and the movie. A signature change that no longer falls on a bar line
+///     moves to the nearest one.
+/// </summary>
+public sealed record InsertTimeCommand(long AtTick, long LengthTicks) : EditCommand;
+
+/// <summary>
+///     Removes the time from <c>startTick</c> to <c>endTick</c> on every track and closes it, as <c>insertTime</c> makes
+///     room: what is inside goes, what crosses it is split, and what follows moves earlier. The tempo, signature, key and
+///     chord in force at its end hold from its start.
+/// </summary>
+public sealed record CutTimeCommand(long StartTick, long EndTick) : EditCommand;
+
+/// <summary>
+///     Deletes regions and closes the time they took across every track: everything that starts after them moves earlier,
+///     the global tracks, markers and automation as <c>cutTime</c> says; what other tracks hold across that time stays
+///     where it is, uncut.
+/// </summary>
+public sealed record RippleDeleteCommand(IReadOnlyList<string> RegionIds) : EditCommand;
 
 /// <summary>Turns the repeats of looped regions (audio, MIDI, pattern) into regions of their own; what plays stays.</summary>
 public sealed record ConvertLoopsCommand(IReadOnlyList<string> RegionIds) : EditCommand;

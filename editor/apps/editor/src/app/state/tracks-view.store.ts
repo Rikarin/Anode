@@ -73,6 +73,8 @@ export class TracksViewStore {
   readonly snap = signal(true);
   readonly snapMode = signal<SnapMode>('smart');
   readonly dragMode = signal<DragMode>('overlap');
+  /** Ripple: deleting closes the gap on every track. */
+  readonly ripple = signal(false);
   /** What the Nudge Regions keys move by. */
   readonly nudgeValue = signal<NudgeValue>('division');
   readonly follow = signal(true);

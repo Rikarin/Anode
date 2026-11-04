@@ -471,6 +471,13 @@ public static class AutomationEvents {
         }
     }
 
+    /// <summary>A lane's value just before <paramref name="tick" /> (the first of two points on it).</summary>
+    public static double LeftAt(IReadOnlyList<AutomationPoint> points, long tick) => new Curve(points).Left(tick);
+
+    /// <summary>A lane's value just after <paramref name="tick" /> (the second of two points on it).</summary>
+    public static double RightAt(IReadOnlyList<AutomationPoint> points, long tick) =>
+        new Curve(points).Right(tick, false);
+
     /// <summary>
     ///     A segment's shape at position <paramref name="x" /> (0…1) for curve <paramref name="curve" /> (−1…1, 0
     ///     linear).

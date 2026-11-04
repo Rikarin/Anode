@@ -165,6 +165,9 @@ public static partial class Edits {
             SetRegionCommand c => SetRegion(state, c),
             DeleteRegionsCommand c => DeleteRegions(state, c),
             ConvertLoopsCommand c => ConvertLoops(state, c, ids),
+            InsertTimeCommand c => InsertTime(state, c, ids),
+            CutTimeCommand c => CutTime(state, c, ids),
+            RippleDeleteCommand c => RippleDelete(state, c),
             SetTempoCommand c => SetTempo(state, c),
             SetSignatureCommand c => SetSignature(state, c),
             SetCycleCommand c => SetCycle(state, c),
@@ -689,25 +692,36 @@ public static partial class Edits {
 
         var region = RegionOf(state, c.RegionId!);
         RefuseLooped(region.LoopTicks, region.Id, "split");
-        var timing = RegionTiming.Of(state, region);
-        long at;
-        if (timing.Warped) {
-            at = c.AtTick > region.StartTick ? (long)Math.Round(timing.FrameAt(c.AtTick)) - region.FileOffset : 0;
-        } else {
-            var map = state.TempoMap;
-            var start = map.SampleAt(region.StartTick, state.SampleRate);
-            at = c.AtTick > region.StartTick ? map.SampleAt(c.AtTick, state.SampleRate) - start : 0;
-        }
-
+        var at = SplitFrames(state, region, c.AtTick);
         if (at <= 0 || at >= region.Length) {
             throw new EditException($"Tick {c.AtTick} is not inside region '{region.Id}'.");
         }
 
+        return Split(region, at, c.AtTick, ids);
+    }
+
+    /// <summary>How many of a region's frames play before <paramref name="tick" />: 0 at or before its start.</summary>
+    static long SplitFrames(ProjectState state, AudioRegion region, long tick) {
+        if (tick <= region.StartTick) {
+            return 0;
+        }
+
+        var timing = RegionTiming.Of(state, region);
+        if (timing.Warped) {
+            return (long)Math.Round(timing.FrameAt(tick)) - region.FileOffset;
+        }
+
+        var map = state.TempoMap;
+        return map.SampleAt(tick, state.SampleRate) - map.SampleAt(region.StartTick, state.SampleRate);
+    }
+
+    /// <summary>A region in two after <paramref name="at" /> of its frames, the second starting at <paramref name="tick" />.</summary>
+    static DeltaOp[] Split(AudioRegion region, long at, long tick, IIdSource ids) {
         var left = Piece(region, region.FileOffset, region.FileOffset + at, region.StartTick) with {
             FadeIn = Math.Min(region.FadeIn, at), FadeOut = 0
         };
         var rightLength = region.Length - at;
-        var right = Piece(region, region.FileOffset + at, region.FileOffset + region.Length, c.AtTick) with {
+        var right = Piece(region, region.FileOffset + at, region.FileOffset + region.Length, tick) with {
             Id = ids.Next(IdPrefix.Region), FadeIn = 0, FadeOut = Math.Min(region.FadeOut, rightLength)
         };
         return [new RegionUpserted(left), new RegionUpserted(right)];

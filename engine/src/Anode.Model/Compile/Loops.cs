@@ -55,6 +55,15 @@ public static class Loops {
             : Math.Max(end, Until(state, region.TrackId, region.StartTick, end, region.LoopTicks));
     }
 
+    /// <summary>The tick an audio region's playing ends: its last frame rounded up, or where its repeats stop.</summary>
+    public static long EndTick(ProjectState state, AudioRegion region) {
+        var timing = RegionTiming.Of(state, region);
+        var end = BaseEndTick(timing);
+        return region.LoopTicks <= 0
+            ? end
+            : Math.Max(end, Until(state, region.TrackId, region.StartTick, end, region.LoopTicks));
+    }
+
     /// <summary>The project sample an audio region's playing ends at: its end, or where its repeats stop.</summary>
     public static long EndSample(ProjectState state, AudioRegion region) {
         var timing = RegionTiming.Of(state, region);
