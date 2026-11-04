@@ -15,6 +15,8 @@ namespace Anode.Interchange.MusicXml;
 ///     grid.
 /// </summary>
 sealed class MusicXmlPartReader {
+    const string StartType = "start";
+
     /// <summary>A grace note's length: a 1/32 note.</summary>
     static readonly Rational GraceLength = new(1, 8);
 
@@ -394,8 +396,8 @@ sealed class MusicXmlPartReader {
     }
 
     static bool TieStarts(XElement note) =>
-        note.Elements("tie").Any(static t => (string?)t.Attribute("type") == "start")
-        || note.Elements("notations").Elements("tied").Any(static t => (string?)t.Attribute("type") == "start");
+        note.Elements("tie").Any(static t => (string?)t.Attribute("type") == StartType)
+        || note.Elements("notations").Elements("tied").Any(static t => (string?)t.Attribute("type") == StartType);
 
     static bool Unpitched(XElement note) => note.Element("unpitched") is not null;
 
@@ -453,7 +455,7 @@ sealed class MusicXmlPartReader {
         var hidden = (string?)notations.Attribute("print-object") == "no";
         foreach (var child in notations.Elements()) {
             switch (child.Name.LocalName) {
-                case "tied" when hidden && (string?)child.Attribute("type") == "start":
+                case "tied" when hidden && (string?)child.Attribute("type") == StartType:
                     NoteSymbol(ScoreSymbolKind.TieHidden, noteId, null);
                     break;
                 case "slur":
@@ -527,7 +529,7 @@ sealed class MusicXmlPartReader {
     void Slur(XElement slur, long noteId) {
         var number = Integer((string?)slur.Attribute("number")) ?? 1;
         switch ((string?)slur.Attribute("type")) {
-            case "start":
+            case StartType:
                 openSlurs[number] = (noteId, Placement(slur));
                 break;
             case "stop" when openSlurs.Remove(number, out var open) && open.NoteId != noteId:
@@ -570,7 +572,8 @@ sealed class MusicXmlPartReader {
             "end" => Syllabic.End,
             _ => Syllabic.Single
         };
-        var extend = lyric.Element("extend") is { } e && (string?)e.Attribute("type") is null or "start" or "continue";
+        var extend = lyric.Element("extend") is { } e
+            && (string?)e.Attribute("type") is null or StartType or "continue";
         score.Lyrics.Add(new(score.Ids.Next(IdPrefix.Lyric), noteId, verse, text, syllabic, extend));
     }
 
@@ -656,7 +659,7 @@ sealed class MusicXmlPartReader {
             Positioned(ScoreSymbolKind.PedalUp, anchor, null);
         }
 
-        if (type is "start" or "change") {
+        if (type is StartType or "change") {
             Positioned(ScoreSymbolKind.PedalDown, anchor, null);
         }
     }
