@@ -447,7 +447,13 @@ public sealed partial class EngineController : IDisposable {
                 return false;
             }
 
+            var delayed = channel.Strip.DelayFrames != strip.DelayFrames;
             SetFader(trackId, channel.Strip, strip);
+            channel.Strip.PrepareMeter(Options.SampleRate);
+            if (delayed) {
+                GrowDelays(Engine.Root.Mix);
+            }
+
             var replaced = new List<IDisposable>();
             if (ApplyFormats(channel, trackId, strip, replaced)) {
                 PublishPlan(); // Phase 10: a format or panner mode is structure

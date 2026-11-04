@@ -7243,7 +7243,15 @@
           "midiEffects",
           "inputFormat",
           "outputFormat",
-          "panner"
+          "panner",
+          "trimDb",
+          "polarityInverted",
+          "delayMs",
+          "dualPan",
+          "panLeft",
+          "panRight",
+          "soloSafe",
+          "meter"
         ],
         "type": "object",
         "properties": {
@@ -7303,9 +7311,37 @@
           },
           "panner": {
             "$ref": "#/components/schemas/Panner"
+          },
+          "trimDb": {
+            "type": "number",
+            "format": "double"
+          },
+          "polarityInverted": {
+            "type": "boolean"
+          },
+          "delayMs": {
+            "type": "number",
+            "format": "double"
+          },
+          "dualPan": {
+            "type": "boolean"
+          },
+          "panLeft": {
+            "type": "number",
+            "format": "double"
+          },
+          "panRight": {
+            "type": "number",
+            "format": "double"
+          },
+          "soloSafe": {
+            "type": "boolean"
+          },
+          "meter": {
+            "$ref": "#/components/schemas/StripMeter"
           }
         },
-        "description": "                A channel strip: volume in dB (\u2212\u221E as \u2212144), pan \u22121 (left) \u2026 1 (right), mute and solo; its insert effects in\n                order; its sends to buses; where it goes (\u0060output\u0060: \u0060master\u0060, \u0060bus:N\u0060 for bus 1\u202664, or\n                \u0060output:N\u0060 for the device\u0027s stereo output pair N); the mixer groups it belongs to (1\u202632); and the VCA track\n                that offsets its volume, if any. The master strip uses only volume, pan, mute and its inserts. Phase 6:\n                \u0060midiEffects\u0060 are its MIDI FX slots (instrument and external MIDI tracks only; empty elsewhere), in the\n                same shape as inserts: they run in slot order on the block\u0027s MIDI (regions, live and step input) before the\n                instrument; bypassed slots pass it through.\n                Phase 10 (docs/11-phase-10.md): inputFormat is the format of the signal the strip processes before its\npanner (an audio track\u0027s recording and regions, an instrument\u0027s output, an aux\u0027s bus: an aux\u0027s input format\nis its bus\u0027s format); outputFormat is its destination\u0027s format, kept by the server (the master\u0027s is\nthe project\u0027s surroundFormat, a bus\u0027s its aux\u0027s input format, a device output pair stereo; the\nmaster\u0027s input and output are the project\u0027s). panner maps the input channels to the output: stereo\npan (pan) for a stereo output, the Surround Panner, or an object (PannerMode); an input\nof the output\u0027s format passes straight through. Sends to a multichannel bus are panned by the strip\u0027s panner\n(their pan applies to stereo buses only). Every strip of a project from before Phase 10 is stereo in\nand out with the stereo panner."
+        "description": "                A channel strip: volume in dB (\u2212\u221E as \u2212144), pan \u22121 (left) \u2026 1 (right), mute and solo; its insert effects in\n                order; its sends to buses; where it goes (\u0060output\u0060: \u0060master\u0060, \u0060bus:N\u0060 for bus 1\u202664, or\n                \u0060output:N\u0060 for the device\u0027s stereo output pair N); the mixer groups it belongs to (1\u202632); and the VCA track\n                that offsets its volume, if any. The master strip uses only volume, pan, mute and its inserts. Phase 6:\n                \u0060midiEffects\u0060 are its MIDI FX slots (instrument and external MIDI tracks only; empty elsewhere), in the\n                same shape as inserts: they run in slot order on the block\u0027s MIDI (regions, live and step input) before the\n                instrument; bypassed slots pass it through.\n                Phase 10 (docs/11-phase-10.md): inputFormat is the format of the signal the strip processes before its\npanner (an audio track\u0027s recording and regions, an instrument\u0027s output, an aux\u0027s bus: an aux\u0027s input format\nis its bus\u0027s format); outputFormat is its destination\u0027s format, kept by the server (the master\u0027s is\nthe project\u0027s surroundFormat, a bus\u0027s its aux\u0027s input format, a device output pair stereo; the\nmaster\u0027s input and output are the project\u0027s). panner maps the input channels to the output: stereo\npan (pan) for a stereo output, the Surround Panner, or an object (PannerMode); an input\nof the output\u0027s format passes straight through. Sends to a multichannel bus are panned by the strip\u0027s panner\n(their pan applies to stereo buses only). Every strip of a project from before Phase 10 is stereo in\nand out with the stereo panner.The strip\u0027s input stage (a track with a full strip, never the master or a VCA): trimDb and\npolarityInverted apply to its source before the inserts, on every channel; delayMs moves it in\ntime after the inserts, before the fader (negative: earlier, which delay compensation pays for by delaying\neverything else). dualPan pans a stereo signal\u0027s two channels on their own, to panLeft and\npanRight (\u22121\u20261), instead of balancing it with pan; at \u22121 and 1 the signal passes as it is. They\nstay when it is off. A mono signal always takes pan, a surround output its panner.soloSafe (a track with a full strip, a bus\u0027s aux above all): the strip stays audible when others are\n                    soloed in place.meter is what the strip\u0027s meter shows and where it reads the signal, the master\u0027s too."
       },
       "Chord": {
         "required": [
@@ -9548,6 +9584,9 @@
             "$ref": "#/components/schemas/EditCommandMoveInsertCommand"
           },
           {
+            "$ref": "#/components/schemas/EditCommandTransferInsertCommand"
+          },
+          {
             "$ref": "#/components/schemas/EditCommandSetInsertCommand"
           },
           {
@@ -9974,6 +10013,7 @@
             "addInsert": "#/components/schemas/EditCommandAddInsertCommand",
             "removeInsert": "#/components/schemas/EditCommandRemoveInsertCommand",
             "moveInsert": "#/components/schemas/EditCommandMoveInsertCommand",
+            "transferInsert": "#/components/schemas/EditCommandTransferInsertCommand",
             "setInsert": "#/components/schemas/EditCommandSetInsertCommand",
             "setInsertParameter": "#/components/schemas/EditCommandSetInsertParameterCommand",
             "addSend": "#/components/schemas/EditCommandAddSendCommand",
@@ -14040,6 +14080,26 @@
               "number"
             ],
             "format": "double"
+          },
+          "panLaw": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PanLaw"
+              }
+            ]
+          },
+          "soloMode": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SoloMode"
+              }
+            ]
           }
         }
       },
@@ -15226,6 +15286,72 @@
               "null",
               "boolean"
             ]
+          },
+          "trimDb": {
+            "type": [
+              "null",
+              "number"
+            ],
+            "format": "double"
+          },
+          "polarityInverted": {
+            "type": [
+              "null",
+              "boolean"
+            ]
+          },
+          "delayMs": {
+            "type": [
+              "null",
+              "number"
+            ],
+            "format": "double"
+          },
+          "dualPan": {
+            "type": [
+              "null",
+              "boolean"
+            ]
+          },
+          "panLeft": {
+            "type": [
+              "null",
+              "number"
+            ],
+            "format": "double"
+          },
+          "panRight": {
+            "type": [
+              "null",
+              "number"
+            ],
+            "format": "double"
+          },
+          "soloSafe": {
+            "type": [
+              "null",
+              "boolean"
+            ]
+          },
+          "meterType": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/MeterType"
+              }
+            ]
+          },
+          "meterTap": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/MeterTap"
+              }
+            ]
           }
         },
         "description": "Changes a track\u0027s volume, pan, mute or solo, or the master\u0027s when \u0060trackId\u0060 is left out. Members of the\ntrack\u0027s enabled mixer groups that link the property follow it (volume keeps their offsets). During playback, a\ntrack whose automation mode is touch, latch or write records the change into its lane (and the batch coalesces as\na drag does)."
@@ -15857,6 +15983,58 @@
           }
         },
         "description": "Strip Silence: splits each audio region into one region per stretch above \u0060thresholdDb\u0060 (RMS), each widened\nby \u0060preAttackMs\u0060 before and \u0060postReleaseMs\u0060 after; the silence between them is removed. As in Logic,\n\u0060minTimeMs\u0060 is the shortest silence that splits: stretches separated by less stay in one region."
+      },
+      "EditCommandTransferInsertCommand": {
+        "required": [
+          "insertId",
+          "type",
+          "copy"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "transferInsert"
+            ],
+            "type": "string"
+          },
+          "insertId": {
+            "type": "string"
+          },
+          "trackId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "toTrackId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "index": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int32"
+          },
+          "copy": {
+            "type": "boolean",
+            "default": false
+          },
+          "chain": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/InsertChain"
+              }
+            ]
+          }
+        },
+        "description": "Moves an insert to slot \u0060index\u0060 of another strip (\u0060toTrackId\u0060, null: the master; no index: last), or with\n\u0060copy\u0060 puts a copy of it there, on the same strip too. It takes its parameters, bypass, sidechain (unless the\nstrip it lands on cannot take that source), file and plugin state with it; a move takes its automation too, a copy\nstarts without any. \u0060trackId\u0060 is the strip it is on (null: the master), \u0060chain\u0060 as the other insert\ncommands; a MIDI FX slot goes to another strip\u0027s MIDI FX."
       },
       "EditCommandTransformCommand": {
         "required": [
@@ -17870,6 +18048,25 @@
         },
         "description": "The master\u0027s Mastering Assistant (\u0060GET /project/mastering\u0060): its insert, settings and analysis (null: not\nanalysed yet; it then passes the audio through its limiter only)."
       },
+      "MeterTap": {
+        "enum": [
+          "input",
+          "preFader",
+          "postFader"
+        ],
+        "description": "Where a strip\u0027s meter reads the signal."
+      },
+      "MeterType": {
+        "enum": [
+          "peak",
+          "rms",
+          "k20",
+          "k14",
+          "k12",
+          "lufs"
+        ],
+        "description": "What a strip\u0027s meter shows."
+      },
       "MetronomeSettings": {
         "required": [
           "enabled",
@@ -18216,7 +18413,9 @@
         "required": [
           "pdc",
           "lowLatency",
-          "lowLatencyLimitMs"
+          "lowLatencyLimitMs",
+          "panLaw",
+          "soloMode"
         ],
         "type": "object",
         "properties": {
@@ -18229,13 +18428,20 @@
           "lowLatencyLimitMs": {
             "type": "number",
             "format": "double"
+          },
+          "panLaw": {
+            "$ref": "#/components/schemas/PanLaw"
+          },
+          "soloMode": {
+            "$ref": "#/components/schemas/SoloMode"
           }
         },
-        "description": "Plugin delay compensation, and low-latency mode: while it is on, plugins on the path of record-armed or\nmonitored tracks whose latency exceeds \u0060lowLatencyLimitMs\u0060 are bypassed."
+        "description": "Plugin delay compensation, and low-latency mode: while it is on, plugins on the path of record-armed or\nmonitored tracks whose latency exceeds \u0060lowLatencyLimitMs\u0060 are bypassed. \u0060panLaw\u0060 is the project\u0027s pan\nlaw, \u0060soloMode\u0060 what solo does."
       },
       "MonitoringSettings": {
         "required": [
           "binaural",
+          "section",
           "speakerMap"
         ],
         "type": "object",
@@ -18259,9 +18465,54 @@
               "type": "integer",
               "format": "int32"
             }
+          },
+          "section": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/MonitorSection"
+              }
+            ]
           }
         },
-        "description": "Monitoring (\u0060GET/PUT /settings/monitoring\u0060), stored in the user settings, not the project: the speaker map is\nthe machine\u0027s and binaural listening the listener\u0027s. It happens after the master and before the device, and never\nchanges bounces or ADM exports. \u0060binaural\u0060 renders the master\u0027s speakers (and objects) through HRTFs to\noutputs 1\u20132; otherwise \u0060downmixTo\u0060 (a format smaller than the master\u0027s; null: none) down-mixes per ITU-R\nBS.775 and sends its channels through the map. \u0060speakerMap[i]\u0060 is the 1-based device output of channel i of\nwhat is sent (0: not sent); an empty or short map sends channel i to output i \u002B 1."
+        "description": "Monitoring (\u0060GET/PUT /settings/monitoring\u0060), stored in the user settings, not the project: the speaker map is\nthe machine\u0027s and binaural listening the listener\u0027s. It happens after the master and before the device, and never\nchanges bounces or ADM exports. \u0060binaural\u0060 renders the master\u0027s speakers (and objects) through HRTFs to\noutputs 1\u20132; otherwise \u0060downmixTo\u0060 (a format smaller than the master\u0027s; null: none) down-mixes per ITU-R\nBS.775 and sends its channels through the map. \u0060speakerMap[i]\u0060 is the 1-based device output of channel i of\nwhat is sent (0: not sent); an empty or short map sends channel i to output i \u002B 1. \u0060section\u0060 is the monitor\nsection (null in a request: as it is)."
+      },
+      "MonitorSection": {
+        "required": [
+          "dim",
+          "dimDb",
+          "mono",
+          "reference",
+          "referenceDb",
+          "levelDb"
+        ],
+        "type": "object",
+        "properties": {
+          "dim": {
+            "type": "boolean"
+          },
+          "dimDb": {
+            "type": "number",
+            "format": "double"
+          },
+          "mono": {
+            "type": "boolean"
+          },
+          "reference": {
+            "type": "boolean"
+          },
+          "referenceDb": {
+            "type": "number",
+            "format": "double"
+          },
+          "levelDb": {
+            "type": "number",
+            "format": "double"
+          }
+        },
+        "description": "The monitor section: what the speakers get after the master, never what a bounce or the listen-in hears. Output\npairs a strip is routed to directly bypass it. The level is \u0060levelDb\u0060, or with \u0060reference\u0060 the calibrated\n\u0060referenceDb\u0060; \u0060dim\u0060 takes \u0060dimDb\u0060 (0 or less) off whichever applies; \u0060mono\u0060 folds the front\npair\nto check it in mono."
       },
       "Movie": {
         "required": [
@@ -19150,6 +19401,16 @@
           }
         },
         "description": "A page of key-command pads (the remote shows one set at a time)."
+      },
+      "PanLaw": {
+        "enum": [
+          "zeroDb",
+          "minus3Db",
+          "minus3DbCompensated",
+          "minus4Point5Db",
+          "minus6Db"
+        ],
+        "description": "How a mono signal\u0027s level follows its pan: what the centre is, relative to a hard pan. Stereo signals are balanced\n(the far side falls linearly) whatever the law; dual pan takes the law\u0027s shape with a hard pan at unity."
       },
       "Panner": {
         "required": [
@@ -22098,6 +22359,14 @@
         },
         "description": "Smart Tempo: the project tempo mode, the \u0060follow\u0060 new audio regions get, and whether imports are analysed\n(transients and beats) as they arrive."
       },
+      "SoloMode": {
+        "enum": [
+          "inPlace",
+          "afl",
+          "pfl"
+        ],
+        "description": "What a strip\u0027s solo does."
+      },
       "Staff": {
         "required": [
           "clef",
@@ -22368,6 +22637,22 @@
           }
         },
         "description": "Stops the cells playing on \u0060trackIds\u0060 (left out: every track) at the grid\u0027s quantise boundary."
+      },
+      "StripMeter": {
+        "required": [
+          "type",
+          "tap"
+        ],
+        "type": "object",
+        "properties": {
+          "type": {
+            "$ref": "#/components/schemas/MeterType"
+          },
+          "tap": {
+            "$ref": "#/components/schemas/MeterTap"
+          }
+        },
+        "description": "A strip\u0027s meter: its type and tap point (a new strip\u0027s: peak, post-fader)."
       },
       "SurfaceStatus": {
         "required": [

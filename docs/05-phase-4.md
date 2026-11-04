@@ -304,6 +304,43 @@ All five e2e specs pass, twice in a row.
 - In small windows the Mixer scrolls instead of squeezing its strips, and the control bar folds its labels into icons
   below 1280 px.
 
+**Strip input stage (after Phase 11):** a full track strip has a trim and polarity (a signed gain on its source, ramped
+over a block, before the inserts; a frozen track's are in its freeze), a delay of ±500 ms and dual pan. The delay is an
+offset to the latency delay compensation aligns on, so it needs no line of its own and works with compensation off: a
+late strip's edges read further back, and an early strip makes everything else at its summing points wait. Automation
+and the sends follow the delayed signal; a sidechain taken from the strip does not. Early delay adds to the latency of
+monitored inputs. The pan law is `settings.mixer.panLaw`: it applies to mono signals (and a send of one), a stereo
+signal is always balanced, and dual pan uses the law's shape with a hard pan at unity, so −1 and 1 change nothing.
+
+**Inserts between strips (after Phase 11):** `transferInsert` moves an insert or MIDI FX slot to a slot of another strip,
+or with `copy` puts a copy there (on the same strip too, under a new id). It carries parameters, bypass, file, sidechain
+(dropped when the strip it lands on is the source) and plugin state, which the API asks the host for first, as saving
+does; a move also carries its automation lanes, a copy starts without any. The move's undo finds the state again as long
+as no other edit came between. The Mixer does it by dragging a slot onto another strip (⌥ copies) and by the slot menu's
+Copy to and Move to.
+
+**Solo and the monitor section (after Phase 11):** `settings.mixer.soloMode` is `inPlace` (as before), `afl` or `pfl`. A
+`soloSafe` strip stays audible under solo in place and keeps what it feeds audible. AFL and PFL leave the mix, its meters
+and every render alone: soloed strips add to a stereo listen bus at their output's delay, after or before fader and pan
+(a muted strip is silent in AFL, as its fader is), surround strips through a stereo down-mix, and the device stage sends
+that bus to the monitors in place of the master; implied solos do not join it. The monitor section (`MonitoringSettings.
+section`, a user setting) is the last stage before the device: dim, the mono check of the front pair, and the level or
+the calibrated reference, one gain to the host (`SetMonitoringMessage`), ramped, the click included. Device output pairs
+strips go to directly, the listen-in tap and a bounce (the monitoring render too) are not behind it.
+
+**Strip meters (after Phase 11):** `ChannelStrip.meter` is a strip's type and tap point. Peaks are measured at the tap
+whatever the type. RMS is true RMS over 300 ms and K-system over 600 ms (one-poles on each block's mean square); LUFS is
+BS.1770 momentary. The host publishes them per strip only when the type asks, and K-system's AES17 offset and scale are
+the client's, the bars staying on the dBFS scale with a line at the type's 0. A mono signal before the pan counts as one
+channel for loudness. A surround strip's bars stay peaks per speaker at its tap point; the levels of its type are of the
+front pair and no bar shows them yet.
+
+**Load meter (after Phase 11):** the callback times itself on the monotonic clock against its deadline, off in renders;
+the telemetry carries that load, its worst over about a second and the share of time the disk thread reads. The server
+adds each core's load (the whole machine's, `host_processor_info` on macOS, `/proc/stat` on Linux) and sends a
+`performance` event four times a second, conflated as meters are. The control bar's overload light is the client's, on
+for 3 s after the device's dropout count or the engine's underrun count grows.
+
 **Open:**
 - Tempo-synced effects take the tempo from the click, not the tempo track.
 - Touch automation releases on the next change, not on mouse-up.

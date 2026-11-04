@@ -57,6 +57,7 @@ import { UiStore } from '../state/ui.store';
 import { SyncControl } from '../sync/sync-control';
 import { EngineStatus } from './engine-status';
 import { Lcd } from './lcd';
+import { PerformanceMeter } from './performance-meter';
 
 /**
  * The control bar (Logic's): the project's name and save state, undo and redo, the transport (go to start, stop, play,
@@ -70,6 +71,7 @@ import { Lcd } from './lcd';
   imports: [
     AnVarispeedDisplay,
     EngineStatus,
+    PerformanceMeter,
     Lcd,
     SyncControl,
     XuiIconImports,
@@ -873,6 +875,7 @@ import { Lcd } from './lcd';
           <ng-icon xui [name]="theme.appearance() === 'dark' ? 'matLightModeRound' : 'matDarkModeRound'" size="sm" />
         </button>
       }
+      <an-performance-meter />
       <an-engine-status />
     </div>
   `

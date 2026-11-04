@@ -115,6 +115,13 @@ public sealed record EngineFile(int Id, string Path, int Channels, int SampleRat
 ///         maps one to the other (null: the stereo pan, as before). The engine's buffers carry a strip's channels in its
 ///         format's layout order (<c>Anode.Dsp.Spatial.SpeakerLayout</c>); a stereo strip costs what it did.
 ///     </para>
+///     <para>
+///         The strip's input stage: <paramref name="Trim" /> is the signed linear gain on its source before the inserts
+///         (negative: polarity inverted); <paramref name="DelayFrames" /> moves it in time (negative: earlier, by
+///         delaying everything else); with <paramref name="DualPan" /> a stereo signal's channels pan on their own to
+///         <paramref name="PanLeft" /> and <paramref name="PanRight" />. <paramref name="SoloSafe" /> keeps it audible
+///         under others' solo in place.
+///     </para>
 /// </summary>
 public sealed record EngineStrip(
     float Gain,
@@ -127,8 +134,83 @@ public sealed record EngineStrip(
     IReadOnlyList<EngineInsert>? MidiEffects = null,
     EngineChannelFormat InputFormat = EngineChannelFormat.Stereo,
     EngineChannelFormat OutputFormat = EngineChannelFormat.Stereo,
-    EnginePanner? Panner = null
+    EnginePanner? Panner = null,
+    float Trim = 1f,
+    int DelayFrames = 0,
+    bool DualPan = false,
+    float PanLeft = -1f,
+    float PanRight = 1f,
+    bool SoloSafe = false,
+    EngineMeterType MeterType = EngineMeterType.Peak,
+    EngineMeterTap MeterTap = EngineMeterTap.PostFader
 );
+
+/// <summary>The contract's <c>MeterType</c>, in its order.</summary>
+[JsonConverter(typeof(JsonStringEnumConverter<EngineMeterType>))]
+public enum EngineMeterType {
+    [JsonStringEnumMemberName("peak")]
+    Peak,
+
+    [JsonStringEnumMemberName("rms")]
+    Rms,
+
+    [JsonStringEnumMemberName("k20")]
+    K20,
+
+    [JsonStringEnumMemberName("k14")]
+    K14,
+
+    [JsonStringEnumMemberName("k12")]
+    K12,
+
+    [JsonStringEnumMemberName("lufs")]
+    Lufs
+}
+
+/// <summary>The contract's <c>MeterTap</c>, in its order.</summary>
+[JsonConverter(typeof(JsonStringEnumConverter<EngineMeterTap>))]
+public enum EngineMeterTap {
+    [JsonStringEnumMemberName("input")]
+    Input,
+
+    [JsonStringEnumMemberName("preFader")]
+    PreFader,
+
+    [JsonStringEnumMemberName("postFader")]
+    PostFader
+}
+
+/// <summary>The contract's <c>SoloMode</c>, in its order.</summary>
+[JsonConverter(typeof(JsonStringEnumConverter<EngineSoloMode>))]
+public enum EngineSoloMode {
+    [JsonStringEnumMemberName("inPlace")]
+    InPlace,
+
+    [JsonStringEnumMemberName("afl")]
+    Afl,
+
+    [JsonStringEnumMemberName("pfl")]
+    Pfl
+}
+
+/// <summary>The contract's <c>PanLaw</c>, in its order.</summary>
+[JsonConverter(typeof(JsonStringEnumConverter<EnginePanLaw>))]
+public enum EnginePanLaw {
+    [JsonStringEnumMemberName("zeroDb")]
+    ZeroDb,
+
+    [JsonStringEnumMemberName("minus3Db")]
+    Minus3Db,
+
+    [JsonStringEnumMemberName("minus3DbCompensated")]
+    Minus3DbCompensated,
+
+    [JsonStringEnumMemberName("minus4Point5Db")]
+    Minus4Point5Db,
+
+    [JsonStringEnumMemberName("minus6Db")]
+    Minus6Db
+}
 
 /// <summary>The contract's <c>ChannelFormat</c>, in its order (and <c>Anode.Dsp.Spatial.SpeakerFormat</c>'s).</summary>
 [JsonConverter(typeof(JsonStringEnumConverter<EngineChannelFormat>))]
@@ -554,7 +636,13 @@ public sealed record SetSendLevelMessage(int TrackId, string SendId, float Gain,
 ///     Server → host: plugin delay compensation (<c>all</c>, <c>tracks</c>, <c>off</c>) and low-latency mode with its
 ///     limit in milliseconds.
 /// </summary>
-public sealed record SetMixerMessage(string Pdc, bool LowLatency, double LowLatencyLimitMs) : IpcMessage;
+public sealed record SetMixerMessage(
+    string Pdc,
+    bool LowLatency,
+    double LowLatencyLimitMs,
+    EnginePanLaw PanLaw = EnginePanLaw.Minus3DbCompensated,
+    EngineSoloMode SoloMode = EngineSoloMode.InPlace
+) : IpcMessage;
 
 /// <summary>
 ///     Server → host: render <paramref name="StartSample" />…<paramref name="EndSample" /> to 32-bit float stereo WAV,
@@ -886,13 +974,17 @@ public sealed record SyncStateMessage(EngineSyncSource Source, bool Locked, doub
 ///     rendered through the HRTF set <paramref name="HrtfPath" /> (Anode's compact file) to outputs 1–2; otherwise
 ///     with <paramref name="DownmixTo" /> they are down-mixed to that format (null: sent as they are). Channel i of what
 ///     is sent goes to 0-based device output <paramref name="SpeakerMap" />[i] (−1: not sent; past the map's end:
-///     output i). The host prepares the renderer off the audio thread and swaps it in.
+///     output i). The host prepares the renderer off the audio thread and swaps it in. <paramref name="Gain" /> and
+///     <paramref name="Mono" /> are the monitor section's (the server works the level out from it): what goes to the
+///     speakers, ramped, the click included; they alone changing costs no new renderer.
 /// </summary>
 public sealed record SetMonitoringMessage(
     bool Binaural,
     EngineChannelFormat? DownmixTo,
     IReadOnlyList<int> SpeakerMap,
-    string? HrtfPath = null
+    string? HrtfPath = null,
+    float Gain = 1f,
+    bool Mono = false
 ) : IpcMessage;
 
 /// <summary>

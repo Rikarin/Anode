@@ -624,9 +624,7 @@ public static class ProjectPackage {
             Signatures = signatures,
             Keys = keys,
             Recording = settings.Recording ?? ProjectDefaults.Recording(signature),
-            Mixer = settings.Mixer is { } mixer && Enum.IsDefined(mixer.Pdc) && double.IsFinite(mixer.LowLatencyLimitMs)
-                ? mixer
-                : ProjectDefaults.Mixer,
+            Mixer = Mixer(settings.Mixer),
             SmartTempo = settings.SmartTempo is { } smart
                 && Enum.IsDefined(smart.Mode)
                 && Enum.IsDefined(smart.DefaultFollow)
@@ -904,6 +902,21 @@ public static class ProjectPackage {
     /// <summary>A value 0…1 as read (0 when it is not a number).</summary>
     static double Unit(double value) => double.IsFinite(value) ? Math.Clamp(value, 0, 1) : 0;
 
+    static double Finite(double value, double otherwise) => double.IsFinite(value) ? value : otherwise;
+
+    /// <summary>The mixer settings as read: what is known of them, the defaults for the rest.</summary>
+    static MixerSettings Mixer(MixerSettings? mixer) {
+        var defaults = ProjectDefaults.Mixer;
+        if (mixer is null || !Enum.IsDefined(mixer.Pdc) || !double.IsFinite(mixer.LowLatencyLimitMs)) {
+            return defaults;
+        }
+
+        return mixer with {
+            PanLaw = Enum.IsDefined(mixer.PanLaw) ? mixer.PanLaw : defaults.PanLaw,
+            SoloMode = Enum.IsDefined(mixer.SoloMode) ? mixer.SoloMode : defaults.SoloMode
+        };
+    }
+
     /// <summary>A track's Smart Controls as read: every control of its layout, mappings well formed (null: none yet).</summary>
     static SmartControls? Normalise(SmartControls? smart, Track track) {
         if (smart is null || !Edits.HasAudioStrip(track.Kind)) {
@@ -951,6 +964,13 @@ public static class ProjectPackage {
             Sends = full && track is not null ? [..sends] : [],
             Output = Routing.Normalise(strip.Output) ?? Routing.Master,
             Groups = strip.Groups ?? [],
+            Meter = strip.Meter is { } meter && Enum.IsDefined(meter.Type) && Enum.IsDefined(meter.Tap)
+                ? meter
+                : StripMeter.Default,
+            TrimDb = Math.Clamp(Finite(strip.TrimDb, 0), -Edits.MaxTrimDb, Edits.MaxTrimDb),
+            DelayMs = Math.Clamp(Finite(strip.DelayMs, 0), -Edits.MaxStripDelayMs, Edits.MaxStripDelayMs),
+            PanLeft = Math.Clamp(Finite(strip.PanLeft, -1), -1, 1),
+            PanRight = Math.Clamp(Finite(strip.PanRight, 1), -1, 1),
             InputFormat = Known(strip.InputFormat),
             OutputFormat = Known(strip.OutputFormat),
             Panner = strip.Panner is { Surround: not null, Object: not null } panner && Enum.IsDefined(panner.Mode)
@@ -1399,21 +1419,6 @@ public static class PackageMigrations {
     /// </summary>
     static JsonObject ToSchema11(string kind, JsonObject json) {
         Schema11.Fill(kind, json);
-        return json;
-    }
-
-    /// <summary>
-    ///     Schema 11 to 12: alternatives hold pattern regions. An older alternative has none: while it was put away, the
-    ///     track's pattern regions stayed live.
-    /// </summary>
-    static JsonObject ToSchema12(string kind, JsonObject json) {
-        if (kind == PackageKeys.TrackKind) {
-            foreach (var alternative in (json[PackageKeys.Track]?["alternatives"] as JsonArray ?? [])
-                     .OfType<JsonObject>()) {
-                alternative[PackageKeys.PatternRegions] ??= new JsonArray();
-            }
-        }
-
         return json;
     }
 }

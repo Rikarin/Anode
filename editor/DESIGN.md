@@ -245,6 +245,23 @@ value) and a selected range as a `primary/15` band with a `primary` edge. The ow
 (gain reduction in `bg-meter-mid`, growing from 0 dB at the right edge; levels in `bg-meter-low` from the left) and a
 `readout` value.
 
+**Strip settings** (`mixer/strip-settings.ts`, `an-strip-settings`). One `strip-slot` row above the slots: muted "Input"
+while nothing is set, else a `readout` of what differs from a plain strip (`+3.0 dB ø -20 ms Dual K-14 Pre`), so a
+strip's state reads without opening it. It opens a popover, a two-column grid of label and control: meter type and tap
+(`xui-select`), trim, polarity, delay, solo safe and dual pan (numeric inputs and checkboxes). The master's has the meter
+alone; a VCA has no row, only its spacer, so sections stay in line.
+
+**Monitor section** (`mixer/monitor-section.ts`). A `bezel-group` in the Mixer's toolbar: Dim, Mono and Ref as pressed
+keys (`aria-pressed`, `text-lit`), then a `readout` of the level the speakers are at, which opens the levels' popover.
+
+**Meters.** `an-peak-meter` takes `markDb`, a 1 px `bg-foreground` line on its dBFS scale (a K-system meter's 0). Its bars
+do not change scale with the type: an RMS, K or LUFS reading is a dBFS-scaled level like any other.
+
+**Load meter** (`shell/performance-meter.ts`). A `bezel` in the control bar beside the engine status: thin `well` bars, one
+per core and one for the disk (`bg-meter-low`, `-mid` from 70 %, `-high` from 90 %), then a 2-unit light, `bg-meter-unlit`
+until an overload lights it `bg-meter-high` for 3 s. The bars change at 4 Hz, with no animation; the popover holds the
+figures in `readout`.
+
 ## Phase 6 patterns: Smart Controls and plugin panels
 
 New tokens, in both theme blocks of `anode-theme.css` (the same physical colours in both themes):

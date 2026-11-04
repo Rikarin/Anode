@@ -69,6 +69,7 @@ namespace Anode.Contracts;
 [JsonDerivedType(typeof(AddInsertCommand), "addInsert")]
 [JsonDerivedType(typeof(RemoveInsertCommand), "removeInsert")]
 [JsonDerivedType(typeof(MoveInsertCommand), "moveInsert")]
+[JsonDerivedType(typeof(TransferInsertCommand), "transferInsert")]
 [JsonDerivedType(typeof(SetInsertCommand), "setInsert")]
 [JsonDerivedType(typeof(SetInsertParameterCommand), "setInsertParameter")]
 [JsonDerivedType(typeof(AddSendCommand), "addSend")]
@@ -229,7 +230,16 @@ public sealed record SetStripCommand(
     double? VolumeDb = null,
     double? Pan = null,
     bool? Mute = null,
-    bool? Solo = null
+    bool? Solo = null,
+    double? TrimDb = null,
+    bool? PolarityInverted = null,
+    double? DelayMs = null,
+    bool? DualPan = null,
+    double? PanLeft = null,
+    double? PanRight = null,
+    bool? SoloSafe = null,
+    MeterType? MeterType = null,
+    MeterTap? MeterTap = null
 ) : EditCommand;
 
 /// <summary>Places a file on a track; the whole file unless <c>fileOffset</c> and <c>length</c> say otherwise.</summary>
@@ -572,6 +582,22 @@ public sealed record MoveInsertCommand(string InsertId, int Index, string? Track
     : EditCommand;
 
 /// <summary>
+///     Moves an insert to slot <c>index</c> of another strip (<c>toTrackId</c>, null: the master; no index: last), or with
+///     <c>copy</c> puts a copy of it there, on the same strip too. It takes its parameters, bypass, sidechain (unless the
+///     strip it lands on cannot take that source), file and plugin state with it; a move takes its automation too, a copy
+///     starts without any. <c>trackId</c> is the strip it is on (null: the master), <c>chain</c> as the other insert
+///     commands; a MIDI FX slot goes to another strip's MIDI FX.
+/// </summary>
+public sealed record TransferInsertCommand(
+    string InsertId,
+    string? TrackId = null,
+    string? ToTrackId = null,
+    int? Index = null,
+    bool Copy = false,
+    InsertChain? Chain = null
+) : EditCommand;
+
+/// <summary>
 ///     Bypasses an insert, or sets its sidechain (a track id, <c>bus:N</c>, or an empty string for none; never on a MIDI
 ///     FX slot).
 /// </summary>
@@ -644,7 +670,9 @@ public sealed record SetAutomationModeCommand(AutomationMode Mode, string? Track
 public sealed record SetMixerSettingsCommand(
     PdcMode? Pdc = null,
     bool? LowLatency = null,
-    double? LowLatencyLimitMs = null)
+    double? LowLatencyLimitMs = null,
+    PanLaw? PanLaw = null,
+    SoloMode? SoloMode = null)
     : EditCommand;
 
 /// <summary>Replaces a track's instrument, inserts and sends with a saved patch's.</summary>

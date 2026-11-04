@@ -16,6 +16,7 @@ namespace Anode.Contracts;
 [JsonDerivedType(typeof(OfflineChangedEvent), "offlineChanged")]
 [JsonDerivedType(typeof(TransportEvent), "transport")]
 [JsonDerivedType(typeof(MetersEvent), "meters")]
+[JsonDerivedType(typeof(PerformanceEvent), "performance")]
 [JsonDerivedType(typeof(MidiActivityEvent), "midiActivity")]
 [JsonDerivedType(typeof(PluginsChangedEvent), "pluginsChanged")]
 [JsonDerivedType(typeof(MidiDevicesChangedEvent), "midiDevicesChanged")]
@@ -82,6 +83,26 @@ public sealed record MetersEvent(
     IReadOnlyList<InsertReading>? Readings = null
 ) : RealtimeEvent;
 
+/// <summary>How hard the engine works, a few times a second while a host is connected.</summary>
+public sealed record PerformanceEvent(PerformanceStatus Performance) : RealtimeEvent;
+
+/// <summary>
+///     The engine's load. <c>audioLoad</c> is the share of the audio callback's time the callback takes (past 1: it missed
+///     its deadline), smoothed over 300 ms, and <c>audioPeakLoad</c> its worst in about the last second.
+///     <c>coreLoads</c> is how busy each of the machine's cores is, from everything that runs on it (0…1; empty where the
+///     system does not say). <c>diskLoad</c> is the share of time the disk thread spends reading. <c>overloads</c> counts
+///     the dropouts the device reported and <c>underruns</c> the callbacks a track found short of audio, since the host
+///     started.
+/// </summary>
+public sealed record PerformanceStatus(
+    double AudioLoad,
+    double AudioPeakLoad,
+    IReadOnlyList<double> CoreLoads,
+    double DiskLoad,
+    long Overloads,
+    long Underruns
+);
+
 /// <summary>An insert's reading (<c>IAudioEffect.Reading</c>); <c>trackId</c> null is the master.</summary>
 public sealed record InsertReading(string? TrackId, string InsertId, double Value);
 
@@ -89,13 +110,20 @@ public sealed record InsertReading(string? TrackId, string InsertId, double Valu
 ///     A track's (or the master's, <c>trackId</c> <c>master</c>) peaks since the previous frame, linear. Phase 10: a
 ///     strip whose output (or a master) is wider than stereo also has <paramref name="Peaks" />, every channel's peak in
 ///     its layout's (ADM) order (<see cref="SpeakerLayouts" />), the first two being <paramref name="PeakLeft" /> and
-///     <paramref name="PeakRight" />; left out otherwise.
+///     <paramref name="PeakRight" />; left out otherwise. A strip whose meter (<c>ChannelStrip.meter</c>) is RMS or
+///     K-system
+///     also has <paramref name="RmsLeft" /> and <paramref name="RmsRight" />, true RMS, linear, over the type's window;
+///     one
+///     that reads loudness has <paramref name="Lufs" />, momentary. At any tap the peaks are the tap's.
 /// </summary>
 public sealed record TrackMeter(
     string TrackId,
     float PeakLeft,
     float PeakRight,
-    IReadOnlyList<float>? Peaks = null
+    IReadOnlyList<float>? Peaks = null,
+    float? RmsLeft = null,
+    float? RmsRight = null,
+    float? Lufs = null
 );
 
 /// <summary>

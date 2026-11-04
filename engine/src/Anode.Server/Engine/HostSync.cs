@@ -439,6 +439,14 @@ public sealed class HostSync(HostLink link, SegmentPool pool, ILogger logger, Se
             || old.Mute != now.Mute
             || old.Solo != now.Solo
             || old.Panner != now.Panner
+            || old.Trim != now.Trim
+            || old.DelayFrames != now.DelayFrames
+            || old.DualPan != now.DualPan
+            || old.PanLeft != now.PanLeft
+            || old.PanRight != now.PanRight
+            || old.SoloSafe != now.SoloSafe
+            || old.MeterType != now.MeterType
+            || old.MeterTap != now.MeterTap
                 ? [new SetStripMessage(id, now)]
                 : [];
         return levels.Concat(
@@ -505,7 +513,9 @@ public sealed class HostSync(HostLink link, SegmentPool pool, ILogger logger, Se
                     _ => "all"
                 },
                 mixer.LowLatency,
-                mixer.LowLatencyLimitMs
+                mixer.LowLatencyLimitMs,
+                (EnginePanLaw)mixer.PanLaw,
+                (EngineSoloMode)mixer.SoloMode
             );
         }
 

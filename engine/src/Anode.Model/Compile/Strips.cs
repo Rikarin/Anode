@@ -12,6 +12,7 @@ namespace Anode.Model.Compile;
 ///     solos its members. Phase 10 (docs/11-phase-10.md): the input and output formats, and the panner unless it is the
 ///     stereo pan (the master has none), its levels as linear gains. Phase 11 (docs/12-phase-11.md): an analysed
 ///     Mastering Assistant carries its chain (<see cref="EngineInsert.Mastering" />, <see cref="MasteringChains" />).
+///     The input stage (trim, polarity, delay; dual pan) is a full track strip's.
 /// </summary>
 public static class Strips {
     /// <summary>
@@ -28,7 +29,7 @@ public static class Strips {
     ) {
         var strip = track is null ? state.Master : Stacks.EffectiveStrip(state, track);
         var full = track is null || Edits.HasAudioStrip(track.Kind);
-        return new(
+        var engine = new EngineStrip(
             Units.DbToGain(strip.VolumeDb),
             (float)strip.Pan,
             strip.Mute,
@@ -61,8 +62,24 @@ public static class Strips {
                 : [],
             (EngineChannelFormat)strip.InputFormat,
             (EngineChannelFormat)strip.OutputFormat,
-            track is null ? null : Panner(strip.Panner)
+            track is null ? null : Panner(strip.Panner),
+            MeterType: (EngineMeterType)strip.Meter.Type,
+            MeterTap: (EngineMeterTap)strip.Meter.Tap
         );
+        return full && track is not null ? WithInputStage(engine, strip, state.SampleRate) : engine;
+    }
+
+    /// <summary>A full track strip's trim, polarity, delay, dual pan and solo safe, in engine units.</summary>
+    static EngineStrip WithInputStage(EngineStrip engine, ChannelStrip strip, int sampleRate) {
+        var trim = Units.DbToGain(strip.TrimDb);
+        return engine with {
+            Trim = strip.PolarityInverted ? -trim : trim,
+            DelayFrames = (int)Math.Round(strip.DelayMs * sampleRate / 1000),
+            DualPan = strip.DualPan,
+            PanLeft = (float)strip.PanLeft,
+            PanRight = (float)strip.PanRight,
+            SoloSafe = strip.SoloSafe
+        };
     }
 
     /// <summary>A panner in engine units (levels as gains); null for the stereo pan.</summary>

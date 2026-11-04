@@ -488,13 +488,19 @@ public sealed partial class ProjectSession(
     /// <summary>
     ///     Applies a batch as <see cref="Apply(CommandBatch, long?)" /> does, coalescing it under
     ///     <paramref name="coalesceKey" /> instead of the batch's own key when one is given (a hardware control's gesture,
-    ///     <see cref="EditHistory.GesturePrefix" />); an automation pass still takes over.
+    ///     <see cref="EditHistory.GesturePrefix" />); an automation pass still takes over. <paramref name="hostStates" />
+    ///     are the plugins' states as the host has them now, which an insert that moves or is copied takes along.
     /// </summary>
-    public CommandResult Apply(CommandBatch batch, long? expected, string? coalesceKey) {
+    public CommandResult Apply(
+        CommandBatch batch,
+        long? expected,
+        string? coalesceKey,
+        IReadOnlyDictionary<string, byte[]?>? hostStates = null
+    ) {
         CommandResult result;
         IReadOnlyList<FileAnalysis> built = [];
         try {
-            result = ApplyLocked(batch, expected, coalesceKey, ref built);
+            result = ApplyLocked(batch, expected, coalesceKey, hostStates, ref built);
         } finally {
             Announce(built);
         }
@@ -507,6 +513,7 @@ public sealed partial class ProjectSession(
         CommandBatch batch,
         long? expected,
         string? coalesceKey,
+        IReadOnlyDictionary<string, byte[]?>? hostStates,
         ref IReadOnlyList<FileAnalysis> built
     ) {
         CommandResult result;
@@ -558,7 +565,7 @@ public sealed partial class ProjectSession(
                 }
             }
 
-            KeepStates(o, o.State, state, batch.Commands);
+            KeepStates(o, o.State, state, batch.Commands, hostStates);
             result = Commit(o, state, forward);
             // Compare (Smart Controls) swaps values without an undo step (docs/07-phase-6.md).
             if (!batch.Commands.All(static c => c is CompareSmartControlsCommand)) {
@@ -730,10 +737,19 @@ public sealed partial class ProjectSession(
 
     /// <summary>
     ///     Keeps the plugin states in step with an edit: a patch brings its plugins' states (for the inserts it adds, in
-    ///     order, and its instrument), and a plugin that changed or went loses its state.
+    ///     order, and its instrument), an insert that moved or was copied brings its own (the host's now, else the one
+    ///     saved), and a plugin that changed or went loses its state. A move's old state stays until the next edit, for
+    ///     its undo.
     /// </summary>
-    void KeepStates(Open o, ProjectState before, ProjectState after, IReadOnlyList<EditCommand> commands) {
+    void KeepStates(
+        Open o,
+        ProjectState before,
+        ProjectState after,
+        IReadOnlyList<EditCommand> commands,
+        IReadOnlyDictionary<string, byte[]?>? hostStates = null
+    ) {
         var states = o.States.ToBuilder();
+        var moved = TransferStates(states, before, after, commands, hostStates);
         var patched = false;
         foreach (var apply in commands.OfType<ApplyPatchCommand>()) {
             patched = true;
@@ -753,8 +769,62 @@ public sealed partial class ProjectSession(
             }
         }
 
+        foreach (var (key, state) in moved) {
+            states[key] = state;
+        }
+
         o.States = states.ToImmutable();
     }
+
+    /// <summary>
+    ///     Gives each insert a <see cref="TransferInsertCommand" /> placed its source's state, and returns the states of
+    ///     those that left their strip (by their old key).
+    /// </summary>
+    static List<(string Key, SavedState State)> TransferStates(
+        ImmutableDictionary<string, SavedState>.Builder states,
+        ProjectState before,
+        ProjectState after,
+        IReadOnlyList<EditCommand> commands,
+        IReadOnlyDictionary<string, byte[]?>? hostStates
+    ) {
+        var left = new List<(string, SavedState)>();
+        var claimed = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var c in commands.OfType<TransferInsertCommand>()) {
+            if (c.Chain == InsertChain.MidiEffects || (!c.Copy && c.TrackId == c.ToTrackId)) {
+                continue;
+            }
+
+            var insert = StripOf(before, c.TrackId).Inserts.FirstOrDefault(i => i.Id == c.InsertId);
+            var landed = c.Copy
+                ? Copied(StripOf(before, c.ToTrackId), StripOf(after, c.ToTrackId), insert, claimed)
+                : insert;
+            var key = ProjectPackage.StateKey(c.TrackId, c.InsertId);
+            var bytes = hostStates is not null && hostStates.TryGetValue(key, out var reported)
+                ? reported
+                : states.GetValueOrDefault(key)?.Bytes;
+            if (insert is null || landed is null || bytes is not { Length: > 0 }) {
+                continue;
+            }
+
+            var state = new SavedState(insert.PluginId, bytes);
+            states[ProjectPackage.StateKey(c.ToTrackId, landed.Id)] = state;
+            if (!c.Copy) {
+                left.Add((key, state));
+            }
+        }
+
+        return left;
+    }
+
+    /// <summary>The copy of <paramref name="insert" /> a strip gained, that no earlier copy of the batch claimed.</summary>
+    static Insert? Copied(ChannelStrip before, ChannelStrip after, Insert? insert, HashSet<string> claimed) =>
+        after.Inserts.FirstOrDefault(i => i.PluginId == insert?.PluginId
+            && !before.Inserts.Any(b => b.Id == i.Id)
+            && claimed.Add(i.Id)
+        );
+
+    static ChannelStrip StripOf(ProjectState state, string? trackId) =>
+        trackId is null ? state.Master : state.FindTrack(trackId)?.Strip ?? ProjectDefaults.Strip;
 
     /// <summary>A patch's plugin states, for the inserts it gave the track (in order) and its instrument.</summary>
     static void PatchStates(ImmutableDictionary<string, SavedState>.Builder states, PatchFile patch, Track track) {

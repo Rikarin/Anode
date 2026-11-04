@@ -2706,7 +2706,13 @@ export interface components {
      *     pan (pan) for a stereo output, the Surround Panner, or an object (PannerMode); an input
      *     of the output's format passes straight through. Sends to a multichannel bus are panned by the strip's panner
      *     (their pan applies to stereo buses only). Every strip of a project from before Phase 10 is stereo in
-     *     and out with the stereo panner.
+     *     and out with the stereo panner.The strip's input stage (a track with a full strip, never the master or a VCA): trimDb and
+     *     polarityInverted apply to its source before the inserts, on every channel; delayMs moves it in
+     *     time after the inserts, before the fader (negative: earlier, which delay compensation pays for by delaying
+     *     everything else). dualPan pans a stereo signal's two channels on their own, to panLeft and
+     *     panRight (−1…1), instead of balancing it with pan; at −1 and 1 the signal passes as it is. They
+     *     stay when it is off. A mono signal always takes pan, a surround output its panner.soloSafe (a track with a full strip, a bus's aux above all): the strip stays audible when others are
+     *                         soloed in place.meter is what the strip's meter shows and where it reads the signal, the master's too.
      */
     ChannelStrip: {
       /** Format: double */
@@ -2724,6 +2730,18 @@ export interface components {
       inputFormat: components['schemas']['ChannelFormat'];
       outputFormat: components['schemas']['ChannelFormat'];
       panner: components['schemas']['Panner'];
+      /** Format: double */
+      trimDb: number;
+      polarityInverted: boolean;
+      /** Format: double */
+      delayMs: number;
+      dualPan: boolean;
+      /** Format: double */
+      panLeft: number;
+      /** Format: double */
+      panRight: number;
+      soloSafe: boolean;
+      meter: components['schemas']['StripMeter'];
     };
     /**
      * @description A chord of the chord track at project tick `tick` (it holds until the next chord): its root, its quality
@@ -3496,6 +3514,7 @@ export interface components {
       | components['schemas']['EditCommandAddInsertCommand']
       | components['schemas']['EditCommandRemoveInsertCommand']
       | components['schemas']['EditCommandMoveInsertCommand']
+      | components['schemas']['EditCommandTransferInsertCommand']
       | components['schemas']['EditCommandSetInsertCommand']
       | components['schemas']['EditCommandSetInsertParameterCommand']
       | components['schemas']['EditCommandAddSendCommand']
@@ -4942,6 +4961,8 @@ export interface components {
       lowLatency?: null | boolean;
       /** Format: double */
       lowLatencyLimitMs?: null | number;
+      panLaw?: null | components['schemas']['PanLaw'];
+      soloMode?: null | components['schemas']['SoloMode'];
     };
     /**
      * @description Phase 10, a movie import's result: sets the project's movie (replacing one it has). The `movieImport` job
@@ -5330,6 +5351,19 @@ export interface components {
       pan?: null | number;
       mute?: null | boolean;
       solo?: null | boolean;
+      /** Format: double */
+      trimDb?: null | number;
+      polarityInverted?: null | boolean;
+      /** Format: double */
+      delayMs?: null | number;
+      dualPan?: null | boolean;
+      /** Format: double */
+      panLeft?: null | number;
+      /** Format: double */
+      panRight?: null | number;
+      soloSafe?: null | boolean;
+      meterType?: null | components['schemas']['MeterType'];
+      meterTap?: null | components['schemas']['MeterTap'];
     };
     /**
      * @description Phase 10: sets a track strip's input format (mono or stereo for instrument tracks; any for audio and aux
@@ -5538,6 +5572,25 @@ export interface components {
        * @default 50
        */
       postReleaseMs: number;
+    };
+    /**
+     * @description Moves an insert to slot `index` of another strip (`toTrackId`, null: the master; no index: last), or with
+     *     `copy` puts a copy of it there, on the same strip too. It takes its parameters, bypass, sidechain (unless the
+     *     strip it lands on cannot take that source), file and plugin state with it; a move takes its automation too, a copy
+     *     starts without any. `trackId` is the strip it is on (null: the master), `chain` as the other insert
+     *     commands; a MIDI FX slot goes to another strip's MIDI FX.
+     */
+    EditCommandTransferInsertCommand: {
+      /** @enum {string} */
+      type: 'transferInsert';
+      insertId: string;
+      trackId?: null | string;
+      toTrackId?: null | string;
+      /** Format: int32 */
+      index?: null | number;
+      /** @default false */
+      copy: boolean;
+      chain?: null | components['schemas']['InsertChain'];
     };
     /**
      * @description Phase 7, MIDI Transform: applies `set` (mode `operateOnly` or `selectAndOperate`;
@@ -6298,6 +6351,16 @@ export interface components {
      * @description The click: on or off, a count-in before recording from a stop, and its level in dB. The count-in lasts
      *     `countInLength` (1…32) of `countInUnit`, measured at where recording starts.
      */
+     * @description Where a strip's meter reads the signal.
+     * @enum {unknown}
+     */
+    MeterTap: 'input' | 'preFader' | 'postFader';
+    /**
+     * @description What a strip's meter shows.
+     * @enum {unknown}
+     */
+    MeterType: 'peak' | 'rms' | 'k20' | 'k14' | 'k12' | 'lufs';
+    /** @description The click: on or off, a one-bar count-in before recording, and its level in dB. */
     MetronomeSettings: {
       enabled: boolean;
       countIn: boolean;
@@ -6433,13 +6496,16 @@ export interface components {
     };
     /**
      * @description Plugin delay compensation, and low-latency mode: while it is on, plugins on the path of record-armed or
-     *     monitored tracks whose latency exceeds `lowLatencyLimitMs` are bypassed.
+     *     monitored tracks whose latency exceeds `lowLatencyLimitMs` are bypassed. `panLaw` is the project's pan
+     *     law, `soloMode` what solo does.
      */
     MixerSettings: {
       pdc: components['schemas']['PdcMode'];
       lowLatency: boolean;
       /** Format: double */
       lowLatencyLimitMs: number;
+      panLaw: components['schemas']['PanLaw'];
+      soloMode: components['schemas']['SoloMode'];
     };
     /**
      * @description Monitoring (`GET/PUT /settings/monitoring`), stored in the user settings, not the project: the speaker map is
@@ -6447,12 +6513,32 @@ export interface components {
      *     changes bounces or ADM exports. `binaural` renders the master's speakers (and objects) through HRTFs to
      *     outputs 1–2; otherwise `downmixTo` (a format smaller than the master's; null: none) down-mixes per ITU-R
      *     BS.775 and sends its channels through the map. `speakerMap[i]` is the 1-based device output of channel i of
-     *     what is sent (0: not sent); an empty or short map sends channel i to output i + 1.
+     *     what is sent (0: not sent); an empty or short map sends channel i to output i + 1. `section` is the monitor
+     *     section (null in a request: as it is).
      */
     MonitoringSettings: {
       binaural: boolean;
       downmixTo?: null | components['schemas']['ChannelFormat'];
       speakerMap: number[];
+      section: null | components['schemas']['MonitorSection'];
+    };
+    /**
+     * @description The monitor section: what the speakers get after the master, never what a bounce or the listen-in hears. Output
+     *     pairs a strip is routed to directly bypass it. The level is `levelDb`, or with `reference` the calibrated
+     *     `referenceDb`; `dim` takes `dimDb` (0 or less) off whichever applies; `mono` folds the front
+     *     pair
+     *     to check it in mono.
+     */
+    MonitorSection: {
+      dim: boolean;
+      /** Format: double */
+      dimDb: number;
+      mono: boolean;
+      reference: boolean;
+      /** Format: double */
+      referenceDb: number;
+      /** Format: double */
+      levelDb: number;
     };
     /**
      * @description The project's movie (`Project.movie`; null: none). `path` is relative to the project folder when the
@@ -6815,6 +6901,12 @@ export interface components {
       name: string;
       pads: components['schemas']['KeyCommandPad'][];
     };
+    /**
+     * @description How a mono signal's level follows its pan: what the centre is, relative to a hard pan. Stereo signals are balanced
+     *     (the far side falls linearly) whatever the law; dual pan takes the law's shape with a hard pan at unity.
+     * @enum {unknown}
+     */
+    PanLaw: 'zeroDb' | 'minus3Db' | 'minus3DbCompensated' | 'minus4Point5Db' | 'minus6Db';
     /**
      * @description A strip's panner (`ChannelStrip.panner`): the mode that applies, and both panners' settings, which stay when
      *     the mode changes. Automation addresses (`AutomationLane.target`): `surround:angle`,
@@ -7970,6 +8062,11 @@ export interface components {
       analyzeImports: boolean;
     };
     /**
+     * @description What a strip's solo does.
+     * @enum {unknown}
+     */
+    SoloMode: 'inPlace' | 'afl' | 'pfl';
+    /**
      * @description One staff of a staff style. `transpose` is in semitones, written = concert + transpose (B♭ clarinet +2, F
      *     horn +7, alto sax +9); an octave clef's octave is the clef's, not part of it. With several staves (top to
      *     bottom), a note goes to the first staff whose `splitPitch` (a concert MIDI pitch) it reaches; the last
@@ -8079,6 +8176,11 @@ export interface components {
     /** @description Stops the cells playing on `trackIds` (left out: every track) at the grid's quantise boundary. */
     StopRequest: {
       trackIds?: null | string[];
+    };
+    /** @description A strip's meter: its type and tap point (a new strip's: peak, post-fader). */
+    StripMeter: {
+      type: components['schemas']['MeterType'];
+      tap: components['schemas']['MeterTap'];
     };
     /**
      * @description A surface's live state: whether it answers (Mackie Control's handshake or any input; HUI's ping) and the index of

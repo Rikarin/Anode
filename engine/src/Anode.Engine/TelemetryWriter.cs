@@ -12,19 +12,27 @@ namespace Anode.Engine;
 public sealed unsafe class TelemetryWriter : IDisposable {
     public static readonly TimeSpan Interval = TimeSpan.FromSeconds(1.0 / 60);
 
+    /// <summary>Writes the worst load holds for: about a second.</summary>
+    const int PeakHoldWrites = 60;
+
     readonly AudioEngine engine;
     readonly byte* region;
     readonly Func<long> overloads;
+    readonly Func<float>? diskLoad;
+    float heldPeak;
+    int heldWrites;
     Thread? thread;
     volatile bool running;
 
     /// <param name="engine">The engine to report.</param>
     /// <param name="region">At least <see cref="TelemetryLayout.Size" /> writable bytes, shared with readers.</param>
     /// <param name="overloads">The device's dropouts so far (driver overloads, or the null clock's late ticks).</param>
-    public TelemetryWriter(AudioEngine engine, byte* region, Func<long> overloads) {
+    /// <param name="diskLoad">The disk thread's load (none: 0).</param>
+    public TelemetryWriter(AudioEngine engine, byte* region, Func<long> overloads, Func<float>? diskLoad = null) {
         this.engine = engine;
         this.region = region;
         this.overloads = overloads;
+        this.diskLoad = diskLoad;
         NativeMemory.Clear(region, (nuint)TelemetryLayout.Size);
         Header->SampleRate = engine.SampleRate;
         Volatile.Write(ref Header->Magic, TelemetryHeader.MagicValue); // last, so a reader never sees half of it
@@ -69,6 +77,10 @@ public sealed unsafe class TelemetryWriter : IDisposable {
         h->Overloads = overloads();
         h->Underruns = snapshot.Underruns;
         h->ModelVersion = snapshot.ModelVersion;
+        var (load, peak) = engine.TakeLoad();
+        h->AudioLoad = load;
+        h->AudioPeakLoad = HoldPeak(peak);
+        h->DiskLoad = diskLoad?.Invoke() ?? 0;
         var meters = Meters;
         for (var i = 0; i < count; i++) {
             meters[i] = Entry(tracks[i].Id, tracks[i].Strip, i);
@@ -85,6 +97,16 @@ public sealed unsafe class TelemetryWriter : IDisposable {
         Volatile.Write(ref h->Sequence, h->Sequence + 1);
     }
 
+    /// <summary>The worst load over about the last second, which readers slower than these writes then see.</summary>
+    float HoldPeak(float peak) {
+        if (peak >= heldPeak || ++heldWrites >= PeakHoldWrites) {
+            heldPeak = peak;
+            heldWrites = 0;
+        }
+
+        return heldPeak;
+    }
+
     /// <summary>
     ///     A strip's meter entry, its channel peaks (a surround meter) into the channel table at
     ///     <paramref name="index" />.
@@ -92,7 +114,17 @@ public sealed unsafe class TelemetryWriter : IDisposable {
     MeterEntry Entry(int trackId, Strip strip, int index) {
         var peaks = new Span<float>(ChannelMeters[index].Peaks, ChannelMeterEntry.MaxChannels);
         var (left, right) = strip.TakePeaks(peaks, out var channels);
-        return new() { TrackId = trackId, PeakLeft = left, PeakRight = right, Channels = channels > 2 ? channels : 0 };
+        var (rmsLeft, rmsRight, lufs, levels) = strip.MeterLevels();
+        return new() {
+            TrackId = trackId,
+            PeakLeft = left,
+            PeakRight = right,
+            Channels = channels > 2 ? channels : 0,
+            RmsLeft = rmsLeft,
+            RmsRight = rmsRight,
+            Lufs = lufs,
+            Levels = levels
+        };
     }
 
     /// <summary>

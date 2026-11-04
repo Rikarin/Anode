@@ -22,6 +22,7 @@ import {
   type ControllerAssignments,
   type ControlSurface,
   DefaultMonitoringSettings,
+  DefaultMonitorSection,
   DefaultPanner,
   DefaultRegionNotation,
   type DeltaOp,
@@ -58,6 +59,7 @@ import {
   MasteringParameters,
   type MasteringSettings,
   type MasteringState,
+  type MeterType,
   type MidiDevices,
   type MidiEnvironment,
   type MidiExportRequest,
@@ -119,6 +121,7 @@ import {
   type StepInputRequest,
   type StepInputState,
   type StopRequest,
+  StripDefaults,
   type SurfaceStatus,
   type SyncState,
   type SystemInfo,
@@ -490,6 +493,7 @@ export class FakeAnodeServer implements AnodeApi {
   /** Phase 10: the movie's cached thumbnails by height, the monitoring and pad settings, the listen-in streams. */
   private readonly thumbnailCache = new Map<number, Set<number>>();
   private monitoringSettings: MonitoringSettings = structuredClone(DefaultMonitoringSettings);
+  private overloadCount = 0;
   private padSets: RemotePads = structuredClone(DefaultRemotePads);
   private readonly listenSockets = new Set<FakeListenInSocket>();
   /** Phase 8: controller assignments, Learn, control surfaces, OSC, the selection, Link and external sync. */
@@ -648,7 +652,13 @@ export class FakeAnodeServer implements AnodeApi {
             preRollLength: 0,
             preRollUnit: 'bars'
           },
-          mixer: { pdc: 'all', lowLatency: false, lowLatencyLimitMs: 10 },
+          mixer: {
+            pdc: 'all',
+            lowLatency: false,
+            lowLatencyLimitMs: 10,
+            panLaw: 'minus3DbCompensated',
+            soloMode: 'inPlace'
+          },
           smartTempo: { mode: 'keep', defaultFollow: 'off', analyzeImports: true },
           varispeed: { enabled: false, mode: 'speedOnly', speed: 1 },
           sync: {
@@ -2877,7 +2887,10 @@ export class FakeAnodeServer implements AnodeApi {
 
   setMonitoring(settings: MonitoringSettings): Promise<MonitoringSettings> {
     return this.answer('SetMonitoring', () => {
-      this.monitoringSettings = checkMonitoring(settings);
+      this.monitoringSettings = checkMonitoring(
+        settings,
+        this.monitoringSettings.section ?? DefaultMonitoringSettings.section ?? DefaultMonitorSection
+      );
       return structuredClone(this.monitoringSettings);
     });
   }
@@ -4007,6 +4020,7 @@ export class FakeAnodeServer implements AnodeApi {
     this.emitCells(this.launcher.advance(tick));
     this.emitTransport();
     this.emit({ type: 'meters', ...this.meters() });
+    this.emitPerformance();
     // Phase 11: the Mastering Assistant's live loudness and gain reduction.
     const mastering = fakeMasteringReading(this.project, this.positionTick);
     if (mastering) {
@@ -4376,6 +4390,28 @@ export class FakeAnodeServer implements AnodeApi {
     this.emit({ type: 'transport', transport: this.status() });
   }
 
+  /** A made-up load, higher while the transport runs: the control bar's meter has something to show. */
+  emitPerformance(): void {
+    const load = this.transportState === 'stopped' ? 0.04 : 0.18;
+    this.emit({
+      type: 'performance',
+      performance: {
+        audioLoad: load,
+        audioPeakLoad: load * 1.5,
+        coreLoads: [load * 2, load * 1.2, load * 0.6, load * 0.3],
+        diskLoad: load / 3,
+        overloads: this.overloadCount,
+        underruns: 0
+      }
+    });
+  }
+
+  /** The engine drops out once (tests, and a way to see the overload light). */
+  simulateOverload(): void {
+    this.overloadCount++;
+    this.emitPerformance();
+  }
+
   /**
    * Levels that follow the regions under the playhead, so the meters move with what plays: VCA gains folded in, aux
    * tracks fed by their bus, only what reaches the master in its meter, and readings of dynamics and metering inserts.
@@ -4386,7 +4422,7 @@ export class FakeAnodeServer implements AnodeApi {
       return { tracks: [], master: { trackId: '', peakLeft: 0, peakRight: 0 }, readings: [] };
     }
 
-    const soloed = project.tracks.some(t => t.strip.solo);
+    const soloed = project.settings.mixer.soloMode === 'inPlace' && project.tracks.some(t => t.strip.solo);
     const byId = new Map(project.tracks.map(t => [t.id, t]));
     const tick = this.positionTick;
     const levels = new Map<string, number>();
@@ -4397,7 +4433,8 @@ export class FakeAnodeServer implements AnodeApi {
       return 10 ** (track.strip.volumeDb / 20) * vcaGain;
     };
     const audible = (track: Track) =>
-      !track.strip.mute && (!soloed || track.strip.solo || track.kind === 'aux' || track.kind === 'vca');
+      !track.strip.mute &&
+      (!soloed || track.strip.solo || track.strip.soloSafe || track.kind === 'aux' || track.kind === 'vca');
     // Sources first: what plays on each track under the playhead.
     for (const track of project.tracks) {
       if (track.kind === 'aux' || track.kind === 'vca' || track.kind === 'stack') {
@@ -4467,14 +4504,18 @@ export class FakeAnodeServer implements AnodeApi {
       if (peaks) {
         return { trackId: track.id, peakLeft: peaks[0] ?? 0, peakRight: peaks[1] ?? 0, peaks };
       }
-      return { trackId: track.id, peakLeft: level * Math.min(1, 1 - pan), peakRight: level * Math.min(1, 1 + pan) };
+      return withMeterLevels(track.strip.meter.type, {
+        trackId: track.id,
+        peakLeft: level * Math.min(1, 1 - pan),
+        peakRight: level * Math.min(1, 1 + pan)
+      });
     });
     const masterGain = 10 ** (project.master.volumeDb / 20) * (project.master.mute ? 0 : 1);
     const master = masterLevel * masterGain;
     const surroundPeaks = masterChannels > 2 ? masterPeaks.map(p => p * masterGain) : null;
     const masterMeter: TrackMeter = surroundPeaks
       ? { trackId: '', peakLeft: surroundPeaks[0] ?? 0, peakRight: surroundPeaks[1] ?? 0, peaks: surroundPeaks }
-      : { trackId: '', peakLeft: master, peakRight: master * 0.97 };
+      : withMeterLevels(project.master.meter.type, { trackId: '', peakLeft: master, peakRight: master * 0.97 });
     const readings: InsertReading[] = [];
     const read = (trackId: string | null, inserts: readonly Insert[], level: number) => {
       const db = level > 0 ? 20 * Math.log10(level) : -144;
@@ -5519,9 +5560,10 @@ export class FakeAnodeServer implements AnodeApi {
       case 'setAutomation':
       case 'setAutomationMode':
       case 'setMixerSettings':
+      case 'transferInsert':
       case 'applyPatch':
       case 'unfreezeTrack':
-        if ('chain' in command && command.chain === 'midiEffects') {
+        if ('chain' in command && command.chain === 'midiEffects' && command.type !== 'transferInsert') {
           // MIDI FX slots (Phase 6): the insert commands on a strip's `midiEffects`.
           return applyMidiEffectCommand(project, command, this.phase6Context());
         }
@@ -6029,7 +6071,13 @@ export class FakeAnodeServer implements AnodeApi {
           preRollLength: 0,
           preRollUnit: 'bars'
         },
-        mixer: { pdc: 'all', lowLatency: false, lowLatencyLimitMs: 10 },
+        mixer: {
+          pdc: 'all',
+          lowLatency: false,
+          lowLatencyLimitMs: 10,
+          panLaw: 'minus3DbCompensated',
+          soloMode: 'inPlace'
+        },
         smartTempo: { mode: 'keep', defaultFollow: 'off', analyzeImports: true },
         varispeed: { enabled: false, mode: 'speedOnly', speed: 1 },
         sync: { source: 'internal', destinations: [], frameRate: 'fps25', startOffsetSeconds: 0, linkStartStop: false },
@@ -6361,8 +6409,21 @@ function strip(): ChannelStrip {
     midiEffects: [],
     inputFormat: 'stereo',
     outputFormat: 'stereo',
-    panner: structuredClone(DefaultPanner)
+    panner: structuredClone(DefaultPanner),
+    ...StripDefaults
   };
+}
+
+/** A meter frame with the levels its type publishes, made up from the peaks as a steady tone's would read. */
+function withMeterLevels(type: MeterType, meter: TrackMeter): TrackMeter {
+  if (type === 'peak') {
+    return meter;
+  }
+  if (type === 'lufs') {
+    const power = (meter.peakLeft ** 2 + meter.peakRight ** 2) / 2;
+    return { ...meter, lufs: power > 0 ? -0.691 + 10 * Math.log10(power) : -120 };
+  }
+  return { ...meter, rmsLeft: meter.peakLeft * Math.SQRT1_2, rmsRight: meter.peakRight * Math.SQRT1_2 };
 }
 
 /**

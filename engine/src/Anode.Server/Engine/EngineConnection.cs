@@ -48,6 +48,10 @@ public sealed partial class EngineConnection(
 
     static readonly TimeSpan RetryDelay = TimeSpan.FromMilliseconds(250);
     static readonly TimeSpan TelemetryInterval = TimeSpan.FromMilliseconds(33);
+
+    /// <summary>The load goes out every this many telemetry reads: about four times a second.</summary>
+    const int PerformanceEveryTicks = 8;
+
     static readonly TimeSpan StatesTimeout = TimeSpan.FromSeconds(3);
 
     readonly EngineOptions engine = options.Value.Engine;
@@ -778,11 +782,14 @@ public sealed partial class EngineConnection(
         using var timer = new PeriodicTimer(TelemetryInterval);
         TransportStatus? last = null;
         var metersLive = false;
+        var cores = new CoreLoads();
+        var ticks = 0;
         while (await timer.WaitForNextTickAsync(cancellationToken).ConfigureAwait(false)) {
             if (telemetry.Read() is not { } frame) {
                 continue;
             }
 
+            PublishLoad(frame.Header, cores, ref ticks);
             var view = session.View;
             var now = Status(frame.Header, view);
             Volatile.Write(ref transport, now);
@@ -822,6 +829,41 @@ public sealed partial class EngineConnection(
         return new(state, position, map.TickAtSample(position, rate), rate);
     }
 
+    /// <summary>Every <see cref="PerformanceEveryTicks" /> reads: the engine's load and the machine's cores.</summary>
+    void PublishLoad(in TelemetryHeader header, CoreLoads cores, ref int ticks) {
+        if (++ticks < PerformanceEveryTicks) {
+            return;
+        }
+
+        ticks = 0;
+        hub.Publish(
+            new PerformanceEvent(
+                new(
+                    header.AudioLoad,
+                    header.AudioPeakLoad,
+                    cores.Sample(),
+                    header.DiskLoad,
+                    header.Overloads,
+                    header.Underruns
+                )
+            )
+        );
+    }
+
+    /// <summary>A meter's reading: its peaks, and the levels its type publishes.</summary>
+    static TrackMeter Meter(string id, MeterEntry entry, IReadOnlyList<float>? peaks) {
+        var rms = (entry.Levels & MeterEntry.HasRms) != 0;
+        return new(
+            id,
+            entry.PeakLeft,
+            entry.PeakRight,
+            peaks,
+            rms ? entry.RmsLeft : null,
+            rms ? entry.RmsRight : null,
+            (entry.Levels & MeterEntry.HasLufs) != 0 ? entry.Lufs : null
+        );
+    }
+
     /// <summary>The frame's meters by domain track id, and whether any shows a level.</summary>
     static (MetersEvent Meters, bool Live) Meters(TelemetryFrame frame, OpenProjectView view) {
         var meters = new List<TrackMeter>(frame.Tracks.Length);
@@ -830,12 +872,12 @@ public sealed partial class EngineConnection(
             var entry = frame.Tracks[i];
             if (view.Ids.TrackOf(entry.TrackId) is { } id) {
                 var peaks = i < frame.TrackPeaks.Length ? frame.TrackPeaks[i] : null;
-                meters.Add(new(id, entry.PeakLeft, entry.PeakRight, peaks));
+                meters.Add(Meter(id, entry, peaks));
                 live |= entry.PeakLeft > 0 || entry.PeakRight > 0 || peaks?.Any(static p => p > 0) == true;
             }
         }
 
-        var master = new TrackMeter("master", frame.Master.PeakLeft, frame.Master.PeakRight, frame.MasterPeaks);
+        var master = Meter("master", frame.Master, frame.MasterPeaks);
         live |= frame.MasterPeaks?.Any(static p => p > 0) == true;
         return (new(meters, master), live);
     }

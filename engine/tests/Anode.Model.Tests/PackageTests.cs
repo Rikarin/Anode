@@ -646,7 +646,7 @@ public sealed class PackageTests : IDisposable {
     public void A_Phase_3_package_opens_with_plain_channel_strips_and_saves_as_the_current_schema() {
         CopyFixture("Phase3.anode");
         var state = ProjectPackage.Load(folder);
-        Assert.Equal(new(PdcMode.All, false, 10), state.Settings.Mixer);
+        Assert.Equal(ProjectDefaults.Mixer, state.Settings.Mixer);
         Assert.Empty(state.Groups);
         Assert.Empty(state.Automation);
         Assert.Equal(
@@ -825,6 +825,106 @@ public sealed class PackageTests : IDisposable {
         ProjectPackage.SaveStates(folder, new Dictionary<string, byte[]> { [b] = [5] });
         Assert.False(File.Exists(Path.Combine(folder, "Plugin States", a + ".bin")));
         Assert.Equal([b], ProjectPackage.LoadStates(folder, state).Keys);
+    }
+
+    [Fact]
+    public void A_schema_11_package_keeps_its_sound_with_the_strip_input_stage_at_its_defaults() {
+        CopyFixture("Schema11.anode");
+        var root = JsonNode.Parse(File.ReadAllText(Path.Combine(folder, "project.json")))!;
+        Assert.Equal(11, root["schemaVersion"]!.GetValue<int>());
+        var state = ProjectPackage.Load(folder);
+        Assert.Equal(PanLaw.Minus3DbCompensated, state.Settings.Mixer.PanLaw);
+        Assert.NotEmpty(state.Tracks);
+        foreach (var strip in state.Tracks.Select(static t => t.Strip).Append(state.Master)) {
+            Assert.Equal(
+                (0d, false, 0d, false, -1d, 1d),
+                (strip.TrimDb, strip.PolarityInverted, strip.DelayMs, strip.DualPan, strip.PanLeft, strip.PanRight)
+            );
+        }
+
+        ProjectPackage.Save(folder, state);
+        var saved = JsonNode.Parse(File.ReadAllText(Path.Combine(folder, "project.json")))!;
+        Assert.Equal(PackageMigrations.CurrentSchemaVersion, saved["schemaVersion"]!.GetValue<int>());
+        Assert.Equal("minus3DbCompensated", saved["settings"]!["mixer"]!["panLaw"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public void The_strip_input_stage_and_pan_law_survive_the_package_and_damage_is_clamped() {
+        var ids = new SequentialIds();
+        var state = Edits.Apply(
+                ProjectDefaults.NewProject("prj_1", "Song", 48_000),
+                [new AddTrackCommand("Gtr"), new SetMixerSettingsCommand(PanLaw: PanLaw.Minus6Db)],
+                ids
+            )
+            .State;
+        var gtr = state.Tracks[0].Id;
+        state = Edits.Apply(
+                state,
+                [
+                    new SetStripCommand(
+                        gtr,
+                        TrimDb: -3,
+                        PolarityInverted: true,
+                        DelayMs: -12.5,
+                        DualPan: true,
+                        PanLeft: 0.25
+                    )
+                ],
+                ids
+            )
+            .State;
+        ProjectPackage.Save(folder, state);
+        var loaded = ProjectPackage.Load(folder);
+        Assert.Equal(PanLaw.Minus6Db, loaded.Settings.Mixer.PanLaw);
+        var strip = loaded.Tracks[0].Strip;
+        Assert.Equal(
+            (-3d, true, -12.5, true, 0.25, 1d),
+            (strip.TrimDb, strip.PolarityInverted, strip.DelayMs, strip.DualPan, strip.PanLeft, strip.PanRight)
+        );
+
+        var path = Path.Combine(folder, "tracks", gtr + ".json");
+        var track = JsonNode.Parse(File.ReadAllText(path))!;
+        track["track"]!["strip"]!["trimDb"] = 900;
+        track["track"]!["strip"]!["delayMs"] = -9000;
+        track["track"]!["strip"]!["panRight"] = 7;
+        File.WriteAllText(path, track.ToJsonString());
+        strip = ProjectPackage.Load(folder).Tracks[0].Strip;
+        Assert.Equal(
+            (Edits.MaxTrimDb, -Edits.MaxStripDelayMs, 1d),
+            (strip.TrimDb, strip.DelayMs, strip.PanRight)
+        );
+    }
+
+    [Fact]
+    public void A_schema_11_package_has_no_solo_safe_strips_and_solos_in_place() {
+        CopyFixture("Schema11.anode");
+        var root = JsonNode.Parse(File.ReadAllText(Path.Combine(folder, "project.json")))!;
+        Assert.Equal(11, root["schemaVersion"]!.GetValue<int>());
+        var state = ProjectPackage.Load(folder);
+        Assert.Equal(SoloMode.InPlace, state.Settings.Mixer.SoloMode);
+        Assert.NotEmpty(state.Tracks);
+        Assert.All(state.Tracks, static t => Assert.False(t.Strip.SoloSafe));
+        ProjectPackage.Save(folder, state);
+        var saved = JsonNode.Parse(File.ReadAllText(Path.Combine(folder, "project.json")))!;
+        Assert.Equal(PackageMigrations.CurrentSchemaVersion, saved["schemaVersion"]!.GetValue<int>());
+        Assert.Equal("inPlace", saved["settings"]!["mixer"]!["soloMode"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public void A_schema_11_package_keeps_its_post_fader_peak_meters() {
+        CopyFixture("Schema11.anode");
+        var root = JsonNode.Parse(File.ReadAllText(Path.Combine(folder, "project.json")))!;
+        Assert.Equal(11, root["schemaVersion"]!.GetValue<int>());
+        var state = ProjectPackage.Load(folder);
+        Assert.NotEmpty(state.Tracks);
+        foreach (var strip in state.Tracks.Select(static t => t.Strip).Append(state.Master)) {
+            Assert.Equal(StripMeter.Default, strip.Meter);
+        }
+
+        ProjectPackage.Save(folder, state);
+        var saved = JsonNode.Parse(File.ReadAllText(Path.Combine(folder, "project.json")))!;
+        Assert.Equal(PackageMigrations.CurrentSchemaVersion, saved["schemaVersion"]!.GetValue<int>());
+        Assert.Equal("postFader", saved["master"]!["meter"]!["tap"]!.GetValue<string>());
     }
 
     void CopyFixture(string name) {

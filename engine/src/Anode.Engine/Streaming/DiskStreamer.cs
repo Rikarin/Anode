@@ -1,3 +1,5 @@
+using System.Diagnostics;
+
 namespace Anode.Engine.Streaming;
 
 /// <summary>
@@ -27,6 +29,10 @@ public sealed class DiskStreamer(AudioEngine engine, int leadFrames) : IDisposab
     volatile bool running;
     long started;
     long completed;
+    long busyTicks;
+    long loadBusy;
+    long loadSampled = Stopwatch.GetTimestamp();
+    float load;
 
     public int LeadFrames { get; } = leadFrames;
 
@@ -185,9 +191,29 @@ public sealed class DiskStreamer(AudioEngine engine, int leadFrames) : IDisposab
         stream.Append(buffer);
     }
 
+    /// <summary>
+    ///     Reader (telemetry): the share of time the thread spends in its passes, over the last quarter of a second or so
+    ///     (a shorter call returns the last figure). The disk's work comes in bursts, so a shorter window would flicker.
+    /// </summary>
+    public float TakeLoad() {
+        var now = Stopwatch.GetTimestamp();
+        var elapsed = now - loadSampled;
+        if (elapsed >= Stopwatch.Frequency / 4) {
+            var busy = Interlocked.Read(ref busyTicks);
+            load = Math.Clamp((float)(busy - loadBusy) / elapsed, 0f, 1f);
+            loadBusy = busy;
+            loadSampled = now;
+        }
+
+        return load;
+    }
+
     void Run() {
         while (running) {
-            if (!Pass()) {
+            var begin = Stopwatch.GetTimestamp();
+            var worked = Pass();
+            Interlocked.Add(ref busyTicks, Stopwatch.GetTimestamp() - begin);
+            if (!worked) {
                 wake.WaitOne(1);
             }
         }

@@ -1,7 +1,9 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
 import {
   type ChannelFormat,
+  DefaultMonitorSection,
   DefaultMonitoringSettings,
+  type MonitorSection,
   type MonitoringSettings,
   SpeakerLayouts
 } from '@anode/api-client';
@@ -80,6 +82,8 @@ export class MonitoringStore {
   readonly projectFormat = computed(() => this.project.settings().surroundFormat);
   readonly targets = computed(() => downmixTargets(this.projectFormat()));
   readonly rows = computed(() => speakerRows(this.settings(), this.projectFormat()));
+  /** The monitor section: what the speakers get after the master. */
+  readonly section = computed(() => this.settings().section ?? DefaultMonitorSection);
 
   async load(): Promise<void> {
     const settings = await this.notify.run(() => this.api.monitoring(), 'Could not load the monitoring settings');
@@ -95,16 +99,21 @@ export class MonitoringStore {
     const target = current.downmixTo ?? this.targets()[0]?.format ?? null;
     switch (mode) {
       case 'binaural':
-        return this.save({ binaural: true, downmixTo: null, speakerMap: current.speakerMap });
+        return this.save({ ...current, binaural: true, downmixTo: null });
       case 'downmix':
-        return this.save({ binaural: false, downmixTo: target, speakerMap: [] });
+        return this.save({ ...current, binaural: false, downmixTo: target, speakerMap: [] });
       default:
-        return this.save({ binaural: false, downmixTo: null, speakerMap: [] });
+        return this.save({ ...current, binaural: false, downmixTo: null, speakerMap: [] });
     }
   }
 
   setDownmix(format: ChannelFormat): Promise<void> {
-    return this.save({ binaural: false, downmixTo: format, speakerMap: [] });
+    return this.save({ ...this.settings(), binaural: false, downmixTo: format, speakerMap: [] });
+  }
+
+  /** Changes the monitor section (Dim, Mono, Ref, the levels), which the host follows at once. */
+  setSection(change: Partial<MonitorSection>): Promise<void> {
+    return this.save({ ...this.settings(), section: { ...this.section(), ...change } });
   }
 
   setSpeakerOutput(index: number, output: number): Promise<void> {

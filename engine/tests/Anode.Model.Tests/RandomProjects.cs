@@ -863,6 +863,24 @@ static partial class RandomProjects {
                         t
                     )
                     : null,
+            nameof(TransferInsertCommand) => r.Next(3) == 0 && withFx.Length > 0 && Pick(r, withFx) is var fx
+                ? new TransferInsertCommand(
+                    Pick(r, fx.Strip.MidiEffects).Id,
+                    fx.Id,
+                    Pick(r, withFx).Id,
+                    r.Next(3) == 0 ? 0 : null,
+                    r.Next(2) == 0,
+                    InsertChain.MidiEffects
+                )
+                : WithInserts() is var (t, strip) && strip is not null
+                    ? new TransferInsertCommand(
+                        Pick(r, strip.Inserts).Id,
+                        t,
+                        r.Next(5) == 0 || mixed.Length == 0 ? null : Pick(r, mixed).Id,
+                        r.Next(3) == 0 ? r.Next(0, 3) : null,
+                        r.Next(2) == 0
+                    )
+                    : null,
             nameof(SetInsertCommand) when r.Next(3) == 0 && withFx.Length > 0 && Pick(r, withFx) is var fx =>
                 new SetInsertCommand(
                     Pick(r, fx.Strip.MidiEffects).Id,

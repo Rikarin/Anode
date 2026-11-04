@@ -47,6 +47,8 @@ arrangement sections, markers, a two-take vocal folder and a project note.
 
 It also follows Save As and Save a Copy, the sample rate change, Import from Project and templates, on its small fake
 disk of saved projects; `failNextJob` makes the next job fail, for the paths that must change nothing.
+It reports a made-up load in `performance` events too, and `simulateOverload()` drops out once, for the control bar's
+load meter.
 
 It stands in for the desktop app's audio bridge too (`core/fake/fake-audio-devices.ts`), so Settings ▸ Audio ▸ Devices
 works in a browser: a few devices, made-up latencies, a Fake Interface that settles on 64 samples and refuses rates over

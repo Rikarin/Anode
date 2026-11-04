@@ -17,6 +17,12 @@ public static partial class Edits {
     public const int MaxAutomationPoints = 100_000;
     public const double MaxLowLatencyLimitMs = 1000;
 
+    /// <summary>A strip's input trim is ±this, in dB.</summary>
+    public const double MaxTrimDb = 24;
+
+    /// <summary>A strip's delay is ±this, in milliseconds.</summary>
+    public const double MaxStripDelayMs = 500;
+
     /// <summary>The send level a new send has unless told otherwise: −∞, as Logic's.</summary>
     public const double NewSendLevelDb = Units.SilenceDb;
 
@@ -615,10 +621,20 @@ public static partial class Edits {
             throw new EditException($"The low-latency limit is 0…{MaxLowLatencyLimitMs} ms, not {limit}.");
         }
 
+        if (c.PanLaw is { } law && !Enum.IsDefined(law)) {
+            throw new EditException($"Unknown pan law {law}.");
+        }
+
+        if (c.SoloMode is { } solo && !Enum.IsDefined(solo)) {
+            throw new EditException($"Unknown solo mode {solo}.");
+        }
+
         var mixer = new MixerSettings(
             c.Pdc ?? old.Pdc,
             c.LowLatency ?? old.LowLatency,
-            c.LowLatencyLimitMs ?? old.LowLatencyLimitMs
+            c.LowLatencyLimitMs ?? old.LowLatencyLimitMs,
+            c.PanLaw ?? old.PanLaw,
+            c.SoloMode ?? old.SoloMode
         );
         return [new SettingsChanged(state.Settings with { Mixer = mixer })];
     }

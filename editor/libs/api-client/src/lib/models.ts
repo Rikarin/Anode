@@ -92,6 +92,11 @@ export type AutomationPoint = Schemas['AutomationPoint'];
 export type AutomationLane = Schemas['AutomationLane'];
 export type MixerSettings = Schemas['MixerSettings'];
 export type PdcMode = Schemas['PdcMode'];
+export type PanLaw = Schemas['PanLaw'];
+export type SoloMode = Schemas['SoloMode'];
+export type MeterType = Schemas['MeterType'];
+export type MeterTap = Schemas['MeterTap'];
+export type MonitorSection = Schemas['MonitorSection'];
 export type IoLabels = Schemas['IoLabels'];
 export type IoLabel = Schemas['IoLabel'];
 export type PatchInfo = Schemas['PatchInfo'];
@@ -453,6 +458,18 @@ export const DefaultSurroundPanner: SurroundPanner = {
 export const DefaultObjectPanner: ObjectPanner = { azimuth: 0, elevation: 0, distance: 1, size: 0 };
 
 /** A new strip's panner (`Panner.Default`): stereo pan, the other panners at their defaults. */
+/** What a new strip has beyond its routing: no trim or delay, polarity as recorded, the plain pan, not solo safe. */
+export const StripDefaults = {
+  trimDb: 0,
+  polarityInverted: false,
+  delayMs: 0,
+  dualPan: false,
+  panLeft: -1,
+  panRight: 1,
+  soloSafe: false,
+  meter: { type: 'peak', tap: 'postFader' }
+} as const;
+
 export const DefaultPanner: Panner = {
   mode: 'stereo',
   surround: DefaultSurroundPanner,
@@ -474,7 +491,22 @@ export const PannerTargets = {
 } as const;
 
 /** A new user's monitoring (`MonitoringSettings.Default`): speakers, no down-mix, channel i to output i + 1. */
-export const DefaultMonitoringSettings: MonitoringSettings = { binaural: false, downmixTo: null, speakerMap: [] };
+/** The monitor section flat: unity, the dim −20 dB, the reference −12 dB. */
+export const DefaultMonitorSection: MonitorSection = {
+  dim: false,
+  dimDb: -20,
+  mono: false,
+  reference: false,
+  referenceDb: -12,
+  levelDb: 0
+};
+
+export const DefaultMonitoringSettings: MonitoringSettings = {
+  binaural: false,
+  downmixTo: null,
+  speakerMap: [],
+  section: DefaultMonitorSection
+};
 
 /** The DNS-SD advertisement (`Discovery`): service type and TXT keys. */
 export const Discovery = {
@@ -793,6 +825,22 @@ export type TransportState = Schemas['TransportState'];
 export type TransportStatus = Schemas['TransportStatus'];
 export type TransportRequest = Schemas['TransportRequest'];
 
+/** The engine's load, a few times a second (`PerformanceStatus` in `Realtime.cs`). */
+export interface PerformanceStatus {
+  /** The share of the callback's time the callback takes, over 300 ms; past 1 it missed its deadline. */
+  audioLoad: number;
+  /** Its worst over about the last second. */
+  audioPeakLoad: number;
+  /** How busy each of the machine's cores is (0…1); empty where the system does not say. */
+  coreLoads: number[];
+  /** The share of time the disk thread spends reading. */
+  diskLoad: number;
+  /** Dropouts the device reported since the host started. */
+  overloads: number;
+  /** Callbacks a track found short of audio since the host started. */
+  underruns: number;
+}
+
 /** Peak levels of one track (or the master) since the previous meters frame, linear. */
 export interface TrackMeter {
   trackId: string;
@@ -805,6 +853,11 @@ export interface TrackMeter {
    * `peakLeft`/`peakRight`.
    */
   peaks?: number[];
+  /** True RMS, linear, over the meter type's window, for a strip whose meter is RMS or K-system. */
+  rmsLeft?: number;
+  rmsRight?: number;
+  /** Momentary loudness, for a strip whose meter reads it. */
+  lufs?: number;
 }
 
 /**
@@ -860,6 +913,7 @@ export type ServerMessage =
   | { type: 'projectChanged'; delta: ProjectDelta }
   | { type: 'transport'; transport: TransportStatus }
   | { type: 'meters'; tracks: TrackMeter[]; master: TrackMeter; readings?: InsertReading[] }
+  | { type: 'performance'; performance: PerformanceStatus }
   | { type: 'midiActivity'; events: MidiActivity[] }
   | { type: 'pluginsChanged' }
   | { type: 'midiDevicesChanged' }

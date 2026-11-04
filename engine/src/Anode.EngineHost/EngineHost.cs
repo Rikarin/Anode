@@ -113,7 +113,7 @@ public sealed class EngineHost : IDisposable {
         }
 
         TelemetryRegion = region;
-        telemetry = new(Controller.Engine, region, () => device.Overloads);
+        telemetry = new(Controller.Engine, region, () => device.Overloads, Controller.Streamer.TakeLoad);
 
         // Phase 10: the master tap ring for listen-in (segment format 5), created with the telemetry region.
         string? tapName = null;
@@ -426,7 +426,7 @@ public sealed class EngineHost : IDisposable {
                 );
                 return true;
             case SetMixerMessage mixer:
-                Controller.SetMixer(mixer.Pdc, mixer.LowLatency, mixer.LowLatencyLimitMs);
+                Controller.SetMixer(mixer.Pdc, mixer.LowLatency, mixer.LowLatencyLimitMs, mixer.PanLaw, mixer.SoloMode);
                 return true;
             case RenderMessage render:
                 Render(render);
