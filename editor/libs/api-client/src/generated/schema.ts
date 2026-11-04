@@ -6224,7 +6224,8 @@ export interface components {
     /**
      * @description The monitor section: what the speakers get after the master, never what a bounce or the listen-in hears. Output
      *     pairs a strip is routed to directly bypass it. The level is `levelDb`, or with `reference` the calibrated
-     *     `referenceDb`; `dim` takes `dimDb` (0 or less) off whichever applies; `mono` folds the front pair
+     *     `referenceDb`; `dim` takes `dimDb` (0 or less) off whichever applies; `mono` folds the front
+     *     pair
      *     to check it in mono.
      */
     MonitorSection: {

@@ -17730,7 +17730,7 @@
             "format": "double"
           }
         },
-        "description": "The monitor section: what the speakers get after the master, never what a bounce or the listen-in hears. Output\npairs a strip is routed to directly bypass it. The level is \u0060levelDb\u0060, or with \u0060reference\u0060 the calibrated\n\u0060referenceDb\u0060; \u0060dim\u0060 takes \u0060dimDb\u0060 (0 or less) off whichever applies; \u0060mono\u0060 folds the front pair\nto check it in mono."
+        "description": "The monitor section: what the speakers get after the master, never what a bounce or the listen-in hears. Output\npairs a strip is routed to directly bypass it. The level is \u0060levelDb\u0060, or with \u0060reference\u0060 the calibrated\n\u0060referenceDb\u0060; \u0060dim\u0060 takes \u0060dimDb\u0060 (0 or less) off whichever applies; \u0060mono\u0060 folds the front\npair\nto check it in mono."
       },
       "Movie": {
         "required": [
