@@ -55,6 +55,8 @@ import {
   plural,
   snapIn,
   splitSpan,
+  type Stretched,
+  stretchEdge,
   trimEnd,
   trimMidiEnd,
   trimMidiStart,
@@ -153,8 +155,8 @@ const ToolCursors: Record<TracksTool, string> = {
  * the signature track, the cycle area and the autopunch range; the playhead. Drawn by `@anode/timeline` in its render
  * worker, in the light or dark palette as the appearance changes.
  *
- * The pointer edits with the left-click tool (the ⌘-click tool with ⌘): Pointer selects, moves (⌥ copies), trims and
- * drags fades (⌃⇧ on a fade changes its curve); a drag on a take is Quick Swipe Comping; Pencil makes MIDI regions;
+ * The pointer edits with the left-click tool (the ⌘-click tool with ⌘): Pointer selects, moves (⌥ copies), trims (⌥
+ * time-stretches an audio region instead) and drags fades (⌃⇧ on a fade changes its curve); a drag on a take is Quick Swipe Comping; Pencil makes MIDI regions;
  * Eraser deletes; Text renames; Scissors split; Glue joins; Solo plays from the click while held; Mute mutes; Zoom
  * zooms (⌥ out, drag a range); Fade drags fades, their curves (vertically, inside a fade) and crossfades (across where
  * two regions meet); Marquee selects a range to delete. The upper right corner of a region, or of its last repeat, drags
@@ -991,6 +993,19 @@ export class Timeline {
     }
     const context = this.context(region);
 
+    if (gesture.alt && (gesture.kind === 'trim-start' || gesture.kind === 'trim-end')) {
+      const s = this.stretched(region, gesture.kind, tick);
+      const end = this.project.regionEnd(region);
+      return [
+        {
+          index,
+          start: s.startTick,
+          length: ((end - region.startTick) * s.stretch) / region.stretch,
+          timeScale: s.stretch / region.stretch
+        }
+      ];
+    }
+
     switch (gesture.kind) {
       case 'trim-start': {
         const t = trimStart(region, tick, context);
@@ -1093,6 +1108,14 @@ export class Timeline {
     switch (gesture.kind) {
       case 'trim-start':
       case 'trim-end': {
+        if (gesture.alt) {
+          const s = this.stretched(region, gesture.kind, tick);
+          const same = s.stretch === region.stretch && s.startTick === region.startTick;
+          return {
+            commands: same ? [] : [{ type: 'stretchRegion', regionId: region.id, ...s }],
+            label: 'Time Stretch Region'
+          };
+        }
         const t =
           gesture.kind === 'trim-start'
             ? trimStart(region, tick, context)
@@ -1132,6 +1155,12 @@ export class Timeline {
       default:
         return { commands: [], label: '' };
     }
+  }
+
+  /** What a ⌥-drag of a region's edge to `tick` makes of its stretch. */
+  private stretched(region: AudioRegion, zone: 'trim-start' | 'trim-end', tick: number): Stretched {
+    const edge = zone === 'trim-start' ? 'start' : 'end';
+    return stretchEdge(region, this.project.regionEnd(region), edge, tick, this.context(region));
   }
 
   /** A finished move: the moves (or ⌥ copies), then what the drag mode does around them. */
@@ -1434,7 +1463,8 @@ export class Timeline {
       this.cursor.set('crosshair'); // Quick Swipe
       return;
     }
-    this.cursor.set(hit ? Cursors[hit.zone] : 'default');
+    const stretching = event.altKey && (hit?.zone === 'trim-start' || hit?.zone === 'trim-end');
+    this.cursor.set(stretching ? 'col-resize' : hit ? Cursors[hit.zone] : 'default');
   }
 
   // ---- wheel, double-click, drop

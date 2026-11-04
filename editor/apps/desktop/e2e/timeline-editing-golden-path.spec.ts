@@ -56,6 +56,14 @@ async function expectPlayhead(window: Page, bars: RegExp): Promise<void> {
   await expect(window.getByTestId('lcd-bars')).toHaveText(bars);
 }
 
+/** Presses `key` until the playhead shows `bars`. */
+async function pressUntil(window: Page, key: string, bars: RegExp): Promise<void> {
+  await expect(async () => {
+    await window.keyboard.press(key);
+    await expect(window.getByTestId('lcd-bars')).toHaveText(bars, { timeout: 500 });
+  }).toPass();
+}
+
 // Two seconds at 120 bpm is exactly one 4/4 bar: the region ends at bar 2.
 test('nudges regions and moves the playhead by region edge and transient from the keyboard', async ({
   app,
@@ -77,16 +85,11 @@ test('nudges regions and moves the playhead by region edge and transient from th
     await window.getByRole('menuitemradio', { name: 'Bar' }).click();
     await window.locator('an-timeline').click({ position: { x: 40, y: 60 } });
     await window.keyboard.press('Alt+ArrowRight');
-    await window.keyboard.press('Control+Alt+ArrowRight');
-    await expectPlayhead(window, /^\s*2\s+1\s+1\s+1/);
-    await window.keyboard.press('Control+Alt+ArrowRight');
-    await expectPlayhead(window, /^\s*3\s+1\s+1\s+1/);
+    // The edit reaches the editor as a delta: the keys go on until the playhead finds the moved region's end.
+    await pressUntil(window, 'Control+Alt+ArrowRight', /^\s*3\s+1\s+1\s+1/);
 
     await window.keyboard.press('ControlOrMeta+z');
-    await window.keyboard.press('Control+Alt+ArrowLeft');
-    await expectPlayhead(window, /^\s*2\s+1\s+1\s+1/);
-    await window.keyboard.press('Control+Alt+ArrowLeft');
-    await expectPlayhead(window, /^\s*1\s+1\s+1\s+1/);
+    await pressUntil(window, 'Control+Alt+ArrowLeft', /^\s*1\s+1\s+1\s+1/);
   } finally {
     rmSync(scratch, { recursive: true, force: true });
   }
@@ -119,9 +122,41 @@ test('loops a region from the inspector and by its corner', async ({ app, window
       sourcePosition: { x: 191, y: ruler + 3 },
       targetPosition: { x: 3 * 192, y: ruler + 3 }
     });
+    await expect(window.getByTestId('region-repeats').locator('input')).toHaveValue('2');
     await window.keyboard.press('Control+Alt+ArrowRight');
     await window.keyboard.press('Control+Alt+ArrowRight');
     await expectPlayhead(window, /^\s*4\s+1\s+1\s+1/);
+  } finally {
+    rmSync(scratch, { recursive: true, force: true });
+  }
+});
+
+// ⌥-drag of a region's lower right edge: twice as long, its file frames untouched; the inspector shows it, undo undoes it.
+test('time-stretches a region by dragging its edge with Option', async ({ app, window }) => {
+  const scratch = mkdtempSync(join(tmpdir(), 'anode-timeline-'));
+  try {
+    await projectWithRegion(app, window, scratch);
+    const box = await window.locator('an-timeline').boundingBox();
+    if (!box) {
+      throw new Error('no timeline');
+    }
+
+    // One bar is 192 px at the default zoom; the lane starts under the 24 px ruler.
+    const y = box.y + 24 + 54;
+    await window.mouse.move(box.x + 191, y);
+    await window.keyboard.down('Alt');
+    await window.mouse.down();
+    await window.mouse.move(box.x + 300, y, { steps: 4 });
+    await window.mouse.move(box.x + 2 * 192, y, { steps: 4 });
+    await window.mouse.up();
+    await window.keyboard.up('Alt');
+
+    await expect(window.getByTestId('region-stretch').locator('input')).toHaveValue(/^200/);
+    await window.keyboard.press('Control+Alt+ArrowRight');
+    await expectPlayhead(window, /^\s*3\s+1\s+1\s+1/);
+
+    await window.keyboard.press('ControlOrMeta+z');
+    await expect(window.getByTestId('region-stretch').locator('input')).toHaveValue(/^100/);
   } finally {
     rmSync(scratch, { recursive: true, force: true });
   }

@@ -13,3 +13,5 @@ All notable changes to Anode are recorded here, by hand.
 - Loop regions: audio, MIDI and pattern regions repeat by the inspector's Loop and Repeats or by dragging their upper
   right corner, compiled, bounced and exported to MIDI files; repeats stop at the next region, and Convert Loops to
   Regions (⌃L) makes them regions of their own. Project schema 12.
+- Time-stretch regions: ⌥-drag an audio region's lower edge, or set the inspector's Stretch, and it lasts up to four
+  times longer or shorter through the flex engine, its file untouched. Project schema 13.

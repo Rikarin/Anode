@@ -2320,6 +2320,11 @@ export interface components {
        * @default 0
        */
       loopTicks: number;
+      /**
+       * Format: double
+       * @default 1
+       */
+      stretch: number;
     };
     /**
      * @description Track automation of one parameter. `trackId` null is the master strip. `target` is `volume` (dB),
@@ -3260,6 +3265,7 @@ export interface components {
       | components['schemas']['EditCommandSetRegionCommand']
       | components['schemas']['EditCommandDeleteRegionsCommand']
       | components['schemas']['EditCommandConvertLoopsCommand']
+      | components['schemas']['EditCommandStretchRegionCommand']
       | components['schemas']['EditCommandSetTempoCommand']
       | components['schemas']['EditCommandSetSignatureCommand']
       | components['schemas']['EditCommandSetCycleCommand']
@@ -5259,6 +5265,20 @@ export interface components {
       noteIds?: null | number[];
       /** Format: int64 */
       lengthTicks?: null | number;
+    };
+    /**
+     * @description Time-stretches an audio region without touching its file: it lasts `stretch` times as long as recorded
+     *     (0.25…4, 1 back to as recorded), from `startTick` when given (a drag of its left edge moves its start). Its
+     *     flex markers scale with it; its fades stay in frames, cut to fit.
+     */
+    EditCommandStretchRegionCommand: {
+      /** @enum {string} */
+      type: 'stretchRegion';
+      regionId: string;
+      /** Format: double */
+      stretch: number;
+      /** Format: int64 */
+      startTick?: null | number;
     };
     /**
      * @description Strip Silence: splits each audio region into one region per stretch above `thresholdDb` (RMS), each widened

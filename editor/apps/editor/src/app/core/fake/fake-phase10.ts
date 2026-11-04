@@ -480,6 +480,7 @@ function wholeRegion(id: string, trackId: string, file: AudioFile, startTick: nu
     pitchNotes: [],
     pitchSource: 'off',
     loopTicks: 0,
+    stretch: 1,
     key: null
   };
 }

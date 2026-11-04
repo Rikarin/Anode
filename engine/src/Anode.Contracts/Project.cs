@@ -246,6 +246,10 @@ public sealed record ChannelStrip(
 ///         again, fades included. <c>convertLoops</c> turns them into regions of their own; a looped region is not
 ///         split or joined. MIDI and pattern regions have the same.
 ///     </para>
+///     <para>
+///         <c>stretch</c>: how many times longer its audio lasts (1: as recorded; 0.25…4), scaling its base map whatever
+///         its follow. A region stretched at all is warped; its file is untouched (<c>stretchRegion</c>).
+///     </para>
 /// </remarks>
 public sealed record AudioRegion(
     string Id,
@@ -268,7 +272,8 @@ public sealed record AudioRegion(
     IReadOnlyList<PitchNote> PitchNotes,
     PitchSourceMode PitchSource,
     RegionKey? Key,
-    long LoopTicks = 0
+    long LoopTicks = 0,
+    double Stretch = 1
 );
 
 /// <summary>

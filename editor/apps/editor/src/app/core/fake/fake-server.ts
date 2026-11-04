@@ -2150,6 +2150,7 @@ export class FakeAnodeServer implements AnodeApi {
       pitchNotes: [],
       pitchSource: 'off',
       loopTicks: 0,
+      stretch: 1,
       key: null
     });
     const [drums, bass] = files as [AudioFile, AudioFile];
@@ -3231,6 +3232,7 @@ export class FakeAnodeServer implements AnodeApi {
         pitchNotes: [],
         pitchSource: 'off',
         loopTicks: 0,
+        stretch: 1,
         key: null
       };
     } else if (info.kind === 'midi') {
@@ -4394,6 +4396,7 @@ export class FakeAnodeServer implements AnodeApi {
           pitchNotes: [],
           pitchSource: 'off',
           loopTicks: 0,
+          stretch: 1,
           key: null
         };
         const smart = project.settings.smartTempo;

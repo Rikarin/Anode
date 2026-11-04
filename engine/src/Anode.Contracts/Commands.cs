@@ -19,6 +19,7 @@ namespace Anode.Contracts;
 [JsonDerivedType(typeof(SetRegionCommand), "setRegion")]
 [JsonDerivedType(typeof(DeleteRegionsCommand), "deleteRegions")]
 [JsonDerivedType(typeof(ConvertLoopsCommand), "convertLoops")]
+[JsonDerivedType(typeof(StretchRegionCommand), "stretchRegion")]
 [JsonDerivedType(typeof(SetTempoCommand), "setTempo")]
 [JsonDerivedType(typeof(SetSignatureCommand), "setSignature")]
 [JsonDerivedType(typeof(SetCycleCommand), "setCycle")]
@@ -264,6 +265,13 @@ public sealed record SetRegionCommand(
 ) : EditCommand;
 
 public sealed record DeleteRegionsCommand(IReadOnlyList<string> RegionIds) : EditCommand;
+
+/// <summary>
+///     Time-stretches an audio region without touching its file: it lasts <c>stretch</c> times as long as recorded
+///     (0.25…4, 1 back to as recorded), from <c>startTick</c> when given (a drag of its left edge moves its start). Its
+///     flex markers scale with it; its fades stay in frames, cut to fit.
+/// </summary>
+public sealed record StretchRegionCommand(string RegionId, double Stretch, long? StartTick = null) : EditCommand;
 
 /// <summary>Turns the repeats of looped regions (audio, MIDI, pattern) into regions of their own; what plays stays.</summary>
 public sealed record ConvertLoopsCommand(IReadOnlyList<string> RegionIds) : EditCommand;

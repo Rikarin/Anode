@@ -88,3 +88,29 @@ describe('FakeAnodeServer, region loops', () => {
     await expect(run(server, { type: 'joinRegions', regionIds: [a, b] })).rejects.toMatchObject({ status: 422 });
   });
 });
+
+describe('FakeAnodeServer, stretchRegion', () => {
+  it('stretches a region without touching its frames, scaling its flex markers', async () => {
+    const server = new FakeAnodeServer();
+    const { file, trackId } = await audioProject(server);
+    let p = await run(
+      server,
+      { type: 'addRegion', trackId, fileId: file.id, startTick: 0, length: 48_000 },
+      { type: 'setTrackFlex', trackId, on: true }
+    );
+    const regionId = p.regions[0]?.id ?? '';
+    await run(server, { type: 'setFlexMarkers', regionId, markers: [{ fileFrame: 24_000, tick: 960 }] });
+    p = await run(server, { type: 'stretchRegion', regionId, stretch: 2, startTick: 480 });
+    expect(p.regions[0]).toMatchObject({ startTick: 480, stretch: 2, length: 48_000, fileOffset: 0 });
+    expect(p.regions[0]?.flexMarkers).toEqual([{ fileFrame: 24_000, tick: 1920 }]);
+  });
+
+  it('keeps the stretch in its range', async () => {
+    const server = new FakeAnodeServer();
+    const { file, trackId } = await audioProject(server);
+    const p = await run(server, { type: 'addRegion', trackId, fileId: file.id, startTick: 0, length: 48_000 });
+    await expect(
+      run(server, { type: 'stretchRegion', regionId: p.regions[0]?.id ?? '', stretch: 5 })
+    ).rejects.toMatchObject({ status: 422 });
+  });
+});

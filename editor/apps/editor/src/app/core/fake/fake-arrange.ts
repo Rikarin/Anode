@@ -515,6 +515,7 @@ export function flattenTakeFolder(project: Project, folderId: string, id: IdMake
         pitchNotes: [],
         pitchSource: 'off',
         loopTicks: 0,
+        stretch: 1,
         key: null
       }
     ];

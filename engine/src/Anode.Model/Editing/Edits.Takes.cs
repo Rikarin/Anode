@@ -279,6 +279,7 @@ public static partial class Edits {
             if (r.TrackId != first.TrackId
                 || r.FileId != first.FileId
                 || r.FileOffset != previous.FileOffset + previous.Length
+                || r.Stretch != previous.Stretch
                 || Math.Abs(gap) > 1) {
                 throw new EditException(
                     "Audio regions join only when they play one contiguous stretch of one file (others need a bounce)."

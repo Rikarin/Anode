@@ -6197,7 +6197,8 @@
           "pitchNotes",
           "pitchSource",
           "key",
-          "loopTicks"
+          "loopTicks",
+          "stretch"
         ],
         "type": "object",
         "properties": {
@@ -6288,6 +6289,11 @@
             "type": "integer",
             "format": "int64",
             "default": 0
+          },
+          "stretch": {
+            "type": "number",
+            "format": "double",
+            "default": 1
           }
         },
         "description": "A region of an audio file on a track: it starts at \u0060startTick\u0060 and plays \u0060length\u0060 frames of the file\nfrom \u0060fileOffset\u0060, at \u0060gainDb\u0060, with fades of \u0060fadeIn\u0060 and \u0060fadeOut\u0060 frames whose curves run\nfrom \u22121 (slow start, exponential-looking) through 0 (linear) to 1 (fast start, logarithmic-looking): a fade-in\u0027s\ngain at position x (0\u20261) is x^(2^(\u22122c)), a fade-out the mirror. A muted region\ndoes not play. Two regions on a track may overlap only as a crossfade: where the earlier fades out and the later\nfades in."
@@ -8881,6 +8887,9 @@
             "$ref": "#/components/schemas/EditCommandConvertLoopsCommand"
           },
           {
+            "$ref": "#/components/schemas/EditCommandStretchRegionCommand"
+          },
+          {
             "$ref": "#/components/schemas/EditCommandSetTempoCommand"
           },
           {
@@ -9395,6 +9404,7 @@
             "setRegion": "#/components/schemas/EditCommandSetRegionCommand",
             "deleteRegions": "#/components/schemas/EditCommandDeleteRegionsCommand",
             "convertLoops": "#/components/schemas/EditCommandConvertLoopsCommand",
+            "stretchRegion": "#/components/schemas/EditCommandStretchRegionCommand",
             "setTempo": "#/components/schemas/EditCommandSetTempoCommand",
             "setSignature": "#/components/schemas/EditCommandSetSignatureCommand",
             "setCycle": "#/components/schemas/EditCommandSetCycleCommand",
@@ -15146,6 +15156,36 @@
           }
         },
         "description": "Phase 7, step input: a tie lengthens the last step\u0027s notes (\u0060noteIds\u0060; the server fills them in) by one step\n(\u0060lengthTicks\u0060; filled in from the state), and advances the position. A rest is not an edit:\n\u0060POST /project/step-input/rest\u0060."
+      },
+      "EditCommandStretchRegionCommand": {
+        "required": [
+          "regionId",
+          "stretch",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "stretchRegion"
+            ],
+            "type": "string"
+          },
+          "regionId": {
+            "type": "string"
+          },
+          "stretch": {
+            "type": "number",
+            "format": "double"
+          },
+          "startTick": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int64"
+          }
+        },
+        "description": "Time-stretches an audio region without touching its file: it lasts \u0060stretch\u0060 times as long as recorded\n(0.25\u20264, 1 back to as recorded), from \u0060startTick\u0060 when given (a drag of its left edge moves its start). Its\nflex markers scale with it; its fades stay in frames, cut to fit."
       },
       "EditCommandStripSilenceCommand": {
         "required": [

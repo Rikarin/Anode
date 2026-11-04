@@ -625,6 +625,13 @@ static partial class RandomProjects {
                     ? Split(Pick(r, regions), s, r)
                     : null,
             nameof(SetRegionCommand) => regions.Length > 0 ? SetRegion(Pick(r, regions), r) : null,
+            nameof(StretchRegionCommand) => regions.Length > 0
+                ? new StretchRegionCommand(
+                    Pick(r, regions).Id,
+                    Pick(r, [0.25, 0.5, 1, 1.5, 2, 4]),
+                    r.Next(4) == 0 ? r.Next(0, 32) * 480L : null
+                )
+                : null,
             nameof(ConvertLoopsCommand) => AnyRegion() is not null
                 ? new ConvertLoopsCommand([..Enumerable.Range(0, r.Next(1, 4)).Select(_ => AnyRegion()!)])
                 : null,

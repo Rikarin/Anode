@@ -80,6 +80,7 @@ function region(id: string, trackId: string, startTick = 0): AudioRegion {
     pitchNotes: [],
     pitchSource: 'off',
     loopTicks: 0,
+    stretch: 1,
     key: null
   };
 }

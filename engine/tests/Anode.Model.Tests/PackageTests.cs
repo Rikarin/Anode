@@ -322,8 +322,15 @@ public sealed class PackageTests : IDisposable {
     }
 
     [Fact]
-    public void A_schema_11_package_loads_with_regions_that_do_not_loop() {
+    public void A_schema_11_package_loads_with_regions_that_do_not_loop_or_stretch() {
         var (state, _, _) = RandomProjects.Build(3, 40);
+        state = state.Apply(
+            [
+                ..state.Regions.Values.Select(static r => new RegionUpserted(r with { LoopTicks = 0, Stretch = 1 })),
+                ..state.MidiRegions.Values.Select(static r => new MidiRegionUpserted(r with { LoopTicks = 0 })),
+                ..state.PatternRegions.Values.Select(static r => new PatternRegionUpserted(r with { LoopTicks = 0 }))
+            ]
+        );
         Assert.NotEmpty(state.PatternRegions);
         ProjectPackage.Save(folder, state);
         var path = Path.Combine(folder, "project.json");
@@ -337,6 +344,7 @@ public sealed class PackageTests : IDisposable {
                 foreach (var list in (string[])["regions", "midiRegions", "patternRegions"]) {
                     foreach (var region in (holder[list] as JsonArray ?? []).OfType<JsonObject>()) {
                         region.Remove("loopTicks");
+                        region.Remove("stretch");
                     }
                 }
             }
@@ -347,6 +355,7 @@ public sealed class PackageTests : IDisposable {
         var loaded = ProjectPackage.Load(folder);
         Assert.Equal(RandomProjects.Json(state), RandomProjects.Json(loaded));
         Assert.All(loaded.Regions.Values, static r => Assert.Equal(0, r.LoopTicks));
+        Assert.All(loaded.Regions.Values, static r => Assert.Equal(1, r.Stretch));
         ProjectPackage.Save(folder, loaded);
         var saved = JsonNode.Parse(File.ReadAllText(path))!.AsObject();
         Assert.Equal(PackageMigrations.CurrentSchemaVersion, saved["schemaVersion"]!.GetValue<int>());

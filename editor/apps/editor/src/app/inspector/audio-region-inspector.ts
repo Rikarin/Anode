@@ -49,6 +49,18 @@ const Band =
         [endTick]="project.regionEnd(region())"
         [loopTicks]="region().loopTicks"
       />
+      <span class="text-foreground-muted">Stretch</span>
+      <xui-numeric-input
+        size="sm"
+        aria-label="Region time stretch, percent"
+        data-testid="region-stretch"
+        [min]="25"
+        [max]="400"
+        [stepSize]="1"
+        [majorStepSize]="10"
+        [value]="stretchPercent()"
+        (valueChange)="$event !== null && setStretch($event)"
+      />
       <an-pitch-source-fields
         [audio]="true"
         [regionId]="region().id"
@@ -301,6 +313,19 @@ export class AudioRegionInspector {
 
   protected frames(ms: number): number {
     return Math.max(0, Math.round((ms / 1000) * this.rate()));
+  }
+
+  /** The stretch as a percentage of the recorded length. */
+  protected readonly stretchPercent = computed(() => Math.round(this.region().stretch * 10_000) / 100);
+
+  protected setStretch(percent: number): void {
+    const stretch = Math.round(percent * 100) / 10_000;
+    if (stretch !== this.region().stretch) {
+      void this.project.execute(
+        [{ type: 'stretchRegion', regionId: this.region().id, stretch }],
+        'Time Stretch Region'
+      );
+    }
   }
 
   protected set(change: Partial<Extract<EditCommand, { type: 'setRegion' }>>, label: string): void {

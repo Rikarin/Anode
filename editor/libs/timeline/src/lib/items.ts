@@ -301,6 +301,8 @@ export interface ItemOverride {
   readonly fadeOut?: number;
   readonly fadeInCurve?: number;
   readonly fadeOutCurve?: number;
+  /** How many times longer the region's audio is drawn (a time-stretch drag). */
+  readonly timeScale?: number;
 }
 
 /** The cycle area in the ruler, in ticks. */

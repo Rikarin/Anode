@@ -40,7 +40,8 @@
         "fineTune": 0,
         "pitchNotes": [],
         "pitchSource": "off",
-        "loopTicks": 0
+        "loopTicks": 0,
+        "stretch": 1
       },
       "fileTempo": null,
       "expected": {
@@ -117,7 +118,8 @@
         "fineTune": 0,
         "pitchNotes": [],
         "pitchSource": "off",
-        "loopTicks": 0
+        "loopTicks": 0,
+        "stretch": 1
       },
       "fileTempo": {
         "bpm": 100,
@@ -226,7 +228,8 @@
         "fineTune": 0,
         "pitchNotes": [],
         "pitchSource": "off",
-        "loopTicks": 0
+        "loopTicks": 0,
+        "stretch": 1
       },
       "fileTempo": {
         "bpm": 100,
@@ -355,7 +358,8 @@
         "fineTune": 0,
         "pitchNotes": [],
         "pitchSource": "off",
-        "loopTicks": 0
+        "loopTicks": 0,
+        "stretch": 1
       },
       "fileTempo": null,
       "expected": {
@@ -422,7 +426,8 @@
         "fineTune": 0,
         "pitchNotes": [],
         "pitchSource": "off",
-        "loopTicks": 0
+        "loopTicks": 0,
+        "stretch": 1
       },
       "fileTempo": {
         "bpm": 100,
@@ -513,7 +518,8 @@
         "fineTune": 0,
         "pitchNotes": [],
         "pitchSource": "off",
-        "loopTicks": 0
+        "loopTicks": 0,
+        "stretch": 1
       },
       "fileTempo": {
         "bpm": 100,
@@ -612,7 +618,8 @@
         "fineTune": 0,
         "pitchNotes": [],
         "pitchSource": "off",
-        "loopTicks": 0
+        "loopTicks": 0,
+        "stretch": 1
       },
       "fileTempo": {
         "bpm": 100,
@@ -704,7 +711,8 @@
         "fineTune": 0,
         "pitchNotes": [],
         "pitchSource": "off",
-        "loopTicks": 0
+        "loopTicks": 0,
+        "stretch": 1
       },
       "fileTempo": {
         "bpm": 100,
@@ -826,7 +834,8 @@
         "fineTune": 0,
         "pitchNotes": [],
         "pitchSource": "off",
-        "loopTicks": 0
+        "loopTicks": 0,
+        "stretch": 1
       },
       "fileTempo": {
         "bpm": 100,
@@ -935,7 +944,8 @@
         "fineTune": 0,
         "pitchNotes": [],
         "pitchSource": "off",
-        "loopTicks": 0
+        "loopTicks": 0,
+        "stretch": 1
       },
       "fileTempo": null,
       "expected": {
@@ -1018,7 +1028,8 @@
         "fineTune": 0,
         "pitchNotes": [],
         "pitchSource": "off",
-        "loopTicks": 0
+        "loopTicks": 0,
+        "stretch": 1
       },
       "fileTempo": null,
       "expected": {
@@ -1106,7 +1117,8 @@
         "fineTune": 0,
         "pitchNotes": [],
         "pitchSource": "off",
-        "loopTicks": 0
+        "loopTicks": 0,
+        "stretch": 1
       },
       "fileTempo": {
         "bpm": 60,
@@ -1208,7 +1220,8 @@
         "fineTune": 0,
         "pitchNotes": [],
         "pitchSource": "off",
-        "loopTicks": 0
+        "loopTicks": 0,
+        "stretch": 1
       },
       "fileTempo": {
         "bpm": 60,
@@ -1310,7 +1323,8 @@
         "fineTune": 0,
         "pitchNotes": [],
         "pitchSource": "off",
-        "loopTicks": 0
+        "loopTicks": 0,
+        "stretch": 1
       },
       "fileTempo": {
         "bpm": 60,
@@ -1417,7 +1431,8 @@
         "fineTune": 0,
         "pitchNotes": [],
         "pitchSource": "off",
-        "loopTicks": 0
+        "loopTicks": 0,
+        "stretch": 1
       },
       "fileTempo": {
         "bpm": 60,
@@ -1465,6 +1480,366 @@
             "frame": 192000,
             "tick": 4320,
             "sample": 129831.482665
+          }
+        ]
+      }
+    },
+    {
+      "name": "stretched twice as long",
+      "sampleRate": 48000,
+      "tempoEvents": [
+        {
+          "tick": 0,
+          "bpm": 120,
+          "curve": "step",
+          "shape": 0
+        }
+      ],
+      "signatures": [
+        {
+          "tick": 0,
+          "numerator": 4,
+          "denominator": 4
+        }
+      ],
+      "flexOn": false,
+      "region": {
+        "id": "rgn_1",
+        "trackId": "trk_1",
+        "fileId": "aud_1",
+        "name": "R",
+        "startTick": 960,
+        "fileOffset": 1000,
+        "length": 96000,
+        "gainDb": 0,
+        "fadeIn": 0,
+        "fadeOut": 0,
+        "fadeInCurve": 0,
+        "fadeOutCurve": 0,
+        "muted": false,
+        "follow": "off",
+        "flexMarkers": [],
+        "transpose": 0,
+        "fineTune": 0,
+        "pitchNotes": [],
+        "pitchSource": "off",
+        "loopTicks": 0,
+        "stretch": 2
+      },
+      "fileTempo": null,
+      "expected": {
+        "warped": true,
+        "follow": "off",
+        "startSample": 24000,
+        "endSample": 216000,
+        "endTick": 8640,
+        "points": [
+          {
+            "frame": 1000,
+            "tick": 960,
+            "sample": 24000
+          },
+          {
+            "frame": 25000,
+            "tick": 2880,
+            "sample": 72000
+          },
+          {
+            "frame": 49000,
+            "tick": 4800,
+            "sample": 120000
+          },
+          {
+            "frame": 73000,
+            "tick": 6720,
+            "sample": 168000
+          },
+          {
+            "frame": 97000,
+            "tick": 8640,
+            "sample": 216000
+          }
+        ]
+      }
+    },
+    {
+      "name": "stretched to half over a linear ramp",
+      "sampleRate": 48000,
+      "tempoEvents": [
+        {
+          "tick": 0,
+          "bpm": 60,
+          "curve": "ramp",
+          "shape": 0
+        },
+        {
+          "tick": 3840,
+          "bpm": 120,
+          "curve": "step",
+          "shape": 0
+        }
+      ],
+      "signatures": [
+        {
+          "tick": 0,
+          "numerator": 4,
+          "denominator": 4
+        }
+      ],
+      "flexOn": false,
+      "region": {
+        "id": "rgn_1",
+        "trackId": "trk_1",
+        "fileId": "aud_1",
+        "name": "R",
+        "startTick": 0,
+        "fileOffset": 0,
+        "length": 240000,
+        "gainDb": 0,
+        "fadeIn": 0,
+        "fadeOut": 0,
+        "fadeInCurve": 0,
+        "fadeOutCurve": 0,
+        "muted": false,
+        "follow": "off",
+        "flexMarkers": [],
+        "transpose": 0,
+        "fineTune": 0,
+        "pitchNotes": [],
+        "pitchSource": "off",
+        "loopTicks": 0,
+        "stretch": 0.5
+      },
+      "fileTempo": null,
+      "expected": {
+        "warped": true,
+        "follow": "off",
+        "startSample": 0,
+        "endSample": 120000,
+        "endTick": 3334.064477,
+        "points": [
+          {
+            "frame": 0,
+            "tick": 0,
+            "sample": 0
+          },
+          {
+            "frame": 48000,
+            "tick": 511.29006,
+            "sample": 24000
+          },
+          {
+            "frame": 96000,
+            "tick": 1090.6576,
+            "sample": 48000
+          },
+          {
+            "frame": 144000,
+            "tick": 1747.167032,
+            "sample": 72000
+          },
+          {
+            "frame": 192000,
+            "tick": 2491.089679,
+            "sample": 96000
+          },
+          {
+            "frame": 240000,
+            "tick": 3334.064477,
+            "sample": 120000
+          }
+        ]
+      }
+    },
+    {
+      "name": "stretched and following",
+      "sampleRate": 48000,
+      "tempoEvents": [
+        {
+          "tick": 0,
+          "bpm": 120,
+          "curve": "step",
+          "shape": 0
+        }
+      ],
+      "signatures": [
+        {
+          "tick": 0,
+          "numerator": 4,
+          "denominator": 4
+        }
+      ],
+      "flexOn": false,
+      "region": {
+        "id": "rgn_1",
+        "trackId": "trk_1",
+        "fileId": "aud_1",
+        "name": "R",
+        "startTick": 0,
+        "fileOffset": 0,
+        "length": 96000,
+        "gainDb": 0,
+        "fadeIn": 0,
+        "fadeOut": 0,
+        "fadeInCurve": 0,
+        "fadeOutCurve": 0,
+        "muted": false,
+        "follow": "on",
+        "flexMarkers": [],
+        "transpose": 0,
+        "fineTune": 0,
+        "pitchNotes": [],
+        "pitchSource": "off",
+        "loopTicks": 0,
+        "stretch": 1.5
+      },
+      "fileTempo": {
+        "bpm": 100,
+        "variable": false,
+        "beats": [
+          0,
+          28800,
+          57600,
+          86400,
+          115200,
+          144000,
+          172800,
+          201600,
+          230400,
+          259200,
+          288000,
+          316800,
+          345600,
+          374400,
+          403200,
+          432000,
+          460800,
+          489600,
+          518400,
+          547200
+        ],
+        "downbeats": [
+          0,
+          115200,
+          230400,
+          345600,
+          460800
+        ]
+      },
+      "expected": {
+        "warped": true,
+        "follow": "on",
+        "startSample": 0,
+        "endSample": 120000,
+        "endTick": 4800,
+        "points": [
+          {
+            "frame": 0,
+            "tick": 0,
+            "sample": 0
+          },
+          {
+            "frame": 24000,
+            "tick": 1200,
+            "sample": 30000
+          },
+          {
+            "frame": 48000,
+            "tick": 2400,
+            "sample": 60000
+          },
+          {
+            "frame": 72000,
+            "tick": 3600,
+            "sample": 90000
+          },
+          {
+            "frame": 96000,
+            "tick": 4800,
+            "sample": 120000
+          }
+        ]
+      }
+    },
+    {
+      "name": "stretched with markers",
+      "sampleRate": 48000,
+      "tempoEvents": [
+        {
+          "tick": 0,
+          "bpm": 120,
+          "curve": "step",
+          "shape": 0
+        }
+      ],
+      "signatures": [
+        {
+          "tick": 0,
+          "numerator": 4,
+          "denominator": 4
+        }
+      ],
+      "flexOn": true,
+      "region": {
+        "id": "rgn_1",
+        "trackId": "trk_1",
+        "fileId": "aud_1",
+        "name": "R",
+        "startTick": 0,
+        "fileOffset": 0,
+        "length": 96000,
+        "gainDb": 0,
+        "fadeIn": 0,
+        "fadeOut": 0,
+        "fadeInCurve": 0,
+        "fadeOutCurve": 0,
+        "muted": false,
+        "follow": "off",
+        "flexMarkers": [
+          {
+            "fileFrame": 48000,
+            "tick": 3000
+          }
+        ],
+        "transpose": 0,
+        "fineTune": 0,
+        "pitchNotes": [],
+        "pitchSource": "off",
+        "loopTicks": 0,
+        "stretch": 1.5
+      },
+      "fileTempo": null,
+      "expected": {
+        "warped": true,
+        "follow": "off",
+        "startSample": 0,
+        "endSample": 144000,
+        "endTick": 5760,
+        "points": [
+          {
+            "frame": 0,
+            "tick": 0,
+            "sample": 0
+          },
+          {
+            "frame": 24000,
+            "tick": 1500,
+            "sample": 37500
+          },
+          {
+            "frame": 48000,
+            "tick": 3000,
+            "sample": 75000
+          },
+          {
+            "frame": 72000,
+            "tick": 4380,
+            "sample": 109500
+          },
+          {
+            "frame": 96000,
+            "tick": 5760,
+            "sample": 144000
           }
         ]
       }

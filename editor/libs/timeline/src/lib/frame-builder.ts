@@ -290,6 +290,8 @@ interface DrawnRegion {
   fadeOut: number;
   fadeInCurve: number;
   fadeOutCurve: number;
+  /** How many times longer its audio is drawn than the scene says: a time-stretch drag. */
+  timeScale: number;
 }
 
 /**
@@ -521,7 +523,8 @@ export class FrameBuilder {
       fadeIn: o?.fadeIn ?? regions?.fadeIn[id] ?? 0,
       fadeOut: o?.fadeOut ?? regions?.fadeOut[id] ?? 0,
       fadeInCurve: o?.fadeInCurve ?? regions?.fadeInCurve[id] ?? 0,
-      fadeOutCurve: o?.fadeOutCurve ?? regions?.fadeOutCurve[id] ?? 0
+      fadeOutCurve: o?.fadeOutCurve ?? regions?.fadeOutCurve[id] ?? 0,
+      timeScale: o?.timeScale ?? 1
     });
     for (let k = 0; k < found; k++) {
       const id = this.visible[k] ?? 0;
@@ -579,7 +582,7 @@ export class FrameBuilder {
       const shift = fileOffset - sceneFileOffset(details, id);
       let k = from;
       const frameAt = (x: number): number => {
-        const tick = originTick + x / ppt - start;
+        const tick = (originTick + x / ppt - start) / region.timeScale;
         if (!warped) {
           return fileOffset + tick * framesPerTick;
         }
