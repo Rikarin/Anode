@@ -65,3 +65,20 @@ dotnet_code_quality.SK7081.threshold = 200
 # 1000 is its own "starting policy, not a measurement"; this is the measurement, with the ceiling just over the largest.
 [engine/src/{Anode.Contracts/Commands,Anode.Engine/AudioEngine.Mix,Anode.Engine/AudioEngine.Spatial,Anode.Engine/EngineController,Anode.Ipc/IpcMessage,Anode.Model/Storage/ProjectPackage,Anode.Server/Engine/FakeHost,Anode.Server/Projects/ProjectSession}.cs]
 dotnet_code_quality.SK7030.threshold = 1600
+
+# SK0002, a line over the width that nothing can break: an audit with no fix, and 1,962 of its 2,153 lines were comment
+# prose a column or nine over. Rewrapping them would churn most of the tree and read worse.
+[engine/**.cs]
+dotnet_diagnostic.SK0002.severity = none
+
+# SK7020, a duplicated block. Its limit of 100 tokens is fixed, so these are scoped by what repeats. The DSP's filters
+# and voices repeat because real-time code stays flat and unshared on purpose; the contracts repeat attribute lists and
+# positional records, which have no other spelling; a spike or a content tool is thrown away or generates data.
+[engine/{src/Anode.Dsp,src/Anode.Contracts,spikes,tools}/**.cs]
+dotnet_diagnostic.SK7020.severity = none
+
+# SK7020 again: flat tables. Route maps (a generic helper is not safe under the host's AOT publish), message and id
+# lists, staff styles, the closed-union dispatch shared by the host and the history, and the object walks of the model
+# state. The audio-path pair stays inline with the mix it runs in.
+[engine/src/{Anode.Server/Api/*,Anode.Server/Projects/PeakJobs,Anode.Ipc/IpcMessage,Anode.Engine/AudioEngine.Spatial,Anode.EngineHost/EngineHost,Anode.Model/History/EditHistory,Anode.Interchange/Aaf/AafIds,Anode.Model/Editing/Edits,Anode.Model/Editing/Edits.Midi,Anode.Model/ProjectState,Anode.Notation/FactoryStaffStyles}.cs]
+dotnet_diagnostic.SK7020.severity = none
