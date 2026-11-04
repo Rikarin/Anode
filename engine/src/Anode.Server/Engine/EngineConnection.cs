@@ -62,7 +62,12 @@ public sealed partial class EngineConnection(
     TransportStatus? transport;
 
     string? thru;
+
+    /// <summary>How long a window's <see cref="WatchDisplays" /> lasts; editors renew it every second.</summary>
+    internal static readonly TimeSpan DisplayLease = TimeSpan.FromSeconds(3);
+
     List<InsertReading>? pendingReadings;
+    readonly Dictionary<WatchedInsert, long> displayLeases = [];
     string? masterTap;
 
     public static string Version =>
@@ -342,6 +347,57 @@ public sealed partial class EngineConnection(
         if (Volatile.Read(ref current) is not { } link
             || !link.Work.Writer.TryWrite(new OpenPluginEditorMessage(engineTrack, request.InsertId, request.Open))) {
             throw ProjectException.Conflict("No engine runs to open the plugin's window.");
+        }
+    }
+
+    /// <summary>
+    ///     Keeps <paramref name="request" />'s inserts on the host's watch list for <see cref="DisplayLease" />. A window
+    ///     renews its lease while it shows, so a client that goes away leaves nothing behind. The list goes out on every
+    ///     renewal: that also brings a reconnected host up to date.
+    /// </summary>
+    public void WatchDisplays(InsertDisplayRequest request) {
+        if (session.View is not { } view) {
+            return;
+        }
+
+        var until = Environment.TickCount64 + (long)DisplayLease.TotalMilliseconds;
+        lock (displayLeases) {
+            foreach (var target in request.Inserts ?? []) {
+                if (target?.InsertId is not null && EngineInsert(view, target) is { } watched) {
+                    displayLeases[watched] = until;
+                }
+            }
+
+            TrySend(new WatchInsertsMessage([..displayLeases.Keys]));
+        }
+    }
+
+    /// <summary>A target's engine address, or null for a track the engine does not know.</summary>
+    static WatchedInsert? EngineInsert(OpenProjectView view, InsertDisplayTarget target) {
+        if (target.TrackId is null) {
+            return new(-1, target.InsertId);
+        }
+
+        return view.State.FindTrack(target.TrackId) is null
+            ? null
+            : new(view.Ids.Track(target.TrackId), target.InsertId);
+    }
+
+    /// <summary>Drops the leases that ran out and tells the host.</summary>
+    void ExpireDisplays() {
+        var now = Environment.TickCount64;
+        lock (displayLeases) {
+            var expired = false;
+            foreach (var (insert, until) in displayLeases) {
+                if (until <= now) {
+                    displayLeases.Remove(insert);
+                    expired = true;
+                }
+            }
+
+            if (expired) {
+                TrySend(new WatchInsertsMessage([..displayLeases.Keys]));
+            }
         }
     }
 
@@ -703,7 +759,14 @@ public sealed partial class EngineConnection(
 
             var trackId = r.TrackId < 0 ? null : ids?.TrackOf(r.TrackId);
             if (r.TrackId < 0 || trackId is not null) {
-                readings.Add(new(trackId, r.InsertId, r.Value));
+                readings.Add(
+                    new(
+                        trackId,
+                        r.InsertId,
+                        r.Value,
+                        r.Values is { } values ? Array.ConvertAll(values, static v => (double)v) : null
+                    )
+                );
             }
         }
 
@@ -801,6 +864,7 @@ public sealed partial class EngineConnection(
             }
 
             last = now;
+            ExpireDisplays();
             var readings = Interlocked.Exchange(ref pendingReadings, null);
             if (view is null) {
                 continue;

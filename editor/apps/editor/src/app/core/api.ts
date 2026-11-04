@@ -26,6 +26,7 @@ import {
   type FileAnalysis,
   type GrooveTemplate,
   type ImportProjectTracksRequest,
+  type InsertDisplayRequest,
   type IoLabels,
   type Job,
   type KeyCommandSet,
@@ -262,6 +263,11 @@ export interface AnodeApi {
    * when the plugin has none or the engine runs headless.
    */
   openPluginEditor(request: PluginEditorRequest): Promise<void>;
+  /**
+   * Keeps these inserts' live displays (`InsertReading.values`: a spectrum, a scope, band gains) on the meters event for
+   * the next few seconds; a plugin window repeats it while it shows.
+   */
+  watchInsertDisplays(request: InsertDisplayRequest): Promise<void>;
   /**
    * A file's cached analysis (Phase 5): transients and beats (analysed now when missing), and its pitch curve and notes
    * once an `analyze` job has run.
@@ -751,6 +757,10 @@ export class HttpAnodeApi implements AnodeApi {
 
   async openPluginEditor(request: PluginEditorRequest): Promise<void> {
     unwrap(await this.client.POST('/api/v1/plugins/editor', { body: request }));
+  }
+
+  async watchInsertDisplays(request: InsertDisplayRequest): Promise<void> {
+    unwrap(await this.client.POST('/api/v1/plugins/displays', { body: request }));
   }
 
   async fileAnalysis(fileId: string): Promise<FileAnalysis> {

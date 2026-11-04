@@ -463,7 +463,6 @@ desktop app with the null device and the test pack, with all nine steps. All sev
 - Loop preview plays audio loops only; MIDI and pattern loops answer 422.
 - A `stopping` cell event carries only the stop boundary, so an editor that connects while a cell is stopping cannot
   draw its progress.
-- The Multipressor's per-band gain readings are not sent to the editor.
 - The phase 1 golden path failed once on a `toHaveAttribute` assertion in a full run and did not reproduce in ten.
 - The editor's initial bundle is 1.13 MB against a 1.00 MB budget (a build warning).
 - Linux and Windows.

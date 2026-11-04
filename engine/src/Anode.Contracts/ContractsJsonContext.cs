@@ -55,6 +55,7 @@ namespace Anode.Contracts;
 [JsonSerializable(typeof(PatchInfo))]
 [JsonSerializable(typeof(SavePatchRequest))]
 [JsonSerializable(typeof(PluginEditorRequest))]
+[JsonSerializable(typeof(InsertDisplayRequest))]
 [JsonSerializable(typeof(FileAnalysis))]
 [JsonSerializable(typeof(BounceInPlaceRequest))]
 [JsonSerializable(typeof(ProcessRequest))]

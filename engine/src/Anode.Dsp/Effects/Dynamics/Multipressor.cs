@@ -24,7 +24,8 @@ namespace Anode.Dsp.Effects.Dynamics;
 ///         </item>
 ///     </list>
 ///     The <see cref="IAudioEffect.Reading" /> is the deepest gain change of any band over the last buffer (dB, ≤ 0);
-///     <see cref="BandGain" /> gives each band's.
+///     <see cref="BandGain" /> gives each band's, and the display (<see cref="IEffectDisplay" />) is those four, band 1
+///     first.
 ///     <para>
 ///         Parameter ids: <c>cross1</c> … <c>cross3</c>, then per band n = 1 … 4: <c>band{n}On</c>,
 ///         <c>band{n}Threshold</c>, <c>band{n}Ratio</c>, <c>band{n}ExpThreshold</c>, <c>band{n}ExpRatio</c>,
@@ -32,7 +33,7 @@ namespace Anode.Dsp.Effects.Dynamics;
 ///         <c>output</c> and <c>mix</c>.
 ///     </para>
 /// </summary>
-public sealed class Multipressor : AudioEffect {
+public sealed class Multipressor : AudioEffect, IEffectDisplay {
     public const string Id = "anode.multipressor";
     public const int BandCount = 4;
     const double Knee = 6;
@@ -91,6 +92,16 @@ public sealed class Multipressor : AudioEffect {
 
     /// <summary>Band <paramref name="band" />'s (0 … 3) gain change over the last buffer, dB (≤ 0 when reducing).</summary>
     public float BandGain(int band) => Volatile.Read(ref published[band]);
+
+    public int DisplaySize => BandCount;
+
+    public int ReadDisplay(Span<float> values) {
+        for (var band = 0; band < BandCount; band++) {
+            values[band] = BandGain(band);
+        }
+
+        return BandCount;
+    }
 
     static BandParameters AddBand(int n) =>
         new(

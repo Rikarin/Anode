@@ -430,6 +430,21 @@ public sealed class MixApiTests {
         await Editor(client, new(gtr, inserts[0].Id, false));
         await ServerFixture.Eventually(() => Task.FromResult(host.Editors.Count == 0));
 
+        // A window showing an insert asks for its display; an unknown track is ignored.
+        Assert.Equal(
+            HttpStatusCode.NoContent,
+            (await Displays(client, new([new(gtr, inserts[1].Id), new(null, "ins_master"), new("trk_none", "x")])))
+            .StatusCode
+        );
+        await ServerFixture.Eventually(() => Task.FromResult(
+                host.WatchedInserts.Contains(new(0, inserts[1].Id))
+                && host.WatchedInserts.Contains(new(-1, "ins_master"))
+            )
+        );
+        Assert.Equal(2, host.WatchedInserts.Count);
+        // The lease runs out with nobody renewing it, so a client that went away leaves nothing behind.
+        await ServerFixture.Eventually(() => Task.FromResult(host.WatchedInserts.Count == 0));
+
         // The plugin's own editor moves its gain twice: one coalesced undo step.
         var undo = (await History(client)).Undo.Count;
         await host.ChangeParameterAsync(0, inserts[0].Id, "0", 3);
@@ -442,6 +457,11 @@ public sealed class MixApiTests {
         await host.ReportReadingsAsync([new(0, inserts[1].Id, -4.5f), new(7, "ins_gone", 1)]);
         var meters = await events.WaitAsync<MetersEvent>(static e => e.Readings is { Count: > 0 });
         Assert.Equal(new(gtr, inserts[1].Id, -4.5), Assert.Single(meters.Readings!));
+
+        // An effect with more to show sends it beside the reading (the Multipressor's four band gains).
+        await host.ReportReadingsAsync([new(0, inserts[1].Id, -9, [-1, -9, 0, -0.5f])]);
+        meters = await events.WaitAsync<MetersEvent>(static e => e.Readings?[0].Values is not null);
+        Assert.Equal([-1, -9, 0, -0.5], Assert.Single(meters.Readings!).Values!);
 
         await host.ReportProblemAsync(0, inserts[0].Id, FakeHost.FakeVst3Id, "The plugin crashed.");
         var problem = await events.WaitAsync<PluginProblemEvent>();
@@ -485,6 +505,14 @@ public sealed class MixApiTests {
             )
         );
     }
+
+    static Task<HttpResponseMessage> Displays(HttpClient client, InsertDisplayRequest request) =>
+        client.PostAsJsonAsync(
+            "/api/v1/plugins/displays",
+            request,
+            ContractsJsonContext.Default.InsertDisplayRequest,
+            Token
+        );
 
     static Task<HttpResponseMessage> Editor(HttpClient client, PluginEditorRequest request) =>
         client.PostAsJsonAsync(

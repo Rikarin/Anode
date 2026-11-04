@@ -102,6 +102,7 @@ export type IoLabel = Schemas['IoLabel'];
 export type PatchInfo = Schemas['PatchInfo'];
 export type SavePatchRequest = Schemas['SavePatchRequest'];
 export type PluginEditorRequest = Schemas['PluginEditorRequest'];
+export type InsertDisplayRequest = Schemas['InsertDisplayRequest'];
 export type Job = Schemas['Job'];
 export type JobKind = Schemas['JobKind'];
 export type JobState = Schemas['JobState'];
@@ -862,14 +863,15 @@ export interface TrackMeter {
 
 /**
  * A reading of an insert effect (`IAudioEffect.Reading`: a compressor's gain reduction in dB, a meter's LUFS), for the
- * generic plugin editor. Not in the committed contracts yet: the editor reads `meters.readings` when a Server sends it
- * (the fake Server does), and shows no reading otherwise.
+ * plugin editor. Realtime events are not in the OpenAPI document; this mirrors `InsertReading` in `Realtime.cs`.
  */
 export interface InsertReading {
   /** The track, or null for the master strip. */
   trackId: string | null;
   insertId: string;
   value: number;
+  /** What an effect with more to show sends beside it (the Multipressor's band gains, band 1 first). */
+  values?: number[] | null;
 }
 
 /** Live MIDI the engine received; `trackId` is the track that played it, if any. */

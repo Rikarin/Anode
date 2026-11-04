@@ -103,8 +103,17 @@ public sealed record PerformanceStatus(
     long Underruns
 );
 
-/// <summary>An insert's reading (<c>IAudioEffect.Reading</c>); <c>trackId</c> null is the master.</summary>
-public sealed record InsertReading(string? TrackId, string InsertId, double Value);
+/// <summary>
+///     An insert's reading (<c>IAudioEffect.Reading</c>); <c>trackId</c> null is the master. <c>values</c> are what an
+///     effect with more to show sends beside it while a client watches it (<c>/plugins/displays</c>): the Multipressor's
+///     band gains, an EQ's spectrum (docs/effects/T2.md lists each effect's layout); left out otherwise.
+/// </summary>
+public sealed record InsertReading(
+    string? TrackId,
+    string InsertId,
+    double Value,
+    IReadOnlyList<double>? Values = null
+);
 
 /// <summary>
 ///     A track's (or the master's, <c>trackId</c> <c>master</c>) peaks since the previous frame, linear. Phase 10: a

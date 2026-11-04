@@ -46,6 +46,7 @@ namespace Anode.Ipc;
 [JsonDerivedType(typeof(ParameterChangedMessage), "parameterChanged")]
 [JsonDerivedType(typeof(PluginProblemMessage), "pluginProblem")]
 [JsonDerivedType(typeof(InsertReadingsMessage), "insertReadings")]
+[JsonDerivedType(typeof(WatchInsertsMessage), "watchInserts")]
 [JsonDerivedType(typeof(LaunchCellsMessage), "launchCells")]
 [JsonDerivedType(typeof(StopCellsMessage), "stopCells")]
 [JsonDerivedType(typeof(CellStateMessage), "cellState")]
@@ -699,14 +700,26 @@ public sealed record ParameterChangedMessage(int TrackId, string? InsertId, stri
 /// <summary>Host → server: a plugin crashed or failed to load and is bypassed.</summary>
 public sealed record PluginProblemMessage(int TrackId, string? InsertId, string PluginId, string Message) : IpcMessage;
 
-/// <summary>An insert's reading (<c>IAudioEffect.Reading</c>: a compressor's gain reduction in dB, a meter's level).</summary>
-public sealed record InsertReadingEntry(int TrackId, string InsertId, float Value);
+/// <summary>
+///     An insert's reading (<c>IAudioEffect.Reading</c>: a compressor's gain reduction in dB, a meter's level), and
+///     <paramref name="Values" />, what its <c>IEffectDisplay</c> shows, when it has one and an editor watches it.
+/// </summary>
+public sealed record InsertReadingEntry(int TrackId, string InsertId, float Value, float[]? Values = null);
 
 /// <summary>
 ///     Host → server: the inserts' readings (track −1: the master; inserts without one are left out), at most 15 times a
 ///     second while any insert has one.
 /// </summary>
 public sealed record InsertReadingsMessage(IReadOnlyList<InsertReadingEntry> Readings) : IpcMessage;
+
+/// <summary>An insert whose display an editor shows (track −1: the master).</summary>
+public sealed record WatchedInsert(int TrackId, string InsertId);
+
+/// <summary>
+///     Server → host: the inserts whose <c>IEffectDisplay</c> values to read and send, all of them (it replaces the last
+///     list). A display can be a spectrum's FFT, so one nobody looks at costs nothing.
+/// </summary>
+public sealed record WatchInsertsMessage(IReadOnlyList<WatchedInsert> Inserts) : IpcMessage;
 
 /// <summary>A Live Loops quantise (the contract's <c>LaunchQuantize</c>): the boundary a launch or stop waits for.</summary>
 [JsonConverter(typeof(JsonStringEnumConverter<EngineQuantize>))]

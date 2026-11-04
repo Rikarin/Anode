@@ -65,6 +65,7 @@ public sealed partial class FakeHost : IAsyncDisposable {
     readonly Dictionary<(int Track, string Insert), string> insertStates = [];
     readonly Dictionary<int, CancellationTokenSource> renders = [];
     readonly HashSet<(int Track, string? Insert)> editors = [];
+    IReadOnlyList<WatchedInsert> watchedInserts = [];
     readonly SemaphoreSlim writing;
     Stream? connection;
     SetMixerMessage mixer = new("all", false, 10);
@@ -198,6 +199,15 @@ public sealed partial class FakeHost : IAsyncDisposable {
     ];
 
     /// <summary>The plugin editors open now: (engine track, insert id; null the instrument).</summary>
+    /// <summary>The inserts whose displays the server last asked for.</summary>
+    public IReadOnlyList<WatchedInsert> WatchedInserts {
+        get {
+            lock (gate) {
+                return watchedInserts;
+            }
+        }
+    }
+
     public IReadOnlyCollection<(int Track, string? Insert)> Editors {
         get {
             lock (gate) {
@@ -579,6 +589,12 @@ public sealed partial class FakeHost : IAsyncDisposable {
             case SetMixerMessage set:
                 lock (gate) {
                     mixer = set;
+                }
+
+                break;
+            case WatchInsertsMessage watch:
+                lock (gate) {
+                    watchedInserts = watch.Inserts;
                 }
 
                 break;

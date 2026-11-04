@@ -49,7 +49,7 @@ describe('Custom plugin panels: the T3 instruments (Phase 11)', () => {
       expect(matchPanel(t3(id))).toBeNull();
     }
     for (const other of [...FakeT2Instruments, ...FakeT2Effects, ...FakeMidiEffects]) {
-      expect(deferredPanel(other)).toBeNull();
+      expect(deferredPanel(other)).toBe(other.id === 'anode.linear-eq' ? 'eqCurve' : null);
     }
     const bound = matchPanel(t3('anode.physical-model'))?.binding;
     expect(bound?.series['exciterPosition']).toHaveLength(3);

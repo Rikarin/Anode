@@ -1,6 +1,6 @@
 import { ChangeDetectionStrategy, Component, computed, input } from '@angular/core';
 import type { ParameterInfo } from '@anode/api-client';
-import { formatParameter, fromNormal, toNormal } from '@anode/audio-ui';
+import { formatParameter, formatReading, fromNormal, readingFraction, toNormal } from '@anode/audio-ui';
 import { PanelParameter } from './panel-parameter';
 import { bandCount, panelBinding } from './panel-patterns';
 import type { PluginPanelHost } from './plugin-panel';
@@ -28,8 +28,7 @@ const Ticks = [100, 1_000, 10_000];
 /**
  * The Multipressor's panel: the crossovers as handles on a 20 Hz–20 kHz axis (ARIA sliders, ←/→ move one along the
  * axis between its neighbours, ⇧ finer, or drag), and a column per band with its threshold, ratio and gain knobs and
- * a bypass toggle. (Per-band gain reduction would sit under each column once the engine reports it per band; the
- * window's reading shows the overall one.)
+ * a bypass toggle, and the band's gain reduction under them (the insert's reading values, band 1 first).
  */
 @Component({
   selector: 'an-multipressor-panel',
@@ -102,6 +101,26 @@ const Ticks = [100, 1_000, 10_000];
           <an-panel-parameter [host]="host()" [parameter]="band.threshold" label="Threshold" />
           <an-panel-parameter [host]="host()" [parameter]="band.ratio" label="Ratio" />
           <an-panel-parameter [host]="host()" [parameter]="band.gain" label="Gain" />
+          <div
+            class="flex w-full flex-col items-center gap-0.5"
+            role="meter"
+            aria-valuemin="-30"
+            aria-valuemax="0"
+            [attr.aria-label]="'Band ' + band.number + ' gain reduction'"
+            [attr.aria-valuenow]="reductionNow(band.number - 1)"
+            [attr.aria-valuetext]="reductionText(band.number - 1)"
+            [attr.data-testid]="'band-reduction-' + band.number"
+          >
+            <span class="well relative h-1.5 w-full overflow-hidden rounded-[2px]" aria-hidden="true">
+              <span
+                class="bg-meter-mid absolute inset-y-0 end-0"
+                [style.width.%]="reductionWidth(band.number - 1)"
+              ></span>
+            </span>
+            <span class="readout text-foreground text-[10px]" aria-hidden="true">{{
+              reductionText(band.number - 1)
+            }}</span>
+          </div>
         </div>
       }
     </div>
@@ -134,6 +153,26 @@ export class MultipressorPanel {
 
   protected value(parameter: ParameterInfo): number {
     return this.host().value(parameter.id);
+  }
+
+  /** Band `index`'s gain reduction, dB (null until the engine reports one). */
+  protected reduction(index: number): number | null {
+    return this.host().readingValues?.()?.[index] ?? null;
+  }
+
+  protected reductionText(index: number): string {
+    return formatReading(this.reduction(index), 'dB');
+  }
+
+  /** How far the band's bar has grown from 0 dB, in %. */
+  protected reductionWidth(index: number): number {
+    const value = this.reduction(index);
+    return value === null ? 0 : (1 - readingFraction(value, -30, 0)) * 100;
+  }
+
+  /** A meter needs a value: with no reading it rests at its top. */
+  protected reductionNow(index: number): number {
+    return Math.round((this.reduction(index) ?? 0) * 10) / 10;
   }
 
   protected position(hz: number): number {

@@ -39,6 +39,7 @@ import {
   type ImportedTrack,
   type ImportProjectTracksRequest,
   type Insert,
+  type InsertDisplayRequest,
   type InsertReading,
   type IoLabel,
   type IoLabels,
@@ -168,6 +169,7 @@ import {
 } from './fake-arrange';
 import { fakePeaks, hash, readWavHeader } from './fake-audio';
 import { FakeAudioDevices } from './fake-audio-devices';
+import { displayKey, DisplayLeaseMs, fakeDisplay, fakeSpectrum } from './fake-displays';
 import { applyEnvironmentCommand } from './fake-environment';
 import { fakeFileExists, FakeHome, fileKind, listFakeFolder } from './fake-files';
 import { adaptTempo, applyFlexCommand, fakeAnalysis, type FlexContext, timingOf } from './fake-flex';
@@ -271,6 +273,7 @@ import {
   withExtension
 } from './fake-phase9';
 import { CrashyPluginId, FakeCatalogue, FakeEffects, FakeMidiDevices } from './fake-plugins';
+import { FakeParityEffects } from './fake-plugins-effects';
 import { FakeT3Effects, FakeT3Instruments } from './fake-plugins-phase11';
 import { FakeMidiEffects, FakeT2Effects, FakeT2Instruments, RemixFxId, withMacros } from './fake-plugins-phase6';
 import { checkedLoop, convertLoops, refuseLooped } from './fake-region-loops';
@@ -410,6 +413,7 @@ export class FakeAnodeServer implements AnodeApi {
       ...FakeEffects,
       ...FakeT2Effects,
       ...FakeT3Effects,
+      ...FakeParityEffects,
       ...FakeMidiEffects
     ]
       .map(withMacros)
@@ -445,6 +449,8 @@ export class FakeAnodeServer implements AnodeApi {
   private jobTimer: ReturnType<typeof setInterval> | null = null;
   private readonly patchStore = new Map<string, StoredPatch>();
   private labels: IoLabels = { inputs: [], outputs: [], buses: [] };
+  /** The leases on inserts' displays: when each runs out. */
+  private readonly watchedDisplays = new Map<string, number>();
   /** Plugin editor windows open, as `trackId/insertId` (`master/…`, `…/instrument`) (tests). */
   readonly editors = new Set<string>();
   /** Inserts the engine bypassed after their plugin crashed. */
@@ -1703,6 +1709,29 @@ export class FakeAnodeServer implements AnodeApi {
       };
       return structuredClone(this.labels);
     });
+  }
+
+  watchInsertDisplays(request: InsertDisplayRequest): Promise<void> {
+    return this.answer('WatchInsertDisplays', () => {
+      for (const { trackId, insertId } of request.inserts) {
+        this.watchedDisplays.set(displayKey(trackId ?? null, insertId), this.now() + DisplayLeaseMs);
+      }
+    });
+  }
+
+  /** The defaults of an insert's plugin, for what the insert has not set. */
+  private fakeDefaults(insert: Insert): ReadonlyMap<string, number> {
+    const plugin = this.catalogue.find(p => p.id === insert.pluginId);
+    return new Map(plugin?.parameters.map(p => [p.id, p.default]));
+  }
+
+  private fakeSpectrumOf(insert: Insert, level: number): number[] {
+    return fakeSpectrum(insert, level, this.positionTick, this.fakeDefaults(insert));
+  }
+
+  /** Whether a client's lease on an insert's display still runs. */
+  private displayWatched(trackId: string | null, insertId: string): boolean {
+    return (this.watchedDisplays.get(displayKey(trackId, insertId)) ?? 0) > this.now();
   }
 
   openPluginEditor(request: PluginEditorRequest): Promise<void> {
@@ -4544,6 +4573,48 @@ export class FakeAnodeServer implements AnodeApi {
             break;
           case 'anode.loudness-meter':
             readings.push({ trackId, insertId: insert.id, value: level > 0 ? Math.max(-70, db - 9) : -70 });
+            break;
+          case 'anode.multipressor': {
+            // Program material falls with frequency: each band hears 4 dB less than the one below it.
+            const bands = [1, 2, 3, 4].map(band =>
+              insert.parameters[`band${band}On`] === 0
+                ? 0
+                : -Math.max(0, db - 4 * (band - 1) - (insert.parameters[`band${band}Threshold`] ?? -20)) *
+                  (1 - 1 / (insert.parameters[`band${band}Ratio`] ?? 2))
+            );
+            readings.push({
+              trackId,
+              insertId: insert.id,
+              value: Math.min(...bands),
+              values: this.displayWatched(trackId, insert.id) ? bands : null
+            });
+            break;
+          }
+          case 'anode.tuner':
+          case 'anode.test-oscillator':
+          case 'anode.expander':
+          case 'anode.frequency-spread':
+          case 'anode.scope':
+          case 'anode.phase-meter':
+          case 'anode.vocoder':
+          case 'anode.voice-shaper': {
+            const shown = fakeDisplay(insert, level, this.positionTick, this.fakeDefaults(insert));
+            readings.push({
+              trackId,
+              insertId: insert.id,
+              value: shown.value,
+              values: this.displayWatched(trackId, insert.id) ? shown.values : null
+            });
+            break;
+          }
+          case 'anode.channel-eq':
+          case 'anode.linear-eq':
+            readings.push({
+              trackId,
+              insertId: insert.id,
+              value: Math.max(-120, db),
+              values: this.displayWatched(trackId, insert.id) ? this.fakeSpectrumOf(insert, level) : null
+            });
             break;
         }
       }

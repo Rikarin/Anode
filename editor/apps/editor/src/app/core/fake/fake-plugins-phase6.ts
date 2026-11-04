@@ -289,9 +289,11 @@ export const FakeT2Effects: readonly PluginInfo[] = [
     ],
     { fileTypes: ['.wav'] }
   ),
-  // Workstream D: the Linear Phase EQ takes the Channel EQ's parameter ids.
+  // Workstream D: the Linear Phase EQ takes the Channel EQ's parameter ids, up to its placement and dynamics.
   plugin('anode.linear-eq', 'Linear Phase EQ', 'EQ', [
-    ...(FakeEffects.find(e => e.id === 'anode.channel-eq')?.parameters ?? [])
+    ...(FakeEffects.find(e => e.id === 'anode.channel-eq')?.parameters ?? []).filter(
+      parameter => !/Place$|Dyn|^dyn/.test(parameter.id)
+    )
   ]),
   plugin('anode.multipressor', 'Multipressor', 'Dynamics', [
     p('cross1', 'Crossover 1', 20, 20_000, 150, 'Hz'),
@@ -389,7 +391,7 @@ export const T1Macros: Readonly<Record<string, readonly string[]>> = {
     'glide'
   ],
   'anode.sampler': ['tune', 'attack', 'release', 'velocity'],
-  'anode.channel-eq': ['low.gain', 'peak2.gain', 'high.gain'],
+  'anode.channel-eq': ['lowShelfGain', 'peak2Gain', 'highShelfGain'],
   'anode.compressor': ['threshold', 'ratio', 'makeup'],
   'anode.reverb': ['size', 'mix'],
   'anode.stereo-delay': ['feedback', 'mix'],

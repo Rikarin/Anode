@@ -223,6 +223,12 @@ public sealed record SavePatchRequest(string TrackId, string Name, string Catego
 /// <summary>Opens (or closes) a plugin's own editor window: an insert, or with no <c>insertId</c> the instrument.</summary>
 public sealed record PluginEditorRequest(string? TrackId, string? InsertId, bool Open);
 
+/// <summary>An insert a plugin window shows; <c>trackId</c> null is the master.</summary>
+public sealed record InsertDisplayTarget(string? TrackId, string InsertId);
+
+/// <summary>The inserts whose live display (a spectrum, a scope, band gains) an editor shows now.</summary>
+public sealed record InsertDisplayRequest(IReadOnlyList<InsertDisplayTarget> Inserts);
+
 /// <summary>
 ///     A Scripter factory script (Phase 7, <c>GET /library/scripts</c>): its stable id (<c>factory.…</c>), name, a
 ///     line about what it does, and its source, which the Script Editor loads as a slot's script.

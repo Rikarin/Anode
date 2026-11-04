@@ -38,6 +38,23 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/api/v1/plugins/displays': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Keeps these inserts' live displays (spectrum, scope, band gains) on the meters event for the next few seconds: an editor repeats it while a plugin window shows. Unknown inserts are ignored. */
+    post: operations['WatchInsertDisplays'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/api/v1/system/discovery': {
     parameters: {
       query?: never;
@@ -5937,6 +5954,15 @@ export interface components {
     };
     /** @enum {unknown} */
     InsertChain: 'inserts' | 'midiEffects' | null;
+    /** @description The inserts whose live display (a spectrum, a scope, band gains) an editor shows now. */
+    InsertDisplayRequest: {
+      inserts: components['schemas']['InsertDisplayTarget'][];
+    };
+    /** @description An insert a plugin window shows; `trackId` null is the master. */
+    InsertDisplayTarget: {
+      trackId?: null | string;
+      insertId: string;
+    };
     /** @description Installs a `.anodepack` from the server's disk (replacing an installed version of the same pack). */
     InstallPackRequest: {
       path: string;
@@ -8610,6 +8636,37 @@ export interface operations {
       };
       /** @description Not Found */
       404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  WatchInsertDisplays: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['InsertDisplayRequest'];
+      };
+    };
+    responses: {
+      /** @description No Content */
+      204: {
         headers: {
           [name: string]: unknown;
         };

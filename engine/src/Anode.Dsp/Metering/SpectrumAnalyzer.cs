@@ -8,6 +8,10 @@ namespace Anode.Dsp.Metering;
 /// </summary>
 public sealed class SpectrumAnalyzer {
     public const int Size = 4096;
+
+    /// <summary>The bands an EQ sends the editor: 20 Hz to 20 kHz, evenly spaced in log frequency.</summary>
+    public const int DisplayBands = 64;
+
     const int Mask = Size - 1;
 
     readonly float[] ring = new float[Size];

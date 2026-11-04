@@ -62,6 +62,7 @@ public sealed partial class EngineController : IDisposable {
     static readonly TimeSpan PrimeTimeout = TimeSpan.FromSeconds(2);
 
     readonly Lock gate = new();
+    HashSet<WatchedInsert> watchedInserts = [];
     readonly Lock sendGate = new();
     readonly Dictionary<string, MappedSegment> pool = new(StringComparer.Ordinal);
     readonly List<string> poolOrder = [];

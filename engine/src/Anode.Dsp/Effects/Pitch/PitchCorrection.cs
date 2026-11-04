@@ -1,5 +1,3 @@
-using Anode.Dsp.Spectral;
-
 namespace Anode.Dsp.Effects.Pitch;
 
 /// <summary>
@@ -7,10 +5,8 @@ namespace Anode.Dsp.Effects.Pitch;
 ///     scale, in real time.
 ///     <list type="bullet">
 ///         <item>
-///             <b>Detection.</b> Every <see cref="Hop" /> samples, YIN (de Cheveigné and Kawahara, 2002) on the mono sum's
-///             last window: the difference function by FFT, its cumulative-mean normalisation, the first trough under
-///             0.12 (refined by a parabola), periods of <see cref="MinHz" /> … <see cref="MaxHz" />. No trough under 0.25,
-///             or a quiet window (below −70 dBFS), is unvoiced.
+///             <b>Detection.</b> Every <see cref="Hop" /> samples, <see cref="YinDetector" /> on the mono sum's last
+///             window, periods of <see cref="MinHz" /> … <see cref="MaxHz" />.
 ///         </item>
 ///         <item>
 ///             <b>Target.</b> The nearest note of Scale in Key to the detected pitch, plus Detune; the correction (in
@@ -32,9 +28,6 @@ public sealed class PitchCorrection : AudioEffect {
     public const double MinHz = 80;
     public const double MaxHz = 1_000;
     public const int Hop = 256;
-    const double Trough = 0.12;
-    const double Voicing = 0.25;
-    const double QuietPower = 1e-7;
 
     /// <summary>The scales' degrees, in semitones above the key.</summary>
     static readonly int[][] ScaleDegrees = [
@@ -69,27 +62,15 @@ public sealed class PitchCorrection : AudioEffect {
         P.Describe(Id, "Pitch Correction", EffectCategories.Pitch, Response, Key, Scale, Detune, Mix);
 
     readonly bool[] inScale = new bool[12];
-    RealFft fft = new(4);
+    YinDetector yin = new(48_000, MinHz, MaxHz);
     float[] inLeft = [];
     float[] inRight = [];
     float[] mono = [];
     float[] outLeft = [];
     float[] outRight = [];
     float[] weight = [];
-    float[] segment = [];
-    float[] head = [];
-    float[] segmentRe = [];
-    float[] segmentIm = [];
-    float[] headRe = [];
-    float[] headIm = [];
-    float[] correlation = [];
-    double[] energy = [];
-    double[] normalised = [];
     GainRamp mix;
     int mask;
-    int window;
-    int minPeriod;
-    int maxPeriod;
     int unvoicedPeriod;
     int latency;
     long now;
@@ -111,23 +92,12 @@ public sealed class PitchCorrection : AudioEffect {
     public double DetectedHz => voiced ? SampleRate / period : 0;
 
     protected override void OnPrepare(float sampleRate) {
-        maxPeriod = (int)Math.Ceiling(sampleRate / MinHz);
-        minPeriod = (int)Math.Floor(sampleRate / MaxHz);
+        yin = new(sampleRate, MinHz, MaxHz);
+        var maxPeriod = yin.MaxPeriod;
         unvoicedPeriod = (int)Math.Round(0.005 * sampleRate);
         latency = 2 * maxPeriod + 2;
-        window = 1;
-        while (window < maxPeriod) {
-            window <<= 1;
-        }
-
-        var size = 1;
-        while (size < window + maxPeriod + 2) {
-            size <<= 1;
-        }
-
-        fft = new(size);
         var ring = 1;
-        while (ring < Math.Max(size, latency + 2 * maxPeriod) * 2) {
+        while (ring < Math.Max(yin.Size, latency + 2 * maxPeriod) * 2) {
             ring <<= 1;
         }
 
@@ -138,15 +108,6 @@ public sealed class PitchCorrection : AudioEffect {
         outLeft = new float[ring];
         outRight = new float[ring];
         weight = new float[ring];
-        segment = new float[size];
-        head = new float[size];
-        segmentRe = new float[fft.Bins];
-        segmentIm = new float[fft.Bins];
-        headRe = new float[fft.Bins];
-        headIm = new float[fft.Bins];
-        correlation = new float[size];
-        energy = new double[size + 1];
-        normalised = new double[maxPeriod + 2];
     }
 
     protected override void OnReset() {
@@ -249,86 +210,9 @@ public sealed class PitchCorrection : AudioEffect {
 
     /// <summary>YIN on the window ending at the current sample; then the correction's next step.</summary>
     void Analyse() {
-        var size = segment.Length;
-        var span = window + maxPeriod;
-        var start = now - span + 1;
-        double power = 0;
-        energy[0] = 0;
-        for (var k = 0; k < size; k++) {
-            var x = k < span ? mono[(int)((start + k) & mask)] : 0;
-            segment[k] = x;
-            head[k] = k < window ? x : 0;
-            energy[k + 1] = energy[k] + (double)x * x;
-            if (k < window) {
-                power += (double)x * x;
-            }
-        }
-
-        if (now + 1 < span || power / window < QuietPower) {
+        if (!yin.Detect(mono, mask, now, out var refined)) {
             Unvoiced();
             return;
-        }
-
-        // r(τ) = Σ head[j]·segment[j + τ], from conj(HEAD)·SEGMENT.
-        fft.Forward(segment, segmentRe, segmentIm);
-        fft.Forward(head, headRe, headIm);
-        for (var k = 0; k < segmentRe.Length; k++) {
-            var ar = headRe[k];
-            var ai = -headIm[k];
-            var br = segmentRe[k];
-            var bi = segmentIm[k];
-            segmentRe[k] = ar * br - ai * bi;
-            segmentIm[k] = ar * bi + ai * br;
-        }
-
-        fft.Inverse(segmentRe, segmentIm, correlation);
-        var e0 = energy[window];
-        double running = 0;
-        normalised[0] = 1;
-        var found = -1;
-        for (var tau = 1; tau <= maxPeriod + 1 && tau < normalised.Length; tau++) {
-            var et = energy[tau + window] - energy[tau];
-            var d = Math.Max(0, e0 + et - 2 * correlation[tau]);
-            running += d;
-            normalised[tau] = running > 0 ? d * tau / running : 1;
-        }
-
-        for (var tau = minPeriod; tau <= maxPeriod; tau++) {
-            if (normalised[tau] < Trough) {
-                while (tau + 1 <= maxPeriod && normalised[tau + 1] < normalised[tau]) {
-                    tau++;
-                }
-
-                found = tau;
-                break;
-            }
-        }
-
-        if (found < 0) {
-            var best = minPeriod;
-            for (var tau = minPeriod + 1; tau <= maxPeriod; tau++) {
-                if (normalised[tau] < normalised[best]) {
-                    best = tau;
-                }
-            }
-
-            if (normalised[best] >= Voicing) {
-                Unvoiced();
-                return;
-            }
-
-            found = best;
-        }
-
-        double refined = found;
-        if (found > 1 && found < maxPeriod + 1) {
-            var a = normalised[found - 1];
-            var b = normalised[found];
-            var c = normalised[found + 1];
-            var curvature = a - 2 * b + c;
-            if (curvature > 1e-12) {
-                refined += Math.Clamp((a - c) / (2 * curvature), -0.5, 0.5);
-            }
         }
 
         voiced = true;
