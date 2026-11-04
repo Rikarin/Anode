@@ -45,6 +45,9 @@ backups, screensets, key commands, bookmarks, a small fake disk for the All File
 and Standard MIDI File import (the fake makes two instrument tracks from any `.mid` path). The demo project adds
 arrangement sections, markers, a two-take vocal folder and a project note.
 
+It also follows Save As and Save a Copy, the sample rate change, Import from Project and templates, on its small fake
+disk of saved projects; `failNextJob` makes the next job fail, for the paths that must change nothing.
+
 It stands in for the desktop app's audio bridge too (`core/fake/fake-audio-devices.ts`), so Settings ▸ Audio ▸ Devices
 works in a browser: a few devices, made-up latencies, a Fake Interface that settles on 64 samples and refuses rates over
 96 kHz, and an Unplugged Interface that cannot open, for the failed switch.

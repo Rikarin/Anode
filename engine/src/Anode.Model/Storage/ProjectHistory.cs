@@ -22,6 +22,9 @@ public static class ProjectHistory {
     public const string ManifestName = "alternatives.json";
     public const int MaxBackups = 10;
 
+    /// <summary>In the package root, while its document is being replaced: the backup to go back to.</summary>
+    public const string RollbackName = "rollback.json";
+
     /// <summary>The id of the alternative a package starts with, before it has a manifest.</summary>
     public const string FirstAlternative = "alt_main";
 
@@ -50,6 +53,55 @@ public static class ProjectHistory {
             Path.Combine(to, ProjectPackage.ProjectFileName),
             true
         );
+    }
+
+    /// <summary>
+    ///     Replaces the root's document with the one at <paramref name="source" />, all or nothing, so a change that
+    ///     rewrites every track file (<see cref="ProjectRate" />) never leaves half of each. It names the backup to go
+    ///     back to in <see cref="RollbackName" /> first, and removes that file last: a failure here goes back at once, and
+    ///     a crash at the next open (<see cref="FinishInterrupted" />). <paramref name="copy" /> is the copy itself.
+    /// </summary>
+    public static void ReplaceDocument(
+        string folder,
+        string source,
+        string? backup,
+        Action<string, string>? copy = null
+    ) {
+        var rollback = Path.Combine(folder, RollbackName);
+        AtomicRename.Write(rollback, backup ?? string.Empty);
+        try {
+            (copy ?? CopyDocument)(source, folder);
+        } catch (Exception e) when (e is IOException or UnauthorizedAccessException) {
+            FinishInterrupted(folder);
+            throw;
+        }
+
+        File.Delete(rollback);
+    }
+
+    /// <summary>
+    ///     Puts back the document a replacement stopped in the middle of left (<see cref="ReplaceDocument" />); nothing when
+    ///     none did. It can run again when it is itself stopped.
+    /// </summary>
+    public static void FinishInterrupted(string folder) {
+        var rollback = Path.Combine(folder, RollbackName);
+        if (!File.Exists(rollback)) {
+            return;
+        }
+
+        if (BackupFolder(folder, File.ReadAllText(rollback)) is { } backup) {
+            CopyDocument(backup, folder);
+        }
+
+        File.Delete(rollback);
+    }
+
+    /// <summary>The folder holding a package's readable document: its backup while a replacement was cut short.</summary>
+    public static string Document(string folder) {
+        var rollback = Path.Combine(folder, RollbackName);
+        return File.Exists(rollback) && BackupFolder(folder, File.ReadAllText(rollback)) is { } backup
+            ? backup
+            : folder;
     }
 
     /// <summary>Removes a package's document (not its media).</summary>

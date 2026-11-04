@@ -25,6 +25,7 @@ import {
   type EnvironmentInputRequest,
   type FileAnalysis,
   type GrooveTemplate,
+  type ImportProjectTracksRequest,
   type IoLabels,
   type Job,
   type KeyCommandSet,
@@ -69,13 +70,18 @@ import {
   type Project,
   type ProjectAlternative,
   type ProjectBackup,
+  type ProjectContents,
   type ProjectSummary,
+  type ProjectTemplate,
   type RecoverableProject,
   type RegenerateRequest,
   type RelinkRequest,
   type RemotePads,
   type SampleRange,
+  type SampleRateChangeMode,
   type SavePatchRequest,
+  type SaveTemplateRequest,
+  type SaveTrackTemplateRequest,
   type SceneDetectRequest,
   type ScoreDocument,
   type ScoreViewMode,
@@ -93,6 +99,7 @@ import {
   type SyncState,
   type SystemInfo,
   type ThumbnailsRequest,
+  type TrackTemplate,
   type TransformSet,
   type TransportRequest,
   type TransportStatus,
@@ -106,6 +113,8 @@ export interface CreateProject {
   /** The folder to create the project folder in; the Server's default projects folder when left out. */
   directory?: string | null;
   sampleRate?: number | null;
+  /** One of `projectTemplates()`; left out: an empty project. */
+  template?: string | null;
 }
 
 /**
@@ -149,6 +158,26 @@ export interface AnodeApi {
   /** The open project, or null when none is open (404). */
   getProject(): Promise<Project | null>;
   saveProject(): Promise<ProjectSummary>;
+  /** The factory's project templates, then the user's. */
+  projectTemplates(): Promise<ProjectTemplate[]>;
+  trackTemplates(): Promise<TrackTemplate[]>;
+  /** Queues saving the open project as a template. */
+  saveProjectTemplate(request: SaveTemplateRequest): Promise<Job>;
+  saveTrackTemplate(request: SaveTrackTemplateRequest): Promise<TrackTemplate>;
+  /** Queues adding a template's tracks to the open project. */
+  applyTrackTemplate(id: string): Promise<Job>;
+  deleteProjectTemplate(id: string): Promise<void>;
+  deleteTrackTemplate(id: string): Promise<void>;
+  /** What a project on the Server's disk holds, read without opening it. */
+  projectContents(path: string): Promise<ProjectContents>;
+  /** Queues importing chosen tracks of another project, one undo step. */
+  importProjectTracks(request: ImportProjectTracksRequest): Promise<Job>;
+  /** Queues changing the project's sample rate; it reopens at the new rate when done. */
+  changeSampleRate(sampleRate: number, mode: SampleRateChangeMode): Promise<Job>;
+  /** Queues writing the whole package at a new place and going on there. */
+  saveProjectAs(path: string): Promise<Job>;
+  /** Queues writing the whole package at a new place; the open project stays. */
+  saveProjectCopy(path: string): Promise<Job>;
   closeProject(): Promise<void>;
   /** One undo step. With `revision`, a stale one is refused (409) instead of applied. */
   applyCommands(batch: CommandBatch, revision?: number): Promise<CommandResult>;
@@ -446,7 +475,12 @@ export class HttpAnodeApi implements AnodeApi {
   async createProject(request: CreateProject): Promise<Project> {
     return unwrap(
       await this.client.POST('/api/v1/projects', {
-        body: { name: request.name, directory: request.directory ?? null, sampleRate: request.sampleRate ?? null }
+        body: {
+          name: request.name,
+          directory: request.directory ?? null,
+          sampleRate: request.sampleRate ?? null,
+          template: request.template ?? null
+        }
       })
     );
   }
@@ -465,6 +499,54 @@ export class HttpAnodeApi implements AnodeApi {
 
       throw error;
     }
+  }
+
+  async saveProjectAs(path: string): Promise<Job> {
+    return unwrap(await this.client.POST('/api/v1/project/save-as', { body: { path } }));
+  }
+
+  async saveProjectCopy(path: string): Promise<Job> {
+    return unwrap(await this.client.POST('/api/v1/project/save-copy', { body: { path } }));
+  }
+
+  async changeSampleRate(sampleRate: number, mode: SampleRateChangeMode): Promise<Job> {
+    return unwrap(await this.client.POST('/api/v1/project/sample-rate', { body: { sampleRate, mode } }));
+  }
+
+  async projectContents(path: string): Promise<ProjectContents> {
+    return unwrap(await this.client.POST('/api/v1/projects/contents', { body: { path } }));
+  }
+
+  async importProjectTracks(request: ImportProjectTracksRequest): Promise<Job> {
+    return unwrap(await this.client.POST('/api/v1/project/import-tracks', { body: request }));
+  }
+
+  async projectTemplates(): Promise<ProjectTemplate[]> {
+    return unwrap(await this.client.GET('/api/v1/library/project-templates'));
+  }
+
+  async trackTemplates(): Promise<TrackTemplate[]> {
+    return unwrap(await this.client.GET('/api/v1/library/track-templates'));
+  }
+
+  async saveProjectTemplate(request: SaveTemplateRequest): Promise<Job> {
+    return unwrap(await this.client.POST('/api/v1/library/project-templates', { body: request }));
+  }
+
+  async saveTrackTemplate(request: SaveTrackTemplateRequest): Promise<TrackTemplate> {
+    return unwrap(await this.client.POST('/api/v1/library/track-templates', { body: request }));
+  }
+
+  async applyTrackTemplate(id: string): Promise<Job> {
+    return unwrap(await this.client.POST('/api/v1/library/track-templates/{id}/apply', { params: { path: { id } } }));
+  }
+
+  async deleteProjectTemplate(id: string): Promise<void> {
+    await this.client.DELETE('/api/v1/library/project-templates/{id}', { params: { path: { id } } });
+  }
+
+  async deleteTrackTemplate(id: string): Promise<void> {
+    await this.client.DELETE('/api/v1/library/track-templates/{id}', { params: { path: { id } } });
   }
 
   async saveProject(): Promise<ProjectSummary> {

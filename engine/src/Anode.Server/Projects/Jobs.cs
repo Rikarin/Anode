@@ -3,6 +3,7 @@ using Anode.Model;
 using Anode.Model.Audio;
 using Anode.Model.Editing;
 using Anode.Server.Engine;
+using Anode.Server.Library;
 using Anode.Server.Realtime;
 using System.Collections.Concurrent;
 using System.Globalization;
@@ -44,6 +45,7 @@ public sealed partial class Jobs : IDisposable {
     readonly IMasteringAnalysis mastering;
     readonly SessionPlayers players;
     readonly ISessionPlayerLibrary library;
+    readonly TemplateLibrary templates;
     readonly TimeProvider time;
     readonly ILogger<Jobs> logger;
     readonly ConcurrentDictionary<string, Entry> jobs = new(StringComparer.Ordinal);
@@ -68,9 +70,11 @@ public sealed partial class Jobs : IDisposable {
         IMasteringAnalysis mastering,
         SessionPlayers players,
         ISessionPlayerLibrary library,
+        TemplateLibrary templates,
         TimeProvider time,
         ILogger<Jobs> logger
     ) {
+        this.templates = templates;
         this.recognition = recognition;
         this.mastering = mastering;
         this.players = players;

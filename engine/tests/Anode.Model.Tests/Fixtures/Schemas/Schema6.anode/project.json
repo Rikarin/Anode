@@ -1,0 +1,147 @@
+{
+  "schemaVersion": 6,
+  "id": "prj_schema6",
+  "name": "Schema 6",
+  "sampleRate": 48000,
+  "settings": {
+    "tempo": 100,
+    "signature": {
+      "numerator": 4,
+      "denominator": 4
+    },
+    "cycle": {
+      "enabled": false,
+      "startTick": 0,
+      "endTick": 15360
+    },
+    "metronome": {
+      "enabled": false,
+      "countIn": false,
+      "levelDb": -6
+    },
+    "endTick": 491520,
+    "mergeMidiRecording": false,
+    "tempoEvents": [
+      {
+        "tick": 0,
+        "bpm": 100,
+        "curve": "step",
+        "shape": 0
+      }
+    ],
+    "signatures": [
+      {
+        "tick": 0,
+        "numerator": 4,
+        "denominator": 4
+      }
+    ],
+    "keys": [
+      {
+        "tick": 0,
+        "tonic": 0,
+        "mode": "major"
+      }
+    ],
+    "recording": {
+      "cycleMode": "takeFolder",
+      "replace": false,
+      "autopunch": false,
+      "punchInTick": 0,
+      "punchOutTick": 15360
+    },
+    "mixer": {
+      "pdc": "all",
+      "lowLatency": false,
+      "lowLatencyLimitMs": 10
+    },
+    "smartTempo": {
+      "mode": "keep",
+      "defaultFollow": "off",
+      "analyzeImports": true
+    },
+    "varispeed": {
+      "enabled": false,
+      "mode": "speedOnly",
+      "speed": 1
+    }
+  },
+  "master": {
+    "volumeDb": 0,
+    "pan": 0,
+    "mute": false,
+    "solo": false,
+    "inserts": [],
+    "sends": [],
+    "output": "master",
+    "groups": [],
+    "midiEffects": []
+  },
+  "tracks": [
+    "trk_fixture001",
+    "trk_fixture003",
+    "trk_fixture007"
+  ],
+  "audioFiles": [
+    {
+      "id": "aud_fixture",
+      "name": "Tone",
+      "path": "Audio Files/Tone.wav",
+      "sampleRate": 48000,
+      "channels": 1,
+      "frames": 48000,
+      "bitDepth": 24,
+      "version": 0
+    }
+  ],
+  "markers": [
+    {
+      "id": "mrk_fixture005",
+      "name": "Verse",
+      "tick": 3840,
+      "lengthTicks": 0,
+      "text": ""
+    }
+  ],
+  "arrangement": [
+    {
+      "id": "sec_fixture006",
+      "name": "Intro",
+      "startTick": 0,
+      "lengthTicks": 3840,
+      "color": "#8a8f98"
+    }
+  ],
+  "notes": "Written by schema 6.",
+  "screensets": [],
+  "groups": [
+    {
+      "number": 1,
+      "name": "Vocals",
+      "color": "#8a8f98",
+      "enabled": true,
+      "properties": {
+        "volume": true,
+        "mute": true,
+        "solo": true,
+        "pan": true,
+        "sends": false,
+        "recordArm": true,
+        "automation": false,
+        "selection": true
+      }
+    }
+  ],
+  "automation": [],
+  "liveLoops": {
+    "scenes": [
+      {
+        "id": "scn_fixture011",
+        "name": "Scene A"
+      }
+    ],
+    "cells": [],
+    "quantize": "bar",
+    "shown": false
+  }
+}

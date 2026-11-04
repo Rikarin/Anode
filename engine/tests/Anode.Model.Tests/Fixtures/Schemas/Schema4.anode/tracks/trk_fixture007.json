@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 4,
+  "track": {
+    "id": "trk_fixture007",
+    "name": "Reverb",
+    "kind": "aux",
+    "color": "#f2b33d",
+    "input": {
+      "channel": 0,
+      "stereo": false
+    },
+    "recordArmed": false,
+    "inputMonitoring": false,
+    "strip": {
+      "volumeDb": 0,
+      "pan": 0,
+      "mute": false,
+      "solo": false,
+      "inserts": [],
+      "sends": [],
+      "output": "master",
+      "groups": []
+    },
+    "midiInput": {
+      "channel": 0
+    },
+    "collapsed": false,
+    "notes": "",
+    "inputBus": 1,
+    "automationMode": "read",
+    "flexOn": false,
+    "flexMode": "polyphonic",
+    "alternatives": []
+  },
+  "regions": [],
+  "midiRegions": [],
+  "takeFolders": [],
+  "automation": []
+}

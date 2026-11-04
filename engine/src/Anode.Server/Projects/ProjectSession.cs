@@ -88,6 +88,7 @@ public sealed partial class ProjectSession(
     ISessionPlayerLibrary players,
     MasteringChains mastering,
     HrtfLocator hrtfs,
+    TemplateLibrary templates,
     TimeProvider time,
     ILogger<ProjectSession> logger
 ) {
@@ -123,13 +124,10 @@ public sealed partial class ProjectSession(
     }
 
     public Project Create(CreateProjectRequest request) {
-        var name = (request.Name ?? string.Empty).Trim();
-        if (name.Length is 0 or > Edits.MaxNameLength
-            || name.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0
-            || name.StartsWith('.')) {
-            throw ProjectException.Unprocessable("A project name has 1…128 characters and no path separators.");
-        }
-
+        var name = CheckProjectName((request.Name ?? string.Empty).Trim());
+        var user = request.Template is { Length: > 0 } id && FactoryTemplates.Find(id) is null
+            ? templates.ProjectFolder(id) ?? throw ProjectException.NotFound($"No template '{id}'.")
+            : null;
         var rate = request.SampleRate ?? device.SampleRate ?? ProjectDefaults.SampleRate;
         if (!ProjectDefaults.SampleRates.Contains(rate)) {
             throw ProjectException.Unprocessable(
@@ -143,7 +141,19 @@ public sealed partial class ProjectSession(
             throw ProjectException.Conflict($"'{folder}' already exists.");
         }
 
+        if (user is not null) {
+            return FromTemplate(name, folder, user, request.SampleRate);
+        }
+
         var state = ProjectDefaults.NewProject(ids.Next(IdPrefix.Project), name, rate);
+        try {
+            if (FactoryTemplates.Find(request.Template ?? string.Empty) is { } factory) {
+                state = FactoryTemplates.Build(factory, state, ids, catalog.ForEdits);
+            }
+        } catch (EditException e) {
+            throw ProjectException.Unprocessable($"Could not make the template: {e.Message}");
+        }
+
         try {
             ProjectPackage.Save(folder, state);
         } catch (Exception e) when (e is IOException or UnauthorizedAccessException) {
@@ -159,6 +169,7 @@ public sealed partial class ProjectSession(
         }
 
         var folder = Path.TrimEndingDirectorySeparator(Path.GetFullPath(path));
+        FinishInterrupted(folder);
         if (!ProjectPackage.Exists(folder)) {
             throw ProjectException.NotFound($"'{folder}' is not an Anode project.");
         }
@@ -1400,11 +1411,18 @@ public sealed partial class ProjectSession(
             )
             .ContinueWith(static _ => { }, TaskScheduler.Default);
 
+    /// <summary>
+    ///     What carries over when the project goes on in another document: its undo history, and a revision to go on from
+    ///     (clients refetch when an opened project's revision is not theirs).
+    /// </summary>
+    sealed record Continued(EditHistory? History, long Revision);
+
     Project Replace(
         string folder,
         ProjectState state,
         ImmutableDictionary<string, SavedState>? states = null,
-        bool recovered = false
+        bool recovered = false,
+        Continued? continued = null
     ) {
         Project project;
         using var writes = autosaving.EnterScope();
@@ -1422,7 +1440,8 @@ public sealed partial class ProjectSession(
             }
 
             ResetStepInput();
-            open = new(++sessions, folder, state, new(time)) {
+            open = new(++sessions, folder, state, continued?.History ?? new(time)) {
+                Revision = continued?.Revision ?? 1,
                 States = states ?? ImmutableDictionary.Create<string, SavedState>(StringComparer.Ordinal),
                 Analyses = FileAnalyses.CachedAll(folder, state.Files.Values)
                     .ToImmutableDictionary(StringComparer.Ordinal),

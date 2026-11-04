@@ -49,6 +49,7 @@ import { ProjectSession } from '../state/project-session';
 import { ProjectStore } from '../state/project.store';
 import { ScreensetStore } from '../state/screenset.store';
 import { SmartTempoStore } from '../state/smart-tempo.store';
+import { TemplatesStore } from '../state/templates.store';
 import { ThemeStore } from '../state/theme.store';
 import { TransportStore } from '../state/transport.store';
 import { UiStore } from '../state/ui.store';
@@ -146,6 +147,37 @@ import { Lcd } from './lcd';
           </button>
           <ng-template #projectMenu>
             <xui-menu class="min-w-56">
+              <button xuiMenuItem type="button" data-testid="save-as" (click)="ui.saveAsOpen.set('saveAs')">
+                Save As…
+              </button>
+              <button xuiMenuItem type="button" data-testid="save-copy" (click)="ui.saveAsOpen.set('saveCopy')">
+                Save a Copy…
+              </button>
+              <button
+                xuiMenuItem
+                type="button"
+                data-testid="save-template-menu"
+                (click)="ui.saveTemplateOpen.set('project')"
+              >
+                Save as Template…
+              </button>
+              <button
+                xuiMenuItem
+                type="button"
+                data-testid="save-track-template"
+                (click)="ui.saveTemplateOpen.set('tracks')"
+              >
+                Save Tracks as Template…
+              </button>
+              <button
+                xuiMenuItem
+                type="button"
+                data-testid="add-track-template"
+                [xuiMenuTriggerFor]="trackTemplatesMenu"
+                (menuOpened)="templates.refresh()"
+              >
+                Add Tracks from Template
+              </button>
               <button
                 xuiMenuItem
                 type="button"
@@ -187,6 +219,9 @@ import { Lcd } from './lcd';
               <!-- Phase 10: the Movie menu (the desktop app's menu bar has it too). -->
               <button xuiMenuItem type="button" data-testid="movie-menu" [xuiMenuTriggerFor]="movieMenu">Movie</button>
               <xui-menu-divider />
+              <button xuiMenuItem type="button" data-testid="sample-rate" (click)="ui.sampleRateOpen.set(true)">
+                Sample Rate…
+              </button>
               <button
                 xuiMenuItem
                 type="button"
@@ -243,8 +278,27 @@ import { Lcd } from './lcd';
               }
             </xui-menu>
           </ng-template>
+          <ng-template #trackTemplatesMenu>
+            <xui-menu>
+              @for (template of templates.trackTemplates(); track template.id) {
+                <button
+                  xuiMenuItem
+                  type="button"
+                  [attr.data-testid]="'track-template-' + template.name"
+                  (click)="templates.apply(template.id)"
+                >
+                  {{ template.name }}
+                </button>
+              } @empty {
+                <button xuiMenuItem type="button" disabled>No track templates yet</button>
+              }
+            </xui-menu>
+          </ng-template>
           <ng-template #importMenu>
             <xui-menu>
+              <button xuiMenuItem type="button" data-testid="import-project" (click)="ui.importProjectOpen.set(true)">
+                From Project…
+              </button>
               <button
                 xuiMenuItem
                 type="button"
@@ -774,6 +828,7 @@ import { Lcd } from './lcd';
   `
 })
 export class ControlBar {
+  protected readonly templates = inject(TemplatesStore);
   protected readonly transport = inject(TransportStore);
   protected readonly project = inject(ProjectStore);
   protected readonly history = inject(HistoryStore);

@@ -1,0 +1,63 @@
+{
+  "schemaVersion": 11,
+  "track": {
+    "id": "trk_fixture007",
+    "name": "Reverb",
+    "kind": "aux",
+    "color": "#f2b33d",
+    "input": {
+      "channel": 0,
+      "stereo": false
+    },
+    "recordArmed": false,
+    "inputMonitoring": false,
+    "strip": {
+      "volumeDb": 0,
+      "pan": 0,
+      "mute": false,
+      "solo": false,
+      "inserts": [],
+      "sends": [],
+      "output": "master",
+      "groups": [],
+      "midiEffects": [],
+      "inputFormat": "stereo",
+      "outputFormat": "stereo",
+      "panner": {
+        "mode": "stereo",
+        "surround": {
+          "angle": 0,
+          "diversity": 1,
+          "elevation": 0,
+          "centreLevelDb": 0,
+          "lfeLevelDb": -144,
+          "spread": 60
+        },
+        "object": {
+          "azimuth": 0,
+          "elevation": 0,
+          "distance": 1,
+          "size": 0
+        }
+      }
+    },
+    "midiInput": {
+      "channel": 0
+    },
+    "collapsed": false,
+    "notes": "",
+    "inputBus": 1,
+    "automationMode": "read",
+    "flexOn": false,
+    "flexMode": "polyphonic",
+    "alternatives": [],
+    "liveLoopsActive": false,
+    "matchGroove": false
+  },
+  "regions": [],
+  "midiRegions": [],
+  "takeFolders": [],
+  "automation": [],
+  "patternRegions": [],
+  "sessionPlayerRegions": []
+}

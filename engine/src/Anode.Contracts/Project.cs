@@ -284,9 +284,81 @@ public sealed record AudioFile(
     int Version
 );
 
-public sealed record CreateProjectRequest(string Name, string? Directory, int? SampleRate);
+/// <summary>
+///     A new project. <c>template</c> names one of <c>GET /library/project-templates</c> (left out: none). Its
+///     <c>sampleRate</c> is the one asked for, else a template's own, else the device's; a template holding audio takes
+///     only its own.
+/// </summary>
+public sealed record CreateProjectRequest(string Name, string? Directory, int? SampleRate, string? Template = null);
 
 public sealed record OpenProjectRequest(string Path);
+
+/// <summary>
+///     Where Save As or Save a Copy writes the package: a folder on the server's disk that does not exist yet
+///     (<c>.anode</c> is added when left out). Its name is the new project's.
+/// </summary>
+public sealed record SaveProjectAsRequest(string Path);
+
+/// <summary>
+///     A track of a project on the server's disk, for the Import from Project browser: how much comes with it
+///     (<c>regions</c> counts audio, MIDI, pattern and Session Player regions and take folders).
+/// </summary>
+public sealed record ProjectTrackInfo(
+    string Id,
+    string Name,
+    TrackKind Kind,
+    string Color,
+    string? ParentId,
+    int Regions,
+    int Inserts,
+    int Sends,
+    int Lanes
+);
+
+/// <summary>What a project on the server's disk holds, read without opening it.</summary>
+public sealed record ProjectContents(
+    string Name,
+    string Path,
+    int SampleRate,
+    double Tempo,
+    IReadOnlyList<ProjectTrackInfo> Tracks
+);
+
+/// <summary>
+///     Import from Project: <c>trackIds</c> of the package at <c>path</c> join the open project after its tracks, as one
+///     undo step, with their stack members and, with sends, the auxes those reach. Left out, each part comes along:
+///     <c>regions</c> (and take folders, alternatives and frozen files), <c>inserts</c>, <c>sends</c> and
+///     <c>automation</c>. Their media is copied in, converted when the source is at another rate.
+/// </summary>
+public sealed record ImportProjectTracksRequest(
+    string Path,
+    IReadOnlyList<string> TrackIds,
+    bool? Regions = null,
+    bool? Inserts = null,
+    bool? Sends = null,
+    bool? Automation = null
+);
+
+/// <summary>What happens to the audio when a project's sample rate changes.</summary>
+[JsonConverter(typeof(JsonStringEnumConverter<SampleRateChangeMode>))]
+public enum SampleRateChangeMode {
+    /// <summary>
+    ///     Every file is converted to a new file at the new rate, and frames scale with it: the project sounds the same,
+    ///     at the same pitch and tempo.
+    /// </summary>
+    [JsonStringEnumMemberName("convert")]
+    Convert,
+
+    /// <summary>
+    ///     Every file keeps its samples and is labelled with the new rate, and the tempo scales with it: every position
+    ///     stays on its sample, and the whole project plays faster or slower, audio pitch with it.
+    /// </summary>
+    [JsonStringEnumMemberName("keepSamples")]
+    KeepSamples
+}
+
+/// <summary>A change of the open project's sample rate.</summary>
+public sealed record ChangeSampleRateRequest(int SampleRate, SampleRateChangeMode Mode);
 
 /// <summary>
 ///     A project whose edits since its last save survive in an autosave, offered after a crash (docs/04-phase-3.md,

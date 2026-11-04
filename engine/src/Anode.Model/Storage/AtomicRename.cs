@@ -90,7 +90,7 @@ public static partial class AtomicRename {
     ///     Makes a rename in <paramref name="folder" /> durable where the file system needs the folder flushed for it
     ///     (POSIX); best effort. NTFS journals the rename itself.
     /// </summary>
-    static void FlushFolder(string folder) {
+    public static void FlushFolder(string folder) {
         if (OperatingSystem.IsWindows()) {
             return;
         }

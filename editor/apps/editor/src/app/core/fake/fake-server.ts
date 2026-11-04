@@ -36,6 +36,7 @@ import {
   type GrooveTemplate,
   type ImportedContent,
   type ImportedTrack,
+  type ImportProjectTracksRequest,
   type Insert,
   type InsertReading,
   type IoLabel,
@@ -90,14 +91,19 @@ import {
   type Project,
   type ProjectAlternative,
   type ProjectBackup,
+  type ProjectContents,
   type ProjectDelta,
   type ProjectSummary,
+  type ProjectTemplate,
   type RecoverableProject,
   type RegenerateRequest,
   type RelinkRequest,
   type RemotePads,
   type SampleRange,
+  type SampleRateChangeMode,
   type SavePatchRequest,
+  type SaveTemplateRequest,
+  type SaveTrackTemplateRequest,
   type SceneDetectRequest,
   type ScoreDocument,
   type Screenset,
@@ -120,6 +126,7 @@ import {
   type ThumbnailsRequest,
   type Track,
   type TrackMeter,
+  type TrackTemplate,
   type TransformSet,
   type TransportRequest,
   type TransportStatus,
@@ -161,6 +168,7 @@ import { FakeAudioDevices } from './fake-audio-devices';
 import { applyEnvironmentCommand } from './fake-environment';
 import { fakeFileExists, FakeHome, fileKind, listFakeFolder } from './fake-files';
 import { adaptTempo, applyFlexCommand, fakeAnalysis, type FlexContext, timingOf } from './fake-flex';
+import { bundledTracks, contentsOf, withImportedTracks } from './fake-import-tracks';
 import { type FakeLoop, FakeLoopLibrary, keyInterval } from './fake-loops';
 import {
   applyMasteringCommand,
@@ -262,8 +270,10 @@ import {
 import { CrashyPluginId, FakeCatalogue, FakeEffects, FakeMidiDevices } from './fake-plugins';
 import { FakeT3Effects, FakeT3Instruments } from './fake-plugins-phase11';
 import { FakeMidiEffects, FakeT2Effects, FakeT2Instruments, RemixFxId, withMacros } from './fake-plugins-phase6';
+import { atRate, rateRefusal } from './fake-sample-rate';
 import { FakeScriptPresets } from './fake-scripts';
 import { FactoryStaffStyles } from './fake-staff-styles';
+import { checkedTemplateName, FactoryTemplates } from './fake-templates';
 
 /** Ticks per quarter note (the contract's time base). */
 const Ppq = 960;
@@ -368,6 +378,12 @@ export class FakeAnodeServer implements AnodeApi {
   private readonly now: () => number;
   private readonly disk = new Map<string, Project>();
   private recent: ProjectSummary[] = [];
+  private jobFailure: string | null = null;
+  private readonly userTemplates = new Map<string, { template: ProjectTemplate; project: Project }>();
+  private readonly trackTemplateSets = new Map<
+    string,
+    { template: TrackTemplate; project: Project; trackIds: string[] }
+  >();
   private project: Project | null = null;
   private undoStack: UndoStep[] = [];
   private redoStack: UndoStep[] = [];
@@ -581,6 +597,11 @@ export class FakeAnodeServer implements AnodeApi {
     return true;
   }
 
+  /** The next job to finish fails with `message`, changing nothing (tests). */
+  failNextJob(message: string): void {
+    this.jobFailure = message;
+  }
+
   /** The Server dies: only what is saved or autosaved survives (tests). */
   crash(): void {
     this.stopEngine();
@@ -658,10 +679,169 @@ export class FakeAnodeServer implements AnodeApi {
         sessionPlayerRegions: [],
         environment: structuredClone(EmptyEnvironment)
       };
-      this.disk.set(path, structuredClone(project));
-      this.open(project);
-      return structuredClone(project);
+      const template = request.template ?? null;
+      const made = template ? this.fromTemplate(project, template, request.sampleRate ?? null) : project;
+      this.disk.set(path, structuredClone(made));
+      this.open(made);
+      return structuredClone(made);
     });
+  }
+
+  /** `project` as a template makes it: a factory one's commands, or a copy of a user's under `project`'s identity. */
+  private fromTemplate(project: Project, id: string, rate: number | null): Project {
+    const factory = FactoryTemplates.find(t => t.template.id === id);
+    if (factory) {
+      return factory.commands.reduce((made, command) => this.applyCommand(made, command), project);
+    }
+
+    const user = this.userTemplates.get(id);
+    if (!user) {
+      throw new ApiError(404, `No template '${id}'.`);
+    }
+
+    if (rate !== null && rate !== user.project.sampleRate && user.project.audioFiles.length > 0) {
+      throw new ApiError(422, `This template holds audio at ${user.project.sampleRate} Hz.`);
+    }
+
+    return {
+      ...structuredClone(user.project),
+      id: project.id,
+      name: project.name,
+      path: project.path,
+      sampleRate: rate ?? user.project.sampleRate,
+      revision: 0,
+      dirty: false
+    };
+  }
+
+  projectTemplates(): Promise<ProjectTemplate[]> {
+    return this.answer('ListProjectTemplates', () => [
+      ...FactoryTemplates.map(t => ({ ...t.template })),
+      ...[...this.userTemplates.values()].map(t => ({ ...t.template }))
+    ]);
+  }
+
+  trackTemplates(): Promise<TrackTemplate[]> {
+    return this.answer('ListTrackTemplates', () => [...this.trackTemplateSets.values()].map(t => ({ ...t.template })));
+  }
+
+  saveProjectTemplate(request: SaveTemplateRequest): Promise<Job> {
+    return this.answer('SaveProjectTemplate', () => {
+      const project = this.require();
+      const name = checkedTemplateName(request.name);
+      return this.startJob(
+        'saveTemplate',
+        {
+          finish: () => {
+            const id = `tpl_${this.nextId++}`;
+            this.userTemplates.set(id, {
+              template: {
+                id,
+                name,
+                category: request.category || 'My Templates',
+                description: '',
+                factory: false,
+                sampleRate: project.sampleRate,
+                hasAudio: project.audioFiles.length > 0
+              },
+              project: structuredClone(project)
+            });
+            return [id];
+          }
+        },
+        1
+      );
+    });
+  }
+
+  saveTrackTemplate(request: SaveTrackTemplateRequest): Promise<TrackTemplate> {
+    return this.answer('SaveTrackTemplate', () => {
+      const project = this.require();
+      const name = checkedTemplateName(request.name);
+      if (request.trackIds.length === 0) {
+        throw new ApiError(422, 'Choose the tracks to save.');
+      }
+
+      const count = bundledTracks(project, request.trackIds, true).length;
+      const template: TrackTemplate = {
+        id: `tpl_${this.nextId++}`,
+        name,
+        category: request.category || 'My Templates',
+        tracks: count
+      };
+      this.trackTemplateSets.set(template.id, {
+        template,
+        project: structuredClone(project),
+        trackIds: [...request.trackIds]
+      });
+      return { ...template };
+    });
+  }
+
+  applyTrackTemplate(id: string): Promise<Job> {
+    return this.answer('ApplyTrackTemplate', () => {
+      this.require();
+      const set = this.trackTemplateSets.get(id);
+      if (!set) {
+        throw new ApiError(404, `No track template '${id}'.`);
+      }
+
+      return this.startJob(
+        'projectImport',
+        {
+          finish: () => {
+            const before = this.require();
+            const after = withImportedTracks(
+              before,
+              set.project,
+              { path: '', trackIds: set.trackIds, regions: false, automation: false },
+              prefix => `${prefix}_${this.nextId++}`
+            );
+            this.commit(before, after, 'Add Track Template');
+            return [];
+          }
+        },
+        1
+      );
+    });
+  }
+
+  deleteProjectTemplate(id: string): Promise<void> {
+    return this.answer('DeleteProjectTemplate', () => {
+      if (!this.userTemplates.delete(id)) {
+        throw new ApiError(404, `No template '${id}'.`);
+      }
+    });
+  }
+
+  deleteTrackTemplate(id: string): Promise<void> {
+    return this.answer('DeleteTrackTemplate', () => {
+      if (!this.trackTemplateSets.delete(id)) {
+        throw new ApiError(404, `No track template '${id}'.`);
+      }
+    });
+  }
+
+  /** Puts a file in the open project's pool, so a template of it holds audio (tests). */
+  addFakeAudio(): void {
+    const project = this.require();
+    this.project = {
+      ...project,
+      audioFiles: [
+        ...project.audioFiles,
+        {
+          id: `aud_${this.nextId++}`,
+          name: 'Tone',
+          path: 'Audio Files/Tone.wav',
+          sampleRate: project.sampleRate,
+          channels: 1,
+          frames: 48_000,
+          bitDepth: 24,
+          tempo: null,
+          version: 0
+        }
+      ]
+    };
   }
 
   openProject(path: string): Promise<Project> {
@@ -679,6 +859,170 @@ export class FakeAnodeServer implements AnodeApi {
 
   getProject(): Promise<Project | null> {
     return this.answer('GetProject', () => (this.project ? structuredClone(this.project) : null));
+  }
+
+  saveProjectAs(path: string): Promise<Job> {
+    return this.answer('SaveProjectAs', () => {
+      const target = this.saveTarget(path);
+      return this.startJob('saveAs', { finish: () => this.finishSaveAs(target) }, 1);
+    });
+  }
+
+  saveProjectCopy(path: string): Promise<Job> {
+    return this.answer('SaveProjectCopy', () => {
+      const target = this.saveTarget(path);
+      return this.startJob('saveCopy', { finish: () => this.finishSaveCopy(target) }, 1);
+    });
+  }
+
+  changeSampleRate(sampleRate: number, mode: SampleRateChangeMode): Promise<Job> {
+    return this.answer('ChangeSampleRate', () => {
+      const refusal = rateRefusal(this.require(), sampleRate, mode);
+      if (refusal) {
+        throw new ApiError(422, refusal);
+      }
+
+      return this.startJob('sampleRateChange', { finish: () => this.finishSampleRate(sampleRate, mode) }, 1);
+    });
+  }
+
+  /** The last save and any unsaved edits go to backups; the project reopens saved at the new rate, with no undo. */
+  private finishSampleRate(rate: number, mode: SampleRateChangeMode): string[] {
+    const before = this.require();
+    const backups = this.backupSets.get(before.path) ?? [];
+    const saved = new Date(this.now()).toISOString();
+    const previous = this.disk.get(before.path);
+    if (previous) {
+      backups.unshift({ backup: { id: `bak_${this.nextId++}`, saved }, project: structuredClone(previous) });
+    }
+
+    if (before.dirty) {
+      backups.unshift({ backup: { id: `bak_${this.nextId++}`, saved }, project: structuredClone(before) });
+    }
+
+    this.backupSets.set(before.path, backups.slice(0, 10));
+    this.autosaves.delete(before.path);
+    const next = atRate(before, rate, mode, () => `aud_${this.nextId++}`);
+    this.project = { ...next, dirty: false, revision: before.revision + 1 };
+    this.undoStack = [];
+    this.redoStack = [];
+    this.disk.set(before.path, structuredClone(this.project));
+    this.emit({ type: 'projectOpened', project: this.remember(this.project), revision: this.project.revision });
+    return [before.path];
+  }
+
+  projectContents(path: string): Promise<ProjectContents> {
+    return this.answer('GetProjectContents', () => contentsOf(this.package(path)));
+  }
+
+  importProjectTracks(request: ImportProjectTracksRequest): Promise<Job> {
+    return this.answer('ImportProjectTracks', () => {
+      this.require();
+      const source = this.package(request.path);
+      if (request.trackIds.length === 0) {
+        throw new ApiError(422, 'Choose the tracks to import.');
+      }
+
+      const unknown = request.trackIds.find(id => !source.tracks.some(t => t.id === id));
+      if (unknown) {
+        throw new ApiError(404, `'${source.name}' has no track '${unknown}'.`);
+      }
+
+      return this.startJob(
+        'projectImport',
+        {
+          finish: () => {
+            const before = this.require();
+            const after = withImportedTracks(before, source, request, prefix => `${prefix}_${this.nextId++}`);
+            this.commit(before, after, 'Import Tracks');
+            return [];
+          }
+        },
+        1
+      );
+    });
+  }
+
+  /** A saved project on the fake disk. */
+  private package(path: string): Project {
+    const project = this.disk.get(path.trim().replace(/\/+$/, ''));
+    if (!project) {
+      throw new ApiError(404, `'${path}' is not an Anode project.`);
+    }
+
+    return project;
+  }
+
+  /** A package location as the Server checks it: with its extension, free, and outside the open project. */
+  private saveTarget(path: string): string {
+    const project = this.require();
+    const trimmed = path.trim().replace(/\/+$/, '');
+    if (!trimmed) {
+      throw new ApiError(422, 'Name the folder to save the project to.');
+    }
+
+    const target = trimmed.endsWith('.anode') ? trimmed : `${trimmed}.anode`;
+    if (target === project.path || target.startsWith(`${project.path}/`)) {
+      throw new ApiError(422, 'A project cannot be saved inside itself.');
+    }
+
+    if (this.disk.has(target)) {
+      throw new ApiError(409, `'${target}' already exists.`);
+    }
+
+    return target;
+  }
+
+  /** The open project as a new one at `target`: its own id, and the name its folder gives it. */
+  private packaged(target: string): Project {
+    const name = (target.split('/').pop() ?? target).replace(/\.anode$/, '');
+    return {
+      ...structuredClone(this.require()),
+      id: `prj_${this.nextId++}`,
+      name,
+      path: target
+    };
+  }
+
+  private finishSaveCopy(target: string): string[] {
+    const copy = this.packaged(target);
+    this.disk.set(target, { ...copy, dirty: false });
+    this.remember(copy);
+    return [target];
+  }
+
+  /** Goes on in the new package with its undo; unsaved edits stay behind as a backup, the snapshot goes with them. */
+  private finishSaveAs(target: string): string[] {
+    const before = this.require();
+    const copy = this.packaged(target);
+    if (before.dirty) {
+      const backups = this.backupSets.get(before.path) ?? [];
+      backups.unshift({
+        backup: { id: `bak_${this.nextId++}`, saved: new Date(this.now()).toISOString() },
+        project: structuredClone(before)
+      });
+      this.backupSets.set(before.path, backups.slice(0, 10));
+    }
+
+    this.autosaves.delete(before.path);
+    const renamed = (project: Project): Project => ({
+      ...project,
+      id: copy.id,
+      name: copy.name,
+      path: target
+    });
+    const rebased = (step: UndoStep): UndoStep => ({
+      ...step,
+      before: renamed(step.before),
+      after: renamed(step.after)
+    });
+    this.undoStack = this.undoStack.map(rebased);
+    this.redoStack = this.redoStack.map(rebased);
+    this.project = { ...copy, dirty: false, revision: before.revision + 1 };
+    this.disk.set(target, structuredClone(this.project));
+    const summary = this.remember(this.project);
+    this.emit({ type: 'projectOpened', project: summary, revision: this.project.revision });
+    return [target];
   }
 
   saveProject(): Promise<ProjectSummary> {
@@ -3508,6 +3852,12 @@ export class FakeAnodeServer implements AnodeApi {
       return;
     }
     try {
+      if (this.jobFailure) {
+        const failure = this.jobFailure;
+        this.jobFailure = null;
+        throw new ApiError(422, failure);
+      }
+
       const files = entry.finish
         ? entry.finish()
         : entry.bounce

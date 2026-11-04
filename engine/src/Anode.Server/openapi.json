@@ -225,6 +225,50 @@
         }
       }
     },
+    "/api/v1/projects/contents": {
+      "post": {
+        "tags": [
+          "Projects"
+        ],
+        "summary": "What a project on the server\u0027s disk holds, read without opening it (Import from Project).",
+        "operationId": "GetProjectContents",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OpenProjectRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectContents"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
     "/api/v1/projects/recoverable": {
       "get": {
         "tags": [
@@ -397,6 +441,182 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ProjectSummary"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/api/v1/project/save-as": {
+      "post": {
+        "tags": [
+          "Project"
+        ],
+        "summary": "Queues writing the project, unsaved edits included, as a whole package at a new location and going on working there; the original stays as last saved. 409 when something is there; a job that fails or is cancelled leaves no package and the open project as it was.",
+        "operationId": "SaveProjectAs",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SaveProjectAsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Job"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/api/v1/project/save-copy": {
+      "post": {
+        "tags": [
+          "Project"
+        ],
+        "summary": "Queues writing the project, unsaved edits included, as a whole package at a new location; the open project stays open where it is, unsaved edits and all.",
+        "operationId": "SaveProjectCopy",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SaveProjectAsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Job"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/api/v1/project/sample-rate": {
+      "post": {
+        "tags": [
+          "Project"
+        ],
+        "summary": "Queues changing the project\u0027s sample rate, saving it: its files are written anew beside the old ones (converted, or their samples kept), the last save and unsaved edits go to backups, and the project reopens without undo history. 422 while files are offline or tracks unreadable, 409 while it plays. A job that fails or is cancelled leaves the project as it was.",
+        "operationId": "ChangeSampleRate",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangeSampleRateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Job"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/api/v1/project/import-tracks": {
+      "post": {
+        "tags": [
+          "Project"
+        ],
+        "summary": "Queues importing chosen tracks of a project on the server\u0027s disk, with their regions, inserts, sends and automation, as one undo step. The source is only read; a job that fails leaves the open project as it was.",
+        "operationId": "ImportProjectTracks",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImportProjectTracksRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Job"
                 }
               }
             }
@@ -1699,6 +1919,273 @@
           },
           "204": {
             "description": "No Content"
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/api/v1/library/project-templates": {
+      "get": {
+        "tags": [
+          "Library"
+        ],
+        "summary": "The factory\u0027s project templates, then the user\u0027s: what \u0060template\u0060 in CreateProject names.",
+        "operationId": "ListProjectTemplates",
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ProjectTemplate"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Library"
+        ],
+        "summary": "Queues saving the open project, media and unsaved edits included, as a template of the user\u0027s.",
+        "operationId": "SaveProjectTemplate",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SaveTemplateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Job"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/api/v1/library/project-templates/{id}": {
+      "delete": {
+        "tags": [
+          "Library"
+        ],
+        "operationId": "DeleteProjectTemplate",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "No Content"
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/api/v1/library/track-templates": {
+      "get": {
+        "tags": [
+          "Library"
+        ],
+        "operationId": "ListTrackTemplates",
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TrackTemplate"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Library"
+        ],
+        "summary": "Saves tracks as a template with their routing: their stack members, the auxes they reach, their plugins and states. No regions or automation.",
+        "operationId": "SaveTrackTemplate",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SaveTrackTemplateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TrackTemplate"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/api/v1/library/track-templates/{id}": {
+      "delete": {
+        "tags": [
+          "Library"
+        ],
+        "operationId": "DeleteTrackTemplate",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "No Content"
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/api/v1/library/track-templates/{id}/apply": {
+      "post": {
+        "tags": [
+          "Library"
+        ],
+        "summary": "Queues adding a template\u0027s tracks to the open project, on buses of their own, as one undo step.",
+        "operationId": "ApplyTrackTemplate",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Job"
+                }
+              }
+            }
           },
           "404": {
             "description": "Not Found"
@@ -6698,6 +7185,23 @@
           "retrigger"
         ]
       },
+      "ChangeSampleRateRequest": {
+        "required": [
+          "sampleRate",
+          "mode"
+        ],
+        "type": "object",
+        "properties": {
+          "sampleRate": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "mode": {
+            "$ref": "#/components/schemas/SampleRateChangeMode"
+          }
+        },
+        "description": "A change of the open project\u0027s sample rate."
+      },
       "ChannelFormat": {
         "enum": [
           "mono",
@@ -7523,8 +8027,15 @@
               "integer"
             ],
             "format": "int32"
+          },
+          "template": {
+            "type": [
+              "null",
+              "string"
+            ]
           }
-        }
+        },
+        "description": "A new project. \u0060template\u0060 names one of \u0060GET /library/project-templates\u0060 (left out: none). Its\n\u0060sampleRate\u0060 is the one asked for, else a template\u0027s own, else the device\u0027s; a template holding audio takes\nonly its own."
       },
       "CycleRange": {
         "required": [
@@ -15977,6 +16488,49 @@
         },
         "description": "Import an audio file the server can read from its own disk (the desktop app, a headless box\u0027s library)."
       },
+      "ImportProjectTracksRequest": {
+        "required": [
+          "path",
+          "trackIds"
+        ],
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "trackIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "regions": {
+            "type": [
+              "null",
+              "boolean"
+            ]
+          },
+          "inserts": {
+            "type": [
+              "null",
+              "boolean"
+            ]
+          },
+          "sends": {
+            "type": [
+              "null",
+              "boolean"
+            ]
+          },
+          "automation": {
+            "type": [
+              "null",
+              "boolean"
+            ]
+          }
+        },
+        "description": "Import from Project: \u0060trackIds\u0060 of the package at \u0060path\u0060 join the open project after its tracks, as one\nundo step, with their stack members and, with sends, the auxes those reach. Left out, each part comes along:\n\u0060regions\u0060 (and take folders, alternatives and frozen files), \u0060inserts\u0060, \u0060sends\u0060 and\n\u0060automation\u0060. Their media is copied in, converted when the source is at another rate."
+      },
       "Insert": {
         "required": [
           "id",
@@ -16223,7 +16777,12 @@
           "thumbnails",
           "chordId",
           "masteringAnalysis",
-          "sessionPlayerConvert"
+          "sessionPlayerConvert",
+          "saveAs",
+          "saveCopy",
+          "sampleRateChange",
+          "projectImport",
+          "saveTemplate"
         ]
       },
       "JobState": {
@@ -19226,6 +19785,39 @@
         },
         "description": "An automatic backup, made at each save of the current alternative (the newest ten are kept)."
       },
+      "ProjectContents": {
+        "required": [
+          "name",
+          "path",
+          "sampleRate",
+          "tempo",
+          "tracks"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          },
+          "sampleRate": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "tempo": {
+            "type": "number",
+            "format": "double"
+          },
+          "tracks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ProjectTrackInfo"
+            }
+          }
+        },
+        "description": "What a project on the server\u0027s disk holds, read without opening it."
+      },
       "ProjectDelta": {
         "required": [
           "revision",
@@ -19403,6 +19995,45 @@
         },
         "description": "A project in the recent list."
       },
+      "ProjectTemplate": {
+        "required": [
+          "id",
+          "name",
+          "category",
+          "description",
+          "factory",
+          "hasAudio"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "category": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "factory": {
+            "type": "boolean"
+          },
+          "sampleRate": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int32"
+          },
+          "hasAudio": {
+            "type": "boolean"
+          }
+        },
+        "description": "A project template for the chooser. A factory one holds no audio and takes any rate; a user\u0027s has the rate it was\nsaved at (\u0060sampleRate\u0060) and \u0060hasAudio\u0060 says whether it takes only that."
+      },
       "ProjectTempoMode": {
         "enum": [
           "keep",
@@ -19410,6 +20041,56 @@
           "auto"
         ],
         "description": "What an audio import or recording does to the project tempo (Logic\u0027s project tempo modes)."
+      },
+      "ProjectTrackInfo": {
+        "required": [
+          "id",
+          "name",
+          "kind",
+          "color",
+          "regions",
+          "inserts",
+          "sends",
+          "lanes"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/TrackKind"
+          },
+          "color": {
+            "type": "string"
+          },
+          "parentId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "regions": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "inserts": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "sends": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "lanes": {
+            "type": "integer",
+            "format": "int32"
+          }
+        },
+        "description": "A track of a project on the server\u0027s disk, for the Import from Project browser: how much comes with it\n(\u0060regions\u0060 counts audio, MIDI, pattern and Session Player regions and take folders)."
       },
       "RecordingSettings": {
         "required": [
@@ -19709,6 +20390,13 @@
         },
         "description": "Samples of a file\u0027s current version for the Audio File Editor (\u0060/project/files/{fileId}/samples\u0060):\n\u0060frames\u0060 frames from \u0060startFrame\u0060, in buckets of \u0060bucket\u0060 frames. With \u0060bucket\u0060 1,\n\u0060samples\u0060 holds each channel\u0027s samples and \u0060min\u0060 and \u0060max\u0060 are null; with a larger bucket,\n\u0060min\u0060 and \u0060max\u0060 hold each channel\u0027s extremes per bucket (the last bucket may be short) and\n\u0060samples\u0060 is null."
       },
+      "SampleRateChangeMode": {
+        "enum": [
+          "convert",
+          "keepSamples"
+        ],
+        "description": "What happens to the audio when a project\u0027s sample rate changes."
+      },
       "SavePatchRequest": {
         "required": [
           "trackId",
@@ -19727,6 +20415,60 @@
             "type": "string"
           }
         }
+      },
+      "SaveProjectAsRequest": {
+        "required": [
+          "path"
+        ],
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string"
+          }
+        },
+        "description": "Where Save As or Save a Copy writes the package: a folder on the server\u0027s disk that does not exist yet\n(\u0060.anode\u0060 is added when left out). Its name is the new project\u0027s."
+      },
+      "SaveTemplateRequest": {
+        "required": [
+          "name"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "category": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "SaveTrackTemplateRequest": {
+        "required": [
+          "name",
+          "trackIds"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "category": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "trackIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "description": "Saves \u0060trackIds\u0060 as a template, with their stack members and the auxes they reach."
       },
       "ScaleChange": {
         "required": [
@@ -21948,6 +22690,31 @@
           null
         ]
       },
+      "TrackTemplate": {
+        "required": [
+          "id",
+          "name",
+          "category",
+          "tracks"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "category": {
+            "type": "string"
+          },
+          "tracks": {
+            "type": "integer",
+            "format": "int32"
+          }
+        },
+        "description": "A saved set of tracks with their routing (\u0060tracks\u0060 counts those that come with them too)."
+      },
       "TransformCondition": {
         "required": [
           "field",
@@ -22264,10 +23031,10 @@
       "name": "Files"
     },
     {
-      "name": "Jobs"
+      "name": "Library"
     },
     {
-      "name": "Library"
+      "name": "Jobs"
     },
     {
       "name": "Control"

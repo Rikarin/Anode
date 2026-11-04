@@ -78,6 +78,7 @@ public sealed partial class ProjectSession {
     ///     the snapshot stays until the edits are saved or kept: a second crash loses nothing.
     /// </summary>
     public Project Recover(string path) {
+        FinishInterrupted(Path.TrimEndingDirectorySeparator(Path.GetFullPath(path)));
         var (folder, manifest) = Snapshot(path);
         var document = ProjectAutosave.Document(folder, manifest);
         ProjectState state;

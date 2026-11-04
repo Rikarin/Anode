@@ -106,6 +106,23 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/api/v1/projects/contents': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** What a project on the server's disk holds, read without opening it (Import from Project). */
+    post: operations['GetProjectContents'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/api/v1/projects/recoverable': {
     parameters: {
       query?: never;
@@ -184,6 +201,74 @@ export interface paths {
     get?: never;
     put?: never;
     post: operations['SaveProject'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/project/save-as': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Queues writing the project, unsaved edits included, as a whole package at a new location and going on working there; the original stays as last saved. 409 when something is there; a job that fails or is cancelled leaves no package and the open project as it was. */
+    post: operations['SaveProjectAs'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/project/save-copy': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Queues writing the project, unsaved edits included, as a whole package at a new location; the open project stays open where it is, unsaved edits and all. */
+    post: operations['SaveProjectCopy'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/project/sample-rate': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Queues changing the project's sample rate, saving it: its files are written anew beside the old ones (converted, or their samples kept), the last save and unsaved edits go to backups, and the project reopens without undo history. 422 while files are offline or tracks unreadable, 409 while it plays. A job that fails or is cancelled leaves the project as it was. */
+    post: operations['ChangeSampleRate'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/project/import-tracks': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Queues importing chosen tracks of a project on the server's disk, with their regions, inserts, sends and automation, as one undo step. The source is only read; a job that fails leaves the open project as it was. */
+    post: operations['ImportProjectTracks'];
     delete?: never;
     options?: never;
     head?: never;
@@ -688,6 +773,90 @@ export interface paths {
     put?: never;
     /** Plays an audio file through the engine's preview channel; a null path stops it. */
     post: operations['PreviewFile'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/library/project-templates': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** The factory's project templates, then the user's: what `template` in CreateProject names. */
+    get: operations['ListProjectTemplates'];
+    put?: never;
+    /** Queues saving the open project, media and unsaved edits included, as a template of the user's. */
+    post: operations['SaveProjectTemplate'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/library/project-templates/{id}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    delete: operations['DeleteProjectTemplate'];
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/library/track-templates': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: operations['ListTrackTemplates'];
+    put?: never;
+    /** Saves tracks as a template with their routing: their stack members, the auxes they reach, their plugins and states. No regions or automation. */
+    post: operations['SaveTrackTemplate'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/library/track-templates/{id}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    delete: operations['DeleteTrackTemplate'];
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/library/track-templates/{id}/apply': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Queues adding a template's tracks to the open project, on buses of their own, as one undo step. */
+    post: operations['ApplyTrackTemplate'];
     delete?: never;
     options?: never;
     head?: never;
@@ -2488,6 +2657,12 @@ export interface components {
     CellKind: 'audio' | 'midi' | 'pattern';
     /** @enum {unknown} */
     CellPlayMode: 'loop' | 'oneShot' | 'retrigger';
+    /** @description A change of the open project's sample rate. */
+    ChangeSampleRateRequest: {
+      /** Format: int32 */
+      sampleRate: number;
+      mode: components['schemas']['SampleRateChangeMode'];
+    };
     /**
      * @description A channel format: an ordered speaker layout (SpeakerLayouts). The engine's buffers carry a strip's
      *     channels in its layout's order. Ambisonics are out of scope.
@@ -2806,11 +2981,17 @@ export interface components {
     CreateAlternativeRequest: {
       name: string;
     };
+    /**
+     * @description A new project. `template` names one of `GET /library/project-templates` (left out: none). Its
+     *     `sampleRate` is the one asked for, else a template's own, else the device's; a template holding audio takes
+     *     only its own.
+     */
     CreateProjectRequest: {
       name: string;
       directory?: null | string;
       /** Format: int32 */
       sampleRate?: null | number;
+      template?: null | string;
     };
     CycleRange: {
       enabled: boolean;
@@ -5573,6 +5754,20 @@ export interface components {
       path: string;
     };
     /**
+     * @description Import from Project: `trackIds` of the package at `path` join the open project after its tracks, as one
+     *     undo step, with their stack members and, with sends, the auxes those reach. Left out, each part comes along:
+     *     `regions` (and take folders, alternatives and frozen files), `inserts`, `sends` and
+     *     `automation`. Their media is copied in, converted when the source is at another rate.
+     */
+    ImportProjectTracksRequest: {
+      path: string;
+      trackIds: string[];
+      regions?: null | boolean;
+      inserts?: null | boolean;
+      sends?: null | boolean;
+      automation?: null | boolean;
+    };
+    /**
      * @description An insert effect on a channel strip: the plugin, whether it is bypassed, its parameter values by parameter id
      *     (all of them), and its sidechain source (a track id or `bus:N`; null: none). A plugin's opaque state lives in
      *     the project's `Plugin States` folder. A MIDI FX slot (`ChannelStrip.midiEffects`) has the same shape,
@@ -5671,7 +5866,12 @@ export interface components {
       | 'thumbnails'
       | 'chordId'
       | 'masteringAnalysis'
-      | 'sessionPlayerConvert';
+      | 'sessionPlayerConvert'
+      | 'saveAs'
+      | 'saveCopy'
+      | 'sampleRateChange'
+      | 'projectImport'
+      | 'saveTemplate';
     /** @enum {unknown} */
     JobState: 'queued' | 'running' | 'done' | 'failed' | 'cancelled';
     /** @description A key-command pad on the remote: its label, the key command it runs (a `KeyCommandSet` id), and a colour. */
@@ -6828,6 +7028,16 @@ export interface components {
       /** Format: date-time */
       saved: string;
     };
+    /** @description What a project on the server's disk holds, read without opening it. */
+    ProjectContents: {
+      name: string;
+      path: string;
+      /** Format: int32 */
+      sampleRate: number;
+      /** Format: double */
+      tempo: number;
+      tracks: components['schemas']['ProjectTrackInfo'][];
+    };
     /**
      * @description What changed between two revisions of the open project (docs/adr/0004-state-ownership.md). Clients apply the
      *     operations in order; a client that misses a revision refetches the project.
@@ -6890,10 +7100,43 @@ export interface components {
       modified: string;
     };
     /**
+     * @description A project template for the chooser. A factory one holds no audio and takes any rate; a user's has the rate it was
+     *     saved at (`sampleRate`) and `hasAudio` says whether it takes only that.
+     */
+    ProjectTemplate: {
+      id: string;
+      name: string;
+      category: string;
+      description: string;
+      factory: boolean;
+      /** Format: int32 */
+      sampleRate?: null | number;
+      hasAudio: boolean;
+    };
+    /**
      * @description What an audio import or recording does to the project tempo (Logic's project tempo modes).
      * @enum {unknown}
      */
     ProjectTempoMode: 'keep' | 'adapt' | 'auto';
+    /**
+     * @description A track of a project on the server's disk, for the Import from Project browser: how much comes with it
+     *     (`regions` counts audio, MIDI, pattern and Session Player regions and take folders).
+     */
+    ProjectTrackInfo: {
+      id: string;
+      name: string;
+      kind: components['schemas']['TrackKind'];
+      color: string;
+      parentId?: null | string;
+      /** Format: int32 */
+      regions: number;
+      /** Format: int32 */
+      inserts: number;
+      /** Format: int32 */
+      sends: number;
+      /** Format: int32 */
+      lanes: number;
+    };
     /**
      * @description How recording works: cycle recording mode; replace mode (a recording removes what it covers on its track); and
      *     autopunch, which records only between `punchInTick` and `punchOutTick` while playback continues around
@@ -7016,10 +7259,32 @@ export interface components {
       min?: null | number[][];
       max?: null | number[][];
     };
+    /**
+     * @description What happens to the audio when a project's sample rate changes.
+     * @enum {unknown}
+     */
+    SampleRateChangeMode: 'convert' | 'keepSamples';
     SavePatchRequest: {
       trackId: string;
       name: string;
       category: string;
+    };
+    /**
+     * @description Where Save As or Save a Copy writes the package: a folder on the server's disk that does not exist yet
+     *     (`.anode` is added when left out). Its name is the new project's.
+     */
+    SaveProjectAsRequest: {
+      path: string;
+    };
+    SaveTemplateRequest: {
+      name: string;
+      category?: null | string;
+    };
+    /** @description Saves `trackIds` as a template, with their stack members and the auxes they reach. */
+    SaveTrackTemplateRequest: {
+      name: string;
+      category?: null | string;
+      trackIds: string[];
     };
     /**
      * @description A key and scale change of the chord track at `tick` (it holds until the next): the scale the players take
@@ -7907,6 +8172,14 @@ export interface components {
     TrackKind: 'audio' | 'instrument' | 'midi' | 'stack' | 'aux' | 'vca' | 'drummer' | 'bassPlayer' | 'keyboardPlayer';
     /** @enum {unknown} */
     TrackSwitchAction: 'mute' | 'solo' | 'recordArm' | 'selectNext' | 'selectPrevious' | null;
+    /** @description A saved set of tracks with their routing (`tracks` counts those that come with them too). */
+    TrackTemplate: {
+      id: string;
+      name: string;
+      category: string;
+      /** Format: int32 */
+      tracks: number;
+    };
     /**
      * @description A condition on one field of an event. A set's conditions are ANDed; a field without a condition (or with
      *     `all`) matches everything. `b` is used by `inside` and `outside` only.
@@ -8255,6 +8528,46 @@ export interface operations {
       };
     };
   };
+  GetProjectContents: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['OpenProjectRequest'];
+      };
+    };
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ProjectContents'];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
   ListRecoverableProjects: {
     parameters: {
       query?: never;
@@ -8414,6 +8727,166 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ProjectSummary'];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  SaveProjectAs: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['SaveProjectAsRequest'];
+      };
+    };
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Job'];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  SaveProjectCopy: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['SaveProjectAsRequest'];
+      };
+    };
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Job'];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  ChangeSampleRate: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['ChangeSampleRateRequest'];
+      };
+    };
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Job'];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  ImportProjectTracks: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['ImportProjectTracksRequest'];
+      };
+    };
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Job'];
         };
       };
       /** @description Not Found */
@@ -9634,6 +10107,254 @@ export interface operations {
           [name: string]: unknown;
         };
         content?: never;
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  ListProjectTemplates: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ProjectTemplate'][];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  SaveProjectTemplate: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['SaveTemplateRequest'];
+      };
+    };
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Job'];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  DeleteProjectTemplate: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description No Content */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  ListTrackTemplates: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['TrackTemplate'][];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  SaveTrackTemplate: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['SaveTrackTemplateRequest'];
+      };
+    };
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['TrackTemplate'];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  DeleteTrackTemplate: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description No Content */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  ApplyTrackTemplate: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Job'];
+        };
       };
       /** @description Not Found */
       404: {

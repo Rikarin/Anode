@@ -1147,8 +1147,9 @@ static class PackageKeys {
 /// <remarks>
 ///     To change the format: raise <see cref="CurrentSchemaVersion" />, append to <see cref="Steps" /> the step that
 ///     takes the previous schema's JSON (of either kind of file, <c>project</c> or <c>track</c>) to the new one, and
-///     add a test with a file of the previous schema. Released steps are never edited. A file from a newer Anode is
-///     refused rather than read wrongly.
+///     add a package the new build wrote to <c>Fixtures/Schemas</c> (<c>MigrationFixtureTests</c> fails without one,
+///     and each folder stays as it was written). Released steps are never edited. A file from a newer Anode is refused
+///     rather than read wrongly.
 /// </remarks>
 public static class PackageMigrations {
     public const int CurrentSchemaVersion = 12;
@@ -1428,4 +1429,5 @@ public static class PackageMigrations {
 [JsonSerializable(typeof(List<ProjectSummary>))]
 [JsonSerializable(typeof(AlternativesFile))]
 [JsonSerializable(typeof(AutosaveManifest))]
+[JsonSerializable(typeof(TemplateFile))]
 public sealed partial class PackageJsonContext : JsonSerializerContext;

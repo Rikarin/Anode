@@ -42,7 +42,12 @@ const JobNames: Record<JobKind, string> = {
   thumbnails: 'Movie thumbnails',
   chordId: 'Chord ID',
   masteringAnalysis: 'Mastering analysis',
-  sessionPlayerConvert: 'Session Player conversion'
+  sessionPlayerConvert: 'Session Player conversion',
+  saveAs: 'Save As',
+  saveCopy: 'Save a Copy',
+  sampleRateChange: 'Sample rate change',
+  projectImport: 'Import from project',
+  saveTemplate: 'Save as Template'
 };
 
 /** A file's name from its absolute path. */
@@ -61,6 +66,7 @@ export class JobsStore {
   private readonly notify = inject(Notify);
   private readonly project = inject(ProjectStore);
   private readonly desktop = inject(ConnectionService).desktop;
+  private readonly stream = inject(EventStream);
 
   /** Every job this editor has seen, by id. */
   readonly jobs = signal<ReadonlyMap<string, Job>>(new Map());
@@ -76,10 +82,32 @@ export class JobsStore {
   readonly active = computed(() => [...this.jobs().values()].filter(isActive));
 
   constructor() {
-    inject(EventStream).events$.subscribe(message => {
+    this.stream.events$.subscribe(message => {
       if (message.type === 'job') {
         this.update(message.job);
       }
+    });
+  }
+
+  /** Resolves with `job` once it has ended, from its events and a look when asked (they may have come first). */
+  finished(job: Job): Promise<Job> {
+    this.update(job);
+    return new Promise(resolve => {
+      const ended = (now: Job): void => {
+        if (!isActive(now)) {
+          events.unsubscribe();
+          resolve(now);
+        }
+      };
+      const events = this.stream.events$.subscribe(message => {
+        if (message.type === 'job' && message.job.id === job.id) {
+          ended(message.job);
+        }
+      });
+      void this.api
+        .job(job.id)
+        .then(ended)
+        .catch(() => undefined);
     });
   }
 
