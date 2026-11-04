@@ -359,7 +359,7 @@ public sealed class FlexPlaybackTests : IDisposable {
         TestContext.Current.SendDiagnosticMessage(message);
         Console.WriteLine(message);
         Assert.Equal(0, controller.Engine.Snapshot.Underruns);
-        if (Environment.GetEnvironmentVariable("CI") is null) { // a shared runner measures its neighbours (#22)
+        if (System.Environment.GetEnvironmentVariable("CI") is null) { // a shared runner measures its neighbours (#22)
             Assert.True(steady.TotalSeconds < seconds, message);
         }
     }
