@@ -14,6 +14,7 @@ contextBridge.exposeInMainWorld('anode', {
   dialogs: {
     openProject: () => ipcRenderer.invoke('anode:dialog:openProject'),
     chooseFolder: () => ipcRenderer.invoke('anode:dialog:chooseFolder'),
+    saveProject: (suggested: unknown) => ipcRenderer.invoke('anode:dialog:saveProject', suggested),
     importAudio: () => ipcRenderer.invoke('anode:dialog:importAudio'),
     importMidi: () => ipcRenderer.invoke('anode:dialog:importMidi'),
     contentPack: () => ipcRenderer.invoke('anode:dialog:contentPack'),

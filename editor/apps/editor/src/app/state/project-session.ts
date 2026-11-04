@@ -1,7 +1,8 @@
 import { Injectable, inject, signal } from '@angular/core';
-import type { ProjectAlternative, ProjectBackup, ProjectSummary, RecoverableProject } from '@anode/api-client';
+import type { Job, ProjectAlternative, ProjectBackup, ProjectSummary, RecoverableProject } from '@anode/api-client';
 import { ANODE_API, type CreateProject } from '../core/api';
 import { Notify } from '../core/notify';
+import { JobsStore } from './jobs.store';
 import { ProjectStore } from './project.store';
 import { ScreensetStore } from './screenset.store';
 import { UiStore } from './ui.store';
@@ -16,6 +17,7 @@ export class ProjectSession {
   private readonly api = inject(ANODE_API);
   private readonly project = inject(ProjectStore);
   private readonly screensets = inject(ScreensetStore);
+  private readonly jobs = inject(JobsStore);
   private readonly notify = inject(Notify);
   private readonly ui = inject(UiStore);
 
@@ -159,6 +161,52 @@ export class ProjectSession {
     }
 
     return saved !== null;
+  }
+
+  /** File ▸ Save As…: the whole package at `path`, unsaved edits included; the project goes on there. */
+  async saveAs(path: string): Promise<boolean> {
+    const job = await this.packageJob(() => this.api.saveProjectAs(path.trim()), 'Could not save the project');
+    if (job) {
+      this.notify.info(`Saved as “${job.files[0] ?? path}”.`);
+      void this.refreshRecent();
+    }
+
+    return job !== null;
+  }
+
+  /** File ▸ Save a Copy…: the whole package at `path`, unsaved edits included; the open project stays. */
+  async saveCopy(path: string): Promise<boolean> {
+    const job = await this.packageJob(() => this.api.saveProjectCopy(path.trim()), 'Could not save a copy');
+    if (job) {
+      this.notify.info(`Saved a copy at “${job.files[0] ?? path}”.`);
+      void this.refreshRecent();
+    }
+
+    return job !== null;
+  }
+
+  /** Runs a job that writes a package to its end: the job when it is done, null (reported) otherwise. */
+  private async packageJob(start: () => Promise<Job>, failure: string): Promise<Job | null> {
+    if (!this.project.isOpen()) {
+      return null;
+    }
+
+    // A layout change still on its way would be left out: it goes first.
+    await this.screensets.flush();
+    this.busy.set('Saving…');
+    try {
+      const job = await this.notify.run(async () => {
+        const ended = await this.jobs.finished(await start());
+        if (ended.state === 'failed') {
+          throw new Error(ended.message ?? 'It failed.');
+        }
+
+        return ended;
+      }, failure);
+      return job?.state === 'done' ? job : null;
+    } finally {
+      this.busy.set(null);
+    }
   }
 
   /** Lists the open project's alternatives and backups (when the project menu opens). */

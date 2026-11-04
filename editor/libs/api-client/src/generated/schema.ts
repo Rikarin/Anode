@@ -190,6 +190,40 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/api/v1/project/save-as': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Queues writing the project, unsaved edits included, as a whole package at a new location and going on working there; the original stays as last saved. 409 when something is there; a job that fails or is cancelled leaves no package and the open project as it was. */
+    post: operations['SaveProjectAs'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/project/save-copy': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Queues writing the project, unsaved edits included, as a whole package at a new location; the open project stays open where it is, unsaved edits and all. */
+    post: operations['SaveProjectCopy'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/api/v1/project/close': {
     parameters: {
       query?: never;
@@ -5671,7 +5705,9 @@ export interface components {
       | 'thumbnails'
       | 'chordId'
       | 'masteringAnalysis'
-      | 'sessionPlayerConvert';
+      | 'sessionPlayerConvert'
+      | 'saveAs'
+      | 'saveCopy';
     /** @enum {unknown} */
     JobState: 'queued' | 'running' | 'done' | 'failed' | 'cancelled';
     /** @description A key-command pad on the remote: its label, the key command it runs (a `KeyCommandSet` id), and a colour. */
@@ -7020,6 +7056,13 @@ export interface components {
       trackId: string;
       name: string;
       category: string;
+    };
+    /**
+     * @description Where Save As or Save a Copy writes the package: a folder on the server's disk that does not exist yet
+     *     (`.anode` is added when left out). Its name is the new project's.
+     */
+    SaveProjectAsRequest: {
+      path: string;
     };
     /**
      * @description A key and scale change of the chord track at `tick` (it holds until the next): the scale the players take
@@ -8413,6 +8456,86 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ProjectSummary'];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  SaveProjectAs: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['SaveProjectAsRequest'];
+      };
+    };
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Job'];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  SaveProjectCopy: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['SaveProjectAsRequest'];
+      };
+    };
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Job'];
         };
       };
       /** @description Not Found */

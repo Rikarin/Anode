@@ -53,6 +53,8 @@ export type AppCommand =
   | 'newProject'
   | 'openProject'
   | 'saveProject'
+  | 'saveProjectAs'
+  | 'saveProjectCopy'
   | 'closeProject'
   | 'importAudio'
   | 'importMidi'
@@ -94,6 +96,8 @@ export interface DesktopDialogs {
   openProject(): Promise<string | null>;
   /** A folder to create a new project in. */
   chooseFolder(): Promise<string | null>;
+  /** Where to write a project package (Save As, Save a Copy), starting from `suggested`. */
+  saveProject?(suggested: string): Promise<string | null>;
   /** WAV files to import. */
   importAudio(): Promise<string[]>;
   /** A Standard MIDI File to import. */

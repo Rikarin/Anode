@@ -289,6 +289,12 @@ public sealed record CreateProjectRequest(string Name, string? Directory, int? S
 public sealed record OpenProjectRequest(string Path);
 
 /// <summary>
+///     Where Save As or Save a Copy writes the package: a folder on the server's disk that does not exist yet
+///     (<c>.anode</c> is added when left out). Its name is the new project's.
+/// </summary>
+public sealed record SaveProjectAsRequest(string Path);
+
+/// <summary>
 ///     A project whose edits since its last save survive in an autosave, offered after a crash (docs/04-phase-3.md,
 ///     "Autosave and crash recovery"). <c>autosaved</c> is when they were last written.
 /// </summary>

@@ -407,6 +407,94 @@
         }
       }
     },
+    "/api/v1/project/save-as": {
+      "post": {
+        "tags": [
+          "Project"
+        ],
+        "summary": "Queues writing the project, unsaved edits included, as a whole package at a new location and going on working there; the original stays as last saved. 409 when something is there; a job that fails or is cancelled leaves no package and the open project as it was.",
+        "operationId": "SaveProjectAs",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SaveProjectAsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Job"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/api/v1/project/save-copy": {
+      "post": {
+        "tags": [
+          "Project"
+        ],
+        "summary": "Queues writing the project, unsaved edits included, as a whole package at a new location; the open project stays open where it is, unsaved edits and all.",
+        "operationId": "SaveProjectCopy",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SaveProjectAsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Job"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
     "/api/v1/project/close": {
       "post": {
         "tags": [
@@ -16223,7 +16311,9 @@
           "thumbnails",
           "chordId",
           "masteringAnalysis",
-          "sessionPlayerConvert"
+          "sessionPlayerConvert",
+          "saveAs",
+          "saveCopy"
         ]
       },
       "JobState": {
@@ -19727,6 +19817,18 @@
             "type": "string"
           }
         }
+      },
+      "SaveProjectAsRequest": {
+        "required": [
+          "path"
+        ],
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string"
+          }
+        },
+        "description": "Where Save As or Save a Copy writes the package: a folder on the server\u0027s disk that does not exist yet\n(\u0060.anode\u0060 is added when left out). Its name is the new project\u0027s."
       },
       "ScaleChange": {
         "required": [

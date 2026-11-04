@@ -149,6 +149,10 @@ export interface AnodeApi {
   /** The open project, or null when none is open (404). */
   getProject(): Promise<Project | null>;
   saveProject(): Promise<ProjectSummary>;
+  /** Queues writing the whole package at a new place and going on there. */
+  saveProjectAs(path: string): Promise<Job>;
+  /** Queues writing the whole package at a new place; the open project stays. */
+  saveProjectCopy(path: string): Promise<Job>;
   closeProject(): Promise<void>;
   /** One undo step. With `revision`, a stale one is refused (409) instead of applied. */
   applyCommands(batch: CommandBatch, revision?: number): Promise<CommandResult>;
@@ -465,6 +469,14 @@ export class HttpAnodeApi implements AnodeApi {
 
       throw error;
     }
+  }
+
+  async saveProjectAs(path: string): Promise<Job> {
+    return unwrap(await this.client.POST('/api/v1/project/save-as', { body: { path } }));
+  }
+
+  async saveProjectCopy(path: string): Promise<Job> {
+    return unwrap(await this.client.POST('/api/v1/project/save-copy', { body: { path } }));
   }
 
   async saveProject(): Promise<ProjectSummary> {

@@ -102,6 +102,8 @@ export const KeyCommands: readonly KeyCommand[] = [
   { id: 'view.theme', label: 'Toggle Light/Dark Appearance', group: 'View', defaults: ['Meta+Ctrl+T'] },
   ...screensets,
   { id: 'project.save', label: 'Save', group: 'Project', defaults: ['Meta+S'] },
+  { id: 'project.saveAs', label: 'Save As…', group: 'Project', defaults: ['Meta+Shift+S'] },
+  { id: 'project.saveCopy', label: 'Save a Copy…', group: 'Project', defaults: [] },
   { id: 'project.saveAlternative', label: 'Save as Alternative…', group: 'Project', defaults: [] },
   { id: 'project.bounce', label: 'Bounce Project or Section…', group: 'Project', defaults: ['Meta+B'] },
   // Phase 8 (docs/09-phase-8.md): control surfaces, controller assignments, synchronisation, the Stem Splitter.

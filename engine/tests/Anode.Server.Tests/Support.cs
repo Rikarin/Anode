@@ -16,11 +16,12 @@ static class ApiCalls {
     public static async Task<Project> CreateProjectAsync(
         this HttpClient client,
         string name = "Song",
-        int? rate = null
+        int? rate = null,
+        string? directory = null
     ) {
         var response = await client.PostAsJsonAsync(
             "/api/v1/projects",
-            new(name, null, rate),
+            new(name, directory, rate),
             ContractsJsonContext.Default.CreateProjectRequest,
             Token
         );
@@ -56,6 +57,32 @@ static class ApiCalls {
         var response = await client.PostAsync(path, null, Token);
         await EnsureAsync(response);
         return (await response.Content.ReadFromJsonAsync(ContractsJsonContext.Default.CommandResult, Token))!;
+    }
+
+    /// <summary>Posts a request that queues a job and waits for the job to end; the job as it ended.</summary>
+    public static async Task<Job> RunJobAsync<T>(
+        this HttpClient client,
+        string path,
+        T request,
+        System.Text.Json.Serialization.Metadata.JsonTypeInfo<T> type
+    ) {
+        var response = await client.PostAsJsonAsync(path, request, type, TestContext.Current.CancellationToken);
+        Assert.True(response.IsSuccessStatusCode, await response.Content.ReadAsStringAsync());
+        var job = (await response.Content.ReadFromJsonAsync(
+            ContractsJsonContext.Default.Job,
+            TestContext.Current.CancellationToken
+        ))!;
+        await ServerFixture.Eventually(async () => {
+                job = (await client.GetFromJsonAsync(
+                    $"/api/v1/jobs/{job.Id}",
+                    ContractsJsonContext.Default.Job,
+                    TestContext.Current.CancellationToken
+                ))!;
+                return job.State is JobState.Done or JobState.Failed or JobState.Cancelled;
+            },
+            120
+        );
+        return job;
     }
 
     public static async Task<AudioFile> ImportAsync(this HttpClient client, string path) {

@@ -146,6 +146,12 @@ import { Lcd } from './lcd';
           </button>
           <ng-template #projectMenu>
             <xui-menu class="min-w-56">
+              <button xuiMenuItem type="button" data-testid="save-as" (click)="ui.saveAsOpen.set('saveAs')">
+                Save As…
+              </button>
+              <button xuiMenuItem type="button" data-testid="save-copy" (click)="ui.saveAsOpen.set('saveCopy')">
+                Save a Copy…
+              </button>
               <button
                 xuiMenuItem
                 type="button"

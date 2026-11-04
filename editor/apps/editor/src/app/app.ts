@@ -44,6 +44,7 @@ import { ScriptEditor } from './scripter/script-editor';
 import { ControlBar } from './shell/control-bar';
 import { MissingFilesDialog } from './shell/missing-files';
 import { SaveAlternativeDialog } from './shell/save-alternative';
+import { SaveProjectAsDialog } from './shell/save-project-as';
 import { HistoryStore } from './state/history.store';
 import { KeyCommandsStore } from './state/key-commands.store';
 import { LiveMidiStore } from './state/live-midi.store';
@@ -100,6 +101,7 @@ const InterchangeCommands = {
     RouterOutlet,
     MissingFilesDialog,
     SaveAlternativeDialog,
+    SaveProjectAsDialog,
     ScriptEditor,
     SoundLibraryDialog,
     StemSplitterDialog,
@@ -192,6 +194,11 @@ const InterchangeCommands = {
           @if (ui.saveAlternativeOpen()) {
             @defer (on immediate) {
               <an-save-alternative />
+            }
+          }
+          @if (ui.saveAsOpen() !== null) {
+            @defer (on immediate) {
+              <an-save-project-as />
             }
           }
           @if (project.isOpen()) {
@@ -441,6 +448,8 @@ export class App {
       'edit.redo': () => void this.history.redo(),
       'project.save': () => void this.session.save(),
       'project.saveAlternative': () => this.ui.saveAlternativeOpen.set(true),
+      'project.saveAs': () => this.saveAs('saveAs'),
+      'project.saveCopy': () => this.saveAs('saveCopy'),
       'view.keyCommands': () => this.ui.keyCommandsOpen.set(true),
       'view.theme': () => this.theme.toggle(),
       'view.mixer': () => this.screensets.showPane('mixer'),
@@ -497,6 +506,12 @@ export class App {
   }
 
   /** What the app menu asks for (File ▸ New, Open…, Save, Close, Import Audio…). */
+  private saveAs(mode: 'saveAs' | 'saveCopy'): void {
+    if (this.project.isOpen()) {
+      this.ui.saveAsOpen.set(mode);
+    }
+  }
+
   async command(command: AppCommand): Promise<void> {
     const dialogs = window.anode?.dialogs;
     switch (command) {
@@ -512,6 +527,12 @@ export class App {
       }
       case 'saveProject':
         await this.session.save();
+        break;
+      case 'saveProjectAs':
+        this.saveAs('saveAs');
+        break;
+      case 'saveProjectCopy':
+        this.saveAs('saveCopy');
         break;
       case 'closeProject':
         await this.session.close();

@@ -123,13 +123,7 @@ public sealed partial class ProjectSession(
     }
 
     public Project Create(CreateProjectRequest request) {
-        var name = (request.Name ?? string.Empty).Trim();
-        if (name.Length is 0 or > Edits.MaxNameLength
-            || name.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0
-            || name.StartsWith('.')) {
-            throw ProjectException.Unprocessable("A project name has 1…128 characters and no path separators.");
-        }
-
+        var name = CheckProjectName((request.Name ?? string.Empty).Trim());
         var rate = request.SampleRate ?? device.SampleRate ?? ProjectDefaults.SampleRate;
         if (!ProjectDefaults.SampleRates.Contains(rate)) {
             throw ProjectException.Unprocessable(
@@ -1379,11 +1373,18 @@ public sealed partial class ProjectSession(
             )
             .ContinueWith(static _ => { }, TaskScheduler.Default);
 
+    /// <summary>
+    ///     What carries over when the project goes on in another document: its undo history, and a revision to go on from
+    ///     (clients refetch when an opened project's revision is not theirs).
+    /// </summary>
+    sealed record Continued(EditHistory? History, long Revision);
+
     Project Replace(
         string folder,
         ProjectState state,
         ImmutableDictionary<string, SavedState>? states = null,
-        bool recovered = false
+        bool recovered = false,
+        Continued? continued = null
     ) {
         Project project;
         using var writes = autosaving.EnterScope();
@@ -1399,7 +1400,8 @@ public sealed partial class ProjectSession(
             }
 
             ResetStepInput();
-            open = new(++sessions, folder, state, new(time)) {
+            open = new(++sessions, folder, state, continued?.History ?? new(time)) {
+                Revision = continued?.Revision ?? 1,
                 States = states ?? ImmutableDictionary.Create<string, SavedState>(StringComparer.Ordinal),
                 Analyses = FileAnalyses.CachedAll(folder, state.Files.Values)
                     .ToImmutableDictionary(StringComparer.Ordinal),

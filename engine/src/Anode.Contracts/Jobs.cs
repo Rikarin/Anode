@@ -103,7 +103,15 @@ public enum JobKind {
     ///     <c>convertSessionPlayerRegions</c>.
     /// </summary>
     [JsonStringEnumMemberName("sessionPlayerConvert")]
-    SessionPlayerConvert
+    SessionPlayerConvert,
+
+    /// <summary>Save As (<c>SaveProjectAsRequest</c>): writes a whole package elsewhere and goes on working there.</summary>
+    [JsonStringEnumMemberName("saveAs")]
+    SaveAs,
+
+    /// <summary>Save a Copy (<c>SaveProjectAsRequest</c>): writes a whole package elsewhere; the open project stays.</summary>
+    [JsonStringEnumMemberName("saveCopy")]
+    SaveCopy
 }
 
 [JsonConverter(typeof(JsonStringEnumConverter<JobState>))]

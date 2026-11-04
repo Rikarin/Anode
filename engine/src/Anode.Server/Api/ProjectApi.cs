@@ -38,6 +38,27 @@ static class ProjectApi {
             )
             .WithName("SaveProject");
         project.MapPost(
+                "/save-as",
+                static Results<Ok<Job>, NotFound, ProblemHttpResult>(SaveProjectAsRequest request, Jobs jobs) =>
+                    TypedResults.Ok(jobs.SaveAs(request))
+            )
+            .WithName("SaveProjectAs")
+            .WithSummary(
+                "Queues writing the project, unsaved edits included, as a whole package at a new location and going on "
+                + "working there; the original stays as last saved. 409 when something is there; a job that fails or is "
+                + "cancelled leaves no package and the open project as it was."
+            );
+        project.MapPost(
+                "/save-copy",
+                static Results<Ok<Job>, NotFound, ProblemHttpResult>(SaveProjectAsRequest request, Jobs jobs) =>
+                    TypedResults.Ok(jobs.SaveCopy(request))
+            )
+            .WithName("SaveProjectCopy")
+            .WithSummary(
+                "Queues writing the project, unsaved edits included, as a whole package at a new location; the open "
+                + "project stays open where it is, unsaved edits and all."
+            );
+        project.MapPost(
                 "/close",
                 static Results<NoContent, NotFound>(ProjectSession session) => {
                     session.Close();

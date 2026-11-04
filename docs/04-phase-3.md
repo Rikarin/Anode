@@ -155,6 +155,17 @@ report. A REST change means regenerating `engine/src/Anode.Server/openapi.json`
     `POST /projects/recover` opens the project with the edits, unsaved; the snapshot stays until they are saved, so a
     second crash loses nothing. Everything else that drops a snapshot moves it to a new backup first:
     `POST /projects/recoverable/discard`, or opening the saved version.
+- **Save As and Save a Copy:**
+  - `POST /project/save-as` and `POST /project/save-copy` queue a job that writes the project, unsaved edits included, as
+    a whole package at a folder that does not exist yet (`ProjectCopy`): media, alternatives, backups, plugin states and
+    caches, with `Autosave/` and temporary files left out. The new package is a new project: its own id and, from its
+    folder, its name, also in its saved documents, so the recent list keeps both.
+  - The package is built in a hidden `.saving-<guid>` folder beside the target, read back, and renamed into place. A
+    failure or a cancel removes the build: there is no target, and the source was only ever read.
+  - A file offline in the source stays offline in the copy, and a track file that cannot be read is copied as it is.
+  - Save a Copy leaves the session alone. Save As goes on in the new package with its undo history, and autosaves there;
+    the original keeps its last save, with its unsaved edits in a backup, and no longer offers them for recovery. A
+    media path outside the package stays as it is (an absolute instrument or insert file, a referenced movie).
 - **Screensets, key commands, bookmarks:**
   - Screensets are saved in the project (they mark it unsaved, but are not undo steps).
   - Key commands and bookmarks are per user, in `<DataDirectory>/settings/`.

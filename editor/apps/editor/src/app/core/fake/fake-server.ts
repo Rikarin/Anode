@@ -368,6 +368,7 @@ export class FakeAnodeServer implements AnodeApi {
   private readonly now: () => number;
   private readonly disk = new Map<string, Project>();
   private recent: ProjectSummary[] = [];
+  private jobFailure: string | null = null;
   private project: Project | null = null;
   private undoStack: UndoStep[] = [];
   private redoStack: UndoStep[] = [];
@@ -581,6 +582,11 @@ export class FakeAnodeServer implements AnodeApi {
     return true;
   }
 
+  /** The next job to finish fails with `message`, changing nothing (tests). */
+  failNextJob(message: string): void {
+    this.jobFailure = message;
+  }
+
   /** The Server dies: only what is saved or autosaved survives (tests). */
   crash(): void {
     this.stopEngine();
@@ -679,6 +685,92 @@ export class FakeAnodeServer implements AnodeApi {
 
   getProject(): Promise<Project | null> {
     return this.answer('GetProject', () => (this.project ? structuredClone(this.project) : null));
+  }
+
+  saveProjectAs(path: string): Promise<Job> {
+    return this.answer('SaveProjectAs', () => {
+      const target = this.saveTarget(path);
+      return this.startJob('saveAs', { finish: () => this.finishSaveAs(target) }, 1);
+    });
+  }
+
+  saveProjectCopy(path: string): Promise<Job> {
+    return this.answer('SaveProjectCopy', () => {
+      const target = this.saveTarget(path);
+      return this.startJob('saveCopy', { finish: () => this.finishSaveCopy(target) }, 1);
+    });
+  }
+
+  /** A package location as the Server checks it: with its extension, free, and outside the open project. */
+  private saveTarget(path: string): string {
+    const project = this.require();
+    const trimmed = path.trim().replace(/\/+$/, '');
+    if (!trimmed) {
+      throw new ApiError(422, 'Name the folder to save the project to.');
+    }
+
+    const target = trimmed.endsWith('.anode') ? trimmed : `${trimmed}.anode`;
+    if (target === project.path || target.startsWith(`${project.path}/`)) {
+      throw new ApiError(422, 'A project cannot be saved inside itself.');
+    }
+
+    if (this.disk.has(target)) {
+      throw new ApiError(409, `'${target}' already exists.`);
+    }
+
+    return target;
+  }
+
+  /** The open project as a new one at `target`: its own id, and the name its folder gives it. */
+  private packaged(target: string): Project {
+    const name = (target.split('/').pop() ?? target).replace(/\.anode$/, '');
+    return {
+      ...structuredClone(this.require()),
+      id: `prj_${this.nextId++}`,
+      name,
+      path: target
+    };
+  }
+
+  private finishSaveCopy(target: string): string[] {
+    const copy = this.packaged(target);
+    this.disk.set(target, { ...copy, dirty: false });
+    this.remember(copy);
+    return [target];
+  }
+
+  /** Goes on in the new package with its undo; unsaved edits stay behind as a backup, the snapshot goes with them. */
+  private finishSaveAs(target: string): string[] {
+    const before = this.require();
+    const copy = this.packaged(target);
+    if (before.dirty) {
+      const backups = this.backupSets.get(before.path) ?? [];
+      backups.unshift({
+        backup: { id: `bak_${this.nextId++}`, saved: new Date(this.now()).toISOString() },
+        project: structuredClone(before)
+      });
+      this.backupSets.set(before.path, backups.slice(0, 10));
+    }
+
+    this.autosaves.delete(before.path);
+    const renamed = (project: Project): Project => ({
+      ...project,
+      id: copy.id,
+      name: copy.name,
+      path: target
+    });
+    const rebased = (step: UndoStep): UndoStep => ({
+      ...step,
+      before: renamed(step.before),
+      after: renamed(step.after)
+    });
+    this.undoStack = this.undoStack.map(rebased);
+    this.redoStack = this.redoStack.map(rebased);
+    this.project = { ...copy, dirty: false, revision: before.revision + 1 };
+    this.disk.set(target, structuredClone(this.project));
+    const summary = this.remember(this.project);
+    this.emit({ type: 'projectOpened', project: summary, revision: this.project.revision });
+    return [target];
   }
 
   saveProject(): Promise<ProjectSummary> {
@@ -3508,6 +3600,12 @@ export class FakeAnodeServer implements AnodeApi {
       return;
     }
     try {
+      if (this.jobFailure) {
+        const failure = this.jobFailure;
+        this.jobFailure = null;
+        throw new ApiError(422, failure);
+      }
+
       const files = entry.finish
         ? entry.finish()
         : entry.bounce
