@@ -382,7 +382,7 @@ export class App {
   constructor() {
     window.anode?.onFullScreen(fullScreen => this.fullScreen.set(fullScreen));
     // The desktop app asks before it quits: the open project lives in its own Server and goes with it.
-    window.anode?.onQuit?.(() => this.session.mayDiscard('quit'));
+    window.anode?.onQuit?.(() => this.session.mayQuit());
     window.anode?.onCommand?.(command => void this.command(command));
     window.anode?.onOpenSettings?.(() => this.ui.settingsOpen.set(true));
     inject(Router).events.subscribe(event => {

@@ -86,6 +86,7 @@ import {
   type ProjectBackup,
   type ProjectDelta,
   type ProjectSummary,
+  type RecoverableProject,
   type RegenerateRequest,
   type RemotePads,
   type SampleRange,
@@ -302,6 +303,9 @@ interface HeldNote {
 /** A note a recording pass captured, in project ticks. */
 type TakeNote = HeldNote & { lengthTicks: number };
 
+/** How long after an edit the realtime fake autosaves (the Server's default). */
+const AutosaveMilliseconds = 30_000;
+
 export interface FakeServerOptions {
   /** Milliseconds, for undo coalescing and the transport (Date.now by default). */
   now?: () => number;
@@ -403,6 +407,9 @@ export class FakeAnodeServer implements AnodeApi {
   /** Alternatives per project path; the current one's project is the open project (or what is on disk). */
   private readonly alternativeSets = new Map<string, { alternative: ProjectAlternative; project: Project | null }[]>();
   private readonly backupSets = new Map<string, { backup: ProjectBackup; project: Project }[]>();
+  /** What each project's autosave holds, by project path (docs/04-phase-3.md, "Autosave and crash recovery"). */
+  private readonly autosaves = new Map<string, { project: Project; autosaved: string }>();
+  private autosaveTimer: ReturnType<typeof setTimeout> | null = null;
   private readonly screensetSets = new Map<string, Screenset[]>();
   private keyCommandSet: KeyCommandSet = { bindings: {} };
   private bookmarkSet: Bookmarks = { paths: [`${FakeHome}/Music/Loops`, `${FakeHome}/Music/MIDI`] };
@@ -463,6 +470,66 @@ export class FakeAnodeServer implements AnodeApi {
 
   recentProjects(): Promise<ProjectSummary[]> {
     return this.answer('ListRecentProjects', () => this.recent.map(summary => ({ ...summary })));
+  }
+
+  recoverableProjects(): Promise<RecoverableProject[]> {
+    return this.answer('ListRecoverableProjects', () =>
+      this.recent.flatMap(({ id, name, path }) => {
+        const snapshot = path === this.project?.path ? undefined : this.autosaves.get(path);
+        return snapshot ? [{ id, name, path, autosaved: snapshot.autosaved }] : [];
+      })
+    );
+  }
+
+  recoverProject(path: string): Promise<Project> {
+    return this.answer('RecoverProject', () => {
+      if (path === this.project?.path) {
+        throw new ApiError(409, `${path} is open.`);
+      }
+      const snapshot = this.autosaves.get(path);
+      if (!snapshot) {
+        throw new ApiError(404, `${path} has no autosaved edits.`);
+      }
+      const project = { ...structuredClone(snapshot.project), revision: 0, dirty: true };
+      this.open(project, true);
+      return structuredClone(project);
+    });
+  }
+
+  discardRecovery(path: string): Promise<void> {
+    return this.answer('DiscardRecovery', () => {
+      if (!this.autosaves.has(path)) {
+        throw new ApiError(404, `${path} has no autosaved edits.`);
+      }
+      this.keepAutosave(path);
+    });
+  }
+
+  /** Writes unsaved edits to the project's autosave, as the Server does on its timer; whether it did. */
+  autosave(): boolean {
+    if (this.autosaveTimer) {
+      clearTimeout(this.autosaveTimer);
+      this.autosaveTimer = null;
+    }
+
+    const project = this.project;
+    if (!project?.dirty) {
+      return false;
+    }
+
+    const autosaved = new Date(this.now()).toISOString();
+    this.autosaves.set(project.path, { project: structuredClone(project), autosaved });
+    this.emit({ type: 'projectAutosaved', revision: project.revision, autosaved });
+    return true;
+  }
+
+  /** The Server dies: only what is saved or autosaved survives (tests). */
+  crash(): void {
+    this.stopEngine();
+    this.project = null;
+    this.undoStack = [];
+    this.redoStack = [];
+    this.emit({ type: 'projectClosed' });
   }
 
   createProject(request: CreateProject): Promise<Project> {
@@ -576,6 +643,7 @@ export class FakeAnodeServer implements AnodeApi {
       }
       this.project = { ...project, dirty: false };
       this.disk.set(project.path, structuredClone(this.project));
+      this.autosaves.delete(project.path);
       const summary = this.remember(this.project);
       this.emit({ type: 'projectSaved', project: summary, revision: project.revision });
       return summary;
@@ -584,7 +652,9 @@ export class FakeAnodeServer implements AnodeApi {
 
   closeProject(): Promise<void> {
     return this.answer('CloseProject', () => {
-      this.require();
+      const project = this.require();
+      this.autosave();
+      this.keepAutosave(project.path);
       this.stopEngine();
       this.project = null;
       this.undoStack = [];
@@ -5253,6 +5323,9 @@ export class FakeAnodeServer implements AnodeApi {
     const revision = previous.revision + 1;
     const project = { ...next, revision, dirty: true };
     this.project = project;
+    if (this.realtime) {
+      this.autosaveTimer ??= setTimeout(() => this.autosave(), AutosaveMilliseconds);
+    }
     const delta: ProjectDelta = { revision, ops: diff(previous, project) };
     this.emit({ type: 'projectChanged', delta });
     // The sync settings changed (setSyncSettings, an undo): the host's sync state follows.
@@ -5296,7 +5369,11 @@ export class FakeAnodeServer implements AnodeApi {
     return { ...file };
   }
 
-  private open(project: Project): void {
+  private open(project: Project, recovered = false): void {
+    if (!recovered) {
+      this.keepAutosave(project.path);
+    }
+
     this.stopEngine();
     this.positionTick = 0;
     this.project = project;
@@ -5304,6 +5381,20 @@ export class FakeAnodeServer implements AnodeApi {
     this.redoStack = [];
     const summary = this.remember(project);
     this.emit({ type: 'projectOpened', project: summary, revision: project.revision });
+  }
+
+  /** A snapshot not recovered goes to a backup, as on the Server: never lost, and out of the new session's way. */
+  private keepAutosave(path: string): void {
+    const snapshot = this.autosaves.get(path);
+    if (snapshot) {
+      const backups = this.backupSets.get(path) ?? [];
+      backups.unshift({
+        backup: { id: `bak_${this.nextId++}`, saved: new Date(this.now()).toISOString() },
+        project: snapshot.project
+      });
+      this.backupSets.set(path, backups.slice(0, 10));
+      this.autosaves.delete(path);
+    }
   }
 
   private remember(project: Project): ProjectSummary {

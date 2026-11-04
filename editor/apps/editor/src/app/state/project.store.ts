@@ -122,6 +122,8 @@ export class ProjectStore {
   readonly info = signal<ProjectInfo | null>(null);
   readonly revision = signal(0);
   readonly dirty = signal(false);
+  /** When the Server last autosaved the unsaved edits (ISO 8601), or null. */
+  readonly autosaved = signal<string | null>(null);
   readonly settings = signal<ProjectSettings>(DefaultSettings);
   readonly master = signal<ChannelStrip>(SilentStrip);
   readonly trackIds = signal<readonly string[]>([]);
@@ -220,6 +222,12 @@ export class ProjectStore {
           }
           this.info.update(info => (info?.id === message.project.id ? { ...info, path: message.project.path } : info));
           break;
+        case 'projectAutosaved':
+          this.autosaved.set(message.autosaved);
+          break;
+        case 'autosaveFailed':
+          this.notify.error(message.message);
+          break;
         default:
           break;
       }
@@ -234,6 +242,7 @@ export class ProjectStore {
     this.info.set({ id: project.id, name: project.name, path: project.path, sampleRate: project.sampleRate });
     this.revision.set(project.revision);
     this.dirty.set(project.dirty);
+    this.autosaved.set(null);
     this.settings.set(project.settings);
     this.master.set(project.master);
     this.trackIds.set(project.tracks.map(t => t.id));
@@ -267,6 +276,7 @@ export class ProjectStore {
     this.info.set(null);
     this.revision.set(0);
     this.dirty.set(false);
+    this.autosaved.set(null);
     this.settings.set(DefaultSettings);
     this.master.set(SilentStrip);
     this.trackIds.set([]);
