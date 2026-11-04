@@ -435,14 +435,30 @@ describe('FakeAnodeServer, patches, I/O labels, plugin editors and problems', ()
     const events = messages(server);
     const track = server.current?.tracks.find(t => t.kind === 'audio');
     await run(server, { type: 'addInsert', trackId: track?.id ?? '', pluginId: 'anode.multipressor' });
+    await run(server, { type: 'addInsert', trackId: track?.id ?? '', pluginId: 'anode.channel-eq' });
+    const [pressor, eq] = server.current?.tracks.find(t => t.id === track?.id)?.strip.inserts.slice(-2) ?? [];
     await server.controlTransport({ command: 'play', tick: 6 * Bar });
-    time += 200;
-    server.advance();
-    const meters = events.filter(m => m.type === 'meters').at(-1);
-    const insert = server.current?.tracks.find(t => t.id === track?.id)?.strip.inserts.at(-1);
-    const reading = meters?.type === 'meters' ? meters.readings?.find(r => r.insertId === insert?.id) : undefined;
-    expect(reading?.values).toHaveLength(4);
-    expect(reading?.value).toBe(Math.min(...(reading?.values ?? [])));
+    const reading = (insert: string | undefined) => {
+      time += 200;
+      server.advance();
+      const meters = events.filter(m => m.type === 'meters').at(-1);
+      return meters?.type === 'meters' ? meters.readings?.find(r => r.insertId === insert) : undefined;
+    };
+    // Nobody watches: the reading alone.
+    expect(reading(pressor?.id)?.values ?? null).toBeNull();
+    await server.watchInsertDisplays({
+      inserts: [
+        { trackId: track?.id ?? null, insertId: pressor?.id ?? '' },
+        { trackId: track?.id ?? null, insertId: eq?.id ?? '' }
+      ]
+    });
+    const shown = reading(pressor?.id);
+    expect(shown?.values).toHaveLength(4);
+    expect(shown?.value).toBe(Math.min(...(shown?.values ?? [])));
+    expect(reading(eq?.id)?.values).toHaveLength(64);
+    // The lease runs out unless a window renews it.
+    time += 3_000;
+    expect(reading(pressor?.id)?.values ?? null).toBeNull();
   });
 
   it('reports insert readings and aux levels in the meters', async () => {

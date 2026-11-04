@@ -10,3 +10,5 @@ All notable changes to Anode are recorded here, by hand.
   the Missing Files window finds or relinks them, checking length, rate and channels.
 - Multipressor: each band's gain reduction reaches the editor (insert readings can now carry several values) and shows
   under its knobs. A meters frame without readings no longer blanks the reading a plugin window shows.
+- Channel EQ and Linear Phase EQ: a draggable curve over a live analyser of the output, with a handle per band. An
+  insert's live display is read only while a window shows it (`POST /plugins/displays`, a lease the window renews).

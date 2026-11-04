@@ -99,6 +99,19 @@ static class MixApi {
                 "Opens or closes a plugin's own editor window on the machine the engine runs on (the desktop app); 409 "
                 + "when the plugin has none or the engine runs headless."
             );
+        api.MapPost(
+                "/plugins/displays",
+                static NoContent(InsertDisplayRequest request, EngineConnection engine) => {
+                    engine.WatchDisplays(request);
+                    return TypedResults.NoContent();
+                }
+            )
+            .WithName("WatchInsertDisplays")
+            .WithTags("Plugins")
+            .WithSummary(
+                "Keeps these inserts' live displays (spectrum, scope, band gains) on the meters event for the next few "
+                + "seconds: an editor repeats it while a plugin window shows. Unknown inserts are ignored."
+            );
     }
 
     static Accepted<Job> Accepted(Job job) => TypedResults.Accepted($"/api/v1/jobs/{job.Id}", job);

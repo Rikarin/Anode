@@ -186,11 +186,12 @@ public sealed class ChannelTests : IDisposable {
             false,
             [
                 TestEffects.Insert("g", TestEffects.Gain), TestEffects.Insert("m", "anode.level-meter"),
-                TestEffects.Insert("p", "anode.multipressor")
+                TestEffects.Insert("p", "anode.multipressor"), TestEffects.Insert("q", "anode.channel-eq")
             ],
             [new("s", 1, 0.5f, 0f, false)]
         );
         Assert.Null(await host.HandleAsync(new SetChannelMessage(1, strip), Token));
+        Assert.Null(await host.HandleAsync(new WatchInsertsMessage([new(1, "q"), new(1, "p")]), Token));
         Assert.Null(await host.HandleAsync(new SetInsertParameterMessage(1, "g", "gain", 0.5), Token));
         Assert.Null(await host.HandleAsync(new SetSendLevelMessage(1, "s", 0.25f, 0f), Token));
         Assert.Null(await host.HandleAsync(new SetMixerMessage("tracks", true, 3), Token));
@@ -233,7 +234,23 @@ public sealed class ChannelTests : IDisposable {
         lock (pushed) {
             var last = pushed.OfType<InsertReadingsMessage>().Last().Readings;
             Assert.Equal(4, last.First(static r => r.InsertId == "p").Values?.Length);
+            Assert.Equal(64, last.First(static r => r.InsertId == "q").Values?.Length);
             Assert.Null(last.First(static r => r.InsertId == "m").Values);
+        }
+
+        // Nobody watches any more: the spectrum's FFT stops with the window.
+        Assert.Null(await host.HandleAsync(new WatchInsertsMessage([]), Token));
+        await Task.Delay(120, Token);
+        lock (pushed) {
+            pushed.Clear();
+        }
+
+        await Task.Delay(120, Token);
+        lock (pushed) {
+            Assert.DoesNotContain(
+                pushed.OfType<InsertReadingsMessage>().SelectMany(static m => m.Readings),
+                static r => r.Values is not null
+            );
         }
 
         var states = Assert.IsType<InstrumentStatesMessage>(

@@ -1,5 +1,7 @@
+using Anode.Dsp.Effects;
 using Anode.Dsp.Effects.Eq;
 using Anode.Dsp.Filters;
+using Anode.Dsp.Metering;
 using Anode.Dsp.Tests.Support;
 using static Anode.Dsp.Tests.Support.Analysis;
 
@@ -53,6 +55,61 @@ public sealed class EqTests {
             _ => 23_000
         };
         Assert.Equal(gainDb, ToDb(MagnitudeAt(ir, at, Fx.Rate)), type == BiquadType.Peak ? 0.01 : 0.3);
+    }
+
+    /// <summary>
+    ///     One setting of every kind of band, measured: <c>eq-response.spec.ts</c> in the editor holds the same table, so
+    ///     the curve the editor draws is the response the engine has.
+    /// </summary>
+    [Fact]
+    public void Response_is_the_table_the_editors_curve_is_tested_against() {
+        var ir = ImpulseResponse(
+            (ChannelEq.HighPassOn, 1),
+            (ChannelEq.HighPassFrequency, 80),
+            (ChannelEq.HighPassSlope, 1),
+            (ChannelEq.LowShelfFrequency, 120),
+            (ChannelEq.LowShelfGain, 4),
+            (ChannelEq.Peak2Frequency, 1_000),
+            (ChannelEq.Peak2Gain, -6),
+            (ChannelEq.Peak2Q, 2),
+            (ChannelEq.Peak3Frequency, 3_000),
+            (ChannelEq.Peak3Gain, 3),
+            (ChannelEq.HighShelfFrequency, 8_000),
+            (ChannelEq.HighShelfGain, 2),
+            (ChannelEq.LowPassOn, 1),
+            (ChannelEq.LowPassFrequency, 15_000),
+            (ChannelEq.LowPassSlope, 0),
+            (ChannelEq.Output, -1)
+        );
+        (double Hz, double Db)[] table = [
+            (40, -21.149), (100, 1.006), (300, -1.042), (1_000, -6.634), (3_000, 1.812), (8_000, 0.286),
+            (15_000, -2.000), (18_000, -7.891)
+        ];
+        foreach (var (hz, db) in table) {
+            Assert.Equal(db, ToDb(MagnitudeAt(ir, hz, Fx.Rate)), 0.001);
+        }
+    }
+
+    [Fact]
+    public void Display_is_the_spectrum_of_a_tone_on_the_analysers_bands() {
+        using var eq = Fx.Create(ChannelEq.Id);
+        var tone = TestWav.Sine(1_000, (int)Fx.Rate, 0.5);
+        Fx.Run(eq, tone);
+        var display = Assert.IsAssignableFrom<IEffectDisplay>(eq);
+        var bands = new float[display.DisplaySize];
+        Assert.Equal(SpectrumAnalyzer.DisplayBands, display.ReadDisplay(bands));
+        // Bands run 20 Hz to 20 kHz evenly in log frequency, so 1 kHz is 56.6 % of the way up.
+        var peak = Array.IndexOf(bands, bands.Max());
+        Assert.Equal((int)(Math.Log(1_000.0 / 20) / Math.Log(1_000) * bands.Length), peak);
+        // −6 dBFS, less the Hann window's scalloping for a tone between bins (at most 1.42 dB).
+        Assert.InRange(bands[peak], -7.5, -5.9);
+        Assert.True(bands[peak - 12] < bands[peak] - 40, $"{bands[peak - 12]} beside {bands[peak]}");
+
+        using var linear = Fx.Create(LinearPhaseEq.Id);
+        Fx.Run(linear, TestWav.Sine(1_000, (int)Fx.Rate, 0.5));
+        var flat = new float[SpectrumAnalyzer.DisplayBands];
+        Assert.Equal(flat.Length, ((IEffectDisplay)linear).ReadDisplay(flat));
+        Assert.Equal(peak, Array.IndexOf(flat, flat.Max()));
     }
 
     [Theory]

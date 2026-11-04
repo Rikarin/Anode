@@ -88,6 +88,7 @@ export type IoLabel = Schemas['IoLabel'];
 export type PatchInfo = Schemas['PatchInfo'];
 export type SavePatchRequest = Schemas['SavePatchRequest'];
 export type PluginEditorRequest = Schemas['PluginEditorRequest'];
+export type InsertDisplayRequest = Schemas['InsertDisplayRequest'];
 export type Job = Schemas['Job'];
 export type JobKind = Schemas['JobKind'];
 export type JobState = Schemas['JobState'];

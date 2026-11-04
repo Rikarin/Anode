@@ -169,23 +169,28 @@ public sealed partial class EngineController {
     /// <summary>
     ///     Every insert's reading that is a number (track −1: the master), read without the gate: the published model
     ///     and each channel's configuration are swapped whole, and a reading is a single float the audio thread writes
-    ///     (or, for an <see cref="IEffectDisplay" />, values a display may see torn).
+    ///     (or, for an <see cref="IEffectDisplay" /> that an editor watches, values a display may see torn).
     /// </summary>
     public List<InsertReadingEntry> InsertReadings() {
         var readings = new List<InsertReadingEntry>();
+        var watching = Volatile.Read(ref watchedInserts);
         foreach (var (trackId, channel) in Channels(Engine.Root)) {
             foreach (var insert in channel.Config.Inserts) {
                 if (insert.Slot.Effect is { } effect
                     && !insert.Slot.Failed
                     && effect.Reading is var value
                     && !float.IsNaN(value)) {
-                    readings.Add(new(trackId, insert.Slot.Id, value, DisplayOf(effect)));
+                    var display = watching.Contains(new(trackId, insert.Slot.Id)) ? DisplayOf(effect) : null;
+                    readings.Add(new(trackId, insert.Slot.Id, value, display));
                 }
             }
         }
 
         return readings;
     }
+
+    /// <summary>The inserts whose displays <see cref="InsertReadings" /> reads, all of them.</summary>
+    public void WatchInserts(IReadOnlyList<WatchedInsert> inserts) => Volatile.Write(ref watchedInserts, [..inserts]);
 
     /// <summary>
     ///     What an effect's display shows now, or null when it has none. The IPC frame is JSON, which cannot carry a

@@ -84,8 +84,8 @@ public sealed record MetersEvent(
 
 /// <summary>
 ///     An insert's reading (<c>IAudioEffect.Reading</c>); <c>trackId</c> null is the master. <c>values</c> are what an
-///     effect with more to show sends beside it (the Multipressor's band gains, band 1 first; docs/effects/T2.md lists
-///     each effect's layout); left out otherwise.
+///     effect with more to show sends beside it while a client watches it (<c>/plugins/displays</c>): the Multipressor's
+///     band gains, an EQ's spectrum (docs/effects/T2.md lists each effect's layout); left out otherwise.
 /// </summary>
 public sealed record InsertReading(
     string? TrackId,

@@ -78,6 +78,40 @@
         }
       }
     },
+    "/api/v1/plugins/displays": {
+      "post": {
+        "tags": [
+          "Plugins"
+        ],
+        "summary": "Keeps these inserts\u0027 live displays (spectrum, scope, band gains) on the meters event for the next few seconds: an editor repeats it while a plugin window shows. Unknown inserts are ignored.",
+        "operationId": "WatchInsertDisplays",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InsertDisplayRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "No Content"
+          }
+        }
+      }
+    },
     "/api/v1/system/discovery": {
       "get": {
         "tags": [
@@ -16053,6 +16087,39 @@
           "midiEffects",
           null
         ]
+      },
+      "InsertDisplayRequest": {
+        "required": [
+          "inserts"
+        ],
+        "type": "object",
+        "properties": {
+          "inserts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/InsertDisplayTarget"
+            }
+          }
+        },
+        "description": "The inserts whose live display (a spectrum, a scope, band gains) an editor shows now."
+      },
+      "InsertDisplayTarget": {
+        "required": [
+          "insertId"
+        ],
+        "type": "object",
+        "properties": {
+          "trackId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "insertId": {
+            "type": "string"
+          }
+        },
+        "description": "An insert a plugin window shows; \u0060trackId\u0060 null is the master."
       },
       "InstallPackRequest": {
         "required": [

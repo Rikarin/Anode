@@ -389,7 +389,7 @@ export const T1Macros: Readonly<Record<string, readonly string[]>> = {
     'glide'
   ],
   'anode.sampler': ['tune', 'attack', 'release', 'velocity'],
-  'anode.channel-eq': ['low.gain', 'peak2.gain', 'high.gain'],
+  'anode.channel-eq': ['lowShelfGain', 'peak2Gain', 'highShelfGain'],
   'anode.compressor': ['threshold', 'ratio', 'makeup'],
   'anode.reverb': ['size', 'mix'],
   'anode.stereo-delay': ['feedback', 'mix'],

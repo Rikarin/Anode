@@ -430,6 +430,21 @@ public sealed class MixApiTests {
         await Editor(client, new(gtr, inserts[0].Id, false));
         await ServerFixture.Eventually(() => Task.FromResult(host.Editors.Count == 0));
 
+        // A window showing an insert asks for its display; an unknown track is ignored.
+        Assert.Equal(
+            HttpStatusCode.NoContent,
+            (await Displays(client, new([new(gtr, inserts[1].Id), new(null, "ins_master"), new("trk_none", "x")])))
+            .StatusCode
+        );
+        await ServerFixture.Eventually(() => Task.FromResult(
+                host.WatchedInserts.Contains(new(0, inserts[1].Id))
+                && host.WatchedInserts.Contains(new(-1, "ins_master"))
+            )
+        );
+        Assert.Equal(2, host.WatchedInserts.Count);
+        // The lease runs out with nobody renewing it, so a client that went away leaves nothing behind.
+        await ServerFixture.Eventually(() => Task.FromResult(host.WatchedInserts.Count == 0));
+
         // The plugin's own editor moves its gain twice: one coalesced undo step.
         var undo = (await History(client)).Undo.Count;
         await host.ChangeParameterAsync(0, inserts[0].Id, "0", 3);
@@ -490,6 +505,14 @@ public sealed class MixApiTests {
             )
         );
     }
+
+    static Task<HttpResponseMessage> Displays(HttpClient client, InsertDisplayRequest request) =>
+        client.PostAsJsonAsync(
+            "/api/v1/plugins/displays",
+            request,
+            ContractsJsonContext.Default.InsertDisplayRequest,
+            Token
+        );
 
     static Task<HttpResponseMessage> Editor(HttpClient client, PluginEditorRequest request) =>
         client.PostAsJsonAsync(

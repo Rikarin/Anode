@@ -1,4 +1,5 @@
 import type { ParameterInfo, PluginInfo } from '@anode/api-client';
+import { EqParameterIds } from './eq-bands';
 
 /** The custom panels (docs/07-phase-6.md, "C — Editor": where a generic editor is unusable). */
 export type PanelKind =
@@ -6,6 +7,8 @@ export type PanelKind =
   | 'fmAlgorithm'
   | 'delayTaps'
   | 'multipressorBands'
+  // The Channel EQ's and the Linear Phase EQ's curve and analyser.
+  | 'eqCurve'
   // Phase 11 (docs/12-phase-11.md): the physical model's object and pickups, Sample Alchemy's source view.
   | 'physicalModel'
   | 'sampleAlchemy';
@@ -61,6 +64,7 @@ function holdsValues(parameter: ParameterInfo | undefined, count: number): boole
  *   least 2 bands from 1; `crossover1` … (`xover1`, `split1`, `crossover.1`) one fewer than the bands; optional
  *   `bandN.bypass` (`bandN.off`, `bandN.mute`), or its inverse `bandNOn` (workstream D: `band1Threshold`, `band1On`,
  *   `cross1`…`cross3`).
+ * - **EQ curve**: the Channel EQ's and the Linear Phase EQ's shared ids (`plugin-panels/eq-bands.ts`), all required.
  * - **Physical model** (Phase 11, workstream E's ids to come; the fake's `core/fake/fake-plugins-phase11.ts`): `object`
  *   (`object.kind`) with at least 4 values (string, bar, membrane, tube); `exciter1.position` (`exciter1Position`,
  *   `exciter_1_pos`) for at least one exciter, `pickup1.position` and `pickup2.position`; optional `stiffness`,
@@ -124,6 +128,12 @@ export const PanelPatterns: readonly PanelPattern[] = [
       const bands = bandCount(b);
       return bands >= 2 && (b.series['crossover']?.length ?? 0) >= bands - 1;
     }
+  },
+  {
+    kind: 'eqCurve',
+    roles: Object.fromEntries(EqParameterIds.map(id => [id, new RegExp(`^${id}$`)])),
+    series: {},
+    accepts: b => EqParameterIds.every(id => !!b.roles[id])
   },
   {
     kind: 'physicalModel',

@@ -16,12 +16,14 @@ export interface PluginPanelHost {
   set(parameterId: string, value: number): void;
   /** What the insert shows beyond its reading (`InsertReading.values`), a signal read; instruments have none. */
   readingValues?(): readonly number[] | null;
+  /** The project's sample rate, where a panel draws a response. */
+  readonly sampleRate?: number | undefined;
 }
 
-/** The T3 panels (Phase 11): drawn by `an-t3-panel` (t3-panel.ts), which the plugin window loads when first shown. */
-export type DeferredPanelKind = Extract<PanelKind, 'physicalModel' | 'sampleAlchemy'>;
+/** The panels drawn by `an-t3-panel` (t3-panel.ts), which the plugin window loads when first shown. */
+export type DeferredPanelKind = Extract<PanelKind, 'physicalModel' | 'sampleAlchemy' | 'eqCurve'>;
 
-const Deferred: ReadonlySet<PanelKind> = new Set<DeferredPanelKind>(['physicalModel', 'sampleAlchemy']);
+const Deferred: ReadonlySet<PanelKind> = new Set<DeferredPanelKind>(['physicalModel', 'sampleAlchemy', 'eqCurve']);
 
 /** The panel component of each kind loaded with the window (the deferred ones are not here). */
 const Panels: Readonly<Record<Exclude<PanelKind, DeferredPanelKind>, Type<unknown>>> = {
@@ -43,8 +45,8 @@ export function pluginPanel(plugin: PluginInfo | null | undefined): Type<unknown
 }
 
 /**
- * The T3 panel for a plugin (Phase 11: the physical model's object and pickups, Sample Alchemy's source view), or null.
- * They load with their own chunk (`@defer` in the plugin window), so the initial bundle carries none of them.
+ * The deferred panel for a plugin (the physical model's object and pickups, Sample Alchemy's source view, an EQ's
+ * curve), or null. They load with their own chunk (`@defer` in the plugin window), so the initial bundle carries none of them.
  */
 export function deferredPanel(plugin: PluginInfo | null | undefined): DeferredPanelKind | null {
   const kind = matchPanel(plugin)?.kind;

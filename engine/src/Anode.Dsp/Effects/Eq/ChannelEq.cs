@@ -10,10 +10,11 @@ namespace Anode.Dsp.Effects.Eq;
 ///     quality are smoothed at control rate. A bell or shelf at 0 dB is skipped.
 ///     <para>
 ///         The <see cref="IAudioEffect.Reading" /> is the output's peak (dBFS) over the last buffer; the spectrum the
-///         editor draws behind the curve comes from <see cref="ReadSpectrum" />.
+///         editor draws behind the curve comes from <see cref="ReadSpectrum" />, and is the display
+///         (<see cref="IEffectDisplay" />): <see cref="SpectrumAnalyzer.DisplayBands" /> levels in dBFS.
 ///     </para>
 /// </summary>
-public sealed class ChannelEq : AudioEffect {
+public sealed class ChannelEq : AudioEffect, IEffectDisplay {
     public const string Id = "anode.channel-eq";
 
     /// <summary>The qualities of the Butterworth sections, per order (2, 4, 6, 8).</summary>
@@ -90,6 +91,17 @@ public sealed class ChannelEq : AudioEffect {
 
     /// <summary>Control thread: the output spectrum, as <see cref="SpectrumAnalyzer.Read" /> gives it.</summary>
     public void ReadSpectrum(Span<float> bandsDb) => analyzer.Read(bandsDb, SampleRate);
+
+    public int DisplaySize => SpectrumAnalyzer.DisplayBands;
+
+    public int ReadDisplay(Span<float> values) {
+        if (!Prepared) {
+            return 0;
+        }
+
+        ReadSpectrum(values[..SpectrumAnalyzer.DisplayBands]);
+        return SpectrumAnalyzer.DisplayBands;
+    }
 
     protected override void OnPrepare(float sampleRate) { }
 

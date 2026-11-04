@@ -76,9 +76,9 @@ public interface IAudioEffect : IDisposable {
 /// <summary>
 ///     An effect that shows the editor more than its one <see cref="IAudioEffect.Reading" />: a Multipressor's band gains,
 ///     an EQ's spectrum, a scope's trace. What the values mean is the effect's own; each effect documents their layout.
-///     The engine finds it with a type test on an <see cref="IAudioEffect" />, as <see cref="IFileEffect" />. Read on the
-///     control thread while the audio thread writes: a frame may tear, which a display does not mind. One reader at a
-///     time.
+///     The engine finds it with a type test on an <see cref="IAudioEffect" />, as <see cref="IFileEffect" />, and reads it
+///     only while an editor watches that insert. Read on the control thread while the audio thread writes: a frame may
+///     tear, which a display does not mind. One reader at a time.
 /// </summary>
 public interface IEffectDisplay {
     /// <summary>The most values <see cref="ReadDisplay" /> writes.</summary>

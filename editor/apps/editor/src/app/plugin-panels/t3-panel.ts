@@ -1,16 +1,17 @@
 import { ChangeDetectionStrategy, Component, input } from '@angular/core';
+import { EqPanel } from './eq-panel';
 import { PhysicalModelPanel } from './physical-model-panel';
 import type { DeferredPanelKind, PluginPanelHost } from './plugin-panel';
 import { SampleAlchemyPanel } from './sample-alchemy-panel';
 
 /**
- * The T3 instruments' custom panels (Phase 11): the physical model's object and pickups, Sample Alchemy's source view.
- * The plugin window loads this with `@defer`, so neither is in the initial bundle.
+ * The custom panels the plugin window loads with `@defer`, so none is in the initial bundle: the T3 instruments'
+ * (Phase 11: the physical model's object and pickups, Sample Alchemy's source view) and an EQ's curve.
  */
 @Component({
   selector: 'an-t3-panel',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [PhysicalModelPanel, SampleAlchemyPanel],
+  imports: [EqPanel, PhysicalModelPanel, SampleAlchemyPanel],
   host: { class: 'contents' },
   template: `
     @switch (kind()) {
@@ -19,6 +20,9 @@ import { SampleAlchemyPanel } from './sample-alchemy-panel';
       }
       @case ('sampleAlchemy') {
         <an-sample-alchemy-panel [host]="host()" />
+      }
+      @case ('eqCurve') {
+        <an-eq-panel [host]="host()" />
       }
     }
   `

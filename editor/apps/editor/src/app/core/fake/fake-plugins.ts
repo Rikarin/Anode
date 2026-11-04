@@ -132,14 +132,23 @@ function effect(
   };
 }
 
-const Bands = [
-  ['low', 'Low Shelf', 80],
-  ['peak1', 'Peak 1', 250],
-  ['peak2', 'Peak 2', 1_000],
-  ['peak3', 'Peak 3', 3_000],
-  ['peak4', 'Peak 4', 6_000],
-  ['high', 'High Shelf', 12_000]
-] as const;
+const Slopes = ['12 dB/oct', '24 dB/oct', '36 dB/oct', '48 dB/oct'];
+const OffOn = ['Off', 'On'];
+
+/** A Channel EQ cut, as the engine lists it. */
+const eqCut = (id: string, name: string, hz: number, on: number): ParameterInfo[] => [
+  choice(`${id}On`, name, OffOn, on),
+  continuous(`${id}Freq`, `${name} Frequency`, 10, 20_000, hz, 'Hz'),
+  choice(`${id}Slope`, `${name} Slope`, Slopes, 1)
+];
+
+/** A Channel EQ bell or shelf, as the engine lists it. */
+const eqBand = (id: string, name: string, hz: number, q: number, maxQ: number): ParameterInfo[] => [
+  choice(`${id}On`, name, OffOn, 1),
+  continuous(`${id}Freq`, `${name} Frequency`, 10, 20_000, hz, 'Hz'),
+  continuous(`${id}Gain`, `${name} Gain`, -24, 24, 0, 'dB'),
+  continuous(`${id}Q`, `${name} Q`, 0.1, maxQ, q)
+];
 
 /**
  * The fake engine's effects (docs/05-phase-4.md, workstream D's T1 suite, by category), then third-party ones as the
@@ -148,14 +157,15 @@ const Bands = [
  */
 export const FakeEffects: readonly PluginInfo[] = [
   effect('anode.channel-eq', 'Channel EQ', 'EQ', [
-    continuous('hpf.frequency', 'HPF Frequency', 20, 20_000, 30, 'Hz'),
-    continuous('lpf.frequency', 'LPF Frequency', 20, 20_000, 20_000, 'Hz'),
-    ...Bands.flatMap(([id, label, hz]) => [
-      continuous(`${id}.frequency`, `${label} Frequency`, 20, 20_000, hz, 'Hz'),
-      continuous(`${id}.gain`, `${label} Gain`, -24, 24, 0, 'dB'),
-      continuous(`${id}.q`, `${label} Q`, 0.1, 10, 0.71)
-    ]),
-    continuous('output.gain', 'Gain', -24, 24, 0, 'dB')
+    ...eqCut('hpf', 'Low Cut', 30, 0),
+    ...eqBand('lowShelf', 'Low Shelf', 80, 0.71, 2),
+    ...eqBand('peak1', 'Peak 1', 200, 1, 20),
+    ...eqBand('peak2', 'Peak 2', 600, 1, 20),
+    ...eqBand('peak3', 'Peak 3', 2_000, 1, 20),
+    ...eqBand('peak4', 'Peak 4', 6_000, 1, 20),
+    ...eqBand('highShelf', 'High Shelf', 10_000, 0.71, 2),
+    ...eqCut('lpf', 'High Cut', 18_000, 0),
+    continuous('output', 'Output Gain', -24, 24, 0, 'dB')
   ]),
   effect(
     'anode.compressor',

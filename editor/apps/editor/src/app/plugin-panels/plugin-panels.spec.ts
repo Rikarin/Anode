@@ -7,7 +7,7 @@ import { DrawbarsPanel, drawbarSetting, drawbarValue } from './drawbars-panel';
 import { FmAlgorithmPanel } from './fm-algorithm-panel';
 import { MultipressorPanel, axisFrequency, axisPosition } from './multipressor-panel';
 import { matchPanel } from './panel-patterns';
-import { type PluginPanelHost, pluginPanel } from './plugin-panel';
+import { type PluginPanelHost, deferredPanel, pluginPanel } from './plugin-panel';
 
 const fake = (id: string): PluginInfo => {
   const plugin = [...FakeT2Instruments, ...FakeT2Effects].find(p => p.id === id);
@@ -49,6 +49,7 @@ describe('Custom plugin panels: parameter-id patterns', () => {
     expect(matchPanel(fake('anode.fm'))?.kind).toBe('fmAlgorithm');
     expect(matchPanel(fake('anode.delay-designer'))?.kind).toBe('delayTaps');
     expect(matchPanel(fake('anode.multipressor'))?.kind).toBe('multipressorBands');
+    expect(deferredPanel(fake('anode.linear-eq'))).toBe('eqCurve');
     const panelled = ['anode.organ', 'anode.fm', 'anode.delay-designer', 'anode.multipressor'];
     for (const other of [...FakeT2Instruments, ...FakeT2Effects, ...FakeMidiEffects]) {
       if (!panelled.includes(other.id)) {
